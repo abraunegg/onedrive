@@ -1,6 +1,6 @@
 module onedrive;
 
-import std.json, std.net.curl, std.path, std.string, std.uni, std.uri;
+import std.datetime, std.json, std.net.curl, std.path, std.string, std.uni, std.uri;
 
 extern(C) void signal(int sig, void function(int));
 
@@ -29,6 +29,7 @@ final class OneDriveApi
 {
 	private string clientId, clientSecret;
 	private string refreshToken, accessToken;
+	private SysTime accessTokenExpiration;
 	private HTTP http;
 
 	void function(string) onRefreshToken; // called when a new refresh_token is received
@@ -78,6 +79,7 @@ final class OneDriveApi
 
 	string getItemPath(const(char)[] id)
 	{
+		checkAccessTokenExpired();
 		JSONValue response = get(itemByIdUrl ~ id ~ "/?select=name,parentReference");
 		string path;
 		try {
@@ -92,6 +94,7 @@ final class OneDriveApi
 
 	string getItemId(const(char)[] path)
 	{
+		checkAccessTokenExpired();
 		JSONValue response = get(itemByPathUrl ~ encodeComponent(path) ~ ":/?select=id");
 		return response["id"].str;
 	}
@@ -99,6 +102,7 @@ final class OneDriveApi
 	// https://dev.onedrive.com/items/view_changes.htm
 	JSONValue viewChangesById(const(char)[] id, const(char)[] statusToken)
 	{
+		checkAccessTokenExpired();
 		char[] url = itemByIdUrl ~ id ~ "/view.changes";
 		if (statusToken) url ~= "?token=" ~ statusToken;
 		return get(url);
@@ -107,6 +111,7 @@ final class OneDriveApi
 	// https://dev.onedrive.com/items/view_changes.htm
 	JSONValue viewChangesByPath(const(char)[] path, const(char)[] statusToken)
 	{
+		checkAccessTokenExpired();
 		char[] url = itemByPathUrl ~ encodeComponent(path).dup ~ ":/view.changes";
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,fileSystemInfo,parentReference";
 		if (statusToken) url ~= "&token=" ~ statusToken;
@@ -144,6 +149,7 @@ final class OneDriveApi
 		} else {
 			throw new OneDriveException("Can't obtain the download url");
 		}*/
+		checkAccessTokenExpired();
 		char[] url = itemByIdUrl ~ id ~ "/content";
 		try {
 			download(url, saveToPath, http);
@@ -157,6 +163,7 @@ final class OneDriveApi
 	// https://dev.onedrive.com/items/upload_put.htm
 	auto simpleUpload(string localPath, const(char)[] remotePath, const(char)[] eTag = null)
 	{
+		checkAccessTokenExpired();
 		char[] url = itemByPathUrl ~ remotePath ~ ":/content";
 		ubyte[] content;
 		http.onReceive = (ubyte[] data) {
@@ -190,6 +197,7 @@ final class OneDriveApi
 		JSONValue response = post(tokenUrl, postData);
 		setAccessToken(response["access_token"].str());
 		refreshToken = response["refresh_token"].str().dup;
+		accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
 		if (onRefreshToken) onRefreshToken(refreshToken);
 	}
 
@@ -200,6 +208,14 @@ final class OneDriveApi
 		http.addRequestHeader("Authorization", "bearer " ~ accessToken);
 	}
 
+	private void checkAccessTokenExpired()
+	{
+		if (Clock.currTime() >= accessTokenExpiration) {
+			writeln("Access token expired, requesting a new token...");
+			newToken();
+		}
+	}
+	
 	private auto get(const(char)[] url)
 	{
 		return parseJSON(.get(url, http));
