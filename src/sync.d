@@ -1,3 +1,4 @@
+import core.exception: RangeError;
 import std.stdio, std.file, std.json;
 import cache, config, onedrive, util;
 
@@ -123,6 +124,8 @@ final class SyncEngine
 				crc32 = item["file"].object["hashes"].object["crc32Hash"].str;
 			} catch (JSONException e) {
 				writeln("The hash is not available");
+			} catch (RangeError e) {
+				writeln("The crc32 hash is not available");
 			}
 		}
 
