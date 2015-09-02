@@ -196,7 +196,7 @@ final class OneDriveApi
 	{
 		JSONValue response = post(tokenUrl, postData);
 		setAccessToken(response["access_token"].str());
-		refreshToken = response["refresh_token"].str().dup;
+		refreshToken = response["refresh_token"].str();
 		accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
 		if (onRefreshToken) onRefreshToken(refreshToken);
 	}
