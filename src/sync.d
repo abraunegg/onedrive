@@ -60,7 +60,7 @@ final class SyncEngine
 		} catch (FileException e) {
 			writeln("Welcome !");
 		}
-		writeln("Checking for changes...");
+		writeln("Applying differences ...");
 
 		string currDir = getcwd();
 		string syncDir = cfg.get("sync_dir");
@@ -150,7 +150,7 @@ final class SyncEngine
 	private void applyDelete(Item item)
 	{
 		if (exists(item.path)) {
-			if (isItemSynced(item, true)) {
+			if (isItemSynced(item)) {
 				addFileToDelete(item.path);
 			} else {
 				writeln("The local item is not synced, renaming ...");
@@ -164,7 +164,7 @@ final class SyncEngine
 	{
 		assert(item.id);
 		if (exists(item.path)) {
-			if (isItemSynced(item, true)) {
+			if (isItemSynced(item)) {
 				writeln("The item is already present");
 				// ensure the modified time is synced
 				setTimes(item.path, item.mtime, item.mtime);
@@ -226,7 +226,7 @@ final class SyncEngine
 	}
 
 	// returns true if the given item corresponds to the local one
-	private bool isItemSynced(Item item, bool checkHash = false)
+	private bool isItemSynced(Item item)
 	{
 		final switch (item.type) {
 		case ItemType.file:
@@ -238,7 +238,7 @@ final class SyncEngine
 				else {
 					writeln("The local item has a different modified time ", localModifiedTime, " remote is ", item.mtime);
 				}
-				if (checkHash && item.crc32) {
+				if (item.crc32) {
 					string localCrc32 = computeCrc32(item.path);
 					if (localCrc32 == item.crc32) return true;
 					else {
@@ -276,5 +276,32 @@ final class SyncEngine
 		}
 		assumeSafeAppend(itemToDelete);
 		itemToDelete.length = 0;
+	}
+
+	// scan the directory for unsynced files and upload them
+	public void uploadDifferences()
+	{
+		writeln("Uploading differences ...");
+		string currDir = getcwd();
+		string syncDir = cfg.get("sync_dir");
+		chdir(syncDir);
+		foreach (DirEntry entry; dirEntries(".", SpanMode.breadth, false)) {
+			uploadDifference(entry.name[2 .. $]);
+		}
+		// TODO: check deleted files
+		chdir(currDir);
+	}
+
+	private void uploadDifference(const(char)[] path)
+	{
+		assert(exists(path));
+		Item item;
+		if (itemCache.selectByPath(path, item)) {
+			if (!isItemSynced(item)) {
+				onedrive.simpleUpload(path.dup, path, item.eTag);
+			}
+		} else {
+			onedrive.simpleUpload(path.dup, path);
+		}
 	}
 }
