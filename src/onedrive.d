@@ -161,7 +161,7 @@ final class OneDriveApi
 	}
 
 	// https://dev.onedrive.com/items/upload_put.htm
-	auto simpleUpload(string localPath, const(char)[] remotePath, const(char)[] eTag = null)
+	JSONValue simpleUpload(string localPath, const(char)[] remotePath, const(char)[] eTag = null)
 	{
 		checkAccessTokenExpired();
 		char[] url = itemByPathUrl ~ remotePath ~ ":/content";
@@ -176,6 +176,20 @@ final class OneDriveApi
 		if (eTag) setAccessToken(accessToken);
 		check();
 		return parseJSON(content);
+	}
+
+	// https://dev.onedrive.com/items/update.htm
+	JSONValue updateById(const(char)[] id, JSONValue data, const(char)[] eTag = null)
+	{
+		checkAccessTokenExpired();
+		char[] url = itemByIdUrl ~ id;
+		if (eTag) http.addRequestHeader("If-Match", eTag);
+		http.addRequestHeader("Content-Type", "application/json");
+		auto result = patch(url, data.toString());
+		http.clearRequestHeaders();
+		// remove the headers
+		setAccessToken(accessToken);
+		return result;
 	}
 
 	private void redeemToken(const(char)[] authCode)
@@ -215,10 +229,15 @@ final class OneDriveApi
 			newToken();
 		}
 	}
-	
+
 	private auto get(const(char)[] url)
 	{
 		return parseJSON(.get(url, http));
+	}
+
+	private auto patch(T)(const(char)[] url, const(T)[] patchData)
+	{
+		return parseJSON(.patch(url, patchData, http));
 	}
 
 	private auto post(T)(const(char)[] url, const(T)[] postData)
