@@ -192,6 +192,17 @@ final class OneDriveApi
 		return result;
 	}
 
+	//https://dev.onedrive.com/items/delete.htm
+	void deleteById(const(char)[] id, const(char)[] eTag = null)
+	{
+		checkAccessTokenExpired();
+		char[] url = itemByIdUrl ~ id;
+		if (eTag) http.addRequestHeader("If-Match", eTag);
+		del(url, http);
+		// remove the if-match header
+		if (eTag) setAccessToken(accessToken);
+	}
+
 	private void redeemToken(const(char)[] authCode)
 	{
 		string postData = "client_id=" ~ clientId ~ "&redirect_url=" ~ redirectUrl ~ "&client_secret=" ~ clientSecret;
