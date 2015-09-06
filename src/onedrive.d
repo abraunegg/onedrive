@@ -186,7 +186,6 @@ final class OneDriveApi
 		if (eTag) http.addRequestHeader("If-Match", eTag);
 		http.addRequestHeader("Content-Type", "application/json");
 		auto result = patch(url, data.toString());
-		http.clearRequestHeaders();
 		// remove the headers
 		setAccessToken(accessToken);
 		return result;
@@ -201,6 +200,17 @@ final class OneDriveApi
 		del(url, http);
 		// remove the if-match header
 		if (eTag) setAccessToken(accessToken);
+	}
+
+	//https://dev.onedrive.com/items/create.htm
+	JSONValue createByPath(const(char)[] parentPath, JSONValue item)
+	{
+		char[] url = itemByPathUrl ~ parentPath ~ ":/children";
+		http.addRequestHeader("Content-Type", "application/json");
+		auto result = post(url, item.toString());
+		// remove the if-match header
+		setAccessToken(accessToken);
+		return result;
 	}
 
 	private void redeemToken(const(char)[] authCode)
