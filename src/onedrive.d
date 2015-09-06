@@ -135,7 +135,7 @@ final class OneDriveApi
 		};
 		writeln("Obtaining the url ...");
 		http.perform();
-		check();
+		checkHttpCode();
 		http.maxRedirects = 10;
 		if (downloadUrl) {
 			// try to download the file
@@ -174,7 +174,7 @@ final class OneDriveApi
 		upload(localPath, url, http);
 		// remove the if-match header
 		if (eTag) setAccessToken(accessToken);
-		check();
+		checkHttpCode();
 		return parseJSON(content);
 	}
 
@@ -245,7 +245,7 @@ final class OneDriveApi
 		return parseJSON(.post(url, postData, http));
 	}
 
-	private void check()
+	private void checkHttpCode()
 	{
 		if (http.statusLine.code / 100 != 2) {
 			throw new OneDriveException(format("HTTP request returned status code %d (%s)", http.statusLine.code, http.statusLine.reason));
