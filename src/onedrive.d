@@ -2,8 +2,6 @@ module onedrive;
 
 import std.datetime, std.json, std.net.curl, std.path, std.string, std.uni, std.uri;
 
-extern(C) void signal(int sig, void function(int));
-
 private immutable {
 	string authUrl = "https://login.live.com/oauth20_authorize.srf";
 	string redirectUrl = "https://login.live.com/oauth20_desktop.srf";
@@ -41,7 +39,7 @@ final class OneDriveApi
 		http = HTTP();
 		//debug http.verbose = true;
 		// HACK: prevent SIGPIPE
-		//import etc.c.curl;
+		//import etc.c.signal, etc.c.curl;
 		//http.handle.set(CurlOption.nosignal, 0);
 		//signal(/*SIGPIPE*/ 13, /*SIG_IGN*/ cast(void function(int)) 1);
 	}
@@ -121,34 +119,6 @@ final class OneDriveApi
 	// https://dev.onedrive.com/items/download.htm
 	void downloadById(const(char)[] id, string saveToPath)
 	{
-		/*string downloadUrl;
-		// obtain the download url
-		http.url = itemByIdUrl ~ id ~ "/content";
-		http.method = HTTP.Method.get;
-		http.maxRedirects = 0;
-		http.onReceive = (ubyte[] data) { return data.length; };
-		http.onReceiveHeader = (in char[] key, in char[] value) {
-			if (sicmp(key, "location") == 0) {
-				http.onReceiveHeader = null;
-				downloadUrl = value.dup;
-			}
-		};
-		writeln("Obtaining the url ...");
-		http.perform();
-		checkHttpCode();
-		http.maxRedirects = 10;
-		if (downloadUrl) {
-			// try to download the file
-			try {
-				download(downloadUrl, saveToPath);
-			} catch (CurlException e) {
-				import std.file;
-				if (exists(saveToPath)) remove(saveToPath);
-				throw new OneDriveException("Download error", e);
-			}
-		} else {
-			throw new OneDriveException("Can't obtain the download url");
-		}*/
 		checkAccessTokenExpired();
 		char[] url = itemByIdUrl ~ id ~ "/content";
 		try {
