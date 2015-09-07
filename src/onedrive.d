@@ -135,6 +135,7 @@ final class OneDriveApi
 	{
 		checkAccessTokenExpired();
 		char[] url = itemByPathUrl ~ remotePath ~ ":/content";
+		if (!eTag) url ~= "?@name.conflictBehavior=fail";
 		ubyte[] content;
 		http.onReceive = (ubyte[] data) {
 			content ~= data;
