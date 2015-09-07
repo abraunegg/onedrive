@@ -26,6 +26,7 @@ struct ItemCache
 {
 	Database db;
 	Statement insertItemStmt;
+	Statement selectItemsStmt;
 	Statement selectItemByIdStmt;
 	Statement selectItemByPathStmt;
 
@@ -45,6 +46,7 @@ struct ItemCache
 		)");
 		db.exec("CREATE UNIQUE INDEX IF NOT EXISTS path_idx ON item (path)");
 		insertItemStmt = db.prepare("INSERT OR REPLACE INTO item (id, path, name, type, eTag, cTag, mtime, parentId, crc32) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+		selectItemsStmt = db.prepare("SELECT id, path, name, type, eTag, cTag, mtime, parentId, crc32 FROM item ORDER BY path DESC");
 		selectItemByIdStmt = db.prepare("SELECT id, path, name, type, eTag, cTag, mtime, parentId, crc32 FROM item WHERE id = ?");
 		selectItemByPathStmt = db.prepare("SELECT id, path, name, type, eTag, cTag, mtime, parentId, crc32 FROM item WHERE path = ?");
 	}
@@ -68,6 +70,37 @@ struct ItemCache
 			bind(9, crc32);
 			exec();
 		}
+	}
+
+	// returns a range that go trough all items
+	auto selectAll()
+	{
+		struct ItemRange
+		{
+			Statement.Result result;
+
+			this(Statement.Result result)
+			{
+				this.result = result;
+			}
+
+			@property bool empty()
+			{
+				return result.empty();
+			}
+
+			@property Item front()
+			{
+				return buildItem(result);
+			}
+
+			void popFront()
+			{
+				result.popFront();
+			}
+		}
+
+		return ItemRange(selectItemsStmt.exec());
 	}
 
 	bool selectById(const(char)[] id, out Item item)
@@ -126,7 +159,7 @@ struct ItemCache
 		return false;
 	}
 
-	private Item buildItem(Statement.Result result)
+	private static Item buildItem(Statement.Result result)
 	{
 		assert(!result.empty && result.front.length == 9);
 		Item item = {
