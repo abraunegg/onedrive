@@ -24,6 +24,15 @@ private bool isItemDeleted(const ref JSONValue item)
 	return !item["deleted"].isNull();
 }
 
+private bool testCrc32(string path, const(char)[] crc32)
+{
+	if (crc32) {
+		string localCrc32 = computeCrc32(path);
+		if (crc32 == localCrc32) return true;
+	}
+	return false;
+}
+
 class SyncException: Exception
 {
     @nogc @safe pure nothrow this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
@@ -165,6 +174,7 @@ final class SyncEngine
 		} else {
 			writeln("The local item is already deleted");
 		}
+		itemCache.deleteById(item.id);
 	}
 	private void applyNewItem(Item item)
 	{
@@ -295,85 +305,119 @@ final class SyncEngine
 		string currDir = getcwd();
 		string syncDir = cfg.get("sync_dir");
 		chdir(syncDir);
-		foreach (DirEntry entry; dirEntries("test", SpanMode.breadth, false)) {
-			uploadDifference(entry.name);
+		foreach (Item item; itemCache.selectAll()) {
+			uploadDifference(item);
 		}
-		// TODO: check deleted files
+		foreach (DirEntry entry; dirEntries("test", SpanMode.breadth, false)) {
+			uploadDifference(entry.name/*[2 .. $]*/);
+		}
 		chdir(currDir);
 	}
 
-	private void uploadDifference(const(char)[] path)
+	private void uploadDifference(Item item)
 	{
-		writeln(path);
-		assert(exists(path));
-		Item item;
-		bool needDelete, uploadFile, createDir, changedLastModifiedTime;
-		if (itemCache.selectByPath(path, item)) {
+		writeln(item.path);
+		if (exists(item.path)) {
 			final switch (item.type) {
 			case ItemType.file:
 				if (isFile(item.path)) {
-					SysTime localModifiedTime = timeLastModified(item.path);
-					import core.time: Duration;
-					item.mtime.fracSecs = Duration.zero; // HACK
-					if (localModifiedTime != item.mtime) {
-						writeln("Different last modified time");
-						changedLastModifiedTime = true;
-						if (item.crc32) {
-							string localCrc32 = computeCrc32(item.path);
-							if (localCrc32 != item.crc32) {
-								writeln("Different content");
-								uploadFile = true;
-							}
-						} else {
-							writeln("The local item has no hash, assuming it's different");
-							uploadFile = true;
-						}
-					}
+					updateItem(item);
 				} else {
-					writeln("The local item is changed in a directory");
-					needDelete = true;
-					createDir = true;
+					deleteItem(item);
+					createFolderItem(item.path);
 				}
 				break;
 			case ItemType.dir:
 				if (isDir(item.path)) {
-					// ignore folder mtime
+					updateItem(item);
 				} else {
-					writeln("The local item changed in a file");
-					needDelete = true;
-					uploadFile = true;
+					deleteItem(item);
+					writeln("Uploading ...");
+					JSONValue returnedItem = onedrive.simpleUpload(item.path, item.path);
+					string id = returnedItem["id"].str;
+					string eTag = returnedItem["eTag"].str;
+					writeln("Updating last modified time ...");
+					JSONValue mtime = [
+						"fileSystemInfo": JSONValue([
+							"lastModifiedDateTime": timeLastModified(item.path).toUTC().toISOExtString()
+						])
+					];
+					onedrive.updateById(id, mtime, eTag);
 				}
 				break;
 			}
 		} else {
-			if (isFile(path)) uploadFile = true;
-			else createDir = true;
+			deleteItem(item);
 		}
+	}
 
-		string id = item.id;
-		string eTag = item.eTag;
-		if (needDelete) {
-			assert(id);
-			writeln("Deleting ...");
-			onedrive.deleteById(id, eTag);
+	private void uploadDifference(const(char)[] path)
+	{
+		Item item;
+		if (!itemCache.selectByPath(path, item)) {
+			writeln("New item ", path);
+			uploadNewItem(path);
 		}
-		if (uploadFile) {
+	}
+
+	private void deleteItem(Item item)
+	{
+		writeln("Deleting ...");
+		onedrive.deleteById(item.id, item.eTag);
+	}
+
+	private void updateItem(Item item)
+	{
+		SysTime localModifiedTime = timeLastModified(item.path);
+		import core.time: Duration;
+		item.mtime.fracSecs = Duration.zero; // HACK
+		if (localModifiedTime != item.mtime) {
+			string id = item.id;
+			string eTag = item.eTag;
+			if (item.type == ItemType.file && !testCrc32(item.path, item.crc32)) {
+				assert(isFile(item.path));
+				writeln("Uploading ...");
+				JSONValue returnedItem = onedrive.simpleUpload(item.path, item.path, item.eTag);
+				id = returnedItem["id"].str;
+				eTag = returnedItem["eTag"].str;
+			}
+			updateItemLastModifiedTime(id, eTag, localModifiedTime.toUTC());
+		} else {
+			writeln("The item is not changed");
+		}
+	}
+
+	private void createFolderItem(const(char)[] path)
+	{
+		import std.path;
+		writeln("Creating folder ...");
+		folderItem["name"] = baseName(path);
+		folderItem["fileSystemInfo"].object["lastModifiedDateTime"] = timeLastModified(path).toUTC().toISOExtString();
+		onedrive.createByPath(dirName(path), folderItem);
+	}
+
+	private void updateItemLastModifiedTime(const(char)[] id, const(char)[] eTag, SysTime mtime)
+	{
+		writeln("Updating last modified time ...");
+		JSONValue mtimeJson = [
+			"fileSystemInfo": JSONValue([
+				"lastModifiedDateTime": mtime.toISOExtString()
+			])
+		];
+		onedrive.updateById(id, mtimeJson, eTag);
+	}
+
+	private void uploadNewItem(const(char)[] path)
+	{
+		assert(exists(path));
+		if (isFile(path)) {
 			writeln("Uploading file ...");
-			auto returnedItem = onedrive.simpleUpload(path.dup, path, eTag);
-			id = returnedItem["id"].str;
-			eTag = returnedItem["eTag"].str;
-		}
-		if (uploadFile || changedLastModifiedTime) {
-			writeln("Updating last modified time ...");
-			JSONValue mtime = ["fileSystemInfo": JSONValue(["lastModifiedDateTime": timeLastModified(path).toUTC().toISOExtString()])];
-			onedrive.updateById(id, mtime, eTag);
-		}
-		if (createDir) {
-			writeln("Creating folder ...");
-			import std.path;
-			folderItem["name"] = baseName(path);
-			folderItem["fileSystemInfo"].object["lastModifiedDateTime"] = timeLastModified(path).toUTC().toISOExtString();
-			onedrive.createByPath(dirName(path), folderItem);
+			JSONValue returnedItem = onedrive.simpleUpload(path.dup, path);
+			string id = returnedItem["id"].str;
+			string eTag = returnedItem["eTag"].str;
+			updateItemLastModifiedTime(id, eTag, timeLastModified(path).toUTC());
+		} else {
+			createFolderItem(path);
 		}
 	}
 }
