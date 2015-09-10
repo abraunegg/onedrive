@@ -391,7 +391,7 @@ final class SyncEngine
 	{
 		import std.path;
 		writeln("Creating folder ...");
-		folderItem["name"] = baseName(path);
+		folderItem["name"] = baseName(path).idup;
 		folderItem["fileSystemInfo"].object["lastModifiedDateTime"] = timeLastModified(path).toUTC().toISOExtString();
 		onedrive.createByPath(dirName(path), folderItem);
 	}
