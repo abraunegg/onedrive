@@ -34,19 +34,23 @@ struct Monitor
 	// map every watch descriptor to their dir
 	private string[int] dirs;
 	// map the inotify cookies of move_from events to their path
-	private string[int] moveFromPaths;
+	private string[int] cookieToPath;
 	// buffer to receive the inotify events
 	private void[] buffer;
 
 	void function(string path) onDirCreated;
-	void function(string path) onDirDeleted;
 	void function(string path) onFileChanged;
-	void function(string path) onFileDeleted;
+	void function(string path) onDelete;
+	void function(string from, string to) onMove;
 
 	@disable this(this);
 
 	void init()
 	{
+		assert(onDirCreated);
+		assert(onFileChanged);
+		assert(onDelete);
+		assert(onMove);
 		fd = inotify_init();
 		if (fd == -1) throw new MonitorException("inotify_init failed");
 		buffer = new void[10000];
@@ -105,40 +109,49 @@ struct Monitor
 		if (length == -1) throw new MonitorException("read failed");
 
 		int i = 0;
-		while ( i < length ) {
+		while (i < length) {
 			inotify_event *event = cast(inotify_event*) &buffer[i];
 			if (event.mask & IN_IGNORED) {
-				writeln(dirs);
-				writeln("ignored ", event.wd);
 				// forget the path associated to the watch descriptor
 				dirs.remove(event.wd);
 			} else if (event.mask & IN_Q_OVERFLOW) {
 				writeln("Inotify overflow, events missing");
+				assert(0);
 			} else if (event.mask & IN_MOVED_FROM) {
 				string path = getPath(event);
-				moveFromPaths[event.cookie] = path;
+				cookieToPath[event.cookie] = path;
 				writeln("moved from ", path);
 			} else if (event.mask & IN_MOVED_TO) {
 				string path = getPath(event);
-				writeln("moved to ", path);
 				if (event.mask & IN_ISDIR) addRecursive(path);
+				auto from = event.cookie in cookieToPath;
+				if (from) {
+					cookieToPath.remove(event.cookie);
+					onMove(*from, path);
+				} else {
+					if (event.mask & IN_ISDIR) {
+						onDirCreated(path);
+					} else {
+						onFileChanged(path);
+					}
+				}
 			} else {
 				if (event.mask & IN_ISDIR) {
 					if (event.mask & IN_CREATE) {
 						string path = getPath(event);
-						writeln("Directory created: ", path);
-						add(path);
+						addRecursive(path);
+						onDirCreated(path);
 					} else if (event.mask & IN_DELETE) {
 						string path = getPath(event);
-						writeln("Directory deleted: ", path);
+						onDelete(path);
 					}
 				} else {
 					if (event.mask & IN_ATTRIB || event.mask & IN_CLOSE_WRITE) {
 						string path = getPath(event);
-						writeln("File changed: ", path);
+						onFileChanged(path);
 					} else if (event.mask & IN_DELETE) {
 						string path = getPath(event);
-						writeln("File deleted: ", path);
+						onDelete(path);
 					}
 				}
 			}
