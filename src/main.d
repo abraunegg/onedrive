@@ -1,5 +1,5 @@
 import std.file;
-import config, onedrive, sync;
+import config, monitor, onedrive, sync;
 
 private string configFile = "./onedrive.conf";
 private string refreshTokenFile = "refresh_token";
@@ -19,12 +19,28 @@ void main()
 
 	auto sync = new SyncEngine(cfg, onedrive);
 	sync.applyDifferences();
+	sync.uploadDifferences();
 
-	/*import std.stdio;
-	import std.net.curl;
-	try {
-		onedrive.simpleUpload("a.txt", "a.txt", "error").toPrettyString.writeln;
-	} catch (CurlException e) {
-		writeln("exc ", e.msg);
-	}*/
+	Monitor m;
+	import std.stdio;
+	m.onDirCreated = delegate(string path) {
+		writeln("Directory created: ", path);
+		sync.createFolderItem(path);
+		sync.uploadDifferences(path);
+	};
+	m.onFileChanged = delegate(string path) {
+		writeln("File changed: ", path);
+		sync.uploadDifference2(path);
+	};
+	m.onDelete = delegate(string path) {
+		sync.deleteByPath(path);
+	};
+	m.onMove = delegate(string from, string to) {
+		sync.moveItem(from, to);
+	};
+	m.init();
+	string syncDir = cfg.get("sync_dir");
+	chdir(syncDir);
+	m.addRecursive("test");
+	while (true) m.update();
 }

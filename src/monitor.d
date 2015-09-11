@@ -38,10 +38,10 @@ struct Monitor
 	// buffer to receive the inotify events
 	private void[] buffer;
 
-	void function(string path) onDirCreated;
-	void function(string path) onFileChanged;
-	void function(string path) onDelete;
-	void function(string from, string to) onMove;
+	void delegate(string path) onDirCreated;
+	void delegate(string path) onFileChanged;
+	void delegate(string path) onDelete;
+	void delegate(string from, string to) onMove;
 
 	@disable this(this);
 
