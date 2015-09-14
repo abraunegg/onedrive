@@ -1,6 +1,6 @@
-import std.regex, std.stdio, std.file;
+import std.file, std.regex, std.stdio;
 
-final class Config
+struct Config
 {
 	private string filename;
 	private string[string] values;
@@ -8,12 +8,16 @@ final class Config
 	this(string filename)
 	{
 		this.filename = filename;
-		load();
 	}
 
 	string get(string key)
 	{
-		return values[key];
+		import core.exception;
+		try {
+			return values[key];
+		} catch (RangeError e) {
+			throw new Exception("Missing config value: " ~ key);
+		}
 	}
 
 	void set(string key, string value)
@@ -24,16 +28,17 @@ final class Config
 	void load()
 	{
 		values = null;
-		scope (failure) return;
 		auto file = File(filename, "r");
 		auto r = regex("(?:^\\s*)(\\w+)(?:\\s*=\\s*\")(.*)(?:\"\\s*$)");
 		foreach (line; file.byLine()) {
 			auto c = matchFirst(line, r);
 			if (!c.empty) {
-				c.popFront(); // skip whole match
+				c.popFront(); // skip the whole match
 				string key = c.front.dup;
 				c.popFront();
 				values[key] = c.front.dup;
+			} else {
+				writeln("Malformed config line: ", line);
 			}
 		}
 	}
@@ -53,7 +58,7 @@ final class Config
 
 unittest
 {
-	auto cfg = new Config("/tmp/test.conf");
+	auto cfg = Config(tempDir() ~ "/test.conf");
 	cfg.set("test1", "1");
 	cfg.set("test2", "2");
 	cfg.set("test1", "3");

@@ -1,6 +1,5 @@
-module onedrive;
-
 import std.datetime, std.json, std.net.curl, std.path, std.string, std.uni, std.uri;
+import config;
 
 private immutable {
 	string authUrl = "https://login.live.com/oauth20_authorize.srf";
@@ -30,18 +29,14 @@ final class OneDriveApi
 	private SysTime accessTokenExpiration;
 	private HTTP http;
 
-	void function(string) onRefreshToken; // called when a new refresh_token is received
+	void delegate(string) onRefreshToken; // called when a new refresh_token is received
 
-	this(string clientId, string clientSecret)
+	this(Config cfg, bool verbose)
 	{
-		this.clientId = clientId;
-		this.clientSecret = clientSecret;
+		this.clientId = cfg.get("client_id");
+		this.clientSecret = cfg.get("client_secret");
 		http = HTTP();
-		//debug http.verbose = true;
-		// HACK: prevent SIGPIPE
-		//import etc.c.signal, etc.c.curl;
-		//http.handle.set(CurlOption.nosignal, 0);
-		//signal(/*SIGPIPE*/ 13, /*SIG_IGN*/ cast(void function(int)) 1);
+		http.verbose = verbose;
 	}
 
 	~this()
@@ -53,8 +48,8 @@ final class OneDriveApi
 	{
 		import std.stdio, std.regex;
 		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=wl.offline_access onedrive.readwrite&response_type=code&redirect_url=" ~ redirectUrl;
-		writeln("Authorize this app visiting:");
-		writeln(url);
+		writeln("Authorize this app visiting:\n");
+		writeln(url, "\n");
 
 		while (true) {
 			char[] response;
@@ -62,7 +57,7 @@ final class OneDriveApi
 			readln(response);
 			auto c = matchFirst(response, r"(?:code=)(([\w\d]+-){4}[\w\d]+)");
 			if (!c.empty) {
-				c.popFront(); // skip whole match
+				c.popFront(); // skip the whole match
 				redeemToken(c.front);
 				break;
 			}

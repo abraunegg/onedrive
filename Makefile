@@ -1,5 +1,5 @@
 DC = dmd
-DFLAGS = -debug -g -gs -od./bin -of./bin/$@ -L-lcurl -L-lsqlite3 -L-ldl
+DFLAGS = -unittest -debug -g -gs -od./bin -of./bin/$@ -L-lcurl -L-lsqlite3 -L-ldl
 
 SOURCES = \
 	/usr/include/dlang/dmd/core/sys/posix/poll.d \
