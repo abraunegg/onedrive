@@ -1,6 +1,6 @@
 module cache;
 
-import std.datetime: SysTime, time_t;
+import std.datetime, std.path;
 import sqlite;
 
 enum ItemType
@@ -26,16 +26,14 @@ struct ItemCache
 {
 	Database db;
 	Statement insertItemStmt;
-	Statement selectItemsStmt;
 	Statement selectItemByIdStmt;
-	Statement selectItemByPathStmt;
+	Statement selectItemByParentIdStmt;
 
 	void init()
 	{
 		db = Database("cache.db");
 		db.exec("CREATE TABLE IF NOT EXISTS item (
 			id       TEXT PRIMARY KEY,
-			path     TEXT UNIQUE NOT NULL,
 			name     TEXT NOT NULL,
 			type     TEXT NOT NULL,
 			eTag     TEXT NOT NULL,
@@ -44,63 +42,87 @@ struct ItemCache
 			parentId TEXT NOT NULL,
 			crc32    TEXT
 		)");
-		db.exec("CREATE UNIQUE INDEX IF NOT EXISTS path_idx ON item (path)");
-		insertItemStmt = db.prepare("INSERT OR REPLACE INTO item (id, path, name, type, eTag, cTag, mtime, parentId, crc32) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-		selectItemsStmt = db.prepare("SELECT id, path, name, type, eTag, cTag, mtime, parentId, crc32 FROM item ORDER BY path DESC");
-		selectItemByIdStmt = db.prepare("SELECT id, path, name, type, eTag, cTag, mtime, parentId, crc32 FROM item WHERE id = ?");
-		selectItemByPathStmt = db.prepare("SELECT id, path, name, type, eTag, cTag, mtime, parentId, crc32 FROM item WHERE path = ?");
+		db.exec("CREATE INDEX IF NOT EXISTS name_idx ON item (name)");
+		insertItemStmt = db.prepare("INSERT OR REPLACE INTO item (id, name, type, eTag, cTag, mtime, parentId, crc32) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+		selectItemByIdStmt = db.prepare("SELECT id, name, type, eTag, cTag, mtime, parentId, crc32 FROM item WHERE id = ?");
+		selectItemByParentIdStmt = db.prepare("SELECT id FROM item WHERE parentId = ?");
 	}
 
 	void insert(const(char)[] id, const(char)[] name, ItemType type, const(char)[] eTag, const(char)[] cTag, const(char)[] mtime, const(char)[] parentId, const(char)[] crc32)
 	{
 		with (insertItemStmt) {
 			bind(1, id);
-			bind(2, computePath(name, parentId));
-			bind(3, name);
+			bind(2, name);
 			string typeStr = void;
 			final switch (type) {
 			case ItemType.file: typeStr = "file"; break;
 			case ItemType.dir:  typeStr = "dir";  break;
 			}
-			bind(4, typeStr);
-			bind(5, eTag);
-			bind(6, cTag);
-			bind(7, mtime);
-			bind(8, parentId);
-			bind(9, crc32);
+			bind(3, typeStr);
+			bind(4, eTag);
+			bind(5, cTag);
+			bind(6, mtime);
+			bind(7, parentId);
+			bind(8, crc32);
 			exec();
 		}
 	}
 
-	// returns a range that go trough all items
+	// returns a range that go trough all items, depth first
 	auto selectAll()
 	{
-		struct ItemRange
+		static struct ItemRange
 		{
-			Statement.Result result;
+			ItemCache* itemCache;
+			string[] stack1, stack2;
 
-			this(Statement.Result result)
+			private this(ItemCache* itemCache, string rootId)
 			{
-				this.result = result;
+				this.itemCache = itemCache;
+				stack1.reserve(8);
+				stack2.reserve(8);
+				stack1 ~= rootId;
+				getChildren();
 			}
 
 			@property bool empty()
 			{
-				return result.empty();
+				return stack2.length == 0;
 			}
 
 			@property Item front()
 			{
-				return buildItem(result);
+				Item item;
+				bool res = itemCache.selectById(stack2[$ - 1], item);
+				assert(res);
+				return item;
 			}
 
 			void popFront()
 			{
-				result.popFront();
+				stack2 = stack2[0 .. $ - 1];
+				assumeSafeAppend(stack2);
+				if (stack1.length > 0) getChildren();
+			}
+
+			private void getChildren()
+			{
+				while (true) {
+					itemCache.selectItemByParentIdStmt.bind(1, stack1[$ - 1]);
+					stack2 ~= stack1[$ - 1];
+					stack1 = stack1[0 .. $ - 1];
+					assumeSafeAppend(stack1);
+					auto res = itemCache.selectItemByParentIdStmt.exec();
+					if (res.empty) break;
+					else foreach (row; res) stack1 ~= row[0].dup;
+				}
 			}
 		}
 
-		return ItemRange(selectItemsStmt.exec());
+		auto s = db.prepare("SELECT a.id FROM item AS a LEFT JOIN item AS b ON a.parentId = b.id WHERE b.id IS NULL");
+		auto r = s.exec();
+		assert(!r.empty());
+		return ItemRange(&this, r.front[0].dup);
 	}
 
 	bool selectById(const(char)[] id, out Item item)
@@ -116,20 +138,31 @@ struct ItemCache
 
 	bool selectByPath(const(char)[] path, out Item item)
 	{
-		selectItemByPathStmt.bind(1, path);
-		auto r = selectItemByPathStmt.exec();
-		if (!r.empty) {
-			item = buildItem(r);
-			return true;
+		string[2][] candidates; // [id, parentId]
+		auto s = db.prepare("SELECT id, parentId FROM item WHERE name = ?");
+		s.bind(1, baseName(path));
+		auto r = s.exec();
+		foreach (row; r) candidates ~= [row[0].dup, row[1].dup];
+		if (candidates.length > 1) {
+			s = db.prepare("SELECT parentId FROM item WHERE id = ? AND name = ?");
+			do {
+				string[2][] newCandidates;
+				newCandidates.reserve(candidates.length);
+				path = dirName(path);
+				foreach (candidate; candidates) {
+					s.bind(1, candidate[1]);
+					s.bind(2, baseName(path));
+					r = s.exec();
+					if (!r.empty) {
+						string[2] c = [candidate[0], r.front[0].idup];
+						newCandidates ~= c;
+					}
+				}
+				candidates = newCandidates;
+			} while (candidates.length > 1);
 		}
+		if (candidates.length == 1) return selectById(candidates[0][0], item);
 		return false;
-	}
-
-	void updateModifiedTime(const(char)[] id, const(char)[] mtime)
-	{
-		auto s = db.prepare("UPDATE mtime FROM item WHERE id = ?");
-		s.bind(1, id);
-		s.exec();
 	}
 
 	void deleteById(const(char)[] id)
@@ -159,25 +192,40 @@ struct ItemCache
 		return false;
 	}
 
-	private static Item buildItem(Statement.Result result)
+	private Item buildItem(Statement.Result result)
 	{
-		assert(!result.empty && result.front.length == 9);
+		assert(!result.empty && result.front.length == 8);
 		Item item = {
 			id: result.front[0].dup,
-			path: result.front[1].dup,
-			name: result.front[2].dup,
-			eTag: result.front[4].dup,
-			cTag: result.front[5].dup,
-			mtime: SysTime.fromISOExtString(result.front[6]),
-			parentId: result.front[7].dup,
-			crc32: result.front[8].dup
+			path: computePath(result.front[0]),
+			name: result.front[1].dup,
+			eTag: result.front[3].dup,
+			cTag: result.front[4].dup,
+			mtime: SysTime.fromISOExtString(result.front[5]),
+			parentId: result.front[6].dup,
+			crc32: result.front[7].dup
 		};
-		switch (result.front[3]) {
+		switch (result.front[2]) {
 		case "file": item.type = ItemType.file; break;
 		case "dir":  item.type = ItemType.dir;  break;
 		default: assert(0);
 		}
 		return item;
+	}
+
+	private string computePath(const(char)[] id)
+	{
+		auto s = db.prepare("SELECT name, parentId FROM item WHERE id = ?");
+		string path;
+		while (true) {
+			s.bind(1, id);
+			auto r = s.exec();
+			if (r.empty) break;
+			if (path) path = r.front[0].idup ~ "/" ~ path;
+			else path = r.front[0].dup;
+			id = r.front[1].dup;
+		}
+		return path;
 	}
 
 	private string computePath(const(char)[] name, const(char)[] parentId)

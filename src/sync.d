@@ -1,5 +1,5 @@
 import core.exception: RangeError;
-import std.file, std.json, std.path, std.stdio;
+import std.datetime, std.file, std.json, std.path, std.stdio;
 import cache, config, onedrive, util;
 
 private string statusTokenFile = "status_token";
@@ -113,9 +113,7 @@ final class SyncEngine
 		ItemType type;
 		if (isItemDeleted(item)) {
 			writeln("The item is marked for deletion");
-			if (cached) {
-				applyDelete(cachedItem);
-			}
+			if (cached) applyDelete(cachedItem);
 			return;
 		} else if (isItemFile(item)) {
 			type = ItemType.file;
