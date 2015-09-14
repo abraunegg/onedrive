@@ -60,11 +60,6 @@ final class SyncEngine
 		this.cfg = cfg;
 		this.onedrive = onedrive;
 		itemCache.init();
-		folderItem = parseJSON("{
-			\"name\": \"\",
-			\"folder\": {},
-			\"fileSystemInfo\": { \"lastModifiedDateTime\": \"\" }
-		}");
 	}
 
 	void applyDifferences()
@@ -439,9 +434,9 @@ final class SyncEngine
 	void createFolderItem(const(char)[] path)
 	{
 		writeln("Creating folder ...");
-		folderItem["name"] = baseName(path).idup;
-		folderItem["fileSystemInfo"].object["lastModifiedDateTime"] = timeLastModified(path).toUTC().toISOExtString();
-		auto res = onedrive.createByPath(dirName(path), folderItem);
+		JSONValue item = ["name": baseName(path).dup];
+		item["folder"] = parseJSON("{}");
+		auto res = onedrive.createByPath(dirName(path), item);
 		cacheItem(res);
 	}
 
