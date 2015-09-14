@@ -5,8 +5,8 @@ SOURCES = \
 	/usr/include/dlang/dmd/core/sys/posix/poll.d \
 	/usr/include/dlang/dmd/etc/c/curl.d \
 	/usr/include/dlang/dmd/std/net/curl.d \
-	src/cache.d \
 	src/config.d \
+	src/itemdb.d \
 	src/main.d \
 	src/monitor.d \
 	src/onedrive.d \

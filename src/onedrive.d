@@ -36,7 +36,7 @@ final class OneDriveApi
 		this.clientId = cfg.get("client_id");
 		this.clientSecret = cfg.get("client_secret");
 		http = HTTP();
-		http.verbose = verbose;
+		//http.verbose = verbose;
 	}
 
 	~this()

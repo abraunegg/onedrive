@@ -1,8 +1,6 @@
 import core.exception: RangeError;
 import std.datetime, std.file, std.json, std.path, std.stdio;
-import cache, config, onedrive, util;
-
-private string statusTokenFile = "status_token";
+import config, itemdb, onedrive, util;
 
 private bool isItemFolder(const ref JSONValue item)
 {
@@ -48,47 +46,43 @@ class SyncException: Exception
 
 final class SyncEngine
 {
-	Config cfg;
-	OneDriveApi onedrive;
-	ItemCache itemCache;
-	string[] itemToDelete; // array of items to be deleted
-	JSONValue folderItem;
+	private Config cfg;
+	private OneDriveApi onedrive;
+	private ItemDatabase itemdb;
+	private bool verbose;
+	private string statusToken;
+	private string[] itemsToDelete;
 
-	this(Config cfg, OneDriveApi onedrive)
+	void delegate(string) onStatusToken;
+
+	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, bool verbose)
 	{
-		assert(onedrive);
+		assert(onedrive && itemdb);
 		this.cfg = cfg;
 		this.onedrive = onedrive;
-		itemCache.init();
+		this.itemdb = itemdb;
+		this.verbose = verbose;
+	}
+
+	void setStatusToken(string statusToken)
+	{
+		this.statusToken = statusToken;
 	}
 
 	void applyDifferences()
 	{
-		string statusToken;
-		try {
-			statusToken = readText(statusTokenFile);
-		} catch (FileException e) {
-			writeln("Welcome !");
-		}
-		writeln("Applying differences ...");
-
-		string currDir = getcwd();
-		string syncDir = cfg.get("sync_dir");
-
+		if (verbose) writeln("Applying differences ...");
 		JSONValue changes;
 		do {
-			chdir(syncDir);
-			changes = onedrive.viewChangesByPath("test", statusToken);
+			changes = onedrive.viewChangesByPath("/", statusToken);
 			foreach (item; changes["value"].array) {
 				applyDifference(item);
 			}
 			statusToken = changes["@changes.token"].str;
-			chdir(currDir);
-			std.file.write(statusTokenFile, statusToken);
+			onStatusToken(statusToken);
 		} while (changes["@changes.hasMoreChanges"].type == JSON_TYPE.TRUE);
-		chdir(syncDir);
-		deleteFiles();
-		chdir(currDir);
+		// delete items in itemsToDelete
+		deleteItems();
 	}
 
 	private void applyDifference(JSONValue item)
@@ -97,27 +91,33 @@ final class SyncEngine
 		string name = item["name"].str;
 		string eTag = item["eTag"].str;
 
+		if (verbose) writeln(id, " ", name);
+
 		Item cachedItem;
-		bool cached = itemCache.selectById(id, cachedItem);
+		bool cached = itemdb.selectById(id, cachedItem);
+
+		if (cached && !isItemSynced(cachedItem)) {
+			if (verbose) writeln("The local item is out of sync, renaming ...");
+			safeRename(cachedItem.path);
+			cached = false;
+		}
 
 		// skip items already downloaded
 		//if (cached && cachedItem.eTag == eTag) return;
 
-		writeln("Item ", id, " ", name);
-
 		ItemType type;
 		if (isItemDeleted(item)) {
-			writeln("The item is marked for deletion");
-			if (cached) applyDelete(cachedItem);
+			if (verbose) writeln("The item is marked for deletion");
+			if (cached) applyDeleteItem(cachedItem);
 			return;
 		} else if (isItemFile(item)) {
+			if (verbose) writeln("The item is a file");
 			type = ItemType.file;
-			writeln("The item is a file");
 		} else if (isItemFolder(item)) {
+			if (verbose) writeln("The item is a directory");
 			type = ItemType.dir;
-			writeln("The item is a directory");
 		} else {
-			writeln("The item is neither a file nor a directory, skipping");
+			writeln("The item is neither a file nor a directory");
 			//skippedFolders ~= id;
 			return;
 		}
@@ -131,18 +131,17 @@ final class SyncEngine
 			try {
 				crc32 = item["file"].object["hashes"].object["crc32Hash"].str;
 			} catch (JSONException e) {
-				writeln("The hash is not available");
+				if (verbose) writeln("The hash is not available");
 			} catch (RangeError e) {
-				writeln("The crc32 hash is not available");
+				if (verbose) writeln("The crc32 hash is not available");
 			}
 		}
 
 		Item newItem;
-		itemCache.insert(id, name, type, eTag, cTag, mtime, parentId, crc32);
-		itemCache.selectById(id, newItem);
+		itemdb.insert(id, name, type, eTag, cTag, mtime, parentId, crc32);
+		itemdb.selectById(id, newItem);
 
-		writeln("Path: ", newItem.path);
-
+		// TODO add item in the db anly if correctly downloaded
 		try {
 			if (!cached) {
 				applyNewItem(newItem);
@@ -150,7 +149,7 @@ final class SyncEngine
 				applyChangedItem(cachedItem, newItem);
 			}
 		} catch (SyncException e) {
-			itemCache.deleteById(id);
+			itemdb.deleteById(id);
 			throw e;
 		}
 	}
@@ -160,7 +159,7 @@ final class SyncEngine
 		string id = item["id"].str;
 		ItemType type;
 		if (isItemDeleted(item)) {
-			itemCache.deleteById(id);
+			itemdb.deleteById(id);
 		} else if (isItemFile(item)) {
 			type = ItemType.file;
 		} else if (isItemFolder(item)) {
@@ -184,40 +183,32 @@ final class SyncEngine
 				writeln("The crc32 hash is not available");
 			}
 		}
-		itemCache.insert(id, name, type, eTag, cTag, mtime, parentId, crc32);
+		itemdb.insert(id, name, type, eTag, cTag, mtime, parentId, crc32);
 	}
 
-	private void applyDelete(Item item)
+	private void applyDeleteItem(Item item)
 	{
-		if (exists(item.path)) {
-			if (isItemSynced(item)) {
-				addFileToDelete(item.path);
-			} else {
-				writeln("The local item is not synced, renaming ...");
-				safeRename(item.path);
-			}
-		} else {
-			writeln("The local item is already deleted");
-		}
-		itemCache.deleteById(item.id);
+		itemsToDelete ~= item.path;
+		itemdb.deleteById(item.id);
 	}
+
 	private void applyNewItem(Item item)
 	{
 		assert(item.id);
 		if (exists(item.path)) {
 			if (isItemSynced(item)) {
-				writeln("The item is already present");
-				// ensure the modified time is synced
+				if (verbose) writeln("The item is already present");
+				// ensure the modified time is correct
 				setTimes(item.path, item.mtime, item.mtime);
 				return;
 			} else {
-				writeln("The item is not synced, renaming ...");
+				if (verbose) writeln("The local item is out of sync, renaming ...");
 				safeRename(item.path);
 			}
 		}
 		final switch (item.type) {
 		case ItemType.file:
-			writeln("Downloading ...");
+			writeln("Downloading: ", item.path);
 			try {
 				onedrive.downloadById(item.id, item.path);
 			} catch (OneDriveException e) {
@@ -225,7 +216,7 @@ final class SyncEngine
 			}
 			break;
 		case ItemType.dir:
-			writeln("Creating local directory...");
+			writeln("Creating directory: ", item.path);
 			mkdir(item.path);
 			break;
 		}
@@ -235,92 +226,86 @@ final class SyncEngine
 	private void applyChangedItem(Item oldItem, Item newItem)
 	{
 		assert(oldItem.id == newItem.id);
-		if (exists(oldItem.path)) {
-			if (isItemSynced(oldItem)) {
-				if (oldItem.eTag != newItem.eTag) {
-					assert(oldItem.type == newItem.type);
-					if (oldItem.path != newItem.path) {
-						writeln("Moved item ", oldItem.path, " to ", newItem.path);
-						if (exists(newItem.path)) {
-							writeln("The destination is occupied, renaming ...");
-							safeRename(newItem.path);
-						}
-						rename(oldItem.path, newItem.path);
-					}
-					if (oldItem.type == ItemType.file && oldItem.cTag != newItem.cTag) {
-						writeln("Downloading ...");
-						onedrive.downloadById(oldItem.id, oldItem.path);
-					}
-					setTimes(newItem.path, newItem.mtime, newItem.mtime);
-					writeln("Updated last modified time");
-				} else {
-					writeln("The item is not changed");
+		assert(oldItem.type == newItem.type);
+		assert(exists(oldItem.path));
+
+		if (oldItem.eTag != newItem.eTag) {
+			if (oldItem.path != newItem.path) {
+				writeln("Moving: ", oldItem.path, " -> ", newItem.path);
+				if (exists(newItem.path)) {
+					if (verbose) writeln("The destination is occupied, renaming ...");
+					safeRename(newItem.path);
 				}
-			} else {
-				writeln("The item is not synced, renaming ...");
-				safeRename(oldItem.path);
-				applyNewItem(newItem);
+				rename(oldItem.path, newItem.path);
 			}
+			if (newItem.type == ItemType.file && oldItem.cTag != newItem.cTag) {
+				writeln("Downloading: ", newItem.path);
+				onedrive.downloadById(newItem.id, newItem.path);
+			}
+			setTimes(newItem.path, newItem.mtime, newItem.mtime);
 		} else {
-			applyNewItem(newItem);
+			if (verbose) writeln("The item is not changed");
 		}
 	}
 
 	// returns true if the given item corresponds to the local one
 	private bool isItemSynced(Item item)
 	{
+		if (!exists(item.path)) return false;
 		final switch (item.type) {
 		case ItemType.file:
 			if (isFile(item.path)) {
 				SysTime localModifiedTime = timeLastModified(item.path);
 				import core.time: Duration;
 				item.mtime.fracSecs = Duration.zero; // HACK
-				if (localModifiedTime == item.mtime) return true;
-				else {
-					writeln("The local item has a different modified time ", localModifiedTime, " remote is ", item.mtime);
+				if (localModifiedTime == item.mtime) {
+					return true;
+				} else {
+					if (verbose) writeln("The local item has a different modified time ", localModifiedTime, " remote is ", item.mtime);
 				}
 				if (item.crc32) {
 					string localCrc32 = computeCrc32(item.path);
-					if (localCrc32 == item.crc32) return true;
-					else {
-						writeln("The local item has a different hash");
+					if (localCrc32 == item.crc32) {
+						return true;
+					} else {
+						if (verbose) writeln("The local item has a different hash");
 					}
 				}
 			} else {
-				writeln("The local item is a directory but should be a file");
+				if (verbose) writeln("The local item is a directory but should be a file");
 			}
 			break;
 		case ItemType.dir:
-			if (isDir(item.path)) return true;
-			else {
-				writeln("The local item is a file but should be a directory");
+			if (isDir(item.path)) {
+				return true;
+			} else {
+				if (verbose) writeln("The local item is a file but should be a directory");
 			}
 			break;
 		}
 		return false;
 	}
 
-	private void addFileToDelete(string path)
+	private void deleteItems()
 	{
-		itemToDelete ~= path;
-	}
-
-	private void deleteFiles()
-	{
-		writeln("Deleting marked files ...");
-		foreach_reverse (ref path; itemToDelete) {
-			if (isFile(path)) {
-				remove(path);
+		if (verbose) writeln("Deleting files ...");
+		foreach_reverse (path; itemsToDelete) {
+			if (exists(path)) {
+				if (isFile(path)) {
+					remove(path);
+					writeln("Deleted file: ", path);
+				}
 			} else {
 				try {
 					rmdir(path);
+					writeln("Deleted dir: ", path);
 				} catch (FileException e) {
-					writeln("Keeping dir \"", path, "\" not empty");
+					writeln("Keeping dir: ", path);
 				}
 			}
 		}
-		itemToDelete.length = 0;
-		assumeSafeAppend(itemToDelete);
+		itemsToDelete.length = 0;
+		assumeSafeAppend(itemsToDelete);
 	}
 
 	// scan the directory for unsynced files and upload them
@@ -330,7 +315,7 @@ final class SyncEngine
 		string currDir = getcwd();
 		string syncDir = cfg.get("sync_dir");
 		chdir(syncDir);
-		foreach (Item item; itemCache.selectAll()) {
+		foreach (Item item; itemdb.selectAll()) {
 			uploadDifference(item);
 		}
 		foreach (DirEntry entry; dirEntries("test", SpanMode.breadth, false)) {
@@ -344,7 +329,7 @@ final class SyncEngine
 		assert(isDir(path));
 		Item item;
 		foreach (DirEntry entry; dirEntries(path, SpanMode.breadth, false)) {
-			if (itemCache.selectByPath(entry.name, item)) {
+			if (itemdb.selectByPath(entry.name, item)) {
 				uploadDifference(item);
 			} else {
 				uploadNewItem(entry.name);
@@ -384,7 +369,7 @@ final class SyncEngine
 	private void uploadDifference(const(char)[] path)
 	{
 		Item item;
-		if (!itemCache.selectByPath(path, item)) {
+		if (!itemdb.selectByPath(path, item)) {
 			writeln("New item ", path);
 			uploadNewItem(path);
 		}
@@ -395,7 +380,7 @@ final class SyncEngine
 	{
 		assert(isFile(path));
 		Item item;
-		if (itemCache.selectByPath(path, item)) {
+		if (itemdb.selectByPath(path, item)) {
 			uploadDifference(item);
 		} else {
 			uploadNewItem(path);
@@ -406,7 +391,7 @@ final class SyncEngine
 	{
 		writeln("Deleting ...");
 		onedrive.deleteById(item.id, item.eTag);
-		itemCache.deleteById(item.id);
+		itemdb.deleteById(item.id);
 	}
 
 	private void updateItem(Item item)
@@ -471,7 +456,7 @@ final class SyncEngine
 	{
 		writeln("Moving ", from, " to ", to, " ...");
 		Item item;
-		if (!itemCache.selectByPath(from, item)) {
+		if (!itemdb.selectByPath(from, item)) {
 			throw new SyncException("Can't move a non synced item");
 		}
 		JSONValue diff = ["name": baseName(to)];
@@ -487,7 +472,7 @@ final class SyncEngine
 	{
 		writeln("Deleting: ", path);
 		Item item;
-		if (!itemCache.selectByPath(path, item)) {
+		if (!itemdb.selectByPath(path, item)) {
 			throw new SyncException("Can't delete a non synced item");
 		}
 		deleteItem(item);
