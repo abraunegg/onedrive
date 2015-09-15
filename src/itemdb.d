@@ -223,7 +223,9 @@ final class ItemDatabase
 			else path = r.front[0].dup;
 			id = r.front[1].dup;
 		}
-		return path[5 .. $]; // HACK: skip "root/"
+		// HACK: skip "root/"
+		if (path.length < 5) return null;
+		return path[5 .. $];
 	}
 
 	/*private string computePath(const(char)[] name, const(char)[] parentId)
