@@ -1,4 +1,5 @@
-import std.datetime, std.json, std.net.curl, std.path, std.string, std.uni, std.uri;
+import std.datetime, std.exception, std.json, std.net.curl, std.path;
+import std.string, std.uni, std.uri;
 import config;
 
 private immutable {
@@ -138,9 +139,14 @@ final class OneDriveApi
 		};
 		if (eTag) http.addRequestHeader("If-Match", eTag);
 		http.addRequestHeader("Content-Type", "application/octet-stream");
-		upload(localPath, url, http);
-		// remove the headers
-		setAccessToken(accessToken);
+		try {
+			upload(localPath, url, http);
+		} catch (ErrnoException e) {
+			throw new OneDriveException(e.msg, e);
+		} finally {
+			// remove the headers
+			setAccessToken(accessToken);
+		}
 		checkHttpCode();
 		return parseJSON(content);
 	}

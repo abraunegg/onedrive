@@ -37,11 +37,22 @@ final class ItemDatabase
 			eTag     TEXT NOT NULL,
 			cTag     TEXT NOT NULL,
 			mtime    TEXT NOT NULL,
-			parentId TEXT NOT NULL,
-			crc32    TEXT
+			parentId TEXT,
+			crc32    TEXT,
+			FOREIGN KEY (parentId) REFERENCES item (id) ON DELETE CASCADE
 		)");
 		db.exec("CREATE INDEX IF NOT EXISTS name_idx ON item (name)");
-		insertItemStmt = db.prepare("INSERT OR REPLACE INTO item (id, name, type, eTag, cTag, mtime, parentId, crc32) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+		db.exec("PRAGMA foreign_keys = ON");
+		db.exec("PRAGMA recursive_triggers = ON");
+		//insertItemStmt = db.prepare("INSERT OR REPLACE INTO item (id, name, type, eTag, cTag, mtime, parentId, crc32) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+		insertItemStmt = db.prepare("
+			INSERT OR IGNORE
+			INTO item (id, name, type, eTag, cTag, mtime, parentId, crc32)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);
+			UPDATE item
+			SET name = ?2, type = ?3, eTag = ?4, cTag = ?5, mtime = ?6, parentId = ?7, crc32 = ?8
+			WHERE id = ?1
+		");
 		selectItemByIdStmt = db.prepare("SELECT id, name, type, eTag, cTag, mtime, parentId, crc32 FROM item WHERE id = ?");
 		selectItemByParentIdStmt = db.prepare("SELECT id FROM item WHERE parentId = ?");
 	}
@@ -117,7 +128,7 @@ final class ItemDatabase
 			}
 		}
 
-		auto s = db.prepare("SELECT a.id FROM item AS a LEFT JOIN item AS b ON a.parentId = b.id WHERE b.id IS NULL");
+		auto s = db.prepare("SELECT id FROM item WHERE parentId IS NULL");
 		auto r = s.exec();
 		assert(!r.empty());
 		return ItemRange(this, r.front[0].dup);

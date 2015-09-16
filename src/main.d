@@ -1,3 +1,4 @@
+import core.time, core.thread;
 import std.getopt, std.file, std.process, std.stdio;
 import config, itemdb, monitor, onedrive, sync;
 
@@ -73,19 +74,19 @@ void main(string[] args)
 	chdir(syncDir);
 	sync.applyDifferences();
 	sync.uploadDifferences();
-	return;
 
 	if (monitor) {
-		if (verbose) writeln("Monitoring for changes ...");
+		if (verbose) writeln("Initializing monitor ...");
 		Monitor m;
 		m.onDirCreated = delegate(string path) {
 			if (verbose) writeln("[M] Directory created: ", path);
 			sync.uploadCreateDir(path);
+			// the directory could be the result of a move operation
 			sync.uploadDifferences(path);
 		};
 		m.onFileChanged = delegate(string path) {
 			if (verbose) writeln("[M] File changed: ", path);
-			sync.uploadDifference2(path);
+			sync.uploadDifference(path);
 		};
 		m.onDelete = delegate(string path) {
 			if (verbose) writeln("[M] Item deleted: ", path);
@@ -93,13 +94,23 @@ void main(string[] args)
 		};
 		m.onMove = delegate(string from, string to) {
 			if (verbose) writeln("[M] Item moved: ", from, " -> ", to);
-			sync.moveItem(from, to);
+			sync.uploadMoveItem(from, to);
 		};
-		m.init();
-		m.addRecursive("test");
-		while (true) m.update();
-		// TODO download changes
+		m.init(verbose);
+		// monitor loop
+		immutable auto checkInterval = dur!"seconds"(45);
+		auto lastCheckTime = MonoTime.currTime();
+		while (true) {
+			m.update();
+			auto currTime = MonoTime.currTime();
+			if (currTime - lastCheckTime > checkInterval) {
+				lastCheckTime = currTime;
+				m.shutdown();
+				sync.applyDifferences();
+				sync.uploadDifferences();
+				m.init(verbose);
+			}
+			Thread.sleep(dur!"msecs"(100));
+		}
 	}
-
-	destroy(sync);
 }

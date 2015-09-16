@@ -83,7 +83,7 @@ final class SyncEngine
 			onStatusToken(statusToken);
 		} while (changes["@changes.hasMoreChanges"].type == JSON_TYPE.TRUE);
 		// delete items in itemsToDelete
-		deleteItems();
+		if (itemsToDelete.length > 0) deleteItems();
 		// empty the skipped items
 		skippedItems.length = 0;
 		assumeSafeAppend(skippedItems);
@@ -101,8 +101,8 @@ final class SyncEngine
 		bool cached = itemdb.selectById(id, cachedItem);
 
 		if (cached && !isItemSynced(cachedItem)) {
-			if (verbose) writeln("The local item is out of sync, renaming ...");
-			safeRename(cachedItem.path);
+			if (verbose) writeln("The local item is out of sync, renaming: ", cachedItem.path);
+			if (exists(cachedItem.path)) safeRename(cachedItem.path);
 			cached = false;
 		}
 
@@ -112,18 +112,20 @@ final class SyncEngine
 			if (cached) applyDeleteItem(cachedItem);
 			return;
 		} else if (isItemFile(item)) {
-			if (verbose) writeln("The item is a file");
 			type = ItemType.file;
 		} else if (isItemFolder(item)) {
-			if (verbose) writeln("The item is a directory");
 			type = ItemType.dir;
 		} else {
-			if (verbose) writeln("The item is neither a file nor a directory");
+			if (verbose) writeln("The item is neither a file nor a directory, skipping");
 			skippedItems ~= id;
 			return;
 		}
 
 		string parentId = item["parentReference"].object["id"].str;
+		if (name == "root" && parentId[$ - 1] == '0' && parentId[$ - 2] == '!') {
+			// HACK: recognize the root directory
+			parentId = null;
+		}
 		if (skippedItems.find(parentId).length != 0) {
 			if (verbose) writeln("The item is a children of a skipped item");
 			skippedItems ~= id;
@@ -148,7 +150,7 @@ final class SyncEngine
 		itemdb.insert(id, name, type, eTag, cTag, mtime, parentId, crc32);
 		itemdb.selectById(id, newItem);
 
-		// TODO add item in the db anly if correctly downloaded
+		// TODO add item in the db only if correctly downloaded
 		try {
 			if (!cached) {
 				applyNewItem(newItem);
@@ -283,13 +285,15 @@ final class SyncEngine
 		assumeSafeAppend(itemsToDelete);
 	}
 
-	// scan the directory for unsynced files and upload them
+	// scan the root directory for unsynced files and upload them
 	public void uploadDifferences()
 	{
 		if (verbose) writeln("Uploading differences ...");
+		// check for changed files or deleted items
 		foreach (Item item; itemdb.selectAll()) {
 			uploadDifference(item);
 		}
+		if (verbose) writeln("Uploading new items ...");
 		// check for new files or directories
 		foreach (DirEntry entry; dirEntries(".", SpanMode.breadth, false)) {
 			string path = entry.name[2 .. $]; // HACK: skip "./"
@@ -304,16 +308,12 @@ final class SyncEngine
 		}
 	}
 
-	public void uploadDifferences(string path)
+	/* scan the specified directory for unsynced files and uplaod them
+	   NOTE: this function does not check for deleted files. */
+	public void uploadDifferences(string dirname)
 	{
-		assert(isDir(path));
-		Item item;
-		foreach (DirEntry entry; dirEntries(path, SpanMode.breadth, false)) {
-			if (itemdb.selectByPath(entry.name, item)) {
-				uploadDifference(item);
-			} else {
-				uploadNewFile(entry.name);
-			}
+		foreach (DirEntry entry; dirEntries(dirname, SpanMode.breadth, false)) {
+			uploadDifference(entry.name);
 		}
 	}
 
@@ -344,6 +344,17 @@ final class SyncEngine
 		} else {
 			if (verbose) writeln("The item has been deleted");
 			uploadDeleteItem(item);
+		}
+	}
+
+	// NOTE: this function works only for files
+	void uploadDifference(string filename)
+	{
+		Item item;
+		if (itemdb.selectByPath(filename, item)) {
+			uploadDifference(item);
+		} else {
+			uploadNewFile(filename);
 		}
 	}
 
@@ -383,7 +394,13 @@ final class SyncEngine
 	private void uploadNewFile(string path)
 	{
 		writeln("Uploading: ", path);
-		auto res = onedrive.simpleUpload(path, path);
+		JSONValue res;
+		try {
+			res = onedrive.simpleUpload(path, path);
+		} catch (OneDriveException e) {
+			writeln(e.msg);
+			return;
+		}
 		saveItem(res);
 		string id = res["id"].str;
 		string eTag = res["eTag"].str;
@@ -392,7 +409,7 @@ final class SyncEngine
 
 	private void uploadDeleteItem(Item item)
 	{
-		writeln("Deleting remote: ", item.path);
+		writeln("Deleting remote item: ", item.path);
 		onedrive.deleteById(item.id, item.eTag);
 		itemdb.deleteById(item.id);
 	}
@@ -437,40 +454,27 @@ final class SyncEngine
 		itemdb.insert(id, name, type, eTag, cTag, mtime, parentId, crc32);
 	}
 
-	// HACK
-	void uploadDifference2(string path)
+	void uploadMoveItem(const(char)[] from, string to)
 	{
-		assert(isFile(path));
-		Item item;
-		if (itemdb.selectByPath(path, item)) {
-			uploadDifference(item);
-		} else {
-			uploadNewFile(path);
-		}
-	}
-
-	void moveItem(const(char)[] from, string to)
-	{
-		writeln("Moving ", from, " to ", to, " ...");
+		writeln("Moving remote item: ", from, " -> ", to);
 		Item item;
 		if (!itemdb.selectByPath(from, item)) {
-			throw new SyncException("Can't move a non synced item");
+			writeln("Can't move an unsynced item");
+			return;
 		}
 		JSONValue diff = ["name": baseName(to)];
 		diff["parentReference"] = JSONValue([
 			"path": "/drive/root:/" ~ dirName(to)
 		]);
-		writeln(diff.toPrettyString());
 		auto res = onedrive.updateById(item.id, diff, item.eTag);
 		saveItem(res);
 	}
 
 	void deleteByPath(const(char)[] path)
 	{
-		writeln("Deleting: ", path);
 		Item item;
 		if (!itemdb.selectByPath(path, item)) {
-			throw new SyncException("Can't delete a non synced item");
+			throw new SyncException("Can't delete an unsynced item");
 		}
 		uploadDeleteItem(item);
 	}
