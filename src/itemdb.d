@@ -224,7 +224,7 @@ final class ItemDatabase
 			id = r.front[1].dup;
 		}
 		// HACK: skip "root/"
-		if (path.length < 5) return null;
+		if (path.length < 5) return ".";
 		return path[5 .. $];
 	}
 

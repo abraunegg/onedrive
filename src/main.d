@@ -1,11 +1,11 @@
 import std.getopt, std.file, std.process, std.stdio;
-import config, monitor, onedrive, sync;
+import config, itemdb, monitor, onedrive, sync;
 
 string ver = "1.0";
 
 void main(string[] args)
 {
-	bool monitor, resync, resetLocal, resetRemote,  verbose;
+	bool monitor, resync, verbose;
 	try {
 		writeln("OneDrive Client for Linux v", ver);
 		auto opt = getopt(
@@ -29,10 +29,10 @@ void main(string[] args)
 	string configFilePath = configDirName ~ "/config";
 	string refreshTokenFilePath = configDirName ~ "/refresh_token";
 	string statusTokenFilePath = configDirName ~ "/status_token";
-	string databaseFilePath = configDirName ~ "/database";
+	string databaseFilePath = configDirName ~ "/items.db";
 
-	if (resync || resetLocal || resetRemote) {
-		if (verbose) writeln("Deleting the current status ...");
+	if (resync) {
+		if (verbose) writeln("Deleting the saved status ...");
 		if (exists(databaseFilePath)) remove(databaseFilePath);
 		if (exists(statusTokenFilePath)) remove(statusTokenFilePath);
 	}
@@ -54,17 +54,33 @@ void main(string[] args)
 	}
 	// TODO check if the token is valid
 
+	if (verbose) writeln("Opening the item database ...");
+	auto itemdb = new ItemDatabase(databaseFilePath);
+
 	if (verbose) writeln("Initializing the Synchronization Engine ...");
-	auto sync = new SyncEngine(cfg, onedrive);
+	auto sync = new SyncEngine(cfg, onedrive, itemdb, verbose);
+	sync.onStatusToken = (string statusToken) {
+		std.file.write(statusTokenFilePath, statusToken);
+	};
+	try {
+		string statusToken = readText(statusTokenFilePath);
+		sync.setStatusToken(statusToken);
+	} catch (FileException e) {
+		// swallow exception
+	}
+
+	string syncDir = cfg.get("sync_dir");
+	chdir(syncDir);
 	sync.applyDifferences();
 	sync.uploadDifferences();
+	return;
 
 	if (monitor) {
 		if (verbose) writeln("Monitoring for changes ...");
 		Monitor m;
 		m.onDirCreated = delegate(string path) {
 			if (verbose) writeln("[M] Directory created: ", path);
-			sync.createFolderItem(path);
+			sync.uploadCreateDir(path);
 			sync.uploadDifferences(path);
 		};
 		m.onFileChanged = delegate(string path) {
@@ -80,10 +96,10 @@ void main(string[] args)
 			sync.moveItem(from, to);
 		};
 		m.init();
-		string syncDir = cfg.get("sync_dir");
-		chdir(syncDir);
 		m.addRecursive("test");
 		while (true) m.update();
 		// TODO download changes
 	}
+
+	destroy(sync);
 }

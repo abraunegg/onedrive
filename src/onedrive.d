@@ -105,7 +105,7 @@ final class OneDriveApi
 	JSONValue viewChangesByPath(const(char)[] path, const(char)[] statusToken)
 	{
 		checkAccessTokenExpired();
-		char[] url = itemByPathUrl ~ encodeComponent(path).dup ~ ":/view.changes";
+		string url = itemByPathUrl ~ encodeComponent(path) ~ ":/view.changes";
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,fileSystemInfo,parentReference";
 		if (statusToken) url ~= "&token=" ~ statusToken;
 		return get(url);
@@ -129,7 +129,7 @@ final class OneDriveApi
 	JSONValue simpleUpload(string localPath, const(char)[] remotePath, const(char)[] eTag = null)
 	{
 		checkAccessTokenExpired();
-		char[] url = itemByPathUrl ~ remotePath ~ ":/content";
+		string url = itemByPathUrl ~ encodeComponent(remotePath) ~ ":/content";
 		if (!eTag) url ~= "?@name.conflictBehavior=fail";
 		ubyte[] content;
 		http.onReceive = (ubyte[] data) {
@@ -137,9 +137,10 @@ final class OneDriveApi
 			return data.length;
 		};
 		if (eTag) http.addRequestHeader("If-Match", eTag);
+		http.addRequestHeader("Content-Type", "application/octet-stream");
 		upload(localPath, url, http);
-		// remove the if-match header
-		if (eTag) setAccessToken(accessToken);
+		// remove the headers
+		setAccessToken(accessToken);
 		checkHttpCode();
 		return parseJSON(content);
 	}
@@ -171,7 +172,7 @@ final class OneDriveApi
 	//https://dev.onedrive.com/items/create.htm
 	JSONValue createByPath(const(char)[] parentPath, JSONValue item)
 	{
-		char[] url = itemByPathUrl ~ parentPath ~ ":/children";
+		string url = itemByPathUrl ~ encodeComponent(parentPath) ~ ":/children";
 		http.addRequestHeader("Content-Type", "application/json");
 		auto result = post(url, item.toString());
 		// remove the if-match header

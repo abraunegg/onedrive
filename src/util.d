@@ -1,10 +1,10 @@
 import std.conv: to;
 import std.digest.crc;
 import std.digest.digest;
-import std.stdio;
-import std.string: chomp;
 import std.file: exists, rename;
 import std.path: extension;
+import std.stdio;
+import std.string: chomp;
 
 private string deviceName;
 

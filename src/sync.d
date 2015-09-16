@@ -1,5 +1,5 @@
 import core.exception: RangeError;
-import std.datetime, std.file, std.json, std.path, std.stdio;
+import std.algorithm, std.datetime, std.file, std.json, std.path, std.stdio;
 import config, itemdb, onedrive, util;
 
 private bool isItemFolder(const ref JSONValue item)
@@ -51,6 +51,7 @@ final class SyncEngine
 	private ItemDatabase itemdb;
 	private bool verbose;
 	private string statusToken;
+	private string[] skippedItems;
 	private string[] itemsToDelete;
 
 	void delegate(string) onStatusToken;
@@ -83,6 +84,9 @@ final class SyncEngine
 		} while (changes["@changes.hasMoreChanges"].type == JSON_TYPE.TRUE);
 		// delete items in itemsToDelete
 		deleteItems();
+		// empty the skipped items
+		skippedItems.length = 0;
+		assumeSafeAppend(skippedItems);
 	}
 
 	private void applyDifference(JSONValue item)
@@ -102,9 +106,6 @@ final class SyncEngine
 			cached = false;
 		}
 
-		// skip items already downloaded
-		//if (cached && cachedItem.eTag == eTag) return;
-
 		ItemType type;
 		if (isItemDeleted(item)) {
 			if (verbose) writeln("The item is marked for deletion");
@@ -117,14 +118,20 @@ final class SyncEngine
 			if (verbose) writeln("The item is a directory");
 			type = ItemType.dir;
 		} else {
-			writeln("The item is neither a file nor a directory");
-			//skippedFolders ~= id;
+			if (verbose) writeln("The item is neither a file nor a directory");
+			skippedItems ~= id;
+			return;
+		}
+
+		string parentId = item["parentReference"].object["id"].str;
+		if (skippedItems.find(parentId).length != 0) {
+			if (verbose) writeln("The item is a children of a skipped item");
+			skippedItems ~= id;
 			return;
 		}
 
 		string cTag = item["cTag"].str;
 		string mtime = item["fileSystemInfo"].object["lastModifiedDateTime"].str;
-		string parentId = item["parentReference"].object["id"].str;
 
 		string crc32;
 		if (type == ItemType.file) {
@@ -152,38 +159,6 @@ final class SyncEngine
 			itemdb.deleteById(id);
 			throw e;
 		}
-	}
-
-	private void cacheItem(JSONValue item)
-	{
-		string id = item["id"].str;
-		ItemType type;
-		if (isItemDeleted(item)) {
-			itemdb.deleteById(id);
-		} else if (isItemFile(item)) {
-			type = ItemType.file;
-		} else if (isItemFolder(item)) {
-			type = ItemType.dir;
-		} else {
-			writeln("The item is neither a file nor a directory, skipping");
-			return;
-		}
-		string name = item["name"].str;
-		string eTag = item["eTag"].str;
-		string cTag = item["cTag"].str;
-		string mtime = item["fileSystemInfo"].object["lastModifiedDateTime"].str;
-		string parentId = item["parentReference"].object["id"].str;
-		string crc32;
-		if (type == ItemType.file) {
-			try {
-				crc32 = item["file"].object["hashes"].object["crc32Hash"].str;
-			} catch (JSONException e) {
-				writeln("The hash is not available");
-			} catch (RangeError e) {
-				writeln("The crc32 hash is not available");
-			}
-		}
-		itemdb.insert(id, name, type, eTag, cTag, mtime, parentId, crc32);
 	}
 
 	private void applyDeleteItem(Item item)
@@ -311,17 +286,22 @@ final class SyncEngine
 	// scan the directory for unsynced files and upload them
 	public void uploadDifferences()
 	{
-		writeln("Uploading differences ...");
-		string currDir = getcwd();
-		string syncDir = cfg.get("sync_dir");
-		chdir(syncDir);
+		if (verbose) writeln("Uploading differences ...");
 		foreach (Item item; itemdb.selectAll()) {
 			uploadDifference(item);
 		}
-		foreach (DirEntry entry; dirEntries("test", SpanMode.breadth, false)) {
-			uploadDifference(entry.name/*[2 .. $]*/);
+		// check for new files or directories
+		foreach (DirEntry entry; dirEntries(".", SpanMode.breadth, false)) {
+			string path = entry.name[2 .. $]; // HACK: skip "./"
+			Item item;
+			if (!itemdb.selectByPath(path, item)) {
+				if (entry.isDir) {
+					uploadCreateDir(path);
+				} else {
+					uploadNewFile(path);
+				 }
+			}
 		}
-		chdir(currDir);
 	}
 
 	public void uploadDifferences(string path)
@@ -332,123 +312,140 @@ final class SyncEngine
 			if (itemdb.selectByPath(entry.name, item)) {
 				uploadDifference(item);
 			} else {
-				uploadNewItem(entry.name);
+				uploadNewFile(entry.name);
 			}
 		}
 	}
 
 	private void uploadDifference(Item item)
 	{
-		writeln(item.path);
+		if (verbose) writeln(item.id, " ", item.name);
 		if (exists(item.path)) {
 			final switch (item.type) {
 			case ItemType.file:
 				if (isFile(item.path)) {
-					updateItem(item);
+					uploadItemDifferences(item);
 				} else {
-					deleteItem(item);
-					createFolderItem(item.path);
+					if (verbose) writeln("The item was a file but now is a directory");
+					uploadDeleteItem(item);
+					uploadCreateDir(item.path);
 				}
 				break;
 			case ItemType.dir:
-				if (isDir(item.path)) {
-					updateItem(item);
+				if (!isDir(item.path)) {
+					if (verbose) writeln("The item was a directory but now is a file");
+					uploadDeleteItem(item);
+					uploadNewFile(item.path);
 				} else {
-					deleteItem(item);
-					writeln("Uploading ...");
-					auto res = onedrive.simpleUpload(item.path, item.path);
-					cacheItem(res);
+					if (verbose) writeln("The item has not changed");
 				}
 				break;
 			}
 		} else {
-			deleteItem(item);
+			if (verbose) writeln("The item has been deleted");
+			uploadDeleteItem(item);
 		}
 	}
 
-	private void uploadDifference(const(char)[] path)
-	{
-		Item item;
-		if (!itemdb.selectByPath(path, item)) {
-			writeln("New item ", path);
-			uploadNewItem(path);
-		}
-	}
-
-	// HACK
-	void uploadDifference2(const(char)[] path)
-	{
-		assert(isFile(path));
-		Item item;
-		if (itemdb.selectByPath(path, item)) {
-			uploadDifference(item);
-		} else {
-			uploadNewItem(path);
-		}
-	}
-
-	private void deleteItem(Item item)
-	{
-		writeln("Deleting ...");
-		onedrive.deleteById(item.id, item.eTag);
-		itemdb.deleteById(item.id);
-	}
-
-	private void updateItem(Item item)
+	// check if the item is changed and upload the differences
+	private void uploadItemDifferences(Item item)
 	{
 		SysTime localModifiedTime = timeLastModified(item.path);
 		import core.time: Duration;
 		item.mtime.fracSecs = Duration.zero; // HACK
 		if (localModifiedTime != item.mtime) {
+			if (verbose) writeln("The item last modified time has changed");
 			string id = item.id;
 			string eTag = item.eTag;
 			if (item.type == ItemType.file && !testCrc32(item.path, item.crc32)) {
-				assert(isFile(item.path));
-				writeln("Uploading ...");
-				JSONValue res = onedrive.simpleUpload(item.path, item.path, item.eTag);
-				cacheItem(res);
+				if (verbose) writeln("The item content has changed");
+				writeln("Uploading: ", item.path);
+				auto res = onedrive.simpleUpload(item.path, item.path, item.eTag);
+				saveItem(res);
 				id = res["id"].str;
 				eTag = res["eTag"].str;
 			}
-			updateItemLastModifiedTime(id, eTag, localModifiedTime.toUTC());
+			uploadLastModifiedTime(id, eTag, localModifiedTime.toUTC());
 		} else {
-			writeln("The item is not changed");
+			if (verbose) writeln("The item has not changed");
 		}
 	}
 
-	void createFolderItem(const(char)[] path)
+	void uploadCreateDir(const(char)[] path)
 	{
-		writeln("Creating folder ...");
-		JSONValue item = ["name": baseName(path).dup];
+		writeln("Creating remote directory: ", path);
+		JSONValue item = ["name": baseName(path).idup];
 		item["folder"] = parseJSON("{}");
 		auto res = onedrive.createByPath(dirName(path), item);
-		cacheItem(res);
+		saveItem(res);
 	}
 
-	private void updateItemLastModifiedTime(const(char)[] id, const(char)[] eTag, SysTime mtime)
+	private void uploadNewFile(string path)
 	{
-		writeln("Updating last modified time ...");
+		writeln("Uploading: ", path);
+		auto res = onedrive.simpleUpload(path, path);
+		saveItem(res);
+		string id = res["id"].str;
+		string eTag = res["eTag"].str;
+		uploadLastModifiedTime(id, eTag, timeLastModified(path).toUTC());
+	}
+
+	private void uploadDeleteItem(Item item)
+	{
+		writeln("Deleting remote: ", item.path);
+		onedrive.deleteById(item.id, item.eTag);
+		itemdb.deleteById(item.id);
+	}
+
+	private void uploadLastModifiedTime(const(char)[] id, const(char)[] eTag, SysTime mtime)
+	{
 		JSONValue mtimeJson = [
 			"fileSystemInfo": JSONValue([
 				"lastModifiedDateTime": mtime.toISOExtString()
 			])
 		];
 		auto res = onedrive.updateById(id, mtimeJson, eTag);
-		cacheItem(res);
+		saveItem(res);
 	}
 
-	private void uploadNewItem(const(char)[] path)
+	private void saveItem(JSONValue item)
 	{
-		assert(exists(path));
-		if (isFile(path)) {
-			writeln("Uploading file ...");
-			JSONValue res = onedrive.simpleUpload(path.dup, path);
-			cacheItem(res);
-			string id = res["id"].str;
-			string eTag = res["eTag"].str;
-			updateItemLastModifiedTime(id, eTag, timeLastModified(path).toUTC());
+		string id = item["id"].str;
+		ItemType type;
+		if (isItemFile(item)) {
+			type = ItemType.file;
+		} else if (isItemFolder(item)) {
+			type = ItemType.dir;
 		} else {
-			createFolderItem(path);
+			assert(0);
+		}
+		string name = item["name"].str;
+		string eTag = item["eTag"].str;
+		string cTag = item["cTag"].str;
+		string mtime = item["fileSystemInfo"].object["lastModifiedDateTime"].str;
+		string parentId = item["parentReference"].object["id"].str;
+		string crc32;
+		if (type == ItemType.file) {
+			try {
+				crc32 = item["file"].object["hashes"].object["crc32Hash"].str;
+			} catch (JSONException e) {
+				// swallow exception
+			} catch (RangeError e) {
+				// swallow exception
+			}
+		}
+		itemdb.insert(id, name, type, eTag, cTag, mtime, parentId, crc32);
+	}
+
+	// HACK
+	void uploadDifference2(string path)
+	{
+		assert(isFile(path));
+		Item item;
+		if (itemdb.selectByPath(path, item)) {
+			uploadDifference(item);
+		} else {
+			uploadNewFile(path);
 		}
 	}
 
@@ -465,7 +462,7 @@ final class SyncEngine
 		]);
 		writeln(diff.toPrettyString());
 		auto res = onedrive.updateById(item.id, diff, item.eTag);
-		cacheItem(res);
+		saveItem(res);
 	}
 
 	void deleteByPath(const(char)[] path)
@@ -475,6 +472,6 @@ final class SyncEngine
 		if (!itemdb.selectByPath(path, item)) {
 			throw new SyncException("Can't delete a non synced item");
 		}
-		deleteItem(item);
+		uploadDeleteItem(item);
 	}
 }
