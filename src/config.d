@@ -10,12 +10,13 @@ struct Config
 		this.filename = filename;
 	}
 
-	string get(string key)
+	string get(string key, string def = null)
 	{
 		import core.exception;
 		try {
 			return values[key];
 		} catch (RangeError e) {
+			if (def) return def;
 			throw new Exception("Missing config value: " ~ key);
 		}
 	}
