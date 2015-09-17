@@ -86,7 +86,11 @@ void main(string[] args)
 		};
 		m.onFileChanged = delegate(string path) {
 			if (verbose) writeln("[M] File changed: ", path);
-			sync.uploadDifference(path);
+			try {
+				sync.uploadDifference(path);
+			} catch(SyncException e) {
+				writeln(e.msg);
+			}
 		};
 		m.onDelete = delegate(string path) {
 			if (verbose) writeln("[M] Item deleted: ", path);

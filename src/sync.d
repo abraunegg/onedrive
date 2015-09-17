@@ -146,8 +146,12 @@ final class SyncEngine
 			}
 		}
 
+		if (cached) {
+			itemdb.update(id, name, type, eTag, cTag, mtime, parentId, crc32);
+		} else {
+			itemdb.insert(id, name, type, eTag, cTag, mtime, parentId, crc32);
+		}
 		Item newItem;
-		itemdb.insert(id, name, type, eTag, cTag, mtime, parentId, crc32);
 		itemdb.selectById(id, newItem);
 
 		// TODO add item in the db only if correctly downloaded
@@ -324,7 +328,25 @@ final class SyncEngine
 			final switch (item.type) {
 			case ItemType.file:
 				if (isFile(item.path)) {
-					uploadItemDifferences(item);
+					SysTime localModifiedTime = timeLastModified(item.path);
+					import core.time: Duration;
+					item.mtime.fracSecs = Duration.zero; // HACK
+					if (localModifiedTime != item.mtime) {
+						if (verbose) writeln("The item last modified time has changed");
+						string id = item.id;
+						string eTag = item.eTag;
+						if (!testCrc32(item.path, item.crc32)) {
+							if (verbose) writeln("The item content has changed");
+							writeln("Uploading: ", item.path);
+							auto res = onedrive.simpleUpload(item.path, item.path, item.eTag);
+							saveItem(res);
+							id = res["id"].str;
+							eTag = res["eTag"].str;
+						}
+						uploadLastModifiedTime(id, eTag, localModifiedTime.toUTC());
+					} else {
+						if (verbose) writeln("The item has not changed");
+					}
 				} else {
 					if (verbose) writeln("The item was a file but now is a directory");
 					uploadDeleteItem(item);
@@ -347,38 +369,21 @@ final class SyncEngine
 		}
 	}
 
-	// NOTE: this function works only for files
-	void uploadDifference(string filename)
+	void uploadDifference(string path)
 	{
-		Item item;
-		if (itemdb.selectByPath(filename, item)) {
-			uploadDifference(item);
-		} else {
-			uploadNewFile(filename);
-		}
-	}
-
-	// check if the item is changed and upload the differences
-	private void uploadItemDifferences(Item item)
-	{
-		SysTime localModifiedTime = timeLastModified(item.path);
-		import core.time: Duration;
-		item.mtime.fracSecs = Duration.zero; // HACK
-		if (localModifiedTime != item.mtime) {
-			if (verbose) writeln("The item last modified time has changed");
-			string id = item.id;
-			string eTag = item.eTag;
-			if (item.type == ItemType.file && !testCrc32(item.path, item.crc32)) {
-				if (verbose) writeln("The item content has changed");
-				writeln("Uploading: ", item.path);
-				auto res = onedrive.simpleUpload(item.path, item.path, item.eTag);
-				saveItem(res);
-				id = res["id"].str;
-				eTag = res["eTag"].str;
+		try {
+			Item item;
+			if (itemdb.selectByPath(path, item)) {
+				uploadDifference(item);
+			} else {
+				if (isDir(path)) {
+					uploadCreateDir(path);
+				} else {
+					uploadNewFile(path);
+				 }
 			}
-			uploadLastModifiedTime(id, eTag, localModifiedTime.toUTC());
-		} else {
-			if (verbose) writeln("The item has not changed");
+		} catch (FileException e) {
+			throw new SyncException(e.msg, e);
 		}
 	}
 
@@ -404,7 +409,14 @@ final class SyncEngine
 		saveItem(res);
 		string id = res["id"].str;
 		string eTag = res["eTag"].str;
-		uploadLastModifiedTime(id, eTag, timeLastModified(path).toUTC());
+		SysTime mtime;
+		try {
+			mtime = timeLastModified(path).toUTC();
+		} catch (FileException e) {
+			writeln(e.msg);
+			return;
+		}
+		uploadLastModifiedTime(id, eTag, mtime);
 	}
 
 	private void uploadDeleteItem(Item item)
@@ -451,16 +463,19 @@ final class SyncEngine
 				// swallow exception
 			}
 		}
-		itemdb.insert(id, name, type, eTag, cTag, mtime, parentId, crc32);
+		itemdb.upsert(id, name, type, eTag, cTag, mtime, parentId, crc32);
 	}
 
 	void uploadMoveItem(const(char)[] from, string to)
 	{
 		writeln("Moving remote item: ", from, " -> ", to);
 		Item item;
-		if (!itemdb.selectByPath(from, item)) {
+		if (!itemdb.selectByPath(from, item) || !isItemSynced(item)) {
 			writeln("Can't move an unsynced item");
 			return;
+		}
+		if (itemdb.selectByPath(to, item)) {
+			uploadDeleteItem(item);
 		}
 		JSONValue diff = ["name": baseName(to)];
 		diff["parentReference"] = JSONValue([
@@ -468,6 +483,9 @@ final class SyncEngine
 		]);
 		auto res = onedrive.updateById(item.id, diff, item.eTag);
 		saveItem(res);
+		string id = res["id"].str;
+		string eTag = res["eTag"].str;
+		uploadLastModifiedTime(id, eTag, timeLastModified(to).toUTC());
 	}
 
 	void deleteByPath(const(char)[] path)

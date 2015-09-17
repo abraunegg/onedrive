@@ -24,6 +24,7 @@ final class ItemDatabase
 {
 	Database db;
 	Statement insertItemStmt;
+	Statement updateItemStmt;
 	Statement selectItemByIdStmt;
 	Statement selectItemByParentIdStmt;
 
@@ -44,11 +45,8 @@ final class ItemDatabase
 		db.exec("CREATE INDEX IF NOT EXISTS name_idx ON item (name)");
 		db.exec("PRAGMA foreign_keys = ON");
 		db.exec("PRAGMA recursive_triggers = ON");
-		//insertItemStmt = db.prepare("INSERT OR REPLACE INTO item (id, name, type, eTag, cTag, mtime, parentId, crc32) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-		insertItemStmt = db.prepare("
-			INSERT OR IGNORE
-			INTO item (id, name, type, eTag, cTag, mtime, parentId, crc32)
-			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);
+		insertItemStmt = db.prepare("INSERT OR REPLACE INTO item (id, name, type, eTag, cTag, mtime, parentId, crc32) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+		updateItemStmt = db.prepare("
 			UPDATE item
 			SET name = ?2, type = ?3, eTag = ?4, cTag = ?5, mtime = ?6, parentId = ?7, crc32 = ?8
 			WHERE id = ?1
@@ -60,6 +58,52 @@ final class ItemDatabase
 	void insert(const(char)[] id, const(char)[] name, ItemType type, const(char)[] eTag, const(char)[] cTag, const(char)[] mtime, const(char)[] parentId, const(char)[] crc32)
 	{
 		with (insertItemStmt) {
+			bind(1, id);
+			bind(2, name);
+			string typeStr = void;
+			final switch (type) {
+			case ItemType.file: typeStr = "file"; break;
+			case ItemType.dir:  typeStr = "dir";  break;
+			}
+			bind(3, typeStr);
+			bind(4, eTag);
+			bind(5, cTag);
+			bind(6, mtime);
+			bind(7, parentId);
+			bind(8, crc32);
+			exec();
+		}
+	}
+
+	void update(const(char)[] id, const(char)[] name, ItemType type, const(char)[] eTag, const(char)[] cTag, const(char)[] mtime, const(char)[] parentId, const(char)[] crc32)
+	{
+		with (updateItemStmt) {
+			bind(1, id);
+			bind(2, name);
+			string typeStr = void;
+			final switch (type) {
+			case ItemType.file: typeStr = "file"; break;
+			case ItemType.dir:  typeStr = "dir";  break;
+			}
+			bind(3, typeStr);
+			bind(4, eTag);
+			bind(5, cTag);
+			bind(6, mtime);
+			bind(7, parentId);
+			bind(8, crc32);
+			exec();
+		}
+	}
+
+	void upsert(const(char)[] id, const(char)[] name, ItemType type, const(char)[] eTag, const(char)[] cTag, const(char)[] mtime, const(char)[] parentId, const(char)[] crc32)
+	{
+		auto s = db.prepare("SELECT COUNT(*) FROM item WHERE id = ?");
+		s.bind(1, id);
+		auto r = s.exec();
+		Statement* p;
+		if (r.front[0] == "0") p = &insertItemStmt;
+		else p = &updateItemStmt;
+		with (p) {
 			bind(1, id);
 			bind(2, name);
 			string typeStr = void;
