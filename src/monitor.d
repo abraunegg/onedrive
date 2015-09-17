@@ -1,7 +1,8 @@
 import core.sys.linux.sys.inotify;
 import core.sys.posix.poll;
 import core.sys.posix.unistd;
-import std.exception, std.file, std.stdio, std.string;
+import std.exception, std.file, std.regex, std.stdio, std.string;
+import config;
 
 // relevant inotify events
 private immutable uint32_t mask = IN_ATTRIB | IN_CLOSE_WRITE | IN_CREATE |
@@ -18,6 +19,8 @@ class MonitorException: ErrnoException
 struct Monitor
 {
 	bool verbose;
+	// regexes that match files/dirs to skip
+	private Regex!char skipDir, skipFile;
 	// inotify file descriptor
 	private int fd;
 	// map every inotify watch descriptor to its directory
@@ -34,9 +37,11 @@ struct Monitor
 
 	@disable this(this);
 
-	void init(bool verbose)
+	void init(Config cfg, bool verbose)
 	{
 		this.verbose = verbose;
+		skipDir = regex(cfg.get("skip_dir", ""));
+		skipFile = regex(cfg.get("skip_file", ""));
 		fd = inotify_init();
 		if (fd == -1) throw new MonitorException("inotify_init failed");
 		if (!buffer) buffer = new void[4096];
@@ -53,7 +58,9 @@ struct Monitor
 	{
 		add(dirname);
 		foreach(DirEntry entry; dirEntries(dirname, SpanMode.breadth, false)) {
-			if (entry.isDir) add(entry.name);
+			if (entry.isDir) {
+				add(entry.name);
+			}
 		}
 	}
 

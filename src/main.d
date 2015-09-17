@@ -100,7 +100,7 @@ void main(string[] args)
 			if (verbose) writeln("[M] Item moved: ", from, " -> ", to);
 			sync.uploadMoveItem(from, to);
 		};
-		m.init(verbose);
+		m.init(cfg, verbose);
 		// monitor loop
 		immutable auto checkInterval = dur!"seconds"(45);
 		auto lastCheckTime = MonoTime.currTime();
@@ -112,7 +112,7 @@ void main(string[] args)
 				m.shutdown();
 				sync.applyDifferences();
 				sync.uploadDifferences();
-				m.init(verbose);
+				m.init(cfg, verbose);
 			}
 			Thread.sleep(dur!"msecs"(100));
 		}

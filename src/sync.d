@@ -1,5 +1,5 @@
 import core.exception: RangeError;
-import std.algorithm, std.datetime, std.file, std.json, std.path, std.stdio;
+import std.algorithm, std.datetime, std.file, std.json, std.path, std.regex, std.stdio;
 import config, itemdb, onedrive, util;
 
 private bool isItemFolder(const ref JSONValue item)
@@ -50,6 +50,7 @@ final class SyncEngine
 	private OneDriveApi onedrive;
 	private ItemDatabase itemdb;
 	private bool verbose;
+	private Regex!char skipDir, skipFile;
 	private string statusToken;
 	private string[] skippedItems;
 	private string[] itemsToDelete;
@@ -63,6 +64,8 @@ final class SyncEngine
 		this.onedrive = onedrive;
 		this.itemdb = itemdb;
 		this.verbose = verbose;
+		skipDir = regex(cfg.get("skip_dir", ""));
+		skipFile = regex(cfg.get("skip_file", ""));
 	}
 
 	void setStatusToken(string statusToken)
@@ -113,8 +116,18 @@ final class SyncEngine
 			return;
 		} else if (isItemFile(item)) {
 			type = ItemType.file;
+			if (!matchFirst(name, skipFile).empty) {
+				if (verbose) writeln("Filtered out");
+				skippedItems ~= id;
+				return;
+			}
 		} else if (isItemFolder(item)) {
 			type = ItemType.dir;
+			if (!matchFirst(name, skipDir).empty) {
+				if (verbose) writeln("Filtered out");
+				skippedItems ~= id;
+				return;
+			}
 		} else {
 			if (verbose) writeln("The item is neither a file nor a directory, skipping");
 			skippedItems ~= id;
@@ -312,7 +325,7 @@ final class SyncEngine
 		}
 	}
 
-	/* scan the specified directory for unsynced files and uplaod them
+	/* scan the specified directory for unsynced files and upload them
 	   NOTE: this function does not check for deleted files. */
 	public void uploadDifferences(string dirname)
 	{
@@ -324,6 +337,11 @@ final class SyncEngine
 	private void uploadDifference(Item item)
 	{
 		if (verbose) writeln(item.id, " ", item.name);
+			if (!matchFirst(name, skipFile).empty) {
+				if (verbose) writeln("Filtered out");
+				skippedItems ~= id;
+				return;
+			}
 		if (exists(item.path)) {
 			final switch (item.type) {
 			case ItemType.file:
