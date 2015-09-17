@@ -5,6 +5,13 @@ import std.string: fromStringz, toStringz;
 
 extern (C) immutable(char)* sqlite3_errstr(int); // missing from the std library
 
+static this()
+{
+	if (sqlite3_libversion_number() < 3006019) {
+		throw new SqliteException("sqlite 3.6.19 or newer is required");
+	}
+}
+
 private string ifromStringz(const(char)* cstr)
 {
 	return fromStringz(cstr).dup;
