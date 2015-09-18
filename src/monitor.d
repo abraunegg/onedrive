@@ -1,7 +1,7 @@
 import core.sys.linux.sys.inotify;
 import core.sys.posix.poll;
 import core.sys.posix.unistd;
-import std.exception, std.file, std.regex, std.stdio, std.string;
+import std.exception, std.file, std.path, std.regex, std.stdio, std.string;
 import config;
 
 // relevant inotify events
@@ -56,10 +56,12 @@ struct Monitor
 
 	private void addRecursive(string dirname)
 	{
-		add(dirname);
-		foreach(DirEntry entry; dirEntries(dirname, SpanMode.breadth, false)) {
-			if (entry.isDir) {
-				add(entry.name);
+		if (matchFirst(baseName(dirname), skipDir).empty) {
+			add(dirname);
+			foreach(DirEntry entry; dirEntries(dirname, SpanMode.shallow, false)) {
+				if (entry.isDir) {
+					addRecursive(entry.name);
+				}
 			}
 		}
 	}
@@ -112,9 +114,23 @@ struct Monitor
 				if (event.mask & IN_IGNORED) {
 					// forget the directory associated to the watch descriptor
 					wdToDirName.remove(event.wd);
+					goto skip;
 				} else if (event.mask & IN_Q_OVERFLOW) {
 					throw new MonitorException("Inotify overflow, events missing");
-				} else if (event.mask & IN_MOVED_FROM) {
+				}
+
+				// skip filtered items
+				if (event.mask & IN_ISDIR) {
+					if (!matchFirst(fromStringz(event.name.ptr), skipDir).empty) {
+						goto skip;
+					}
+				} else {
+					if (!matchFirst(fromStringz(event.name.ptr), skipFile).empty) {
+						goto skip;
+					}
+				}
+
+				if (event.mask & IN_MOVED_FROM) {
 					string path = getPath(event);
 					cookieToPath[event.cookie] = path;
 				} else if (event.mask & IN_MOVED_TO) {
@@ -149,6 +165,8 @@ struct Monitor
 				} else {
 					writeln("Unknow inotify event: ", format("%#x", event.mask));
 				}
+
+				skip:
 				i += inotify_event.sizeof + event.len;
 			}
 			// assume that the items moved outside the watched directory has been deleted

@@ -74,7 +74,6 @@ void main(string[] args)
 	chdir(syncDir);
 	sync.applyDifferences();
 	sync.scanForDifferences(".");
-	return;
 
 	if (monitor) {
 		if (verbose) writeln("Initializing monitor ...");
