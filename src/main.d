@@ -73,21 +73,20 @@ void main(string[] args)
 	string syncDir = cfg.get("sync_dir");
 	chdir(syncDir);
 	sync.applyDifferences();
-	sync.uploadDifferences();
+	sync.scanForDifferences(".");
+	return;
 
 	if (monitor) {
 		if (verbose) writeln("Initializing monitor ...");
 		Monitor m;
 		m.onDirCreated = delegate(string path) {
 			if (verbose) writeln("[M] Directory created: ", path);
-			sync.uploadCreateDir(path);
-			// the directory could be the result of a move operation
-			sync.uploadDifferences(path);
+			sync.scanForDifferences(path);
 		};
 		m.onFileChanged = delegate(string path) {
 			if (verbose) writeln("[M] File changed: ", path);
 			try {
-				sync.uploadDifference(path);
+				sync.scanForDifferences(path);
 			} catch(SyncException e) {
 				writeln(e.msg);
 			}
@@ -111,7 +110,7 @@ void main(string[] args)
 				lastCheckTime = currTime;
 				m.shutdown();
 				sync.applyDifferences();
-				sync.uploadDifferences();
+				sync.scanForDifferences(".");
 				m.init(cfg, verbose);
 			}
 			Thread.sleep(dur!"msecs"(100));

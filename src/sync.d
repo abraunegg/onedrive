@@ -51,8 +51,11 @@ final class SyncEngine
 	private ItemDatabase itemdb;
 	private bool verbose;
 	private Regex!char skipDir, skipFile;
+	// token representing the last status correctly synced
 	private string statusToken;
+	// list of items to skip while applying the changes downloaded
 	private string[] skippedItems;
+	// list of items to delete after the changes has been downloaded
 	private string[] itemsToDelete;
 
 	void delegate(string) onStatusToken;
@@ -238,7 +241,7 @@ final class SyncEngine
 			}
 			setTimes(newItem.path, newItem.mtime, newItem.mtime);
 		} else {
-			if (verbose) writeln("The item is not changed");
+			if (verbose) writeln("The item has not changed");
 		}
 	}
 
@@ -302,110 +305,115 @@ final class SyncEngine
 		assumeSafeAppend(itemsToDelete);
 	}
 
-	// scan the root directory for unsynced files and upload them
-	public void uploadDifferences()
+	// scan the given directory for differences
+	public void scanForDifferences(string path)
 	{
 		if (verbose) writeln("Uploading differences ...");
-		// check for changed files or deleted items
-		foreach (Item item; itemdb.selectAll()) {
-			uploadDifference(item);
+		Item item;
+		if (itemdb.selectByPath(path, item)) {
+			uploadDifferences(item);
 		}
 		if (verbose) writeln("Uploading new items ...");
-		// check for new files or directories
-		foreach (DirEntry entry; dirEntries(".", SpanMode.breadth, false)) {
-			string path = entry.name[2 .. $]; // HACK: skip "./"
-			Item item;
-			if (!itemdb.selectByPath(path, item)) {
-				if (entry.isDir) {
-					uploadCreateDir(path);
-				} else {
-					uploadNewFile(path);
-				 }
-			}
-		}
+		uploadNewItems(path);
 	}
 
-	/* scan the specified directory for unsynced files and upload them
-	   NOTE: this function does not check for deleted files. */
-	public void uploadDifferences(string dirname)
-	{
-		foreach (DirEntry entry; dirEntries(dirname, SpanMode.breadth, false)) {
-			uploadDifference(entry.name);
-		}
-	}
-
-	private void uploadDifference(Item item)
+	public void uploadDifferences(Item item)
 	{
 		if (verbose) writeln(item.id, " ", item.name);
-			if (!matchFirst(name, skipFile).empty) {
-				if (verbose) writeln("Filtered out");
-				skippedItems ~= id;
-				return;
-			}
+		final switch (item.type) {
+		case ItemType.dir:
+			if (!matchFirst(item.name, skipDir).empty) break;
+			uploadDirDifferences(item);
+			break;
+		case ItemType.file:
+			if (!matchFirst(item.name, skipFile).empty) break;
+			uploadFileDifferences(item);
+			break;
+		}
+	}
+
+	private void uploadDirDifferences(Item item)
+	{
+		assert(item.type == ItemType.dir);
 		if (exists(item.path)) {
-			final switch (item.type) {
-			case ItemType.file:
-				if (isFile(item.path)) {
-					SysTime localModifiedTime = timeLastModified(item.path);
-					import core.time: Duration;
-					item.mtime.fracSecs = Duration.zero; // HACK
-					if (localModifiedTime != item.mtime) {
-						if (verbose) writeln("The item last modified time has changed");
-						string id = item.id;
-						string eTag = item.eTag;
-						if (!testCrc32(item.path, item.crc32)) {
-							if (verbose) writeln("The item content has changed");
-							writeln("Uploading: ", item.path);
-							auto res = onedrive.simpleUpload(item.path, item.path, item.eTag);
-							saveItem(res);
-							id = res["id"].str;
-							eTag = res["eTag"].str;
-						}
-						uploadLastModifiedTime(id, eTag, localModifiedTime.toUTC());
-					} else {
-						if (verbose) writeln("The item has not changed");
-					}
-				} else {
-					if (verbose) writeln("The item was a file but now is a directory");
-					uploadDeleteItem(item);
-					uploadCreateDir(item.path);
+			if (!isDir(item.path)) {
+				if (verbose) writeln("The item was a directory but now is a file");
+				uploadDeleteItem(item);
+				uploadNewFile(item.path);
+			} else {
+				if (verbose) writeln("The directory has not changed");
+				// loop trough the children
+				foreach (Item child; itemdb.selectChildren(item.id)) {
+					uploadDifferences(child);
 				}
-				break;
-			case ItemType.dir:
-				if (!isDir(item.path)) {
-					if (verbose) writeln("The item was a directory but now is a file");
-					uploadDeleteItem(item);
-					uploadNewFile(item.path);
-				} else {
-					if (verbose) writeln("The item has not changed");
-				}
-				break;
 			}
 		} else {
-			if (verbose) writeln("The item has been deleted");
+			if (verbose) writeln("The directory has been deleted");
 			uploadDeleteItem(item);
 		}
 	}
 
-	void uploadDifference(string path)
+	private void uploadFileDifferences(Item item)
 	{
-		try {
-			Item item;
-			if (itemdb.selectByPath(path, item)) {
-				uploadDifference(item);
-			} else {
-				if (isDir(path)) {
-					uploadCreateDir(path);
+		assert(item.type == ItemType.file);
+		if (exists(item.path)) {
+			if (isFile(item.path)) {
+				SysTime localModifiedTime = timeLastModified(item.path);
+				import core.time: Duration;
+				item.mtime.fracSecs = Duration.zero; // HACK
+				if (localModifiedTime != item.mtime) {
+					if (verbose) writeln("The file last modified time has changed");
+					string id = item.id;
+					string eTag = item.eTag;
+					if (!testCrc32(item.path, item.crc32)) {
+						if (verbose) writeln("The file content has changed");
+						writeln("Uploading: ", item.path);
+						auto res = onedrive.simpleUpload(item.path, item.path, item.eTag);
+						saveItem(res);
+						id = res["id"].str;
+						eTag = res["eTag"].str;
+					}
+					uploadLastModifiedTime(id, eTag, localModifiedTime.toUTC());
 				} else {
-					uploadNewFile(path);
-				 }
+					if (verbose) writeln("The file has not changed");
+				}
+			} else {
+				if (verbose) writeln("The item was a file but now is a directory");
+				uploadDeleteItem(item);
+				uploadCreateDir(item.path);
 			}
-		} catch (FileException e) {
-			throw new SyncException(e.msg, e);
+		} else {
+			if (verbose) writeln("The file has been deleted");
+			uploadDeleteItem(item);
 		}
 	}
 
-	void uploadCreateDir(const(char)[] path)
+	private void uploadNewItems(string path)
+	{
+		if (isDir(path)) {
+			if (matchFirst(baseName(path), skipDir).empty) {
+				import std.string: chompPrefix;
+				path = chompPrefix(path, "./");
+				Item item;
+				if (!itemdb.selectByPath(path, item)) {
+					uploadCreateDir(path);
+				}
+				auto entries = dirEntries(path, SpanMode.shallow, false);
+				foreach (DirEntry entry; entries) {
+					uploadNewItems(entry.name);
+				}
+			}
+		} else {
+			if (matchFirst(baseName(path), skipFile).empty) {
+				Item item;
+				if (!itemdb.selectByPath(path, item)) {
+					uploadNewFile(path);
+				}
+			}
+		}
+	}
+
+	private void uploadCreateDir(const(char)[] path)
 	{
 		writeln("Creating remote directory: ", path);
 		JSONValue item = ["name": baseName(path).idup];

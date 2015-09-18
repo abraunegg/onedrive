@@ -121,61 +121,18 @@ final class ItemDatabase
 		}
 	}
 
-	// returns a range that go trough all items, depth first
-	auto selectAll()
+	Item[] selectChildren(const(char)[] id)
 	{
-		static struct ItemRange
-		{
-			ItemDatabase itemdb;
-			string[] stack1, stack2;
-
-			private this(ItemDatabase itemdb, string rootId)
-			{
-				this.itemdb = itemdb;
-				stack1.reserve(8);
-				stack2.reserve(8);
-				stack1 ~= rootId;
-				getChildren();
-			}
-
-			@property bool empty()
-			{
-				return stack2.length == 0;
-			}
-
-			@property Item front()
-			{
-				Item item;
-				bool res = itemdb.selectById(stack2[$ - 1], item);
-				assert(res);
-				return item;
-			}
-
-			void popFront()
-			{
-				stack2 = stack2[0 .. $ - 1];
-				assumeSafeAppend(stack2);
-				if (stack1.length > 0) getChildren();
-			}
-
-			private void getChildren()
-			{
-				while (true) {
-					itemdb.selectItemByParentIdStmt.bind(1, stack1[$ - 1]);
-					stack2 ~= stack1[$ - 1];
-					stack1 = stack1[0 .. $ - 1];
-					assumeSafeAppend(stack1);
-					auto res = itemdb.selectItemByParentIdStmt.exec();
-					if (res.empty) break;
-					else foreach (row; res) stack1 ~= row[0].dup;
-				}
-			}
+		selectItemByParentIdStmt.bind(1, id);
+		auto res = selectItemByParentIdStmt.exec();
+		Item[] items;
+		foreach (row; res) {
+			Item item;
+			bool found = selectById(row[0], item);
+			assert(found);
+			items ~= item;
 		}
-
-		auto s = db.prepare("SELECT id FROM item WHERE parentId IS NULL");
-		auto r = s.exec();
-		assert(!r.empty());
-		return ItemRange(this, r.front[0].dup);
+		return items;
 	}
 
 	bool selectById(const(char)[] id, out Item item)
@@ -191,6 +148,7 @@ final class ItemDatabase
 
 	bool selectByPath(const(char)[] path, out Item item)
 	{
+		if (path == ".") path = "root"; // HACK
 		string[2][] candidates; // [id, parentId]
 		auto s = db.prepare("SELECT id, parentId FROM item WHERE name = ?");
 		s.bind(1, baseName(path));
@@ -202,14 +160,24 @@ final class ItemDatabase
 				string[2][] newCandidates;
 				newCandidates.reserve(candidates.length);
 				path = dirName(path);
-				foreach (candidate; candidates) {
-					s.bind(1, candidate[1]);
+				if (path.length != 0) {
 					s.bind(2, baseName(path));
-					r = s.exec();
-					if (!r.empty) {
-						string[2] c = [candidate[0], r.front[0].idup];
-						newCandidates ~= c;
+					foreach (candidate; candidates) {
+						s.bind(1, candidate[1]);
+						r = s.exec();
+						if (!r.empty) {
+							string[2] c = [candidate[0], r.front[0].idup];
+							newCandidates ~= c;
+						}
 					}
+				} else {
+					// reached the root
+					foreach (candidate; candidates) {
+						if (!candidate[1]) {
+							newCandidates ~= candidate;
+						}
+					}
+					assert(newCandidates.length <= 1);
 				}
 				candidates = newCandidates;
 			} while (candidates.length > 1);
