@@ -48,7 +48,7 @@ string wild2regex(const(char)[] pattern)
 {
 	string regex;
 	regex.reserve(pattern.length + 2);
-	regex ~= "^";
+	regex ~= "(^|/)";
 	foreach (c; pattern) {
 		switch (c) {
 		case '*':
@@ -61,7 +61,7 @@ string wild2regex(const(char)[] pattern)
 			regex ~= ".";
 			break;
 		case '|':
-			regex ~= "$|^";
+			regex ~= "$|(^|/)";
 			break;
 		default:
 			regex ~= c;
