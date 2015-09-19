@@ -10,7 +10,6 @@ enum ItemType
 struct Item
 {
 	string   id;
-	string   path;
 	string   name;
 	ItemType type;
 	string   eTag;
@@ -218,7 +217,6 @@ final class ItemDatabase
 		assert(!result.empty && result.front.length == 8);
 		Item item = {
 			id: result.front[0].dup,
-			path: computePath(result.front[0]),
 			name: result.front[1].dup,
 			eTag: result.front[3].dup,
 			cTag: result.front[4].dup,
@@ -234,10 +232,11 @@ final class ItemDatabase
 		return item;
 	}
 
-	private string computePath(const(char)[] id)
+	string computePath(const(char)[] id)
 	{
-		auto s = db.prepare("SELECT name, parentId FROM item WHERE id = ?");
+		if (!id) return null;
 		string path;
+		auto s = db.prepare("SELECT name, parentId FROM item WHERE id = ?");
 		while (true) {
 			s.bind(1, id);
 			auto r = s.exec();
@@ -250,18 +249,4 @@ final class ItemDatabase
 		if (path.length < 5) return ".";
 		return path[5 .. $];
 	}
-
-	/*private string computePath(const(char)[] name, const(char)[] parentId)
-	{
-		auto s = db.prepare("SELECT name, parentId FROM item WHERE id = ?");
-		string path = name.dup;
-		while (true) {
-			s.bind(1, parentId);
-			auto r = s.exec();
-			if (r.empty) break;
-			path = r.front[0].idup ~ "/" ~ path;
-			parentId = r.front[1].dup;
-		}
-		return path;
-	}*/
 }

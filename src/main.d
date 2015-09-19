@@ -8,15 +8,14 @@ void main(string[] args)
 {
 	bool monitor, resync, verbose;
 	try {
-		writeln("OneDrive Client for Linux v", ver);
 		auto opt = getopt(
 			args,
 			"monitor|m", "Keep monitoring for local and remote changes.", &monitor,
-			"resync", "Perform a full synchronization.", &resync,
+			"resync", "Forget the local state and perform a full synchronization.", &resync,
 			"verbose|v", "Print more details, useful for debugging.", &verbose
 		);
 		if (opt.helpWanted) {
-			defaultGetoptPrinter("Available options:", opt.options);
+			defaultGetoptPrinter("OneDrive Free Client for Linux v" ~ ver ~ "\nAvailable options:", opt.options);
 			return;
 		}
 	} catch (GetOptException e) {
