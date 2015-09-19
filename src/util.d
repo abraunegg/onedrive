@@ -42,3 +42,32 @@ string computeCrc32(string path)
 	}
 	return crc.finish().toHexString().dup;
 }
+
+// convert wildcards (*, ?) to regex
+string wild2regex(const(char)[] pattern)
+{
+	string regex;
+	regex.reserve(pattern.length + 2);
+	regex ~= "^";
+	foreach (c; pattern) {
+		switch (c) {
+		case '*':
+			regex ~= ".*";
+			break;
+		case '.':
+			regex ~= "\\.";
+			break;
+		case '?':
+			regex ~= ".";
+			break;
+		case '|':
+			regex ~= "$|^";
+			break;
+		default:
+			regex ~= c;
+			break;
+		}
+	}
+	regex ~= "$";
+	return regex;
+}

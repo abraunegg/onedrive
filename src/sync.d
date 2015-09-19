@@ -67,8 +67,8 @@ final class SyncEngine
 		this.onedrive = onedrive;
 		this.itemdb = itemdb;
 		this.verbose = verbose;
-		skipDir = regex(cfg.get("skip_dir", ""));
-		skipFile = regex(cfg.get("skip_file", ""));
+		skipDir = regex(wild2regex(cfg.get("skip_dir", "")));
+		skipFile = regex(wild2regex(cfg.get("skip_file", "")));
 	}
 
 	void setStatusToken(string statusToken)
@@ -322,11 +322,17 @@ final class SyncEngine
 		if (verbose) writeln(item.id, " ", item.name);
 		final switch (item.type) {
 		case ItemType.dir:
-			if (!matchFirst(item.name, skipDir).empty) break;
+			if (!matchFirst(item.name, skipDir).empty) {
+				if (verbose) writeln("Filtered out");
+				break;
+			}
 			uploadDirDifferences(item);
 			break;
 		case ItemType.file:
-			if (!matchFirst(item.name, skipFile).empty) break;
+			if (!matchFirst(item.name, skipFile).empty) {
+				if (verbose) writeln("Filtered out");
+				break;
+			}
 			uploadFileDifferences(item);
 			break;
 		}

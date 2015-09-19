@@ -2,7 +2,7 @@ import core.sys.linux.sys.inotify;
 import core.sys.posix.poll;
 import core.sys.posix.unistd;
 import std.exception, std.file, std.path, std.regex, std.stdio, std.string;
-import config;
+import config, util;
 
 // relevant inotify events
 private immutable uint32_t mask = IN_ATTRIB | IN_CLOSE_WRITE | IN_CREATE |
@@ -40,8 +40,8 @@ struct Monitor
 	void init(Config cfg, bool verbose)
 	{
 		this.verbose = verbose;
-		skipDir = regex(cfg.get("skip_dir", ""));
-		skipFile = regex(cfg.get("skip_file", ""));
+		skipDir = regex(wild2regex(cfg.get("skip_dir", "")));
+		skipFile = regex(wild2regex(cfg.get("skip_file", "")));
 		fd = inotify_init();
 		if (fd == -1) throw new MonitorException("inotify_init failed");
 		if (!buffer) buffer = new void[4096];
