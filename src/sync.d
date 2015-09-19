@@ -168,7 +168,8 @@ final class SyncEngine
 			itemdb.insert(id, name, type, eTag, cTag, mtime, parentId, crc32);
 		}
 		Item newItem;
-		itemdb.selectById(id, newItem);
+		bool found = itemdb.selectById(id, newItem);
+		assert(found);
 
 		// TODO add item in the db only if correctly downloaded
 		try {
