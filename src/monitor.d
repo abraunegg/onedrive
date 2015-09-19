@@ -56,7 +56,7 @@ struct Monitor
 
 	private void addRecursive(string dirname)
 	{
-		if (matchFirst(baseName(dirname), skipDir).empty) {
+		if (matchFirst(dirname, skipDir).empty) {
 			add(dirname);
 			foreach(DirEntry entry; dirEntries(dirname, SpanMode.shallow, false)) {
 				if (entry.isDir) {
@@ -82,6 +82,20 @@ struct Monitor
 		if (ret == -1) throw new MonitorException("inotify_rm_watch failed");
 		if (verbose) writeln("Monitored directory removed: ", wdToDirName[wd]);
 		wdToDirName.remove(wd);
+	}
+
+	// remove the watch descriptors associated to the given path
+	private void remove(const(char)[] path)
+	{
+		path ~= "/";
+		foreach (wd, dirname; wdToDirName) {
+			if (dirname.startsWith(path)) {
+				int ret = inotify_rm_watch(fd, wd);
+				if (ret == -1) throw new MonitorException("inotify_rm_watch failed");
+				wdToDirName.remove(wd);
+				if (verbose) writeln("Monitored directory removed: ", dirname);
+			}
+		}
 	}
 
 	// return the file path from an inotify event
@@ -111,6 +125,8 @@ struct Monitor
 			int i = 0;
 			while (i < length) {
 				inotify_event *event = cast(inotify_event*) &buffer[i];
+				string path;
+
 				if (event.mask & IN_IGNORED) {
 					// forget the directory associated to the watch descriptor
 					wdToDirName.remove(event.wd);
@@ -120,21 +136,20 @@ struct Monitor
 				}
 
 				// skip filtered items
+				path = getPath(event);
 				if (event.mask & IN_ISDIR) {
-					if (!matchFirst(fromStringz(event.name.ptr), skipDir).empty) {
+					if (!matchFirst(path, skipDir).empty) {
 						goto skip;
 					}
 				} else {
-					if (!matchFirst(fromStringz(event.name.ptr), skipFile).empty) {
+					if (!matchFirst(path, skipFile).empty) {
 						goto skip;
 					}
 				}
 
 				if (event.mask & IN_MOVED_FROM) {
-					string path = getPath(event);
 					cookieToPath[event.cookie] = path;
 				} else if (event.mask & IN_MOVED_TO) {
-					string path = getPath(event);
 					if (event.mask & IN_ISDIR) addRecursive(path);
 					auto from = event.cookie in cookieToPath;
 					if (from) {
@@ -150,16 +165,13 @@ struct Monitor
 					}
 				} else if (event.mask & IN_CREATE) {
 					if (event.mask & IN_ISDIR) {
-						string path = getPath(event);
 						addRecursive(path);
 						onDirCreated(path);
 					}
 				} else if (event.mask & IN_DELETE) {
-					string path = getPath(event);
 					onDelete(path);
 				} else if (event.mask & IN_ATTRIB || event.mask & IN_CLOSE_WRITE) {
 					if (!(event.mask & IN_ISDIR)) {
-						string path = getPath(event);
 						onFileChanged(path);
 					}
 				} else {
@@ -172,6 +184,7 @@ struct Monitor
 			// assume that the items moved outside the watched directory has been deleted
 			foreach (cookie, path; cookieToPath) {
 				onDelete(path);
+				remove(path);
 				cookieToPath.remove(cookie);
 			}
 		}
