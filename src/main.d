@@ -1,5 +1,5 @@
 import core.time, core.thread;
-import std.getopt, std.file, std.process, std.stdio;
+import std.getopt, std.file, std.path, std.process, std.stdio;
 import config, itemdb, monitor, onedrive, sync;
 
 string ver = "1.0";
@@ -24,8 +24,7 @@ void main(string[] args)
 		return;
 	}
 
-	string homeDirName = environment["HOME"];
-	string configDirName = environment.get("XDG_CONFIG_HOME", homeDirName ~ "/.config") ~ "/onedrive";
+	string configDirName = expandTilde(environment.get("XDG_CONFIG_HOME", "~/.config")) ~ "/onedrive";
 	string configFilePath = configDirName ~ "/config";
 	string refreshTokenFilePath = configDirName ~ "/refresh_token";
 	string statusTokenFilePath = configDirName ~ "/status_token";
@@ -69,7 +68,7 @@ void main(string[] args)
 		// swallow exception
 	}
 
-	string syncDir = cfg.get("sync_dir");
+	string syncDir = expandTilde(cfg.get("sync_dir"));
 	chdir(syncDir);
 	sync.applyDifferences();
 	sync.scanForDifferences(".");
