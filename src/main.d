@@ -109,8 +109,11 @@ void main(string[] args)
 				sync.applyDifferences();
 				sync.scanForDifferences(".");
 				m.init(cfg, verbose);
+				import core.memory;
+				GC.collect();
+			} else {
+				Thread.sleep(dur!"msecs"(100));
 			}
-			Thread.sleep(dur!"msecs"(100));
 		}
 	}
 }
