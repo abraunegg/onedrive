@@ -1,5 +1,6 @@
 import core.exception: RangeError;
-import std.algorithm, std.datetime, std.file, std.json, std.path, std.regex, std.stdio;
+import std.algorithm, std.datetime, std.file, std.json, std.path, std.regex;
+import std.stdio, std.string;
 import config, itemdb, onedrive, util;
 
 private bool isItemFolder(const ref JSONValue item)
@@ -132,7 +133,7 @@ final class SyncEngine
 		if (parentId) {
 			path = itemdb.computePath(parentId) ~ "/" ~ name;
 		} else {
-			path = name;
+			path = ".";
 		}
 
 		ItemType type;
@@ -260,6 +261,8 @@ final class SyncEngine
 	// returns true if the given item corresponds to the local one
 	private bool isItemSynced(Item item, string path)
 	{
+		import std.stdio;
+		writeln(path);
 		if (!exists(path)) return false;
 		final switch (item.type) {
 		case ItemType.file:
@@ -408,8 +411,6 @@ final class SyncEngine
 	{
 		if (isDir(path)) {
 			if (path.matchFirst(skipDir).empty) {
-				import std.string: chompPrefix;
-				path = chompPrefix(path, "./");
 				Item item;
 				if (!itemdb.selectByPath(path, item)) {
 					uploadCreateDir(path);
@@ -434,7 +435,7 @@ final class SyncEngine
 		writeln("Creating remote directory: ", path);
 		JSONValue item = ["name": baseName(path).idup];
 		item["folder"] = parseJSON("{}");
-		auto res = onedrive.createByPath(dirName(path), item);
+		auto res = onedrive.createByPath(path.dirName ~ "/", item);
 		saveItem(res);
 	}
 
@@ -511,19 +512,24 @@ final class SyncEngine
 	void uploadMoveItem(string from, string to)
 	{
 		writeln("Moving remote item: ", from, " -> ", to);
-		Item item;
-		if (!itemdb.selectByPath(from, item) || !isItemSynced(item, from)) {
+		Item fromItem, toItem, parentItem;
+		if (!itemdb.selectByPath(from, fromItem)) {
 			writeln("Can't move an unsynced item");
 			return;
 		}
-		if (itemdb.selectByPath(to, item)) {
-			uploadDeleteItem(item, to);
+		if (itemdb.selectByPath(to, toItem)) {
+			// the destination has been overridden
+			uploadDeleteItem(toItem, to);
+		}
+		if (!itemdb.selectByPath(to.dirName, parentItem)) {
+			writeln("Can't move an item to an unsynced directory");
+			return;
 		}
 		JSONValue diff = ["name": baseName(to)];
 		diff["parentReference"] = JSONValue([
-			"path": "/drive/root:/" ~ dirName(to)
+			"id": parentItem.id
 		]);
-		auto res = onedrive.updateById(item.id, diff, item.eTag);
+		auto res = onedrive.updateById(fromItem.id, diff, fromItem.eTag);
 		saveItem(res);
 		string id = res["id"].str;
 		string eTag = res["eTag"].str;

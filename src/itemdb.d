@@ -1,4 +1,4 @@
-import std.datetime, std.path;
+import std.datetime, std.path, std.string;
 import sqlite;
 
 enum ItemType
@@ -147,40 +147,46 @@ final class ItemDatabase
 
 	bool selectByPath(const(char)[] path, out Item item)
 	{
-		if (path == ".") path = "root"; // HACK
+		path = "root/" ~ path.chompPrefix("."); // HACK
+
+		// initialize the search
 		string[2][] candidates; // [id, parentId]
 		auto s = db.prepare("SELECT id, parentId FROM item WHERE name = ?");
 		s.bind(1, baseName(path));
 		auto r = s.exec();
 		foreach (row; r) candidates ~= [row[0].dup, row[1].dup];
-		if (candidates.length > 1) {
+		path = dirName(path);
+
+		if (path != ".") {
 			s = db.prepare("SELECT parentId FROM item WHERE id = ? AND name = ?");
+			// discard the candidates that do not have the correct parent
 			do {
+				s.bind(2, baseName(path));
 				string[2][] newCandidates;
 				newCandidates.reserve(candidates.length);
-				path = dirName(path);
-				if (path.length != 0) {
-					s.bind(2, baseName(path));
-					foreach (candidate; candidates) {
-						s.bind(1, candidate[1]);
-						r = s.exec();
-						if (!r.empty) {
-							string[2] c = [candidate[0], r.front[0].idup];
-							newCandidates ~= c;
-						}
+				foreach (candidate; candidates) {
+					s.bind(1, candidate[1]);
+					r = s.exec();
+					if (!r.empty) {
+						string[2] c = [candidate[0], r.front[0].idup];
+						newCandidates ~= c;
 					}
-				} else {
-					// reached the root
-					foreach (candidate; candidates) {
-						if (!candidate[1]) {
-							newCandidates ~= candidate;
-						}
-					}
-					assert(newCandidates.length <= 1);
 				}
 				candidates = newCandidates;
-			} while (candidates.length > 1);
+				path = dirName(path);
+			} while (path != ".");
 		}
+
+		// reached the root
+		string[2][] newCandidates;
+		foreach (candidate; candidates) {
+			if (!candidate[1]) {
+				newCandidates ~= candidate;
+			}
+		}
+		candidates = newCandidates;
+		assert(candidates.length <= 1);
+
 		if (candidates.length == 1) return selectById(candidates[0][0], item);
 		return false;
 	}
@@ -240,13 +246,20 @@ final class ItemDatabase
 		while (true) {
 			s.bind(1, id);
 			auto r = s.exec();
-			if (r.empty) break;
-			if (path) path = r.front[0].idup ~ "/" ~ path;
-			else path = r.front[0].dup;
+			if (r.empty) {
+				// no results
+				break;
+			} else if (r.front[1]) {
+				if (path) path = r.front[0].idup ~ "/" ~ path;
+				else path = r.front[0].idup;
+			} else {
+				// root
+				if (path) path = "./" ~ path;
+				else path = ".";
+				break;
+			}
 			id = r.front[1].dup;
 		}
-		// HACK: skip "root/"
-		if (path.length < 5) return ".";
-		return path[5 .. $];
+		return path;
 	}
 }

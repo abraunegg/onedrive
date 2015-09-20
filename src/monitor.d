@@ -19,7 +19,7 @@ class MonitorException: ErrnoException
 struct Monitor
 {
 	bool verbose;
-	// regexes that match files/dirs to skip
+	// regex that match files/dirs to skip
 	private Regex!char skipDir, skipFile;
 	// inotify file descriptor
 	private int fd;
@@ -70,7 +70,7 @@ struct Monitor
 	{
 		int wd = inotify_add_watch(fd, toStringz(dirname), mask);
 		if (wd == -1) throw new MonitorException("inotify_add_watch failed");
-		wdToDirName[wd] = chompPrefix(dirname ~ "/", "./");
+		wdToDirName[wd] = dirname ~ "/";
 		if (verbose) writeln("Monitor directory: ", dirname);
 	}
 
