@@ -52,13 +52,13 @@ string wild2regex(const(char)[] pattern)
 	foreach (c; pattern) {
 		switch (c) {
 		case '*':
-			regex ~= ".*";
+			regex ~= "[^/]*";
 			break;
 		case '.':
 			regex ~= "\\.";
 			break;
 		case '?':
-			regex ~= ".";
+			regex ~= "[^/]";
 			break;
 		case '|':
 			regex ~= "$|(^|/)";
