@@ -261,8 +261,6 @@ final class SyncEngine
 	// returns true if the given item corresponds to the local one
 	private bool isItemSynced(Item item, string path)
 	{
-		import std.stdio;
-		writeln(path);
 		if (!exists(path)) return false;
 		final switch (item.type) {
 		case ItemType.file:
@@ -320,16 +318,22 @@ final class SyncEngine
 	// scan the given directory for differences
 	public void scanForDifferences(string path)
 	{
-		if (verbose) writeln("Uploading differences ...");
-		Item item;
-		if (itemdb.selectByPath(path, item)) {
-			uploadDifferences(item);
+		try {
+			if (verbose) writeln("Uploading differences ...");
+			Item item;
+			if (itemdb.selectByPath(path, item)) {
+				uploadDifferences(item);
+			}
+			if (verbose) writeln("Uploading new items ...");
+			uploadNewItems(path);
+		} catch (FileException e) {
+			throw new SyncException(e.msg, e);
+		} catch (OneDriveException e) {
+			throw new SyncException(e.msg, e);
 		}
-		if (verbose) writeln("Uploading new items ...");
-		uploadNewItems(path);
 	}
 
-	public void uploadDifferences(Item item)
+	private void uploadDifferences(Item item)
 	{
 		if (verbose) writeln(item.id, " ", item.name);
 		string path = itemdb.computePath(item.id);
@@ -442,23 +446,11 @@ final class SyncEngine
 	private void uploadNewFile(string path)
 	{
 		writeln("Uploading: ", path);
-		JSONValue res;
-		try {
-			res = onedrive.simpleUpload(path, path);
-		} catch (OneDriveException e) {
-			writeln(e.msg);
-			return;
-		}
+		JSONValue res = onedrive.simpleUpload(path, path);
 		saveItem(res);
 		string id = res["id"].str;
 		string eTag = res["eTag"].str;
-		SysTime mtime;
-		try {
-			mtime = timeLastModified(path).toUTC();
-		} catch (FileException e) {
-			writeln(e.msg);
-			return;
-		}
+		SysTime mtime = timeLastModified(path).toUTC();
 		uploadLastModifiedTime(id, eTag, mtime);
 	}
 
@@ -514,16 +506,14 @@ final class SyncEngine
 		writeln("Moving remote item: ", from, " -> ", to);
 		Item fromItem, toItem, parentItem;
 		if (!itemdb.selectByPath(from, fromItem)) {
-			writeln("Can't move an unsynced item");
-			return;
+			throw new SyncException("Can't move an unsynced item");
 		}
 		if (itemdb.selectByPath(to, toItem)) {
 			// the destination has been overridden
 			uploadDeleteItem(toItem, to);
 		}
 		if (!itemdb.selectByPath(to.dirName, parentItem)) {
-			writeln("Can't move an item to an unsynced directory");
-			return;
+			throw new SyncException("Can't move an item to an unsynced directory");
 		}
 		JSONValue diff = ["name": baseName(to)];
 		diff["parentReference"] = JSONValue([

@@ -1,4 +1,4 @@
-import core.time, core.thread;
+import core.memory, core.time, core.thread;
 import std.getopt, std.file, std.path, std.process, std.stdio;
 import config, itemdb, monitor, onedrive, sync;
 
@@ -70,15 +70,18 @@ void main(string[] args)
 
 	string syncDir = expandTilde(cfg.get("sync_dir"));
 	chdir(syncDir);
-	sync.applyDifferences();
-	sync.scanForDifferences(".");
+	performSync(sync);
 
 	if (monitor) {
 		if (verbose) writeln("Initializing monitor ...");
 		Monitor m;
 		m.onDirCreated = delegate(string path) {
 			if (verbose) writeln("[M] Directory created: ", path);
-			sync.scanForDifferences(path);
+			try {
+				sync.scanForDifferences(path);
+			} catch(SyncException e) {
+				writeln(e.msg);
+			}
 		};
 		m.onFileChanged = delegate(string path) {
 			if (verbose) writeln("[M] File changed: ", path);
@@ -90,11 +93,19 @@ void main(string[] args)
 		};
 		m.onDelete = delegate(string path) {
 			if (verbose) writeln("[M] Item deleted: ", path);
-			sync.deleteByPath(path);
+			try {
+				sync.deleteByPath(path);
+			} catch(SyncException e) {
+				writeln(e.msg);
+			}
 		};
 		m.onMove = delegate(string from, string to) {
 			if (verbose) writeln("[M] Item moved: ", from, " -> ", to);
-			sync.uploadMoveItem(from, to);
+			try {
+				sync.uploadMoveItem(from, to);
+			} catch(SyncException e) {
+				writeln(e.msg);
+			}
 		};
 		m.init(cfg, verbose);
 		// monitor loop
@@ -106,14 +117,28 @@ void main(string[] args)
 			if (currTime - lastCheckTime > checkInterval) {
 				lastCheckTime = currTime;
 				m.shutdown();
-				sync.applyDifferences();
-				sync.scanForDifferences(".");
+				performSync(sync);
 				m.init(cfg, verbose);
-				import core.memory;
 				GC.collect();
 			} else {
 				Thread.sleep(dur!"msecs"(100));
 			}
 		}
 	}
+}
+
+// try to synchronize the folder three times
+void performSync(SyncEngine sync)
+{
+	int count;
+	do {
+		try {
+			sync.applyDifferences();
+			sync.scanForDifferences(".");
+			count = -1;
+		} catch (SyncException e) {
+			if (++count == 3) throw e;
+			else writeln(e.msg);
+		}
+	} while (count != -1);
 }
