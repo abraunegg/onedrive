@@ -219,7 +219,6 @@ final class OneDriveApi
 	private void checkAccessTokenExpired()
 	{
 		if (Clock.currTime() >= accessTokenExpiration) {
-			writeln("Access token expired, requesting a new token...");
 			newToken();
 		}
 	}

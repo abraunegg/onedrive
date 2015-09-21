@@ -1,10 +1,5 @@
-import std.conv: to;
-import std.digest.crc;
-import std.digest.digest;
-import std.file: exists, rename;
-import std.path: extension;
-import std.stdio;
-import std.string: chomp;
+import std.conv, std.digest.crc, std.digest.digest, std.file, std.path;
+import std.regex, std.stdio, std.string: chomp;
 
 private string deviceName;
 
@@ -44,30 +39,30 @@ string computeCrc32(string path)
 }
 
 // convert wildcards (*, ?) to regex
-string wild2regex(const(char)[] pattern)
+Regex!char wild2regex(const(char)[] pattern)
 {
-	string regex;
-	regex.reserve(pattern.length + 2);
-	regex ~= "(^|/)";
+	string str;
+	str.reserve(pattern.length + 2);
+	str ~= "(^|/)";
 	foreach (c; pattern) {
 		switch (c) {
 		case '*':
-			regex ~= "[^/]*";
+			str ~= "[^/]*";
 			break;
 		case '.':
-			regex ~= "\\.";
+			str ~= "\\.";
 			break;
 		case '?':
-			regex ~= "[^/]";
+			str ~= "[^/]";
 			break;
 		case '|':
-			regex ~= "$|(^|/)";
+			str ~= "$|(^|/)";
 			break;
 		default:
-			regex ~= c;
+			str ~= c;
 			break;
 		}
 	}
-	regex ~= "$";
-	return regex;
+	str ~= "$";
+	return regex(str, "i");
 }
