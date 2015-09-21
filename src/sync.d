@@ -394,7 +394,10 @@ final class SyncEngine
 						auto res = onedrive.simpleUpload(path, path, item.eTag);
 						saveItem(res);
 						id = res["id"].str;
-						eTag = res["eTag"].str;
+						/* use the cTag instead of the eTag because Onedrive changes the
+						 * metadata of some type of files (ex. images) AFTER they have been
+						 * uploaded */
+						eTag = res["cTag"].str;
 					}
 					uploadLastModifiedTime(id, eTag, localModifiedTime.toUTC());
 				} else {
@@ -449,9 +452,12 @@ final class SyncEngine
 		JSONValue res = onedrive.simpleUpload(path, path);
 		saveItem(res);
 		string id = res["id"].str;
-		string eTag = res["eTag"].str;
+		string cTag = res["cTag"].str;
 		SysTime mtime = timeLastModified(path).toUTC();
-		uploadLastModifiedTime(id, eTag, mtime);
+		/* use the cTag instead of the eTag because Onedrive changes the
+		 * metadata of some type of files (ex. images) AFTER they have been
+		 * uploaded */
+		uploadLastModifiedTime(id, cTag, mtime);
 	}
 
 	private void uploadDeleteItem(Item item, const(char)[] path)
