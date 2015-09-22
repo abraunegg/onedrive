@@ -72,7 +72,7 @@ final class OneDriveApi
 		JSONValue response = get(itemByIdUrl ~ id ~ "/?select=name,parentReference");
 		string path;
 		try {
-			path = response["parentReference"].object["path"].str;
+			path = response["parentReference"]["path"].str;
 		} catch (JSONException e) {
 			// root does not have parentReference
 			return "";

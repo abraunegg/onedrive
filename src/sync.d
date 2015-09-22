@@ -1,4 +1,3 @@
-import core.exception: RangeError;
 import std.exception: ErrnoException;
 import std.algorithm, std.datetime, std.file, std.json, std.path, std.regex;
 import std.stdio, std.string;
@@ -109,7 +108,7 @@ final class SyncEngine
 	{
 		string id = item["id"].str;
 		string name = item["name"].str;
-		string parentId = item["parentReference"].object["id"].str;
+		string parentId = item["parentReference"]["id"].str;
 
 		// HACK: recognize the root directory
 		if (name == "root" && parentId[$ - 1] == '0' && parentId[$ - 2] == '!') {
@@ -174,16 +173,14 @@ final class SyncEngine
 
 		string eTag = item["eTag"].str;
 		string cTag = item["cTag"].str;
-		string mtime = item["fileSystemInfo"].object["lastModifiedDateTime"].str;
+		string mtime = item["fileSystemInfo"]["lastModifiedDateTime"].str;
 
 		string crc32;
 		if (type == ItemType.file) {
 			try {
-				crc32 = item["file"].object["hashes"].object["crc32Hash"].str;
+				crc32 = item["file"]["hashes"]["crc32Hash"].str;
 			} catch (JSONException e) {
 				if (verbose) writeln("The hash is not available");
-			} catch (RangeError e) {
-				if (verbose) writeln("The crc32 hash is not available");
 			}
 		}
 
@@ -499,15 +496,13 @@ final class SyncEngine
 		string name = item["name"].str;
 		string eTag = item["eTag"].str;
 		string cTag = item["cTag"].str;
-		string mtime = item["fileSystemInfo"].object["lastModifiedDateTime"].str;
-		string parentId = item["parentReference"].object["id"].str;
+		string mtime = item["fileSystemInfo"]["lastModifiedDateTime"].str;
+		string parentId = item["parentReference"]["id"].str;
 		string crc32;
 		if (type == ItemType.file) {
 			try {
-				crc32 = item["file"].object["hashes"].object["crc32Hash"].str;
+				crc32 = item["file"]["hashes"]["crc32Hash"].str;
 			} catch (JSONException e) {
-				// swallow exception
-			} catch (RangeError e) {
 				// swallow exception
 			}
 		}
