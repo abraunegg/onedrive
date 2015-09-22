@@ -40,11 +40,6 @@ final class OneDriveApi
 		//http.verbose = verbose;
 	}
 
-	~this()
-	{
-		http.shutdown();
-	}
-
 	void authorize()
 	{
 		import std.stdio, std.regex;
