@@ -2,7 +2,6 @@ import core.memory, core.time, core.thread;
 import std.getopt, std.file, std.path, std.process, std.stdio;
 import config, itemdb, monitor, onedrive, sync;
 
-string ver = "1.0";
 
 void main(string[] args)
 {
@@ -11,11 +10,15 @@ void main(string[] args)
 		auto opt = getopt(
 			args,
 			"monitor|m", "Keep monitoring for local and remote changes.", &monitor,
-			"resync", "Forget the local state and perform a full synchronization.", &resync,
+			"resync", "Forget the local state and perform a full sync.", &resync,
 			"verbose|v", "Print more details, useful for debugging.", &verbose
 		);
 		if (opt.helpWanted) {
-			defaultGetoptPrinter("OneDrive Free Client for Linux v" ~ ver ~ "\nAvailable options:", opt.options);
+			defaultGetoptPrinter(
+				"Usage: onedrive [OPTION]...\n\n" ~
+				"no option    Sync and exit.",
+				opt.options
+			);
 			return;
 		}
 	} catch (GetOptException e) {
@@ -69,6 +72,7 @@ void main(string[] args)
 	}
 
 	string syncDir = expandTilde(cfg.get("sync_dir"));
+	if (verbose) writeln("All operations will be performed in: ", syncDir);
 	chdir(syncDir);
 	performSync(sync);
 
