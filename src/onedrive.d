@@ -137,7 +137,7 @@ final class OneDriveApi
 		try {
 			upload(localPath, url, http);
 		} catch (ErrnoException e) {
-			throw new OneDriveException(e.msg, e);
+			throw e;
 		} finally {
 			// remove the headers
 			setAccessToken(accessToken);

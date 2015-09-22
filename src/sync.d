@@ -1,4 +1,5 @@
 import core.exception: RangeError;
+import std.exception: ErrnoException;
 import std.algorithm, std.datetime, std.file, std.json, std.path, std.regex;
 import std.stdio, std.string;
 import config, itemdb, onedrive, util;
@@ -80,15 +81,23 @@ final class SyncEngine
 	void applyDifferences()
 	{
 		if (verbose) writeln("Applying differences ...");
-		JSONValue changes;
-		do {
-			changes = onedrive.viewChangesByPath("/", statusToken);
-			foreach (item; changes["value"].array) {
-				applyDifference(item);
-			}
-			statusToken = changes["@changes.token"].str;
-			onStatusToken(statusToken);
-		} while (changes["@changes.hasMoreChanges"].type == JSON_TYPE.TRUE);
+		try {
+			JSONValue changes;
+			do {
+				changes = onedrive.viewChangesByPath("/", statusToken);
+				foreach (item; changes["value"].array) {
+					applyDifference(item);
+				}
+				statusToken = changes["@changes.token"].str;
+				onStatusToken(statusToken);
+			} while (changes["@changes.hasMoreChanges"].type == JSON_TYPE.TRUE);
+		} catch (ErrnoException e) {
+			throw new SyncException(e.msg, e);
+		} catch (FileException e) {
+			throw new SyncException(e.msg, e);
+		} catch (OneDriveException e) {
+			throw new SyncException(e.msg, e);
+		}
 		// delete items in pathsToDelete
 		if (pathsToDelete.length > 0) deleteItems();
 		// empty the skipped items
@@ -219,11 +228,7 @@ final class SyncEngine
 		final switch (item.type) {
 		case ItemType.file:
 			writeln("Downloading: ", path);
-			try {
-				onedrive.downloadById(item.id, path);
-			} catch (OneDriveException e) {
-				throw new SyncException("Sync error", e);
-			}
+			onedrive.downloadById(item.id, path);
 			break;
 		case ItemType.dir:
 			writeln("Creating directory: ", path);
@@ -326,6 +331,8 @@ final class SyncEngine
 			}
 			if (verbose) writeln("Uploading new items ...");
 			uploadNewItems(path);
+		} catch (ErrnoException e) {
+			throw new SyncException(e.msg, e);
 		} catch (FileException e) {
 			throw new SyncException(e.msg, e);
 		} catch (OneDriveException e) {
