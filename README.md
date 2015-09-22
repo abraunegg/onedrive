@@ -4,7 +4,6 @@ OneDrive Free Client
 ### Features:
 * State caching
 * Real-Time file monitoring with Inotify
-* Written in the [D programming language](http://dlang.org/)
 
 ### What's missing:
 * Files bigger than [100 MB][1] are not supported
@@ -16,12 +15,14 @@ OneDrive Free Client
 
 ### Config:
 Config files are loaded in the following order:
+
 1. `/etc/onedrive.conf`
 2. `/usr/local/etc/onedrive.conf`
 3. `$XDG_CONFIG_HOME/onedrive/config`
 4. `~/.config/onedrive/config`
 
 Available options:
+
 * `client_id` & `client_secret`: application identifiers necessary during the [authentication][2]
 * `sync_dir`: directory where the files will be synced
 * `skip_file`: any files that match this pattern will be skipped during sync
