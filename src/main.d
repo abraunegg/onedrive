@@ -10,7 +10,7 @@ void main(string[] args)
 		auto opt = getopt(
 			args,
 			"monitor|m", "Keep monitoring for local and remote changes.", &monitor,
-			"resync", "Forget the local state and perform a full sync.", &resync,
+			"resync", "Forget the last saved state, perform a full sync.", &resync,
 			"verbose|v", "Print more details, useful for debugging.", &verbose
 		);
 		if (opt.helpWanted) {
