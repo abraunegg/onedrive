@@ -1,5 +1,7 @@
 DC = dmd
-DFLAGS = -debug -g -gs -od./bin -of./bin/$@ -L-lcurl -L-lsqlite3 -L-ldl
+DFLAGS = -ofonedrive -L-lcurl -L-lsqlite3 -L-ldl
+DESTDIR = /usr/local/bin
+CONFDIR = /usr/local/etc
 
 SOURCES = \
 	patch/etc_c_curl.d \
@@ -14,4 +16,18 @@ SOURCES = \
 	src/util.d
 
 onedrive: $(SOURCES)
-	$(DC) $(DFLAGS) $(SOURCES)
+	$(DC) -O -release -inline -boundscheck=off $(DFLAGS) $(SOURCES)
+
+debug: $(SOURCES)
+	$(DC) -unittest -debug -g -gs $(DFLAGS) $(SOURCES)
+
+clean:
+	rm -f onedrive.o onedrive
+
+install: onedrive onedrive.conf
+	install onedrive $(DESTDIR)
+	install onedrive.conf $(CONFDIR)
+
+uninstall:
+	rm -f $(DESTDIR)/onedrive
+	rm -f $(CONFDIR)/onedrive.conf
