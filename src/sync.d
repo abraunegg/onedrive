@@ -69,8 +69,8 @@ final class SyncEngine
 		this.onedrive = onedrive;
 		this.itemdb = itemdb;
 		this.verbose = verbose;
-		skipDir = wild2regex(cfg.get("skip_dir", ""));
-		skipFile = wild2regex(cfg.get("skip_file", ""));
+		skipDir = wild2regex(cfg.get("skip_dir"));
+		skipFile = wild2regex(cfg.get("skip_file"));
 	}
 
 	void setStatusToken(string statusToken)

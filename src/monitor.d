@@ -40,8 +40,8 @@ struct Monitor
 	void init(Config cfg, bool verbose)
 	{
 		this.verbose = verbose;
-		skipDir = wild2regex(cfg.get("skip_dir", ""));
-		skipFile = wild2regex(cfg.get("skip_file", ""));
+		skipDir = wild2regex(cfg.get("skip_dir"));
+		skipFile = wild2regex(cfg.get("skip_file"));
 		fd = inotify_init();
 		if (fd == -1) throw new MonitorException("inotify_init failed");
 		if (!buffer) buffer = new void[4096];
