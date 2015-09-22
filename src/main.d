@@ -35,6 +35,8 @@ void main(string[] args)
 	string statusTokenFilePath = configDirName ~ "/status_token";
 	string databaseFilePath = configDirName ~ "/items.db";
 
+	if (!exists(configDirName)) mkdir(configDirName);
+
 	if (resync) {
 		if (verbose) writeln("Deleting the saved status ...");
 		if (exists(databaseFilePath)) remove(databaseFilePath);
