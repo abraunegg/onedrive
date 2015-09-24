@@ -18,10 +18,10 @@ struct Config
 
 	string get(string key)
 	{
-		import core.exception;
-		try {
-			return values[key];
-		} catch (RangeError e) {
+		auto p = key in values;
+		if (p) {
+			return *p;
+		} else {
 			throw new Exception("Missing config value: " ~ key);
 		}
 	}
