@@ -29,7 +29,7 @@ struct Config
 	private void load(string filename)
 	{
 		auto file = File(filename, "r");
-		auto r = regex("(?:^\\s*)(\\w+)(?:\\s*=\\s*\")(.*)(?:\"\\s*$)");
+		auto r = regex(`^\s*(\w+)\s*=\s*"(.*)"\s*$`);
 		foreach (line; file.byLine()) {
 			auto c = line.matchFirst(r);
 			if (!c.empty) {
