@@ -43,7 +43,7 @@ final class OneDriveApi
 	void authorize()
 	{
 		import std.stdio, std.regex;
-		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=wl.offline_access onedrive.readwrite&response_type=code&redirect_url=" ~ redirectUrl;
+		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=wl.offline_access%20onedrive.readwrite&response_type=code&redirect_url=" ~ redirectUrl;
 		writeln("Authorize this app visiting:\n");
 		writeln(url, "\n");
 
