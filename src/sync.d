@@ -1,7 +1,11 @@
 import std.exception: ErrnoException;
 import std.algorithm, std.datetime, std.file, std.json, std.path, std.regex;
 import std.stdio, std.string;
-import config, itemdb, onedrive, util;
+import config, itemdb, onedrive, upload, util;
+
+private string uploadStateFileName = "resume_upload";
+// threshold after which files will be uploaded using an upload session
+private long thresholdFileSize = 10 * 2^^20; // 10 Mib
 
 private bool isItemFolder(const ref JSONValue item)
 {
@@ -52,6 +56,7 @@ final class SyncEngine
 	private ItemDatabase itemdb;
 	private bool verbose;
 	private Regex!char skipDir, skipFile;
+	private UploadSession session;
 	// token representing the last status correctly synced
 	private string statusToken;
 	// list of items to skip while applying the changes downloaded
@@ -61,20 +66,28 @@ final class SyncEngine
 
 	void delegate(string) onStatusToken;
 
-	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, bool verbose)
+	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, string configDirName, bool verbose)
 	{
 		assert(onedrive && itemdb);
 		this.cfg = cfg;
 		this.onedrive = onedrive;
 		this.itemdb = itemdb;
+		//this.configDirName = configDirName;
 		this.verbose = verbose;
 		skipDir = wild2regex(cfg.get("skip_dir"));
 		skipFile = wild2regex(cfg.get("skip_file"));
+		session = UploadSession(onedrive, configDirName ~ "/" ~ uploadStateFileName, verbose);
 	}
 
-	void setStatusToken(string statusToken)
+	void init(string statusToken = null)
 	{
 		this.statusToken = statusToken;
+		// check if there is an interrupted upload session
+		if (session.restore()) {
+			writeln("Continuing the upload session ...");
+			auto item = session.upload();
+			saveItem(item);
+		}
 	}
 
 	void applyDifferences()
@@ -395,13 +408,18 @@ final class SyncEngine
 					if (!testCrc32(path, item.crc32)) {
 						if (verbose) writeln("The file content has changed");
 						writeln("Uploading: ", path);
-						auto res = onedrive.simpleUpload(path, path, item.eTag);
-						saveItem(res);
-						id = res["id"].str;
+						JSONValue response;
+						if (getSize(path) <= thresholdFileSize) {
+							response = onedrive.simpleUpload(path, path);
+						} else {
+							response = session.upload(path, path);
+						}
+						saveItem(response);
+						id = response["id"].str;
 						/* use the cTag instead of the eTag because Onedrive changes the
 						 * metadata of some type of files (ex. images) AFTER they have been
 						 * uploaded */
-						eTag = res["cTag"].str;
+						eTag = response["cTag"].str;
 					}
 					uploadLastModifiedTime(id, eTag, localModifiedTime.toUTC());
 				} else {
@@ -453,10 +471,15 @@ final class SyncEngine
 	private void uploadNewFile(string path)
 	{
 		writeln("Uploading: ", path);
-		JSONValue res = onedrive.simpleUpload(path, path);
-		saveItem(res);
-		string id = res["id"].str;
-		string cTag = res["cTag"].str;
+		JSONValue response;
+		if (getSize(path) <= thresholdFileSize) {
+			response = onedrive.simpleUpload(path, path);
+		} else {
+			response = session.upload(path, path);
+		}
+		saveItem(response);
+		string id = response["id"].str;
+		string cTag = response["cTag"].str;
 		SysTime mtime = timeLastModified(path).toUTC();
 		/* use the cTag instead of the eTag because Onedrive changes the
 		 * metadata of some type of files (ex. images) AFTER they have been

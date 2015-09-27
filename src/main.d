@@ -62,21 +62,22 @@ void main(string[] args)
 	if (verbose) writeln("Opening the item database ...");
 	auto itemdb = new ItemDatabase(databaseFilePath);
 
-	if (verbose) writeln("Initializing the Synchronization Engine ...");
-	auto sync = new SyncEngine(cfg, onedrive, itemdb, verbose);
-	sync.onStatusToken = (string statusToken) {
-		std.file.write(statusTokenFilePath, statusToken);
-	};
-	try {
-		string statusToken = readText(statusTokenFilePath);
-		sync.setStatusToken(statusToken);
-	} catch (FileException e) {
-		// swallow exception
-	}
-
 	string syncDir = expandTilde(cfg.get("sync_dir"));
 	if (verbose) writeln("All operations will be performed in: ", syncDir);
 	chdir(syncDir);
+
+	if (verbose) writeln("Initializing the Synchronization Engine ...");
+	auto sync = new SyncEngine(cfg, onedrive, itemdb, configDirName, verbose);
+	sync.onStatusToken = (string statusToken) {
+		std.file.write(statusTokenFilePath, statusToken);
+	};
+	string statusToken;
+	try {
+		statusToken = readText(statusTokenFilePath);
+	} catch (FileException e) {
+		// swallow exception
+	}
+	sync.init(statusToken);
 	performSync(sync);
 
 	if (monitor) {

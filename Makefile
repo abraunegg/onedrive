@@ -13,6 +13,7 @@ SOURCES = \
 	src/onedrive.d \
 	src/sqlite.d \
 	src/sync.d \
+	src/upload.d \
 	src/util.d
 
 onedrive: $(SOURCES)

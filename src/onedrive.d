@@ -1,5 +1,5 @@
 import std.datetime, std.exception, std.json, std.net.curl, std.path;
-import std.string, std.uni, std.uri;
+import std.stdio, std.string, std.uni, std.uri;
 import config;
 
 private immutable {
@@ -179,6 +179,49 @@ final class OneDriveApi
 		// remove the if-match header
 		setAccessToken(accessToken);
 		return result;
+	}
+
+	// https://dev.onedrive.com/items/upload_large_files.htm
+	JSONValue createUploadSession(const(char)[] path, const(char)[] eTag = null)
+	{
+		checkAccessTokenExpired();
+		string url = itemByPathUrl ~ encodeComponent(path) ~ ":/upload.createSession";
+		if (eTag) http.addRequestHeader("If-Match", eTag);
+		auto result = post(url, null);
+		// remove the if-match header
+		if (eTag) setAccessToken(accessToken);
+		return result;
+	}
+
+	// https://dev.onedrive.com/items/upload_large_files.htm
+	JSONValue uploadFragment(const(char)[] uploadUrl, string filepath, long offset, long offsetSize, long fileSize)
+	{
+		checkAccessTokenExpired();
+		http.method = HTTP.Method.put;
+		http.url = uploadUrl;
+		ubyte[] content;
+		http.onReceive = (ubyte[] data) {
+			content ~= data;
+			return data.length;
+		};
+		auto file = File(filepath, "rb");
+		file.seek(offset);
+        http.onSend = data => file.rawRead(data).length;
+        http.contentLength = offsetSize;
+		import std.conv;
+		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
+		http.addRequestHeader("Content-Range", contentRange);
+        http.perform();
+		checkHttpCode(); // TODO: retry on 5xx errors
+		// remove the content-range header
+		scope(exit) setAccessToken(accessToken);
+		return parseJSON(content);
+	}
+
+	// https://dev.onedrive.com/items/upload_large_files.htm
+	JSONValue requestUploadStatus(const(char)[] uploadUrl)
+	{
+		return get(uploadUrl);
 	}
 
 	private void redeemToken(const(char)[] authCode)
