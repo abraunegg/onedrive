@@ -4,14 +4,12 @@ OneDrive Free Client
 ### Features:
 * State caching
 * Real-Time file monitoring with Inotify
+* Resumable uploads
 
 ### What's missing:
-* Files bigger than [100 MB][1] are not supported
 * OneDrive for business is not supported
 * While local changes are uploaded right away, remote changes are delayed.
 * No GUI
-
-[1]: https://dev.onedrive.com/items/upload_put.htm
 
 ### Config:
 Config files are loaded in the following order:
