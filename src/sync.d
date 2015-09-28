@@ -316,13 +316,13 @@ final class SyncEngine
 				if (isFile(path)) {
 					remove(path);
 					writeln("Deleted file: ", path);
-				}
-			} else {
-				try {
-					rmdir(path);
-					writeln("Deleted dir: ", path);
-				} catch (FileException e) {
-					writeln("Keeping dir: ", path);
+				} else {
+					try {
+						rmdir(path);
+						writeln("Deleted directory: ", path);
+					} catch (FileException e) {
+						// directory not empty
+					}
 				}
 			}
 		}
