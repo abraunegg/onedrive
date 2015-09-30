@@ -410,9 +410,9 @@ final class SyncEngine
 						writeln("Uploading: ", path);
 						JSONValue response;
 						if (getSize(path) <= thresholdFileSize) {
-							response = onedrive.simpleUpload(path, path);
+							response = onedrive.simpleUpload(path, path, eTag);
 						} else {
-							response = session.upload(path, path);
+							response = session.upload(path, path, eTag);
 						}
 						saveItem(response);
 						id = response["id"].str;
