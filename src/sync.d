@@ -121,6 +121,7 @@ final class SyncEngine
 	{
 		string id = item["id"].str;
 		string name = item["name"].str;
+		string eTag = item["eTag"].str;
 		string parentId = item["parentReference"]["id"].str;
 
 		// HACK: recognize the root directory
@@ -136,14 +137,14 @@ final class SyncEngine
 
 		if (verbose) writeln(id, " ", name);
 
-		// check if the cached item is still synced
+		// rename the local item if it is unsynced and there is a new version of it
 		Item oldItem;
 		string oldPath;
 		bool cached = itemdb.selectById(id, oldItem);
-		if (cached) {
+		if (cached && eTag != oldItem.eTag) {
 			oldPath = itemdb.computePath(id);
 			if (!isItemSynced(oldItem, oldPath)) {
-				if (verbose) writeln("The local item is out of sync, renaming");
+				if (verbose) writeln("The local item is unsynced, renaming");
 				if (exists(oldPath)) safeRename(oldPath);
 				cached = false;
 			}
@@ -184,7 +185,6 @@ final class SyncEngine
 			return;
 		}
 
-		string eTag = item["eTag"].str;
 		string cTag = item["cTag"].str;
 		string mtime = item["fileSystemInfo"]["lastModifiedDateTime"].str;
 
