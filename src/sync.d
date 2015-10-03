@@ -9,22 +9,17 @@ private long thresholdFileSize = 10 * 2^^20; // 10 Mib
 
 private bool isItemFolder(const ref JSONValue item)
 {
-	scope (failure) return false;
-	JSONValue folder = item["folder"];
-	return true;
+	return (("folder" in item.object) !is null);
 }
 
 private bool isItemFile(const ref JSONValue item)
 {
-	scope (failure) return false;
-	JSONValue folder = item["file"];
-	return true;
+	return (("file" in item.object) !is null);
 }
 
 private bool isItemDeleted(const ref JSONValue item)
 {
-	scope (failure) return false;
-	return !item["deleted"].isNull();
+	return (("deleted" in item.object) !is null);
 }
 
 private bool testCrc32(string path, const(char)[] crc32)
