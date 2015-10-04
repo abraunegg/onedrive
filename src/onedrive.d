@@ -312,7 +312,7 @@ final class OneDriveApi
 	private JSONValue perform()
 	{
 		scope(exit) http.onReceive = null;
-		ubyte[] content;
+		char[] content;
 		http.onReceive = (ubyte[] data) {
 			content ~= data;
 			return data.length;
