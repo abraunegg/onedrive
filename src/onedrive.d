@@ -12,15 +12,15 @@ private immutable {
 
 class OneDriveException: Exception
 {
-    @nogc @safe pure nothrow this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
-    {
-        super(msg, file, line, next);
-    }
+	// HTTP status code
+	int code;
 
-    @nogc @safe pure nothrow this(string msg, Throwable next, string file = __FILE__, size_t line = __LINE__)
-    {
-        super(msg, file, line, next);
-    }
+	@safe pure this(int code, string reason, string file = __FILE__, size_t line = __LINE__)
+	{
+		this.code = code;
+		string msg = format("HTTP request returned status code %d (%s)", code, reason);
+		super(msg, file, line, next);
+	}
 }
 
 final class OneDriveApi
@@ -66,28 +66,6 @@ final class OneDriveApi
 		newToken();
 	}
 
-	string getItemPath(const(char)[] id)
-	{
-		checkAccessTokenExpired();
-		JSONValue response = get(itemByIdUrl ~ id ~ "/?select=name,parentReference");
-		string path;
-		try {
-			path = response["parentReference"]["path"].str;
-		} catch (JSONException e) {
-			// root does not have parentReference
-			return "";
-		}
-		path = decodeComponent(path[path.indexOf(':') + 1 .. $]);
-		return buildNormalizedPath("." ~ path ~ "/" ~ response["name"].str);
-	}
-
-	string getItemId(const(char)[] path)
-	{
-		checkAccessTokenExpired();
-		JSONValue response = get(itemByPathUrl ~ encodeComponent(path) ~ ":/?select=id");
-		return response["id"].str;
-	}
-
 	// https://dev.onedrive.com/items/view_changes.htm
 	JSONValue viewChangesById(const(char)[] id, const(char)[] statusToken)
 	{
@@ -111,14 +89,12 @@ final class OneDriveApi
 	void downloadById(const(char)[] id, string saveToPath)
 	{
 		checkAccessTokenExpired();
-		char[] url = itemByIdUrl ~ id ~ "/content";
-		try {
-			download(url, saveToPath, http);
-		} catch (CurlException e) {
+		scope(failure) {
 			import std.file;
 			if (exists(saveToPath)) remove(saveToPath);
-			throw new OneDriveException("Download error", e);
 		}
+		char[] url = itemByIdUrl ~ id ~ "/content";
+		download(url, saveToPath);
 	}
 
 	// https://dev.onedrive.com/items/upload_put.htm
@@ -126,24 +102,10 @@ final class OneDriveApi
 	{
 		checkAccessTokenExpired();
 		string url = itemByPathUrl ~ encodeComponent(remotePath) ~ ":/content";
-		if (!eTag) url ~= "?@name.conflictBehavior=fail";
-		ubyte[] content;
-		http.onReceive = (ubyte[] data) {
-			content ~= data;
-			return data.length;
-		};
-		if (eTag) http.addRequestHeader("If-Match", eTag);
 		http.addRequestHeader("Content-Type", "application/octet-stream");
-		try {
-			upload(localPath, url, http);
-		} catch (ErrnoException e) {
-			throw e;
-		} finally {
-			// remove the headers
-			setAccessToken(accessToken);
-		}
-		checkHttpCode();
-		return parseJSON(content);
+		if (eTag) http.addRequestHeader("If-Match", eTag);
+		else url ~= "?@name.conflictBehavior=fail";
+		return upload(localPath, url);
 	}
 
 	// https://dev.onedrive.com/items/update.htm
@@ -153,10 +115,7 @@ final class OneDriveApi
 		char[] url = itemByIdUrl ~ id;
 		if (eTag) http.addRequestHeader("If-Match", eTag);
 		http.addRequestHeader("Content-Type", "application/json");
-		auto result = patch(url, data.toString());
-		// remove the headers
-		setAccessToken(accessToken);
-		return result;
+		return patch(url, data.toString());
 	}
 
 	//https://dev.onedrive.com/items/delete.htm
@@ -165,9 +124,7 @@ final class OneDriveApi
 		checkAccessTokenExpired();
 		char[] url = itemByIdUrl ~ id;
 		if (eTag) http.addRequestHeader("If-Match", eTag);
-		del(url, http);
-		// remove the if-match header
-		if (eTag) setAccessToken(accessToken);
+		del(url);
 	}
 
 	//https://dev.onedrive.com/items/create.htm
@@ -175,10 +132,7 @@ final class OneDriveApi
 	{
 		string url = itemByPathUrl ~ encodeComponent(parentPath) ~ ":/children";
 		http.addRequestHeader("Content-Type", "application/json");
-		auto result = post(url, item.toString());
-		// remove the if-match header
-		setAccessToken(accessToken);
-		return result;
+		return post(url, item.toString());
 	}
 
 	// https://dev.onedrive.com/items/upload_large_files.htm
@@ -187,40 +141,37 @@ final class OneDriveApi
 		checkAccessTokenExpired();
 		string url = itemByPathUrl ~ encodeComponent(path) ~ ":/upload.createSession";
 		if (eTag) http.addRequestHeader("If-Match", eTag);
-		auto result = post(url, null);
-		// remove the if-match header
-		if (eTag) setAccessToken(accessToken);
-		return result;
+		return post(url, null);
 	}
 
 	// https://dev.onedrive.com/items/upload_large_files.htm
 	JSONValue uploadFragment(const(char)[] uploadUrl, string filepath, long offset, long offsetSize, long fileSize)
 	{
 		checkAccessTokenExpired();
+		scope(exit) {
+			http.clearRequestHeaders();
+			http.onSend = null;
+		}
 		http.method = HTTP.Method.put;
 		http.url = uploadUrl;
-		ubyte[] content;
-		http.onReceive = (ubyte[] data) {
-			content ~= data;
-			return data.length;
-		};
-		auto file = File(filepath, "rb");
-		file.seek(offset);
-        http.onSend = data => file.rawRead(data).length;
-        http.contentLength = offsetSize;
+		addAccessTokenHeader();
 		import std.conv;
 		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
 		http.addRequestHeader("Content-Range", contentRange);
-        http.perform();
-		checkHttpCode(); // TODO: retry on 5xx errors
-		// remove the content-range header
-		scope(exit) setAccessToken(accessToken);
-		return parseJSON(content);
+		auto file = File(filepath, "rb");
+		file.seek(offset);
+		http.onSend = data => file.rawRead(data).length;
+		http.contentLength = offsetSize;
+		auto response = perform();
+		// TODO: retry on 5xx errors
+		checkHttpCode();
+		return response;
 	}
 
 	// https://dev.onedrive.com/items/upload_large_files.htm
 	JSONValue requestUploadStatus(const(char)[] uploadUrl)
 	{
+		checkAccessTokenExpired();
 		return get(uploadUrl);
 	}
 
@@ -241,17 +192,10 @@ final class OneDriveApi
 	private void acquireToken(const(char)[] postData)
 	{
 		JSONValue response = post(tokenUrl, postData);
-		setAccessToken(response["access_token"].str());
+		accessToken = "bearer " ~ response["access_token"].str();
 		refreshToken = response["refresh_token"].str();
 		accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
 		if (onRefreshToken) onRefreshToken(refreshToken);
-	}
-
-	private void setAccessToken(string accessToken)
-	{
-		http.clearRequestHeaders();
-		this.accessToken = accessToken;
-		http.addRequestHeader("Authorization", "bearer " ~ accessToken);
 	}
 
 	private void checkAccessTokenExpired()
@@ -261,25 +205,126 @@ final class OneDriveApi
 		}
 	}
 
-	private auto get(const(char)[] url)
+	private void addAccessTokenHeader()
 	{
-		return parseJSON(.get(url, http));
+		http.addRequestHeader("Authorization", accessToken);
+	}
+
+	private JSONValue get(const(char)[] url)
+	{
+		scope(exit) http.clearRequestHeaders();
+		http.method = HTTP.Method.get;
+		http.url = url;
+		addAccessTokenHeader();
+		auto response = perform();
+		checkHttpCode();
+		return response;
+	}
+
+	private void del(const(char)[] url)
+	{
+		scope(exit) http.clearRequestHeaders();
+		http.method = HTTP.Method.del;
+		http.url = url;
+		addAccessTokenHeader();
+		perform();
+		checkHttpCode();
+	}
+
+	private void download(const(char)[] url, string filename)
+	{
+		scope(exit) http.clearRequestHeaders();
+		http.method = HTTP.Method.get;
+		http.url = url;
+		addAccessTokenHeader();
+		auto f = File(filename, "wb");
+		http.onReceive = (ubyte[] data) {
+			f.rawWrite(data);
+			return data.length;
+		};
+		http.perform();
+		checkHttpCode();
 	}
 
 	private auto patch(T)(const(char)[] url, const(T)[] patchData)
 	{
-		return parseJSON(.patch(url, patchData, http));
+		scope(exit) http.clearRequestHeaders();
+		http.method = HTTP.Method.patch;
+		http.url = url;
+		addAccessTokenHeader();
+		auto response = perform(patchData);
+		checkHttpCode();
+		return response;
 	}
 
 	private auto post(T)(const(char)[] url, const(T)[] postData)
 	{
-		return parseJSON(.post(url, postData, http));
+		scope(exit) http.clearRequestHeaders();
+		http.method = HTTP.Method.post;
+		http.url = url;
+		addAccessTokenHeader();
+		auto response = perform(postData);
+		checkHttpCode();
+		return response;
+	}
+
+	private JSONValue upload(string filepath, string url)
+	{
+		scope(exit) {
+			http.clearRequestHeaders();
+			http.onSend = null;
+			http.contentLength = 0;
+		}
+		http.method = HTTP.Method.put;
+		http.url = url;
+		addAccessTokenHeader();
+		http.addRequestHeader("Content-Type", "application/octet-stream");
+		auto file = File(filepath, "rb");
+		http.onSend = data => file.rawRead(data).length;
+		http.contentLength = file.size;
+		auto response = perform();
+		checkHttpCode();
+		return response;
+	}
+
+	private JSONValue perform(const(void)[] sendData)
+	{
+		scope(exit) {
+			http.onSend = null;
+			http.contentLength = 0;
+		}
+		if (sendData) {
+			http.contentLength = sendData.length;
+			http.onSend = (void[] buf) {
+				import std.algorithm: min;
+				size_t minLen = min(buf.length, sendData.length);
+				if (minLen == 0) return 0;
+				buf[0 .. minLen] = sendData[0 .. minLen];
+				sendData = sendData[minLen .. $];
+				return minLen;
+			};
+		} else {
+			http.onSend = buf => 0;
+		}
+		return perform();
+	}
+
+	private JSONValue perform()
+	{
+		scope(exit) http.onReceive = null;
+		ubyte[] content;
+		http.onReceive = (ubyte[] data) {
+			content ~= data;
+			return data.length;
+		};
+		http.perform();
+		return content.parseJSON();
 	}
 
 	private void checkHttpCode()
 	{
 		if (http.statusLine.code / 100 != 2) {
-			throw new OneDriveException(format("HTTP request returned status code %d (%s)", http.statusLine.code, http.statusLine.reason));
+			throw new OneDriveException(http.statusLine.code, http.statusLine.reason);
 		}
 	}
 }
