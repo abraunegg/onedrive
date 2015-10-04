@@ -485,7 +485,12 @@ final class SyncEngine
 	private void uploadDeleteItem(Item item, const(char)[] path)
 	{
 		writeln("Deleting remote item: ", path);
-		onedrive.deleteById(item.id, item.eTag);
+		try {
+			onedrive.deleteById(item.id, item.eTag);
+		} catch (OneDriveException e) {
+			if (e.code == 404) writeln(e.msg);
+			else throw e;
+		}
 		itemdb.deleteById(item.id);
 	}
 
@@ -558,6 +563,11 @@ final class SyncEngine
 		if (!itemdb.selectByPath(path, item)) {
 			throw new SyncException("Can't delete an unsynced item");
 		}
-		uploadDeleteItem(item, path);
+		try {
+			uploadDeleteItem(item, path);
+		} catch (OneDriveException e) {
+			if (e.code == 404) writeln(e.msg);
+			else throw e;
+		}
 	}
 }
