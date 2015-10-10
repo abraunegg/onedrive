@@ -106,7 +106,7 @@ struct Monitor
 		return path;
 	}
 
-	void update()
+	void update(bool useCallbacks = true)
 	{
 		assert(onDirCreated && onFileChanged && onDelete && onMove);
 		pollfd[1] fds = void;
@@ -154,25 +154,25 @@ struct Monitor
 					auto from = event.cookie in cookieToPath;
 					if (from) {
 						cookieToPath.remove(event.cookie);
-						onMove(*from, path);
+						if (useCallbacks) onMove(*from, path);
 					} else {
 						// item moved from the outside
 						if (event.mask & IN_ISDIR) {
-							onDirCreated(path);
+							if (useCallbacks) onDirCreated(path);
 						} else {
-							onFileChanged(path);
+							if (useCallbacks) onFileChanged(path);
 						}
 					}
 				} else if (event.mask & IN_CREATE) {
 					if (event.mask & IN_ISDIR) {
 						addRecursive(path);
-						onDirCreated(path);
+						if (useCallbacks) onDirCreated(path);
 					}
 				} else if (event.mask & IN_DELETE) {
-					onDelete(path);
+					if (useCallbacks) onDelete(path);
 				} else if (event.mask & IN_ATTRIB || event.mask & IN_CLOSE_WRITE) {
 					if (!(event.mask & IN_ISDIR)) {
-						onFileChanged(path);
+						if (useCallbacks) onFileChanged(path);
 					}
 				} else {
 					writeln("Unknow inotify event: ", format("%#x", event.mask));
@@ -183,7 +183,7 @@ struct Monitor
 			}
 			// assume that the items moved outside the watched directory has been deleted
 			foreach (cookie, path; cookieToPath) {
-				onDelete(path);
+				if (useCallbacks) onDelete(path);
 				remove(path);
 				cookieToPath.remove(cookie);
 			}
