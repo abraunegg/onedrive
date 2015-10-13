@@ -11,6 +11,17 @@ OneDrive Free Client
 * While local changes are uploaded right away, remote changes are delayed.
 * No GUI
 
+### Dependencies
+
+* [libcurl](http://curl.haxx.se/libcurl/)
+* [SQLite 3](https://www.sqlite.org/)
+* [Digital Mars D Compiler (DMD)](http://dlang.org/download.html)
+
+### Installation
+
+1. `make`
+2. `sudo make install`
+
 ### Config:
 Config files are loaded in the following order:
 
@@ -49,5 +60,6 @@ The first time you run the program you will be asked to sign in. The procedure r
 ### Notes:
 * After changing the filters (`skip_file` or `skip_dir` in your configs) you must execute `onedrive --resync`
 * [Windows naming conventions][4] apply
+* Use `make debug` to generate an executable for debugging
 
 [4]: https://msdn.microsoft.com/en-us/library/aa365247
