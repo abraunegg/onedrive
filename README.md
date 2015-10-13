@@ -22,13 +22,12 @@ OneDrive Free Client
 1. `make`
 2. `sudo make install`
 
-### Config:
-Config files are loaded in the following order:
-
-1. `/etc/onedrive.conf`
-2. `/usr/local/etc/onedrive.conf`
-3. `$XDG_CONFIG_HOME/onedrive/config`
-4. `~/.config/onedrive/config`
+### Configuration:
+You should copy the default config file into your home directory before making changes:
+```
+mkdir -p ~/.config/onedrive
+cp /usr/local/etc/onedrive.conf ~/.config/onedrive/config`
+```
 
 Available options:
 
