@@ -5,6 +5,9 @@ import config, itemdb, monitor, onedrive, sync;
 
 void main(string[] args)
 {
+	// always print log messages
+	stdout = stderr;
+
 	bool monitor, resync, verbose;
 	try {
 		auto opt = getopt(
