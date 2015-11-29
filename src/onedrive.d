@@ -63,7 +63,6 @@ final class OneDriveApi
 	void setRefreshToken(string refreshToken)
 	{
 		this.refreshToken = refreshToken;
-		newToken();
 	}
 
 	// https://dev.onedrive.com/items/view_changes.htm

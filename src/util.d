@@ -1,11 +1,16 @@
-import std.conv, std.digest.crc, std.digest.digest, std.file, std.path;
-import std.regex, std.stdio, std.string: chomp;
+import std.conv;
+import std.digest.crc;
+import std.file;
+import std.path;
+import std.regex;
+import std.socket;
+import std.stdio;
+import std.string;
 
 private string deviceName;
 
 static this()
 {
-	import std.socket;
 	deviceName = Socket.hostName;
 }
 
@@ -65,4 +70,16 @@ Regex!char wild2regex(const(char)[] pattern)
 	}
 	str ~= "$";
 	return regex(str, "i");
+}
+
+// return true if the network connection is available
+bool testNetwork()
+{
+	try {
+		auto addr = new InternetAddress("login.live.com", 443);
+		auto socket = new TcpSocket(addr);
+		return socket.isAlive();
+	} catch (SocketException) {
+		return false;
+	}
 }

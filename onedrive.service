@@ -1,0 +1,10 @@
+[Unit]
+Description=OneDrive Free Client
+Documentation=https://github.com/skilion/onedrive
+
+[Service]
+ExecStart=/usr/local/bin/onedrive -m
+Restart=no
+
+[Install]
+WantedBy=default.target
