@@ -46,6 +46,18 @@ Use `|` to separate multiple patterns.
 ### First run
 The first time you run the program you will be asked to sign in. The procedure require a web browser.
 
+### Service
+If you want to sync your files automatically, enable and start the systemd service:
+```
+systemctl --user enable onedrive
+systemctl --user start onedrive
+```
+
+To see the logs run:
+```
+journalctl --user-unit onedrive -f
+```
+
 ### Usage:
 
 	onedrive [OPTION]...
