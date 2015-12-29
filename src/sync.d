@@ -54,7 +54,7 @@ final class SyncEngine
 	private UploadSession session;
 	// token representing the last status correctly synced
 	private string statusToken;
-	// list of items to skip while applying the changes downloaded
+	// list of items to skip while applying the changes
 	private string[] skippedItems;
 	// list of items to delete after the changes has been downloaded
 	private string[] pathsToDelete;

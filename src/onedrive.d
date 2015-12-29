@@ -1,6 +1,8 @@
-import std.datetime, std.exception, std.json, std.net.curl, std.path;
+import std.net.curl: CurlException, HTTP;
+import std.datetime, std.exception, std.json, std.path;
 import std.stdio, std.string, std.uni, std.uri;
 import config;
+
 
 private immutable {
 	string authUrl = "https://login.live.com/oauth20_authorize.srf";
@@ -14,6 +16,11 @@ class OneDriveException: Exception
 {
 	// HTTP status code
 	int code;
+
+    @nogc @safe pure nothrow this(string msg, Throwable next, string file = __FILE__, size_t line = __LINE__)
+    {
+        super(msg, file, line, next);
+    }
 
 	@safe pure this(int code, string reason, string file = __FILE__, size_t line = __LINE__)
 	{
@@ -117,7 +124,7 @@ final class OneDriveApi
 		return patch(url, data.toString());
 	}
 
-	//https://dev.onedrive.com/items/delete.htm
+	// https://dev.onedrive.com/items/delete.htm
 	void deleteById(const(char)[] id, const(char)[] eTag = null)
 	{
 		checkAccessTokenExpired();
@@ -126,7 +133,7 @@ final class OneDriveApi
 		del(url);
 	}
 
-	//https://dev.onedrive.com/items/create.htm
+	// https://dev.onedrive.com/items/create.htm
 	JSONValue createByPath(const(char)[] parentPath, JSONValue item)
 	{
 		string url = itemByPathUrl ~ encodeComponent(parentPath) ~ ":/children";
@@ -316,7 +323,11 @@ final class OneDriveApi
 			content ~= data;
 			return data.length;
 		};
-		http.perform();
+		try {
+			http.perform();
+		} catch (CurlException e) {
+			throw new OneDriveException(e.msg, e);
+		}
 		return content.parseJSON();
 	}
 
