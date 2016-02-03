@@ -180,7 +180,15 @@ final class SyncEngine
 			return;
 		}
 
-		string cTag = item["cTag"].str;
+		string cTag;
+                try {
+                        cTag = item["cTag"].str;
+                } catch (JSONException e) {
+                        // cTag is not returned if the Item is a folder
+                        // https://dev.onedrive.com/resources/item.htm
+                        cTag = "";
+                }
+
 		string mtime = item["fileSystemInfo"]["lastModifiedDateTime"].str;
 
 		string crc32;
