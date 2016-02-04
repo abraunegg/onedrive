@@ -1,4 +1,5 @@
 import core.sys.linux.sys.inotify;
+import core.stdc.errno;
 import core.sys.posix.poll;
 import core.sys.posix.unistd;
 import std.exception, std.file, std.path, std.regex, std.stdio, std.string;
@@ -69,7 +70,21 @@ struct Monitor
 	private void add(string dirname)
 	{
 		int wd = inotify_add_watch(fd, toStringz(dirname), mask);
-		if (wd == -1) throw new MonitorException("inotify_add_watch failed");
+		if (wd == -1) {
+                    if (errno() == ENOSPC) {
+                        writeln("The maximum number of inotify wathches is probably too low.");
+                        writeln("");
+                        writeln("To see the current max number of watches run");
+                        writeln("");
+                        writeln("   sysctl fs.inotify.max_user_watches");
+                        writeln("");
+                        writeln("To change the current max number of watches to 32768 run");
+                        writeln("");
+                        writeln("   sudo sysctl fs.inotify.max_user_watches=32768");
+                        writeln("");
+                    }
+                    throw new MonitorException("inotify_add_watch failed");
+                }
 		wdToDirName[wd] = dirname ~ "/";
 		if (verbose) writeln("Monitor directory: ", dirname);
 	}
