@@ -143,6 +143,9 @@ void main(string[] args)
 			}
 		}
 	}
+
+	// workaround for segfault in std.net.curl.Curl.shutdown() on exit
+	onedrive.http.shutdown();
 }
 
 // try to synchronize the folder three times

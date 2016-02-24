@@ -35,7 +35,7 @@ final class OneDriveApi
 	private string clientId, clientSecret;
 	private string refreshToken, accessToken;
 	private SysTime accessTokenExpiration;
-	private HTTP http;
+	/* private */ HTTP http;
 
 	void delegate(string) onRefreshToken; // called when a new refresh_token is received
 
