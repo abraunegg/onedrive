@@ -4,8 +4,6 @@ DESTDIR = /usr/local/bin
 CONFDIR = /usr/local/etc
 
 SOURCES = \
-	patch/etc_c_curl.d \
-	patch/std_net_curl.d \
 	src/config.d \
 	src/itemdb.d \
 	src/main.d \
