@@ -26,8 +26,8 @@ clean:
 	rm -f onedrive.o onedrive
 
 install: onedrive onedrive.conf
-	install onedrive $(DESTDIR)
-	install -m 644 onedrive.conf $(CONFDIR)
+	install onedrive $(DESTDIR)/onedrive
+	install -m 644 onedrive.conf $(CONFDIR)/onedrive.conf
 	install -m 644 onedrive.service /usr/lib/systemd/user
 
 uninstall:
