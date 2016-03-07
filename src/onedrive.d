@@ -50,13 +50,13 @@ final class OneDriveApi
 	void authorize()
 	{
 		import std.stdio, std.regex;
-		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=wl.offline_access%20onedrive.readwrite&response_type=code&redirect_url=" ~ redirectUrl;
+		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=wl.offline_access%20onedrive.readwrite&response_type=code&redirect_uri=" ~ redirectUrl;
 		writeln("Authorize this app visiting:\n");
 		writeln(url, "\n");
 
 		while (true) {
 			char[] response;
-			write("Enter the response url: ");
+			write("Enter the response uri: ");
 			readln(response);
 			auto c = matchFirst(response, r"(?:code=)(([\w\d]+-){4}[\w\d]+)");
 			if (!c.empty) {
@@ -183,14 +183,14 @@ final class OneDriveApi
 
 	private void redeemToken(const(char)[] authCode)
 	{
-		string postData = "client_id=" ~ clientId ~ "&redirect_url=" ~ redirectUrl ~ "&client_secret=" ~ clientSecret;
+		string postData = "client_id=" ~ clientId ~ "&redirect_uri=" ~ redirectUrl ~ "&client_secret=" ~ clientSecret;
 		postData ~= "&code=" ~ authCode ~ "&grant_type=authorization_code";
 		acquireToken(postData);
 	}
 
 	private void newToken()
 	{
-		string postData = "client_id=" ~ clientId ~ "&redirect_url=" ~ redirectUrl ~ "&client_secret=" ~ clientSecret;
+		string postData = "client_id=" ~ clientId ~ "&redirect_uri=" ~ redirectUrl ~ "&client_secret=" ~ clientSecret;
 		postData ~= "&refresh_token=" ~ refreshToken ~ "&grant_type=refresh_token";
 		acquireToken(postData);
 	}
