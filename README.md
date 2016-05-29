@@ -26,7 +26,7 @@ OneDrive Free Client
 You should copy the default config file into your home directory before making changes:
 ```
 mkdir -p ~/.config/onedrive
-cp /usr/local/etc/onedrive.conf ~/.config/onedrive/config`
+cp /usr/local/etc/onedrive.conf ~/.config/onedrive/config
 ```
 
 Available options:
