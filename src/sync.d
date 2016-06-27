@@ -95,9 +95,9 @@ final class SyncEngine
 				foreach (item; changes["value"].array) {
 					applyDifference(item);
 				}
-				statusToken = changes["@changes.token"].str;
+				statusToken = changes["@delta.token"].str;
 				onStatusToken(statusToken);
-			} while (changes["@changes.hasMoreChanges"].type == JSON_TYPE.TRUE);
+			} while (("@odata.nextLink" in changes.object) !is null);
 		} catch (ErrnoException e) {
 			throw new SyncException(e.msg, e);
 		} catch (FileException e) {
@@ -146,11 +146,9 @@ final class SyncEngine
 		}
 
 		// compute the path of the item
-		string path;
+		string path = ".";
 		if (parentId) {
 			path = itemdb.computePath(parentId) ~ "/" ~ name;
-		} else {
-			path = ".";
 		}
 
 		ItemType type;
@@ -181,13 +179,13 @@ final class SyncEngine
 		}
 
 		string cTag;
-                try {
-                        cTag = item["cTag"].str;
-                } catch (JSONException e) {
-                        // cTag is not returned if the Item is a folder
-                        // https://dev.onedrive.com/resources/item.htm
-                        cTag = "";
-                }
+		try {
+			cTag = item["cTag"].str;
+		} catch (JSONException e) {
+			// cTag is not returned if the Item is a folder
+			// https://dev.onedrive.com/resources/item.htm
+			cTag = "";
+		}
 
 		string mtime = item["fileSystemInfo"]["lastModifiedDateTime"].str;
 

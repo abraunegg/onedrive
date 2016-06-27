@@ -31,7 +31,7 @@ cp /usr/local/etc/onedrive.conf ~/.config/onedrive/config
 
 Available options:
 
-* `client_id` & `client_secret`: application identifiers necessary during the [authentication][2]
+* `client_id`: application identifier necessary for the [authentication][2]
 * `sync_dir`: directory where the files will be synced
 * `skip_file`: any files that match this pattern will be skipped during sync
 * `skip_dir`: any directories that match this pattern will be skipped during sync

@@ -6,7 +6,7 @@ import config;
 
 private immutable {
 	string authUrl = "https://login.live.com/oauth20_authorize.srf";
-	string redirectUrl = "https://login.live.com/oauth20_desktop.srf";
+	string redirectUrl = "https://login.live.com/oauth20_desktop.srf"; // "urn:ietf:wg:oauth:2.0:oob";
 	string tokenUrl = "https://login.live.com/oauth20_token.srf";
 	string itemByIdUrl = "https://api.onedrive.com/v1.0/drive/items/";
 	string itemByPathUrl = "https://api.onedrive.com/v1.0/drive/root:/";
@@ -32,7 +32,7 @@ class OneDriveException: Exception
 
 final class OneDriveApi
 {
-	private string clientId, clientSecret;
+	private string clientId;
 	private string refreshToken, accessToken;
 	private SysTime accessTokenExpiration;
 	/* private */ HTTP http;
@@ -42,7 +42,6 @@ final class OneDriveApi
 	this(Config cfg, bool verbose)
 	{
 		this.clientId = cfg.get("client_id");
-		this.clientSecret = cfg.get("client_secret");
 		http = HTTP();
 		//http.verbose = verbose;
 	}
@@ -50,7 +49,7 @@ final class OneDriveApi
 	void authorize()
 	{
 		import std.stdio, std.regex;
-		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=wl.offline_access%20onedrive.readwrite&response_type=code&redirect_uri=" ~ redirectUrl;
+		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=onedrive.readwrite%20offline_access&response_type=code&redirect_uri=" ~ redirectUrl;
 		writeln("Authorize this app visiting:\n");
 		writeln(url, "\n");
 
@@ -72,21 +71,22 @@ final class OneDriveApi
 		this.refreshToken = refreshToken;
 	}
 
-	// https://dev.onedrive.com/items/view_changes.htm
+	// https://dev.onedrive.com/items/view_delta.htm
 	JSONValue viewChangesById(const(char)[] id, const(char)[] statusToken)
 	{
 		checkAccessTokenExpired();
-		char[] url = itemByIdUrl ~ id ~ "/view.changes";
+		const(char)[] url = itemByIdUrl ~ id ~ "/view.delta";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,fileSystemInfo,remoteItem,parentReference";
 		if (statusToken) url ~= "?token=" ~ statusToken;
 		return get(url);
 	}
 
-	// https://dev.onedrive.com/items/view_changes.htm
+	// https://dev.onedrive.com/items/view_delta.htm
 	JSONValue viewChangesByPath(const(char)[] path, const(char)[] statusToken)
 	{
 		checkAccessTokenExpired();
-		string url = itemByPathUrl ~ encodeComponent(path) ~ ":/view.changes";
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,fileSystemInfo,parentReference";
+		string url = itemByPathUrl ~ encodeComponent(path) ~ ":/view.delta";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,fileSystemInfo,remoteItem,parentReference";
 		if (statusToken) url ~= "&token=" ~ statusToken;
 		return get(url);
 	}
@@ -99,7 +99,7 @@ final class OneDriveApi
 			import std.file;
 			if (exists(saveToPath)) remove(saveToPath);
 		}
-		char[] url = itemByIdUrl ~ id ~ "/content?AVOverride=1";
+		const(char)[] url = itemByIdUrl ~ id ~ "/content";
 		download(url, saveToPath);
 	}
 
@@ -183,15 +183,21 @@ final class OneDriveApi
 
 	private void redeemToken(const(char)[] authCode)
 	{
-		string postData = "client_id=" ~ clientId ~ "&redirect_uri=" ~ redirectUrl ~ "&client_secret=" ~ clientSecret;
-		postData ~= "&code=" ~ authCode ~ "&grant_type=authorization_code";
+		const(char)[] postData =
+			"client_id=" ~ clientId ~
+			"&redirect_uri=" ~ redirectUrl ~
+			"&code=" ~ authCode ~
+			"&grant_type=authorization_code";
 		acquireToken(postData);
 	}
 
 	private void newToken()
 	{
-		string postData = "client_id=" ~ clientId ~ "&redirect_uri=" ~ redirectUrl ~ "&client_secret=" ~ clientSecret;
-		postData ~= "&refresh_token=" ~ refreshToken ~ "&grant_type=refresh_token";
+		string postData =
+			"client_id=" ~ clientId ~
+			"&redirect_uri=" ~ redirectUrl ~
+			"&refresh_token=" ~ refreshToken ~
+			"&grant_type=refresh_token";
 		acquireToken(postData);
 	}
 
