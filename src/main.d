@@ -71,6 +71,7 @@ void main(string[] args)
 
 	string syncDir = expandTilde(cfg.get("sync_dir"));
 	if (verbose) writeln("All operations will be performed in: ", syncDir);
+	if (!exists(syncDir)) mkdir(syncDir);
 	chdir(syncDir);
 
 	if (verbose) writeln("Initializing the Synchronization Engine ...");
