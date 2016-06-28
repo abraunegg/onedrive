@@ -18,6 +18,9 @@ onedrive: $(SOURCES)
 	$(DC) -O -release -inline -boundscheck=off $(DFLAGS) $(SOURCES)
 
 debug: $(SOURCES)
+	$(DC) -debug -g -gs $(DFLAGS) $(SOURCES)
+
+unittest: $(SOURCES)
 	$(DC) -unittest -debug -g -gs $(DFLAGS) $(SOURCES)
 
 clean:
