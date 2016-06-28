@@ -12,13 +12,20 @@ OneDrive Free Client
 * No GUI
 
 ### Dependencies
-
 * [libcurl](http://curl.haxx.se/libcurl/)
 * [SQLite 3](https://www.sqlite.org/)
 * [Digital Mars D Compiler (DMD)](http://dlang.org/download.html)
 
-### Installation
+### Dependencies: Ubuntu
+```
+sudo apt-get install libcurl-dev
+sudo apt-get install libsqlite3-dev
+sudo wget http://master.dl.sourceforge.net/project/d-apt/files/d-apt.list -O /etc/apt/sources.list.d/d-apt.list
+wget -qO - http://dlang.org/d-keyring.gpg | sudo apt-key add -
+sudo apt-get update && sudo apt-get install dmd-bin
+```
 
+### Installation
 1. `make`
 2. `sudo make install`
 
@@ -30,7 +37,6 @@ cp /usr/local/etc/onedrive.conf ~/.config/onedrive/config
 ```
 
 Available options:
-
 * `client_id`: application identifier necessary for the [authentication][2]
 * `sync_dir`: directory where the files will be synced
 * `skip_file`: any files that match this pattern will be skipped during sync
@@ -59,14 +65,15 @@ journalctl --user-unit onedrive -f
 ```
 
 ### Usage:
+```
+onedrive [OPTION]...
 
-	onedrive [OPTION]...
-
-	no option    Sync and exit.
-	-m --monitor Keep monitoring for local and remote changes.
-		--resync Forget the last saved state, perform a full sync.
-	-v --verbose Print more details, useful for debugging.
-	-h    --help This help information.
+no option    Sync and exit.
+-m --monitor Keep monitoring for local and remote changes.
+	--resync Forget the last saved state, perform a full sync.
+-v --verbose Print more details, useful for debugging.
+-h    --help This help information.
+```
 
 ### Notes:
 * After changing the filters (`skip_file` or `skip_dir` in your configs) you must execute `onedrive --resync`
