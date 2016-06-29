@@ -99,7 +99,7 @@ final class OneDriveApi
 			import std.file;
 			if (exists(saveToPath)) remove(saveToPath);
 		}
-		const(char)[] url = itemByIdUrl ~ id ~ "/content";
+		const(char)[] url = itemByIdUrl ~ id ~ "/content?AVOverride=1";
 		download(url, saveToPath);
 	}
 
