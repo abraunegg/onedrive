@@ -46,24 +46,23 @@ final class OneDriveApi
 		//http.verbose = verbose;
 	}
 
-	void authorize()
+	bool authorize()
 	{
 		import std.stdio, std.regex;
+		char[] response;
 		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=onedrive.readwrite%20offline_access&response_type=code&redirect_uri=" ~ redirectUrl;
 		writeln("Authorize this app visiting:\n");
-		writeln(url, "\n");
-
-		while (true) {
-			char[] response;
-			write("Enter the response uri: ");
-			readln(response);
-			auto c = matchFirst(response, r"(?:code=)(([\w\d]+-){4}[\w\d]+)");
-			if (!c.empty) {
-				c.popFront(); // skip the whole match
-				redeemToken(c.front);
-				break;
-			}
+		write(url, "\n\n", "Enter the response uri: ");
+		readln(response);
+		// match the authorization code
+		auto c = matchFirst(response, r"(?:code=)(([\w\d]+-){4}[\w\d]+)");
+		if (c.empty) {
+			writeln("Invalid uri");
+			return false;
 		}
+		c.popFront(); // skip the whole match
+		redeemToken(c.front);
+		return true;
 	}
 
 	void setRefreshToken(string refreshToken)

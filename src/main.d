@@ -63,7 +63,11 @@ void main(string[] args)
 		string refreshToken = readText(refreshTokenFilePath);
 		onedrive.setRefreshToken(refreshToken);
 	} catch (FileException e) {
-		onedrive.authorize();
+		if (!onedrive.authorize()) {
+			// workaround for segfault in std.net.curl.Curl.shutdown() on exit
+			onedrive.http.shutdown();
+			return;
+		}
 	}
 
 	if (verbose) writeln("Opening the item database ...");
