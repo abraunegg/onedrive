@@ -12,6 +12,8 @@ int main(string[] args)
 	bool monitor;
 	// force a full resync
 	bool resync;
+	// remove the current user and sync state
+	bool logout;
 	// enable verbose logging
 	bool verbose;
 
@@ -21,7 +23,8 @@ int main(string[] args)
 			std.getopt.config.bundling,
 			"monitor|m", "Keep monitoring for local and remote changes.", &monitor,
 			"resync", "Forget the last saved state, perform a full sync.", &resync,
-			"confdir", "Directory to use to store the configuration files.", &configDirName,
+			"logout", "Logout the current user.", &logout,
+			"confdir", "Set the directory to use to store the configuration files.", &configDirName,
 			"verbose|v", "Print more details, useful for debugging.", &log.verbose
 		);
 		if (opt.helpWanted) {
@@ -39,13 +42,18 @@ int main(string[] args)
 	}
 
 	log.vlog("Loading config ...");
+	configDirName = expandTilde(configDirName);
 	if (!exists(configDirName)) mkdir(configDirName);
 	auto cfg = new config.Config(configDirName);
 	cfg.init();
-	if (resync) {
+	if (resync || logout) {
 		log.log("Deleting the saved status ...");
-		if (exists(cfg.databaseFilePath)) remove(cfg.databaseFilePath);
-		if (exists(cfg.statusTokenFilePath)) remove(cfg.statusTokenFilePath);
+		safeRemove(cfg.databaseFilePath);
+		safeRemove(cfg.statusTokenFilePath);
+		safeRemove(cfg.uploadStateFilePath);
+		if (logout) {
+			safeRemove(cfg.refreshTokenFilePath);
+		}
 	}
 
 	log.vlog("Initializing the OneDrive API ...");

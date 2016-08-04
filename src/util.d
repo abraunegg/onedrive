@@ -32,6 +32,12 @@ void safeRename(const(char)[] path)
 	rename(path, newPath);
 }
 
+// delete the specified file without throwing an exception if it does not exists
+void safeRemove(const(char)[] path)
+{
+	if (exists(path)) remove(path);
+}
+
 // return the crc32 hex string of a file
 string computeCrc32(string path)
 {
