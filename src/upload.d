@@ -1,12 +1,8 @@
-import std.algorithm;
-import std.conv;
-import std.datetime;
-import std.file;
-import std.json;
-import std.stdio;
+import std.algorithm, std.conv, std.datetime, std.file, std.json;
 import onedrive;
+static import log;
 
-private long fragmentSize = 10 * 2^^20; // 10 Mib
+private long fragmentSize = 10 * 2^^20; // 10 MiB
 
 struct UploadSession
 {
@@ -17,7 +13,7 @@ struct UploadSession
 	// path where to save the session
 	private string sessionFilePath;
 
-	this(OneDriveApi onedrive, string sessionFilePath, bool verbose)
+	this(OneDriveApi onedrive, string sessionFilePath)
 	{
 		assert(onedrive);
 		this.onedrive = onedrive;
@@ -39,15 +35,15 @@ struct UploadSession
 	bool restore()
 	{
 		if (exists(sessionFilePath)) {
-			if (verbose) writeln("Trying to restore the upload session ...");
+			log.vlog("Trying to restore the upload session ...");
 			session = readText(sessionFilePath).parseJSON();
 			auto expiration =  SysTime.fromISOExtString(session["expirationDateTime"].str);
 			if (expiration < Clock.currTime()) {
-				if (verbose) writeln("The upload session is expired");
+				log.vlog("The upload session is expired");
 				return false;
 			}
 			if (!exists(session["localPath"].str)) {
-				if (verbose) writeln("The file do not exist anymore");
+				log.vlog("The file do not exist anymore");
 				return false;
 			}
 			// request the session status
@@ -55,7 +51,7 @@ struct UploadSession
 			session["expirationDateTime"] = response["expirationDateTime"];
 			session["nextExpectedRanges"] = response["nextExpectedRanges"];
 			if (session["nextExpectedRanges"].array.length == 0) {
-				if (verbose) writeln("The upload session is completed");
+				log.vlog("The upload session is completed");
 				return false;
 			}
 			return true;
@@ -70,7 +66,7 @@ struct UploadSession
 		JSONValue response;
 		while (true) {
 			long fragSize = fragmentSize < fileSize - offset ? fragmentSize : fileSize - offset;
-			if (verbose) writeln("Uploading fragment: ", offset, "-", offset + fragSize, "/", fileSize);
+			log.vlog("Uploading fragment: ", offset, "-", offset + fragSize, "/", fileSize);
 			response = onedrive.uploadFragment(
 				session["uploadUrl"].str,
 				session["localPath"].str,

@@ -1,7 +1,8 @@
 import std.net.curl: CurlException, HTTP;
-import std.datetime, std.exception, std.json, std.path;
+import std.datetime, std.exception, std.file, std.json, std.path;
 import std.stdio, std.string, std.uni, std.uri;
 import config;
+static import log;
 
 
 private immutable {
@@ -32,18 +33,28 @@ class OneDriveException: Exception
 
 final class OneDriveApi
 {
+	private Config cfg;
 	private string clientId;
 	private string refreshToken, accessToken;
 	private SysTime accessTokenExpiration;
 	/* private */ HTTP http;
 
-	void delegate(string) onRefreshToken; // called when a new refresh_token is received
-
-	this(Config cfg, bool verbose)
+	this(Config cfg)
 	{
-		this.clientId = cfg.get("client_id");
+		this.cfg = cfg;
+		this.clientId = cfg.getValue("client_id");
 		http = HTTP();
-		//http.verbose = verbose;
+		//http.verbose = true;
+	}
+
+	bool init()
+	{
+		try {
+			refreshToken = readText(cfg.refreshTokenFilePath);
+		} catch (FileException e) {
+			return authorize();
+		}
+		return true;
 	}
 
 	bool authorize()
@@ -51,23 +62,18 @@ final class OneDriveApi
 		import std.stdio, std.regex;
 		char[] response;
 		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=onedrive.readwrite%20offline_access&response_type=code&redirect_uri=" ~ redirectUrl;
-		writeln("Authorize this app visiting:\n");
+		log.log("Authorize this app visiting:\n");
 		write(url, "\n\n", "Enter the response uri: ");
 		readln(response);
 		// match the authorization code
 		auto c = matchFirst(response, r"(?:code=)(([\w\d]+-){4}[\w\d]+)");
 		if (c.empty) {
-			writeln("Invalid uri");
+			log.log("Invalid uri");
 			return false;
 		}
 		c.popFront(); // skip the whole match
 		redeemToken(c.front);
 		return true;
-	}
-
-	void setRefreshToken(string refreshToken)
-	{
-		this.refreshToken = refreshToken;
 	}
 
 	// https://dev.onedrive.com/items/view_delta.htm
@@ -206,7 +212,7 @@ final class OneDriveApi
 		accessToken = "bearer " ~ response["access_token"].str();
 		refreshToken = response["refresh_token"].str();
 		accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
-		if (onRefreshToken) onRefreshToken(refreshToken);
+		std.file.write(cfg.refreshTokenFilePath, refreshToken);
 	}
 
 	private void checkAccessTokenExpired()

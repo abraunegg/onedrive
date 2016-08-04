@@ -6,6 +6,7 @@ CONFDIR = /usr/local/etc
 SOURCES = \
 	src/config.d \
 	src/itemdb.d \
+	src/log.d \
 	src/main.d \
 	src/monitor.d \
 	src/onedrive.d \

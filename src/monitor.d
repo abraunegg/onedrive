@@ -1,9 +1,9 @@
 import core.sys.linux.sys.inotify;
 import core.stdc.errno;
-import core.sys.posix.poll;
-import core.sys.posix.unistd;
+import core.sys.posix.poll, core.sys.posix.unistd;
 import std.exception, std.file, std.path, std.regex, std.stdio, std.string;
 import config, util;
+static import log;
 
 // relevant inotify events
 private immutable uint32_t mask = IN_ATTRIB | IN_CLOSE_WRITE | IN_CREATE |
@@ -41,8 +41,8 @@ struct Monitor
 	void init(Config cfg, bool verbose)
 	{
 		this.verbose = verbose;
-		skipDir = wild2regex(cfg.get("skip_dir"));
-		skipFile = wild2regex(cfg.get("skip_file"));
+		skipDir = wild2regex(cfg.getValue("skip_dir"));
+		skipFile = wild2regex(cfg.getValue("skip_file"));
 		fd = inotify_init();
 		if (fd == -1) throw new MonitorException("inotify_init failed");
 		if (!buffer) buffer = new void[4096];
@@ -72,21 +72,21 @@ struct Monitor
 		int wd = inotify_add_watch(fd, toStringz(dirname), mask);
 		if (wd == -1) {
                     if (errno() == ENOSPC) {
-                        writeln("The maximum number of inotify wathches is probably too low.");
-                        writeln("");
-                        writeln("To see the current max number of watches run");
-                        writeln("");
-                        writeln("   sysctl fs.inotify.max_user_watches");
-                        writeln("");
-                        writeln("To change the current max number of watches to 32768 run");
-                        writeln("");
-                        writeln("   sudo sysctl fs.inotify.max_user_watches=32768");
-                        writeln("");
+                        log.log("The maximum number of inotify wathches is probably too low.");
+                        log.log("");
+                        log.log("To see the current max number of watches run");
+                        log.log("");
+                        log.log("   sysctl fs.inotify.max_user_watches");
+                        log.log("");
+                        log.log("To change the current max number of watches to 32768 run");
+                        log.log("");
+                        log.log("   sudo sysctl fs.inotify.max_user_watches=32768");
+                        log.log("");
                     }
                     throw new MonitorException("inotify_add_watch failed");
                 }
 		wdToDirName[wd] = dirname ~ "/";
-		if (verbose) writeln("Monitor directory: ", dirname);
+		log.vlog("Monitor directory: ", dirname);
 	}
 
 	// remove a watch descriptor
@@ -95,7 +95,7 @@ struct Monitor
 		assert(wd in wdToDirName);
 		int ret = inotify_rm_watch(fd, wd);
 		if (ret == -1) throw new MonitorException("inotify_rm_watch failed");
-		if (verbose) writeln("Monitored directory removed: ", wdToDirName[wd]);
+		log.vlog("Monitored directory removed: ", wdToDirName[wd]);
 		wdToDirName.remove(wd);
 	}
 
@@ -108,7 +108,7 @@ struct Monitor
 				int ret = inotify_rm_watch(fd, wd);
 				if (ret == -1) throw new MonitorException("inotify_rm_watch failed");
 				wdToDirName.remove(wd);
-				if (verbose) writeln("Monitored directory removed: ", dirname);
+				log.vlog("Monitored directory removed: ", dirname);
 			}
 		}
 	}
@@ -190,7 +190,7 @@ struct Monitor
 						if (useCallbacks) onFileChanged(path);
 					}
 				} else {
-					writeln("Unknow inotify event: ", format("%#x", event.mask));
+					log.log("Unknow inotify event: ", format("%#x", event.mask));
 				}
 
 				skip:

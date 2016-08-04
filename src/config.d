@@ -1,22 +1,36 @@
 import std.file, std.regex, std.stdio;
+static import log;
 
-struct Config
+final class Config
 {
+	public string refreshTokenFilePath;
+	public string statusTokenFilePath;
+	public string databaseFilePath;
+	public string uploadStateFilePath;
+
+	private string userConfigFilePath;
+	// hashmap for the values found in the user config file
 	private string[string] values;
 
-	this(string[] filenames...)
+	this(string configDirName)
+	{
+		refreshTokenFilePath = configDirName ~ "/refresh_token";
+		statusTokenFilePath = configDirName ~ "/status_token";
+		databaseFilePath = configDirName ~ "/items.db";
+		uploadStateFilePath = configDirName ~ "/resume_upload";
+		userConfigFilePath = configDirName ~ "/config";
+	}
+
+	void init()
 	{
 		bool found = false;
-		foreach (filename; filenames) {
-			if (exists(filename)) {
-				found = true;
-				load(filename);
-			}
-		}
+		found |= load("/etc/onedrive.conf");
+		found |= load("/usr/local/etc/onedrive.conf");
+		found |= load(userConfigFilePath);
 		if (!found) throw new Exception("No config file found");
 	}
 
-	string get(string key)
+	string getValue(string key)
 	{
 		auto p = key in values;
 		if (p) {
@@ -26,8 +40,9 @@ struct Config
 		}
 	}
 
-	private void load(string filename)
+	private bool load(string filename)
 	{
+		scope(failure) return false;
 		auto file = File(filename, "r");
 		auto r = regex(`^\s*(\w+)\s*=\s*"(.*)"\s*$`);
 		foreach (line; file.byLine()) {
@@ -38,23 +53,16 @@ struct Config
 				c.popFront();
 				values[key] = c.front.dup;
 			} else {
-				writeln("Malformed config line: ", line);
+				log.log("Malformed config line: ", line);
 			}
 		}
+		return true;
 	}
 }
 
 unittest
 {
-	auto cfg = Config("empty", "onedrive.conf");
-	assert(cfg.get("sync_dir") == "~/OneDrive");
-}
-
-unittest
-{
-	try {
-		auto cfg = Config("empty");
-		assert(0);
-	} catch (Exception e) {
-	}
+	auto cfg = new Config("");
+	cfg.load("onedrive.conf");
+	assert(cfg.getValue("sync_dir") == "~/OneDrive");
 }

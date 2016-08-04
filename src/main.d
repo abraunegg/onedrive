@@ -1,20 +1,28 @@
+import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE;
 import core.memory, core.time, core.thread;
-import std.getopt, std.file, std.path, std.process, std.stdio;
+import std.getopt, std.file, std.path, std.process;
 import config, itemdb, monitor, onedrive, sync, util;
+static import log;
 
-
-void main(string[] args)
+int main(string[] args)
 {
-	// always print log messages
-	stdout = stderr;
+	// configuration directory
+	string configDirName = expandTilde(environment.get("XDG_CONFIG_HOME", "~/.config")) ~ "/onedrive";
+	// enable monitor mode
+	bool monitor;
+	// force a full resync
+	bool resync;
+	// enable verbose logging
+	bool verbose;
 
-	bool monitor, resync, verbose;
 	try {
 		auto opt = getopt(
 			args,
+			std.getopt.config.bundling,
 			"monitor|m", "Keep monitoring for local and remote changes.", &monitor,
 			"resync", "Forget the last saved state, perform a full sync.", &resync,
-			"verbose|v", "Print more details, useful for debugging.", &verbose
+			"confdir", "Directory to use to store the configuration files.", &configDirName,
+			"verbose|v", "Print more details, useful for debugging.", &log.verbose
 		);
 		if (opt.helpWanted) {
 			defaultGetoptPrinter(
@@ -22,109 +30,84 @@ void main(string[] args)
 				"no option    Sync and exit.",
 				opt.options
 			);
-			return;
+			return EXIT_SUCCESS;
 		}
 	} catch (GetOptException e) {
-		writeln(e.msg);
-		writeln("Try 'onedrive -h' for more information.");
-		return;
+		log.log(e.msg);
+		log.log("Try 'onedrive -h' for more information.");
+		return EXIT_FAILURE;
 	}
 
-	string configDirName = expandTilde(environment.get("XDG_CONFIG_HOME", "~/.config")) ~ "/onedrive";
-	string configFile1Path = "/etc/onedrive.conf";
-	string configFile2Path = "/usr/local/etc/onedrive.conf";
-	string configFile3Path = configDirName ~ "/config";
-	string refreshTokenFilePath = configDirName ~ "/refresh_token";
-	string statusTokenFilePath = configDirName ~ "/status_token";
-	string databaseFilePath = configDirName ~ "/items.db";
-
+	log.vlog("Loading config ...");
 	if (!exists(configDirName)) mkdir(configDirName);
-
+	auto cfg = new config.Config(configDirName);
+	cfg.init();
 	if (resync) {
-		if (verbose) writeln("Deleting the saved status ...");
-		if (exists(databaseFilePath)) remove(databaseFilePath);
-		if (exists(statusTokenFilePath)) remove(statusTokenFilePath);
+		log.log("Deleting the saved status ...");
+		if (exists(cfg.databaseFilePath)) remove(cfg.databaseFilePath);
+		if (exists(cfg.statusTokenFilePath)) remove(cfg.statusTokenFilePath);
 	}
 
-	if (verbose) writeln("Loading config ...");
-	auto cfg = config.Config(configFile1Path, configFile2Path, configFile3Path);
-
-	if (verbose) writeln("Initializing the OneDrive API ...");
+	log.vlog("Initializing the OneDrive API ...");
 	bool online = testNetwork();
 	if (!online && !monitor) {
-		writeln("No network connection");
-		return;
+		log.log("No network connection");
+		return EXIT_FAILURE;
 	}
-	auto onedrive = new OneDriveApi(cfg, verbose);
-	onedrive.onRefreshToken = (string refreshToken) {
-		std.file.write(refreshTokenFilePath, refreshToken);
-	};
-	try {
-		string refreshToken = readText(refreshTokenFilePath);
-		onedrive.setRefreshToken(refreshToken);
-	} catch (FileException e) {
-		if (!onedrive.authorize()) {
-			// workaround for segfault in std.net.curl.Curl.shutdown() on exit
-			onedrive.http.shutdown();
-			return;
-		}
+	auto onedrive = new OneDriveApi(cfg);
+	if (!onedrive.init()) {
+		log.log("Could not initialize the OneDrive API");
+		// workaround for segfault in std.net.curl.Curl.shutdown() on exit
+		onedrive.http.shutdown();
+		return EXIT_FAILURE;
 	}
 
-	if (verbose) writeln("Opening the item database ...");
-	auto itemdb = new ItemDatabase(databaseFilePath);
+	log.vlog("Opening the item database ...");
+	auto itemdb = new ItemDatabase(cfg.databaseFilePath);
 
-	string syncDir = expandTilde(cfg.get("sync_dir"));
-	if (verbose) writeln("All operations will be performed in: ", syncDir);
+	string syncDir = expandTilde(cfg.getValue("sync_dir"));
+	log.vlog("All operations will be performed in: ", syncDir);
 	if (!exists(syncDir)) mkdir(syncDir);
 	chdir(syncDir);
 
-	if (verbose) writeln("Initializing the Synchronization Engine ...");
-	auto sync = new SyncEngine(cfg, onedrive, itemdb, configDirName, verbose);
-	sync.onStatusToken = (string statusToken) {
-		std.file.write(statusTokenFilePath, statusToken);
-	};
-	string statusToken;
-	try {
-		statusToken = readText(statusTokenFilePath);
-	} catch (FileException e) {
-		// swallow exception
-	}
-	sync.init(statusToken);
+	log.vlog("Initializing the Synchronization Engine ...");
+	auto sync = new SyncEngine(cfg, onedrive, itemdb);
+	sync.init();
 	if (online) performSync(sync);
 
 	if (monitor) {
-		if (verbose) writeln("Initializing monitor ...");
+		log.vlog("Initializing monitor ...");
 		Monitor m;
 		m.onDirCreated = delegate(string path) {
-			if (verbose) writeln("[M] Directory created: ", path);
+			log.vlog("[M] Directory created: ", path);
 			try {
 				sync.scanForDifferences(path);
 			} catch(SyncException e) {
-				writeln(e.msg);
+				log.log(e.msg);
 			}
 		};
 		m.onFileChanged = delegate(string path) {
-			if (verbose) writeln("[M] File changed: ", path);
+			log.vlog("[M] File changed: ", path);
 			try {
 				sync.scanForDifferences(path);
 			} catch(SyncException e) {
-				writeln(e.msg);
+				log.log(e.msg);
 			}
 		};
 		m.onDelete = delegate(string path) {
-			if (verbose) writeln("[M] Item deleted: ", path);
+			log.vlog("[M] Item deleted: ", path);
 			try {
 				sync.deleteByPath(path);
 			} catch(SyncException e) {
-				writeln(e.msg);
+				log.log(e.msg);
 			}
 		};
 		m.onMove = delegate(string from, string to) {
-			if (verbose) writeln("[M] Item moved: ", from, " -> ", to);
+			log.vlog("[M] Item moved: ", from, " -> ", to);
 			try {
 				sync.uploadMoveItem(from, to);
 			} catch(SyncException e) {
-				writeln(e.msg);
+				log.log(e.msg);
 			}
 		};
 		m.init(cfg, verbose);
@@ -151,6 +134,7 @@ void main(string[] args)
 
 	// workaround for segfault in std.net.curl.Curl.shutdown() on exit
 	onedrive.http.shutdown();
+	return EXIT_SUCCESS;
 }
 
 // try to synchronize the folder three times
@@ -164,7 +148,7 @@ void performSync(SyncEngine sync)
 			count = -1;
 		} catch (SyncException e) {
 			if (++count == 3) throw e;
-			else writeln(e.msg);
+			else log.log(e.msg);
 		}
 	} while (count != -1);
 }
