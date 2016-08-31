@@ -439,6 +439,9 @@ final class SyncEngine
 
 	private void uploadNewItems(string path)
 	{
+		if (isSymlink(path) && !exists(readLink(path))) {
+			return;
+		}
 		if (isDir(path)) {
 			if (path.matchFirst(skipDir).empty) {
 				Item item;
