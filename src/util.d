@@ -89,3 +89,21 @@ bool testNetwork()
 		return false;
 	}
 }
+
+// call globMatch for each string in pattern separated by '|'
+bool multiGlobMatch(const(char)[] path, const(char)[] pattern)
+{
+	foreach (glob; pattern.split('|')) {
+		if (globMatch!(std.path.CaseSensitive.yes)(path, glob)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+unittest
+{
+	assert(multiGlobMatch(".hidden", ".*"));
+	assert(multiGlobMatch(".hidden", "file|.*"));
+	assert(!multiGlobMatch("foo.bar", "foo|bar"));
+}
