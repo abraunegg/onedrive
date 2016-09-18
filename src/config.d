@@ -40,6 +40,16 @@ final class Config
 		}
 	}
 
+	string getValue(string key, string value)
+	{
+		auto p = key in values;
+		if (p) {
+			return *p;
+		} else {
+			return value;
+		}
+	}
+
 	private bool load(string filename)
 	{
 		scope(failure) return false;
@@ -65,4 +75,5 @@ unittest
 	auto cfg = new Config("");
 	cfg.load("onedrive.conf");
 	assert(cfg.getValue("sync_dir") == "~/OneDrive");
+	assert(cfg.getValue("empty", "default") == "default");
 }
