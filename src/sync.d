@@ -243,7 +243,8 @@ final class SyncEngine
 			break;
 		case ItemType.dir:
 			log.log("Creating directory: ", path);
-			mkdir(path);
+			//Use mkdirRecuse to deal nested dir
+			mkdirRecurse(path);
 			break;
 		}
 		setTimes(path, item.mtime, item.mtime);

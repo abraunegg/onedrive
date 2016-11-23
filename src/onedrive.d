@@ -100,9 +100,13 @@ final class OneDriveApi
 	void downloadById(const(char)[] id, string saveToPath)
 	{
 		checkAccessTokenExpired();
+		import std.file;
 		scope(failure) {
-			import std.file;
 			if (exists(saveToPath)) remove(saveToPath);
+		}
+		// mkdir if need, or File(saveToPath, "wb") may fail
+		if ( !exists(dirName(saveToPath)) ) {
+		   mkdirRecurse(dirName(saveToPath));
 		}
 		const(char)[] url = itemByIdUrl ~ id ~ "/content?AVOverride=1";
 		download(url, saveToPath);
