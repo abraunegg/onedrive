@@ -50,7 +50,7 @@ Use `|` to separate multiple patterns.
 [3]: https://technet.microsoft.com/en-us/library/bb490639.aspx
 
 ### First run
-The first time you run the program you will be asked to sign in. The procedure require a web browser.
+The first time you run the program you will be asked to sign in. The procedure requires a web browser.
 
 ### Service
 If you want to sync your files automatically, enable and start the systemd service:
