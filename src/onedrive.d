@@ -17,6 +17,8 @@ class OneDriveException: Exception
 {
 	// HTTP status code
 	int code;
+	// error details
+	JSONValue error;
 
     @nogc @safe pure nothrow this(string msg, Throwable next, string file = __FILE__, size_t line = __LINE__)
     {
@@ -26,7 +28,16 @@ class OneDriveException: Exception
 	@safe pure this(int code, string reason, string file = __FILE__, size_t line = __LINE__)
 	{
 		this.code = code;
+		this.error = error;
 		string msg = format("HTTP request returned status code %d (%s)", code, reason);
+		super(msg, file, line, next);
+	}
+
+	this(int code, string reason, ref const JSONValue error, string file = __FILE__, size_t line = __LINE__)
+	{
+		this.code = code;
+		this.error = error;
+		string msg = format("HTTP request returned status code %d (%s)\n%s", code, reason, toJSON(&error, true));
 		super(msg, file, line, next);
 	}
 }
@@ -234,7 +245,7 @@ final class OneDriveApi
 		http.url = url;
 		addAccessTokenHeader();
 		auto response = perform();
-		checkHttpCode();
+		checkHttpCode(response);
 		return response;
 	}
 
@@ -244,8 +255,8 @@ final class OneDriveApi
 		http.method = HTTP.Method.del;
 		http.url = url;
 		addAccessTokenHeader();
-		perform();
-		checkHttpCode();
+		auto response = perform();
+		checkHttpCode(response);
 	}
 
 	private void download(const(char)[] url, string filename)
@@ -270,7 +281,7 @@ final class OneDriveApi
 		http.url = url;
 		addAccessTokenHeader();
 		auto response = perform(patchData);
-		checkHttpCode();
+		checkHttpCode(response);
 		return response;
 	}
 
@@ -281,7 +292,7 @@ final class OneDriveApi
 		http.url = url;
 		addAccessTokenHeader();
 		auto response = perform(postData);
-		checkHttpCode();
+		checkHttpCode(response);
 		return response;
 	}
 
@@ -300,7 +311,7 @@ final class OneDriveApi
 		http.onSend = data => file.rawRead(data).length;
 		http.contentLength = file.size;
 		auto response = perform();
-		checkHttpCode();
+		checkHttpCode(response);
 		return response;
 	}
 
@@ -346,6 +357,13 @@ final class OneDriveApi
 	{
 		if (http.statusLine.code / 100 != 2) {
 			throw new OneDriveException(http.statusLine.code, http.statusLine.reason);
+		}
+	}
+
+	private void checkHttpCode(ref const JSONValue response)
+	{
+		if (http.statusLine.code / 100 != 2) {
+			throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
 		}
 	}
 }
