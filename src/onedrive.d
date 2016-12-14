@@ -15,8 +15,7 @@ private immutable {
 
 class OneDriveException: Exception
 {
-	// HTTP status code
-	int code;
+	int httpStatusCode;
 	// error details
 	JSONValue error;
 
@@ -25,19 +24,19 @@ class OneDriveException: Exception
         super(msg, file, line, next);
     }
 
-	@safe pure this(int code, string reason, string file = __FILE__, size_t line = __LINE__)
+	@safe pure this(int httpStatusCode, string reason, string file = __FILE__, size_t line = __LINE__)
 	{
-		this.code = code;
+		this.httpStatusCode = httpStatusCode;
 		this.error = error;
-		string msg = format("HTTP request returned status code %d (%s)", code, reason);
+		string msg = format("HTTP request returned status code %d (%s)", httpStatusCode, reason);
 		super(msg, file, line, next);
 	}
 
-	this(int code, string reason, ref const JSONValue error, string file = __FILE__, size_t line = __LINE__)
+	this(int httpStatusCode, string reason, ref const JSONValue error, string file = __FILE__, size_t line = __LINE__)
 	{
-		this.code = code;
+		this.httpStatusCode = httpStatusCode;
 		this.error = error;
-		string msg = format("HTTP request returned status code %d (%s)\n%s", code, reason, toJSON(&error, true));
+		string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(&error, true));
 		super(msg, file, line, next);
 	}
 }

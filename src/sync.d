@@ -91,7 +91,19 @@ final class SyncEngine
 		try {
 			JSONValue changes;
 			do {
-				changes = onedrive.viewChangesByPath("/", statusToken);
+				// get changes from the server
+				try {
+					changes = onedrive.viewChangesByPath("/", statusToken);
+				} catch (OneDriveException e) {
+					if (e.httpStatusCode == 410) {
+						log.log("Status token expired, resyncing");
+						statusToken = null;
+						continue;
+					}
+					else {
+						throw e;
+					}
+				}
 				foreach (item; changes["value"].array) {
 					applyDifference(item);
 				}
@@ -497,7 +509,7 @@ final class SyncEngine
 		try {
 			onedrive.deleteById(item.id, item.eTag);
 		} catch (OneDriveException e) {
-			if (e.code == 404) log.log(e.msg);
+			if (e.httpStatusCode == 404) log.log(e.msg);
 			else throw e;
 		}
 		itemdb.deleteById(item.id);
@@ -575,7 +587,7 @@ final class SyncEngine
 		try {
 			uploadDeleteItem(item, path);
 		} catch (OneDriveException e) {
-			if (e.code == 404) log.log(e.msg);
+			if (e.httpStatusCode == 404) log.log(e.msg);
 			else throw e;
 		}
 	}
