@@ -109,7 +109,7 @@ final class SyncEngine
 				}
 				statusToken = changes["@delta.token"].str;
 				std.file.write(cfg.statusTokenFilePath, statusToken);
-			} while (("@odata.nextLink" in changes.object) !is null);
+			} while ((changes.type != JSON_TYPE.OBJECT) && (("@odata.nextLink" in changes) !is null));
 		} catch (ErrnoException e) {
 			throw new SyncException(e.msg, e);
 		} catch (FileException e) {
