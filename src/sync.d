@@ -190,17 +190,6 @@ final class SyncEngine
 			return;
 		}
 
-		string cTag;
-		try {
-			cTag = item["cTag"].str;
-		} catch (JSONException e) {
-			// cTag is not returned if the Item is a folder
-			// https://dev.onedrive.com/resources/item.htm
-			cTag = "";
-		}
-
-		string mtime = item["fileSystemInfo"]["lastModifiedDateTime"].str;
-
 		string crc32;
 		if (type == ItemType.file) {
 			try {
@@ -215,8 +204,8 @@ final class SyncEngine
 			name: name,
 			type: type,
 			eTag: eTag,
-			cTag: cTag,
-			mtime: SysTime.fromISOExtString(mtime),
+			cTag: "cTag" in item ? item["cTag"].str : null,
+			mtime: SysTime.fromISOExtString(item["fileSystemInfo"]["lastModifiedDateTime"].str),
 			parentId: parentId,
 			crc32: crc32
 		};
@@ -229,9 +218,9 @@ final class SyncEngine
 
 		// save the item in the db
 		if (oldItem.id) {
-			itemdb.update(id, name, type, eTag, cTag, mtime, parentId, crc32);
+			itemdb.update(newItem);
 		} else {
-			itemdb.insert(id, name, type, eTag, cTag, mtime, parentId, crc32);
+			itemdb.insert(newItem);
 		}
 	}
 
@@ -526,31 +515,32 @@ final class SyncEngine
 		saveItem(res);
 	}
 
-	private void saveItem(JSONValue item)
+	private void saveItem(JSONValue jsonItem)
 	{
-		string id = item["id"].str;
+		string id = jsonItem["id"].str;
 		ItemType type;
-		if (isItemFile(item)) {
+		if (isItemFile(jsonItem)) {
 			type = ItemType.file;
-		} else if (isItemFolder(item)) {
+		} else if (isItemFolder(jsonItem)) {
 			type = ItemType.dir;
 		} else {
 			assert(0);
 		}
-		string name = item["name"].str;
-		string eTag = item["eTag"].str;
-		string cTag = item["cTag"].str;
-		string mtime = item["fileSystemInfo"]["lastModifiedDateTime"].str;
-		string parentId = item["parentReference"]["id"].str;
-		string crc32;
+		Item item = {
+			name: jsonItem["name"].str,
+			eTag: jsonItem["eTag"].str,
+			cTag: "cTag" in jsonItem ? jsonItem["cTag"].str : null,
+			mtime: SysTime.fromISOExtString(jsonItem["fileSystemInfo"]["lastModifiedDateTime"].str),
+			parentId: jsonItem["parentReference"]["id"].str
+		};
 		if (type == ItemType.file) {
 			try {
-				crc32 = item["file"]["hashes"]["crc32Hash"].str;
+				item.crc32 = jsonItem["file"]["hashes"]["crc32Hash"].str;
 			} catch (JSONException e) {
-				// swallow exception
+				log.vlog("The hash is not available");
 			}
 		}
-		itemdb.upsert(id, name, type, eTag, cTag, mtime, parentId, crc32);
+		itemdb.upsert(item);
 	}
 
 	void uploadMoveItem(string from, string to)

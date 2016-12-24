@@ -1,4 +1,4 @@
-import std.datetime, std.path, std.string;
+import std.datetime, std.path, std.exception, std.string;
 import sqlite;
 
 enum ItemType
@@ -21,6 +21,9 @@ struct Item
 
 final class ItemDatabase
 {
+	// increment this for every change in the db schema
+	immutable int itemDatabaseVersion = 1;
+
 	Database db;
 	Statement insertItemStmt;
 	Statement updateItemStmt;
@@ -35,7 +38,7 @@ final class ItemDatabase
 			name     TEXT NOT NULL,
 			type     TEXT NOT NULL,
 			eTag     TEXT NOT NULL,
-			cTag     TEXT NOT NULL,
+			cTag     TEXT,
 			mtime    TEXT NOT NULL,
 			parentId TEXT,
 			crc32    TEXT,
@@ -44,6 +47,8 @@ final class ItemDatabase
 		db.exec("CREATE INDEX IF NOT EXISTS name_idx ON item (name)");
 		db.exec("PRAGMA foreign_keys = ON");
 		db.exec("PRAGMA recursive_triggers = ON");
+		db.setVersion(itemDatabaseVersion);
+
 		insertItemStmt = db.prepare("INSERT OR REPLACE INTO item (id, name, type, eTag, cTag, mtime, parentId, crc32) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
 		updateItemStmt = db.prepare("
 			UPDATE item
@@ -54,70 +59,28 @@ final class ItemDatabase
 		selectItemByParentIdStmt = db.prepare("SELECT id FROM item WHERE parentId = ?");
 	}
 
-	void insert(const(char)[] id, const(char)[] name, ItemType type, const(char)[] eTag, const(char)[] cTag, const(char)[] mtime, const(char)[] parentId, const(char)[] crc32)
+	void insert(const ref Item item)
 	{
-		with (insertItemStmt) {
-			bind(1, id);
-			bind(2, name);
-			string typeStr = void;
-			final switch (type) {
-			case ItemType.file: typeStr = "file"; break;
-			case ItemType.dir:  typeStr = "dir";  break;
-			}
-			bind(3, typeStr);
-			bind(4, eTag);
-			bind(5, cTag);
-			bind(6, mtime);
-			bind(7, parentId);
-			bind(8, crc32);
-			exec();
-		}
+		bindItem(item, insertItemStmt);
+		insertItemStmt.exec();
 	}
 
-	void update(const(char)[] id, const(char)[] name, ItemType type, const(char)[] eTag, const(char)[] cTag, const(char)[] mtime, const(char)[] parentId, const(char)[] crc32)
+	void update(const ref Item item)
 	{
-		with (updateItemStmt) {
-			bind(1, id);
-			bind(2, name);
-			string typeStr = void;
-			final switch (type) {
-			case ItemType.file: typeStr = "file"; break;
-			case ItemType.dir:  typeStr = "dir";  break;
-			}
-			bind(3, typeStr);
-			bind(4, eTag);
-			bind(5, cTag);
-			bind(6, mtime);
-			bind(7, parentId);
-			bind(8, crc32);
-			exec();
-		}
+		bindItem(item, updateItemStmt);
+		updateItemStmt.exec();
 	}
 
-	void upsert(const(char)[] id, const(char)[] name, ItemType type, const(char)[] eTag, const(char)[] cTag, const(char)[] mtime, const(char)[] parentId, const(char)[] crc32)
+	void upsert(const ref Item item)
 	{
 		auto s = db.prepare("SELECT COUNT(*) FROM item WHERE id = ?");
-		s.bind(1, id);
+		s.bind(1, item.id);
 		auto r = s.exec();
-		Statement* p;
-		if (r.front[0] == "0") p = &insertItemStmt;
-		else p = &updateItemStmt;
-		with (p) {
-			bind(1, id);
-			bind(2, name);
-			string typeStr = void;
-			final switch (type) {
-			case ItemType.file: typeStr = "file"; break;
-			case ItemType.dir:  typeStr = "dir";  break;
-			}
-			bind(3, typeStr);
-			bind(4, eTag);
-			bind(5, cTag);
-			bind(6, mtime);
-			bind(7, parentId);
-			bind(8, crc32);
-			exec();
-		}
+		Statement* stmt;
+		if (r.front[0] == "0") stmt = &insertItemStmt;
+		else stmt = &updateItemStmt;
+		bindItem(item, *stmt);
+		stmt.exec();
 	}
 
 	Item[] selectChildren(const(char)[] id)
@@ -218,6 +181,25 @@ final class ItemDatabase
 		return false;
 	}
 
+	private void bindItem(const ref Item item, ref Statement stmt)
+	{
+		with (stmt) with (item) {
+			bind(1, id);
+			bind(2, name);
+			string typeStr = null;
+			final switch (type) with (ItemType) {
+				case file: typeStr = "file"; break;
+				case dir:  typeStr = "dir";  break;
+			}
+			bind(3, typeStr);
+			bind(4, eTag);
+			bind(5, cTag);
+			bind(6, mtime.toISOExtString());
+			bind(7, parentId);
+			bind(8, crc32);
+		}
+	}
+
 	private Item buildItem(Statement.Result result)
 	{
 		assert(!result.empty && result.front.length == 8);
@@ -231,25 +213,25 @@ final class ItemDatabase
 			crc32: result.front[7].dup
 		};
 		switch (result.front[2]) {
-		case "file": item.type = ItemType.file; break;
-		case "dir":  item.type = ItemType.dir;  break;
-		default: assert(0);
+			case "file": item.type = ItemType.file; break;
+			case "dir":  item.type = ItemType.dir;  break;
+			default: assert(0);
 		}
 		return item;
 	}
 
+	// computes the path of the given item id
+	// the path is relative to the sync directory ex: "./Music/Turbo Killer.mp3"
+	// a trailing slash is never added
 	string computePath(const(char)[] id)
 	{
-		if (!id) return null;
 		string path;
 		auto s = db.prepare("SELECT name, parentId FROM item WHERE id = ?");
 		while (true) {
 			s.bind(1, id);
 			auto r = s.exec();
-			if (r.empty) {
-				// no results
-				break;
-			} else if (r.front[1]) {
+			enforce(!r.empty, "Unknow item id");
+			if (r.front[1]) {
 				if (path) path = r.front[0].idup ~ "/" ~ path;
 				else path = r.front[0].idup;
 			} else {

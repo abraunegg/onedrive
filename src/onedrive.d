@@ -16,7 +16,7 @@ private immutable {
 class OneDriveException: Exception
 {
 	int httpStatusCode;
-	// error details
+	// https://dev.onedrive.com/misc/errors.htm
 	JSONValue error;
 
     @nogc @safe pure nothrow this(string msg, Throwable next, string file = __FILE__, size_t line = __LINE__)
@@ -36,7 +36,7 @@ class OneDriveException: Exception
 	{
 		this.httpStatusCode = httpStatusCode;
 		this.error = error;
-		string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(&error, true));
+		string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(error, true));
 		super(msg, file, line, next);
 	}
 }
