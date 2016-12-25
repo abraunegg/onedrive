@@ -26,8 +26,12 @@ sudo apt-get update && sudo apt-get install dmd-bin
 ```
 
 ### Installation
-1. `make`
-2. `sudo make install`
+```
+git clone git@github.com:skilion/onedrive.git
+cd onedrive
+make
+sudo make install
+```
 
 ### Configuration:
 You should copy the default config file into your home directory before making changes:
