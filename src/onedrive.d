@@ -9,6 +9,7 @@ private immutable {
 	string authUrl = "https://login.live.com/oauth20_authorize.srf";
 	string redirectUrl = "https://login.live.com/oauth20_desktop.srf"; // "urn:ietf:wg:oauth:2.0:oob";
 	string tokenUrl = "https://login.live.com/oauth20_token.srf";
+	string driveUrl = "https://api.onedrive.com/v1.0/drive";
 	string itemByIdUrl = "https://api.onedrive.com/v1.0/drive/items/";
 	string itemByPathUrl = "https://api.onedrive.com/v1.0/drive/root:/";
 }
@@ -61,8 +62,15 @@ final class OneDriveApi
 	{
 		try {
 			refreshToken = readText(cfg.refreshTokenFilePath);
+			getDefaultDrive();
 		} catch (FileException e) {
 			return authorize();
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
+				log.log("Refresh token invalid");
+				return authorize();
+			}
+			throw e;
 		}
 		return true;
 	}
@@ -84,6 +92,13 @@ final class OneDriveApi
 		c.popFront(); // skip the whole match
 		redeemToken(c.front);
 		return true;
+	}
+
+	// https://dev.onedrive.com/drives/default.htm
+	JSONValue getDefaultDrive()
+	{
+		checkAccessTokenExpired();
+		return get(driveUrl);
 	}
 
 	// https://dev.onedrive.com/items/view_delta.htm
