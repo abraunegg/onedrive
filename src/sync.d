@@ -56,7 +56,7 @@ final class SyncEngine
 	// list of items to skip while applying the changes
 	private string[] skippedItems;
 	// list of items to delete after the changes has been downloaded
-	private string[] pathsToDelete;
+	private string[] idsToDelete;
 
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb)
 	{
@@ -117,8 +117,8 @@ final class SyncEngine
 		} catch (OneDriveException e) {
 			throw new SyncException(e.msg, e);
 		}
-		// delete items in pathsToDelete
-		if (pathsToDelete.length > 0) deleteItems();
+		// delete items in idsToDelete
+		if (idsToDelete.length > 0) deleteItems();
 		// empty the skipped items
 		skippedItems.length = 0;
 		assumeSafeAppend(skippedItems);
@@ -166,10 +166,7 @@ final class SyncEngine
 		ItemType type;
 		if (isItemDeleted(item)) {
 			log.vlog("The item is marked for deletion");
-			if (cached) {
-				itemdb.deleteById(id);
-				pathsToDelete ~= oldPath;
-			}
+			if (cached) idsToDelete ~= id;
 			return;
 		} else if (isItemFile(item)) {
 			type = ItemType.file;
@@ -311,7 +308,9 @@ final class SyncEngine
 	private void deleteItems()
 	{
 		log.vlog("Deleting files ...");
-		foreach_reverse (path; pathsToDelete) {
+		foreach_reverse (id; idsToDelete) {
+			string path = itemdb.computePath(id);
+			itemdb.deleteById(id);
 			if (exists(path)) {
 				if (isFile(path)) {
 					remove(path);
@@ -326,8 +325,8 @@ final class SyncEngine
 				}
 			}
 		}
-		pathsToDelete.length = 0;
-		assumeSafeAppend(pathsToDelete);
+		idsToDelete.length = 0;
+		assumeSafeAppend(idsToDelete);
 	}
 
 	// scan the given directory for differences
