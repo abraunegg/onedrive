@@ -46,6 +46,14 @@ int main(string[] args)
 	if (!exists(configDirName)) mkdir(configDirName);
 	auto cfg = new config.Config(configDirName);
 	cfg.init();
+
+	// upgrades
+	if (exists(configDirName ~ "/items.db")) {
+		remove(configDirName ~ "/items.db");
+		log.log("Database schema changed, resync needed");
+		resync = true;
+	}
+
 	if (resync || logout) {
 		log.log("Deleting the saved status ...");
 		safeRemove(cfg.databaseFilePath);

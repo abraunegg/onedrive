@@ -16,7 +16,7 @@ final class Config
 	{
 		refreshTokenFilePath = configDirName ~ "/refresh_token";
 		statusTokenFilePath = configDirName ~ "/status_token";
-		databaseFilePath = configDirName ~ "/items.db";
+		databaseFilePath = configDirName ~ "/items.sqlite3";
 		uploadStateFilePath = configDirName ~ "/resume_upload";
 		userConfigFilePath = configDirName ~ "/config";
 	}

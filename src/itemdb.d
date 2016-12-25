@@ -33,21 +33,25 @@ final class ItemDatabase
 	this(const(char)[] filename)
 	{
 		db = Database(filename);
-		db.exec("CREATE TABLE IF NOT EXISTS item (
-			id       TEXT PRIMARY KEY,
-			name     TEXT NOT NULL,
-			type     TEXT NOT NULL,
-			eTag     TEXT NOT NULL,
-			cTag     TEXT,
-			mtime    TEXT NOT NULL,
-			parentId TEXT,
-			crc32    TEXT,
-			FOREIGN KEY (parentId) REFERENCES item (id) ON DELETE CASCADE
-		)");
-		db.exec("CREATE INDEX IF NOT EXISTS name_idx ON item (name)");
+		if (db.getVersion() == 0) {
+			db.exec("CREATE TABLE item (
+				id       TEXT PRIMARY KEY,
+				name     TEXT NOT NULL,
+				type     TEXT NOT NULL,
+				eTag     TEXT NOT NULL,
+				cTag     TEXT,
+				mtime    TEXT NOT NULL,
+				parentId TEXT,
+				crc32    TEXT,
+				FOREIGN KEY (parentId) REFERENCES item (id) ON DELETE CASCADE
+			)");
+			db.exec("CREATE INDEX name_idx ON item (name)");
+			db.setVersion(itemDatabaseVersion);
+		} else if (db.getVersion() != itemDatabaseVersion) {
+			throw new Exception("The item database is incompatible, please resync manually");
+		}
 		db.exec("PRAGMA foreign_keys = ON");
 		db.exec("PRAGMA recursive_triggers = ON");
-		db.setVersion(itemDatabaseVersion);
 
 		insertItemStmt = db.prepare("INSERT OR REPLACE INTO item (id, name, type, eTag, cTag, mtime, parentId, crc32) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
 		updateItemStmt = db.prepare("
