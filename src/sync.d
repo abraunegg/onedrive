@@ -283,8 +283,6 @@ final class SyncEngine
 		case ItemType.file:
 			if (isFile(path)) {
 				SysTime localModifiedTime = timeLastModified(path);
-				import core.time: Duration;
-				item.mtime.fracSecs = Duration.zero; // HACK
 				if (localModifiedTime == item.mtime) {
 					return true;
 				} else {
@@ -401,8 +399,6 @@ final class SyncEngine
 		if (exists(path)) {
 			if (isFile(path)) {
 				SysTime localModifiedTime = timeLastModified(path);
-				import core.time: Duration;
-				item.mtime.fracSecs = Duration.zero; // HACK
 				if (localModifiedTime != item.mtime) {
 					log.vlog("The file last modified time has changed");
 					string id = item.id;
