@@ -166,6 +166,7 @@ final class OneDriveApi
 	// https://dev.onedrive.com/items/create.htm
 	JSONValue createByPath(const(char)[] parentPath, JSONValue item)
 	{
+		checkAccessTokenExpired();
 		string url = itemByPathUrl ~ encodeComponent(parentPath) ~ ":/children";
 		http.addRequestHeader("Content-Type", "application/json");
 		return post(url, item.toString());
