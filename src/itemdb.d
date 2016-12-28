@@ -22,7 +22,7 @@ struct Item
 final class ItemDatabase
 {
 	// increment this for every change in the db schema
-	immutable int itemDatabaseVersion = 1;
+	immutable int itemDatabaseVersion = 2;
 
 	Database db;
 	Statement insertItemStmt;
@@ -35,7 +35,7 @@ final class ItemDatabase
 		db = Database(filename);
 		if (db.getVersion() == 0) {
 			db.exec("CREATE TABLE item (
-				id       TEXT PRIMARY KEY,
+				id       TEXT NOT NULL PRIMARY KEY,
 				name     TEXT NOT NULL,
 				type     TEXT NOT NULL,
 				eTag     TEXT NOT NULL,

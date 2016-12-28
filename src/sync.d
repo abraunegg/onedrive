@@ -522,7 +522,9 @@ final class SyncEngine
 			assert(0);
 		}
 		Item item = {
+			id: id,
 			name: jsonItem["name"].str,
+			type: type,
 			eTag: jsonItem["eTag"].str,
 			cTag: "cTag" in jsonItem ? jsonItem["cTag"].str : null,
 			mtime: SysTime.fromISOExtString(jsonItem["fileSystemInfo"]["lastModifiedDateTime"].str),
