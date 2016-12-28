@@ -159,7 +159,8 @@ final class OneDriveApi
 	{
 		checkAccessTokenExpired();
 		char[] url = itemByIdUrl ~ id;
-		if (eTag) http.addRequestHeader("If-Match", eTag);
+		//TODO: investigate why this always fail with 412 (Precondition Failed)
+		//if (eTag) http.addRequestHeader("If-Match", eTag);
 		del(url);
 	}
 
