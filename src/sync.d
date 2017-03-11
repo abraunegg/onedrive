@@ -167,6 +167,13 @@ final class SyncEngine
 			}
 		}
 
+		// check if the item is to be deleted
+		if (isItemDeleted(item)) {
+			log.vlog("The item is marked for deletion");
+			if (cached) idsToDelete ~= id;
+			return;
+		}
+
 		// compute the path of the item
 		string path = ".";
 		if (parentId) {
@@ -174,11 +181,7 @@ final class SyncEngine
 		}
 
 		ItemType type;
-		if (isItemDeleted(item)) {
-			log.vlog("The item is marked for deletion");
-			if (cached) idsToDelete ~= id;
-			return;
-		} else if (isItemFile(item)) {
+		if (isItemFile(item)) {
 			type = ItemType.file;
 			if (!path.matchFirst(skipFile).empty) {
 				log.vlog("Filtered out");
