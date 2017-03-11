@@ -1,3 +1,4 @@
+import std.net.curl: CurlTimeoutException;
 import std.exception: ErrnoException;
 import std.algorithm, std.datetime, std.file, std.json, std.path, std.regex;
 import std.stdio, std.string;
@@ -120,6 +121,8 @@ final class SyncEngine
 		} catch (ErrnoException e) {
 			throw new SyncException(e.msg, e);
 		} catch (FileException e) {
+			throw new SyncException(e.msg, e);
+		} catch (CurlTimeoutException e) {
 			throw new SyncException(e.msg, e);
 		} catch (OneDriveException e) {
 			throw new SyncException(e.msg, e);
