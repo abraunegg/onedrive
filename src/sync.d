@@ -5,21 +5,22 @@ import config, itemdb, onedrive, upload, util;
 static import log;
 
 // threshold after which files will be uploaded using an upload session
-private long thresholdFileSize = 10 * 2^^20; // 10 MiB
+private long thresholdFileSize = 4 * 2^^20; // 4 MiB
 
 private bool isItemFolder(const ref JSONValue item)
 {
-	return (("folder" in item.object) !is null);
+	return ("folder" in item) != null;
 }
 
 private bool isItemFile(const ref JSONValue item)
 {
-	return (("file" in item.object) !is null);
+	return ("file" in item) != null;
 }
 
 private bool isItemDeleted(const ref JSONValue item)
 {
-	return (("deleted" in item.object) !is null);
+	// HACK: fix for https://github.com/skilion/onedrive/issues/157
+	return ("deleted" in item) || ("fileSystemInfo" !in item);
 }
 
 private bool testCrc32(string path, const(char)[] crc32)
@@ -107,9 +108,15 @@ final class SyncEngine
 				foreach (item; changes["value"].array) {
 					applyDifference(item);
 				}
-				statusToken = changes["@delta.token"].str;
+				// hack to reuse old code
+				string url;
+				if ("@odata.nextLink" in changes) url = changes["@odata.nextLink"].str;
+				if ("@odata.deltaLink" in changes) url = changes["@odata.deltaLink"].str;
+				auto c = matchFirst(url, r"(?:token=)([\w\d]+)");
+				c.popFront(); // skip the whole match
+				statusToken = c.front;
 				std.file.write(cfg.statusTokenFilePath, statusToken);
-			} while (!((changes.type == JSON_TYPE.OBJECT) && (("@odata.nextLink" in changes) is null)));
+			} while ("@odata.nextLink" in changes);
 		} catch (ErrnoException e) {
 			throw new SyncException(e.msg, e);
 		} catch (FileException e) {
@@ -477,7 +484,6 @@ final class SyncEngine
 		} else {
 			response = session.upload(path, path);
 		}
-		saveItem(response);
 		string id = response["id"].str;
 		string cTag = response["cTag"].str;
 		SysTime mtime = timeLastModified(path).toUTC();
@@ -512,7 +518,6 @@ final class SyncEngine
 
 	private void saveItem(JSONValue jsonItem)
 	{
-		string id = jsonItem["id"].str;
 		ItemType type;
 		if (isItemFile(jsonItem)) {
 			type = ItemType.file;
@@ -522,7 +527,7 @@ final class SyncEngine
 			assert(0);
 		}
 		Item item = {
-			id: id,
+			id: jsonItem["id"].str,
 			name: jsonItem["name"].str,
 			type: type,
 			eTag: jsonItem["eTag"].str,

@@ -6,12 +6,12 @@ static import log;
 
 
 private immutable {
-	string authUrl = "https://login.live.com/oauth20_authorize.srf";
-	string redirectUrl = "https://login.live.com/oauth20_desktop.srf"; // "urn:ietf:wg:oauth:2.0:oob";
-	string tokenUrl = "https://login.live.com/oauth20_token.srf";
-	string driveUrl = "https://api.onedrive.com/v1.0/drive";
-	string itemByIdUrl = "https://api.onedrive.com/v1.0/drive/items/";
-	string itemByPathUrl = "https://api.onedrive.com/v1.0/drive/root:/";
+	string authUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
+	string redirectUrl = "https://login.microsoftonline.com/common/oauth2/nativeclient";
+	string tokenUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
+	string driveUrl = "https://graph.microsoft.com/v1.0/me/drive";
+	string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
+	string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
 }
 
 class OneDriveException: Exception
@@ -79,7 +79,7 @@ final class OneDriveApi
 	{
 		import std.stdio, std.regex;
 		char[] response;
-		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=onedrive.readwrite%20offline_access&response_type=code&redirect_uri=" ~ redirectUrl;
+		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=files.readwrite.all%20offline_access&response_type=code&redirect_uri=" ~ redirectUrl;
 		log.log("Authorize this app visiting:\n");
 		write(url, "\n\n", "Enter the response uri: ");
 		readln(response);
@@ -105,9 +105,9 @@ final class OneDriveApi
 	JSONValue viewChangesById(const(char)[] id, const(char)[] statusToken)
 	{
 		checkAccessTokenExpired();
-		const(char)[] url = itemByIdUrl ~ id ~ "/view.delta";
+		const(char)[] url = itemByIdUrl ~ id ~ "/delta";
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,fileSystemInfo,remoteItem,parentReference";
-		if (statusToken) url ~= "?token=" ~ statusToken;
+		if (statusToken) url ~= "&token=" ~ statusToken;
 		return get(url);
 	}
 
@@ -115,7 +115,9 @@ final class OneDriveApi
 	JSONValue viewChangesByPath(const(char)[] path, const(char)[] statusToken)
 	{
 		checkAccessTokenExpired();
-		string url = itemByPathUrl ~ encodeComponent(path) ~ ":/view.delta";
+		//string url = itemByPathUrl ~ encodeComponent(path) ~ ":/delta";
+		// HACK: item by path seems to no be working
+		string url = "https://graph.microsoft.com/v1.0/me/drive/root/delta";
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,fileSystemInfo,remoteItem,parentReference";
 		if (statusToken) url ~= "&token=" ~ statusToken;
 		return get(url);
@@ -138,7 +140,6 @@ final class OneDriveApi
 	{
 		checkAccessTokenExpired();
 		string url = itemByPathUrl ~ encodeComponent(remotePath) ~ ":/content";
-		http.addRequestHeader("Content-Type", "application/octet-stream");
 		if (eTag) http.addRequestHeader("If-Match", eTag);
 		else url ~= "?@name.conflictBehavior=fail";
 		return upload(localPath, url);
@@ -177,7 +178,7 @@ final class OneDriveApi
 	JSONValue createUploadSession(const(char)[] path, const(char)[] eTag = null)
 	{
 		checkAccessTokenExpired();
-		string url = itemByPathUrl ~ encodeComponent(path) ~ ":/upload.createSession";
+		string url = itemByPathUrl ~ encodeComponent(path) ~ ":/createUploadSession";
 		if (eTag) http.addRequestHeader("If-Match", eTag);
 		return post(url, null);
 	}
@@ -192,7 +193,8 @@ final class OneDriveApi
 		}
 		http.method = HTTP.Method.put;
 		http.url = uploadUrl;
-		addAccessTokenHeader();
+		// when using microsoft graph the auth code is different
+		//addAccessTokenHeader();
 		import std.conv;
 		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
 		http.addRequestHeader("Content-Range", contentRange);
@@ -210,7 +212,8 @@ final class OneDriveApi
 	JSONValue requestUploadStatus(const(char)[] uploadUrl)
 	{
 		checkAccessTokenExpired();
-		return get(uploadUrl);
+		// when using microsoft graph the auth code is different
+		return get(uploadUrl, true);
 	}
 
 	private void redeemToken(const(char)[] authCode)
@@ -254,12 +257,12 @@ final class OneDriveApi
 		http.addRequestHeader("Authorization", accessToken);
 	}
 
-	private JSONValue get(const(char)[] url)
+	private JSONValue get(const(char)[] url, bool skipToken = false)
 	{
 		scope(exit) http.clearRequestHeaders();
 		http.method = HTTP.Method.get;
 		http.url = url;
-		addAccessTokenHeader();
+		if (!skipToken) addAccessTokenHeader(); // HACK: requestUploadStatus
 		auto response = perform();
 		checkHttpCode(response);
 		return response;
@@ -366,7 +369,15 @@ final class OneDriveApi
 		} catch (CurlException e) {
 			throw new OneDriveException(e.msg, e);
 		}
-		return content.parseJSON();
+		JSONValue json;
+		try {
+			json = content.parseJSON();
+		} catch (JSONException e) {
+			e.msg ~= "\n";
+			e.msg ~= content;
+			throw e;
+		}
+		return json;
 	}
 
 	private void checkHttpCode()
@@ -382,4 +393,38 @@ final class OneDriveApi
 			throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
 		}
 	}
+}
+
+unittest
+{
+	string configDirName = expandTilde("~/.config/onedrive");
+	auto cfg = new config.Config(configDirName);
+	cfg.init();
+	OneDriveApi onedrive = new OneDriveApi(cfg);
+	onedrive.init();
+	std.file.write("/tmp/test", "test");
+
+	// simpleUpload
+	auto item = onedrive.simpleUpload("/tmp/test", "/test");
+	try {
+		item = onedrive.simpleUpload("/tmp/test", "/test");
+	} catch (OneDriveException e) {
+		assert(e.httpStatusCode == 409);
+	}
+	try {
+		item = onedrive.simpleUpload("/tmp/test", "/test", "123");
+	} catch (OneDriveException e) {
+		assert(e.httpStatusCode == 412);
+	}
+	item = onedrive.simpleUpload("/tmp/test", "/test", item["eTag"].str);
+
+	// deleteById
+	try {
+		onedrive.deleteById(item["id"].str, "123");
+	} catch (OneDriveException e) {
+		assert(e.httpStatusCode == 412);
+	}
+	onedrive.deleteById(item["id"].str, item["eTag"].str);
+
+	onedrive.http.shutdown();
 }
