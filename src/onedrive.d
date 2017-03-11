@@ -115,9 +115,9 @@ final class OneDriveApi
 	JSONValue viewChangesByPath(const(char)[] path, const(char)[] statusToken)
 	{
 		checkAccessTokenExpired();
-		//string url = itemByPathUrl ~ encodeComponent(path) ~ ":/delta";
-		// HACK: item by path seems to no be working
-		string url = "https://graph.microsoft.com/v1.0/me/drive/root/delta";
+		string url = itemByPathUrl ~ encodeComponent(path) ~ ":/delta";
+		// HACK
+		if (path == ".") url = driveUrl ~ "/root/delta";
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,fileSystemInfo,remoteItem,parentReference";
 		if (statusToken) url ~= "&token=" ~ statusToken;
 		return get(url);
@@ -170,6 +170,8 @@ final class OneDriveApi
 	{
 		checkAccessTokenExpired();
 		string url = itemByPathUrl ~ encodeComponent(parentPath) ~ ":/children";
+		// HACK
+		if (parentPath == ".") url = driveUrl ~ "/root/children";
 		http.addRequestHeader("Content-Type", "application/json");
 		return post(url, item.toString());
 	}

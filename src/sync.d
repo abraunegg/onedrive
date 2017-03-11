@@ -95,7 +95,7 @@ final class SyncEngine
 			do {
 				// get changes from the server
 				try {
-					changes = onedrive.viewChangesByPath("/", statusToken);
+					changes = onedrive.viewChangesByPath(".", statusToken);
 				} catch (OneDriveException e) {
 					if (e.httpStatusCode == 410) {
 						log.log("Status token expired, resyncing");
@@ -474,7 +474,7 @@ final class SyncEngine
 		log.log("Creating remote directory: ", path);
 		JSONValue item = ["name": baseName(path).idup];
 		item["folder"] = parseJSON("{}");
-		auto res = onedrive.createByPath(path.dirName ~ "/", item);
+		auto res = onedrive.createByPath(path.dirName, item);
 		saveItem(res);
 	}
 
