@@ -6,6 +6,7 @@ static import log;
 
 
 private immutable {
+	string clientId = "22c49a0d-d21c-4792-aed1-8f163c982546";
 	string authUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
 	string redirectUrl = "https://login.microsoftonline.com/common/oauth2/nativeclient";
 	string tokenUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
@@ -45,7 +46,6 @@ class OneDriveException: Exception
 final class OneDriveApi
 {
 	private Config cfg;
-	private string clientId;
 	private string refreshToken, accessToken;
 	private SysTime accessTokenExpiration;
 	/* private */ HTTP http;
@@ -53,7 +53,6 @@ final class OneDriveApi
 	this(Config cfg)
 	{
 		this.cfg = cfg;
-		this.clientId = cfg.getValue("client_id");
 		http = HTTP();
 		//http.verbose = true;
 	}
