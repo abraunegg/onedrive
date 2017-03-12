@@ -22,7 +22,7 @@ struct Item
 final class ItemDatabase
 {
 	// increment this for every change in the db schema
-	immutable int itemDatabaseVersion = 2;
+	immutable int itemDatabaseVersion = 3;
 
 	Database db;
 	Statement insertItemStmt;
@@ -38,7 +38,7 @@ final class ItemDatabase
 				id       TEXT NOT NULL PRIMARY KEY,
 				name     TEXT NOT NULL,
 				type     TEXT NOT NULL,
-				eTag     TEXT NOT NULL,
+				eTag     TEXT,
 				cTag     TEXT,
 				mtime    TEXT NOT NULL,
 				parentId TEXT,

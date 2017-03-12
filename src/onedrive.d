@@ -83,7 +83,7 @@ final class OneDriveApi
 		write(url, "\n\n", "Enter the response uri: ");
 		readln(response);
 		// match the authorization code
-		auto c = matchFirst(response, r"(?:code=)(([\w\d]+-){4}[\w\d]+)");
+		auto c = matchFirst(response, r"(?:code=)([\w\d-]+)");
 		if (c.empty) {
 			log.log("Invalid uri");
 			return false;
@@ -105,7 +105,7 @@ final class OneDriveApi
 	{
 		checkAccessTokenExpired();
 		const(char)[] url = itemByIdUrl ~ id ~ "/delta";
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,fileSystemInfo,remoteItem,parentReference";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
 		if (statusToken) url ~= "&token=" ~ statusToken;
 		return get(url);
 	}
@@ -117,7 +117,7 @@ final class OneDriveApi
 		string url = itemByPathUrl ~ encodeComponent(path) ~ ":/delta";
 		// HACK
 		if (path == ".") url = driveUrl ~ "/root/delta";
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,fileSystemInfo,remoteItem,parentReference";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
 		if (statusToken) url ~= "&token=" ~ statusToken;
 		return get(url);
 	}

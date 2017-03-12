@@ -24,6 +24,11 @@ private bool isItemDeleted(const ref JSONValue item)
 	return ("deleted" in item) || ("fileSystemInfo" !in item);
 }
 
+private bool isItemRoot(const ref JSONValue item)
+{
+	return ("root" in item) != null;
+}
+
 private bool testCrc32(string path, const(char)[] crc32)
 {
 	if (crc32) {
@@ -150,15 +155,15 @@ final class SyncEngine
 	{
 		string id = item["id"].str;
 		string name = item["name"].str;
-		string eTag = item["eTag"].str;
-		string parentId = item["parentReference"]["id"].str;
-
-		// HACK: recognize the root directory
-		if (name == "root" && parentId[$ - 1] == '0' && parentId[$ - 2] == '!') {
-			parentId = null;
-		}
 
 		log.vlog(id, " ", name);
+
+		// eTag and parentId do not exists for the root in OneDrive Biz
+		string eTag, parentId;
+		if (!isItemRoot(item)) {
+			eTag = item["eTag"].str;
+			parentId = item["parentReference"]["id"].str;
+		}
 
 		// skip unwanted items early
 		if (skippedItems.find(parentId).length != 0) {
