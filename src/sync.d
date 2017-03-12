@@ -472,11 +472,13 @@ final class SyncEngine
 		}
 
 		// skip filtered items
-		if (!baseName(path).matchFirst(skipFile).empty) {
-			return;
-		}
-		if (isPathExcluded(path, selectiveSyncPaths)) {
-			return;
+		if (path != ".") {
+			if (!baseName(path).matchFirst(skipFile).empty) {
+				return;
+			}
+			if (isPathExcluded(path, selectiveSyncPaths)) {
+				return;
+			}
 		}
 
 		if (isDir(path)) {
