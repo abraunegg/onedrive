@@ -308,6 +308,9 @@ final class SyncEngine
 		case ItemType.file:
 			if (isFile(path)) {
 				SysTime localModifiedTime = timeLastModified(path);
+				// HACK: reduce time resolution to seconds before comparing
+				item.mtime.fracSecs = Duration.zero;
+				localModifiedTime.fracSecs = Duration.zero;
 				if (localModifiedTime == item.mtime) {
 					return true;
 				} else {
