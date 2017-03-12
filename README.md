@@ -37,21 +37,30 @@ sudo make install
 You should copy the default config file into your home directory before making changes:
 ```
 mkdir -p ~/.config/onedrive
-cp /usr/local/etc/onedrive.conf ~/.config/onedrive/config
+cp ./config ~/.config/onedrive/config
 ```
 
 Available options:
-* `client_id`: application identifier necessary for the [authentication][2]
 * `sync_dir`: directory where the files will be synced
-* `skip_file`: any files that match this pattern will be skipped during sync
-* `skip_dir`: any directories that match this pattern will be skipped during sync
+* `skip_file`: any files or directories that match this pattern will be skipped during sync
 
 Pattern are case insensitive.
-`*` and `?` [wildcards characters][3] are supported.
+`*` and `?` [wildcards characters][1] are supported.
 Use `|` to separate multiple patterns.
 
-[2]: https://dev.onedrive.com/auth/msa_oauth.htm
-[3]: https://technet.microsoft.com/en-us/library/bb490639.aspx
+[1]: https://technet.microsoft.com/en-us/library/bb490639.aspx
+
+### Selective sync
+Selective sync allows you to sync only specific files and directories.
+To enable selective sync create a file named `sync_list` in `~/.config/onedrive`.
+Each line represents a path to a file or directory relative from your `sync_dir`.
+```
+$ cat ~/.config/onedrive/sync_list
+Backup
+Documents/report.odt
+Work/ProjectX
+notes.txt
+```
 
 ### First run
 The first time you run the program you will be asked to sign in. The procedure requires a web browser.
@@ -72,16 +81,17 @@ journalctl --user-unit onedrive -f
 ```
 onedrive [OPTION]...
 
-no option    Sync and exit.
 -m --monitor Keep monitoring for local and remote changes.
-	--resync Forget the last saved state, perform a full sync.
+    --resync Forget the last saved state, perform a full sync.
+    --logout Logout the current user.
+   --confdir Set the directory to use to store the configuration files.
 -v --verbose Print more details, useful for debugging.
 -h    --help This help information.
 ```
 
 ### Notes:
-* After changing the filters (`skip_file` or `skip_dir` in your configs) you must execute `onedrive --resync`
-* [Windows naming conventions][4] apply
+* After changing `skip_file` in your configs or the sync list, you must execute `onedrive --resync`
+* [Windows naming conventions][2] apply
 * Use `make debug` to generate an executable for debugging
 
-[4]: https://msdn.microsoft.com/en-us/library/aa365247
+[2]: https://msdn.microsoft.com/en-us/library/aa365247

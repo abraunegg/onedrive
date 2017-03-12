@@ -114,7 +114,8 @@ final class ItemDatabase
 
 	bool selectByPath(const(char)[] path, out Item item)
 	{
-		path = "root/" ~ path.chompPrefix("."); // HACK
+		// prefix with the root dir
+		path = "root/" ~ path.chompPrefix(".");
 
 		// initialize the search
 		string[2][] candidates; // [id, parentId]
@@ -240,8 +241,7 @@ final class ItemDatabase
 				else path = r.front[0].idup;
 			} else {
 				// root
-				if (path) path = "./" ~ path;
-				else path = ".";
+				if (!path) path = ".";
 				break;
 			}
 			id = r.front[1].dup;

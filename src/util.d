@@ -1,3 +1,4 @@
+import std.algorithm;
 import std.conv;
 import std.digest.crc;
 import std.file;
@@ -55,7 +56,7 @@ Regex!char wild2regex(const(char)[] pattern)
 {
 	string str;
 	str.reserve(pattern.length + 2);
-	str ~= "/";
+	str ~= "^";
 	foreach (c; pattern) {
 		switch (c) {
 		case '*':
@@ -68,7 +69,7 @@ Regex!char wild2regex(const(char)[] pattern)
 			str ~= "[^/]";
 			break;
 		case '|':
-			str ~= "$|/";
+			str ~= "$|^";
 			break;
 		default:
 			str ~= c;
@@ -98,9 +99,32 @@ bool multiGlobMatch(const(char)[] path, const(char)[] pattern)
 	return false;
 }
 
+// test if the given path is not included in the allowed paths
+// if there are no allowed paths always return false
+bool isPathExcluded(string path, string[] allowedPaths)
+{
+	// always allow the root
+	if (path == ".") return false;
+	// if there are no allowed paths always return false
+	if (allowedPaths.empty) return false;
+
+	path = buildNormalizedPath(path);
+	foreach (allowed; allowedPaths) {
+		auto comm = commonPrefix(path, allowed);
+		if (comm.length == path.length || comm.length == allowed.length) {
+			return false;
+		}
+	}
+	return true;
+}
+
 unittest
 {
 	assert(multiGlobMatch(".hidden", ".*"));
 	assert(multiGlobMatch(".hidden", "file|.*"));
 	assert(!multiGlobMatch("foo.bar", "foo|bar"));
+	assert(isPathExcluded("Documents2", ["Documents"]));
+	assert(isPathExcluded("Hello/World", ["Hello/John"]));
+	assert(!isPathExcluded("Documents", ["Documents"]));
+	assert(!isPathExcluded("Documents/a.txt", ["Documents"]));
 }

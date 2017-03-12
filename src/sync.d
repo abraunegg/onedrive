@@ -51,8 +51,10 @@ final class SyncEngine
 	private Config cfg;
 	private OneDriveApi onedrive;
 	private ItemDatabase itemdb;
-	private Regex!char skipDir, skipFile;
 	private UploadSession session;
+	private Regex!char skipFile;
+	// list of paths to sync
+	private string[] selectiveSyncPaths;
 	// token representing the last status correctly synced
 	private string statusToken;
 	// list of items to skip while applying the changes
@@ -66,9 +68,19 @@ final class SyncEngine
 		this.cfg = cfg;
 		this.onedrive = onedrive;
 		this.itemdb = itemdb;
-		skipDir = wild2regex(cfg.getValue("skip_dir"));
 		skipFile = wild2regex(cfg.getValue("skip_file"));
 		session = UploadSession(onedrive, cfg.uploadStateFilePath);
+
+		// read the selective sync list
+		if (exists(cfg.syncListFilePath)) {
+			import std.array;
+			auto file = File(cfg.syncListFilePath);
+			selectiveSyncPaths = file
+				.byLine()
+				.map!(a => buildNormalizedPath(a))
+				.filter!(a => a.length > 0)
+				.array;
+		}
 	}
 
 	void init()
@@ -146,13 +158,19 @@ final class SyncEngine
 			parentId = null;
 		}
 
+		log.vlog(id, " ", name);
+
 		// skip unwanted items early
 		if (skippedItems.find(parentId).length != 0) {
+			log.vlog("Filtered out");
 			skippedItems ~= id;
 			return;
 		}
-
-		log.vlog(id, " ", name);
+		if (!name.matchFirst(skipFile).empty) {
+			log.vlog("Filtered out");
+			skippedItems ~= id;
+			return;
+		}
 
 		// rename the local item if it is unsynced and there is a new version of it
 		Item oldItem;
@@ -178,22 +196,19 @@ final class SyncEngine
 		string path = ".";
 		if (parentId) {
 			path = itemdb.computePath(parentId) ~ "/" ~ name;
+			// selective sync
+			if (isPathExcluded(path, selectiveSyncPaths)) {
+				log.vlog("Filtered out: ", path);
+				skippedItems ~= id;
+				return;
+			}
 		}
 
 		ItemType type;
 		if (isItemFile(item)) {
 			type = ItemType.file;
-			if (!path.matchFirst(skipFile).empty) {
-				log.vlog("Filtered out");
-				return;
-			}
 		} else if (isItemFolder(item)) {
 			type = ItemType.dir;
-			if (!path.matchFirst(skipDir).empty) {
-				log.vlog("Filtered out");
-				skippedItems ~= id;
-				return;
-			}
 		} else {
 			log.vlog("The item is neither a file nor a directory, skipping");
 			skippedItems ~= id;
@@ -365,20 +380,23 @@ final class SyncEngine
 	private void uploadDifferences(Item item)
 	{
 		log.vlog(item.id, " ", item.name);
+
+		// skip filtered items
+		if (!item.name.matchFirst(skipFile).empty) {
+			log.vlog("Filtered out");
+			return;
+		}
 		string path = itemdb.computePath(item.id);
+		if (isPathExcluded(path, selectiveSyncPaths)) {
+			log.vlog("Filtered out: ", path);
+			return;
+		}
+
 		final switch (item.type) {
 		case ItemType.dir:
-			if (!path.matchFirst(skipDir).empty) {
-				log.vlog("Filtered out");
-				break;
-			}
 			uploadDirDifferences(item, path);
 			break;
 		case ItemType.file:
-			if (!path.matchFirst(skipFile).empty) {
-				log.vlog("Filtered out");
-				break;
-			}
 			uploadFileDifferences(item, path);
 			break;
 		}
@@ -448,26 +466,33 @@ final class SyncEngine
 
 	private void uploadNewItems(string path)
 	{
+		// skip unexisting symbolic links
 		if (isSymlink(path) && !exists(readLink(path))) {
 			return;
 		}
+
+		// skip filtered items
+		if (!baseName(path).matchFirst(skipFile).empty) {
+			return;
+		}
+		if (isPathExcluded(path, selectiveSyncPaths)) {
+			return;
+		}
+
 		if (isDir(path)) {
-			if (path.matchFirst(skipDir).empty) {
-				Item item;
-				if (!itemdb.selectByPath(path, item)) {
-					uploadCreateDir(path);
-				}
-				auto entries = dirEntries(path, SpanMode.shallow, false);
-				foreach (DirEntry entry; entries) {
-					uploadNewItems(entry.name);
-				}
+			Item item;
+			if (!itemdb.selectByPath(path, item)) {
+				uploadCreateDir(path);
+			}
+			// recursively traverse children
+			auto entries = dirEntries(path, SpanMode.shallow, false);
+			foreach (DirEntry entry; entries) {
+				uploadNewItems(entry.name);
 			}
 		} else {
-			if (path.matchFirst(skipFile).empty) {
-				Item item;
-				if (!itemdb.selectByPath(path, item)) {
-					uploadNewFile(path);
-				}
+			Item item;
+			if (!itemdb.selectByPath(path, item)) {
+				uploadNewFile(path);
 			}
 		}
 	}
