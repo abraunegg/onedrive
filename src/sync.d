@@ -429,6 +429,9 @@ final class SyncEngine
 		if (exists(path)) {
 			if (isFile(path)) {
 				SysTime localModifiedTime = timeLastModified(path);
+				// HACK: reduce time resolution to seconds before comparing
+				item.mtime.fracSecs = Duration.zero;
+				localModifiedTime.fracSecs = Duration.zero;
 				if (localModifiedTime != item.mtime) {
 					log.vlog("The file last modified time has changed");
 					string id = item.id;
