@@ -1,7 +1,7 @@
 import core.sys.linux.sys.inotify;
 import core.stdc.errno;
 import core.sys.posix.poll, core.sys.posix.unistd;
-import std.exception, std.file, std.path, std.regex, std.stdio, std.string;
+import std.algorithm, std.exception, std.file, std.path, std.regex, std.stdio, std.string;
 import config, util;
 static import log;
 
@@ -20,8 +20,10 @@ class MonitorException: ErrnoException
 struct Monitor
 {
 	bool verbose;
-	// regex that match files/dirs to skip
-	private Regex!char skipDir, skipFile;
+	// regex that match files to skip
+	private Regex!char skipFile;
+	// list of paths to sync
+	private string[] selectiveSyncPaths;
 	// inotify file descriptor
 	private int fd;
 	// map every inotify watch descriptor to its directory
@@ -41,8 +43,18 @@ struct Monitor
 	void init(Config cfg, bool verbose)
 	{
 		this.verbose = verbose;
-		skipDir = wild2regex(cfg.getValue("skip_dir"));
 		skipFile = wild2regex(cfg.getValue("skip_file"));
+		// read the selective sync list
+		if (exists(cfg.syncListFilePath)) {
+			import std.array;
+			auto file = File(cfg.syncListFilePath);
+			selectiveSyncPaths = file
+				.byLine()
+				.map!(a => buildNormalizedPath(a))
+				.filter!(a => a.length > 0)
+				.array;
+		}
+
 		fd = inotify_init();
 		if (fd == -1) throw new MonitorException("inotify_init failed");
 		if (!buffer) buffer = new void[4096];
@@ -57,12 +69,20 @@ struct Monitor
 
 	private void addRecursive(string dirname)
 	{
-		if (matchFirst(dirname, skipDir).empty) {
-			add(dirname);
-			foreach(DirEntry entry; dirEntries(dirname, SpanMode.shallow, false)) {
-				if (entry.isDir) {
-					addRecursive(entry.name);
-				}
+		// skip filtered items
+		if (dirname != ".") {
+			if (!baseName(dirname).matchFirst(skipFile).empty) {
+				return;
+			}
+			if (isPathExcluded(buildNormalizedPath(dirname), selectiveSyncPaths)) {
+				return;
+			}
+		}
+
+		add(dirname);
+		foreach(DirEntry entry; dirEntries(dirname, SpanMode.shallow, false)) {
+			if (entry.isDir) {
+				addRecursive(entry.name);
 			}
 		}
 	}
@@ -85,7 +105,7 @@ struct Monitor
                     }
                     throw new MonitorException("inotify_add_watch failed");
                 }
-		wdToDirName[wd] = dirname ~ "/";
+		wdToDirName[wd] = buildNormalizedPath(dirname) ~ "/";
 		log.vlog("Monitor directory: ", dirname);
 	}
 
@@ -152,14 +172,11 @@ struct Monitor
 
 				// skip filtered items
 				path = getPath(event);
-				if (event.mask & IN_ISDIR) {
-					if (!matchFirst(path, skipDir).empty) {
-						goto skip;
-					}
-				} else {
-					if (!matchFirst(path, skipFile).empty) {
-						goto skip;
-					}
+				if (!baseName(path).matchFirst(skipFile).empty) {
+					goto skip;
+				}
+				if (isPathExcluded(path, selectiveSyncPaths)) {
+					goto skip;
 				}
 
 				if (event.mask & IN_MOVED_FROM) {
