@@ -1,7 +1,7 @@
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE;
 import core.memory, core.time, core.thread;
 import std.getopt, std.file, std.path, std.process;
-import config, itemdb, monitor, onedrive, sync, util;
+import config, itemdb, monitor, onedrive, selective, sync, util;
 static import log;
 
 int main(string[] args)
@@ -87,13 +87,16 @@ int main(string[] args)
 	chdir(syncDir);
 
 	log.vlog("Initializing the Synchronization Engine ...");
-	auto sync = new SyncEngine(cfg, onedrive, itemdb);
+	auto selectiveSync = new SelectiveSync();
+	selectiveSync.load(cfg.syncListFilePath);
+	selectiveSync.setMask(cfg.getValue("skip_file"));
+	auto sync = new SyncEngine(cfg, onedrive, itemdb, selectiveSync);
 	sync.init();
 	if (online) performSync(sync);
 
 	if (monitor) {
 		log.vlog("Initializing monitor ...");
-		Monitor m;
+		Monitor m = new Monitor(selectiveSync);
 		m.onDirCreated = delegate(string path) {
 			log.vlog("[M] Directory created: ", path);
 			try {

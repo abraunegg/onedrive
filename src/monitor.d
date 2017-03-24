@@ -1,8 +1,10 @@
 import core.sys.linux.sys.inotify;
 import core.stdc.errno;
 import core.sys.posix.poll, core.sys.posix.unistd;
-import std.algorithm, std.exception, std.file, std.path, std.regex, std.stdio, std.string;
-import config, util;
+import std.exception, std.file, std.path, std.regex, std.stdio, std.string;
+import config;
+import selective;
+import util;
 static import log;
 
 // relevant inotify events
@@ -17,13 +19,9 @@ class MonitorException: ErrnoException
     }
 }
 
-struct Monitor
+final class Monitor
 {
 	bool verbose;
-	// regex that match files to skip
-	private Regex!char skipFile;
-	// list of paths to sync
-	private string[] selectiveSyncPaths;
 	// inotify file descriptor
 	private int fd;
 	// map every inotify watch descriptor to its directory
@@ -33,27 +31,22 @@ struct Monitor
 	// buffer to receive the inotify events
 	private void[] buffer;
 
+	private SelectiveSync selectiveSync;
+
 	void delegate(string path) onDirCreated;
 	void delegate(string path) onFileChanged;
 	void delegate(string path) onDelete;
 	void delegate(string from, string to) onMove;
 
-	@disable this(this);
+	this(SelectiveSync selectiveSync)
+	{
+		assert(selectiveSync);
+		this.selectiveSync = selectiveSync;
+	}
 
 	void init(Config cfg, bool verbose)
 	{
 		this.verbose = verbose;
-		skipFile = wild2regex(cfg.getValue("skip_file"));
-		// read the selective sync list
-		if (exists(cfg.syncListFilePath)) {
-			import std.array;
-			auto file = File(cfg.syncListFilePath);
-			selectiveSyncPaths = file
-				.byLine()
-				.map!(a => buildNormalizedPath(a))
-				.filter!(a => a.length > 0)
-				.array;
-		}
 
 		fd = inotify_init();
 		if (fd == -1) throw new MonitorException("inotify_init failed");
@@ -71,10 +64,10 @@ struct Monitor
 	{
 		// skip filtered items
 		if (dirname != ".") {
-			if (!baseName(dirname).matchFirst(skipFile).empty) {
+			if (selectiveSync.isNameExcluded(baseName(dirname))) {
 				return;
 			}
-			if (isPathExcluded(buildNormalizedPath(dirname), selectiveSyncPaths)) {
+			if (selectiveSync.isPathExcluded(buildNormalizedPath(dirname))) {
 				return;
 			}
 		}
@@ -172,10 +165,10 @@ struct Monitor
 
 				// skip filtered items
 				path = getPath(event);
-				if (!baseName(path).matchFirst(skipFile).empty) {
+				if (selectiveSync.isNameExcluded(baseName(path))) {
 					goto skip;
 				}
-				if (isPathExcluded(path, selectiveSyncPaths)) {
+				if (selectiveSync.isPathExcluded(path)) {
 					goto skip;
 				}
 

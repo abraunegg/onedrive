@@ -9,6 +9,7 @@ SOURCES = \
 	src/main.d \
 	src/monitor.d \
 	src/onedrive.d \
+	src/selective.d \
 	src/sqlite.d \
 	src/sync.d \
 	src/upload.d \

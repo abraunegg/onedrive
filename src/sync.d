@@ -1,8 +1,10 @@
+import std.algorithm;
 import std.net.curl: CurlTimeoutException;
 import std.exception: ErrnoException;
-import std.algorithm, std.datetime, std.file, std.json, std.path, std.regex;
+import std.datetime, std.file, std.json, std.path;
+import std.regex;
 import std.stdio, std.string;
-import config, itemdb, onedrive, upload, util;
+import config, itemdb, onedrive, selective, upload, util;
 static import log;
 
 // threshold after which files will be uploaded using an upload session
@@ -57,9 +59,7 @@ final class SyncEngine
 	private OneDriveApi onedrive;
 	private ItemDatabase itemdb;
 	private UploadSession session;
-	private Regex!char skipFile;
-	// list of paths to sync
-	private string[] selectiveSyncPaths;
+	private SelectiveSync selectiveSync;
 	// token representing the last status correctly synced
 	private string statusToken;
 	// list of items to skip while applying the changes
@@ -67,25 +67,14 @@ final class SyncEngine
 	// list of items to delete after the changes has been downloaded
 	private string[] idsToDelete;
 
-	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb)
+	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
-		assert(onedrive && itemdb);
+		assert(onedrive && itemdb && selectiveSync);
 		this.cfg = cfg;
 		this.onedrive = onedrive;
 		this.itemdb = itemdb;
-		skipFile = wild2regex(cfg.getValue("skip_file"));
+		this.selectiveSync = selectiveSync;
 		session = UploadSession(onedrive, cfg.uploadStateFilePath);
-
-		// read the selective sync list
-		if (exists(cfg.syncListFilePath)) {
-			import std.array;
-			auto file = File(cfg.syncListFilePath);
-			selectiveSyncPaths = file
-				.byLine()
-				.map!(a => buildNormalizedPath(a))
-				.filter!(a => a.length > 0)
-				.array;
-		}
 	}
 
 	void init()
@@ -171,7 +160,7 @@ final class SyncEngine
 			skippedItems ~= id;
 			return;
 		}
-		if (!name.matchFirst(skipFile).empty) {
+		if (selectiveSync.isNameExcluded(name)) {
 			log.vlog("Filtered out");
 			skippedItems ~= id;
 			return;
@@ -202,7 +191,7 @@ final class SyncEngine
 		if (parentId) {
 			path = itemdb.computePath(parentId) ~ "/" ~ name;
 			// selective sync
-			if (isPathExcluded(path, selectiveSyncPaths)) {
+			if (selectiveSync.isPathExcluded(path)) {
 				log.vlog("Filtered out: ", path);
 				skippedItems ~= id;
 				return;
@@ -390,12 +379,12 @@ final class SyncEngine
 		log.vlog(item.id, " ", item.name);
 
 		// skip filtered items
-		if (!item.name.matchFirst(skipFile).empty) {
+		if (selectiveSync.isNameExcluded(item.name)) {
 			log.vlog("Filtered out");
 			return;
 		}
 		string path = itemdb.computePath(item.id);
-		if (isPathExcluded(path, selectiveSyncPaths)) {
+		if (selectiveSync.isPathExcluded(path)) {
 			log.vlog("Filtered out: ", path);
 			return;
 		}
@@ -484,10 +473,10 @@ final class SyncEngine
 
 		// skip filtered items
 		if (path != ".") {
-			if (!baseName(path).matchFirst(skipFile).empty) {
+			if (selectiveSync.isNameExcluded(baseName(path))) {
 				return;
 			}
-			if (isPathExcluded(path, selectiveSyncPaths)) {
+			if (selectiveSync.isPathExcluded(path)) {
 				return;
 			}
 		}
