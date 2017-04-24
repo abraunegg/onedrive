@@ -1,7 +1,6 @@
 DC = dmd
 DFLAGS = -ofonedrive -L-lcurl -L-lsqlite3 -L-ldl
 DESTDIR = /usr/local/bin
-CONFDIR = /usr/local/etc
 
 SOURCES = \
 	src/config.d \
@@ -10,6 +9,7 @@ SOURCES = \
 	src/main.d \
 	src/monitor.d \
 	src/onedrive.d \
+	src/selective.d \
 	src/sqlite.d \
 	src/sync.d \
 	src/upload.d \
@@ -27,12 +27,10 @@ unittest: $(SOURCES)
 clean:
 	rm -f onedrive.o onedrive
 
-install: onedrive onedrive.conf
+install: onedrive onedrive.service
 	install onedrive $(DESTDIR)/onedrive
-	install -m 644 onedrive.conf $(CONFDIR)/onedrive.conf
 	install -m 644 onedrive.service /usr/lib/systemd/user
 
 uninstall:
 	rm -f $(DESTDIR)/onedrive
-	rm -f $(CONFDIR)/onedrive.conf
 	rm -f /usr/lib/systemd/user/onedrive.service

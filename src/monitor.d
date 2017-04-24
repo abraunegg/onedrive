@@ -2,7 +2,9 @@ import core.sys.linux.sys.inotify;
 import core.stdc.errno;
 import core.sys.posix.poll, core.sys.posix.unistd;
 import std.exception, std.file, std.path, std.regex, std.stdio, std.string;
-import config, util;
+import config;
+import selective;
+import util;
 static import log;
 
 // relevant inotify events
@@ -17,11 +19,9 @@ class MonitorException: ErrnoException
     }
 }
 
-struct Monitor
+final class Monitor
 {
 	bool verbose;
-	// regex that match files/dirs to skip
-	private Regex!char skipDir, skipFile;
 	// inotify file descriptor
 	private int fd;
 	// map every inotify watch descriptor to its directory
@@ -31,18 +31,23 @@ struct Monitor
 	// buffer to receive the inotify events
 	private void[] buffer;
 
+	private SelectiveSync selectiveSync;
+
 	void delegate(string path) onDirCreated;
 	void delegate(string path) onFileChanged;
 	void delegate(string path) onDelete;
 	void delegate(string from, string to) onMove;
 
-	@disable this(this);
+	this(SelectiveSync selectiveSync)
+	{
+		assert(selectiveSync);
+		this.selectiveSync = selectiveSync;
+	}
 
 	void init(Config cfg, bool verbose)
 	{
 		this.verbose = verbose;
-		skipDir = wild2regex(cfg.getValue("skip_dir"));
-		skipFile = wild2regex(cfg.getValue("skip_file"));
+
 		fd = inotify_init();
 		if (fd == -1) throw new MonitorException("inotify_init failed");
 		if (!buffer) buffer = new void[4096];
@@ -57,12 +62,20 @@ struct Monitor
 
 	private void addRecursive(string dirname)
 	{
-		if (matchFirst(dirname, skipDir).empty) {
-			add(dirname);
-			foreach(DirEntry entry; dirEntries(dirname, SpanMode.shallow, false)) {
-				if (entry.isDir) {
-					addRecursive(entry.name);
-				}
+		// skip filtered items
+		if (dirname != ".") {
+			if (selectiveSync.isNameExcluded(baseName(dirname))) {
+				return;
+			}
+			if (selectiveSync.isPathExcluded(buildNormalizedPath(dirname))) {
+				return;
+			}
+		}
+
+		add(dirname);
+		foreach(DirEntry entry; dirEntries(dirname, SpanMode.shallow, false)) {
+			if (entry.isDir) {
+				addRecursive(entry.name);
 			}
 		}
 	}
@@ -85,7 +98,7 @@ struct Monitor
                     }
                     throw new MonitorException("inotify_add_watch failed");
                 }
-		wdToDirName[wd] = dirname ~ "/";
+		wdToDirName[wd] = buildNormalizedPath(dirname) ~ "/";
 		log.vlog("Monitor directory: ", dirname);
 	}
 
@@ -152,14 +165,11 @@ struct Monitor
 
 				// skip filtered items
 				path = getPath(event);
-				if (event.mask & IN_ISDIR) {
-					if (!matchFirst(path, skipDir).empty) {
-						goto skip;
-					}
-				} else {
-					if (!matchFirst(path, skipFile).empty) {
-						goto skip;
-					}
+				if (selectiveSync.isNameExcluded(baseName(path))) {
+					goto skip;
+				}
+				if (selectiveSync.isPathExcluded(path)) {
+					goto skip;
 				}
 
 				if (event.mask & IN_MOVED_FROM) {

@@ -64,6 +64,27 @@ struct Database
 		}
 	}
 
+	int getVersion()
+	{
+		int userVersion;
+		extern (C) int callback(void* user_version, int count, char** column_text, char** column_name) {
+			import std.c.stdlib: atoi;
+			*(cast(int*) user_version) = atoi(*column_text);
+			return 0;
+		}
+		int rc = sqlite3_exec(pDb, "PRAGMA user_version", &callback, &userVersion, null);
+		if (rc != SQLITE_OK) {
+			throw new SqliteException(ifromStringz(sqlite3_errmsg(pDb)));
+		}
+		return userVersion;
+	}
+
+	void setVersion(int userVersion)
+	{
+		import std.conv: to;
+		exec("PRAGMA user_version=" ~ to!string(userVersion));
+	}
+
 	Statement prepare(const(char)[] zSql)
 	{
 		Statement s;
@@ -169,6 +190,10 @@ unittest
 		id    TEXT PRIMARY KEY,
 		value TEXT
 	)");
+
+	assert(db.getVersion() == 0);
+	db.setVersion(1);
+	assert(db.getVersion() == 1);
 
 	auto s = db.prepare("INSERT INTO test VALUES (?, ?)");
 	s.bind(1, "key1");

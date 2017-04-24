@@ -1,0 +1,4 @@
+# Directory where the files will be synced
+sync_dir = "~/OneDrive"
+# Skip files and directories that match this pattern
+skip_file = ".*|~*"
