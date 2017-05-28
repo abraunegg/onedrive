@@ -46,8 +46,8 @@ private Item makeItem(const ref JSONValue jsonItem)
 		id: jsonItem["id"].str,
 		name: jsonItem["name"].str,
 		type: type,
-		eTag: isItemRoot(jsonItem) ? null : jsonItem["eTag"].str, // eTag is not returned if for the root in OneDrive Biz
-		cTag: /*isItemFolder(jsonItem)*/ "cTag" !in jsonItem ? null : jsonItem["cTag"].str, // 'cTag' is missing in old files
+		eTag: isItemRoot(jsonItem) ? null : jsonItem["eTag"].str, // eTag is not returned for the root in OneDrive Biz
+		cTag: "cTag" !in jsonItem ? null : jsonItem["cTag"].str, // cTag is missing in old files (plus all folders)
 		mtime: SysTime.fromISOExtString(jsonItem["fileSystemInfo"]["lastModifiedDateTime"].str),
 		parentId: isItemRoot(jsonItem) ? null : jsonItem["parentReference"]["id"].str
 	};
