@@ -33,7 +33,7 @@ int main(string[] args)
 		if (opt.helpWanted) {
 			defaultGetoptPrinter(
 				"Usage: onedrive [OPTION]...\n\n" ~
-				"no option    Sync and exit.",
+				"no option        Sync and exit.",
 				opt.options
 			);
 			return EXIT_SUCCESS;
