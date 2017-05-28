@@ -17,7 +17,7 @@ static this()
 	deviceName = Socket.hostName;
 }
 
-// give a new name to the specified file or directory
+// gives a new name to the specified file or directory
 void safeRename(const(char)[] path)
 {
 	auto ext = extension(path);
@@ -35,13 +35,13 @@ void safeRename(const(char)[] path)
 	rename(path, newPath);
 }
 
-// delete the specified file without throwing an exception if it does not exists
+// deletes the specified file without throwing an exception if it does not exists
 void safeRemove(const(char)[] path)
 {
 	if (exists(path)) remove(path);
 }
 
-// return the crc32 hex string of a file
+// returns the crc32 hex string of a file
 string computeCrc32(string path)
 {
 	CRC32 crc;
@@ -52,7 +52,7 @@ string computeCrc32(string path)
 	return crc.finish().toHexString().dup;
 }
 
-// return the quickXorHash base64 string of a file
+// returns the quickXorHash base64 string of a file
 string computeQuickXorHash(string path)
 {
 	QuickXor qxor;
@@ -63,7 +63,7 @@ string computeQuickXorHash(string path)
 	return Base64.encode(qxor.finish());
 }
 
-// convert wildcards (*, ?) to regex
+// converts wildcards (*, ?) to regex
 Regex!char wild2regex(const(char)[] pattern)
 {
 	string str;
@@ -92,7 +92,7 @@ Regex!char wild2regex(const(char)[] pattern)
 	return regex(str, "i");
 }
 
-// return true if the network connection is available
+// returns true if the network connection is available
 bool testNetwork()
 {
 	HTTP http = HTTP("https://login.microsoftonline.com");
@@ -100,7 +100,7 @@ bool testNetwork()
 	return http.perform(ThrowOnError.no) == 0;
 }
 
-// call globMatch for each string in pattern separated by '|'
+// calls globMatch for each string in pattern separated by '|'
 bool multiGlobMatch(const(char)[] path, const(char)[] pattern)
 {
 	foreach (glob; pattern.split('|')) {
