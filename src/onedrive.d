@@ -50,6 +50,9 @@ final class OneDriveApi
 	private SysTime accessTokenExpiration;
 	/* private */ HTTP http;
 
+	// if true, every new access token is printed
+	bool printAccessToken;
+
 	this(Config cfg)
 	{
 		this.cfg = cfg;
@@ -244,6 +247,7 @@ final class OneDriveApi
 		refreshToken = response["refresh_token"].str();
 		accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
 		std.file.write(cfg.refreshTokenFilePath, refreshToken);
+		if (printAccessToken) writeln("New access token: ", accessToken);
 	}
 
 	private void checkAccessTokenExpired()
