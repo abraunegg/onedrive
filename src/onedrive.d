@@ -21,10 +21,10 @@ class OneDriveException: Exception
 	// https://dev.onedrive.com/misc/errors.htm
 	JSONValue error;
 
-    @nogc @safe pure nothrow this(string msg, Throwable next, string file = __FILE__, size_t line = __LINE__)
-    {
-        super(msg, file, line, next);
-    }
+	@nogc @safe pure nothrow this(string msg, Throwable next, string file = __FILE__, size_t line = __LINE__)
+	{
+		super(msg, file, line, next);
+	}
 
 	@safe pure this(int httpStatusCode, string reason, string file = __FILE__, size_t line = __LINE__)
 	{
