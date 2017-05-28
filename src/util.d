@@ -1,3 +1,4 @@
+import std.base64;
 import std.conv;
 import std.digest.crc;
 import std.file;
@@ -7,6 +8,7 @@ import std.regex;
 import std.socket;
 import std.stdio;
 import std.string;
+import qxor;
 
 private string deviceName;
 
@@ -48,6 +50,17 @@ string computeCrc32(string path)
 		crc.put(data);
 	}
 	return crc.finish().toHexString().dup;
+}
+
+// return the quickXorHash base64 string of a file
+string computeQuickXorHash(string path)
+{
+	QuickXor qxor;
+	auto file = File(path, "rb");
+	foreach (ubyte[] data; chunks(file, 4096)) {
+		qxor.put(data);
+	}
+	return Base64.encode(qxor.finish());
 }
 
 // convert wildcards (*, ?) to regex
