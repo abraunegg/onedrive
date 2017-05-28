@@ -58,7 +58,7 @@ int main(string[] args)
 	}
 
 	if (resync || logout) {
-		log.log("Deleting the saved status ...");
+		log.vlog("Deleting the saved status ...");
 		safeRemove(cfg.databaseFilePath);
 		safeRemove(cfg.deltaLinkFilePath);
 		safeRemove(cfg.uploadStateFilePath);
