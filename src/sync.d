@@ -47,7 +47,7 @@ private Item makeItem(const ref JSONValue jsonItem)
 		name: jsonItem["name"].str,
 		type: type,
 		eTag: isItemRoot(jsonItem) ? null : jsonItem["eTag"].str, // eTag is not returned if for the root in OneDrive Biz
-		cTag: isItemFolder(jsonItem) ? null : jsonItem["cTag"].str,
+		cTag: /*isItemFolder(jsonItem)*/ "cTag" !in jsonItem ? null : jsonItem["cTag"].str, // 'cTag' is missing in old files
 		mtime: SysTime.fromISOExtString(jsonItem["fileSystemInfo"]["lastModifiedDateTime"].str),
 		parentId: isItemRoot(jsonItem) ? null : jsonItem["parentReference"]["id"].str
 	};
@@ -65,7 +65,8 @@ private Item makeItem(const ref JSONValue jsonItem)
 				log.vlog("The file does not have any hash");
 			}
 		} else {
-			log.vlog("No hashes in the file facet");
+			// 'hashes' is missing in old files
+			log.vlog("No hashes facet");
 		}
 	}
 
