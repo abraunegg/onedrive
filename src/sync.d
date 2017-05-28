@@ -60,8 +60,6 @@ final class SyncEngine
 	private ItemDatabase itemdb;
 	private UploadSession session;
 	private SelectiveSync selectiveSync;
-	// token representing the last status correctly synced
-	private string statusToken;
 	// list of items to skip while applying the changes
 	private string[] skippedItems;
 	// list of items to delete after the changes has been downloaded
@@ -79,12 +77,6 @@ final class SyncEngine
 
 	void init()
 	{
-		// restore the previous status token
-		try {
-			statusToken = readText(cfg.statusTokenFilePath);
-		} catch (FileException e) {
-			// swallow exception
-		}
 		// check if there is an interrupted upload session
 		if (session.restore()) {
 			log.log("Continuing the upload session ...");
@@ -96,33 +88,36 @@ final class SyncEngine
 	void applyDifferences()
 	{
 		log.vlog("Applying differences ...");
+
+		// restore the last known state
+		string deltaLink;
+		try {
+			deltaLink = readText(cfg.deltaLinkFilePath);
+		} catch (FileException e) {
+			// swallow exception
+		}
+		
 		try {
 			JSONValue changes;
 			do {
 				// get changes from the server
 				try {
-					changes = onedrive.viewChangesByPath(".", statusToken);
+					changes = onedrive.viewChangesByPath(".", deltaLink);
 				} catch (OneDriveException e) {
 					if (e.httpStatusCode == 410) {
-						log.log("Status token expired, resyncing");
-						statusToken = null;
+						log.log("Delta link expired, resyncing");
+						deltaLink = null;
 						continue;
-					}
-					else {
+					} else {
 						throw e;
 					}
 				}
 				foreach (item; changes["value"].array) {
 					applyDifference(item);
 				}
-				// hack to reuse old code
-				string url;
-				if ("@odata.nextLink" in changes) url = changes["@odata.nextLink"].str;
-				if ("@odata.deltaLink" in changes) url = changes["@odata.deltaLink"].str;
-				auto c = matchFirst(url, r"(?:token=)([\w\d]+)");
-				c.popFront(); // skip the whole match
-				statusToken = c.front;
-				std.file.write(cfg.statusTokenFilePath, statusToken);
+				if ("@odata.nextLink" in changes) deltaLink = changes["@odata.nextLink"].str;
+				if ("@odata.deltaLink" in changes) deltaLink = changes["@odata.deltaLink"].str;
+				std.file.write(cfg.deltaLinkFilePath, deltaLink);
 			} while ("@odata.nextLink" in changes);
 		} catch (ErrnoException e) {
 			throw new SyncException(e.msg, e);

@@ -104,24 +104,24 @@ final class OneDriveApi
 	}
 
 	// https://dev.onedrive.com/items/view_delta.htm
-	JSONValue viewChangesById(const(char)[] id, const(char)[] statusToken)
+	JSONValue viewChangesById(const(char)[] id, const(char)[] deltaLink)
 	{
 		checkAccessTokenExpired();
+		if (deltaLink) return get(deltaLink);
 		const(char)[] url = itemByIdUrl ~ id ~ "/delta";
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
-		if (statusToken) url ~= "&token=" ~ statusToken;
 		return get(url);
 	}
 
 	// https://dev.onedrive.com/items/view_delta.htm
-	JSONValue viewChangesByPath(const(char)[] path, const(char)[] statusToken)
+	JSONValue viewChangesByPath(const(char)[] path, const(char)[] deltaLink)
 	{
 		checkAccessTokenExpired();
+		if (deltaLink) return get(deltaLink);
 		string url = itemByPathUrl ~ encodeComponent(path) ~ ":/delta";
 		// HACK
 		if (path == ".") url = driveUrl ~ "/root/delta";
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
-		if (statusToken) url ~= "&token=" ~ statusToken;
 		return get(url);
 	}
 
