@@ -31,11 +31,55 @@ private bool isItemRoot(const ref JSONValue item)
 	return ("root" in item) != null;
 }
 
-private bool testCrc32(string path, const(char)[] crc32)
+private Item makeItem(const ref JSONValue jsonItem)
 {
-	if (crc32) {
-		string localCrc32 = computeCrc32(path);
-		if (crc32 == localCrc32) return true;
+	ItemType type;
+	if (isItemFile(jsonItem)) {
+		type = ItemType.file;
+	} else if (isItemFolder(jsonItem)) {
+		type = ItemType.dir;
+	} else {
+		assert(0);
+	}
+
+	Item item = {
+		id: jsonItem["id"].str,
+		name: jsonItem["name"].str,
+		type: type,
+		eTag: isItemRoot(jsonItem) ? null : jsonItem["eTag"].str, // eTag is not returned if for the root in OneDrive Biz
+		cTag: isItemFolder(jsonItem) ? null : jsonItem["cTag"].str,
+		mtime: SysTime.fromISOExtString(jsonItem["fileSystemInfo"]["lastModifiedDateTime"].str),
+		parentId: isItemRoot(jsonItem) ? null : jsonItem["parentReference"]["id"].str
+	};
+
+	// extract the file hash
+	if (type == ItemType.file) {
+		if ("hashes" in jsonItem["file"]) {
+			if ("crc32Hash" in jsonItem["file"]["hashes"]) {
+				item.crc32Hash = jsonItem["file"]["hashes"]["crc32Hash"].str;
+			} else if ("sha1Hash" in jsonItem["file"]["hashes"]) {
+				item.sha1Hash = jsonItem["file"]["hashes"]["sha1Hash"].str;
+			} else if ("quickXorHash" in jsonItem["file"]["hashes"]) {
+				item.quickXorHash = jsonItem["file"]["hashes"]["quickXorHash"].str;
+			} else {
+				log.vlog("The file does not have any hash");
+			}
+		} else {
+			log.vlog("No hashes in the file facet");
+		}
+	}
+
+	return item;
+}
+
+private bool testFileHash(string path, const ref Item item)
+{
+	if (item.crc32Hash) {
+		if (item.crc32Hash == computeCrc32(path)) return true;
+	} else if (item.sha1Hash) {
+		if (item.sha1Hash == computeSha1Hash(path)) return true;
+	} else if (item.quickXorHash) {
+		if (item.quickXorHash == computeQuickXorHash(path)) return true;
 	}
 	return false;
 }
@@ -193,36 +237,13 @@ final class SyncEngine
 			}
 		}
 
-		ItemType type;
-		if (isItemFile(item)) {
-			type = ItemType.file;
-		} else if (isItemFolder(item)) {
-			type = ItemType.dir;
-		} else {
+		if (!isItemFile(item) && !isItemFolder(item)) {
 			log.vlog("The item is neither a file nor a directory, skipping");
 			skippedItems ~= id;
 			return;
 		}
 
-		string crc32;
-		if (type == ItemType.file) {
-			try {
-				crc32 = item["file"]["hashes"]["crc32Hash"].str;
-			} catch (JSONException e) {
-				log.vlog("The hash is not available");
-			}
-		}
-
-		Item newItem = {
-			id: id,
-			name: name,
-			type: type,
-			eTag: eTag,
-			cTag: "cTag" in item ? item["cTag"].str : null,
-			mtime: SysTime.fromISOExtString(item["fileSystemInfo"]["lastModifiedDateTime"].str),
-			parentId: parentId,
-			crc32: crc32
-		};
+		Item newItem = makeItem(item);
 
 		if (!cached) {
 			applyNewItem(newItem, path);
@@ -305,7 +326,7 @@ final class SyncEngine
 				} else {
 					log.vlog("The local item has a different modified time ", localModifiedTime, " remote is ", item.mtime);
 				}
-				if (testCrc32(path, item.crc32)) {
+				if (testFileHash(path, item)) {
 					return true;
 				} else {
 					log.vlog("The local item has a different hash");
@@ -428,7 +449,7 @@ final class SyncEngine
 					log.vlog("The file last modified time has changed");
 					string id = item.id;
 					string eTag = item.eTag;
-					if (!testCrc32(path, item.crc32)) {
+					if (!testFileHash(path, item)) {
 						log.vlog("The file content has changed");
 						log.log("Uploading: ", path);
 						JSONValue response;
@@ -546,30 +567,7 @@ final class SyncEngine
 
 	private void saveItem(JSONValue jsonItem)
 	{
-		ItemType type;
-		if (isItemFile(jsonItem)) {
-			type = ItemType.file;
-		} else if (isItemFolder(jsonItem)) {
-			type = ItemType.dir;
-		} else {
-			assert(0);
-		}
-		Item item = {
-			id: jsonItem["id"].str,
-			name: jsonItem["name"].str,
-			type: type,
-			eTag: jsonItem["eTag"].str,
-			cTag: "cTag" in jsonItem ? jsonItem["cTag"].str : null,
-			mtime: SysTime.fromISOExtString(jsonItem["fileSystemInfo"]["lastModifiedDateTime"].str),
-			parentId: jsonItem["parentReference"]["id"].str
-		};
-		if (type == ItemType.file) {
-			try {
-				item.crc32 = jsonItem["file"]["hashes"]["crc32Hash"].str;
-			} catch (JSONException e) {
-				log.vlog("The hash is not available");
-			}
-		}
+		Item item = makeItem(jsonItem);
 		itemdb.upsert(item);
 	}
 

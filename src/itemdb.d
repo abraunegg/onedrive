@@ -16,13 +16,15 @@ struct Item
 	string   cTag;
 	SysTime  mtime;
 	string   parentId;
-	string   crc32;
+	string   crc32Hash;
+	string   sha1Hash;
+	string   quickXorHash;
 }
 
 final class ItemDatabase
 {
 	// increment this for every change in the db schema
-	immutable int itemDatabaseVersion = 3;
+	immutable int itemDatabaseVersion = 4;
 
 	Database db;
 	Statement insertItemStmt;
@@ -35,14 +37,16 @@ final class ItemDatabase
 		db = Database(filename);
 		if (db.getVersion() == 0) {
 			db.exec("CREATE TABLE item (
-				id       TEXT NOT NULL PRIMARY KEY,
-				name     TEXT NOT NULL,
-				type     TEXT NOT NULL,
-				eTag     TEXT,
-				cTag     TEXT,
-				mtime    TEXT NOT NULL,
-				parentId TEXT,
-				crc32    TEXT,
+				id              TEXT NOT NULL PRIMARY KEY,
+				name            TEXT NOT NULL,
+				type            TEXT NOT NULL,
+				eTag            TEXT,
+				cTag            TEXT,
+				mtime           TEXT NOT NULL,
+				parentId        TEXT,
+				crc32Hash       TEXT,
+				sha1Hash        TEXT,
+				quickXorHash    TEXT,
 				FOREIGN KEY (parentId) REFERENCES item (id) ON DELETE CASCADE
 			)");
 			db.exec("CREATE INDEX name_idx ON item (name)");
@@ -52,14 +56,13 @@ final class ItemDatabase
 		}
 		db.exec("PRAGMA foreign_keys = ON");
 		db.exec("PRAGMA recursive_triggers = ON");
-
-		insertItemStmt = db.prepare("INSERT OR REPLACE INTO item (id, name, type, eTag, cTag, mtime, parentId, crc32) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+		insertItemStmt = db.prepare("INSERT OR REPLACE INTO item (id, name, type, eTag, cTag, mtime, parentId, crc32Hash, sha1Hash, quickXorHash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 		updateItemStmt = db.prepare("
 			UPDATE item
-			SET name = ?2, type = ?3, eTag = ?4, cTag = ?5, mtime = ?6, parentId = ?7, crc32 = ?8
+			SET name = ?2, type = ?3, eTag = ?4, cTag = ?5, mtime = ?6, parentId = ?7, crc32Hash = ?8, sha1Hash = ?9, quickXorHash = ?10
 			WHERE id = ?1
 		");
-		selectItemByIdStmt = db.prepare("SELECT id, name, type, eTag, cTag, mtime, parentId, crc32 FROM item WHERE id = ?");
+		selectItemByIdStmt = db.prepare("SELECT id, name, type, eTag, cTag, mtime, parentId, crc32Hash, sha1Hash, quickXorHash FROM item WHERE id = ?");
 		selectItemByParentIdStmt = db.prepare("SELECT id FROM item WHERE parentId = ?");
 	}
 
@@ -201,13 +204,15 @@ final class ItemDatabase
 			bind(5, cTag);
 			bind(6, mtime.toISOExtString());
 			bind(7, parentId);
-			bind(8, crc32);
+			bind(8, crc32Hash);
+			bind(9, sha1Hash);
+			bind(10, quickXorHash);
 		}
 	}
 
 	private Item buildItem(Statement.Result result)
 	{
-		assert(!result.empty && result.front.length == 8);
+		assert(!result.empty && result.front.length == 10);
 		Item item = {
 			id: result.front[0].dup,
 			name: result.front[1].dup,
@@ -215,7 +220,9 @@ final class ItemDatabase
 			cTag: result.front[4].dup,
 			mtime: SysTime.fromISOExtString(result.front[5]),
 			parentId: result.front[6].dup,
-			crc32: result.front[7].dup
+			crc32Hash: result.front[7].dup,
+			sha1Hash: result.front[8].dup,
+			quickXorHash: result.front[9].dup
 		};
 		switch (result.front[2]) {
 			case "file": item.type = ItemType.file; break;

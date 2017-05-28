@@ -1,6 +1,6 @@
 import std.base64;
 import std.conv;
-import std.digest.crc;
+import std.digest.crc, std.digest.sha;
 import std.file;
 import std.net.curl;
 import std.path;
@@ -50,6 +50,17 @@ string computeCrc32(string path)
 		crc.put(data);
 	}
 	return crc.finish().toHexString().dup;
+}
+
+// returns the sha1 hash hex string of a file
+string computeSha1Hash(string path)
+{
+	SHA1 sha;
+	auto file = File(path, "rb");
+	foreach (ubyte[] data; chunks(file, 4096)) {
+		sha.put(data);
+	}
+	return sha.finish().toHexString().dup;
 }
 
 // returns the quickXorHash base64 string of a file
