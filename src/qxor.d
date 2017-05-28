@@ -35,7 +35,7 @@ struct QuickXor
 				byte low = cast(byte) (bitsInVectorCell - vectorOffset);
 
 				byte xoredByte = 0;
-				for (int j = i; j < array.length; j += widthInBits) {
+				for (size_t j = i; j < array.length; j += widthInBits) {
 					xoredByte ^= array[j];
 				}
 
