@@ -16,10 +16,10 @@ struct QuickXor
 	private int _shiftSoFar;
 
 	nothrow @safe void put(scope const(ubyte)[] array...)
-    {
+	{
 		int vectorArrayIndex = _shiftSoFar / 64;
 		int vectorOffset = _shiftSoFar % 64;
-        size_t iterations = min(array.length, widthInBits);
+		size_t iterations = min(array.length, widthInBits);
 
 		for (size_t i = 0; i < iterations; i++) {
 			bool isLastCell = vectorArrayIndex == _data.length - 1;
@@ -67,7 +67,7 @@ struct QuickXor
 		ubyte[lengthInBytes] tmp;
 		tmp[0 .. lengthInBytes] = (cast(ubyte*) _data)[0 .. lengthInBytes];
 		for (size_t i = 0; i < 8; i++) {
-            tmp[lengthInBytes - 8 + i] ^= (cast(ubyte*) &_lengthSoFar)[i];
+			tmp[lengthInBytes - 8 + i] ^= (cast(ubyte*) &_lengthSoFar)[i];
         }
 		return tmp;
 	}
