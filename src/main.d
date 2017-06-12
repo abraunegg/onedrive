@@ -7,7 +7,7 @@ static import log;
 int main(string[] args)
 {
 	// configuration directory
-	string configDirName = expandTilde(environment.get("XDG_CONFIG_HOME", "~/.config")) ~ "/onedrive";
+	string configDirName = environment.get("XDG_CONFIG_HOME", "~/.config") ~ "/onedrive";
 	// enable monitor mode
 	bool monitor;
 	// force a full resync
@@ -45,7 +45,7 @@ int main(string[] args)
 	}
 
 	log.vlog("Loading config ...");
-	configDirName = expandTilde(configDirName);
+	configDirName = configDirName.expandTilde().absolutePath();
 	if (!exists(configDirName)) mkdir(configDirName);
 	auto cfg = new config.Config(configDirName);
 	cfg.init();
