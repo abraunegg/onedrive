@@ -23,7 +23,7 @@ private bool isItemFile(const ref JSONValue item)
 private bool isItemDeleted(const ref JSONValue item)
 {
 	// HACK: fix for https://github.com/skilion/onedrive/issues/157
-	return ("deleted" in item) || ("fileSystemInfo" !in item);
+	return ("deleted" in item) || ("fileSystemInfo" !in item && "remoteItem" !in item);
 }
 
 private bool isItemRoot(const ref JSONValue item)
