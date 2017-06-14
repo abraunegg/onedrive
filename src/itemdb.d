@@ -150,14 +150,12 @@ final class ItemDatabase
 			auto r = s.exec();
 			if (r.empty) return false;
 			currItem = buildItem(r);
-			// if the item of type remote jump to the child
+			// if the item is of type remote substitute it with the child
 			if (currItem.type == ItemType.remote) {
 				auto children = selectChildren(currItem.driveId, currItem.id);
 				enforce(children.length == 1, "The remote item does not have exactly 1 child");
-				// keep some characteristics of the remote item
+				// keep the name of the remote item
 				children[0].name = currItem.name;
-				children[0].eTag = currItem.eTag;
-				children[0].cTag = currItem.cTag;
 				currItem = children[0];
 			}
 		}

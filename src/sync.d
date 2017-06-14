@@ -31,6 +31,11 @@ private bool isItemRoot(const ref JSONValue item)
 	return ("root" in item) != null;
 }
 
+private bool isItemRemote(const ref JSONValue item)
+{
+	return ("remoteItem" in item) != null;
+}
+
 private Item makeItem(const ref JSONValue jsonItem)
 {
 	ItemType type;
@@ -38,8 +43,8 @@ private Item makeItem(const ref JSONValue jsonItem)
 		type = ItemType.file;
 	} else if (isItemFolder(jsonItem)) {
 		type = ItemType.dir;
-	} else {
-		assert(0);
+	} else if (isItemRemote(jsonItem)) {
+		type = ItemType.remote;
 	}
 
 	Item item = {
@@ -49,7 +54,7 @@ private Item makeItem(const ref JSONValue jsonItem)
 		type: type,
 		eTag: isItemRoot(jsonItem) ? null : jsonItem["eTag"].str, // eTag is not returned for the root in OneDrive Biz
 		cTag: "cTag" !in jsonItem ? null : jsonItem["cTag"].str, // cTag is missing in old files (plus all folders)
-		mtime: SysTime.fromISOExtString(jsonItem["fileSystemInfo"]["lastModifiedDateTime"].str),
+		mtime: isItemRemote(jsonItem) ? SysTime(0) : SysTime.fromISOExtString(jsonItem["fileSystemInfo"]["lastModifiedDateTime"].str),
 		parentDriveId: isItemRoot(jsonItem) ? null : jsonItem["parentReference"]["driveId"].str,
 		parentId: isItemRoot(jsonItem) ? null : jsonItem["parentReference"]["id"].str
 	};
@@ -182,39 +187,56 @@ final class SyncEngine
 		assumeSafeAppend(skippedItems);
 	}
 
-	private void applyDifference(JSONValue item)
+	private void applyDifference(JSONValue jsonItem)
 	{
-		string driveId = item["parentReference"]["driveId"].str;
-		string id = item["id"].str;
-		string name = item["name"].str;
-
-		log.vlog(id, " ", name);
-
-		// eTag and parentId do not exists for the root in OneDrive Biz
-		string eTag, parentId;
-		if (!isItemRoot(item)) {
-			eTag = item["eTag"].str;
-			parentId = item["parentReference"]["id"].str;
-		}
+		Item item = makeItem(jsonItem);
+		log.vlog(item.id, " ", item.name);
 
 		// skip unwanted items early
-		if (skippedItems.find(parentId).length != 0) {
+		bool unwanted;
+		unwanted |= skippedItems.find(item.parentId).length != 0;
+		unwanted |= selectiveSync.isNameExcluded(item.name);
+		unwanted |= selectiveSync.isPathExcluded(path);
+		if (unwanted) {
 			log.vlog("Filtered out");
-			skippedItems ~= id;
+			skippedItems ~= item.id;
 			return;
 		}
-		if (selectiveSync.isNameExcluded(name)) {
-			log.vlog("Filtered out");
-			skippedItems ~= id;
+
+		// compute the path of the item
+		string path = ".";
+		if (!isItemRoot(jsonItem)) {
+			path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
+		}
+
+		// check if the item is to be deleted
+		if (isItemDeleted(jsonItem)) {
+			log.vlog("The item is marked for deletion");
+			idsToDelete ~= [item.driveId, item.id];
+			return;
+		}
+
+		// check the item type
+		if (isItemRemote(jsonItem)) {
+			// TODO
+			// check name change
+			// scan the children later
+			// fix child references
+			log.vlog("Remote items are not supported yet");
+			skippedItems ~= item.id;
+			return;
+		} else if (!isItemFile(jsonItem) && !isItemFolder(jsonItem)) {
+			log.vlog("The item is neither a file nor a directory, skipping");
+			skippedItems ~= item.id;
 			return;
 		}
 
 		// rename the local item if it is unsynced and there is a new version of it
 		Item oldItem;
 		string oldPath;
-		bool cached = itemdb.selectById(driveId, id, oldItem);
-		if (cached && eTag != oldItem.eTag) {
-			oldPath = itemdb.computePath(driveId, id);
+		bool cached = itemdb.selectById(item.driveId, item.id, oldItem);
+		if (cached && item.eTag != oldItem.eTag) {
+			oldPath = itemdb.computePath(item.driveId, item.id);
 			if (!isItemSynced(oldItem, oldPath)) {
 				log.vlog("The local item is unsynced, renaming");
 				if (exists(oldPath)) safeRename(oldPath);
@@ -222,44 +244,17 @@ final class SyncEngine
 			}
 		}
 
-		// check if the item is to be deleted
-		if (isItemDeleted(item)) {
-			log.vlog("The item is marked for deletion");
-			if (cached) idsToDelete ~= [driveId, id];
-			return;
-		}
-
-		// compute the path of the item
-		string path = ".";
-		if (parentId) {
-			path = itemdb.computePath(driveId, parentId) ~ "/" ~ name;
-			// selective sync
-			if (selectiveSync.isPathExcluded(path)) {
-				log.vlog("Filtered out: ", path);
-				skippedItems ~= id;
-				return;
-			}
-		}
-
-		if (!isItemFile(item) && !isItemFolder(item)) {
-			log.vlog("The item is neither a file nor a directory, skipping");
-			skippedItems ~= id;
-			return;
-		}
-
-		Item newItem = makeItem(item);
-
 		if (!cached) {
-			applyNewItem(newItem, path);
+			applyNewItem(item, path);
 		} else {
-			applyChangedItem(oldItem, newItem, path);
+			applyChangedItem(oldItem, oldPath, item, path);
 		}
 
 		// save the item in the db
 		if (oldItem.id) {
-			itemdb.update(newItem);
+			itemdb.update(item);
 		} else {
-			itemdb.insert(newItem);
+			itemdb.insert(item);
 		}
 	}
 
@@ -272,7 +267,7 @@ final class SyncEngine
 				setTimes(path, item.mtime, item.mtime);
 				return;
 			} else {
-				log.vlog("The local item is out of sync, renaming ...");
+				log.vlog("The local item is out of sync, renaming...");
 				safeRename(path);
 			}
 		}
@@ -285,24 +280,25 @@ final class SyncEngine
 			log.log("Creating directory: ", path);
 			mkdir(path);
 				break;
-			case ItemType.remote:
-				assert(0);
+		case ItemType.remote:
+			assert(0);
 		}
 		setTimes(path, item.mtime, item.mtime);
 	}
 
-	private void applyChangedItem(Item oldItem, Item newItem, string newPath)
+	// update a local item
+	// the local item is assumed to be in sync with the local db
+	private void applyChangedItem(Item oldItem, string oldPath, Item newItem, string newPath)
 	{
 		assert(oldItem.driveId == newItem.driveId);
 		assert(oldItem.id == newItem.id);
 		assert(oldItem.type == newItem.type);
 
 		if (oldItem.eTag != newItem.eTag) {
-			string oldPath = itemdb.computePath(oldItem.driveId, oldItem.id);
 			if (oldPath != newPath) {
 				log.log("Moving: ", oldPath, " -> ", newPath);
 				if (exists(newPath)) {
-					log.vlog("The destination is occupied, renaming ...");
+					log.vlog("The destination is occupied, renaming the conflicting file...");
 					safeRename(newPath);
 				}
 				rename(oldPath, newPath);
