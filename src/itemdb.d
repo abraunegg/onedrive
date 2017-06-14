@@ -153,7 +153,11 @@ final class ItemDatabase
 			// if the item of type remote jump to the child
 			if (currItem.type == ItemType.remote) {
 				auto children = selectChildren(currItem.driveId, currItem.id);
-				enforce(children.length == 1, "The remote item has more than 1 child");
+				enforce(children.length == 1, "The remote item does not have exactly 1 child");
+				// keep some characteristics of the remote item
+				children[0].name = currItem.name;
+				children[0].eTag = currItem.eTag;
+				children[0].cTag = currItem.cTag;
 				currItem = children[0];
 			}
 		}
