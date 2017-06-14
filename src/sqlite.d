@@ -197,17 +197,17 @@ unittest
 
 	auto s = db.prepare("INSERT INTO test VALUES (?, ?)");
 	s.bind(1, "key1");
-	s.bind(2, "value1");
+	s.bind(2, "value");
 	s.exec();
 	s.bind(1, "key2");
-	s.bind(2, "value2");
+	s.bind(2, null);
 	s.exec();
 
 	s = db.prepare("SELECT * FROM test ORDER BY id ASC");
 	auto r = s.exec();
 	assert(r.front[0] == "key1");
 	r.popFront();
-	assert(r.front[1] == "value2");
+	assert(r.front[1] == null);
 	r.popFront();
 	assert(r.empty);
 }
