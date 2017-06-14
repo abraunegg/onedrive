@@ -43,12 +43,14 @@ private Item makeItem(const ref JSONValue jsonItem)
 	}
 
 	Item item = {
+		driveId: jsonItem["parentReference"]["driveId"].str,
 		id: jsonItem["id"].str,
 		name: jsonItem["name"].str,
 		type: type,
 		eTag: isItemRoot(jsonItem) ? null : jsonItem["eTag"].str, // eTag is not returned for the root in OneDrive Biz
 		cTag: "cTag" !in jsonItem ? null : jsonItem["cTag"].str, // cTag is missing in old files (plus all folders)
 		mtime: SysTime.fromISOExtString(jsonItem["fileSystemInfo"]["lastModifiedDateTime"].str),
+		parentDriveId: isItemRoot(jsonItem) ? null : jsonItem["parentReference"]["driveId"].str,
 		parentId: isItemRoot(jsonItem) ? null : jsonItem["parentReference"]["id"].str
 	};
 
@@ -108,7 +110,7 @@ final class SyncEngine
 	// list of items to skip while applying the changes
 	private string[] skippedItems;
 	// list of items to delete after the changes has been downloaded
-	private string[] idsToDelete;
+	private string[2][] idsToDelete;
 
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
@@ -182,6 +184,7 @@ final class SyncEngine
 
 	private void applyDifference(JSONValue item)
 	{
+		string driveId = item["parentReference"]["driveId"].str;
 		string id = item["id"].str;
 		string name = item["name"].str;
 
@@ -209,9 +212,9 @@ final class SyncEngine
 		// rename the local item if it is unsynced and there is a new version of it
 		Item oldItem;
 		string oldPath;
-		bool cached = itemdb.selectById(id, oldItem);
+		bool cached = itemdb.selectById(driveId, id, oldItem);
 		if (cached && eTag != oldItem.eTag) {
-			oldPath = itemdb.computePath(id);
+			oldPath = itemdb.computePath(driveId, id);
 			if (!isItemSynced(oldItem, oldPath)) {
 				log.vlog("The local item is unsynced, renaming");
 				if (exists(oldPath)) safeRename(oldPath);
@@ -222,14 +225,14 @@ final class SyncEngine
 		// check if the item is to be deleted
 		if (isItemDeleted(item)) {
 			log.vlog("The item is marked for deletion");
-			if (cached) idsToDelete ~= id;
+			if (cached) idsToDelete ~= [driveId, id];
 			return;
 		}
 
 		// compute the path of the item
 		string path = ".";
 		if (parentId) {
-			path = itemdb.computePath(parentId) ~ "/" ~ name;
+			path = itemdb.computePath(driveId, parentId) ~ "/" ~ name;
 			// selective sync
 			if (selectiveSync.isPathExcluded(path)) {
 				log.vlog("Filtered out: ", path);
@@ -281,18 +284,21 @@ final class SyncEngine
 		case ItemType.dir:
 			log.log("Creating directory: ", path);
 			mkdir(path);
-			break;
+				break;
+			case ItemType.remote:
+				assert(0);
 		}
 		setTimes(path, item.mtime, item.mtime);
 	}
 
 	private void applyChangedItem(Item oldItem, Item newItem, string newPath)
 	{
+		assert(oldItem.driveId == newItem.driveId);
 		assert(oldItem.id == newItem.id);
 		assert(oldItem.type == newItem.type);
 
 		if (oldItem.eTag != newItem.eTag) {
-			string oldPath = itemdb.computePath(oldItem.id);
+			string oldPath = itemdb.computePath(oldItem.driveId, oldItem.id);
 			if (oldPath != newPath) {
 				log.log("Moving: ", oldPath, " -> ", newPath);
 				if (exists(newPath)) {
@@ -343,6 +349,8 @@ final class SyncEngine
 				log.vlog("The local item is a file but should be a directory");
 			}
 			break;
+		case ItemType.remote:
+			assert(0);
 		}
 		return false;
 	}
@@ -350,9 +358,9 @@ final class SyncEngine
 	private void deleteItems()
 	{
 		log.vlog("Deleting files ...");
-		foreach_reverse (id; idsToDelete) {
-			string path = itemdb.computePath(id);
-			itemdb.deleteById(id);
+		foreach_reverse (i; idsToDelete) {
+			string path = itemdb.computePath(i[0], i[1]);
+			itemdb.deleteById(i[0], i[1]);
 			if (exists(path)) {
 				if (isFile(path)) {
 					remove(path);
@@ -400,7 +408,7 @@ final class SyncEngine
 			log.vlog("Filtered out");
 			return;
 		}
-		string path = itemdb.computePath(item.id);
+		string path = itemdb.computePath(item.driveId, item.id);
 		if (selectiveSync.isPathExcluded(path)) {
 			log.vlog("Filtered out: ", path);
 			return;
@@ -413,6 +421,8 @@ final class SyncEngine
 		case ItemType.file:
 			uploadFileDifferences(item, path);
 			break;
+		case ItemType.remote:
+			assert(0);
 		}
 	}
 
@@ -427,7 +437,7 @@ final class SyncEngine
 			} else {
 				log.vlog("The directory has not changed");
 				// loop trough the children
-				foreach (Item child; itemdb.selectChildren(item.id)) {
+				foreach (Item child; itemdb.selectChildren(item.driveId, item.id)) {
 					uploadDifferences(child);
 				}
 			}
@@ -552,7 +562,7 @@ final class SyncEngine
 			if (e.httpStatusCode == 404) log.log(e.msg);
 			else throw e;
 		}
-		itemdb.deleteById(item.id);
+		itemdb.deleteById(item.driveId, item.id);
 	}
 
 	private void uploadLastModifiedTime(const(char)[] id, const(char)[] eTag, SysTime mtime)
