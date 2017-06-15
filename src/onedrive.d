@@ -13,6 +13,7 @@ private immutable {
 	string driveUrl = "https://graph.microsoft.com/v1.0/me/drive";
 	string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
 	string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
+	string driveByIdUrl = "https://graph.microsoft.com/v1.0/me/drives/";
 }
 
 class OneDriveException: Exception
@@ -64,15 +65,8 @@ final class OneDriveApi
 	{
 		try {
 			refreshToken = readText(cfg.refreshTokenFilePath);
-			getDefaultDrive();
 		} catch (FileException e) {
 			return authorize();
-		} catch (OneDriveException e) {
-			if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
-				log.log("Refresh token invalid");
-				return authorize();
-			}
-			throw e;
 		}
 		return true;
 	}
@@ -104,11 +98,11 @@ final class OneDriveApi
 	}
 
 	// https://dev.onedrive.com/items/view_delta.htm
-	JSONValue viewChangesById(const(char)[] id, const(char)[] deltaLink)
+	JSONValue viewChangesById(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink)
 	{
 		checkAccessTokenExpired();
 		if (deltaLink) return get(deltaLink);
-		const(char)[] url = itemByIdUrl ~ id ~ "/delta";
+		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/delta";
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
 		return get(url);
 	}
@@ -252,8 +246,15 @@ final class OneDriveApi
 
 	private void checkAccessTokenExpired()
 	{
-		if (Clock.currTime() >= accessTokenExpiration) {
-			newToken();
+		try {
+			if (Clock.currTime() >= accessTokenExpiration) {
+				newToken();
+			}
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
+				e.msg ~= "\nRefresh token invalid, use --logout to authorize the client again";
+			}
+			throw e;
 		}
 	}
 
