@@ -192,24 +192,26 @@ final class SyncEngine
 		Item item = makeItem(jsonItem);
 		log.vlog(item.id, " ", item.name);
 
-		// skip unwanted items early
+		string path = ".";
 		bool unwanted;
 		unwanted |= skippedItems.find(item.parentId).length != 0;
 		unwanted |= selectiveSync.isNameExcluded(item.name);
-		unwanted |= selectiveSync.isPathExcluded(path);
+
+		if (!unwanted && !isItemRoot(jsonItem)) {
+			// delay path computation after assuring the item parent is not excluded
+			path = itemdb.computePath(item.parentDriveId, item.parentId) ~ "/" ~ item.name;
+			// selective sync
+			unwanted |= selectiveSync.isPathExcluded(path);
+		}
+
+		// skip unwanted items early
 		if (unwanted) {
 			log.vlog("Filtered out");
 			skippedItems ~= item.id;
 			return;
 		}
 
-		// compute the path of the item
-		string path = ".";
-		if (!isItemRoot(jsonItem)) {
-			path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
-		}
-
-		// check if the item is to be deleted
+		// check if the item is going to be deleted
 		if (isItemDeleted(jsonItem)) {
 			log.vlog("The item is marked for deletion");
 			idsToDelete ~= [item.driveId, item.id];
