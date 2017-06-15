@@ -54,7 +54,7 @@ private Item makeItem(const ref JSONValue jsonItem)
 		type: type,
 		eTag: isItemRoot(jsonItem) ? null : jsonItem["eTag"].str, // eTag is not returned for the root in OneDrive Biz
 		cTag: "cTag" !in jsonItem ? null : jsonItem["cTag"].str, // cTag is missing in old files (plus all folders)
-		mtime: isItemRemote(jsonItem) ? SysTime(0) : SysTime.fromISOExtString(jsonItem["fileSystemInfo"]["lastModifiedDateTime"].str),
+		mtime: "fileSystemInfo" in jsonItem ? SysTime.fromISOExtString(jsonItem["fileSystemInfo"]["lastModifiedDateTime"].str) : SysTime(0),
 		parentDriveId: isItemRoot(jsonItem) ? null : jsonItem["parentReference"]["driveId"].str,
 		parentId: isItemRoot(jsonItem) ? null : jsonItem["parentReference"]["id"].str
 	};
@@ -71,9 +71,6 @@ private Item makeItem(const ref JSONValue jsonItem)
 			} else {
 				log.vlog("The file does not have any hash");
 			}
-		} else {
-			// 'hashes' is missing in old files
-			log.vlog("No hashes facet");
 		}
 	}
 
@@ -148,7 +145,7 @@ final class SyncEngine
 		} catch (FileException e) {
 			// swallow exception
 		}
-		
+
 		try {
 			JSONValue changes;
 			do {
@@ -189,8 +186,8 @@ final class SyncEngine
 
 	private void applyDifference(JSONValue jsonItem)
 	{
+		log.vlog(jsonItem["id"].str, " ", jsonItem["name"].str);
 		Item item = makeItem(jsonItem);
-		log.vlog(item.id, " ", item.name);
 
 		string path = ".";
 		bool unwanted;
