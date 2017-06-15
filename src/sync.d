@@ -63,7 +63,7 @@ private Item makeItem(const ref JSONValue jsonItem)
 	};
 
 	// extract the file hash
-	if (type == ItemType.file) {
+	if (isItemFile(jsonItem)) {
 		if ("hashes" in jsonItem["file"]) {
 			if ("crc32Hash" in jsonItem["file"]["hashes"]) {
 				item.crc32Hash = jsonItem["file"]["hashes"]["crc32Hash"].str;
