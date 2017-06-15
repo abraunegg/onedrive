@@ -36,6 +36,9 @@ private bool isItemRemote(const ref JSONValue item)
 	return ("remoteItem" in item) != null;
 }
 
+// HACK: OneDrive Biz does not return parentReference for the root
+string defaultDriveId;
+
 private Item makeItem(const ref JSONValue jsonItem)
 {
 	ItemType type;
@@ -48,7 +51,7 @@ private Item makeItem(const ref JSONValue jsonItem)
 	}
 
 	Item item = {
-		driveId: jsonItem["parentReference"]["driveId"].str,
+		driveId: isItemRoot(jsonItem) ? defaultDriveId : jsonItem["parentReference"]["driveId"].str,
 		id: jsonItem["id"].str,
 		name: jsonItem["name"].str,
 		type: type,
@@ -147,6 +150,7 @@ final class SyncEngine
 		}
 
 		try {
+			defaultDriveId = onedrive.getDefaultDrive()["id"].str;
 			JSONValue changes;
 			do {
 				// get changes from the server
