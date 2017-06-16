@@ -19,11 +19,11 @@ struct QuickXor
 	{
 		int vectorArrayIndex = _shiftSoFar / 64;
 		int vectorOffset = _shiftSoFar % 64;
-		size_t iterations = min(array.length, widthInBits);
+		immutable size_t iterations = min(array.length, widthInBits);
 
 		for (size_t i = 0; i < iterations; i++) {
-			bool isLastCell = vectorArrayIndex == _data.length - 1;
-			int bitsInVectorCell = isLastCell ? bitsInLastCell : 64;
+			immutable bool isLastCell = vectorArrayIndex == _data.length - 1;
+			immutable int bitsInVectorCell = isLastCell ? bitsInLastCell : 64;
 
 			if (vectorOffset <= bitsInVectorCell - 8) {
 				 for (size_t j = i; j < array.length; j += widthInBits) {
@@ -50,7 +50,7 @@ struct QuickXor
 			}
 		}
 
-		_shiftSoFar += (_shiftSoFar + shift * array.length) % widthInBits;
+		_shiftSoFar = cast(int) (_shiftSoFar + shift * (array.length % widthInBits)) % widthInBits;
 		_lengthSoFar += array.length;
 
 	}
