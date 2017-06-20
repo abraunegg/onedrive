@@ -53,10 +53,10 @@ private Item makeItem(const ref JSONValue jsonItem)
 	Item item = {
 		driveId: isItemRoot(jsonItem) ? defaultDriveId : jsonItem["parentReference"]["driveId"].str,
 		id: jsonItem["id"].str,
-		name: jsonItem["name"].str,
+		name: "name" in jsonItem ? jsonItem["name"].str : null, // name may be missing for deleted files in OneDrive Biz
 		type: type,
-		eTag: isItemRoot(jsonItem) ? null : jsonItem["eTag"].str, // eTag is not returned for the root in OneDrive Biz
-		cTag: "cTag" !in jsonItem ? null : jsonItem["cTag"].str, // cTag is missing in old files (plus all folders)
+		eTag: "eTag" in jsonItem ? jsonItem["eTag"].str : null, // eTag is not returned for the root in OneDrive Biz
+		cTag: "cTag" in jsonItem ? jsonItem["cTag"].str : null, // cTag is missing in old files (and all folders)
 		mtime: "fileSystemInfo" in jsonItem ? SysTime.fromISOExtString(jsonItem["fileSystemInfo"]["lastModifiedDateTime"].str) : SysTime(0),
 		parentDriveId: isItemRoot(jsonItem) ? null : jsonItem["parentReference"]["driveId"].str,
 		parentId: isItemRoot(jsonItem) ? null : jsonItem["parentReference"]["id"].str
@@ -190,7 +190,7 @@ final class SyncEngine
 
 	private void applyDifference(JSONValue jsonItem)
 	{
-		log.vlog(jsonItem["id"].str, " ", jsonItem["name"].str);
+		log.vlog(jsonItem["id"].str, " ", "name" in jsonItem ? jsonItem["name"].str : null);
 		Item item = makeItem(jsonItem);
 
 		string path = ".";
