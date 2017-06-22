@@ -43,7 +43,7 @@ struct UploadSession
 				return false;
 			}
 			if (!exists(session["localPath"].str)) {
-				log.vlog("The file do not exist anymore");
+				log.vlog("The file does not exist anymore");
 				return false;
 			}
 			// request the session status

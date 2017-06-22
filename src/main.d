@@ -7,7 +7,7 @@ static import log;
 int main(string[] args)
 {
 	// configuration directory
-	string configDirName = expandTilde(environment.get("XDG_CONFIG_HOME", "~/.config")) ~ "/onedrive";
+	string configDirName = environment.get("XDG_CONFIG_HOME", "~/.config") ~ "/onedrive";
 	// enable monitor mode
 	bool monitor;
 	// force a full resync
@@ -16,6 +16,8 @@ int main(string[] args)
 	bool logout;
 	// enable verbose logging
 	bool verbose;
+	// print the access token
+	bool printAccessToken;
 
 	try {
 		auto opt = getopt(
@@ -25,12 +27,13 @@ int main(string[] args)
 			"resync", "Forget the last saved state, perform a full sync.", &resync,
 			"logout", "Logout the current user.", &logout,
 			"confdir", "Set the directory to use to store the configuration files.", &configDirName,
-			"verbose|v", "Print more details, useful for debugging.", &log.verbose
+			"verbose|v", "Print more details, useful for debugging.", &log.verbose,
+			"print-token", "Print the access token, useful for debugging.", &printAccessToken
 		);
 		if (opt.helpWanted) {
 			defaultGetoptPrinter(
 				"Usage: onedrive [OPTION]...\n\n" ~
-				"no option    Sync and exit.",
+				"no option        Sync and exit.",
 				opt.options
 			);
 			return EXIT_SUCCESS;
@@ -42,7 +45,7 @@ int main(string[] args)
 	}
 
 	log.vlog("Loading config ...");
-	configDirName = expandTilde(configDirName);
+	configDirName = configDirName.expandTilde().absolutePath();
 	if (!exists(configDirName)) mkdir(configDirName);
 	auto cfg = new config.Config(configDirName);
 	cfg.init();
@@ -55,9 +58,9 @@ int main(string[] args)
 	}
 
 	if (resync || logout) {
-		log.log("Deleting the saved status ...");
+		log.vlog("Deleting the saved status ...");
 		safeRemove(cfg.databaseFilePath);
-		safeRemove(cfg.statusTokenFilePath);
+		safeRemove(cfg.deltaLinkFilePath);
 		safeRemove(cfg.uploadStateFilePath);
 		if (logout) {
 			safeRemove(cfg.refreshTokenFilePath);
@@ -71,6 +74,7 @@ int main(string[] args)
 		return EXIT_FAILURE;
 	}
 	auto onedrive = new OneDriveApi(cfg);
+	onedrive.printAccessToken = printAccessToken;
 	if (!onedrive.init()) {
 		log.log("Could not initialize the OneDrive API");
 		// workaround for segfault in std.net.curl.Curl.shutdown() on exit

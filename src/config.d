@@ -5,7 +5,7 @@ static import log;
 final class Config
 {
 	public string refreshTokenFilePath;
-	public string statusTokenFilePath;
+	public string deltaLinkFilePath;
 	public string databaseFilePath;
 	public string uploadStateFilePath;
 	public string syncListFilePath;
@@ -17,7 +17,7 @@ final class Config
 	this(string configDirName)
 	{
 		refreshTokenFilePath = configDirName ~ "/refresh_token";
-		statusTokenFilePath = configDirName ~ "/status_token";
+		deltaLinkFilePath = configDirName ~ "/delta_link";
 		databaseFilePath = configDirName ~ "/items.sqlite3";
 		uploadStateFilePath = configDirName ~ "/resume_upload";
 		userConfigFilePath = configDirName ~ "/config";
