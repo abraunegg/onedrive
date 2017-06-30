@@ -28,8 +28,8 @@ curl -fsS https://dlang.org/install.sh | bash -s dmd
 
 ### Dependencies: Fedora/CentOS
 ```sh
-sudo apt-get install libcurl-devel
-sudo apt-get install sqlite-devel
+sudo yum install libcurl-devel
+sudo yum install sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
