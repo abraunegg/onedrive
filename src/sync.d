@@ -359,6 +359,8 @@ final class SyncEngine
 	{
 		log.vlog("Deleting files ...");
 		foreach_reverse (i; idsToDelete) {
+			Item item;
+			if (!itemdb.selectById(i[0], i[1], item)) continue; // check if the item is in the db
 			string path = itemdb.computePath(i[0], i[1]);
 			itemdb.deleteById(i[0], i[1]);
 			if (exists(path)) {
