@@ -1,6 +1,6 @@
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE;
 import core.memory, core.time, core.thread;
-import std.getopt, std.file, std.path, std.process;
+import std.getopt, std.file, std.path, std.process, std.stdio;
 import config, itemdb, monitor, onedrive, selective, sync, util;
 static import log;
 
@@ -18,30 +18,39 @@ int main(string[] args)
 	bool verbose;
 	// print the access token
 	bool printAccessToken;
+	// print the version and exit
+	bool printVersion;
 
 	try {
 		auto opt = getopt(
 			args,
 			std.getopt.config.bundling,
-			"monitor|m", "Keep monitoring for local and remote changes.", &monitor,
-			"resync", "Forget the last saved state, perform a full sync.", &resync,
-			"logout", "Logout the current user.", &logout,
-			"confdir", "Set the directory to use to store the configuration files.", &configDirName,
-			"verbose|v", "Print more details, useful for debugging.", &log.verbose,
-			"print-token", "Print the access token, useful for debugging.", &printAccessToken
+			std.getopt.config.caseSensitive,
+			"confdir", "Set the directory used to store the configuration files", &configDirName,
+			"logout", "Logout the current user", &logout,
+			"monitor|m", "Keep monitoring for local and remote changes", &monitor,
+			"print-token", "Print the access token, useful for debugging", &printAccessToken,
+			"resync", "Forget the last saved state, perform a full sync", &resync,
+			"verbose|v", "Print more details, useful for debugging", &log.verbose,
+			"version", "Print the version and exit", &printVersion
 		);
 		if (opt.helpWanted) {
 			defaultGetoptPrinter(
 				"Usage: onedrive [OPTION]...\n\n" ~
-				"no option        Sync and exit.",
+				"no option        Sync and exit",
 				opt.options
 			);
 			return EXIT_SUCCESS;
 		}
 	} catch (GetOptException e) {
 		log.log(e.msg);
-		log.log("Try 'onedrive -h' for more information.");
+		log.log("Try 'onedrive -h' for more information");
 		return EXIT_FAILURE;
+	}
+
+	if (printVersion) {
+		writeln("OneDrive Free Client version ", import("version"));
+		return EXIT_SUCCESS;
 	}
 
 	log.vlog("Loading config ...");

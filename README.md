@@ -121,13 +121,14 @@ If you encounter any bugs you can report them here on Github. Before filing an i
 ```text
 Usage: onedrive [OPTION]...
 
-no option        Sync and exit.
--m     --monitor Keep monitoring for local and remote changes.
-        --resync Forget the last saved state, perform a full sync.
-        --logout Logout the current user.
-       --confdir Set the directory to use to store the configuration files.
--v     --verbose Print more details, useful for debugging.
-   --print-token Print the access token, useful for debugging.
+no option        Sync and exit
+       --confdir Set the directory used to store the configuration files
+        --logout Logout the current user
+-m     --monitor Keep monitoring for local and remote changes
+   --print-token Print the access token, useful for debugging
+        --resync Forget the last saved state, perform a full sync
+-v     --verbose Print more details, useful for debugging
+       --version Print the version and exit
 -h        --help This help information.
 ```
 
