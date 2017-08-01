@@ -8,6 +8,8 @@ int main(string[] args)
 {
 	// configuration directory
 	string configDirName = environment.get("XDG_CONFIG_HOME", "~/.config") ~ "/onedrive";
+	// override the sync directory
+	string syncDirName;
 	// enable monitor mode
 	bool monitor;
 	// force a full resync
@@ -31,6 +33,7 @@ int main(string[] args)
 			"monitor|m", "Keep monitoring for local and remote changes", &monitor,
 			"print-token", "Print the access token, useful for debugging", &printAccessToken,
 			"resync", "Forget the last saved state, perform a full sync", &resync,
+			"syncdir", "Set the directory used to sync the files are synced", &syncDirName,
 			"verbose|v", "Print more details, useful for debugging", &log.verbose,
 			"version", "Print the version and exit", &printVersion
 		);
@@ -49,15 +52,18 @@ int main(string[] args)
 	}
 
 	if (printVersion) {
-		writeln("OneDrive Free Client version ", import("version"));
+		std.stdio.write("onedrive ", import("version"));
 		return EXIT_SUCCESS;
 	}
 
 	log.vlog("Loading config ...");
 	configDirName = configDirName.expandTilde().absolutePath();
-	if (!exists(configDirName)) mkdir(configDirName);
+	if (!exists(configDirName)) mkdirRecurse(configDirName);
 	auto cfg = new config.Config(configDirName);
 	cfg.init();
+	
+	// command line parameters override the config
+	if (syncDirName) cfg.setValue("sync_dir", syncDirName);
 
 	// upgrades
 	if (exists(configDirName ~ "/items.db")) {
@@ -96,7 +102,7 @@ int main(string[] args)
 
 	string syncDir = expandTilde(cfg.getValue("sync_dir"));
 	log.vlog("All operations will be performed in: ", syncDir);
-	if (!exists(syncDir)) mkdir(syncDir);
+	if (!exists(syncDir)) mkdirRecurse(syncDir);
 	chdir(syncDir);
 
 	log.vlog("Initializing the Synchronization Engine ...");

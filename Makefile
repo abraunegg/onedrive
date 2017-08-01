@@ -41,4 +41,4 @@ uninstall:
 	rm -f $(DESTDIR)/usr/lib/systemd/user/onedrive.service
 
 version: .git/HEAD .git/index
-	printf "$(shell git describe --tags 2>/dev/null)" >version
+	echo $(shell git describe --tags 2>/dev/null) >version
