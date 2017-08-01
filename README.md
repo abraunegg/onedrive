@@ -127,6 +127,7 @@ no option        Sync and exit
 -m     --monitor Keep monitoring for local and remote changes
    --print-token Print the access token, useful for debugging
         --resync Forget the last saved state, perform a full sync
+       --syncdir Set the directory used to sync the files are synced
 -v     --verbose Print more details, useful for debugging
        --version Print the version and exit
 -h        --help This help information.
