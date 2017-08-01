@@ -212,13 +212,6 @@ final class SyncEngine
 			return;
 		}
 
-		// check if the item is going to be deleted
-		if (isItemDeleted(jsonItem)) {
-			log.vlog("The item is marked for deletion");
-			idsToDelete ~= [item.driveId, item.id];
-			return;
-		}
-
 		// check the item type
 		if (isItemRemote(jsonItem)) {
 			// TODO
@@ -228,16 +221,31 @@ final class SyncEngine
 			log.vlog("Remote items are not supported yet");
 			skippedItems ~= item.id;
 			return;
-		} else if (!isItemFile(jsonItem) && !isItemFolder(jsonItem)) {
+		} else if (!isItemFile(jsonItem) && !isItemFolder(jsonItem) && !isItemDeleted(jsonItem)) {
 			log.vlog("The item is neither a file nor a directory, skipping");
 			skippedItems ~= item.id;
 			return;
 		}
 
-		// rename the local item if it is unsynced and there is a new version of it
+		// check if the item has been seen before
 		Item oldItem;
-		string oldPath;
 		bool cached = itemdb.selectById(item.driveId, item.id, oldItem);
+
+		// check if the item is going to be deleted
+		if (isItemDeleted(jsonItem)) {
+			log.vlog("The item is marked for deletion");
+			if (cached) {
+				// flag to delete
+				idsToDelete ~= [item.driveId, item.id];
+			} else {
+				// flag to ignore
+				skippedItems ~= item.id;
+			}
+			return;
+		}
+
+		// rename the local item if it is unsynced and there is a new version of it
+		string oldPath;
 		if (cached && item.eTag != oldItem.eTag) {
 			oldPath = itemdb.computePath(item.driveId, item.id);
 			if (!isItemSynced(oldItem, oldPath)) {
