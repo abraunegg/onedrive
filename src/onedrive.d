@@ -8,12 +8,12 @@ static import log;
 private immutable {
 	string clientId = "22c49a0d-d21c-4792-aed1-8f163c982546";
 	string authUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
-	string redirectUrl = "https://login.microsoftonline.com/common/oauth2/nativeclient";
+	string redirectUrl = "urn:ietf:wg:oauth:2.0:oob";
 	string tokenUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
 	string driveUrl = "https://graph.microsoft.com/v1.0/me/drive";
 	string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
 	string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
-	string driveByIdUrl = "https://graph.microsoft.com/v1.0/me/drives/";
+	string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
 }
 
 class OneDriveException: Exception
@@ -90,48 +90,54 @@ final class OneDriveApi
 		return true;
 	}
 
-	// https://dev.onedrive.com/drives/default.htm
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_get
 	JSONValue getDefaultDrive()
 	{
 		checkAccessTokenExpired();
 		return get(driveUrl);
 	}
 
-	// https://dev.onedrive.com/items/view_delta.htm
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
+	JSONValue getDefaultRoot()
+	{
+		checkAccessTokenExpired();
+		return get(driveUrl ~ "/root");
+	}
+
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
 	JSONValue viewChangesById(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink)
 	{
 		checkAccessTokenExpired();
-		if (deltaLink) return get(deltaLink);
-		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/delta";
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
+		const(char)[] url = deltaLink;
+		if (url == null) {
+			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/delta";
+			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
+		}
 		return get(url);
 	}
 
-	// https://dev.onedrive.com/items/view_delta.htm
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
 	JSONValue viewChangesByPath(const(char)[] path, const(char)[] deltaLink)
 	{
 		checkAccessTokenExpired();
-		if (deltaLink) return get(deltaLink);
-		string url = itemByPathUrl ~ encodeComponent(path) ~ ":/delta";
-		// HACK
-		if (path == ".") url = driveUrl ~ "/root/delta";
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
+		const(char)[] url = deltaLink;
+		if (url == null) {
+			if (path == ".") url = driveUrl ~ "/root/delta";
+			else url = itemByPathUrl ~ encodeComponent(path) ~ ":/delta";
+			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
+		}
 		return get(url);
 	}
 
-	// https://dev.onedrive.com/items/download.htm
-	void downloadById(const(char)[] id, string saveToPath)
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
+	void downloadById(const(char)[] driveId, const(char)[] id, string saveToPath)
 	{
 		checkAccessTokenExpired();
-		import std.file;
 		scope(failure) {
 			if (exists(saveToPath)) remove(saveToPath);
 		}
-		// mkdir if need, or File(saveToPath, "wb") may fail
-		if ( !exists(dirName(saveToPath)) ) {
-		   mkdirRecurse(dirName(saveToPath));
-		}
-		const(char)[] url = itemByIdUrl ~ id ~ "/content?AVOverride=1";
+		mkdirRecurse(dirName(saveToPath));
+		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content?AVOverride=1";
 		download(url, saveToPath);
 	}
 
@@ -145,21 +151,21 @@ final class OneDriveApi
 		return upload(localPath, url);
 	}
 
-	// https://dev.onedrive.com/items/update.htm
-	JSONValue updateById(const(char)[] id, JSONValue data, const(char)[] eTag = null)
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_update
+	JSONValue updateById(const(char)[] driveId, const(char)[] id, JSONValue data, const(char)[] eTag = null)
 	{
 		checkAccessTokenExpired();
-		char[] url = itemByIdUrl ~ id;
+		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
 		if (eTag) http.addRequestHeader("If-Match", eTag);
 		http.addRequestHeader("Content-Type", "application/json");
 		return patch(url, data.toString());
 	}
 
-	// https://dev.onedrive.com/items/delete.htm
-	void deleteById(const(char)[] id, const(char)[] eTag = null)
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delete
+	void deleteById(const(char)[] driveId, const(char)[] id, const(char)[] eTag = null)
 	{
 		checkAccessTokenExpired();
-		char[] url = itemByIdUrl ~ id;
+		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
 		//TODO: investigate why this always fail with 412 (Precondition Failed)
 		//if (eTag) http.addRequestHeader("If-Match", eTag);
 		del(url);
