@@ -5,10 +5,15 @@ bool verbose;
 
 void log(T...)(T args)
 {
-	stderr.writeln(args);
+	writeln(args);
 }
 
 void vlog(T...)(T args)
 {
-	if (verbose) stderr.writeln(args);
+	if (verbose) writeln(args);
+}
+
+void error(T...)(T args)
+{
+	stderr.writeln(args);
 }

@@ -46,8 +46,8 @@ int main(string[] args)
 			return EXIT_SUCCESS;
 		}
 	} catch (GetOptException e) {
-		log.log(e.msg);
-		log.log("Try 'onedrive -h' for more information");
+		log.error(e.msg);
+		log.error("Try 'onedrive -h' for more information");
 		return EXIT_FAILURE;
 	}
 
@@ -85,13 +85,13 @@ int main(string[] args)
 	log.vlog("Initializing the OneDrive API ...");
 	bool online = testNetwork();
 	if (!online && !monitor) {
-		log.log("No network connection");
+		log.error("No network connection");
 		return EXIT_FAILURE;
 	}
 	auto onedrive = new OneDriveApi(cfg);
 	onedrive.printAccessToken = printAccessToken;
 	if (!onedrive.init()) {
-		log.log("Could not initialize the OneDrive API");
+		log.error("Could not initialize the OneDrive API");
 		// workaround for segfault in std.net.curl.Curl.shutdown() on exit
 		onedrive.http.shutdown();
 		return EXIT_FAILURE;
