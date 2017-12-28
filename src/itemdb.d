@@ -92,7 +92,7 @@ final class ItemDatabase
 			FROM item
 			WHERE driveId = ?1 AND id = ?2
 		");
-		selectItemByParentIdStmt = db.prepare("SELECT driveId, id FROM item WHERE parentId = ? AND id = ?");
+		selectItemByParentIdStmt = db.prepare("SELECT * FROM item WHERE parentDriveId = ? AND parentId = ?");
 		deleteItemByIdStmt = db.prepare("DELETE FROM item WHERE driveId = ? AND id = ?");
 	}
 
@@ -127,11 +127,9 @@ final class ItemDatabase
 		selectItemByParentIdStmt.bind(2, id);
 		auto res = selectItemByParentIdStmt.exec();
 		Item[] items;
-		foreach (row; res) {
-			Item item;
-			bool found = selectById(row[0], row[1], item);
-			assert(found, "Could not select the child of the item");
-			items ~= item;
+		while (!res.empty) {
+			items ~= buildItem(res);
+			res.step();
 		}
 		return items;
 	}
