@@ -22,13 +22,12 @@ private bool isItemFile(const ref JSONValue item)
 
 private bool isItemDeleted(const ref JSONValue item)
 {
-	// HACK: fix for https://github.com/skilion/onedrive/issues/157
-	return ("deleted" in item) || ("fileSystemInfo" !in item && "remoteItem" !in item);
+	return ("deleted" in item) != null;
 }
 
 private bool isItemRoot(const ref JSONValue item)
 {
-	return ("root" in item) != null || ("parentReference" in item) == null;
+	return ("root" in item) != null;
 }
 
 private bool isItemRemote(const ref JSONValue item)
@@ -51,16 +50,20 @@ private Item makeItem(const ref JSONValue jsonItem)
 	}
 
 	Item item = {
-		driveId: isItemRoot(jsonItem) ? defaultDriveId : jsonItem["parentReference"]["driveId"].str,
+		driveId: defaultDriveId, // HACK
 		id: jsonItem["id"].str,
 		name: "name" in jsonItem ? jsonItem["name"].str : null, // name may be missing for deleted files in OneDrive Biz
 		type: type,
 		eTag: "eTag" in jsonItem ? jsonItem["eTag"].str : null, // eTag is not returned for the root in OneDrive Biz
 		cTag: "cTag" in jsonItem ? jsonItem["cTag"].str : null, // cTag is missing in old files (and all folders)
 		mtime: "fileSystemInfo" in jsonItem ? SysTime.fromISOExtString(jsonItem["fileSystemInfo"]["lastModifiedDateTime"].str) : SysTime(0),
-		parentDriveId: isItemRoot(jsonItem) ? null : jsonItem["parentReference"]["driveId"].str, // root and remote items do not have parentReference
-		parentId: isItemRoot(jsonItem) ? null : jsonItem["parentReference"]["id"].str
 	};
+
+	// root and remote items do not have parentReference
+	if (!isItemRoot(jsonItem) && ("parentReference" in jsonItem) != null) {
+		item.parentDriveId = jsonItem["parentReference"]["driveId"].str;
+		item.parentId = jsonItem["parentReference"]["id"].str;
+	}
 
 	// extract the file hash
 	if (isItemFile(jsonItem)) {
@@ -166,8 +169,6 @@ final class SyncEngine
 
 		JSONValue changes;
 		do {
-			// HACK
-			defaultDriveId = h;
 
 			// get changes from the server
 			try {
@@ -182,6 +183,8 @@ final class SyncEngine
 				}
 			}
 			foreach (item; changes["value"].array) {
+				// HACK
+				defaultDriveId = h;
 				applyDifference(item);
 			}
 
@@ -199,6 +202,13 @@ final class SyncEngine
 	{
 		log.vlog(jsonItem["id"].str, " ", "name" in jsonItem ? jsonItem["name"].str : null);
 		Item item = makeItem(jsonItem);
+
+		if (!isItemRoot(jsonItem) && !item.parentDriveId) {
+			log.vlog("Root of remote item");
+			// this the root of a remote item, it can be skipped safely
+			itemdb.upsert(item);
+			return;
+		}
 
 		bool unwanted;
 		unwanted |= skippedItems.find(item.parentId).length != 0;
@@ -410,7 +420,7 @@ final class SyncEngine
 		idsToDelete.length = 0;
 		assumeSafeAppend(idsToDelete);
 	}
-
+	
 	// scan the given directory for differences
 	public void scanForDifferences(string path)
 	{
@@ -446,7 +456,10 @@ final class SyncEngine
 			uploadFileDifferences(item, path);
 			break;
 		case ItemType.remote:
-			assert(0);
+			Item remoteItem;
+			bool found = itemdb.selectById(item.remoteDriveId, item.remoteId, remoteItem);
+			assert(found && remoteItem.type == ItemType.dir, "The remote item is not linked to a shared folder");
+			uploadDifferences(remoteItem);
 		}
 	}
 
