@@ -99,14 +99,9 @@ private bool testFileHash(string path, const ref Item item)
 
 class SyncException: Exception
 {
-    @nogc @safe pure nothrow this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+    @nogc @safe pure nothrow this(string msg, string file = __FILE__, size_t line = __LINE__)
     {
-        super(msg, file, line, next);
-    }
-
-    @nogc @safe pure nothrow this(string msg, Throwable next, string file = __FILE__, size_t line = __LINE__)
-    {
-        super(msg, file, line, next);
+        super(msg, file, line);
     }
 }
 
@@ -419,21 +414,13 @@ final class SyncEngine
 	// scan the given directory for differences
 	public void scanForDifferences(string path)
 	{
-		try {
-			log.vlog("Uploading differences ...");
-			Item item;
-			if (itemdb.selectByPath(path, item)) {
-				uploadDifferences(item);
-			}
-			log.vlog("Uploading new items ...");
-			uploadNewItems(path);
-		} catch (ErrnoException e) {
-			throw new SyncException(e.msg, e);
-		} catch (FileException e) {
-			throw new SyncException(e.msg, e);
-		} catch (OneDriveException e) {
-			throw new SyncException(e.msg, e);
+		log.vlog("Uploading differences ...");
+		Item item;
+		if (itemdb.selectByPath(path, item)) {
+			uploadDifferences(item);
 		}
+		log.vlog("Uploading new items ...");
+		uploadNewItems(path);
 	}
 
 	private void uploadDifferences(Item item)

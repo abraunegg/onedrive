@@ -18,21 +18,16 @@ private immutable {
 
 class OneDriveException: Exception
 {
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/concepts/errors
 	int httpStatusCode;
-	// https://dev.onedrive.com/misc/errors.htm
 	JSONValue error;
-
-	@nogc @safe pure nothrow this(string msg, Throwable next, string file = __FILE__, size_t line = __LINE__)
-	{
-		super(msg, file, line, next);
-	}
 
 	@safe pure this(int httpStatusCode, string reason, string file = __FILE__, size_t line = __LINE__)
 	{
 		this.httpStatusCode = httpStatusCode;
 		this.error = error;
 		string msg = format("HTTP request returned status code %d (%s)", httpStatusCode, reason);
-		super(msg, file, line, next);
+		super(msg, file, line);
 	}
 
 	this(int httpStatusCode, string reason, ref const JSONValue error, string file = __FILE__, size_t line = __LINE__)
@@ -40,7 +35,7 @@ class OneDriveException: Exception
 		this.httpStatusCode = httpStatusCode;
 		this.error = error;
 		string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(error, true));
-		super(msg, file, line, next);
+		super(msg, file, line);
 	}
 }
 
@@ -380,11 +375,7 @@ final class OneDriveApi
 			content ~= data;
 			return data.length;
 		};
-		try {
-			http.perform();
-		} catch (CurlException e) {
-			throw new OneDriveException(e.msg, e);
-		}
+		http.perform();
 		JSONValue json;
 		try {
 			json = content.parseJSON();

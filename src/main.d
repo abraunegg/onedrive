@@ -120,7 +120,7 @@ int main(string[] args)
 			log.vlog("[M] Directory created: ", path);
 			try {
 				sync.scanForDifferences(path);
-			} catch(SyncException e) {
+			} catch(Exception e) {
 				log.log(e.msg);
 			}
 		};
@@ -128,7 +128,7 @@ int main(string[] args)
 			log.vlog("[M] File changed: ", path);
 			try {
 				sync.scanForDifferences(path);
-			} catch(SyncException e) {
+			} catch(Exception e) {
 				log.log(e.msg);
 			}
 		};
@@ -136,7 +136,7 @@ int main(string[] args)
 			log.vlog("[M] Item deleted: ", path);
 			try {
 				sync.deleteByPath(path);
-			} catch(SyncException e) {
+			} catch(Exception e) {
 				log.log(e.msg);
 			}
 		};
@@ -144,7 +144,7 @@ int main(string[] args)
 			log.vlog("[M] Item moved: ", from, " -> ", to);
 			try {
 				sync.uploadMoveItem(from, to);
-			} catch(SyncException e) {
+			} catch(Exception e) {
 				log.log(e.msg);
 			}
 		};
@@ -184,7 +184,7 @@ void performSync(SyncEngine sync)
 			sync.applyDifferences();
 			sync.scanForDifferences(".");
 			count = -1;
-		} catch (SyncException e) {
+		} catch (Exception e) {
 			if (++count == 3) throw e;
 			else log.log(e.msg);
 		}
