@@ -64,20 +64,17 @@ final class ItemDatabase
 				PRIMARY KEY (driveId, id),
 				FOREIGN KEY (parentDriveId, parentId)
 				REFERENCES item (driveId, id)
-				FOREIGN KEY (parentDriveId, parentId)
-				REFERENCES item (driveId, id)
 				ON DELETE CASCADE
 				ON UPDATE RESTRICT
 			)");
-			/*db.exec("CREATE INDEX name_idx ON item (name)");
-			db.exec("CREATE INDEX id_idx ON item (id)");
-			db.exec("CREATE INDEX remoteId_idx ON item (remoteId)");*/
+			db.exec("CREATE INDEX name_idx ON item (name)");
+			db.exec("CREATE INDEX remote_idx ON item (remoteDriveId, remoteId)");
 			db.setVersion(itemDatabaseVersion);
 		} else if (db.getVersion() != itemDatabaseVersion) {
 			throw new Exception("The item database is incompatible, please resync manually");
 		}
-		/*db.exec("PRAGMA foreign_keys = ON");
-		db.exec("PRAGMA recursive_triggers = ON");*/
+		db.exec("PRAGMA foreign_keys = ON");
+		db.exec("PRAGMA recursive_triggers = ON");
 		insertItemStmt = db.prepare("
 			INSERT OR REPLACE INTO item (driveId, id, name, type, eTag, cTag, mtime, parentDriveId, parentId, crc32Hash, sha1Hash, quickXorHash, remoteDriveId, remoteId, deltaLink)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
