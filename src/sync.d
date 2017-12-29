@@ -598,7 +598,7 @@ final class SyncEngine
 	{
 		log.log("Deleting remote item: ", path);
 		try {
-			onedrive.deleteById(item.id, item.eTag);
+			onedrive.deleteById(item.driveId, item.id, item.eTag);
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 404) log.log(e.msg);
 			else throw e;
