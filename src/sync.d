@@ -103,7 +103,6 @@ class SyncException: Exception
     }
 }
 
-// This class handle the synchronization of one folder (ex. the root)
 final class SyncEngine
 {
 	private Config cfg;
@@ -151,12 +150,12 @@ final class SyncEngine
 	}
 
 
-	// download all new changes from OneDrive
-	void applyDifferences(string driveId, const(char)[] id)
+	// download the new changes of a specific item
+	private void applyDifferences(string driveId, const(char)[] id)
 	{
 		JSONValue changes;
 		string deltaLink = itemdb.getDeltaLink(driveId, id);
-		log.vlog("Downloading changes of " ~ id);
+		log.vlog("Applying changes of " ~ id);
 		do {
 			try {
 				changes = onedrive.viewChangesById(driveId, id, deltaLink);
@@ -320,7 +319,7 @@ final class SyncEngine
 		if (oldItem.eTag != newItem.eTag) {
 			// handle changed name/path
 			if (oldPath != newPath) {
-				log.log("Moving: ", oldPath, " -> ", newPath);
+				log.log("Moving ", oldPath, " to ", newPath);
 				if (exists(newPath)) {
 					// TODO: force remote sync by deleting local item
 					log.vlog("The destination is occupied, renaming the conflicting file...");
@@ -394,23 +393,27 @@ final class SyncEngine
 
 	private void deleteItems()
 	{
-		log.vlog("Deleting files ...");
 		foreach_reverse (i; idsToDelete) {
 			Item item;
 			if (!itemdb.selectById(i[0], i[1], item)) continue; // check if the item is in the db
 			string path = itemdb.computePath(i[0], i[1]);
-			itemdb.deleteById(i[0], i[1]);
-			// TODO CHECK REMOTE ITEM
+			log.log("Deleting ", path);
+			itemdb.deleteById(item.driveId, item.id);
 			if (exists(path)) {
 				if (isFile(path)) {
 					remove(path);
-					log.log("Deleted file: ", path);
 				} else {
 					try {
-						rmdir(path);
-						log.log("Deleted directory: ", path);
+						if (item.remoteDriveId == null) {
+							rmdir(path);
+						} else {
+							// delete the linked remote folder
+							itemdb.deleteById(item.remoteDriveId, item.remoteId);
+							// remote items do not delete all the children first
+							rmdirRecurse(path);
+						}
 					} catch (FileException e) {
-						// directory not empty
+						log.log(e.msg);
 					}
 				}
 			}
@@ -419,30 +422,32 @@ final class SyncEngine
 		assumeSafeAppend(idsToDelete);
 	}
 	
-	// scan the given directory for differences
+	// scan the given directory for differences and new items
 	void scanForDifferences(string path = ".")
 	{
-		log.vlog("Uploading differences ...");
+		log.vlog("Uploading differences of ", path);
 		Item item;
 		if (itemdb.selectByPath(path, item)) {
 			uploadDifferences(item);
 		}
-		log.vlog("Uploading new items ...");
+		log.vlog("Uploading new items of ", path);
 		uploadNewItems(path);
 	}
 
 	private void uploadDifferences(Item item)
 	{
-		log.vlog(item.id, " ", item.name);
+		log.vlog("Processing ", item.name);
 
-		// skip filtered items
-		if (selectiveSync.isNameExcluded(item.name)) {
-			log.vlog("Filtered out");
-			return;
+		string path;
+		bool unwanted = selectiveSync.isNameExcluded(item.name);
+		if (!unwanted) {
+			path = itemdb.computePath(item.driveId, item.id);
+			unwanted = selectiveSync.isPathExcluded(path);
 		}
-		string path = itemdb.computePath(item.driveId, item.id);
-		if (selectiveSync.isPathExcluded(path)) {
-			log.vlog("Filtered out: ", path);
+
+		// skip unwanted items
+		if (unwanted) {
+			log.vlog("Filtered out");
 			return;
 		}
 
@@ -454,10 +459,12 @@ final class SyncEngine
 			uploadFileDifferences(item, path);
 			break;
 		case ItemType.remote:
+			assert(item.remoteDriveId && item.remoteId);
 			Item remoteItem;
 			bool found = itemdb.selectById(item.remoteDriveId, item.remoteId, remoteItem);
-			assert(found && remoteItem.type == ItemType.dir, "The remote item is not linked to a shared folder");
+			assert(found);
 			uploadDifferences(remoteItem);
+			break;
 		}
 	}
 
@@ -501,9 +508,9 @@ final class SyncEngine
 						log.log("Uploading: ", path);
 						JSONValue response;
 						if (getSize(path) <= thresholdFileSize) {
-							writeln("upload by id");
 							response = onedrive.simpleUploadById(path, item.driveId, item.id, item.eTag);
 						} else {
+							// TODO: upload by id
 							response = session.upload(path, path, eTag);
 						}
 						/*saveItem(response);
@@ -529,7 +536,6 @@ final class SyncEngine
 
 	private void uploadNewItems(string path)
 	{
-		writeln("uploadNewItems " ~ path);
 		// skip unexisting symbolic links
 		if (isSymlink(path) && !exists(readLink(path))) {
 			return;
