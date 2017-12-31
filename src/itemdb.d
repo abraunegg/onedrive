@@ -26,13 +26,12 @@ struct Item
 	string   quickXorHash;
 	string   remoteDriveId;
 	string   remoteId;
-	string   deltaLink;
 }
 
 final class ItemDatabase
 {
 	// increment this for every change in the db schema
-	immutable int itemDatabaseVersion = 6	;
+	immutable int itemDatabaseVersion = 6;
 
 	Database db;
 	Statement insertItemStmt;
@@ -76,12 +75,12 @@ final class ItemDatabase
 		db.exec("PRAGMA foreign_keys = ON");
 		db.exec("PRAGMA recursive_triggers = ON");
 		insertItemStmt = db.prepare("
-			INSERT OR REPLACE INTO item (driveId, id, name, type, eTag, cTag, mtime, parentDriveId, parentId, crc32Hash, sha1Hash, quickXorHash, remoteDriveId, remoteId, deltaLink)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			INSERT OR REPLACE INTO item (driveId, id, name, type, eTag, cTag, mtime, parentDriveId, parentId, crc32Hash, sha1Hash, quickXorHash, remoteDriveId, remoteId)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		");
 		updateItemStmt = db.prepare("
 			UPDATE item
-			SET name = ?3, type = ?4, eTag = ?5, cTag = ?6, mtime = ?7, parentDriveId = ?8, parentId = ?9, crc32Hash = ?10, sha1Hash = ?11, quickXorHash = ?12, remoteDriveId = ?13, remoteId = ?14, deltaLink = ?15
+			SET name = ?3, type = ?4, eTag = ?5, cTag = ?6, mtime = ?7, parentDriveId = ?8, parentId = ?9, crc32Hash = ?10, sha1Hash = ?11, quickXorHash = ?12, remoteDriveId = ?13, remoteId = ?14
 			WHERE driveId = ?1 AND id = ?2
 		");
 		selectItemByIdStmt = db.prepare("
@@ -202,7 +201,6 @@ final class ItemDatabase
 			bind(12, quickXorHash);
 			bind(13, remoteDriveId);
 			bind(14, remoteId);
-			bind(15, deltaLink);
 		}
 	}
 
@@ -223,8 +221,7 @@ final class ItemDatabase
 			sha1Hash: result.front[10].dup,
 			quickXorHash: result.front[11].dup,
 			remoteDriveId: result.front[12].dup,
-			remoteId: result.front[13].dup,
-			deltaLink: result.front[14].dup
+			remoteId: result.front[13].dup
 		};
 		switch (result.front[3]) {
 			case "file":    item.type = ItemType.file;    break;
@@ -291,5 +288,39 @@ final class ItemDatabase
 			writeln(path);
 		}
 		return path;
+	}
+
+	Item[] selectRemoteItems()
+	{
+		Item[] items;
+		auto stmt = db.prepare("SELECT * FROM item WHERE remoteDriveId IS NOT NULL");
+		auto res = stmt.exec();
+		while (!res.empty) {
+			items ~= buildItem(res);
+			res.step();
+		}
+		return items;
+	}
+
+	string getDeltaLink(const(char)[] driveId, const(char)[] id)
+	{
+		assert(driveId && id);
+		auto stmt = db.prepare("SELECT deltaLink FROM item WHERE driveId = ?1 AND id = ?2");
+		stmt.bind(1, driveId);
+		stmt.bind(2, id);
+		auto res = stmt.exec();
+		if (res.empty) return null;
+		return res.front[0].dup;
+	}
+
+	void setDeltaLink(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink)
+	{
+		assert(driveId && id);
+		assert(deltaLink);
+		auto stmt = db.prepare("UPDATE item SET deltaLink = ?3 WHERE driveId = ?1 AND id = ?2");
+		stmt.bind(1, driveId);
+		stmt.bind(2, id);
+		stmt.bind(3, deltaLink);
+		stmt.exec();
 	}
 }
