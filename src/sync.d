@@ -401,6 +401,10 @@ final class SyncEngine
 			string path = itemdb.computePath(i[0], i[1]);
 			log.log("Deleting ", path);
 			itemdb.deleteById(item.driveId, item.id);
+			if (item.remoteDriveId != null) {
+				// delete the linked remote folder
+				itemdb.deleteById(item.remoteDriveId, item.remoteId);
+			}
 			if (exists(path)) {
 				if (isFile(path)) {
 					remove(path);
@@ -409,9 +413,7 @@ final class SyncEngine
 						if (item.remoteDriveId == null) {
 							rmdir(path);
 						} else {
-							// delete the linked remote folder
-							itemdb.deleteById(item.remoteDriveId, item.remoteId);
-							// remote items do not delete all the children first
+							// children of remote items are not enumerated
 							rmdirRecurse(path);
 						}
 					} catch (FileException e) {
@@ -429,7 +431,6 @@ final class SyncEngine
 	{
 		log.vlog("Uploading differences of ", path);
 		Item item;
-		// TODO: SKIPS REMOTE FOLDER!
 		if (itemdb.selectByPath(path, item)) {
 			uploadDifferences(item);
 		}
@@ -462,11 +463,7 @@ final class SyncEngine
 			uploadFileDifferences(item, path);
 			break;
 		case ItemType.remote:
-			assert(item.remoteDriveId && item.remoteId);
-			Item remoteItem;
-			bool found = itemdb.selectById(item.remoteDriveId, item.remoteId, remoteItem);
-			assert(found);
-			uploadDifferences(remoteItem);
+			uploadRemoteDirDifferences(item, path);
 			break;
 		}
 	}
@@ -476,7 +473,7 @@ final class SyncEngine
 		assert(item.type == ItemType.dir);
 		if (exists(path)) {
 			if (!isDir(path)) {
-				log.vlog("The item was a directory but now is a file");
+				log.vlog("The item was a directory but now it is a file");
 				uploadDeleteItem(item, path);
 				uploadNewFile(path);
 			} else {
@@ -485,6 +482,29 @@ final class SyncEngine
 				foreach (Item child; itemdb.selectChildren(item.driveId, item.id)) {
 					uploadDifferences(child);
 				}
+			}
+		} else {
+			log.vlog("The directory has been deleted");
+			uploadDeleteItem(item, path);
+		}
+	}
+
+	private void uploadRemoteDirDifferences(Item item, string path)
+	{
+		assert(item.type == ItemType.remote);
+		if (exists(path)) {
+			if (!isDir(path)) {
+				log.vlog("The item was a directory but now it is a file");
+				uploadDeleteItem(item, path);
+				uploadNewFile(path);
+			} else {
+				log.vlog("The directory has not changed");
+				// continue trough the linked folder
+				assert(item.remoteDriveId && item.remoteId);
+				Item remoteItem;
+				bool found = itemdb.selectById(item.remoteDriveId, item.remoteId, remoteItem);
+				assert(found);
+				uploadDifferences(remoteItem);
 			}
 		} else {
 			log.vlog("The directory has been deleted");
@@ -503,8 +523,6 @@ final class SyncEngine
 				localModifiedTime.fracSecs = Duration.zero;
 				if (localModifiedTime != item.mtime) {
 					log.vlog("The file last modified time has changed");
-					/*string driveId = item.driveId;
-					string id = item.id;*/
 					string eTag = item.eTag;
 					if (!testFileHash(path, item)) {
 						log.vlog("The file content has changed");
@@ -517,9 +535,7 @@ final class SyncEngine
 							writeln("");
 							response = session.upload(path, item.parentDriveId, item.parentId, baseName(path), eTag);
 						}
-						/*saveItem(response);
-						id = response["id"].str;
-						driveId = response["parentReference"]["driveId"].str;*/
+						// saveItem(response); redundant
 						// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
 						eTag = response["cTag"].str;
 					}
@@ -609,7 +625,7 @@ final class SyncEngine
 
 	private void uploadDeleteItem(Item item, const(char)[] path)
 	{
-		log.log("Deleting remote item: ", path);
+		log.log("Deleting ", path);
 		try {
 			onedrive.deleteById(item.driveId, item.id, item.eTag);
 		} catch (OneDriveException e) {
@@ -617,6 +633,9 @@ final class SyncEngine
 			else throw e;
 		}
 		itemdb.deleteById(item.driveId, item.id);
+		if (item.remoteId != null) {
+			itemdb.deleteById(item.remoteDriveId, item.remoteId);
+		}
 	}
 
 	private void uploadLastModifiedTime(const(char)[] driveId, const(char)[] id, const(char)[] eTag, SysTime mtime)
