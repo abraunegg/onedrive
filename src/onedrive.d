@@ -185,11 +185,11 @@ final class OneDriveApi
 		return post(url, item.toString());
 	}
 
-	// https://dev.onedrive.com/items/upload_large_files.htm
-	JSONValue createUploadSession(const(char)[] path, const(char)[] eTag = null)
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createuploadsession
+	JSONValue createUploadSession(const(char)[] parentDriveId, const(char)[] parentId, const(char)[] filename, const(char)[] eTag = null)
 	{
 		checkAccessTokenExpired();
-		string url = itemByPathUrl ~ encodeComponent(path) ~ ":/createUploadSession";
+		const(char)[] url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ ":/" ~ encodeComponent(filename) ~ ":/createUploadSession";
 		if (eTag) http.addRequestHeader("If-Match", eTag);
 		return post(url, null);
 	}

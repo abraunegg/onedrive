@@ -277,6 +277,7 @@ final class SyncEngine
 		}
 
 		// sync remote folder
+		// https://github.com/OneDrive/onedrive-api-docs/issues/764
 		/*if (isItemRemote(driveItem)) {
 			log.log("Syncing remote folder: ", path);
 			applyDifferences(item.remoteDriveId, item.remoteId);
@@ -507,13 +508,14 @@ final class SyncEngine
 					string eTag = item.eTag;
 					if (!testFileHash(path, item)) {
 						log.vlog("The file content has changed");
-						log.log("Uploading: ", path);
+						write("Uploading ", path, "...");
 						JSONValue response;
 						if (getSize(path) <= thresholdFileSize) {
-							response = onedrive.simpleUpload(path, item.driveId, item.id, item.eTag);
+							response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
+							writeln(" done.");
 						} else {
-							// TODO: upload by id
-							response = session.upload(path, path, eTag);
+							writeln("");
+							response = session.upload(path, item.parentDriveId, item.parentId, baseName(path), eTag);
 						}
 						/*saveItem(response);
 						id = response["id"].str;
@@ -593,15 +595,16 @@ final class SyncEngine
 		JSONValue response;
 		if (getSize(path) <= thresholdFileSize) {
 			response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+			writeln(" done.");
 		} else {
-			response = session.upload(path, path);
+			writeln("");
+			response = session.upload(path, parent.driveId, parent.id, baseName(path));
 		}
 		string id = response["id"].str;
 		string cTag = response["cTag"].str;
 		SysTime mtime = timeLastModified(path).toUTC();
 		// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
 		uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
-		writeln(" done.");
 	}
 
 	private void uploadDeleteItem(Item item, const(char)[] path)

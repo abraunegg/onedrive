@@ -21,9 +21,9 @@ struct UploadSession
 		this.verbose = verbose;
 	}
 
-	JSONValue upload(string localPath, string remotePath, const(char)[] eTag = null)
+	JSONValue upload(string localPath, const(char)[] parentDriveId, const(char)[] parentId, const(char)[] filename, const(char)[] eTag = null)
 	{
-		session = onedrive.createUploadSession(remotePath, eTag);
+		session = onedrive.createUploadSession(parentDriveId, parentId, filename, eTag);
 		session["localPath"] = localPath;
 		save();
 		return upload();
@@ -47,7 +47,17 @@ struct UploadSession
 				return false;
 			}
 			// request the session status
-			auto response = onedrive.requestUploadStatus(session["uploadUrl"].str);
+			JSONValue response;
+			try {
+				response = onedrive.requestUploadStatus(session["uploadUrl"].str);
+			} catch (OneDriveException e) {
+				if (e.httpStatusCode == 400) {
+					log.vlog("Upload session not found");
+					return false;
+				} else {
+					throw e;
+				}
+			}
 			session["expirationDateTime"] = response["expirationDateTime"];
 			session["nextExpectedRanges"] = response["nextExpectedRanges"];
 			if (session["nextExpectedRanges"].array.length == 0) {
