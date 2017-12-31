@@ -330,17 +330,16 @@ final class SyncEngine
 				rename(oldPath, newPath);
 			}
 			// handle changed content and mtime
-			// HACK: use mtime instead of cTag because of https://github.com/OneDrive/onedrive-api-docs/issues/765
-			if (newItem.type == ItemType.file && oldItem.mtime != newItem.mtime) {
+			// HACK: use mtime+hash instead of cTag because of https://github.com/OneDrive/onedrive-api-docs/issues/765
+			if (newItem.type == ItemType.file && oldItem.mtime != newItem.mtime && !testFileHash(newPath, newItem)) {
 				downloadFileItem(newItem, newPath);
 			} else {
 				log.vlog("The item content has not changed");
 			}
 			// handle changed time
-			/* redundant because of the previous HACK
-			if (newItem.type == ItemType.file) {
+			if (newItem.type == ItemType.file && oldItem.mtime != newItem.mtime) {
 				setTimes(newPath, newItem.mtime, newItem.mtime);
-			}*/
+			}
 		} else {
 			log.vlog("The item has not changed");
 		}
@@ -511,7 +510,7 @@ final class SyncEngine
 						log.log("Uploading: ", path);
 						JSONValue response;
 						if (getSize(path) <= thresholdFileSize) {
-							response = onedrive.simpleUploadById(path, item.driveId, item.id, item.eTag);
+							response = onedrive.simpleUpload(path, item.driveId, item.id, item.eTag);
 						} else {
 							// TODO: upload by id
 							response = session.upload(path, path, eTag);
@@ -574,7 +573,7 @@ final class SyncEngine
 
 	private void uploadCreateDir(const(char)[] path)
 	{
-		log.log("Uploading folder ", path);
+		log.log("Creating folder ", path, "...");
 		Item parent;
 		enforce(itemdb.selectByPath(dirName(path), parent), "The parent item is not in the database");
 		JSONValue driveItem = [
@@ -583,25 +582,26 @@ final class SyncEngine
 		];
 		auto res = onedrive.createById(parent.driveId, parent.id, driveItem);
 		saveItem(res);
+		writeln(" done.");
 	}
 
 	private void uploadNewFile(string path)
 	{
-		log.log("Uploading: ", path);
+		write("Uploading file ", path, "...");
+		Item parent;
+		enforce(itemdb.selectByPath(dirName(path), parent), "The parent item is not in the database");
 		JSONValue response;
 		if (getSize(path) <= thresholdFileSize) {
-			response = onedrive.simpleUpload(path, path);
+			response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
 		} else {
 			response = session.upload(path, path);
 		}
-		string driveId = response["parentReference"]["driveId"].str;
 		string id = response["id"].str;
 		string cTag = response["cTag"].str;
 		SysTime mtime = timeLastModified(path).toUTC();
-		/* use the cTag instead of the eTag because Onedrive changes the
-		 * metadata of some type of files (ex. images) AFTER they have been
-		 * uploaded */
-		uploadLastModifiedTime(driveId, id, cTag, mtime);
+		// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
+		uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+		writeln(" done.");
 	}
 
 	private void uploadDeleteItem(Item item, const(char)[] path)
@@ -624,7 +624,6 @@ final class SyncEngine
 			])
 		];
 		auto response = onedrive.updateById(driveId, id, data, eTag);
-		writeln(response);
 		saveItem(response);
 	}
 

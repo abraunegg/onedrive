@@ -137,17 +137,6 @@ final class OneDriveApi
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
-	JSONValue simpleUpload(string localPath, const(char)[] remotePath, const(char)[] eTag = null)
-	{
-		checkAccessTokenExpired();
-		string url = itemByPathUrl ~ encodeComponent(remotePath) ~ ":/content";
-		// TODO: investigate why this fails for remote folders
-		//if (eTag) http.addRequestHeader("If-Match", eTag);
-		/*else*/ http.addRequestHeader("If-None-Match", "*");
-		return upload(localPath, url);
-	}
-
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
 	JSONValue simpleUpload(string localPath, string parentDriveId, string parentId, string filename, const(char)[] eTag = null)
 	{
 		checkAccessTokenExpired();
@@ -159,7 +148,7 @@ final class OneDriveApi
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
-	JSONValue simpleUploadById(string localPath, string driveId, string id, const(char)[] eTag = null)
+	JSONValue simpleUploadReplace(string localPath, string driveId, string id, const(char)[] eTag = null)
 	{
 		checkAccessTokenExpired();
 		string url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content";
