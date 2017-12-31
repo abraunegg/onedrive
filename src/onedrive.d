@@ -187,13 +187,11 @@ final class OneDriveApi
 		del(url);
 	}
 
-	// https://dev.onedrive.com/items/create.htm
-	JSONValue createByPath(const(char)[] parentPath, JSONValue item)
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_post_children
+	JSONValue createById(const(char)[] parentDriveId, const(char)[] parentId, JSONValue item)
 	{
 		checkAccessTokenExpired();
-		string url = itemByPathUrl ~ encodeComponent(parentPath) ~ ":/children";
-		// HACK
-		if (parentPath == ".") url = driveUrl ~ "/root/children";
+		const(char)[] url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ "/children";
 		http.addRequestHeader("Content-Type", "application/json");
 		return post(url, item.toString());
 	}

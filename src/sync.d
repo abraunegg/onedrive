@@ -1,6 +1,8 @@
-import std.algorithm;
+import std.algorithm: find;
 import std.array: array;
-import std.datetime, std.file, std.json, std.path;
+import std.datetime;
+import std.exception: enforce;
+import std.file, std.json, std.path;
 import std.regex;
 import std.stdio, std.string;
 import config, itemdb, onedrive, selective, upload, util;
@@ -427,6 +429,7 @@ final class SyncEngine
 	{
 		log.vlog("Uploading differences of ", path);
 		Item item;
+		// TODO: SKIPS REMOTE FOLDER!
 		if (itemdb.selectByPath(path, item)) {
 			uploadDifferences(item);
 		}
@@ -571,10 +574,14 @@ final class SyncEngine
 
 	private void uploadCreateDir(const(char)[] path)
 	{
-		log.log("Creating remote directory: ", path);
-		JSONValue item = ["name": baseName(path).idup];
-		item["folder"] = parseJSON("{}");
-		auto res = onedrive.createByPath(path.dirName, item);
+		log.log("Uploading folder ", path);
+		Item parent;
+		enforce(itemdb.selectByPath(dirName(path), parent), "The parent item is not in the database");
+		JSONValue driveItem = [
+			"name": JSONValue(baseName(path)),
+			"folder": parseJSON("{}")
+		];
+		auto res = onedrive.createById(parent.driveId, parent.id, driveItem);
 		saveItem(res);
 	}
 
