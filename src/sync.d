@@ -655,30 +655,40 @@ final class SyncEngine
 		itemdb.upsert(item);
 	}
 
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_move
 	void uploadMoveItem(string from, string to)
 	{
-		log.log("Moving remote item: ", from, " -> ", to);
+		log.log("Moving ", from, " to ", to);
 		Item fromItem, toItem, parentItem;
 		if (!itemdb.selectByPath(from, fromItem)) {
 			throw new SyncException("Can't move an unsynced item");
 		}
 		if (itemdb.selectByPath(to, toItem)) {
-			// the destination has been overridden
+			// the destination has been overwritten
 			uploadDeleteItem(toItem, to);
 		}
-		if (!itemdb.selectByPath(to.dirName, parentItem)) {
+		if (!itemdb.selectByPath(dirName(to), parentItem)) {
 			throw new SyncException("Can't move an item to an unsynced directory");
 		}
-		JSONValue diff = ["name": baseName(to)];
-		diff["parentReference"] = JSONValue([
-			"id": parentItem.id
-		]);
-		auto res = onedrive.updateById(fromItem.driveId, fromItem.id, diff, fromItem.eTag);
-		saveItem(res);
-		string driveId = res["parentReference"]["driveId"].str;
-		string id = res["id"].str;
-		string eTag = res["eTag"].str;
-		uploadLastModifiedTime(driveId, id, eTag, timeLastModified(to).toUTC());
+		if (fromItem.driveId != parentItem.driveId) {
+			// items cannot be moved between drives
+			uploadDeleteItem(fromItem, from);
+			uploadNewFile(to);
+		} else {
+			SysTime mtime = timeLastModified(to).toUTC();
+			JSONValue diff = [
+				"name": JSONValue(baseName(to)),
+				"parentReference": JSONValue([
+					"id": parentItem.id
+				]),
+				"fileSystemInfo": JSONValue([
+					"lastModifiedDateTime": mtime.toISOExtString()
+				])
+			];
+			auto res = onedrive.updateById(fromItem.driveId, fromItem.id, diff, fromItem.eTag);
+			// update itemdb
+			saveItem(res);
+		}
 	}
 
 	void deleteByPath(const(char)[] path)

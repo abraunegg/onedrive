@@ -190,7 +190,7 @@ void performSync(SyncEngine sync)
 			sync.applyDifferences();
 			if (!downloadOnly) {
 				sync.scanForDifferences();
-				// HACK: file metadata are often changed by OneDrive after an upload
+				// ensure that the current state is updated
 				sync.applyDifferences();
 			}
 			count = -1;
