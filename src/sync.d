@@ -54,7 +54,7 @@ private Item makeItem(const ref JSONValue driveItem)
 	} else if (isItemRemote(driveItem)) {
 		item.type = ItemType.remote;
 	} else {
-		assert(0);
+		// do not throw exception, item will be removed in applyDifferences()
 	}
 
 	// root and remote items do not have parentReference
