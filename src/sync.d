@@ -663,6 +663,10 @@ final class SyncEngine
 		if (!itemdb.selectByPath(from, fromItem)) {
 			throw new SyncException("Can't move an unsynced item");
 		}
+		if (fromItem.parentId == null) {
+			// the item is a remote folder, need to do the operation on the parent
+			enforce(itemdb.selectByPathNoRemote(from, fromItem));
+		}
 		if (itemdb.selectByPath(to, toItem)) {
 			// the destination has been overwritten
 			uploadDeleteItem(toItem, to);
@@ -696,6 +700,10 @@ final class SyncEngine
 		Item item;
 		if (!itemdb.selectByPath(path, item)) {
 			throw new SyncException("Can't delete an unsynced item");
+		}
+		if (item.parentId == null) {
+			// the item is a remote folder, need to do the operation on the parent
+			enforce(itemdb.selectByPathNoRemote(path, item));
 		}
 		try {
 			uploadDeleteItem(item, path);

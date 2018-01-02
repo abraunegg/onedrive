@@ -1,7 +1,8 @@
-import std.datetime, std.path, std.exception, std.string;
+import std.datetime;
+import std.exception;
+import std.path;
+import std.string;
 import sqlite;
-
-import std.stdio;
 
 enum ItemType
 {
@@ -149,7 +150,6 @@ final class ItemDatabase
 		Item currItem;
 		path = "root/" ~ path.chompPrefix(".");
 		auto s = db.prepare("SELECT * FROM item WHERE name IS ?1 AND parentDriveId IS ?2 AND parentId IS ?3");
-		writeln("selectByPath " ~ path);
 		foreach (name; pathSplitter(path)) {
 			s.bind(1, name);
 			s.bind(2, currItem.driveId);
@@ -165,7 +165,24 @@ final class ItemDatabase
 					currItem = child;
 				}
 			}
-			writeln(currItem.id);
+		}
+		item = currItem;
+		return true;
+	}
+
+	// same as selectByPath() but it does not traverse remote folders
+	bool selectByPathNoRemote(const(char)[] path, out Item item)
+	{
+		Item currItem;
+		path = "root/" ~ path.chompPrefix(".");
+		auto s = db.prepare("SELECT * FROM item WHERE name IS ?1 AND parentDriveId IS ?2 AND parentId IS ?3");
+		foreach (name; pathSplitter(path)) {
+			s.bind(1, name);
+			s.bind(2, currItem.driveId);
+			s.bind(3, currItem.id);
+			auto r = s.exec();
+			if (r.empty) return false;
+			currItem = buildItem(r);
 		}
 		item = currItem;
 		return true;
@@ -242,7 +259,6 @@ final class ItemDatabase
 		Item item;
 		auto s = db.prepare("SELECT * FROM item WHERE driveId = ?1 AND id = ?2");
 		auto s2 = db.prepare("SELECT driveId, id FROM item WHERE remoteDriveId = ?1 AND remoteId = ?2");
-		writeln("computePath " ~ id);
 		while (true) {
 			s.bind(1, driveId);
 			s.bind(2, id);
@@ -273,7 +289,6 @@ final class ItemDatabase
 						else path = path[4 .. $];
 						// special case of computing the path of the root itself
 						if (path.length == 0) path = ".";
-						writeln(path);
 						break;
 					} else {
 						// remote folder
@@ -285,7 +300,6 @@ final class ItemDatabase
 					assert(0);
 				}
 			}
-			writeln(path);
 		}
 		return path;
 	}
