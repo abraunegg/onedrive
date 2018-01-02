@@ -8,7 +8,7 @@ static import log;
 private immutable {
 	string clientId = "22c49a0d-d21c-4792-aed1-8f163c982546";
 	string authUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
-	string redirectUrl = "urn:ietf:wg:oauth:2.0:oob";
+	string redirectUrl = "https://login.microsoftonline.com/common/oauth2/nativeclient";
 	string tokenUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
 	string driveUrl = "https://graph.microsoft.com/v1.0/me/drive";
 	string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
