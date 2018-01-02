@@ -6,9 +6,9 @@
 * Real-Time file monitoring with Inotify
 * Resumable uploads
 * Support OneDrive for Business (part of Office 365)
+* Shared folders :scream:
 
 ### What's missing:
-* Shared folders are not supported
 * While local changes are uploaded right away, remote changes are delayed
 * No GUI
 
@@ -21,9 +21,11 @@
 
 ### Dependencies: Ubuntu/Debian
 ```sh
-sudo apt-get install libcurl4-openssl-dev
-sudo apt-get install libsqlite3-dev
-curl -fsS https://dlang.org/install.sh | bash -s dmd
+sudo apt install libcurl4-openssl-dev
+sudo apt install libsqlite3-dev
+sudo wget http://master.dl.sourceforge.net/project/d-apt/files/d-apt.list -O /etc/apt/sources.list.d/d-apt.list
+sudo apt-get update && sudo apt-get -y --allow-unauthenticated install --reinstall d-apt-keyring
+sudo apt-get update && sudo apt-get install dmd-compiler dub
 ```
 
 ### Dependencies: Fedora/CentOS
@@ -33,12 +35,22 @@ sudo yum install sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
+### Dependencies: Arch Linux
+```sh
+sudo pacman -S curl sqlite dmd
+```
+
 ### Installation
 ```sh
 git clone https://github.com/skilion/onedrive.git
 cd onedrive
 make
 sudo make install
+```
+
+Using a different compiler (for example [LDC](https://wiki.dlang.org/LDC)):
+```sh
+make DC=ldmd2
 ```
 
 ### First run :zap:
@@ -69,11 +81,11 @@ Patterns are case insensitive. `*` and `?` [wildcards characters](https://techne
 
 Note: after changing `skip_file`, you must perform a full synchronization by executing `onedrive --resync`
 
-### Selective sync :zap:
+### Selective sync
 Selective sync allows you to sync only specific files and directories.
 To enable selective sync create a file named `sync_list` in `~/.config/onedrive`.
-Each line of the file represents a path to a file or directory relative from your `sync_dir`.
-Here is an example:
+Each line of the file represents a relative path from your `sync_dir`. All files and directories not matching any line of the file will be skipped during all operations.
+Here is an example of `sync_list`:
 ```text
 Backup
 Documents/latest_report.docx
@@ -81,6 +93,9 @@ Work/ProjectX
 notes.txt
 ```
 Note: after changing the sync list, you must perform a full synchronization by executing `onedrive --resync`
+
+### Shared folders
+Folders shared with you can be synced by adding them to your OneDrive. To do that open your Onedrive, go to the Shared files list, right click on the folder you want to sync and then click on "Add to my OneDrive".
 
 ### OneDrive service
 If you want to sync your files automatically, enable and start the systemd service:
@@ -93,6 +108,8 @@ To see the logs run:
 ```sh
 journalctl --user-unit onedrive -f
 ```
+
+Note: systemd is supported on Ubuntu only starting from version 15.04
 
 ### Using multiple accounts
 You can run multiple instances of the application specifying a different config directory in order to handle multiple OneDrive accounts.
@@ -112,7 +129,7 @@ onedrive --monitor --confdir="~/.config/onedriveWork" &
 ### Reporting issues
 If you encounter any bugs you can report them here on Github. Before filing an issue be sure to:
 
-1. Have compiled the application in debug mode with `make debug`
+1. Check the version of the application you are using `onedrive --version`
 2. Run the application in verbose mode `onedrive --verbose`
 3. Have the log of the error (preferably uploaded on an external website such as [pastebin](https://pastebin.com/))
 4. Collect any information that you may think it is relevant to the error (such as the steps to trigger it)
@@ -123,6 +140,7 @@ Usage: onedrive [OPTION]...
 
 no option        Sync and exit
        --confdir Set the directory used to store the configuration files
+-d    --download Only download remote changes
         --logout Logout the current user
 -m     --monitor Keep monitoring for local and remote changes
    --print-token Print the access token, useful for debugging
