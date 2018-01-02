@@ -60,7 +60,6 @@ private Item makeItem(const ref JSONValue driveItem)
 	// root and remote items do not have parentReference
 	if (!isItemRoot(driveItem) && ("parentReference" in driveItem) != null) {
 		item.driveId = driveItem["parentReference"]["driveId"].str,
-		item.parentDriveId = item.driveId; // TODO: parentDriveId is redundant
 		item.parentId = driveItem["parentReference"]["id"].str;
 	}
 
@@ -116,6 +115,8 @@ final class SyncEngine
 	private string[] skippedItems;
 	// list of items to delete after the changes has been downloaded
 	private string[2][] idsToDelete;
+	// default drive id
+	private string defaultDriveId;
 
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
@@ -141,7 +142,7 @@ final class SyncEngine
 	void applyDifferences()
 	{
 		// root folder
-		string driveId = onedrive.getDefaultDrive()["id"].str;
+		string driveId = defaultDriveId = onedrive.getDefaultDrive()["id"].str;
 		string rootId = onedrive.getDefaultRoot["id"].str;
 		applyDifferences(driveId, rootId);
 
@@ -193,7 +194,7 @@ final class SyncEngine
 		Item item = makeItem(driveItem);
 		log.vlog("Processing ", item.id, " ", item.name);
 
-		if (isItemRoot(driveItem) || !item.parentDriveId) {
+		if (isItemRoot(driveItem) || !item.parentId) {
 			log.vlog("Root");
 			item.driveId = driveId; // HACK: makeItem() cannot set the driveId propery of the root
 			itemdb.upsert(item);
@@ -222,7 +223,7 @@ final class SyncEngine
 		// check for selective sync
 		string path;
 		if (!unwanted) {
-			path = itemdb.computePath(item.parentDriveId, item.parentId) ~ "/" ~ item.name;
+			path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
 			path = buildNormalizedPath(path);
 			unwanted = selectiveSync.isPathExcluded(path);
 		}
@@ -431,7 +432,7 @@ final class SyncEngine
 	{
 		log.vlog("Uploading differences of ", path);
 		Item item;
-		if (itemdb.selectByPath(path, item)) {
+		if (itemdb.selectByPath(path, defaultDriveId, item)) {
 			uploadDifferences(item);
 		}
 		log.vlog("Uploading new items of ", path);
@@ -533,7 +534,7 @@ final class SyncEngine
 							writeln(" done.");
 						} else {
 							writeln("");
-							response = session.upload(path, item.parentDriveId, item.parentId, baseName(path), eTag);
+							response = session.upload(path, item.driveId, item.parentId, baseName(path), eTag);
 						}
 						// saveItem(response); redundant
 						// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
@@ -573,7 +574,7 @@ final class SyncEngine
 
 		if (isDir(path)) {
 			Item item;
-			if (!itemdb.selectByPath(path, item)) {
+			if (!itemdb.selectByPath(path, defaultDriveId, item)) {
 				uploadCreateDir(path);
 			}
 			// recursively traverse children
@@ -583,7 +584,7 @@ final class SyncEngine
 			}
 		} else {
 			Item item;
-			if (!itemdb.selectByPath(path, item)) {
+			if (!itemdb.selectByPath(path, defaultDriveId, item)) {
 				uploadNewFile(path);
 			}
 		}
@@ -591,23 +592,22 @@ final class SyncEngine
 
 	private void uploadCreateDir(const(char)[] path)
 	{
-		log.log("Creating folder ", path, "...");
+		log.log("Creating folder ", path);
 		Item parent;
-		enforce(itemdb.selectByPath(dirName(path), parent), "The parent item is not in the database");
+		enforce(itemdb.selectByPath(dirName(path), defaultDriveId, parent), "The parent item is not in the database");
 		JSONValue driveItem = [
 			"name": JSONValue(baseName(path)),
 			"folder": parseJSON("{}")
 		];
 		auto res = onedrive.createById(parent.driveId, parent.id, driveItem);
 		saveItem(res);
-		writeln(" done.");
 	}
 
 	private void uploadNewFile(string path)
 	{
 		write("Uploading file ", path, "...");
 		Item parent;
-		enforce(itemdb.selectByPath(dirName(path), parent), "The parent item is not in the database");
+		enforce(itemdb.selectByPath(dirName(path), defaultDriveId, parent), "The parent item is not in the database");
 		JSONValue response;
 		if (getSize(path) <= thresholdFileSize) {
 			response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
@@ -660,18 +660,18 @@ final class SyncEngine
 	{
 		log.log("Moving ", from, " to ", to);
 		Item fromItem, toItem, parentItem;
-		if (!itemdb.selectByPath(from, fromItem)) {
+		if (!itemdb.selectByPath(from, defaultDriveId, fromItem)) {
 			throw new SyncException("Can't move an unsynced item");
 		}
 		if (fromItem.parentId == null) {
 			// the item is a remote folder, need to do the operation on the parent
-			enforce(itemdb.selectByPathNoRemote(from, fromItem));
+			enforce(itemdb.selectByPathNoRemote(from, defaultDriveId, fromItem));
 		}
-		if (itemdb.selectByPath(to, toItem)) {
+		if (itemdb.selectByPath(to, defaultDriveId, toItem)) {
 			// the destination has been overwritten
 			uploadDeleteItem(toItem, to);
 		}
-		if (!itemdb.selectByPath(dirName(to), parentItem)) {
+		if (!itemdb.selectByPath(dirName(to), defaultDriveId, parentItem)) {
 			throw new SyncException("Can't move an item to an unsynced directory");
 		}
 		if (fromItem.driveId != parentItem.driveId) {
@@ -698,12 +698,12 @@ final class SyncEngine
 	void deleteByPath(const(char)[] path)
 	{
 		Item item;
-		if (!itemdb.selectByPath(path, item)) {
+		if (!itemdb.selectByPath(path, defaultDriveId, item)) {
 			throw new SyncException("Can't delete an unsynced item");
 		}
 		if (item.parentId == null) {
 			// the item is a remote folder, need to do the operation on the parent
-			enforce(itemdb.selectByPathNoRemote(path, item));
+			enforce(itemdb.selectByPathNoRemote(path, defaultDriveId, item));
 		}
 		try {
 			uploadDeleteItem(item, path);
