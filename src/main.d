@@ -195,7 +195,6 @@ void performSync(SyncEngine sync)
 			}
 			count = -1;
 		} catch (Exception e) {
-			throw e;
 			if (++count == 3) throw e;
 			else log.log(e.msg);
 		}
