@@ -154,10 +154,12 @@ final class SyncEngine
 
 
 	// download the new changes of a specific item
+	// id is the root of the drive or a shared folder
 	private void applyDifferences(string driveId, const(char)[] id)
 	{
 		JSONValue changes;
 		string deltaLink = itemdb.getDeltaLink(driveId, id);
+		bool isRoot = true; // fix for https://github.com/skilion/onedrive/issues/269
 		log.vlog("Applying changes of " ~ id);
 		do {
 			try {
@@ -172,7 +174,8 @@ final class SyncEngine
 				}
 			}
 			foreach (item; changes["value"].array) {
-				applyDifference(item, driveId);
+				applyDifference(item, driveId, isRoot);
+				isRoot = false;
 			}
 
 			// the response may contain either @odata.deltaLink or @odata.nextLink
@@ -189,12 +192,12 @@ final class SyncEngine
 	}
 
 	// process the change of a single DriveItem
-	private void applyDifference(JSONValue driveItem, string driveId)
+	private void applyDifference(JSONValue driveItem, string driveId, bool isRoot)
 	{
 		Item item = makeItem(driveItem);
 		log.vlog("Processing ", item.id, " ", item.name);
 
-		if (isItemRoot(driveItem) || !item.parentId) {
+		if (isItemRoot(driveItem) || !item.parentId || isRoot) {
 			log.vlog("Root");
 			item.driveId = driveId; // HACK: makeItem() cannot set the driveId propery of the root
 			itemdb.upsert(item);
