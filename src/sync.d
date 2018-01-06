@@ -159,7 +159,6 @@ final class SyncEngine
 	{
 		JSONValue changes;
 		string deltaLink = itemdb.getDeltaLink(driveId, id);
-		bool isRoot = true; // fix for https://github.com/skilion/onedrive/issues/269
 		log.vlog("Applying changes of " ~ id);
 		do {
 			try {
@@ -174,8 +173,8 @@ final class SyncEngine
 				}
 			}
 			foreach (item; changes["value"].array) {
+				bool isRoot = (id == item["id"].str); // fix for https://github.com/skilion/onedrive/issues/269
 				applyDifference(item, driveId, isRoot);
-				isRoot = false;
 			}
 
 			// the response may contain either @odata.deltaLink or @odata.nextLink
