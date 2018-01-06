@@ -199,6 +199,7 @@ final class SyncEngine
 
 		if (isItemRoot(driveItem) || !item.parentId || isRoot) {
 			log.vlog("Root");
+			item.parentId = null; // ensures that it has no parent
 			item.driveId = driveId; // HACK: makeItem() cannot set the driveId propery of the root
 			itemdb.upsert(item);
 			return;
