@@ -37,7 +37,7 @@ int main(string[] args)
 			"monitor|m", "Keep monitoring for local and remote changes", &monitor,
 			"print-token", "Print the access token, useful for debugging", &printAccessToken,
 			"resync", "Forget the last saved state, perform a full sync", &resync,
-			"syncdir", "Set the directory used to sync the files are synced", &syncDirName,
+			"syncdir", "Set the directory used to sync the files that are synced", &syncDirName,
 			"verbose|v", "Print more details, useful for debugging", &log.verbose,
 			"version", "Print the version and exit", &printVersion
 		);
