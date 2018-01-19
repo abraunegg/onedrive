@@ -133,7 +133,10 @@ If you encounter any bugs you can report them here on Github. Before filing an i
 1. Check the version of the application you are using `onedrive --version`
 2. Run the application in verbose mode `onedrive --verbose`
 3. Have the log of the error (preferably uploaded on an external website such as [pastebin](https://pastebin.com/))
-4. Collect any information that you may think it is relevant to the error (such as the steps to trigger it)
+4. Collect any information that you may think it is relevant to the error
+	- The steps to trigger the error
+	- What have you already done to try solve it
+	- ...
 
 ### All available commands:
 ```text
