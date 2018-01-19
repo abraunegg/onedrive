@@ -6,7 +6,7 @@
 * Real-Time file monitoring with Inotify
 * Resumable uploads
 * Support OneDrive for Business (part of Office 365)
-* Shared folders :scream:
+* Shared folders (not Business)
 
 ### What's missing:
 * While local changes are uploaded right away, remote changes are delayed
