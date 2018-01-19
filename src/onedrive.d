@@ -75,7 +75,7 @@ final class OneDriveApi
 		write(url, "\n\n", "Enter the response uri: ");
 		readln(response);
 		// match the authorization code
-		auto c = matchFirst(response, r"(?:code=)([\w\d-]+)");
+		auto c = matchFirst(response, r"(?:(\?|&)code=)([\w\d-]+)");
 		if (c.empty) {
 			log.log("Invalid uri");
 			return false;
