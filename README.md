@@ -54,8 +54,9 @@ make DC=ldmd2
 ```
 
 ### First run :zap:
-After installing the application you must run it at least one time from the terminal to authorize it. The procedure requires a web browser.
-You will be asked to open a specific link where you will have to login into your Microsoft Account and give the application the permission to access your files. After giving the permission, you will be redirected to a blank page. Copy the URI of the blank page into the application.
+After installing the application you must run it at least once from the terminal to authorize it.
+
+You will be asked to open a specific link using your web browser where you will have to login into your Microsoft Account and give the application the permission to access your files. After giving the permission, you will be redirected to a blank page. Copy the URI of the blank page into the application.
 
 ### Uninstall
 ```sh
