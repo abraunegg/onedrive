@@ -160,7 +160,7 @@ final class SyncEngine
 		JSONValue changes;
 		string deltaLink = itemdb.getDeltaLink(driveId, id);
 		log.vlog("Applying changes of " ~ id);
-		do {
+		for (;;) {
 			try {
 				changes = onedrive.viewChangesById(driveId, id, deltaLink);
 			} catch (OneDriveException e) {
@@ -181,7 +181,8 @@ final class SyncEngine
 			if ("@odata.deltaLink" in changes) deltaLink = changes["@odata.deltaLink"].str;
 			if (deltaLink) itemdb.setDeltaLink(driveId, id, deltaLink);
 			if ("@odata.nextLink" in changes) deltaLink = changes["@odata.nextLink"].str;
-		} while ("@odata.nextLink" in changes);
+			else break;
+		}
 
 		// delete items in idsToDelete
 		if (idsToDelete.length > 0) deleteItems();
