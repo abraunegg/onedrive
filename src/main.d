@@ -54,6 +54,9 @@ int main(string[] args)
 		log.error("Try 'onedrive -h' for more information");
 		return EXIT_FAILURE;
 	}
+	
+	// disable buffering on stdout
+	stdout.setvbuf(0, _IONBF);
 
 	if (printVersion) {
 		std.stdio.write("onedrive ", import("version"));

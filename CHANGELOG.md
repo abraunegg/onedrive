@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 ### Fixed
 - Crash when the delta link is expired
+### Changed
+- Disabled buffering on stdout
 
 ## [1.1.1] - 2018-01-20
 ### Fixed
