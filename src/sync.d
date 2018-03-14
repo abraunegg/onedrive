@@ -4,7 +4,7 @@ import std.datetime;
 import std.exception: enforce;
 import std.file, std.json, std.path;
 import std.regex;
-import std.stdio, std.string;
+import std.stdio, std.string, std.uni, std.uri;
 import config, itemdb, onedrive, selective, upload, util;
 static import log;
 
@@ -141,7 +141,7 @@ final class SyncEngine
 	// download all new changes from OneDrive
 	void applyDifferences()
 	{
-		// root folder
+		// Set defaults for the root folder
 		string driveId = defaultDriveId = onedrive.getDefaultDrive()["id"].str;
 		string rootId = onedrive.getDefaultRoot["id"].str;
 		applyDifferences(driveId, rootId);
@@ -152,14 +152,133 @@ final class SyncEngine
 		foreach (item; items) applyDifferences(item.remoteDriveId, item.remoteId);
 	}
 
-
+	// download all new changes from a specified folder on OneDrive
+	void applyDifferencesSingleDirectory(string path)
+	{
+		// test if the path we are going to sync from actually exists on OneDrive
+		try {
+			onedrive.getPathDetails(path);
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 404) {
+				// The directory was not found 
+				log.vlog("ERROR: The requested single directory to sync was not found on OneDrive");
+				return;
+			}
+		} 
+		// OK - it should exist, get the driveId and rootId for this folder
+		log.vlog("Checking for differences from OneDrive ...");
+		JSONValue onedrivePathDetails = onedrive.getPathDetails(path); // Returns a JSON String for the OneDrive Path
+		
+		// If the OneDrive Root is not in the local database, creating a remote folder will fail
+		checkDatabaseForOneDriveRoot();
+		
+		// Configure the defaults
+		defaultDriveId = onedrive.getDefaultDrive()["id"].str;
+		string driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
+		string folderId = onedrivePathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
+		
+		// Apply any differences found on OneDrive for this path (download data)
+		applyDifferences(driveId, folderId);
+	}
+	
+	// make sure the OneDrive root is in our database
+	auto checkDatabaseForOneDriveRoot()
+	{
+		log.vlog("Fetching details for OneDrive Root");
+		JSONValue rootPathDetails = onedrive.getDefaultRoot(); // Returns a JSON Value
+		Item rootPathItem = makeItem(rootPathDetails);
+		
+		// configure driveId and rootId for the OneDrive Root
+		
+		// Set defaults for the root folder
+		string driveId = rootPathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
+		string rootId = rootPathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
+		
+		// Query the database
+		if (!itemdb.selectById(driveId, rootId, rootPathItem)) {
+			log.vlog("OneDrive Root does not exist in the database. We need to add it.");	
+			applyDifference(rootPathDetails, driveId, true);
+		} else {
+			log.vlog("OneDrive Root exists in the database");
+		}
+	}
+	
+	// create a directory on OneDrive without syncing
+	auto createDirectoryNoSync(string path)
+	{
+		// Attempt to create the requested path within OneDrive without performing a sync
+		log.vlog("Attempting to create the requested path within OneDrive");
+		
+		// If the OneDrive Root is not in the local database, creating a remote folder will fail
+		checkDatabaseForOneDriveRoot();
+		
+		// Handle the remote folder creation and updating of the local database without performing a sync
+		uploadCreateDir(path);
+	}
+	
+	// delete a directory on OneDrive without syncing
+	auto deleteDirectoryNoSync(string path)
+	{
+		// Set defaults for the root folder
+		defaultDriveId = onedrive.getDefaultDrive()["id"].str;
+		string rootId = onedrive.getDefaultRoot["id"].str;
+		
+		// Attempt to delete the requested path within OneDrive without performing a sync
+		log.vlog("Attempting to delete the requested path within OneDrive");
+		
+		// test if the path we are going to exists on OneDrive
+		try {
+			onedrive.getPathDetails(path);
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 404) {
+				// The directory was not found on OneDrive - no need to delete it
+				log.vlog("The requested directory to create was not found on OneDrive - skipping removing the remote directory as it doesnt exist");
+				return;
+			}
+		}
+		
+		Item item;
+		if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+			// this is odd .. this directory is not in the local database - just go delete it
+			log.vlog("The requested directory to delete was not found in the local database - pushing delete request direct to OneDrive");
+			uploadDeleteItem(item, path);
+		} else {
+			// the folder was in the local database
+			// Handle the deletion and saving any update to the local database
+			log.vlog("The requested directory to delete was found in the local database. Processing the delection normally");
+			deleteByPath(path);
+		}
+	}
+	
+	// rename a directory on OneDrive without syncing
+	auto renameDirectoryNoSync(string source, string destination)
+	{
+		try {
+			// test if the local path exists on OneDrive
+			onedrive.getPathDetails(source);
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 404) {
+				// The directory was not found 
+				log.vlog("The requested directory to rename was not found on OneDrive");
+				return;
+			}
+		}
+		// The OneDrive API returned a 200 OK status, so the folder exists
+		// Rename the requested directory on OneDrive without performing a sync
+		moveByPath(source, destination);
+	}
+	
 	// download the new changes of a specific item
 	// id is the root of the drive or a shared folder
 	private void applyDifferences(string driveId, const(char)[] id)
 	{
 		JSONValue changes;
 		string deltaLink = itemdb.getDeltaLink(driveId, id);
-		log.vlog("Applying changes of " ~ id);
+		log.vlog("Applying changes of Path ID: " ~ id);
+		
+		// Get the OneDrive Root ID
+		string oneDriveRootId = onedrive.getDefaultRoot["id"].str;
+		
 		for (;;) {
 			try {
 				changes = onedrive.viewChangesById(driveId, id, deltaLink);
@@ -172,8 +291,14 @@ final class SyncEngine
 					throw e;
 				}
 			}
-			foreach (item; changes["value"].array) {
-				bool isRoot = (id == item["id"].str); // fix for https://github.com/skilion/onedrive/issues/269
+			foreach (item; changes["value"].array) {			
+				// Test is this is the OneDrive Root - not say a single folder root sync
+				bool isRoot = false;
+				if ((id == oneDriveRootId) && (item["name"].str == "root")) { // fix for https://github.com/skilion/onedrive/issues/269
+					// This IS the OneDrive Root
+					isRoot = true;
+				}
+				// Apply the change
 				applyDifference(item, driveId, isRoot);
 			}
 
@@ -195,12 +320,16 @@ final class SyncEngine
 	private void applyDifference(JSONValue driveItem, string driveId, bool isRoot)
 	{
 		Item item = makeItem(driveItem);
-		log.vlog("Processing ", item.id, " ", item.name);
+		//log.vlog("Processing item to apply differences");
 
 		if (isItemRoot(driveItem) || !item.parentId || isRoot) {
-			log.vlog("Root");
+			log.vlog("Adding OneDrive Root to the local database");
 			item.parentId = null; // ensures that it has no parent
 			item.driveId = driveId; // HACK: makeItem() cannot set the driveId propery of the root
+			
+			// What parent.driveId and parent.id are we using?
+			//log.vlog("Parent Drive ID: ", item.driveId);
+			//log.vlog("Parent ID:       ", item.parentId);
 			itemdb.upsert(item);
 			return;
 		}
@@ -212,14 +341,14 @@ final class SyncEngine
 		// check the item type
 		if (!unwanted) {
 			if (isItemFile(driveItem)) {
-				log.vlog("File");
+				//log.vlog("The item we are syncing is a file");
 			} else if (isItemFolder(driveItem)) {
-				log.vlog("Folder");
+				//log.vlog("The item we are syncing is a folder");
 			} else if (isItemRemote(driveItem)) {
-				log.vlog("Remote item");
+				//log.vlog("The item we are syncing is a remote item");
 				assert(isItemFolder(driveItem["remoteItem"]), "The remote item is not a folder");
 			} else {
-				log.vlog("The item type is not supported");
+				log.vlog("This item type (", item.name, ") is not supported");
 				unwanted = true;
 			}
 		}
@@ -340,14 +469,14 @@ final class SyncEngine
 			if (newItem.type == ItemType.file && oldItem.mtime != newItem.mtime && !testFileHash(newPath, newItem)) {
 				downloadFileItem(newItem, newPath);
 			} else {
-				log.vlog("The item content has not changed");
+				//log.vlog("The item content has not changed");
 			}
 			// handle changed time
 			if (newItem.type == ItemType.file && oldItem.mtime != newItem.mtime) {
 				setTimes(newPath, newItem.mtime, newItem.mtime);
 			}
 		} else {
-			log.vlog("The item has not changed");
+			//log.vlog("", oldItem.name, " has not changed");
 		}
 	}
 
@@ -432,8 +561,18 @@ final class SyncEngine
 	}
 	
 	// scan the given directory for differences and new items
-	void scanForDifferences(string path = ".")
+	void scanForDifferences(string path)
 	{
+		// Make sure the OneDrive Root is in the database
+		checkDatabaseForOneDriveRoot();
+	
+		// make sure defaultDriveId is set
+		if (defaultDriveId == ""){
+			// defaultDriveId is not set ... odd ..
+			defaultDriveId = onedrive.getDefaultDrive()["id"].str;
+		}
+	
+		// scan for changes
 		log.vlog("Uploading differences of ", path);
 		Item item;
 		if (itemdb.selectByPath(path, defaultDriveId, item)) {
@@ -531,7 +670,7 @@ final class SyncEngine
 					string eTag = item.eTag;
 					if (!testFileHash(path, item)) {
 						log.vlog("The file content has changed");
-						write("Uploading ", path, "...");
+						write("Uploading file ", path, "...");
 						JSONValue response;
 						if (getSize(path) <= thresholdFileSize) {
 							response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
@@ -540,6 +679,7 @@ final class SyncEngine
 							writeln("");
 							response = session.upload(path, item.driveId, item.parentId, baseName(path), eTag);
 						}
+						log.vlog("Uploading file ", path, "... done.");
 						// saveItem(response); redundant
 						// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
 						eTag = response["cTag"].str;
@@ -561,75 +701,233 @@ final class SyncEngine
 
 	private void uploadNewItems(string path)
 	{
-		// skip unexisting symbolic links
-		if (isSymlink(path) && !exists(readLink(path))) {
-			return;
-		}
+		//	https://github.com/OneDrive/onedrive-api-docs/issues/443
+		//  If the path is greater than 430 characters, then one drive will return a '400 - Bad Request' 
+		//  Need to ensure that the URI is encoded before the check is made
+		if(encodeComponent(path).length < 430){
+			// path is less than 430 characters
 
-		// skip filtered items
-		if (path != ".") {
-			if (selectiveSync.isNameExcluded(baseName(path))) {
+			if (defaultDriveId == ""){
+				// defaultDriveId is not set ... odd ..
+				defaultDriveId = onedrive.getDefaultDrive()["id"].str;
+			}
+			
+			// skip unexisting symbolic links
+			if (isSymlink(path) && !exists(readLink(path))) {
 				return;
 			}
-			if (selectiveSync.isPathExcluded(path)) {
-				return;
-			}
-		}
 
-		if (isDir(path)) {
-			Item item;
-			if (!itemdb.selectByPath(path, defaultDriveId, item)) {
-				uploadCreateDir(path);
+			// skip filtered items
+			if (path != ".") {
+				if (selectiveSync.isNameExcluded(baseName(path))) {
+					return;
+				}
+				if (selectiveSync.isPathExcluded(path)) {
+					return;
+				}
 			}
-			// recursively traverse children
-			auto entries = dirEntries(path, SpanMode.shallow, false);
-			foreach (DirEntry entry; entries) {
-				uploadNewItems(entry.name);
+
+			if (isDir(path)) {
+				Item item;
+				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+					uploadCreateDir(path);
+				}
+				// recursively traverse children
+				auto entries = dirEntries(path, SpanMode.shallow, false);
+				foreach (DirEntry entry; entries) {
+					uploadNewItems(entry.name);
+				}
+			} else {
+				Item item;
+				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+					uploadNewFile(path);
+				}
 			}
 		} else {
-			Item item;
-			if (!itemdb.selectByPath(path, defaultDriveId, item)) {
-				uploadNewFile(path);
-			}
+			// This path was skipped - why?
+			log.log("Skipping item '", path, "' due to the full path exceeding 430 characters (Microsoft OneDrive limitation)");
 		}
 	}
 
-	private void uploadCreateDir(const(char)[] path)
+	private void uploadCreateDir(const(string) path)
 	{
-		log.log("Creating folder ", path);
+		log.vlog("OneDrive Client requested to create remote path: ", path);
 		Item parent;
-		enforce(itemdb.selectByPath(dirName(path), defaultDriveId, parent), "The parent item is not in the database");
-		JSONValue driveItem = [
-			"name": JSONValue(baseName(path)),
-			"folder": parseJSON("{}")
-		];
-		auto res = onedrive.createById(parent.driveId, parent.id, driveItem);
-		saveItem(res);
-	}
+		
+		// Was the path entered the root path?
+		if (path == "."){
+			// We cant create this directory, as this would essentially equal the users OneDrive root:/
+			checkDatabaseForOneDriveRoot();
+		} else {
+			// If this is null or empty - we cant query the database properly
+			if ((parent.driveId == "") && (parent.id == "")){
+				// These are both empty .. not good
+				//log.vlog("WHOOPS: Well this is odd - parent.driveId & parent.id are empty - we have to query OneDrive for some values for the parent");
+				
+				// What path to use?
+				string parentPath = dirName(path);		// will be either . or something else
+				//log.vlog("WHOOPS FIX: Query OneDrive path details for parent: ", parentPath);
+				
+				if (parentPath == "."){
+					// We cant create this directory, as this would essentially equal the users OneDrive root:/
+					checkDatabaseForOneDriveRoot();
+				}
+				
+				try {
+					onedrive.getPathDetails(parentPath);
+				} catch (OneDriveException e) {
+					if (e.httpStatusCode == 404) {
+						// Parent does not exist ... need to create parent
+						uploadCreateDir(parentPath);
+					}
+				}
+				
+				// Get the Parent Path Details
+				JSONValue onedrivePathDetails = onedrive.getPathDetails(parentPath); // Returns a JSON String for the OneDrive Path
+				
+				// JSON Response
+				//log.vlog("WHOOPS JSON Response: ", onedrivePathDetails);
+				
+				// configure the data
+				parent.driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
+				parent.id = onedrivePathDetails["id"].str; // This item's ID. Should give something like 12345ABCDE1234A1!101
+				
+				// What parent.driveId and parent.id did we find?
+				//log.vlog("Using Parent DriveID: ", parent.driveId);
+				//log.vlog("Using Parent ID:      ", parent.id);
+			}
+		
+			// test if the path we are going to create already exists on OneDrive
+			try {
+				onedrive.getPathDetails(path);
+			} catch (OneDriveException e) {
+				if (e.httpStatusCode == 404) {
+					// The directory was not found 
+					log.vlog("The requested directory to create was not found on OneDrive - creating remote directory: ", path);
 
+					// Perform the database lookup
+					enforce(itemdb.selectById(parent.driveId, parent.id, parent), "The parent item id is not in the database");
+					JSONValue driveItem = [
+							"name": JSONValue(baseName(path)),
+							"folder": parseJSON("{}")
+					];
+					
+					// Submit the creation request
+					auto res = onedrive.createById(parent.driveId, parent.id, driveItem);
+					// What is returned?
+					//log.vlog("Create Folder Response JSON: ", res);
+					saveItem(res);
+					log.vlog("Sucessfully created the remote directory ", path, " on OneDrive");
+					return;
+				}
+			} 
+			log.vlog("The requested directory to create was found on OneDrive - skipping creating the directory: ", path );
+			
+			// Check that this path is in the database
+			if (!itemdb.selectById(parent.driveId, parent.id, parent)){
+				// parent for 'path' is NOT in the database
+				log.vlog("The parent for this path is not in the local database - need to add parent to local database");
+				string parentPath = dirName(path);
+				uploadCreateDir(parentPath);
+			} else {
+				// parent is in database
+				log.vlog("The parent for this path is in the local database - adding requested path (", path ,") to database");
+				auto res = onedrive.getPathDetails(path);
+				saveItem(res);
+			}
+		}
+	}
+	
 	private void uploadNewFile(string path)
 	{
-		write("Uploading file ", path, "...");
 		Item parent;
-		enforce(itemdb.selectByPath(dirName(path), defaultDriveId, parent), "The parent item is not in the database");
-		JSONValue response;
-		if (getSize(path) <= thresholdFileSize) {
-			response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-			writeln(" done.");
-		} else {
-			writeln("");
-			response = session.upload(path, parent.driveId, parent.id, baseName(path));
+		
+		if (defaultDriveId == ""){
+			// defaultDriveId is not set ... odd ..
+			defaultDriveId = onedrive.getDefaultDrive()["id"].str;
 		}
-		string id = response["id"].str;
-		string cTag = response["cTag"].str;
-		SysTime mtime = timeLastModified(path).toUTC();
-		// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
-		uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+		
+		// Check the database for the parent
+		enforce(itemdb.selectByPath(dirName(path), defaultDriveId, parent), "The parent item is not in the local database");
+		
+		// To avoid a 409 Conflict error - does the file actually exist on OneDrive already?
+		JSONValue fileDetailsFromOneDrive;
+		
+		// Does this 'file' already exist on OneDrive?
+		try {
+			// test if the local path exists on OneDrive
+			fileDetailsFromOneDrive = onedrive.getPathDetails(path);
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 404) {
+				// The file was not found on OneDrive, need to upload it		
+				write("Uploading file ", path, "...");
+				JSONValue response;
+				if (getSize(path) <= thresholdFileSize) {
+					response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+					writeln(" done.");
+				} else {
+					writeln("");
+					response = session.upload(path, parent.driveId, parent.id, baseName(path));
+				}
+				log.vlog("Uploading file ", path, "... done.");
+				string id = response["id"].str;
+				string cTag = response["cTag"].str;
+				SysTime mtime = timeLastModified(path).toUTC();
+				// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
+				uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+				return;
+			}
+		}
+		
+		log.vlog("Requested file to upload exists on OneDrive - local database is out of sync for this file: ", path);
+		
+		// Is the local file newer than the uploaded file?
+		SysTime localFileModifiedTime = timeLastModified(path).toUTC();
+		SysTime remoteFileModifiedTime = SysTime.fromISOExtString(fileDetailsFromOneDrive["fileSystemInfo"]["lastModifiedDateTime"].str);
+		
+		if (localFileModifiedTime > remoteFileModifiedTime){
+			// local file is newer
+			log.vlog("Requested file to upload is newer than existing file on OneDrive");
+			
+			write("Uploading file ", path, "...");
+			JSONValue response;
+			if (getSize(path) <= thresholdFileSize) {
+				response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+				writeln(" done.");
+			} else {
+				writeln("");
+				response = session.upload(path, parent.driveId, parent.id, baseName(path));
+			}
+			log.vlog("Uploading file ", path, "... done.");
+			string id = response["id"].str;
+			string cTag = response["cTag"].str;
+			SysTime mtime = timeLastModified(path).toUTC();
+			// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
+			uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+		} else {
+			// Save the details of the file that we got from OneDrive
+			log.vlog("Updating the local database with details for this file: ", path);
+			saveItem(fileDetailsFromOneDrive);
+		}
 	}
 
-	private void uploadDeleteItem(Item item, const(char)[] path)
+	private void uploadDeleteItem(Item item, string path)
 	{
-		log.log("Deleting ", path);
+		log.log("Deleting directory from OneDrive: ", path);
+		
+		if ((item.driveId == "") && (item.id == "") && (item.eTag == "")){
+			// These are empty ... we cannot delete if this is empty ....
+			JSONValue onedrivePathDetails = onedrive.getPathDetails(path); // Returns a JSON String for the OneDrive Path
+			//log.vlog("WHOOPS JSON Response: ", onedrivePathDetails);
+			item.driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
+			item.id = onedrivePathDetails["id"].str; // This item's ID. Should give something like 12345ABCDE1234A1!101
+			item.eTag = onedrivePathDetails["eTag"].str; // Should be something like aNjM2NjJFRUVGQjY2NjJFMSE5MzUuMA
+		
+			//log.vlog("item.driveId = ", item.driveId);
+			//log.vlog("item.id = ", item.id);
+			//log.vlog("item.eTag = ", item.eTag);
+		}
+			
 		try {
 			onedrive.deleteById(item.driveId, item.id, item.eTag);
 		} catch (OneDriveException e) {
@@ -655,7 +953,10 @@ final class SyncEngine
 
 	private void saveItem(JSONValue jsonItem)
 	{
+		// Takes a JSON input and formats to an item which can be used by the database
 		Item item = makeItem(jsonItem);
+		
+		// Add to the local database
 		itemdb.upsert(item);
 	}
 
@@ -699,11 +1000,11 @@ final class SyncEngine
 		}
 	}
 
-	void deleteByPath(const(char)[] path)
+	void deleteByPath(string path)
 	{
 		Item item;
 		if (!itemdb.selectByPath(path, defaultDriveId, item)) {
-			throw new SyncException("Can't delete an unsynced item");
+			throw new SyncException("The item to delete is not in the local database");
 		}
 		if (item.parentId == null) {
 			// the item is a remote folder, need to do the operation on the parent
@@ -716,4 +1017,31 @@ final class SyncEngine
 			else throw e;
 		}
 	}
+	
+	// move a OneDrive folder from one name to another
+	void moveByPath(const(string) source, const(string) destination)
+	{
+		log.vlog("Moving remote folder: ", source, " -> ", destination);
+		
+		// Source and Destination are relative to ~/OneDrive
+		string sourcePath = source;
+		string destinationBasePath = dirName(destination).idup;
+		
+		// if destinationBasePath == '.' then destinationBasePath needs to be ""
+		if (destinationBasePath == ".") {
+			destinationBasePath = "";
+		}
+		
+		string newFolderName = baseName(destination).idup;
+		string destinationPathString = "/drive/root:/" ~ destinationBasePath;
+		
+		// Build up the JSON changes
+		JSONValue moveData = ["name": newFolderName];
+		JSONValue destinationPath = ["path": destinationPathString];
+		moveData["parentReference"] = destinationPath;
+				
+		// Make the change on OneDrive
+		auto res = onedrive.moveByPath(sourcePath, moveData);	
+	}
+	
 }
