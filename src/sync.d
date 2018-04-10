@@ -488,6 +488,7 @@ final class SyncEngine
 		onedrive.downloadById(item.driveId, item.id, path);
 		setTimes(path, item.mtime, item.mtime);
 		writeln(" done.");
+		log.log("Downloading ", path, "... done.");
 	}
 
 	// returns true if the given item corresponds to the local one
@@ -533,7 +534,7 @@ final class SyncEngine
 			Item item;
 			if (!itemdb.selectById(i[0], i[1], item)) continue; // check if the item is in the db
 			string path = itemdb.computePath(i[0], i[1]);
-			log.log("Deleting ", path);
+			log.log("Deleting item ", path);
 			itemdb.deleteById(item.driveId, item.id);
 			if (item.remoteDriveId != null) {
 				// delete the linked remote folder
@@ -679,7 +680,7 @@ final class SyncEngine
 							writeln("");
 							response = session.upload(path, item.driveId, item.parentId, baseName(path), eTag);
 						}
-						log.vlog("Uploading file ", path, "... done.");
+						log.log("Uploading file ", path, "... done.");
 						// saveItem(response); redundant
 						// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
 						eTag = response["cTag"].str;
@@ -869,7 +870,7 @@ final class SyncEngine
 					writeln("");
 					response = session.upload(path, parent.driveId, parent.id, baseName(path));
 				}
-				log.vlog("Uploading file ", path, "... done.");
+				log.log("Uploading file ", path, "... done.");
 				string id = response["id"].str;
 				string cTag = response["cTag"].str;
 				SysTime mtime = timeLastModified(path).toUTC();
@@ -898,7 +899,7 @@ final class SyncEngine
 				writeln("");
 				response = session.upload(path, parent.driveId, parent.id, baseName(path));
 			}
-			log.vlog("Uploading file ", path, "... done.");
+			log.log("Uploading file ", path, "... done.");
 			string id = response["id"].str;
 			string cTag = response["cTag"].str;
 			SysTime mtime = timeLastModified(path).toUTC();
@@ -913,7 +914,7 @@ final class SyncEngine
 
 	private void uploadDeleteItem(Item item, string path)
 	{
-		log.log("Deleting directory from OneDrive: ", path);
+		log.log("Deleting item from OneDrive: ", path);
 		
 		if ((item.driveId == "") && (item.id == "") && (item.eTag == "")){
 			// These are empty ... we cannot delete if this is empty ....
