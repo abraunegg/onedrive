@@ -927,6 +927,9 @@ final class SyncEngine
 				log.vlog("Updating the local database with details for this file: ", path);
 				saveItem(fileDetailsFromOneDrive);
 			}
+		} else {
+			// Skip file - too large
+			log.log("Skipping uploading this new file as it exceeds the maximum allowed OneDrive size: ", path);
 		}
 	}
 
