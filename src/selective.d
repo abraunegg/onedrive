@@ -29,7 +29,14 @@ final class SelectiveSync
 
 	bool isNameExcluded(string name)
 	{
-		return !name.matchFirst(mask).empty;
+		auto validName = isValidFilename(name);
+		if (validName){
+			// This is a valid filename - do NOT exclude
+			return false;
+		} else {
+			// Invalid file name - exclude this name
+			return true;
+		}
 	}
 
 	bool isPathExcluded(string path)

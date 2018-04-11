@@ -715,15 +715,18 @@ final class SyncEngine
 			
 			// skip unexisting symbolic links
 			if (isSymlink(path) && !exists(readLink(path))) {
+				log.vlog("Skipping item - symbolic link: ", path);
 				return;
 			}
 
 			// skip filtered items
 			if (path != ".") {
 				if (selectiveSync.isNameExcluded(baseName(path))) {
+					log.vlog("Skipping item - invalid name: ", path);
 					return;
 				}
 				if (selectiveSync.isPathExcluded(path)) {
+					log.vlog("Skipping item - path excluded: ", path);
 					return;
 				}
 			}
