@@ -854,16 +854,59 @@ final class SyncEngine
 		// Check the database for the parent
 		enforce(itemdb.selectByPath(dirName(path), defaultDriveId, parent), "The parent item is not in the local database");
 		
-		// To avoid a 409 Conflict error - does the file actually exist on OneDrive already?
-		JSONValue fileDetailsFromOneDrive;
+		// Maximum file size upload
+		//	https://support.microsoft.com/en-au/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
+		//	1. OneDrive Business say's 15GB
+		//	2. Another article updated April 2018 says 20GB:
+		//		https://answers.microsoft.com/en-us/onedrive/forum/odoptions-oddesktop-sdwin10/personal-onedrive-file-upload-size-max/a3621fc9-b766-4a99-99f8-bcc01ccb025f
 		
-		// Does this 'file' already exist on OneDrive?
-		try {
-			// test if the local path exists on OneDrive
-			fileDetailsFromOneDrive = onedrive.getPathDetails(path);
-		} catch (OneDriveException e) {
-			if (e.httpStatusCode == 404) {
-				// The file was not found on OneDrive, need to upload it		
+		// Use smaller size for now
+		auto maxUploadFileSize = 16106127360; // 15GB
+		//auto maxUploadFileSize = 21474836480; // 20GB
+		auto thisFileSize = getSize(path);
+		
+		if (thisFileSize <= maxUploadFileSize){
+			// Resolves: https://github.com/skilion/onedrive/issues/121, https://github.com/skilion/onedrive/issues/294, https://github.com/skilion/onedrive/issues/329
+		
+			// To avoid a 409 Conflict error - does the file actually exist on OneDrive already?
+			JSONValue fileDetailsFromOneDrive;
+			
+			// Does this 'file' already exist on OneDrive?
+			try {
+				// test if the local path exists on OneDrive
+				fileDetailsFromOneDrive = onedrive.getPathDetails(path);
+			} catch (OneDriveException e) {
+				if (e.httpStatusCode == 404) {
+					// The file was not found on OneDrive, need to upload it		
+					write("Uploading file ", path, "...");
+					JSONValue response;
+					if (getSize(path) <= thresholdFileSize) {
+						response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+						writeln(" done.");
+					} else {
+						writeln("");
+						response = session.upload(path, parent.driveId, parent.id, baseName(path));
+					}
+					log.log("Uploading file ", path, "... done.");
+					string id = response["id"].str;
+					string cTag = response["cTag"].str;
+					SysTime mtime = timeLastModified(path).toUTC();
+					// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
+					uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+					return;
+				}
+			}
+			
+			log.vlog("Requested file to upload exists on OneDrive - local database is out of sync for this file: ", path);
+			
+			// Is the local file newer than the uploaded file?
+			SysTime localFileModifiedTime = timeLastModified(path).toUTC();
+			SysTime remoteFileModifiedTime = SysTime.fromISOExtString(fileDetailsFromOneDrive["fileSystemInfo"]["lastModifiedDateTime"].str);
+			
+			if (localFileModifiedTime > remoteFileModifiedTime){
+				// local file is newer
+				log.vlog("Requested file to upload is newer than existing file on OneDrive");
+				
 				write("Uploading file ", path, "...");
 				JSONValue response;
 				if (getSize(path) <= thresholdFileSize) {
@@ -879,39 +922,11 @@ final class SyncEngine
 				SysTime mtime = timeLastModified(path).toUTC();
 				// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
 				uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
-				return;
-			}
-		}
-		
-		log.vlog("Requested file to upload exists on OneDrive - local database is out of sync for this file: ", path);
-		
-		// Is the local file newer than the uploaded file?
-		SysTime localFileModifiedTime = timeLastModified(path).toUTC();
-		SysTime remoteFileModifiedTime = SysTime.fromISOExtString(fileDetailsFromOneDrive["fileSystemInfo"]["lastModifiedDateTime"].str);
-		
-		if (localFileModifiedTime > remoteFileModifiedTime){
-			// local file is newer
-			log.vlog("Requested file to upload is newer than existing file on OneDrive");
-			
-			write("Uploading file ", path, "...");
-			JSONValue response;
-			if (getSize(path) <= thresholdFileSize) {
-				response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-				writeln(" done.");
 			} else {
-				writeln("");
-				response = session.upload(path, parent.driveId, parent.id, baseName(path));
+				// Save the details of the file that we got from OneDrive
+				log.vlog("Updating the local database with details for this file: ", path);
+				saveItem(fileDetailsFromOneDrive);
 			}
-			log.log("Uploading file ", path, "... done.");
-			string id = response["id"].str;
-			string cTag = response["cTag"].str;
-			SysTime mtime = timeLastModified(path).toUTC();
-			// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
-			uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
-		} else {
-			// Save the details of the file that we got from OneDrive
-			log.vlog("Updating the local database with details for this file: ", path);
-			saveItem(fileDetailsFromOneDrive);
 		}
 	}
 
