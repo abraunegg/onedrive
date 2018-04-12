@@ -113,15 +113,15 @@ An example of the log file is below:
 2018-Apr-07 17:09:37.7739451 Fetching details for OneDrive Root
 2018-Apr-07 17:09:38.0211861 OneDrive Root exists in the database
 2018-Apr-07 17:09:38.0215375 Uploading differences of .
-2018-Apr-07 17:09:38.0220464 Processing root
+2018-Apr-07 17:09:38.0220464 Processing <redacted>
 2018-Apr-07 17:09:38.0224884 The directory has not changed
-2018-Apr-07 17:09:38.0229369 Processing Documents
+2018-Apr-07 17:09:38.0229369 Processing <redacted>
 2018-Apr-07 17:09:38.02338 The directory has not changed
-2018-Apr-07 17:09:38.0237678 Processing Attachments
+2018-Apr-07 17:09:38.0237678 Processing <redacted>
 2018-Apr-07 17:09:38.0242285 The directory has not changed
 2018-Apr-07 17:09:38.0245977 Processing <redacted>
 2018-Apr-07 17:09:38.0250788 The directory has not changed
-2018-Apr-07 17:09:38.0254657 Processing asdf
+2018-Apr-07 17:09:38.0254657 Processing <redacted>
 2018-Apr-07 17:09:38.0259923 The directory has not changed
 2018-Apr-07 17:09:38.0263547 Uploading new items of .
 2018-Apr-07 17:09:38.5708652 Applying changes of Path ID: <redacted>
