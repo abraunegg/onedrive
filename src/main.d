@@ -6,8 +6,17 @@ static import log;
 
 int main(string[] args)
 {
+	// Determine the user home directory. 
+	// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d scripts
+	string homePath = environment.get("XDG_CONFIG_HOME");
+	if (homePath == ""){
+		// XDG_CONFIG_HOME does not exist on systems where X11 is not present - ie - headless systems / servers
+		// Get HOME environment variable
+		homePath = environment.get("HOME");
+	}
+	
 	// configuration directory
-	string configDirName = environment.get("XDG_CONFIG_HOME", "~/.config") ~ "/onedrive";
+	string configDirName = homePath ~ "/.config/onedrive";
 	// only download remote changes
 	bool downloadOnly;
 	// override the sync directory
@@ -96,8 +105,10 @@ int main(string[] args)
 	string logFilePath = "/var/log/onedrive/";
 	if (!exists(logFilePath)) mkdirRecurse(logFilePath);
 
+	// load configuration
 	log.vlog("Loading config ...");
 	configDirName = configDirName.expandTilde().absolutePath();
+	log.vlog("Using Config Dir: ", configDirName);
 	if (!exists(configDirName)) mkdirRecurse(configDirName);
 	auto cfg = new config.Config(configDirName);
 	cfg.init();
