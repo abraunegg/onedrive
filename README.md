@@ -58,6 +58,75 @@ After installing the application you must run it at least once from the terminal
 
 You will be asked to open a specific link using your web browser where you will have to login into your Microsoft Account and give the application the permission to access your files. After giving the permission, you will be redirected to a blank page. Copy the URI of the blank page into the application.
 
+### Performing a sync
+By default all files are downloaded in `~/OneDrive`. After authorizing the application, a sync of your data can be performed by running:
+```
+onedrive --synchronize
+```
+This will synchronize files from your OneDrive account to your `~/OneDrive` local directory.
+
+If you prefer to use your local files as stored in `~/OneDrive` as the 'source of truth' use the following sync command:
+```
+onedrive --synchronize --local-first
+```
+
+### Performing a selective directory sync
+In some cases it may be desirable to sync a single directory under ~/OneDrive without having to change your client configuration. To do this use the following command:
+```
+onedrive --synchronize --single-directory '<dir_name>'
+```
+
+Example: If the full path is `~/OneDrive/mydir`, the command would be `onedrive --synchronize --single-directory 'mydir'`
+
+### Performing a 'one-way' sync
+In some cases it may be desirable to 'upload only' to OneDrive. To do this use the following command:
+```
+onedrive --synchronize --upload-only 
+```
+
+### Increasing logging level
+When running a sync it may be desirable to see additional information as to the progress and operation of the client. To do this, use the following command:
+```
+onedrive --synchronize --verbose
+```
+
+### Client Activity Log
+When running onedrive all actions are logged to `/var/log/onedrive/`
+
+All logfiles will be in the format of `%username%.onedrive.log`
+
+An example of the log file is below:
+```
+2018-Apr-07 17:09:32.1162837 Loading config ...
+2018-Apr-07 17:09:32.1167908 No config file found, using defaults
+2018-Apr-07 17:09:32.1170626 Initializing the OneDrive API ...
+2018-Apr-07 17:09:32.5359143 Opening the item database ...
+2018-Apr-07 17:09:32.5515295 All operations will be performed in: /root/OneDrive
+2018-Apr-07 17:09:32.5518387 Initializing the Synchronization Engine ...
+2018-Apr-07 17:09:36.6701351 Applying changes of Path ID: <redacted>
+2018-Apr-07 17:09:37.4434282 Adding OneDrive Root to the local database
+2018-Apr-07 17:09:37.4478342 The item is already present
+2018-Apr-07 17:09:37.4513752 The item is already present
+2018-Apr-07 17:09:37.4550062 The item is already present
+2018-Apr-07 17:09:37.4586444 The item is already present
+2018-Apr-07 17:09:37.7663571 Adding OneDrive Root to the local database
+2018-Apr-07 17:09:37.7739451 Fetching details for OneDrive Root
+2018-Apr-07 17:09:38.0211861 OneDrive Root exists in the database
+2018-Apr-07 17:09:38.0215375 Uploading differences of .
+2018-Apr-07 17:09:38.0220464 Processing root
+2018-Apr-07 17:09:38.0224884 The directory has not changed
+2018-Apr-07 17:09:38.0229369 Processing Documents
+2018-Apr-07 17:09:38.02338 The directory has not changed
+2018-Apr-07 17:09:38.0237678 Processing Attachments
+2018-Apr-07 17:09:38.0242285 The directory has not changed
+2018-Apr-07 17:09:38.0245977 Processing <redacted>
+2018-Apr-07 17:09:38.0250788 The directory has not changed
+2018-Apr-07 17:09:38.0254657 Processing asdf
+2018-Apr-07 17:09:38.0259923 The directory has not changed
+2018-Apr-07 17:09:38.0263547 Uploading new items of .
+2018-Apr-07 17:09:38.5708652 Applying changes of Path ID: <redacted>
+```
+
 ### Uninstall
 ```sh
 sudo make uninstall
@@ -65,8 +134,8 @@ sudo make uninstall
 rm -rf .config/onedrive
 ```
 
-## Configuration
-Configuration is optional. By default all files are downloaded in `~/OneDrive` and only hidden files are skipped.
+## Additional Configuration
+Additional configuration is optional. 
 If you want to change the defaults, you can copy and edit the included config file into your `~/.config/onedrive` directory:
 ```sh
 mkdir -p ~/.config/onedrive
@@ -117,8 +186,8 @@ You can run multiple instances of the application specifying a different config 
 To do this you can use the `--confdir` parameter.
 Here is an example:
 ```sh
-onedrive --monitor --confdir="~/.config/onedrivePersonal" &
-onedrive --monitor --confdir="~/.config/onedriveWork" &
+onedrive --synchronize --monitor --confdir="~/.config/onedrivePersonal" &
+onedrive --synchronize --monitor --confdir="~/.config/onedriveWork" &
 ```
 
 `--monitor` keeps the application running and monitoring for changes
@@ -142,17 +211,26 @@ If you encounter any bugs you can report them here on Github. Before filing an i
 ```text
 Usage: onedrive [OPTION]...
 
-no option        Sync and exit
-       --confdir Set the directory used to store the configuration files
--d    --download Only download remote changes
-        --logout Logout the current user
--m     --monitor Keep monitoring for local and remote changes
-   --print-token Print the access token, useful for debugging
-        --resync Forget the last saved state, perform a full sync
-       --syncdir Set the directory used to sync the files that are synced
--v     --verbose Print more details, useful for debugging
-       --version Print the version and exit
--h        --help This help information.
+no option        		   No Sync and exit
+                 --confdir Set the directory used to store the configuration files
+        --create-directory Create a directory on OneDrive - no sync will be performed.
+   --destination-directory Destination directory for renamed or move on OneDrive - no sync will be performed.
+              --debug-http Debug OneDrive HTTP communication.
+-d              --download Only download remote changes
+             --local-first Synchronize from the local directory source first, before downloading changes from OneDrive.
+                  --logout Logout the current user
+-m               --monitor Keep monitoring for local and remote changes
+             --print-token Print the access token, useful for debugging
+                  --resync Forget the last saved state, perform a full sync
+        --remove-directory Remove a directory on OneDrive - no sync will be performed.
+        --single-directory Specify a single local directory within the OneDrive root to sync.
+        --source-directory Source directory to rename or move on OneDrive - no sync will be performed.
+                 --syncdir Set the directory used to sync the files that are synced
+             --synchronize Perform a synchronization
+             --upload-only Only upload to OneDrive, do not sync changes from OneDrive locally
+-v               --verbose Print more details, useful for debugging
+                 --version Print the version and exit
+-h                  --help This help information.
 ```
 
 ### File naming

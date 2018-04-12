@@ -73,7 +73,7 @@ int main(string[] args)
 		if (opt.helpWanted) {
 			defaultGetoptPrinter(
 				"Usage: onedrive [OPTION]...\n\n" ~
-				"no option        Sync and exit",
+				"no option        No sync and exit",
 				opt.options
 			);
 			return EXIT_SUCCESS;
@@ -284,15 +284,15 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 				log.vlog("Syncing changes from this selected path: ", singleDirectory);
 				if (localFirst) {
 					if (uploadOnly){
-						log.vlog("Syncing changes from selected local path only - NOT syncing data changes from OneDrive ...");
+						log.log("Syncing changes from selected local path only - NOT syncing data changes from OneDrive ...");
 						sync.scanForDifferences(localPath);
 					} else {
-						log.vlog("Syncing changes from selected local path first before downloading changes from OneDrive ...");
+						log.log("Syncing changes from selected local path first before downloading changes from OneDrive ...");
 						sync.scanForDifferences(localPath);
 						sync.applyDifferencesSingleDirectory(remotePath);
 					}
 				} else {
-					log.vlog("Syncing changes from selected OneDrive path first before uploading local changes ...");
+					log.log("Syncing changes from selected OneDrive path first before uploading local changes ...");
 					sync.applyDifferencesSingleDirectory(remotePath);
 					sync.scanForDifferences(localPath);
 				}
@@ -307,6 +307,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 					}
 				} else {
 					// upload only
+					log.log("Syncing changes from local path only - NOT syncing data changes from OneDrive ...");
 					sync.scanForDifferences(localPath);
 				}
 			}
