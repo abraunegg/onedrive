@@ -24,16 +24,22 @@ clean:
 install: all
 	install -D onedrive $(DESTDIR)$(PREFIX)/bin/onedrive
 	install -D -m 644 onedrive.service $(DESTDIR)/usr/lib/systemd/user/onedrive.service
+	install -D -m 644 onedrive@.service $(DESTDIR)/usr/lib/systemd/user/onedrive@.service
+	mkdir -p /var/log/onedrive
+	chown root.users /var/log/onedrive
+	chmod 0775 /var/log/onedrive
 
 onedrive: version $(SOURCES)
 	$(DC) $(DFLAGS) $(SOURCES)
 
 onedrive.service:
 	sed "s|@PREFIX@|$(PREFIX)|g" systemd.units/onedrive.service.in > onedrive.service
+	sed "s|@PREFIX@|$(PREFIX)|g" systemd.units/onedrive@.service.in > onedrive@.service
 
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/onedrive
 	rm -f $(DESTDIR)/usr/lib/systemd/user/onedrive.service
+	rm -f $(DESTDIR)/usr/lib/systemd/user/onedrive@.service
 
 version: .git/HEAD .git/index
 	echo $(shell git describe --tags) >version

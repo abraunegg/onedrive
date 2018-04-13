@@ -55,12 +55,13 @@ make
 cp %{_builddir}/%{name}-%{version}/onedrive %{buildroot}/usr/bin/onedrive
 cp %{_builddir}/%{name}-%{version}/logrotate/onedrive.logrotate %{buildroot}/etc/logrotate.d/onedrive
 %if 0%{?with_systemd}
-%{__mkdir_p} %{buildroot}/usr/lib/systemd/user/
-cp %{_builddir}/%{name}-%{version}/onedrive.service %{buildroot}/usr/lib/systemd/user/onedrive.service
+%{__mkdir_p} %{buildroot}/%{_unitdir}
+cp %{_builddir}/%{name}-%{version}/onedrive.service %{buildroot}/%{_unitdir}/onedrive.service
+cp %{_builddir}/%{name}-%{version}/onedrive.service %{buildroot}/%{_unitdir}/onedrive@.service
 %else
-%{__mkdir_p} %{buildroot}/etc/init.d
+%{__mkdir_p} %{buildroot}/%{_initrddir}
 cp %{_builddir}/%{name}-%{version}/init.d/onedrive_service.sh %{buildroot}/usr/bin/onedrive_service.sh
-cp %{_builddir}/%{name}-%{version}/init.d/onedrive.init %{buildroot}/etc/init.d/onedrive
+cp %{_builddir}/%{name}-%{version}/init.d/onedrive.init %{buildroot}/%{_initrddir}/onedrive
 %endif
 
 %clean
@@ -70,10 +71,11 @@ cp %{_builddir}/%{name}-%{version}/init.d/onedrive.init %{buildroot}/etc/init.d/
 %attr(0555,root,root) /usr/bin/onedrive
 %attr(0644,root,root) /etc/logrotate.d/onedrive
 %if 0%{?with_systemd}
-%attr(0555,root,root) /usr/lib/systemd/user/onedrive.service
+%attr(0555,root,root) %{_unitdir}/onedrive.service
+%attr(0555,root,root) %{_unitdir}/onedrive@.service
 %else
 %attr(0555,root,root) /usr/bin/onedrive_service.sh
-%attr(0555,root,root) /etc/init.d/onedrive
+%attr(0555,root,root) %{_initrddir}/onedrive
 %endif
 
 %pre
@@ -84,6 +86,9 @@ rm -f /root/.config/onedrive/resume_upload
 %post
 mkdir -p /root/.config/onedrive
 mkdir -p /root/OneDrive
+mkdir -p /var/log/onedrive
+chown root.users /var/log/onedrive
+chmod 0775 /var/log/onedrive
 %if 0%{?with_systemd}
 %systemd_post onedrive.service
 %else
