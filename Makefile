@@ -29,7 +29,7 @@ onedrive: version $(SOURCES)
 	$(DC) $(DFLAGS) $(SOURCES)
 
 onedrive.service:
-	sed "s|@PREFIX@|$(PREFIX)|g" onedrive.service.in > onedrive.service
+	sed "s|@PREFIX@|$(PREFIX)|g" systemd.units/onedrive.service.in > onedrive.service
 
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/onedrive
