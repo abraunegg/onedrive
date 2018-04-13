@@ -128,3 +128,78 @@ unittest
 	assert(multiGlobMatch(".hidden", "file|.*"));
 	assert(!multiGlobMatch("foo.bar", "foo|bar"));
 }
+
+bool isValidName(string path)
+{
+	// allow root item
+	if (path == ".") {
+		return true;
+	}
+
+	string itemName = baseName(path);
+
+	// Restriction and limitations about windows naming files
+	// https://msdn.microsoft.com/en-us/library/aa365247
+	auto invalidNameReg =
+		ctRegex!(
+			// leading whitespace and trailing whitespace/dot
+			`^\s.*|^.*[\s\.]$|` ~
+			// invalid character
+			`.*[#%<>:"\|\?*/\\].*|` ~
+			// reserved device name and trailing .~
+			`(?:CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(?:[.].+)?$`
+		);
+	auto m = match(itemName, invalidNameReg);
+
+	return m.empty;
+}
+
+unittest
+{
+	// that should detect invalid file/directory name.
+	assert(isValidName("."));
+	assert(isValidName("./general.file"));
+	assert(!isValidName("./ leading_white_space"));
+	assert(!isValidName("./trailing_white_space "));
+	assert(!isValidName("./trailing_dot."));
+	assert(!isValidName("./includes#in the path"));
+	assert(!isValidName("./includes%in the path"));
+	assert(!isValidName("./includes<in the path"));
+	assert(!isValidName("./includes>in the path"));
+	assert(!isValidName("./includes:in the path"));
+	assert(!isValidName(`./includes"in the path`));
+	assert(!isValidName("./includes|in the path"));
+	assert(!isValidName("./includes?in the path"));
+	assert(!isValidName("./includes*in the path"));
+	assert(!isValidName("./includes / in the path"));
+	assert(!isValidName(`./includes\ in the path`));
+	assert(!isValidName(`./includes\\ in the path`));
+	assert(!isValidName(`./includes\\\\ in the path`));
+	assert(!isValidName("./includes\\ in the path"));
+	assert(!isValidName("./includes\\\\ in the path"));
+	assert(!isValidName("./CON"));
+	assert(!isValidName("./CON.text"));
+	assert(!isValidName("./PRN"));
+	assert(!isValidName("./AUX"));
+	assert(!isValidName("./NUL"));
+	assert(!isValidName("./COM0"));
+	assert(!isValidName("./COM1"));
+	assert(!isValidName("./COM2"));
+	assert(!isValidName("./COM3"));
+	assert(!isValidName("./COM4"));
+	assert(!isValidName("./COM5"));
+	assert(!isValidName("./COM6"));
+	assert(!isValidName("./COM7"));
+	assert(!isValidName("./COM8"));
+	assert(!isValidName("./COM9"));
+	assert(!isValidName("./LPT0"));
+	assert(!isValidName("./LPT1"));
+	assert(!isValidName("./LPT2"));
+	assert(!isValidName("./LPT3"));
+	assert(!isValidName("./LPT4"));
+	assert(!isValidName("./LPT5"));
+	assert(!isValidName("./LPT6"));
+	assert(!isValidName("./LPT7"));
+	assert(!isValidName("./LPT8"));
+	assert(!isValidName("./LPT9"));
+}

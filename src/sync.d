@@ -599,6 +599,12 @@ final class SyncEngine
 			log.vlog("Filtered out");
 			return;
 		}
+		
+		// Restriction and limitations about windows naming files
+		if (!isValidName(path)) {
+			log.vlog("Skipping item - invalid name (Microsoft Naming Convention): ", path);
+			return;
+		}
 
 		final switch (item.type) {
 		case ItemType.dir:
@@ -718,11 +724,17 @@ final class SyncEngine
 				log.vlog("Skipping item - symbolic link: ", path);
 				return;
 			}
+			
+			// Restriction and limitations about windows naming files
+			if (!isValidName(path)) {
+				log.vlog("Skipping item - invalid name (Microsoft Naming Convention): ", path);
+				return;
+			}
 
 			// skip filtered items
 			if (path != ".") {
 				if (selectiveSync.isNameExcluded(baseName(path))) {
-					log.vlog("Skipping item - invalid name: ", path);
+					log.vlog("Skipping item - name excluded: ", path);
 					return;
 				}
 				if (selectiveSync.isPathExcluded(path)) {
