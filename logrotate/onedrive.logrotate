@@ -1,0 +1,21 @@
+# Any OneDrive Client logs configured for here 
+
+/var/log/onedrive/*log {
+    # rotate log files weekly
+    weekly
+
+    # keep 4 weeks worth of backlogs
+    rotate 4
+
+    # create new (empty) log files after rotating old ones
+    create
+
+    # use date as a suffix of the rotated file
+    dateext
+   
+    # compress the log files
+    compress
+    
+    # missing files OK
+    missingok
+}
