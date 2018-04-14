@@ -6,22 +6,21 @@
 %endif
 
 Name:       onedrive
-Version:    1.3
-Release:    6%{?dist}
+Version:    1.1.1
+Release:    1%{?dist}
 Summary:    Microsoft OneDrive Client
 Group:      System Environment/Network
 License:    GPLv3
-URL:        https://github.com/skilion/onedrive
-Source0:    %{name}-%{version}.tar.gz
+URL:        https://github.com/abraunegg/onedrive
+#Source0:    %{name}-%{version}.tar.gz
 BuildRoot:  %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
-BuildRequires:  git
+BuildRequires:	git
 BuildRequires:	dmd >= 2.079.0
 BuildRequires:	sqlite-devel >= 3.7.15
 BuildRequires:	libcurl-devel
-
-Requires:	sqlite >= 3.7.15
-Requires:	libcurl 
+Requires:		sqlite >= 3.7.15
+Requires:		libcurl
 
 %if 0%{?with_systemd}
 Requires(post):    systemd
@@ -41,10 +40,14 @@ Microsoft OneDrive Client for Linux
 
 %prep
 
-%setup -q
+%setup -c -D -T
+# This creates cd %{_builddir}/%{name}-%{version}/
+# clone the repository
+git clone https://github.com/abraunegg/onedrive.git .
+# We should now have %{_builddir}/%{name}-%{version} with the git clone
 
 %build
-cd %{_builddir}/%{name}-%{version}/
+cd %{_builddir}/%{name}-%{version}
 make
 
 %install
@@ -59,9 +62,9 @@ cp %{_builddir}/%{name}-%{version}/logrotate/onedrive.logrotate %{buildroot}/etc
 cp %{_builddir}/%{name}-%{version}/onedrive.service %{buildroot}/%{_unitdir}/onedrive.service
 cp %{_builddir}/%{name}-%{version}/onedrive.service %{buildroot}/%{_unitdir}/onedrive@.service
 %else
-%{__mkdir_p} %{buildroot}/%{_initrddir}
+%{__mkdir_p} %{buildroot}%{_initrddir}
 cp %{_builddir}/%{name}-%{version}/init.d/onedrive_service.sh %{buildroot}/usr/bin/onedrive_service.sh
-cp %{_builddir}/%{name}-%{version}/init.d/onedrive.init %{buildroot}/%{_initrddir}/onedrive
+cp %{_builddir}/%{name}-%{version}/init.d/onedrive.init %{buildroot}%{_initrddir}/onedrive
 %endif
 
 %clean
