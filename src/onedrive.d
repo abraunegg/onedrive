@@ -3,7 +3,7 @@ import std.datetime, std.exception, std.file, std.json, std.path;
 import std.stdio, std.string, std.uni, std.uri;
 import config;
 static import log;
-
+shared bool debugResponse = false;
 
 private immutable {
 	string clientId = "22c49a0d-d21c-4792-aed1-8f163c982546";
@@ -55,6 +55,7 @@ final class OneDriveApi
 		http = HTTP();
 		if (debugHttp) {
 			http.verbose = true;
+			.debugResponse = true;
         }
 	}
 
@@ -308,6 +309,9 @@ final class OneDriveApi
 		if (!skipToken) addAccessTokenHeader(); // HACK: requestUploadStatus
 		auto response = perform();
 		checkHttpCode(response);
+		if (.debugResponse){
+			log.vlog("OneDrive Response: ", response);
+        }
 		return response;
 	}
 

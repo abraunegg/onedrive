@@ -63,7 +63,7 @@ int main(string[] args)
 			"confdir", "Set the directory used to store the configuration files", &configDirName,
 			"create-directory", "Create a directory on OneDrive - no sync will be performed.", &createDirectory,
 			"destination-directory", "Destination directory for renamed or move on OneDrive - no sync will be performed.", &destinationDirectory,
-			"debug-http", "Debug OneDrive HTTP communication.", &debugHttp,
+			"debug-https", "Debug OneDrive HTTPS communication.", &debugHttp,
 			"download|d", "Only download remote changes", &downloadOnly,
 			"local-first", "Synchronize from the local directory source first, before downloading changes from OneDrive.", &localFirst,
 			"logout", "Logout the current user", &logout,
