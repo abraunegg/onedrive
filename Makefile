@@ -29,6 +29,7 @@ install: all
 	mkdir -p /var/log/onedrive
 	chown root.users /var/log/onedrive
 	chmod 0775 /var/log/onedrive
+	rm -f ~/.config/onedrive/items.sqlite3
 
 onedrive: version $(SOURCES)
 	$(DC) $(DFLAGS) $(SOURCES)
@@ -42,6 +43,7 @@ uninstall:
 	rm -f $(DESTDIR)/usr/lib/systemd/user/onedrive.service
 	rm -f $(DESTDIR)/usr/lib/systemd/user/onedrive@.service
 	rm -f /etc/logrotate.d/onedrive
+	rm -rf ~/.config/onedrive
 
 version: .git/HEAD .git/index
 	echo $(shell git describe --tags) >version
