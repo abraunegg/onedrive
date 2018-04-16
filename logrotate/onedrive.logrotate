@@ -1,7 +1,10 @@
 # Any OneDrive Client logs configured for here 
 
 /var/log/onedrive/*log {
-    # rotate log files weekly
+	# What user / group should logrotate use?
+	su root users
+	
+	# rotate log files weekly
     weekly
 
     # keep 4 weeks worth of backlogs
