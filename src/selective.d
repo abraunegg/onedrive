@@ -27,18 +27,16 @@ final class SelectiveSync
 		this.mask = wild2regex(mask);
 	}
 
+	// config file skip_file parameter
 	bool isNameExcluded(string name)
 	{
-		auto validName = isValidFilename(name);
-		if (validName){
-			// This is a valid filename - do NOT exclude
-			return false;
-		} else {
-			// Invalid file name - exclude this name
-			return true;
-		}
+		// Does the file match skip_file config entry?
+		// Returns true if the file matches a skip_file config entry
+		// Returns false if no match
+		return !name.matchFirst(mask).empty;
 	}
 
+	// config sync_list file handling
 	bool isPathExcluded(string path)
 	{
 		return .isPathExcluded(path, paths);

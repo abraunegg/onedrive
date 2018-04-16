@@ -731,10 +731,10 @@ final class SyncEngine
 				return;
 			}
 
-			// skip filtered items
+			// filter out user configured items to skip
 			if (path != ".") {
 				if (selectiveSync.isNameExcluded(baseName(path))) {
-					log.vlog("Skipping item - name excluded: ", path);
+					log.vlog("Skipping item - excluded by skip_file config: ", path);
 					return;
 				}
 				if (selectiveSync.isPathExcluded(path)) {
@@ -743,6 +743,8 @@ final class SyncEngine
 				}
 			}
 
+			// This item passed all the unwanted checks
+			// We want to upload this new item
 			if (isDir(path)) {
 				Item item;
 				if (!itemdb.selectByPath(path, defaultDriveId, item)) {

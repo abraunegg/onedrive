@@ -27,7 +27,9 @@ final class Config
 	void init()
 	{
 		setValue("sync_dir", "~/OneDrive");
-		setValue("skip_file", ".*|~*");
+		// Configure to skip ONLY temp files (~*.doc etc) by default
+		// Prior configuration was: .*|~*
+		setValue("skip_file", "~*");
 		if (!load(userConfigFilePath)) {
 			log.vlog("No config file found, using defaults");
 		}
