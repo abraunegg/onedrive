@@ -114,16 +114,15 @@ final class OneDriveApi
 		return get(url);
 	}
 
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
-	JSONValue viewChangesByPath(const(char)[] path, const(char)[] deltaLink)
+	// https://developer.microsoft.com/en-us/graph/docs/api-reference/v1.0/api/driveitem_list_children
+	JSONValue viewChildrenById(const(char)[] driveId, const(char)[] id)
 	{
+		// Get a list of children for a given item id
+		// Returns a value array where each array element has the following:
+		//		id,name,eTag,cTag,file,folder,fileSystemInfo,remoteItem,parentReference
 		checkAccessTokenExpired();
-		const(char)[] url = deltaLink;
-		if (url == null) {
-			if (path == ".") url = driveUrl ~ "/root/delta";
-			else url = itemByPathUrl ~ encodeComponent(path) ~ ":/delta";
-			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
-		}
+		//		GET /drives/{drive-id}/items/{item-id}/children
+		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/children";
 		return get(url);
 	}
 
