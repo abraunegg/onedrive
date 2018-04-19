@@ -123,6 +123,8 @@ final class SyncEngine
 	private string accountType;
 	// default root id
 	private string defaultRootId;
+	// free space remaining at init()
+	private long remainingFreeSpace;
 
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
@@ -141,11 +143,13 @@ final class SyncEngine
 		accountType = oneDriveDetails["driveType"].str;
 		defaultDriveId = oneDriveDetails["id"].str;
 		defaultRootId = onedrive.getDefaultRoot["id"].str;
+		remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
 		
 		// display accountType, defaultDriveId & defaultRootId
 		log.vlog("Account Type: ", accountType);
 		log.vlog("Default Drive ID: ", defaultDriveId);
 		log.vlog("Default Root ID: ", defaultRootId);
+		log.vlog("Remaining Free Space: ", remainingFreeSpace);
 		
 		// check if there is an interrupted upload session
 		if (session.restore()) {
@@ -292,7 +296,7 @@ final class SyncEngine
 			// Will provide a JSON of children of the item id
 			changes = onedrive.viewChildrenById(driveId, id);
 		
-			// For each 'value' item (child resource ..
+			// For each 'value' item (child resource) ..
 			foreach (item; changes["value"].array) {
 				bool isRoot = (id == defaultRootId); // fix for https://github.com/skilion/onedrive/issues/269
 				// Apply the change
@@ -746,9 +750,19 @@ final class SyncEngine
 					uploadNewItems(entry.name);
 				}
 			} else {
-				Item item;
-				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
-					uploadNewFile(path);
+				// Item is a file
+				// Can we upload this file - is there enough free space - https://github.com/skilion/onedrive/issues/73
+				auto fileSize = getSize(path);
+				if ((remainingFreeSpace - fileSize) > 0){
+					Item item;
+					if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+						uploadNewFile(path);
+						remainingFreeSpace = (remainingFreeSpace - fileSize);
+						log.vlog("Remaining free space: ", remainingFreeSpace);
+					}
+				} else {
+					// Not enough free space
+					log.log("Skipping item '", path, "' due to insufficient free space available on OneDrive");
 				}
 			}
 		} else {
