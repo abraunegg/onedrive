@@ -181,14 +181,13 @@ final class SyncEngine
 			if (e.httpStatusCode == 404) {
 				// The directory was not found 
 				log.vlog("ERROR: The requested single directory to sync was not found on OneDrive");
-				// We are expecting this directory however as this is a single directory sync
-				uploadCreateDir(path);
+				return;
 			}
 		} 
 		// OK - it should exist, get the driveId and rootId for this folder
 		log.vlog("Checking for differences from OneDrive ...");
 		
-		// If the OneDrive Root is not in the local database, creating a remote folder in the selected path will fail
+		// If the OneDrive Root is not in the local database, creating a remote folder will fail
 		checkDatabaseForOneDriveRoot();
 		
 		// Configure driveID and folderId
@@ -289,10 +288,17 @@ final class SyncEngine
 		log.vlog("Applying changes of Path ID: " ~ id);
 		
 		for (;;) {
-			// Will provide a JSON of children of the item id
-			changes = onedrive.viewChildrenById(driveId, id);
-		
-			// For each 'value' item (child resource ..
+			try {
+				changes = onedrive.viewChangesById(driveId, id, deltaLink);
+			} catch (OneDriveException e) {
+				if (e.httpStatusCode == 410) {
+					log.vlog("Delta link expired, resyncing...");
+					deltaLink = null;
+					continue;
+				} else {
+					throw e;
+				}
+			}
 			foreach (item; changes["value"].array) {
 				bool isRoot = (id == defaultRootId); // fix for https://github.com/skilion/onedrive/issues/269
 				// Apply the change
