@@ -22,15 +22,15 @@ clean:
 	rm -f onedrive onedrive.o onedrive.service
 
 install: all
+	install -D onedrive $(DESTDIR)$(PREFIX)/bin/onedrive
+	install -D -m 644 onedrive.service $(DESTDIR)/usr/lib/systemd/user/onedrive.service
+	install -D -m 644 onedrive@.service $(DESTDIR)/usr/lib/systemd/user/onedrive@.service
+	install -D -m 644 logrotate/onedrive.logrotate /etc/logrotate.d/onedrive
 	mkdir -p /var/log/onedrive
 	chown root.users /var/log/onedrive
 	chmod 0775 /var/log/onedrive
-	install -D onedrive $(DESTDIR)$(PREFIX)/bin/onedrive
-	install -D -m 644 logrotate/onedrive.logrotate /etc/logrotate.d/onedrive
-	install -D -m 644 onedrive.service $(DESTDIR)/usr/lib/systemd/user/onedrive.service
-	install -D -m 644 onedrive@.service $(DESTDIR)/usr/lib/systemd/user/onedrive@.service
 	rm -f ~/.config/onedrive/items.sqlite3
-	
+
 onedrive: version $(SOURCES)
 	$(DC) $(DFLAGS) $(SOURCES)
 
