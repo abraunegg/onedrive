@@ -211,8 +211,8 @@ final class SyncEngine
 		Item rootPathItem = makeItem(rootPathDetails);
 		
 		// Set defaults for the root folder
-		string driveId = defaultDriveId; // Should give something like 12345abcde1234a1
-		string rootId = defaultRootId; // Should give something like 12345ABCDE1234A1!101
+		string driveId = rootPathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
+		string rootId = rootPathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
 		
 		// Query the database
 		if (!itemdb.selectById(driveId, rootId, rootPathItem)) {
@@ -288,9 +288,6 @@ final class SyncEngine
 	// id is the root of the drive or a shared folder
 	private void applyDifferences(string driveId, const(char)[] id)
 	{
-		// If the OneDrive Root is not in the local database, add it
-		checkDatabaseForOneDriveRoot();
-	
 		JSONValue changes;
 		string deltaLink = itemdb.getDeltaLink(driveId, id);
 		log.vlog("Applying changes of Path ID: " ~ id);
@@ -298,7 +295,7 @@ final class SyncEngine
 		for (;;) {
 			// Will provide a JSON of children of the item id
 			changes = onedrive.viewChildrenById(driveId, id);
-
+		
 			// For each 'value' item (child resource) ..
 			foreach (item; changes["value"].array) {
 				bool isRoot = (id == defaultRootId); // fix for https://github.com/skilion/onedrive/issues/269
@@ -329,12 +326,10 @@ final class SyncEngine
 		//if (isItemRoot(driveItem) || !item.parentId || isRoot) {
 		// Post 'Key not found: lastModifiedDateTime' makeItem change, if the DB has items & OneDrive returns a tombstone, !item.parentID will always return true - thus we get in a loop
 		// Remove !item.parentId and || qualifier - these two are better at flagging is this the OneDrive root
-		
-		// Only if both of these are true, add the root item to the database
 		if (isItemRoot(driveItem) && isRoot) { 
 			log.vlog("Adding OneDrive Root to the local database");
 			item.parentId = null; // ensures that it has no parent
-			item.driveId = defaultDriveId; // HACK: makeItem() cannot set the driveId propery of the root
+			item.driveId = driveId; // HACK: makeItem() cannot set the driveId propery of the root
 			itemdb.upsert(item);
 			return;
 		}
