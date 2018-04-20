@@ -46,10 +46,7 @@ private Item makeItem(const ref JSONValue driveItem)
 		cTag: "cTag" in driveItem ? driveItem["cTag"].str : null, // cTag is missing in old files (and all folders in OneDrive Biz)
 		// OneDrive API Change: https://github.com/OneDrive/onedrive-api-docs/issues/834
 		// Fixes issue 'Key not found: lastModifiedDateTime' (#334, #337)
-		//mtime: ("fileSystemInfo" in driveItem && "lastModifiedDateTime" in driveItem["fileSystemInfo"])? SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str) : SysTime(0),
-		// Revert 77c0cdbe24b1360b82685b4e5842df2ae23e7999 temp
-		mtime: "fileSystemInfo" in driveItem ? SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str) : SysTime(0),
-		
+		mtime: ("fileSystemInfo" in driveItem && "lastModifiedDateTime" in driveItem["fileSystemInfo"])? SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str) : SysTime(0),
 	};
 
 	if (isItemFile(driveItem)) {
