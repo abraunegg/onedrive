@@ -44,9 +44,7 @@ private Item makeItem(const ref JSONValue driveItem)
 		name: "name" in driveItem ? driveItem["name"].str : null, // name may be missing for deleted files in OneDrive Biz
 		eTag: "eTag" in driveItem ? driveItem["eTag"].str : null, // eTag is not returned for the root in OneDrive Biz
 		cTag: "cTag" in driveItem ? driveItem["cTag"].str : null, // cTag is missing in old files (and all folders in OneDrive Biz)
-		// OneDrive API Change: https://github.com/OneDrive/onedrive-api-docs/issues/834
-		// Fixes issue 'Key not found: lastModifiedDateTime' (#334, #337)
-		mtime: ("fileSystemInfo" in driveItem && "lastModifiedDateTime" in driveItem["fileSystemInfo"])? SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str) : SysTime(0),
+		mtime: "fileSystemInfo" in driveItem ? SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str) : SysTime(0),
 	};
 
 	if (isItemFile(driveItem)) {
@@ -119,10 +117,6 @@ final class SyncEngine
 	private string[2][] idsToDelete;
 	// default drive id
 	private string defaultDriveId;
-	// type of OneDrive account 
-	private string accountType;
-	// default root id
-	private string defaultRootId;
 
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
@@ -136,17 +130,6 @@ final class SyncEngine
 
 	void init()
 	{
-		// Set accountType, defaultDriveId & defaultRootId once and reuse where possible
-		auto oneDriveDetails = onedrive.getDefaultDrive();
-		accountType = oneDriveDetails["driveType"].str;
-		defaultDriveId = oneDriveDetails["id"].str;
-		defaultRootId = onedrive.getDefaultRoot["id"].str;
-		
-		// display accountType, defaultDriveId & defaultRootId
-		log.vlog("Account Type: ", accountType);
-		log.vlog("Default Drive ID: ", defaultDriveId);
-		log.vlog("Default Root ID: ", defaultRootId);
-		
 		// check if there is an interrupted upload session
 		if (session.restore()) {
 			log.log("Continuing the upload session ...");
@@ -159,9 +142,8 @@ final class SyncEngine
 	void applyDifferences()
 	{
 		// Set defaults for the root folder
-		string driveId = defaultDriveId;
-		string rootId = defaultRootId;
-		
+		string driveId = defaultDriveId = onedrive.getDefaultDrive()["id"].str;
+		string rootId = onedrive.getDefaultRoot["id"].str;
 		applyDifferences(driveId, rootId);
 
 		// check all remote folders
@@ -174,9 +156,8 @@ final class SyncEngine
 	void applyDifferencesSingleDirectory(string path)
 	{
 		// test if the path we are going to sync from actually exists on OneDrive
-		JSONValue onedrivePathDetails;
 		try {
-			onedrivePathDetails = onedrive.getPathDetails(path);
+			onedrive.getPathDetails(path);
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 404) {
 				// The directory was not found 
@@ -186,11 +167,13 @@ final class SyncEngine
 		} 
 		// OK - it should exist, get the driveId and rootId for this folder
 		log.vlog("Checking for differences from OneDrive ...");
+		JSONValue onedrivePathDetails = onedrive.getPathDetails(path); // Returns a JSON String for the OneDrive Path
 		
 		// If the OneDrive Root is not in the local database, creating a remote folder will fail
 		checkDatabaseForOneDriveRoot();
 		
-		// Configure driveID and folderId
+		// Configure the defaults
+		defaultDriveId = onedrive.getDefaultDrive()["id"].str;
 		string driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
 		string folderId = onedrivePathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
 		
@@ -204,6 +187,8 @@ final class SyncEngine
 		log.vlog("Fetching details for OneDrive Root");
 		JSONValue rootPathDetails = onedrive.getDefaultRoot(); // Returns a JSON Value
 		Item rootPathItem = makeItem(rootPathDetails);
+		
+		// configure driveId and rootId for the OneDrive Root
 		
 		// Set defaults for the root folder
 		string driveId = rootPathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
@@ -234,6 +219,10 @@ final class SyncEngine
 	// delete a directory on OneDrive without syncing
 	auto deleteDirectoryNoSync(string path)
 	{
+		// Set defaults for the root folder
+		defaultDriveId = onedrive.getDefaultDrive()["id"].str;
+		string rootId = onedrive.getDefaultRoot["id"].str;
+		
 		// Attempt to delete the requested path within OneDrive without performing a sync
 		log.vlog("Attempting to delete the requested path within OneDrive");
 		
@@ -287,6 +276,9 @@ final class SyncEngine
 		string deltaLink = itemdb.getDeltaLink(driveId, id);
 		log.vlog("Applying changes of Path ID: " ~ id);
 		
+		// Get the OneDrive Root ID
+		string oneDriveRootId = onedrive.getDefaultRoot["id"].str;
+		
 		for (;;) {
 			try {
 				changes = onedrive.viewChangesById(driveId, id, deltaLink);
@@ -299,8 +291,13 @@ final class SyncEngine
 					throw e;
 				}
 			}
-			foreach (item; changes["value"].array) {
-				bool isRoot = (id == defaultRootId); // fix for https://github.com/skilion/onedrive/issues/269
+			foreach (item; changes["value"].array) {			
+				// Test is this is the OneDrive Root - not say a single folder root sync
+				bool isRoot = false;
+				if ((id == oneDriveRootId) && (item["name"].str == "root")) { // fix for https://github.com/skilion/onedrive/issues/269
+					// This IS the OneDrive Root
+					isRoot = true;
+				}
 				// Apply the change
 				applyDifference(item, driveId, isRoot);
 			}
@@ -322,29 +319,25 @@ final class SyncEngine
 	// process the change of a single DriveItem
 	private void applyDifference(JSONValue driveItem, string driveId, bool isRoot)
 	{
-		bool unwanted = false;
 		Item item = makeItem(driveItem);
-		
-		//if (isItemRoot(driveItem) || !item.parentId || isRoot) {
-		// Post 'Key not found: lastModifiedDateTime' makeItem change, if the DB has items & OneDrive returns a tombstone, !item.parentID will always return true - thus we get in a loop
-		// Remove !item.parentId and || qualifier - these two are better at flagging is this the OneDrive root
-		if (isItemRoot(driveItem) && isRoot) { 
+		//log.vlog("Processing item to apply differences");
+
+		if (isItemRoot(driveItem) || !item.parentId || isRoot) {
 			log.vlog("Adding OneDrive Root to the local database");
 			item.parentId = null; // ensures that it has no parent
 			item.driveId = driveId; // HACK: makeItem() cannot set the driveId propery of the root
+			
+			// What parent.driveId and parent.id are we using?
+			//log.vlog("Parent Drive ID: ", item.driveId);
+			//log.vlog("Parent ID:       ", item.parentId);
 			itemdb.upsert(item);
 			return;
 		}
-		
+
+		bool unwanted;
 		unwanted |= skippedItems.find(item.parentId).length != 0;
 		unwanted |= selectiveSync.isNameExcluded(item.name);
 
-		// what if this item's state is deleted - ie - OneDrive now returns a tombstoned item with no lastModifiedDateTime entry
-		if (isItemDeleted(driveItem)) {
-			log.vlog("This remote item is in a deleted state");
-			unwanted = true;
-		}
-		
 		// check the item type
 		if (!unwanted) {
 			if (isItemFile(driveItem)) {
@@ -360,7 +353,7 @@ final class SyncEngine
 			}
 		}
 
-		// check for selective path sync
+		// check for selective sync
 		string path;
 		if (!unwanted) {
 			path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
@@ -370,7 +363,7 @@ final class SyncEngine
 
 		// skip unwanted items early
 		if (unwanted) {
-			log.vlog("Skipping item: ", item.id);
+			log.vlog("Filtered out");
 			skippedItems ~= item.id;
 			return;
 		}
@@ -574,6 +567,12 @@ final class SyncEngine
 		// Make sure the OneDrive Root is in the database
 		checkDatabaseForOneDriveRoot();
 	
+		// make sure defaultDriveId is set
+		if (defaultDriveId == ""){
+			// defaultDriveId is not set ... odd ..
+			defaultDriveId = onedrive.getDefaultDrive()["id"].str;
+		}
+	
 		// scan for changes
 		log.vlog("Uploading differences of ", path);
 		Item item;
@@ -715,6 +714,11 @@ final class SyncEngine
 		if(encodeComponent(path).length < 430){
 			// path is less than 430 characters
 
+			if (defaultDriveId == ""){
+				// defaultDriveId is not set ... odd ..
+				defaultDriveId = onedrive.getDefaultDrive()["id"].str;
+			}
+			
 			// skip unexisting symbolic links
 			if (isSymlink(path) && !exists(readLink(path))) {
 				log.vlog("Skipping item - symbolic link: ", path);
@@ -776,26 +780,39 @@ final class SyncEngine
 			// If this is null or empty - we cant query the database properly
 			if ((parent.driveId == "") && (parent.id == "")){
 				// These are both empty .. not good
+				//log.vlog("WHOOPS: Well this is odd - parent.driveId & parent.id are empty - we have to query OneDrive for some values for the parent");
+				
 				// What path to use?
 				string parentPath = dirName(path);		// will be either . or something else
+				//log.vlog("WHOOPS FIX: Query OneDrive path details for parent: ", parentPath);
+				
 				if (parentPath == "."){
 					// We cant create this directory, as this would essentially equal the users OneDrive root:/
 					checkDatabaseForOneDriveRoot();
 				}
 				
-				JSONValue onedrivePathDetails;
 				try {
-					onedrivePathDetails = onedrive.getPathDetails(parentPath);
+					onedrive.getPathDetails(parentPath);
 				} catch (OneDriveException e) {
 					if (e.httpStatusCode == 404) {
 						// Parent does not exist ... need to create parent
 						uploadCreateDir(parentPath);
 					}
 				}
-							
+				
+				// Get the Parent Path Details
+				JSONValue onedrivePathDetails = onedrive.getPathDetails(parentPath); // Returns a JSON String for the OneDrive Path
+				
+				// JSON Response
+				//log.vlog("WHOOPS JSON Response: ", onedrivePathDetails);
+				
 				// configure the data
 				parent.driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
 				parent.id = onedrivePathDetails["id"].str; // This item's ID. Should give something like 12345ABCDE1234A1!101
+				
+				// What parent.driveId and parent.id did we find?
+				//log.vlog("Using Parent DriveID: ", parent.driveId);
+				//log.vlog("Using Parent ID:      ", parent.id);
 			}
 		
 			// test if the path we are going to create already exists on OneDrive
@@ -842,6 +859,11 @@ final class SyncEngine
 	private void uploadNewFile(string path)
 	{
 		Item parent;
+		
+		if (defaultDriveId == ""){
+			// defaultDriveId is not set ... odd ..
+			defaultDriveId = onedrive.getDefaultDrive()["id"].str;
+		}
 		
 		// Check the database for the parent
 		enforce(itemdb.selectByPath(dirName(path), defaultDriveId, parent), "The parent item is not in the local database");
@@ -932,15 +954,20 @@ final class SyncEngine
 		if ((item.driveId == "") && (item.id == "") && (item.eTag == "")){
 			// These are empty ... we cannot delete if this is empty ....
 			JSONValue onedrivePathDetails = onedrive.getPathDetails(path); // Returns a JSON String for the OneDrive Path
+			//log.vlog("WHOOPS JSON Response: ", onedrivePathDetails);
 			item.driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
 			item.id = onedrivePathDetails["id"].str; // This item's ID. Should give something like 12345ABCDE1234A1!101
 			item.eTag = onedrivePathDetails["eTag"].str; // Should be something like aNjM2NjJFRUVGQjY2NjJFMSE5MzUuMA
+		
+			//log.vlog("item.driveId = ", item.driveId);
+			//log.vlog("item.id = ", item.id);
+			//log.vlog("item.eTag = ", item.eTag);
 		}
 			
 		try {
 			onedrive.deleteById(item.driveId, item.id, item.eTag);
 		} catch (OneDriveException e) {
-			if (e.httpStatusCode == 404) log.log("OneDrive reported: The resource could not be found.");
+			if (e.httpStatusCode == 404) log.log(e.msg);
 			else throw e;
 		}
 		itemdb.deleteById(item.driveId, item.id);
