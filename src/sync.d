@@ -171,8 +171,9 @@ final class SyncEngine
 	void applyDifferences()
 	{
 		// Set defaults for the root folder
-		string driveId = defaultDriveId = onedrive.getDefaultDrive()["id"].str;
-		string rootId = onedrive.getDefaultRoot["id"].str;
+		// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
+		string driveId = defaultDriveId;
+		string rootId = defaultRootId;
 		applyDifferences(driveId, rootId);
 
 		// check all remote folders
@@ -201,9 +202,8 @@ final class SyncEngine
 		// If the OneDrive Root is not in the local database, creating a remote folder will fail
 		checkDatabaseForOneDriveRoot();
 		
-		// Configure the defaults
-		defaultDriveId = onedrive.getDefaultDrive()["id"].str;
-		string driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
+		// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
+		string driveId = defaultDriveId;
 		string folderId = onedrivePathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
 		
 		// Apply any differences found on OneDrive for this path (download data)
@@ -248,9 +248,8 @@ final class SyncEngine
 	// delete a directory on OneDrive without syncing
 	auto deleteDirectoryNoSync(string path)
 	{
-		// Set defaults for the root folder
-		defaultDriveId = onedrive.getDefaultDrive()["id"].str;
-		string rootId = onedrive.getDefaultRoot["id"].str;
+		// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
+		string rootId = defaultRootId;
 		
 		// Attempt to delete the requested path within OneDrive without performing a sync
 		log.vlog("Attempting to delete the requested path within OneDrive");
@@ -305,8 +304,8 @@ final class SyncEngine
 		string deltaLink = itemdb.getDeltaLink(driveId, id);
 		log.vlog("Applying changes of Path ID: " ~ id);
 		
-		// Get the OneDrive Root ID
-		string oneDriveRootId = onedrive.getDefaultRoot["id"].str;
+		// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
+		string oneDriveRootId = defaultRootId;
 		
 		for (;;) {
 			try {
@@ -603,12 +602,6 @@ final class SyncEngine
 		// Make sure the OneDrive Root is in the database
 		checkDatabaseForOneDriveRoot();
 	
-		// make sure defaultDriveId is set
-		if (defaultDriveId == ""){
-			// defaultDriveId is not set ... odd ..
-			defaultDriveId = onedrive.getDefaultDrive()["id"].str;
-		}
-	
 		// scan for changes
 		log.vlog("Uploading differences of ", path);
 		Item item;
@@ -750,11 +743,6 @@ final class SyncEngine
 		if(encodeComponent(path).length < 430){
 			// path is less than 430 characters
 
-			if (defaultDriveId == ""){
-				// defaultDriveId is not set ... odd ..
-				defaultDriveId = onedrive.getDefaultDrive()["id"].str;
-			}
-			
 			// skip unexisting symbolic links
 			if (isSymlink(path) && !exists(readLink(path))) {
 				log.vlog("Skipping item - symbolic link: ", path);
@@ -905,11 +893,6 @@ final class SyncEngine
 	private void uploadNewFile(string path)
 	{
 		Item parent;
-		
-		if (defaultDriveId == ""){
-			// defaultDriveId is not set ... odd ..
-			defaultDriveId = onedrive.getDefaultDrive()["id"].str;
-		}
 		
 		// Check the database for the parent
 		enforce(itemdb.selectByPath(dirName(path), defaultDriveId, parent), "The parent item is not in the local database");
