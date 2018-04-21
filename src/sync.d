@@ -127,6 +127,12 @@ final class SyncEngine
 	private string[2][] idsToDelete;
 	// default drive id
 	private string defaultDriveId;
+	// default root id
+	private string defaultRootId;
+	// type of OneDrive account
+	private string accountType;
+	// free space remaining at init()
+	private long remainingFreeSpace;
 
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
@@ -140,6 +146,19 @@ final class SyncEngine
 
 	void init()
 	{
+		// Set accountType, defaultDriveId, defaultRootId & remainingFreeSpace once and reuse where possible
+		auto oneDriveDetails = onedrive.getDefaultDrive();
+		accountType = oneDriveDetails["driveType"].str;
+		defaultDriveId = oneDriveDetails["id"].str;
+		defaultRootId = onedrive.getDefaultRoot["id"].str;
+		remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+		
+		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
+		log.vlog("Account Type: ", accountType);
+		log.vlog("Default Drive ID: ", defaultDriveId);
+		log.vlog("Default Root ID: ", defaultRootId);
+		log.vlog("Remaining Free Space: ", remainingFreeSpace);
+	
 		// check if there is an interrupted upload session
 		if (session.restore()) {
 			log.log("Continuing the upload session ...");
