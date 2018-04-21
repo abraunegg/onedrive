@@ -1,8 +1,8 @@
 [Unit]
 Description=OneDrive Free Client
 Documentation=https://github.com/skilion/onedrive
-Requires=network-online.target
 After=network-online.target
+Wants=network-online.target
 
 [Service]
 ExecStart=@PREFIX@/bin/onedrive --monitor
