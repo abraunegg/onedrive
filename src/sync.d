@@ -44,9 +44,19 @@ private Item makeItem(const ref JSONValue driveItem)
 		name: "name" in driveItem ? driveItem["name"].str : null, // name may be missing for deleted files in OneDrive Biz
 		eTag: "eTag" in driveItem ? driveItem["eTag"].str : null, // eTag is not returned for the root in OneDrive Biz
 		cTag: "cTag" in driveItem ? driveItem["cTag"].str : null, // cTag is missing in old files (and all folders in OneDrive Biz)
-		mtime: "fileSystemInfo" in driveItem ? SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str) : SysTime(0),
+		//mtime: "fileSystemInfo" in driveItem ? SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str) : SysTime(0),
 	};
 
+	// OneDrive API Change: https://github.com/OneDrive/onedrive-api-docs/issues/834
+	// OneDrive no longer returns lastModifiedDateTime if the item is deleted by OneDrive
+	if(isItemDeleted(driveItem)){
+		// Set mtime to SysTime(0)
+		item.mtime = SysTime(0);
+	} else {
+		// Item is not in a deleted state
+		item.mtime = SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+	}
+		
 	if (isItemFile(driveItem)) {
 		item.type = ItemType.file;
 	} else if (isItemFolder(driveItem)) {
@@ -294,10 +304,17 @@ final class SyncEngine
 			foreach (item; changes["value"].array) {			
 				// Test is this is the OneDrive Root - not say a single folder root sync
 				bool isRoot = false;
-				if ((id == oneDriveRootId) && (item["name"].str == "root")) { // fix for https://github.com/skilion/onedrive/issues/269
-					// This IS the OneDrive Root
-					isRoot = true;
+				
+				// Deleted items returned from onedrive.viewChangesById (/delta) do not have a 'name' attribute
+				// Thus we cannot name check for 'root' below on deleted items
+				if(!isItemDeleted(item)){
+					// This is not a deleted item
+					if ((id == oneDriveRootId) && (item["name"].str == "root")) { // fix for https://github.com/skilion/onedrive/issues/269
+						// This IS the OneDrive Root
+						isRoot = true;
+					}
 				}
+				
 				// Apply the change
 				applyDifference(item, driveId, isRoot);
 			}
