@@ -792,10 +792,20 @@ final class SyncEngine
 					uploadNewItems(entry.name);
 				}
 			} else {
-				Item item;
-				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
-					uploadNewFile(path);
-				}
+				// This item is a file
+				// Can we upload this file - is there enough free space? - https://github.com/skilion/onedrive/issues/73
+				auto fileSize = getSize(path);
+				if ((remainingFreeSpace - fileSize) > 0){
+					Item item;
+					if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+						uploadNewFile(path);
+						remainingFreeSpace = (remainingFreeSpace - fileSize);
+						log.vlog("Remaining free space: ", remainingFreeSpace);
+					}
+				} else {
+					// Not enough free space
+					log.log("Skipping item '", path, "' due to insufficient free space available on OneDrive");
+ 				}
 			}
 		} else {
 			// This path was skipped - why?
