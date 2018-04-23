@@ -114,19 +114,6 @@ final class OneDriveApi
 		return get(url);
 	}
 
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
-	JSONValue viewChangesByPath(const(char)[] path, const(char)[] deltaLink)
-	{
-		checkAccessTokenExpired();
-		const(char)[] url = deltaLink;
-		if (url == null) {
-			if (path == ".") url = driveUrl ~ "/root/delta";
-			else url = itemByPathUrl ~ encodeComponent(path) ~ ":/delta";
-			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
-		}
-		return get(url);
-	}
-
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
 	void downloadById(const(char)[] driveId, const(char)[] id, string saveToPath)
 	{
@@ -199,6 +186,19 @@ final class OneDriveApi
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
 		return get(url);
 	}
+	
+	// Return the details of the specified id
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
+	JSONValue getPathDetailsById(const(char)[] id)
+	{
+		checkAccessTokenExpired();
+		const(char)[] url;
+		//		string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
+		url = itemByIdUrl ~ id;
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
+		return get(url);
+	}
+	
 	
 	// https://dev.onedrive.com/items/move.htm
 	JSONValue moveByPath(const(char)[] sourcePath, JSONValue moveData)
