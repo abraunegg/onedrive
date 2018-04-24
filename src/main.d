@@ -148,6 +148,19 @@ int main(string[] args)
 		return EXIT_FAILURE;
 	}
 
+	// if --synchronize or --monitor not passed in, exit & display help
+	auto performSyncOK = false;
+	if (synchronize || monitor) {
+		performSyncOK = true;
+	}
+	
+	if (!performSyncOK) {
+		writeln("\n--synchronize or --monitor missing from your command options or use --help for further assistance\n");
+		writeln("No OneDrive sync will be performed without either of these two arguments being present\n");
+		onedrive.http.shutdown();
+		return EXIT_FAILURE;
+	}
+	
 	// initialize system
 	log.vlog("Opening the item database ...");
 	auto itemdb = new ItemDatabase(cfg.databaseFilePath);
@@ -159,7 +172,7 @@ int main(string[] args)
 	chdir(syncDir);
 	
 	// Initialise the sync engine
-	log.vlog("Initializing the Synchronization Engine ...");
+	log.log("Initializing the Synchronization Engine ...");
 	auto selectiveSync = new SelectiveSync();
 	selectiveSync.load(cfg.syncListFilePath);
 	selectiveSync.setMask(cfg.getValue("skip_file"));
