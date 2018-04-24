@@ -106,9 +106,15 @@ Regex!char wild2regex(const(char)[] pattern)
 // returns true if the network connection is available
 bool testNetwork()
 {
-	HTTP http = HTTP("https://login.microsoftonline.com");
-	http.method = HTTP.Method.head;
-	return http.perform(ThrowOnError.no) == 0;
+	try {
+		HTTP http = HTTP("https://login.microsoftonline.com");
+		http.dnsTimeout = (dur!"seconds"(5));
+		http.method = HTTP.Method.head;
+		http.perform();
+		return true;
+	} catch (SocketException) {
+		return false;
+	}
 }
 
 // calls globMatch for each string in pattern separated by '|'
@@ -120,13 +126,6 @@ bool multiGlobMatch(const(char)[] path, const(char)[] pattern)
 		}
 	}
 	return false;
-}
-
-unittest
-{
-	assert(multiGlobMatch(".hidden", ".*"));
-	assert(multiGlobMatch(".hidden", "file|.*"));
-	assert(!multiGlobMatch("foo.bar", "foo|bar"));
 }
 
 bool isValidName(string path)
@@ -156,6 +155,9 @@ bool isValidName(string path)
 
 unittest
 {
+	assert(multiGlobMatch(".hidden", ".*"));
+	assert(multiGlobMatch(".hidden", "file|.*"));
+	assert(!multiGlobMatch("foo.bar", "foo|bar"));
 	// that should detect invalid file/directory name.
 	assert(isValidName("."));
 	assert(isValidName("./general.file"));
