@@ -1,6 +1,7 @@
 import std.stdio;
 import std.file;
 import std.datetime;
+import std.process;
 import core.sys.posix.pwd, core.sys.posix.unistd, core.stdc.string : strlen;
 import std.algorithm : splitter;
 
@@ -42,7 +43,21 @@ private void logfileWriteLine(T...)(T args)
 	string logFileName = "/var/log/onedrive/" ~ .username ~ ".onedrive.log";
 	auto currentTime = Clock.currTime();
 	auto timeString = currentTime.toString();
-	File logFile = File(logFileName, "a");
+	File logFile;
+	
+	// Resolve: std.exception.ErrnoException@std/stdio.d(423): Cannot open file `/var/log/onedrive/xxxxx.onedrive.log' in mode `a' (Permission denied)
+	try {
+		logFile = File(logFileName, "a");
+		} 
+	catch (std.exception.ErrnoException e) {
+		// We cannot open the log file in /var/log/onedrive for writing
+		// The user is not part of the standard 'users' group (GID 100)
+		// Change logfile to ~/onedrive.log putting the log file in the users home directory
+		string homePath = environment.get("HOME");
+		string logFileNameAlternate = homePath ~ "/onedrive.log";
+		logFile = File(logFileNameAlternate, "a");
+	} 
+	// Write to the log file
 	logFile.writeln(timeString, " ", args);
 	logFile.close();
 }
