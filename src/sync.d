@@ -596,16 +596,18 @@ final class SyncEngine
 				itemdb.deleteById(item.remoteDriveId, item.remoteId);
 			}
 			if (exists(path)) {
+				// path exists on the local system	
 				if (isFile(path)) {
 					remove(path);
 				} else {
 					try {
-						if (item.remoteDriveId == null) {
-							rmdir(path);
-						} else {
-							// children of remote items are not enumerated
-							rmdirRecurse(path);
+						// Remove any children of this path if they still exist
+						// Resolve 'Directory not empty' error when deleting local files
+						foreach (DirEntry child; dirEntries(path, SpanMode.depth, false)) {
+							attrIsDir(child.linkAttributes) ? rmdir(child.name) : remove(child.name);
 						}
+						// Remove the path now that it is empty of children
+						rmdirRecurse(path);
 					} catch (FileException e) {
 						log.log(e.msg);
 					}
