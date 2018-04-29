@@ -358,6 +358,30 @@ final class SyncEngine
 					if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderName)) ){
 						// This is a change we want to apply
 						applyDifference(item, driveId, isRoot);
+					} else {
+						// No item ID match or folder sync match
+						// Before discarding change - does this ID still exist on OneDrive - as in IS this 
+						// potentially a --single-directory sync and the user 'moved' the file out of the 'sync-dir' to another OneDrive folder
+						// This is a corner edge case - https://github.com/skilion/onedrive/issues/341
+						JSONValue oneDriveMovedNotDeleted;
+						try {
+							oneDriveMovedNotDeleted = onedrive.getPathDetailsById(item["id"].str);
+						} catch (OneDriveException e) {
+							if (e.httpStatusCode == 404) {
+								// No .. that ID is GONE
+								return;
+							} 
+						}
+						// Yes .. ID is still on OneDrive but elsewhere .... #341 edge case handling
+						// What is the original local path for this ID in the database? Does it match 'syncFolderName'
+						string originalLocalPath = itemdb.computePath(driveId, item["id"].str);
+				
+						if (canFind(originalLocalPath, syncFolderName)){
+							// This 'change' relates to an item that WAS in 'syncFolderName' but is now 
+							// stored elsewhere on OneDrive - outside the path we are syncing from
+							// Remove this item locally as it's local path is now obsolete
+							idsToDelete ~= [driveId, item["id"].str];
+						}
 					}
 				}
 			}
