@@ -21,6 +21,12 @@ void log(T...)(T args)
 	logfileWriteLine(args);
 }
 
+void fileOnly(T...)(T args)
+{
+	// Write to log file only
+	logfileWriteLine(args);
+}
+
 void vlog(T...)(T args)
 {
 	if (verbose) {

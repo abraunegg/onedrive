@@ -478,59 +478,62 @@ final class OneDriveApi
 	
 		switch(http.statusLine.code)
 		{
-		
-		//	case 1,2,3,4:
-		
-		//	200 - OK
-		//	201 - Created OK
-		//  202 - Accepted
-		//	204 - Deleted OK
-		case 200,201,202,204:
-			// No actions, but log if verbose logging
-			log.vlog("OneDrive Response: '", http.statusLine.code, " - ", http.statusLine.reason, "'");
-			break;
-		
-		// 400 - Bad Request
-		case 400:
-			// Bad Request .. how should we act?
-			log.vlog("OneDrive returned a 'HTTP 400 - Bad Request' - gracefully handling error");
-			break;	
-		
-		// Item not found
-		case 404:
-			// Item was not found - do not throw an exception
-			log.vlog("OneDrive returned a 'HTTP 404 - Item not found' - gracefully handling error");
-			break;
-		
-		//	409 - Conflict
-		case 409:
-			// Conflict handling .. how should we act? This only really gets triggered if we are using --local-first & we remove items.db as the DB thinks the file is not uploaded but it is
-			log.vlog("OneDrive returned a 'HTTP 409 - Conflict' - gracefully handling error");
-			break;	
-		
-		//	412 - Precondition Failed
-		case 412:
-			// A precondition provided in the request (such as an if-match header) does not match the resource's current state.
-			log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
-			break;	
-		
-		//  415 - Unsupported Media Type
-		case 415:
-			// Unsupported Media Type ... sometimes triggered on image files, especially PNG
-			log.vlog("OneDrive returned a 'HTTP 415 - Unsupported Media Type' - gracefully handling error");
-			break;
-		
-		//  500 - Internal Server Error
-		// 	502 - Bad Gateway
-		//	503 - Service Unavailable
-		case 500,502,503:
-			// No actions
-			break;	
+			//	200 - OK
+			case 200:
+				// No Log .. 
+				break;
+			//	201 - Created OK
+			//  202 - Accepted
+			//	204 - Deleted OK
+			case 201,202,204:
+				// No actions, but log if verbose logging
+				log.vlog("OneDrive Response: '", http.statusLine.code, " - ", http.statusLine.reason, "'");
+				break;
+			
+			// 400 - Bad Request
+			case 400:
+				// Bad Request .. how should we act?
+				log.vlog("OneDrive returned a 'HTTP 400 - Bad Request' - gracefully handling error");
+				break;	
+			
+			// Item not found
+			case 404:
+				// Item was not found - do not throw an exception
+				log.vlog("OneDrive returned a 'HTTP 404 - Item not found' - gracefully handling error");
+				break;
+			
+			//	409 - Conflict
+			case 409:
+				// Conflict handling .. how should we act? This only really gets triggered if we are using --local-first & we remove items.db as the DB thinks the file is not uploaded but it is
+				log.vlog("OneDrive returned a 'HTTP 409 - Conflict' - gracefully handling error");
+				break;	
+			
+			//	412 - Precondition Failed
+			case 412:
+				// A precondition provided in the request (such as an if-match header) does not match the resource's current state.
+				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
+				break;	
+			
+			//  415 - Unsupported Media Type
+			case 415:
+				// Unsupported Media Type ... sometimes triggered on image files, especially PNG
+				log.vlog("OneDrive returned a 'HTTP 415 - Unsupported Media Type' - gracefully handling error");
+				break;
+			
+			// Server side (OneDrive) Errors
+			//  500 - Internal Server Error
+			// 	502 - Bad Gateway
+			//	503 - Service Unavailable
+			//  504 - Gateway Timeout (Issue #320)
+			case 500,502,503,504:
+				// No actions
+				log.vlog("OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error");
+				break;	
 
-		// "else"
-		default:
-			throw new OneDriveException(http.statusLine.code, http.statusLine.reason); 
-			break;
+			// "else"
+			default:
+				throw new OneDriveException(http.statusLine.code, http.statusLine.reason); 
+				break;
 		}
 	}
 

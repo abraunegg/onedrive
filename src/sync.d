@@ -404,8 +404,7 @@ final class SyncEngine
 	private void applyDifference(JSONValue driveItem, string driveId, bool isRoot)
 	{
 		Item item = makeItem(driveItem);
-		//log.vlog("Processing item to apply differences");
-
+		
 		if (isItemRoot(driveItem) || !item.parentId || isRoot) {
 			item.parentId = null; // ensures that it has no parent
 			item.driveId = driveId; // HACK: makeItem() cannot set the driveId propery of the root
@@ -567,7 +566,7 @@ final class SyncEngine
 		onedrive.downloadById(item.driveId, item.id, path);
 		setTimes(path, item.mtime, item.mtime);
 		writeln(" done.");
-		log.log("Downloading ", path, "... done.");
+		log.fileOnly("Downloading ", path, "... done.");
 	}
 
 	// returns true if the given item corresponds to the local one
@@ -758,7 +757,7 @@ final class SyncEngine
 							writeln("");
 							response = session.upload(path, item.driveId, item.parentId, baseName(path), eTag);
 						}
-						log.log("Uploading file ", path, "... done.");
+						log.fileOnly("Uploading file ", path, "... done.");
 						// saveItem(response); redundant
 						// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
 						eTag = response["cTag"].str;
@@ -950,7 +949,9 @@ final class SyncEngine
 						writeln("");
 						response = session.upload(path, parent.driveId, parent.id, baseName(path));
 					}
-					log.log("Uploading file ", path, "... done.");
+					log.fileOnly("Uploading file ", path, "... done.");
+					
+					// Update the item's metadata on OneDrive
 					string id = response["id"].str;
 					string cTag = response["cTag"].str;
 					SysTime mtime = timeLastModified(path).toUTC();
@@ -979,7 +980,7 @@ final class SyncEngine
 					writeln("");
 					response = session.upload(path, parent.driveId, parent.id, baseName(path));
 				}
-				log.log("Uploading file ", path, "... done.");
+				log.fileOnly("Uploading file ", path, "... done.");
 				string id = response["id"].str;
 				string cTag = response["cTag"].str;
 				SysTime mtime = timeLastModified(path).toUTC();
@@ -1027,7 +1028,19 @@ final class SyncEngine
 				"lastModifiedDateTime": mtime.toISOExtString()
 			])
 		];
-		auto response = onedrive.updateById(driveId, id, data, eTag);
+		
+		JSONValue response;
+		try {
+			response = onedrive.updateById(driveId, id, data, eTag);
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 412) {
+				// OneDrive threw a 412 error, most likely: ETag does not match current item's value
+				// Retry without eTag
+				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
+				string nullTag = null;
+				response = onedrive.updateById(driveId, id, data, nullTag);
+			}
+		} 
 		saveItem(response);
 	}
 
