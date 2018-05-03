@@ -71,6 +71,8 @@ final class ItemDatabase
 		}
 		db.exec("PRAGMA foreign_keys = ON");
 		db.exec("PRAGMA recursive_triggers = ON");
+		db.exec("PRAGMA journal_mode = WAL");
+		
 		insertItemStmt = db.prepare("
 			INSERT OR REPLACE INTO item (driveId, id, name, type, eTag, cTag, mtime, parentId, crc32Hash, sha1Hash, quickXorHash, remoteDriveId, remoteId)
 			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
