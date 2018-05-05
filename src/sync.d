@@ -327,9 +327,24 @@ final class SyncEngine
 					log.vlog("Delta link expired, resyncing...");
 					deltaLink = null;
 					continue;
-				} else {
-					throw e;
 				}
+				
+				if (e.httpStatusCode == 500) {
+					// HTTP request returned status code 500 (Internal Server Error)
+					// Exit Application
+					log.vlog("\n\nOneDrive returned a 'HTTP 500 - Internal Server Error'");
+					log.vlog("This is a OneDrive API Bug - https://github.com/OneDrive/onedrive-api-docs/issues/844\n\n");
+					return;
+				}
+				
+				if (e.httpStatusCode == 504) {
+					// HTTP request returned status code 504 (Gateway Timeout)
+					// Retry
+					log.vlog("OneDrive returned a 'HTTP 504 - Gateway Timeout' - gracefully handling error");
+					changes = onedrive.viewChangesById(driveId, defaultRootId, deltaLink);
+				}
+				
+				else throw e;
 			}
 			foreach (item; changes["value"].array) {
 				bool isRoot = false;
@@ -751,7 +766,17 @@ final class SyncEngine
 						write("Uploading file ", path, "...");
 						JSONValue response;
 						if (getSize(path) <= thresholdFileSize) {
-							response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
+							try {
+								response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
+							} catch (OneDriveException e) {
+								if (e.httpStatusCode == 504) {
+									// HTTP request returned status code 504 (Gateway Timeout)
+									// Try upload as a session
+									log.vlog("OneDrive returned a 'HTTP 504 - Gateway Timeout' - gracefully handling error");
+									response = session.upload(path, item.driveId, item.parentId, baseName(path), eTag);
+								}
+								else throw e;
+							}
 							writeln(" done.");
 						} else {
 							writeln("");
@@ -943,7 +968,17 @@ final class SyncEngine
 					write("Uploading file ", path, "...");
 					JSONValue response;
 					if (getSize(path) <= thresholdFileSize) {
-						response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+						try {
+								response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+							} catch (OneDriveException e) {
+								if (e.httpStatusCode == 504) {
+									// HTTP request returned status code 504 (Gateway Timeout)
+									// Try upload as a session
+									log.vlog("OneDrive returned a 'HTTP 504 - Gateway Timeout' - gracefully handling error");
+									response = session.upload(path, parent.driveId, parent.id, baseName(path));
+								}
+								else throw e;
+							}
 						writeln(" done.");
 					} else {
 						writeln("");
