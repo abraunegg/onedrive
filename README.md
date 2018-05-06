@@ -45,7 +45,7 @@ sudo pacman -S curl sqlite dmd
 
 ### Installation
 ```sh
-git clone https://github.com/skilion/onedrive.git
+git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
 make
 sudo make install
