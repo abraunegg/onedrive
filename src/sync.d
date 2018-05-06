@@ -332,15 +332,15 @@ final class SyncEngine
 				if (e.httpStatusCode == 500) {
 					// HTTP request returned status code 500 (Internal Server Error)
 					// Exit Application
-					log.vlog("\n\nOneDrive returned a 'HTTP 500 - Internal Server Error'");
-					log.vlog("This is a OneDrive API Bug - https://github.com/OneDrive/onedrive-api-docs/issues/844\n\n");
+					log.log("\n\nOneDrive returned a 'HTTP 500 - Internal Server Error'");
+					log.log("This is a OneDrive API Bug - https://github.com/OneDrive/onedrive-api-docs/issues/844\n\n");
 					return;
 				}
 				
 				if (e.httpStatusCode == 504) {
 					// HTTP request returned status code 504 (Gateway Timeout)
 					// Retry
-					log.vlog("OneDrive returned a 'HTTP 504 - Gateway Timeout' - gracefully handling error");
+					//log.vlog("OneDrive returned a 'HTTP 504 - Gateway Timeout' - gracefully handling error");
 					changes = onedrive.viewChangesById(driveId, defaultRootId, deltaLink);
 				}
 				
@@ -772,7 +772,7 @@ final class SyncEngine
 								if (e.httpStatusCode == 504) {
 									// HTTP request returned status code 504 (Gateway Timeout)
 									// Try upload as a session
-									log.vlog("OneDrive returned a 'HTTP 504 - Gateway Timeout' - gracefully handling error");
+									//log.vlog("OneDrive returned a 'HTTP 504 - Gateway Timeout' - gracefully handling error");
 									response = session.upload(path, item.driveId, item.parentId, baseName(path), eTag);
 								}
 								else throw e;
@@ -974,7 +974,7 @@ final class SyncEngine
 								if (e.httpStatusCode == 504) {
 									// HTTP request returned status code 504 (Gateway Timeout)
 									// Try upload as a session
-									log.vlog("OneDrive returned a 'HTTP 504 - Gateway Timeout' - gracefully handling error");
+									//log.vlog("OneDrive returned a 'HTTP 504 - Gateway Timeout' - gracefully handling error");
 									response = session.upload(path, parent.driveId, parent.id, baseName(path));
 								}
 								else throw e;
