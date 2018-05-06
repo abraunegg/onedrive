@@ -15,9 +15,12 @@
 ## Setup
 
 ### Dependencies
+* Build environment must have at least 1GB of memory
 * [libcurl](http://curl.haxx.se/libcurl/)
 * [SQLite 3](https://www.sqlite.org/)
 * [Digital Mars D Compiler (DMD)](http://dlang.org/download.html)
+
+If using monitor mode, you may need to increase the `fs.inotify.max_user_watches` value on your system to handle the number of files in the directory you are monitoring.
 
 ### Dependencies: Ubuntu/Debian
 ```sh
