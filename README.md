@@ -26,9 +26,7 @@ If using monitor mode, you may need to increase the `fs.inotify.max_user_watches
 ```sh
 sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
-sudo wget http://master.dl.sourceforge.net/project/d-apt/files/d-apt.list -O /etc/apt/sources.list.d/d-apt.list
-sudo apt-get update && sudo apt-get -y --allow-unauthenticated install --reinstall d-apt-keyring
-sudo apt-get update && sudo apt-get install dmd-compiler dub
+curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
 ### Dependencies: Fedora/CentOS
