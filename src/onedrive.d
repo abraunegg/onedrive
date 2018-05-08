@@ -487,7 +487,7 @@ final class OneDriveApi
 			//	204 - Deleted OK
 			case 201,202,204:
 				// No actions, but log if verbose logging
-				log.vlog("OneDrive Response: '", http.statusLine.code, " - ", http.statusLine.reason, "'");
+				//log.vlog("OneDrive Response: '", http.statusLine.code, " - ", http.statusLine.reason, "'");
 				break;
 			
 			// 400 - Bad Request

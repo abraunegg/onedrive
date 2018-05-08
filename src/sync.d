@@ -763,7 +763,7 @@ final class SyncEngine
 					string eTag = item.eTag;
 					if (!testFileHash(path, item)) {
 						log.vlog("The file content has changed");
-						write("Uploading file ", path, "...");
+						write("Uploading file ", path, " ...");
 						JSONValue response;
 						if (getSize(path) <= thresholdFileSize) {
 							try {
@@ -781,8 +781,9 @@ final class SyncEngine
 						} else {
 							writeln("");
 							response = session.upload(path, item.driveId, item.parentId, baseName(path), eTag);
+							writeln(" done.");
 						}
-						log.fileOnly("Uploading file ", path, "... done.");
+						log.fileOnly("Uploading file ", path, " ... done.");
 						// saveItem(response); redundant
 						// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
 						eTag = response["cTag"].str;
@@ -805,10 +806,21 @@ final class SyncEngine
 	private void uploadNewItems(string path)
 	{
 		//	https://github.com/OneDrive/onedrive-api-docs/issues/443
-		//  If the path is greater than 430 characters, then one drive will return a '400 - Bad Request' 
+		//  If the path is greater than allowed characters, then one drive will return a '400 - Bad Request' 
 		//  Need to ensure that the URI is encoded before the check is made
-		if(encodeComponent(path).length < 430){
-			// path is less than 430 characters
+		//  256 Character Limit for OneDrive Business / Office 365
+		//  430 Character Limit for OneDrive Personal
+		auto maxPathLength = 0;
+		if (accountType == "business"){
+			// Business Account
+			maxPathLength = 256;
+		} else {
+			// Personal Account
+			maxPathLength = 430;
+		}
+		
+		if(encodeComponent(path).length < maxPathLength){
+			// path is less than maxPathLength
 
 			// skip unexisting symbolic links
 			if (isSymlink(path) && !exists(readLink(path))) {
@@ -864,7 +876,7 @@ final class SyncEngine
 			}
 		} else {
 			// This path was skipped - why?
-			log.log("Skipping item '", path, "' due to the full path exceeding 430 characters (Microsoft OneDrive limitation)");
+			log.log("Skipping item '", path, "' due to the full path exceeding ", maxPathLength, " characters (Microsoft OneDrive limitation)");
 		}
 	}
 
@@ -965,7 +977,7 @@ final class SyncEngine
 			} catch (OneDriveException e) {
 				if (e.httpStatusCode == 404) {
 					// The file was not found on OneDrive, need to upload it		
-					write("Uploading file ", path, "...");
+					write("Uploading file ", path, " ...");
 					JSONValue response;
 					if (getSize(path) <= thresholdFileSize) {
 						try {
@@ -979,12 +991,13 @@ final class SyncEngine
 								}
 								else throw e;
 							}
-						writeln(" done.");
+							writeln(" done.");
 					} else {
 						writeln("");
 						response = session.upload(path, parent.driveId, parent.id, baseName(path));
+						writeln(" done.");
 					}
-					log.fileOnly("Uploading file ", path, "... done.");
+					log.fileOnly("Uploading file ", path, " ... done.");
 					
 					// Update the item's metadata on OneDrive
 					string id = response["id"].str;
@@ -1006,7 +1019,7 @@ final class SyncEngine
 				// local file is newer
 				log.vlog("Requested file to upload is newer than existing file on OneDrive");
 				
-				write("Uploading file ", path, "...");
+				write("Uploading file ", path, " ...");
 				JSONValue response;
 				if (getSize(path) <= thresholdFileSize) {
 					response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
@@ -1014,8 +1027,9 @@ final class SyncEngine
 				} else {
 					writeln("");
 					response = session.upload(path, parent.driveId, parent.id, baseName(path));
+					writeln(" done.");
 				}
-				log.fileOnly("Uploading file ", path, "... done.");
+				log.fileOnly("Uploading file ", path, " ... done.");
 				string id = response["id"].str;
 				string cTag = response["cTag"].str;
 				SysTime mtime = timeLastModified(path).toUTC();
