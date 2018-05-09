@@ -389,15 +389,19 @@ final class SyncEngine
 						}
 						// Yes .. ID is still on OneDrive but elsewhere .... #341 edge case handling
 						// What is the original local path for this ID in the database? Does it match 'syncFolderName'
-						string originalLocalPath = itemdb.computePath(driveId, item["id"].str);
-				
-						if (canFind(originalLocalPath, syncFolderName)){
-							// This 'change' relates to an item that WAS in 'syncFolderName' but is now 
-							// stored elsewhere on OneDrive - outside the path we are syncing from
-							// Remove this item locally as it's local path is now obsolete
-							idsToDelete ~= [driveId, item["id"].str];
+						if (itemdb.idInLocalDatabase(driveId, item["id"].str)){
+							// item is in the database
+							string originalLocalPath = itemdb.computePath(driveId, item["id"].str);
+							if (canFind(originalLocalPath, syncFolderName)){
+								// This 'change' relates to an item that WAS in 'syncFolderName' but is now 
+								// stored elsewhere on OneDrive - outside the path we are syncing from
+								// Remove this item locally as it's local path is now obsolete
+								idsToDelete ~= [driveId, item["id"].str];
+							}
+						} else {
+							log.vlog("Remote Change Discarded: ", item);
 						}
-					}
+					} 
 				}
 			}
 

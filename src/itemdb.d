@@ -141,6 +141,18 @@ final class ItemDatabase
 		return false;
 	}
 
+	// returns if an item id is in the database
+	bool idInLocalDatabase(const(string) driveId, const(string)id)
+	{
+		selectItemByIdStmt.bind(1, driveId);
+		selectItemByIdStmt.bind(2, id);
+		auto r = selectItemByIdStmt.exec();
+		if (!r.empty) {
+			return true;
+		}
+		return false;
+	}
+	
 	// returns the item with the given path
 	// the path is relative to the sync directory ex: "./Music/Turbo Killer.mp3"
 	bool selectByPath(const(char)[] path, string rootDriveId, out Item item)
