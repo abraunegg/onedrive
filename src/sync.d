@@ -49,7 +49,6 @@ private Item makeItem(const ref JSONValue driveItem)
 		name: "name" in driveItem ? driveItem["name"].str : null, // name may be missing for deleted files in OneDrive Biz
 		eTag: "eTag" in driveItem ? driveItem["eTag"].str : null, // eTag is not returned for the root in OneDrive Biz
 		cTag: "cTag" in driveItem ? driveItem["cTag"].str : null, // cTag is missing in old files (and all folders in OneDrive Biz)
-		//mtime: "fileSystemInfo" in driveItem ? SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str) : SysTime(0),
 	};
 
 	// OneDrive API Change: https://github.com/OneDrive/onedrive-api-docs/issues/834
@@ -334,6 +333,7 @@ final class SyncEngine
 					// Exit Application
 					log.log("\n\nOneDrive returned a 'HTTP 500 - Internal Server Error'");
 					log.log("This is a OneDrive API Bug - https://github.com/OneDrive/onedrive-api-docs/issues/844\n\n");
+					log.log("Remove your 'items.sqlite3' file and try to sync again\n\n");
 					return;
 				}
 				
@@ -399,7 +399,7 @@ final class SyncEngine
 								idsToDelete ~= [driveId, item["id"].str];
 							}
 						} else {
-							log.vlog("Remote Change Discarded: ", item);
+							log.vlog("Remote change discarded - not in --single-directory scope");
 						}
 					} 
 				}
@@ -426,7 +426,7 @@ final class SyncEngine
 		
 		if (isItemRoot(driveItem) || !item.parentId || isRoot) {
 			item.parentId = null; // ensures that it has no parent
-			item.driveId = driveId; // HACK: makeItem() cannot set the driveId propery of the root
+			item.driveId = driveId; // HACK: makeItem() cannot set the driveId property of the root
 			itemdb.upsert(item);
 			return;
 		}
@@ -453,14 +453,19 @@ final class SyncEngine
 		// check for selective sync
 		string path;
 		if (!unwanted) {
-			path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
-			path = buildNormalizedPath(path);
-			unwanted = selectiveSync.isPathExcluded(path);
+			// Is the item in the local database
+			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){				
+				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
+				path = buildNormalizedPath(path);
+				unwanted = selectiveSync.isPathExcluded(path);
+			} else {
+				unwanted = true;
+			}
 		}
 
 		// skip unwanted items early
 		if (unwanted) {
-			log.vlog("Filtered out");
+			//log.vlog("Filtered out");
 			skippedItems ~= item.id;
 			return;
 		}
@@ -471,7 +476,7 @@ final class SyncEngine
 
 		// check if the item is going to be deleted
 		if (isItemDeleted(driveItem)) {
-			log.vlog("The item is marked for deletion");
+			log.vlog("This item is marked for deletion:", item.name);
 			if (cached) {
 				// flag to delete
 				idsToDelete ~= [item.driveId, item.id];
@@ -482,14 +487,17 @@ final class SyncEngine
 			return;
 		}
 
-		// rename the local item if it is unsynced and there is a new version of it
+		// rename the local item if it is unsynced and there is a new version of it on OneDrive
 		string oldPath;
 		if (cached && item.eTag != oldItem.eTag) {
-			oldPath = itemdb.computePath(item.driveId, item.id);
-			if (!isItemSynced(oldItem, oldPath)) {
-				log.vlog("The local item is unsynced, renaming");
-				if (exists(oldPath)) safeRename(oldPath);
-				cached = false;
+			// Is the item in the local database
+			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
+				oldPath = itemdb.computePath(item.driveId, item.id);
+				if (!isItemSynced(oldItem, oldPath)) {
+					log.vlog("The local item is unsynced, renaming");
+					if (exists(oldPath)) safeRename(oldPath);
+					cached = false;
+				}
 			}
 		}
 
@@ -686,7 +694,7 @@ final class SyncEngine
 
 		// skip unwanted items
 		if (unwanted) {
-			log.vlog("Filtered out");
+			//log.vlog("Filtered out");
 			return;
 		}
 		
@@ -802,7 +810,7 @@ final class SyncEngine
 				uploadCreateDir(path);
 			}
 		} else {
-			log.vlog("The file has been deleted");
+			log.vlog("The file has been deleted locally");
 			uploadDeleteItem(item, path);
 		}
 	}
@@ -929,7 +937,7 @@ final class SyncEngine
 					// Submit the creation request
 					auto res = onedrive.createById(parent.driveId, parent.id, driveItem);
 					saveItem(res);
-					log.vlog("Sucessfully created the remote directory ", path, " on OneDrive");
+					log.vlog("Successfully created the remote directory ", path, " on OneDrive");
 					return;
 				}
 			} 
@@ -1003,13 +1011,29 @@ final class SyncEngine
 					}
 					log.fileOnly("Uploading file ", path, " ... done.");
 					
-					// Update the item's metadata on OneDrive
-					string id = response["id"].str;
-					string cTag = response["cTag"].str;
-					SysTime mtime = timeLastModified(path).toUTC();
-					// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
-					uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
-					return;
+					// The file was uploaded
+					ulong uploadFileSize = response["size"].integer;
+					
+					// In some cases the file that was uploaded was not complete, but 'completed' without errors on OneDrive
+					// This has been seen with PNG / JPG files mainly, which then contributes to generating a 412 error when we attempt to update the metadata
+					// Validate here that the file uploaded, at least in size, matches in the response to what the size is on disk
+					if (thisFileSize != uploadFileSize){
+						// OK .. the uploaded file does not match
+						log.log("Uploaded file size does not match local file - upload failure - retrying");
+						// Delete uploaded bad file
+						onedrive.deleteById(response["parentReference"]["driveId"].str, response["id"].str, response["eTag"].str);
+						// Re-upload
+						uploadNewFile(path);
+						return;
+					} else {
+						// Update the item's metadata on OneDrive
+						string id = response["id"].str;
+						string cTag = response["cTag"].str;
+						SysTime mtime = timeLastModified(path).toUTC();
+						// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
+						uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+						return;
+					}
 				}
 			}
 			
