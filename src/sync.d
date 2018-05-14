@@ -491,7 +491,7 @@ final class SyncEngine
 		string oldPath;
 		if (cached && item.eTag != oldItem.eTag) {
 			// Is the item in the local database
-			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
+			if (itemdb.idInLocalDatabase(item.driveId, item.id)){
 				oldPath = itemdb.computePath(item.driveId, item.id);
 				if (!isItemSynced(oldItem, oldPath)) {
 					log.vlog("The local item is unsynced, renaming");
