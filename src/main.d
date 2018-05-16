@@ -8,15 +8,15 @@ int main(string[] args)
 {
 	// Determine the user home directory. 
 	// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d scripts
-	string homePath = environment.get("XDG_CONFIG_HOME");
-	if (homePath == ""){
+	string configPath = environment.get("XDG_CONFIG_HOME");
+	if (configPath == ""){
 		// XDG_CONFIG_HOME does not exist on systems where X11 is not present - ie - headless systems / servers
 		// Get HOME environment variable
-		homePath = environment.get("HOME");
+		configPath = environment.get("HOME") ~ "/.config";
 	}
 	
 	// configuration directory
-	string configDirName = homePath ~ "/.config/onedrive";
+	string configDirName = configPath ~ "/onedrive";
 	// only download remote changes
 	bool downloadOnly;
 	// override the sync directory
