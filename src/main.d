@@ -6,7 +6,7 @@ static import log;
 
 int main(string[] args)
 {
-	// Determine the user home directory. 
+	// Determine the users configuration directory. 
 	// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d scripts
 	string configPath = environment.get("XDG_CONFIG_HOME");
 	if (configPath == ""){
@@ -35,8 +35,10 @@ int main(string[] args)
 	bool printVersion;
 	
 	// Additional options added to support MyNAS Storage Appliance
-	// debug the HTTP(S) operations if required
+	// Debug the HTTPS submit operations if required
 	bool debugHttp;
+	// Debug the HTTPS response operations if required
+	bool debugHttpSubmit;
 	// This allows for selective directory syncing instead of everything under ~/OneDrive/
 	string singleDirectory;
 	// Create a single root directory on OneDrive
@@ -102,8 +104,7 @@ int main(string[] args)
 	}
 
 	// Configure Logging
-	string logFilePath = "/var/log/onedrive/";
-	if (!exists(logFilePath)) mkdirRecurse(logFilePath);
+	log.init();
 
 	// load configuration
 	log.vlog("Loading config ...");
@@ -139,6 +140,8 @@ int main(string[] args)
 		log.error("No network connection");
 		return EXIT_FAILURE;
 	}
+	
+	// Initialize OneDrive, check for authorization
 	auto onedrive = new OneDriveApi(cfg, debugHttp);
 	onedrive.printAccessToken = printAccessToken;
 	if (!onedrive.init()) {
@@ -150,7 +153,14 @@ int main(string[] args)
 
 	// if --synchronize or --monitor not passed in, exit & display help
 	auto performSyncOK = false;
+	
 	if (synchronize || monitor) {
+		performSyncOK = true;
+	}
+	
+	// create-directory, remove-directory, source-directory, destination-directory 
+	// are activities that dont perform a sync no error message for these items either
+	if (((createDirectory != "") || (removeDirectory != "")) || ((sourceDirectory != "") && (destinationDirectory != "")) ) {
 		performSyncOK = true;
 	}
 	
@@ -171,11 +181,13 @@ int main(string[] args)
 	if (!exists(syncDir)) mkdirRecurse(syncDir);
 	chdir(syncDir);
 	
-	// Initialise the sync engine
-	log.log("Initializing the Synchronization Engine ...");
+	// Configure selective sync by parsing and getting a regex for skip_file config component
 	auto selectiveSync = new SelectiveSync();
 	selectiveSync.load(cfg.syncListFilePath);
 	selectiveSync.setMask(cfg.getValue("skip_file"));
+	
+	// Initialise the sync engine
+	log.log("Initializing the Synchronization Engine ...");
 	auto sync = new SyncEngine(cfg, onedrive, itemdb, selectiveSync);
 	sync.init();
 		

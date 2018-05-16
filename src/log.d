@@ -7,12 +7,31 @@ import std.algorithm : splitter;
 
 // shared string variable for username
 string username;
+string logFilePath;
 static this() {
 	username = getUserName();
+	logFilePath = "/var/log/onedrive/";
 }
 
 // enable verbose logging
 bool verbose;
+
+void init()
+{
+	if (!exists(logFilePath)){
+		// logfile path does not exist
+		try {
+			mkdirRecurse(logFilePath);
+		} 
+		catch (std.file.FileException e) {
+			// we got an error ..
+			writeln("\nUnable to create /var/log/onedrive/ ");
+			writeln("Please manually create /var/log/onedrive/ and set appropriate permissions to allow write access");
+			writeln("The client activity log will be located in the users home directory\n");
+		}
+	}
+
+}
 
 void log(T...)(T args)
 {
@@ -46,7 +65,7 @@ void error(T...)(T args)
 private void logfileWriteLine(T...)(T args)
 {
 	// Write to log file
-	string logFileName = "/var/log/onedrive/" ~ .username ~ ".onedrive.log";
+	string logFileName = .logFilePath ~ .username ~ ".onedrive.log";
 	auto currentTime = Clock.currTime();
 	auto timeString = currentTime.toString();
 	File logFile;
