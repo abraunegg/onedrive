@@ -14,13 +14,11 @@
 
 ## Setup
 
-### Dependencies
+### Build Requirements
 * Build environment must have at least 1GB of memory
 * [libcurl](http://curl.haxx.se/libcurl/)
 * [SQLite 3](https://www.sqlite.org/)
 * [Digital Mars D Compiler (DMD)](http://dlang.org/download.html)
-
-If using monitor mode, you may need to increase the `fs.inotify.max_user_watches` value on your system to handle the number of files in the directory you are monitoring.
 
 ### Dependencies: Ubuntu/Debian
 ```sh
@@ -53,6 +51,8 @@ Using a different compiler (for example [LDC](https://wiki.dlang.org/LDC)):
 ```sh
 make DC=ldmd2
 ```
+
+**Note:** 32Bit / i686 perating systems are not supported when using this client.
 
 ### First run :zap:
 After installing the application you must run it at least once from the terminal to authorize it.
@@ -169,7 +169,25 @@ Note: after changing the sync list, you must perform a full synchronization by e
 Folders shared with you can be synced by adding them to your OneDrive. To do that open your Onedrive, go to the Shared files list, right click on the folder you want to sync and then click on "Add to my OneDrive".
 
 ### OneDrive service
-If you want to sync your files automatically, enable and start the systemd service:
+There are two ways that onedrive can be used as a service
+* via init.d
+* via systemd
+
+**Note:** If using the service files, you may need to increase the `fs.inotify.max_user_watches` value on your system to handle the number of files in the directory you are monitoring as the initial value may be too low.
+
+**init.d**
+
+```
+chkconfig onedrive on
+service onedrive start
+```
+To see the logs run:
+```
+tail -f /var/log/onedrive/<username>.onedrive.log
+```
+To change what 'user' the client runs under (by default root), manually edit the init.d service file and modify `daemon --user root onedrive_service.sh` for the correct user.
+
+**systemd**
 ```sh
 systemctl --user enable onedrive
 systemctl --user start onedrive
@@ -180,7 +198,7 @@ To see the logs run:
 journalctl --user-unit onedrive -f
 ```
 
-Note: systemd is supported on Ubuntu only starting from version 15.04
+**Note:** systemd is supported on Ubuntu only starting from version 15.04
 
 ### Using multiple accounts
 You can run multiple instances of the application specifying a different config directory in order to handle multiple OneDrive accounts.
