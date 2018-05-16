@@ -52,7 +52,7 @@ Using a different compiler (for example [LDC](https://wiki.dlang.org/LDC)):
 make DC=ldmd2
 ```
 
-**Note:** 32Bit / i686 perating systems are not supported when using this client.
+**Note:** 32Bit / i686 operating systems are not supported when using this client.
 
 ### First run :zap:
 After installing the application you must run it at least once from the terminal to authorize it.
