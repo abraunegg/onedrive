@@ -935,8 +935,20 @@ final class SyncEngine
 					];
 					
 					// Submit the creation request
-					auto res = onedrive.createById(parent.driveId, parent.id, driveItem);
-					saveItem(res);
+					JSONValue response;
+					// Fix for https://github.com/skilion/onedrive/issues/356
+					try {
+						response = onedrive.createById(parent.driveId, parent.id, driveItem);
+					} catch (OneDriveException e) {
+						if (e.httpStatusCode == 409) {
+							// OneDrive API returned a 404 (above) to say the directory did not exist
+							// but when we attempted to create it, OneDrive responded that it now already exists
+							log.vlog("OneDrive reported that ", path, " already exists .. OneDrive API race condition");
+							return;
+						}
+					}
+					
+					saveItem(response);
 					log.vlog("Successfully created the remote directory ", path, " on OneDrive");
 					return;
 				}
