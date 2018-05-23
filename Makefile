@@ -42,7 +42,6 @@ uninstall:
 	rm -f $(DESTDIR)/usr/lib/systemd/user/onedrive.service
 	rm -f $(DESTDIR)/usr/lib/systemd/user/onedrive@.service
 	rm -f $(DESTDIR)/etc/logrotate.d/onedrive
-	rm -rf ~/.config/onedrive
 
 version: .git/HEAD .git/index
 	echo $(shell git describe --tags) >version
