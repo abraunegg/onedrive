@@ -22,11 +22,11 @@ clean:
 	rm -f onedrive onedrive.o onedrive.service
 
 install: all
-	mkdir -p /var/log/onedrive
-	chown root.users /var/log/onedrive
-	chmod 0775 /var/log/onedrive
+	mkdir -p $(DESTDIR)/var/log/onedrive
+	chown root.users $(DESTDIR)/var/log/onedrive
+	chmod 0775 $(DESTDIR)/var/log/onedrive
 	install -D onedrive $(DESTDIR)$(PREFIX)/bin/onedrive
-	install -D -m 644 logrotate/onedrive.logrotate /etc/logrotate.d/onedrive
+	install -D -m 644 logrotate/onedrive.logrotate $(DESTDIR)/etc/logrotate.d/onedrive
 	cp -af *.service $(DESTDIR)/usr/lib/systemd/user/
 	chmod 0644 $(DESTDIR)/usr/lib/systemd/user/onedrive*.service
 	
@@ -41,7 +41,7 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/onedrive
 	rm -f $(DESTDIR)/usr/lib/systemd/user/onedrive.service
 	rm -f $(DESTDIR)/usr/lib/systemd/user/onedrive@.service
-	rm -f /etc/logrotate.d/onedrive
+	rm -f $(DESTDIR)/etc/logrotate.d/onedrive
 	rm -rf ~/.config/onedrive
 
 version: .git/HEAD .git/index
