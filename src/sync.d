@@ -820,7 +820,7 @@ final class SyncEngine
 		//	https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
 		//  If the path is greater than allowed characters, then one drive will return a '400 - Bad Request' 
 		//  Need to ensure that the URI is encoded before the check is made
-		//  256 Character Limit for OneDrive Business / Office 365
+		//  400 Character Limit for OneDrive Business / Office 365
 		//  430 Character Limit for OneDrive Personal
 		auto maxPathLength = 0;
 		if (accountType == "business"){
