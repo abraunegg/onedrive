@@ -140,12 +140,13 @@ bool isValidName(string path)
 
 	// Restriction and limitations about windows naming files
 	// https://msdn.microsoft.com/en-us/library/aa365247
+	// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
 	auto invalidNameReg =
 		ctRegex!(
 			// leading whitespace and trailing whitespace/dot
 			`^\s.*|^.*[\s\.]$|` ~
 			// invalid character
-			`.*[#%<>:"\|\?*/\\].*|` ~
+			`.*[<>:"\|\?*/\\].*|` ~
 			// reserved device name and trailing .~
 			`(?:CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(?:[.].+)?$`
 		);
@@ -165,8 +166,6 @@ unittest
 	assert(!isValidName("./ leading_white_space"));
 	assert(!isValidName("./trailing_white_space "));
 	assert(!isValidName("./trailing_dot."));
-	assert(!isValidName("./includes#in the path"));
-	assert(!isValidName("./includes%in the path"));
 	assert(!isValidName("./includes<in the path"));
 	assert(!isValidName("./includes>in the path"));
 	assert(!isValidName("./includes:in the path"));

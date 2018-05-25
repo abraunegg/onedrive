@@ -817,7 +817,7 @@ final class SyncEngine
 
 	private void uploadNewItems(string path)
 	{
-		//	https://github.com/OneDrive/onedrive-api-docs/issues/443
+		//	https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
 		//  If the path is greater than allowed characters, then one drive will return a '400 - Bad Request' 
 		//  Need to ensure that the URI is encoded before the check is made
 		//  256 Character Limit for OneDrive Business / Office 365
@@ -825,7 +825,7 @@ final class SyncEngine
 		auto maxPathLength = 0;
 		if (accountType == "business"){
 			// Business Account
-			maxPathLength = 256;
+			maxPathLength = 400;
 		} else {
 			// Personal Account
 			maxPathLength = 430;
