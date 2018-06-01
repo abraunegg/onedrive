@@ -1,5 +1,5 @@
 module sqlite;
-
+import std.stdio;
 import etc.c.sqlite3;
 import std.string: fromStringz, toStringz;
 
@@ -133,6 +133,11 @@ struct Statement
 		{
 			// https://www.sqlite.org/c3ref/step.html
 			int rc = sqlite3_step(pStmt);
+			if (rc == SQLITE_BUSY) {
+				// Database is locked by another onedrive process
+				writeln("The database is currently locked by another process - cannot sync");
+				return;
+			}
 			if (rc == SQLITE_DONE) {
 				row.length = 0;
 			} else if (rc == SQLITE_ROW) {
