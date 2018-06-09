@@ -11,7 +11,7 @@ private immutable {
 	string redirectUrl = "https://login.microsoftonline.com/common/oauth2/nativeclient";
 	string tokenUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
 	string driveUrl = "https://graph.microsoft.com/v1.0/me/drive";
-	string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
+	string itemByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
 	string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
 	string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
 }
@@ -54,6 +54,7 @@ final class OneDriveApi
 		this.cfg = cfg;
 		http = HTTP();
 		http.dnsTimeout = (dur!"seconds"(5));
+		//http.setUserAgent = "Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; AS; rv:11.0) like Gecko";
 		if (debugHttp) {
 			http.verbose = true;
 			.debugResponse = true;
@@ -190,12 +191,11 @@ final class OneDriveApi
 	
 	// Return the details of the specified id
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
-	JSONValue getPathDetailsById(const(char)[] id)
+	JSONValue getPathDetailsById(string driveId, string id)
 	{
 		checkAccessTokenExpired();
 		const(char)[] url;
-		//		string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
-		url = itemByIdUrl ~ id;
+		url = itemByIdUrl ~ driveId ~ "/items/" ~ id;
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
 		return get(url);
 	}
@@ -212,12 +212,14 @@ final class OneDriveApi
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createuploadsession
-	JSONValue createUploadSession(const(char)[] parentDriveId, const(char)[] parentId, const(char)[] filename, const(char)[] eTag = null)
+	JSONValue createUploadSession(const(char)[] parentDriveId, const(char)[] parentId, const(char)[] filename, const(char)[] eTag = null, JSONValue item = null)
 	{
 		checkAccessTokenExpired();
 		const(char)[] url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ ":/" ~ encodeComponent(filename) ~ ":/createUploadSession";
 		if (eTag) http.addRequestHeader("If-Match", eTag);
+		http.addRequestHeader("Content-Type", "application/json");
 		return post(url, null);
+		//return post(url, item.toString());
 	}
 
 	// https://dev.onedrive.com/items/upload_large_files.htm
