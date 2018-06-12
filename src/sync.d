@@ -327,7 +327,7 @@ final class SyncEngine
 		if (("id" in idDetails) != null) {
 			// valid response from onedrive.getPathDetailsById(id) a JSON item object present
 			if ((idDetails["id"].str == id) && (isItemFolder(idDetails))){
-				syncFolderName = encodeComponent(idDetails["name"].str);
+				syncFolderName = idDetails["name"].str;
 			}
 		}
 		
@@ -389,7 +389,6 @@ final class SyncEngine
 				} else {
 					// What is this item's path?
 					thisItemPath = item["parentReference"]["path"].str;
-					
 					// Check this item's id to see if this is a change we want to process
 					if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderName)) ){
 						// This is a change we want to apply
