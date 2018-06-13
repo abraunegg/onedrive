@@ -190,12 +190,12 @@ final class OneDriveApi
 	
 	// Return the details of the specified id
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
-	JSONValue getPathDetailsById(const(char)[] id)
+	JSONValue getPathDetailsById(const(char)[] driveId, const(char)[] id)
 	{
 		checkAccessTokenExpired();
 		const(char)[] url;
-		//		string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
-		url = itemByIdUrl ~ id;
+		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
+		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
 		return get(url);
 	}
