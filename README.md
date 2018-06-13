@@ -34,6 +34,12 @@ sudo yum install sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
+Alternatively, if you are on a 64 bit system, you may also use the
+LLVM D Compiler (LDC):
+```
+sudo yum install ldc
+```
+
 ### Dependencies: Arch Linux
 ```sh
 sudo pacman -S curl sqlite dmd
