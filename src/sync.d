@@ -58,12 +58,7 @@ private Item makeItem(const ref JSONValue driveItem)
 		item.mtime = SysTime(0);
 	} else {
 		// Item is not in a deleted state
-		if (isItemRemote(driveItem)) {
-			// Resolve https://github.com/abraunegg/onedrive/issues/11
-			item.mtime = SysTime.fromISOExtString(driveItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
-		} else {
-			item.mtime = SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
-		}
+		item.mtime = SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
 	}
 		
 	if (isItemFile(driveItem)) {
@@ -267,7 +262,7 @@ final class SyncEngine
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 404) {
 				// The directory was not found on OneDrive - no need to delete it
-				log.vlog("The requested directory to create was not found on OneDrive - skipping removing the remote directory as it doesn't exist");
+				log.vlog("The requested directory to create was not found on OneDrive - skipping removing the remote directory as it doesnt exist");
 				return;
 			}
 		}
@@ -280,7 +275,7 @@ final class SyncEngine
 		} else {
 			// the folder was in the local database
 			// Handle the deletion and saving any update to the local database
-			log.vlog("The requested directory to delete was found in the local database. Processing the deletion normally");
+			log.vlog("The requested directory to delete was found in the local database. Processing the delection normally");
 			deleteByPath(path);
 		}
 	}
@@ -305,39 +300,26 @@ final class SyncEngine
 	
 	// download the new changes of a specific item
 	// id is the root of the drive or a shared folder
-	private void applyDifferences(string driveId, string id)
+	private void applyDifferences(string driveId, const(char)[] id)
 	{
 		log.vlog("Applying changes of Path ID: " ~ id);
 		JSONValue changes;
-		string deltaLink = itemdb.getDeltaLink(driveId, id);
-		
-		// Query the name of this folder id
 		string syncFolderName;
-		JSONValue idDetails = parseJSON("{}");
-		try {
-			idDetails = onedrive.getPathDetailsById(driveId, id);
-		} catch (OneDriveException e) {
-			if (e.httpStatusCode == 404) {
-				// id was not found - possibly a remote (shared) folder
-				log.vlog("No details returned for given Path ID");
-				return;
-			}
-		} 
+		string deltaLink = itemdb.getDeltaLink(driveId, id);
+		JSONValue idDetails = onedrive.getPathDetailsById(id);
 		
-		if (("id" in idDetails) != null) {
-			// valid response from onedrive.getPathDetailsById(id) a JSON item object present
-			if ((idDetails["id"].str == id) && (isItemFolder(idDetails))){
-				syncFolderName = idDetails["name"].str;
-			}
+		// Set the name of this folder
+		if ((idDetails["id"].str == id) && (isItemFolder(idDetails))){
+			syncFolderName = idDetails["name"].str;
 		}
-		
+				
 		for (;;) {
 			try {
 				// Due to differences in OneDrive API's between personal and business we need to get changes only from defaultRootId
 				// If we used the 'id' passed in & when using --single-directory with a business account we get:
 				//	'HTTP request returned status code 501 (Not Implemented): view.delta can only be called on the root.'
-				// To view changes correctly, we need to use 'defaultRootId' or the 'id' if this is different from 'defaultRootId'
-				changes = onedrive.viewChangesById(driveId, id, deltaLink);
+				// To view changes correctly, we need to use 'defaultRootId' 
+				changes = onedrive.viewChangesById(driveId, defaultRootId, deltaLink);
 				
 			} catch (OneDriveException e) {
 				if (e.httpStatusCode == 410) {
@@ -359,7 +341,7 @@ final class SyncEngine
 					// HTTP request returned status code 504 (Gateway Timeout)
 					// Retry
 					//log.vlog("OneDrive returned a 'HTTP 504 - Gateway Timeout' - gracefully handling error");
-					changes = onedrive.viewChangesById(driveId, id, deltaLink);
+					changes = onedrive.viewChangesById(driveId, defaultRootId, deltaLink);
 				}
 				
 				else throw e;
@@ -372,12 +354,10 @@ final class SyncEngine
 				// Thus we cannot name check for 'root' below on deleted items
 				if(!isItemDeleted(item)){
 					// This is not a deleted item
-					// Test is this is the OneDrive Users Root?
-					// Test is this a Shared Folder - which should be classified as a 'root'
+					// Test is this is the OneDrive Root?
 					// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
-					string sharedDriveRootPath = "/drives/" ~ item["parentReference"]["driveId"].str ~ "/root:";
-					if ( ((id == defaultRootId) && (item["name"].str == "root")) || (item["parentReference"]["path"].str == sharedDriveRootPath) ) {
-						// This change has to be processed as a 'root' item
+					if ((id == defaultRootId) && (item["name"].str == "root")) { // fix for https://github.com/skilion/onedrive/issues/269
+						// This IS the OneDrive Root
 						isRoot = true;
 					}
 				}
@@ -389,7 +369,7 @@ final class SyncEngine
 				} else {
 					// What is this item's path?
 					thisItemPath = item["parentReference"]["path"].str;
-					// Check this item's id to see if this is a change we want to process
+					// Check this item's path to see if this is a change on the path we want
 					if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderName)) ){
 						// This is a change we want to apply
 						applyDifference(item, driveId, isRoot);
@@ -400,11 +380,10 @@ final class SyncEngine
 						// This is a corner edge case - https://github.com/skilion/onedrive/issues/341
 						JSONValue oneDriveMovedNotDeleted;
 						try {
-							oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item["id"].str);
+							oneDriveMovedNotDeleted = onedrive.getPathDetailsById(item["id"].str);
 						} catch (OneDriveException e) {
 							if (e.httpStatusCode == 404) {
 								// No .. that ID is GONE
-								log.vlog("Remote change discarded - item cannot be found");
 								return;
 							} 
 						}
@@ -451,11 +430,11 @@ final class SyncEngine
 			itemdb.upsert(item);
 			return;
 		}
-		
+
 		bool unwanted;
 		unwanted |= skippedItems.find(item.parentId).length != 0;
 		unwanted |= selectiveSync.isNameExcluded(item.name);
-		
+
 		// check the item type
 		if (!unwanted) {
 			if (isItemFile(driveItem)) {
@@ -463,7 +442,7 @@ final class SyncEngine
 			} else if (isItemFolder(driveItem)) {
 				//log.vlog("The item we are syncing is a folder");
 			} else if (isItemRemote(driveItem)) {
-				//log.vlog("The item we are syncing is a shared item");
+				//log.vlog("The item we are syncing is a remote item");
 				assert(isItemFolder(driveItem["remoteItem"]), "The remote item is not a folder");
 			} else {
 				log.vlog("This item type (", item.name, ") is not supported");
@@ -475,12 +454,11 @@ final class SyncEngine
 		string path;
 		if (!unwanted) {
 			// Is the item in the local database
-			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
+			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){				
 				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
 				path = buildNormalizedPath(path);
 				unwanted = selectiveSync.isPathExcluded(path);
 			} else {
-				// is this a remote item?
 				unwanted = true;
 			}
 		}
@@ -498,7 +476,7 @@ final class SyncEngine
 
 		// check if the item is going to be deleted
 		if (isItemDeleted(driveItem)) {
-			//log.vlog("This item is marked for deletion:", item.name);
+			log.vlog("This item is marked for deletion:", item.name);
 			if (cached) {
 				// flag to delete
 				idsToDelete ~= [item.driveId, item.id];
@@ -536,6 +514,13 @@ final class SyncEngine
 		} else {
 			itemdb.insert(item);
 		}
+
+		// sync remote folder
+		// https://github.com/OneDrive/onedrive-api-docs/issues/764
+		/*if (isItemRemote(driveItem)) {
+			log.log("Syncing remote folder: ", path);
+			applyDifferences(item.remoteDriveId, item.remoteId);
+		}*/
 	}
 
 	// download an item that was not synced before

@@ -141,7 +141,7 @@ final class ItemDatabase
 		return false;
 	}
 
-	// returns true if an item id is in the database
+	// returns if an item id is in the database
 	bool idInLocalDatabase(const(string) driveId, const(string)id)
 	{
 		selectItemByIdStmt.bind(1, driveId);

@@ -23,22 +23,7 @@ struct UploadSession
 
 	JSONValue upload(string localPath, const(char)[] parentDriveId, const(char)[] parentId, const(char)[] filename, const(char)[] eTag = null)
 	{
-		// Fix https://github.com/abraunegg/onedrive/issues/2
-		// More Details https://github.com/OneDrive/onedrive-api-docs/issues/778
-		
-		SysTime localFileLastModifiedTime = timeLastModified(localPath).toUTC();
-		localFileLastModifiedTime.fracSecs = Duration.zero;
-		
-		JSONValue fileSystemInfo = [
-				"item": JSONValue([
-					"@name.conflictBehavior": JSONValue("replace"),
-					"fileSystemInfo": JSONValue([
-						"lastModifiedDateTime": localFileLastModifiedTime.toISOExtString()
-					])
-				])
-			];
-		
-		session = onedrive.createUploadSession(parentDriveId, parentId, filename, eTag, fileSystemInfo);
+		session = onedrive.createUploadSession(parentDriveId, parentId, filename, eTag);
 		session["localPath"] = localPath;
 		save();
 		return upload();
