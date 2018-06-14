@@ -784,7 +784,6 @@ final class SyncEngine
 								if (e.httpStatusCode == 504) {
 									// HTTP request returned status code 504 (Gateway Timeout)
 									// Try upload as a session
-									//log.vlog("OneDrive returned a 'HTTP 504 - Gateway Timeout' - gracefully handling error");
 									response = session.upload(path, item.driveId, item.parentId, baseName(path), eTag);
 								}
 								else throw e;
@@ -1003,24 +1002,37 @@ final class SyncEngine
 					// The file was not found on OneDrive, need to upload it		
 					write("Uploading file ", path, " ...");
 					JSONValue response;
-					if (getSize(path) <= thresholdFileSize) {
-						try {
-								response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-							} catch (OneDriveException e) {
-								if (e.httpStatusCode == 504) {
-									// HTTP request returned status code 504 (Gateway Timeout)
-									// Try upload as a session
-									//log.vlog("OneDrive returned a 'HTTP 504 - Gateway Timeout' - gracefully handling error");
-									response = session.upload(path, parent.driveId, parent.id, baseName(path));
+					
+					// Are we using OneDrive Personal or OneDrive Business?
+					// To solve 'Multiple versions of file shown on website after single upload' (https://github.com/abraunegg/onedrive/issues/2)
+					// check what 'account type' this is as this issue only affects OneDrive Business so we need some extra logic here
+					if (accountType == "personal"){
+						// Original file upload logic
+						if (getSize(path) <= thresholdFileSize) {
+							try {
+									response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+								} catch (OneDriveException e) {
+									if (e.httpStatusCode == 504) {
+										// HTTP request returned status code 504 (Gateway Timeout)
+										// Try upload as a session
+										response = session.upload(path, parent.driveId, parent.id, baseName(path));
+									}
+									else throw e;
 								}
-								else throw e;
-							}
+								writeln(" done.");
+						} else {
+							writeln("");
+							response = session.upload(path, parent.driveId, parent.id, baseName(path));
 							writeln(" done.");
+						}
 					} else {
+						// OneDrive Business Account - always use a session to upload
 						writeln("");
 						response = session.upload(path, parent.driveId, parent.id, baseName(path));
 						writeln(" done.");
 					}
+					
+					// Log action to log file
 					log.fileOnly("Uploading file ", path, " ... done.");
 					
 					// The file was uploaded
@@ -1038,13 +1050,21 @@ final class SyncEngine
 						uploadNewFile(path);
 						return;
 					} else {
-						// Update the item's metadata on OneDrive
-						string id = response["id"].str;
-						string cTag = response["cTag"].str;
-						SysTime mtime = timeLastModified(path).toUTC();
-						// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
-						uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
-						return;
+						if (accountType == "personal"){
+							// Update the item's metadata on OneDrive
+							string id = response["id"].str;
+							string cTag = response["cTag"].str;
+							SysTime mtime = timeLastModified(path).toUTC();
+							// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
+							uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+							return;
+						} else {
+							// OneDrive Business Account - always use a session to upload
+							// The session includes a Request Body element containing lastModifiedDateTime
+							// which negates the need for a modify event against OneDrive
+							saveItem(response);
+							return;
+						}
 					}
 				}
 			}
@@ -1058,23 +1078,35 @@ final class SyncEngine
 			if (localFileModifiedTime > remoteFileModifiedTime){
 				// local file is newer
 				log.vlog("Requested file to upload is newer than existing file on OneDrive");
-				
 				write("Uploading file ", path, " ...");
 				JSONValue response;
-				if (getSize(path) <= thresholdFileSize) {
-					response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-					writeln(" done.");
+				
+				if (accountType == "personal"){
+					// OneDrive Personal account upload handling
+					if (getSize(path) <= thresholdFileSize) {
+						response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+						writeln(" done.");
+					} else {
+						writeln("");
+						response = session.upload(path, parent.driveId, parent.id, baseName(path));
+						writeln(" done.");
+					}
+					string id = response["id"].str;
+					string cTag = response["cTag"].str;
+					SysTime mtime = timeLastModified(path).toUTC();
+					// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
+					uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
 				} else {
+					// OneDrive Business account upload handling
 					writeln("");
 					response = session.upload(path, parent.driveId, parent.id, baseName(path));
 					writeln(" done.");
+					saveItem(response);
 				}
+				
+				// Log action to log file
 				log.fileOnly("Uploading file ", path, " ... done.");
-				string id = response["id"].str;
-				string cTag = response["cTag"].str;
-				SysTime mtime = timeLastModified(path).toUTC();
-				// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
-				uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+				
 			} else {
 				// Save the details of the file that we got from OneDrive
 				log.vlog("Updating the local database with details for this file: ", path);
