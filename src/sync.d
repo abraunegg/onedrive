@@ -387,7 +387,7 @@ final class SyncEngine
 				// Thus we cannot name check for 'root' below on deleted items
 				if(!isItemDeleted(item)){
 					// This is not a deleted item
-					// // Test is this is the OneDrive Users Root?
+					// Test is this is the OneDrive Users Root?
 					// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
 					if ((id == defaultRootId) && (item["name"].str == "root")) { 
 						// This IS the OneDrive Root
