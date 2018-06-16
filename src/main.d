@@ -56,12 +56,15 @@ int main(string[] args)
 	bool localFirst;
 	// Upload Only
 	bool uploadOnly;
+	// Add a check mounts option to resolve https://github.com/abraunegg/onedrive/issues/8
+	bool checkMount;
 		
 	try {
 		auto opt = getopt(
 			args,
 			std.getopt.config.bundling,
 			std.getopt.config.caseSensitive,
+			"check-mount", "Check for the presence of .nosync in the syncdir root", &checkMount,
 			"confdir", "Set the directory used to store the configuration files", &configDirName,
 			"create-directory", "Create a directory on OneDrive - no sync will be performed.", &createDirectory,
 			"destination-directory", "Destination directory for renamed or move on OneDrive - no sync will be performed.", &destinationDirectory,
@@ -190,7 +193,17 @@ int main(string[] args)
 	log.log("Initializing the Synchronization Engine ...");
 	auto sync = new SyncEngine(cfg, onedrive, itemdb, selectiveSync);
 	sync.init();
-		
+	
+	// Do we need to validate the syncDir to check for the presence of a '.nosync' file
+	if (checkMount) {
+		// we were asked to check the mounts
+		if (exists(syncDir ~ "/.nosync")) {
+			log.log("\nERROR: .nosync file found. Aborting synchronization process to safeguard data.");
+			onedrive.http.shutdown();
+			return EXIT_FAILURE;
+		}
+	}
+	
 	// Do we need to create or remove a directory?
 	if ((createDirectory != "") || (removeDirectory != "")) {
 	
