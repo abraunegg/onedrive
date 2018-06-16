@@ -779,8 +779,16 @@ final class SyncEngine
 						JSONValue response;
 						if (getSize(path) <= thresholdFileSize) {
 							try {
-								response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
+								response = onedrive.simpleUploadReplace(path, item.driveId, item.id, eTag);
 							} catch (OneDriveException e) {
+								if (e.httpStatusCode == 412) {
+									// OneDrive threw a 412 error, most likely: ETag does not match current item's value
+									// In some cases the file that was uploaded was not complete, but 'completed' without errors on OneDrive
+									// This has been seen with PNG / JPG files mainly, which then contributes to generating a 412 error
+									// Re-try upload as a session
+									response = session.upload(path, item.driveId, item.parentId, baseName(path), eTag);
+								}
+								
 								if (e.httpStatusCode == 504) {
 									// HTTP request returned status code 504 (Gateway Timeout)
 									// Try upload as a session
