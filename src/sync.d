@@ -561,13 +561,6 @@ final class SyncEngine
 		} else {
 			itemdb.insert(item);
 		}
-
-		// sync remote folder
-		// https://github.com/OneDrive/onedrive-api-docs/issues/764
-		/*if (isItemRemote(driveItem)) {
-			log.log("Syncing remote folder: ", path);
-			applyDifferences(item.remoteDriveId, item.remoteId);
-		}*/
 	}
 
 	// download an item that was not synced before
