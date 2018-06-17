@@ -785,8 +785,9 @@ final class SyncEngine
 									// OneDrive threw a 412 error, most likely: ETag does not match current item's value
 									// In some cases the file that was uploaded was not complete, but 'completed' without errors on OneDrive
 									// This has been seen with PNG / JPG files mainly, which then contributes to generating a 412 error
-									// Re-try upload as a session
-									response = session.upload(path, item.driveId, item.parentId, baseName(path), eTag);
+									// Re-try upload as a session, but no eTag
+									string nullTag = null;
+									response = session.upload(path, item.driveId, item.parentId, baseName(path), nullTag);
 								}
 								
 								if (e.httpStatusCode == 504) {
