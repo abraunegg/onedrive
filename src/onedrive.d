@@ -540,8 +540,14 @@ final class OneDriveApi
 
 	private void checkHttpCode(ref const JSONValue response)
 	{
-		if (http.statusLine.code / 100 != 2) {
-			throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
+		if (http.statusLine.code == 412) {
+			// A precondition provided in the request (such as an if-match header) does not match the resource's current state.
+			log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
+		} else {
+			// Original handling
+			if (http.statusLine.code / 100 != 2) {
+				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
+			}
 		}
 	}
 }
