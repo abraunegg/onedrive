@@ -132,7 +132,13 @@ An example of the log file is below:
 ```sh
 sudo make uninstall
 # delete the application state
-rm -rf .config/onedrive
+rm -rf ~/.config/onedrive
+```
+If you are using the `--confdir option`, substitute `~/.config/onedrive` above for that directory.
+
+If you want to just delete the application key, but keep the items database:
+```
+rm -f ~/.config/onedrive/refresh_token
 ```
 
 ## Additional Configuration
