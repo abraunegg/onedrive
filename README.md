@@ -27,11 +27,23 @@ sudo apt install libsqlite3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
-### Dependencies: Fedora/CentOS
+### Dependencies: Fedora < Version 18 / CentOS 6.x / RHEL 6.x
 ```sh
 sudo yum install libcurl-devel
 sudo yum install sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+
+### Dependencies: Fedora > Version 18 / CentOS 7.x / RHEL 7.x
+```sh
+sudo dnf install libcurl-devel
+sudo dnf install sqlite-devel
+curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+
+Alternatively, if you are on a 64 bit system, you may also use the LLVM D Compiler (LDC):
+```
+sudo dnf install ldc
 ```
 
 ### Dependencies: Arch Linux
