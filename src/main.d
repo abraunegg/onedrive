@@ -64,7 +64,7 @@ int main(string[] args)
 			args,
 			std.getopt.config.bundling,
 			std.getopt.config.caseSensitive,
-			"check-mount", "Check for the presence of .nosync in the syncdir root", &checkMount,
+			"check-for-nomount", "Check for the presence of .nosync in the syncdir root. If found, do not perform sync.", &checkMount,
 			"confdir", "Set the directory used to store the configuration files", &configDirName,
 			"create-directory", "Create a directory on OneDrive - no sync will be performed.", &createDirectory,
 			"destination-directory", "Destination directory for renamed or move on OneDrive - no sync will be performed.", &destinationDirectory,
