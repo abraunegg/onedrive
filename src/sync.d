@@ -1003,33 +1003,42 @@ final class SyncEngine
 					write("Uploading file ", path, " ...");
 					JSONValue response;
 					
-					// Are we using OneDrive Personal or OneDrive Business?
-					// To solve 'Multiple versions of file shown on website after single upload' (https://github.com/abraunegg/onedrive/issues/2)
-					// check what 'account type' this is as this issue only affects OneDrive Business so we need some extra logic here
-					if (accountType == "personal"){
-						// Original file upload logic
-						if (getSize(path) <= thresholdFileSize) {
-							try {
-									response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-								} catch (OneDriveException e) {
-									if (e.httpStatusCode == 504) {
-										// HTTP request returned status code 504 (Gateway Timeout)
-										// Try upload as a session
-										response = session.upload(path, parent.driveId, parent.id, baseName(path));
+					// Resolve https://github.com/abraunegg/onedrive/issues/37
+					if (thisFileSize == 0){
+						// We can only upload zero size files via simpleFileUpload regardless of account type
+						// https://github.com/OneDrive/onedrive-api-docs/issues/53
+						response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+						writeln(" done.");
+					} else {
+						// File is not a zero byte file
+						// Are we using OneDrive Personal or OneDrive Business?
+						// To solve 'Multiple versions of file shown on website after single upload' (https://github.com/abraunegg/onedrive/issues/2)
+						// check what 'account type' this is as this issue only affects OneDrive Business so we need some extra logic here
+						if (accountType == "personal"){
+							// Original file upload logic
+							if (getSize(path) <= thresholdFileSize) {
+								try {
+										response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+									} catch (OneDriveException e) {
+										if (e.httpStatusCode == 504) {
+											// HTTP request returned status code 504 (Gateway Timeout)
+											// Try upload as a session
+											response = session.upload(path, parent.driveId, parent.id, baseName(path));
+										}
+										else throw e;
 									}
-									else throw e;
-								}
+									writeln(" done.");
+							} else {
+								writeln("");
+								response = session.upload(path, parent.driveId, parent.id, baseName(path));
 								writeln(" done.");
+							}
 						} else {
+							// OneDrive Business Account - always use a session to upload
 							writeln("");
 							response = session.upload(path, parent.driveId, parent.id, baseName(path));
 							writeln(" done.");
 						}
-					} else {
-						// OneDrive Business Account - always use a session to upload
-						writeln("");
-						response = session.upload(path, parent.driveId, parent.id, baseName(path));
-						writeln(" done.");
 					}
 					
 					// Log action to log file
@@ -1050,7 +1059,7 @@ final class SyncEngine
 						uploadNewFile(path);
 						return;
 					} else {
-						if (accountType == "personal"){
+						if ((accountType == "personal") || (thisFileSize == 0)){
 							// Update the item's metadata on OneDrive
 							string id = response["id"].str;
 							string cTag = response["cTag"].str;
