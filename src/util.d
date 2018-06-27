@@ -9,6 +9,7 @@ import std.regex;
 import std.socket;
 import std.stdio;
 import std.string;
+import std.algorithm;
 import qxor;
 
 private string deviceName;
@@ -136,6 +137,7 @@ bool isValidName(string path)
 		return true;
 	}
 
+	bool matched = true;
 	string itemName = baseName(path);
 
 	// Restriction and limitations about windows naming files
@@ -143,16 +145,28 @@ bool isValidName(string path)
 	// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
 	auto invalidNameReg =
 		ctRegex!(
-			// leading whitespace and trailing whitespace/dot
+			// Leading whitespace and trailing whitespace/dot
 			`^\s.*|^.*[\s\.]$|` ~
-			// invalid character
+			// Invalid characters
 			`.*[<>:"\|\?*/\\].*|` ~
-			// reserved device name and trailing .~
-			`(?:CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(?:[.].+)?$`
+			// Trailing & First Character '~' / '.~'
+			`(?:[.].+)?$`
 		);
 	auto m = match(itemName, invalidNameReg);
-
-	return m.empty;
+	matched = m.empty;
+	
+	// Explicit filename checks
+	// Resolve https://github.com/abraunegg/onedrive/issues/34
+	if (itemName == "Icon") {matched = false;}
+	if (itemName == ".lock") {matched = false;}
+	if (itemName == "CON") {matched = false;}
+	if (itemName == "PRN") {matched = false;}
+	if (itemName == "AUX") {matched = false;}
+	if (itemName == "NUL") {matched = false;}
+	if (itemName == "desktop.ini") {matched = false;}
+	if(canFind(itemName, "_vti_")){matched = false;}
+	
+	return matched;
 }
 
 unittest
