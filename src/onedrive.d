@@ -212,12 +212,13 @@ final class OneDriveApi
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createuploadsession
-	JSONValue createUploadSession(const(char)[] parentDriveId, const(char)[] parentId, const(char)[] filename, const(char)[] eTag = null)
+	JSONValue createUploadSession(const(char)[] parentDriveId, const(char)[] parentId, const(char)[] filename, const(char)[] eTag = null, JSONValue item = null)
 	{
 		checkAccessTokenExpired();
 		const(char)[] url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ ":/" ~ encodeComponent(filename) ~ ":/createUploadSession";
 		if (eTag) http.addRequestHeader("If-Match", eTag);
-		return post(url, null);
+		http.addRequestHeader("Content-Type", "application/json");
+		return post(url, item.toString());
 	}
 
 	// https://dev.onedrive.com/items/upload_large_files.htm
@@ -539,8 +540,14 @@ final class OneDriveApi
 
 	private void checkHttpCode(ref const JSONValue response)
 	{
-		if (http.statusLine.code / 100 != 2) {
-			throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
+		if (http.statusLine.code == 412) {
+			// A precondition provided in the request (such as an if-match header) does not match the resource's current state.
+			log.vlog("\nOneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error\n");
+		} else {
+			// Original handling
+			if (http.statusLine.code / 100 != 2) {
+				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
+			}
 		}
 	}
 }
