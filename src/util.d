@@ -132,6 +132,10 @@ bool multiGlobMatch(const(char)[] path, const(char)[] pattern)
 
 bool isValidName(string path)
 {
+	// Restriction and limitations about windows naming files
+	// https://msdn.microsoft.com/en-us/library/aa365247
+	// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
+	
 	// allow root item
 	if (path == ".") {
 		return true;
@@ -140,32 +144,26 @@ bool isValidName(string path)
 	bool matched = true;
 	string itemName = baseName(path);
 
-	// Restriction and limitations about windows naming files
-	// https://msdn.microsoft.com/en-us/library/aa365247
-	// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
 	auto invalidNameReg =
 		ctRegex!(
 			// Leading whitespace and trailing whitespace/dot
 			`^\s.*|^.*[\s\.]$|` ~
 			// Invalid characters
 			`.*[<>:"\|\?*/\\].*|` ~
-			// Trailing & First Character '~' / '.~'
-			`(?:[.].+)?$`
+			// Reserved device name and trailing .~
+			`(?:^CON|^PRN|^AUX|^NUL|^COM[0-9]|^LPT[0-9])(?:[.].+)?$`
 		);
 	auto m = match(itemName, invalidNameReg);
 	matched = m.empty;
 	
-	// Explicit filename checks
-	// Resolve https://github.com/abraunegg/onedrive/issues/34
+	// Additional explicit validation checks
 	if (itemName == "Icon") {matched = false;}
 	if (itemName == ".lock") {matched = false;}
-	if (itemName == "CON") {matched = false;}
-	if (itemName == "PRN") {matched = false;}
-	if (itemName == "AUX") {matched = false;}
-	if (itemName == "NUL") {matched = false;}
 	if (itemName == "desktop.ini") {matched = false;}
+	// _vti_ cannot appear anywhere in a file or folder name
 	if(canFind(itemName, "_vti_")){matched = false;}
 	
+	// return response
 	return matched;
 }
 
