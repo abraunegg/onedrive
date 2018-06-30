@@ -1,0 +1,8 @@
+# latest dmd
+d: 
+  - dmd
+
+language: d
+
+script: make
+ 
