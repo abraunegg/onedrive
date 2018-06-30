@@ -175,7 +175,7 @@ bool containsBadWhiteSpace(string path)
 	
 	auto invalidWhitespaceReg =
 		ctRegex!(
-			// leading whitespace and trailing whitespace/dot
+			// Check for \n which is %0A when encoded
 			`%0A`
 		);
 	auto m = match(itemName, invalidWhitespaceReg);
