@@ -9,6 +9,7 @@ import std.regex;
 import std.socket;
 import std.stdio;
 import std.string;
+import std.algorithm;
 import qxor;
 
 private string deviceName;
@@ -134,28 +135,39 @@ bool multiGlobMatch(const(char)[] path, const(char)[] pattern)
 
 bool isValidName(string path)
 {
+	// Restriction and limitations about windows naming files
+	// https://msdn.microsoft.com/en-us/library/aa365247
+	// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
+	
 	// allow root item
 	if (path == ".") {
 		return true;
 	}
 
+	bool matched = true;
 	string itemName = baseName(path);
 
-	// Restriction and limitations about windows naming files
-	// https://msdn.microsoft.com/en-us/library/aa365247
-	// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
 	auto invalidNameReg =
 		ctRegex!(
-			// leading whitespace and trailing whitespace/dot
+			// Leading whitespace and trailing whitespace/dot
 			`^\s.*|^.*[\s\.]$|` ~
-			// invalid character
+			// Invalid characters
 			`.*[<>:"\|\?*/\\].*|` ~
-			// reserved device name and trailing .~
-			`(?:CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(?:[.].+)?$`
+			// Reserved device name and trailing .~
+			`(?:^CON|^PRN|^AUX|^NUL|^COM[0-9]|^LPT[0-9])(?:[.].+)?$`
 		);
 	auto m = match(itemName, invalidNameReg);
-
-	return m.empty;
+	matched = m.empty;
+	
+	// Additional explicit validation checks
+	if (itemName == "Icon") {matched = false;}
+	if (itemName == ".lock") {matched = false;}
+	if (itemName == "desktop.ini") {matched = false;}
+	// _vti_ cannot appear anywhere in a file or folder name
+	if(canFind(itemName, "_vti_")){matched = false;}
+	
+	// return response
+	return matched;
 }
 
 unittest
