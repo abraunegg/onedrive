@@ -9,6 +9,7 @@ import std.regex;
 import std.socket;
 import std.stdio;
 import std.string;
+import std.algorithm;
 import std.uri;
 import qxor;
 
