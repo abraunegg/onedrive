@@ -743,7 +743,13 @@ final class SyncEngine
 			log.vlog("Skipping item - invalid name (Microsoft Naming Convention): ", path);
 			return;
 		}
-
+		
+		// Check for bad whitespace items
+		if (!containsBadWhiteSpace(path)) {
+			log.vlog("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
+			return;
+		}
+		
 		final switch (item.type) {
 		case ItemType.dir:
 			uploadDirDifferences(item, path);
@@ -883,6 +889,12 @@ final class SyncEngine
 			// Restriction and limitations about windows naming files
 			if (!isValidName(path)) {
 				log.vlog("Skipping item - invalid name (Microsoft Naming Convention): ", path);
+				return;
+			}
+			
+			// Check for bad whitespace items
+			if (!containsBadWhiteSpace(path)) {
+				log.vlog("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
 				return;
 			}
 
