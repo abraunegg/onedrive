@@ -27,14 +27,14 @@ sudo apt install libsqlite3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
-### Dependencies: Fedora < Version 18 / CentOS 6.x / RHEL 6.x
+### Dependencies: Fedora < Version 18 / CentOS / RHEL 
 ```sh
 sudo yum install libcurl-devel
 sudo yum install sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
-### Dependencies: Fedora > Version 18 / CentOS 7.x / RHEL 7.x
+### Dependencies: Fedora > Version 18 
 ```sh
 sudo dnf install libcurl-devel
 sudo dnf install sqlite-devel
