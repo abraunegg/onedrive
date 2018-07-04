@@ -5,6 +5,7 @@ import std.path;
 import std.regex;
 import std.stdio;
 import util;
+static import log;
 
 final class SelectiveSync
 {
@@ -33,13 +34,17 @@ final class SelectiveSync
 		// Does the file match skip_file config entry?
 		// Returns true if the file matches a skip_file config entry
 		// Returns false if no match
+		log.vlog("isNameExcluded for name '", name, "': ", !name.matchFirst(mask).empty);
 		return !name.matchFirst(mask).empty;
 	}
 
 	// config sync_list file handling
+	// also incorporates skip_file config parameter for expanded regex path matching
 	bool isPathExcluded(string path)
 	{
-		return .isPathExcluded(path, paths);
+		log.vlog("isPathExcluded for path '", path, "': ", .isPathExcluded(path, paths));
+		log.vlog("Path Matched for path '", path, "': ", !path.matchFirst(mask).empty);
+		return .isPathExcluded(path, paths) || !path.matchFirst(mask).empty;
 	}
 }
 

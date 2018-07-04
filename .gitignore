@@ -3,3 +3,4 @@ onedrive
 onedrive.o
 onedrive.service
 version
+onedrive@.service

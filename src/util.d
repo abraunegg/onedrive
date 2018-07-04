@@ -100,6 +100,12 @@ Regex!char wild2regex(const(char)[] pattern)
 		case '+':
 			str ~= "\\+";
 			break;	
+		case ' ':
+			str ~= "\\s+";
+			break;	
+		case '/':
+			str ~= "\\/";
+			break;	
 		default:
 			str ~= c;
 			break;
