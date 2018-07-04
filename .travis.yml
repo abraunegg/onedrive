@@ -1,6 +1,8 @@
-# Use DMD64 D Compiler v2.080.1
-d: dmd-2.080.1
+# latest dmd
+d: 
+  - dmd
 
 language: d
 
 script: make
+ 
