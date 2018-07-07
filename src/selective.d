@@ -34,7 +34,8 @@ final class SelectiveSync
 		// Does the file match skip_file config entry?
 		// Returns true if the file matches a skip_file config entry
 		// Returns false if no match
-		log.dlog("isNameExcluded for name '", name, "': ", !name.matchFirst(mask).empty);
+		log.dlog("Checking '", name, "' for exclusion...");
+		log.dlog("    Name matched in skip_file: ", !name.matchFirst(mask).empty);
 		return !name.matchFirst(mask).empty;
 	}
 
@@ -42,10 +43,29 @@ final class SelectiveSync
 	// also incorporates skip_file config parameter for expanded regex path matching
 	bool isPathExcluded(string path)
 	{
-		log.dlog("isPathExcluded for path '", path, "': ", .isPathExcluded(path, paths));
-		log.dlog("Path Matched for path '", path, "': ", !path.matchFirst(mask).empty);
-		return .isPathExcluded(path, paths) || !path.matchFirst(mask).empty;
+		log.dlog("Checking '", path, "' for exclusion...");
+		log.dlog("    Path excluded in sync_list: ", .isPathExcluded(path, paths));
+		log.dlog("    Path matched in skip_file: ", .isPathMatched(path, mask));
+		return .isPathExcluded(path, paths) || .isPathMatched(path, mask);
 	}
+}
+
+// test if the given path is matched by the regex expression.
+// recursively test up the tree.
+private bool isPathMatched(string path, Regex!char mask) {
+	path = buildNormalizedPath(path);
+	auto paths = pathSplitter(path);
+
+	string prefix = "";
+	foreach(base; paths) {
+		prefix ~= base;
+		if (!path.matchFirst(mask).empty) {
+			log.dlog("    Path matched for '", prefix, "'");
+			return true;
+		}
+		prefix ~= dirSeparator;
+	}
+	return false;
 }
 
 // test if the given path is not included in the allowed paths
