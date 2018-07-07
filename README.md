@@ -103,6 +103,11 @@ When running a sync it may be desirable to see additional information as to the 
 onedrive --synchronize --verbose
 ```
 
+Debug logging can be enabled to provide even more information using the following command:
+```
+onedrive --synchronise --verbose --debug
+```
+
 ### Client Activity Log
 When running onedrive all actions are logged to `/var/log/onedrive/`
 

@@ -16,6 +16,9 @@ static this() {
 // enable verbose logging
 bool verbose;
 
+// enable debug logging
+bool debugging;
+
 void init()
 {
 	if (!exists(logFilePath)){
@@ -52,6 +55,15 @@ void vlog(T...)(T args)
 		writeln(args);
 		// Write to log file
 		logfileWriteLine(args);
+	}
+}
+
+void dlog(T...)(T args)
+{
+	if (debugging) {
+		writeln("[DEBUG] ", args);
+		// Write to log file
+		logfileWriteLine("[DEBUG] ", args);
 	}
 }
 

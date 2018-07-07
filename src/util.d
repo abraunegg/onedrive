@@ -12,6 +12,7 @@ import std.string;
 import std.algorithm;
 import std.uri;
 import qxor;
+static import log;
 
 private string deviceName;
 
@@ -112,6 +113,9 @@ Regex!char wild2regex(const(char)[] pattern)
 		}
 	}
 	str ~= "$";
+
+	log.dlog("Wild Card expression: ", pattern);
+	log.dlog("Regular Expression: ", str);
 	return regex(str, "i");
 }
 

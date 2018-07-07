@@ -27,8 +27,6 @@ int main(string[] args)
 	bool resync;
 	// remove the current user and sync state
 	bool logout;
-	// enable verbose logging
-	bool verbose;
 	// print the access token
 	bool printAccessToken;
 	// print the version and exit
@@ -82,6 +80,7 @@ int main(string[] args)
 			"synchronize", "Perform a synchronization", &synchronize,
 			"upload-only", "Only upload to OneDrive, do not sync changes from OneDrive locally", &uploadOnly,
 			"verbose|v", "Print more details, useful for debugging", &log.verbose,
+			"debug", "Print even more details, useful for debugging", &log.debugging,
 			"version", "Print the version and exit", &printVersion
 		);
 		if (opt.helpWanted) {
@@ -280,7 +279,7 @@ int main(string[] args)
 					log.log(e.msg);
 				}
 			};
-			if (!downloadOnly) m.init(cfg, verbose);
+			if (!downloadOnly) m.init(cfg);
 			// monitor loop
 			immutable auto checkInterval = dur!"seconds"(45);
 			auto lastCheckTime = MonoTime.currTime();

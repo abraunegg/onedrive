@@ -21,7 +21,6 @@ class MonitorException: ErrnoException
 
 final class Monitor
 {
-	bool verbose;
 	// inotify file descriptor
 	private int fd;
 	// map every inotify watch descriptor to its directory
@@ -44,9 +43,8 @@ final class Monitor
 		this.selectiveSync = selectiveSync;
 	}
 
-	void init(Config cfg, bool verbose)
+	void init(Config cfg)
 	{
-		this.verbose = verbose;
 
 		fd = inotify_init();
 		if (fd == -1) throw new MonitorException("inotify_init failed");

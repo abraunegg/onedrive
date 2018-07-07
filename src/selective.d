@@ -34,7 +34,7 @@ final class SelectiveSync
 		// Does the file match skip_file config entry?
 		// Returns true if the file matches a skip_file config entry
 		// Returns false if no match
-		log.vlog("isNameExcluded for name '", name, "': ", !name.matchFirst(mask).empty);
+		log.dlog("isNameExcluded for name '", name, "': ", !name.matchFirst(mask).empty);
 		return !name.matchFirst(mask).empty;
 	}
 
@@ -42,8 +42,8 @@ final class SelectiveSync
 	// also incorporates skip_file config parameter for expanded regex path matching
 	bool isPathExcluded(string path)
 	{
-		log.vlog("isPathExcluded for path '", path, "': ", .isPathExcluded(path, paths));
-		log.vlog("Path Matched for path '", path, "': ", !path.matchFirst(mask).empty);
+		log.dlog("isPathExcluded for path '", path, "': ", .isPathExcluded(path, paths));
+		log.dlog("Path Matched for path '", path, "': ", !path.matchFirst(mask).empty);
 		return .isPathExcluded(path, paths) || !path.matchFirst(mask).empty;
 	}
 }
