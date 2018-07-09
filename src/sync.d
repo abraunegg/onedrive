@@ -523,7 +523,9 @@ final class SyncEngine
 
 		// check if the item is going to be deleted
 		if (isItemDeleted(driveItem)) {
-			log.vlog("This item is marked for deletion:", item.name);
+			// item.name is not available, so we get a bunch of meaningless log output
+			// will fix this with wider logging changes being worked on
+			//log.vlog("This item is marked for deletion:", item.name);
 			if (cached) {
 				// flag to delete
 				idsToDelete ~= [item.driveId, item.id];
