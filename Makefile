@@ -19,7 +19,7 @@ SOURCES = \
 all: onedrive onedrive.service
 
 clean:
-	rm -f onedrive onedrive.o onedrive.service
+	rm -f onedrive onedrive.o onedrive.service onedrive@.service
 
 install: all
 	mkdir -p $(DESTDIR)/var/log/onedrive
