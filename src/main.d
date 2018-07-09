@@ -118,7 +118,7 @@ int main(string[] args)
 	cfg.init();
 	
 	// command line parameters override the config
-	if (syncDirName) cfg.setValue("sync_dir", syncDirName);
+	if (syncDirName) cfg.setValue("sync_dir", syncDirName.expandTilde().absolutePath());
 
 	// upgrades
 	if (exists(configDirName ~ "/items.db")) {
