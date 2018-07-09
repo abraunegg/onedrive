@@ -161,10 +161,22 @@ mkdir -p ~/.config/onedrive
 cp ./config ~/.config/onedrive/config
 nano ~/.config/onedrive/config
 ```
+This file does not get created by default, and should only be created if you want to change the 'default' operational parameters. 
 
 Available options:
 * `sync_dir`: directory where the files will be synced
 * `skip_file`: any files or directories that match this pattern will be skipped during sync.
+
+### sync_dir
+Example: `sync_dir="~/MyDirToSync"`
+
+**Please Note:**
+Proceed with caution here by changing the default sync dir from ~/OneDrive to ~/MyDirToSync
+
+The issue here is around how the client stores the sync_dir path in the database. If the config file is missing, or you don't use the `--syncdir` parameter - what will happen is the client will default back to `~/OneDrive` and 'think' that either all your data has been deleted - thus delete the content on OneDrive, or will start downloading all data from OneDrive into the default location.
+
+### skip_file
+Example: `skip_file = ".*|~*|Desktop|Documents/OneNote*|Documents/IISExpress|Documents/SQL Server Management Studio|Documents/Visual Studio*|Documents/config.xlaunch|Documents/WindowsPowerShell"`
 
 Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns.
 
