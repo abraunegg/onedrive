@@ -68,7 +68,7 @@ struct Database
 	{
 		int userVersion;
 		extern (C) int callback(void* user_version, int count, char** column_text, char** column_name) {
-			import core.stdc.stdlib;
+			import core.stdc.stdlib: atoi;
 			*(cast(int*) user_version) = atoi(*column_text);
 			return 0;
 		}
