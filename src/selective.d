@@ -39,7 +39,7 @@ final class SelectiveSync
 	// config sync_list file handling
 	bool isPathExcluded(string path)
 	{
-		return .isPathExcluded(path, paths);
+		return .isPathExcluded(path, paths) || .isPathMatched(path, mask);
 	}
 }
 
@@ -65,6 +65,24 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 		}
 	}
 	return true;
+}
+
+// test if the given path is matched by the regex expression.
+// recursively test up the tree.
+private bool isPathMatched(string path, Regex!char mask) {
+	path = buildNormalizedPath(path);
+	auto paths = pathSplitter(path);
+
+	string prefix = "";
+	foreach(base; paths) {
+		prefix ~= base;
+		if (!path.matchFirst(mask).empty) {
+			// the given path matches something which we should skip
+			return true;
+		}
+		prefix ~= dirSeparator;
+	}
+	return false;
 }
 
 unittest
