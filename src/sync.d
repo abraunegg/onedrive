@@ -525,7 +525,9 @@ final class SyncEngine
 
 		// check if the item is going to be deleted
 		if (isItemDeleted(driveItem)) {
-			log.vlog("This item is marked for deletion:", item.name);
+			// item.name is not available, so we get a bunch of meaningless log output
+			// will fix this with wider logging changes being worked on
+			//log.vlog("This item is marked for deletion:", item.name);
 			if (cached) {
 				// flag to delete
 				idsToDelete ~= [item.driveId, item.id];
@@ -839,6 +841,17 @@ final class SyncEngine
 								try {
 									response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
 								} catch (OneDriveException e) {
+									// Resolve https://github.com/abraunegg/onedrive/issues/36
+									if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
+										// The file is currently checked out or locked for editing by another user
+										// We cant upload this file at this time
+										writeln(" skipped.");
+										log.fileOnly("Uploading file ", path, " ... skipped.");
+										write("", path, " is currently checked out or locked for editing by another user.");
+										log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+										return;
+									}
+								
 									if (e.httpStatusCode == 504) {
 										// HTTP request returned status code 504 (Gateway Timeout)
 										// Try upload as a session
@@ -855,7 +868,23 @@ final class SyncEngine
 						} else {
 							// OneDrive Business Account - always use a session to upload
 							writeln("");
-							response = session.upload(path, item.driveId, item.parentId, baseName(path));
+							
+							try {
+								response = session.upload(path, item.driveId, item.parentId, baseName(path));
+							} catch (OneDriveException e) {
+							
+								// Resolve https://github.com/abraunegg/onedrive/issues/36
+								if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
+									// The file is currently checked out or locked for editing by another user
+									// We cant upload this file at this time
+									writeln(" skipped.");
+									log.fileOnly("Uploading file ", path, " ... skipped.");
+									writeln("", path, " is currently checked out or locked for editing by another user.");
+									log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+									return;
+								}
+							}
+														
 							writeln(" done.");
 							// As the session.upload includes the last modified time, save the response
 							saveItem(response);
