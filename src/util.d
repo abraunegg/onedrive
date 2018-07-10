@@ -100,13 +100,13 @@ Regex!char wild2regex(const(char)[] pattern)
 			break;
 		case '+':
 			str ~= "\\+";
-			break;	
+			break;
 		case ' ':
 			str ~= "\\s+";
-			break;	
+			break;
 		case '/':
 			str ~= "\\/";
-			break;	
+			break;
 		default:
 			str ~= c;
 			break;
@@ -149,7 +149,7 @@ bool isValidName(string path)
 	// Restriction and limitations about windows naming files
 	// https://msdn.microsoft.com/en-us/library/aa365247
 	// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
-	
+
 	// allow root item
 	if (path == ".") {
 		return true;
@@ -169,14 +169,14 @@ bool isValidName(string path)
 		);
 	auto m = match(itemName, invalidNameReg);
 	matched = m.empty;
-	
+
 	// Additional explicit validation checks
 	if (itemName == "Icon") {matched = false;}
 	if (itemName == ".lock") {matched = false;}
 	if (itemName == "desktop.ini") {matched = false;}
 	// _vti_ cannot appear anywhere in a file or folder name
 	if(canFind(itemName, "_vti_")){matched = false;}
-	
+
 	// return response
 	return matched;
 }
@@ -187,7 +187,7 @@ bool containsBadWhiteSpace(string path)
 	if (path == ".") {
 		return true;
 	}
-	
+
 	// https://github.com/abraunegg/onedrive/issues/35
 	// Issue #35 presented an interesting issue where the filename contained a newline item
 	//		'State-of-the-art, challenges, and open issues in the integration of Internet of'$'\n''Things and Cloud Computing.pdf'
@@ -195,9 +195,9 @@ bool containsBadWhiteSpace(string path)
 	//		/v1.0/me/drive/root:/.%2FState-of-the-art%2C%20challenges%2C%20and%20open%20issues%20in%20the%20integration%20of%20Internet%20of%0AThings%20and%20Cloud%20Computing.pdf
 	// The '$'\n'' is translated to %0A which causes the OneDrive query to fail
 	// Check for the presence of '%0A' via regex
-	
+
 	string itemName = encodeComponent(baseName(path));
-	
+
 	auto invalidWhitespaceReg =
 		ctRegex!(
 			// Check for \n which is %0A when encoded
@@ -206,7 +206,7 @@ bool containsBadWhiteSpace(string path)
 	auto m = match(itemName, invalidWhitespaceReg);
 
 	return m.empty;
-	
+
 }
 
 
