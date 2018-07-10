@@ -2,7 +2,7 @@ import std.algorithm;
 import std.digest.digest;
 
 // implementation of the QuickXorHash algorithm in D
-// https://github.com/OneDrive/onedrive-api-docs/blob/master/snippets/quickxorhash.md
+// https://github.com/OneDrive/onedrive-api-docs/blob/live/docs/code-snippets/quickxorhash.md
 struct QuickXor
 {
 	private immutable int widthInBits = 160;
