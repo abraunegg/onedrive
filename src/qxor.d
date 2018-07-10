@@ -32,9 +32,9 @@ struct QuickXor
 			} else {
 				int index1 = vectorArrayIndex;
 				int index2 = isLastCell ? 0 : (vectorArrayIndex + 1);
-				byte low = cast(byte) (bitsInVectorCell - vectorOffset);
+				ubyte low = cast(ubyte) (bitsInVectorCell - vectorOffset);
 
-				byte xoredByte = 0;
+				ubyte xoredByte = 0;
 				for (size_t j = i; j < array.length; j += widthInBits) {
 					xoredByte ^= array[j];
 				}
