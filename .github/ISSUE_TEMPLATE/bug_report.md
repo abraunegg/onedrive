@@ -4,6 +4,7 @@ about: Create a report to help us improve
 
 ---
 
+### Bug Report Details ###
 **Describe the bug**
 A clear and concise description of what the bug is.
 
@@ -28,3 +29,8 @@ If applicable, add screenshots to help explain your problem.
 
 **Additional context**
 Add any other context about the problem here.
+
+### Bug Report Checklist ###
+- [ ] Detailed description
+- [ ] Reproduction steps (if applicable)
+- [ ] Verbose Log Output
