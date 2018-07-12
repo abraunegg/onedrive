@@ -15,13 +15,14 @@
 ## Setup
 
 ### Build Requirements
-* Build environment must have at least 1GB of memory
+* Build environment must have at least 1GB of memory & 1GB swap space
 * [libcurl](http://curl.haxx.se/libcurl/)
 * [SQLite 3](https://www.sqlite.org/)
 * [Digital Mars D Compiler (DMD)](http://dlang.org/download.html)
 
 ### Dependencies: Ubuntu/Debian
 ```sh
+sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
