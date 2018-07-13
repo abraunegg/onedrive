@@ -846,7 +846,12 @@ final class SyncEngine
 										log.fileOnly(path, " is currently checked out or locked for editing by another user.");
 										return;
 									}
-								
+									if (e.httpStatusCode == 412) {
+										// HTTP request returned status code 412
+										// ETag does not match current item's value
+										string nullTag = null;
+										response = onedrive.simpleUploadReplace(path, item.driveId, item.id, nullTag);
+									}
 									if (e.httpStatusCode == 504) {
 										// HTTP request returned status code 504 (Gateway Timeout)
 										// Try upload as a session
