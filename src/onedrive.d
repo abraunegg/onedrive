@@ -294,7 +294,6 @@ final class OneDriveApi
 			if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
 				e.msg ~= "\nRefresh token invalid, use --logout to authorize the client again";
 			}
-			throw e;
 		}
 	}
 
