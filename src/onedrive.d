@@ -540,8 +540,12 @@ final class OneDriveApi
 
 	private void checkHttpCode(ref const JSONValue response)
 	{
-		if (http.statusLine.code / 100 != 2) {
-			throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
+		if (http.statusLine.code == 412) {
+			throw new OneDriveException(http.statusLine.code, http.statusLine.reason);
+		} else {
+			if (http.statusLine.code / 100 != 2) {
+				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
+			}
 		}
 	}
 }

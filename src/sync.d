@@ -824,7 +824,7 @@ final class SyncEngine
 					string eTag = item.eTag;
 					if (!testFileHash(path, item)) {
 						log.vlog("The file content has changed");
-						write("Uploading file ", path, " ...");
+						write("Uploading file ", path, " ... ");
 						JSONValue response;
 						
 						// Are we using OneDrive Personal or OneDrive Business?
@@ -846,20 +846,28 @@ final class SyncEngine
 										log.fileOnly(path, " is currently checked out or locked for editing by another user.");
 										return;
 									}
-								
+									
+									if (e.httpStatusCode == 412) {
+										// HTTP request returned status code 412 - ETag does not match current item's value
+										// Remove the offending file from OneDrive - file will be uploaded as a new file
+										onedrive.deleteById(item.driveId, item.id, item.eTag);
+										// Delete from the local database
+										itemdb.deleteById(item.driveId, item.id);
+									}
+									
 									if (e.httpStatusCode == 504) {
 										// HTTP request returned status code 504 (Gateway Timeout)
 										// Try upload as a session
-										response = session.upload(path, item.driveId, item.parentId, baseName(path), eTag);
+										response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
 									}
 									else throw e;
 								}
-								writeln(" done.");
+								writeln("done.");
 							} else {
 								writeln("");
-								response = session.upload(path, item.driveId, item.parentId, baseName(path), eTag);
-								writeln(" done.");
-							}	
+								response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+								writeln("done.");
+							}		
 						} else {
 							// OneDrive Business Account - always use a session to upload
 							writeln("");
@@ -880,12 +888,12 @@ final class SyncEngine
 								}
 							}
 														
-							writeln(" done.");
+							writeln("done.");
 							// As the session.upload includes the last modified time, save the response
 							saveItem(response);
 						}
 						log.fileOnly("Uploading file ", path, " ... done.");
-						// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
+						// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
 						eTag = response["cTag"].str;
 					}
 					if (accountType == "personal"){
