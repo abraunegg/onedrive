@@ -198,7 +198,7 @@ int main(string[] args)
 	} catch (OneDriveException e) {
 		if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
 			// Authorization is invalid
-			log.log("\nAuthorisation token invalid, use --logout to authorize the client again\n");
+			log.log("\nAuthorization token invalid, use --logout to authorize the client again\n");
 			onedrive.http.shutdown();
 			return EXIT_FAILURE;
 		}
