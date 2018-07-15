@@ -192,7 +192,17 @@ int main(string[] args)
 	// Initialise the sync engine
 	log.log("Initializing the Synchronization Engine ...");
 	auto sync = new SyncEngine(cfg, onedrive, itemdb, selectiveSync);
-	sync.init();
+	
+	try {
+		sync.init();
+	} catch (OneDriveException e) {
+		if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
+			// Authorization is invalid
+			log.log("\nAuthorisation token invalid, use --logout to authorize the client again\n");
+			onedrive.http.shutdown();
+			return EXIT_FAILURE;
+		}
+	}
 	
 	// Do we need to validate the syncDir to check for the presence of a '.nosync' file
 	if (checkMount) {
