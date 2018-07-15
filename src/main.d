@@ -331,33 +331,55 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 			if (singleDirectory != ""){
 				// we were requested to sync a single directory
 				log.vlog("Syncing changes from this selected path: ", singleDirectory);
-				if (localFirst) {
-					if (uploadOnly){
-						log.log("Syncing changes from selected local path only - NOT syncing data changes from OneDrive ...");
-						sync.scanForDifferences(localPath);
-					} else {
+				if (uploadOnly){
+					// Upload Only of selected single directory
+					log.log("Syncing changes from selected local path only - NOT syncing data changes from OneDrive ...");
+					sync.scanForDifferences(localPath);
+				} else {
+					// No upload only
+					if (localFirst) {
+						// Local First
 						log.log("Syncing changes from selected local path first before downloading changes from OneDrive ...");
 						sync.scanForDifferences(localPath);
 						sync.applyDifferencesSingleDirectory(remotePath);
+					} else {
+						// OneDrive First
+						log.log("Syncing changes from selected OneDrive path ...");
+						sync.applyDifferencesSingleDirectory(remotePath);
+						// is this a download only request?
+						if (!downloadOnly) {
+							// process local changes
+							sync.scanForDifferences(localPath);
+							// ensure that the current remote state is updated locally
+							sync.applyDifferencesSingleDirectory(remotePath);
+						}
 					}
-				} else {
-					log.log("Syncing changes from selected OneDrive path first before uploading local changes ...");
-					sync.applyDifferencesSingleDirectory(remotePath);
-					sync.scanForDifferences(localPath);
 				}
 			} else {
-				if (!uploadOnly){
-					// original onedrive client logic below
-					sync.applyDifferences();
-					if (!downloadOnly) {
-						sync.scanForDifferences(localPath);
-						// ensure that the current state is updated
-						sync.applyDifferences();
-					}
-				} else {
-					// upload only
+				// no single directory sync
+				if (uploadOnly){
+					// Upload Only of entire sync_dir
 					log.log("Syncing changes from local path only - NOT syncing data changes from OneDrive ...");
 					sync.scanForDifferences(localPath);
+				} else {
+					// No upload only
+					if (localFirst) {
+						// sync local files first before downloading from OneDrive
+						log.log("Syncing changes from local path first before downloading changes from OneDrive ...");
+						sync.scanForDifferences(localPath);
+						sync.applyDifferences();
+					} else {
+						// sync from OneDrive first before uploading files to OneDrive
+						log.log("Syncing changes from OneDrive ...");
+						sync.applyDifferences();
+						// is this a download only request?
+						if (!downloadOnly) {
+							// process local changes
+							sync.scanForDifferences(localPath);
+							// ensure that the current remote state is updated locally
+							sync.applyDifferences();
+						}
+					}
 				}
 			}
 			count = -1;

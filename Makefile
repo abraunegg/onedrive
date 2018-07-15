@@ -27,7 +27,10 @@ install: all
 	chmod 0775 $(DESTDIR)/var/log/onedrive
 	install -D onedrive $(DESTDIR)$(PREFIX)/bin/onedrive
 	install -D -m 644 logrotate/onedrive.logrotate $(DESTDIR)/etc/logrotate.d/onedrive
-	cp -af *.service $(DESTDIR)/usr/lib/systemd/user/
+	mkdir -p $(DESTDIR)/usr/lib/systemd/user/
+	chown root.root $(DESTDIR)/usr/lib/systemd/user/
+	chmod 0755 $(DESTDIR)/usr/lib/systemd/user/
+	cp -raf *.service $(DESTDIR)/usr/lib/systemd/user/
 	chmod 0644 $(DESTDIR)/usr/lib/systemd/user/onedrive*.service
 	
 onedrive: version $(SOURCES)
