@@ -268,7 +268,7 @@ final class SyncEngine
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 404) {
 				// The directory was not found on OneDrive - no need to delete it
-				log.vlog("The requested directory to create was not found on OneDrive - skipping removing the remote directory as it doesnt exist");
+				log.vlog("The requested directory to delete was not found on OneDrive - skipping removing the remote directory as it doesn't exist");
 				return;
 			}
 		}
