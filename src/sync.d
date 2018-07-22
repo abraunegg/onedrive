@@ -480,6 +480,7 @@ final class SyncEngine
 
 		bool unwanted;
 		unwanted |= skippedItems.find(item.parentId).length != 0;
+		log.dlog("sync.applyDifference testing name '", item.name, "'");	
 		unwanted |= selectiveSync.isNameExcluded(item.name);
 
 		// check the item type
@@ -504,6 +505,7 @@ final class SyncEngine
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){				
 				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
 				path = buildNormalizedPath(path);
+				log.dlog("sync.applyDifference testing path '", path, "'");	
 				unwanted = selectiveSync.isPathExcluded(path);
 			} else {
 				unwanted = true;
@@ -728,9 +730,12 @@ final class SyncEngine
 		log.vlog("Processing ", item.name);
 
 		string path;
+
+		log.dlog("sync.uploadDifferences testing name '", item.name, "'");	
 		bool unwanted = selectiveSync.isNameExcluded(item.name);
 		if (!unwanted) {
 			path = itemdb.computePath(item.driveId, item.id);
+			log.dlog("sync.uploadDifferences testing path '", path, "'");	
 			unwanted = selectiveSync.isPathExcluded(path);
 		}
 
@@ -954,11 +959,11 @@ final class SyncEngine
 			// filter out user configured items to skip
 			if (path != ".") {
 				if (selectiveSync.isNameExcluded(baseName(path))) {
-					log.vlog("Skipping item - excluded by skip_file config: ", path);
+					log.dlog("sync.uploadNewItems Skipping item - excluded by skip_file config: ", path);
 					return;
 				}
 				if (selectiveSync.isPathExcluded(path)) {
-					log.vlog("Skipping item - path excluded: ", path);
+					log.dlog("sync.uploadNewItems Skipping item - path excluded: ", path);
 					return;
 				}
 			}

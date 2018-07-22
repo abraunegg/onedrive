@@ -21,7 +21,6 @@ class MonitorException: ErrnoException
 
 final class Monitor
 {
-	bool verbose;
 	// inotify file descriptor
 	private int fd;
 	// map every inotify watch descriptor to its directory
@@ -44,9 +43,8 @@ final class Monitor
 		this.selectiveSync = selectiveSync;
 	}
 
-	void init(Config cfg, bool verbose)
+	void init(Config cfg)
 	{
-		this.verbose = verbose;
 
 		fd = inotify_init();
 		if (fd == -1) throw new MonitorException("inotify_init failed");
@@ -64,6 +62,7 @@ final class Monitor
 	{
 		// skip filtered items
 		if (dirname != ".") {
+			log.dlog("monitor.addRecursive Checking '", dirname, "' for exclusion... ");
 			if (selectiveSync.isNameExcluded(baseName(dirname))) {
 				return;
 			}
@@ -85,7 +84,7 @@ final class Monitor
 		int wd = inotify_add_watch(fd, toStringz(dirname), mask);
 		if (wd == -1) {
                     if (errno() == ENOSPC) {
-                        log.log("The maximum number of inotify wathches is probably too low.");
+                        log.log("The maximum number of inotify watches is probably too low.");
                         log.log("");
                         log.log("To see the current max number of watches run");
                         log.log("");
@@ -152,58 +151,69 @@ final class Monitor
 
 			int i = 0;
 			while (i < length) {
+				bool skipped = false;
 				inotify_event *event = cast(inotify_event*) &buffer[i];
 				string path;
 
+				log.dlog("monitor.update event.mask: ", format("%#x", event.mask));
 				if (event.mask & IN_IGNORED) {
 					// forget the directory associated to the watch descriptor
+					log.dlog("monitor.update ignoring '", event.wd, "'");
 					wdToDirName.remove(event.wd);
-					goto skip;
+					skipped = true;
+					// goto skip;
 				} else if (event.mask & IN_Q_OVERFLOW) {
 					throw new MonitorException("Inotify overflow, events missing");
 				}
 
 				// skip filtered items
 				path = getPath(event);
+				log.dlog("monitor.update Checking '", path, "' for exclusion... ");
 				if (selectiveSync.isNameExcluded(baseName(path))) {
-					goto skip;
+					skipped = true;
+					// goto skip;
 				}
 				if (selectiveSync.isPathExcluded(path)) {
-					goto skip;
+					skipped = true;
+					// goto skip;
 				}
 
-				if (event.mask & IN_MOVED_FROM) {
-					cookieToPath[event.cookie] = path;
-				} else if (event.mask & IN_MOVED_TO) {
-					if (event.mask & IN_ISDIR) addRecursive(path);
-					auto from = event.cookie in cookieToPath;
-					if (from) {
-						cookieToPath.remove(event.cookie);
-						if (useCallbacks) onMove(*from, path);
-					} else {
-						// item moved from the outside
-						if (event.mask & IN_ISDIR) {
-							if (useCallbacks) onDirCreated(path);
+				if (!skipped) {
+					if (event.mask & IN_MOVED_FROM) {
+						cookieToPath[event.cookie] = path;
+					} else if (event.mask & IN_MOVED_TO) {
+						if (event.mask & IN_ISDIR) addRecursive(path);
+						auto from = event.cookie in cookieToPath;
+						if (from) {
+							cookieToPath.remove(event.cookie);
+							if (useCallbacks) onMove(*from, path);
 						} else {
+							// item moved from the outside
+							if (event.mask & IN_ISDIR) {
+								if (useCallbacks) onDirCreated(path);
+							} else {
+								if (useCallbacks) onFileChanged(path);
+							}
+						}
+					} else if (event.mask & IN_CREATE) {
+						if (event.mask & IN_ISDIR) {
+							addRecursive(path);
+							if (useCallbacks) onDirCreated(path);
+						}
+					} else if (event.mask & IN_DELETE) {
+						if (useCallbacks) onDelete(path);
+					} else if (event.mask & IN_ATTRIB || event.mask & IN_CLOSE_WRITE) {
+						if (!(event.mask & IN_ISDIR)) {
 							if (useCallbacks) onFileChanged(path);
 						}
+					} else {
+						log.log("Unknown inotify event: ", format("%#x", event.mask));
 					}
-				} else if (event.mask & IN_CREATE) {
-					if (event.mask & IN_ISDIR) {
-						addRecursive(path);
-						if (useCallbacks) onDirCreated(path);
-					}
-				} else if (event.mask & IN_DELETE) {
-					if (useCallbacks) onDelete(path);
-				} else if (event.mask & IN_ATTRIB || event.mask & IN_CLOSE_WRITE) {
-					if (!(event.mask & IN_ISDIR)) {
-						if (useCallbacks) onFileChanged(path);
-					}
-				} else {
-					log.log("Unknow inotify event: ", format("%#x", event.mask));
 				}
-
-				skip:
+				if (skipped) {
+					log.dlog("monitor.update Skipping '", path, "'");
+				}
+				// skip:
 				i += inotify_event.sizeof + event.len;
 			}
 			// assume that the items moved outside the watched directory has been deleted

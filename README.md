@@ -30,14 +30,14 @@ sudo apt install libsqlite3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
-### Dependencies: Fedora < Version 18 / CentOS / RHEL 
+### Dependencies: Fedora < Version 18 / CentOS / RHEL
 ```sh
 sudo yum install libcurl-devel
 sudo yum install sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
-### Dependencies: Fedora > Version 18 
+### Dependencies: Fedora > Version 18
 ```sh
 sudo dnf install libcurl-devel
 sudo dnf install sqlite-devel
@@ -95,7 +95,7 @@ Example: If the full path is `~/OneDrive/mydir`, the command would be `onedrive 
 ### Performing a 'one-way' sync
 In some cases it may be desirable to 'upload only' to OneDrive. To do this use the following command:
 ```
-onedrive --synchronize --upload-only 
+onedrive --synchronize --upload-only
 ```
 
 ### Increasing logging level
@@ -155,14 +155,14 @@ rm -f ~/.config/onedrive/refresh_token
 ```
 
 ## Additional Configuration
-Additional configuration is optional. 
+Additional configuration is optional.
 If you want to change the defaults, you can copy and edit the included config file into your `~/.config/onedrive` directory:
 ```sh
 mkdir -p ~/.config/onedrive
 cp ./config ~/.config/onedrive/config
 nano ~/.config/onedrive/config
 ```
-This file does not get created by default, and should only be created if you want to change the 'default' operational parameters. 
+This file does not get created by default, and should only be created if you want to change the 'default' operational parameters.
 
 Available options:
 * `sync_dir`: directory where the files will be synced
