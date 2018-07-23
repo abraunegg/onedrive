@@ -2,6 +2,8 @@ import std.datetime;
 import std.exception;
 import std.path;
 import std.string;
+import std.stdio;
+import core.stdc.stdlib;
 import sqlite;
 
 enum ItemType {
@@ -29,7 +31,7 @@ struct Item {
 final class ItemDatabase
 {
 	// increment this for every change in the db schema
-	immutable int itemDatabaseVersion = 6;
+	immutable int itemDatabaseVersion = 7;
 
 	Database db;
 	Statement insertItemStmt;
@@ -41,33 +43,21 @@ final class ItemDatabase
 	this(const(char)[] filename)
 	{
 		db = Database(filename);
-		if (db.getVersion() == 0) {
-			db.exec("CREATE TABLE item (
-				driveId          TEXT NOT NULL,
-				id               TEXT NOT NULL,
-				name             TEXT NOT NULL,
-				type             TEXT NOT NULL,
-				eTag             TEXT,
-				cTag             TEXT,
-				mtime            TEXT NOT NULL,
-				parentId         TEXT,
-				crc32Hash        TEXT,
-				sha1Hash         TEXT,
-				quickXorHash     TEXT,
-				remoteDriveId    TEXT,
-				remoteId         TEXT,
-				deltaLink        TEXT,
-				PRIMARY KEY (driveId, id),
-				FOREIGN KEY (driveId, parentId)
-				REFERENCES item (driveId, id)
-				ON DELETE CASCADE
-				ON UPDATE RESTRICT
-			)");
-			db.exec("CREATE INDEX name_idx ON item (name)");
-			db.exec("CREATE INDEX remote_idx ON item (remoteDriveId, remoteId)");
-			db.setVersion(itemDatabaseVersion);
+		int dbVersion;
+		try {
+			dbVersion = db.getVersion();
+		} catch (SqliteException e) {
+			// An error was generated - what was the error?
+			writeln("\nAn internal database error occurred: " ~ e.msg ~ "\n");
+			exit(-1);
+		}
+		
+		if (dbVersion == 0) {
+			createTable(dbVersion);
 		} else if (db.getVersion() != itemDatabaseVersion) {
-			throw new Exception("The item database is incompatible, please resync manually");
+			writeln("The item database is incompatible, re-creating database table structures");
+			db.exec("DROP TABLE item");
+			createTable(dbVersion);
 		}
 		db.exec("PRAGMA foreign_keys = ON");
 		db.exec("PRAGMA recursive_triggers = ON");
@@ -91,6 +81,34 @@ final class ItemDatabase
 		deleteItemByIdStmt = db.prepare("DELETE FROM item WHERE driveId = ? AND id = ?");
 	}
 
+	void createTable(int dbVersion)
+	{
+		db.exec("CREATE TABLE item (
+				driveId          TEXT NOT NULL,
+				id               TEXT NOT NULL,
+				name             TEXT NOT NULL,
+				type             TEXT NOT NULL,
+				eTag             TEXT,
+				cTag             TEXT,
+				mtime            TEXT NOT NULL,
+				parentId         TEXT,
+				crc32Hash        TEXT,
+				sha1Hash         TEXT,
+				quickXorHash     TEXT,
+				remoteDriveId    TEXT,
+				remoteId         TEXT,
+				deltaLink        TEXT,
+				PRIMARY KEY (driveId, id),
+				FOREIGN KEY (driveId, parentId)
+				REFERENCES item (driveId, id)
+				ON DELETE CASCADE
+				ON UPDATE RESTRICT
+			)");
+		db.exec("CREATE INDEX name_idx ON item (name)");
+		db.exec("CREATE INDEX remote_idx ON item (remoteDriveId, remoteId)");
+		db.setVersion(itemDatabaseVersion);
+	}
+	
 	void insert(const ref Item item)
 	{
 		bindItem(item, insertItemStmt);

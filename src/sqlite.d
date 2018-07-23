@@ -2,6 +2,7 @@ module sqlite;
 import std.stdio;
 import etc.c.sqlite3;
 import std.string: fromStringz, toStringz;
+import core.stdc.stdlib;
 
 extern (C) immutable(char)* sqlite3_errstr(int); // missing from the std library
 
@@ -48,9 +49,16 @@ struct Database
 	{
 		// https://www.sqlite.org/c3ref/open.html
 		int rc = sqlite3_open(toStringz(filename), &pDb);
-		if (rc != SQLITE_OK) {
+		if (rc == SQLITE_CANTOPEN) {
+			// Database cannot be opened
+			writeln("\nThe database cannot be opened. Please check the permissions of ~/.config/onedrive/items.sqlite3\n");
 			close();
-			throw new SqliteException(ifromStringz(sqlite3_errstr(rc)));
+			exit(-1);
+		}
+		if (rc != SQLITE_OK) {
+			writeln("\nA database access error occurred: " ~ getErrorMessage() ~ "\n");
+			close();
+			exit(-1);
 		}
 		sqlite3_extended_result_codes(pDb, 1); // always use extended result codes
 	}
@@ -60,7 +68,9 @@ struct Database
 		// https://www.sqlite.org/c3ref/exec.html
 		int rc = sqlite3_exec(pDb, toStringz(sql), null, null, null);
 		if (rc != SQLITE_OK) {
-			throw new SqliteException(ifromStringz(sqlite3_errmsg(pDb)));
+			writeln("\nA database execution error occurred: "~ getErrorMessage() ~ "\n");
+			close();
+			exit(-1);
 		}
 	}
 
@@ -79,6 +89,11 @@ struct Database
 		return userVersion;
 	}
 
+	string getErrorMessage()
+	{
+		return ifromStringz(sqlite3_errmsg(pDb));
+	}
+	
 	void setVersion(int userVersion)
 	{
 		import std.conv: to;
@@ -149,7 +164,9 @@ struct Statement
 					column = fromStringz(sqlite3_column_text(pStmt, i));
 				}
 			} else {
-				throw new SqliteException(ifromStringz(sqlite3_errmsg(sqlite3_db_handle(pStmt))));
+				string errorMessage = ifromStringz(sqlite3_errmsg(sqlite3_db_handle(pStmt)));
+				writeln("\nA database statement execution error occurred: "~ errorMessage ~ "\n");
+				exit(-1);
 			}
 		}
 	}
