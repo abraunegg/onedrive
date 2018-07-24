@@ -151,7 +151,7 @@ struct Statement
 			int rc = sqlite3_step(pStmt);
 			if (rc == SQLITE_BUSY) {
 				// Database is locked by another onedrive process
-				writeln("The database is currently locked by another process - cannot sync");
+				log.error("The database is currently locked by another process - cannot sync");
 				return;
 			}
 			if (rc == SQLITE_DONE) {
@@ -166,7 +166,7 @@ struct Statement
 				}
 			} else {
 				string errorMessage = ifromStringz(sqlite3_errmsg(sqlite3_db_handle(pStmt)));
-				writeln("\nA database statement execution error occurred: "~ errorMessage ~ "\n");
+				log.error("\nA database statement execution error occurred: "~ errorMessage ~ "\n");
 				exit(-1);
 			}
 		}
