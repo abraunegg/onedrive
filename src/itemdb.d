@@ -2,9 +2,9 @@ import std.datetime;
 import std.exception;
 import std.path;
 import std.string;
-import std.stdio;
 import core.stdc.stdlib;
 import sqlite;
+static import log;
 
 enum ItemType {
 	file,
@@ -48,16 +48,16 @@ final class ItemDatabase
 			dbVersion = db.getVersion();
 		} catch (SqliteException e) {
 			// An error was generated - what was the error?
-			writeln("\nAn internal database error occurred: " ~ e.msg ~ "\n");
+			log.error("\nAn internal database error occurred: " ~ e.msg ~ "\n");
 			exit(-1);
 		}
 		
 		if (dbVersion == 0) {
-			createTable(dbVersion);
+			createTable();
 		} else if (db.getVersion() != itemDatabaseVersion) {
-			writeln("The item database is incompatible, re-creating database table structures");
+			log.log("The item database is incompatible, re-creating database table structures");
 			db.exec("DROP TABLE item");
-			createTable(dbVersion);
+			createTable();
 		}
 		db.exec("PRAGMA foreign_keys = ON");
 		db.exec("PRAGMA recursive_triggers = ON");
@@ -81,7 +81,7 @@ final class ItemDatabase
 		deleteItemByIdStmt = db.prepare("DELETE FROM item WHERE driveId = ? AND id = ?");
 	}
 
-	void createTable(int dbVersion)
+	void createTable()
 	{
 		db.exec("CREATE TABLE item (
 				driveId          TEXT NOT NULL,

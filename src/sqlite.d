@@ -3,6 +3,7 @@ import std.stdio;
 import etc.c.sqlite3;
 import std.string: fromStringz, toStringz;
 import core.stdc.stdlib;
+static import log;
 
 extern (C) immutable(char)* sqlite3_errstr(int); // missing from the std library
 
@@ -51,12 +52,12 @@ struct Database
 		int rc = sqlite3_open(toStringz(filename), &pDb);
 		if (rc == SQLITE_CANTOPEN) {
 			// Database cannot be opened
-			writeln("\nThe database cannot be opened. Please check the permissions of ~/.config/onedrive/items.sqlite3\n");
+			log.error("\nThe database cannot be opened. Please check the permissions of ~/.config/onedrive/items.sqlite3\n");
 			close();
 			exit(-1);
 		}
 		if (rc != SQLITE_OK) {
-			writeln("\nA database access error occurred: " ~ getErrorMessage() ~ "\n");
+			log.error("\nA database access error occurred: " ~ getErrorMessage() ~ "\n");
 			close();
 			exit(-1);
 		}
@@ -68,7 +69,7 @@ struct Database
 		// https://www.sqlite.org/c3ref/exec.html
 		int rc = sqlite3_exec(pDb, toStringz(sql), null, null, null);
 		if (rc != SQLITE_OK) {
-			writeln("\nA database execution error occurred: "~ getErrorMessage() ~ "\n");
+			log.error("\nA database execution error occurred: "~ getErrorMessage() ~ "\n");
 			close();
 			exit(-1);
 		}
