@@ -55,13 +55,15 @@ sudo pacman -S curl sqlite dmd
 ```
 
 ### Compilation & Installation
-Before cloning and compiling, if you have installed DMD via curl for your OS, you will need to activate DMD as per below:
+Before cloning and compiling, if you have installed DMD via curl for your OS, you will need to activate DMD as per example below:
 ```
 Run `source ~/dlang/dmd-2.081.1/activate` in your shell to use dmd-2.081.1.
 This will setup PATH, LIBRARY_PATH, LD_LIBRARY_PATH, DMD, DC, and PS1.
 Run `deactivate` later on to restore your environment.
 ```
 Without performing this step, the compilation process will fail.
+
+Note: Depending on your DMD version, substitute `2.081.1` above with your DMD version that is installed.
 
 ```sh
 git clone https://github.com/abraunegg/onedrive.git
