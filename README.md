@@ -57,8 +57,8 @@ sudo pacman -S curl sqlite dmd
 ```
 sudo apt-get install libcurl4-openssl-dev
 sudo apt-get install libsqlite3-dev
-wget https://github.com/ldc-developers/ldc/releases/download/v1.8.0/ldc2-1.8.0-linux-armhf.tar.xz
-tar -xvf ldc2-1.8.0-linux-armhf.tar.xz
+wget https://github.com/ldc-developers/ldc/releases/download/v1.10.0/ldc2-1.10.0-linux-armhf.tar.xz
+tar -xvf ldc2-1.10.0-linux-armhf.tar.xz
 ```
 
 ## Compilation & Installation
@@ -81,18 +81,18 @@ sudo make install
 ```
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC)):
-#### Ubuntu / Debian (i386 or i686 architecture)
+#### Ubuntu / Debian (i386 or i686 Architecture)
 ```
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
 make DC=ldmd2
 sudo make install
 ```
-#### ARM architecture
+#### ARM Architecture
 ```
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-make DC=/home/pi/ldc2-1.8.0-linux-armhf/bin/ldmd2
+make DC=/home/pi/ldc2-1.10.0-linux-armhf/bin/ldmd2
 sudo make install
 ```
 
