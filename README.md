@@ -151,6 +151,20 @@ An example of the log file is below:
 2018-Apr-07 17:09:38.5708652 Applying changes of Path ID: <redacted>
 ```
 
+## OneDrive service
+If you want to sync your files automatically, enable and start the systemd service:
+```sh
+systemctl --user enable onedrive
+systemctl --user start onedrive
+```
+
+To see the logs run:
+```sh
+journalctl --user-unit onedrive -f
+```
+
+Note: systemd is supported on Ubuntu only starting from version 15.04
+
 ### Uninstall
 ```sh
 sudo make uninstall
