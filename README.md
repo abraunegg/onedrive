@@ -12,49 +12,57 @@
 * While local changes are uploaded right away, remote changes are delayed
 * No GUI
 
-## Setup
-
-### Build Requirements
+## Build Requirements
 * Build environment must have at least 1GB of memory & 1GB swap space
 * [libcurl](http://curl.haxx.se/libcurl/)
 * [SQLite 3](https://www.sqlite.org/)
 * [Digital Mars D Compiler (DMD)](http://dlang.org/download.html)
 
-**Note:** 32Bit / i686 operating systems are not supported when using this client.
-
-### Dependencies: Ubuntu/Debian
-```sh
+### Dependencies: Ubuntu/Debian - x86_64
+```
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
+### Dependencies: Ubuntu/Debian - i386 / i686
+```
+sudo apt install build-essential
+sudo apt install libcurl4-openssl-dev
+sudo apt install libsqlite3-dev
+sudo apt install ldc
+```
+
 ### Dependencies: Fedora < Version 18 / CentOS / RHEL 
-```sh
+```
 sudo yum install libcurl-devel
 sudo yum install sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
 ### Dependencies: Fedora > Version 18 
-```sh
+```
 sudo dnf install libcurl-devel
 sudo dnf install sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
-Alternatively, if you are on a 64 bit system, you may also use the LLVM D Compiler (LDC):
-```
-sudo dnf install ldc
-```
-
 ### Dependencies: Arch Linux
-```sh
+```
 sudo pacman -S curl sqlite dmd
 ```
 
-### Compilation & Installation
+### Dependencies: Raspbian (ARM)
+```
+sudo apt-get install libcurl4-openssl-dev
+sudo apt-get install libsqlite3-dev
+wget https://github.com/ldc-developers/ldc/releases/download/v1.10.0/ldc2-1.10.0-linux-armhf.tar.xz
+tar -xvf ldc2-1.10.0-linux-armhf.tar.xz
+```
+
+## Compilation & Installation
+### Building using DMD Reference Compiler:
 Before cloning and compiling, if you have installed DMD via curl for your OS, you will need to activate DMD as per example below:
 ```
 Run `source ~/dlang/dmd-2.081.1/activate` in your shell to use dmd-2.081.1.
@@ -65,18 +73,30 @@ Without performing this step, the compilation process will fail.
 
 Note: Depending on your DMD version, substitute `2.081.1` above with your DMD version that is installed.
 
-```sh
+```
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
 make
 sudo make install
 ```
 
-Using a different compiler (for example [LDC](https://wiki.dlang.org/LDC)):
-```sh
+### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC)):
+#### Ubuntu / Debian (i386 or i686 Architecture)
+```
+git clone https://github.com/abraunegg/onedrive.git
+cd onedrive
 make DC=ldmd2
+sudo make install
+```
+#### ARM Architecture
+```
+git clone https://github.com/abraunegg/onedrive.git
+cd onedrive
+make DC=/home/pi/ldc2-1.10.0-linux-armhf/bin/ldmd2
+sudo make install
 ```
 
+## Using the client
 ### First run :zap:
 After installing the application you must run it at least once from the terminal to authorize it.
 
@@ -182,7 +202,7 @@ Available options:
 Example: `sync_dir="~/MyDirToSync"`
 
 **Please Note:**
-Proceed with caution here by changing the default sync dir from ~/OneDrive to ~/MyDirToSync
+Proceed with caution here when changing the default sync dir from ~/OneDrive to ~/MyDirToSync
 
 The issue here is around how the client stores the sync_dir path in the database. If the config file is missing, or you don't use the `--syncdir` parameter - what will happen is the client will default back to `~/OneDrive` and 'think' that either all your data has been deleted - thus delete the content on OneDrive, or will start downloading all data from OneDrive into the default location.
 
