@@ -31,7 +31,7 @@ curl -fsS https://dlang.org/install.sh | bash -s dmd
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
-sudo apt install ldc
+curl -fsS https://dlang.org/install.sh | bash -s ldc
 ```
 
 ### Dependencies: Fedora < Version 18 / CentOS / RHEL 
@@ -53,12 +53,11 @@ curl -fsS https://dlang.org/install.sh | bash -s dmd
 sudo pacman -S curl sqlite dmd
 ```
 
-### Dependencies: Raspbian (ARM)
+### Dependencies: ARM (armhf, arm64)
 ```
 sudo apt-get install libcurl4-openssl-dev
 sudo apt-get install libsqlite3-dev
-wget https://github.com/ldc-developers/ldc/releases/download/v1.10.0/ldc2-1.10.0-linux-armhf.tar.xz
-tar -xvf ldc2-1.10.0-linux-armhf.tar.xz
+curl -fsS https://dlang.org/install.sh | bash -s ldc
 ```
 
 ## Compilation & Installation
@@ -81,18 +80,21 @@ sudo make install
 ```
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC)):
-#### Ubuntu / Debian (i386 or i686 Architecture)
+Before cloning and compiling, if you have installed LDC via curl for your OS, you will need to activate LDC as per example below:
+```
+Run `source ~/dlang/ldc-1.10.0/activate` in your shell to use ldc-1.10.0.
+This will setup PATH, LIBRARY_PATH, LD_LIBRARY_PATH, DMD, DC, and PS1.
+Run `deactivate` later on to restore your environment.
+```
+Without performing this step, the compilation process will fail.
+
+Note: Depending on your LDC version, substitute `1.10.0` above with your LDC version that is installed.
+
+#### Ubuntu / Debian (i386 or i686 Architecture) & ARM Architecture (armhf, arm64)
 ```
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
 make DC=ldmd2
-sudo make install
-```
-#### ARM Architecture
-```
-git clone https://github.com/abraunegg/onedrive.git
-cd onedrive
-make DC=/home/pi/ldc2-1.10.0-linux-armhf/bin/ldmd2
 sudo make install
 ```
 
