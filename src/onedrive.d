@@ -55,6 +55,7 @@ final class OneDriveApi
 		this.cfg = cfg;
 		http = HTTP();
 		http.dnsTimeout = (dur!"seconds"(5));
+		http.dataTimeout = (dur!"seconds"(3600));
 		if (debugHttp) {
 			http.verbose = true;
 			.debugResponse = true;
