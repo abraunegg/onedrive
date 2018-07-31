@@ -31,7 +31,8 @@ curl -fsS https://dlang.org/install.sh | bash -s dmd
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
-sudo apt install ldc
+wget https://github.com/ldc-developers/ldc/releases/download/v1.10.0/ldc2-1.10.0-linux-x86_64.tar.xz
+tar -xvf ldc2-1.10.0-linux-x86_64.tar.xz
 ```
 
 ### Dependencies: Fedora < Version 18 / CentOS / RHEL 
@@ -85,14 +86,14 @@ sudo make install
 ```
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-make DC=ldmd2
+make DC=~/ldc2-1.10.0-linux-x86_64/bin/ldmd2
 sudo make install
 ```
 #### ARM Architecture
 ```
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-make DC=/home/pi/ldc2-1.10.0-linux-armhf/bin/ldmd2
+make DC=~/ldc2-1.10.0-linux-armhf/bin/ldmd2
 sudo make install
 ```
 
