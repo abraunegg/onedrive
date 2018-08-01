@@ -16,7 +16,7 @@ DEBIAN_MIRROR="http://ftp.debian.org/debian"
 HOST_DEPENDENCIES="qemu-user-static binfmt-support debootstrap sbuild wget"
 
 # Debian package dependencies for the chrooted environment
-GUEST_DEPENDENCIES="build-essential libcurl4-openssl-dev libsqlite3-dev libgnutls-openssl27"
+GUEST_DEPENDENCIES="build-essential libcurl4-openssl-dev libsqlite3-dev libgnutls-openssl27 git"
 
 function setup_arm32_chroot {
 	# Update apt repository details
