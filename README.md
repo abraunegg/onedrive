@@ -27,12 +27,12 @@ curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
 ### Dependencies: Ubuntu/Debian - i386 / i686
+**Note:** Validated with `Linux ubuntu-i386-vm 4.13.0-36-generic #40~16.04.1-Ubuntu SMP Fri Feb 16 23:26:51 UTC 2018 i686 i686 i686 GNU/Linux` and DMD 2.081.1
 ```
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
-wget https://github.com/ldc-developers/ldc/releases/download/v1.10.0/ldc2-1.10.0-linux-x86_64.tar.xz
-tar -xvf ldc2-1.10.0-linux-x86_64.tar.xz
+curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
 ### Dependencies: Fedora < Version 18 / CentOS / RHEL 
@@ -72,7 +72,7 @@ Run `deactivate` later on to restore your environment.
 ```
 Without performing this step, the compilation process will fail.
 
-Note: Depending on your DMD version, substitute `2.081.1` above with your DMD version that is installed.
+**Note:** Depending on your DMD version, substitute `2.081.1` above with your DMD version that is installed.
 
 ```
 git clone https://github.com/abraunegg/onedrive.git
@@ -82,13 +82,6 @@ sudo make install
 ```
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC)):
-#### Ubuntu / Debian (i386 or i686 Architecture)
-```
-git clone https://github.com/abraunegg/onedrive.git
-cd onedrive
-make DC=~/ldc2-1.10.0-linux-x86_64/bin/ldmd2
-sudo make install
-```
 #### ARM Architecture
 ```
 git clone https://github.com/abraunegg/onedrive.git
@@ -212,7 +205,7 @@ Example: `skip_file = ".*|~*|Desktop|Documents/OneNote*|Documents/IISExpress|Doc
 
 Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns.
 
-Note: after changing `skip_file`, you must perform a full synchronization by executing `onedrive --resync`
+**Note:** after changing `skip_file`, you must perform a full synchronization by executing `onedrive --resync`
 
 ### Selective sync
 Selective sync allows you to sync only specific files and directories.
@@ -225,7 +218,7 @@ Documents/latest_report.docx
 Work/ProjectX
 notes.txt
 ```
-Note: after changing the sync list, you must perform a full synchronization by executing `onedrive --resync`
+**Note:** after changing the sync list, you must perform a full synchronization by executing `onedrive --resync`
 
 ### Shared folders
 Folders shared with you can be synced by adding them to your OneDrive. To do that open your Onedrive, go to the Shared files list, right click on the folder you want to sync and then click on "Add to my OneDrive".
