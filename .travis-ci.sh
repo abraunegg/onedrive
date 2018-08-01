@@ -5,19 +5,14 @@
 # Adapted from https://gist.github.com/oznu/b5efd7784e5a820ec3746820f2183dc0
 # Adapted from https://blog.lazy-evaluation.net/posts/linux/debian-armhf-bootstrap.html
 # Adapted from https://blog.lazy-evaluation.net/posts/linux/debian-stretch-arm64.html
-
 set -e
-
 # CHROOT Directory
 CHROOT_DIR=/tmp/chroot
-
 # Debian package dependencies for the host to run ARM under QEMU
 DEBIAN_MIRROR="http://ftp.debian.org/debian"
 HOST_DEPENDENCIES="qemu-user-static binfmt-support debootstrap sbuild wget"
-
 # Debian package dependencies for the chrooted environment
 GUEST_DEPENDENCIES="build-essential libcurl4-openssl-dev libsqlite3-dev libgnutls-openssl27"
-
 function setup_arm32_chroot {
 	# Update apt repository details
 	sudo apt-get update
@@ -39,7 +34,6 @@ function setup_arm32_chroot {
 	sudo sbuild-createchroot --arch=${CHROOT_ARCH} --foreign --setup-only ${VERSION} ${CHROOT_DIR} ${DEBIAN_MIRROR}
 	configure_chroot
 }
-
 function setup_arm64_chroot {
 	# Update apt repository details
 	sudo apt-get update
@@ -58,7 +52,6 @@ function setup_arm64_chroot {
 	sudo qemu-debootstrap --arch=${CHROOT_ARCH64} ${VERSION64} ${CHROOT_DIR} ${DEBIAN_MIRROR}
 	configure_chroot
 }
-
 function setup_x32_chroot {
 	# Update apt repository details
 	sudo apt-get update
@@ -81,7 +74,6 @@ function setup_x32_chroot {
 	sudo sbuild-createchroot --arch=${CHROOT_ARCH32} --foreign --setup-only ${VERSION} ${CHROOT_DIR} ${DEBIAN_MIRROR}
 	configure_chroot
 }
-
 function configure_chroot {
 	# Create file with environment variables which will be used inside chrooted environment
 	echo "export ARCH=${ARCH}" > envvars.sh
@@ -103,7 +95,6 @@ function configure_chroot {
 	sudo chroot ${CHROOT_DIR} bash -c "cd ${TRAVIS_BUILD_DIR} && chmod a+x ./.travis-ci.sh"
 	sudo chroot ${CHROOT_DIR} bash -c "cd ${TRAVIS_BUILD_DIR} && ./.travis-ci.sh"
 }
-
 function build_onedrive {
 	# Depending on architecture, build onedrive using applicable tool
 	echo `uname -a`
@@ -125,12 +116,10 @@ function build_onedrive {
 	# Functional testing of built application
 	test_onedrive
 }
-
 function test_onedrive {
 	# Testing onedrive client
 	./onedrive --version
 }
-
 if [ "${ARCH}" = "arm32" ] || [ "${ARCH}" = "arm64" ] || [ "${ARCH}" = "x32" ]; then
 	if [ -e "/.chroot_is_done" ]; then
 		# We are inside ARM chroot
