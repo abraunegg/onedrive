@@ -1189,6 +1189,7 @@ final class SyncEngine
 			// Is the local file newer than the uploaded file?
 			SysTime localFileModifiedTime = timeLastModified(path).toUTC();
 			SysTime remoteFileModifiedTime = SysTime.fromISOExtString(fileDetailsFromOneDrive["fileSystemInfo"]["lastModifiedDateTime"].str);
+			localFileModifiedTime.fracSecs = Duration.zero;
 			
 			if (localFileModifiedTime > remoteFileModifiedTime){
 				// local file is newer
