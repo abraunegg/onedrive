@@ -36,7 +36,25 @@ curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
 ### Dependencies: Debian - i386 / i686
-**Note:** TBA
+**Note:** Validated with `Linux debian-i386 4.9.0-7-686-pae #1 SMP Debian 4.9.110-1 (2018-07-05) i686 GNU/Linux` and LDC - the LLVM D compiler (1.8.0).
+
+First install development dependancies as per below:
+```
+sudo apt install build-essential
+sudo apt install libcurl4-openssl-dev
+sudo apt install libsqlite3-dev
+sudo apt install git
+```
+Second, install the LDC compiler as per below:
+```
+mkdir ldc && cd ldc
+wget http://ftp.us.debian.org/debian/pool/main/l/ldc/ldc_1.8.0-3_i386.deb
+wget http://ftp.us.debian.org/debian/pool/main/l/ldc/libphobos2-ldc-shared-dev_1.8.0-3_i386.deb
+wget http://ftp.us.debian.org/debian/pool/main/l/ldc/libphobos2-ldc-shared78_1.8.0-3_i386.deb
+wget http://ftp.us.debian.org/debian/pool/main/l/llvm-toolchain-5.0/libllvm5.0_5.0.1-2~bpo9+1_i386.deb
+wget http://ftp.us.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.1+20180714-1_i386.deb
+sudo dpkg -i ./*.deb
+```
 
 ### Dependencies: Fedora < Version 18 / CentOS / RHEL 
 ```
@@ -85,6 +103,14 @@ sudo make install
 ```
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC)):
+#### Debian - i386 / i686
+```
+git clone https://github.com/abraunegg/onedrive.git
+cd onedrive
+make make DC=/usr/bin/ldmd2
+sudo make install
+```
+
 #### ARM Architecture
 ```
 git clone https://github.com/abraunegg/onedrive.git
