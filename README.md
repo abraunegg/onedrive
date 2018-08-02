@@ -194,6 +194,7 @@ This file does not get created by default, and should only be created if you wan
 Available options:
 * `sync_dir`: directory where the files will be synced
 * `skip_file`: any files or directories that match this pattern will be skipped during sync.
+* `skip_symlinks`: any files or directories that are symlinked will be skipped during sync
 
 ### sync_dir
 Example: `sync_dir="~/MyDirToSync"`
@@ -209,6 +210,11 @@ Example: `skip_file = ".*|~*|Desktop|Documents/OneNote*|Documents/IISExpress|Doc
 Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns.
 
 **Note:** after changing `skip_file`, you must perform a full synchronization by executing `onedrive --resync`
+
+### skip_symlinks
+Example: `skip_symlinks = "true"`
+
+Setting this to `"true"` will skip all symlinks while syncing.
 
 ### Selective sync
 Selective sync allows you to sync only specific files and directories.
