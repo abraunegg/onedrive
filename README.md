@@ -26,7 +26,7 @@ sudo apt install libsqlite3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
-### Dependencies: Ubuntu/Debian - i386 / i686
+### Dependencies: Ubuntu - i386 / i686
 **Note:** Validated with `Linux ubuntu-i386-vm 4.13.0-36-generic #40~16.04.1-Ubuntu SMP Fri Feb 16 23:26:51 UTC 2018 i686 i686 i686 GNU/Linux` and DMD 2.081.1
 ```
 sudo apt install build-essential
@@ -34,6 +34,9 @@ sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
+
+### Dependencies: Debian - i386 / i686
+**Note:** TBA
 
 ### Dependencies: Fedora < Version 18 / CentOS / RHEL 
 ```
