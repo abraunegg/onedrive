@@ -936,7 +936,9 @@ final class SyncEngine
 			if (isSymlink(path)) {
 				// if config says so we skip all symlinked items
 				if (cfg.getValue("skip_symlinks") == "true") {
+					log.vlog("Skipping item - skip symbolic links configured: ", path);
 					return;
+
 				}
 				// skip unexisting symbolic links
 				else if (!exists(readLink(path))) {
