@@ -938,10 +938,18 @@ final class SyncEngine
 		if(encodeComponent(path).length < maxPathLength){
 			// path is less than maxPathLength
 
-			// skip unexisting symbolic links
-			if (isSymlink(path) && !exists(readLink(path))) {
-				log.vlog("Skipping item - symbolic link: ", path);
-				return;
+			if (isSymlink(path)) {
+				// if config says so we skip all symlinked items
+				if (cfg.getValue("skip_symlinks") == "true") {
+					log.vlog("Skipping item - skip symbolic links configured: ", path);
+					return;
+
+				}
+				// skip unexisting symbolic links
+				else if (!exists(readLink(path))) {
+					log.vlog("Skipping item - invalid symbolic link: ", path);
+					return;
+				}
 			}
 			
 			// Restriction and limitations about windows naming files
@@ -1194,6 +1202,7 @@ final class SyncEngine
 			// Is the local file newer than the uploaded file?
 			SysTime localFileModifiedTime = timeLastModified(path).toUTC();
 			SysTime remoteFileModifiedTime = SysTime.fromISOExtString(fileDetailsFromOneDrive["fileSystemInfo"]["lastModifiedDateTime"].str);
+			localFileModifiedTime.fracSecs = Duration.zero;
 			
 			if (localFileModifiedTime > remoteFileModifiedTime){
 				// local file is newer

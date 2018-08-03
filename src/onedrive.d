@@ -2,6 +2,7 @@ import std.net.curl: CurlException, HTTP;
 import std.datetime, std.exception, std.file, std.json, std.path;
 import std.stdio, std.string, std.uni, std.uri;
 import config;
+import core.stdc.stdlib;
 static import log;
 shared bool debugResponse = false;
 
@@ -54,6 +55,7 @@ final class OneDriveApi
 		this.cfg = cfg;
 		http = HTTP();
 		http.dnsTimeout = (dur!"seconds"(5));
+		http.dataTimeout = (dur!"seconds"(3600));
 		if (debugHttp) {
 			http.verbose = true;
 			.debugResponse = true;
@@ -423,7 +425,15 @@ final class OneDriveApi
 			content ~= data;
 			return data.length;
 		};
-		http.perform();
+		
+		try {
+			http.perform();
+		} catch (CurlException e) {
+			// Potentially Timeout was reached on handle error
+			log.error("\nAccess to the Microsoft OneDrive service timed out - Internet connectivity issue?\n");
+			exit(-1);
+		}
+		
 		JSONValue json;
 		try {
 			json = content.parseJSON();

@@ -58,7 +58,9 @@ int main(string[] args)
 	bool uploadOnly;
 	// Add a check mounts option to resolve https://github.com/abraunegg/onedrive/issues/8
 	bool checkMount;
-	// Add option for no remote delete
+	// Add option to skip symlinks
+	bool skipSymlinks;
+  // Add option for no remote delete
 	bool noRemoteDelete;
 		
 	try {
@@ -80,6 +82,7 @@ int main(string[] args)
 			"resync", "Forget the last saved state, perform a full sync", &resync,
 			"remove-directory", "Remove a directory on OneDrive - no sync will be performed.", &removeDirectory,
 			"single-directory", "Specify a single local directory within the OneDrive root to sync.", &singleDirectory,
+			"skip-symlinks", "Skip syncing of symlinks", &skipSymlinks,
 			"source-directory", "Source directory to rename or move on OneDrive - no sync will be performed.", &sourceDirectory,
 			"syncdir", "Set the directory used to sync the files that are synced", &syncDirName,
 			"synchronize", "Perform a synchronization", &synchronize,
@@ -122,10 +125,11 @@ int main(string[] args)
 	
 	// command line parameters override the config
 	if (syncDirName) cfg.setValue("sync_dir", syncDirName.expandTilde().absolutePath());
-	
+  if (skipSymlinks) cfg.setValue("skip_symlinks", "true");
+  
 	// we should only set noRemoteDelete in an upload-only scenario
 	if ((uploadOnly)&&(noRemoteDelete)) cfg.setValue("no-remote-delete", "true");
-
+	
 	// upgrades
 	if (exists(configDirName ~ "/items.db")) {
 		remove(configDirName ~ "/items.db");

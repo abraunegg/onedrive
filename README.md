@@ -26,13 +26,34 @@ sudo apt install libsqlite3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
-### Dependencies: Ubuntu/Debian - i386 / i686
+### Dependencies: Ubuntu - i386 / i686
 **Note:** Validated with `Linux ubuntu-i386-vm 4.13.0-36-generic #40~16.04.1-Ubuntu SMP Fri Feb 16 23:26:51 UTC 2018 i686 i686 i686 GNU/Linux` and DMD 2.081.1
 ```
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+
+### Dependencies: Debian - i386 / i686
+**Note:** Validated with `Linux debian-i386 4.9.0-7-686-pae #1 SMP Debian 4.9.110-1 (2018-07-05) i686 GNU/Linux` and LDC - the LLVM D compiler (1.8.0).
+
+First install development dependancies as per below:
+```
+sudo apt install build-essential
+sudo apt install libcurl4-openssl-dev
+sudo apt install libsqlite3-dev
+sudo apt install git
+```
+Second, install the LDC compiler as per below:
+```
+mkdir ldc && cd ldc
+wget http://ftp.us.debian.org/debian/pool/main/l/ldc/ldc_1.8.0-3_i386.deb
+wget http://ftp.us.debian.org/debian/pool/main/l/ldc/libphobos2-ldc-shared-dev_1.8.0-3_i386.deb
+wget http://ftp.us.debian.org/debian/pool/main/l/ldc/libphobos2-ldc-shared78_1.8.0-3_i386.deb
+wget http://ftp.us.debian.org/debian/pool/main/l/llvm-toolchain-5.0/libllvm5.0_5.0.1-2~bpo9+1_i386.deb
+wget http://ftp.us.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.1+20180714-1_i386.deb
+sudo dpkg -i ./*.deb
 ```
 
 ### Dependencies: Fedora < Version 18 / CentOS / RHEL 
@@ -82,6 +103,14 @@ sudo make install
 ```
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC)):
+#### Debian - i386 / i686
+```
+git clone https://github.com/abraunegg/onedrive.git
+cd onedrive
+make make DC=/usr/bin/ldmd2
+sudo make install
+```
+
 #### ARM Architecture
 ```
 git clone https://github.com/abraunegg/onedrive.git
@@ -191,6 +220,7 @@ This file does not get created by default, and should only be created if you wan
 Available options:
 * `sync_dir`: directory where the files will be synced
 * `skip_file`: any files or directories that match this pattern will be skipped during sync.
+* `skip_symlinks`: any files or directories that are symlinked will be skipped during sync
 
 ### sync_dir
 Example: `sync_dir="~/MyDirToSync"`
@@ -206,6 +236,11 @@ Example: `skip_file = ".*|~*|Desktop|Documents/OneNote*|Documents/IISExpress|Doc
 Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns.
 
 **Note:** after changing `skip_file`, you must perform a full synchronization by executing `onedrive --resync`
+
+### skip_symlinks
+Example: `skip_symlinks = "true"`
+
+Setting this to `"true"` will skip all symlinks while syncing.
 
 ### Selective sync
 Selective sync allows you to sync only specific files and directories.
