@@ -330,10 +330,12 @@ no option        		   No Sync and exit
              --local-first Synchronize from the local directory source first, before downloading changes from OneDrive.
                   --logout Logout the current user
 -m               --monitor Keep monitoring for local and remote changes
+        --no-remote-delete Do not delete local file 'deletes' from OneDrive when using --upload-only
              --print-token Print the access token, useful for debugging
                   --resync Forget the last saved state, perform a full sync
         --remove-directory Remove a directory on OneDrive - no sync will be performed.
         --single-directory Specify a single local directory within the OneDrive root to sync.
+           --skip-symlinks Skip syncing of symlinks
         --source-directory Source directory to rename or move on OneDrive - no sync will be performed.
                  --syncdir Set the directory used to sync the files that are synced
              --synchronize Perform a synchronization
