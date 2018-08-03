@@ -296,7 +296,6 @@ int main(string[] args)
 			};
 			if (!downloadOnly) m.init(cfg, verbose);
 			// monitor loop
-			log.vlog("Monitor Loop: ", to!long(cfg.getValue("monitor_interval")));
 			immutable auto checkInterval = dur!"seconds"(to!long(cfg.getValue("monitor_interval")));
 			auto lastCheckTime = MonoTime.currTime();
 			while (true) {
