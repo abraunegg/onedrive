@@ -219,8 +219,9 @@ This file does not get created by default, and should only be created if you wan
 
 Available options:
 * `sync_dir`: directory where the files will be synced
-* `skip_file`: any files or directories that match this pattern will be skipped during sync.
+* `skip_file`: any files or directories that match this pattern will be skipped during sync
 * `skip_symlinks`: any files or directories that are symlinked will be skipped during sync
+* `monitor_interval`: time interval in seconds by which the monitor process will process local and remote changes
 
 ### sync_dir
 Example: `sync_dir="~/MyDirToSync"`
@@ -241,6 +242,11 @@ Patterns are case insensitive. `*` and `?` [wildcards characters](https://techne
 Example: `skip_symlinks = "true"`
 
 Setting this to `"true"` will skip all symlinks while syncing.
+
+### monitor_interval
+Example: `monitor_interval = "300"`
+
+By default without configuration, the monitor_interval is set to 45 seconds. Set this value to a valid number. Setting this value to 300 will run the sync process every 5 minutes.
 
 ### Selective sync
 Selective sync allows you to sync only specific files and directories.

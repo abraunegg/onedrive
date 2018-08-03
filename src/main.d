@@ -1,6 +1,6 @@
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE;
 import core.memory, core.time, core.thread;
-import std.getopt, std.file, std.path, std.process, std.stdio;
+import std.getopt, std.file, std.path, std.process, std.stdio, std.conv;
 import config, itemdb, monitor, onedrive, selective, sync, util;
 static import log;
 
@@ -296,7 +296,8 @@ int main(string[] args)
 			};
 			if (!downloadOnly) m.init(cfg, verbose);
 			// monitor loop
-			immutable auto checkInterval = dur!"seconds"(45);
+			log.vlog("Monitor Loop: ", to!long(cfg.getValue("monitor_interval")));
+			immutable auto checkInterval = dur!"seconds"(to!long(cfg.getValue("monitor_interval")));
 			auto lastCheckTime = MonoTime.currTime();
 			while (true) {
 				if (!downloadOnly) m.update(online);
