@@ -260,8 +260,8 @@ int main(string[] args)
 		}
 			
 		if (monitor) {
-			log.vlog("Initializing monitor ...");
-			log.vlog("OneDrive monitor interval (seconds): ", to!long(cfg.getValue("monitor_interval")));
+			log.log("Initializing monitor ...");
+			log.log("OneDrive monitor interval (seconds): ", to!long(cfg.getValue("monitor_interval")));
 			Monitor m = new Monitor(selectiveSync);
 			m.onDirCreated = delegate(string path) {
 				log.vlog("[M] Directory created: ", path);
