@@ -60,7 +60,7 @@ int main(string[] args)
 	bool checkMount;
 	// Add option to skip symlinks
 	bool skipSymlinks;
-  // Add option for no remote delete
+	// Add option for no remote delete
 	bool noRemoteDelete;
 		
 	try {
