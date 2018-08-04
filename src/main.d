@@ -125,7 +125,7 @@ int main(string[] args)
 	
 	// command line parameters override the config
 	if (syncDirName) cfg.setValue("sync_dir", syncDirName.expandTilde().absolutePath());
-  if (skipSymlinks) cfg.setValue("skip_symlinks", "true");
+	if (skipSymlinks) cfg.setValue("skip_symlinks", "true");
   
 	// we should only set noRemoteDelete in an upload-only scenario
 	if ((uploadOnly)&&(noRemoteDelete)) cfg.setValue("no-remote-delete", "true");
