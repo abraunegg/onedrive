@@ -107,7 +107,7 @@ sudo make install
 ```
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-make make DC=/usr/bin/ldmd2
+make DC=/usr/bin/ldmd2
 sudo make install
 ```
 
