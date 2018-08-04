@@ -91,6 +91,7 @@ struct UploadSession
 		JSONValue response;
 		while (true) {
 			long fragSize = fragmentSize < fileSize - offset ? fragmentSize : fileSize - offset;
+			log.log("Upload Progress: ", double(offset)/fileSize*100,"%");
 			log.vlog("Uploading fragment: ", offset, "-", offset + fragSize, "/", fileSize);
 			response = onedrive.uploadFragment(
 				session["uploadUrl"].str,
@@ -107,6 +108,7 @@ struct UploadSession
 			save();
 		}
 		// upload complete
+		log.log("Upload Progress: ", double(offset)/fileSize*100,"%");
 		remove(sessionFilePath);
 		return response;
 	}
