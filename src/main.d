@@ -312,7 +312,7 @@ int main(string[] args)
 						}
 					}
 					// performSync complete, set lastCheckTime to current time
-					lastCheckTime = currTime;
+					lastCheckTime = MonoTime.currTime();
 					GC.collect();
 				} else {
 					Thread.sleep(dur!"msecs"(100));
