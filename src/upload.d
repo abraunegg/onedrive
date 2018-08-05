@@ -1,4 +1,6 @@
 import std.algorithm, std.conv, std.datetime, std.file, std.json;
+import std.stdio, core.thread;
+import progress;
 import onedrive;
 static import log;
 
@@ -88,11 +90,16 @@ struct UploadSession
 	{
 		long offset = session["nextExpectedRanges"][0].str.splitter('-').front.to!long;
 		long fileSize = getSize(session["localPath"].str);
+		
+		// Upload Progress Bar
+		size_t iteration = (roundTo!int(double(fileSize)/double(fragmentSize)))+1;
+		Progress p = new Progress(iteration);
+		p.title = "Uploading";
+				
 		JSONValue response;
 		while (true) {
+			p.next();
 			long fragSize = fragmentSize < fileSize - offset ? fragmentSize : fileSize - offset;
-			log.log("Upload Progress: ", double(offset)/fileSize*100,"%");
-			log.vlog("Uploading fragment: ", offset, "-", offset + fragSize, "/", fileSize);
 			response = onedrive.uploadFragment(
 				session["uploadUrl"].str,
 				session["localPath"].str,
@@ -108,7 +115,8 @@ struct UploadSession
 			save();
 		}
 		// upload complete
-		log.log("Upload Progress: ", double(offset)/fileSize*100,"%");
+		p.next();
+		writeln();
 		remove(sessionFilePath);
 		return response;
 	}
