@@ -43,12 +43,17 @@ class Progress
     int calc_eta() {
       immutable auto ratio = cast(double)counter / iterations;
       auto current_time = Clock.currTime.toUnixTime();
-      auto duration = (current_time - start_time);
+      auto duration = cast(int)(current_time - start_time);
       int hours, minutes, seconds;
       double elapsed = (current_time - start_time);
       int eta_sec = cast(int)((elapsed / ratio) - elapsed);
 
-      return eta_sec;
+	  // Return an ETA or Duration?
+	  if (eta_sec != 0){
+		return eta_sec;
+	  } else {
+	    return duration;
+	  }
     }
 
 
@@ -81,7 +86,11 @@ class Progress
         int h, m, s;
         dur!"seconds"(calc_eta())
           .split!("hours", "minutes", "seconds")(h, m, s);
-        footer.formattedWrite("| ETA %02d:%02d:%02d ", h, m, s);
+		if (counter != iterations){   
+          footer.formattedWrite("|   ETA   %02d:%02d:%02d ", h, m, s);
+		} else {
+		  footer.formattedWrite("| DONE IN %02d:%02d:%02d ", h, m, s);
+		}
       }
 
       write(progressbarText(header.data, footer.data));
