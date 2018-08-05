@@ -910,7 +910,12 @@ final class SyncEngine
 			}
 		} else {
 			log.vlog("The file has been deleted locally");
-			uploadDeleteItem(item, path);
+			if (cfg.getValue("no-remote-delete") == "true") {
+				// do not process remote delete
+				log.vlog("Skipping remote delete as --upload-only & --no-remote-delete configured");
+			} else {
+				uploadDeleteItem(item, path);
+			}
 		}
 	}
 
