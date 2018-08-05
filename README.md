@@ -252,6 +252,11 @@ Backup
 Documents/latest_report.docx
 Work/ProjectX
 notes.txt
+Blender
+Cinema Soc
+Codes
+Textbooks
+Year 2
 ```
 **Note:** after changing the sync list, you must perform a full synchronization by executing `onedrive --resync`
 
