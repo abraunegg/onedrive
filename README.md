@@ -86,6 +86,9 @@ tar -xvf ldc2-1.10.0-linux-armhf.tar.xz
 ### Dependencies: Gentoo
 ```
 sudo emerge app-portage/layman
+sudo layman -a dlang
+
+Add ebuild from contrib/gentoo to a local overlay to use.
 
 ```
 
