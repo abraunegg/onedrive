@@ -1,6 +1,6 @@
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE;
 import core.memory, core.time, core.thread;
-import std.getopt, std.file, std.path, std.process, std.stdio;
+import std.getopt, std.file, std.path, std.process, std.stdio, std.conv;
 import config, itemdb, monitor, onedrive, selective, sync, util;
 static import log;
 
@@ -266,7 +266,8 @@ int main(string[] args)
 		}
 			
 		if (monitor) {
-			log.vlog("Initializing monitor ...");
+			log.log("Initializing monitor ...");
+			log.log("OneDrive monitor interval (seconds): ", to!long(cfg.getValue("monitor_interval")));
 			Monitor m = new Monitor(selectiveSync);
 			m.onDirCreated = delegate(string path) {
 				log.vlog("[M] Directory created: ", path);
@@ -302,13 +303,12 @@ int main(string[] args)
 			};
 			if (!downloadOnly) m.init(cfg, verbose);
 			// monitor loop
-			immutable auto checkInterval = dur!"seconds"(45);
+			immutable auto checkInterval = dur!"seconds"(to!long(cfg.getValue("monitor_interval")));
 			auto lastCheckTime = MonoTime.currTime();
 			while (true) {
 				if (!downloadOnly) m.update(online);
 				auto currTime = MonoTime.currTime();
 				if (currTime - lastCheckTime > checkInterval) {
-					lastCheckTime = currTime;
 					online = testNetwork();
 					if (online) {
 						performSync(sync, singleDirectory, downloadOnly, localFirst, uploadOnly);
@@ -317,19 +317,19 @@ int main(string[] args)
 							m.update(false);
 						}
 					}
+					// performSync complete, set lastCheckTime to current time
+					lastCheckTime = MonoTime.currTime();
 					GC.collect();
 				} else {
 					Thread.sleep(dur!"msecs"(100));
 				}
 			}
 		}
-
 	}
 
 	// workaround for segfault in std.net.curl.Curl.shutdown() on exit
 	onedrive.http.shutdown();
 	return EXIT_SUCCESS;
-	
 }
 
 // try to synchronize the folder three times

@@ -33,8 +33,12 @@ final class Config
 		// By default symlinks are not skipped (using string type
 		// instead of boolean because hashmap only stores string types)
 		setValue("skip_symlinks", "false");
+		// Configure the monitor mode loop - the number of seconds by which
+		// each sync operation is undertaken when idle under monitor mode
+		setValue("monitor_interval", "45");
 		// By default we will process remote deletes
-		setValue("no-remote-delete", "false");		
+		setValue("no-remote-delete", "false");
+    
 		if (!load(userConfigFilePath)) {
 			log.vlog("No config file found, using defaults");
 		}
