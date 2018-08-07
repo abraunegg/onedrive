@@ -39,7 +39,9 @@ final class Config
 		// of the rate of change of local and remote files
 		// Default set to 300 seconds = 5 minutes which is a more sane default
 		setValue("monitor_interval", "300");
-		
+		// By default we will process remote deletes
+		setValue("no-remote-delete", "false");
+    
 		if (!load(userConfigFilePath)) {
 			log.vlog("No config file found, using defaults");
 		}

@@ -60,6 +60,8 @@ int main(string[] args)
 	bool checkMount;
 	// Add option to skip symlinks
 	bool skipSymlinks;
+	// Add option for no remote delete
+	bool noRemoteDelete;
 		
 	try {
 		auto opt = getopt(
@@ -75,6 +77,7 @@ int main(string[] args)
 			"local-first", "Synchronize from the local directory source first, before downloading changes from OneDrive.", &localFirst,
 			"logout", "Logout the current user", &logout,
 			"monitor|m", "Keep monitoring for local and remote changes", &monitor,
+			"no-remote-delete", "Do not delete local file 'deletes' from OneDrive when using --upload-only", &noRemoteDelete,
 			"print-token", "Print the access token, useful for debugging", &printAccessToken,
 			"resync", "Forget the last saved state, perform a full sync", &resync,
 			"remove-directory", "Remove a directory on OneDrive - no sync will be performed.", &removeDirectory,
@@ -123,7 +126,10 @@ int main(string[] args)
 	// command line parameters override the config
 	if (syncDirName) cfg.setValue("sync_dir", syncDirName.expandTilde().absolutePath());
 	if (skipSymlinks) cfg.setValue("skip_symlinks", "true");
-
+  
+	// we should only set noRemoteDelete in an upload-only scenario
+	if ((uploadOnly)&&(noRemoteDelete)) cfg.setValue("no-remote-delete", "true");
+	
 	// upgrades
 	if (exists(configDirName ~ "/items.db")) {
 		remove(configDirName ~ "/items.db");
