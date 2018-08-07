@@ -83,6 +83,15 @@ wget https://github.com/ldc-developers/ldc/releases/download/v1.10.0/ldc2-1.10.0
 tar -xvf ldc2-1.10.0-linux-armhf.tar.xz
 ```
 
+### Dependencies: Gentoo
+```
+sudo emerge app-portage/layman
+sudo layman -a dlang
+
+Add ebuild from contrib/gentoo to a local overlay to use.
+
+```
+
 ## Compilation & Installation
 ### Building using DMD Reference Compiler:
 Before cloning and compiling, if you have installed DMD via curl for your OS, you will need to activate DMD as per example below:
