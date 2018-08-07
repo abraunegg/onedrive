@@ -33,7 +33,6 @@ final class Config
 		// By default symlinks are not skipped (using string type
 		// instead of boolean because hashmap only stores string types)
 		setValue("skip_symlinks", "false");
-		setValue("drive_url", "https://graph.microsoft.com/v1.0/me/drive");
 		if (!load(userConfigFilePath)) {
 			log.vlog("No config file found, using defaults");
 		}

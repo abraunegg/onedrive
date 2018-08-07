@@ -15,6 +15,8 @@ private immutable {
 }
 private {
 	string driveUrl = "https://graph.microsoft.com/v1.0/me/drive";
+    string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
+    string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
 	string driveId = "";
 }
 
@@ -69,6 +71,8 @@ final class OneDriveApi
 			driveId = cfg.getValue("drive_id");
 			if (driveId.length) {
 				driveUrl = driveByIdUrl ~ driveId;
+                itemByIdUrl = driveUrl ~ "/items";
+                itemByPathUrl = driveUrl ~ "/root:/";
 			}
 		} catch (Exception e) {}
 
