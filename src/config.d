@@ -35,10 +35,7 @@ final class Config
 		setValue("skip_symlinks", "false");
 		// Configure the monitor mode loop - the number of seconds by which
 		// each sync operation is undertaken when idle under monitor mode
-		// The previous default of 45 seconds is 'too frequent' regardless 
-		// of the rate of change of local and remote files
-		// Default set to 300 seconds = 5 minutes which is a more sane default
-		setValue("monitor_interval", "300");
+		setValue("monitor_interval", "45");
 		// By default we will process remote deletes
 		setValue("no-remote-delete", "false");
     

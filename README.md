@@ -253,9 +253,9 @@ Example: `skip_symlinks = "true"`
 Setting this to `"true"` will skip all symlinks while syncing.
 
 ### monitor_interval
-Example: `monitor_interval = "600"`
+Example: `monitor_interval = "300"`
 
-The monitor interval is defined as the wait time 'between' sync's when running in monitor mode. By default without configuration, the monitor_interval is set to 300 seconds. Setting this value to 600 will run the sync process every 10 minutes.
+The monitor interval is defined as the wait time 'between' sync's when running in monitor mode. By default without configuration, the monitor_interval is set to 45 seconds. Setting this value to 300 will run the sync process every 5 minutes.
 
 ### Selective sync
 Selective sync allows you to sync only specific files and directories.

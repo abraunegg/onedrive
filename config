@@ -2,3 +2,5 @@
 sync_dir = "~/OneDrive"
 # Skip files and directories that match this pattern
 skip_file = ".*|~*"
+# Wait time (seconds) between sync operations in monitor mode
+monitor_interval = "45"
