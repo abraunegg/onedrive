@@ -1,8 +1,10 @@
 import std.net.curl: CurlException, HTTP;
 import std.datetime, std.exception, std.file, std.json, std.path;
 import std.stdio, std.string, std.uni, std.uri;
-import config;
 import core.stdc.stdlib;
+import core.thread, std.conv;
+import progress;
+import config;
 static import log;
 shared bool debugResponse = false;
 
@@ -112,13 +114,13 @@ final class OneDriveApi
 		const(char)[] url = deltaLink;
 		if (url == null) {
 			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/delta";
-			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
+			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		}
 		return get(url);
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
-	void downloadById(const(char)[] driveId, const(char)[] id, string saveToPath)
+	void downloadById(const(char)[] driveId, const(char)[] id, string saveToPath, long fileSize)
 	{
 		checkAccessTokenExpired();
 		scope(failure) {
@@ -126,7 +128,7 @@ final class OneDriveApi
 		}
 		mkdirRecurse(dirName(saveToPath));
 		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content?AVOverride=1";
-		download(url, saveToPath);
+		download(url, saveToPath, fileSize);
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
@@ -186,7 +188,7 @@ final class OneDriveApi
 		//		string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
 		if (path == ".") url = driveUrl ~ "/root/";
 		else url = itemByPathUrl ~ encodeComponent(path) ~ ":/";
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		return get(url);
 	}
 	
@@ -198,7 +200,7 @@ final class OneDriveApi
 		const(char)[] url;
 		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		return get(url);
 	}
 	
@@ -328,8 +330,18 @@ final class OneDriveApi
 		checkHttpCode(response);
 	}
 
-	private void download(const(char)[] url, string filename)
+	private void download(const(char)[] url, string filename, long fileSize)
 	{
+		// Download Progress Bar
+		long fragmentSize = 8192; // Curl default 8k
+		long downloadFragments = roundTo!int(double(fileSize)/double(fragmentSize));
+		size_t iteration = 100;
+		Progress p = new Progress(iteration);
+		p.title = "Downloading";
+	
+		writeln("downloadFragments: ", downloadFragments);
+		writeln("downloadFragments / 100: ", (downloadFragments / 100));
+	
 		scope(exit) http.clearRequestHeaders();
 		http.method = HTTP.Method.get;
 		http.url = url;
@@ -339,7 +351,30 @@ final class OneDriveApi
 			f.rawWrite(data);
 			return data.length;
 		};
+		
+		
+		
+		// Setup progress bar to display
+		http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
+		{
+			fragmentsDownloaded++;
+			
+			writeln("fragmentsDownloaded: ", fragmentsDownloaded);
+			
+			
+			return 0;
+		};
+		
+		// Perform download
 		http.perform();
+		writeln();
+		
+		// Reset onProgress 
+		http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
+		{
+			return 0;
+		};
+		
 		checkHttpCode();
 	}
 

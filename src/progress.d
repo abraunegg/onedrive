@@ -81,7 +81,7 @@ class Progress
       header.formattedWrite("%s %3d%% |", caption, cast(int)(ratio * 100));
 
       if(counter <= 1 || ratio == 0.0) {
-        footer.formattedWrite("| ETA --:--:--:");
+        footer.formattedWrite("|   ETA   --:--:--:");
       } else {
         int h, m, s;
         dur!"seconds"(calc_eta())
