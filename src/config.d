@@ -33,6 +33,8 @@ final class Config
 		// By default symlinks are not skipped (using string type
 		// instead of boolean because hashmap only stores string types)
 		setValue("skip_symlinks", "false");
+		// By default we will process remote deletes
+		setValue("no-remote-delete", "false");		
 		if (!load(userConfigFilePath)) {
 			log.vlog("No config file found, using defaults");
 		}
