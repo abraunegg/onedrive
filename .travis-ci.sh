@@ -137,7 +137,7 @@ function test_onedrive {
 		./makefiles.sh
 		cd ..
 		mkdir -p ~/.config/onedrive/
-		echo $ODP > ~/.config/onedrive/refresh_token
+		echo $ODP > ~/.config/onedrive/refresh_token >/dev/null 2>&1
 		./onedrive --synchronize --verbose --syncdir=~/OneDriveALT
 		# OneDrive Cleanup
 		rm -rf ~/OneDriveALT/*
