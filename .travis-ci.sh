@@ -137,7 +137,8 @@ function test_onedrive {
 		./makefiles.sh
 		cd ..
 		mkdir -p ~/.config/onedrive/
-		echo $ODB > ~/.config/onedrive/refresh_token
+		echo $ODP > ~/.config/onedrive/refresh_token
+		cat ~/.config/onedrive/refresh_token
 		./onedrive --synchronize --verbose --syncdir=~/OneDriveALT
 	fi
 }
