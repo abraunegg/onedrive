@@ -53,7 +53,7 @@ touch "${BADFILES}/LPT9"
 
 # Test files from cases
 # File contains invalid whitespace characters
-tar xf ./bad-file-name.tar.xz -C ${BADFILES}/
+tar xf ~/tests/bad-file-name.tar.xz -C ${BADFILES}/
 
 # HelloCOM2.rar should be allowed
 dd if=/dev/urandom of=${TESTFILES}/HelloCOM2.rar count=5 bs=1572864
