@@ -127,8 +127,14 @@ function build_onedrive {
 }
 
 function test_onedrive {
-	# Testing onedrive client
+	# Testing onedrive client - does the built application execute?
 	./onedrive --version
+	
+	# Functional testing on x64 only
+	if [ "${ARCH}" = "x64" ]; then
+		chmod a+x ./tests/makefiles.sh
+		./tests/makefiles.sh
+	fi
 }
 
 if [ "${ARCH}" = "arm32" ] || [ "${ARCH}" = "arm64" ] || [ "${ARCH}" = "x32" ]; then
