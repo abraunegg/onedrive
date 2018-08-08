@@ -133,8 +133,9 @@ function test_onedrive {
 	# Functional testing on x64 only
 	if [ "${ARCH}" = "x64" ]; then
 		chmod a+x ./tests/makefiles.sh
+		ls -la
 		cd ./tests/
-		makefiles.sh
+		./makefiles.sh
 		ls -laR ~/OneDriveALT
 	fi
 }
