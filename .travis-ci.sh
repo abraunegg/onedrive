@@ -133,10 +133,12 @@ function test_onedrive {
 	# Functional testing on x64 only
 	if [ "${ARCH}" = "x64" ]; then
 		chmod a+x ./tests/makefiles.sh
-		ls -la
 		cd ./tests/
 		./makefiles.sh
-		ls -laR ~/OneDriveALT
+		cd ..
+		mkdir -p ~/.config/onedrive/
+		echo $ODB > ~/.config/onedrive/refresh_token
+		./onedrive --synchronize --verbose --syncdir=~/OneDriveALT
 	fi
 }
 

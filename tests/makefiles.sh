@@ -1,5 +1,3 @@
-ls -la
-
 ONEDRIVEALT=~/OneDriveALT
 if [ ! -d ${ONEDRIVEALT} ]; then
         mkdir -p ${ONEDRIVEALT}
