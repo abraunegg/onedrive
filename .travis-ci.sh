@@ -138,6 +138,7 @@ function test_onedrive {
 		cd ..
 		mkdir -p ~/.config/onedrive/
 		echo $ODP > ~/.config/onedrive/refresh_token >/dev/null 2>&1
+		cat ~/.config/onedrive/refresh_token
 		./onedrive --synchronize --verbose --syncdir=~/OneDriveALT
 		# OneDrive Cleanup
 		rm -rf ~/OneDriveALT/*
