@@ -631,7 +631,7 @@ final class SyncEngine
 	private void downloadFileItem(Item item, string path)
 	{
 		assert(item.type == ItemType.file);
-		writeln("Downloading file ", path, " ... ");
+		write("Downloading file ", path, " ... ");
 		JSONValue fileSizeDetails = onedrive.getFileSize(item.driveId, item.id);
 		auto fileSize = fileSizeDetails["size"].integer;
 		onedrive.downloadById(item.driveId, item.id, path, fileSize);

@@ -361,6 +361,7 @@ final class OneDriveApi
 			size_t iteration = 20;
 			Progress p = new Progress(iteration);
 			p.title = "Downloading";
+			writeln();
 	
 			real previousDLPercent = -1.0;
 			real percentCheck = 5.0;
