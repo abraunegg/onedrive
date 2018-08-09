@@ -1,8 +1,10 @@
 import std.net.curl: CurlException, HTTP;
 import std.datetime, std.exception, std.file, std.json, std.path;
 import std.stdio, std.string, std.uni, std.uri;
-import config;
 import core.stdc.stdlib;
+import core.thread, std.conv, std.math;
+import progress;
+import config;
 static import log;
 shared bool debugResponse = false;
 
@@ -118,7 +120,7 @@ final class OneDriveApi
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
-	void downloadById(const(char)[] driveId, const(char)[] id, string saveToPath)
+	void downloadById(const(char)[] driveId, const(char)[] id, string saveToPath, long fileSize)
 	{
 		checkAccessTokenExpired();
 		scope(failure) {
@@ -126,7 +128,7 @@ final class OneDriveApi
 		}
 		mkdirRecurse(dirName(saveToPath));
 		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content?AVOverride=1";
-		download(url, saveToPath);
+		download(url, saveToPath, fileSize);
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
@@ -202,6 +204,17 @@ final class OneDriveApi
 		return get(url);
 	}
 	
+	// Return the requested details of the specified id
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
+	JSONValue getFileSize(const(char)[] driveId, const(char)[] id)
+	{
+		checkAccessTokenExpired();
+		const(char)[] url;
+		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
+		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
+		url ~= "?select=size";
+		return get(url);
+	}
 	
 	// https://dev.onedrive.com/items/move.htm
 	JSONValue moveByPath(const(char)[] sourcePath, JSONValue moveData)
@@ -328,8 +341,11 @@ final class OneDriveApi
 		checkHttpCode(response);
 	}
 
-	private void download(const(char)[] url, string filename)
+	private void download(const(char)[] url, string filename, long fileSize)
 	{
+		// Threshold for displaying download bar
+		long thresholdFileSize = 4 * 2^^20; // 4 MiB
+		
 		scope(exit) http.clearRequestHeaders();
 		http.method = HTTP.Method.get;
 		http.url = url;
@@ -339,7 +355,43 @@ final class OneDriveApi
 			f.rawWrite(data);
 			return data.length;
 		};
-		http.perform();
+		
+		if (fileSize >= thresholdFileSize){
+			// Download Progress Bar
+			size_t iteration = 20;
+			Progress p = new Progress(iteration);
+			p.title = "Downloading";
+			writeln();
+	
+			real previousDLPercent = -1.0;
+			real percentCheck = 5.0;
+			// Setup progress bar to display
+			http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
+			{
+				// For each onProgress, what is the % of dlnow to dltotal
+				real currentDLPercent = round(double(dlnow)/dltotal*100);
+				// If matching 5% of download, increment progress bar
+				if ((isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) && (previousDLPercent != currentDLPercent)) {
+					p.next();
+					previousDLPercent = currentDLPercent;
+				}
+				return 0;
+			};
+		
+			// Perform download & display progress bar
+			http.perform();
+			writeln();
+			// Reset onProgress to not display anything for next download
+			http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
+			{
+				return 0;
+			};
+		} else {
+			// No progress bar
+			http.perform();
+		}
+		
+		// Check the HTTP response code
 		checkHttpCode();
 	}
 

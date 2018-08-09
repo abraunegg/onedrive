@@ -642,11 +642,13 @@ final class SyncEngine
 	private void downloadFileItem(Item item, string path)
 	{
 		assert(item.type == ItemType.file);
-		write("Downloading ", path, "...");
-		onedrive.downloadById(item.driveId, item.id, path);
+		write("Downloading file ", path, " ... ");
+		JSONValue fileSizeDetails = onedrive.getFileSize(item.driveId, item.id);
+		auto fileSize = fileSizeDetails["size"].integer;
+		onedrive.downloadById(item.driveId, item.id, path, fileSize);
+		writeln("done.");
+		log.fileOnly("Downloading file ", path, " ... done.");
 		setTimes(path, item.mtime, item.mtime);
-		writeln(" done.");
-		log.fileOnly("Downloading ", path, "... done.");
 	}
 
 	// returns true if the given item corresponds to the local one

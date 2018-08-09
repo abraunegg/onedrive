@@ -14,7 +14,8 @@ SOURCES = \
 	src/sqlite.d \
 	src/sync.d \
 	src/upload.d \
-	src/util.d
+	src/util.d \
+	src/progress.d
 
 all: onedrive onedrive.service
 
