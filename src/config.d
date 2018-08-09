@@ -36,9 +36,7 @@ final class Config
 		// Configure the monitor mode loop - the number of seconds by which
 		// each sync operation is undertaken when idle under monitor mode
 		setValue("monitor_interval", "45");
-		// By default we will process remote deletes
-		setValue("no-remote-delete", "false");
-    
+		    
 		if (!load(userConfigFilePath)) {
 			log.vlog("No config file found, using defaults");
 		}

@@ -11,6 +11,9 @@ static import log;
 // threshold after which files will be uploaded using an upload session
 private long thresholdFileSize = 4 * 2^^20; // 4 MiB
 
+// flag to set whether local files should be deleted
+private bool noRemoteDelete = false;
+
 private bool isItemFolder(const ref JSONValue item)
 {
 	return ("folder" in item) != null;
@@ -180,6 +183,14 @@ final class SyncEngine
 		}
 	}
 
+	// Configure noRemoteDelete if function is called
+	// By default, noRemoteDelete = false;
+	// Meaning we will process local deletes to delete item on OneDrive
+	void setNoRemoteDelete()
+	{
+		noRemoteDelete = true;
+	}
+	
 	// download all new changes from OneDrive
 	void applyDifferences()
 	{
@@ -910,7 +921,7 @@ final class SyncEngine
 			}
 		} else {
 			log.vlog("The file has been deleted locally");
-			if (cfg.getValue("no-remote-delete") == "true") {
+			if (noRemoteDelete) {
 				// do not process remote delete
 				log.vlog("Skipping remote delete as --upload-only & --no-remote-delete configured");
 			} else {
@@ -1386,5 +1397,4 @@ final class SyncEngine
 		// Make the change on OneDrive
 		auto res = onedrive.moveByPath(sourcePath, moveData);	
 	}
-	
 }
