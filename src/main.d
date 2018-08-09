@@ -127,9 +127,6 @@ int main(string[] args)
 	if (syncDirName) cfg.setValue("sync_dir", syncDirName.expandTilde().absolutePath());
 	if (skipSymlinks) cfg.setValue("skip_symlinks", "true");
   
-	// we should only set noRemoteDelete in an upload-only scenario
-	if ((uploadOnly)&&(noRemoteDelete)) cfg.setValue("no-remote-delete", "true");
-	
 	// upgrades
 	if (exists(configDirName ~ "/items.db")) {
 		remove(configDirName ~ "/items.db");
@@ -213,6 +210,9 @@ int main(string[] args)
 			return EXIT_FAILURE;
 		}
 	}
+	
+	// We should only set noRemoteDelete in an upload-only scenario
+	if ((uploadOnly)&&(noRemoteDelete)) sync.setNoRemoteDelete();
 	
 	// Do we need to validate the syncDir to check for the presence of a '.nosync' file
 	if (checkMount) {
