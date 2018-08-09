@@ -2,7 +2,7 @@ import std.net.curl: CurlException, HTTP;
 import std.datetime, std.exception, std.file, std.json, std.path;
 import std.stdio, std.string, std.uni, std.uri;
 import core.stdc.stdlib;
-import core.thread, std.conv;
+import core.thread, std.conv, std.math;
 import progress;
 import config;
 static import log;
@@ -114,7 +114,7 @@ final class OneDriveApi
 		const(char)[] url = deltaLink;
 		if (url == null) {
 			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/delta";
-			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
 		}
 		return get(url);
 	}
@@ -188,7 +188,7 @@ final class OneDriveApi
 		//		string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
 		if (path == ".") url = driveUrl ~ "/root/";
 		else url = itemByPathUrl ~ encodeComponent(path) ~ ":/";
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
 		return get(url);
 	}
 	
@@ -200,10 +200,21 @@ final class OneDriveApi
 		const(char)[] url;
 		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
 		return get(url);
 	}
 	
+	// Return the requested details of the specified id
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
+	JSONValue getFileSize(const(char)[] driveId, const(char)[] id)
+	{
+		checkAccessTokenExpired();
+		const(char)[] url;
+		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
+		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
+		url ~= "?select=size";
+		return get(url);
+	}
 	
 	// https://dev.onedrive.com/items/move.htm
 	JSONValue moveByPath(const(char)[] sourcePath, JSONValue moveData)
@@ -332,16 +343,9 @@ final class OneDriveApi
 
 	private void download(const(char)[] url, string filename, long fileSize)
 	{
-		// Download Progress Bar
-		long fragmentSize = 8192; // Curl default 8k
-		long downloadFragments = roundTo!int(double(fileSize)/double(fragmentSize));
-		size_t iteration = 100;
-		Progress p = new Progress(iteration);
-		p.title = "Downloading";
-	
-		writeln("downloadFragments: ", downloadFragments);
-		writeln("downloadFragments / 100: ", (downloadFragments / 100));
-	
+		// Threshold for displaying download bar
+		long thresholdFileSize = 4 * 2^^20; // 4 MiB
+		
 		scope(exit) http.clearRequestHeaders();
 		http.method = HTTP.Method.get;
 		http.url = url;
@@ -352,29 +356,41 @@ final class OneDriveApi
 			return data.length;
 		};
 		
+		if (fileSize >= thresholdFileSize){
+			// Download Progress Bar
+			size_t iteration = 20;
+			Progress p = new Progress(iteration);
+			p.title = "Downloading";
+	
+			real previousDLPercent = -1.0;
+			real percentCheck = 5.0;
+			// Setup progress bar to display
+			http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
+			{
+				// For each onProgress, what is the % of dlnow to dltotal
+				real currentDLPercent = round(double(dlnow)/dltotal*100);
+				// If matching 5% of download, increment progress bar
+				if ((isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) && (previousDLPercent != currentDLPercent)) {
+					p.next();
+					previousDLPercent = currentDLPercent;
+				}
+				return 0;
+			};
 		
+			// Perform download & display progress bar
+			http.perform();
+			writeln();
+			// Reset onProgress to not display anything for next download
+			http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
+			{
+				return 0;
+			};
+		} else {
+			// No progress bar
+			http.perform();
+		}
 		
-		// Setup progress bar to display
-		http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
-		{
-			fragmentsDownloaded++;
-			
-			writeln("fragmentsDownloaded: ", fragmentsDownloaded);
-			
-			
-			return 0;
-		};
-		
-		// Perform download
-		http.perform();
-		writeln();
-		
-		// Reset onProgress 
-		http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
-		{
-			return 0;
-		};
-		
+		// Check the HTTP response code
 		checkHttpCode();
 	}
 

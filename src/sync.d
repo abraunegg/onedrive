@@ -10,7 +10,6 @@ static import log;
 
 // threshold after which files will be uploaded using an upload session
 private long thresholdFileSize = 4 * 2^^20; // 4 MiB
-private long fileSize = 0;
 
 private bool isItemFolder(const ref JSONValue item)
 {
@@ -70,7 +69,6 @@ private Item makeItem(const ref JSONValue driveItem)
 		
 	if (isItemFile(driveItem)) {
 		item.type = ItemType.file;
-		fileSize = driveItem["size"].integer;
 	} else if (isItemFolder(driveItem)) {
 		item.type = ItemType.dir;
 	} else if (isItemRemote(driveItem)) {
@@ -634,6 +632,8 @@ final class SyncEngine
 	{
 		assert(item.type == ItemType.file);
 		writeln("Downloading file ", path, " ... ");
+		JSONValue fileSizeDetails = onedrive.getFileSize(item.driveId, item.id);
+		auto fileSize = fileSizeDetails["size"].integer;
 		onedrive.downloadById(item.driveId, item.id, path, fileSize);
 		writeln("done.");
 		log.fileOnly("Downloading file ", path, " ... done.");
