@@ -89,7 +89,13 @@ sudo emerge app-portage/layman
 sudo layman -a dlang
 
 Add ebuild from contrib/gentoo to a local overlay to use.
+```
 
+### Dependencies: openSUSE Leap 15.0
+```
+wget http://downloads.dlang.org/releases/2.x/2.081.1/dmd-2.081.1-0.openSUSE.x86_64.rpm
+sudo zypper install ./dmd-2.081.1-0.openSUSE.x86_64.rpm 
+sudo zypper install git libcurl-devel sqlite3-devel
 ```
 
 ## Compilation & Installation
