@@ -3,6 +3,27 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2018-08-10
+
+### Fixed
+- Fix handling of database exit scenarios when there is zero disk space left on drive where the items database resides
+- Fix handling of incorrect database permissions
+- Fix handling of different database versions to automatically re-create tables if version mis-match
+- Fix handling timeout when accessing the Microsoft OneDrive Service
+- Fix localFileModifiedTime to not use fraction seconds
+
+### Added
+- Implement Feature: Add a progress bar for large uploads & downloads
+- Implement Feature: Make checkinterval for monitor configurable
+- Implement Feature: Upload Only Option that does not perform remote delete
+- Implement Feature: Add ability to skip symlinks
+- Add dependency, ebuild and build instructions for Gentoo distributions
+
+### Changed
+- Build instructions for x86, x86_64 and ARM32 platforms
+- Travis CI files to automate building on x32, x64 and ARM32 architectures
+- Travis CI files to test built application against valid, invalid and problem files from previous issues
+
 ## [2.0.2] - 2018-07-18
 ### Fixed
 - Fix systemd service install for builds with DESTDIR defined
