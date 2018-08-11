@@ -58,6 +58,7 @@ sudo dpkg -i ./*.deb
 
 ### Dependencies: Fedora < Version 18 / CentOS / RHEL 
 ```
+sudo yum groupinstall 'Development Tools'
 sudo yum install libcurl-devel
 sudo yum install sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
