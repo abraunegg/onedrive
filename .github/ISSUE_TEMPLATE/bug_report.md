@@ -9,8 +9,9 @@ about: Create a report to help us improve
 A clear and concise description of what the bug is.
 
 **Application and Operating System Details:**
- - OS: Output of `uname -a`
+- OS: Output of `uname -a`
 - Application version: Output of `onedrive --version`
+- DMD or LDC compiler version `dmd --version` or `ldmd2 --version`
 
 **To Reproduce**
 Steps to reproduce the behavior if not causing an application crash:
