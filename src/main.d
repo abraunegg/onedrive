@@ -2,7 +2,7 @@ import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE;
 import core.memory, core.time, core.thread;
 import std.getopt, std.file, std.path, std.process, std.stdio, std.conv;
 import config, itemdb, monitor, onedrive, selective, sync, util;
-import std.net.curl: CurlException
+import std.net.curl: CurlException;
 static import log;
 
 int main(string[] args)
