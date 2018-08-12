@@ -794,8 +794,13 @@ final class SyncEngine
 				}
 			}
 		} else {
-			log.vlog("The directory has been deleted");
-			uploadDeleteItem(item, path);
+			log.vlog("The directory has been deleted locally");
+			if (noRemoteDelete) {
+				// do not process remote directory delete
+				log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+			} else {
+				uploadDeleteItem(item, path);
+			}
 		}
 	}
 
@@ -924,8 +929,8 @@ final class SyncEngine
 		} else {
 			log.vlog("The file has been deleted locally");
 			if (noRemoteDelete) {
-				// do not process remote delete
-				log.vlog("Skipping remote delete as --upload-only & --no-remote-delete configured");
+				// do not process remote file delete
+				log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
 			} else {
 				uploadDeleteItem(item, path);
 			}
