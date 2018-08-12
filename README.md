@@ -66,6 +66,7 @@ curl -fsS https://dlang.org/install.sh | bash -s dmd
 
 ### Dependencies: Fedora > Version 18 
 ```
+sudo dnf groupinstall 'Development Tools'
 sudo dnf install libcurl-devel
 sudo dnf install sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
