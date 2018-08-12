@@ -63,25 +63,36 @@ struct UploadSession
 				log.vlog("The file does not exist anymore");
 				return false;
 			}
-			// request the session status
-			JSONValue response;
+			// Can we read the file - as a permissions issue or file corruption will cause a failure on resume
+			// https://github.com/abraunegg/onedrive/issues/113
 			try {
-				response = onedrive.requestUploadStatus(session["uploadUrl"].str);
-			} catch (OneDriveException e) {
-				if (e.httpStatusCode == 400) {
-					log.vlog("Upload session not found");
-					return false;
-				} else {
-					throw e;
+				// attempt to read the first 10MB of the file
+				read(session["localPath"].str,10000000);
+				// request the session status
+				JSONValue response;
+				try {
+					response = onedrive.requestUploadStatus(session["uploadUrl"].str);
+				} catch (OneDriveException e) {
+					if (e.httpStatusCode == 400) {
+						log.vlog("Upload session not found");
+						return false;
+					} else {
+						throw e;
+					}
 				}
-			}
-			session["expirationDateTime"] = response["expirationDateTime"];
-			session["nextExpectedRanges"] = response["nextExpectedRanges"];
-			if (session["nextExpectedRanges"].array.length == 0) {
-				log.vlog("The upload session is completed");
+				session["expirationDateTime"] = response["expirationDateTime"];
+				session["nextExpectedRanges"] = response["nextExpectedRanges"];
+				if (session["nextExpectedRanges"].array.length == 0) {
+					log.vlog("The upload session is completed");
+					return false;
+				}
+				return true;
+			} catch (std.file.FileException e) {
+				// unable to read the local file
+				log.log("Skipping resuming uploading this file as it cannot be read (file permissions or file corruption): ", session["localPath"].str);
+				remove(sessionFilePath);
 				return false;
 			}
-			return true;
 		}
 		return false;
 	}
