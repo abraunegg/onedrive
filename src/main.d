@@ -152,7 +152,7 @@ int main(string[] args)
 		online = testNetwork();
 	} catch (CurlException e) {
 		// No network connection to OneDrive Service
-		log.error("No network connection");
+		log.error("No network connection to Microsoft OneDrive Service");
 		return EXIT_FAILURE;
 	} 
 	
