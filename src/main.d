@@ -2,6 +2,7 @@ import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE;
 import core.memory, core.time, core.thread;
 import std.getopt, std.file, std.path, std.process, std.stdio, std.conv;
 import config, itemdb, monitor, onedrive, selective, sync, util;
+import std.net.curl: CurlException;
 static import log;
 
 int main(string[] args)
@@ -62,7 +63,9 @@ int main(string[] args)
 	bool skipSymlinks;
 	// Add option for no remote delete
 	bool noRemoteDelete;
-		
+	// Are we able to reach the OneDrive Service
+	bool online = false;
+	
 	try {
 		auto opt = getopt(
 			args,
@@ -145,11 +148,13 @@ int main(string[] args)
 	}
 
 	log.vlog("Initializing the OneDrive API ...");
-	bool online = testNetwork();
-	if (!online && !monitor) {
-		log.error("No network connection");
+	try {
+		online = testNetwork();
+	} catch (CurlException e) {
+		// No network connection to OneDrive Service
+		log.error("No network connection to Microsoft OneDrive Service");
 		return EXIT_FAILURE;
-	}
+	} 
 	
 	// Initialize OneDrive, check for authorization
 	auto onedrive = new OneDriveApi(cfg, debugHttp);
