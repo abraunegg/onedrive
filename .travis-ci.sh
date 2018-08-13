@@ -12,7 +12,7 @@ set -e
 CHROOT_DIR=/tmp/chroot
 
 # Debian package dependencies for the host to run ARM under QEMU
-DEBIAN_MIRROR="http://ftp.debian.org/debian"
+DEBIAN_MIRROR="http://ftp.us.debian.org/debian"
 HOST_DEPENDENCIES="qemu-user-static binfmt-support debootstrap sbuild wget"
 
 # Debian package dependencies for the chrooted environment
