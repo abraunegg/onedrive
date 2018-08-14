@@ -1124,144 +1124,149 @@ final class SyncEngine
 		//auto maxUploadFileSize = 21474836480; // 20GB
 		auto thisFileSize = getSize(path);
 		
-		if (thisFileSize <= maxUploadFileSize){
-			// Resolves: https://github.com/skilion/onedrive/issues/121, https://github.com/skilion/onedrive/issues/294, https://github.com/skilion/onedrive/issues/329
-		
-			// To avoid a 409 Conflict error - does the file actually exist on OneDrive already?
-			JSONValue fileDetailsFromOneDrive;
+		// Can we read the file - as a permissions issue or file corruption will cause a failure
+		// https://github.com/abraunegg/onedrive/issues/113
+		if (readLocalFile(path)){
+			// able to read the file
+			if (thisFileSize <= maxUploadFileSize){
+				// Resolves: https://github.com/skilion/onedrive/issues/121, https://github.com/skilion/onedrive/issues/294, https://github.com/skilion/onedrive/issues/329
 			
-			// Does this 'file' already exist on OneDrive?
-			try {
-				// test if the local path exists on OneDrive
-				fileDetailsFromOneDrive = onedrive.getPathDetails(path);
-			} catch (OneDriveException e) {
-				if (e.httpStatusCode == 404) {
-					// The file was not found on OneDrive, need to upload it		
-					write("Uploading file ", path, " ...");
-					JSONValue response;
-					
-					// Resolve https://github.com/abraunegg/onedrive/issues/37
-					if (thisFileSize == 0){
-						// We can only upload zero size files via simpleFileUpload regardless of account type
-						// https://github.com/OneDrive/onedrive-api-docs/issues/53
-						response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-						writeln(" done.");
-					} else {
-						// File is not a zero byte file
-						// Are we using OneDrive Personal or OneDrive Business?
-						// To solve 'Multiple versions of file shown on website after single upload' (https://github.com/abraunegg/onedrive/issues/2)
-						// check what 'account type' this is as this issue only affects OneDrive Business so we need some extra logic here
-						if (accountType == "personal"){
-							// Original file upload logic
-							if (getSize(path) <= thresholdFileSize) {
-								try {
-										response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-									} catch (OneDriveException e) {
-										if (e.httpStatusCode == 504) {
-											// HTTP request returned status code 504 (Gateway Timeout)
-											// Try upload as a session
-											response = session.upload(path, parent.driveId, parent.id, baseName(path));
+				// To avoid a 409 Conflict error - does the file actually exist on OneDrive already?
+				JSONValue fileDetailsFromOneDrive;
+				
+				// Does this 'file' already exist on OneDrive?
+				try {
+					// test if the local path exists on OneDrive
+					fileDetailsFromOneDrive = onedrive.getPathDetails(path);
+				} catch (OneDriveException e) {
+					if (e.httpStatusCode == 404) {
+						// The file was not found on OneDrive, need to upload it		
+						write("Uploading file ", path, " ...");
+						JSONValue response;
+						
+						// Resolve https://github.com/abraunegg/onedrive/issues/37
+						if (thisFileSize == 0){
+							// We can only upload zero size files via simpleFileUpload regardless of account type
+							// https://github.com/OneDrive/onedrive-api-docs/issues/53
+							response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+							writeln(" done.");
+						} else {
+							// File is not a zero byte file
+							// Are we using OneDrive Personal or OneDrive Business?
+							// To solve 'Multiple versions of file shown on website after single upload' (https://github.com/abraunegg/onedrive/issues/2)
+							// check what 'account type' this is as this issue only affects OneDrive Business so we need some extra logic here
+							if (accountType == "personal"){
+								// Original file upload logic
+								if (getSize(path) <= thresholdFileSize) {
+									try {
+											response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+										} catch (OneDriveException e) {
+											if (e.httpStatusCode == 504) {
+												// HTTP request returned status code 504 (Gateway Timeout)
+												// Try upload as a session
+												response = session.upload(path, parent.driveId, parent.id, baseName(path));
+											}
+											else throw e;
 										}
-										else throw e;
-									}
+										writeln(" done.");
+								} else {
+									writeln("");
+									response = session.upload(path, parent.driveId, parent.id, baseName(path));
 									writeln(" done.");
+								}
 							} else {
+								// OneDrive Business Account - always use a session to upload
 								writeln("");
 								response = session.upload(path, parent.driveId, parent.id, baseName(path));
 								writeln(" done.");
 							}
+						}
+						
+						// Log action to log file
+						log.fileOnly("Uploading file ", path, " ... done.");
+						
+						// The file was uploaded
+						ulong uploadFileSize = response["size"].integer;
+						
+						// In some cases the file that was uploaded was not complete, but 'completed' without errors on OneDrive
+						// This has been seen with PNG / JPG files mainly, which then contributes to generating a 412 error when we attempt to update the metadata
+						// Validate here that the file uploaded, at least in size, matches in the response to what the size is on disk
+						if (thisFileSize != uploadFileSize){
+							// OK .. the uploaded file does not match
+							log.log("Uploaded file size does not match local file - upload failure - retrying");
+							// Delete uploaded bad file
+							onedrive.deleteById(response["parentReference"]["driveId"].str, response["id"].str, response["eTag"].str);
+							// Re-upload
+							uploadNewFile(path);
+							return;
 						} else {
-							// OneDrive Business Account - always use a session to upload
+							if ((accountType == "personal") || (thisFileSize == 0)){
+								// Update the item's metadata on OneDrive
+								string id = response["id"].str;
+								string cTag = response["cTag"].str;
+								SysTime mtime = timeLastModified(path).toUTC();
+								// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
+								uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+								return;
+							} else {
+								// OneDrive Business Account - always use a session to upload
+								// The session includes a Request Body element containing lastModifiedDateTime
+								// which negates the need for a modify event against OneDrive
+								saveItem(response);
+								return;
+							}
+						}
+					}
+				}
+				
+				log.vlog("Requested file to upload exists on OneDrive - local database is out of sync for this file: ", path);
+				
+				// Is the local file newer than the uploaded file?
+				SysTime localFileModifiedTime = timeLastModified(path).toUTC();
+				SysTime remoteFileModifiedTime = SysTime.fromISOExtString(fileDetailsFromOneDrive["fileSystemInfo"]["lastModifiedDateTime"].str);
+				localFileModifiedTime.fracSecs = Duration.zero;
+				
+				if (localFileModifiedTime > remoteFileModifiedTime){
+					// local file is newer
+					log.vlog("Requested file to upload is newer than existing file on OneDrive");
+					write("Uploading file ", path, " ...");
+					JSONValue response;
+					
+					if (accountType == "personal"){
+						// OneDrive Personal account upload handling
+						if (getSize(path) <= thresholdFileSize) {
+							response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+							writeln(" done.");
+						} else {
 							writeln("");
 							response = session.upload(path, parent.driveId, parent.id, baseName(path));
 							writeln(" done.");
 						}
+						string id = response["id"].str;
+						string cTag = response["cTag"].str;
+						SysTime mtime = timeLastModified(path).toUTC();
+						// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
+						uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+					} else {
+						// OneDrive Business account upload handling
+						writeln("");
+						response = session.upload(path, parent.driveId, parent.id, baseName(path));
+						writeln(" done.");
+						saveItem(response);
 					}
 					
 					// Log action to log file
 					log.fileOnly("Uploading file ", path, " ... done.");
 					
-					// The file was uploaded
-					ulong uploadFileSize = response["size"].integer;
-					
-					// In some cases the file that was uploaded was not complete, but 'completed' without errors on OneDrive
-					// This has been seen with PNG / JPG files mainly, which then contributes to generating a 412 error when we attempt to update the metadata
-					// Validate here that the file uploaded, at least in size, matches in the response to what the size is on disk
-					if (thisFileSize != uploadFileSize){
-						// OK .. the uploaded file does not match
-						log.log("Uploaded file size does not match local file - upload failure - retrying");
-						// Delete uploaded bad file
-						onedrive.deleteById(response["parentReference"]["driveId"].str, response["id"].str, response["eTag"].str);
-						// Re-upload
-						uploadNewFile(path);
-						return;
-					} else {
-						if ((accountType == "personal") || (thisFileSize == 0)){
-							// Update the item's metadata on OneDrive
-							string id = response["id"].str;
-							string cTag = response["cTag"].str;
-							SysTime mtime = timeLastModified(path).toUTC();
-							// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
-							uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
-							return;
-						} else {
-							// OneDrive Business Account - always use a session to upload
-							// The session includes a Request Body element containing lastModifiedDateTime
-							// which negates the need for a modify event against OneDrive
-							saveItem(response);
-							return;
-						}
-					}
-				}
-			}
-			
-			log.vlog("Requested file to upload exists on OneDrive - local database is out of sync for this file: ", path);
-			
-			// Is the local file newer than the uploaded file?
-			SysTime localFileModifiedTime = timeLastModified(path).toUTC();
-			SysTime remoteFileModifiedTime = SysTime.fromISOExtString(fileDetailsFromOneDrive["fileSystemInfo"]["lastModifiedDateTime"].str);
-			localFileModifiedTime.fracSecs = Duration.zero;
-			
-			if (localFileModifiedTime > remoteFileModifiedTime){
-				// local file is newer
-				log.vlog("Requested file to upload is newer than existing file on OneDrive");
-				write("Uploading file ", path, " ...");
-				JSONValue response;
-				
-				if (accountType == "personal"){
-					// OneDrive Personal account upload handling
-					if (getSize(path) <= thresholdFileSize) {
-						response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-						writeln(" done.");
-					} else {
-						writeln("");
-						response = session.upload(path, parent.driveId, parent.id, baseName(path));
-						writeln(" done.");
-					}
-					string id = response["id"].str;
-					string cTag = response["cTag"].str;
-					SysTime mtime = timeLastModified(path).toUTC();
-					// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
-					uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
 				} else {
-					// OneDrive Business account upload handling
-					writeln("");
-					response = session.upload(path, parent.driveId, parent.id, baseName(path));
-					writeln(" done.");
-					saveItem(response);
+					// Save the details of the file that we got from OneDrive
+					log.vlog("Updating the local database with details for this file: ", path);
+					saveItem(fileDetailsFromOneDrive);
 				}
-				
-				// Log action to log file
-				log.fileOnly("Uploading file ", path, " ... done.");
-				
 			} else {
-				// Save the details of the file that we got from OneDrive
-				log.vlog("Updating the local database with details for this file: ", path);
-				saveItem(fileDetailsFromOneDrive);
+				// Skip file - too large
+				log.log("Skipping uploading this new file as it exceeds the maximum size allowed by OneDrive: ", path);
 			}
-		} else {
-			// Skip file - too large
-			log.log("Skipping uploading this new file as it exceeds the maximum size allowed by OneDrive: ", path);
 		}
 	}
 

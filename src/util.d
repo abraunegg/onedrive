@@ -12,6 +12,7 @@ import std.string;
 import std.algorithm;
 import std.uri;
 import qxor;
+static import log;
 
 private string deviceName;
 
@@ -127,6 +128,22 @@ bool testNetwork()
 	} catch (SocketException) {
 		return false;
 	}
+}
+
+// Can we read the file - as a permissions issue or file corruption will cause a failure
+// https://github.com/abraunegg/onedrive/issues/113
+// returns true if file can be accessed
+bool readLocalFile(string path)
+{
+	try {
+		// attempt to read the first 10MB of the file
+		read(path,10000000);
+	} catch (std.file.FileException e) {
+		// unable to read the new local file
+		log.log("Skipping uploading this file as it cannot be read (file permissions or file corruption): ", path);
+		return false;
+	}
+	return true;
 }
 
 // calls globMatch for each string in pattern separated by '|'
