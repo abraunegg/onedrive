@@ -85,6 +85,10 @@ struct UploadSession
 					return false;
 				}
 				return true;
+			} else {
+				// unable to read the local file
+				remove(sessionFilePath);
+				return false;
 			}
 		}
 		return false;
