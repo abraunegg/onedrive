@@ -1121,9 +1121,7 @@ final class SyncEngine
 		
 		// Can we read the file - as a permissions issue or file corruption will cause a failure
 		// https://github.com/abraunegg/onedrive/issues/113
-		try {
-			// attempt to read the first 10MB of the file
-			read(path,10000000);
+		if (readLocalFile(path)){
 			// able to read the file
 			if (thisFileSize <= maxUploadFileSize){
 				// Resolves: https://github.com/skilion/onedrive/issues/121, https://github.com/skilion/onedrive/issues/294, https://github.com/skilion/onedrive/issues/329
@@ -1264,9 +1262,6 @@ final class SyncEngine
 				// Skip file - too large
 				log.log("Skipping uploading this new file as it exceeds the maximum size allowed by OneDrive: ", path);
 			}
-		} catch (std.file.FileException e) {
-			// unable to read the new local file
-			log.log("Skipping uploading this file as it cannot be read (file permissions or file corruption): ", path);
 		}
 	}
 

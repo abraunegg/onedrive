@@ -1,7 +1,6 @@
 import std.algorithm, std.conv, std.datetime, std.file, std.json;
 import std.stdio, core.thread;
-import progress;
-import onedrive;
+import progress, onedrive, util;
 static import log;
 
 private long fragmentSize = 10 * 2^^20; // 10 MiB
@@ -65,9 +64,8 @@ struct UploadSession
 			}
 			// Can we read the file - as a permissions issue or file corruption will cause a failure on resume
 			// https://github.com/abraunegg/onedrive/issues/113
-			try {
-				// attempt to read the first 10MB of the file
-				read(session["localPath"].str,10000000);
+			if (readLocalFile(session["localPath"].str)){
+				// able to read the file
 				// request the session status
 				JSONValue response;
 				try {
@@ -87,11 +85,6 @@ struct UploadSession
 					return false;
 				}
 				return true;
-			} catch (std.file.FileException e) {
-				// unable to read the local file
-				log.log("Skipping resuming uploading this file as it cannot be read (file permissions or file corruption): ", session["localPath"].str);
-				remove(sessionFilePath);
-				return false;
 			}
 		}
 		return false;
