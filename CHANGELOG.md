@@ -3,6 +3,15 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2018-08-14
+### Fixed
+- Fix handling no remote delete of remote directories when using --no-remote-delete
+- Fix handling of no permission to access a local file / corrupt local file
+- Fix application crash when unable to access login.microsoft.com upon application startup
+
+### Added
+- Build instructions for openSUSE Leap 15.0
+
 ## [2.1.0] - 2018-08-10
 
 ### Fixed
