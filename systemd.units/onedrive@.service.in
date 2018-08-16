@@ -1,6 +1,6 @@
 [Unit]
 Description=OneDrive Free Client for %i
-Documentation=https://github.com/skilion/onedrive
+Documentation=https://github.com/abraunegg/onedrive
 After=network-online.target
 Wants=network-online.target
 
