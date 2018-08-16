@@ -306,7 +306,9 @@ int main(string[] args)
 					log.log(e.msg);
 				}
 			};
-			if (!downloadOnly) m.init(cfg, verbose);
+			// initialise the monitor class
+			if (cfg.getValue("skip_symlinks") == "true") skipSymlinks = true;
+			if (!downloadOnly) m.init(cfg, verbose, skipSymlinks);
 			// monitor loop
 			immutable auto checkInterval = dur!"seconds"(to!long(cfg.getValue("monitor_interval")));
 			auto lastCheckTime = MonoTime.currTime();

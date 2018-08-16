@@ -30,7 +30,9 @@ final class Monitor
 	private string[int] cookieToPath;
 	// buffer to receive the inotify events
 	private void[] buffer;
-
+	// skip symbolic links
+	bool skip_symlinks;
+	
 	private SelectiveSync selectiveSync;
 
 	void delegate(string path) onDirCreated;
@@ -44,9 +46,10 @@ final class Monitor
 		this.selectiveSync = selectiveSync;
 	}
 
-	void init(Config cfg, bool verbose)
+	void init(Config cfg, bool verbose, bool skip_symlinks)
 	{
 		this.verbose = verbose;
+		this.skip_symlinks = skip_symlinks;
 
 		fd = inotify_init();
 		if (fd == -1) throw new MonitorException("inotify_init failed");
@@ -72,6 +75,15 @@ final class Monitor
 			}
 		}
 
+		// skip symlinks if configured
+		if (isSymlink(dirname)) {
+			// if config says so we skip all symlinked items
+			if (skip_symlinks) {
+				// dont add a watch for this directory
+				return;
+			}
+		}
+		
 		add(dirname);
 		foreach(DirEntry entry; dirEntries(dirname, SpanMode.shallow, false)) {
 			if (entry.isDir) {
@@ -85,7 +97,7 @@ final class Monitor
 		int wd = inotify_add_watch(fd, toStringz(dirname), mask);
 		if (wd == -1) {
                     if (errno() == ENOSPC) {
-                        log.log("The maximum number of inotify wathches is probably too low.");
+                        log.log("The maximum number of inotify watches is probably too low.");
                         log.log("");
                         log.log("To see the current max number of watches run");
                         log.log("");
@@ -200,7 +212,7 @@ final class Monitor
 						if (useCallbacks) onFileChanged(path);
 					}
 				} else {
-					log.log("Unknow inotify event: ", format("%#x", event.mask));
+					log.log("Unknown inotify event: ", format("%#x", event.mask));
 				}
 
 				skip:
