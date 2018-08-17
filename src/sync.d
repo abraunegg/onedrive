@@ -1319,11 +1319,13 @@ final class SyncEngine
 
 	private void saveItem(JSONValue jsonItem)
 	{
-		// Takes a JSON input and formats to an item which can be used by the database
-		Item item = makeItem(jsonItem);
-		
-		// Add to the local database
-		itemdb.upsert(item);
+		// jsonItem has to be a valid object
+		if (jsonItem.object()){
+			// Takes a JSON input and formats to an item which can be used by the database
+			Item item = makeItem(jsonItem);
+			// Add to the local database
+			itemdb.upsert(item);
+		}
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_move
