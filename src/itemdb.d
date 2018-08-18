@@ -179,11 +179,20 @@ final class ItemDatabase
 		path = "root/" ~ path.chompPrefix(".");
 		auto s = db.prepare("SELECT * FROM item WHERE name = ?1 AND driveId IS ?2 AND parentId IS ?3");
 		foreach (name; pathSplitter(path)) {
+		
+			// Issue #121 Debugging
+			log.log("Path: ", name);
+			log.log("driveId: ", currItem.driveId);
+			log.log("itemId: ", currItem.id);
+		
 			s.bind(1, name);
 			s.bind(2, currItem.driveId);
 			s.bind(3, currItem.id);
 			auto r = s.exec();
-			if (r.empty) return false;
+			if (r.empty) {
+				log.log("ERROR - This item was not found in the database: ", name ~ ", " ~ currItem.driveId ~ ", " ~ currItem.id);
+				return false;
+			}
 			currItem = buildItem(r);
 			// if the item is of type remote substitute it with the child
 			if (currItem.type == ItemType.remote) {
