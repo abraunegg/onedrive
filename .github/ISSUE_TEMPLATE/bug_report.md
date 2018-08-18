@@ -23,7 +23,17 @@ Steps to reproduce the behavior if not causing an application crash:
 If issue is replicated by a specific 'file' or 'path' please archive the file and path tree & email to support@mynas.com.au 
 
 **Complete Verbose Log Output**
-A clear and full log of the problem. Please use 3 ` characters to format log output to make it easier to read. See https://guides.github.com/features/mastering-markdown/ for more details.
+A clear and full log of the problem when running the application in the following manner (ie, not in monitor mode):
+```
+onedrive --synchronize --verbose <any of your other needed options>
+```
+
+Run the application in a separate terminal window or SSH session and provide the entire application output including the error & crash. When posing the logs, Please format log output to make it easier to read. See https://guides.github.com/features/mastering-markdown/ for more details.
+
+Application Log Output:
+```
+Verbose console log output goes here
+```
 
 **Screenshots**
 If applicable, add screenshots to help explain your problem.
