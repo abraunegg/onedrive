@@ -9,26 +9,28 @@ int main(string[] args)
 {
 	// Determine the users home directory. 
 	// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
-	string homePath = environment.get("XDG_CONFIG_HOME");
-	if (homePath == ""){
+	string homePath = "";
+	if (environment.get("XDG_CONFIG_HOME") != ""){
+		homePath = environment.get("XDG_CONFIG_HOME");
+	} else {
 		// XDG_CONFIG_HOME does not exist on systems where X11 is not present - ie - headless systems / servers
 		// Check for HOME environment variable
 		if (environment.get("HOME") != ""){
 			// Use HOME environment variable
-			homePath = environment.get("HOME") ~ "/";
+			homePath = environment.get("HOME");
 		} else {
 			if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
 				// No shell is set or username - observed case when running as systemd service under CentOS 7.x
-				homePath = "/root/";
+				homePath = "/root";
 			} else {
 				// A shell & valid user is set, but no XDG_CONFIG_HOME or HOME set
-				homePath = "~/";
+				homePath = "~";
 			}
 		}
 	}
 	
 	// configuration directory
-	string configDirName = homePath ~ ".config/onedrive";
+	string configDirName = homePath ~ "/.config/onedrive";
 	// only download remote changes
 	bool downloadOnly;
 	// override the sync directory
