@@ -390,79 +390,84 @@ final class SyncEngine
 				
 				else throw e;
 			}
-			foreach (item; changes["value"].array) {
-				bool isRoot = false;
-				string thisItemPath;
-				
-				// Deleted items returned from onedrive.viewChangesById (/delta) do not have a 'name' attribute
-				// Thus we cannot name check for 'root' below on deleted items
-				if(!isItemDeleted(item)){
-					// This is not a deleted item
-					// Test is this is the OneDrive Users Root?
-					// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
-					if ((id == defaultRootId) && (item["name"].str == "root")) { 
-						// This IS the OneDrive Root
-						isRoot = true;
-					}
+			
+			// Are there any changes to process?
+			if (("value" in changes) != null) {
+				// There are valid changes
+				foreach (item; changes["value"].array) {
+					bool isRoot = false;
+					string thisItemPath;
 					
-					// Test is this a Shared Folder - which should also be classified as a 'root' item
-					if (changeHasParentReferenceId(item)) {
-						// item contains parentReference key
-						if (item["parentReference"]["driveId"].str != defaultDriveId) {
-							// The change parentReference driveId does not match the defaultDriveId - this could be a Shared Folder root item
-							string sharedDriveRootPath = "/drives/" ~ item["parentReference"]["driveId"].str ~ "/root:";
-							if (item["parentReference"]["path"].str == sharedDriveRootPath) {
-								// The drive path matches what a shared folder root item would equal
-								isRoot = true;
+					// Deleted items returned from onedrive.viewChangesById (/delta) do not have a 'name' attribute
+					// Thus we cannot name check for 'root' below on deleted items
+					if(!isItemDeleted(item)){
+						// This is not a deleted item
+						// Test is this is the OneDrive Users Root?
+						// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
+						if ((id == defaultRootId) && (item["name"].str == "root")) { 
+							// This IS the OneDrive Root
+							isRoot = true;
+						}
+						
+						// Test is this a Shared Folder - which should also be classified as a 'root' item
+						if (changeHasParentReferenceId(item)) {
+							// item contains parentReference key
+							if (item["parentReference"]["driveId"].str != defaultDriveId) {
+								// The change parentReference driveId does not match the defaultDriveId - this could be a Shared Folder root item
+								string sharedDriveRootPath = "/drives/" ~ item["parentReference"]["driveId"].str ~ "/root:";
+								if (item["parentReference"]["path"].str == sharedDriveRootPath) {
+									// The drive path matches what a shared folder root item would equal
+									isRoot = true;
+								}
 							}
 						}
 					}
-				}
 
-				// How do we handle this change?
-				if (isRoot || !changeHasParentReferenceId(item) || isItemDeleted(item)){
-					// Is a root item, has no id in parentReference or is a OneDrive deleted item
-					applyDifference(item, driveId, isRoot);
-				} else {
-					// What is this item's path?
-					thisItemPath = item["parentReference"]["path"].str;
-					// Check this item's path to see if this is a change on the path we want
-					if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderName)) ){
-						// This is a change we want to apply
+					// How do we handle this change?
+					if (isRoot || !changeHasParentReferenceId(item) || isItemDeleted(item)){
+						// Is a root item, has no id in parentReference or is a OneDrive deleted item
 						applyDifference(item, driveId, isRoot);
 					} else {
-						// No item ID match or folder sync match
-						// Before discarding change - does this ID still exist on OneDrive - as in IS this 
-						// potentially a --single-directory sync and the user 'moved' the file out of the 'sync-dir' to another OneDrive folder
-						// This is a corner edge case - https://github.com/skilion/onedrive/issues/341
-						JSONValue oneDriveMovedNotDeleted;
-						try {
-							oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item["id"].str);
-						} catch (OneDriveException e) {
-							if (e.httpStatusCode == 404) {
-								// No .. that ID is GONE
-								log.vlog("Remote change discarded - item cannot be found");
-								return;
-							} 
-						}
-						// Yes .. ID is still on OneDrive but elsewhere .... #341 edge case handling
-						// What is the original local path for this ID in the database? Does it match 'syncFolderName'
-						if (itemdb.idInLocalDatabase(driveId, item["id"].str)){
-							// item is in the database
-							string originalLocalPath = itemdb.computePath(driveId, item["id"].str);
-							if (canFind(originalLocalPath, syncFolderName)){
-								// This 'change' relates to an item that WAS in 'syncFolderName' but is now 
-								// stored elsewhere on OneDrive - outside the path we are syncing from
-								// Remove this item locally as it's local path is now obsolete
-								idsToDelete ~= [driveId, item["id"].str];
-							}
+						// What is this item's path?
+						thisItemPath = item["parentReference"]["path"].str;
+						// Check this item's path to see if this is a change on the path we want
+						if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderName)) ){
+							// This is a change we want to apply
+							applyDifference(item, driveId, isRoot);
 						} else {
-							log.vlog("Remote change discarded - not in --single-directory scope");
-						}
-					} 
+							// No item ID match or folder sync match
+							// Before discarding change - does this ID still exist on OneDrive - as in IS this 
+							// potentially a --single-directory sync and the user 'moved' the file out of the 'sync-dir' to another OneDrive folder
+							// This is a corner edge case - https://github.com/skilion/onedrive/issues/341
+							JSONValue oneDriveMovedNotDeleted;
+							try {
+								oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item["id"].str);
+							} catch (OneDriveException e) {
+								if (e.httpStatusCode == 404) {
+									// No .. that ID is GONE
+									log.vlog("Remote change discarded - item cannot be found");
+									return;
+								} 
+							}
+							// Yes .. ID is still on OneDrive but elsewhere .... #341 edge case handling
+							// What is the original local path for this ID in the database? Does it match 'syncFolderName'
+							if (itemdb.idInLocalDatabase(driveId, item["id"].str)){
+								// item is in the database
+								string originalLocalPath = itemdb.computePath(driveId, item["id"].str);
+								if (canFind(originalLocalPath, syncFolderName)){
+									// This 'change' relates to an item that WAS in 'syncFolderName' but is now 
+									// stored elsewhere on OneDrive - outside the path we are syncing from
+									// Remove this item locally as it's local path is now obsolete
+									idsToDelete ~= [driveId, item["id"].str];
+								}
+							} else {
+								log.vlog("Remote change discarded - not in --single-directory scope");
+							}
+						} 
+					}
 				}
 			}
-
+			
 			// the response may contain either @odata.deltaLink or @odata.nextLink
 			if ("@odata.deltaLink" in changes) deltaLink = changes["@odata.deltaLink"].str;
 			if (deltaLink) itemdb.setDeltaLink(driveId, id, deltaLink);
