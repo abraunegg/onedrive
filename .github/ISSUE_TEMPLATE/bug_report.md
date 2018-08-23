@@ -11,6 +11,7 @@ A clear and concise description of what the bug is.
 **Application and Operating System Details:**
 - OS: Output of `uname -a`
 - Application version: Output of `onedrive --version`
+- OneDrive Account Type
 - DMD or LDC compiler version `dmd --version` or `ldmd2 --version`
 
 **To Reproduce**
