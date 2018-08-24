@@ -582,6 +582,13 @@ final class OneDriveApi
 				log.vlog("OneDrive returned a 'HTTP 415 - Unsupported Media Type' - gracefully handling error");
 				break;
 			
+			//  429 - Too Many Requests
+			case 429:
+				// Too many requests in a certain time window
+				// https://docs.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
+				log.vlog("OneDrive returned a 'HTTP 429 - Too Many Requests' - gracefully handling error");
+				break;
+			
 			// Server side (OneDrive) Errors
 			//  500 - Internal Server Error
 			// 	502 - Bad Gateway
