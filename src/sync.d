@@ -1111,6 +1111,8 @@ final class SyncEngine
 		Item parent;
 		
 		// Check the database for the parent
+		// Issue #121 Debugging
+		log.log("Full Path: ", path);
 		enforce(itemdb.selectByPath(dirName(path), defaultDriveId, parent), "The parent item is not in the local database");
 		
 		// Maximum file size upload
