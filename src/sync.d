@@ -215,7 +215,7 @@ final class SyncEngine
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 404) {
 				// The directory was not found 
-				log.vlog("ERROR: The requested single directory to sync was not found on OneDrive");
+				log.error("ERROR: The requested single directory to sync was not found on OneDrive");
 				return;
 			}
 		} 
@@ -1112,8 +1112,8 @@ final class SyncEngine
 				}
 			} else {
 				// They are the "same" name wise but different in case sensitivity
-				log.log("ERROR: A local directory has the same name as another local directory.");
-				log.log("ERROR: To resolve, rename this local directory: ", absolutePath(path));
+				log.error("ERROR: A local directory has the same name as another local directory.");
+				log.error("ERROR: To resolve, rename this local directory: ", absolutePath(path));
 				log.log("Skipping: ", absolutePath(path));
 				return;
 			}
