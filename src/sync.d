@@ -405,6 +405,8 @@ final class SyncEngine
 						isRoot = true;
 					}
 					
+					log.log("Item: ", item);
+					
 					// Test is this a Shared Folder - which should also be classified as a 'root' item
 					if (changeHasParentReferenceId(item)) {
 						// item contains parentReference key
