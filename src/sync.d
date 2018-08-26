@@ -1275,7 +1275,7 @@ final class SyncEngine
 					// The files are the "same" name wise but different in case sensitivity
 					log.error("ERROR: A local file has the same name as another local file.");
 					log.error("ERROR: To resolve, rename this local file: ", absolutePath(path));
-					log.log("Skipping: ", absolutePath(path));
+					log.log("Skipping uploading this new file: ", absolutePath(path));
 				}
 			} else {
 				// Skip file - too large
