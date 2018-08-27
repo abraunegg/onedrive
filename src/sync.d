@@ -215,7 +215,7 @@ final class SyncEngine
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 404) {
 				// The directory was not found 
-				log.error("ERROR: The requested single directory to sync was not found on OneDrive");
+				log.vlog("ERROR: The requested single directory to sync was not found on OneDrive");
 				return;
 			}
 		} 
