@@ -601,11 +601,28 @@ final class OneDriveApi
 
 	private void checkHttpCode(ref const JSONValue response)
 	{
-		if (http.statusLine.code == 412) {
-			throw new OneDriveException(http.statusLine.code, http.statusLine.reason);
-		} else {
+		switch(http.statusLine.code)
+		{
+			//	412 - Precondition Failed
+			case 412:
+				throw new OneDriveException(http.statusLine.code, http.statusLine.reason);
+				break;
+				
+			// Server side (OneDrive) Errors
+			//  500 - Internal Server Error
+			// 	502 - Bad Gateway
+			//	503 - Service Unavailable
+			//  504 - Gateway Timeout (Issue #320)
+			case 500,502,503,504:
+				// No actions
+				log.vlog("OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error");
+				break;
+			
+			// Default - all other errors that are not a 2xx
+			default:
 			if (http.statusLine.code / 100 != 2) {
 				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
+				break;
 			}
 		}
 	}
