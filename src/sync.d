@@ -945,7 +945,6 @@ final class SyncEngine
 		//  400 Character Limit for OneDrive Business / Office 365
 		//  430 Character Limit for OneDrive Personal
 		auto maxPathLength = 0;
-		string check_path = path;
 		import std.range : walkLength;
 		import std.uni : byGrapheme;
 		if (accountType == "business"){
@@ -956,7 +955,7 @@ final class SyncEngine
 			maxPathLength = 430;
 		}
 		
-		if(check_path.byGrapheme.walkLength < maxPathLength){
+		if(path.byGrapheme.walkLength < maxPathLength){
 			// path is less than maxPathLength
 
 			if (isSymlink(path)) {
