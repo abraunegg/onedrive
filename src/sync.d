@@ -1090,7 +1090,7 @@ final class SyncEngine
 			JSONValue response;
 			// test if the path we are going to create already exists on OneDrive
 			try {
-				response =  onedrive.getPathDetails(path);
+				response = onedrive.getPathDetails(path);
 			} catch (OneDriveException e) {
 				if (e.httpStatusCode == 404) {
 					// The directory was not found 
@@ -1265,49 +1265,63 @@ final class SyncEngine
 						}
 					}
 					
-					log.vlog("Requested file to upload exists on OneDrive - local database is out of sync for this file: ", path);
+					// Check that the filename that is returned is actually the file we wish to upload
+					// https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
+					// Do not assume case sensitivity. For example, consider the names OSCAR, Oscar, and oscar to be the same, 
+					// even though some file systems (such as a POSIX-compliant file system) may consider them as different. 
+					// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior.
 					
-					// Is the local file newer than the uploaded file?
-					SysTime localFileModifiedTime = timeLastModified(path).toUTC();
-					SysTime remoteFileModifiedTime = SysTime.fromISOExtString(fileDetailsFromOneDrive["fileSystemInfo"]["lastModifiedDateTime"].str);
-					localFileModifiedTime.fracSecs = Duration.zero;
-					
-					if (localFileModifiedTime > remoteFileModifiedTime){
-						// local file is newer
-						log.vlog("Requested file to upload is newer than existing file on OneDrive");
-						write("Uploading file ", path, " ...");
-						JSONValue response;
+					if (fileDetailsFromOneDrive["name"].str == baseName(path)){
+						// OneDrive 'name' matches local path name
+						log.vlog("Requested file to upload exists on OneDrive - local database is out of sync for this file: ", path);
 						
-						if (accountType == "personal"){
-							// OneDrive Personal account upload handling
-							if (getSize(path) <= thresholdFileSize) {
-								response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-								writeln(" done.");
+						// Is the local file newer than the uploaded file?
+						SysTime localFileModifiedTime = timeLastModified(path).toUTC();
+						SysTime remoteFileModifiedTime = SysTime.fromISOExtString(fileDetailsFromOneDrive["fileSystemInfo"]["lastModifiedDateTime"].str);
+						localFileModifiedTime.fracSecs = Duration.zero;
+						
+						if (localFileModifiedTime > remoteFileModifiedTime){
+							// local file is newer
+							log.vlog("Requested file to upload is newer than existing file on OneDrive");
+							write("Uploading file ", path, " ...");
+							JSONValue response;
+							
+							if (accountType == "personal"){
+								// OneDrive Personal account upload handling
+								if (getSize(path) <= thresholdFileSize) {
+									response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+									writeln(" done.");
+								} else {
+									writeln("");
+									response = session.upload(path, parent.driveId, parent.id, baseName(path));
+									writeln(" done.");
+								}
+								string id = response["id"].str;
+								string cTag = response["cTag"].str;
+								SysTime mtime = timeLastModified(path).toUTC();
+								// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
+								uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
 							} else {
+								// OneDrive Business account upload handling
 								writeln("");
 								response = session.upload(path, parent.driveId, parent.id, baseName(path));
 								writeln(" done.");
+								saveItem(response);
 							}
-							string id = response["id"].str;
-							string cTag = response["cTag"].str;
-							SysTime mtime = timeLastModified(path).toUTC();
-							// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
-							uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+							
+							// Log action to log file
+							log.fileOnly("Uploading file ", path, " ... done.");
+							
 						} else {
-							// OneDrive Business account upload handling
-							writeln("");
-							response = session.upload(path, parent.driveId, parent.id, baseName(path));
-							writeln(" done.");
-							saveItem(response);
+							// Save the details of the file that we got from OneDrive
+							log.vlog("Updating the local database with details for this file: ", path);
+							saveItem(fileDetailsFromOneDrive);
 						}
-						
-						// Log action to log file
-						log.fileOnly("Uploading file ", path, " ... done.");
-						
 					} else {
-						// Save the details of the file that we got from OneDrive
-						log.vlog("Updating the local database with details for this file: ", path);
-						saveItem(fileDetailsFromOneDrive);
+						// The files are the "same" name wise but different in case sensitivity
+						log.error("ERROR: A local file has the same name as another local file.");
+						log.error("ERROR: To resolve, rename this local file: ", absolutePath(path));
+						log.log("Skipping uploading this new file: ", absolutePath(path));
 					}
 				} else {
 					// Skip file - too large
