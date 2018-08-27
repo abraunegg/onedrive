@@ -689,8 +689,8 @@ final class SyncEngine
 		} else {
 			// Filename invalid
 			log.error("ERROR: The file attempted to be downloaded exceeds local file system limits.");
-			log.error("ERROR: To resolve, rename this file on OneDrive: ", name);
-			log.log("Skipping uploading this new file: ", name);
+			log.error("ERROR: To resolve, rename this file on OneDrive: ", fileName);
+			log.log("Skipping uploading this new file: ", fileName);
 		}
 	}
 
