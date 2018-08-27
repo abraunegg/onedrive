@@ -5,6 +5,7 @@ import std.exception: enforce;
 import std.file, std.json, std.path;
 import std.regex;
 import std.stdio, std.string, std.uni, std.uri;
+import core.time, core.thread;
 import config, itemdb, onedrive, selective, upload, util;
 static import log;
 
@@ -650,7 +651,31 @@ final class SyncEngine
 		write("Downloading file ", path, " ... ");
 		JSONValue fileSizeDetails = onedrive.getFileSize(item.driveId, item.id);
 		auto fileSize = fileSizeDetails["size"].integer;
-		onedrive.downloadById(item.driveId, item.id, path, fileSize);
+		try {
+			onedrive.downloadById(item.driveId, item.id, path, fileSize);
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 429) {
+				// HTTP request returned status code 429 (Too Many Requests)
+				// https://github.com/abraunegg/onedrive/issues/133
+				// Back off & retry with incremental delay
+				int retryCount = 10; 
+				int retryAttempts = 1;
+				int backoffInterval = 2;
+				while (retryAttempts < retryCount){
+					Thread.sleep(dur!"seconds"(retryAttempts*backoffInterval));
+					try {
+						onedrive.downloadById(item.driveId, item.id, path, fileSize);
+						// successful download
+						retryAttempts = retryCount;
+					} catch (OneDriveException e) {
+						if (e.httpStatusCode == 429) {
+							// Increment & loop around
+							retryAttempts++;
+						}
+					}
+				}
+			}
+		}
 		writeln("done.");
 		log.fileOnly("Downloading file ", path, " ... done.");
 		setTimes(path, item.mtime, item.mtime);
