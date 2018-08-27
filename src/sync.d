@@ -5,6 +5,7 @@ import std.exception: enforce;
 import std.file, std.json, std.path;
 import std.regex;
 import std.stdio, std.string, std.uni, std.uri;
+import core.time, core.thread;
 import config, itemdb, onedrive, selective, upload, util;
 static import log;
 
@@ -215,7 +216,7 @@ final class SyncEngine
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 404) {
 				// The directory was not found 
-				log.vlog("ERROR: The requested single directory to sync was not found on OneDrive");
+				log.error("ERROR: The requested single directory to sync was not found on OneDrive");
 				return;
 			}
 		} 
@@ -390,79 +391,84 @@ final class SyncEngine
 				
 				else throw e;
 			}
-			foreach (item; changes["value"].array) {
-				bool isRoot = false;
-				string thisItemPath;
-				
-				// Deleted items returned from onedrive.viewChangesById (/delta) do not have a 'name' attribute
-				// Thus we cannot name check for 'root' below on deleted items
-				if(!isItemDeleted(item)){
-					// This is not a deleted item
-					// Test is this is the OneDrive Users Root?
-					// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
-					if ((id == defaultRootId) && (item["name"].str == "root")) { 
-						// This IS the OneDrive Root
-						isRoot = true;
-					}
+			
+			// Are there any changes to process?
+			if (("value" in changes) != null) {
+				// There are valid changes
+				foreach (item; changes["value"].array) {
+					bool isRoot = false;
+					string thisItemPath;
 					
-					// Test is this a Shared Folder - which should also be classified as a 'root' item
-					if (changeHasParentReferenceId(item)) {
-						// item contains parentReference key
-						if (item["parentReference"]["driveId"].str != defaultDriveId) {
-							// The change parentReference driveId does not match the defaultDriveId - this could be a Shared Folder root item
-							string sharedDriveRootPath = "/drives/" ~ item["parentReference"]["driveId"].str ~ "/root:";
-							if (item["parentReference"]["path"].str == sharedDriveRootPath) {
-								// The drive path matches what a shared folder root item would equal
-								isRoot = true;
+					// Deleted items returned from onedrive.viewChangesById (/delta) do not have a 'name' attribute
+					// Thus we cannot name check for 'root' below on deleted items
+					if(!isItemDeleted(item)){
+						// This is not a deleted item
+						// Test is this is the OneDrive Users Root?
+						// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
+						if ((id == defaultRootId) && (item["name"].str == "root")) { 
+							// This IS the OneDrive Root
+							isRoot = true;
+						}
+						
+						// Test is this a Shared Folder - which should also be classified as a 'root' item
+						if (changeHasParentReferenceId(item)) {
+							// item contains parentReference key
+							if (item["parentReference"]["driveId"].str != defaultDriveId) {
+								// The change parentReference driveId does not match the defaultDriveId - this could be a Shared Folder root item
+								string sharedDriveRootPath = "/drives/" ~ item["parentReference"]["driveId"].str ~ "/root:";
+								if (item["parentReference"]["path"].str == sharedDriveRootPath) {
+									// The drive path matches what a shared folder root item would equal
+									isRoot = true;
+								}
 							}
 						}
 					}
-				}
 
-				// How do we handle this change?
-				if (isRoot || !changeHasParentReferenceId(item) || isItemDeleted(item)){
-					// Is a root item, has no id in parentReference or is a OneDrive deleted item
-					applyDifference(item, driveId, isRoot);
-				} else {
-					// What is this item's path?
-					thisItemPath = item["parentReference"]["path"].str;
-					// Check this item's path to see if this is a change on the path we want
-					if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderName)) ){
-						// This is a change we want to apply
+					// How do we handle this change?
+					if (isRoot || !changeHasParentReferenceId(item) || isItemDeleted(item)){
+						// Is a root item, has no id in parentReference or is a OneDrive deleted item
 						applyDifference(item, driveId, isRoot);
 					} else {
-						// No item ID match or folder sync match
-						// Before discarding change - does this ID still exist on OneDrive - as in IS this 
-						// potentially a --single-directory sync and the user 'moved' the file out of the 'sync-dir' to another OneDrive folder
-						// This is a corner edge case - https://github.com/skilion/onedrive/issues/341
-						JSONValue oneDriveMovedNotDeleted;
-						try {
-							oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item["id"].str);
-						} catch (OneDriveException e) {
-							if (e.httpStatusCode == 404) {
-								// No .. that ID is GONE
-								log.vlog("Remote change discarded - item cannot be found");
-								return;
-							} 
-						}
-						// Yes .. ID is still on OneDrive but elsewhere .... #341 edge case handling
-						// What is the original local path for this ID in the database? Does it match 'syncFolderName'
-						if (itemdb.idInLocalDatabase(driveId, item["id"].str)){
-							// item is in the database
-							string originalLocalPath = itemdb.computePath(driveId, item["id"].str);
-							if (canFind(originalLocalPath, syncFolderName)){
-								// This 'change' relates to an item that WAS in 'syncFolderName' but is now 
-								// stored elsewhere on OneDrive - outside the path we are syncing from
-								// Remove this item locally as it's local path is now obsolete
-								idsToDelete ~= [driveId, item["id"].str];
-							}
+						// What is this item's path?
+						thisItemPath = item["parentReference"]["path"].str;
+						// Check this item's path to see if this is a change on the path we want
+						if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderName)) ){
+							// This is a change we want to apply
+							applyDifference(item, driveId, isRoot);
 						} else {
-							log.vlog("Remote change discarded - not in --single-directory scope");
-						}
-					} 
+							// No item ID match or folder sync match
+							// Before discarding change - does this ID still exist on OneDrive - as in IS this 
+							// potentially a --single-directory sync and the user 'moved' the file out of the 'sync-dir' to another OneDrive folder
+							// This is a corner edge case - https://github.com/skilion/onedrive/issues/341
+							JSONValue oneDriveMovedNotDeleted;
+							try {
+								oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item["id"].str);
+							} catch (OneDriveException e) {
+								if (e.httpStatusCode == 404) {
+									// No .. that ID is GONE
+									log.vlog("Remote change discarded - item cannot be found");
+									return;
+								} 
+							}
+							// Yes .. ID is still on OneDrive but elsewhere .... #341 edge case handling
+							// What is the original local path for this ID in the database? Does it match 'syncFolderName'
+							if (itemdb.idInLocalDatabase(driveId, item["id"].str)){
+								// item is in the database
+								string originalLocalPath = itemdb.computePath(driveId, item["id"].str);
+								if (canFind(originalLocalPath, syncFolderName)){
+									// This 'change' relates to an item that WAS in 'syncFolderName' but is now 
+									// stored elsewhere on OneDrive - outside the path we are syncing from
+									// Remove this item locally as it's local path is now obsolete
+									idsToDelete ~= [driveId, item["id"].str];
+								}
+							} else {
+								log.vlog("Remote change discarded - not in --single-directory scope");
+							}
+						} 
+					}
 				}
 			}
-
+			
 			// the response may contain either @odata.deltaLink or @odata.nextLink
 			if ("@odata.deltaLink" in changes) deltaLink = changes["@odata.deltaLink"].str;
 			if (deltaLink) itemdb.setDeltaLink(driveId, id, deltaLink);
@@ -645,7 +651,31 @@ final class SyncEngine
 		write("Downloading file ", path, " ... ");
 		JSONValue fileSizeDetails = onedrive.getFileSize(item.driveId, item.id);
 		auto fileSize = fileSizeDetails["size"].integer;
-		onedrive.downloadById(item.driveId, item.id, path, fileSize);
+		try {
+			onedrive.downloadById(item.driveId, item.id, path, fileSize);
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 429) {
+				// HTTP request returned status code 429 (Too Many Requests)
+				// https://github.com/abraunegg/onedrive/issues/133
+				// Back off & retry with incremental delay
+				int retryCount = 10; 
+				int retryAttempts = 1;
+				int backoffInterval = 2;
+				while (retryAttempts < retryCount){
+					Thread.sleep(dur!"seconds"(retryAttempts*backoffInterval));
+					try {
+						onedrive.downloadById(item.driveId, item.id, path, fileSize);
+						// successful download
+						retryAttempts = retryCount;
+					} catch (OneDriveException e) {
+						if (e.httpStatusCode == 429) {
+							// Increment & loop around
+							retryAttempts++;
+						}
+					}
+				}
+			}
+		}
 		writeln("done.");
 		log.fileOnly("Downloading file ", path, " ... done.");
 		setTimes(path, item.mtime, item.mtime);
@@ -945,6 +975,8 @@ final class SyncEngine
 		//  400 Character Limit for OneDrive Business / Office 365
 		//  430 Character Limit for OneDrive Personal
 		auto maxPathLength = 0;
+		import std.range : walkLength;
+		import std.uni : byGrapheme;
 		if (accountType == "business"){
 			// Business Account
 			maxPathLength = 400;
@@ -953,7 +985,7 @@ final class SyncEngine
 			maxPathLength = 430;
 		}
 		
-		if(encodeComponent(path).length < maxPathLength){
+		if(path.byGrapheme.walkLength < maxPathLength){
 			// path is less than maxPathLength
 
 			if (isSymlink(path)) {
@@ -1055,9 +1087,10 @@ final class SyncEngine
 				parent.id = onedrivePathDetails["id"].str; // This item's ID. Should give something like 12345ABCDE1234A1!101
 			}
 		
+			JSONValue response;
 			// test if the path we are going to create already exists on OneDrive
 			try {
-				onedrive.getPathDetails(path);
+				response =  onedrive.getPathDetails(path);
 			} catch (OneDriveException e) {
 				if (e.httpStatusCode == 404) {
 					// The directory was not found 
@@ -1071,7 +1104,6 @@ final class SyncEngine
 					];
 					
 					// Submit the creation request
-					JSONValue response;
 					// Fix for https://github.com/skilion/onedrive/issues/356
 					try {
 						response = onedrive.createById(parent.driveId, parent.id, driveItem);
@@ -1089,19 +1121,33 @@ final class SyncEngine
 					return;
 				}
 			} 
-			log.vlog("The requested directory to create was found on OneDrive - skipping creating the directory: ", path );
 			
-			// Check that this path is in the database
-			if (!itemdb.selectById(parent.driveId, parent.id, parent)){
-				// parent for 'path' is NOT in the database
-				log.vlog("The parent for this path is not in the local database - need to add parent to local database");
-				string parentPath = dirName(path);
-				uploadCreateDir(parentPath);
+			// https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
+			// Do not assume case sensitivity. For example, consider the names OSCAR, Oscar, and oscar to be the same, 
+			// even though some file systems (such as a POSIX-compliant file system) may consider them as different. 
+			// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior.
+			
+			if (response["name"].str == baseName(path)){
+				// OneDrive 'name' matches local path name
+				log.vlog("The requested directory to create was found on OneDrive - skipping creating the directory: ", path );
+				// Check that this path is in the database
+				if (!itemdb.selectById(parent.driveId, parent.id, parent)){
+					// parent for 'path' is NOT in the database
+					log.vlog("The parent for this path is not in the local database - need to add parent to local database");
+					string parentPath = dirName(path);
+					uploadCreateDir(parentPath);
+				} else {
+					// parent is in database
+					log.vlog("The parent for this path is in the local database - adding requested path (", path ,") to database");
+					auto res = onedrive.getPathDetails(path);
+					saveItem(res);
+				}
 			} else {
-				// parent is in database
-				log.vlog("The parent for this path is in the local database - adding requested path (", path ,") to database");
-				auto res = onedrive.getPathDetails(path);
-				saveItem(res);
+				// They are the "same" name wise but different in case sensitivity
+				log.error("ERROR: A local directory has the same name as another local directory.");
+				log.error("ERROR: To resolve, rename this local directory: ", absolutePath(path));
+				log.log("Skipping: ", absolutePath(path));
+				return;
 			}
 		}
 	}
@@ -1111,162 +1157,166 @@ final class SyncEngine
 		Item parent;
 		
 		// Check the database for the parent
-		enforce(itemdb.selectByPath(dirName(path), defaultDriveId, parent), "The parent item is not in the local database");
-		
-		// Maximum file size upload
-		//	https://support.microsoft.com/en-au/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
-		//	1. OneDrive Business say's 15GB
-		//	2. Another article updated April 2018 says 20GB:
-		//		https://answers.microsoft.com/en-us/onedrive/forum/odoptions-oddesktop-sdwin10/personal-onedrive-file-upload-size-max/a3621fc9-b766-4a99-99f8-bcc01ccb025f
-		
-		// Use smaller size for now
-		auto maxUploadFileSize = 16106127360; // 15GB
-		//auto maxUploadFileSize = 21474836480; // 20GB
-		auto thisFileSize = getSize(path);
-		
-		// Can we read the file - as a permissions issue or file corruption will cause a failure
-		// https://github.com/abraunegg/onedrive/issues/113
-		if (readLocalFile(path)){
-			// able to read the file
-			if (thisFileSize <= maxUploadFileSize){
-				// Resolves: https://github.com/skilion/onedrive/issues/121, https://github.com/skilion/onedrive/issues/294, https://github.com/skilion/onedrive/issues/329
+		//enforce(itemdb.selectByPath(dirName(path), defaultDriveId, parent), "The parent item is not in the local database");
+		if (itemdb.selectByPath(dirName(path), defaultDriveId, parent)) {
+			// Maximum file size upload
+			//	https://support.microsoft.com/en-au/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
+			//	1. OneDrive Business say's 15GB
+			//	2. Another article updated April 2018 says 20GB:
+			//		https://answers.microsoft.com/en-us/onedrive/forum/odoptions-oddesktop-sdwin10/personal-onedrive-file-upload-size-max/a3621fc9-b766-4a99-99f8-bcc01ccb025f
 			
-				// To avoid a 409 Conflict error - does the file actually exist on OneDrive already?
-				JSONValue fileDetailsFromOneDrive;
+			// Use smaller size for now
+			auto maxUploadFileSize = 16106127360; // 15GB
+			//auto maxUploadFileSize = 21474836480; // 20GB
+			auto thisFileSize = getSize(path);
+			
+			// Can we read the file - as a permissions issue or file corruption will cause a failure
+			// https://github.com/abraunegg/onedrive/issues/113
+			if (readLocalFile(path)){
+				// able to read the file
+				if (thisFileSize <= maxUploadFileSize){
+					// Resolves: https://github.com/skilion/onedrive/issues/121, https://github.com/skilion/onedrive/issues/294, https://github.com/skilion/onedrive/issues/329
 				
-				// Does this 'file' already exist on OneDrive?
-				try {
-					// test if the local path exists on OneDrive
-					fileDetailsFromOneDrive = onedrive.getPathDetails(path);
-				} catch (OneDriveException e) {
-					if (e.httpStatusCode == 404) {
-						// The file was not found on OneDrive, need to upload it		
-						write("Uploading file ", path, " ...");
-						JSONValue response;
-						
-						// Resolve https://github.com/abraunegg/onedrive/issues/37
-						if (thisFileSize == 0){
-							// We can only upload zero size files via simpleFileUpload regardless of account type
-							// https://github.com/OneDrive/onedrive-api-docs/issues/53
-							response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-							writeln(" done.");
-						} else {
-							// File is not a zero byte file
-							// Are we using OneDrive Personal or OneDrive Business?
-							// To solve 'Multiple versions of file shown on website after single upload' (https://github.com/abraunegg/onedrive/issues/2)
-							// check what 'account type' this is as this issue only affects OneDrive Business so we need some extra logic here
-							if (accountType == "personal"){
-								// Original file upload logic
-								if (getSize(path) <= thresholdFileSize) {
-									try {
-											response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-										} catch (OneDriveException e) {
-											if (e.httpStatusCode == 504) {
-												// HTTP request returned status code 504 (Gateway Timeout)
-												// Try upload as a session
-												response = session.upload(path, parent.driveId, parent.id, baseName(path));
+					// To avoid a 409 Conflict error - does the file actually exist on OneDrive already?
+					JSONValue fileDetailsFromOneDrive;
+					
+					// Does this 'file' already exist on OneDrive?
+					try {
+						// test if the local path exists on OneDrive
+						fileDetailsFromOneDrive = onedrive.getPathDetails(path);
+					} catch (OneDriveException e) {
+						if (e.httpStatusCode == 404) {
+							// The file was not found on OneDrive, need to upload it		
+							write("Uploading file ", path, " ...");
+							JSONValue response;
+							
+							// Resolve https://github.com/abraunegg/onedrive/issues/37
+							if (thisFileSize == 0){
+								// We can only upload zero size files via simpleFileUpload regardless of account type
+								// https://github.com/OneDrive/onedrive-api-docs/issues/53
+								response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+								writeln(" done.");
+							} else {
+								// File is not a zero byte file
+								// Are we using OneDrive Personal or OneDrive Business?
+								// To solve 'Multiple versions of file shown on website after single upload' (https://github.com/abraunegg/onedrive/issues/2)
+								// check what 'account type' this is as this issue only affects OneDrive Business so we need some extra logic here
+								if (accountType == "personal"){
+									// Original file upload logic
+									if (getSize(path) <= thresholdFileSize) {
+										try {
+												response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+											} catch (OneDriveException e) {
+												if (e.httpStatusCode == 504) {
+													// HTTP request returned status code 504 (Gateway Timeout)
+													// Try upload as a session
+													response = session.upload(path, parent.driveId, parent.id, baseName(path));
+												}
+												else throw e;
 											}
-											else throw e;
-										}
+											writeln(" done.");
+									} else {
+										writeln("");
+										response = session.upload(path, parent.driveId, parent.id, baseName(path));
 										writeln(" done.");
+									}
 								} else {
+									// OneDrive Business Account - always use a session to upload
 									writeln("");
 									response = session.upload(path, parent.driveId, parent.id, baseName(path));
 									writeln(" done.");
 								}
+							}
+							
+							// Log action to log file
+							log.fileOnly("Uploading file ", path, " ... done.");
+							
+							// The file was uploaded
+							ulong uploadFileSize = response["size"].integer;
+							
+							// In some cases the file that was uploaded was not complete, but 'completed' without errors on OneDrive
+							// This has been seen with PNG / JPG files mainly, which then contributes to generating a 412 error when we attempt to update the metadata
+							// Validate here that the file uploaded, at least in size, matches in the response to what the size is on disk
+							if (thisFileSize != uploadFileSize){
+								// OK .. the uploaded file does not match
+								log.log("Uploaded file size does not match local file - upload failure - retrying");
+								// Delete uploaded bad file
+								onedrive.deleteById(response["parentReference"]["driveId"].str, response["id"].str, response["eTag"].str);
+								// Re-upload
+								uploadNewFile(path);
+								return;
 							} else {
-								// OneDrive Business Account - always use a session to upload
+								if ((accountType == "personal") || (thisFileSize == 0)){
+									// Update the item's metadata on OneDrive
+									string id = response["id"].str;
+									string cTag = response["cTag"].str;
+									SysTime mtime = timeLastModified(path).toUTC();
+									// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
+									uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+									return;
+								} else {
+									// OneDrive Business Account - always use a session to upload
+									// The session includes a Request Body element containing lastModifiedDateTime
+									// which negates the need for a modify event against OneDrive
+									saveItem(response);
+									return;
+								}
+							}
+						}
+					}
+					
+					log.vlog("Requested file to upload exists on OneDrive - local database is out of sync for this file: ", path);
+					
+					// Is the local file newer than the uploaded file?
+					SysTime localFileModifiedTime = timeLastModified(path).toUTC();
+					SysTime remoteFileModifiedTime = SysTime.fromISOExtString(fileDetailsFromOneDrive["fileSystemInfo"]["lastModifiedDateTime"].str);
+					localFileModifiedTime.fracSecs = Duration.zero;
+					
+					if (localFileModifiedTime > remoteFileModifiedTime){
+						// local file is newer
+						log.vlog("Requested file to upload is newer than existing file on OneDrive");
+						write("Uploading file ", path, " ...");
+						JSONValue response;
+						
+						if (accountType == "personal"){
+							// OneDrive Personal account upload handling
+							if (getSize(path) <= thresholdFileSize) {
+								response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+								writeln(" done.");
+							} else {
 								writeln("");
 								response = session.upload(path, parent.driveId, parent.id, baseName(path));
 								writeln(" done.");
 							}
+							string id = response["id"].str;
+							string cTag = response["cTag"].str;
+							SysTime mtime = timeLastModified(path).toUTC();
+							// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
+							uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+						} else {
+							// OneDrive Business account upload handling
+							writeln("");
+							response = session.upload(path, parent.driveId, parent.id, baseName(path));
+							writeln(" done.");
+							saveItem(response);
 						}
 						
 						// Log action to log file
 						log.fileOnly("Uploading file ", path, " ... done.");
 						
-						// The file was uploaded
-						ulong uploadFileSize = response["size"].integer;
-						
-						// In some cases the file that was uploaded was not complete, but 'completed' without errors on OneDrive
-						// This has been seen with PNG / JPG files mainly, which then contributes to generating a 412 error when we attempt to update the metadata
-						// Validate here that the file uploaded, at least in size, matches in the response to what the size is on disk
-						if (thisFileSize != uploadFileSize){
-							// OK .. the uploaded file does not match
-							log.log("Uploaded file size does not match local file - upload failure - retrying");
-							// Delete uploaded bad file
-							onedrive.deleteById(response["parentReference"]["driveId"].str, response["id"].str, response["eTag"].str);
-							// Re-upload
-							uploadNewFile(path);
-							return;
-						} else {
-							if ((accountType == "personal") || (thisFileSize == 0)){
-								// Update the item's metadata on OneDrive
-								string id = response["id"].str;
-								string cTag = response["cTag"].str;
-								SysTime mtime = timeLastModified(path).toUTC();
-								// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
-								uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
-								return;
-							} else {
-								// OneDrive Business Account - always use a session to upload
-								// The session includes a Request Body element containing lastModifiedDateTime
-								// which negates the need for a modify event against OneDrive
-								saveItem(response);
-								return;
-							}
-						}
-					}
-				}
-				
-				log.vlog("Requested file to upload exists on OneDrive - local database is out of sync for this file: ", path);
-				
-				// Is the local file newer than the uploaded file?
-				SysTime localFileModifiedTime = timeLastModified(path).toUTC();
-				SysTime remoteFileModifiedTime = SysTime.fromISOExtString(fileDetailsFromOneDrive["fileSystemInfo"]["lastModifiedDateTime"].str);
-				localFileModifiedTime.fracSecs = Duration.zero;
-				
-				if (localFileModifiedTime > remoteFileModifiedTime){
-					// local file is newer
-					log.vlog("Requested file to upload is newer than existing file on OneDrive");
-					write("Uploading file ", path, " ...");
-					JSONValue response;
-					
-					if (accountType == "personal"){
-						// OneDrive Personal account upload handling
-						if (getSize(path) <= thresholdFileSize) {
-							response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-							writeln(" done.");
-						} else {
-							writeln("");
-							response = session.upload(path, parent.driveId, parent.id, baseName(path));
-							writeln(" done.");
-						}
-						string id = response["id"].str;
-						string cTag = response["cTag"].str;
-						SysTime mtime = timeLastModified(path).toUTC();
-						// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
-						uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
 					} else {
-						// OneDrive Business account upload handling
-						writeln("");
-						response = session.upload(path, parent.driveId, parent.id, baseName(path));
-						writeln(" done.");
-						saveItem(response);
+						// Save the details of the file that we got from OneDrive
+						log.vlog("Updating the local database with details for this file: ", path);
+						saveItem(fileDetailsFromOneDrive);
 					}
-					
-					// Log action to log file
-					log.fileOnly("Uploading file ", path, " ... done.");
-					
 				} else {
-					// Save the details of the file that we got from OneDrive
-					log.vlog("Updating the local database with details for this file: ", path);
-					saveItem(fileDetailsFromOneDrive);
+					// Skip file - too large
+					log.log("Skipping uploading this new file as it exceeds the maximum size allowed by OneDrive: ", path);
 				}
-			} else {
-				// Skip file - too large
-				log.log("Skipping uploading this new file as it exceeds the maximum size allowed by OneDrive: ", path);
 			}
+		} else {
+			log.log("Skipping uploading this new file as parent path is not in the database: ", path);
+			return;
 		}
 	}
 
@@ -1319,11 +1369,13 @@ final class SyncEngine
 
 	private void saveItem(JSONValue jsonItem)
 	{
-		// Takes a JSON input and formats to an item which can be used by the database
-		Item item = makeItem(jsonItem);
-		
-		// Add to the local database
-		itemdb.upsert(item);
+		// jsonItem has to be a valid object
+		if (jsonItem.object()){
+			// Takes a JSON input and formats to an item which can be used by the database
+			Item item = makeItem(jsonItem);
+			// Add to the local database
+			itemdb.upsert(item);
+		}
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_move

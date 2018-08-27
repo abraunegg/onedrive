@@ -304,7 +304,7 @@ tail -f /var/log/onedrive/<username>.onedrive.log
 ```
 To change what 'user' the client runs under (by default root), manually edit the init.d service file and modify `daemon --user root onedrive_service.sh` for the correct user.
 
-**systemd**
+**systemd - Arch, Ubuntu, Debian, OpenSuSE**
 ```sh
 systemctl --user enable onedrive
 systemctl --user start onedrive
@@ -313,6 +313,17 @@ systemctl --user start onedrive
 To see the logs run:
 ```sh
 journalctl --user-unit onedrive -f
+```
+
+**systemd - Red Hat Enterprise Linux, CentOS Linux**
+```sh
+systemctl enable onedrive
+systemctl start onedrive
+```
+
+To see the logs run:
+```sh
+journalctl onedrive -f
 ```
 
 **Note:** systemd is supported on Ubuntu only starting from version 15.04
