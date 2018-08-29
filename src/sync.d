@@ -661,7 +661,7 @@ final class SyncEngine
 		
 		if (isMalware(fileDetails)){
 			// OneDrive reports that this file is malware
-			log.log("ERROR: MALWARE DETECTED IN FILE");
+			log.error("ERROR: MALWARE DETECTED IN FILE - DOWNLOAD SKIPPED");
 			return;
 		}
 		
