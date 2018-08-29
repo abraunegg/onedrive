@@ -649,8 +649,12 @@ final class SyncEngine
 	{
 		assert(item.type == ItemType.file);
 		write("Downloading file ", path, " ... ");
-		JSONValue fileSizeDetails = onedrive.getFileSize(item.driveId, item.id);
-		auto fileSize = fileSizeDetails["size"].integer;
+		JSONValue fileDetails = onedrive.getFileDetails(item.driveId, item.id);
+		
+		// Issue #153 Debugging
+		log.log("File Details: ", fileDetails);
+		
+		auto fileSize = fileDetails["size"].integer;
 		try {
 			onedrive.downloadById(item.driveId, item.id, path, fileSize);
 		} catch (OneDriveException e) {
