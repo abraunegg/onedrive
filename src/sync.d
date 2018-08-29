@@ -45,6 +45,11 @@ private bool changeHasParentReferenceId(const ref JSONValue item)
 	return ("id" in item["parentReference"]) != null;
 }
 
+private bool isMalware(const ref JSONValue item)
+{
+	return ("malware" in item) != null;
+}
+
 // construct an Item struct from a JSON driveItem
 private Item makeItem(const ref JSONValue driveItem)
 {
@@ -652,7 +657,13 @@ final class SyncEngine
 		JSONValue fileDetails = onedrive.getFileDetails(item.driveId, item.id);
 		
 		// Issue #153 Debugging
-		log.log("File Details: ", fileDetails);
+		//log.log("File Details: ", fileDetails);
+		
+		if (isMalware(fileDetails)){
+			// OneDrive reports that this file is malware
+			log.log("ERROR: MALWARE DETECTED IN FILE");
+			return;
+		}
 		
 		auto fileSize = fileDetails["size"].integer;
 		try {

@@ -212,7 +212,7 @@ final class OneDriveApi
 		const(char)[] url;
 		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		//url ~= "?select=size";
+		url ~= "?select=size,malware";
 		return get(url);
 	}
 	
