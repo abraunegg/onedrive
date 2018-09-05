@@ -9,7 +9,8 @@ about: Create a report to help us improve
 A clear and concise description of what the bug is.
 
 **Application and Operating System Details:**
-- OS: Output of `uname -a`
+- OS: Output of `uname -a` & provide your OS & version (CentOS 6.x, Ubuntu 18.x etc)
+- Are you using a headless system (no gui) or with a gui installed?
 - Application version: Output of `onedrive --version`
 - OneDrive Account Type
 - DMD or LDC compiler version `dmd --version` or `ldmd2 --version`
