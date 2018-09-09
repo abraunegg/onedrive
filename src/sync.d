@@ -44,7 +44,9 @@ private Item makeItem(const ref JSONValue driveItem)
 		name: "name" in driveItem ? driveItem["name"].str : null, // name may be missing for deleted files in OneDrive Biz
 		eTag: "eTag" in driveItem ? driveItem["eTag"].str : null, // eTag is not returned for the root in OneDrive Biz
 		cTag: "cTag" in driveItem ? driveItem["cTag"].str : null, // cTag is missing in old files (and all folders in OneDrive Biz)
-		mtime: "fileSystemInfo" in driveItem ? SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str) : SysTime(0),
+		mtime: "fileSystemInfo" in driveItem && "lastModifiedDateTime" in driveItem["fileSystemInfo"] ?
+			SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str) :
+			SysTime(0),
 	};
 
 	if (isItemFile(driveItem)) {
