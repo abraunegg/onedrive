@@ -155,7 +155,7 @@ int main(string[] args)
 				log.log(e.msg);
 			}
 		};
-		if (!downloadOnly) m.init(cfg, verbose);
+		if (!downloadOnly) m.init(cfg);
 		// monitor loop
 		immutable auto checkInterval = dur!"seconds"(45);
 		auto lastCheckTime = MonoTime.currTime();
@@ -173,9 +173,8 @@ int main(string[] args)
 					}
 				}
 				GC.collect();
-			} else {
-				Thread.sleep(dur!"msecs"(100));
 			}
+			Thread.sleep(dur!"msecs"(500));
 		}
 	}
 
