@@ -8,8 +8,8 @@ import util;
 static import log;
 
 // relevant inotify events
-private immutable uint32_t mask = IN_ATTRIB | IN_CLOSE_WRITE | IN_CREATE |
-	IN_DELETE | IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
+private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE |
+	IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
 
 class MonitorException: ErrnoException
 {
@@ -50,9 +50,10 @@ final class Monitor
 	{
 		this.verbose = verbose;
 		this.skip_symlinks = skip_symlinks;
-
+		
+		assert(onDirCreated && onFileChanged && onDelete && onMove);
 		fd = inotify_init();
-		if (fd == -1) throw new MonitorException("inotify_init failed");
+		if (fd < 0) throw new MonitorException("inotify_init failed");
 		if (!buffer) buffer = new void[4096];
 		addRecursive(".");
 	}
@@ -92,26 +93,21 @@ final class Monitor
 		}
 	}
 
-	private void add(string dirname)
+	private void add(string pathname)
 	{
-		int wd = inotify_add_watch(fd, toStringz(dirname), mask);
-		if (wd == -1) {
-                    if (errno() == ENOSPC) {
-                        log.log("The maximum number of inotify watches is probably too low.");
-                        log.log("");
-                        log.log("To see the current max number of watches run");
-                        log.log("");
-                        log.log("   sysctl fs.inotify.max_user_watches");
-                        log.log("");
-                        log.log("To change the current max number of watches to 32768 run");
-                        log.log("");
-                        log.log("   sudo sysctl fs.inotify.max_user_watches=32768");
-                        log.log("");
-                    }
-                    throw new MonitorException("inotify_add_watch failed");
-                }
-		wdToDirName[wd] = buildNormalizedPath(dirname) ~ "/";
-		log.vlog("Monitor directory: ", dirname);
+		int wd = inotify_add_watch(fd, toStringz(pathname), mask);
+		if (wd < 0) {
+			if (errno() == ENOSPC) {
+				log.log("The user limit on the total number of inotify watches has been reached.");
+				log.log("To see the current max number of watches run:");
+				log.log("sysctl fs.inotify.max_user_watches");
+				log.log("To change the current max number of watches to 524288 run:");
+				log.log("sudo sysctl fs.inotify.max_user_watches=524288");
+			}
+			throw new MonitorException("inotify_add_watch failed");
+		}
+		wdToDirName[wd] = buildNormalizedPath(pathname) ~ "/";
+		log.vlog("Monitor directory: ", pathname);
 	}
 
 	// remove a watch descriptor
@@ -119,7 +115,7 @@ final class Monitor
 	{
 		assert(wd in wdToDirName);
 		int ret = inotify_rm_watch(fd, wd);
-		if (ret == -1) throw new MonitorException("inotify_rm_watch failed");
+		if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
 		log.vlog("Monitored directory removed: ", wdToDirName[wd]);
 		wdToDirName.remove(wd);
 	}
@@ -131,7 +127,7 @@ final class Monitor
 		foreach (wd, dirname; wdToDirName) {
 			if (dirname.startsWith(path)) {
 				int ret = inotify_rm_watch(fd, wd);
-				if (ret == -1) throw new MonitorException("inotify_rm_watch failed");
+				if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
 				wdToDirName.remove(wd);
 				log.vlog("Monitored directory removed: ", dirname);
 			}
@@ -148,18 +144,17 @@ final class Monitor
 
 	void update(bool useCallbacks = true)
 	{
-		assert(onDirCreated && onFileChanged && onDelete && onMove);
-		pollfd[1] fds = void;
-		fds[0].fd = fd;
-		fds[0].events = POLLIN;
+		pollfd fds = {
+			fd: fd,
+			events: POLLIN
+		};
 
 		while (true) {
-			int ret = poll(fds.ptr, 1, 0);
+			int ret = poll(&fds, 1, 0);
 			if (ret == -1) throw new MonitorException("poll failed");
 			else if (ret == 0) break; // no events available
 
-			assert(fds[0].revents & POLLIN);
-			size_t length = read(fds[0].fd, buffer.ptr, buffer.length);
+			size_t length = read(fd, buffer.ptr, buffer.length);
 			if (length == -1) throw new MonitorException("read failed");
 
 			int i = 0;
@@ -207,18 +202,16 @@ final class Monitor
 					}
 				} else if (event.mask & IN_DELETE) {
 					if (useCallbacks) onDelete(path);
-				} else if (event.mask & IN_ATTRIB || event.mask & IN_CLOSE_WRITE) {
-					if (!(event.mask & IN_ISDIR)) {
-						if (useCallbacks) onFileChanged(path);
-					}
+				} else if ((event.mask & IN_CLOSE_WRITE) && !(event.mask & IN_ISDIR)) {
+					if (useCallbacks) onFileChanged(path);
 				} else {
-					log.log("Unknown inotify event: ", format("%#x", event.mask));
+					assert(0);
 				}
 
 				skip:
 				i += inotify_event.sizeof + event.len;
 			}
-			// assume that the items moved outside the watched directory has been deleted
+			// assume that the items moved outside the watched directory have been deleted
 			foreach (cookie, path; cookieToPath) {
 				if (useCallbacks) onDelete(path);
 				remove(path);
