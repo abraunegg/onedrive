@@ -1205,8 +1205,14 @@ final class SyncEngine
 							if (thisFileSize == 0){
 								// We can only upload zero size files via simpleFileUpload regardless of account type
 								// https://github.com/OneDrive/onedrive-api-docs/issues/53
-								response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-								writeln(" done.");
+								try {
+									response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+									writeln(" done.");
+								} catch (OneDriveException e) {
+									// error uploading file
+									return;
+								}
+								
 							} else {
 								// File is not a zero byte file
 								// Are we using OneDrive Personal or OneDrive Business?
@@ -1221,21 +1227,37 @@ final class SyncEngine
 												if (e.httpStatusCode == 504) {
 													// HTTP request returned status code 504 (Gateway Timeout)
 													// Try upload as a session
-													response = session.upload(path, parent.driveId, parent.id, baseName(path));
+													try {
+														response = session.upload(path, parent.driveId, parent.id, baseName(path));
+													} catch (OneDriveException e) {
+														// error uploading file
+														return;
+													}
 												}
 												else throw e;
 											}
 											writeln(" done.");
 									} else {
+										// File larger than threshold - use a session to upload
 										writeln("");
-										response = session.upload(path, parent.driveId, parent.id, baseName(path));
-										writeln(" done.");
+										try {
+											response = session.upload(path, parent.driveId, parent.id, baseName(path));
+											writeln(" done.");
+										} catch (OneDriveException e) {
+											// error uploading file
+											return;
+										}
 									}
 								} else {
 									// OneDrive Business Account - always use a session to upload
 									writeln("");
-									response = session.upload(path, parent.driveId, parent.id, baseName(path));
-									writeln(" done.");
+									try {
+										response = session.upload(path, parent.driveId, parent.id, baseName(path));
+										writeln(" done.");
+									} catch (OneDriveException e) {
+										// error uploading file
+										return;
+									}
 								}
 							}
 							
