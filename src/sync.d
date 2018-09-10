@@ -161,27 +161,38 @@ final class SyncEngine
 	void init()
 	{
 		// Set accountType, defaultDriveId, defaultRootId & remainingFreeSpace once and reuse where possible
-		auto oneDriveDetails = onedrive.getDefaultDrive();
-		accountType = oneDriveDetails["driveType"].str;
-		defaultDriveId = oneDriveDetails["id"].str;
-		defaultRootId = onedrive.getDefaultRoot["id"].str;
-		remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+		JSONValue oneDriveDetails;
+
+		// Need to catch 5xx server side errors at initialization
+		try {
+			oneDriveDetails	= onedrive.getDefaultDrive();
+			// Successfully got details from OneDrive without a server side error such as HTTP/1.1 504 Gateway Timeout
+			accountType = oneDriveDetails["driveType"].str;
+			defaultDriveId = oneDriveDetails["id"].str;
+			defaultRootId = onedrive.getDefaultRoot["id"].str;
+			remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+			
+			// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
+			log.vlog("Account Type: ", accountType);
+			log.vlog("Default Drive ID: ", defaultDriveId);
+			log.vlog("Default Root ID: ", defaultRootId);
+			log.vlog("Remaining Free Space: ", remainingFreeSpace);
 		
-		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
-		log.vlog("Account Type: ", accountType);
-		log.vlog("Default Drive ID: ", defaultDriveId);
-		log.vlog("Default Root ID: ", defaultRootId);
-		log.vlog("Remaining Free Space: ", remainingFreeSpace);
-	
-		// Check the local database to ensure the OneDrive Root details are in the database
-		checkDatabaseForOneDriveRoot();
-	
-		// check if there is an interrupted upload session
-		if (session.restore()) {
-			log.log("Continuing the upload session ...");
-			auto item = session.upload();
-			saveItem(item);
-		}
+			// Check the local database to ensure the OneDrive Root details are in the database
+			checkDatabaseForOneDriveRoot();
+		
+			// Check if there is an interrupted upload session
+			if (session.restore()) {
+				log.log("Continuing the upload session ...");
+				auto item = session.upload();
+				saveItem(item);
+			}
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode >= 500) {
+				// There was a HTTP 5xx Server Side Error
+				log.error("ERROR: OneDrive returned a 'HTTP 5xx Server Side Error' - Cannot Initialize Sync Engine");
+			}
+		}	
 	}
 
 	// Configure noRemoteDelete if function is called
