@@ -206,13 +206,13 @@ final class OneDriveApi
 	
 	// Return the requested details of the specified id
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
-	JSONValue getFileDetails(const(char)[] driveId, const(char)[] id)
+	JSONValue getFileSize(const(char)[] driveId, const(char)[] id)
 	{
 		checkAccessTokenExpired();
 		const(char)[] url;
 		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		url ~= "?select=name,size";
+		url ~= "?select=size";
 		return get(url);
 	}
 	

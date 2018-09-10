@@ -647,51 +647,38 @@ final class SyncEngine
 	// downloads a File resource
 	private void downloadFileItem(Item item, string path)
 	{
-		import std.utf : byCodeUnit;
 		assert(item.type == ItemType.file);
 		write("Downloading file ", path, " ... ");
-		JSONValue fileDetails = onedrive.getFileDetails(item.driveId, item.id);
-		auto fileSize = fileDetails["size"].integer;
-		auto fileName = fileDetails["name"].str;
-		
-		// Checks that the given file or directory name is valid.
-		// The maximum length of filename is given by the constant core.stdc.stdio.FILENAME_MAX. 
-		if isValidFilename(fileName.byCodeUnit){
-			// Valid filename for FILENAME_MAX
-			try {
-				onedrive.downloadById(item.driveId, item.id, path, fileSize);
-			} catch (OneDriveException e) {
-				if (e.httpStatusCode == 429) {
-					// HTTP request returned status code 429 (Too Many Requests)
-					// https://github.com/abraunegg/onedrive/issues/133
-					// Back off & retry with incremental delay
-					int retryCount = 10; 
-					int retryAttempts = 1;
-					int backoffInterval = 2;
-					while (retryAttempts < retryCount){
-						Thread.sleep(dur!"seconds"(retryAttempts*backoffInterval));
-						try {
-							onedrive.downloadById(item.driveId, item.id, path, fileSize);
-							// successful download
-							retryAttempts = retryCount;
-						} catch (OneDriveException e) {
-							if (e.httpStatusCode == 429) {
-								// Increment & loop around
-								retryAttempts++;
-							}
+		JSONValue fileSizeDetails = onedrive.getFileSize(item.driveId, item.id);
+		auto fileSize = fileSizeDetails["size"].integer;
+		try {
+			onedrive.downloadById(item.driveId, item.id, path, fileSize);
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 429) {
+				// HTTP request returned status code 429 (Too Many Requests)
+				// https://github.com/abraunegg/onedrive/issues/133
+				// Back off & retry with incremental delay
+				int retryCount = 10; 
+				int retryAttempts = 1;
+				int backoffInterval = 2;
+				while (retryAttempts < retryCount){
+					Thread.sleep(dur!"seconds"(retryAttempts*backoffInterval));
+					try {
+						onedrive.downloadById(item.driveId, item.id, path, fileSize);
+						// successful download
+						retryAttempts = retryCount;
+					} catch (OneDriveException e) {
+						if (e.httpStatusCode == 429) {
+							// Increment & loop around
+							retryAttempts++;
 						}
 					}
 				}
 			}
-			writeln("done.");
-			log.fileOnly("Downloading file ", path, " ... done.");
-			setTimes(path, item.mtime, item.mtime);
-		} else {
-			// Filename invalid
-			log.error("ERROR: The file attempted to be downloaded exceeds local file system limits.");
-			log.error("ERROR: To resolve, rename this file on OneDrive: ", name);
-			log.log("Skipping uploading this new file: ", name);
 		}
+		writeln("done.");
+		log.fileOnly("Downloading file ", path, " ... done.");
+		setTimes(path, item.mtime, item.mtime);
 	}
 
 	// returns true if the given item corresponds to the local one
