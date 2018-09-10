@@ -656,7 +656,7 @@ final class SyncEngine
 		
 		// Checks that the given file or directory name is valid.
 		// The maximum length of filename is given by the constant core.stdc.stdio.FILENAME_MAX. 
-		if (isValidFilename(fileName.byCodeUnit)){
+		if isValidFilename(fileName.byCodeUnit){
 			// Valid filename for FILENAME_MAX
 			try {
 				onedrive.downloadById(item.driveId, item.id, path, fileSize);
