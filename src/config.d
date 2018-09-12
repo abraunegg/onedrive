@@ -26,6 +26,7 @@ final class Config
 
 	void init()
 	{
+		// Default configuration directory
 		setValue("sync_dir", "~/OneDrive");
 		// Configure to skip ONLY temp files (~*.doc etc) by default
 		// Prior configuration was: .*|~*
