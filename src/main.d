@@ -1,6 +1,6 @@
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE;
 import core.memory, core.time, core.thread;
-import std.getopt, std.file, std.path, std.process, std.stdio, std.conv;
+import std.getopt, std.file, std.path, std.process, std.stdio, std.conv, std.algorithm.searching;
 import config, itemdb, monitor, onedrive, selective, sync, util;
 import std.net.curl: CurlException;
 static import log;
@@ -206,10 +206,23 @@ int main(string[] args)
 	// Set the local path OneDrive root
 	string syncDir;
 	if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
-		// no shell or user set, so expandTilde() will fail
-		syncDir = homePath ~ "OneDrive";
+		// No shell or user set, so expandTilde() will fail - usually headless system running under init.d / systemd
+		// Did the user specify a 'different' sync dir by passing a value in?
+		if (syncDirName){
+			// was there a ~ in the passed in state? it will not work via init.d / systemd
+			if (canFind(cfg.getValue("sync_dir"),"~") ) {
+				// A ~ was found
+				syncDir = homePath ~ "/OneDrive";
+			} else {
+				// No ~ found in passed in state, use as is
+				syncDir = cfg.getValue("sync_dir");
+			}
+		} else {
+			// need to create a default as expanding ~ will not work
+			syncDir = homePath ~ "/OneDrive";
+		}
 	} else {
-		// A shell and user is set
+		// A shell and user is set, expand any ~ as this will be expanded if present
 		syncDir = expandTilde(cfg.getValue("sync_dir"));
 	}
 	log.vlog("All operations will be performed in: ", syncDir);
