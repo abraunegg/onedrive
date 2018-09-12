@@ -304,7 +304,7 @@ tail -f /var/log/onedrive/<username>.onedrive.log
 ```
 To change what 'user' the client runs under (by default root), manually edit the init.d service file and modify `daemon --user root onedrive_service.sh` for the correct user.
 
-**systemd - Arch, Ubuntu, Debian, OpenSuSE**
+**systemd - Arch, Ubuntu, Debian, OpenSuSE, Fedora**
 ```sh
 systemctl --user enable onedrive
 systemctl --user start onedrive
