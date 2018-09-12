@@ -45,6 +45,11 @@ private bool changeHasParentReferenceId(const ref JSONValue item)
 	return ("id" in item["parentReference"]) != null;
 }
 
+private bool isMalware(const ref JSONValue item)
+{
+	return ("malware" in item) != null;
+}
+
 // construct an Item struct from a JSON driveItem
 private Item makeItem(const ref JSONValue driveItem)
 {
@@ -147,6 +152,8 @@ final class SyncEngine
 	private string accountType;
 	// free space remaining at init()
 	private long remainingFreeSpace;
+	// is file malware flag
+	private bool malwareDetected = false;
 
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
@@ -488,6 +495,9 @@ final class SyncEngine
 	{
 		Item item = makeItem(driveItem);
 		
+		// Reset the malwareDetected flag for this item
+		malwareDetected = false;
+		
 		if (isItemRoot(driveItem) || !item.parentId || isRoot) {
 			item.parentId = null; // ensures that it has no parent
 			item.driveId = driveId; // HACK: makeItem() cannot set the driveId property of the root
@@ -574,11 +584,14 @@ final class SyncEngine
 			applyNewItem(item, path);
 		}
 
-		// save the item in the db
-		if (cached) {
-			itemdb.update(item);
-		} else {
-			itemdb.insert(item);
+		if (malwareDetected == false){
+			// save the item in the db
+			// if the file was detected as malware and NOT downloaded, we dont want to falsify the DB as downloading it as otherwise the next pass will think it was deleted, thus delete the remote item
+			if (cached) {
+				itemdb.update(item);
+			} else {
+				itemdb.insert(item);
+			}
 		}
 	}
 
@@ -649,8 +662,20 @@ final class SyncEngine
 	{
 		assert(item.type == ItemType.file);
 		write("Downloading file ", path, " ... ");
-		JSONValue fileSizeDetails = onedrive.getFileSize(item.driveId, item.id);
-		auto fileSize = fileSizeDetails["size"].integer;
+		JSONValue fileDetails = onedrive.getFileDetails(item.driveId, item.id);
+		
+		// Issue #153 Debugging
+		//log.log("File Details: ", fileDetails);
+		
+		if (isMalware(fileDetails)){
+			// OneDrive reports that this file is malware
+			log.error("ERROR: MALWARE DETECTED IN FILE - DOWNLOAD SKIPPED");
+			// set global flag
+			malwareDetected = true;
+			return;
+		}
+		
+		auto fileSize = fileDetails["size"].integer;
 		try {
 			onedrive.downloadById(item.driveId, item.id, path, fileSize);
 		} catch (OneDriveException e) {
