@@ -44,8 +44,10 @@ else
 	mkdir -p $(DESTDIR)/usr/lib/systemd/user/
 	chown root.root $(DESTDIR)/usr/lib/systemd/user/
 	chmod 0755 $(DESTDIR)/usr/lib/systemd/user/
-	cp -raf *.service $(DESTDIR)/usr/lib/systemd/user/
-	chmod 0644 $(DESTDIR)/usr/lib/systemd/user/onedrive*.service
+	cp -raf onedrive.service $(DESTDIR)/usr/lib/systemd/user/
+	chmod 0644 $(DESTDIR)/usr/lib/systemd/user/onedrive.service
+	cp -raf onedrive@.service $(DESTDIR)/etc/systemd/system/
+	chmod 0644 $(DESTDIR)/etc/systemd/system/onedrive@.service
 endif
 
 onedrive: version $(SOURCES)
