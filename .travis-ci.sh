@@ -56,6 +56,14 @@ function setup_arm64_chroot {
 	
 	sudo apt list --installed | grep debootstrap
 	
+	# ARM64 qemu-debootstrap needs to be 1.0.78, Trusty is 1.0.59
+	sudo echo "deb http://archive.ubuntu.com/ubuntu xenial main restricted universe multiverse" >> /etc/apt/sources.list
+	sudo apt-get update
+	sudo apt-get install -t xenial debootstrap
+	
+	sudo apt list --installed | grep debootstrap
+	
+	
 	# Create chrooted environment
 	#sudo mkdir ${CHROOT_DIR}
 	#sudo qemu-debootstrap --arch=${CHROOT_ARCH64} ${VERSION64} ${CHROOT_DIR} ${DEBIAN_MIRROR}
