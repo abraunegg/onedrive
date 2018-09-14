@@ -108,19 +108,26 @@ struct UploadSession
 		while (true) {
 			p.next();
 			long fragSize = fragmentSize < fileSize - offset ? fragmentSize : fileSize - offset;
-			response = onedrive.uploadFragment(
-				session["uploadUrl"].str,
-				session["localPath"].str,
-				offset,
-				fragSize,
-				fileSize
-			);
-			offset += fragmentSize;
-			if (offset >= fileSize) break;
-			// update the session
-			session["expirationDateTime"] = response["expirationDateTime"];
-			session["nextExpectedRanges"] = response["nextExpectedRanges"];
-			save();
+			// If the resume upload fails, we need to check for a return code here
+			try {
+				response = onedrive.uploadFragment(
+					session["uploadUrl"].str,
+					session["localPath"].str,
+					offset,
+					fragSize,
+					fileSize
+				);
+				offset += fragmentSize;
+				if (offset >= fileSize) break;
+				// update the session details
+				session["expirationDateTime"] = response["expirationDateTime"];
+				session["nextExpectedRanges"] = response["nextExpectedRanges"];
+				save();
+			} catch (OneDriveException e) {
+				// there was an error remove session file
+				remove(sessionFilePath);
+				return response;
+			}
 		}
 		// upload complete
 		p.next();
