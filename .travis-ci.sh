@@ -49,14 +49,17 @@ function setup_arm64_chroot {
 	# Host dependencies
 	sudo apt-get install -qq -y ${HOST_DEPENDENCIES}
 	# Download LDC compiler
-	wget https://github.com/ldc-developers/ldc/releases/download/v1.10.0/ldc2-1.10.0-linux-armhf.tar.xz
-	tar -xf ldc2-1.10.0-linux-armhf.tar.xz
-	mv ldc2-1.10.0-linux-armhf dlang-${ARCH}
-	rm -rf ldc2-1.10.0-linux-armhf.tar.xz
+	wget https://github.com/ldc-developers/ldc/releases/download/v1.11.0/ldc2-1.11.0-linux-aarch64.tar.xz
+	tar -xf ldc2-1.11.0-linux-aarch64.tar.xz
+	mv ldc2-1.11.0-linux-aarch64 dlang-${ARCH}
+	rm -rf ldc2-1.11.0-linux-aarch64.tar.xz
+	
+	sudo apt list --installed | grep debootstrap
+	
 	# Create chrooted environment
-	sudo mkdir ${CHROOT_DIR}
-	sudo qemu-debootstrap --arch=${CHROOT_ARCH64} ${VERSION64} ${CHROOT_DIR} ${DEBIAN_MIRROR}
-	configure_chroot
+	#sudo mkdir ${CHROOT_DIR}
+	#sudo qemu-debootstrap --arch=${CHROOT_ARCH64} ${VERSION64} ${CHROOT_DIR} ${DEBIAN_MIRROR}
+	#configure_chroot
 }
 
 function setup_x32_chroot {
