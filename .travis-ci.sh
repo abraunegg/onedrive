@@ -54,20 +54,15 @@ function setup_arm64_chroot {
 	mv ldc2-1.11.0-linux-aarch64 dlang-${ARCH}
 	rm -rf ldc2-1.11.0-linux-aarch64.tar.xz
 	
-	sudo apt list --installed | grep debootstrap
-	
 	# ARM64 qemu-debootstrap needs to be 1.0.78, Trusty is 1.0.59
 	sudo echo "deb http://archive.ubuntu.com/ubuntu xenial main restricted universe multiverse" >> /etc/apt/sources.list
 	sudo apt-get update
 	sudo apt-get install -t xenial debootstrap
 	
-	sudo apt list --installed | grep debootstrap
-	
-	
 	# Create chrooted environment
-	#sudo mkdir ${CHROOT_DIR}
-	#sudo qemu-debootstrap --arch=${CHROOT_ARCH64} ${VERSION64} ${CHROOT_DIR} ${DEBIAN_MIRROR}
-	#configure_chroot
+	sudo mkdir ${CHROOT_DIR}
+	sudo qemu-debootstrap --arch=${CHROOT_ARCH64} ${VERSION64} ${CHROOT_DIR} ${DEBIAN_MIRROR}
+	configure_chroot
 }
 
 function setup_x32_chroot {
