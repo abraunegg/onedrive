@@ -230,6 +230,11 @@ final class SyncEngine
 				log.error("ERROR: The requested single directory to sync was not found on OneDrive");
 				return;
 			}
+			
+			if (e.httpStatusCode >= 500) {
+				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+				return;
+			}
 		} 
 		// OK - the path on OneDrive should exist, get the driveId and rootId for this folder
 		log.vlog("Getting path details from OneDrive ...");
@@ -294,6 +299,11 @@ final class SyncEngine
 				log.vlog("The requested directory to delete was not found on OneDrive - skipping removing the remote directory as it doesn't exist");
 				return;
 			}
+			
+			if (e.httpStatusCode >= 500) {
+				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+				return;
+			}
 		}
 		
 		Item item;
@@ -321,6 +331,11 @@ final class SyncEngine
 				log.vlog("The requested directory to rename was not found on OneDrive");
 				return;
 			}
+			
+			if (e.httpStatusCode >= 500) {
+				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+				return;
+			}
 		}
 		// The OneDrive API returned a 200 OK status, so the folder exists
 		// Rename the requested directory on OneDrive without performing a sync
@@ -344,6 +359,11 @@ final class SyncEngine
 			if (e.httpStatusCode == 404) {
 				// id was not found - possibly a remote (shared) folder
 				log.vlog("No details returned for given Path ID");
+				return;
+			}
+			
+			if (e.httpStatusCode >= 500) {
+				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
 				return;
 			}
 		} 
@@ -459,7 +479,12 @@ final class SyncEngine
 									// No .. that ID is GONE
 									log.vlog("Remote change discarded - item cannot be found");
 									return;
-								} 
+								}
+								
+								if (e.httpStatusCode >= 500) {
+									// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+									return;
+								}
 							}
 							// Yes .. ID is still on OneDrive but elsewhere .... #341 edge case handling
 							// What is the original local path for this ID in the database? Does it match 'syncFolderName'
@@ -1091,6 +1116,11 @@ final class SyncEngine
 						// Parent does not exist ... need to create parent
 						uploadCreateDir(parentPath);
 					}
+					
+					if (e.httpStatusCode >= 500) {
+						// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+						return;
+					}
 				}
 								
 				// configure the data
@@ -1129,6 +1159,11 @@ final class SyncEngine
 					
 					saveItem(response);
 					log.vlog("Successfully created the remote directory ", path, " on OneDrive");
+					return;
+				}
+				
+				if (e.httpStatusCode >= 500) {
+					// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
 					return;
 				}
 			} 
