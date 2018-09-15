@@ -228,7 +228,7 @@ bool containsASCIIHTMLCodes(string path)
 	auto invalidASCIICode = 
 		ctRegex!(
 			// Check to see if &#XXXX is in the filename
-			`(?:&#[0-9][0-9]|&#[0-9][0-9][0-9]|&#[0-9][0-9][0-9][0-9])`
+			`(?:&#|&#[0-9][0-9]|&#[0-9][0-9][0-9]|&#[0-9][0-9][0-9][0-9])`
 		);
 	
 	auto m = match(path, invalidASCIICode);
