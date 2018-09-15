@@ -820,6 +820,12 @@ final class SyncEngine
 			return;
 		}
 		
+		// Check for HTML ASCII Codes as part of file name
+		if (!containsASCIIHTMLCodes(path)) {
+			log.vlog("Skipping item - invalid name (Contains HTML ASCII Code): ", path);
+			return;
+		}
+		
 		final switch (item.type) {
 		case ItemType.dir:
 			uploadDirDifferences(item, path);
@@ -1036,6 +1042,12 @@ final class SyncEngine
 			// Check for bad whitespace items
 			if (!containsBadWhiteSpace(path)) {
 				log.vlog("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
+				return;
+			}
+			
+			// Check for HTML ASCII Codes as part of file name
+			if (!containsASCIIHTMLCodes(path)) {
+				log.vlog("Skipping item - invalid name (Contains HTML ASCII Code): ", path);
 				return;
 			}
 
