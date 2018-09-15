@@ -1296,6 +1296,11 @@ final class SyncEngine
 								}
 							}
 						}
+					
+						if (e.httpStatusCode >= 500) {
+							// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+							return;
+						}
 					}
 					
 					// Check that the filename that is returned is actually the file we wish to upload
