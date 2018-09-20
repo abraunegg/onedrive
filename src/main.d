@@ -20,7 +20,7 @@ int main(string[] args)
 			// No shell is set or username - observed case when running as systemd service under CentOS 7.x
 			homePath = "/root";
 		} else {
-			// A shell & valid user is set, but no XDG_CONFIG_HOME or HOME set
+			// A shell & valid user is set, but no HOME is set, use ~ which can be expanded
 			homePath = "~";
 		}
 	}
