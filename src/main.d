@@ -252,6 +252,11 @@ int main(string[] args)
 			onedrive.http.shutdown();
 			return EXIT_FAILURE;
 		}
+		if (e.httpStatusCode >= 500) {
+			// There was a HTTP 5xx Server Side Error, message already printed
+			onedrive.http.shutdown();
+			return EXIT_FAILURE;
+		}
 	}
 	
 	// We should only set noRemoteDelete in an upload-only scenario

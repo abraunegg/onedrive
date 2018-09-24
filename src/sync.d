@@ -168,27 +168,38 @@ final class SyncEngine
 	void init()
 	{
 		// Set accountType, defaultDriveId, defaultRootId & remainingFreeSpace once and reuse where possible
-		auto oneDriveDetails = onedrive.getDefaultDrive();
-		accountType = oneDriveDetails["driveType"].str;
-		defaultDriveId = oneDriveDetails["id"].str;
-		defaultRootId = onedrive.getDefaultRoot["id"].str;
-		remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+		JSONValue oneDriveDetails;
+
+		// Need to catch 5xx server side errors at initialization
+		try {
+			oneDriveDetails	= onedrive.getDefaultDrive();
+			// Successfully got details from OneDrive without a server side error such as HTTP/1.1 504 Gateway Timeout
+			accountType = oneDriveDetails["driveType"].str;
+			defaultDriveId = oneDriveDetails["id"].str;
+			defaultRootId = onedrive.getDefaultRoot["id"].str;
+			remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+			
+			// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
+			log.vlog("Account Type: ", accountType);
+			log.vlog("Default Drive ID: ", defaultDriveId);
+			log.vlog("Default Root ID: ", defaultRootId);
+			log.vlog("Remaining Free Space: ", remainingFreeSpace);
 		
-		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
-		log.vlog("Account Type: ", accountType);
-		log.vlog("Default Drive ID: ", defaultDriveId);
-		log.vlog("Default Root ID: ", defaultRootId);
-		log.vlog("Remaining Free Space: ", remainingFreeSpace);
-	
-		// Check the local database to ensure the OneDrive Root details are in the database
-		checkDatabaseForOneDriveRoot();
-	
-		// check if there is an interrupted upload session
-		if (session.restore()) {
-			log.log("Continuing the upload session ...");
-			auto item = session.upload();
-			saveItem(item);
-		}
+			// Check the local database to ensure the OneDrive Root details are in the database
+			checkDatabaseForOneDriveRoot();
+		
+			// Check if there is an interrupted upload session
+			if (session.restore()) {
+				log.log("Continuing the upload session ...");
+				auto item = session.upload();
+				saveItem(item);
+			}
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode >= 500) {
+				// There was a HTTP 5xx Server Side Error
+				log.error("ERROR: OneDrive returned a 'HTTP 5xx Server Side Error' - Cannot Initialize Sync Engine");
+			}
+		}	
 	}
 
 	// Configure noRemoteDelete if function is called
@@ -224,6 +235,11 @@ final class SyncEngine
 			if (e.httpStatusCode == 404) {
 				// The directory was not found 
 				log.error("ERROR: The requested single directory to sync was not found on OneDrive");
+				return;
+			}
+			
+			if (e.httpStatusCode >= 500) {
+				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
 				return;
 			}
 		} 
@@ -290,6 +306,11 @@ final class SyncEngine
 				log.vlog("The requested directory to delete was not found on OneDrive - skipping removing the remote directory as it doesn't exist");
 				return;
 			}
+			
+			if (e.httpStatusCode >= 500) {
+				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+				return;
+			}
 		}
 		
 		Item item;
@@ -317,6 +338,11 @@ final class SyncEngine
 				log.vlog("The requested directory to rename was not found on OneDrive");
 				return;
 			}
+			
+			if (e.httpStatusCode >= 500) {
+				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+				return;
+			}
 		}
 		// The OneDrive API returned a 200 OK status, so the folder exists
 		// Rename the requested directory on OneDrive without performing a sync
@@ -340,6 +366,11 @@ final class SyncEngine
 			if (e.httpStatusCode == 404) {
 				// id was not found - possibly a remote (shared) folder
 				log.vlog("No details returned for given Path ID");
+				return;
+			}
+			
+			if (e.httpStatusCode >= 500) {
+				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
 				return;
 			}
 		} 
@@ -455,7 +486,12 @@ final class SyncEngine
 									// No .. that ID is GONE
 									log.vlog("Remote change discarded - item cannot be found");
 									return;
-								} 
+								}
+								
+								if (e.httpStatusCode >= 500) {
+									// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+									return;
+								}
 							}
 							// Yes .. ID is still on OneDrive but elsewhere .... #341 edge case handling
 							// What is the original local path for this ID in the database? Does it match 'syncFolderName'
@@ -1105,6 +1141,11 @@ final class SyncEngine
 						// Parent does not exist ... need to create parent
 						uploadCreateDir(parentPath);
 					}
+					
+					if (e.httpStatusCode >= 500) {
+						// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+						return;
+					}
 				}
 								
 				// configure the data
@@ -1143,6 +1184,11 @@ final class SyncEngine
 					
 					saveItem(response);
 					log.vlog("Successfully created the remote directory ", path, " on OneDrive");
+					return;
+				}
+				
+				if (e.httpStatusCode >= 500) {
+					// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
 					return;
 				}
 			} 
@@ -1219,8 +1265,14 @@ final class SyncEngine
 							if (thisFileSize == 0){
 								// We can only upload zero size files via simpleFileUpload regardless of account type
 								// https://github.com/OneDrive/onedrive-api-docs/issues/53
-								response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-								writeln(" done.");
+								try {
+									response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+									writeln(" done.");
+								} catch (OneDriveException e) {
+									// error uploading file
+									return;
+								}
+								
 							} else {
 								// File is not a zero byte file
 								// Are we using OneDrive Personal or OneDrive Business?
@@ -1235,21 +1287,37 @@ final class SyncEngine
 												if (e.httpStatusCode == 504) {
 													// HTTP request returned status code 504 (Gateway Timeout)
 													// Try upload as a session
-													response = session.upload(path, parent.driveId, parent.id, baseName(path));
+													try {
+														response = session.upload(path, parent.driveId, parent.id, baseName(path));
+													} catch (OneDriveException e) {
+														// error uploading file
+														return;
+													}
 												}
 												else throw e;
 											}
 											writeln(" done.");
 									} else {
+										// File larger than threshold - use a session to upload
 										writeln("");
-										response = session.upload(path, parent.driveId, parent.id, baseName(path));
-										writeln(" done.");
+										try {
+											response = session.upload(path, parent.driveId, parent.id, baseName(path));
+											writeln(" done.");
+										} catch (OneDriveException e) {
+											// error uploading file
+											return;
+										}
 									}
 								} else {
 									// OneDrive Business Account - always use a session to upload
 									writeln("");
-									response = session.upload(path, parent.driveId, parent.id, baseName(path));
-									writeln(" done.");
+									try {
+										response = session.upload(path, parent.driveId, parent.id, baseName(path));
+										writeln(" done.");
+									} catch (OneDriveException e) {
+										// error uploading file
+										return;
+									}
 								}
 							}
 							
@@ -1287,6 +1355,11 @@ final class SyncEngine
 									return;
 								}
 							}
+						}
+					
+						if (e.httpStatusCode >= 500) {
+							// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+							return;
 						}
 					}
 					
