@@ -252,7 +252,7 @@ Example: `skip_file = ".*|~*|Desktop|Documents/OneNote*|Documents/IISExpress|Doc
 
 Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns.
 
-**Note:** after changing `skip_file`, you must perform a full synchronization by executing `onedrive --resync`
+**Note:** after changing `skip_file`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
 ### skip_symlinks
 Example: `skip_symlinks = "true"`
@@ -280,7 +280,7 @@ Codes
 Textbooks
 Year 2
 ```
-**Note:** after changing the sync list, you must perform a full synchronization by executing `onedrive --resync`
+**Note:** after changing the sync_list, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
 ### Shared folders
 Folders shared with you can be synced by adding them to your OneDrive. To do that open your Onedrive, go to the Shared files list, right click on the folder you want to sync and then click on "Add to my OneDrive".
