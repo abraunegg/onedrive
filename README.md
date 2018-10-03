@@ -77,7 +77,7 @@ curl -fsS https://dlang.org/install.sh | bash -s dmd
 sudo pacman -S curl sqlite dmd
 ```
 
-### Dependencies: Raspbian (ARM)
+### Dependencies: Raspbian (ARMHF)
 ```
 sudo apt-get install libcurl4-openssl-dev
 sudo apt-get install libsqlite3-dev
@@ -85,13 +85,20 @@ wget https://github.com/ldc-developers/ldc/releases/download/v1.10.0/ldc2-1.10.0
 tar -xvf ldc2-1.10.0-linux-armhf.tar.xz
 ```
 
+### Dependencies: Debian (ARM64)
+```
+sudo apt-get install libcurl4-openssl-dev
+sudo apt-get install libsqlite3-dev
+wget https://github.com/ldc-developers/ldc/releases/download/v1.11.0/ldc2-1.11.0-linux-aarch64.tar.xz
+tar -xvf ldc2-1.11.0-linux-aarch64.tar.xz
+```
+
 ### Dependencies: Gentoo
 ```
 sudo emerge app-portage/layman
 sudo layman -a dlang
-
-Add ebuild from contrib/gentoo to a local overlay to use.
 ```
+Add ebuild from contrib/gentoo to a local overlay to use.
 
 ### Dependencies: OpenSuSE Leap 15.0
 ```
@@ -127,11 +134,19 @@ make DC=/usr/bin/ldmd2
 sudo make install
 ```
 
-#### ARM Architecture
+#### ARMHF Architecture
 ```
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
 make DC=~/ldc2-1.10.0-linux-armhf/bin/ldmd2
+sudo make install
+```
+
+#### ARM64 Architecture
+```
+git clone https://github.com/abraunegg/onedrive.git
+cd onedrive
+make DC=~/ldc2-1.11.0-linux-aarch64/bin/ldmd2
 sudo make install
 ```
 

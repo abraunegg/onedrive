@@ -49,10 +49,16 @@ function setup_arm64_chroot {
 	# Host dependencies
 	sudo apt-get install -qq -y ${HOST_DEPENDENCIES}
 	# Download LDC compiler
-	wget https://github.com/ldc-developers/ldc/releases/download/v1.10.0/ldc2-1.10.0-linux-armhf.tar.xz
-	tar -xf ldc2-1.10.0-linux-armhf.tar.xz
-	mv ldc2-1.10.0-linux-armhf dlang-${ARCH}
-	rm -rf ldc2-1.10.0-linux-armhf.tar.xz
+	wget https://github.com/ldc-developers/ldc/releases/download/v1.11.0/ldc2-1.11.0-linux-aarch64.tar.xz
+	tar -xf ldc2-1.11.0-linux-aarch64.tar.xz
+	mv ldc2-1.11.0-linux-aarch64 dlang-${ARCH}
+	rm -rf ldc2-1.11.0-linux-aarch64.tar.xz
+	
+	# ARM64 qemu-debootstrap needs to be 1.0.78, Trusty is 1.0.59
+	sudo echo "deb http://archive.ubuntu.com/ubuntu xenial main restricted universe multiverse" >> /etc/apt/sources.list
+	sudo apt-get update
+	sudo apt-get install -t xenial debootstrap
+	
 	# Create chrooted environment
 	sudo mkdir ${CHROOT_DIR}
 	sudo qemu-debootstrap --arch=${CHROOT_ARCH64} ${VERSION64} ${CHROOT_DIR} ${DEBIAN_MIRROR}
