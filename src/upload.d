@@ -53,40 +53,51 @@ struct UploadSession
 		if (exists(sessionFilePath)) {
 			log.vlog("Trying to restore the upload session ...");
 			session = readText(sessionFilePath).parseJSON();
-			auto expiration =  SysTime.fromISOExtString(session["expirationDateTime"].str);
-			if (expiration < Clock.currTime()) {
-				log.vlog("The upload session is expired");
-				return false;
-			}
-			if (!exists(session["localPath"].str)) {
-				log.vlog("The file does not exist anymore");
-				return false;
-			}
-			// Can we read the file - as a permissions issue or file corruption will cause a failure on resume
-			// https://github.com/abraunegg/onedrive/issues/113
-			if (readLocalFile(session["localPath"].str)){
-				// able to read the file
-				// request the session status
-				JSONValue response;
-				try {
-					response = onedrive.requestUploadStatus(session["uploadUrl"].str);
-				} catch (OneDriveException e) {
-					if (e.httpStatusCode == 400) {
-						log.vlog("Upload session not found");
-						return false;
-					} else {
-						throw e;
-					}
-				}
-				session["expirationDateTime"] = response["expirationDateTime"];
-				session["nextExpectedRanges"] = response["nextExpectedRanges"];
-				if (session["nextExpectedRanges"].array.length == 0) {
-					log.vlog("The upload session is completed");
+			
+			// Check the session resume file for expirationDateTime
+			if ("expirationDateTime" in session){
+				// expirationDateTime in the file
+				auto expiration =  SysTime.fromISOExtString(session["expirationDateTime"].str);
+				if (expiration < Clock.currTime()) {
+					log.vlog("The upload session is expired");
 					return false;
 				}
-				return true;
+				if (!exists(session["localPath"].str)) {
+					log.vlog("The file does not exist anymore");
+					return false;
+				}
+				// Can we read the file - as a permissions issue or file corruption will cause a failure on resume
+				// https://github.com/abraunegg/onedrive/issues/113
+				if (readLocalFile(session["localPath"].str)){
+					// able to read the file
+					// request the session status
+					JSONValue response;
+					try {
+						response = onedrive.requestUploadStatus(session["uploadUrl"].str);
+					} catch (OneDriveException e) {
+						if (e.httpStatusCode == 400) {
+							log.vlog("Upload session not found");
+							return false;
+						} else {
+							throw e;
+						}
+					}
+					session["expirationDateTime"] = response["expirationDateTime"];
+					session["nextExpectedRanges"] = response["nextExpectedRanges"];
+					if (session["nextExpectedRanges"].array.length == 0) {
+						log.vlog("The upload session is completed");
+						return false;
+					}
+					return true;
+				} else {
+					// unable to read the local file
+					log.vlog("Restore file upload session failed - unable to read the local file");
+					remove(sessionFilePath);
+					return false;
+				}
 			} else {
-				// unable to read the local file
+				// session file contains an error - cant resume
+				log.vlog("Restore file upload session failed - cleaning up session resume");
 				remove(sessionFilePath);
 				return false;
 			}
@@ -108,19 +119,26 @@ struct UploadSession
 		while (true) {
 			p.next();
 			long fragSize = fragmentSize < fileSize - offset ? fragmentSize : fileSize - offset;
-			response = onedrive.uploadFragment(
-				session["uploadUrl"].str,
-				session["localPath"].str,
-				offset,
-				fragSize,
-				fileSize
-			);
-			offset += fragmentSize;
-			if (offset >= fileSize) break;
-			// update the session
-			session["expirationDateTime"] = response["expirationDateTime"];
-			session["nextExpectedRanges"] = response["nextExpectedRanges"];
-			save();
+			// If the resume upload fails, we need to check for a return code here
+			try {
+				response = onedrive.uploadFragment(
+					session["uploadUrl"].str,
+					session["localPath"].str,
+					offset,
+					fragSize,
+					fileSize
+				);
+				offset += fragmentSize;
+				if (offset >= fileSize) break;
+				// update the session details
+				session["expirationDateTime"] = response["expirationDateTime"];
+				session["nextExpectedRanges"] = response["nextExpectedRanges"];
+				save();
+			} catch (OneDriveException e) {
+				// there was an error remove session file
+				remove(sessionFilePath);
+				return response;
+			}
 		}
 		// upload complete
 		p.next();
