@@ -300,7 +300,7 @@ Year 2
 ### Shared folders
 Folders shared with you can be synced by adding them to your OneDrive. To do that open your Onedrive, go to the Shared files list, right click on the folder you want to sync and then click on "Add to my OneDrive".
 
-### OneDrive service
+### OneDrive service running as root user
 There are two ways that onedrive can be used as a service
 * via init.d
 * via systemd
@@ -341,9 +341,26 @@ To see the logs run:
 journalctl onedrive -f
 ```
 
-**Note:** systemd is supported on Ubuntu only starting from version 15.04
+### OneDrive service running as a non-root user via systemd
 
-### Using multiple accounts
+In some cases it is desirable to run the OneDrive client as a service, but not running as the 'root' user. In this case, follow the directions below to configure the service for a non-root user.
+
+1. As the user, who will be running the service, run the application in standalone mode, authorize the application for use & validate that the synchronization is working as expected:
+```
+onedrive --synchronize --verbose 
+```
+2. Once the application is validated and working for your user, as the 'root' user, where <username> is your username from step 1 above.
+```
+systemctl enable onedrive@<username>.service
+systemctl start onedrive@<username>.service
+```
+
+3. To view the status of the service running for the user, use the following:
+```
+systemctl status onedrive@username.service
+```
+
+### Using multiple OneDrive accounts
 You can run multiple instances of the application specifying a different config directory in order to handle multiple OneDrive accounts.
 To do this you can use the `--confdir` parameter.
 Here is an example:
