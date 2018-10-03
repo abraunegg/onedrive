@@ -210,18 +210,30 @@ bool containsBadWhiteSpace(string path)
 	// Check for the presence of '%0A' via regex
 	
 	string itemName = encodeComponent(baseName(path));
-	
 	auto invalidWhitespaceReg =
 		ctRegex!(
 			// Check for \n which is %0A when encoded
 			`%0A`
 		);
 	auto m = match(itemName, invalidWhitespaceReg);
-
 	return m.empty;
-	
 }
 
+bool containsASCIIHTMLCodes(string path)
+{
+	// https://github.com/abraunegg/onedrive/issues/151
+	// If a filename contains ASCII HTML codes, regardless of if it gets encoded, it generates an error
+	// Check if the filename contains an ASCII HTML code sequence
+
+	auto invalidASCIICode = 
+		ctRegex!(
+			// Check to see if &#XXXX is in the filename
+			`(?:&#|&#[0-9][0-9]|&#[0-9][0-9][0-9]|&#[0-9][0-9][0-9][0-9])`
+		);
+	
+	auto m = match(path, invalidASCIICode);
+	return m.empty;
+}
 
 unittest
 {
