@@ -154,6 +154,8 @@ final class SyncEngine
 	private long remainingFreeSpace;
 	// is file malware flag
 	private bool malwareDetected = false;
+	// download filesystem issue flag
+	private bool downloadFailed = false;
 
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
@@ -534,6 +536,9 @@ final class SyncEngine
 		// Reset the malwareDetected flag for this item
 		malwareDetected = false;
 		
+		// Reset the downloadFailed flag for this item
+		downloadFailed = false;
+		
 		if (isItemRoot(driveItem) || !item.parentId || isRoot) {
 			item.parentId = null; // ensures that it has no parent
 			item.driveId = driveId; // HACK: makeItem() cannot set the driveId property of the root
@@ -620,9 +625,10 @@ final class SyncEngine
 			applyNewItem(item, path);
 		}
 
-		if (malwareDetected == false){
+		if ((malwareDetected == false) && (downloadFailed == false)){
 			// save the item in the db
 			// if the file was detected as malware and NOT downloaded, we dont want to falsify the DB as downloading it as otherwise the next pass will think it was deleted, thus delete the remote item
+			// Likewise if the download failed, we dont want to falsify the DB as downloading it as otherwise the next pass will think it was deleted, thus delete the remote item 
 			if (cached) {
 				itemdb.update(item);
 			} else {
@@ -681,16 +687,13 @@ final class SyncEngine
 			// HACK: use mtime+hash instead of cTag because of https://github.com/OneDrive/onedrive-api-docs/issues/765
 			if (newItem.type == ItemType.file && oldItem.mtime != newItem.mtime && !testFileHash(newPath, newItem)) {
 				downloadFileItem(newItem, newPath);
-			} else {
-				//log.vlog("The item content has not changed");
-			}
+			} 
+			
 			// handle changed time
 			if (newItem.type == ItemType.file && oldItem.mtime != newItem.mtime) {
 				setTimes(newPath, newItem.mtime, newItem.mtime);
 			}
-		} else {
-			//log.vlog("", oldItem.name, " has not changed");
-		}
+		} 
 	}
 
 	// downloads a File resource
@@ -699,9 +702,6 @@ final class SyncEngine
 		assert(item.type == ItemType.file);
 		write("Downloading file ", path, " ... ");
 		JSONValue fileDetails = onedrive.getFileDetails(item.driveId, item.id);
-		
-		// Issue #153 Debugging
-		//log.log("File Details: ", fileDetails);
 		
 		if (isMalware(fileDetails)){
 			// OneDrive reports that this file is malware
@@ -736,6 +736,11 @@ final class SyncEngine
 					}
 				}
 			}
+		} catch (std.exception.ErrnoException e) {
+			// There was a file system error
+			log.error("ERROR: ", e.msg);
+			downloadFailed = true;
+			return;
 		}
 		writeln("done.");
 		log.fileOnly("Downloading file ", path, " ... done.");
