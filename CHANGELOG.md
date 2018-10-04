@@ -3,6 +3,31 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [2.1.3] - 2018-10-04
+### Fixed
+- Resolve File download fails if the file is marked as malware in OneDrive
+- Resolve high CPU usage when running in monitor mode
+- Resolve how default path is set when running under systemd on headless systems
+- Resolve incorrectly nested configDir in X11 systems
+- Resolve Key not found: driveType
+- Resolve to validate filename length before download to conform with Linux FS limits
+- Resolve file handling to look for HTML ASCII codes which will cause uploads to fail
+- Resolve Key not found: expirationDateTime on session resume
+
+### Added
+- Update Travis CI building to test build on ARM64
+
+## [2.1.2] - 2018-08-27
+### Fixed
+- Resolve skipping of symlinks in monitor mode
+- Resolve Gateway Timeout - JSONValue is not an object
+- Resolve systemd/user is not supported on CentOS / RHEL
+- Resolve HTTP request returned status code 429 (Too Many Requests)
+- Resolve handling of maximum path length calculation
+- Resolve 'The parent item is not in the local database'
+- Resolve Correctly handle file case sensitivity issues in same folder
+- Update unit files documentation link
+
 ## [2.1.1] - 2018-08-14
 ### Fixed
 - Fix handling no remote delete of remote directories when using --no-remote-delete
