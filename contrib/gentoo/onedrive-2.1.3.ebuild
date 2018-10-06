@@ -5,7 +5,7 @@ EAPI=6
 
 DESCRIPTION="Onedrive sync client for Linux"
 HOMEPAGE="https://github.com/abraunegg/onedrive"
-SRC_URI="https://github.com/abraunegg/onedrive/archive/v${PV}.tar.gz -> ${P}.tar.gz"
+SRC_URI="https://github.com/abraunegg/onedrive/archive/${PV}.tar.gz -> ${P}.tar.gz"
 
 LICENSE="GPL-3"
 SLOT="0"
@@ -13,14 +13,7 @@ KEYWORDS="~amd64 ~x86"
 IUSE=""
 
 DEPEND="
-    || (  
-        dev-util/dub[dmd-2_080]
-        dev-util/dub[dmd-2_079]
-        dev-util/dub[dmd-2_078]
-        dev-util/dub[dmd-2_076]
-        dev-util/dub[dmd-2_075]
-        dev-util/dub[dmd-2_074]
-)
+	>=dev-lang/dmd-2.081.1
 	dev-db/sqlite
 "
 
@@ -29,8 +22,10 @@ RDEPEND="${DEPEND}
 	"
 src_prepare() {
 	default
+	# Copy line 38 to 44 as systemd path needs to be created in portage sandbox
 	# Update the makefile so that it doesnt use git commands to get the version during build.
-	sed -i -e "s/version:.*/version:/" \
+	sed -i -e "38h; 44p; 44x" \
+		-e "s/version:.*/version:/" \
 		-e "\$s/.*/\techo v${PV} > version/" \
 		Makefile
 }
