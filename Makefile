@@ -35,19 +35,22 @@ install: all
 	install -D onedrive $(DESTDIR)$(PREFIX)/bin/onedrive
 	install -D -m 644 logrotate/onedrive.logrotate $(DESTDIR)/etc/logrotate.d/onedrive
 ifeq ($(RHEL),1)
-	mkdir -p $(DESTDIR)/etc/systemd/system/
-	chown root.root $(DESTDIR)/etc/systemd/system/
-	chmod 0755 $(DESTDIR)/etc/systemd/system/
-	cp -raf *.service $(DESTDIR)/etc/systemd/system/
-	chmod 0644 $(DESTDIR)/etc/systemd/system/onedrive*.service
+	mkdir -p $(DESTDIR)/usr/lib/systemd/system/
+	chown root.root $(DESTDIR)/usr/lib/systemd/system/
+	chmod 0755 $(DESTDIR)/usr/lib/systemd/system/
+	cp -raf *.service $(DESTDIR)/usr/lib/systemd/system/
+	chmod 0644 $(DESTDIR)/usr/lib/systemd/system/onedrive*.service
 else
 	mkdir -p $(DESTDIR)/usr/lib/systemd/user/
 	chown root.root $(DESTDIR)/usr/lib/systemd/user/
 	chmod 0755 $(DESTDIR)/usr/lib/systemd/user/
 	cp -raf onedrive.service $(DESTDIR)/usr/lib/systemd/user/
 	chmod 0644 $(DESTDIR)/usr/lib/systemd/user/onedrive.service
-	cp -raf onedrive@.service $(DESTDIR)/etc/systemd/system/
-	chmod 0644 $(DESTDIR)/etc/systemd/system/onedrive@.service
+	mkdir -p $(DESTDIR)/usr/lib/systemd/system/
+	chown root.root $(DESTDIR)/usr/lib/systemd/system/
+	chmod 0755 $(DESTDIR)/usr/lib/systemd/system/
+	cp -raf onedrive@.service $(DESTDIR)/usr/lib/systemd/system/
+	chmod 0644 $(DESTDIR)/usr/lib/systemd/system/onedrive@.service
 endif
 
 onedrive: version $(SOURCES)
