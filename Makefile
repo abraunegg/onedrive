@@ -64,11 +64,10 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/onedrive
 	rm -f $(DESTDIR)/etc/logrotate.d/onedrive
 ifeq ($(RHEL),1)
-	rm -f $(DESTDIR)/etc/systemd/system/onedrive.service
-	rm -f $(DESTDIR)/etc/systemd/system/onedrive@.service
+	rm -f $(DESTDIR)/usr/lib/systemd/system/onedrive*.service
 else
 	rm -f $(DESTDIR)/usr/lib/systemd/user/onedrive.service
-	rm -f $(DESTDIR)/usr/lib/systemd/user/onedrive@.service
+	rm -f $(DESTDIR)/usr/lib/systemd/system/onedrive@.service
 endif
 
 version: .git/HEAD .git/index
