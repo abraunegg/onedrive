@@ -156,7 +156,9 @@ The 'skilion' version contains a significant number of defect's in how the local
 ```
 Skipping uploading this new file as parent path is not in the database:
 ```
-In this instance it is advisable to stop any service / onedrive process from running and then remove any `items.sqlite3` file from your home directory as this will force the creation of a new local cache file.
+In this instance it is advisable to stop any service / onedrive process from running and then remove any `items.sqlite3` file from your configuration directory (`~/.config/onedrive/`) as this will force the creation of a new local cache file.
+
+Alternativly add `--resync` to your existing command line onetime only - for example: `onedrive --synchronize --resync` to force a full resync.
 
 ### First run :zap:
 After installing the application you must run it at least once from the terminal to authorize it.
