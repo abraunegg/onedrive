@@ -5,7 +5,7 @@ EAPI=6
 
 DESCRIPTION="Onedrive sync client for Linux"
 HOMEPAGE="https://github.com/abraunegg/onedrive"
-SRC_URI="https://github.com/abraunegg/onedrive/archive/${PV}.tar.gz -> ${P}.tar.gz"
+SRC_URI="https://github.com/abraunegg/onedrive/archive/v${PV}.tar.gz -> ${P}.tar.gz"
 
 LICENSE="GPL-3"
 SLOT="0"
