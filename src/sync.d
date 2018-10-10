@@ -40,7 +40,7 @@ private bool isItemRemote(const ref JSONValue item)
 	return ("remoteItem" in item) != null;
 }
 
-private bool changeHasParentReferenceId(const ref JSONValue item)
+private bool hasParentReferenceId(const ref JSONValue item)
 {
 	return ("id" in item["parentReference"]) != null;
 }
@@ -88,8 +88,10 @@ private Item makeItem(const ref JSONValue driveItem)
 
 	// root and remote items do not have parentReference
 	if (!isItemRoot(driveItem) && ("parentReference" in driveItem) != null) {
-		item.driveId = driveItem["parentReference"]["driveId"].str,
-		item.parentId = driveItem["parentReference"]["id"].str;
+		item.driveId = driveItem["parentReference"]["driveId"].str;
+		if (hasParentReferenceId(driveItem)) {
+			item.parentId = driveItem["parentReference"]["id"].str;
+		}
 	}
 
 	// extract the file hash
@@ -451,7 +453,7 @@ final class SyncEngine
 						}
 						
 						// Test is this a Shared Folder - which should also be classified as a 'root' item
-						if (changeHasParentReferenceId(item)) {
+						if (hasParentReferenceId(item)) {
 							// item contains parentReference key
 							if (item["parentReference"]["driveId"].str != defaultDriveId) {
 								// The change parentReference driveId does not match the defaultDriveId - this could be a Shared Folder root item
@@ -465,14 +467,19 @@ final class SyncEngine
 					}
 
 					// How do we handle this change?
-					if (isRoot || !changeHasParentReferenceId(item) || isItemDeleted(item)){
+					if (isRoot || !hasParentReferenceId(item) || isItemDeleted(item)){
 						// Is a root item, has no id in parentReference or is a OneDrive deleted item
 						applyDifference(item, driveId, isRoot);
 					} else {
 						// What is this item's path?
 						thisItemPath = item["parentReference"]["path"].str;
-						// Check this item's path to see if this is a change on the path we want
-						if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderName)) ){
+						// Check this item's path to see if this is a change on the path we want:
+						// 1. 'item id' matches 'id'
+						// 2. 'parentReference id' matches 'id'
+						// 3. 'item path' contains 'sync folder name'
+						// 4. 'item path' contains 'id'
+						
+						if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderName)) || (canFind(thisItemPath, id)) ){
 							// This is a change we want to apply
 							applyDifference(item, driveId, isRoot);
 						} else {
