@@ -382,7 +382,8 @@ final class SyncEngine
 		// Get the name of this 'Path ID'
 		if (("id" in idDetails) != null) {
 			// valid response from onedrive.getPathDetailsById(driveId, id) - a JSON item object present
-			if ((idDetails["id"].str == id) && (isItemFolder(idDetails))){
+			if ((idDetails["id"].str == id) && (!isItemFile(idDetails))){
+				// Is a Folder or Remote Folder
 				syncFolderName = encodeComponent(idDetails["name"].str);
 			}
 		}
