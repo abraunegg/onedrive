@@ -27,10 +27,10 @@ function setup_arm32_chroot {
 	# Host dependencies
 	sudo apt-get install -qq -y ${HOST_DEPENDENCIES}
 	# Download LDC compiler
-	wget https://github.com/ldc-developers/ldc/releases/download/v1.10.0/ldc2-1.10.0-linux-armhf.tar.xz
-	tar -xf ldc2-1.10.0-linux-armhf.tar.xz
-	mv ldc2-1.10.0-linux-armhf dlang-${ARCH}
-	rm -rf ldc2-1.10.0-linux-armhf.tar.xz
+	wget https://github.com/ldc-developers/ldc/releases/download/v1.11.0/ldc2-1.11.0-linux-armhf.tar.xz
+	tar -xf ldc2-1.11.0-linux-armhf.tar.xz
+	mv ldc2-1.11.0-linux-armhf dlang-${ARCH}
+	rm -rf ldc2-1.11.0-linux-armhf.tar.xz
 	# Create chrooted environment
 	sudo mkdir ${CHROOT_DIR}
 	sudo debootstrap --foreign --no-check-gpg --variant=buildd --arch=${CHROOT_ARCH} ${VERSION} ${CHROOT_DIR} ${DEBIAN_MIRROR}
