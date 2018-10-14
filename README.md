@@ -152,13 +152,7 @@ sudo make install
 
 ## Using the client
 ### Upgrading from 'skilion' client
-The 'skilion' version contains a significant number of defect's in how the local sync state is managed. When upgrading from the 'skilion' version to this version, you may encounter the following error: 
-```
-Skipping uploading this new file as parent path is not in the database:
-```
-In this instance it is advisable to stop any service / onedrive process from running and then remove any `items.sqlite3` file from your configuration directory (`~/.config/onedrive/`) as this will force the creation of a new local cache file.
-
-Alternativly add `--resync` to your existing command line onetime only - for example: `onedrive --synchronize --resync` to force a full resync.
+The 'skilion' version contains a significant number of defect's in how the local sync state is managed. When upgrading from the 'skilion' version to this version, it is advisable to stop any service / onedrive process from running and then remove any `items.sqlite3` file from your configuration directory (`~/.config/onedrive/`) as this will force the creation of a new local cache file.
 
 ### First run :zap:
 After installing the application you must run it at least once from the terminal to authorize it.
