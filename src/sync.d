@@ -442,6 +442,9 @@ final class SyncEngine
 					bool isRoot = false;
 					string thisItemPath;
 					
+					// Issue #196 Debug
+					log.vlog("OneDrive Change: ", item);
+					
 					// Deleted items returned from onedrive.viewChangesById (/delta) do not have a 'name' attribute
 					// Thus we cannot name check for 'root' below on deleted items
 					if(!isItemDeleted(item)){
