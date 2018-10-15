@@ -443,7 +443,7 @@ final class SyncEngine
 					string thisItemPath;
 					
 					// Issue #196 Debug
-					log.vlog("OneDrive Change: ", item);
+					//log.vlog("OneDrive Change: ", item);
 					
 					// Deleted items returned from onedrive.viewChangesById (/delta) do not have a 'name' attribute
 					// Thus we cannot name check for 'root' below on deleted items
@@ -604,10 +604,11 @@ final class SyncEngine
 		if (isItemDeleted(driveItem)) {
 			// item.name is not available, so we get a bunch of meaningless log output
 			// will fix this with wider logging changes being worked on
-			//log.vlog("This item is marked for deletion:", item.name);
+			log.vlog("This item is marked for deletion:", item.id);
 			if (cached) {
 				// flag to delete
 				idsToDelete ~= [item.driveId, item.id];
+				log.vlog("idsToDelete:", idsToDelete);
 			} else {
 				// flag to ignore
 				skippedItems ~= item.id;
