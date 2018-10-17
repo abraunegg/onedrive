@@ -38,19 +38,16 @@ ifeq ($(RHEL),1)
 	mkdir -p $(DESTDIR)/usr/lib/systemd/system/
 	chown root.root $(DESTDIR)/usr/lib/systemd/system/
 	chmod 0755 $(DESTDIR)/usr/lib/systemd/system/
-	cp -raf *.service $(DESTDIR)/usr/lib/systemd/system/
-	chmod 0644 $(DESTDIR)/usr/lib/systemd/system/onedrive*.service
+	install -D -m 644 *.service $(DESTDIR)/usr/lib/systemd/system/
 else
 	mkdir -p $(DESTDIR)/usr/lib/systemd/user/
 	chown root.root $(DESTDIR)/usr/lib/systemd/user/
 	chmod 0755 $(DESTDIR)/usr/lib/systemd/user/
-	cp -raf onedrive.service $(DESTDIR)/usr/lib/systemd/user/
-	chmod 0644 $(DESTDIR)/usr/lib/systemd/user/onedrive.service
+	install -D -m 644 onedrive.service $(DESTDIR)/usr/lib/systemd/user/
 	mkdir -p $(DESTDIR)/usr/lib/systemd/system/
 	chown root.root $(DESTDIR)/usr/lib/systemd/system/
 	chmod 0755 $(DESTDIR)/usr/lib/systemd/system/
-	cp -raf onedrive@.service $(DESTDIR)/usr/lib/systemd/system/
-	chmod 0644 $(DESTDIR)/usr/lib/systemd/system/onedrive@.service
+	install -D -m 644 onedrive@.service $(DESTDIR)/usr/lib/systemd/system/
 endif
 
 onedrive: version $(SOURCES)
