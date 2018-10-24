@@ -1352,6 +1352,8 @@ final class SyncEngine
 							// The file was uploaded
 							ulong uploadFileSize = response["size"].integer;
 							
+							log.vlog("Upload Response: ", response);
+							
 							// In some cases the file that was uploaded was not complete, but 'completed' without errors on OneDrive
 							// This has been seen with PNG / JPG files mainly, which then contributes to generating a 412 error when we attempt to update the metadata
 							// Validate here that the file uploaded, at least in size, matches in the response to what the size is on disk
