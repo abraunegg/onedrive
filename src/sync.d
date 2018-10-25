@@ -480,7 +480,11 @@ final class SyncEngine
 						applyDifference(item, driveId, isRoot);
 					} else {
 						// What is this item's path?
-						thisItemPath = item["parentReference"]["path"].str;
+						if (hasParentReferencePath(item)) {
+							thisItemPath = item["parentReference"]["path"].str;
+						} else {
+							thisItemPath = "";
+						}
 						// Check this item's path to see if this is a change on the path we want:
 						// 1. 'item id' matches 'id'
 						// 2. 'parentReference id' matches 'id'
