@@ -45,6 +45,11 @@ private bool hasParentReferenceId(const ref JSONValue item)
 	return ("id" in item["parentReference"]) != null;
 }
 
+private bool hasParentReferencePath(const ref JSONValue item)
+{
+	return ("path" in item["parentReference"]) != null;
+}
+
 private bool isMalware(const ref JSONValue item)
 {
 	return ("malware" in item) != null;
@@ -459,9 +464,11 @@ final class SyncEngine
 							if (item["parentReference"]["driveId"].str != defaultDriveId) {
 								// The change parentReference driveId does not match the defaultDriveId - this could be a Shared Folder root item
 								string sharedDriveRootPath = "/drives/" ~ item["parentReference"]["driveId"].str ~ "/root:";
-								if (item["parentReference"]["path"].str == sharedDriveRootPath) {
-									// The drive path matches what a shared folder root item would equal
-									isRoot = true;
+								if (hasParentReferencePath(item)) {
+									if (item["parentReference"]["path"].str == sharedDriveRootPath) {
+										// The drive path matches what a shared folder root item would equal
+										isRoot = true;
+									}
 								}
 							}
 						}
