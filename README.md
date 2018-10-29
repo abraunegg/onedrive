@@ -6,7 +6,8 @@
 * Real-Time file monitoring with Inotify
 * Resumable uploads
 * Support OneDrive for Business (part of Office 365)
-* Shared folders (not Business)
+* Shared folders (OneDrive Personal)
+* SharePoint / Office 365 Group Drives (refer to README.Office365.md to configure)
 
 ### What's missing:
 * While local changes are uploaded right away, remote changes are delayed
