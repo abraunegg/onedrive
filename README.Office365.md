@@ -49,7 +49,7 @@ To sync an Office365 / Business Shared Folder we need the Drive ID for that shar
 ```
 https://graph.microsoft.com/v1.0/sites/$host,$SiteId,$webId/lists/$listId/drive
 ```
-Example:
+**Example:**
 ```
 curl -i 'https://graph.microsoft.com/v1.0/sites/ucanedu.sharepoint.com,0936e7d2-1285-4c54-81f9-55e9c8b8613b,345db3b7-1ebb-484f-85e3-31c785278051/lists/A3913FAC-26F8-4436-A9F6-AA6B44776343/drive' -H "Authorization: bearer <your_token>"
 ```
@@ -61,7 +61,7 @@ b!0uc2CYUSVEyB-VXpyLhhO7ezXTS7Hk9IheMxx4UngFGsP5Gj-CY2RKn2qmtEd2ND
 ```
 GET https://graph.microsoft.com/v1.0/drives/$drive-id/root
 ```
-Example:
+**Example:**
 ```
 curl -i 'https://graph.microsoft.com/v1.0/drives/b!0uc2CYUSVEyB-VXpyLhhO7ezXTS7Hk9IheMxx4UngFGsP5Gj-CY2RKn2qmtEd2ND/root' -H "Authorization: bearer <your_token>"
 ```
