@@ -909,7 +909,7 @@ final class SyncEngine
 				uploadNewFile(path);
 			} else {
 				log.vlog("The directory has not changed");
-				// loop trough the children
+				// loop through the children
 				foreach (Item child; itemdb.selectChildren(item.driveId, item.id)) {
 					uploadDifferences(child);
 				}
@@ -935,7 +935,7 @@ final class SyncEngine
 				uploadNewFile(path);
 			} else {
 				log.vlog("The directory has not changed");
-				// continue trough the linked folder
+				// continue through the linked folder
 				assert(item.remoteDriveId && item.remoteId);
 				Item remoteItem;
 				bool found = itemdb.selectById(item.remoteDriveId, item.remoteId, remoteItem);
