@@ -939,8 +939,10 @@ final class SyncEngine
 				assert(item.remoteDriveId && item.remoteId);
 				Item remoteItem;
 				bool found = itemdb.selectById(item.remoteDriveId, item.remoteId, remoteItem);
-				//assert(found);
-				uploadDifferences(remoteItem);
+				if(found){
+					// item was found in the database
+					uploadDifferences(remoteItem);
+				}
 			}
 		} else {
 			log.vlog("The directory has been deleted");
