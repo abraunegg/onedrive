@@ -45,6 +45,11 @@ private bool hasParentReferenceId(const ref JSONValue item)
 	return ("id" in item["parentReference"]) != null;
 }
 
+private bool hasParentReferencePath(const ref JSONValue item)
+{
+	return ("path" in item["parentReference"]) != null;
+}
+
 private bool isMalware(const ref JSONValue item)
 {
 	return ("malware" in item) != null;
@@ -459,9 +464,11 @@ final class SyncEngine
 							if (item["parentReference"]["driveId"].str != defaultDriveId) {
 								// The change parentReference driveId does not match the defaultDriveId - this could be a Shared Folder root item
 								string sharedDriveRootPath = "/drives/" ~ item["parentReference"]["driveId"].str ~ "/root:";
-								if (item["parentReference"]["path"].str == sharedDriveRootPath) {
-									// The drive path matches what a shared folder root item would equal
-									isRoot = true;
+								if (hasParentReferencePath(item)) {
+									if (item["parentReference"]["path"].str == sharedDriveRootPath) {
+										// The drive path matches what a shared folder root item would equal
+										isRoot = true;
+									}
 								}
 							}
 						}
@@ -473,7 +480,11 @@ final class SyncEngine
 						applyDifference(item, driveId, isRoot);
 					} else {
 						// What is this item's path?
-						thisItemPath = item["parentReference"]["path"].str;
+						if (hasParentReferencePath(item)) {
+							thisItemPath = item["parentReference"]["path"].str;
+						} else {
+							thisItemPath = "";
+						}
 						// Check this item's path to see if this is a change on the path we want:
 						// 1. 'item id' matches 'id'
 						// 2. 'parentReference id' matches 'id'
@@ -898,7 +909,7 @@ final class SyncEngine
 				uploadNewFile(path);
 			} else {
 				log.vlog("The directory has not changed");
-				// loop trough the children
+				// loop through the children
 				foreach (Item child; itemdb.selectChildren(item.driveId, item.id)) {
 					uploadDifferences(child);
 				}
@@ -924,12 +935,14 @@ final class SyncEngine
 				uploadNewFile(path);
 			} else {
 				log.vlog("The directory has not changed");
-				// continue trough the linked folder
+				// continue through the linked folder
 				assert(item.remoteDriveId && item.remoteId);
 				Item remoteItem;
 				bool found = itemdb.selectById(item.remoteDriveId, item.remoteId, remoteItem);
-				assert(found);
-				uploadDifferences(remoteItem);
+				if(found){
+					// item was found in the database
+					uploadDifferences(remoteItem);
+				}
 			}
 		} else {
 			log.vlog("The directory has been deleted");
