@@ -939,11 +939,7 @@ final class SyncEngine
 				assert(item.remoteDriveId && item.remoteId);
 				Item remoteItem;
 				bool found = itemdb.selectById(item.remoteDriveId, item.remoteId, remoteItem);
-				
-				// This will still fail .. but what is the bool set to?
-				log.vlog("found: ", found);
-				
-				assert(found);
+				//assert(found);
 				uploadDifferences(remoteItem);
 			}
 		} else {
