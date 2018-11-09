@@ -1,4 +1,3 @@
-//import std.net.curl: CurlException, HTTP;
 import std.net.curl;
 import etc.c.curl: CurlOption;
 import std.datetime, std.exception, std.file, std.json, std.path;
