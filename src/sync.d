@@ -999,7 +999,7 @@ final class SyncEngine
 									if (e.httpStatusCode == 504) {
 										// HTTP request returned status code 504 (Gateway Timeout)
 										// Try upload as a session
-										response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+										response = session.upload(path, item.driveId, item.parentId, baseName(path));
 									}
 									else throw e;
 								}
@@ -1007,7 +1007,7 @@ final class SyncEngine
 							} else {
 								writeln("");
 								try {
-									response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+									response = session.upload(path, item.driveId, item.parentId, baseName(path));
 								} catch (OneDriveException e) {	
 									if (e.httpStatusCode == 412) {
 										// HTTP request returned status code 412 - ETag does not match current item's value
