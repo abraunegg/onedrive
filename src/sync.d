@@ -1006,7 +1006,17 @@ final class SyncEngine
 								writeln("done.");
 							} else {
 								writeln("");
-								response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+								try {
+									response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+								} catch (OneDriveException e) {	
+									if (e.httpStatusCode == 412) {
+										// HTTP request returned status code 412 - ETag does not match current item's value
+										// Remove the offending file from OneDrive - file will be uploaded as a new file
+										onedrive.deleteById(item.driveId, item.id, item.eTag);
+										// Delete from the local database
+										itemdb.deleteById(item.driveId, item.id);
+									}
+								}
 								writeln("done.");
 							}		
 						} else {
