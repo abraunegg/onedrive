@@ -1,4 +1,5 @@
-import std.net.curl: CurlException, HTTP;
+import std.net.curl;
+import etc.c.curl: CurlOption;
 import std.datetime, std.exception, std.file, std.json, std.path;
 import std.stdio, std.string, std.uni, std.uri;
 import core.stdc.stdlib;
@@ -58,6 +59,11 @@ final class OneDriveApi
 		http = HTTP();
 		http.dnsTimeout = (dur!"seconds"(5));
 		http.dataTimeout = (dur!"seconds"(3600));
+		
+		// Specify which HTTP version to use
+		// Curl 7.62.0 defaults to http2, we need to use http 1.1
+		http.handle.set(CurlOption.http_version,2);
+		
 		if (debugHttp) {
 			http.verbose = true;
 			.debugResponse = true;
