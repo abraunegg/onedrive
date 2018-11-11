@@ -3,6 +3,20 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [2.1.5] - 2018-11-11
+### Fixed
+- Resolve 'Key not found: path' when syncing from some shared folders due to OneDrive API change
+- Resolve to only upload changes on remote folder if the item is in the database - dont assert if false
+- Resolve files will not download or upload when using curl 7.62.0 due to HTTP/2 being set as default for all curl operations
+- Resolve to handle HTTP request returned status code 412 (Precondition Failed) for session uploads to OneDrive Personal Accounts
+- Resolve unable to remove '~/.config/onedrive/resume_upload: No such file or directory' if there is a session upload error and the resume file does not get created
+- Resolve handling of response codes when using 2 different systems when using '--upload-only' but the same OneDrive account and uploading the same filename to the same location
+
+### Updated
+- Updated Travis CI building on LDC v1.11.0 for ARMHF builds
+- Updated Makefile to use 'install -D -m 644' rather than 'cp -raf'
+- Updated default config to be aligned to code defaults
+
 ## [2.1.4] - 2018-10-04
 ### Fixed
 - Resolve syncing of OneDrive Personal Shared Folders due to OneDrive API change
