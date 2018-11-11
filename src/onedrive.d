@@ -251,8 +251,11 @@ final class OneDriveApi
 		}
 		http.method = HTTP.Method.put;
 		http.url = uploadUrl;
-		// when using microsoft graph the auth code is different
-		//addAccessTokenHeader();
+
+		// Specify which HTTP version to use for session uploads
+		// Curl 7.62.0 defaults to HTTP/2, we need to use HTTP/1.1
+		http.handle.set(CurlOption.http_version,2);
+
 		import std.conv;
 		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
 		http.addRequestHeader("Content-Range", contentRange);
