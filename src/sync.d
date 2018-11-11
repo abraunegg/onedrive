@@ -977,6 +977,14 @@ final class SyncEngine
 								try {
 									response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
 								} catch (OneDriveException e) {
+									if (e.httpStatusCode == 404) {
+										// HTTP request returned status code 404 - the eTag provided does not exist
+										// Delete record from the local database - file will be uploaded as a new file
+										log.vlog("OneDrive returned a 'HTTP 404 - eTag Issue' - gracefully handling error");
+										itemdb.deleteById(item.driveId, item.id);
+										return;
+									}
+								
 									// Resolve https://github.com/abraunegg/onedrive/issues/36
 									if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
 										// The file is currently checked out or locked for editing by another user
@@ -990,10 +998,10 @@ final class SyncEngine
 									
 									if (e.httpStatusCode == 412) {
 										// HTTP request returned status code 412 - ETag does not match current item's value
-										// Remove the offending file from OneDrive - file will be uploaded as a new file
-										onedrive.deleteById(item.driveId, item.id, item.eTag);
-										// Delete from the local database
+										// Delete record from the local database - file will be uploaded as a new file
+										log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
 										itemdb.deleteById(item.driveId, item.id);
+										return;
 									}
 									
 									if (e.httpStatusCode == 504) {
@@ -1006,7 +1014,17 @@ final class SyncEngine
 								writeln("done.");
 							} else {
 								writeln("");
-								response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+								try {
+									response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+								} catch (OneDriveException e) {	
+									if (e.httpStatusCode == 412) {
+										// HTTP request returned status code 412 - ETag does not match current item's value
+										// Delete record from the local database - file will be uploaded as a new file
+										log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
+										itemdb.deleteById(item.driveId, item.id);
+										return;
+									}
+								}
 								writeln("done.");
 							}		
 						} else {
@@ -1034,7 +1052,7 @@ final class SyncEngine
 							saveItem(response);
 						}
 						log.fileOnly("Uploading file ", path, " ... done.");
-						// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
+						// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded via simple upload
 						eTag = response["cTag"].str;
 					}
 					if (accountType == "personal"){
