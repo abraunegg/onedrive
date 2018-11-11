@@ -60,9 +60,8 @@ final class OneDriveApi
 		http.dnsTimeout = (dur!"seconds"(5));
 		http.dataTimeout = (dur!"seconds"(3600));
 		
-		// Specify which HTTP version to use
-		// Curl 7.62.0 defaults to http2, we need to use http 1.1
-		http.handle.set(CurlOption.http_version,2);
+		// Specify how many redirects should be allowed
+		http.maxRedirects(5);
 		
 		if (debugHttp) {
 			http.verbose = true;
@@ -558,6 +557,10 @@ final class OneDriveApi
 				//log.vlog("OneDrive Response: '", http.statusLine.code, " - ", http.statusLine.reason, "'");
 				break;
 			
+			// 302 - resource found and available at another location, redirect
+			case 302:
+				break;
+			
 			// 400 - Bad Request
 			case 400:
 				// Bad Request .. how should we act?
@@ -631,9 +634,9 @@ final class OneDriveApi
 				log.vlog("OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error");
 				break;
 			
-			// Default - all other errors that are not a 2xx
+			// Default - all other errors that are not a 2xx or a 302
 			default:
-			if (http.statusLine.code / 100 != 2) {
+			if (http.statusLine.code / 100 != 2 && http.statusLine.code != 302) {
 				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
 				break;
 			}
@@ -671,6 +674,5 @@ unittest
 		assert(e.httpStatusCode == 412);
 	}
 	onedrive.deleteById(item["id"].str, item["eTag"].str);
-
 	onedrive.http.shutdown();
 }
