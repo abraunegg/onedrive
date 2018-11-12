@@ -21,7 +21,7 @@ build() {
 	git add * #Create .git/index
 	git commit --allow-empty-message -m "" #Create .git/refs/heads/master
 	git tag v$pkgver #Add version tag
-	#make PREFIX=/usr onedrive
+	make PREFIX=/usr onedrive
 }
 
 package() {
