@@ -480,9 +480,10 @@ final class OneDriveApi
 		http.onReceive = (ubyte[] data) {
 			content ~= data;
 			// HTTP Server Response Debugging
-			if (.debugResponse){
-				writeln("\nOneDrive HTTP Server Response: ", http.statusLine.code);
-			}
+			//if (.debugResponse){
+			//	writeln("\nOneDrive HTTP Server Response: ", http.statusLine.code);
+			//}
+			log.vlog("\nOneDrive HTTP Server Response: ", http.statusLine.code);
 			return data.length;
 		};
 		
