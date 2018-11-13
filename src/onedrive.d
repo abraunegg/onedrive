@@ -238,6 +238,11 @@ final class OneDriveApi
 		const(char)[] url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ ":/" ~ encodeComponent(filename) ~ ":/createUploadSession";
 		if (eTag) http.addRequestHeader("If-Match", eTag);
 		http.addRequestHeader("Content-Type", "application/json");
+		
+		// Specify which HTTP version to use for session uploads
+		// Curl 7.62.0 defaults to HTTP/2 if built with h2 support, we need to use HTTP/1.1
+		http.handle.set(CurlOption.http_version,2);
+		
 		return post(url, item.toString());
 	}
 
@@ -253,7 +258,7 @@ final class OneDriveApi
 		http.url = uploadUrl;
 
 		// Specify which HTTP version to use for session uploads
-		// Curl 7.62.0 defaults to HTTP/2, we need to use HTTP/1.1
+		// Curl 7.62.0 defaults to HTTP/2 if built with h2 support, we need to use HTTP/1.1
 		http.handle.set(CurlOption.http_version,2);
 
 		import std.conv;
