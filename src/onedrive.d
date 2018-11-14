@@ -487,7 +487,6 @@ final class OneDriveApi
 			return data.length;
 		};
 		
-		
 		try {
 			http.perform();
 		} catch (CurlException e) {
