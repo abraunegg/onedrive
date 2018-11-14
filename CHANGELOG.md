@@ -3,6 +3,13 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [2.1.6] - 2018-11-15
+### Fixed
+- Updated HTTP/2 transport handling when using curl 7.62.0 for session uploads
+
+### Added
+- Added PKGBUILD for makepkg for building packages under Arch Linux
+
 ## [2.1.5] - 2018-11-11
 ### Fixed
 - Resolve 'Key not found: path' when syncing from some shared folders due to OneDrive API change
@@ -17,7 +24,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Updated Makefile to use 'install -D -m 644' rather than 'cp -raf'
 - Updated default config to be aligned to code defaults
 
-## [2.1.4] - 2018-10-04
+## [2.1.4] - 2018-10-10
 ### Fixed
 - Resolve syncing of OneDrive Personal Shared Folders due to OneDrive API change
 - Resolve incorrect systemd installation location(s) in Makefile
