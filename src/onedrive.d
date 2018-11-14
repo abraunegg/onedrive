@@ -251,11 +251,7 @@ final class OneDriveApi
 		}
 		http.method = HTTP.Method.put;
 		http.url = uploadUrl;
-
-		// Specify which HTTP version to use for session uploads
-		// Curl 7.62.0 defaults to HTTP/2, we need to use HTTP/1.1
-		http.handle.set(CurlOption.http_version,2);
-
+		
 		import std.conv;
 		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
 		http.addRequestHeader("Content-Range", contentRange);
@@ -334,7 +330,7 @@ final class OneDriveApi
 		auto response = perform();
 		checkHttpCode(response);
 		if (.debugResponse){
-			log.vlog("OneDrive Response: ", response);
+			log.vlog("OneDrive API Response: ", response);
         }
 		return response;
 	}
@@ -483,8 +479,14 @@ final class OneDriveApi
 		char[] content;
 		http.onReceive = (ubyte[] data) {
 			content ~= data;
+			// HTTP Server Response Code Debugging
+			if (.debugResponse){
+				log.vlog("OneDrive HTTP Server Response: ", http.statusLine.code);
+			}
+			
 			return data.length;
 		};
+		
 		
 		try {
 			http.perform();
@@ -511,7 +513,7 @@ final class OneDriveApi
 		// https://developer.overdrive.com/docs/reference-guide
 		
 		/*
-			Error response handling
+			HTTP/1.1 Response handling
 
 			Errors in the OneDrive API are returned using standard HTTP status codes, as well as a JSON error response object. The following HTTP status codes should be expected.
 
@@ -544,10 +546,16 @@ final class OneDriveApi
 			507				Insufficient Storage				The maximum storage quota has been reached.
 			509				Bandwidth Limit Exceeded			Your app has been throttled for exceeding the maximum bandwidth cap. Your app can retry the request again after more time has elapsed.
 		
+			HTTP/2 Response handling 
+			
+			0				OK
+		
 		*/
 	
 		switch(http.statusLine.code)
 		{
+			case 0:
+				break;
 			//	200 - OK
 			case 200:
 				// No Log .. 
