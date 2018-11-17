@@ -136,11 +136,6 @@ int main(string[] args)
 		return EXIT_SUCCESS;
 	}
 
-	// Configure logging if enabled
-	if (enableLogFile){
-		log.init();
-	}
-
 	// load configuration
 	log.vlog("Loading config ...");
 	configDirName = configDirName.expandTilde().absolutePath();
@@ -148,6 +143,14 @@ int main(string[] args)
 	if (!exists(configDirName)) mkdirRecurse(configDirName);
 	auto cfg = new config.Config(configDirName);
 	cfg.init();
+	
+	// Configure logging if enabled
+	if (enableLogFile){
+		// Read in a user defined log directory or use the default
+		string logDir = cfg.getValue("log_dir");
+		log.vlog("Using logfile dir: ", logDir);
+		log.init(logDir);
+	}
 	
 	// command line parameters override the config
 	if (syncDirName) cfg.setValue("sync_dir", syncDirName.expandTilde().absolutePath());
@@ -220,7 +223,7 @@ int main(string[] args)
 		// Did the user specify a 'different' sync dir by passing a value in?
 		if (syncDirName){
 			// was there a ~ in the passed in state? it will not work via init.d / systemd
-			if (canFind(cfg.getValue("sync_dir"),"~") ) {
+			if (canFind(cfg.getValue("sync_dir"),"~")) {
 				// A ~ was found
 				syncDir = homePath ~ "/OneDrive";
 			} else {

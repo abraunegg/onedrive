@@ -13,11 +13,11 @@ bool writeLogFile = false;
 string username;
 string logFilePath;
 
-void init()
+void init(string logDir)
 {
 	writeLogFile = true;
 	username = getUserName();
-	logFilePath = "/var/log/onedrive/";
+	logFilePath = logDir;
 	
 	if (!exists(logFilePath)){
 		// logfile path does not exist
@@ -26,9 +26,9 @@ void init()
 		} 
 		catch (std.file.FileException e) {
 			// we got an error ..
-			writeln("\nUnable to create /var/log/onedrive/ ");
-			writeln("Please manually create /var/log/onedrive/ and set appropriate permissions to allow write access");
-			writeln("The client activity log will be located in the users home directory\n");
+			writeln("\nUnable to create ", logFilePath);
+			writeln("Please manually create '",logFilePath, "' and set appropriate permissions to allow write access");
+			writeln("The requested client activity log will instead be located in the users home directory\n");
 		}
 	}
 }
@@ -83,7 +83,7 @@ private void logfileWriteLine(T...)(T args)
 		logFile = File(logFileName, "a");
 		} 
 	catch (std.exception.ErrnoException e) {
-		// We cannot open the log file in /var/log/onedrive for writing
+		// We cannot open the log file in logFilePath location for writing
 		// The user is not part of the standard 'users' group (GID 100)
 		// Change logfile to ~/onedrive.log putting the log file in the users home directory
 		string homePath = environment.get("HOME");
