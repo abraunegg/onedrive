@@ -83,6 +83,8 @@ int main(string[] args)
 	bool noRemoteDelete;
 	// Are we able to reach the OneDrive Service
 	bool online = false;
+	// Do we enable a log file
+	bool enableLogFile = false;
 	
 	try {
 		auto opt = getopt(
@@ -95,6 +97,7 @@ int main(string[] args)
 			"destination-directory", "Destination directory for renamed or move on OneDrive - no sync will be performed.", &destinationDirectory,
 			"debug-https", "Debug OneDrive HTTPS communication.", &debugHttp,
 			"download-only|d", "Only download remote changes", &downloadOnly,
+			"enable-logging", "Enable client activity to a separate log file", &enableLogFile,
 			"local-first", "Synchronize from the local directory source first, before downloading changes from OneDrive.", &localFirst,
 			"logout", "Logout the current user", &logout,
 			"monitor|m", "Keep monitoring for local and remote changes", &monitor,
@@ -133,8 +136,10 @@ int main(string[] args)
 		return EXIT_SUCCESS;
 	}
 
-	// Configure Logging
-	//log.init();
+	// Configure logging if enabled
+	if (enableLogFile){
+		log.init();
+	}
 
 	// load configuration
 	log.vlog("Loading config ...");
