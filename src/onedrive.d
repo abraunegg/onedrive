@@ -330,7 +330,7 @@ final class OneDriveApi
 		auto response = perform();
 		checkHttpCode(response);
 		if (.debugResponse){
-			log.vlog("OneDrive API Response: ", response);
+			writeln("OneDrive API Response: ", response);
         }
 		return response;
 	}
@@ -481,7 +481,7 @@ final class OneDriveApi
 			content ~= data;
 			// HTTP Server Response Code Debugging
 			if (.debugResponse){
-				log.vlog("OneDrive HTTP Server Response: ", http.statusLine.code);
+				writeln("OneDrive HTTP Server Response: ", http.statusLine.code);
 			}
 			
 			return data.length;
