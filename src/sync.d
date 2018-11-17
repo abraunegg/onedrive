@@ -762,7 +762,7 @@ final class SyncEngine
 			return;
 		}
 		writeln("done.");
-		log.fileOnly("Downloading file ", path, " ... done.");
+		//log.fileOnly("Downloading file ", path, " ... done.");
 		setTimes(path, item.mtime, item.mtime);
 	}
 
@@ -990,9 +990,9 @@ final class SyncEngine
 										// The file is currently checked out or locked for editing by another user
 										// We cant upload this file at this time
 										writeln(" skipped.");
-										log.fileOnly("Uploading file ", path, " ... skipped.");
+										//log.fileOnly("Uploading file ", path, " ... skipped.");
 										write("", path, " is currently checked out or locked for editing by another user.");
-										log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+										//log.fileOnly(path, " is currently checked out or locked for editing by another user.");
 										return;
 									}
 									
@@ -1040,9 +1040,9 @@ final class SyncEngine
 									// The file is currently checked out or locked for editing by another user
 									// We cant upload this file at this time
 									writeln(" skipped.");
-									log.fileOnly("Uploading file ", path, " ... skipped.");
+									//log.fileOnly("Uploading file ", path, " ... skipped.");
 									writeln("", path, " is currently checked out or locked for editing by another user.");
-									log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+									//log.fileOnly(path, " is currently checked out or locked for editing by another user.");
 									return;
 								}
 							}
@@ -1051,7 +1051,7 @@ final class SyncEngine
 							// As the session.upload includes the last modified time, save the response
 							saveItem(response);
 						}
-						log.fileOnly("Uploading file ", path, " ... done.");
+						//log.fileOnly("Uploading file ", path, " ... done.");
 						// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded via simple upload
 						eTag = response["cTag"].str;
 					}
@@ -1378,7 +1378,7 @@ final class SyncEngine
 							}
 							
 							// Log action to log file
-							log.fileOnly("Uploading file ", path, " ... done.");
+							//log.fileOnly("Uploading file ", path, " ... done.");
 							
 							// The file was uploaded
 							ulong uploadFileSize = response["size"].integer;
@@ -1464,7 +1464,7 @@ final class SyncEngine
 							}
 							
 							// Log action to log file
-							log.fileOnly("Uploading file ", path, " ... done.");
+							//log.fileOnly("Uploading file ", path, " ... done.");
 							
 						} else {
 							// Save the details of the file that we got from OneDrive
