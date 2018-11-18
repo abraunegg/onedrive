@@ -21,12 +21,14 @@ all: onedrive onedrive.service
 clean:
 	rm -f onedrive onedrive.o onedrive.service
 
-install: all
-	install -D onedrive $(DESTDIR)$(PREFIX)/bin/onedrive
-	install -D -m 644 onedrive.service $(DESTDIR)/usr/lib/systemd/user/onedrive.service
-
 onedrive: version $(SOURCES)
 	$(DC) $(DFLAGS) $(SOURCES)
+
+install.noservice: onedrive
+	install -D onedrive $(DESTDIR)$(PREFIX)/bin/onedrive
+
+install: all install.noservice
+	install -D -m 644 onedrive.service $(DESTDIR)/usr/lib/systemd/user/onedrive.service
 
 onedrive.service:
 	sed "s|@PREFIX@|$(PREFIX)|g" onedrive.service.in > onedrive.service
