@@ -179,7 +179,13 @@ onedrive --synchronize --single-directory '<dir_name>'
 
 Example: If the full path is `~/OneDrive/mydir`, the command would be `onedrive --synchronize --single-directory 'mydir'`
 
-### Performing a 'one-way' sync
+### Performing a 'one-way' download sync
+In some cases it may be desirable to 'download only' from OneDrive. To do this use the following command:
+```
+onedrive --synchronize --download-only 
+```
+
+### Performing a 'one-way' upload sync
 In some cases it may be desirable to 'upload only' to OneDrive. To do this use the following command:
 ```
 onedrive --synchronize --upload-only 
@@ -192,9 +198,23 @@ onedrive --synchronize --verbose
 ```
 
 ### Client Activity Log
-When running onedrive all actions are logged to `/var/log/onedrive/`
+When running onedrive all actions can be logged to a separate log file. This can be enabled by using the `--enable-logging` flag. By default, log files will be written to `/var/log/onedrive/`
 
-All logfiles will be in the format of `%username%.onedrive.log`
+**Note:** You will need to ensure your user has the applicable permissions to write to this directory or the following warning will be printed:
+```
+Unable to access /var/log/onedrive/
+Please manually create '/var/log/onedrive/' and set appropriate permissions to allow write access
+The requested client activity log will instead be located in the users home directory
+```
+
+All logfiles will be in the format of `%username%.onedrive.log`, where `%username%` represents the user who ran the client.
+
+**Note: **
+To use a different log directory rather than the default above, add the following as a configuration option to `~/.config/onedrive/config`:
+```
+log_dir = "/path/to/location/"
+```
+Trailing slash required
 
 An example of the log file is below:
 ```
@@ -393,13 +413,14 @@ If you encounter any bugs you can report them here on Github. Before filing an i
 ```text
 Usage: onedrive [OPTION]...
 
-no option        		   No Sync and exit
+no option                  No Sync and exit
        --check-for-nomount Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
                  --confdir Set the directory used to store the configuration files
         --create-directory Create a directory on OneDrive - no sync will be performed.
    --destination-directory Destination directory for renamed or move on OneDrive - no sync will be performed.
               --debug-http Debug OneDrive HTTP communication.
--d              --download Only download remote changes
+-d         --download-only Only download remote changes
+          --enable-logging Enable client activity to a separate log file
              --local-first Synchronize from the local directory source first, before downloading changes from OneDrive.
                   --logout Logout the current user
 -m               --monitor Keep monitoring for local and remote changes

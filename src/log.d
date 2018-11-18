@@ -26,7 +26,7 @@ void init(string logDir)
 		} 
 		catch (std.file.FileException e) {
 			// we got an error ..
-			writeln("\nUnable to create ", logFilePath);
+			writeln("\nUnable to access ", logFilePath);
 			writeln("Please manually create '",logFilePath, "' and set appropriate permissions to allow write access");
 			writeln("The requested client activity log will instead be located in the users home directory\n");
 		}
