@@ -6,6 +6,7 @@ import std.file, std.json, std.path;
 import std.regex;
 import std.stdio, std.string, std.uni, std.uri;
 import core.time, core.thread;
+import core.stdc.stdlib;
 import config, itemdb, onedrive, selective, upload, util;
 static import log;
 
@@ -174,36 +175,49 @@ final class SyncEngine
 		// Set accountType, defaultDriveId, defaultRootId & remainingFreeSpace once and reuse where possible
 		JSONValue oneDriveDetails;
 
-		// Need to catch 5xx server side errors at initialization
+		// Need to catch 400 or 5xx server side errors at initialization
 		try {
 			oneDriveDetails	= onedrive.getDefaultDrive();
-			// Successfully got details from OneDrive without a server side error such as HTTP/1.1 504 Gateway Timeout
-			accountType = oneDriveDetails["driveType"].str;
-			defaultDriveId = oneDriveDetails["id"].str;
-			defaultRootId = onedrive.getDefaultRoot["id"].str;
-			remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
-			
-			// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
-			log.vlog("Account Type: ", accountType);
-			log.vlog("Default Drive ID: ", defaultDriveId);
-			log.vlog("Default Root ID: ", defaultRootId);
-			log.vlog("Remaining Free Space: ", remainingFreeSpace);
-		
-			// Check the local database to ensure the OneDrive Root details are in the database
-			checkDatabaseForOneDriveRoot();
-		
-			// Check if there is an interrupted upload session
-			if (session.restore()) {
-				log.log("Continuing the upload session ...");
-				auto item = session.upload();
-				saveItem(item);
-			}
 		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 400) {
+				// OneDrive responded with 400 error: Bad Request
+				log.error("\nERROR: OneDrive returned a 'HTTP 400 Bad Request' - Cannot Initialize Sync Engine");
+				// Check this
+				if (cfg.getValue("drive_id").length) {
+					log.error("ERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
+				}
+				// Must exit here
+				exit(-1);
+			}
 			if (e.httpStatusCode >= 500) {
 				// There was a HTTP 5xx Server Side Error
 				log.error("ERROR: OneDrive returned a 'HTTP 5xx Server Side Error' - Cannot Initialize Sync Engine");
 			}
-		}	
+			// Must exit here
+			exit(-1);
+		}
+		
+		// Successfully got details from OneDrive without a server side error such as HTTP/1.1 504 Gateway Timeout
+		accountType = oneDriveDetails["driveType"].str;
+		defaultDriveId = oneDriveDetails["id"].str;
+		defaultRootId = onedrive.getDefaultRoot["id"].str;
+		remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+		
+		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
+		log.vlog("Account Type: ", accountType);
+		log.vlog("Default Drive ID: ", defaultDriveId);
+		log.vlog("Default Root ID: ", defaultRootId);
+		log.vlog("Remaining Free Space: ", remainingFreeSpace);
+	
+		// Check the local database to ensure the OneDrive Root details are in the database
+		checkDatabaseForOneDriveRoot();
+	
+		// Check if there is an interrupted upload session
+		if (session.restore()) {
+			log.log("Continuing the upload session ...");
+			auto item = session.upload();
+			saveItem(item);
+		}		
 	}
 
 	// Configure noRemoteDelete if function is called
