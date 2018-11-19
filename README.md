@@ -209,7 +209,7 @@ The requested client activity log will instead be located in the users home dire
 
 All logfiles will be in the format of `%username%.onedrive.log`, where `%username%` represents the user who ran the client.
 
-**Note: **
+**Note:**
 To use a different log directory rather than the default above, add the following as a configuration option to `~/.config/onedrive/config`:
 ```
 log_dir = "/path/to/location/"
