@@ -40,9 +40,6 @@ install.noservice: onedrive
 	install -D onedrive $(DESTDIR)$(PREFIX)/bin/onedrive
 
 install: all install.noservice
-	install -D -m 644 onedrive.service $(DESTDIR)/usr/lib/systemd/user/onedrive.service
-
-onedrive.service:
 ifeq ($(RHEL),1)
 	mkdir -p $(DESTDIR)/usr/lib/systemd/system/
 	chown root.root $(DESTDIR)/usr/lib/systemd/system/
@@ -58,6 +55,9 @@ else
 	chmod 0755 $(DESTDIR)/usr/lib/systemd/system/
 	install -D -m 644 onedrive@.service $(DESTDIR)/usr/lib/systemd/system/
 endif
+	install -D -m 644 onedrive.service $(DESTDIR)/usr/lib/systemd/user/onedrive.service
+
+onedrive.service:
 	sed "s|@PREFIX@|$(PREFIX)|g" systemd.units/onedrive.service.in > onedrive.service
 	sed "s|@PREFIX@|$(PREFIX)|g" systemd.units/onedrive@.service.in > onedrive@.service
 
