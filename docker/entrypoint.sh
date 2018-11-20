@@ -23,4 +23,4 @@ else
 fi
 
 chown "${oduser}:${odgroup}" /onedrive/ /onedrive/conf
-exec gosu "${oduser}" /usr/local/bin/onedrive -m --confdir /onedrive/conf --syncdir /onedrive/data
+exec gosu "${oduser}" /usr/local/bin/onedrive --monitor --verbose --confdir /onedrive/conf --syncdir /onedrive/data

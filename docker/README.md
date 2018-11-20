@@ -7,7 +7,7 @@ This container offers simple monitoring-mode service for OneDrive.
 ## Build instructions
 ```
 cd docker
-git clone https://github.com/skilion/onedrive
+git clone https://github.com/abraunegg/onedrive
 docker build . -t onedrive
 ```
 
