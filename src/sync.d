@@ -16,6 +16,9 @@ private long thresholdFileSize = 4 * 2^^20; // 4 MiB
 // flag to set whether local files should be deleted
 private bool noRemoteDelete = false;
 
+// Do we configure to disable the upload validation routine
+private bool disableUploadValidation = false;
+
 private bool isItemFolder(const ref JSONValue item)
 {
 	return ("folder" in item) != null;
@@ -234,6 +237,18 @@ final class SyncEngine
 	{
 		noRemoteDelete = true;
 	}
+	
+	// Configure disableUploadValidation if function is called
+	// By default, disableUploadValidation = false;
+	// Meaning we will always validate our uploads
+	// However, when uploading a file that can contain metadata SharePoint will associate some 
+	// metadata from the library the file is uploaded to directly in the file
+	// which breaks this validation. See https://github.com/abraunegg/onedrive/issues/205
+	void setDisableUploadValidation()
+	{
+		disableUploadValidation = true;
+	}
+	
 	
 	// download all new changes from OneDrive
 	void applyDifferences()
@@ -1377,29 +1392,35 @@ final class SyncEngine
 							// This has been seen with PNG / JPG files mainly, which then contributes to generating a 412 error when we attempt to update the metadata
 							// Validate here that the file uploaded, at least in size, matches in the response to what the size is on disk
 							if (thisFileSize != uploadFileSize){
-								// OK .. the uploaded file does not match
-								log.log("Uploaded file size does not match local file - upload failure - retrying");
-								// Delete uploaded bad file
-								onedrive.deleteById(response["parentReference"]["driveId"].str, response["id"].str, response["eTag"].str);
-								// Re-upload
-								uploadNewFile(path);
-								return;
-							} else {
-								if ((accountType == "personal") || (thisFileSize == 0)){
-									// Update the item's metadata on OneDrive
-									string id = response["id"].str;
-									string cTag = response["cTag"].str;
-									SysTime mtime = timeLastModified(path).toUTC();
-									// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
-									uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
-									return;
+								if(disableUploadValidation){
+									// Print a warning message
+									log.log("WARNING: Uploaded file size does not match local file - skipping upload validation");
 								} else {
-									// OneDrive Business Account - always use a session to upload
-									// The session includes a Request Body element containing lastModifiedDateTime
-									// which negates the need for a modify event against OneDrive
-									saveItem(response);
+									// OK .. the uploaded file does not match and we did not disable this validation
+									log.log("Uploaded file size does not match local file - upload failure - retrying");
+									// Delete uploaded bad file
+									onedrive.deleteById(response["parentReference"]["driveId"].str, response["id"].str, response["eTag"].str);
+									// Re-upload
+									uploadNewFile(path);
 									return;
 								}
+							} 
+							
+							// File validation is OK
+							if ((accountType == "personal") || (thisFileSize == 0)){
+								// Update the item's metadata on OneDrive
+								string id = response["id"].str;
+								string cTag = response["cTag"].str;
+								SysTime mtime = timeLastModified(path).toUTC();
+								// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
+								uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+								return;
+							} else {
+								// OneDrive Business Account - always use a session to upload
+								// The session includes a Request Body element containing lastModifiedDateTime
+								// which negates the need for a modify event against OneDrive
+								saveItem(response);
+								return;
 							}
 						}
 					
