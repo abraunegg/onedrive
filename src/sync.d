@@ -185,7 +185,7 @@ final class SyncEngine
 			oneDriveDetails	= onedrive.getDefaultDrive();
 		} catch (OneDriveException e) {
 		
-			writeln("exception triggered");
+			writeln("exception triggered: ", e);
 		
 			if (e.httpStatusCode == 400) {
 				// OneDrive responded with 400 error: Bad Request
