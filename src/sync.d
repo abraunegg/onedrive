@@ -192,20 +192,20 @@ final class SyncEngine
 					log.error("ERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
 				}
 				// Must exit here
-				exit(0);
+				exit(-1);
 			}
 			if (e.httpStatusCode == 401) {
 				// HTTP request returned status code 401 (Unauthorized)
 				log.error("\nERROR: OneDrive returned a 'HTTP 401 Unauthorized' - Cannot Initialize Sync Engine");
 				log.error("ERROR: Check your configuration as your access token may be empty or invalid\n");
 				// Must exit here
-				exit(0);
+				exit(-1);
 			}
 			if (e.httpStatusCode >= 500) {
 				// There was a HTTP 5xx Server Side Error
 				log.error("ERROR: OneDrive returned a 'HTTP 5xx Server Side Error' - Cannot Initialize Sync Engine");
 				// Must exit here
-				exit(0);
+				exit(-1);
 			}
 		}
 		
