@@ -9,9 +9,9 @@ d:
 # What build architectures will we build on
 env:
   - ARCH=x64
-#  - ARCH=x32
-#  - ARCH=arm32
-#  - ARCH=arm64
+  - ARCH=x32
+  - ARCH=arm32
+  - ARCH=arm64
 
 script:
   - "bash -ex .travis-ci.sh"
