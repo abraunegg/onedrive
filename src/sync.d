@@ -277,12 +277,30 @@ final class SyncEngine
 		log.vlog("Getting path details from OneDrive ...");
 		JSONValue onedrivePathDetails = onedrive.getPathDetails(path); // Returns a JSON String for the OneDrive Path
 		
-		// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
-		string driveId = defaultDriveId;
-		string folderId = onedrivePathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
+		string driveId;
+		string folderId;
 		
-		// Apply any differences found on OneDrive for this path (download data)
-		applyDifferences(driveId, folderId);
+		if(isItemRemote(onedrivePathDetails)){
+			// 2 step approach:
+			//		1. Ensure changes for the root remote path are captured
+			//		2. Download changes specific to the remote path
+			
+			// root remote
+			applyDifferences(defaultDriveId, onedrivePathDetails["id"].str);
+		
+			// remote changes
+			driveId = onedrivePathDetails["remoteItem"]["parentReference"]["driveId"].str; // Should give something like 66d53be8a5056eca
+			folderId = onedrivePathDetails["remoteItem"]["id"].str; // Should give something like BC7D88EC1F539DCF!107
+			
+			// Apply any differences found on OneDrive for this path (download data)
+			applyDifferences(driveId, folderId);
+			
+		} else {
+			// use the item id as folderId
+			folderId = onedrivePathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
+			// Apply any differences found on OneDrive for this path (download data)
+			applyDifferences(defaultDriveId, folderId);
+		}
 	}
 	
 	// make sure the OneDrive root is in our database
@@ -433,7 +451,6 @@ final class SyncEngine
 			try {
 				// Fetch the changes relative to the path id we want to query
 				changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
-				
 			} catch (OneDriveException e) {
 				// HTTP request returned status code 410 (The requested resource is no longer available at the server)
 				if (e.httpStatusCode == 410) {
@@ -477,21 +494,6 @@ final class SyncEngine
 						if ((id == defaultRootId) && (item["name"].str == "root")) { 
 							// This IS the OneDrive Root
 							isRoot = true;
-						}
-						
-						// Test is this a Shared Folder - which should also be classified as a 'root' item
-						if (hasParentReferenceId(item)) {
-							// item contains parentReference key
-							if (item["parentReference"]["driveId"].str != defaultDriveId) {
-								// The change parentReference driveId does not match the defaultDriveId - this could be a Shared Folder root item
-								string sharedDriveRootPath = "/drives/" ~ item["parentReference"]["driveId"].str ~ "/root:";
-								if (hasParentReferencePath(item)) {
-									if (item["parentReference"]["path"].str == sharedDriveRootPath) {
-										// The drive path matches what a shared folder root item would equal
-										isRoot = true;
-									}
-								}
-							}
 						}
 					}
 
@@ -1240,7 +1242,7 @@ final class SyncEngine
 					log.vlog("The requested directory to create was not found on OneDrive - creating remote directory: ", path);
 
 					// Perform the database lookup
-					enforce(itemdb.selectById(parent.driveId, parent.id, parent), "The parent item id is not in the database");
+					enforce(itemdb.selectByPath(dirName(path), parent.driveId, parent), "The parent item id is not in the database");
 					JSONValue driveItem = [
 							"name": JSONValue(baseName(path)),
 							"folder": parseJSON("{}")
