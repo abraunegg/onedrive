@@ -4,14 +4,10 @@ Thats right folks onedrive is now dockerized ;)
 
 This container offers simple monitoring-mode service for OneDrive.
 
-## Build instructions
-```
-cd docker
-git clone https://github.com/abraunegg/onedrive
-docker build . -t onedrive
-```
-
 ## Usage instructions
+```
+docker pull driveone/onedrive
+```
 NOTE:
 > SELinux context needs to be configured or disabled for Docker, to be able to write to OneDrive host directory.
 
@@ -22,7 +18,7 @@ Replace onedrive_container_name with meaningful name (like onedrive_user_hotmail
 Follow instructions on terminal.  
 For reguler usage this should be only command needed.
 ```
-docker run -it --restart unless-stopped --name onedrive_container_name -v /home/user/OneDrive:/onedrive/data onedrive
+docker run -it --restart unless-stopped --name onedrive_container_name -v /home/user/OneDrive:/onedrive/data driveone/onedrive
 # you can close terminal, docker will continue its work in background
 ```
 ## Poweruser section
@@ -45,5 +41,12 @@ docker start onedrive_container_name
 5. Unregister onedrive monitor
 ```
 docker rm -f onedrive_container_name
+```
+
+## Build instructions
+```
+cd docker
+git clone https://github.com/abraunegg/onedrive
+docker build . -t driveone/onedrive
 ```
 
