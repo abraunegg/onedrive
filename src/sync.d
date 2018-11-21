@@ -184,6 +184,9 @@ final class SyncEngine
 		try {
 			oneDriveDetails	= onedrive.getDefaultDrive();
 		} catch (OneDriveException e) {
+		
+			writeln("exception triggered");
+		
 			if (e.httpStatusCode == 400) {
 				// OneDrive responded with 400 error: Bad Request
 				log.error("\nERROR: OneDrive returned a 'HTTP 400 Bad Request' - Cannot Initialize Sync Engine");
