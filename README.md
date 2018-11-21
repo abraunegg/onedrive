@@ -150,6 +150,13 @@ make DC=~/ldc2-1.11.0-linux-aarch64/bin/ldmd2
 sudo make install
 ```
 
+#### ARM64 Docker onedrive monitor
+```
+# make sure SELinux is configured properly for volume sharing or (not recommended) disabled
+docker pull driveone/onedrive
+docker run -it --restart unless-stopped --name onedrive_container_name -v /home/user/OneDrive:/onedrive/data driveone/onedrive
+```
+
 ## Using the client
 ### Upgrading from 'skilion' client
 The 'skilion' version contains a significant number of defect's in how the local sync state is managed. When upgrading from the 'skilion' version to this version, it is advisable to stop any service / onedrive process from running and then remove any `items.sqlite3` file from your configuration directory (`~/.config/onedrive/`) as this will force the creation of a new local cache file.
