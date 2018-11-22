@@ -2,7 +2,7 @@
 
 Thats right folks onedrive is now dockerized ;)
 
-This container offers simple monitoring-mode service for OneDrive.
+This container offers simple monitoring-mode service for 'Free Client for OneDrive on Linux'.
 
 ## Usage instructions
 ```
@@ -11,36 +11,39 @@ docker pull driveone/onedrive
 NOTE:
 > SELinux context needs to be configured or disabled for Docker, to be able to write to OneDrive host directory.
 
-Replace /home/user/OneDrive with your actual OneDrive host directory
-Replace onedrive_container_name with meaningful name (like onedrive_user_hotmail)
 
-1. Register new onedrive monitor
-Follow instructions on terminal.  
-For reguler usage this should be only command needed.
+1. Run or update onedrive container
 ```
-docker run -it --restart unless-stopped --name onedrive_container_name -v /home/user/OneDrive:/onedrive/data driveone/onedrive
-# you can close terminal, docker will continue its work in background
+# Update onedriveDir with correct existing OneDrive directory path
+onedriveDir="${HOME}/OneDrive"
+
+firstRun='-d'
+docker pull driveone/onedrive
+docker inspect onedrive_conf > /dev/null || { docker volume create onedrive_conf; firstRun='-it'; }
+docker inspect onedrive > /dev/null && docker rm -f onedrive
+docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive
 ```
+
 ## Poweruser section
 1. Check if monitor service is running
 ```
-docker ps -f name=onedrive_container_name
+docker ps -f name=onedrive
 ```
 2. Show monitor run logs
 ```
-docker logs onedrive_container_name
+docker logs onedrive
 ```
 3. Stop running monitor
 ```
-docker stop onedrive_container_name
+docker stop onedrive
 ```
 4. Resume monitor
 ```
-docker start onedrive_container_name
+docker start onedrive
 ```
 5. Unregister onedrive monitor
 ```
-docker rm -f onedrive_container_name
+docker rm -f onedrive
 ```
 
 ## Build instructions

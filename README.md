@@ -56,7 +56,7 @@ wget http://ftp.us.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.1+20180714-
 sudo dpkg -i ./*.deb
 ```
 
-### Dependencies: Fedora < Version 18 / CentOS / RHEL 
+### Dependencies: Fedora < Version 18 / CentOS / RHEL
 ```
 sudo yum groupinstall 'Development Tools'
 sudo yum install libcurl-devel
@@ -64,7 +64,7 @@ sudo yum install sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
-### Dependencies: Fedora > Version 18 
+### Dependencies: Fedora > Version 18
 ```
 sudo dnf groupinstall 'Development Tools'
 sudo dnf install libcurl-devel
@@ -152,9 +152,14 @@ sudo make install
 
 #### ARM64 Docker onedrive monitor
 ```
-# make sure SELinux is configured properly for volume sharing or (not recommended) disabled
+# Update onedriveDir with correct existing OneDrive directory path
+onedriveDir="${HOME}/OneDrive"
+
+firstRun='-d'
 docker pull driveone/onedrive
-docker run -it --restart unless-stopped --name onedrive_container_name -v /home/user/OneDrive:/onedrive/data driveone/onedrive
+docker inspect onedrive_conf > /dev/null || { docker volume create onedrive_conf; firstRun='-it'; }
+docker inspect onedrive > /dev/null && docker rm -f onedrive
+docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive
 ```
 
 ## Using the client
@@ -189,7 +194,7 @@ Example: If the full path is `~/OneDrive/mydir`, the command would be `onedrive 
 ### Performing a 'one-way' sync
 In some cases it may be desirable to 'upload only' to OneDrive. To do this use the following command:
 ```
-onedrive --synchronize --upload-only 
+onedrive --synchronize --upload-only
 ```
 
 ### Increasing logging level
@@ -249,14 +254,14 @@ rm -f ~/.config/onedrive/refresh_token
 ```
 
 ## Additional Configuration
-Additional configuration is optional. 
+Additional configuration is optional.
 If you want to change the defaults, you can copy and edit the included config file into your `~/.config/onedrive` directory:
 ```sh
 mkdir -p ~/.config/onedrive
 cp ./config ~/.config/onedrive/config
 nano ~/.config/onedrive/config
 ```
-This file does not get created by default, and should only be created if you want to change the 'default' operational parameters. 
+This file does not get created by default, and should only be created if you want to change the 'default' operational parameters.
 
 Available options:
 * `sync_dir`: directory where the files will be synced
@@ -357,7 +362,7 @@ In some cases it is desirable to run the OneDrive client as a service, but not r
 
 1. As the user, who will be running the service, run the application in standalone mode, authorize the application for use & validate that the synchronization is working as expected:
 ```
-onedrive --synchronize --verbose 
+onedrive --synchronize --verbose
 ```
 2. Once the application is validated and working for your user, as the 'root' user, where <username> is your username from step 1 above.
 ```
