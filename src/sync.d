@@ -49,6 +49,11 @@ private bool hasParentReferenceId(const ref JSONValue item)
 	return ("id" in item["parentReference"]) != null;
 }
 
+private bool hasParentReferencePath(const ref JSONValue item)
+{
+	return ("path" in item["parentReference"]) != null;
+}
+
 private bool isMalware(const ref JSONValue item)
 {
 	return ("malware" in item) != null;
@@ -218,13 +223,13 @@ final class SyncEngine
 		log.vlog("Default Drive ID: ", defaultDriveId);
 		log.vlog("Default Root ID: ", defaultRootId);
 		log.vlog("Remaining Free Space: ", remainingFreeSpace);
-	
+    
 		// If account type is documentLibrary - then most likely this is a SharePoint repository
 		// and files 'may' be modified after upload. See: https://github.com/abraunegg/onedrive/issues/205
 		if(accountType == "documentLibrary") {
 			setDisableUploadValidation();
 		}
-		
+    
 		// Check the local database to ensure the OneDrive Root details are in the database
 		checkDatabaseForOneDriveRoot();
 	
@@ -293,12 +298,30 @@ final class SyncEngine
 		log.vlog("Getting path details from OneDrive ...");
 		JSONValue onedrivePathDetails = onedrive.getPathDetails(path); // Returns a JSON String for the OneDrive Path
 		
-		// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
-		string driveId = defaultDriveId;
-		string folderId = onedrivePathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
+		string driveId;
+		string folderId;
 		
-		// Apply any differences found on OneDrive for this path (download data)
-		applyDifferences(driveId, folderId);
+		if(isItemRemote(onedrivePathDetails)){
+			// 2 step approach:
+			//		1. Ensure changes for the root remote path are captured
+			//		2. Download changes specific to the remote path
+			
+			// root remote
+			applyDifferences(defaultDriveId, onedrivePathDetails["id"].str);
+		
+			// remote changes
+			driveId = onedrivePathDetails["remoteItem"]["parentReference"]["driveId"].str; // Should give something like 66d53be8a5056eca
+			folderId = onedrivePathDetails["remoteItem"]["id"].str; // Should give something like BC7D88EC1F539DCF!107
+			
+			// Apply any differences found on OneDrive for this path (download data)
+			applyDifferences(driveId, folderId);
+			
+		} else {
+			// use the item id as folderId
+			folderId = onedrivePathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
+			// Apply any differences found on OneDrive for this path (download data)
+			applyDifferences(defaultDriveId, folderId);
+		}
 	}
 	
 	// make sure the OneDrive root is in our database
@@ -449,7 +472,6 @@ final class SyncEngine
 			try {
 				// Fetch the changes relative to the path id we want to query
 				changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
-				
 			} catch (OneDriveException e) {
 				// HTTP request returned status code 410 (The requested resource is no longer available at the server)
 				if (e.httpStatusCode == 410) {
@@ -494,19 +516,6 @@ final class SyncEngine
 							// This IS the OneDrive Root
 							isRoot = true;
 						}
-						
-						// Test is this a Shared Folder - which should also be classified as a 'root' item
-						if (hasParentReferenceId(item)) {
-							// item contains parentReference key
-							if (item["parentReference"]["driveId"].str != defaultDriveId) {
-								// The change parentReference driveId does not match the defaultDriveId - this could be a Shared Folder root item
-								string sharedDriveRootPath = "/drives/" ~ item["parentReference"]["driveId"].str ~ "/root:";
-								if (item["parentReference"]["path"].str == sharedDriveRootPath) {
-									// The drive path matches what a shared folder root item would equal
-									isRoot = true;
-								}
-							}
-						}
 					}
 
 					// How do we handle this change?
@@ -515,7 +524,11 @@ final class SyncEngine
 						applyDifference(item, driveId, isRoot);
 					} else {
 						// What is this item's path?
-						thisItemPath = item["parentReference"]["path"].str;
+						if (hasParentReferencePath(item)) {
+							thisItemPath = item["parentReference"]["path"].str;
+						} else {
+							thisItemPath = "";
+						}
 						// Check this item's path to see if this is a change on the path we want:
 						// 1. 'item id' matches 'id'
 						// 2. 'parentReference id' matches 'id'
@@ -940,7 +953,7 @@ final class SyncEngine
 				uploadNewFile(path);
 			} else {
 				log.vlog("The directory has not changed");
-				// loop trough the children
+				// loop through the children
 				foreach (Item child; itemdb.selectChildren(item.driveId, item.id)) {
 					uploadDifferences(child);
 				}
@@ -966,12 +979,14 @@ final class SyncEngine
 				uploadNewFile(path);
 			} else {
 				log.vlog("The directory has not changed");
-				// continue trough the linked folder
+				// continue through the linked folder
 				assert(item.remoteDriveId && item.remoteId);
 				Item remoteItem;
 				bool found = itemdb.selectById(item.remoteDriveId, item.remoteId, remoteItem);
-				assert(found);
-				uploadDifferences(remoteItem);
+				if(found){
+					// item was found in the database
+					uploadDifferences(remoteItem);
+				}
 			}
 		} else {
 			log.vlog("The directory has been deleted");
@@ -1006,6 +1021,14 @@ final class SyncEngine
 								try {
 									response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
 								} catch (OneDriveException e) {
+									if (e.httpStatusCode == 404) {
+										// HTTP request returned status code 404 - the eTag provided does not exist
+										// Delete record from the local database - file will be uploaded as a new file
+										log.vlog("OneDrive returned a 'HTTP 404 - eTag Issue' - gracefully handling error");
+										itemdb.deleteById(item.driveId, item.id);
+										return;
+									}
+								
 									// Resolve https://github.com/abraunegg/onedrive/issues/36
 									if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
 										// The file is currently checked out or locked for editing by another user
@@ -1019,10 +1042,10 @@ final class SyncEngine
 									
 									if (e.httpStatusCode == 412) {
 										// HTTP request returned status code 412 - ETag does not match current item's value
-										// Remove the offending file from OneDrive - file will be uploaded as a new file
-										onedrive.deleteById(item.driveId, item.id, item.eTag);
-										// Delete from the local database
+										// Delete record from the local database - file will be uploaded as a new file
+										log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
 										itemdb.deleteById(item.driveId, item.id);
+										return;
 									}
 									
 									if (e.httpStatusCode == 504) {
@@ -1035,7 +1058,17 @@ final class SyncEngine
 								writeln("done.");
 							} else {
 								writeln("");
-								response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+								try {
+									response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+								} catch (OneDriveException e) {	
+									if (e.httpStatusCode == 412) {
+										// HTTP request returned status code 412 - ETag does not match current item's value
+										// Delete record from the local database - file will be uploaded as a new file
+										log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
+										itemdb.deleteById(item.driveId, item.id);
+										return;
+									}
+								}
 								writeln("done.");
 							}		
 						} else {
@@ -1063,7 +1096,7 @@ final class SyncEngine
 							saveItem(response);
 						}
 						log.fileOnly("Uploading file ", path, " ... done.");
-						// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
+						// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded via simple upload
 						eTag = response["cTag"].str;
 					}
 					if (accountType == "personal"){
@@ -1230,7 +1263,7 @@ final class SyncEngine
 					log.vlog("The requested directory to create was not found on OneDrive - creating remote directory: ", path);
 
 					// Perform the database lookup
-					enforce(itemdb.selectById(parent.driveId, parent.id, parent), "The parent item id is not in the database");
+					enforce(itemdb.selectByPath(dirName(path), parent.driveId, parent), "The parent item id is not in the database");
 					JSONValue driveItem = [
 							"name": JSONValue(baseName(path)),
 							"folder": parseJSON("{}")

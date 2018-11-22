@@ -3,6 +3,7 @@ name: Bug report
 about: Create a report to help us improve
 
 ---
+**Note:** Before submitting a bug report, please ensure you are running the latest 'onedrive' client as built from 'master' and by using the latest available DMD compiler. Refer to the readme on building the client for your system.
 
 ### Bug Report Details ###
 **Describe the bug**

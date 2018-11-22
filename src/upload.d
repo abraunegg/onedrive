@@ -92,13 +92,17 @@ struct UploadSession
 				} else {
 					// unable to read the local file
 					log.vlog("Restore file upload session failed - unable to read the local file");
-					remove(sessionFilePath);
+					if (exists(sessionFilePath)) {
+						remove(sessionFilePath);
+					}
 					return false;
 				}
 			} else {
 				// session file contains an error - cant resume
 				log.vlog("Restore file upload session failed - cleaning up session resume");
-				remove(sessionFilePath);
+				if (exists(sessionFilePath)) {
+					remove(sessionFilePath);
+				}
 				return false;
 			}
 		}
@@ -136,14 +140,18 @@ struct UploadSession
 				save();
 			} catch (OneDriveException e) {
 				// there was an error remove session file
-				remove(sessionFilePath);
+				if (exists(sessionFilePath)) {
+					remove(sessionFilePath);
+				}
 				return response;
 			}
 		}
 		// upload complete
 		p.next();
 		writeln();
-		remove(sessionFilePath);
+		if (exists(sessionFilePath)) {
+			remove(sessionFilePath);
+		}
 		return response;
 	}
 

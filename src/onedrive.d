@@ -1,4 +1,5 @@
-import std.net.curl: CurlException, HTTP;
+import std.net.curl;
+import etc.c.curl: CurlOption;
 import std.datetime, std.exception, std.file, std.json, std.path;
 import std.stdio, std.string, std.uni, std.uri;
 import core.stdc.stdlib;
@@ -62,6 +63,10 @@ final class OneDriveApi
 		http = HTTP();
 		http.dnsTimeout = (dur!"seconds"(5));
 		http.dataTimeout = (dur!"seconds"(3600));
+		
+		// Specify how many redirects should be allowed
+		http.maxRedirects(5);
+		
 		if (debugHttp) {
 			http.verbose = true;
 			.debugResponse = true;
@@ -259,8 +264,7 @@ final class OneDriveApi
 		}
 		http.method = HTTP.Method.put;
 		http.url = uploadUrl;
-		// when using microsoft graph the auth code is different
-		//addAccessTokenHeader();
+		
 		import std.conv;
 		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
 		http.addRequestHeader("Content-Range", contentRange);
@@ -339,7 +343,7 @@ final class OneDriveApi
 		auto response = perform();
 		checkHttpCode(response);
 		if (.debugResponse){
-			log.vlog("OneDrive Response: ", response);
+			writeln("OneDrive API Response: ", response);
         }
 		return response;
 	}
@@ -488,6 +492,11 @@ final class OneDriveApi
 		char[] content;
 		http.onReceive = (ubyte[] data) {
 			content ~= data;
+			// HTTP Server Response Code Debugging
+			if (.debugResponse){
+				writeln("OneDrive HTTP Server Response: ", http.statusLine.code);
+			}
+			
 			return data.length;
 		};
 		
@@ -516,7 +525,7 @@ final class OneDriveApi
 		// https://developer.overdrive.com/docs/reference-guide
 		
 		/*
-			Error response handling
+			HTTP/1.1 Response handling
 
 			Errors in the OneDrive API are returned using standard HTTP status codes, as well as a JSON error response object. The following HTTP status codes should be expected.
 
@@ -549,10 +558,16 @@ final class OneDriveApi
 			507				Insufficient Storage				The maximum storage quota has been reached.
 			509				Bandwidth Limit Exceeded			Your app has been throttled for exceeding the maximum bandwidth cap. Your app can retry the request again after more time has elapsed.
 		
+			HTTP/2 Response handling 
+			
+			0				OK
+		
 		*/
 	
 		switch(http.statusLine.code)
 		{
+			case 0:
+				break;
 			//	200 - OK
 			case 200:
 				// No Log .. 
@@ -563,6 +578,10 @@ final class OneDriveApi
 			case 201,202,204:
 				// No actions, but log if verbose logging
 				//log.vlog("OneDrive Response: '", http.statusLine.code, " - ", http.statusLine.reason, "'");
+				break;
+			
+			// 302 - resource found and available at another location, redirect
+			case 302:
 				break;
 			
 			// 400 - Bad Request
@@ -638,9 +657,9 @@ final class OneDriveApi
 				log.vlog("OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error");
 				break;
 			
-			// Default - all other errors that are not a 2xx
+			// Default - all other errors that are not a 2xx or a 302
 			default:
-			if (http.statusLine.code / 100 != 2) {
+			if (http.statusLine.code / 100 != 2 && http.statusLine.code != 302) {
 				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
 				break;
 			}
@@ -678,6 +697,5 @@ unittest
 		assert(e.httpStatusCode == 412);
 	}
 	onedrive.deleteById(item["id"].str, item["eTag"].str);
-
 	onedrive.http.shutdown();
 }
