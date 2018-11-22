@@ -219,6 +219,12 @@ final class SyncEngine
 		log.vlog("Default Root ID: ", defaultRootId);
 		log.vlog("Remaining Free Space: ", remainingFreeSpace);
 	
+		// If account type is documentLibrary - then most likely this is a SharePoint repository
+		// and files 'may' be modified after upload. See: https://github.com/abraunegg/onedrive/issues/205
+		if(accountType == "documentLibrary") {
+			setDisableUploadValidation();
+		}
+		
 		// Check the local database to ensure the OneDrive Root details are in the database
 		checkDatabaseForOneDriveRoot();
 	

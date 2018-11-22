@@ -97,7 +97,7 @@ int main(string[] args)
 			"create-directory", "Create a directory on OneDrive - no sync will be performed.", &createDirectory,
 			"destination-directory", "Destination directory for renamed or move on OneDrive - no sync will be performed.", &destinationDirectory,
 			"debug-https", "Debug OneDrive HTTPS communication.", &debugHttp,
-			"disable-upload-validation", "Disable upload validation when uploading to SharePoint", &disableUploadValidation,
+			"disable-upload-validation", "Disable upload validation when uploading to OneDrive", &disableUploadValidation,
 			"download|d", "Only download remote changes", &downloadOnly,
 			"local-first", "Synchronize from the local directory source first, before downloading changes from OneDrive.", &localFirst,
 			"logout", "Logout the current user", &logout,
