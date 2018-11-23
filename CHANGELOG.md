@@ -2,6 +2,19 @@
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
+## [2.2.0] - 2018-11-24
+### Fixed
+- Updated client to output additional logging when debugging
+- Resolve database assertion failure due to authentication
+- Resolve unable to create folders on shared OneDrive Personal accounts
+
+### Added
+- Implement feature request to Sync from Microsoft SharePoint
+- Implement feature request to specify a logging directory if logging is enabled
+
+### Changed
+- Change '--download' to '--download-only' to align with '--upload-only'
+- Change logging so that logging to a separate file is no longer the default
 
 ## [2.1.6] - 2018-11-15
 ### Fixed
