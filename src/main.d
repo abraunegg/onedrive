@@ -83,6 +83,9 @@ int main(string[] args)
 	bool noRemoteDelete;
 	// Are we able to reach the OneDrive Service
 	bool online = false;
+	// Does the user want to disable upload validation - https://github.com/abraunegg/onedrive/issues/205
+	// SharePoint will associate some metadata from the library the file is uploaded to directly in the file - thus change file size & checksums
+	bool disableUploadValidation = false;
 	
 	try {
 		auto opt = getopt(
@@ -94,6 +97,7 @@ int main(string[] args)
 			"create-directory", "Create a directory on OneDrive - no sync will be performed.", &createDirectory,
 			"destination-directory", "Destination directory for renamed or move on OneDrive - no sync will be performed.", &destinationDirectory,
 			"debug-https", "Debug OneDrive HTTPS communication.", &debugHttp,
+			"disable-upload-validation", "Disable upload validation when uploading to OneDrive", &disableUploadValidation,
 			"download|d", "Only download remote changes", &downloadOnly,
 			"local-first", "Synchronize from the local directory source first, before downloading changes from OneDrive.", &localFirst,
 			"logout", "Logout the current user", &logout,
@@ -261,6 +265,9 @@ int main(string[] args)
 	
 	// We should only set noRemoteDelete in an upload-only scenario
 	if ((uploadOnly)&&(noRemoteDelete)) sync.setNoRemoteDelete();
+	
+	// Do we configure to disable the upload validation routine
+	if(disableUploadValidation) sync.setDisableUploadValidation();
 	
 	// Do we need to validate the syncDir to check for the presence of a '.nosync' file
 	if (checkMount) {
