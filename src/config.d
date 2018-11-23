@@ -37,7 +37,9 @@ final class Config
 		// Configure the monitor mode loop - the number of seconds by which
 		// each sync operation is undertaken when idle under monitor mode
 		setValue("monitor_interval", "45");
-		    
+		// Configure the default logging directory to be /var/log/onedrive/
+		setValue("log_dir", "/var/log/onedrive/");
+		
 		if (!load(userConfigFilePath)) {
 			log.vlog("No config file found, using defaults");
 		}

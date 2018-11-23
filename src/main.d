@@ -83,6 +83,8 @@ int main(string[] args)
 	bool noRemoteDelete;
 	// Are we able to reach the OneDrive Service
 	bool online = false;
+	// Do we enable a log file
+	bool enableLogFile = false;
 	// Does the user want to disable upload validation - https://github.com/abraunegg/onedrive/issues/205
 	// SharePoint will associate some metadata from the library the file is uploaded to directly in the file - thus change file size & checksums
 	bool disableUploadValidation = false;
@@ -97,8 +99,9 @@ int main(string[] args)
 			"create-directory", "Create a directory on OneDrive - no sync will be performed.", &createDirectory,
 			"destination-directory", "Destination directory for renamed or move on OneDrive - no sync will be performed.", &destinationDirectory,
 			"debug-https", "Debug OneDrive HTTPS communication.", &debugHttp,
+			"download-only|d", "Only download remote changes", &downloadOnly,
 			"disable-upload-validation", "Disable upload validation when uploading to OneDrive", &disableUploadValidation,
-			"download|d", "Only download remote changes", &downloadOnly,
+			"enable-logging", "Enable client activity to a separate log file", &enableLogFile,
 			"local-first", "Synchronize from the local directory source first, before downloading changes from OneDrive.", &localFirst,
 			"logout", "Logout the current user", &logout,
 			"monitor|m", "Keep monitoring for local and remote changes", &monitor,
@@ -137,9 +140,6 @@ int main(string[] args)
 		return EXIT_SUCCESS;
 	}
 
-	// Configure Logging
-	log.init();
-
 	// load configuration
 	log.vlog("Loading config ...");
 	configDirName = configDirName.expandTilde().absolutePath();
@@ -147,6 +147,14 @@ int main(string[] args)
 	if (!exists(configDirName)) mkdirRecurse(configDirName);
 	auto cfg = new config.Config(configDirName);
 	cfg.init();
+	
+	// Configure logging if enabled
+	if (enableLogFile){
+		// Read in a user defined log directory or use the default
+		string logDir = cfg.getValue("log_dir");
+		log.vlog("Using logfile dir: ", logDir);
+		log.init(logDir);
+	}
 	
 	// command line parameters override the config
 	if (syncDirName) cfg.setValue("sync_dir", syncDirName.expandTilde().absolutePath());
@@ -219,7 +227,7 @@ int main(string[] args)
 		// Did the user specify a 'different' sync dir by passing a value in?
 		if (syncDirName){
 			// was there a ~ in the passed in state? it will not work via init.d / systemd
-			if (canFind(cfg.getValue("sync_dir"),"~") ) {
+			if (canFind(cfg.getValue("sync_dir"),"~")) {
 				// A ~ was found
 				syncDir = homePath ~ "/OneDrive";
 			} else {
