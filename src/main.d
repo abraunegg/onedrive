@@ -85,6 +85,9 @@ int main(string[] args)
 	bool online = false;
 	// Do we enable a log file
 	bool enableLogFile = false;
+	// Does the user want to disable upload validation - https://github.com/abraunegg/onedrive/issues/205
+	// SharePoint will associate some metadata from the library the file is uploaded to directly in the file - thus change file size & checksums
+	bool disableUploadValidation = false;
 	
 	try {
 		auto opt = getopt(
@@ -98,6 +101,7 @@ int main(string[] args)
 			"debug-https", "Debug OneDrive HTTPS communication.", &debugHttp,
 			"download-only|d", "Only download remote changes", &downloadOnly,
 			"enable-logging", "Enable client activity to a separate log file", &enableLogFile,
+			"disable-upload-validation", "Disable upload validation when uploading to OneDrive", &disableUploadValidation,
 			"local-first", "Synchronize from the local directory source first, before downloading changes from OneDrive.", &localFirst,
 			"logout", "Logout the current user", &logout,
 			"monitor|m", "Keep monitoring for local and remote changes", &monitor,
@@ -269,6 +273,9 @@ int main(string[] args)
 	
 	// We should only set noRemoteDelete in an upload-only scenario
 	if ((uploadOnly)&&(noRemoteDelete)) sync.setNoRemoteDelete();
+	
+	// Do we configure to disable the upload validation routine
+	if(disableUploadValidation) sync.setDisableUploadValidation();
 	
 	// Do we need to validate the syncDir to check for the presence of a '.nosync' file
 	if (checkMount) {

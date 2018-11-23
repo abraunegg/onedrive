@@ -6,6 +6,7 @@ import std.file, std.json, std.path;
 import std.regex;
 import std.stdio, std.string, std.uni, std.uri;
 import core.time, core.thread;
+import core.stdc.stdlib;
 import config, itemdb, onedrive, selective, upload, util;
 static import log;
 
@@ -14,6 +15,9 @@ private long thresholdFileSize = 4 * 2^^20; // 4 MiB
 
 // flag to set whether local files should be deleted
 private bool noRemoteDelete = false;
+
+// Do we configure to disable the upload validation routine
+private bool disableUploadValidation = false;
 
 private bool isItemFolder(const ref JSONValue item)
 {
@@ -179,36 +183,62 @@ final class SyncEngine
 		// Set accountType, defaultDriveId, defaultRootId & remainingFreeSpace once and reuse where possible
 		JSONValue oneDriveDetails;
 
-		// Need to catch 5xx server side errors at initialization
+		// Need to catch 400 or 5xx server side errors at initialization
 		try {
 			oneDriveDetails	= onedrive.getDefaultDrive();
-			// Successfully got details from OneDrive without a server side error such as HTTP/1.1 504 Gateway Timeout
-			accountType = oneDriveDetails["driveType"].str;
-			defaultDriveId = oneDriveDetails["id"].str;
-			defaultRootId = onedrive.getDefaultRoot["id"].str;
-			remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
-			
-			// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
-			log.vlog("Account Type: ", accountType);
-			log.vlog("Default Drive ID: ", defaultDriveId);
-			log.vlog("Default Root ID: ", defaultRootId);
-			log.vlog("Remaining Free Space: ", remainingFreeSpace);
-		
-			// Check the local database to ensure the OneDrive Root details are in the database
-			checkDatabaseForOneDriveRoot();
-		
-			// Check if there is an interrupted upload session
-			if (session.restore()) {
-				log.log("Continuing the upload session ...");
-				auto item = session.upload();
-				saveItem(item);
-			}
 		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 400) {
+				// OneDrive responded with 400 error: Bad Request
+				log.error("\nERROR: OneDrive returned a 'HTTP 400 Bad Request' - Cannot Initialize Sync Engine");
+				// Check this
+				if (cfg.getValue("drive_id").length) {
+					log.error("ERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
+				}
+				// Must exit here
+				exit(-1);
+			}
+			if (e.httpStatusCode == 401) {
+				// HTTP request returned status code 401 (Unauthorized)
+				log.error("\nERROR: OneDrive returned a 'HTTP 401 Unauthorized' - Cannot Initialize Sync Engine");
+				log.error("ERROR: Check your configuration as your access token may be empty or invalid\n");
+				// Must exit here
+				exit(-1);
+			}
 			if (e.httpStatusCode >= 500) {
 				// There was a HTTP 5xx Server Side Error
 				log.error("ERROR: OneDrive returned a 'HTTP 5xx Server Side Error' - Cannot Initialize Sync Engine");
+				// Must exit here
+				exit(-1);
 			}
-		}	
+		}
+		
+		// Successfully got details from OneDrive without a server side error such as HTTP/1.1 504 Gateway Timeout
+		accountType = oneDriveDetails["driveType"].str;
+		defaultDriveId = oneDriveDetails["id"].str;
+		defaultRootId = onedrive.getDefaultRoot["id"].str;
+		remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+		
+		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
+		log.vlog("Account Type: ", accountType);
+		log.vlog("Default Drive ID: ", defaultDriveId);
+		log.vlog("Default Root ID: ", defaultRootId);
+		log.vlog("Remaining Free Space: ", remainingFreeSpace);
+    
+		// If account type is documentLibrary - then most likely this is a SharePoint repository
+		// and files 'may' be modified after upload. See: https://github.com/abraunegg/onedrive/issues/205
+		if(accountType == "documentLibrary") {
+			setDisableUploadValidation();
+		}
+    
+		// Check the local database to ensure the OneDrive Root details are in the database
+		checkDatabaseForOneDriveRoot();
+	
+		// Check if there is an interrupted upload session
+		if (session.restore()) {
+			log.log("Continuing the upload session ...");
+			auto item = session.upload();
+			saveItem(item);
+		}		
 	}
 
 	// Configure noRemoteDelete if function is called
@@ -218,6 +248,18 @@ final class SyncEngine
 	{
 		noRemoteDelete = true;
 	}
+	
+	// Configure disableUploadValidation if function is called
+	// By default, disableUploadValidation = false;
+	// Meaning we will always validate our uploads
+	// However, when uploading a file that can contain metadata SharePoint will associate some 
+	// metadata from the library the file is uploaded to directly in the file
+	// which breaks this validation. See https://github.com/abraunegg/onedrive/issues/205
+	void setDisableUploadValidation()
+	{
+		disableUploadValidation = true;
+	}
+	
 	
 	// download all new changes from OneDrive
 	void applyDifferences()
@@ -256,12 +298,30 @@ final class SyncEngine
 		log.vlog("Getting path details from OneDrive ...");
 		JSONValue onedrivePathDetails = onedrive.getPathDetails(path); // Returns a JSON String for the OneDrive Path
 		
-		// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
-		string driveId = defaultDriveId;
-		string folderId = onedrivePathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
+		string driveId;
+		string folderId;
 		
-		// Apply any differences found on OneDrive for this path (download data)
-		applyDifferences(driveId, folderId);
+		if(isItemRemote(onedrivePathDetails)){
+			// 2 step approach:
+			//		1. Ensure changes for the root remote path are captured
+			//		2. Download changes specific to the remote path
+			
+			// root remote
+			applyDifferences(defaultDriveId, onedrivePathDetails["id"].str);
+		
+			// remote changes
+			driveId = onedrivePathDetails["remoteItem"]["parentReference"]["driveId"].str; // Should give something like 66d53be8a5056eca
+			folderId = onedrivePathDetails["remoteItem"]["id"].str; // Should give something like BC7D88EC1F539DCF!107
+			
+			// Apply any differences found on OneDrive for this path (download data)
+			applyDifferences(driveId, folderId);
+			
+		} else {
+			// use the item id as folderId
+			folderId = onedrivePathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
+			// Apply any differences found on OneDrive for this path (download data)
+			applyDifferences(defaultDriveId, folderId);
+		}
 	}
 	
 	// make sure the OneDrive root is in our database
@@ -412,7 +472,6 @@ final class SyncEngine
 			try {
 				// Fetch the changes relative to the path id we want to query
 				changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
-				
 			} catch (OneDriveException e) {
 				// HTTP request returned status code 410 (The requested resource is no longer available at the server)
 				if (e.httpStatusCode == 410) {
@@ -456,21 +515,6 @@ final class SyncEngine
 						if ((id == defaultRootId) && (item["name"].str == "root")) { 
 							// This IS the OneDrive Root
 							isRoot = true;
-						}
-						
-						// Test is this a Shared Folder - which should also be classified as a 'root' item
-						if (hasParentReferenceId(item)) {
-							// item contains parentReference key
-							if (item["parentReference"]["driveId"].str != defaultDriveId) {
-								// The change parentReference driveId does not match the defaultDriveId - this could be a Shared Folder root item
-								string sharedDriveRootPath = "/drives/" ~ item["parentReference"]["driveId"].str ~ "/root:";
-								if (hasParentReferencePath(item)) {
-									if (item["parentReference"]["path"].str == sharedDriveRootPath) {
-										// The drive path matches what a shared folder root item would equal
-										isRoot = true;
-									}
-								}
-							}
 						}
 					}
 
@@ -1219,7 +1263,7 @@ final class SyncEngine
 					log.vlog("The requested directory to create was not found on OneDrive - creating remote directory: ", path);
 
 					// Perform the database lookup
-					enforce(itemdb.selectById(parent.driveId, parent.id, parent), "The parent item id is not in the database");
+					enforce(itemdb.selectByPath(dirName(path), parent.driveId, parent), "The parent item id is not in the database");
 					JSONValue driveItem = [
 							"name": JSONValue(baseName(path)),
 							"folder": parseJSON("{}")
@@ -1387,29 +1431,35 @@ final class SyncEngine
 							// This has been seen with PNG / JPG files mainly, which then contributes to generating a 412 error when we attempt to update the metadata
 							// Validate here that the file uploaded, at least in size, matches in the response to what the size is on disk
 							if (thisFileSize != uploadFileSize){
-								// OK .. the uploaded file does not match
-								log.log("Uploaded file size does not match local file - upload failure - retrying");
-								// Delete uploaded bad file
-								onedrive.deleteById(response["parentReference"]["driveId"].str, response["id"].str, response["eTag"].str);
-								// Re-upload
-								uploadNewFile(path);
-								return;
-							} else {
-								if ((accountType == "personal") || (thisFileSize == 0)){
-									// Update the item's metadata on OneDrive
-									string id = response["id"].str;
-									string cTag = response["cTag"].str;
-									SysTime mtime = timeLastModified(path).toUTC();
-									// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
-									uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
-									return;
+								if(disableUploadValidation){
+									// Print a warning message
+									log.log("WARNING: Uploaded file size does not match local file - skipping upload validation");
 								} else {
-									// OneDrive Business Account - always use a session to upload
-									// The session includes a Request Body element containing lastModifiedDateTime
-									// which negates the need for a modify event against OneDrive
-									saveItem(response);
+									// OK .. the uploaded file does not match and we did not disable this validation
+									log.log("Uploaded file size does not match local file - upload failure - retrying");
+									// Delete uploaded bad file
+									onedrive.deleteById(response["parentReference"]["driveId"].str, response["id"].str, response["eTag"].str);
+									// Re-upload
+									uploadNewFile(path);
 									return;
 								}
+							} 
+							
+							// File validation is OK
+							if ((accountType == "personal") || (thisFileSize == 0)){
+								// Update the item's metadata on OneDrive
+								string id = response["id"].str;
+								string cTag = response["cTag"].str;
+								SysTime mtime = timeLastModified(path).toUTC();
+								// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
+								uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+								return;
+							} else {
+								// OneDrive Business Account - always use a session to upload
+								// The session includes a Request Body element containing lastModifiedDateTime
+								// which negates the need for a modify event against OneDrive
+								saveItem(response);
+								return;
 							}
 						}
 					
