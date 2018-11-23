@@ -414,31 +414,31 @@ If you encounter any bugs you can report them here on Github. Before filing an i
 ```
 Usage: onedrive [OPTION]...
 
-no option                   No Sync and exit
-        --check-for-nomount Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
-                  --confdir Set the directory used to store the configuration files
-         --create-directory Create a directory on OneDrive - no sync will be performed.
-    --destination-directory Destination directory for renamed or move on OneDrive - no sync will be performed.
-               --debug-http Debug OneDrive HTTP communication.
---disable-upload-validation Disable upload validation when uploading to OneDrive
-           --enable-logging Enable client activity to a separate log file
--d          --download-only Only download remote changes
-              --local-first Synchronize from the local directory source first, before downloading changes from OneDrive.
-                   --logout Logout the current user
--m                --monitor Keep monitoring for local and remote changes
-         --no-remote-delete Do not delete local file 'deletes' from OneDrive when using --upload-only
-              --print-token Print the access token, useful for debugging
-                   --resync Forget the last saved state, perform a full sync
-         --remove-directory Remove a directory on OneDrive - no sync will be performed.
-         --single-directory Specify a single local directory within the OneDrive root to sync.
-            --skip-symlinks Skip syncing of symlinks
-         --source-directory Source directory to rename or move on OneDrive - no sync will be performed.
-                  --syncdir Set the directory used to sync the files that are synced
-              --synchronize Perform a synchronization
-              --upload-only Only upload to OneDrive, do not sync changes from OneDrive locally
--v                --verbose Print more details, useful for debugging
-                  --version Print the version and exit
--h                   --help This help information.
+no option                      No sync and exit
+           --check-for-nomount Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
+                     --confdir Set the directory used to store the configuration files
+            --create-directory Create a directory on OneDrive - no sync will be performed.
+       --destination-directory Destination directory for renamed or move on OneDrive - no sync will be performed.
+                 --debug-https Debug OneDrive HTTPS communication.
+-d             --download-only Only download remote changes
+   --disable-upload-validation Disable upload validation when uploading to OneDrive
+              --enable-logging Enable client activity to a separate log file
+                 --local-first Synchronize from the local directory source first, before downloading changes from OneDrive.
+                      --logout Logout the current user
+-m                   --monitor Keep monitoring for local and remote changes
+            --no-remote-delete Do not delete local file 'deletes' from OneDrive when using --upload-only
+                 --print-token Print the access token, useful for debugging
+                      --resync Forget the last saved state, perform a full sync
+            --remove-directory Remove a directory on OneDrive - no sync will be performed.
+            --single-directory Specify a single local directory within the OneDrive root to sync.
+               --skip-symlinks Skip syncing of symlinks
+            --source-directory Source directory to rename or move on OneDrive - no sync will be performed.
+                     --syncdir Set the directory used to sync the files that are synced
+                 --synchronize Perform a synchronization
+                 --upload-only Only upload to OneDrive, do not sync changes from OneDrive locally
+-v                   --verbose Print more details, useful for debugging
+                     --version Print the version and exit
+-h                      --help This help information.
 ```
 
 ### File naming
