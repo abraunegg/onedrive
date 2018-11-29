@@ -740,9 +740,22 @@ final class SyncEngine
 			if (oldPath != newPath) {
 				log.log("Moving ", oldPath, " to ", newPath);
 				if (exists(newPath)) {
-					// TODO: force remote sync by deleting local item
-					log.vlog("The destination is occupied, renaming the conflicting file...");
-					safeRename(newPath);
+					Item localNewItem;
+					if (itemdb.selectByPath(newPath, defaultDriveId, localNewItem)) {
+						if (isItemSynced(localNewItem, newPath)) {
+							log.vlog("Destination is in sync and will be overwritten");
+						} else {
+							// TODO: force remote sync by deleting local item
+							log.vlog("The destination is occupied, renaming the conflicting file...");
+							safeRename(newPath);
+						}
+					} else {
+						// to be overwritten item is not already in the itemdb, so it should
+						// be synced. Do a safe rename here, too.
+						// TODO: force remote sync by deleting local item
+						log.vlog("The destination is occupied by new file, renaming the conflicting file...");
+						safeRename(newPath);
+					}
 				}
 				rename(oldPath, newPath);
 			}
