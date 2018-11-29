@@ -374,7 +374,13 @@ int main(string[] args)
 				if (!downloadOnly) m.update(online);
 				auto currTime = MonoTime.currTime();
 				if (currTime - lastCheckTime > checkInterval) {
-					online = testNetwork();
+					try {
+						online = testNetwork();
+					} catch (CurlException e) {
+						// No network connection to OneDrive Service
+						log.log("No network connection to Microsoft OneDrive Service, skipping sync");
+						online = false;
+					}
 					if (online) {
 						performSync(sync, singleDirectory, downloadOnly, localFirst, uploadOnly);
 						if (!downloadOnly) {
