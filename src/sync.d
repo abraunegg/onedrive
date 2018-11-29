@@ -740,9 +740,22 @@ final class SyncEngine
 			if (oldPath != newPath) {
 				log.log("Moving ", oldPath, " to ", newPath);
 				if (exists(newPath)) {
-					// TODO: force remote sync by deleting local item
-					log.vlog("The destination is occupied, renaming the conflicting file...");
-					safeRename(newPath);
+					Item localNewItem;
+					if (itemdb.selectByPath(newPath, defaultDriveId, localNewItem)) {
+						if (isItemSynced(localNewItem, newPath)) {
+							log.vlog("Destination is in sync and will be overwritten");
+						} else {
+							// TODO: force remote sync by deleting local item
+							log.vlog("The destination is occupied, renaming the conflicting file...");
+							safeRename(newPath);
+						}
+					} else {
+						// to be overwritten item is not already in the itemdb, so it should
+						// be synced. Do a safe rename here, too.
+						// TODO: force remote sync by deleting local item
+						log.vlog("The destination is occupied by new file, renaming the conflicting file...");
+						safeRename(newPath);
+					}
 				}
 				rename(oldPath, newPath);
 			}
@@ -853,14 +866,30 @@ final class SyncEngine
 			Item item;
 			if (!itemdb.selectById(i[0], i[1], item)) continue; // check if the item is in the db
 			string path = itemdb.computePath(i[0], i[1]);
-			log.log("Deleting item ", path);
+			log.log("Trying to delete item ", path);
 			itemdb.deleteById(item.driveId, item.id);
 			if (item.remoteDriveId != null) {
 				// delete the linked remote folder
 				itemdb.deleteById(item.remoteDriveId, item.remoteId);
 			}
+			bool needsRemoval = false;
 			if (exists(path)) {
 				// path exists on the local system	
+				// make sure that the path refers to the correct item
+				Item pathItem;
+				if (itemdb.selectByPath(path, item.driveId, pathItem)) {
+					if (pathItem.id == item.id) {
+						needsRemoval = true;
+					} else {
+						log.log("Skipped due to id difference!");
+					}
+				} else {
+					// item has disappeared completely
+					needsRemoval = true;
+				}
+			}
+			if (needsRemoval) {
+				log.log("Deleting item ", path);
 				if (isFile(path)) {
 					remove(path);
 				} else {
