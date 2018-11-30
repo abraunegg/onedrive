@@ -1,6 +1,8 @@
 DC = dmd
 DFLAGS = -g -ofonedrive -O -L-lcurl -L-lsqlite3 -L-ldl -J.
 PREFIX = /usr/local
+DOCDIR = $(PREFIX)/share/doc/onedrive
+DOCFILES = README.md README.Office365.md config LICENSE CHANGELOG.md
 
 ifneq ("$(wildcard /etc/redhat-release)","")
 RHEL = $(shell cat /etc/redhat-release | grep -E "(Red Hat Enterprise Linux Server|CentOS Linux)" | wc -l)
@@ -34,6 +36,7 @@ install: all
 	chmod 0775 $(DESTDIR)/var/log/onedrive
 	install -D onedrive $(DESTDIR)$(PREFIX)/bin/onedrive
 	install -D -m 644 logrotate/onedrive.logrotate $(DESTDIR)/etc/logrotate.d/onedrive
+	for i in $(DOCFILES) ; do install -D -m 644 $$i $(DESTDIR)$(DOCDIR)/$$i ; done
 ifeq ($(RHEL),1)
 	mkdir -p $(DESTDIR)/usr/lib/systemd/system/
 	chown root.root $(DESTDIR)/usr/lib/systemd/system/
