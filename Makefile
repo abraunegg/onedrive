@@ -74,6 +74,8 @@ else
 	rm -f $(DESTDIR)/usr/lib/systemd/user/onedrive.service
 	rm -f $(DESTDIR)/usr/lib/systemd/system/onedrive@.service
 endif
+	for i in $(DOCFILES) ; do rm -f $(DESTDIR)$(DOCDIR)/$$i ; done
+	rm -f $(DESTDIR)$(MANDIR)/onedrive.1
 
 version: .git/HEAD .git/index
 	echo $(shell git describe --tags) >version
