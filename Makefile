@@ -2,6 +2,7 @@ DC = dmd
 DFLAGS = -g -ofonedrive -O -L-lcurl -L-lsqlite3 -L-ldl -J.
 PREFIX = /usr/local
 DOCDIR = $(PREFIX)/share/doc/onedrive
+MANDIR = $(PREFIX)/share/man/man1
 DOCFILES = README.md README.Office365.md config LICENSE CHANGELOG.md
 
 ifneq ("$(wildcard /etc/redhat-release)","")
@@ -25,7 +26,7 @@ SOURCES = \
 	src/util.d \
 	src/progress.d
 
-all: onedrive onedrive.service
+all: onedrive onedrive.service onedrive.1
 
 clean:
 	rm -f onedrive onedrive.o onedrive.service onedrive@.service
@@ -35,6 +36,7 @@ install: all
 	chown root.users $(DESTDIR)/var/log/onedrive
 	chmod 0775 $(DESTDIR)/var/log/onedrive
 	install -D onedrive $(DESTDIR)$(PREFIX)/bin/onedrive
+	install -D onedrive.1 $(DESTDIR)$(MANDIR)/onedrive.1
 	install -D -m 644 logrotate/onedrive.logrotate $(DESTDIR)/etc/logrotate.d/onedrive
 	for i in $(DOCFILES) ; do install -D -m 644 $$i $(DESTDIR)$(DOCDIR)/$$i ; done
 ifeq ($(RHEL),1)
@@ -59,6 +61,9 @@ onedrive: version $(SOURCES)
 onedrive.service:
 	sed "s|@PREFIX@|$(PREFIX)|g" systemd.units/onedrive.service.in > onedrive.service
 	sed "s|@PREFIX@|$(PREFIX)|g" systemd.units/onedrive@.service.in > onedrive@.service
+
+onedrive.1: onedrive.1.in
+	sed "s|@DOCDIR@|$(DOCDIR)|g" onedrive.1.in > onedrive.1
 
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/onedrive
