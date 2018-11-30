@@ -1,6 +1,6 @@
-DC = dmd
-DFLAGS = -g -ofonedrive -O -L-lcurl -L-lsqlite3 -L-ldl -J.
-PREFIX = /usr/local
+DC ?= dmd
+DFLAGS += -g -ofonedrive -O -L-lcurl -L-lsqlite3 -L-ldl -J.
+PREFIX ?= /usr/local
 
 ifneq ("$(wildcard /etc/redhat-release)","")
 RHEL = $(shell cat /etc/redhat-release | grep -E "(Red Hat Enterprise Linux Server|CentOS Linux)" | wc -l)
