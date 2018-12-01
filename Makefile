@@ -34,7 +34,7 @@ clean:
 onedrive: version $(SOURCES)
 	$(DC) $(DFLAGS) $(SOURCES)
 
-install.noservice: onedrive
+install.noservice: onedrive onedrive.1
 	mkdir -p $(DESTDIR)/var/log/onedrive
 	chown root.users $(DESTDIR)/var/log/onedrive
 	chmod 0775 $(DESTDIR)/var/log/onedrive
