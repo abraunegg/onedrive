@@ -14,10 +14,14 @@ private immutable {
 	string authUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
 	string redirectUrl = "https://login.microsoftonline.com/common/oauth2/nativeclient";
 	string tokenUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
-	string driveUrl = "https://graph.microsoft.com/v1.0/me/drive";
-	string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
-	string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
 	string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
+}
+
+private {
+    string driveUrl = "https://graph.microsoft.com/v1.0/me/drive";
+    string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
+    string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
+    string driveId = "";
 }
 
 class OneDriveException: Exception
@@ -71,6 +75,15 @@ final class OneDriveApi
 
 	bool init()
 	{
+		try {
+			driveId = cfg.getValue("drive_id");
+			if (driveId.length) {
+				driveUrl = driveByIdUrl ~ driveId;
+                itemByIdUrl = driveUrl ~ "/items";
+                itemByPathUrl = driveUrl ~ "/root:/";
+			}
+		} catch (Exception e) {}
+	
 		try {
 			refreshToken = readText(cfg.refreshTokenFilePath);
 		} catch (FileException e) {
@@ -329,6 +342,7 @@ final class OneDriveApi
 		if (!skipToken) addAccessTokenHeader(); // HACK: requestUploadStatus
 		auto response = perform();
 		checkHttpCode(response);
+		// OneDrive API Response Debugging
 		if (.debugResponse){
 			writeln("OneDrive API Response: ", response);
         }

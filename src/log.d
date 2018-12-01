@@ -5,19 +5,20 @@ import std.process;
 import core.sys.posix.pwd, core.sys.posix.unistd, core.stdc.string : strlen;
 import std.algorithm : splitter;
 
+// enable verbose logging
+bool verbose;
+bool writeLogFile = false;
+
 // shared string variable for username
 string username;
 string logFilePath;
-static this() {
-	username = getUserName();
-	logFilePath = "/var/log/onedrive/";
-}
 
-// enable verbose logging
-bool verbose;
-
-void init()
+void init(string logDir)
 {
+	writeLogFile = true;
+	username = getUserName();
+	logFilePath = logDir;
+	
 	if (!exists(logFilePath)){
 		// logfile path does not exist
 		try {
@@ -25,41 +26,48 @@ void init()
 		} 
 		catch (std.file.FileException e) {
 			// we got an error ..
-			writeln("\nUnable to create /var/log/onedrive/ ");
-			writeln("Please manually create /var/log/onedrive/ and set appropriate permissions to allow write access");
-			writeln("The client activity log will be located in the users home directory\n");
+			writeln("\nUnable to access ", logFilePath);
+			writeln("Please manually create '",logFilePath, "' and set appropriate permissions to allow write access");
+			writeln("The requested client activity log will instead be located in the users home directory\n");
 		}
 	}
-
 }
 
 void log(T...)(T args)
 {
 	writeln(args);
-	// Write to log file
-	logfileWriteLine(args);
+	if(writeLogFile){
+		// Write to log file
+		logfileWriteLine(args);
+	}
 }
 
 void fileOnly(T...)(T args)
 {
-	// Write to log file only
-	logfileWriteLine(args);
+	if(writeLogFile){
+		// Write to log file
+		logfileWriteLine(args);
+	}
 }
 
 void vlog(T...)(T args)
 {
 	if (verbose) {
 		writeln(args);
-		// Write to log file
-		logfileWriteLine(args);
+		if(writeLogFile){
+			// Write to log file
+			logfileWriteLine(args);
+		}
 	}
 }
 
 void error(T...)(T args)
 {
 	stderr.writeln(args);
-	// Write to log file
-	logfileWriteLine(args);
+	if(writeLogFile){
+		// Write to log file
+		logfileWriteLine(args);
+	}
 }
 
 private void logfileWriteLine(T...)(T args)
@@ -75,7 +83,7 @@ private void logfileWriteLine(T...)(T args)
 		logFile = File(logFileName, "a");
 		} 
 	catch (std.exception.ErrnoException e) {
-		// We cannot open the log file in /var/log/onedrive for writing
+		// We cannot open the log file in logFilePath location for writing
 		// The user is not part of the standard 'users' group (GID 100)
 		// Change logfile to ~/onedrive.log putting the log file in the users home directory
 		string homePath = environment.get("HOME");

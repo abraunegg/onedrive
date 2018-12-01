@@ -1,0 +1,195 @@
+.TH ONEDRIVE "1" "November 2018" "2.2.0" "User Commands"
+.SH NAME
+onedrive \- folder synchronization with OneDrive
+.SH SYNOPSIS
+.B onedrive
+[\fI\,OPTION\/\fR]...
+.SH DESCRIPTION
+A complete tool to interact with OneDrive on Linux.
+.SH OPTIONS
+Without any option given, no sync is done and the program exits.
+.TP
+\fB\-\-check\-for\-nomount\fP
+Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
+.TP
+\fB\-\-confdir\fP
+Set the directory used to store the configuration files
+.TP
+\fB\-\-create\-directory\fP
+Create a directory on OneDrive \- no sync will be performed.
+.TP
+\fB\-\-destination\-directory\fP
+Destination directory for renamed or move on OneDrive \- no sync will be performed.
+.TP
+\fB\-\-debug\-https\fP
+Debug OneDrive HTTPS communication.
+.TP
+\fB\-d \-\-download\-only\fP
+Only download remote changes
+.TP
+\fB\-\-disable\-upload\-validation\fP
+Disable upload validation when uploading to OneDrive
+.TP
+\fB\-\-enable\-logging\fP
+Enable client activity to a separate log file
+.TP
+\fB\-\-local\-first\fP
+Synchronize from the local directory source first, before downloading changes from OneDrive.
+.TP
+\fB\-\-logout\fP
+Logout the current user
+.TP
+\fB\-m \-\-monitor\fP
+Keep monitoring for local and remote changes
+.TP
+\fB\-\-no\-remote\-delete\fP
+Do not delete local file 'deletes' from OneDrive when using \fB\-\-upload\-only\fR
+.TP
+\fB\-\-print\-token\fP
+Print the access token, useful for debugging
+.TP
+\fB\-\-resync\fP
+Forget the last saved state, perform a full sync
+.TP
+\fB\-\-remove\-directory\fP
+Remove a directory on OneDrive \- no sync will be performed.
+.TP
+\fB\-\-single\-directory\fP
+Specify a single local directory within the OneDrive root to sync.
+.TP
+\fB\-\-skip\-symlinks\fP
+Skip syncing of symlinks
+.TP
+\fB\-\-source\-directory\fP
+Source directory to rename or move on OneDrive \- no sync will be performed.
+.TP
+\fB\-\-syncdir\fP
+Set the directory used to sync the files that are synced
+.TP
+\fB\-\-synchronize\fP
+Perform a synchronization
+.TP
+\fB\-\-upload\-only\fP
+Only upload to OneDrive, do not sync changes from OneDrive locally
+.TP
+\fB\-v \-\-verbose\fP
+Print more details, useful for debugging
+.TP
+\fB\-\-version\fP
+Print the version and exit
+.TP
+\fB\-h \-\-help\fP
+This help information.
+.PP
+
+.SH FEATURES
+
+State caching
+
+Real-Time file monitoring with Inotify
+
+Resumable uploads
+
+Support OneDrive for Business (part of Office 365)
+
+Shared folders (OneDrive Personal)
+
+SharePoint / Office 365 Group Drives (refer to README.Office365.md to configure)
+
+
+.SH CONFIGURATION
+
+You should copy the default config file into your home directory before making changes:
+.nf
+\fB
+mkdir\ \-p\ ~/.config/onedrive
+cp\ @DOCDIR@/config\ ~/.config/onedrive/config
+\fP
+.fi
+
+Available options:
+.TP
+\fBsync_dir\fP
+directory where the files will be synced
+.TP
+\fBskip_file\fP
+any files that match this pattern will be skipped during sync
+.TP
+\fBskip_symlinks\fP
+skip symbolic links during sync, defaults to \fB"false"\fP
+.TP
+\fBmonitor_interval\fP
+the number of seconds by which each sync operation is undertaken when
+idle under monitor mode, defaults to \fB"45"\fP
+.TP
+\fBlog_dir\fP
+defines the directory where logging output is saved to, needs to end with a slash
+.PP
+Pattern are case insensitive.
+\fB*\fP and \fB?\fP wildcards characters are supported.
+Use \fB|\fP to separate multiple patterns.
+
+After changing the filters (\fBskip_file\fP or \fBskip_dir\fP in your configs) you must
+execute \fBonedrive --synchronize --resync\fP.
+
+.SH FIRST RUN
+
+After installing the application you must run it at least once from the terminal
+to authorize it.
+
+You will be asked to open a specific link using your web browser where you
+will have to login into your Microsoft Account and give the application the
+permission to access your files. After giving the permission, you will be
+redirected to a blank page. Copy the URI of the blank page into the application.
+
+
+.SH SYSTEMD INTEGRATION
+
+Service files are installed into user and system directories.
+.TP
+OneDrive service running as root user
+To enable this mode, run as root user
+.nf
+\fB
+systemctl enable onedrive
+systemctl start onedrive
+\fP
+.fi
+
+.TP
+OneDrive service running as root user for a non-root user
+This mode allows starting the OneDrive service automatically with
+system start for multiple users. For each \fB<username>\fP run:
+.nf
+\fB
+systemctl enable onedrive@<username>
+systemctl start onedrive@<username>
+\fP
+.fi
+
+.TP
+OneDrive service running as non-root user
+In this mode the service will be started when the user logs in.
+Run as user
+.nf
+\fB
+systemctl --user enable onedrive
+systemctl --user start onedrive
+\fP
+.fi
+
+.SH LOGGING OUTPUT
+
+When running onedrive all actions can be logged to a separate log file.
+This can be enabled by using the \fB--enable-logging\fP flag.
+By default, log files will be written to \fB/var/log/onedrive\fP.
+
+All logfiles will be in the format of \fB%username%.onedrive.log\fP,
+where \fB%username%\fP represents the user who ran the client.
+
+
+.SH SEE ALSO
+
+Further examples and documentation is available in
+\f[C]@DOCDIR@/README.md\f[]
+

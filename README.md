@@ -6,7 +6,8 @@
 * Real-Time file monitoring with Inotify
 * Resumable uploads
 * Support OneDrive for Business (part of Office 365)
-* Shared folders (not Business)
+* Shared folders (OneDrive Personal)
+* SharePoint / Office 365 Group Drives (refer to README.Office365.md to configure)
 
 ### What's missing:
 * While local changes are uploaded right away, remote changes are delayed
@@ -191,7 +192,13 @@ onedrive --synchronize --single-directory '<dir_name>'
 
 Example: If the full path is `~/OneDrive/mydir`, the command would be `onedrive --synchronize --single-directory 'mydir'`
 
-### Performing a 'one-way' sync
+### Performing a 'one-way' download sync
+In some cases it may be desirable to 'download only' from OneDrive. To do this use the following command:
+```
+onedrive --synchronize --download-only 
+```
+
+### Performing a 'one-way' upload sync
 In some cases it may be desirable to 'upload only' to OneDrive. To do this use the following command:
 ```
 onedrive --synchronize --upload-only
@@ -204,9 +211,23 @@ onedrive --synchronize --verbose
 ```
 
 ### Client Activity Log
-When running onedrive all actions are logged to `/var/log/onedrive/`
+When running onedrive all actions can be logged to a separate log file. This can be enabled by using the `--enable-logging` flag. By default, log files will be written to `/var/log/onedrive/`
 
-All logfiles will be in the format of `%username%.onedrive.log`
+**Note:** You will need to ensure your user has the applicable permissions to write to this directory or the following warning will be printed:
+```
+Unable to access /var/log/onedrive/
+Please manually create '/var/log/onedrive/' and set appropriate permissions to allow write access
+The requested client activity log will instead be located in the users home directory
+```
+
+All logfiles will be in the format of `%username%.onedrive.log`, where `%username%` represents the user who ran the client.
+
+**Note:**
+To use a different log directory rather than the default above, add the following as a configuration option to `~/.config/onedrive/config`:
+```
+log_dir = "/path/to/location/"
+```
+Trailing slash required
 
 An example of the log file is below:
 ```
@@ -402,32 +423,34 @@ If you encounter any bugs you can report them here on Github. Before filing an i
 	- ...
 
 ### All available commands:
-```text
+```
 Usage: onedrive [OPTION]...
 
-no option        		   No Sync and exit
-       --check-for-nomount Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
-                 --confdir Set the directory used to store the configuration files
-        --create-directory Create a directory on OneDrive - no sync will be performed.
-   --destination-directory Destination directory for renamed or move on OneDrive - no sync will be performed.
-              --debug-http Debug OneDrive HTTP communication.
--d              --download Only download remote changes
-             --local-first Synchronize from the local directory source first, before downloading changes from OneDrive.
-                  --logout Logout the current user
--m               --monitor Keep monitoring for local and remote changes
-        --no-remote-delete Do not delete local file 'deletes' from OneDrive when using --upload-only
-             --print-token Print the access token, useful for debugging
-                  --resync Forget the last saved state, perform a full sync
-        --remove-directory Remove a directory on OneDrive - no sync will be performed.
-        --single-directory Specify a single local directory within the OneDrive root to sync.
-           --skip-symlinks Skip syncing of symlinks
-        --source-directory Source directory to rename or move on OneDrive - no sync will be performed.
-                 --syncdir Set the directory used to sync the files that are synced
-             --synchronize Perform a synchronization
-             --upload-only Only upload to OneDrive, do not sync changes from OneDrive locally
--v               --verbose Print more details, useful for debugging
-                 --version Print the version and exit
--h                  --help This help information.
+no option                      No sync and exit
+           --check-for-nomount Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
+                     --confdir Set the directory used to store the configuration files
+            --create-directory Create a directory on OneDrive - no sync will be performed.
+       --destination-directory Destination directory for renamed or move on OneDrive - no sync will be performed.
+                 --debug-https Debug OneDrive HTTPS communication.
+-d             --download-only Only download remote changes
+   --disable-upload-validation Disable upload validation when uploading to OneDrive
+              --enable-logging Enable client activity to a separate log file
+                 --local-first Synchronize from the local directory source first, before downloading changes from OneDrive.
+                      --logout Logout the current user
+-m                   --monitor Keep monitoring for local and remote changes
+            --no-remote-delete Do not delete local file 'deletes' from OneDrive when using --upload-only
+                 --print-token Print the access token, useful for debugging
+                      --resync Forget the last saved state, perform a full sync
+            --remove-directory Remove a directory on OneDrive - no sync will be performed.
+            --single-directory Specify a single local directory within the OneDrive root to sync.
+               --skip-symlinks Skip syncing of symlinks
+            --source-directory Source directory to rename or move on OneDrive - no sync will be performed.
+                     --syncdir Set the directory used to sync the files that are synced
+                 --synchronize Perform a synchronization
+                 --upload-only Only upload to OneDrive, do not sync changes from OneDrive locally
+-v                   --verbose Print more details, useful for debugging
+                     --version Print the version and exit
+-h                      --help This help information.
 ```
 
 ### File naming
