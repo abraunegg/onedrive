@@ -192,6 +192,8 @@ final class SyncEngine
 				log.error("\nERROR: OneDrive returned a 'HTTP 400 Bad Request' - Cannot Initialize Sync Engine");
 				// Check this
 				if (cfg.getValue("drive_id").length) {
+					// Issue #248 extra debug
+					writeln("Exception: ", e.msg);
 					log.error("ERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
 				}
 				// Must exit here
