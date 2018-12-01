@@ -124,6 +124,12 @@ final class OneDriveApi
 		checkAccessTokenExpired();
 		// Issue #248 extra debug
 		writeln("Done checking access token");
+		
+		writeln("List 'my' drives");
+		string myDrivesUrl = "https://graph.microsoft.com/v1.0/me/drives";
+		auto response = get(myDrivesUrl);
+		writeln("Response: ", response);
+		
 		writeln("Performing a get of driveURL: ", driveUrl);
 		return get(driveUrl);
 	}
