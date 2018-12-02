@@ -61,8 +61,25 @@ final class OneDriveApi
 	{
 		this.cfg = cfg;
 		http = HTTP();
+		// DNS lookup timeout
 		http.dnsTimeout = (dur!"seconds"(5));
-		http.dataTimeout = (dur!"seconds"(3600));
+		// timeout for connecting
+		http.connectTimeout = (dur!"seconds"(10));
+		// Timeouts
+		// with the following settings we force
+		// - if there is no data flow for 5min, abort
+		// - if the download time for one item exceeds 1h, abort
+		//
+		// timeout for activity on connection
+		// this translates into Curl's CURLOPT_LOW_SPEED_TIME
+		// which says
+		//   It contains the time in number seconds that the
+		//   transfer speed should be below the CURLOPT_LOW_SPEED_LIMIT
+		//   for the library to consider it too slow and abort.
+		http.dataTimeout = (dur!"seconds"(300));
+		// maximum time an operation is allowed to take
+		// This includes dns resolution, connecting, data transfer, etc.
+		http.operationTimeout = (dur!"seconds"(3600));
 		
 		// Specify how many redirects should be allowed
 		http.maxRedirects(5);
