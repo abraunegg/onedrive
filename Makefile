@@ -1,8 +1,8 @@
 DC ?= dmd
 DFLAGS += -w -g -ofonedrive -O -L-lcurl -L-lsqlite3 -L-ldl -J.
 PREFIX ?= /usr/local
-DOCDIR = $(PREFIX)/share/doc/onedrive
-MANDIR = $(PREFIX)/share/man/man1
+DOCDIR ?= $(PREFIX)/share/doc/onedrive
+MANDIR ?= $(PREFIX)/share/man/man1
 DOCFILES = README.md README.Office365.md config LICENSE CHANGELOG.md
 
 ifneq ("$(wildcard /etc/redhat-release)","")
