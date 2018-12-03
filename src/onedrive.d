@@ -652,7 +652,6 @@ final class OneDriveApi
 			// "else"
 			default:
 				throw new OneDriveException(http.statusLine.code, http.statusLine.reason); 
-				break;
 		}
 	}
 
@@ -662,7 +661,7 @@ final class OneDriveApi
 		{
 			//	412 - Precondition Failed
 			case 412:
-				throw new OneDriveException(http.statusLine.code, http.statusLine.reason);
+				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
 				break;
 				
 			// Server side (OneDrive) Errors
@@ -679,7 +678,6 @@ final class OneDriveApi
 			default:
 			if (http.statusLine.code / 100 != 2 && http.statusLine.code != 302) {
 				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
-				break;
 			}
 		}
 	}

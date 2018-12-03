@@ -1,5 +1,5 @@
 DC = dmd
-DFLAGS = -g -ofonedrive -O -L-lcurl -L-lsqlite3 -L-ldl -J.
+DFLAGS = -w -g -ofonedrive -O -L-lcurl -L-lsqlite3 -L-ldl -J.
 PREFIX = /usr/local
 DOCDIR = $(PREFIX)/share/doc/onedrive
 MANDIR = $(PREFIX)/share/man/man1
