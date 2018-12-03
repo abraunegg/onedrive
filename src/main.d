@@ -255,20 +255,9 @@ int main(string[] args)
 	log.log("Initializing the Synchronization Engine ...");
 	auto sync = new SyncEngine(cfg, onedrive, itemdb, selectiveSync);
 	
-	try {
-		sync.init();
-	} catch (OneDriveException e) {
-		if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
-			// Authorization is invalid
-			log.log("\nAuthorization token invalid, use --logout to authorize the client again\n");
-			onedrive.http.shutdown();
-			return EXIT_FAILURE;
-		}
-		if (e.httpStatusCode >= 500) {
-			// There was a HTTP 5xx Server Side Error, message already printed
-			onedrive.http.shutdown();
-			return EXIT_FAILURE;
-		}
+	if (!initSyncEngine(sync)) {
+		onedrive.http.shutdown();
+		return EXIT_FAILURE;
 	}
 	
 	// We should only set noRemoteDelete in an upload-only scenario
@@ -405,6 +394,24 @@ int main(string[] args)
 	// workaround for segfault in std.net.curl.Curl.shutdown() on exit
 	onedrive.http.shutdown();
 	return EXIT_SUCCESS;
+}
+
+bool initSyncEngine(SyncEngine sync)
+{
+	try {
+		sync.init();
+	} catch (OneDriveException e) {
+		if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
+			// Authorization is invalid
+			log.log("\nAuthorization token invalid, use --logout to authorize the client again\n");
+			return false;
+		}
+		if (e.httpStatusCode >= 500) {
+			// There was a HTTP 5xx Server Side Error, message already printed
+			return false;
+		}
+	}
+	return true;
 }
 
 // try to synchronize the folder three times
