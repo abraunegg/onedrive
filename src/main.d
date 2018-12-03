@@ -265,6 +265,7 @@ int main(string[] args)
 	} catch (CurlException e) {
 		if (!monitor) {
 			log.log("\nNo internet connection.");
+			onedrive.http.shutdown();
 			return EXIT_FAILURE;
 		}
 	}
