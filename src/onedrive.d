@@ -81,11 +81,6 @@ final class OneDriveApi
 				driveUrl = driveByIdUrl ~ driveId;
                 itemByIdUrl = driveUrl ~ "/items";
                 itemByPathUrl = driveUrl ~ "/root:/";
-				
-				// Issue #248 extra debug
-				writeln("driveUrl: ", driveUrl);
-				writeln("itemByIdUrl: ", itemByIdUrl);
-				writeln("itemByPathUrl: ", itemByPathUrl);
 			}
 		} catch (Exception e) {}
 	
@@ -119,18 +114,7 @@ final class OneDriveApi
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_get
 	JSONValue getDefaultDrive()
 	{
-		// Issue #248 extra debug
-		writeln("Checking access token");
 		checkAccessTokenExpired();
-		// Issue #248 extra debug
-		writeln("Done checking access token");
-		
-		writeln("List 'my' drives");
-		string myDrivesUrl = "https://graph.microsoft.com/v1.0/me/drives";
-		auto response = get(myDrivesUrl);
-		writeln("Response: ", response);
-		
-		writeln("Performing a get of driveURL: ", driveUrl);
 		return get(driveUrl);
 	}
 
