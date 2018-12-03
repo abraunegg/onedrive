@@ -523,7 +523,7 @@ final class OneDriveApi
 		} catch (CurlException e) {
 			// Potentially Timeout was reached on handle error
 			log.error("\nAccess to the Microsoft OneDrive service timed out - Internet connectivity issue?\n");
-			exit(-1);
+			throw e;
 		}
 		
 		JSONValue json;
