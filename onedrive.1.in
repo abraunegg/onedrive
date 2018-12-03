@@ -33,6 +33,9 @@ Disable upload validation when uploading to OneDrive
 \fB\-\-enable\-logging\fP
 Enable client activity to a separate log file
 .TP
+\fB\-\-get\-O365\-drive\-id\fP
+Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library
+.TP
 \fB\-\-local\-first\fP
 Synchronize from the local directory source first, before downloading changes from OneDrive.
 .TP
@@ -192,4 +195,4 @@ where \fB%username%\fP represents the user who ran the client.
 
 Further examples and documentation is available in
 \f[C]@DOCDIR@/README.md\f[]
-
+\f[C]@DOCDIR@/README.Office365.md\f[]

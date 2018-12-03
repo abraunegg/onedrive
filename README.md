@@ -7,7 +7,7 @@
 * Resumable uploads
 * Support OneDrive for Business (part of Office 365)
 * Shared folders (OneDrive Personal)
-* SharePoint / Office 365 Group Drives (refer to README.Office365.md to configure)
+* SharePoint / Office 365 Shared Libraries (refer to README.Office365.md to configure)
 
 ### What's missing:
 * While local changes are uploaded right away, remote changes are delayed
@@ -39,7 +39,7 @@ curl -fsS https://dlang.org/install.sh | bash -s dmd
 ### Dependencies: Debian - i386 / i686
 **Note:** Validated with `Linux debian-i386 4.9.0-7-686-pae #1 SMP Debian 4.9.110-1 (2018-07-05) i686 GNU/Linux` and LDC - the LLVM D compiler (1.8.0).
 
-First install development dependancies as per below:
+First install development dependencies as per below:
 ```
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
@@ -423,6 +423,7 @@ no option                      No sync and exit
 -d             --download-only Only download remote changes
    --disable-upload-validation Disable upload validation when uploading to OneDrive
               --enable-logging Enable client activity to a separate log file
+           --get-O365-drive-id Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library
                  --local-first Synchronize from the local directory source first, before downloading changes from OneDrive.
                       --logout Logout the current user
 -m                   --monitor Keep monitoring for local and remote changes

@@ -88,6 +88,8 @@ int main(string[] args)
 	// Does the user want to disable upload validation - https://github.com/abraunegg/onedrive/issues/205
 	// SharePoint will associate some metadata from the library the file is uploaded to directly in the file - thus change file size & checksums
 	bool disableUploadValidation = false;
+	// SharePoint / Office 365 Shared Library name to query
+	string o365SharedLibraryName;
 	
 	try {
 		auto opt = getopt(
@@ -102,6 +104,7 @@ int main(string[] args)
 			"download-only|d", "Only download remote changes", &downloadOnly,
 			"disable-upload-validation", "Disable upload validation when uploading to OneDrive", &disableUploadValidation,
 			"enable-logging", "Enable client activity to a separate log file", &enableLogFile,
+			"get-O365-drive-id", "Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library", &o365SharedLibraryName,
 			"local-first", "Synchronize from the local directory source first, before downloading changes from OneDrive.", &localFirst,
 			"logout", "Logout the current user", &logout,
 			"monitor|m", "Keep monitoring for local and remote changes", &monitor,
@@ -205,7 +208,7 @@ int main(string[] args)
 	
 	// create-directory, remove-directory, source-directory, destination-directory 
 	// are activities that dont perform a sync no error message for these items either
-	if (((createDirectory != "") || (removeDirectory != "")) || ((sourceDirectory != "") && (destinationDirectory != "")) ) {
+	if (((createDirectory != "") || (removeDirectory != "")) || ((sourceDirectory != "") && (destinationDirectory != "")) || (o365SharedLibraryName != "") ) {
 		performSyncOK = true;
 	}
 	
@@ -305,6 +308,11 @@ int main(string[] args)
 	if ((sourceDirectory != "") && (destinationDirectory != "")) {
 		// We are renaming or moving a directory
 		sync.renameDirectoryNoSync(sourceDirectory, destinationDirectory);
+	}
+	
+	// Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
+	if (o365SharedLibraryName != ""){
+		sync.querySiteCollectionForDriveID(o365SharedLibraryName);
 	}
 	
 	// Are we performing a sync, resync or monitor operation?

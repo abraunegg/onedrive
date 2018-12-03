@@ -1708,4 +1708,37 @@ final class SyncEngine
 		// Make the change on OneDrive
 		auto res = onedrive.moveByPath(sourcePath, moveData);	
 	}
+	
+	// Query Office 365 SharePoint Shared Library site to obtain it's Drive ID
+	void querySiteCollectionForDriveID(string o365SharedLibraryName){
+		// Steps to get the ID:
+		// 1. Query https://graph.microsoft.com/v1.0/sites?search= with the name entered
+		// 2. Evaluate the response. A valid response will contain the description and the id. If the response comes back with nothing, the site name cannot be found or no access
+		// 3. If valid, use the returned ID and query the site drives
+		//		https://graph.microsoft.com/v1.0/sites/<site_id>/drives
+		// 4. Display Shared Library Name & Drive ID
+		
+		string site_id;
+		string drive_id;
+		JSONValue siteQuery = onedrive.o365SiteSearch(o365SharedLibraryName);
+		
+		foreach (searchResult; siteQuery["value"].array) {
+			// Need an 'exclusive' match here with as entered
+			if (o365SharedLibraryName == searchResult["description"].str){
+				// 'description' matches search request
+				site_id = searchResult["id"].str;
+				JSONValue siteDriveQuery = onedrive.o365SiteDrives(site_id);
+				foreach (driveResult; siteDriveQuery["value"].array) {
+					drive_id = driveResult["id"].str;
+				}
+			}
+		}
+		
+		log.log("Office 365 Library Name: ", o365SharedLibraryName);
+		if(drive_id != null) {
+			log.log("drive_id: ", drive_id);
+		} else {
+			writeln("ERROR: This site could not be found. Please check it's name and your permissions to access the site.");
+		}
+	}
 }
