@@ -2,6 +2,21 @@
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
+## [2.2.1] - 2018-12-04
+### Fixed
+- Gracefully handle connection errors in monitor mode 
+- Fix renaming of files when syncing 
+- Installation of doc files, addition of man page 
+- Adjust timeout values for libcurl 
+- Continue in monitor mode when sync timed out 
+- Fix unreachable statements 
+- Update Makefile to better support packaging 
+- Allow starting offline in monitor mode 
+
+### Added
+- Implement --get-O365-drive-id to get correct SharePoint Shared Library (#248)
+- Docker buildfiles for onedrive service (#262) 
+
 ## [2.2.0] - 2018-11-24
 ### Fixed
 - Updated client to output additional logging when debugging
