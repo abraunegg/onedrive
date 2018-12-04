@@ -151,7 +151,7 @@ make DC=~/ldc2-1.11.0-linux-aarch64/bin/ldmd2
 sudo make install
 ```
 
-#### ARM64 Docker onedrive monitor
+#### Docker onedrive monitor
 ```
 # Update onedriveDir with correct existing OneDrive directory path
 onedriveDir="${HOME}/OneDrive"
