@@ -134,7 +134,7 @@ int main(string[] args)
 		log.error("Try 'onedrive -h' for more information");
 		return EXIT_FAILURE;
 	}
-	
+
 	// disable buffering on stdout
 	stdout.setvbuf(0, _IONBF);
 
@@ -158,6 +158,9 @@ int main(string[] args)
 		log.vlog("Using logfile dir: ", logDir);
 		log.init(logDir);
 	}
+
+	// Configure logging monitor setting for notifications
+	log.setMonitor(monitor);
 	
 	// command line parameters override the config
 	if (syncDirName) cfg.setValue("sync_dir", syncDirName.expandTilde().absolutePath());
@@ -166,7 +169,7 @@ int main(string[] args)
 	// upgrades
 	if (exists(configDirName ~ "/items.db")) {
 		remove(configDirName ~ "/items.db");
-		log.log("Database schema changed, resync needed");
+		log.logAndNotify("Database schema changed, resync needed");
 		resync = true;
 	}
 
@@ -257,7 +260,7 @@ int main(string[] args)
 	selectiveSync.setMask(cfg.getValue("skip_file"));
 	
 	// Initialise the sync engine
-	log.log("Initializing the Synchronization Engine ...");
+	log.logAndNotify("Initializing the Synchronization Engine ...");
 	auto sync = new SyncEngine(cfg, onedrive, itemdb, selectiveSync);
 	
 	try {
@@ -283,7 +286,7 @@ int main(string[] args)
 	if (checkMount) {
 		// we were asked to check the mounts
 		if (exists(syncDir ~ "/.nosync")) {
-			log.log("\nERROR: .nosync file found. Aborting synchronization process to safeguard data.");
+			log.logAndNotify("ERROR: .nosync file found. Aborting synchronization process to safeguard data.");
 			onedrive.http.shutdown();
 			return EXIT_FAILURE;
 		}
@@ -324,7 +327,7 @@ int main(string[] args)
 					// Does the directory we want to sync actually exist?
 					if (!exists(singleDirectory)){
 						// the requested directory does not exist .. 
-						log.log("The requested local directory does not exist. Please check ~/OneDrive/ for requested path");
+						log.logAndNotify("ERROR: The requested local directory does not exist. Please check ~/OneDrive/ for requested path");
 						onedrive.http.shutdown();
 						return EXIT_FAILURE;
 					}
@@ -336,7 +339,7 @@ int main(string[] args)
 		}
 			
 		if (monitor) {
-			log.log("Initializing monitor ...");
+			log.logAndNotify("Initializing monitor ...");
 			log.log("OneDrive monitor interval (seconds): ", to!long(cfg.getValue("monitor_interval")));
 			Monitor m = new Monitor(selectiveSync);
 			m.onDirCreated = delegate(string path) {
@@ -344,7 +347,7 @@ int main(string[] args)
 				try {
 					sync.scanForDifferences(path);
 				} catch(Exception e) {
-					log.log(e.msg);
+					log.logAndNotify(e.msg);
 				}
 			};
 			m.onFileChanged = delegate(string path) {
@@ -352,7 +355,7 @@ int main(string[] args)
 				try {
 					sync.scanForDifferences(path);
 				} catch(Exception e) {
-					log.log(e.msg);
+					log.logAndNotify(e.msg);
 				}
 			};
 			m.onDelete = delegate(string path) {
@@ -360,7 +363,7 @@ int main(string[] args)
 				try {
 					sync.deleteByPath(path);
 				} catch(Exception e) {
-					log.log(e.msg);
+					log.logAndNotify(e.msg);
 				}
 			};
 			m.onMove = delegate(string from, string to) {
@@ -368,7 +371,7 @@ int main(string[] args)
 				try {
 					sync.uploadMoveItem(from, to);
 				} catch(Exception e) {
-					log.log(e.msg);
+					log.logAndNotify(e.msg);
 				}
 			};
 			// initialise the monitor class
@@ -395,6 +398,7 @@ int main(string[] args)
 						// TODO better check of type of exception from Curl
 						// could be either timeout of operation of connection error
 						// No network connection to OneDrive Service
+						// Don't overload notifications
 						log.log("No network connection to Microsoft OneDrive Service, skipping sync");
 					}
 					// performSync complete, set lastCheckTime to current time
@@ -502,7 +506,8 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 			count = -1;
 		} catch (Exception e) {
 			if (++count == 3) throw e;
-			else log.log(e.msg);
+			else log.logAndNotify(e.msg);
 		}
 	} while (count != -1);
 }
+
