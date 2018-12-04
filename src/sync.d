@@ -167,6 +167,8 @@ final class SyncEngine
 	private bool malwareDetected = false;
 	// download filesystem issue flag
 	private bool downloadFailed = false;
+	// initialization has been done
+	private bool initDone = false;
 
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
@@ -182,6 +184,11 @@ final class SyncEngine
 	{
 		// Set accountType, defaultDriveId, defaultRootId & remainingFreeSpace once and reuse where possible
 		JSONValue oneDriveDetails;
+
+
+		if (initDone) {
+			return;
+		}
 
 		// Need to catch 400 or 5xx server side errors at initialization
 		try {
@@ -239,6 +246,7 @@ final class SyncEngine
 			auto item = session.upload();
 			saveItem(item);
 		}		
+		initDone = true;
 	}
 
 	// Configure noRemoteDelete if function is called
