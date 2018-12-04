@@ -90,6 +90,8 @@ int main(string[] args)
 	bool disableUploadValidation = false;
 	// SharePoint / Office 365 Shared Library name to query
 	string o365SharedLibraryName;
+	// Do not use notifications in monitor mode
+	bool disableNotifications = false;
 	
 	try {
 		auto opt = getopt(
@@ -101,6 +103,7 @@ int main(string[] args)
 			"create-directory", "Create a directory on OneDrive - no sync will be performed.", &createDirectory,
 			"destination-directory", "Destination directory for renamed or move on OneDrive - no sync will be performed.", &destinationDirectory,
 			"debug-https", "Debug OneDrive HTTPS communication.", &debugHttp,
+			"disable-notifications", "Do not use desktop notifications in monitor mode.", &disableNotifications,
 			"download-only|d", "Only download remote changes", &downloadOnly,
 			"disable-upload-validation", "Disable upload validation when uploading to OneDrive", &disableUploadValidation,
 			"enable-logging", "Enable client activity to a separate log file", &enableLogFile,
@@ -159,8 +162,8 @@ int main(string[] args)
 		log.init(logDir);
 	}
 
-	// Configure logging monitor setting for notifications
-	log.setMonitor(monitor);
+	// Configure whether notifications are used
+	log.setNotifications(monitor && !disableNotifications);
 	
 	// command line parameters override the config
 	if (syncDirName) cfg.setValue("sync_dir", syncDirName.expandTilde().absolutePath());

@@ -13,7 +13,7 @@ version(Notifications) {
 bool verbose;
 bool writeLogFile = false;
 
-private bool monitorMode;
+private bool doNotifications;
 
 // shared string variable for username
 string username;
@@ -39,9 +39,9 @@ void init(string logDir)
 	}
 }
 
-void setMonitor(bool monitor)
+void setNotifications(bool value)
 {
-	monitorMode = monitor;
+	doNotifications = value;
 }
 
 void log(T...)(T args)
@@ -96,7 +96,7 @@ void errorAndNotify(T...)(T args)
 void notify(T...)(T args)
 {
 	version(Notifications) {
-		if (monitorMode) {
+		if (doNotifications) {
 			string result;
 			foreach (index, arg; args) {
 				result ~= to!string(arg);

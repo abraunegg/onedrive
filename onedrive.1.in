@@ -27,6 +27,9 @@ Debug OneDrive HTTPS communication.
 \fB\-d \-\-download\-only\fP
 Only download remote changes
 .TP
+\fB\-\-disable\-notifications\fP
+Do not use desktop notifications in monitor mode
+.TP
 \fB\-\-disable\-upload\-validation\fP
 Disable upload validation when uploading to OneDrive
 .TP
