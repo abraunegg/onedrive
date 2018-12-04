@@ -1,5 +1,9 @@
 DC ?= dmd
-DFLAGS += -w -g -ofonedrive -O -L-lcurl -L-lsqlite3 -L-ldl -J.
+ifdef NOTIFICATIONS
+	DFLAGSNOTIFICATIONS ?= -version=NoPragma -version=NoGdk -version=Notifications \
+		-L-lgmodule-2.0 -L-lglib-2.0 -L-lnotify
+endif
+DFLAGS += -w -g -ofonedrive -O -L-lcurl -L-lsqlite3 $(DFLAGSNOTIFICATIONS) -L-ldl -J.
 PREFIX ?= /usr/local
 DOCDIR ?= $(PREFIX)/share/doc/onedrive
 MANDIR ?= $(PREFIX)/share/man/man1
@@ -25,6 +29,10 @@ SOURCES = \
 	src/upload.d \
 	src/util.d \
 	src/progress.d
+
+ifdef NOTIFICATIONS
+SOURCES += src/notifications/notify.d src/notifications/dnotify.d
+endif
 
 all: onedrive onedrive.service onedrive.1
 

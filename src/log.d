@@ -2,12 +2,18 @@ import std.stdio;
 import std.file;
 import std.datetime;
 import std.process;
+import std.conv;
 import core.sys.posix.pwd, core.sys.posix.unistd, core.stdc.string : strlen;
 import std.algorithm : splitter;
+version(Notifications) {
+	import dnotify;
+}
 
 // enable verbose logging
 bool verbose;
 bool writeLogFile = false;
+
+private bool monitorMode;
 
 // shared string variable for username
 string username;
@@ -33,6 +39,11 @@ void init(string logDir)
 	}
 }
 
+void setMonitor(bool monitor)
+{
+	monitorMode = monitor;
+}
+
 void log(T...)(T args)
 {
 	writeln(args);
@@ -40,6 +51,12 @@ void log(T...)(T args)
 		// Write to log file
 		logfileWriteLine(args);
 	}
+}
+
+void logAndNotify(T...)(T args)
+{
+	notify(args);
+	log(args);
 }
 
 void fileOnly(T...)(T args)
@@ -67,6 +84,32 @@ void error(T...)(T args)
 	if(writeLogFile){
 		// Write to log file
 		logfileWriteLine(args);
+	}
+}
+
+void errorAndNotify(T...)(T args)
+{
+	notify(args);
+	error(args);
+}
+
+void notify(T...)(T args)
+{
+	version(Notifications) {
+		if (monitorMode) {
+			string result;
+			foreach (index, arg; args) {
+				result ~= to!string(arg);
+				if (index != args.length - 1)
+					result ~= " ";
+			}
+			auto n = new Notification("OneDrive", result, "IGNORED");
+			try {
+				n.show();
+			} catch (Throwable e) {
+				vlog("Got exception from showing notification: ", e);
+			}
+		}
 	}
 }
 
