@@ -8,6 +8,7 @@
 * Support OneDrive for Business (part of Office 365)
 * Shared folders (OneDrive Personal)
 * SharePoint / Office 365 Shared Libraries (refer to README.Office365.md to configure)
+* Notifications
 
 ### What's missing:
 * While local changes are uploaded right away, remote changes are delayed
@@ -125,6 +126,13 @@ cd onedrive
 make
 sudo make install
 ```
+
+### Build options ###
+By passing `NOTIFICATIONS=1` to the `make` call, notifications via
+libnotify are enabled. Necessary libraries are 
+`gmodule-2.0`, `glib-2.0`, and `notify`. If these libraries are
+named differently on the build system, the make variable
+`DFLAGSNOTIFICATIONS` can be adjusted.
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC)):
 #### Debian - i386 / i686

@@ -191,6 +191,15 @@ All logfiles will be in the format of \fB%username%.onedrive.log\fP,
 where \fB%username%\fP represents the user who ran the client.
 
 
+.SH NOTIFICATIONS
+
+If OneDrive has been compiled with support for notifications, a running
+\fBonedrive\fP in monitor mode will send notifications about
+initialization and errors via libnotify to the dbus.
+
+Note that this does not work if \fBonedrive\fP is started as root
+for a user via the \fBonedrive@<username>\fP service.
+
 .SH SEE ALSO
 
 Further examples and documentation is available in
