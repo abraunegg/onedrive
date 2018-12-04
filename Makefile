@@ -31,13 +31,18 @@ all: onedrive onedrive.service onedrive.1
 clean:
 	rm -f onedrive onedrive.o onedrive.service onedrive@.service onedrive.1
 
-install: all
+onedrive: version $(SOURCES)
+	$(DC) $(DFLAGS) $(SOURCES)
+
+install.noservice: onedrive onedrive.1
 	mkdir -p $(DESTDIR)/var/log/onedrive
 	chown root.users $(DESTDIR)/var/log/onedrive
 	chmod 0775 $(DESTDIR)/var/log/onedrive
 	install -D onedrive $(DESTDIR)$(PREFIX)/bin/onedrive
 	install -D onedrive.1 $(DESTDIR)$(MANDIR)/onedrive.1
 	install -D -m 644 logrotate/onedrive.logrotate $(DESTDIR)/etc/logrotate.d/onedrive
+
+install: all install.noservice
 	for i in $(DOCFILES) ; do install -D -m 644 $$i $(DESTDIR)$(DOCDIR)/$$i ; done
 ifeq ($(RHEL),1)
 	mkdir -p $(DESTDIR)/usr/lib/systemd/system/
@@ -54,9 +59,7 @@ else
 	chmod 0755 $(DESTDIR)/usr/lib/systemd/system/
 	install -D -m 644 onedrive@.service $(DESTDIR)/usr/lib/systemd/system/
 endif
-
-onedrive: version $(SOURCES)
-	$(DC) $(DFLAGS) $(SOURCES)
+	install -D -m 644 onedrive.service $(DESTDIR)/usr/lib/systemd/user/onedrive.service
 
 onedrive.service:
 	sed "s|@PREFIX@|$(PREFIX)|g" systemd.units/onedrive.service.in > onedrive.service
