@@ -350,7 +350,7 @@ int main(string[] args)
 				try {
 					sync.scanForDifferences(path);
 				} catch(Exception e) {
-					log.logAndNotify(e.msg);
+					log.logAndNotify("Cannot create remote directory: ", e.msg);
 				}
 			};
 			m.onFileChanged = delegate(string path) {
@@ -358,7 +358,7 @@ int main(string[] args)
 				try {
 					sync.scanForDifferences(path);
 				} catch(Exception e) {
-					log.logAndNotify(e.msg);
+					log.logAndNotify("Cannot upload file changes/creation: ", e.msg);
 				}
 			};
 			m.onDelete = delegate(string path) {
@@ -369,10 +369,10 @@ int main(string[] args)
 					if (e.msg == "The item to delete is not in the local database") {
 						log.vlog("Item cannot be deleted because not found in database");
 					} else {
-						log.logAndNotify(e.msg);
+						log.logAndNotify("Cannot delete remote item: ", e.msg);
 					}
 				} catch(Exception e) {
-					log.logAndNotify(e.msg);
+					log.logAndNotify("Cannot delete remote item: ", e.msg);
 				}
 			};
 			m.onMove = delegate(string from, string to) {
@@ -380,7 +380,7 @@ int main(string[] args)
 				try {
 					sync.uploadMoveItem(from, to);
 				} catch(Exception e) {
-					log.logAndNotify(e.msg);
+					log.logAndNotify("Cannot move item:, ", e.msg);
 				}
 			};
 			// initialise the monitor class
@@ -515,7 +515,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 			count = -1;
 		} catch (Exception e) {
 			if (++count == 3) throw e;
-			else log.logAndNotify(e.msg);
+			else log.log("Retrial sync count: ", count, ": ", e.msg);
 		}
 	} while (count != -1);
 }
