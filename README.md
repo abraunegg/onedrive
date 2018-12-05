@@ -8,6 +8,7 @@
 * Support OneDrive for Business (part of Office 365)
 * Shared folders (OneDrive Personal)
 * SharePoint / Office 365 Shared Libraries (refer to README.Office365.md to configure)
+* Notifications
 
 ### What's missing:
 * While local changes are uploaded right away, remote changes are delayed
@@ -26,6 +27,10 @@ sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
+For notifications the following is necessary:
+```
+sudo apt install libnotify-dev
+```
 
 ### Dependencies: Ubuntu - i386 / i686
 **Note:** Validated with `Linux ubuntu-i386-vm 4.13.0-36-generic #40~16.04.1-Ubuntu SMP Fri Feb 16 23:26:51 UTC 2018 i686 i686 i686 GNU/Linux` and DMD 2.081.1
@@ -34,6 +39,10 @@ sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+For notifications the following is necessary:
+```
+sudo apt install libnotify-dev
 ```
 
 ### Dependencies: Debian - i386 / i686
@@ -56,6 +65,10 @@ wget http://ftp.us.debian.org/debian/pool/main/l/llvm-toolchain-5.0/libllvm5.0_5
 wget http://ftp.us.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.1+20180714-1_i386.deb
 sudo dpkg -i ./*.deb
 ```
+For notifications the following is necessary:
+```
+sudo apt install libnotify-dev
+```
 
 ### Dependencies: Fedora < Version 18 / CentOS / RHEL
 ```
@@ -63,6 +76,10 @@ sudo yum groupinstall 'Development Tools'
 sudo yum install libcurl-devel
 sudo yum install sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+For notifications the following is necessary:
+```
+sudo yum install libnotify-devel
 ```
 
 ### Dependencies: Fedora > Version 18
@@ -72,10 +89,18 @@ sudo dnf install libcurl-devel
 sudo dnf install sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
+For notifications the following is necessary:
+```
+sudo yum install libnotify-devel
+```
 
 ### Dependencies: Arch Linux
 ```
 sudo pacman -S curl sqlite dmd
+```
+For notifications the following is necessary:
+```
+sudo pacman -S libnotify
 ```
 
 ### Dependencies: Raspbian (ARMHF)
@@ -85,6 +110,10 @@ sudo apt-get install libsqlite3-dev
 wget https://github.com/ldc-developers/ldc/releases/download/v1.11.0/ldc2-1.11.0-linux-armhf.tar.xz
 tar -xvf ldc2-1.11.0-linux-armhf.tar.xz
 ```
+For notifications the following is necessary:
+```
+sudo apt install libnotify-dev
+```
 
 ### Dependencies: Debian (ARM64)
 ```
@@ -92,6 +121,10 @@ sudo apt-get install libcurl4-openssl-dev
 sudo apt-get install libsqlite3-dev
 wget https://github.com/ldc-developers/ldc/releases/download/v1.11.0/ldc2-1.11.0-linux-aarch64.tar.xz
 tar -xvf ldc2-1.11.0-linux-aarch64.tar.xz
+```
+For notifications the following is necessary:
+```
+sudo apt install libnotify-dev
 ```
 
 ### Dependencies: Gentoo
@@ -101,10 +134,19 @@ sudo layman -a dlang
 ```
 Add ebuild from contrib/gentoo to a local overlay to use.
 
+For notifications the following is necessary:
+```
+sudo emerge x11-libs/libnotify
+```
+
 ### Dependencies: OpenSuSE Leap 15.0
 ```
 sudo zypper addrepo --check --refresh --name "D" http://download.opensuse.org/repositories/devel:/languages:/D/openSUSE_Leap_15.0/devel:languages:D.repo
 sudo zypper install git libcurl-devel sqlite3-devel D:dmd D:libphobos2-0_81 D:phobos-devel D:phobos-devel-static
+```
+For notifications the following is necessary:
+```
+sudo zypper install libnotify-devel
 ```
 
 ## Compilation & Installation
@@ -125,6 +167,13 @@ cd onedrive
 make
 sudo make install
 ```
+
+### Build options ###
+By passing `NOTIFICATIONS=1` to the `make` call, notifications via
+libnotify are enabled. Necessary libraries are 
+`gmodule-2.0`, `glib-2.0`, and `notify`. If these libraries are
+named differently on the build system, the make variable
+`DFLAGSNOTIFICATIONS` can be adjusted.
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC)):
 #### Debian - i386 / i686

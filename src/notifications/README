@@ -1,0 +1,10 @@
+The files in this directory have been obtained form the following places:
+
+dnotify.d
+	https://github.com/Dav1dde/dnotify/blob/master/dnotify.d
+	License: Creative Commons Zro 1.0 Universal
+	see https://github.com/Dav1dde/dnotify/blob/master/LICENSE
+
+notify.d
+	https://github.com/D-Programming-Deimos/libnotify/blob/master/deimos/notify/notify.d
+	License: GPL 2.1 or upwards, see file
