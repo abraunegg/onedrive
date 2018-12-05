@@ -369,7 +369,7 @@ int main(string[] args)
 					if (e.msg == "The item to delete is not in the local database") {
 						log.vlog("Item cannot be deleted because not found in database");
 					} else {
-						log.log(e.msg);
+						log.logAndNotify(e.msg);
 					}
 				} catch(Exception e) {
 					log.logAndNotify(e.msg);
