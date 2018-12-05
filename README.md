@@ -481,6 +481,7 @@ no option                      No sync and exit
             --create-directory Create a directory on OneDrive - no sync will be performed.
        --destination-directory Destination directory for renamed or move on OneDrive - no sync will be performed.
                  --debug-https Debug OneDrive HTTPS communication.
+       --disable-notifications Do not use desktop notifications in monitor mode.
 -d             --download-only Only download remote changes
    --disable-upload-validation Disable upload validation when uploading to OneDrive
               --enable-logging Enable client activity to a separate log file
