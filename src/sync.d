@@ -1177,6 +1177,12 @@ final class SyncEngine
 			maxPathLength = 430;
 		}
 		
+		// A short lived file that has disappeared will cause an error - is the path valid?
+		if (!exists(path)) {
+			log.log("Skipping item - has disappeared: ", path);
+			return;
+		}
+		
 		if(path.byGrapheme.walkLength < maxPathLength){
 			// path is less than maxPathLength
 

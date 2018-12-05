@@ -365,6 +365,12 @@ int main(string[] args)
 				log.vlog("[M] Item deleted: ", path);
 				try {
 					sync.deleteByPath(path);
+				} catch(SyncException e) {
+					if (e.msg == "The item to delete is not in the local database") {
+						log.vlog("Item cannot be deleted because not found in database");
+					} else {
+						log.log(e.msg);
+					}
 				} catch(Exception e) {
 					log.logAndNotify(e.msg);
 				}
