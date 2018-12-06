@@ -66,6 +66,12 @@ final class Monitor
 
 	private void addRecursive(string dirname)
 	{
+		// skip non existing/disappeared items
+		if (!exists(dirname)) {
+			log.vlog("Not adding non-existing/disappeared directory: ", dirname);
+			return;
+		}
+
 		// skip filtered items
 		if (dirname != ".") {
 			if (selectiveSync.isNameExcluded(baseName(dirname))) {
