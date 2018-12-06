@@ -1430,21 +1430,21 @@ final class SyncEngine
 									// Original file upload logic
 									if (thisFileSize <= thresholdFileSize) {
 										try {
-												response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-											} catch (OneDriveException e) {
-												if (e.httpStatusCode == 504) {
-													// HTTP request returned status code 504 (Gateway Timeout)
-													// Try upload as a session
-													try {
-														response = session.upload(path, parent.driveId, parent.id, baseName(path));
-													} catch (OneDriveException e) {
-														// error uploading file
-														return;
-													}
+											response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+										} catch (OneDriveException e) {
+											if (e.httpStatusCode == 504) {
+												// HTTP request returned status code 504 (Gateway Timeout)
+												// Try upload as a session
+												try {
+													response = session.upload(path, parent.driveId, parent.id, baseName(path));
+												} catch (OneDriveException e) {
+													// error uploading file
+													return;
 												}
-												else throw e;
 											}
-											writeln(" done.");
+											else throw e;
+										}
+										writeln(" done.");
 									} else {
 										// File larger than threshold - use a session to upload
 										writeln("");
