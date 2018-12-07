@@ -1677,6 +1677,10 @@ final class SyncEngine
 			uploadDeleteItem(fromItem, from);
 			uploadNewFile(to);
 		} else {
+			if (!exists(to)) {
+				log.vlog("uploadMoveItem target has disappeared: ", to);
+				return;
+			}
 			SysTime mtime = timeLastModified(to).toUTC();
 			JSONValue diff = [
 				"name": JSONValue(baseName(to)),
