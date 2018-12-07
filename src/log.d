@@ -10,7 +10,7 @@ version(Notifications) {
 }
 
 // enable verbose logging
-bool verbose;
+int verbose;
 bool writeLogFile = false;
 
 private bool doNotifications;
@@ -69,11 +69,22 @@ void fileOnly(T...)(T args)
 
 void vlog(T...)(T args)
 {
-	if (verbose) {
+	if (verbose >= 1) {
 		writeln(args);
 		if(writeLogFile){
 			// Write to log file
 			logfileWriteLine(args);
+		}
+	}
+}
+
+void vdebug(T...)(T args)
+{
+	if (verbose >= 2) {
+		writeln("[DEBUG] ", args);
+		if(writeLogFile){
+			// Write to log file
+			logfileWriteLine("[DEBUG] ", args);
 		}
 	}
 }

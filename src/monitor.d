@@ -186,8 +186,10 @@ final class Monitor
 				}
 
 				if (event.mask & IN_MOVED_FROM) {
+					log.vdebug("event IN_MOVED_FROM: ", path);
 					cookieToPath[event.cookie] = path;
 				} else if (event.mask & IN_MOVED_TO) {
+					log.vdebug("event IN_MOVED_TO: ", path);
 					if (event.mask & IN_ISDIR) addRecursive(path);
 					auto from = event.cookie in cookieToPath;
 					if (from) {
@@ -202,15 +204,19 @@ final class Monitor
 						}
 					}
 				} else if (event.mask & IN_CREATE) {
+					log.vdebug("event IN_CREATE: ", path);
 					if (event.mask & IN_ISDIR) {
 						addRecursive(path);
 						if (useCallbacks) onDirCreated(path);
 					}
 				} else if (event.mask & IN_DELETE) {
+					log.vdebug("event IN_DELETE: ", path);
 					if (useCallbacks) onDelete(path);
 				} else if ((event.mask & IN_CLOSE_WRITE) && !(event.mask & IN_ISDIR)) {
+					log.vdebug("event IN_CLOSE_WRITE and ...: ", path);
 					if (useCallbacks) onFileChanged(path);
 				} else {
+					log.vdebug("event unhandled: ", path);
 					assert(0);
 				}
 
@@ -219,6 +225,7 @@ final class Monitor
 			}
 			// assume that the items moved outside the watched directory have been deleted
 			foreach (cookie, path; cookieToPath) {
+				log.vdebug("deleting (post loop): ", path);
 				if (useCallbacks) onDelete(path);
 				remove(path);
 				cookieToPath.remove(cookie);

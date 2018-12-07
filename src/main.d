@@ -121,7 +121,7 @@ int main(string[] args)
 			"syncdir", "Set the directory used to sync the files that are synced", &syncDirName,
 			"synchronize", "Perform a synchronization", &synchronize,
 			"upload-only", "Only upload to OneDrive, do not sync changes from OneDrive locally", &uploadOnly,
-			"verbose|v", "Print more details, useful for debugging", &log.verbose,
+			"verbose|v+", "Print more details, useful for debugging (repeat for extra debugging)", &log.verbose,
 			"version", "Print the version and exit", &printVersion
 		);
 		if (opt.helpWanted) {
