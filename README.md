@@ -499,7 +499,7 @@ no option                      No sync and exit
                      --syncdir Set the directory used to sync the files that are synced
                  --synchronize Perform a synchronization
                  --upload-only Only upload to OneDrive, do not sync changes from OneDrive locally
--v                   --verbose Print more details, useful for debugging
+-v                   --verbose Print more details, useful for debugging (repeat for extra debugging)
                      --version Print the version and exit
 -h                      --help This help information.
 ```

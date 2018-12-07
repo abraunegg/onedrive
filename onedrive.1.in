@@ -79,7 +79,8 @@ Perform a synchronization
 Only upload to OneDrive, do not sync changes from OneDrive locally
 .TP
 \fB\-v \-\-verbose\fP
-Print more details, useful for debugging
+Print more details, useful for debugging. Given two times (or more)
+enables even more verbose debug statements.
 .TP
 \fB\-\-version\fP
 Print the version and exit
