@@ -180,6 +180,11 @@ final class SyncEngine
 		session = UploadSession(onedrive, cfg.uploadStateFilePath);
 	}
 
+	void reset()
+	{
+		initDone=false;
+	}
+
 	void init()
 	{
 		// Set accountType, defaultDriveId, defaultRootId & remainingFreeSpace once and reuse where possible
