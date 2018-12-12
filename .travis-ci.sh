@@ -114,6 +114,7 @@ function build_onedrive {
 	# Depending on architecture, build onedrive using applicable tool
 	echo `uname -a`
 	HOMEDIR=`pwd`
+	./configure
 	if [ "${ARCH}" = "x64" ]; then
 		# Build on x86_64 as normal
 		make clean; make;
