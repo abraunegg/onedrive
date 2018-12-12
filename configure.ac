@@ -1,66 +1,59 @@
+AC_PREREQ([2.69])
 AC_INIT([onedrive],[2.2.1], [https://github.com/abraunegg/onedrive], [onedrive])
-AC_CONFIG_SRCDIR([Makefile.in])
-AM_INIT_AUTOMAKE
-AC_PREREQ(2.6)
-# AC_CONFIG_MACRO_DIR([m4])
-# AC_CONFIG_AUX_DIR([build-aux])
+AC_CONFIG_SRCDIR([src/main.d])
 
-AC_ARG_PROGRAM
+
+AC_ARG_VAR([DC], [D compiler executable])
+AC_ARG_VAR([DCFLAGS], [flags for D compiler])
+
+: ${DCFLAGS='-w -g -O'}
+AC_SUBST([DCFLAGS])
+
 AC_PROG_INSTALL
+AC_PROG_SED
+PKG_PROG_PKG_CONFIG
 
-AC_ARG_WITH(gdc,
-   [AS_HELP_STRING([--with-gdc=<cmd>],
-      [specify the GDC compiler @<:@default: gdc@:>@])],
-   gdc=$withval,gdc=gdc)
-AC_ARG_WITH(dmd,
-   [AS_HELP_STRING([--with-dmd=<cmd>],
-      [specify the GCL compiler @<:@default: dmd@:>@])],
-   dmd=$withval,dmd=dmd)
+AC_PATH_PROGS([DC], [dmd ldmd2], NOT_FOUND)
+DC_SUFFIX=
+case $(basename $DC) in
+	dmd) DC_SUFFIX=-dmd ;;
+	ldmd2) DC_SUFFIX=-ldc ;;
+	NOT_FOUND) AC_MSG_ERROR(Could not find any compatible D compiler, 1)
+esac
 
-AC_PATH_PROG(gdc_path,$gdc)
-AC_PATH_PROG(dmd_path,$dmd)
+PKG_CHECK_MODULES([CURL],[libcurl])
+PKG_CHECK_MODULES([SQLITE],[sqlite3])
 
-# AC_PROG_MAKE_SET
-# AC_PROG_MKDIR_P
+AC_ARG_WITH([systemdsystemunitdir],
+     [AS_HELP_STRING([--with-systemdsystemunitdir=DIR], [Directory for systemd system service files])],,
+     [with_systemdsystemunitdir=auto])
+AS_IF([test "x$with_systemdsystemunitdir" = "xyes" -o "x$with_systemdsystemunitdir" = "xauto"], [
+     def_systemdsystemunitdir=$($PKG_CONFIG --variable=systemdsystemunitdir systemd)
 
-AC_ARG_WITH(dc,
-   [AS_HELP_STRING([--with-dc=<dmd|gdc>],
-      [specify the D compiler to be used. By default if "dmd" is available it is used, otherwise "gdc".])],
-        dc=$withval)
+     AS_IF([test "x$def_systemdsystemunitdir" = "x"],
+   [AS_IF([test "x$with_systemdsystemunitdir" = "xyes"],
+    [AC_MSG_ERROR([systemd support requested but pkg-config unable to query systemd package])])
+    with_systemdsystemunitdir=no],
+   [with_systemdsystemunitdir="$def_systemdsystemunitdir"])])
+AS_IF([test "x$with_systemdsystemunitdir" != "xno"],
+      [AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])])
 
+AC_ARG_WITH([systemduserunitdir],
+     [AS_HELP_STRING([--with-systemduserunitdir=DIR], [Directory for systemd user service files])],,
+     [with_systemduserunitdir=auto])
+AS_IF([test "x$with_systemduserunitdir" = "xyes" -o "x$with_systemduserunitdir" = "xauto"], [
+     def_systemduserunitdir=$($PKG_CONFIG --variable=systemduserunitdir systemd)
 
-if test "x$dc" = "xdmd"
-then
-	if test -z "$dmd_path"
-	then
-		AC_MSG_ERROR([selected D compiler dmd not available])
-	fi
-elif test "x$dc" = "xgdc"
-then
-	if test -z "$gdc_path"
-	then
-		AC_MSG_ERROR([selected D compiler gcc not available])
-	fi
-elif test "x$dc" = "x" 
-then
-	# no DC specified, select one by default
-	if   test -n "$dmd_path" ; then dc="$dmd_path" ; 
-	elif test -n "$gdc_path" ; then dc="$gdc_path" ;
-	else
-		AC_MSG_ERROR([no supported D compiler found])
-	fi
-else
-	AC_MSG_ERROR([unsupported D compiler $dc])
-fi
+     AS_IF([test "x$def_systemduserunitdir" = "x"],
+   [AS_IF([test "x$with_systemduserunitdir" = "xyes"],
+    [AC_MSG_ERROR([systemd support requested but pkg-config unable to query systemd package])])
+    with_systemduserunitdir=no],
+   [with_systemduserunitdir="$def_systemduserunitdir"])])
+AS_IF([test "x$with_systemduserunitdir" != "xno"],
+      [AC_SUBST([systemduserunitdir], [$with_systemduserunitdir])])
 
-AC_MSG_NOTICE([Using D compiler: $dc])
+AM_CONDITIONAL([HAVE_SYSTEMD], [test "x$with_systemduserunitdir" != "xno" -a "x$with_systemdsystemunitdir" != "xno"])
 
-# check for necessary libraris
-
-PKG_CHECK_MODULES(curl,libcurl)
-PKG_CHECK_MODULES(sqlite,sqlite3)
-AC_SUBST(curl_LIBS)
-AC_SUBST(sqlite_LIBS)
 
 
 #
@@ -71,22 +64,13 @@ AC_ARG_ENABLE(notifications,
           [Enable desktop notifications via libnotify])],
        [enable_notifications="${enableval}"],
        [enable_notifications=yes])
-
 if test "x$enable_notifications" = "xyes"
 then
-	PKG_CHECK_MODULES(notify,libnotify)
-	AC_SUBST(notify_LIBS)
+	PKG_CHECK_MODULES(NOTIFY,libnotify,,enable_notifications=no)
 fi
+AM_CONDITIONAL([NOTIFICATIONS], [test x$enable_notifications = xyes])
 
+AM_INIT_AUTOMAKE([1.15 foreign])
 
-
-
-AC_SUBST(enable_notifications)
-AC_SUBST(dc)
-AC_SUBST(dmd_path)
-AC_SUBST(gdc_path)
-
-AC_CONFIG_FILES([
-  Makefile
-])
-AC_OUTPUT()
+AC_CONFIG_FILES([Makefile pacman/PKGBUILD spec/onedrive.spec])
+AC_OUTPUT

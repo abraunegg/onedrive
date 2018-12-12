@@ -5,3 +5,13 @@ onedrive.o
 onedrive.service
 onedrive@.service
 version
+configure
+configure.in
+Makefile.in
+Makefile
+install-sh
+config.status
+aclocal.m4
+autom4te.cache/
+missing
+config.log
