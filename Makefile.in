@@ -100,7 +100,7 @@ DIST_COMMON = $(srcdir)/Makefile.am $(top_srcdir)/configure \
 am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
  configure.lineno config.status.lineno
 mkinstalldirs = $(install_sh) -d
-CONFIG_CLEAN_FILES = pacman/PKGBUILD spec/onedrive.spec
+CONFIG_CLEAN_FILES = pacman/PKGBUILD spec/onedrive.spec onedrive.1.in
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)" "$(DESTDIR)$(man1dir)" \
 	"$(DESTDIR)$(docdir)" "$(DESTDIR)$(systemdsystemunitdir)" \
@@ -199,7 +199,7 @@ ETAGS = etags
 CTAGS = ctags
 CSCOPE = cscope
 AM_RECURSIVE_TARGETS = cscope
-am__DIST_COMMON = $(srcdir)/Makefile.in \
+am__DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/onedrive.1.in.in \
 	$(top_srcdir)/pacman/PKGBUILD.in \
 	$(top_srcdir)/spec/onedrive.spec.in install-sh missing
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -370,6 +370,8 @@ $(am__aclocal_m4_deps):
 pacman/PKGBUILD: $(top_builddir)/config.status $(top_srcdir)/pacman/PKGBUILD.in
 	cd $(top_builddir) && $(SHELL) ./config.status $@
 spec/onedrive.spec: $(top_builddir)/config.status $(top_srcdir)/spec/onedrive.spec.in
+	cd $(top_builddir) && $(SHELL) ./config.status $@
+onedrive.1.in: $(top_builddir)/config.status $(srcdir)/onedrive.1.in.in
 	cd $(top_builddir) && $(SHELL) ./config.status $@
 install-binPROGRAMS: $(bin_PROGRAMS)
 	@$(NORMAL_INSTALL)
@@ -895,7 +897,7 @@ onedrive$(EXEEXT): onedrive.o
 	$(DC) $(DCFLAGS) $(addprefix -L,$(CURL_LIBS)) $(addprefix -L,$(SQLITE_LIBS)) $(addprefix -L,$(NOTIFY_LIBS)) -L-ldl $^ -of$@
 
 onedrive.1: onedrive.1.in
-	$(SED) -e 's,[@]docdir[@],$(docdir),g' < $< > $@
+	$(SED) -e 's,[@]FinalDocDir[@],$(docdir),g' < $< > $@
 .service.in.service:
 	$(SED) -e 's,[@]bindir[@],$(bindir),g' < $< > $@
 

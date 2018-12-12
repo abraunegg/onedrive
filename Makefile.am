@@ -33,7 +33,7 @@ doc_DATA = README.md README.Office365.md config LICENSE CHANGELOG.md
 man_MANS = onedrive.1
 
 onedrive.1: onedrive.1.in
-	$(SED) -e 's,[@]docdir[@],$(docdir),g' < $< > $@
+	$(SED) -e 's,[@]FinalDocDir[@],$(docdir),g' < $< > $@
 
 
 #

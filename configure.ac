@@ -72,5 +72,5 @@ AM_CONDITIONAL([NOTIFICATIONS], [test x$enable_notifications = xyes])
 
 AM_INIT_AUTOMAKE([1.15 foreign])
 
-AC_CONFIG_FILES([Makefile pacman/PKGBUILD spec/onedrive.spec])
+AC_CONFIG_FILES([Makefile pacman/PKGBUILD spec/onedrive.spec onedrive.1.in])
 AC_OUTPUT

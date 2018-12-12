@@ -2979,7 +2979,7 @@ END
 fi
 
 
-ac_config_files="$ac_config_files Makefile pacman/PKGBUILD spec/onedrive.spec"
+ac_config_files="$ac_config_files Makefile pacman/PKGBUILD spec/onedrive.spec onedrive.1.in"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -3709,6 +3709,7 @@ do
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
     "pacman/PKGBUILD") CONFIG_FILES="$CONFIG_FILES pacman/PKGBUILD" ;;
     "spec/onedrive.spec") CONFIG_FILES="$CONFIG_FILES spec/onedrive.spec" ;;
+    "onedrive.1.in") CONFIG_FILES="$CONFIG_FILES onedrive.1.in" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;
   esac
