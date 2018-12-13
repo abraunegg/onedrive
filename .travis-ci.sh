@@ -125,7 +125,7 @@ function build_onedrive {
 			make clean;
 			make
 		else
-			./configure DC=${HOMEDIR}/dlang-${ARCH}/bin/dmd
+			./configure DC=${HOMEDIR}/dlang-${ARCH}/bin/ldmd2
 			# LDC Build - ARM32, ARM64
 			make clean;
 			make
