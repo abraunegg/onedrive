@@ -119,12 +119,13 @@ function build_onedrive {
 		./configure
 		make clean; make;
 	else
-		./configure DC=${HOMEDIR}/dlang-${ARCH}/linux/bin32/dmd
 		if [ "${ARCH}" = "x32" ]; then
+			./configure DC=${HOMEDIR}/dlang-${ARCH}/linux/bin32/dmd
 			# 32Bit DMD Build
 			make clean;
 			make
 		else
+			./configure DC=${HOMEDIR}/dlang-${ARCH}/bin/dmd
 			# LDC Build - ARM32, ARM64
 			make clean;
 			make
