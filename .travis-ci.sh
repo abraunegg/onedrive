@@ -114,19 +114,20 @@ function build_onedrive {
 	# Depending on architecture, build onedrive using applicable tool
 	echo `uname -a`
 	HOMEDIR=`pwd`
-	./configure
 	if [ "${ARCH}" = "x64" ]; then
 		# Build on x86_64 as normal
+		./configure
 		make clean; make;
 	else
+		./configure DC=${HOMEDIR}/dlang-${ARCH}/linux/bin32/dmd
 		if [ "${ARCH}" = "x32" ]; then
 			# 32Bit DMD Build
 			make clean;
-			make DC=${HOMEDIR}/dlang-${ARCH}/linux/bin32/dmd
+			make
 		else
 			# LDC Build - ARM32, ARM64
 			make clean;
-			make DC=${HOMEDIR}/dlang-${ARCH}/bin/ldmd2
+			make
 		fi
 	fi
 	# Functional testing of built application
