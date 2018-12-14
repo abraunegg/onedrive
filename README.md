@@ -212,6 +212,25 @@ docker inspect onedrive > /dev/null && docker rm -f onedrive
 docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive
 ```
 
+## Building with meson
+
+Meson/Ninja is a supported build system. Configuration options are
+
+- `notifications=enabled|disabled` (default: `disabled`)
+- `systemd_user_unit_dir=<path>` (default: automatically determined from `pkg-config`)
+- `systemd_system_unit_dir=<path>` (default: automatically determined from `pkg-config`)
+
+Set these options via `-D<option>`
+
+A different compiler can be selected by setting the `DC` environment variable.
+
+A typical compile/run
+```
+DC=dmd meson -Dnotifications=enable build
+ninja -C build
+ninja -C build install
+```
+
 ## Using the client
 ### Upgrading from 'skilion' client
 The 'skilion' version contains a significant number of defect's in how the local sync state is managed. When upgrading from the 'skilion' version to this version, it is advisable to stop any service / onedrive process from running and then remove any `items.sqlite3` file from your configuration directory (`~/.config/onedrive/`) as this will force the creation of a new local cache file.
