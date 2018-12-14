@@ -1,0 +1,18 @@
+#!/bin/sh
+
+if [ -n "$1" ] ; then
+	destdir="$1"
+	shift
+else
+	destdir="."
+fi
+
+if [ -d .git ] ; then
+	version=`git describe --tags`
+else
+	version="v$1"
+fi
+echo "$version" > $destdir/version
+
+
+
