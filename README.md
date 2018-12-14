@@ -226,7 +226,7 @@ A different compiler can be selected by setting the `DC` environment variable.
 
 A typical compile/run
 ```
-DC=dmd meson -Dnotifications=enable build
+DC=dmd meson -Dnotifications=enabled build
 ninja -C build
 ninja -C build install
 ```
