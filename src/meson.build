@@ -24,8 +24,7 @@ dargs = [ '-J' + meson.build_root() ]
 notifications_dep = dependency('libnotify', required : get_option('notifications'))
 if notifications_dep.found()
   deps += [ notifications_dep ]
-  onedrive_src += [ 'notifications/dnotify.d', 'notifications/notify.d' ]
-  dargs += [ '-I' + join_paths(meson.current_source_dir(), 'notifications') ]
+  onedrive_src += [ 'dnotify.d', 'deimos/notify/notify.d' ]
 endif
 
 executable('onedrive', onedrive_src, 
