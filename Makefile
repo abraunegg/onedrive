@@ -31,7 +31,7 @@ SOURCES = \
 	src/progress.d
 
 ifdef NOTIFICATIONS
-SOURCES += src/notifications/notify.d src/notifications/dnotify.d
+SOURCES += src/dnotify.d src/deimos/notify/notify.d
 endif
 
 all: onedrive onedrive.service onedrive.1
