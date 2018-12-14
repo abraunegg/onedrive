@@ -2,3 +2,14 @@ option('notifications',
        type        : 'feature',
        value       : 'disabled',
        description : 'Enable notifications via libnotify')
+
+option('systemd_user_unit_dir',
+       type: 'string',
+       value: '',
+       description: 'systemd user service directory')
+
+option('systemd_system_unit_dir',
+       type: 'string',
+       value: '',
+       description: 'systemd system service directory')
+

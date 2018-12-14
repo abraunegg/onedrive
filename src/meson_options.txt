@@ -1,5 +1,0 @@
-option('notifications',
-       type        : 'feature',
-       value       : 'disabled',
-       description : 'Enable notifications via libnotify',
-       yield       : 'true')
