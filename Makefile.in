@@ -1,0 +1,109 @@
+package = @PACKAGE_NAME@
+version = @PACKAGE_VERSION@
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+datarootdir = @datarootdir@
+datadir = @datadir@
+srcdir = @srcdir@
+bindir = @bindir@
+mandir = @mandir@
+sysconfdir = @sysconfdir@
+docdir = $(datadir)/doc/$(package)
+VPATH = @srcdir@
+SED = @SED@
+INSTALL = @INSTALL@
+
+NOTIFICATIONS = @NOTIFICATIONS@
+HAVE_SYSTEMD = @HAVE_SYSTEMD@
+systemduserunitdir = @systemduserunitdir@
+systemdsystemunitdir = @systemdsystemunitdir@
+curl_LIBS = @curl_LIBS@
+sqlite_LIBS = @sqlite_LIBS@
+notify_LIBS = @notify_LIBS@
+
+DC = @DC@
+DCFLAGS = @DCFLAGS@
+DCFLAGS += -J.
+ifeq ($(NOTIFICATIONS),yes)
+DCFLAGS += -version=NoPragma -version=NoGdk -version=Notifications
+endif
+
+system_unit_files = systemd.units/onedrive@.service
+user_unit_files = systemd.units/onedrive.service
+
+DOCFILES = README.md README.Office365.md config LICENSE CHANGELOG.md
+
+SOURCES = \
+	src/config.d \
+	src/itemdb.d \
+	src/log.d \
+	src/main.d \
+	src/monitor.d \
+	src/onedrive.d \
+	src/qxor.d \
+	src/selective.d \
+	src/sqlite.d \
+	src/sync.d \
+	src/upload.d \
+	src/util.d \
+	src/progress.d
+
+ifeq ($(NOTIFICATIONS),yes)
+SOURCES += src/notifications/notify.d src/notifications/dnotify.d
+endif
+
+ALLTARGETS=onedrive onedrive.1
+ifeq ($(HAVE_SYSTEMD),yes)
+ALLTARGETS += systemd.units/onedrive.service systemd.units/onedrive@.service
+endif
+
+all: $(ALLTARGETS)
+
+clean:
+	rm -f onedrive onedrive.o version \
+	     systemd.units/onedrive.service systemd.units/onedrive@.service
+	rm -rf autom4te.cache
+	rm -f config.log config.status
+
+# also remove files generated via ./configure
+distclean: clean
+	rm -f Makefile pacman/PKGBUILD spec/onedrive.spec onedrive.1
+
+onedrive: version $(SOURCES)
+	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) -L-ldl $(SOURCES) -of$@
+
+%.service : %.service.in
+	$(SED) -e 's,[@]bindir[@],$(bindir),g' < $< > $@
+
+
+install: all
+	$(INSTALL) -d -o root -g users -m 0775 $(DESTDIR)/var/log/onedrive
+	$(INSTALL) -D onedrive $(DESTDIR)$(bindir)/onedrive
+	$(INSTALL) -D onedrive.1 $(DESTDIR)$(mandir)/man1/onedrive.1
+	$(INSTALL) -D -m 644 logrotate/onedrive.logrotate $(DESTDIR)$(sysconfdir)/logrotate.d/onedrive
+	for i in $(DOCFILES) ; do $(INSTALL) -D -m 644 $$i $(DESTDIR)$(docdir)/$$i ; done
+ifeq ($(HAVE_SYSTEMD),yes)
+	$(INSTALL) -d -o root -g root -m 0755 $(DESTDIR)$(systemduserunitdir) $(DESTDIR)$(systemdsystemunitdir)
+	$(INSTALL) -m 0644 $(system_unit_files) $(DESTDIR)$(systemdsystemunitdir)
+	$(INSTALL) -m 0644 $(user_unit_files) $(DESTDIR)$(systemduserunitdir)
+endif
+
+
+
+uninstall:
+	rm -f $(DESTDIR)$(bindir)/onedrive
+	rm -f $(DESTDIR)$(mandir)/man1/onedrive.1
+	rm -f $(DESTDIR)$(sysconfdir)/logrotate.d/onedrive
+ifeq ($(HAVE_SYSTEMD),yes)
+	for i in $(system_unit_files) ; do rm -f $(DESTDIR)$(systemdsystemunitdir)/$$i ; done
+	for i in $(user_unit_files) ; do rm -f $(DESTDIR)$(systemduserunitdir)/$$i ; done
+endif
+	for i in $(DOCFILES) ; do rm -f $(DESTDIR)$(DOCDIR)/$$i ; done
+
+version:
+	if [ -d .git/ ] ; then \
+		echo $(shell git describe --tags) > version ; \
+	else \
+		echo $(version) > version ; \
+	fi
+

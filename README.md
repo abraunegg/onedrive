@@ -164,23 +164,30 @@ Without performing this step, the compilation process will fail.
 ```
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
+./configure
 make
 sudo make install
 ```
 
 ### Build options ###
-By passing `NOTIFICATIONS=1` to the `make` call, notifications via
-libnotify are enabled. Necessary libraries are 
-`gmodule-2.0`, `glib-2.0`, and `notify`. If these libraries are
-named differently on the build system, the make variable
-`DFLAGSNOTIFICATIONS` can be adjusted.
+
+Notifications can be enabled using the `configure` switch `--enable-notifications`.
+
+Systemd service files are installed in the appropriate directories on the system,
+as provided by `pkg-config systemd` settings. If the need for overriding the
+deduced path are necessary, the two options `--with-systemdsystemunitdir` (for
+the Systemd system unit location), and `--with-systemduserunitdir` (for the
+Systemd user unit location) can be specified. Passing in `no` to one of these
+options disabled service file installation.
+
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC)):
 #### Debian - i386 / i686
 ```
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-make DC=/usr/bin/ldmd2
+./configure
+make
 sudo make install
 ```
 
@@ -188,7 +195,8 @@ sudo make install
 ```
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-make DC=~/ldc2-1.11.0-linux-armhf/bin/ldmd2
+./configure DC=~/ldc2-1.11.0-linux-armhf/bin/ldmd2
+make
 sudo make install
 ```
 
@@ -196,7 +204,8 @@ sudo make install
 ```
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-make DC=~/ldc2-1.11.0-linux-aarch64/bin/ldmd2
+./configure DC=~/ldc2-1.11.0-linux-aarch64/bin/ldmd2
+make
 sudo make install
 ```
 
