@@ -221,6 +221,23 @@ After installing the application you must run it at least once from the terminal
 
 You will be asked to open a specific link using your web browser where you will have to login into your Microsoft Account and give the application the permission to access your files. After giving the permission, you will be redirected to a blank page. Copy the URI of the blank page into the application.
 
+### Show your configuration
+To validate your configuration the application will use, utilise the following:
+```
+onedrive --display-config
+```
+This will display all the pertinent runtime interpretation of the options and configuration you are using. This is helpful to validate the client will perform the operations your asking without performing a sync. Example output is as follows:
+```
+Config path                         = /home/alex/.config/onedrive
+Config file found in config path    = false
+Config option 'sync_dir'            = /home/alex/OneDrive
+Config option 'skip_file'           = ~*
+Config option 'skip_symlinks'       = false
+Config option 'monitor_interval'    = 45
+Config option 'log_dir'             = /var/log/onedrive/
+Selective sync configured           = false
+```
+
 ### Performing a sync
 By default all files are downloaded in `~/OneDrive`. After authorizing the application, a sync of your data can be performed by running:
 ```
@@ -482,6 +499,7 @@ no option                      No sync and exit
        --destination-directory Destination directory for renamed or move on OneDrive - no sync will be performed.
                  --debug-https Debug OneDrive HTTPS communication.
        --disable-notifications Do not use desktop notifications in monitor mode.
+              --display-config Display what options the client will use as currently configured - no sync will be performed.
 -d             --download-only Only download remote changes
    --disable-upload-validation Disable upload validation when uploading to OneDrive
               --enable-logging Enable client activity to a separate log file

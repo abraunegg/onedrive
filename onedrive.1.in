@@ -30,6 +30,9 @@ Only download remote changes
 \fB\-\-disable\-notifications\fP
 Do not use desktop notifications in monitor mode
 .TP
+\fB\-\-display\-config\fP
+Display what options the client will use as currently configured \- no sync will be performed.
+.TP
 \fB\-\-disable\-upload\-validation\fP
 Disable upload validation when uploading to OneDrive
 .TP

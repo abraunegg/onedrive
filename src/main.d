@@ -106,7 +106,7 @@ int main(string[] args)
 			"destination-directory", "Destination directory for renamed or move on OneDrive - no sync will be performed.", &destinationDirectory,
 			"debug-https", "Debug OneDrive HTTPS communication.", &debugHttp,
 			"disable-notifications", "Do not use desktop notifications in monitor mode.", &disableNotifications,
-			"display-config", "Display what options the client will use as currently configured  - no sync will be performed.", &displayConfiguration,
+			"display-config", "Display what options the client will use as currently configured - no sync will be performed.", &displayConfiguration,
 			"download-only|d", "Only download remote changes", &downloadOnly,
 			"disable-upload-validation", "Disable upload validation when uploading to OneDrive", &disableUploadValidation,
 			"enable-logging", "Enable client activity to a separate log file", &enableLogFile,
