@@ -139,6 +139,11 @@ int main(string[] args)
 		log.error(e.msg);
 		log.error("Try 'onedrive -h' for more information");
 		return EXIT_FAILURE;
+	} catch (Exception e) {
+		// error
+		log.error(e.msg);
+		log.error("Try 'onedrive -h' for more information");
+		return EXIT_FAILURE;
 	}
 
 	// disable buffering on stdout
