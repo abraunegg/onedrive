@@ -24,7 +24,7 @@ final class Config
 		syncListFilePath = configDirName ~ "/sync_list";
 	}
 
-	void init()
+	bool init()
 	{
 		// Default configuration directory
 		setValue("sync_dir", "~/OneDrive");
@@ -43,8 +43,16 @@ final class Config
 		setValue("drive_id", "");
 		
 		if (!load(userConfigFilePath)) {
-			log.vlog("No config file found, using defaults");
+			// What was the reason for failure?
+			if (!exists(userConfigFilePath)) {
+				log.vlog("No config file found, using application defaults");
+				return true;
+			} else {
+				log.log("Configuration file has errors - please check your configuration");
+				return false;
+			}
 		}
+		return true;
 	}
 
 	string getValue(string key)
