@@ -39,6 +39,8 @@ final class Config
 		setValue("monitor_interval", "45");
 		// Configure the default logging directory to be /var/log/onedrive/
 		setValue("log_dir", "/var/log/onedrive/");
+		// Configure a default empty value for drive_id
+		setValue("drive_id", "");
 		
 		if (!load(userConfigFilePath)) {
 			log.vlog("No config file found, using defaults");
