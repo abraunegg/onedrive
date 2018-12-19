@@ -92,6 +92,8 @@ int main(string[] args)
 	string o365SharedLibraryName;
 	// Do not use notifications in monitor mode
 	bool disableNotifications = false;
+	// Display application configuration but do not sync
+	bool displayConfiguration = false;
 	
 	try {
 		auto opt = getopt(
@@ -104,6 +106,7 @@ int main(string[] args)
 			"destination-directory", "Destination directory for renamed or move on OneDrive - no sync will be performed.", &destinationDirectory,
 			"debug-https", "Debug OneDrive HTTPS communication.", &debugHttp,
 			"disable-notifications", "Do not use desktop notifications in monitor mode.", &disableNotifications,
+			"display-config", "Display what options the client will use as currently configured - no sync will be performed.", &displayConfiguration,
 			"download-only|d", "Only download remote changes", &downloadOnly,
 			"disable-upload-validation", "Disable upload validation when uploading to OneDrive", &disableUploadValidation,
 			"enable-logging", "Enable client activity to a separate log file", &enableLogFile,
@@ -154,6 +157,29 @@ int main(string[] args)
 	auto cfg = new config.Config(configDirName);
 	cfg.init();
 	
+	// Set the local path OneDrive root
+	string syncDir;
+	if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
+		// No shell or user set, so expandTilde() will fail - usually headless system running under init.d / systemd
+		// Did the user specify a 'different' sync dir by passing a value in?
+		if (syncDirName){
+			// was there a ~ in the passed in state? it will not work via init.d / systemd
+			if (canFind(cfg.getValue("sync_dir"),"~")) {
+				// A ~ was found
+				syncDir = homePath ~ "/OneDrive";
+			} else {
+				// No ~ found in passed in state, use as is
+				syncDir = cfg.getValue("sync_dir");
+			}
+		} else {
+			// need to create a default as expanding ~ will not work
+			syncDir = homePath ~ "/OneDrive";
+		}
+	} else {
+		// A shell and user is set, expand any ~ as this will be expanded if present
+		syncDir = expandTilde(cfg.getValue("sync_dir"));
+	}
+	
 	// Configure logging if enabled
 	if (enableLogFile){
 		// Read in a user defined log directory or use the default
@@ -186,6 +212,42 @@ int main(string[] args)
 		}
 	}
 
+	// Display current application configuration, no application initialisation
+	if (displayConfiguration){
+		string userConfigFilePath = configDirName ~ "/config";
+		string userSyncList = configDirName ~ "/sync_list";
+		// Display all of the pertinent configuration options
+		writeln("Config path                         = ", configDirName);
+		
+		// Does a config file exist or are we using application defaults
+		if (exists(userConfigFilePath)){
+			writeln("Config file found in config path    = true");
+		} else {
+			writeln("Config file found in config path    = false");
+		}
+		
+		// Config Options
+		writeln("Config option 'sync_dir'            = ", syncDir);
+		writeln("Config option 'skip_file'           = ", cfg.getValue("skip_file"));
+		writeln("Config option 'skip_symlinks'       = ", cfg.getValue("skip_symlinks"));
+		writeln("Config option 'monitor_interval'    = ", cfg.getValue("monitor_interval"));
+		writeln("Config option 'log_dir'             = ", cfg.getValue("log_dir"));
+		
+		// Is config option drive_id configured?
+		if (cfg.getValue("drive_id", "") != ""){
+			writeln("Config option 'drive_id'            = ", cfg.getValue("drive_id"));
+		}
+		
+		// Is sync_list configured?
+		if (exists(userSyncList)){
+			writeln("Selective sync configured           = true");
+		} else {
+			writeln("Selective sync configured           = false");
+		}
+		
+		return EXIT_SUCCESS;
+	}
+	
 	log.vlog("Initializing the OneDrive API ...");
 	try {
 		online = testNetwork();
@@ -206,7 +268,7 @@ int main(string[] args)
 		onedrive.http.shutdown();
 		return EXIT_FAILURE;
 	}
-
+	
 	// if --synchronize or --monitor not passed in, exit & display help
 	auto performSyncOK = false;
 	
@@ -216,7 +278,7 @@ int main(string[] args)
 	
 	// create-directory, remove-directory, source-directory, destination-directory 
 	// are activities that dont perform a sync no error message for these items either
-	if (((createDirectory != "") || (removeDirectory != "")) || ((sourceDirectory != "") && (destinationDirectory != "")) || (o365SharedLibraryName != "") ) {
+	if (((createDirectory != "") || (removeDirectory != "")) || ((sourceDirectory != "") && (destinationDirectory != "")) || (o365SharedLibraryName != "")) {
 		performSyncOK = true;
 	}
 	
@@ -231,28 +293,6 @@ int main(string[] args)
 	log.vlog("Opening the item database ...");
 	auto itemdb = new ItemDatabase(cfg.databaseFilePath);
 	
-	// Set the local path OneDrive root
-	string syncDir;
-	if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
-		// No shell or user set, so expandTilde() will fail - usually headless system running under init.d / systemd
-		// Did the user specify a 'different' sync dir by passing a value in?
-		if (syncDirName){
-			// was there a ~ in the passed in state? it will not work via init.d / systemd
-			if (canFind(cfg.getValue("sync_dir"),"~")) {
-				// A ~ was found
-				syncDir = homePath ~ "/OneDrive";
-			} else {
-				// No ~ found in passed in state, use as is
-				syncDir = cfg.getValue("sync_dir");
-			}
-		} else {
-			// need to create a default as expanding ~ will not work
-			syncDir = homePath ~ "/OneDrive";
-		}
-	} else {
-		// A shell and user is set, expand any ~ as this will be expanded if present
-		syncDir = expandTilde(cfg.getValue("sync_dir"));
-	}
 	log.vlog("All operations will be performed in: ", syncDir);
 	if (!exists(syncDir)) mkdirRecurse(syncDir);
 	chdir(syncDir);
