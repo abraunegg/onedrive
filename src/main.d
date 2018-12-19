@@ -234,7 +234,7 @@ int main(string[] args)
 		writeln("Config option 'log_dir'             = ", cfg.getValue("log_dir"));
 		
 		// Is config option drive_id configured?
-		if (cfg.getValue("drive_id") != ""){
+		if (cfg.getValue("drive_id", "") != ""){
 			writeln("Config option 'drive_id'            = ", cfg.getValue("drive_id"));
 		}
 		
