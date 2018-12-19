@@ -82,8 +82,13 @@ final class Config
 			if (!c.empty) {
 				c.popFront(); // skip the whole match
 				string key = c.front.dup;
-				c.popFront();
-				values[key] = c.front.dup;
+				auto p = key in values;
+				if (p) {
+					c.popFront();
+					setValue(key, c.front.dup);
+				} else {
+					log.log("Unknown key in config file: ", key);
+				}
 			} else {
 				log.log("Malformed config line: ", line);
 			}
