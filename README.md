@@ -480,6 +480,7 @@ onedrive --monitor --verbose --confdir="~/.config/onedriveWork" &
 * `&` puts the application in background and leaves the terminal interactive
 
 **Automatic syncing of both OneDrive accounts**
+
 In order to automatically start syncing your OneDrive accounts, you will need to create a service file for each account. From the `~/onedrive` folder:
 ```
 cp onedrive.service onedrive-work.service
