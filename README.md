@@ -463,17 +463,37 @@ systemctl status onedrive@username.service
 ```
 
 ### Using multiple OneDrive accounts
-You can run multiple instances of the application specifying a different config directory in order to handle multiple OneDrive accounts.
-To do this you can use the `--confdir` parameter.
-Here is an example:
-```sh
-onedrive --synchronize --monitor --confdir="~/.config/onedrivePersonal" &
-onedrive --synchronize --monitor --confdir="~/.config/onedriveWork" &
+You can run multiple instances of the application by specifying a different config directory in order to handle multiple OneDrive accounts. For example, if you have a work and a personal account, you can run the onedrive command using the --confdir parameter. Here is an example:
+
+```
+onedrive --synchronize --verbose --confdir="~/.config/onedrivePersonal" &
+onedrive --synchronize --verbose --confdir="~/.config/onedriveWork" &
+```
+or 
+```
+onedrive --monitor --verbose --confdir="~/.config/onedrivePersonal" &
+onedrive --monitor --verbose --confdir="~/.config/onedriveWork" &
 ```
 
-`--monitor` keeps the application running and monitoring for changes
+* `--synchronize` does a one-time sync
+* `--monitor` keeps the application running and monitoring for changes both local and remote
+* `&` puts the application in background and leaves the terminal interactive
 
-`&` puts the application in background and leaves the terminal interactive
+**Automatic syncing of both OneDrive accounts**
+In order to automatically start syncing your OneDrive accounts, you will need to create a service file for each account. From the `~/onedrive` folder:
+```
+cp onedrive.service onedrive-work.service
+```
+And edit the line beginning with `ExecStart` so that the command mirrors the one you used above:
+```
+ExecStart=/usr/local/bin/onedrive --monitor --confdir="/path/to/config/dir"
+```
+Then you can safely run these commands:
+```
+systemctl --user enable onedrive-work
+systemctl --user start onedrive-work
+```
+Repeat these steps for each OneDrive account that you wish to use.
 
 ## Extra
 
