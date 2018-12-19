@@ -233,6 +233,11 @@ int main(string[] args)
 		writeln("Config option 'monitor_interval'    = ", cfg.getValue("monitor_interval"));
 		writeln("Config option 'log_dir'             = ", cfg.getValue("log_dir"));
 		
+		// Is config option drive_id configured?
+		if (cfg.getValue("drive_id") != ""){
+			writeln("Config option 'drive_id'            = ", cfg.getValue("drive_id"));
+		}
+		
 		// Is sync_list configured?
 		if (exists(userSyncList)){
 			writeln("Selective sync configured           = true");
