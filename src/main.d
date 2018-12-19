@@ -155,7 +155,11 @@ int main(string[] args)
 	log.vlog("Using Config Dir: ", configDirName);
 	if (!exists(configDirName)) mkdirRecurse(configDirName);
 	auto cfg = new config.Config(configDirName);
-	cfg.init();
+	if(!cfg.init()){
+		// There was an error loading the configuration
+		// Error message already printed
+		return EXIT_FAILURE;
+	}
 	
 	// Set the local path OneDrive root
 	string syncDir;
