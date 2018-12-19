@@ -98,9 +98,11 @@ final class Config
 					setValue(key, c.front.dup);
 				} else {
 					log.log("Unknown key in config file: ", key);
+					return false;
 				}
 			} else {
 				log.log("Malformed config line: ", line);
+				return false;
 			}
 		}
 		return true;
