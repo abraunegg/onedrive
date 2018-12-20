@@ -167,6 +167,11 @@ int main(string[] args)
 	}
 	
 	// Set the local path OneDrive root
+	if (syncDirName){
+		// The user passed in an alternate sync_dir
+		cfg.setValue("sync_dir", syncDirName);
+	}
+	
 	string syncDir;
 	if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
 		// No shell or user set, so expandTilde() will fail - usually headless system running under init.d / systemd
