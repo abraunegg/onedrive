@@ -3,6 +3,10 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [2.2.3] - 2018-12-20
+### Fixed
+- Fix syncdir option is ignored
+
 ## [2.2.2] - 2018-12-20
 ### Fixed
 - Handle short lived files in monitor mode
