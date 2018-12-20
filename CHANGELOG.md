@@ -2,6 +2,24 @@
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
+
+## [2.2.2] - 2018-12-20
+### Fixed
+- Handle short lived files in monitor mode
+- Provide better log messages, less noise on temporary timeouts
+- Deal with items that disappear during upload
+- Deal with deleted move targets
+- Reinitialize sync engine after three failed attempts
+- Fix activation of dmd for docker builds
+- Fix to check displayName rather than description for --get-O365-drive-id
+- Fix checking of config file keys for validity
+- Fix exception handling when missing parameter from usage option
+
+### Added
+- Notification support via libnotify
+- Add very verbose (debug) mode by double -v -v
+- Implement option --display-config
+
 ## [2.2.1] - 2018-12-04
 ### Fixed
 - Gracefully handle connection errors in monitor mode 

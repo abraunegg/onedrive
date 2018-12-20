@@ -6,7 +6,7 @@
 %endif
 
 Name:       onedrive
-Version:    1.1.1
+Version:    2.2.2
 Release:    1%{?dist}
 Summary:    Microsoft OneDrive Client
 Group:      System Environment/Network
