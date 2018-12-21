@@ -1839,7 +1839,6 @@ final class SyncEngine
 					}
 					if ( (thisItemId == folderId) || (canFind(thisItemPath, syncFolderName)) || (canFind(thisItemPath, folderId)) ){
 						// This is a change we want count
-						writeln("valid change found!");
 						validChanges++;
 					}
 				}
@@ -1852,8 +1851,6 @@ final class SyncEngine
 			} else {
 				writeln("Local directory is out of sync with OneDrive");
 			}
-			
-			
 		} else {
 			writeln("No pending remote changes - in sync");
 		}
