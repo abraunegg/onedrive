@@ -45,7 +45,7 @@ int main(string[] args)
 	}
 	
 	// Output configDirBase calculation
-	log.vdebug("configDirBase: ", homePath);
+	log.vdebug("configDirBase: ", configDirBase);
 	
 	// configuration directory
 	string configDirName = configDirBase ~ "/onedrive";
