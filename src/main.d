@@ -1,6 +1,6 @@
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE;
 import core.memory, core.time, core.thread;
-import std.getopt, std.file, std.path, std.process, std.stdio, std.conv, std.algorithm.searching;
+import std.getopt, std.file, std.path, std.process, std.stdio, std.conv, std.algorithm.searching, std.string;
 import config, itemdb, monitor, onedrive, selective, sync, util;
 import std.net.curl: CurlException;
 static import log;
@@ -14,25 +14,38 @@ int main(string[] args)
 	// Check for HOME environment variable
 	if (environment.get("HOME") != ""){
 		// Use HOME environment variable
+		log.vdebug("homePath: HOME environment variable set");
 		homePath = environment.get("HOME");
 	} else {
 		if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
 			// No shell is set or username - observed case when running as systemd service under CentOS 7.x
+			log.vdebug("homePath: WARNING - no HOME environment variable set");
+			log.vdebug("homePath: WARNING - no SHELL environment variable set");
+			log.vdebug("homePath: WARNING - no USER environment variable set");
 			homePath = "/root";
 		} else {
 			// A shell & valid user is set, but no HOME is set, use ~ which can be expanded
+			log.vdebug("homePath: WARNING - no HOME environment variable set");
 			homePath = "~";
 		}
 	}
+	
+	// Output homePath calculation
+	log.vdebug("homePath: ", homePath);
 
 	// Determine the base directory relative to which user specific configuration files should be stored.
 	string configDirBase = "";
 	if (environment.get("XDG_CONFIG_HOME") != ""){
+		log.vdebug("configDirBase: XDG_CONFIG_HOME environment variable set");
 		configDirBase = environment.get("XDG_CONFIG_HOME");
 	} else {
 		// XDG_CONFIG_HOME does not exist on systems where X11 is not present - ie - headless systems / servers
+		log.vdebug("configDirBase: WARNING - no XDG_CONFIG_HOME environment variable set");
 		configDirBase = homePath ~ "/.config";
 	}
+	
+	// Output configDirBase calculation
+	log.vdebug("configDirBase: ", homePath);
 	
 	// configuration directory
 	string configDirName = configDirBase ~ "/onedrive";
@@ -154,7 +167,7 @@ int main(string[] args)
 		return EXIT_SUCCESS;
 	}
 
-	// load configuration
+	// load application configuration
 	log.vlog("Loading config ...");
 	configDirName = configDirName.expandTilde().absolutePath();
 	log.vlog("Using Config Dir: ", configDirName);
@@ -166,33 +179,49 @@ int main(string[] args)
 		return EXIT_FAILURE;
 	}
 	
-	// Set the local path OneDrive root
-	if (syncDirName){
-		// The user passed in an alternate sync_dir
+	// command line parameters to override the 'config' & take precedence
+	if (skipSymlinks) {
+		// The user passed in an alternate skip_symlinks as to what was either in 'config' file or application default
+		log.vdebug("CLI override to set skip_symlinks to: true");
+		cfg.setValue("skip_symlinks", "true");
+	}
+	
+	// Set the OneDrive Local Sync Directory if was passed in via --syncdir
+	if (syncDirName) {
+		// The user passed in an alternate sync_dir as to what was either in 'config' file or application default
+		// Do not expandTilde here as we do not know if we reliably can
+		log.vdebug("CLI override to set sync_dir to: ", syncDirName);
 		cfg.setValue("sync_dir", syncDirName);
 	}
 	
+	// sync_dir environment handling to handle ~ expansion properly
 	string syncDir;
 	if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
-		// No shell or user set, so expandTilde() will fail - usually headless system running under init.d / systemd
-		// Did the user specify a 'different' sync dir by passing a value in?
-		if (syncDirName){
-			// was there a ~ in the passed in state? it will not work via init.d / systemd
-			if (canFind(cfg.getValue("sync_dir"),"~")) {
-				// A ~ was found
-				syncDir = homePath ~ "/OneDrive";
-			} else {
-				// No ~ found in passed in state, use as is
-				syncDir = cfg.getValue("sync_dir");
-			}
+		log.vdebug("sync_dir: No SHELL or USER detected");
+		// No shell or user set, so expandTilde() will fail - usually headless system running under init.d / systemd or potentially Docker
+		// Does the 'currently configured' sync_dir include a ~
+		if (canFind(cfg.getValue("sync_dir"),"~")) {
+			// A ~ was found
+			log.vdebug("sync_dir: A '~' was found in configured sync_dir, using the calculated 'homePath' to replace '~'");
+			syncDir = homePath ~ strip(cfg.getValue("sync_dir"),"~");
 		} else {
-			// need to create a default as expanding ~ will not work
-			syncDir = homePath ~ "/OneDrive";
+			// No ~ found in sync_dir, use as is
+			log.vdebug("sync_dir: Getting syncDir from config value sync_dir");
+			syncDir = cfg.getValue("sync_dir");
 		}
 	} else {
-		// A shell and user is set, expand any ~ as this will be expanded if present
-		syncDir = expandTilde(cfg.getValue("sync_dir"));
+		// A shell and user is set, expand any ~ as this will be expanded correctly if present
+		log.vdebug("sync_dir: Getting syncDir from config value sync_dir");
+		if (canFind(cfg.getValue("sync_dir"),"~")) {
+			log.vdebug("sync_dir: A '~' was found in configured sync_dir, automatically expanding as SHELL and USER is set");
+			syncDir = expandTilde(cfg.getValue("sync_dir"));
+		} else {
+			syncDir = cfg.getValue("sync_dir");
+		}
 	}
+	
+	// vdebug syncDir as set and calculated
+	log.vdebug("syncDir: ", syncDir);
 	
 	// Configure logging if enabled
 	if (enableLogFile){
@@ -205,10 +234,6 @@ int main(string[] args)
 	// Configure whether notifications are used
 	log.setNotifications(monitor && !disableNotifications);
 	
-	// command line parameters override the config
-	if (syncDirName) cfg.setValue("sync_dir", syncDirName.expandTilde().absolutePath());
-	if (skipSymlinks) cfg.setValue("skip_symlinks", "true");
-  
 	// upgrades
 	if (exists(configDirName ~ "/items.db")) {
 		remove(configDirName ~ "/items.db");
