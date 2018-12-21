@@ -1757,7 +1757,7 @@ final class SyncEngine
 		
 		string site_id;
 		string drive_id;
-		JSONValue siteQuery = onedrive.o365SiteSearch(o365SharedLibraryName);
+		JSONValue siteQuery = onedrive.o365SiteSearch(encodeComponent(o365SharedLibraryName));
 		
 		foreach (searchResult; siteQuery["value"].array) {
 			// Need an 'exclusive' match here with o365SharedLibraryName as entered
