@@ -228,7 +228,7 @@ final class OneDriveApi
 		checkAccessTokenExpired();
 		const(char)[] url;
 		//		string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
-		if (path == ".") url = driveUrl ~ "/root/";
+		if ((path == ".")||(path == "/")) url = driveUrl ~ "/root/";
 		else url = itemByPathUrl ~ encodeComponent(path) ~ ":/";
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
 		return get(url);

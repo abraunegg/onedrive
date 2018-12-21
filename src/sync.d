@@ -478,7 +478,7 @@ final class SyncEngine
 			} else {
 				// The drive id does not match our users default drive id
 				// Potentially the 'path id' we are requesting the details of is a Shared Folder (remote item)
-				// Use the 'id' that was passed in
+				// Use the 'id' that was passed in (folderId)
 				idToQuery = id;
 			}
 		
@@ -1757,7 +1757,7 @@ final class SyncEngine
 		
 		string site_id;
 		string drive_id;
-		JSONValue siteQuery = onedrive.o365SiteSearch(encodeComponent(o365SharedLibraryName));
+		JSONValue siteQuery = onedrive.o365SiteSearch(o365SharedLibraryName);
 		
 		foreach (searchResult; siteQuery["value"].array) {
 			// Need an 'exclusive' match here with o365SharedLibraryName as entered
@@ -1776,6 +1776,86 @@ final class SyncEngine
 			log.log("drive_id: ", drive_id);
 		} else {
 			writeln("ERROR: This site could not be found. Please check it's name and your permissions to access the site.");
+		}
+	}
+	
+	// Query the OneDrive 'drive' to determine if we are 'in sync' or if there are pending changes
+	void queryDriveForChanges(string path) {
+		
+		// Function variables
+		string driveId;
+		string folderId;
+		string deltaLink;
+		string thisItemId;
+		string thisItemPath;
+		string syncFolderName;
+		JSONValue changes;
+		JSONValue onedrivePathDetails;
+		
+		// Get the path details from OneDrive
+		onedrivePathDetails = onedrive.getPathDetails(path); // Returns a JSON String for the OneDrive Path
+		if(isItemRemote(onedrivePathDetails)){
+			// remote changes
+			driveId = onedrivePathDetails["remoteItem"]["parentReference"]["driveId"].str; // Should give something like 66d53be8a5056eca
+			folderId = onedrivePathDetails["remoteItem"]["id"].str; // Should give something like BC7D88EC1F539DCF!107
+			syncFolderName = onedrivePathDetails["remoteItem"]["name"].str;
+		} else {
+			driveId = defaultDriveId;
+			// use the item id as folderId
+			folderId = onedrivePathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
+			syncFolderName = onedrivePathDetails["name"].str;
+		}
+		
+		// Query for the deltalink
+		deltaLink = itemdb.getDeltaLink(driveId, folderId);
+		const(char)[] idToQuery;
+		if (driveId == defaultDriveId) {
+			// The drive id matches our users default drive id
+			idToQuery = defaultRootId.dup;
+		} else {
+			// The drive id does not match our users default drive id
+			// Potentially the 'path id' we are requesting the details of is a Shared Folder (remote item)
+			// Use folderId
+			idToQuery = folderId;
+		}
+		
+		// Query OneDrive changes
+		changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
+		
+		// Are there any changes on OneDrive?
+		if (count(changes["value"].array) != 0) {
+			// Were we given a remote path to check if we are in sync for, or the root?
+			if (path != "/") {
+				int validChanges = 0;
+				// we were given a directory to check, we need to validate the list of changes against this path only
+				foreach (item; changes["value"].array) {
+					// Is this change valid for the 'path' we are checking?
+					if (hasParentReferencePath(item)) {
+						thisItemId = item["parentReference"]["id"].str;
+						thisItemPath = item["parentReference"]["path"].str;
+					} else {
+						thisItemId = item["id"].str;
+						thisItemPath = "";
+					}
+					if ( (thisItemId == folderId) || (canFind(thisItemPath, syncFolderName)) || (canFind(thisItemPath, folderId)) ){
+						// This is a change we want count
+						writeln("valid change found!");
+						validChanges++;
+					}
+				}
+				// Are there any valid changes?
+				if (validChanges != 0){
+					writeln("Selected directory is out of sync with OneDrive");
+				} else {
+					writeln("No pending remote changes - selected directory is in sync");
+				}
+			} else {
+				writeln("Local directory is out of sync with OneDrive");
+			}
+			
+			
+		} else {
+			writeln("No pending remote changes - in sync");
 		}
 	}
 }
