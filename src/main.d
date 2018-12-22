@@ -7,107 +7,66 @@ static import log;
 
 int main(string[] args)
 {
-	// Determine the users home directory. 
-	// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
-	string homePath = "";
-
-	// Check for HOME environment variable
-	if (environment.get("HOME") != ""){
-		// Use HOME environment variable
-		log.vdebug("homePath: HOME environment variable set");
-		homePath = environment.get("HOME");
-	} else {
-		if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
-			// No shell is set or username - observed case when running as systemd service under CentOS 7.x
-			log.vdebug("homePath: WARNING - no HOME environment variable set");
-			log.vdebug("homePath: WARNING - no SHELL environment variable set");
-			log.vdebug("homePath: WARNING - no USER environment variable set");
-			homePath = "/root";
-		} else {
-			// A shell & valid user is set, but no HOME is set, use ~ which can be expanded
-			log.vdebug("homePath: WARNING - no HOME environment variable set");
-			homePath = "~";
-		}
-	}
+	// Disable buffering on stdout
+	stdout.setvbuf(0, _IONBF);
 	
-	// Output homePath calculation
-	log.vdebug("homePath: ", homePath);
-
-	// Determine the base directory relative to which user specific configuration files should be stored.
-	string configDirBase = "";
-	if (environment.get("XDG_CONFIG_HOME") != ""){
-		log.vdebug("configDirBase: XDG_CONFIG_HOME environment variable set");
-		configDirBase = environment.get("XDG_CONFIG_HOME");
-	} else {
-		// XDG_CONFIG_HOME does not exist on systems where X11 is not present - ie - headless systems / servers
-		log.vdebug("configDirBase: WARNING - no XDG_CONFIG_HOME environment variable set");
-		configDirBase = homePath ~ "/.config";
-	}
-	
-	// Output configDirBase calculation
-	log.vdebug("configDirBase: ", configDirBase);
-	
-	// configuration directory
-	string configDirName = configDirBase ~ "/onedrive";
-	// only download remote changes
-	bool downloadOnly;
-	// override the sync directory
-	string syncDirName;
-	// enable monitor mode
-	bool monitor;
-	// force a full resync
-	bool resync;
-	// remove the current user and sync state
-	bool logout;
-	// enable verbose logging
-	bool verbose;
-	// print the access token
-	bool printAccessToken;
-	// print the version and exit
-	bool printVersion;
-	
-	// Additional options added to support MyNAS Storage Appliance
-	// Debug the HTTPS submit operations if required
-	bool debugHttp;
-	// Debug the HTTPS response operations if required
-	bool debugHttpSubmit;
-	// This allows for selective directory syncing instead of everything under ~/OneDrive/
-	string singleDirectory;
-	// Create a single root directory on OneDrive
-	string createDirectory;
-	// Remove a single directory on OneDrive
-	string removeDirectory;
-	// The source directory if we are using the OneDrive client to rename a directory
-	string sourceDirectory;
-	// The destination directory if we are using the OneDrive client to rename a directory
-	string destinationDirectory;
-	// Configure a flag to perform a sync
-	// This is beneficial so that if just running the client itself - without any options, or sync check, the client does not perform a sync
-	bool synchronize;
-	// Local sync - Upload local changes first before downloading changes from OneDrive
-	bool localFirst;
-	// Upload Only
-	bool uploadOnly;
+	// Application Option Variables
 	// Add a check mounts option to resolve https://github.com/abraunegg/onedrive/issues/8
 	bool checkMount;
-	// Add option to skip symlinks
-	bool skipSymlinks;
-	// Add option for no remote delete
-	bool noRemoteDelete;
-	// Are we able to reach the OneDrive Service
-	bool online = false;
-	// Do we enable a log file
-	bool enableLogFile = false;
-	// Does the user want to disable upload validation - https://github.com/abraunegg/onedrive/issues/205
-	// SharePoint will associate some metadata from the library the file is uploaded to directly in the file - thus change file size & checksums
-	bool disableUploadValidation = false;
-	// SharePoint / Office 365 Shared Library name to query
-	string o365SharedLibraryName;
+	// configuration directory
+	string configDirName;
+	// Create a single root directory on OneDrive
+	string createDirectory;
+	// The destination directory if we are using the OneDrive client to rename a directory
+	string destinationDirectory;
+	// Debug the HTTPS submit operations if required
+	bool debugHttp;
 	// Do not use notifications in monitor mode
 	bool disableNotifications = false;
 	// Display application configuration but do not sync
 	bool displayConfiguration = false;
+	// only download remote changes
+	bool downloadOnly;
+	// Does the user want to disable upload validation - https://github.com/abraunegg/onedrive/issues/205
+	// SharePoint will associate some metadata from the library the file is uploaded to directly in the file - thus change file size & checksums
+	bool disableUploadValidation = false;
+	// Do we enable a log file
+	bool enableLogFile = false;
+	// SharePoint / Office 365 Shared Library name to query
+	string o365SharedLibraryName;
+	// Local sync - Upload local changes first before downloading changes from OneDrive
+	bool localFirst;
+	// remove the current user and sync state
+	bool logout;
+	// enable monitor mode
+	bool monitor;
+	// Add option for no remote delete
+	bool noRemoteDelete;
+	// print the access token
+	bool printAccessToken;
+	// force a full resync
+	bool resync;
+	// Remove a single directory on OneDrive
+	string removeDirectory;
+	// This allows for selective directory syncing instead of everything under ~/OneDrive/
+	string singleDirectory;
+	// Add option to skip symlinks
+	bool skipSymlinks;
+	// The source directory if we are using the OneDrive client to rename a directory
+	string sourceDirectory;
+	// override the sync directory
+	string syncDirName;
+	// Configure a flag to perform a sync
+	// This is beneficial so that if just running the client itself - without any options, or sync check, the client does not perform a sync
+	bool synchronize;
+	// Upload Only
+	bool uploadOnly;
+	// enable verbose logging
+	bool verbose;
+	// print the version and exit
+	bool printVersion;
 	
+	// Application Startup option validation
 	try {
 		auto opt = getopt(
 			args,
@@ -159,9 +118,67 @@ int main(string[] args)
 		return EXIT_FAILURE;
 	}
 
-	// disable buffering on stdout
-	stdout.setvbuf(0, _IONBF);
+	// Main function variables
+	string homePath = "";
+	string configDirBase = "";
+	// Debug the HTTPS response operations if required
+	bool debugHttpSubmit;
+	// Are we able to reach the OneDrive Service
+	bool online = false;
+	
+	// Determine the users home directory. 
+	// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
+	// Check for HOME environment variable
+	if (environment.get("HOME") != ""){
+		// Use HOME environment variable
+		log.vdebug("homePath: HOME environment variable set");
+		homePath = environment.get("HOME");
+	} else {
+		if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
+			// No shell is set or username - observed case when running as systemd service under CentOS 7.x
+			log.vdebug("homePath: WARNING - no HOME environment variable set");
+			log.vdebug("homePath: WARNING - no SHELL environment variable set");
+			log.vdebug("homePath: WARNING - no USER environment variable set");
+			homePath = "/root";
+		} else {
+			// A shell & valid user is set, but no HOME is set, use ~ which can be expanded
+			log.vdebug("homePath: WARNING - no HOME environment variable set");
+			homePath = "~";
+		}
+	}
+	
+	// Output homePath calculation
+	log.vdebug("homePath: ", homePath);
 
+	// Determine the base directory relative to which user specific configuration files should be stored.
+	if (environment.get("XDG_CONFIG_HOME") != ""){
+		log.vdebug("configDirBase: XDG_CONFIG_HOME environment variable set");
+		configDirBase = environment.get("XDG_CONFIG_HOME");
+	} else {
+		// XDG_CONFIG_HOME does not exist on systems where X11 is not present - ie - headless systems / servers
+		log.vdebug("configDirBase: WARNING - no XDG_CONFIG_HOME environment variable set");
+		configDirBase = homePath ~ "/.config";
+	}
+	
+	// Output configDirBase calculation
+	log.vdebug("configDirBase: ", configDirBase);
+	
+	// Determine the correct configuration directory to use
+	if (configDirName != "") {
+		// A CLI 'confdir' was passed in
+		log.vdebug("configDirName: CLI override to set configDirName to: ", configDirName);
+		if (canFind(configDirName,"~")) {
+			// A ~ was found
+			log.vdebug("configDirName: A '~' was found in configDirName, using the calculated 'homePath' to replace '~'");
+			configDirName = homePath ~ strip(configDirName,"~");
+		}
+	} else {
+		// Set the default application configuration directory
+		log.vdebug("configDirName: Configuring application to use default config path");
+		// configDirBase contains the correct path so we do not need to check for presence of '~'
+		configDirName = configDirBase ~ "/onedrive";
+	}
+	
 	if (printVersion) {
 		std.stdio.write("onedrive ", import("version"));
 		return EXIT_SUCCESS;
@@ -169,7 +186,6 @@ int main(string[] args)
 
 	// load application configuration
 	log.vlog("Loading config ...");
-	configDirName = configDirName.expandTilde().absolutePath();
 	log.vlog("Using Config Dir: ", configDirName);
 	if (!exists(configDirName)) mkdirRecurse(configDirName);
 	auto cfg = new config.Config(configDirName);
@@ -179,7 +195,8 @@ int main(string[] args)
 		return EXIT_FAILURE;
 	}
 	
-	// command line parameters to override the 'config' & take precedence
+	// command line parameters to override default 'config' & take precedence
+	// Set the client to skip symbolic links if --skip-symlinks was passed in
 	if (skipSymlinks) {
 		// The user passed in an alternate skip_symlinks as to what was either in 'config' file or application default
 		log.vdebug("CLI override to set skip_symlinks to: true");
@@ -202,8 +219,8 @@ int main(string[] args)
 		// Does the 'currently configured' sync_dir include a ~
 		if (canFind(cfg.getValue("sync_dir"),"~")) {
 			// A ~ was found
-			log.vdebug("sync_dir: A '~' was found in configured sync_dir, using the calculated 'homePath' to replace '~'");
-			syncDir = homePath ~ strip(cfg.getValue("sync_dir"),"~");
+			log.vdebug("sync_dir: A '~' was found in sync_dir, using the calculated 'homePath' to replace '~'");
+			syncDir = homePath ~ strip(cfg.getValue("sync_dir"),"~","~");
 		} else {
 			// No ~ found in sync_dir, use as is
 			log.vdebug("sync_dir: Getting syncDir from config value sync_dir");
@@ -212,7 +229,7 @@ int main(string[] args)
 	} else {
 		// A shell and user is set, expand any ~ as this will be expanded correctly if present
 		log.vdebug("sync_dir: Getting syncDir from config value sync_dir");
-		if (canFind(cfg.getValue("sync_dir"),"~")) {
+		if (canFind(cfg.getValue("sync_dir"),"~","~")) {
 			log.vdebug("sync_dir: A '~' was found in configured sync_dir, automatically expanding as SHELL and USER environment variable is set");
 			syncDir = expandTilde(cfg.getValue("sync_dir"));
 		} else {
@@ -333,7 +350,10 @@ int main(string[] args)
 	auto itemdb = new ItemDatabase(cfg.databaseFilePath);
 	
 	log.vlog("All operations will be performed in: ", syncDir);
-	if (!exists(syncDir)) mkdirRecurse(syncDir);
+	if (!exists(syncDir)) {
+		log.vdebug("syncDir: Configured syncDir is missing. Creating: ", syncDir);
+		mkdirRecurse(syncDir);
+	}
 	chdir(syncDir);
 	
 	// Configure selective sync by parsing and getting a regex for skip_file config component
