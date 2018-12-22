@@ -197,7 +197,7 @@ int main(string[] args)
 	// sync_dir environment handling to handle ~ expansion properly
 	string syncDir;
 	if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
-		log.vdebug("sync_dir: No SHELL or USER detected");
+		log.vdebug("sync_dir: No SHELL or USER environment variable configuration detected");
 		// No shell or user set, so expandTilde() will fail - usually headless system running under init.d / systemd or potentially Docker
 		// Does the 'currently configured' sync_dir include a ~
 		if (canFind(cfg.getValue("sync_dir"),"~")) {
@@ -213,7 +213,7 @@ int main(string[] args)
 		// A shell and user is set, expand any ~ as this will be expanded correctly if present
 		log.vdebug("sync_dir: Getting syncDir from config value sync_dir");
 		if (canFind(cfg.getValue("sync_dir"),"~")) {
-			log.vdebug("sync_dir: A '~' was found in configured sync_dir, automatically expanding as SHELL and USER is set");
+			log.vdebug("sync_dir: A '~' was found in configured sync_dir, automatically expanding as SHELL and USER environment variable is set");
 			syncDir = expandTilde(cfg.getValue("sync_dir"));
 		} else {
 			syncDir = cfg.getValue("sync_dir");
