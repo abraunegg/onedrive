@@ -170,7 +170,7 @@ int main(string[] args)
 		if (canFind(configDirName,"~")) {
 			// A ~ was found
 			log.vdebug("configDirName: A '~' was found in configDirName, using the calculated 'homePath' to replace '~'");
-			configDirName = homePath ~ strip(configDirName,"~");
+			configDirName = homePath ~ strip(configDirName,"~","~");
 		}
 	} else {
 		// Set the default application configuration directory
@@ -229,7 +229,7 @@ int main(string[] args)
 	} else {
 		// A shell and user is set, expand any ~ as this will be expanded correctly if present
 		log.vdebug("sync_dir: Getting syncDir from config value sync_dir");
-		if (canFind(cfg.getValue("sync_dir"),"~","~")) {
+		if (canFind(cfg.getValue("sync_dir"),"~")) {
 			log.vdebug("sync_dir: A '~' was found in configured sync_dir, automatically expanding as SHELL and USER environment variable is set");
 			syncDir = expandTilde(cfg.getValue("sync_dir"));
 		} else {
