@@ -46,6 +46,22 @@ struct Database
 		close();
 	}
 
+	int db_checkpoint()
+	{
+		return sqlite3_wal_checkpoint(pDb, null);
+	}
+
+	void dump_open_statements()
+	{
+		log.log("Dumpint open statements: \n");
+		auto p = sqlite3_next_stmt(pDb, null);
+		while (p != null) {
+			log.log (" - " ~ ifromStringz(sqlite3_sql(p)) ~ "\n");
+			p = sqlite3_next_stmt(pDb, p);
+		}
+	}
+
+
 	void open(const(char)[] filename)
 	{
 		// https://www.sqlite.org/c3ref/open.html
