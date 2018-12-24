@@ -1,8 +1,9 @@
-import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE;
+import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.memory, core.time, core.thread;
 import std.getopt, std.file, std.path, std.process, std.stdio, std.conv, std.algorithm.searching, std.string;
 import config, itemdb, monitor, onedrive, selective, sync, util;
 import std.net.curl: CurlException;
+import core.stdc.signal;
 static import log;
 
 int main(string[] args)
@@ -482,6 +483,12 @@ int main(string[] args)
 					log.logAndNotify("Cannot move item:, ", e.msg);
 				}
 			};
+			extern(C) @nogc void exitHandler(int value) {
+				printf("Ooohhhh got %d\n", value);
+				exit(0);
+			}
+			signal(SIGINT, &exitHandler);
+
 			// initialise the monitor class
 			if (cfg.getValue("skip_symlinks") == "true") skipSymlinks = true;
 			if (!downloadOnly) m.init(cfg, verbose, skipSymlinks);
