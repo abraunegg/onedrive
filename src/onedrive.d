@@ -156,7 +156,7 @@ final class OneDriveApi
 		const(char)[] url = deltaLink;
 		if (url == null) {
 			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/delta";
-			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
+			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		}
 		return get(url);
 	}

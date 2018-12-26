@@ -59,6 +59,11 @@ private bool isMalware(const ref JSONValue item)
 	return ("malware" in item) != null;
 }
 
+private bool hasFileSize(const ref JSONValue item)
+{
+	return ("size" in item) != null;
+}
+
 // construct an Item struct from a JSON driveItem
 private Item makeItem(const ref JSONValue driveItem)
 {
@@ -1783,31 +1788,55 @@ final class SyncEngine
 	void queryDriveForChanges(string path) {
 		
 		// Function variables
+		int validChanges = 0;
+		long downloadSize = 0;
 		string driveId;
 		string folderId;
 		string deltaLink;
 		string thisItemId;
 		string thisItemPath;
 		string syncFolderName;
+		string syncFolderPath;
+		string syncFolderChildPath;
 		JSONValue changes;
 		JSONValue onedrivePathDetails;
 		
 		// Get the path details from OneDrive
-		onedrivePathDetails = onedrive.getPathDetails(path); // Returns a JSON String for the OneDrive Path
+		try {
+			onedrivePathDetails = onedrive.getPathDetails(path); // Returns a JSON String for the OneDrive Path
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 404) {
+				// Requested path could not be found
+				log.error("ERROR: The requested path to query was not found on OneDrive");
+				return;
+			}
+		} 
+		
 		if(isItemRemote(onedrivePathDetails)){
 			// remote changes
 			driveId = onedrivePathDetails["remoteItem"]["parentReference"]["driveId"].str; // Should give something like 66d53be8a5056eca
 			folderId = onedrivePathDetails["remoteItem"]["id"].str; // Should give something like BC7D88EC1F539DCF!107
-			syncFolderName = onedrivePathDetails["remoteItem"]["name"].str;
+			syncFolderName = onedrivePathDetails["name"].str;
+			// A remote drive item will not have ["parentReference"]["path"]
+			syncFolderPath = "";
+			syncFolderChildPath = "";
 		} else {
 			driveId = defaultDriveId;
-			// use the item id as folderId
 			folderId = onedrivePathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
 			syncFolderName = onedrivePathDetails["name"].str;
+			if (hasParentReferencePath(onedrivePathDetails)) {
+				syncFolderPath = onedrivePathDetails["parentReference"]["path"].str;
+				syncFolderChildPath = syncFolderPath ~ "/" ~ syncFolderName ~ "/";
+			} else {
+				// root drive item will not have ["parentReference"]["path"] 
+				syncFolderPath = "";
+				syncFolderChildPath = "";
+			}
 		}
 		
-		// Query for the deltalink
+		// Query Database for the deltaLink
 		deltaLink = itemdb.getDeltaLink(driveId, folderId);
+		
 		const(char)[] idToQuery;
 		if (driveId == defaultDriveId) {
 			// The drive id matches our users default drive id
@@ -1826,7 +1855,6 @@ final class SyncEngine
 		if (count(changes["value"].array) != 0) {
 			// Were we given a remote path to check if we are in sync for, or the root?
 			if (path != "/") {
-				int validChanges = 0;
 				// we were given a directory to check, we need to validate the list of changes against this path only
 				foreach (item; changes["value"].array) {
 					// Is this change valid for the 'path' we are checking?
@@ -1835,21 +1863,44 @@ final class SyncEngine
 						thisItemPath = item["parentReference"]["path"].str;
 					} else {
 						thisItemId = item["id"].str;
-						thisItemPath = "";
+						// Is the defaultDriveId == driveId
+						if (driveId == defaultDriveId){
+							thisItemPath = item["parentReference"]["path"].str;
+						} else {
+							// A remote drive item will not have ["parentReference"]["path"]
+							thisItemPath = "";
+						}
 					}
-					if ( (thisItemId == folderId) || (canFind(thisItemPath, syncFolderName)) || (canFind(thisItemPath, folderId)) ){
+					
+					if ( (thisItemId == folderId) || (canFind(thisItemPath, syncFolderChildPath)) || (canFind(thisItemPath, folderId)) ){
 						// This is a change we want count
 						validChanges++;
+						if ((isItemFile(item)) && (hasFileSize(item))) {
+							downloadSize = downloadSize + item["size"].integer;
+						}
 					}
 				}
 				// Are there any valid changes?
 				if (validChanges != 0){
 					writeln("Selected directory is out of sync with OneDrive");
+					if (downloadSize > 0){
+						downloadSize = downloadSize / 1000;
+						writeln("Approximate data to transfer: ", downloadSize, " KB");
+					}
 				} else {
 					writeln("No pending remote changes - selected directory is in sync");
 				}
 			} else {
 				writeln("Local directory is out of sync with OneDrive");
+				foreach (item; changes["value"].array) {
+					if ((isItemFile(item)) && (hasFileSize(item))) {
+						downloadSize = downloadSize + item["size"].integer;
+					}
+				}
+				if (downloadSize > 0){
+					downloadSize = downloadSize / 1000;
+					writeln("Approximate data to transfer: ", downloadSize, " KB");
+				}
 			}
 		} else {
 			writeln("No pending remote changes - in sync");
