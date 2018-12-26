@@ -4,6 +4,7 @@ import std.getopt, std.file, std.path, std.process, std.stdio, std.conv, std.alg
 import config, itemdb, monitor, onedrive, selective, sync, util;
 import std.net.curl: CurlException;
 import core.stdc.signal;
+import std.traits;
 static import log;
 
 OneDriveApi oneDrive;
@@ -487,6 +488,7 @@ int main(string[] args)
 				}
 			};
 			signal(SIGINT, &exitHandler);
+			signal(SIGTERM, &exitHandler);
 
 			// initialise the monitor class
 			if (cfg.getValue("skip_symlinks") == "true") skipSymlinks = true;
@@ -636,9 +638,23 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 	} while (count != -1);
 }
 
-extern(C) @nogc @system void exitHandler(int value) {
-	printf("Ooohhhh got %d\n", value);
-	// workaround for segfault in std.net.curl.Curl.shutdown() on exit
-	oneDrive.http.shutdown();
+// getting around the @nogc problem
+// https://p0nce.github.io/d-idioms/#Bypassing-@nogc
+auto assumeNoGC(T) (T t) if (isFunctionPointer!T || isDelegate!T)
+{
+	enum attrs = functionAttributes!T | FunctionAttribute.nogc;
+	return cast(SetFunctionAttributes!(T, functionLinkage!T, attrs)) t;
+}
+
+extern(C) nothrow @nogc @system void exitHandler(int value) {
+	try {
+		assumeNoGC ( () {
+			log.log("Got termination signal, shutting down db connection");
+			// make sure the .wal file is incorporated into the main db
+			destroy(itemDb);
+			// workaround for segfault in std.net.curl.Curl.shutdown() on exit
+			oneDrive.http.shutdown();
+		})();
+	} catch(Exception e) {}
 	exit(0);
 }
