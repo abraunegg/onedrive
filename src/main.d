@@ -6,6 +6,9 @@ import std.net.curl: CurlException;
 import core.stdc.signal;
 static import log;
 
+OneDriveApi oneDrive;
+ItemDatabase itemDb;
+
 int main(string[] args)
 {
 	// Disable buffering on stdout
@@ -317,12 +320,12 @@ int main(string[] args)
 	}
 
 	// Initialize OneDrive, check for authorization
-	auto onedrive = new OneDriveApi(cfg, debugHttp);
-	onedrive.printAccessToken = printAccessToken;
-	if (!onedrive.init()) {
+	oneDrive = new OneDriveApi(cfg, debugHttp);
+	oneDrive.printAccessToken = printAccessToken;
+	if (!oneDrive.init()) {
 		log.error("Could not initialize the OneDrive API");
 		// workaround for segfault in std.net.curl.Curl.shutdown() on exit
-		onedrive.http.shutdown();
+		oneDrive.http.shutdown();
 		return EXIT_FAILURE;
 	}
 	
@@ -342,13 +345,13 @@ int main(string[] args)
 	if (!performSyncOK) {
 		writeln("\n--synchronize or --monitor missing from your command options or use --help for further assistance\n");
 		writeln("No OneDrive sync will be performed without either of these two arguments being present\n");
-		onedrive.http.shutdown();
+		oneDrive.http.shutdown();
 		return EXIT_FAILURE;
 	}
 	
 	// initialize system
 	log.vlog("Opening the item database ...");
-	auto itemdb = new ItemDatabase(cfg.databaseFilePath);
+	itemDb = new ItemDatabase(cfg.databaseFilePath);
 	
 	log.vlog("All operations will be performed in: ", syncDir);
 	if (!exists(syncDir)) {
@@ -364,17 +367,17 @@ int main(string[] args)
 	
 	// Initialise the sync engine
 	log.logAndNotify("Initializing the Synchronization Engine ...");
-	auto sync = new SyncEngine(cfg, onedrive, itemdb, selectiveSync);
+	auto sync = new SyncEngine(cfg, oneDrive, itemDb, selectiveSync);
 	
 	try {
 		if (!initSyncEngine(sync)) {
-			onedrive.http.shutdown();
+			oneDrive.http.shutdown();
 			return EXIT_FAILURE;
 		}
 	} catch (CurlException e) {
 		if (!monitor) {
 			log.log("\nNo internet connection.");
-			onedrive.http.shutdown();
+			oneDrive.http.shutdown();
 			return EXIT_FAILURE;
 		}
 	}
@@ -390,7 +393,7 @@ int main(string[] args)
 		// we were asked to check the mounts
 		if (exists(syncDir ~ "/.nosync")) {
 			log.logAndNotify("ERROR: .nosync file found. Aborting synchronization process to safeguard data.");
-			onedrive.http.shutdown();
+			oneDrive.http.shutdown();
 			return EXIT_FAILURE;
 		}
 	}
@@ -431,7 +434,7 @@ int main(string[] args)
 					if (!exists(singleDirectory)){
 						// the requested directory does not exist .. 
 						log.logAndNotify("ERROR: The requested local directory does not exist. Please check ~/OneDrive/ for requested path");
-						onedrive.http.shutdown();
+						oneDrive.http.shutdown();
 						return EXIT_FAILURE;
 					}
 				}
@@ -483,10 +486,6 @@ int main(string[] args)
 					log.logAndNotify("Cannot move item:, ", e.msg);
 				}
 			};
-			extern(C) @nogc void exitHandler(int value) {
-				printf("Ooohhhh got %d\n", value);
-				exit(0);
-			}
 			signal(SIGINT, &exitHandler);
 
 			// initialise the monitor class
@@ -505,7 +504,7 @@ int main(string[] args)
 					// itemdb.dump_open_statements();
 					try {
 						if (!initSyncEngine(sync)) {
-							onedrive.http.shutdown();
+							oneDrive.http.shutdown();
 							return EXIT_FAILURE;
 						}
 						try {
@@ -534,7 +533,7 @@ int main(string[] args)
 	}
 
 	// workaround for segfault in std.net.curl.Curl.shutdown() on exit
-	onedrive.http.shutdown();
+	oneDrive.http.shutdown();
 	return EXIT_SUCCESS;
 }
 
@@ -637,3 +636,9 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 	} while (count != -1);
 }
 
+extern(C) @nogc @system void exitHandler(int value) {
+	printf("Ooohhhh got %d\n", value);
+	// workaround for segfault in std.net.curl.Curl.shutdown() on exit
+	oneDrive.http.shutdown();
+	exit(0);
+}
