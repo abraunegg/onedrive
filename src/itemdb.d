@@ -34,11 +34,11 @@ final class ItemDatabase
 	immutable int itemDatabaseVersion = 7;
 
 	Database db;
-	Statement insertItemStmt;
-	Statement updateItemStmt;
-	Statement selectItemByIdStmt;
-	Statement selectItemByParentIdStmt;
-	Statement deleteItemByIdStmt;
+	string insertItemStmt;
+	string updateItemStmt;
+	string selectItemByIdStmt;
+	string selectItemByParentIdStmt;
+	string deleteItemByIdStmt;
 
 	this(const(char)[] filename)
 	{
@@ -63,22 +63,22 @@ final class ItemDatabase
 		db.exec("PRAGMA recursive_triggers = ON");
 		db.exec("PRAGMA journal_mode = WAL");
 		
-		insertItemStmt = db.prepare("
+		insertItemStmt = "
 			INSERT OR REPLACE INTO item (driveId, id, name, type, eTag, cTag, mtime, parentId, crc32Hash, sha1Hash, quickXorHash, remoteDriveId, remoteId)
 			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
-		");
-		updateItemStmt = db.prepare("
+		";
+		updateItemStmt = "
 			UPDATE item
 			SET name = ?3, type = ?4, eTag = ?5, cTag = ?6, mtime = ?7, parentId = ?8, crc32Hash = ?9, sha1Hash = ?10, quickXorHash = ?11, remoteDriveId = ?12, remoteId = ?13
 			WHERE driveId = ?1 AND id = ?2
-		");
-		selectItemByIdStmt = db.prepare("
+		";
+		selectItemByIdStmt = "
 			SELECT *
 			FROM item
 			WHERE driveId = ?1 AND id = ?2
-		");
-		selectItemByParentIdStmt = db.prepare("SELECT * FROM item WHERE driveId = ? AND parentId = ?");
-		deleteItemByIdStmt = db.prepare("DELETE FROM item WHERE driveId = ? AND id = ?");
+		";
+		selectItemByParentIdStmt = "SELECT * FROM item WHERE driveId = ? AND parentId = ?";
+		deleteItemByIdStmt = "DELETE FROM item WHERE driveId = ? AND id = ?";
 	}
 
 	void createTable()
@@ -111,14 +111,26 @@ final class ItemDatabase
 	
 	void insert(const ref Item item)
 	{
-		bindItem(item, insertItemStmt);
-		insertItemStmt.exec();
+		auto p = db.prepare(insertItemStmt);
+		bindItem(item, p);
+		p.exec();
 	}
 
 	void update(const ref Item item)
 	{
-		bindItem(item, updateItemStmt);
-		updateItemStmt.exec();
+		auto p = db.prepare(updateItemStmt);
+		bindItem(item, p);
+		p.exec();
+	}
+
+	void dump_open_statements()
+	{
+		db.dump_open_statements();
+	}
+
+	int db_checkpoint()
+	{
+		return db.db_checkpoint();
 	}
 
 	void upsert(const ref Item item)
@@ -127,18 +139,19 @@ final class ItemDatabase
 		s.bind(1, item.driveId);
 		s.bind(2, item.id);
 		auto r = s.exec();
-		Statement* stmt;
-		if (r.front[0] == "0") stmt = &insertItemStmt;
-		else stmt = &updateItemStmt;
-		bindItem(item, *stmt);
+		Statement stmt;
+		if (r.front[0] == "0") stmt = db.prepare(insertItemStmt);
+		else stmt = db.prepare(updateItemStmt);
+		bindItem(item, stmt);
 		stmt.exec();
 	}
 
 	Item[] selectChildren(const(char)[] driveId, const(char)[] id)
 	{
-		selectItemByParentIdStmt.bind(1, driveId);
-		selectItemByParentIdStmt.bind(2, id);
-		auto res = selectItemByParentIdStmt.exec();
+		auto p = db.prepare(selectItemByParentIdStmt);
+		p.bind(1, driveId);
+		p.bind(2, id);
+		auto res = p.exec();
 		Item[] items;
 		while (!res.empty) {
 			items ~= buildItem(res);
@@ -149,9 +162,10 @@ final class ItemDatabase
 
 	bool selectById(const(char)[] driveId, const(char)[] id, out Item item)
 	{
-		selectItemByIdStmt.bind(1, driveId);
-		selectItemByIdStmt.bind(2, id);
-		auto r = selectItemByIdStmt.exec();
+		auto p = db.prepare(selectItemByIdStmt);
+		p.bind(1, driveId);
+		p.bind(2, id);
+		auto r = p.exec();
 		if (!r.empty) {
 			item = buildItem(r);
 			return true;
@@ -162,9 +176,10 @@ final class ItemDatabase
 	// returns if an item id is in the database
 	bool idInLocalDatabase(const(string) driveId, const(string)id)
 	{
-		selectItemByIdStmt.bind(1, driveId);
-		selectItemByIdStmt.bind(2, id);
-		auto r = selectItemByIdStmt.exec();
+		auto p = db.prepare(selectItemByIdStmt);
+		p.bind(1, driveId);
+		p.bind(2, id);
+		auto r = p.exec();
 		if (!r.empty) {
 			return true;
 		}
@@ -218,9 +233,10 @@ final class ItemDatabase
 
 	void deleteById(const(char)[] driveId, const(char)[] id)
 	{
-		deleteItemByIdStmt.bind(1, driveId);
-		deleteItemByIdStmt.bind(2, id);
-		deleteItemByIdStmt.exec();
+		auto p = db.prepare(deleteItemByIdStmt);
+		p.bind(1, driveId);
+		p.bind(2, id);
+		p.exec();
 	}
 
 	private void bindItem(const ref Item item, ref Statement stmt)

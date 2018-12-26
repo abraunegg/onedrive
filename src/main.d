@@ -492,6 +492,10 @@ int main(string[] args)
 				if (!downloadOnly) m.update(online);
 				auto currTime = MonoTime.currTime();
 				if (currTime - lastCheckTime > checkInterval) {
+					// log.logAndNotify("DEBUG trying to create checkpoint");
+					// auto res = itemdb.db_checkpoint();
+					// log.logAndNotify("Checkpoint return: ", res);
+					// itemdb.dump_open_statements();
 					try {
 						if (!initSyncEngine(sync)) {
 							onedrive.http.shutdown();
