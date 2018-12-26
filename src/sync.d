@@ -1865,7 +1865,12 @@ final class SyncEngine
 						thisItemId = item["id"].str;
 						// Is the defaultDriveId == driveId
 						if (driveId == defaultDriveId){
-							thisItemPath = item["parentReference"]["path"].str;
+							// 'root' items will not have ["parentReference"]["path"]
+							if (isItemRoot(item)){
+								thisItemPath = "";
+							} else {
+								thisItemPath = item["parentReference"]["path"].str;
+							}
 						} else {
 							// A remote drive item will not have ["parentReference"]["path"]
 							thisItemPath = "";
