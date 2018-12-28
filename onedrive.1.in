@@ -3,7 +3,16 @@
 onedrive \- folder synchronization with OneDrive
 .SH SYNOPSIS
 .B onedrive
-[\fI\,OPTION\/\fR]...
+[\fI\,OPTION\/\fR] \-\-synchronize
+.br
+.B onedrive
+[\fI\,OPTION\/\fR] \-\-monitor
+.br
+.B onedrive
+[\fI\,OPTION\/\fR] \-\-display-config
+.br
+.B onedrive
+[\fI\,OPTION\/\fR] \-\-display-sync-status
 .SH DESCRIPTION
 A complete tool to interact with OneDrive on Linux.
 .SH OPTIONS
@@ -12,34 +21,37 @@ Without any option given, no sync is done and the program exits.
 \fB\-\-check\-for\-nomount\fP
 Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
 .TP
-\fB\-\-confdir\fP
+\fB\-\-confdir\fP ARG
 Set the directory used to store the configuration files
 .TP
-\fB\-\-create\-directory\fP
+\fB\-\-create\-directory\fP ARG
 Create a directory on OneDrive \- no sync will be performed.
 .TP
-\fB\-\-destination\-directory\fP
+\fB\-\-destination\-directory\fP ARG
 Destination directory for renamed or move on OneDrive \- no sync will be performed.
 .TP
 \fB\-\-debug\-https\fP
 Debug OneDrive HTTPS communication.
 .TP
-\fB\-d \-\-download\-only\fP
-Only download remote changes
-.TP
 \fB\-\-disable\-notifications\fP
 Do not use desktop notifications in monitor mode
-.TP
-\fB\-\-display\-config\fP
-Display what options the client will use as currently configured \- no sync will be performed.
 .TP
 \fB\-\-disable\-upload\-validation\fP
 Disable upload validation when uploading to OneDrive
 .TP
+\fB\-\-display\-config\fP
+Display what options the client will use as currently configured \- no sync will be performed.
+.TP
+\fB\-\-display\-sync\-status\fP
+Display the sync status of the client \- no sync will be performed.
+.TP
+\fB\-d \-\-download\-only\fP
+Only download remote changes
+.TP
 \fB\-\-enable\-logging\fP
 Enable client activity to a separate log file
 .TP
-\fB\-\-get\-O365\-drive\-id\fP
+\fB\-\-get\-O365\-drive\-id\fP ARG
 Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library
 .TP
 \fB\-\-local\-first\fP
@@ -60,19 +72,19 @@ Print the access token, useful for debugging
 \fB\-\-resync\fP
 Forget the last saved state, perform a full sync
 .TP
-\fB\-\-remove\-directory\fP
+\fB\-\-remove\-directory\fP ARG
 Remove a directory on OneDrive \- no sync will be performed.
 .TP
-\fB\-\-single\-directory\fP
+\fB\-\-single\-directory\fP ARG
 Specify a single local directory within the OneDrive root to sync.
 .TP
 \fB\-\-skip\-symlinks\fP
 Skip syncing of symlinks
 .TP
-\fB\-\-source\-directory\fP
+\fB\-\-source\-directory\fP ARG
 Source directory to rename or move on OneDrive \- no sync will be performed.
 .TP
-\fB\-\-syncdir\fP
+\fB\-\-syncdir\fP ARG
 Set the directory used to sync the files that are synced
 .TP
 \fB\-\-synchronize\fP
