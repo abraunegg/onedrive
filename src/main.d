@@ -1,9 +1,14 @@
-import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE;
+import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.memory, core.time, core.thread;
 import std.getopt, std.file, std.path, std.process, std.stdio, std.conv, std.algorithm.searching, std.string;
 import config, itemdb, monitor, onedrive, selective, sync, util;
 import std.net.curl: CurlException;
+import core.stdc.signal;
+import std.traits;
 static import log;
+
+OneDriveApi oneDrive;
+ItemDatabase itemDb;
 
 int main(string[] args)
 {
@@ -319,12 +324,12 @@ int main(string[] args)
 	}
 
 	// Initialize OneDrive, check for authorization
-	auto onedrive = new OneDriveApi(cfg, debugHttp);
-	onedrive.printAccessToken = printAccessToken;
-	if (!onedrive.init()) {
+	oneDrive = new OneDriveApi(cfg, debugHttp);
+	oneDrive.printAccessToken = printAccessToken;
+	if (!oneDrive.init()) {
 		log.error("Could not initialize the OneDrive API");
 		// workaround for segfault in std.net.curl.Curl.shutdown() on exit
-		onedrive.http.shutdown();
+		oneDrive.http.shutdown();
 		return EXIT_FAILURE;
 	}
 	
@@ -344,13 +349,13 @@ int main(string[] args)
 	if (!performSyncOK) {
 		writeln("\n--synchronize or --monitor missing from your command options or use --help for further assistance\n");
 		writeln("No OneDrive sync will be performed without either of these two arguments being present\n");
-		onedrive.http.shutdown();
+		oneDrive.http.shutdown();
 		return EXIT_FAILURE;
 	}
 	
 	// initialize system
 	log.vlog("Opening the item database ...");
-	auto itemdb = new ItemDatabase(cfg.databaseFilePath);
+	itemDb = new ItemDatabase(cfg.databaseFilePath);
 	
 	log.vlog("All operations will be performed in: ", syncDir);
 	if (!exists(syncDir)) {
@@ -366,17 +371,17 @@ int main(string[] args)
 	
 	// Initialise the sync engine
 	log.logAndNotify("Initializing the Synchronization Engine ...");
-	auto sync = new SyncEngine(cfg, onedrive, itemdb, selectiveSync);
+	auto sync = new SyncEngine(cfg, oneDrive, itemDb, selectiveSync);
 	
 	try {
 		if (!initSyncEngine(sync)) {
-			onedrive.http.shutdown();
+			oneDrive.http.shutdown();
 			return EXIT_FAILURE;
 		}
 	} catch (CurlException e) {
 		if (!monitor) {
 			log.log("\nNo internet connection.");
-			onedrive.http.shutdown();
+			oneDrive.http.shutdown();
 			return EXIT_FAILURE;
 		}
 	}
@@ -392,7 +397,7 @@ int main(string[] args)
 		// we were asked to check the mounts
 		if (exists(syncDir ~ "/.nosync")) {
 			log.logAndNotify("ERROR: .nosync file found. Aborting synchronization process to safeguard data.");
-			onedrive.http.shutdown();
+			oneDrive.http.shutdown();
 			return EXIT_FAILURE;
 		}
 	}
@@ -447,7 +452,7 @@ int main(string[] args)
 					if (!exists(singleDirectory)){
 						// the requested directory does not exist .. 
 						log.logAndNotify("ERROR: The requested local directory does not exist. Please check ~/OneDrive/ for requested path");
-						onedrive.http.shutdown();
+						oneDrive.http.shutdown();
 						return EXIT_FAILURE;
 					}
 				}
@@ -499,6 +504,9 @@ int main(string[] args)
 					log.logAndNotify("Cannot move item:, ", e.msg);
 				}
 			};
+			signal(SIGINT, &exitHandler);
+			signal(SIGTERM, &exitHandler);
+
 			// initialise the monitor class
 			if (cfg.getValue("skip_symlinks") == "true") skipSymlinks = true;
 			if (!downloadOnly) m.init(cfg, verbose, skipSymlinks);
@@ -515,7 +523,7 @@ int main(string[] args)
 					// itemdb.dump_open_statements();
 					try {
 						if (!initSyncEngine(sync)) {
-							onedrive.http.shutdown();
+							oneDrive.http.shutdown();
 							return EXIT_FAILURE;
 						}
 						try {
@@ -544,7 +552,7 @@ int main(string[] args)
 	}
 
 	// workaround for segfault in std.net.curl.Curl.shutdown() on exit
-	onedrive.http.shutdown();
+	oneDrive.http.shutdown();
 	return EXIT_SUCCESS;
 }
 
@@ -647,3 +655,23 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 	} while (count != -1);
 }
 
+// getting around the @nogc problem
+// https://p0nce.github.io/d-idioms/#Bypassing-@nogc
+auto assumeNoGC(T) (T t) if (isFunctionPointer!T || isDelegate!T)
+{
+	enum attrs = functionAttributes!T | FunctionAttribute.nogc;
+	return cast(SetFunctionAttributes!(T, functionLinkage!T, attrs)) t;
+}
+
+extern(C) nothrow @nogc @system void exitHandler(int value) {
+	try {
+		assumeNoGC ( () {
+			log.log("Got termination signal, shutting down db connection");
+			// make sure the .wal file is incorporated into the main db
+			destroy(itemDb);
+			// workaround for segfault in std.net.curl.Curl.shutdown() on exit
+			oneDrive.http.shutdown();
+		})();
+	} catch(Exception e) {}
+	exit(0);
+}
