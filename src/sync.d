@@ -441,6 +441,8 @@ final class SyncEngine
 		
 		// Query the name of this folder id
 		string syncFolderName;
+		string syncFolderPath;
+		string syncFolderChildPath;
 		JSONValue idDetails = parseJSON("{}");
 		try {
 			idDetails = onedrive.getPathDetailsById(driveId, id);
@@ -463,6 +465,21 @@ final class SyncEngine
 			if ((idDetails["id"].str == id) && (!isItemFile(idDetails))){
 				// Is a Folder or Remote Folder
 				syncFolderName = encodeComponent(idDetails["name"].str);
+			}
+			// Is this a 'local' or 'remote' item?
+			if(isItemRemote(idDetails)){
+				// A remote drive item will not have ["parentReference"]["path"]
+				syncFolderPath = "";
+				syncFolderChildPath = "";
+			} else {
+				if (hasParentReferencePath(idDetails)) {
+					syncFolderPath = idDetails["parentReference"]["path"].str;
+					syncFolderChildPath = syncFolderPath ~ "/" ~ idDetails["name"].str ~ "/";
+				} else {
+					// root drive item will not have ["parentReference"]["path"] 
+					syncFolderPath = "";
+					syncFolderChildPath = "";
+				}
 			}
 		}
 		
@@ -545,10 +562,10 @@ final class SyncEngine
 						// Check this item's path to see if this is a change on the path we want:
 						// 1. 'item id' matches 'id'
 						// 2. 'parentReference id' matches 'id'
-						// 3. 'item path' contains 'sync folder name'
+						// 3. 'item path' contains 'syncFolderChildPath'
 						// 4. 'item path' contains 'id'
 						
-						if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderName)) || (canFind(thisItemPath, id)) ){
+						if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderChildPath)) || (canFind(thisItemPath, id)) ){
 							// This is a change we want to apply
 							applyDifference(item, driveId, isRoot);
 						} else {
@@ -572,12 +589,12 @@ final class SyncEngine
 								}
 							}
 							// Yes .. ID is still on OneDrive but elsewhere .... #341 edge case handling
-							// What is the original local path for this ID in the database? Does it match 'syncFolderName'
+							// What is the original local path for this ID in the database? Does it match 'syncFolderChildPath'
 							if (itemdb.idInLocalDatabase(driveId, item["id"].str)){
 								// item is in the database
 								string originalLocalPath = itemdb.computePath(driveId, item["id"].str);
-								if (canFind(originalLocalPath, syncFolderName)){
-									// This 'change' relates to an item that WAS in 'syncFolderName' but is now 
+								if (canFind(originalLocalPath, syncFolderChildPath)){
+									// This 'change' relates to an item that WAS in 'syncFolderChildPath' but is now 
 									// stored elsewhere on OneDrive - outside the path we are syncing from
 									// Remove this item locally as it's local path is now obsolete
 									idsToDelete ~= [driveId, item["id"].str];
