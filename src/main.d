@@ -25,6 +25,8 @@ int main(string[] args)
 	bool disableNotifications = false;
 	// Display application configuration but do not sync
 	bool displayConfiguration = false;
+	// Display sync status
+	bool displaySyncStatus = false;
 	// only download remote changes
 	bool downloadOnly;
 	// Does the user want to disable upload validation - https://github.com/abraunegg/onedrive/issues/205
@@ -79,6 +81,7 @@ int main(string[] args)
 			"debug-https", "Debug OneDrive HTTPS communication.", &debugHttp,
 			"disable-notifications", "Do not use desktop notifications in monitor mode.", &disableNotifications,
 			"display-config", "Display what options the client will use as currently configured - no sync will be performed.", &displayConfiguration,
+			"display-sync-status", "Display the sync status of the client - no sync will be performed.", &displaySyncStatus,
 			"download-only|d", "Only download remote changes", &downloadOnly,
 			"disable-upload-validation", "Disable upload validation when uploading to OneDrive", &disableUploadValidation,
 			"enable-logging", "Enable client activity to a separate log file", &enableLogFile,
@@ -334,7 +337,7 @@ int main(string[] args)
 	
 	// create-directory, remove-directory, source-directory, destination-directory 
 	// are activities that dont perform a sync no error message for these items either
-	if (((createDirectory != "") || (removeDirectory != "")) || ((sourceDirectory != "") && (destinationDirectory != "")) || (o365SharedLibraryName != "")) {
+	if (((createDirectory != "") || (removeDirectory != "")) || ((sourceDirectory != "") && (destinationDirectory != "")) || (o365SharedLibraryName != "") || (displaySyncStatus == true)) {
 		performSyncOK = true;
 	}
 	
@@ -417,6 +420,20 @@ int main(string[] args)
 	// Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
 	if (o365SharedLibraryName != ""){
 		sync.querySiteCollectionForDriveID(o365SharedLibraryName);
+	}
+	
+	// Are we displaying the sync status of the client?
+	if (displaySyncStatus) {
+		string remotePath = "/";
+		string localPath = ".";
+		
+		// Are we doing a single directory check?
+		if (singleDirectory != ""){
+			// Need two different path strings here
+			remotePath = singleDirectory;
+			localPath = singleDirectory;
+		}
+		sync.queryDriveForChanges(remotePath);
 	}
 	
 	// Are we performing a sync, resync or monitor operation?

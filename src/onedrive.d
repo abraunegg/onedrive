@@ -156,7 +156,7 @@ final class OneDriveApi
 		const(char)[] url = deltaLink;
 		if (url == null) {
 			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/delta";
-			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
+			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		}
 		return get(url);
 	}
@@ -228,7 +228,7 @@ final class OneDriveApi
 		checkAccessTokenExpired();
 		const(char)[] url;
 		//		string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
-		if (path == ".") url = driveUrl ~ "/root/";
+		if ((path == ".")||(path == "/")) url = driveUrl ~ "/root/";
 		else url = itemByPathUrl ~ encodeComponent(path) ~ ":/";
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
 		return get(url);
