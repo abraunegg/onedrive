@@ -3,6 +3,24 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [2.2.4] - 2018-12-28
+### Fixed
+- Resolve JSONException when supplying --get-O365-drive-id option with a string containing spaces
+- Resolve 'sync_dir' not read from 'config' file when run in Docker container
+- Resolve logic where potentially a 'default' ~/OneDrive sync_dir could be set despite 'config' file configured for an alternate
+- Make sure sqlite checkpointing works by properly finalizing statements
+- Update logic handling of --single-directory to prevent inadvertent local data loss
+- Resolve signal handling and database shutdown on SIGINT and SIGTERM
+- Update man page
+- Implement better help output formatting
+
+### Added
+- Add debug handling for sync_dir operations
+- Add debug handling for homePath calculation
+- Add debug handling for configDirBase calculation
+- Add debug handling if syncDir is created
+- Implement Feature Request: Add status command or switch
+
 ## [2.2.3] - 2018-12-20
 ### Fixed
 - Fix syncdir option is ignored

@@ -328,7 +328,7 @@ An example of the log file is below:
 ```
 
 ### Uninstall
-```sh
+```
 sudo make uninstall
 # delete the application state
 rm -rf ~/.config/onedrive
@@ -343,7 +343,7 @@ rm -f ~/.config/onedrive/refresh_token
 ## Additional Configuration
 Additional configuration is optional.
 If you want to change the defaults, you can copy and edit the included config file into your `~/.config/onedrive` directory:
-```sh
+```
 mkdir -p ~/.config/onedrive
 cp ./config ~/.config/onedrive/config
 nano ~/.config/onedrive/config
@@ -422,24 +422,24 @@ tail -f /var/log/onedrive/<username>.onedrive.log
 To change what 'user' the client runs under (by default root), manually edit the init.d service file and modify `daemon --user root onedrive_service.sh` for the correct user.
 
 **systemd - Arch, Ubuntu, Debian, OpenSuSE, Fedora**
-```sh
+```
 systemctl --user enable onedrive
 systemctl --user start onedrive
 ```
 
 To see the logs run:
-```sh
+```
 journalctl --user-unit onedrive -f
 ```
 
 **systemd - Red Hat Enterprise Linux, CentOS Linux**
-```sh
+```
 systemctl enable onedrive
 systemctl start onedrive
 ```
 
 To see the logs run:
-```sh
+```
 journalctl onedrive -f
 ```
 
@@ -510,39 +510,84 @@ If you encounter any bugs you can report them here on Github. Before filing an i
 	- ...
 
 ### All available commands:
+Output of `onedrive --help`
 ```
-Usage: onedrive [OPTION]...
+OneDrive - a client for OneDrive Cloud Services
 
-no option                      No sync and exit
-           --check-for-nomount Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
-                     --confdir Set the directory used to store the configuration files
-            --create-directory Create a directory on OneDrive - no sync will be performed.
-       --destination-directory Destination directory for renamed or move on OneDrive - no sync will be performed.
-                 --debug-https Debug OneDrive HTTPS communication.
-       --disable-notifications Do not use desktop notifications in monitor mode.
-              --display-config Display what options the client will use as currently configured - no sync will be performed.
--d             --download-only Only download remote changes
-   --disable-upload-validation Disable upload validation when uploading to OneDrive
-              --enable-logging Enable client activity to a separate log file
-           --get-O365-drive-id Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library
-                 --local-first Synchronize from the local directory source first, before downloading changes from OneDrive.
-                      --logout Logout the current user
--m                   --monitor Keep monitoring for local and remote changes
-            --no-remote-delete Do not delete local file 'deletes' from OneDrive when using --upload-only
-                 --print-token Print the access token, useful for debugging
-                      --resync Forget the last saved state, perform a full sync
-            --remove-directory Remove a directory on OneDrive - no sync will be performed.
-            --single-directory Specify a single local directory within the OneDrive root to sync.
-               --skip-symlinks Skip syncing of symlinks
-            --source-directory Source directory to rename or move on OneDrive - no sync will be performed.
-                     --syncdir Set the directory used to sync the files that are synced
-                 --synchronize Perform a synchronization
-                 --upload-only Only upload to OneDrive, do not sync changes from OneDrive locally
--v                   --verbose Print more details, useful for debugging (repeat for extra debugging)
-                     --version Print the version and exit
--h                      --help This help information.
+Usage:
+  onedrive [options] --synchronize
+      Do a one time synchronization
+  onedrive [options] --monitor
+      Monitor filesystem and sync regularly
+  onedrive [options] --display-config
+      Display the currently used configuration
+  onedrive [options] --display-sync-status
+      Query OneDrive service and report on pending changes
+  onedrive -h | --help
+      Show this help screen
+  onedrive --version
+      Show version
+
+Options:
+
+  --check-for-nomount
+      Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
+  --confdir ARG
+      Set the directory used to store the configuration files
+  --create-directory ARG
+      Create a directory on OneDrive - no sync will be performed.
+  --destination-directory ARG
+      Destination directory for renamed or move on OneDrive - no sync will be performed.
+  --debug-https
+      Debug OneDrive HTTPS communication.
+  --disable-notifications
+      Do not use desktop notifications in monitor mode.
+  --display-config
+      Display what options the client will use as currently configured - no sync will be performed.
+  --display-sync-status
+      Display the sync status of the client - no sync will be performed.
+  -d --download-only
+      Only download remote changes
+  --disable-upload-validation
+      Disable upload validation when uploading to OneDrive
+  --enable-logging
+      Enable client activity to a separate log file
+  --get-O365-drive-id ARG
+      Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library
+  --local-first
+      Synchronize from the local directory source first, before downloading changes from OneDrive.
+  --logout
+      Logout the current user
+  -m --monitor
+      Keep monitoring for local and remote changes
+  --no-remote-delete
+      Do not delete local file 'deletes' from OneDrive when using --upload-only
+  --print-token
+      Print the access token, useful for debugging
+  --resync
+      Forget the last saved state, perform a full sync
+  --remove-directory ARG
+      Remove a directory on OneDrive - no sync will be performed.
+  --single-directory ARG
+      Specify a single local directory within the OneDrive root to sync.
+  --skip-symlinks
+      Skip syncing of symlinks
+  --source-directory ARG
+      Source directory to rename or move on OneDrive - no sync will be performed.
+  --syncdir ARG
+      Specify the local directory used for synchronization to OneDrive
+  --synchronize
+      Perform a synchronization
+  --upload-only
+      Only upload to OneDrive, do not sync changes from OneDrive locally
+  -v+ --verbose
+      Print more details, useful for debugging (repeat for extra debugging)
+  --version
+      Print the version and exit
+  -h --help
+      This help information.
 ```
 
 ### File naming
 The files and directories in the synchronization directory must follow the [Windows naming conventions](https://msdn.microsoft.com/en-us/library/aa365247).
-The application will crash for example if you have two files with the same name but different case. This is expected behavior and won't be fixed.
+The application will attempt to handle instances where you have two files with the same name but different case. Where there is a namespace clash, the file name which clashes will not be synced. This is expected behavior and won't be fixed.
