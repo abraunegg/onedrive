@@ -108,11 +108,7 @@ int main(string[] args)
 			"version", "Print the version and exit", &printVersion
 		);
 		if (opt.helpWanted) {
-			defaultGetoptPrinter(
-				"Usage: onedrive [OPTION]...\n\n" ~
-				"no option        No sync and exit",
-				opt.options
-			);
+			outputLongHelp(opt.options);
 			return EXIT_SUCCESS;
 		}
 	} catch (GetOptException e) {
@@ -675,3 +671,41 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 	} catch(Exception e) {}
 	exit(0);
 }
+void outputLongHelp(Option[] opt)
+{
+	auto argsNeedingOptions = [
+		"--confdir",
+		"--create-directory",
+		"--destination-directory",
+		"--get-O365-drive-id",
+		"--remove-directory",
+		"--single-directory",
+		"--source-directory",
+		"--syncdir" ];
+	writeln(`OneDrive - a client for OneDrive Cloud Services
+
+Usage:
+  onedrive [options] --synchronize
+      Do a one time synchronization
+  onedrive [options] --monitor
+      Monitor filesystem and sync regularly
+  onedrive [options] --display-config
+      Display the currently used configuration
+  onedrive [options] --display-sync-status
+      Query OneDrive service and report on pending changes
+  onedrive -h | --help
+      Show this help screen
+  onedrive --version
+      Show version
+
+Options:
+`);
+	foreach (it; opt) {
+		writefln("  %s%s%s%s\n      %s",
+				it.optShort == "" ? "" : it.optShort ~ " ",
+				it.optLong,
+				argsNeedingOptions.canFind(it.optLong) ? " ARG" : "",
+				it.required ? " (required)" : "", it.help);
+	}
+}
+
