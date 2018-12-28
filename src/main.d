@@ -1,7 +1,8 @@
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.memory, core.time, core.thread;
-import std.getopt, std.file, std.path, std.process, std.stdio, std.conv, std.algorithm.searching, std.string;
+import std.file, std.path, std.process, std.stdio, std.conv, std.algorithm.searching, std.string;
 import config, itemdb, monitor, onedrive, selective, sync, util;
+import docopt;
 import std.net.curl: CurlException;
 import core.stdc.signal;
 import std.traits;
@@ -15,116 +16,141 @@ int main(string[] args)
 	// Disable buffering on stdout
 	stdout.setvbuf(0, _IONBF);
 	
-	// Application Option Variables
+	auto doc = "OneDrive - a client for OneDrive Cloud Services
+
+Usage:
+  onedrive [options] [-v | -vv] (--synchronize | --monitor | --display-config | --display-sync-status )
+  onedrive -h | --help
+  onedrive --version
+
+Options:
+  -h --help     Show this screen.
+  --version     Show version.
+  --check-for-nomount
+       Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
+  --confdir ARG
+       Set the directory used to store the configuration files
+  --create-directory ARG
+       Create a directory on OneDrive - no sync will be performed.
+  --destination-directory ARG
+       Destination directory for renamed or move on OneDrive - no sync will be performed.
+  --debug-https
+       Debug OneDrive HTTPS communication.
+  --disable-notifications
+       Do not use desktop notifications in monitor mode.
+  --disable-upload-validation
+       Disable upload validation when uploading to OneDrive
+  --display-config
+       Display what options the client will use as currently configured - no sync will be performed.
+  --display-sync-status
+       Display the sync status of the client - no sync will be performed.
+  --download-only -d
+       Only download remote changes
+  --enable-logging
+       Enable client activity to a separate log file
+  --get-O365-drive-id ARG
+       Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library
+  --local-first
+       Synchronize from the local directory source first, before downloading changes from OneDrive.
+  --logout
+       Logout the current user
+  --monitor -m
+       Keep monitoring for local and remote changes
+  --no-remote-delete
+       Do not delete local file 'deletes' from OneDrive when using --upload-only
+  --print-token
+       Print the access token, useful for debugging
+  --remove-directory ARG
+       Remove a directory on OneDrive - no sync will be performed.
+  --resync
+       Forget the last saved state, perform a full sync
+  --single-directory ARG
+       Specify a single local directory within the OneDrive root to sync.
+  --skip-symlinks
+       Skip syncing of symlinks
+  --source-directory ARG
+       Source directory to rename or move on OneDrive - no sync will be performed.
+  --syncdir ARG
+       Set the directory used to sync the files that are synced
+  --synchronize
+       Perform a synchronization
+  --upload-only
+       Only upload to OneDrive, do not sync changes from OneDrive locally
+  --verbose -v
+       Print more details, useful for debugging (repeat for extra debugging)
+";
+
+	auto arguments = docopt.docopt(doc, args[1..$], true, import("version"));
+
+	log.vdebug("parsed arguments = ", arguments);
+
+	// Convert returned arguments to actually used settings
+
+	// variables are ordered according to the help output, which is alphabetic
+	// in the option names
+	string ConvertToString(string arg) {
+		return (arguments[arg].isNull ? null : arguments[arg].toString);
+	}
+
 	// Add a check mounts option to resolve https://github.com/abraunegg/onedrive/issues/8
-	bool checkMount;
+	bool checkMount = arguments["--check-for-nomount"].isTrue;
 	// configuration directory
-	string configDirName;
+	string configDirName = ConvertToString("--confdir");
 	// Create a single root directory on OneDrive
-	string createDirectory;
+	string createDirectory = ConvertToString("--create-directory");
 	// The destination directory if we are using the OneDrive client to rename a directory
-	string destinationDirectory;
+	string destinationDirectory = ConvertToString("--destination-directory");
 	// Debug the HTTPS submit operations if required
-	bool debugHttp;
+	bool debugHttp = arguments["--debug-https"].isTrue;
 	// Do not use notifications in monitor mode
-	bool disableNotifications = false;
-	// Display application configuration but do not sync
-	bool displayConfiguration = false;
-	// Display sync status
-	bool displaySyncStatus = false;
-	// only download remote changes
-	bool downloadOnly;
+	bool disableNotifications = arguments["--disable-notifications"].isTrue;
 	// Does the user want to disable upload validation - https://github.com/abraunegg/onedrive/issues/205
 	// SharePoint will associate some metadata from the library the file is uploaded to directly in the file - thus change file size & checksums
-	bool disableUploadValidation = false;
+	bool disableUploadValidation = arguments["--disable-upload-validation"].isTrue;
+	// Display application configuration but do not sync
+	bool displayConfiguration = arguments["--display-config"].isTrue;
+	// Display sync status
+	bool displaySyncStatus = arguments["--display-sync-status"].isTrue;
+	// only download remote changes
+	bool downloadOnly = arguments["--download-only"].isTrue;
 	// Do we enable a log file
-	bool enableLogFile = false;
+	bool enableLogFile = arguments["--enable-logging"].isTrue;
 	// SharePoint / Office 365 Shared Library name to query
-	string o365SharedLibraryName;
+	string o365SharedLibraryName = ConvertToString("--get-O365-drive-id");
 	// Local sync - Upload local changes first before downloading changes from OneDrive
-	bool localFirst;
+	bool localFirst = arguments["--local-first"].isTrue;
 	// remove the current user and sync state
-	bool logout;
+	bool logout = arguments["--logout"].isTrue;
 	// enable monitor mode
-	bool monitor;
+	bool monitor = arguments["--monitor"].isTrue;
 	// Add option for no remote delete
-	bool noRemoteDelete;
+	bool noRemoteDelete = arguments["--no-remote-delete"].isTrue;
 	// print the access token
-	bool printAccessToken;
-	// force a full resync
-	bool resync;
+	bool printAccessToken = arguments["--print-token"].isTrue;
 	// Remove a single directory on OneDrive
-	string removeDirectory;
+	string removeDirectory = ConvertToString("--remove-directory");
+	// force a full resync
+	bool resync = arguments["--resync"].isTrue;
 	// This allows for selective directory syncing instead of everything under ~/OneDrive/
-	string singleDirectory;
+	string singleDirectory = ConvertToString("--single-directory");
 	// Add option to skip symlinks
-	bool skipSymlinks;
+	bool skipSymlinks = arguments["--skip-symlinks"].isTrue;
 	// The source directory if we are using the OneDrive client to rename a directory
-	string sourceDirectory;
+	string sourceDirectory = ConvertToString("--source-directory");
 	// override the sync directory
-	string syncDirName;
+	string syncDirName = ConvertToString("--syncdir");
 	// Configure a flag to perform a sync
 	// This is beneficial so that if just running the client itself - without any options, or sync check, the client does not perform a sync
-	bool synchronize;
+	bool synchronize = arguments["--synchronize"].isTrue;
 	// Upload Only
-	bool uploadOnly;
+	bool uploadOnly = arguments["--upload-only"].isTrue;
 	// enable verbose logging
-	bool verbose;
-	// print the version and exit
-	bool printVersion;
-	
-	// Application Startup option validation
-	try {
-		auto opt = getopt(
-			args,
-			std.getopt.config.bundling,
-			std.getopt.config.caseSensitive,
-			"check-for-nomount", "Check for the presence of .nosync in the syncdir root. If found, do not perform sync.", &checkMount,
-			"confdir", "Set the directory used to store the configuration files", &configDirName,
-			"create-directory", "Create a directory on OneDrive - no sync will be performed.", &createDirectory,
-			"destination-directory", "Destination directory for renamed or move on OneDrive - no sync will be performed.", &destinationDirectory,
-			"debug-https", "Debug OneDrive HTTPS communication.", &debugHttp,
-			"disable-notifications", "Do not use desktop notifications in monitor mode.", &disableNotifications,
-			"display-config", "Display what options the client will use as currently configured - no sync will be performed.", &displayConfiguration,
-			"display-sync-status", "Display the sync status of the client - no sync will be performed.", &displaySyncStatus,
-			"download-only|d", "Only download remote changes", &downloadOnly,
-			"disable-upload-validation", "Disable upload validation when uploading to OneDrive", &disableUploadValidation,
-			"enable-logging", "Enable client activity to a separate log file", &enableLogFile,
-			"get-O365-drive-id", "Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library", &o365SharedLibraryName,
-			"local-first", "Synchronize from the local directory source first, before downloading changes from OneDrive.", &localFirst,
-			"logout", "Logout the current user", &logout,
-			"monitor|m", "Keep monitoring for local and remote changes", &monitor,
-			"no-remote-delete", "Do not delete local file 'deletes' from OneDrive when using --upload-only", &noRemoteDelete,
-			"print-token", "Print the access token, useful for debugging", &printAccessToken,
-			"resync", "Forget the last saved state, perform a full sync", &resync,
-			"remove-directory", "Remove a directory on OneDrive - no sync will be performed.", &removeDirectory,
-			"single-directory", "Specify a single local directory within the OneDrive root to sync.", &singleDirectory,
-			"skip-symlinks", "Skip syncing of symlinks", &skipSymlinks,
-			"source-directory", "Source directory to rename or move on OneDrive - no sync will be performed.", &sourceDirectory,
-			"syncdir", "Set the directory used to sync the files that are synced", &syncDirName,
-			"synchronize", "Perform a synchronization", &synchronize,
-			"upload-only", "Only upload to OneDrive, do not sync changes from OneDrive locally", &uploadOnly,
-			"verbose|v+", "Print more details, useful for debugging (repeat for extra debugging)", &log.verbose,
-			"version", "Print the version and exit", &printVersion
-		);
-		if (opt.helpWanted) {
-			defaultGetoptPrinter(
-				"Usage: onedrive [OPTION]...\n\n" ~
-				"no option        No sync and exit",
-				opt.options
-			);
-			return EXIT_SUCCESS;
-		}
-	} catch (GetOptException e) {
-		log.error(e.msg);
-		log.error("Try 'onedrive -h' for more information");
-		return EXIT_FAILURE;
-	} catch (Exception e) {
-		// error
-		log.error(e.msg);
-		log.error("Try 'onedrive -h' for more information");
-		return EXIT_FAILURE;
+	if (arguments["--verbose"].isInt) {
+		log.verbose = arguments["--verbose"].asInt;
+	} else {
+		log.verbose = 0;
 	}
+	
 
 	// Main function variables
 	string homePath = "";
@@ -134,7 +160,7 @@ int main(string[] args)
 	// Are we able to reach the OneDrive Service
 	bool online = false;
 	
-	// Determine the users home directory. 
+	// Determine the users home directory.
 	// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
 	// Check for HOME environment variable
 	if (environment.get("HOME") != ""){
@@ -187,11 +213,6 @@ int main(string[] args)
 		configDirName = configDirBase ~ "/onedrive";
 	}
 	
-	if (printVersion) {
-		std.stdio.write("onedrive ", import("version"));
-		return EXIT_SUCCESS;
-	}
-
 	// load application configuration
 	log.vlog("Loading config ...");
 	log.vlog("Using Config Dir: ", configDirName);
@@ -509,7 +530,7 @@ int main(string[] args)
 
 			// initialise the monitor class
 			if (cfg.getValue("skip_symlinks") == "true") skipSymlinks = true;
-			if (!downloadOnly) m.init(cfg, verbose, skipSymlinks);
+			if (!downloadOnly) m.init(cfg, log.verbose >= 1, skipSymlinks);
 			// monitor loop
 			immutable auto checkInterval = dur!"seconds"(to!long(cfg.getValue("monitor_interval")));
 			auto lastCheckTime = MonoTime.currTime();

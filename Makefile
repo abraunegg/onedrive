@@ -28,7 +28,13 @@ SOURCES = \
 	src/sync.d \
 	src/upload.d \
 	src/util.d \
-	src/progress.d
+	src/progress.d \
+	src/docopt/argvalue.d \
+	src/docopt/tokens.d \
+	src/docopt/docopt.d \
+	src/docopt/patterns.d \
+	src/docopt/unittests.d
+
 
 ifdef NOTIFICATIONS
 SOURCES += src/notifications/notify.d src/notifications/dnotify.d
