@@ -101,7 +101,7 @@ int main(string[] args)
 			"single-directory", "Specify a single local directory within the OneDrive root to sync.", &singleDirectory,
 			"skip-symlinks", "Skip syncing of symlinks", &skipSymlinks,
 			"source-directory", "Source directory to rename or move on OneDrive - no sync will be performed.", &sourceDirectory,
-			"syncdir", "Set the local directory used to sync the files that are synced", &syncDirName,
+			"syncdir", "Specify the local directory used for synchronization to OneDrive", &syncDirName,
 			"synchronize", "Perform a synchronization", &synchronize,
 			"upload-only", "Only upload to OneDrive, do not sync changes from OneDrive locally", &uploadOnly,
 			"verbose|v+", "Print more details, useful for debugging (repeat for extra debugging)", &log.verbose,
