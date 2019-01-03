@@ -281,6 +281,8 @@ int main(string[] args)
 	if (displayConfiguration){
 		string userConfigFilePath = configDirName ~ "/config";
 		string userSyncList = configDirName ~ "/sync_list";
+		// Display application version
+		std.stdio.write("onedrive version                    = ", import("version"));
 		// Display all of the pertinent configuration options
 		writeln("Config path                         = ", configDirName);
 		
@@ -377,6 +379,13 @@ int main(string[] args)
 	auto selectiveSync = new SelectiveSync();
 	if (exists(cfg.syncListFilePath)){
 		log.vdebug("Loading user configured sync_list file ...");
+		// list what will be synced
+		auto syncListFile = File(cfg.syncListFilePath);
+		auto range = syncListFile.byLine();
+		foreach (line; range)
+		{
+			log.vdebug("sync_list: ", line);
+		}
 	}
 	selectiveSync.load(cfg.syncListFilePath);
 	selectiveSync.setMask(cfg.getValue("skip_file"));

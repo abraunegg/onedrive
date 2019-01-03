@@ -683,6 +683,9 @@ final class SyncEngine
 				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
 				path = buildNormalizedPath(path);
 				unwanted = selectiveSync.isPathExcluded(path);
+				if (unwanted) {
+					log.vdebug("OneDrive change path is to be excluded by user configuration: ", path);
+				}
 			} else {
 				unwanted = true;
 			}
