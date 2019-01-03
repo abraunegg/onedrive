@@ -486,6 +486,14 @@ final class SyncEngine
 					syncFolderChildPath = "";
 				}
 			}
+			
+			// Debug Output
+			log.vdebug("Sync Folder Name: ", syncFolderName);
+			// Debug Output of path if only set, generally only set if using --single-directory
+			if (hasParentReferencePath(idDetails)) {
+				log.vdebug("Sync Folder Path: ", syncFolderPath);
+				log.vdebug("Sync Folder Child Path: ", syncFolderChildPath);
+			}
 		}
 		
 		for (;;) {
@@ -537,6 +545,8 @@ final class SyncEngine
 			// Are there any changes to process?
 			if (("value" in changes) != null) {
 				// There are valid changes
+				log.vdebug("Number of changes from OneDrive to process: ", count(changes["value"].array));
+				
 				foreach (item; changes["value"].array) {
 					bool isRoot = false;
 					string thisItemPath;
@@ -637,7 +647,9 @@ final class SyncEngine
 		// Reset the downloadFailed flag for this item
 		downloadFailed = false;
 		
+		// Is the change from OneDrive a 'root' item
 		if (isItemRoot(driveItem) || !item.parentId || isRoot) {
+			log.vdebug("Handing a OneDrive 'root' change");
 			item.parentId = null; // ensures that it has no parent
 			item.driveId = driveId; // HACK: makeItem() cannot set the driveId property of the root
 			itemdb.upsert(item);
@@ -651,11 +663,11 @@ final class SyncEngine
 		// check the item type
 		if (!unwanted) {
 			if (isItemFile(driveItem)) {
-				//log.vlog("The item we are syncing is a file");
+				log.vdebug("The item we are syncing is a file");
 			} else if (isItemFolder(driveItem)) {
-				//log.vlog("The item we are syncing is a folder");
+				log.vdebug("The item we are syncing is a folder");
 			} else if (isItemRemote(driveItem)) {
-				//log.vlog("The item we are syncing is a remote item");
+				log.vdebug("The item we are syncing is a remote item");
 				assert(isItemFolder(driveItem["remoteItem"]), "The remote item is not a folder");
 			} else {
 				log.vlog("This item type (", item.name, ") is not supported");
@@ -678,7 +690,7 @@ final class SyncEngine
 
 		// skip unwanted items early
 		if (unwanted) {
-			//log.vlog("Filtered out");
+			log.vdebug("Skipping OneDrive change as this is determined to be unwanted");
 			skippedItems ~= item.id;
 			return;
 		}
@@ -690,8 +702,8 @@ final class SyncEngine
 		// check if the item is going to be deleted
 		if (isItemDeleted(driveItem)) {
 			// item.name is not available, so we get a bunch of meaningless log output
-			// will fix this with wider logging changes being worked on
-			//log.vlog("This item is marked for deletion:", item.name);
+			string itemPath = itemdb.computePath(item.driveId, item.id);
+			log.vdebug("This item is marked for local deletion: ", itemPath);
 			if (cached) {
 				// flag to delete
 				idsToDelete ~= [item.driveId, item.id];
@@ -718,8 +730,10 @@ final class SyncEngine
 
 		// update the item
 		if (cached) {
+			log.vdebug("OneDrive change is an update to an existing local item");
 			applyChangedItem(oldItem, oldPath, item, path);
 		} else {
+			log.vdebug("OneDrive change is a new local item");
 			applyNewItem(item, path);
 		}
 
