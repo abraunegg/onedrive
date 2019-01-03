@@ -69,6 +69,10 @@ private bool hasId(const ref JSONValue item)
 	return ("id" in item) != null;
 }
 
+private bool hasName(const ref JSONValue item)
+{
+	return ("name" in item) != null;
+}
 
 // construct an Item struct from a JSON driveItem
 private Item makeItem(const ref JSONValue driveItem)
@@ -315,6 +319,7 @@ final class SyncEngine
 			
 			if (e.httpStatusCode >= 500) {
 				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+				log.vdebug("ERROR: OneDrive 'HTTP 5xx Server Side Error' when running applyDifferencesSingleDirectory()");
 				return;
 			}
 		} 
@@ -402,6 +407,7 @@ final class SyncEngine
 			
 			if (e.httpStatusCode >= 500) {
 				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+				log.vdebug("ERROR: OneDrive 'HTTP 5xx Server Side Error' when running deleteDirectoryNoSync()");
 				return;
 			}
 		}
@@ -434,6 +440,7 @@ final class SyncEngine
 			
 			if (e.httpStatusCode >= 500) {
 				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+				log.vdebug("ERROR: OneDrive 'HTTP 5xx Server Side Error' when running renameDirectoryNoSync()");
 				return;
 			}
 		}
@@ -466,6 +473,7 @@ final class SyncEngine
 			
 			if (e.httpStatusCode >= 500) {
 				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+				log.vdebug("ERROR: OneDrive 'HTTP 5xx Server Side Error' when running applyDifferences()");
 				return;
 			}
 		} 
@@ -596,6 +604,7 @@ final class SyncEngine
 								
 								if (e.httpStatusCode >= 500) {
 									// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+									log.vdebug("ERROR: OneDrive 'HTTP 5xx Server Side Error' when running applyDifferences() - oneDriveMovedNotDeleted");
 									return;
 								}
 							}
@@ -1113,7 +1122,8 @@ final class SyncEngine
 									if (e.httpStatusCode == 412) {
 										// HTTP request returned status code 412 - ETag does not match current item's value
 										// Delete record from the local database - file will be uploaded as a new file
-										log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
+										log.vlog("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
+										log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 										itemdb.deleteById(item.driveId, item.id);
 										return;
 									}
@@ -1134,7 +1144,8 @@ final class SyncEngine
 									if (e.httpStatusCode == 412) {
 										// HTTP request returned status code 412 - ETag does not match current item's value
 										// Delete record from the local database - file will be uploaded as a new file
-										log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
+										log.vlog("Session Upload Replace Failed - OneDrive eTag / cTag match issue");
+										log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 										itemdb.deleteById(item.driveId, item.id);
 										return;
 									}
@@ -1326,6 +1337,7 @@ final class SyncEngine
 					
 					if (e.httpStatusCode >= 500) {
 						// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+						log.vdebug("ERROR: OneDrive 'HTTP 5xx Server Side Error' when running uploadCreateDir()");
 						return;
 					}
 				}
@@ -1371,34 +1383,43 @@ final class SyncEngine
 				
 				if (e.httpStatusCode >= 500) {
 					// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+					log.vdebug("ERROR: OneDrive 'HTTP 5xx Server Side Error' when running uploadCreateDir() - test if path exists");
 					return;
 				}
 			} 
 			
-			// https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
-			// Do not assume case sensitivity. For example, consider the names OSCAR, Oscar, and oscar to be the same, 
-			// even though some file systems (such as a POSIX-compliant file system) may consider them as different. 
-			// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior.
-			
-			if (response["name"].str == baseName(path)){
-				// OneDrive 'name' matches local path name
-				log.vlog("The requested directory to create was found on OneDrive - skipping creating the directory: ", path );
-				// Check that this path is in the database
-				if (!itemdb.selectById(parent.driveId, parent.id, parent)){
-					// parent for 'path' is NOT in the database
-					log.vlog("The parent for this path is not in the local database - need to add parent to local database");
-					string parentPath = dirName(path);
-					uploadCreateDir(parentPath);
+			// Ensure that the response has a name which we can check & validate
+			if (hasName(response)){
+				// https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
+				// Do not assume case sensitivity. For example, consider the names OSCAR, Oscar, and oscar to be the same, 
+				// even though some file systems (such as a POSIX-compliant file system) may consider them as different. 
+				// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior.
+				
+				if (response["name"].str == baseName(path)){
+					// OneDrive 'name' matches local path name
+					log.vlog("The requested directory to create was found on OneDrive - skipping creating the directory: ", path );
+					// Check that this path is in the database
+					if (!itemdb.selectById(parent.driveId, parent.id, parent)){
+						// parent for 'path' is NOT in the database
+						log.vlog("The parent for this path is not in the local database - need to add parent to local database");
+						string parentPath = dirName(path);
+						uploadCreateDir(parentPath);
+					} else {
+						// parent is in database
+						log.vlog("The parent for this path is in the local database - adding requested path (", path ,") to database");
+						auto res = onedrive.getPathDetails(path);
+						saveItem(res);
+					}
 				} else {
-					// parent is in database
-					log.vlog("The parent for this path is in the local database - adding requested path (", path ,") to database");
-					auto res = onedrive.getPathDetails(path);
-					saveItem(res);
+					// They are the "same" name wise but different in case sensitivity
+					log.error("ERROR: A local directory has the same name as another local directory.");
+					log.error("ERROR: To resolve, rename this local directory: ", absolutePath(path));
+					log.log("Skipping: ", absolutePath(path));
+					return;
 				}
 			} else {
-				// They are the "same" name wise but different in case sensitivity
-				log.error("ERROR: A local directory has the same name as another local directory.");
-				log.error("ERROR: To resolve, rename this local directory: ", absolutePath(path));
+				// response json is invalid
+				log.error("ERROR: Unable to process request due to an error with getting data from OneDrive");
 				log.log("Skipping: ", absolutePath(path));
 				return;
 			}
@@ -1555,6 +1576,7 @@ final class SyncEngine
 					
 						if (e.httpStatusCode >= 500) {
 							// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+							log.vdebug("ERROR: OneDrive 'HTTP 5xx Server Side Error' when running uploadNewFile() - test if file exists");
 							return;
 						}
 					}
@@ -1667,12 +1689,9 @@ final class SyncEngine
 			if (e.httpStatusCode == 412) {
 				// OneDrive threw a 412 error, most likely: ETag does not match current item's value
 				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting file time stamp update - gracefully handling error");
-				writeln("OneDrive Original Response: ", response);
 				string nullTag = null;
 				// Retry without eTag so we dont try and match against the etag / ctag
 				response = onedrive.updateById(driveId, id, data, nullTag);
-				writeln("OneDrive Re-submit: ", driveId, " ", id, " ", data, " ", nullTag);
-				writeln("OneDrive null Response: ", response);
 			}
 		}
 		if (hasId(response)) {
