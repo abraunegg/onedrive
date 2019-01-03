@@ -64,6 +64,12 @@ private bool hasFileSize(const ref JSONValue item)
 	return ("size" in item) != null;
 }
 
+private bool hasId(const ref JSONValue item)
+{
+	return ("id" in item) != null;
+}
+
+
 // construct an Item struct from a JSON driveItem
 private Item makeItem(const ref JSONValue driveItem)
 {
@@ -1660,13 +1666,18 @@ final class SyncEngine
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 412) {
 				// OneDrive threw a 412 error, most likely: ETag does not match current item's value
-				// Retry without eTag
-				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
+				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting file time stamp update - gracefully handling error");
+				writeln("OneDrive Original Response: ", response);
 				string nullTag = null;
+				// Retry without eTag so we dont try and match against the etag / ctag
 				response = onedrive.updateById(driveId, id, data, nullTag);
+				writeln("OneDrive Re-submit: ", driveId, " ", id, " ", data, " ", nullTag);
+				writeln("OneDrive null Response: ", response);
 			}
-		} 
-		saveItem(response);
+		}
+		if (hasId(response)) {
+			saveItem(response);
+		}
 	}
 
 	private void saveItem(JSONValue jsonItem)
