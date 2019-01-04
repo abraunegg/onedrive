@@ -670,7 +670,7 @@ final class OneDriveApi
 			//  504 - Gateway Timeout (Issue #320)
 			case 500,502,503,504:
 				// No actions
-				log.vlog("OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error");
+				log.vlog("OneDrive returned a 'HTTP ", http.statusLine.code, "Server Side Error' - gracefully handling error");
 				break;	
 
 			// "else"
@@ -695,7 +695,7 @@ final class OneDriveApi
 			//  504 - Gateway Timeout (Issue #320)
 			case 500,502,503,504:
 				// No actions
-				log.vlog("OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error");
+				log.vlog("OneDrive returned a 'HTTP ", http.statusLine.code, "Server Side Error' - gracefully handling error");
 				break;
 			
 			// Default - all other errors that are not a 2xx or a 302
