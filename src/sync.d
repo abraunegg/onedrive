@@ -705,8 +705,7 @@ final class SyncEngine
 		// check if the item is going to be deleted
 		if (isItemDeleted(driveItem)) {
 			// item.name is not available, so we get a bunch of meaningless log output
-			string itemPath = itemdb.computePath(item.driveId, item.id);
-			log.vdebug("This item is marked for local deletion: ", itemPath);
+			// Item name we will attempt to delete will be printed out later
 			if (cached) {
 				// flag to delete
 				idsToDelete ~= [item.driveId, item.id];
