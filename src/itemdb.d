@@ -77,6 +77,11 @@ final class ItemDatabase
 			FROM item
 			WHERE driveId = ?1 AND id = ?2
 		";
+		selectRemoteItemByIdStmt = "
+			SELECT *
+			FROM item
+			WHERE remoteDriveId = ?1 AND remoteId = ?2
+		";
 		selectItemByParentIdStmt = "SELECT * FROM item WHERE driveId = ? AND parentId = ?";
 		deleteItemByIdStmt = "DELETE FROM item WHERE driveId = ? AND id = ?";
 	}
@@ -173,12 +178,25 @@ final class ItemDatabase
 		return false;
 	}
 
-	// returns if an item id is in the database
+	// returns true if an item id is in the database
 	bool idInLocalDatabase(const(string) driveId, const(string)id)
 	{
 		auto p = db.prepare(selectItemByIdStmt);
 		p.bind(1, driveId);
 		p.bind(2, id);
+		auto r = p.exec();
+		if (!r.empty) {
+			return true;
+		}
+		return false;
+	}
+	
+	// returns true if the remote item id is in the database
+	bool remoteIdInLocalDatabase(const(string) remoteDriveId, const(string)remoteId)
+	{
+		auto p = db.prepare(selectRemoteItemByIdStmt);
+		p.bind(1, remoteDriveId);
+		p.bind(2, remoteId);
 		auto r = p.exec();
 		if (!r.empty) {
 			return true;

@@ -687,14 +687,26 @@ final class SyncEngine
 		string path;
 		if (!unwanted) {
 			// Is the item in the local database
-			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){				
+			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
+				// compute the item path to see if the path is excluded
 				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
 				path = buildNormalizedPath(path);
 				unwanted = selectiveSync.isPathExcluded(path);
 				if (unwanted) log.vdebug("OneDrive change path is to be excluded by user configuration: ", path);
 			} else {
-				unwanted = true;
-				log.vdebug("Flagging as unwanted: item.driveId, item.parentId not in local database");
+				// Before flagging as unwanted, is the item.driveId, item.parentId a remoteDriveId, remoteId?
+				if (itemdb.remoteIdInLocalDatabase(item.driveId, item.parentId)){
+					// compute the item path to see if the path is excluded
+					// computePath handles checking of remoteDriveId, remoteId database fields
+					path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
+					path = buildNormalizedPath(path);
+					unwanted = selectiveSync.isPathExcluded(path);
+					if (unwanted) log.vdebug("OneDrive remote change path is to be excluded by user configuration: ", path);
+				} else {
+					// Not a local or remote item in the database
+					unwanted = true;
+					log.vdebug("Flagging as unwanted: item.driveId (", item.driveId,"), item.parentId (", item.parentId,") not in local database");
+				}
 			}
 		}
 
@@ -751,8 +763,10 @@ final class SyncEngine
 			// if the file was detected as malware and NOT downloaded, we dont want to falsify the DB as downloading it as otherwise the next pass will think it was deleted, thus delete the remote item
 			// Likewise if the download failed, we dont want to falsify the DB as downloading it as otherwise the next pass will think it was deleted, thus delete the remote item 
 			if (cached) {
+				log.vdebug("Updating local database with item details");
 				itemdb.update(item);
 			} else {
+				log.vdebug("Inserting item details to local database");
 				itemdb.insert(item);
 			}
 		}
