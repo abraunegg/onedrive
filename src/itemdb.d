@@ -39,6 +39,7 @@ final class ItemDatabase
 	string selectItemByIdStmt;
 	string selectItemByParentIdStmt;
 	string deleteItemByIdStmt;
+	string selectRemoteItemByIdStmt;
 
 	this(const(char)[] filename)
 	{
