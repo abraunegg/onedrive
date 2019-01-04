@@ -551,6 +551,9 @@ final class SyncEngine
 					bool isRoot = false;
 					string thisItemPath;
 					
+					// Change as reported by OneDrive
+					log.vdebug("OneDrive Change: ", item);
+					
 					// Deleted items returned from onedrive.viewChangesById (/delta) do not have a 'name' attribute
 					// Thus we cannot name check for 'root' below on deleted items
 					if(!isItemDeleted(item)){
@@ -566,6 +569,7 @@ final class SyncEngine
 					// How do we handle this change?
 					if (isRoot || !hasParentReferenceId(item) || isItemDeleted(item)){
 						// Is a root item, has no id in parentReference or is a OneDrive deleted item
+						log.vdebug("Handling change as 'root item', has no parent reference or is a deleted item");
 						applyDifference(item, driveId, isRoot);
 					} else {
 						// What is this item's path?
@@ -582,6 +586,7 @@ final class SyncEngine
 						
 						if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderChildPath)) || (canFind(thisItemPath, id)) ){
 							// This is a change we want to apply
+							log.vdebug("Change matches search criteria to apply");
 							applyDifference(item, driveId, isRoot);
 						} else {
 							// No item ID match or folder sync match
