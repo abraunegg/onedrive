@@ -663,7 +663,9 @@ final class SyncEngine
 
 		bool unwanted;
 		unwanted |= skippedItems.find(item.parentId).length != 0;
+		if (unwanted) log.vdebug("Flagging as unwanted: find(item.parentId).length != 0");
 		unwanted |= selectiveSync.isNameExcluded(item.name);
+		if (unwanted) log.vdebug("Flagging as unwanted: item name is excluded - ", item.name);
 
 		// check the item type
 		if (!unwanted) {
@@ -677,6 +679,7 @@ final class SyncEngine
 			} else {
 				log.vlog("This item type (", item.name, ") is not supported");
 				unwanted = true;
+				log.vdebug("Flagging as unwanted: item type is not supported");
 			}
 		}
 
@@ -688,11 +691,10 @@ final class SyncEngine
 				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
 				path = buildNormalizedPath(path);
 				unwanted = selectiveSync.isPathExcluded(path);
-				if (unwanted) {
-					log.vdebug("OneDrive change path is to be excluded by user configuration: ", path);
-				}
+				if (unwanted) log.vdebug("OneDrive change path is to be excluded by user configuration: ", path);
 			} else {
 				unwanted = true;
+				log.vdebug("Flagging as unwanted: item.driveId, item.parentId not in local database");
 			}
 		}
 
