@@ -680,7 +680,7 @@ final class SyncEngine
 		unwanted |= skippedItems.find(item.parentId).length != 0;
 		if (unwanted) log.vdebug("Flagging as unwanted: find(item.parentId).length != 0");
 		unwanted |= selectiveSync.isNameExcluded(item.name);
-		if (unwanted) log.vdebug("Flagging as unwanted: item name is excluded - ", item.name);
+		if (unwanted) log.vdebug("Flagging as unwanted: item name is excluded: ", item.name);
 
 		// check the item type
 		if (!unwanted) {
