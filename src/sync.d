@@ -1159,7 +1159,7 @@ final class SyncEngine
 									if (e.httpStatusCode == 412) {
 										// HTTP request returned status code 412 - ETag does not match current item's value
 										// Delete record from the local database - file will be uploaded as a new file
-										log.vlog("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
+										log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
 										log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 										itemdb.deleteById(item.driveId, item.id);
 										return;
@@ -1181,7 +1181,7 @@ final class SyncEngine
 									if (e.httpStatusCode == 412) {
 										// HTTP request returned status code 412 - ETag does not match current item's value
 										// Delete record from the local database - file will be uploaded as a new file
-										log.vlog("Session Upload Replace Failed - OneDrive eTag / cTag match issue");
+										log.vdebug("Session Upload Replace Failed - OneDrive eTag / cTag match issue");
 										log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 										itemdb.deleteById(item.driveId, item.id);
 										return;
