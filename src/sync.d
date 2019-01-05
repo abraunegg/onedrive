@@ -566,6 +566,7 @@ final class SyncEngine
 					string thisItemPath;
 					
 					// Change as reported by OneDrive
+					log.vdebug("------------------------------------------------------------------");
 					log.vdebug("OneDrive Change: ", item);
 					
 					// Deleted items returned from onedrive.viewChangesById (/delta) do not have a 'name' attribute
@@ -592,6 +593,18 @@ final class SyncEngine
 						} else {
 							thisItemPath = "";
 						}
+						
+						// Debug output of change evaluation items
+						log.vdebug("'search id'                                       = ", id);
+						log.vdebug("'parentReference id'                              = ", item["parentReference"]["id"].str);
+						log.vdebug("syncFolderPath                                    = ", syncFolderPath);
+						log.vdebug("syncFolderChildPath                               = ", syncFolderChildPath);
+						log.vdebug("thisItemPath                                      = ", thisItemPath);
+						log.vdebug("'item id' matches search 'id'                     = ", (item["id"].str == id));
+						log.vdebug("'parentReference id' matches search 'id'          = ", (item["parentReference"]["id"].str == id));
+						log.vdebug("'item path' contains 'syncFolderChildPath'        = ", (canFind(thisItemPath, syncFolderChildPath)));
+						log.vdebug("'item path' contains search 'id'                  = ", (canFind(thisItemPath, id)));
+						
 						// Check this item's path to see if this is a change on the path we want:
 						// 1. 'item id' matches 'id'
 						// 2. 'parentReference id' matches 'id'
