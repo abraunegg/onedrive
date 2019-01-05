@@ -672,8 +672,8 @@ final class SyncEngine
 	// process the change of a single DriveItem
 	private void applyDifference(JSONValue driveItem, string driveId, bool isRoot)
 	{
+		// Format the OneDrive change into a consumable object for the database
 		Item item = makeItem(driveItem);
-		log.vdebug("item details (start): ", item);
 		
 		// Reset the malwareDetected flag for this item
 		malwareDetected = false;
@@ -682,11 +682,19 @@ final class SyncEngine
 		downloadFailed = false;
 		
 		// Is the change from OneDrive a 'root' item
-		if (isItemRoot(driveItem) || !item.parentId || isRoot) {
+		// The change should be considered a 'root' item if:
+		// 1. Contains a ["root"] element
+		// 2. Has no ["parentReference"]["id"] ... #323 & #324 highlighted that this is false as some 'root' shared objects now can have an 'id' element .. OneDrive API change
+		// 2. Has no ["parentReference"]["path"]
+		// 3. Was detected by an input flag as to be handled as a root item regardless of actual status
+		
+		if (isItemRoot(driveItem) || !hasParentReferencePath(driveItem) || isRoot) {
 			log.vdebug("Handing a OneDrive 'root' change");
 			item.parentId = null; // ensures that it has no parent
 			item.driveId = driveId; // HACK: makeItem() cannot set the driveId property of the root
+			log.vdebug("Update/Insert local database with item details");
 			itemdb.upsert(item);
+			log.vdebug("item details: ", item);
 			return;
 		}
 
@@ -799,8 +807,7 @@ final class SyncEngine
 				itemdb.insert(item);
 			}
 			// What was the item that was saved
-			log.vdebug("item details (finish): ", item);
-			
+			log.vdebug("item details: ", item);
 		}
 	}
 
