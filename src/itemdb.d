@@ -39,7 +39,6 @@ final class ItemDatabase
 	string selectItemByIdStmt;
 	string selectItemByParentIdStmt;
 	string deleteItemByIdStmt;
-	string selectRemoteItemByIdStmt;
 
 	this(const(char)[] filename)
 	{
@@ -77,11 +76,6 @@ final class ItemDatabase
 			SELECT *
 			FROM item
 			WHERE driveId = ?1 AND id = ?2
-		";
-		selectRemoteItemByIdStmt = "
-			SELECT *
-			FROM item
-			WHERE remoteDriveId = ?1 AND remoteId = ?2
 		";
 		selectItemByParentIdStmt = "SELECT * FROM item WHERE driveId = ? AND parentId = ?";
 		deleteItemByIdStmt = "DELETE FROM item WHERE driveId = ? AND id = ?";
@@ -186,21 +180,6 @@ final class ItemDatabase
 		p.bind(1, driveId);
 		p.bind(2, id);
 		log.vdebug("sql query:    SELECT * FROM item WHERE driveId = ", driveId, " AND id = ", id, "");
-		auto r = p.exec();
-		log.vdebug("sql response: ", r);
-		if (!r.empty) {
-			return true;
-		}
-		return false;
-	}
-	
-	// returns true if the remote item id is in the database
-	bool remoteIdInLocalDatabase(const(string) remoteDriveId, const(string)remoteId)
-	{
-		auto p = db.prepare(selectRemoteItemByIdStmt);
-		p.bind(1, remoteDriveId);
-		p.bind(2, remoteId);
-		log.vdebug("sql query:    SELECT * FROM item WHERE remoteDriveId = ", remoteDriveId, " AND remoteId = ", remoteId, "");
 		auto r = p.exec();
 		log.vdebug("sql response: ", r);
 		if (!r.empty) {
