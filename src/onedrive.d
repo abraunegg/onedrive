@@ -64,7 +64,7 @@ final class OneDriveApi
 	// if true, every new access token is printed
 	bool printAccessToken;
 
-	this(Config cfg, bool debugHttp)
+	this(Config cfg, bool debugHttp, bool forceHTTP11)
 	{
 		this.cfg = cfg;
 		http = HTTP();
@@ -91,10 +91,19 @@ final class OneDriveApi
 		// Specify how many redirects should be allowed
 		http.maxRedirects(5);
 		
+		// Do we enable curl debugging?
 		if (debugHttp) {
 			http.verbose = true;
 			.debugResponse = true;
         }
+		
+		// What version of HTTP protocol do we use?
+		// Curl >= 7.62.0 defaults to http2 for a significant number of operations
+		if (forceHTTP11) {
+			log.vdebug("Downgrading all HTTP operations to HTTP 1.1");
+			// Downgrade to HTTP 1.1 - yes version = 2 is HTTP 1.1
+			http.handle.set(CurlOption.http_version,2);
+		}
 	}
 
 	bool init()

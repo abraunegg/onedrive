@@ -17,7 +17,7 @@ int main(string[] args)
 	
 	// Application Option Variables
 	// Add a check mounts option to resolve https://github.com/abraunegg/onedrive/issues/8
-	bool checkMount;
+	bool checkMount = false;
 	// configuration directory
 	string configDirName;
 	// Create a single root directory on OneDrive
@@ -25,7 +25,7 @@ int main(string[] args)
 	// The destination directory if we are using the OneDrive client to rename a directory
 	string destinationDirectory;
 	// Debug the HTTPS submit operations if required
-	bool debugHttp;
+	bool debugHttp = false;
 	// Do not use notifications in monitor mode
 	bool disableNotifications = false;
 	// Display application configuration but do not sync
@@ -33,45 +33,49 @@ int main(string[] args)
 	// Display sync status
 	bool displaySyncStatus = false;
 	// only download remote changes
-	bool downloadOnly;
+	bool downloadOnly = false;
 	// Does the user want to disable upload validation - https://github.com/abraunegg/onedrive/issues/205
 	// SharePoint will associate some metadata from the library the file is uploaded to directly in the file - thus change file size & checksums
 	bool disableUploadValidation = false;
 	// Do we enable a log file
 	bool enableLogFile = false;
+	// Force the use of HTTP 1.1 to overcome curl => 7.62.0 where some operations are now sent via HTTP/2
+	// Whilst HTTP/2 operations are handled, in some cases the handling of this outside of the client is not being done correctly (router, other) thus the client breaks
+	// This flag then allows the user to downgrade all HTTP operations to HTTP 1.1 for maximum network path compatibility
+	bool forceHTTP11 = false;
 	// SharePoint / Office 365 Shared Library name to query
 	string o365SharedLibraryName;
 	// Local sync - Upload local changes first before downloading changes from OneDrive
-	bool localFirst;
+	bool localFirst = false;
 	// remove the current user and sync state
-	bool logout;
+	bool logout = false;
 	// enable monitor mode
-	bool monitor;
+	bool monitor = false;
 	// Add option for no remote delete
-	bool noRemoteDelete;
+	bool noRemoteDelete = false;
 	// print the access token
-	bool printAccessToken;
+	bool printAccessToken = false;
 	// force a full resync
-	bool resync;
+	bool resync = false;
 	// Remove a single directory on OneDrive
 	string removeDirectory;
 	// This allows for selective directory syncing instead of everything under ~/OneDrive/
 	string singleDirectory;
 	// Add option to skip symlinks
-	bool skipSymlinks;
+	bool skipSymlinks = false;
 	// The source directory if we are using the OneDrive client to rename a directory
 	string sourceDirectory;
 	// override the sync directory
 	string syncDirName;
 	// Configure a flag to perform a sync
 	// This is beneficial so that if just running the client itself - without any options, or sync check, the client does not perform a sync
-	bool synchronize;
+	bool synchronize = false;
 	// Upload Only
-	bool uploadOnly;
+	bool uploadOnly = false;
 	// enable verbose logging
-	bool verbose;
+	bool verbose = false;
 	// print the version and exit
-	bool printVersion;
+	bool printVersion = false;
 	
 	// Application Startup option validation
 	try {
@@ -90,6 +94,7 @@ int main(string[] args)
 			"download-only|d", "Only download remote changes", &downloadOnly,
 			"disable-upload-validation", "Disable upload validation when uploading to OneDrive", &disableUploadValidation,
 			"enable-logging", "Enable client activity to a separate log file", &enableLogFile,
+			"force-http-1.1", "Force the use of HTTP 1.1 for all operations", &forceHTTP11,
 			"get-O365-drive-id", "Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library", &o365SharedLibraryName,
 			"local-first", "Synchronize from the local directory source first, before downloading changes from OneDrive.", &localFirst,
 			"logout", "Logout the current user", &logout,
@@ -276,6 +281,8 @@ int main(string[] args)
 	if (displayConfiguration){
 		string userConfigFilePath = configDirName ~ "/config";
 		string userSyncList = configDirName ~ "/sync_list";
+		// Display application version
+		std.stdio.write("onedrive version                    = ", import("version"));
 		// Display all of the pertinent configuration options
 		writeln("Config path                         = ", configDirName);
 		
@@ -301,6 +308,14 @@ int main(string[] args)
 		// Is sync_list configured?
 		if (exists(userSyncList)){
 			writeln("Selective sync configured           = true");
+			writeln("sync_list contents:");
+			// Output the sync_list contents
+			auto syncListFile = File(userSyncList);
+			auto range = syncListFile.byLine();
+			foreach (line; range)
+			{
+				writeln(line);
+			}
 		} else {
 			writeln("Selective sync configured           = false");
 		}
@@ -320,7 +335,7 @@ int main(string[] args)
 	}
 
 	// Initialize OneDrive, check for authorization
-	oneDrive = new OneDriveApi(cfg, debugHttp);
+	oneDrive = new OneDriveApi(cfg, debugHttp, forceHTTP11);
 	oneDrive.printAccessToken = printAccessToken;
 	if (!oneDrive.init()) {
 		log.error("Could not initialize the OneDrive API");
@@ -362,6 +377,16 @@ int main(string[] args)
 	
 	// Configure selective sync by parsing and getting a regex for skip_file config component
 	auto selectiveSync = new SelectiveSync();
+	if (exists(cfg.syncListFilePath)){
+		log.vdebug("Loading user configured sync_list file ...");
+		// list what will be synced
+		auto syncListFile = File(cfg.syncListFilePath);
+		auto range = syncListFile.byLine();
+		foreach (line; range)
+		{
+			log.vdebug("sync_list: ", line);
+		}
+	}
 	selectiveSync.load(cfg.syncListFilePath);
 	selectiveSync.setMask(cfg.getValue("skip_file"));
 	
