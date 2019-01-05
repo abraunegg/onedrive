@@ -14,8 +14,10 @@ A clear and concise description of what the bug is.
 - Are you using a headless system (no gui) or with a gui installed?
 - OneDrive Account Type
 - DMD or LDC compiler version `dmd --version` or `ldmd2 --version`
-- Application version: Output of `onedrive --version`
 - Application configuration: Output of `onedrive --display-config`
+- Curl Version: Output of `curl --version`
+
+**Note:** If curl version is >= 7.62.0 please retry your sync by adding `--force-http-1.1`. If this is sucessful, please generate a full debug log as per https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support and email to support@mynas.com.au
 
 **To Reproduce**
 Steps to reproduce the behavior if not causing an application crash:
