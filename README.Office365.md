@@ -1,6 +1,6 @@
 # Show how to access a Sharepoint group drive in Office 365 business or education
 ## Obtaining the Sharepoint Site Details
-1. Login to OneDrive and under 'Shared Libraries' obtain the shared library name
+1.  Login to OneDrive and under 'Shared Libraries' obtain the shared library name
 2. Run the following command using the 'onedrive' client
 ```
 onedrive --get-O365-drive-id '<your library name>'
