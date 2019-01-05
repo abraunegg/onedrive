@@ -590,6 +590,7 @@ final class SyncEngine
 						log.vdebug("'parentReference id'                              = ", item["parentReference"]["id"].str);
 						log.vdebug("syncFolderPath                                    = ", syncFolderPath);
 						log.vdebug("syncFolderChildPath                               = ", syncFolderChildPath);
+						log.vdebug("thisItemId                                        = ", item["id"].str);
 						log.vdebug("thisItemPath                                      = ", thisItemPath);
 						log.vdebug("'item id' matches search 'id'                     = ", (item["id"].str == id));
 						log.vdebug("'parentReference id' matches search 'id'          = ", (item["parentReference"]["id"].str == id));
