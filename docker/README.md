@@ -23,23 +23,23 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 ```
 ## Poweruser section
 1.  Check if monitor service is running
-```
+```bash
 docker ps -f name=onedrive
 ```
 2.  Show monitor run logs
-```
+```bash
 docker logs onedrive
 ```
 3.  Stop running monitor
-```
+```bash
 docker stop onedrive
 ```
 4.  Resume monitor
-```
+```bash
 docker start onedrive
 ```
 5.  Unregister onedrive monitor
-```
+```bash
 docker rm -f onedrive
 ```
 ## Build instructions
