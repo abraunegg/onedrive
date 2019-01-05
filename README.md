@@ -216,6 +216,9 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 ### Upgrading from 'skilion' client
 The 'skilion' version contains a significant number of defect's in how the local sync state is managed. When upgrading from the 'skilion' version to this version, it is advisable to stop any service / onedrive process from running and then remove any `items.sqlite3` file from your configuration directory (`~/.config/onedrive/`) as this will force the creation of a new local cache file.
 
+### Important - curl compatability
+If your system utilises curl >= 7.62.0 you may need to use `--force-http-1.1` in order for the client to work correctly due to changes in curl to prefer HTTP/2 over HTTP/1.1 by default.
+
 ### First run :zap:
 After installing the application you must run it at least once from the terminal to authorize it.
 
@@ -552,6 +555,8 @@ Options:
       Disable upload validation when uploading to OneDrive
   --enable-logging
       Enable client activity to a separate log file
+  --force-http-1.1
+      Force the use of HTTP 1.1 for all operations
   --get-O365-drive-id ARG
       Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library
   --local-first
