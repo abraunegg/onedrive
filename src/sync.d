@@ -64,6 +64,11 @@ private bool hasFileSize(const ref JSONValue item)
 	return ("size" in item) != null;
 }
 
+private bool hasId(const ref JSONValue item)
+{
+	return ("id" in item) != null;
+}
+
 // construct an Item struct from a JSON driveItem
 private Item makeItem(const ref JSONValue driveItem)
 {
@@ -1107,7 +1112,8 @@ final class SyncEngine
 									if (e.httpStatusCode == 412) {
 										// HTTP request returned status code 412 - ETag does not match current item's value
 										// Delete record from the local database - file will be uploaded as a new file
-										log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
+										log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
+										log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 										itemdb.deleteById(item.driveId, item.id);
 										return;
 									}
@@ -1128,7 +1134,8 @@ final class SyncEngine
 									if (e.httpStatusCode == 412) {
 										// HTTP request returned status code 412 - ETag does not match current item's value
 										// Delete record from the local database - file will be uploaded as a new file
-										log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
+										log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
+										log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 										itemdb.deleteById(item.driveId, item.id);
 										return;
 									}
@@ -1661,12 +1668,17 @@ final class SyncEngine
 			if (e.httpStatusCode == 412) {
 				// OneDrive threw a 412 error, most likely: ETag does not match current item's value
 				// Retry without eTag
-				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
+				log.vdebug("File Metadata Update Failed - OneDrive eTag / cTag match issue");
+				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting file time stamp update - gracefully handling error");
 				string nullTag = null;
 				response = onedrive.updateById(driveId, id, data, nullTag);
 			}
 		} 
-		saveItem(response);
+		// Check if the response JSON has an 'id', otherwise makeItem() fails with 'Key not found: id'
+		if (hasId(response)) {
+			// save the updated response from OneDrive in the database
+			saveItem(response);
+		}
 	}
 
 	private void saveItem(JSONValue jsonItem)
