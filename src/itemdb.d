@@ -179,9 +179,7 @@ final class ItemDatabase
 		auto p = db.prepare(selectItemByIdStmt);
 		p.bind(1, driveId);
 		p.bind(2, id);
-		log.vdebug("sql query:    SELECT * FROM item WHERE driveId = ", driveId, " AND id = ", id, "");
 		auto r = p.exec();
-		log.vdebug("sql response: ", r);
 		if (!r.empty) {
 			return true;
 		}
