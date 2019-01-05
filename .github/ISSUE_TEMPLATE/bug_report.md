@@ -17,7 +17,7 @@ A clear and concise description of what the bug is.
 - Application configuration: Output of `onedrive --display-config`
 - Curl Version: Output of `curl --version`
 
-**Note:** If curl version is >= 7.62.0 please retry your sync by adding `--force-http-1.1`. If this is sucessful, please generate a full debug log as per https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support and email to support@mynas.com.au
+**Note:** If curl version is >= 7.62.0 please retry your sync by adding `--force-http-1.1`. If this is successful, please generate a full debug log as per https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support and email to support@mynas.com.au
 
 **To Reproduce**
 Steps to reproduce the behavior if not causing an application crash:
