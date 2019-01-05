@@ -483,7 +483,7 @@ final class SyncEngine
 			// valid response from onedrive.getPathDetailsById(driveId, id) - a JSON item object present
 			if ((idDetails["id"].str == id) && (!isItemFile(idDetails))){
 				// Is a Folder or Remote Folder
-				syncFolderName = encodeComponent(idDetails["name"].str);
+				syncFolderName = idDetails["name"].str;
 			}
 			// Is this a 'local' or 'remote' item?
 			if(isItemRemote(idDetails)){
@@ -673,6 +673,7 @@ final class SyncEngine
 	private void applyDifference(JSONValue driveItem, string driveId, bool isRoot)
 	{
 		Item item = makeItem(driveItem);
+		log.vdebug("item details (start): ", item);
 		
 		// Reset the malwareDetected flag for this item
 		malwareDetected = false;
@@ -797,6 +798,9 @@ final class SyncEngine
 				log.vdebug("Inserting item details to local database");
 				itemdb.insert(item);
 			}
+			// What was the item that was saved
+			log.vdebug("item details (finish): ", item);
+			
 		}
 	}
 

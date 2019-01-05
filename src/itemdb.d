@@ -185,7 +185,9 @@ final class ItemDatabase
 		auto p = db.prepare(selectItemByIdStmt);
 		p.bind(1, driveId);
 		p.bind(2, id);
+		log.vdebug("sql query:    SELECT * FROM item WHERE driveId = ", driveId, " AND id = ", id, "");
 		auto r = p.exec();
+		log.vdebug("sql response: ", r);
 		if (!r.empty) {
 			return true;
 		}
@@ -198,7 +200,9 @@ final class ItemDatabase
 		auto p = db.prepare(selectRemoteItemByIdStmt);
 		p.bind(1, remoteDriveId);
 		p.bind(2, remoteId);
+		log.vdebug("sql query:    SELECT * FROM item WHERE remoteDriveId = ", remoteDriveId, " AND remoteId = ", remoteId, "");
 		auto r = p.exec();
+		log.vdebug("sql response: ", r);
 		if (!r.empty) {
 			return true;
 		}
