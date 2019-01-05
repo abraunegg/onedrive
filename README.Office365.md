@@ -5,7 +5,7 @@
 ```bash
 onedrive --get-O365-drive-id '<your library name>'
 ```
-3. This will return the following:
+3.  This will return the following:
 ```bash
 Initializing the Synchronization Engine ...
 Office 365 Library Name: ab-github-odtest
@@ -14,7 +14,7 @@ drive_id: b!6H.....l7vVxU5
 
 ## Configuring the onedrive client
 Once you have obtained the 'drive_id' above, add to your 'onedrive' configuration file (`~/.config/onedrive/config`)the following:
-```
+```bash
 drive_id = "insert the drive id from above here"
 ```
 
