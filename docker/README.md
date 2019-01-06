@@ -5,7 +5,7 @@ Thats right folks onedrive is now dockerized ;)
 This container offers simple monitoring-mode service for 'Free Client for OneDrive on Linux'.
 
 ## Usage instructions
-```
+```bash
 docker pull driveone/onedrive
 ```
 **NOTE:** SELinux context needs to be configured or disabled for Docker, to be able to write to OneDrive host directory.
