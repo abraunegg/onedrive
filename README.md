@@ -468,12 +468,12 @@ systemctl status onedrive@username.service
 ### Using multiple OneDrive accounts
 You can run multiple instances of the application by specifying a different config directory in order to handle multiple OneDrive accounts. For example, if you have a work and a personal account, you can run the onedrive command using the --confdir parameter. Here is an example:
 
-```
+```text
 onedrive --synchronize --verbose --confdir="~/.config/onedrivePersonal" &
 onedrive --synchronize --verbose --confdir="~/.config/onedriveWork" &
 ```
 or 
-```
+```text
 onedrive --monitor --verbose --confdir="~/.config/onedrivePersonal" &
 onedrive --monitor --verbose --confdir="~/.config/onedriveWork" &
 ```
@@ -485,11 +485,11 @@ onedrive --monitor --verbose --confdir="~/.config/onedriveWork" &
 ### Automatic syncing of both OneDrive accounts
 
 In order to automatically start syncing your OneDrive accounts, you will need to create a service file for each account. From the `~/onedrive` folder:
-```
+```text
 cp onedrive.service onedrive-work.service
 ```
 And edit the line beginning with `ExecStart` so that the command mirrors the one you used above:
-```
+```text
 ExecStart=/usr/local/bin/onedrive --monitor --confdir="/path/to/config/dir"
 ```
 Then you can safely run these commands:
@@ -504,13 +504,13 @@ Repeat these steps for each OneDrive account that you wish to use.
 ### Reporting issues
 If you encounter any bugs you can report them here on Github. Before filing an issue be sure to:
 
-1.  Check the version of the application you are using `onedrive --version`
-2.  Run the application in verbose mode `onedrive --verbose`
+1.  Check the version of the application you are using `onedrive --version` 
+2.  Run the application in verbose mode `onedrive --verbose` 
 3.  Have the log of the error (preferably uploaded on an external website such as [pastebin](https://pastebin.com/))
 4.  Collect any information that you may think it is relevant to the error
-	* The steps to trigger the error
-	* What have you already done to try solve it
-	* ...
+	*   The steps to trigger the error
+	*   What have you already done to try solve it
+	*   ...
 
 ### All available commands
 Output of `onedrive --help`
