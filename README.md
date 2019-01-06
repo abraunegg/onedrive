@@ -507,7 +507,7 @@ If you encounter any bugs you can report them here on Github. Before filing an i
 1.  Check the version of the application you are using `onedrive --version` and ensure that you are running either the latest [release](https://github.com/abraunegg/onedrive/releases) or built from master.
 2.  Fill in a new bug report using the [issue template](https://github.com/abraunegg/onedrive/issues/new?template=bug_report.md)
 3.  Generate a debug log for support using the following [process](https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support)
-4.  Upload the logfile to [pastebin](https://pastebin.com/) or email to support@mynas.com.au 
+4.  Upload the debug log to [pastebin](https://pastebin.com/) or archive and email to support@mynas.com.au 
 
 ### All available commands
 Output of `onedrive --help`
