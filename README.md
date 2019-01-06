@@ -504,13 +504,10 @@ Repeat these steps for each OneDrive account that you wish to use.
 ### Reporting issues
 If you encounter any bugs you can report them here on Github. Before filing an issue be sure to:
 
-1.  Check the version of the application you are using `onedrive --version` 
-2.  Run the application in verbose mode `onedrive --verbose` 
-3.  Have the log of the error (preferably uploaded on an external website such as [pastebin](https://pastebin.com/))
-4.  Collect any information that you may think it is relevant to the error
-	*   The steps to trigger the error
-	*   What have you already done to try solve it
-	*   ...
+1.  Check the version of the application you are using `onedrive --version` and ensure that you are running either the latest [release](https://github.com/abraunegg/onedrive/releases) or built from master.
+2.  Fill in a new bug report using the [issue template](https://github.com/abraunegg/onedrive/issues/new?template=bug_report.md)
+3.  Generate a debug log for support using the following [process](https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support)
+4.  Upload the logfile to [pastebin](https://pastebin.com/) or email to support@mynas.com.au 
 
 ### All available commands
 Output of `onedrive --help`
