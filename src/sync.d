@@ -474,7 +474,7 @@ final class SyncEngine
 			// valid response from onedrive.getPathDetailsById(driveId, id) - a JSON item object present
 			if ((idDetails["id"].str == id) && (!isItemFile(idDetails))){
 				// Is a Folder or Remote Folder
-				syncFolderName = encodeComponent(idDetails["name"].str);
+				syncFolderName = idDetails["name"].str;
 			}
 			// Is this a 'local' or 'remote' item?
 			if(isItemRemote(idDetails)){
@@ -556,6 +556,10 @@ final class SyncEngine
 					bool isRoot = false;
 					string thisItemPath;
 					
+					// Change as reported by OneDrive
+					log.vdebug("------------------------------------------------------------------");
+					log.vdebug("OneDrive Change: ", item);
+					
 					// Deleted items returned from onedrive.viewChangesById (/delta) do not have a 'name' attribute
 					// Thus we cannot name check for 'root' below on deleted items
 					if(!isItemDeleted(item)){
@@ -571,6 +575,7 @@ final class SyncEngine
 					// How do we handle this change?
 					if (isRoot || !hasParentReferenceId(item) || isItemDeleted(item)){
 						// Is a root item, has no id in parentReference or is a OneDrive deleted item
+						log.vdebug("Handling change as 'root item', has no parent reference or is a deleted item");
 						applyDifference(item, driveId, isRoot);
 					} else {
 						// What is this item's path?
@@ -579,6 +584,19 @@ final class SyncEngine
 						} else {
 							thisItemPath = "";
 						}
+						
+						// Debug output of change evaluation items
+						log.vdebug("'search id'                                       = ", id);
+						log.vdebug("'parentReference id'                              = ", item["parentReference"]["id"].str);
+						log.vdebug("syncFolderPath                                    = ", syncFolderPath);
+						log.vdebug("syncFolderChildPath                               = ", syncFolderChildPath);
+						log.vdebug("thisItemId                                        = ", item["id"].str);
+						log.vdebug("thisItemPath                                      = ", thisItemPath);
+						log.vdebug("'item id' matches search 'id'                     = ", (item["id"].str == id));
+						log.vdebug("'parentReference id' matches search 'id'          = ", (item["parentReference"]["id"].str == id));
+						log.vdebug("'item path' contains 'syncFolderChildPath'        = ", (canFind(thisItemPath, syncFolderChildPath)));
+						log.vdebug("'item path' contains search 'id'                  = ", (canFind(thisItemPath, id)));
+						
 						// Check this item's path to see if this is a change on the path we want:
 						// 1. 'item id' matches 'id'
 						// 2. 'parentReference id' matches 'id'
@@ -587,6 +605,7 @@ final class SyncEngine
 						
 						if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderChildPath)) || (canFind(thisItemPath, id)) ){
 							// This is a change we want to apply
+							log.vdebug("Change matches search criteria to apply");
 							applyDifference(item, driveId, isRoot);
 						} else {
 							// No item ID match or folder sync match
@@ -644,6 +663,7 @@ final class SyncEngine
 	// process the change of a single DriveItem
 	private void applyDifference(JSONValue driveItem, string driveId, bool isRoot)
 	{
+		// Format the OneDrive change into a consumable object for the database
 		Item item = makeItem(driveItem);
 		
 		// Reset the malwareDetected flag for this item
@@ -653,17 +673,27 @@ final class SyncEngine
 		downloadFailed = false;
 		
 		// Is the change from OneDrive a 'root' item
-		if (isItemRoot(driveItem) || !item.parentId || isRoot) {
+		// The change should be considered a 'root' item if:
+		// 1. Contains a ["root"] element
+		// 2. Has no ["parentReference"]["id"] ... #323 & #324 highlighted that this is false as some 'root' shared objects now can have an 'id' element .. OneDrive API change
+		// 2. Has no ["parentReference"]["path"]
+		// 3. Was detected by an input flag as to be handled as a root item regardless of actual status
+		
+		if (isItemRoot(driveItem) || !hasParentReferencePath(driveItem) || isRoot) {
 			log.vdebug("Handing a OneDrive 'root' change");
 			item.parentId = null; // ensures that it has no parent
 			item.driveId = driveId; // HACK: makeItem() cannot set the driveId property of the root
+			log.vdebug("Update/Insert local database with item details");
 			itemdb.upsert(item);
+			log.vdebug("item details: ", item);
 			return;
 		}
 
 		bool unwanted;
 		unwanted |= skippedItems.find(item.parentId).length != 0;
+		if (unwanted) log.vdebug("Flagging as unwanted: find(item.parentId).length != 0");
 		unwanted |= selectiveSync.isNameExcluded(item.name);
+		if (unwanted) log.vdebug("Flagging as unwanted: item name is excluded: ", item.name);
 
 		// check the item type
 		if (!unwanted) {
@@ -677,6 +707,7 @@ final class SyncEngine
 			} else {
 				log.vlog("This item type (", item.name, ") is not supported");
 				unwanted = true;
+				log.vdebug("Flagging as unwanted: item type is not supported");
 			}
 		}
 
@@ -684,14 +715,14 @@ final class SyncEngine
 		string path;
 		if (!unwanted) {
 			// Is the item in the local database
-			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){				
+			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
+				// compute the item path to see if the path is excluded
 				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
 				path = buildNormalizedPath(path);
 				unwanted = selectiveSync.isPathExcluded(path);
-				if (unwanted) {
-					log.vdebug("OneDrive change path is to be excluded by user configuration: ", path);
-				}
+				if (unwanted) log.vdebug("OneDrive change path is to be excluded by user configuration: ", path);
 			} else {
+				log.vdebug("Flagging as unwanted: item.driveId (", item.driveId,"), item.parentId (", item.parentId,") not in local database");
 				unwanted = true;
 			}
 		}
@@ -749,10 +780,14 @@ final class SyncEngine
 			// if the file was detected as malware and NOT downloaded, we dont want to falsify the DB as downloading it as otherwise the next pass will think it was deleted, thus delete the remote item
 			// Likewise if the download failed, we dont want to falsify the DB as downloading it as otherwise the next pass will think it was deleted, thus delete the remote item 
 			if (cached) {
+				log.vdebug("Updating local database with item details");
 				itemdb.update(item);
 			} else {
+				log.vdebug("Inserting item details to local database");
 				itemdb.insert(item);
 			}
+			// What was the item that was saved
+			log.vdebug("item details: ", item);
 		}
 	}
 
