@@ -21,14 +21,14 @@ A complete tool to interact with OneDrive on Linux. Built following the UNIX phi
 *   [Digital Mars D Compiler (DMD)](http://dlang.org/download.html)
 
 ### Dependencies: Ubuntu/Debian - x86_64
-```bash
+```text
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For notifications the following is necessary:
-```bash
+```text
 sudo apt install libnotify-dev
 ```
 
@@ -150,7 +150,7 @@ sudo zypper install libnotify-devel
 ```
 
 ## Compilation & Installation
-### Building using DMD Reference Compiler:
+### Building using DMD Reference Compiler
 Before cloning and compiling, if you have installed DMD via curl for your OS, you will need to activate DMD as per example below:
 ```
 Run `source ~/dlang/dmd-2.081.1/activate` in your shell to use dmd-2.081.1.
@@ -168,14 +168,14 @@ make
 sudo make install
 ```
 
-### Build options ###
+### Build options
 By passing `NOTIFICATIONS=1` to the `make` call, notifications via
 libnotify are enabled. Necessary libraries are 
 `gmodule-2.0`, `glib-2.0`, and `notify`. If these libraries are
 named differently on the build system, the make variable
 `DFLAGSNOTIFICATIONS` can be adjusted.
 
-### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC)):
+### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
 #### Debian - i386 / i686
 ```
 git clone https://github.com/abraunegg/onedrive.git
@@ -354,10 +354,10 @@ nano ~/.config/onedrive/config
 This file does not get created by default, and should only be created if you want to change the 'default' operational parameters.
 
 Available options:
-* `sync_dir`: directory where the files will be synced
-* `skip_file`: any files or directories that match this pattern will be skipped during sync
-* `skip_symlinks`: any files or directories that are symlinked will be skipped during sync
-* `monitor_interval`: time interval in seconds by which the monitor process will process local and remote changes
+*   `sync_dir`: directory where the files will be synced
+*   `skip_file`: any files or directories that match this pattern will be skipped during sync
+*   `skip_symlinks`: any files or directories that are symlinked will be skipped during sync
+*   `monitor_interval`: time interval in seconds by which the monitor process will process local and remote changes
 
 ### sync_dir
 Example: `sync_dir="~/MyDirToSync"`
@@ -407,8 +407,8 @@ Folders shared with you can be synced by adding them to your OneDrive. To do tha
 
 ### OneDrive service running as root user
 There are two ways that onedrive can be used as a service
-* via init.d
-* via systemd
+*   via init.d
+*   via systemd
 
 **Note:** If using the service files, you may need to increase the `fs.inotify.max_user_watches` value on your system to handle the number of files in the directory you are monitoring as the initial value may be too low.
 
@@ -450,17 +450,17 @@ journalctl onedrive -f
 
 In some cases it is desirable to run the OneDrive client as a service, but not running as the 'root' user. In this case, follow the directions below to configure the service for a non-root user.
 
-1. As the user, who will be running the service, run the application in standalone mode, authorize the application for use & validate that the synchronization is working as expected:
+1.  As the user, who will be running the service, run the application in standalone mode, authorize the application for use & validate that the synchronization is working as expected:
 ```
 onedrive --synchronize --verbose
 ```
-2. Once the application is validated and working for your user, as the 'root' user, where <username> is your username from step 1 above.
+2.  Once the application is validated and working for your user, as the 'root' user, where <username> is your username from step 1 above.
 ```
 systemctl enable onedrive@<username>.service
 systemctl start onedrive@<username>.service
 ```
 
-3. To view the status of the service running for the user, use the following:
+3.  To view the status of the service running for the user, use the following:
 ```
 systemctl status onedrive@username.service
 ```
@@ -478,11 +478,11 @@ onedrive --monitor --verbose --confdir="~/.config/onedrivePersonal" &
 onedrive --monitor --verbose --confdir="~/.config/onedriveWork" &
 ```
 
-* `--synchronize` does a one-time sync
-* `--monitor` keeps the application running and monitoring for changes both local and remote
-* `&` puts the application in background and leaves the terminal interactive
+*   `--synchronize` does a one-time sync
+*   `--monitor` keeps the application running and monitoring for changes both local and remote
+*   `&` puts the application in background and leaves the terminal interactive
 
-**Automatic syncing of both OneDrive accounts**
+### Automatic syncing of both OneDrive accounts
 
 In order to automatically start syncing your OneDrive accounts, you will need to create a service file for each account. From the `~/onedrive` folder:
 ```
@@ -512,9 +512,9 @@ If you encounter any bugs you can report them here on Github. Before filing an i
 	- What have you already done to try solve it
 	- ...
 
-### All available commands:
+### All available commands
 Output of `onedrive --help`
-```
+```text
 OneDrive - a client for OneDrive Cloud Services
 
 Usage:

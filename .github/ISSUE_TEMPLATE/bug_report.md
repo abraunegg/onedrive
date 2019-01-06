@@ -10,12 +10,12 @@ about: Create a report to help us improve
 A clear and concise description of what the bug is.
 
 **Application and Operating System Details:**
--   OS: Output of `uname -a` & provide your OS & version (CentOS 6.x, Ubuntu 18.x etc)
--   Are you using a headless system (no gui) or with a gui installed?
--   OneDrive Account Type
--   DMD or LDC compiler version `dmd --version` or `ldmd2 --version`
--   Application configuration: Output of `onedrive --display-config`
--   Curl Version: Output of `curl --version`
+*   OS: Output of `uname -a` & provide your OS & version (CentOS 6.x, Ubuntu 18.x etc)
+*   Are you using a headless system (no gui) or with a gui installed?
+*   OneDrive Account Type
+*   DMD or LDC compiler version `dmd --version` or `ldmd2 --version`
+*   Application configuration: Output of `onedrive --display-config`
+*   Curl Version: Output of `curl --version`
 
 **Note:** If curl version is >= 7.62.0 please generate a full debug log as per [https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support](https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support) and email to support@mynas.com.au
 
@@ -50,6 +50,6 @@ If applicable, add screenshots to help explain your problem.
 Add any other context about the problem here.
 
 ### Bug Report Checklist ###
--  []  Detailed description
--  []  Reproduction steps (if applicable)
--  []  Verbose Log Output
+*   [] Detailed description
+*   [] Reproduction steps (if applicable)
+*   [] Verbose Log Output
