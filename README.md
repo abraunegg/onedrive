@@ -493,7 +493,7 @@ And edit the line beginning with `ExecStart` so that the command mirrors the one
 ExecStart=/usr/local/bin/onedrive --monitor --confdir="/path/to/config/dir"
 ```
 Then you can safely run these commands:
-```
+```text
 systemctl --user enable onedrive-work
 systemctl --user start onedrive-work
 ```
@@ -504,13 +504,13 @@ Repeat these steps for each OneDrive account that you wish to use.
 ### Reporting issues
 If you encounter any bugs you can report them here on Github. Before filing an issue be sure to:
 
-1. Check the version of the application you are using `onedrive --version`
-2. Run the application in verbose mode `onedrive --verbose`
-3. Have the log of the error (preferably uploaded on an external website such as [pastebin](https://pastebin.com/))
-4. Collect any information that you may think it is relevant to the error
-	- The steps to trigger the error
-	- What have you already done to try solve it
-	- ...
+1.  Check the version of the application you are using `onedrive --version`
+2.  Run the application in verbose mode `onedrive --verbose`
+3.  Have the log of the error (preferably uploaded on an external website such as [pastebin](https://pastebin.com/))
+4.  Collect any information that you may think it is relevant to the error
+	* The steps to trigger the error
+	* What have you already done to try solve it
+	* ...
 
 ### All available commands
 Output of `onedrive --help`
