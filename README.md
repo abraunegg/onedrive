@@ -34,14 +34,14 @@ sudo apt install libnotify-dev
 
 ### Dependencies: Ubuntu - i386 / i686
 **Note:** Validated with `Linux ubuntu-i386-vm 4.13.0-36-generic #40~16.04.1-Ubuntu SMP Fri Feb 16 23:26:51 UTC 2018 i686 i686 i686 GNU/Linux` and DMD 2.081.1
-```
+```text
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For notifications the following is necessary:
-```
+```text
 sudo apt install libnotify-dev
 ```
 
@@ -49,14 +49,14 @@ sudo apt install libnotify-dev
 **Note:** Validated with `Linux debian-i386 4.9.0-7-686-pae #1 SMP Debian 4.9.110-1 (2018-07-05) i686 GNU/Linux` and LDC - the LLVM D compiler (1.8.0).
 
 First install development dependencies as per below:
-```
+```text
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
 sudo apt install git
 ```
 Second, install the LDC compiler as per below:
-```
+```text
 mkdir ldc && cd ldc
 wget http://ftp.us.debian.org/debian/pool/main/l/ldc/ldc_1.8.0-3_i386.deb
 wget http://ftp.us.debian.org/debian/pool/main/l/ldc/libphobos2-ldc-shared-dev_1.8.0-3_i386.deb
@@ -66,93 +66,93 @@ wget http://ftp.us.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.1+20180714-
 sudo dpkg -i ./*.deb
 ```
 For notifications the following is necessary:
-```
+```text
 sudo apt install libnotify-dev
 ```
 
 ### Dependencies: Fedora < Version 18 / CentOS / RHEL
-```
+```text
 sudo yum groupinstall 'Development Tools'
 sudo yum install libcurl-devel
 sudo yum install sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For notifications the following is necessary:
-```
+```text
 sudo yum install libnotify-devel
 ```
 
 ### Dependencies: Fedora > Version 18
-```
+```text
 sudo dnf groupinstall 'Development Tools'
 sudo dnf install libcurl-devel
 sudo dnf install sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For notifications the following is necessary:
-```
+```text
 sudo yum install libnotify-devel
 ```
 
 ### Dependencies: Arch Linux
-```
+```text
 sudo pacman -S curl sqlite dmd
 ```
 For notifications the following is necessary:
-```
+```text
 sudo pacman -S libnotify
 ```
 
 ### Dependencies: Raspbian (ARMHF)
-```
+```text
 sudo apt-get install libcurl4-openssl-dev
 sudo apt-get install libsqlite3-dev
 wget https://github.com/ldc-developers/ldc/releases/download/v1.11.0/ldc2-1.11.0-linux-armhf.tar.xz
 tar -xvf ldc2-1.11.0-linux-armhf.tar.xz
 ```
 For notifications the following is necessary:
-```
+```text
 sudo apt install libnotify-dev
 ```
 
 ### Dependencies: Debian (ARM64)
-```
+```text
 sudo apt-get install libcurl4-openssl-dev
 sudo apt-get install libsqlite3-dev
 wget https://github.com/ldc-developers/ldc/releases/download/v1.11.0/ldc2-1.11.0-linux-aarch64.tar.xz
 tar -xvf ldc2-1.11.0-linux-aarch64.tar.xz
 ```
 For notifications the following is necessary:
-```
+```text
 sudo apt install libnotify-dev
 ```
 
 ### Dependencies: Gentoo
-```
+```text
 sudo emerge app-portage/layman
 sudo layman -a dlang
 ```
 Add ebuild from contrib/gentoo to a local overlay to use.
 
 For notifications the following is necessary:
-```
+```text
 sudo emerge x11-libs/libnotify
 ```
 
 ### Dependencies: OpenSuSE Leap 15.0
-```
+```text
 sudo zypper addrepo --check --refresh --name "D" http://download.opensuse.org/repositories/devel:/languages:/D/openSUSE_Leap_15.0/devel:languages:D.repo
 sudo zypper install git libcurl-devel sqlite3-devel D:dmd D:libphobos2-0_81 D:phobos-devel D:phobos-devel-static
 ```
 For notifications the following is necessary:
-```
+```text
 sudo zypper install libnotify-devel
 ```
 
 ## Compilation & Installation
 ### Building using DMD Reference Compiler
 Before cloning and compiling, if you have installed DMD via curl for your OS, you will need to activate DMD as per example below:
-```
+```text
 Run `source ~/dlang/dmd-2.081.1/activate` in your shell to use dmd-2.081.1.
 This will setup PATH, LIBRARY_PATH, LD_LIBRARY_PATH, DMD, DC, and PS1.
 Run `deactivate` later on to restore your environment.
@@ -161,7 +161,7 @@ Without performing this step, the compilation process will fail.
 
 **Note:** Depending on your DMD version, substitute `2.081.1` above with your DMD version that is installed.
 
-```
+```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
 make
@@ -177,7 +177,7 @@ named differently on the build system, the make variable
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
 #### Debian - i386 / i686
-```
+```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
 make DC=/usr/bin/ldmd2
@@ -185,7 +185,7 @@ sudo make install
 ```
 
 #### ARMHF Architecture
-```
+```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
 make DC=~/ldc2-1.11.0-linux-armhf/bin/ldmd2
@@ -193,7 +193,7 @@ sudo make install
 ```
 
 #### ARM64 Architecture
-```
+```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
 make DC=~/ldc2-1.11.0-linux-aarch64/bin/ldmd2
@@ -201,7 +201,7 @@ sudo make install
 ```
 
 #### Docker onedrive monitor
-```
+```text
 # Update onedriveDir with correct existing OneDrive directory path
 onedriveDir="${HOME}/OneDrive"
 
@@ -226,11 +226,11 @@ You will be asked to open a specific link using your web browser where you will 
 
 ### Show your configuration
 To validate your configuration the application will use, utilise the following:
-```
+```text
 onedrive --display-config
 ```
 This will display all the pertinent runtime interpretation of the options and configuration you are using. This is helpful to validate the client will perform the operations your asking without performing a sync. Example output is as follows:
-```
+```text
 Config path                         = /home/alex/.config/onedrive
 Config file found in config path    = false
 Config option 'sync_dir'            = /home/alex/OneDrive
@@ -243,19 +243,19 @@ Selective sync configured           = false
 
 ### Performing a sync
 By default all files are downloaded in `~/OneDrive`. After authorizing the application, a sync of your data can be performed by running:
-```
+```text
 onedrive --synchronize
 ```
 This will synchronize files from your OneDrive account to your `~/OneDrive` local directory.
 
 If you prefer to use your local files as stored in `~/OneDrive` as the 'source of truth' use the following sync command:
-```
+```text
 onedrive --synchronize --local-first
 ```
 
 ### Performing a selective directory sync
 In some cases it may be desirable to sync a single directory under ~/OneDrive without having to change your client configuration. To do this use the following command:
-```
+```text
 onedrive --synchronize --single-directory '<dir_name>'
 ```
 
@@ -263,19 +263,19 @@ Example: If the full path is `~/OneDrive/mydir`, the command would be `onedrive 
 
 ### Performing a 'one-way' download sync
 In some cases it may be desirable to 'download only' from OneDrive. To do this use the following command:
-```
+```text
 onedrive --synchronize --download-only 
 ```
 
 ### Performing a 'one-way' upload sync
 In some cases it may be desirable to 'upload only' to OneDrive. To do this use the following command:
-```
+```text
 onedrive --synchronize --upload-only
 ```
 
 ### Increasing logging level
 When running a sync it may be desirable to see additional information as to the progress and operation of the client. To do this, use the following command:
-```
+```text
 onedrive --synchronize --verbose
 ```
 
@@ -283,7 +283,7 @@ onedrive --synchronize --verbose
 When running onedrive all actions can be logged to a separate log file. This can be enabled by using the `--enable-logging` flag. By default, log files will be written to `/var/log/onedrive/`
 
 **Note:** You will need to ensure your user has the applicable permissions to write to this directory or the following warning will be printed:
-```
+```text
 Unable to access /var/log/onedrive/
 Please manually create '/var/log/onedrive/' and set appropriate permissions to allow write access
 The requested client activity log will instead be located in the users home directory
@@ -293,13 +293,13 @@ All logfiles will be in the format of `%username%.onedrive.log`, where `%usernam
 
 **Note:**
 To use a different log directory rather than the default above, add the following as a configuration option to `~/.config/onedrive/config`:
-```
+```text
 log_dir = "/path/to/location/"
 ```
 Trailing slash required
 
 An example of the log file is below:
-```
+```text
 2018-Apr-07 17:09:32.1162837 Loading config ...
 2018-Apr-07 17:09:32.1167908 No config file found, using defaults
 2018-Apr-07 17:09:32.1170626 Initializing the OneDrive API ...
@@ -331,7 +331,7 @@ An example of the log file is below:
 ```
 
 ### Uninstall
-```
+```text
 sudo make uninstall
 # delete the application state
 rm -rf ~/.config/onedrive
@@ -339,14 +339,14 @@ rm -rf ~/.config/onedrive
 If you are using the `--confdir option`, substitute `~/.config/onedrive` above for that directory.
 
 If you want to just delete the application key, but keep the items database:
-```
+```text
 rm -f ~/.config/onedrive/refresh_token
 ```
 
 ## Additional Configuration
 Additional configuration is optional.
 If you want to change the defaults, you can copy and edit the included config file into your `~/.config/onedrive` directory:
-```
+```text
 mkdir -p ~/.config/onedrive
 cp ./config ~/.config/onedrive/config
 nano ~/.config/onedrive/config
@@ -414,35 +414,35 @@ There are two ways that onedrive can be used as a service
 
 **init.d**
 
-```
+```text
 chkconfig onedrive on
 service onedrive start
 ```
 To see the logs run:
-```
+```text
 tail -f /var/log/onedrive/<username>.onedrive.log
 ```
 To change what 'user' the client runs under (by default root), manually edit the init.d service file and modify `daemon --user root onedrive_service.sh` for the correct user.
 
 **systemd - Arch, Ubuntu, Debian, OpenSuSE, Fedora**
-```
+```text
 systemctl --user enable onedrive
 systemctl --user start onedrive
 ```
 
 To see the logs run:
-```
+```text
 journalctl --user-unit onedrive -f
 ```
 
 **systemd - Red Hat Enterprise Linux, CentOS Linux**
-```
+```text
 systemctl enable onedrive
 systemctl start onedrive
 ```
 
 To see the logs run:
-```
+```text
 journalctl onedrive -f
 ```
 
@@ -451,17 +451,17 @@ journalctl onedrive -f
 In some cases it is desirable to run the OneDrive client as a service, but not running as the 'root' user. In this case, follow the directions below to configure the service for a non-root user.
 
 1.  As the user, who will be running the service, run the application in standalone mode, authorize the application for use & validate that the synchronization is working as expected:
-```
+```text
 onedrive --synchronize --verbose
 ```
 2.  Once the application is validated and working for your user, as the 'root' user, where <username> is your username from step 1 above.
-```
+```text
 systemctl enable onedrive@<username>.service
 systemctl start onedrive@<username>.service
 ```
 
 3.  To view the status of the service running for the user, use the following:
-```
+```text
 systemctl status onedrive@username.service
 ```
 
