@@ -2,17 +2,17 @@
 A complete tool to interact with OneDrive on Linux. Built following the UNIX philosophy
 
 ## Features
-* State caching
-* Real-Time file monitoring with Inotify
-* Resumable uploads
-* Support OneDrive for Business (part of Office 365)
-* Shared folders (OneDrive Personal)
-* SharePoint / Office 365 Shared Libraries (refer to README.Office365.md to configure)
-* Notifications
+*   State caching
+*   Real-Time file monitoring with Inotify
+*   Resumable uploads
+*   Support OneDrive for Business (part of Office 365)
+*   Shared folders (OneDrive Personal)
+*   SharePoint / Office 365 Shared Libraries (refer to README.Office365.md to configure)
+*   Notifications
 
 ## What's missing
-*  While local changes are uploaded right away, remote changes are delayed
-*  No GUI
+*   While local changes are uploaded right away, remote changes are delayed
+*   No GUI
 
 ## Build Requirements
 *   Build environment must have at least 1GB of memory & 1GB swap space
