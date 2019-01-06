@@ -1,34 +1,34 @@
 # OneDrive Free Client
-###### A complete tool to interact with OneDrive on Linux. Built following the UNIX philosophy.
+A complete tool to interact with OneDrive on Linux. Built following the UNIX philosophy
 
-### Features:
-* State caching
-* Real-Time file monitoring with Inotify
-* Resumable uploads
-* Support OneDrive for Business (part of Office 365)
-* Shared folders (OneDrive Personal)
-* SharePoint / Office 365 Shared Libraries (refer to README.Office365.md to configure)
-* Notifications
+### Features
+*  State caching
+*  Real-Time file monitoring with Inotify
+*  Resumable uploads
+*  Support OneDrive for Business (part of Office 365)
+*  Shared folders (OneDrive Personal)
+*  SharePoint / Office 365 Shared Libraries (refer to README.Office365.md to configure)
+*  Notifications
 
-### What's missing:
-* While local changes are uploaded right away, remote changes are delayed
-* No GUI
+### What's missing
+*  While local changes are uploaded right away, remote changes are delayed
+*  No GUI
 
 ## Build Requirements
-* Build environment must have at least 1GB of memory & 1GB swap space
-* [libcurl](http://curl.haxx.se/libcurl/)
-* [SQLite 3](https://www.sqlite.org/)
-* [Digital Mars D Compiler (DMD)](http://dlang.org/download.html)
+*  Build environment must have at least 1GB of memory & 1GB swap space
+*  [libcurl](http://curl.haxx.se/libcurl/)
+*  [SQLite 3](https://www.sqlite.org/)
+*  [Digital Mars D Compiler (DMD)](http://dlang.org/download.html)
 
 ### Dependencies: Ubuntu/Debian - x86_64
-```
+```bash
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For notifications the following is necessary:
-```
+```bash
 sudo apt install libnotify-dev
 ```
 
