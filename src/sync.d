@@ -672,21 +672,25 @@ final class SyncEngine
 		// Reset the downloadFailed flag for this item
 		downloadFailed = false;
 		
-		// Is the change from OneDrive a 'root' item
-		// The change should be considered a 'root' item if:
-		// 1. Contains a ["root"] element
-		// 2. Has no ["parentReference"]["id"] ... #323 & #324 highlighted that this is false as some 'root' shared objects now can have an 'id' element .. OneDrive API change
-		// 2. Has no ["parentReference"]["path"]
-		// 3. Was detected by an input flag as to be handled as a root item regardless of actual status
-		
-		if (isItemRoot(driveItem) || !hasParentReferencePath(driveItem) || isRoot) {
-			log.vdebug("Handing a OneDrive 'root' change");
-			item.parentId = null; // ensures that it has no parent
-			item.driveId = driveId; // HACK: makeItem() cannot set the driveId property of the root
-			log.vdebug("Update/Insert local database with item details");
-			itemdb.upsert(item);
-			log.vdebug("item details: ", item);
-			return;
+		if(isItemDeleted(driveItem)){
+			// Change is to delete an item
+			log.vdebug("Remote deleted item");
+		} else {
+			// Is the change from OneDrive a 'root' item
+			// The change should be considered a 'root' item if:
+			// 1. Contains a ["root"] element
+			// 2. Has no ["parentReference"]["id"] ... #323 & #324 highlighted that this is false as some 'root' shared objects now can have an 'id' element .. OneDrive API change
+			// 2. Has no ["parentReference"]["path"]
+			// 3. Was detected by an input flag as to be handled as a root item regardless of actual status
+			if (isItemRoot(driveItem) || !hasParentReferencePath(driveItem) || isRoot) {
+				log.vdebug("Handing a OneDrive 'root' change");
+				item.parentId = null; // ensures that it has no parent
+				item.driveId = driveId; // HACK: makeItem() cannot set the driveId property of the root
+				log.vdebug("Update/Insert local database with item details");
+				itemdb.upsert(item);
+				log.vdebug("item details: ", item);
+				return;
+			}
 		}
 
 		bool unwanted;
