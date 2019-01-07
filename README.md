@@ -169,11 +169,14 @@ sudo make install
 ```
 
 ### Build options
+
+By passing `PKGCONFIG=1` to the `make` call, necessary libraries (`sqlite3`,
+`curl`, and `libnotify` for notifications) are searched for using `pkg-config`
+instead of using the hard-coded values.
+
 By passing `NOTIFICATIONS=1` to the `make` call, notifications via
-libnotify are enabled. Necessary libraries are 
-`gmodule-2.0`, `glib-2.0`, and `notify`. If these libraries are
-named differently on the build system, the make variable
-`DFLAGSNOTIFICATIONS` can be adjusted.
+libnotify are enabled. If `pkg-config` is not used (see above), the necessary
+libraries are `gmodule-2.0`, `glib-2.0`, and `notify`.
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
 #### Debian - i386 / i686
