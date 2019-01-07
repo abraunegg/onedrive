@@ -1,9 +1,30 @@
 DC ?= dmd
-ifdef NOTIFICATIONS
-	DFLAGSNOTIFICATIONS ?= -version=NoPragma -version=NoGdk -version=Notifications \
-		-L-lgmodule-2.0 -L-lglib-2.0 -L-lnotify
+
+ifdef PKGCONFIG
+	LIBS = $(shell pkg-config --libs sqlite3 libcurl)
+else
+	LIBS = -lcurl -lsqlite3
 endif
-DFLAGS += -w -g -ofonedrive -O -L-lcurl -L-lsqlite3 $(DFLAGSNOTIFICATIONS) -L-ldl -J.
+ifdef NOTIFICATIONS
+	NOTIF_VERSIONS = -version=NoPragma -version=NoGdk -version=Notifications
+ifdef PKGCONFIG
+	LIBS += $(shell pkg-config --libs libnotify)
+else
+	LIBS += -lgmodule-2.0 -lglib-2.0 -lnotify
+endif
+endif
+LIBS += -ldl
+
+# add the necessary prefix for the D compiler
+LIBS := $(addprefix -L,$(LIBS))
+
+# support ldc2 which needs -d prefix for version specification
+ifeq ($(notdir $(DC)),ldc2)
+	NOTIF_VERSIONS := $(addprefix -d,$(NOTIF_VERSIONS))
+endif
+
+DFLAGS += -w -g -ofonedrive -O $(NOTIF_VERSIONS) $(LIBS) -J.
+
 PREFIX ?= /usr/local
 DOCDIR ?= $(PREFIX)/share/doc/onedrive
 MANDIR ?= $(PREFIX)/share/man/man1
