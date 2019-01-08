@@ -532,7 +532,7 @@ final class SyncEngine
 					// Stop application
 					log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
 					log.log("The item id to query was not found on OneDrive");
-					log.log("Remove your 'items.sqlite3' file and try to sync again\n\n");
+					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
 					return;
 				}
 				
@@ -548,7 +548,7 @@ final class SyncEngine
 					// Stop application
 					log.log("\n\nOneDrive returned a 'HTTP 500 - Internal Server Error'");
 					log.log("This is a OneDrive API Bug - https://github.com/OneDrive/onedrive-api-docs/issues/844\n\n");
-					log.log("Remove your 'items.sqlite3' file and try to sync again\n\n");
+					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
 					return;
 				}
 				
@@ -567,7 +567,7 @@ final class SyncEngine
 					// extract 'message' as the reason
 					JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
 					log.log("Error Reason:  ", errorMessage["error"]["message"].str);
-					log.log("\n\nRemove your 'items.sqlite3' file and try to sync again\n\n");
+					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
 					return;
 				}
 			}
