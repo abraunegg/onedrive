@@ -37,6 +37,8 @@ int main(string[] args)
 	// Does the user want to disable upload validation - https://github.com/abraunegg/onedrive/issues/205
 	// SharePoint will associate some metadata from the library the file is uploaded to directly in the file - thus change file size & checksums
 	bool disableUploadValidation = false;
+	// Perform only a dry run - not applicable for --monitor mode
+	bool dryRun = false;
 	// Do we enable a log file
 	bool enableLogFile = false;
 	// Force the use of HTTP 1.1 to overcome curl => 7.62.0 where some operations are now sent via HTTP/2
@@ -93,6 +95,7 @@ int main(string[] args)
 			"display-sync-status", "Display the sync status of the client - no sync will be performed.", &displaySyncStatus,
 			"download-only|d", "Only download remote changes", &downloadOnly,
 			"disable-upload-validation", "Disable upload validation when uploading to OneDrive", &disableUploadValidation,
+			"dry-run", "Perform a trial sync with no changes made", &dryRun,
 			"enable-logging", "Enable client activity to a separate log file", &enableLogFile,
 			"force-http-1.1", "Force the use of HTTP 1.1 for all operations", &forceHTTP11,
 			"get-O365-drive-id", "Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library", &o365SharedLibraryName,
@@ -134,6 +137,8 @@ int main(string[] args)
 	bool debugHttpSubmit;
 	// Are we able to reach the OneDrive Service
 	bool online = false;
+	// simulateNoRefreshTokenFile in case of --dry-run & --logout
+	bool simulateNoRefreshTokenFile = false;
 	
 	// Determine the users home directory. 
 	// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
@@ -191,6 +196,11 @@ int main(string[] args)
 	if (printVersion) {
 		std.stdio.write("onedrive ", import("version"));
 		return EXIT_SUCCESS;
+	}
+	
+	// dry-run notification
+	if (dryRun) {
+		log.log("DRY-RUN Configured. Output below shows what 'would' have occurred.");
 	}
 
 	// load application configuration
@@ -262,22 +272,31 @@ int main(string[] args)
 	
 	// upgrades
 	if (exists(configDirName ~ "/items.db")) {
-		remove(configDirName ~ "/items.db");
+		if (!dryRun) {
+			safeRemove(configDirName ~ "/items.db");
+		}
 		log.logAndNotify("Database schema changed, resync needed");
 		resync = true;
 	}
 
 	if (resync || logout) {
 		log.vlog("Deleting the saved status ...");
-		safeRemove(cfg.databaseFilePath);
-		safeRemove(cfg.deltaLinkFilePath);
-		safeRemove(cfg.uploadStateFilePath);
+		if (!dryRun) {
+			safeRemove(cfg.databaseFilePath);
+			safeRemove(cfg.deltaLinkFilePath);
+			safeRemove(cfg.uploadStateFilePath);
+		}
 		if (logout) {
-			safeRemove(cfg.refreshTokenFilePath);
+			if (!dryRun) {
+				safeRemove(cfg.refreshTokenFilePath);
+			} else {
+				// simulate file being removed / unavailable
+				simulateNoRefreshTokenFile = true;
+			}
 		}
 	}
 
-	// Display current application configuration, no application initialisation
+	// Display current application configuration, no application initialization
 	if (displayConfiguration){
 		string userConfigFilePath = configDirName ~ "/config";
 		string userSyncList = configDirName ~ "/sync_list";
@@ -335,7 +354,7 @@ int main(string[] args)
 	}
 
 	// Initialize OneDrive, check for authorization
-	oneDrive = new OneDriveApi(cfg, debugHttp, forceHTTP11);
+	oneDrive = new OneDriveApi(cfg, debugHttp, forceHTTP11, dryRun, simulateNoRefreshTokenFile);
 	oneDrive.printAccessToken = printAccessToken;
 	if (!oneDrive.init()) {
 		log.error("Could not initialize the OneDrive API");
@@ -366,7 +385,7 @@ int main(string[] args)
 	
 	// initialize system
 	log.vlog("Opening the item database ...");
-	itemDb = new ItemDatabase(cfg.databaseFilePath);
+	itemDb = new ItemDatabase(cfg.databaseFilePath, dryRun);
 	
 	log.vlog("All operations will be performed in: ", syncDir);
 	if (!exists(syncDir)) {
@@ -392,7 +411,7 @@ int main(string[] args)
 	
 	// Initialise the sync engine
 	log.logAndNotify("Initializing the Synchronization Engine ...");
-	auto sync = new SyncEngine(cfg, oneDrive, itemDb, selectiveSync);
+	auto sync = new SyncEngine(cfg, oneDrive, itemDb, selectiveSync, dryRun);
 	
 	try {
 		if (!initSyncEngine(sync)) {
@@ -574,6 +593,16 @@ int main(string[] args)
 
 	// workaround for segfault in std.net.curl.Curl.shutdown() on exit
 	oneDrive.http.shutdown();
+	
+	// --dry-run temp database cleanup
+	if (dryRun) {
+		string dryRunFilename = replace(cfg.databaseFilePath, "sqlite3", "dryRun");
+		if (exists(dryRunFilename)) {
+			// safely remove items.dryRun to cleanup
+			//safeRemove(dryRunFilename); //temp disabled so it can be checked
+		}
+	}
+	
 	return EXIT_SUCCESS;
 }
 
