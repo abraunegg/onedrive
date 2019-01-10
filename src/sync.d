@@ -1394,11 +1394,14 @@ final class SyncEngine
 		if (path != "."){
 			// If this is null or empty - we cant query the database properly
 			if ((parent.driveId == "") && (parent.id == "")){
+				log.vdebug("parent.driveId & parent.id are empty ... need to query OneDrive for values");
 				// What path to use?
 				string parentPath = dirName(path);		// will be either . or something else
 								
 				try {
+					log.vdebug("Checking OneDrive for path: ", parentPath);
 					onedrivePathDetails = onedrive.getPathDetails(parentPath);
+					log.vdebug("OneDrive path details: ", onedrivePathDetails);
 				} catch (OneDriveException e) {
 					if (e.httpStatusCode == 404) {
 						// Parent does not exist ... need to create parent
@@ -1431,11 +1434,15 @@ final class SyncEngine
 							"name": JSONValue(baseName(path)),
 							"folder": parseJSON("{}")
 					];
+					log.vdebug("New remote directory drive item: ", driveItem);
 					
 					// Submit the creation request
 					// Fix for https://github.com/skilion/onedrive/issues/356
 					try {
+						log.vdebug("parent.driveId: ", parent.driveId);
+						log.vdebug("parent.id: ", parent.id);
 						response = onedrive.createById(parent.driveId, parent.id, driveItem);
+						log.vdebug("Create remote directory response: ", response);
 					} catch (OneDriveException e) {
 						if (e.httpStatusCode == 409) {
 							// OneDrive API returned a 404 (above) to say the directory did not exist
@@ -1452,6 +1459,19 @@ final class SyncEngine
 				
 				if (e.httpStatusCode >= 500) {
 					// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+					return;
+				}
+				
+				// Not a 404 or 5xx error
+				else {
+					// 404 or 500 error
+					log.log("\n\nOneDrive returned an error with the following message:\n");
+					auto errorArray = splitLines(e.msg);
+					log.log("Error Message: ", errorArray[0]);
+					// extract 'message' as the reason
+					JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+					log.log("Error Reason:  ", errorMessage["error"]["message"].str);
+					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
 					return;
 				}
 			} 
