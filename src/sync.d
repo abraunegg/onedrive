@@ -516,11 +516,26 @@ final class SyncEngine
 				// Use the 'id' that was passed in (folderId)
 				idToQuery = id;
 			}
-		
+			
 			try {
 				// Fetch the changes relative to the path id we want to query
 				changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
 			} catch (OneDriveException e) {
+				// OneDrive threw an error
+				log.vdebug("OneDrive threw an error when querying for these changes:");
+				log.vdebug("driveId: ", driveId);
+				log.vdebug("idToQuery: ", idToQuery);
+				log.vdebug("deltaLink: ", deltaLink);
+				
+				// HTTP request returned status code 404 (Not Found)
+				if (e.httpStatusCode == 404) {
+					// Stop application
+					log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
+					log.log("The item id to query was not found on OneDrive");
+					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
+					return;
+				}
+				
 				// HTTP request returned status code 410 (The requested resource is no longer available at the server)
 				if (e.httpStatusCode == 410) {
 					log.vlog("Delta link expired, re-syncing...");
@@ -528,12 +543,12 @@ final class SyncEngine
 					continue;
 				}
 				
+				// HTTP request returned status code 500 (Internal Server Error)
 				if (e.httpStatusCode == 500) {
-					// HTTP request returned status code 500 (Internal Server Error)
-					// Exit Application
+					// Stop application
 					log.log("\n\nOneDrive returned a 'HTTP 500 - Internal Server Error'");
 					log.log("This is a OneDrive API Bug - https://github.com/OneDrive/onedrive-api-docs/issues/844\n\n");
-					log.log("Remove your 'items.sqlite3' file and try to sync again\n\n");
+					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
 					return;
 				}
 				
@@ -544,7 +559,17 @@ final class SyncEngine
 					applyDifferences(driveId, idToQuery);
 				}
 				
-				else throw e;
+				else {
+					// Default operation if not 404, 410, 500, 504 errors
+					log.log("\n\nOneDrive returned an error with the following message:\n");
+					auto errorArray = splitLines(e.msg);
+					log.log("Error Message: ", errorArray[0]);
+					// extract 'message' as the reason
+					JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+					log.log("Error Reason:  ", errorMessage["error"]["message"].str);
+					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
+					return;
+				}
 			}
 			
 			// Are there any changes to process?
