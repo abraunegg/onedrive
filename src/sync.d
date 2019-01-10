@@ -1715,7 +1715,10 @@ final class SyncEngine
 		
 		if ((item.driveId == "") && (item.id == "") && (item.eTag == "")){
 			// These are empty ... we cannot delete if this is empty ....
+			log.vdebug("item.driveId, item.id & item.eTag are empty ... need to query OneDrive for values");
+			log.vdebug("Checking OneDrive for path: ", path);
 			JSONValue onedrivePathDetails = onedrive.getPathDetails(path); // Returns a JSON String for the OneDrive Path
+			log.vdebug("OneDrive path details: ", onedrivePathDetails);
 			item.driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
 			item.id = onedrivePathDetails["id"].str; // This item's ID. Should give something like 12345ABCDE1234A1!101
 			item.eTag = onedrivePathDetails["eTag"].str; // Should be something like aNjM2NjJFRUVGQjY2NjJFMSE5MzUuMA
@@ -1724,11 +1727,27 @@ final class SyncEngine
 		try {
 			onedrive.deleteById(item.driveId, item.id, item.eTag);
 		} catch (OneDriveException e) {
-			if (e.httpStatusCode == 404) log.vlog("OneDrive reported: The resource could not be found.");
-			else throw e;
+			if (e.httpStatusCode == 404) {
+				// item.id, item.eTag could not be found on driveId
+				log.vlog("OneDrive reported: The resource could not be found.");
+			}
+			
+			else {
+				// Not a 404 response 
+				log.log("\n\nOneDrive returned an error with the following message:\n");
+				auto errorArray = splitLines(e.msg);
+				log.log("Error Message: ", errorArray[0]);
+				// extract 'message' as the reason
+				JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+				log.log("Error Reason:  ", errorMessage["error"]["message"].str);
+				return;
+			}
 		}
+		
+		// delete the reference in the local database
 		itemdb.deleteById(item.driveId, item.id);
 		if (item.remoteId != null) {
+			// If the item is a remote item, delete the reference in the local database
 			itemdb.deleteById(item.remoteDriveId, item.remoteId);
 		}
 	}
