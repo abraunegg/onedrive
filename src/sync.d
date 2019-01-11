@@ -1413,9 +1413,20 @@ final class SyncEngine
 						log.vdebug("Parent Path does not exist - need to create: ", parentPath);
 						uploadCreateDir(parentPath);
 					}
-					
 					if (e.httpStatusCode >= 500) {
 						// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+						log.vdebug("OneDrive returned a 5xx error message: ", e.httpStatusCode);
+						return;
+					}
+					else {
+						// Default operation if not 404 or 5xx errors
+						log.log("\n\nOneDrive returned an error with the following message:\n");
+						auto errorArray = splitLines(e.msg);
+						log.log("Error Message: ", errorArray[0]);
+						// extract 'message' as the reason
+						JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+						log.log("Error Reason:  ", errorMessage["error"]["message"].str);
+						log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
 						return;
 					}
 				}
