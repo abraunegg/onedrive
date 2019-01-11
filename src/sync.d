@@ -54,6 +54,11 @@ private bool hasParentReferencePath(const ref JSONValue item)
 	return ("path" in item["parentReference"]) != null;
 }
 
+private bool hasParentReferenceDriveId(const ref JSONValue item)
+{
+	return ("driveId" in item["parentReference"]) != null;
+}
+
 private bool isMalware(const ref JSONValue item)
 {
 	return ("malware" in item) != null;
@@ -1405,6 +1410,7 @@ final class SyncEngine
 				} catch (OneDriveException e) {
 					if (e.httpStatusCode == 404) {
 						// Parent does not exist ... need to create parent
+						log.vdebug("Parent Path does not exist - need to create: ", parentPath);
 						uploadCreateDir(parentPath);
 					}
 					
@@ -1415,8 +1421,14 @@ final class SyncEngine
 				}
 								
 				// configure the data
-				parent.driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
-				parent.id = onedrivePathDetails["id"].str; // This item's ID. Should give something like 12345ABCDE1234A1!101
+				if (hasParentReferenceDriveId(onedrivePathDetails)){
+					log.vdebug("onedrivePathDetails contains valid JSON data");
+					parent.driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
+					parent.id = onedrivePathDetails["id"].str; // This item's ID. Should give something like 12345ABCDE1234A1!101
+				} else {
+					log.vdebug("Issue #339 triggered");
+					log.vdebug("onedrivePathDetails: ", onedrivePathDetails);
+				}
 			}
 		
 			JSONValue response;
