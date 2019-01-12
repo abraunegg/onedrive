@@ -1427,7 +1427,8 @@ final class SyncEngine
 					log.error("\nERROR: Unable to query the following path due to OneDrive API regression: ", path);
 					log.error("ERROR: Refer to https://github.com/OneDrive/onedrive-api-docs/issues/976 for further details");
 					log.error("WORKAROUND: Manually create the path above on OneDrive to workaround API issue\n");
-					// force application quit
+					// return
+					return;
 				}
 			}
 		
