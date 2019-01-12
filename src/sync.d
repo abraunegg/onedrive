@@ -44,6 +44,11 @@ private bool isItemRemote(const ref JSONValue item)
 	return ("remoteItem" in item) != null;
 }
 
+private bool hasParentReference(const ref JSONValue item)
+{
+	return ("parentReference" in item) != null;
+}
+
 private bool hasParentReferenceId(const ref JSONValue item)
 {
 	return ("id" in item["parentReference"]) != null;
@@ -52,11 +57,6 @@ private bool hasParentReferenceId(const ref JSONValue item)
 private bool hasParentReferencePath(const ref JSONValue item)
 {
 	return ("path" in item["parentReference"]) != null;
-}
-
-private bool hasParentReferenceDriveId(const ref JSONValue item)
-{
-	return ("driveId" in item["parentReference"]) != null;
 }
 
 private bool isMalware(const ref JSONValue item)
@@ -1399,46 +1399,35 @@ final class SyncEngine
 		if (path != "."){
 			// If this is null or empty - we cant query the database properly
 			if ((parent.driveId == "") && (parent.id == "")){
-				log.vdebug("parent.driveId & parent.id are empty ... need to query OneDrive for values");
 				// What path to use?
 				string parentPath = dirName(path);		// will be either . or something else
 								
 				try {
-					log.vdebug("Checking OneDrive for path: ", parentPath);
 					onedrivePathDetails = onedrive.getPathDetails(parentPath);
-					log.vdebug("OneDrive path details: ", onedrivePathDetails);
 				} catch (OneDriveException e) {
+					// exception - set onedriveParentRootDetails to a blank valid JSON
+					onedrivePathDetails = parseJSON("{}");
 					if (e.httpStatusCode == 404) {
 						// Parent does not exist ... need to create parent
-						log.vdebug("Parent Path does not exist - need to create: ", parentPath);
 						uploadCreateDir(parentPath);
 					}
+					
 					if (e.httpStatusCode >= 500) {
 						// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
-						log.vdebug("OneDrive returned a 5xx error message: ", e.httpStatusCode);
-						return;
-					}
-					else {
-						// Default operation if not 404 or 5xx errors
-						log.log("\n\nOneDrive returned an error with the following message:\n");
-						auto errorArray = splitLines(e.msg);
-						log.log("Error Message: ", errorArray[0]);
-						// extract 'message' as the reason
-						JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-						log.log("Error Reason:  ", errorMessage["error"]["message"].str);
-						log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
 						return;
 					}
 				}
 								
-				// configure the data
-				if (hasParentReferenceDriveId(onedrivePathDetails)){
-					log.vdebug("onedrivePathDetails contains valid JSON data");
-					parent.driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
+				// configure the parent item data
+				if (hasId(onedrivePathDetails) && hasParentReference(onedrivePathDetails)){
 					parent.id = onedrivePathDetails["id"].str; // This item's ID. Should give something like 12345ABCDE1234A1!101
+					parent.driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
 				} else {
-					log.vdebug("Issue #339 triggered");
-					log.vdebug("onedrivePathDetails: ", onedrivePathDetails);
+					// OneDrive API query failed
+					log.error("\nERROR: Unable to query the following path due to OneDrive API regression: ", path);
+					log.error("ERROR: Refer to https://github.com/OneDrive/onedrive-api-docs/issues/976 for further details");
+					log.error("WORKAROUND: Manually create the path above on OneDrive to workaround API issue\n");
+					return;
 				}
 			}
 		
@@ -1457,15 +1446,11 @@ final class SyncEngine
 							"name": JSONValue(baseName(path)),
 							"folder": parseJSON("{}")
 					];
-					log.vdebug("New remote directory drive item: ", driveItem);
 					
 					// Submit the creation request
 					// Fix for https://github.com/skilion/onedrive/issues/356
 					try {
-						log.vdebug("parent.driveId: ", parent.driveId);
-						log.vdebug("parent.id: ", parent.id);
 						response = onedrive.createById(parent.driveId, parent.id, driveItem);
-						log.vdebug("Create remote directory response: ", response);
 					} catch (OneDriveException e) {
 						if (e.httpStatusCode == 409) {
 							// OneDrive API returned a 404 (above) to say the directory did not exist
@@ -1482,19 +1467,6 @@ final class SyncEngine
 				
 				if (e.httpStatusCode >= 500) {
 					// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
-					return;
-				}
-				
-				// Not a 404 or 5xx error
-				else {
-					// 404 or 500 error
-					log.log("\n\nOneDrive returned an error with the following message:\n");
-					auto errorArray = splitLines(e.msg);
-					log.log("Error Message: ", errorArray[0]);
-					// extract 'message' as the reason
-					JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-					log.log("Error Reason:  ", errorMessage["error"]["message"].str);
-					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
 					return;
 				}
 			} 
