@@ -333,6 +333,14 @@ An example of the log file is below:
 2018-Apr-07 17:09:38.5708652 Applying changes of Path ID: <redacted>
 ```
 
+### Notifications
+If notification support is compiled in, the following events will trigger a notification within the display manager session:
+*   Aborting a sync if .nosync file is found
+*   Cannot create remote directory
+*   Cannot upload file changes
+*   Cannot delete remote file / folder
+*   Cannot move remote file / folder
+
 ### Uninstall
 ```text
 sudo make uninstall
