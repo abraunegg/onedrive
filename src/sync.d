@@ -1753,14 +1753,28 @@ final class SyncEngine
 			}
 			
 			else {
-				// Not a 404 response 
-				log.log("\n\nOneDrive returned an error with the following message:\n");
-				auto errorArray = splitLines(e.msg);
-				log.log("Error Message: ", errorArray[0]);
-				// extract 'message' as the reason
-				JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-				log.log("Error Reason:  ", errorMessage["error"]["message"].str);
-				return;
+				// Not a 404 response .. is this a 403 response due to OneDrive Business Retention Policy being enabled?
+				if ((e.httpStatusCode == 403) && (accountType != "personal")) {
+					auto errorArray = splitLines(e.msg);
+					JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+					if (errorMessage["error"]["message"].str == "Request was cancelled by event received. If attempting to delete a non-empty folder, it's possible that it's on hold") {
+						// Issue #338 - Unable to delete OneDrive content when OneDrive Business Retention Policy is enabled
+						// TODO: We have to recursively delete all files & folders from this path to delete
+						// WARN: 
+						log.error("\nERROR: Unable to delete the requested remote path from OneDrive: ", path);
+						log.error("ERROR: This error is due to OneDrive Business Retention Policy being applied");
+						log.error("WORKAROUND: Manually delete all files and folders from the above path as per Business Retention Policy\n");
+					}
+				} else {
+					// Not a 403 response & OneDrive Business Account / O365 Shared Folder / Library
+					log.log("\n\nOneDrive returned an error with the following message:\n");
+					auto errorArray = splitLines(e.msg);
+					log.log("Error Message: ", errorArray[0]);
+					// extract 'message' as the reason
+					JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+					log.log("Error Reason:  ", errorMessage["error"]["message"].str);
+					return;
+				}
 			}
 		}
 		
