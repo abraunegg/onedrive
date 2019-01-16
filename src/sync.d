@@ -44,6 +44,11 @@ private bool isItemRemote(const ref JSONValue item)
 	return ("remoteItem" in item) != null;
 }
 
+private bool hasParentReference(const ref JSONValue item)
+{
+	return ("parentReference" in item) != null;
+}
+
 private bool hasParentReferenceId(const ref JSONValue item)
 {
 	return ("id" in item["parentReference"]) != null;
@@ -1398,10 +1403,14 @@ final class SyncEngine
 				string parentPath = dirName(path);		// will be either . or something else
 								
 				try {
+					log.vdebug("Attempting to query OneDrive for this path: ", parentPath);
 					onedrivePathDetails = onedrive.getPathDetails(parentPath);
 				} catch (OneDriveException e) {
+					// exception - set onedriveParentRootDetails to a blank valid JSON
+					onedrivePathDetails = parseJSON("{}");
 					if (e.httpStatusCode == 404) {
 						// Parent does not exist ... need to create parent
+						log.vdebug("Parent path does not exist: ", parentPath);
 						uploadCreateDir(parentPath);
 					}
 					
@@ -1411,14 +1420,25 @@ final class SyncEngine
 					}
 				}
 								
-				// configure the data
-				parent.driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
-				parent.id = onedrivePathDetails["id"].str; // This item's ID. Should give something like 12345ABCDE1234A1!101
+				// configure the parent item data
+				if (hasId(onedrivePathDetails) && hasParentReference(onedrivePathDetails)){
+					log.vdebug("Parent path found, configuring parent item");
+					parent.id = onedrivePathDetails["id"].str; // This item's ID. Should give something like 12345ABCDE1234A1!101
+					parent.driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
+				} else {
+					// OneDrive API query failed
+					log.error("\nERROR: Unable to query the following path due to OneDrive API regression: ", path);
+					log.error("ERROR: Refer to https://github.com/OneDrive/onedrive-api-docs/issues/976 for further details");
+					log.error("WORKAROUND: Manually create the path above on OneDrive to workaround API issue\n");
+					// return
+					return;
+				}
 			}
 		
 			JSONValue response;
 			// test if the path we are going to create already exists on OneDrive
 			try {
+				log.vdebug("Attempting to query OneDrive for this path: ", path);
 				response = onedrive.getPathDetails(path);
 			} catch (OneDriveException e) {
 				if (e.httpStatusCode == 404) {

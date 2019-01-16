@@ -3,6 +3,21 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [2.2.5] - 2019-01-16
+### Fixed
+- Update handling of HTTP 412 - Precondition Failed errors
+- Update --display-config to display sync_list if configured
+- Add a check for 'id' key on metadata update to prevent 'std.json.JSONException@std/json.d(494): Key not found: id'
+- Update handling of 'remote' folder designation as 'root' items
+- Ensure that remote deletes are handled correctly
+- Handle 'Item not found' exception when unable to query OneDrive 'root' for changes
+- Add handling for JSON response error when OneDrive API returns a 404 due to OneDrive API regression
+- Fix items highlighted by codacy review
+
+### Added
+- Add --force-http-1.1 flag to downgrade any HTTP/2 curl operations to HTTP 1.1 protocol
+- Support building with ldc2 and usage of pkg-config for lib finding
+
 ## [2.2.4] - 2018-12-28
 ### Fixed
 - Resolve JSONException when supplying --get-O365-drive-id option with a string containing spaces

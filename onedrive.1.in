@@ -1,4 +1,4 @@
-.TH ONEDRIVE "1" "December 2018" "2.2.4" "User Commands"
+.TH ONEDRIVE "1" "January 2019" "2.2.5" "User Commands"
 .SH NAME
 onedrive \- folder synchronization with OneDrive
 .SH SYNOPSIS
@@ -50,6 +50,9 @@ Only download remote changes
 .TP
 \fB\-\-enable\-logging\fP
 Enable client activity to a separate log file
+.TP
+\fB\-\-force\-http\-1.1\fP
+Force the use of HTTP 1.1 for all operations
 .TP
 \fB\-\-get\-O365\-drive\-id\fP ARG
 Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library
