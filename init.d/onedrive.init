@@ -25,7 +25,7 @@ RETVAL=0
 
 start() {
 	export PATH=/usr/local/bin/:$PATH
-        echo -n $"Starting $APP_NAME: "
+        echo -n "Starting $APP_NAME: "
         daemon --user root onedrive_service.sh
         RETVAL=$?
         echo
@@ -35,7 +35,7 @@ start() {
 }
 
 stop() {
-        echo -n $"Shutting down $APP_NAME: "
+        echo -n "Shutting down $APP_NAME: "
         killproc onedrive
         RETVAL=$?
         echo
@@ -75,7 +75,7 @@ case "$1" in
         rhstatus
         ;;
   *)
-        echo $"Usage: $0 {start|stop|restart|reload|status}"
+        echo "Usage: $0 {start|stop|restart|reload|status}"
         exit 2
 esac
 
