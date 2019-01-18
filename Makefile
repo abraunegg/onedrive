@@ -31,9 +31,11 @@ MANDIR ?= $(PREFIX)/share/man/man1
 DOCFILES = README.md README.Office365.md config LICENSE CHANGELOG.md
 
 ifneq ("$(wildcard /etc/redhat-release)","")
-RHEL = $(shell cat /etc/redhat-release | grep -E "(Red Hat Enterprise Linux Server|CentOS Linux)" | wc -l)
+RHEL = $(shell cat /etc/redhat-release | grep -E "(Red Hat Enterprise Linux Server|CentOS)" | wc -l)
+RHEL_VERSION = $(shell rpm --eval "%{centos_ver}")
 else
 RHEL = 0
+RHEL_VERSION = 0
 endif
 
 SOURCES = \
@@ -74,10 +76,17 @@ install.noservice: onedrive onedrive.1
 install: all install.noservice
 	for i in $(DOCFILES) ; do install -D -m 644 $$i $(DESTDIR)$(DOCDIR)/$$i ; done
 ifeq ($(RHEL),1)
+ifeq ($(RHEL_VERSION),6)
+	mkdir -p $(DESTDIR)/etc/init.d/
+	chown root.root $(DESTDIR)/etc/init.d/
+	install -D init.d/onedrive.init $(DESTDIR)/etc/init.d/onedrive
+	install -D init.d/onedrive_service.sh $(DESTDIR)$(PREFIX)/bin/onedrive_service.sh
+else
 	mkdir -p $(DESTDIR)/usr/lib/systemd/system/
 	chown root.root $(DESTDIR)/usr/lib/systemd/system/
 	chmod 0755 $(DESTDIR)/usr/lib/systemd/system/
 	install -D -m 644 *.service $(DESTDIR)/usr/lib/systemd/system/
+endif
 else
 	mkdir -p $(DESTDIR)/usr/lib/systemd/user/
 	chown root.root $(DESTDIR)/usr/lib/systemd/user/
@@ -87,8 +96,8 @@ else
 	chown root.root $(DESTDIR)/usr/lib/systemd/system/
 	chmod 0755 $(DESTDIR)/usr/lib/systemd/system/
 	install -D -m 644 onedrive@.service $(DESTDIR)/usr/lib/systemd/system/
-endif
 	install -D -m 644 onedrive.service $(DESTDIR)/usr/lib/systemd/user/onedrive.service
+endif
 
 onedrive.service:
 	sed "s|@PREFIX@|$(PREFIX)|g" systemd.units/onedrive.service.in > onedrive.service
@@ -101,7 +110,12 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/onedrive
 	rm -f $(DESTDIR)/etc/logrotate.d/onedrive
 ifeq ($(RHEL),1)
+ifeq ($(RHEL_VERSION),6)
+	rm -f $(DESTDIR)/etc/init.d/onedrive
+	rm -f $(DESTDIR)$(PREFIX)/bin/onedrive_service.sh
+else
 	rm -f $(DESTDIR)/usr/lib/systemd/system/onedrive*.service
+endif
 else
 	rm -f $(DESTDIR)/usr/lib/systemd/user/onedrive.service
 	rm -f $(DESTDIR)/usr/lib/systemd/system/onedrive@.service
@@ -110,4 +124,4 @@ endif
 	rm -f $(DESTDIR)$(MANDIR)/onedrive.1
 
 version: .git/HEAD .git/index
-	echo $(shell git describe --tags) >version
+	echo $(shell git describe --tags) > version
