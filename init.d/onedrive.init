@@ -24,6 +24,7 @@ STOP_TIMEOUT=${STOP_TIMEOUT-5}
 RETVAL=0
 
 start() {
+	export PATH=/usr/local/bin/:$PATH
         echo -n $"Starting $APP_NAME: "
         daemon --user root onedrive_service.sh
         RETVAL=$?
