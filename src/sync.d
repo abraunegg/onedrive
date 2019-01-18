@@ -1891,24 +1891,30 @@ final class SyncEngine
 		
 		string site_id;
 		string drive_id;
+		string webUrl;
+		bool found = false;
 		JSONValue siteQuery = onedrive.o365SiteSearch(encodeComponent(o365SharedLibraryName));
+		
+		log.log("Office 365 Library Name Query: ", o365SharedLibraryName);
 		
 		foreach (searchResult; siteQuery["value"].array) {
 			// Need an 'exclusive' match here with o365SharedLibraryName as entered
 			if (o365SharedLibraryName == searchResult["displayName"].str){
 				// 'displayName' matches search request
 				site_id = searchResult["id"].str;
+				webUrl = searchResult["webUrl"].str;
 				JSONValue siteDriveQuery = onedrive.o365SiteDrives(site_id);
 				foreach (driveResult; siteDriveQuery["value"].array) {
-					drive_id = driveResult["id"].str;
+					// Display results
+					found = true;
+					writeln("SiteName: ", searchResult["displayName"].str);
+					writeln("drive_id: ", driveResult["id"].str);
+					writeln("URL:      ", webUrl);
 				}
 			}
 		}
 		
-		log.log("Office 365 Library Name: ", o365SharedLibraryName);
-		if(drive_id != null) {
-			log.log("drive_id: ", drive_id);
-		} else {
+		if(!found) {
 			writeln("ERROR: This site could not be found. Please check it's name and your permissions to access the site.");
 		}
 	}
