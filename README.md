@@ -17,7 +17,7 @@ A complete tool to interact with OneDrive on Linux. Built following the UNIX phi
 ## Build Requirements
 *   Build environment must have at least 1GB of memory & 1GB swap space
 *   [libcurl](http://curl.haxx.se/libcurl/)
-*   [SQLite 3](https://www.sqlite.org/)
+*   [SQLite 3](https://www.sqlite.org/) >= 3.7.15
 *   [Digital Mars D Compiler (DMD)](http://dlang.org/download.html)
 
 ### Dependencies: Ubuntu/Debian - x86_64
@@ -80,6 +80,17 @@ curl -fsS https://dlang.org/install.sh | bash -s dmd
 For notifications the following is necessary:
 ```text
 sudo yum install libnotify-devel
+```
+
+### Dependencies: CentOS 6.x / RHEL 6.x
+In addition to the above requirements, the `sqlite` version used on CentOS 6.x / RHEL 6.x needs to be upgraded. Use the following instructions to update your version of `sqlite` so that it can support the client:
+```text
+sudo yum -y update
+sudo yum -y install epel-release, wget
+sudo yum -y install mock
+wget https://kojipkgs.fedoraproject.org//packages/sqlite/3.7.15.2/2.fc19/src/sqlite-3.7.15.2-2.fc19.src.rpm
+sudo mock --rebuild sqlite-3.7.15.2-2.fc19.src.rpm
+sudo yum -y upgrade /var/lib/mock/epel-6-{arch}/result/sqlite-*
 ```
 
 ### Dependencies: Fedora > Version 18
