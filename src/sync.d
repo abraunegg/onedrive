@@ -765,8 +765,17 @@ final class SyncEngine
 			if (itemdb.idInLocalDatabase(item.driveId, item.id)){
 				oldPath = itemdb.computePath(item.driveId, item.id);
 				if (!isItemSynced(oldItem, oldPath)) {
-					log.vlog("The local item is unsynced, renaming");
-					if (exists(oldPath)) safeRename(oldPath);
+					if (exists(oldPath)) {
+						auto ext = extension(oldPath);
+						auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
+						log.vlog("The local item is unsynced, renaming: ", oldPath, " -> ", newPath);
+						if (!dryRun) {
+							safeRename(oldPath);
+						} else {
+							log.vdebug("DRY-RUN: Skipping local file rename");
+							// Expectation here is that there is a new file locally (newPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
+						}
+					}
 					cached = false;
 				}
 			}
@@ -806,8 +815,14 @@ final class SyncEngine
 				return;
 			} else {
 				// TODO: force remote sync by deleting local item
-				log.vlog("The local item is out of sync, renaming...");
-				safeRename(path);
+				auto ext = extension(path);
+				auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
+				log.vlog("The local item is out of sync, renaming: ", path, " -> ", newPath);
+				if (!dryRun) {
+					safeRename(path);
+				} else {
+					log.vdebug("DRY-RUN: Skipping local file rename");
+				}
 			}
 		}
 		final switch (item.type) {
@@ -1138,22 +1153,75 @@ final class SyncEngine
 						write("Uploading modified file ", path, " ... ");
 						JSONValue response;
 						
-						// Are we using OneDrive Personal or OneDrive Business?
-						// To solve 'Multiple versions of file shown on website after single upload' (https://github.com/abraunegg/onedrive/issues/2)
-						// check what 'account type' this is as this issue only affects OneDrive Business so we need some extra logic here
-						if (accountType == "personal"){
-							// Original file upload logic
-							if (getSize(path) <= thresholdFileSize) {
-								try {
-									response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
-								} catch (OneDriveException e) {
-									if (e.httpStatusCode == 404) {
-										// HTTP request returned status code 404 - the eTag provided does not exist
-										// Delete record from the local database - file will be uploaded as a new file
-										log.vlog("OneDrive returned a 'HTTP 404 - eTag Issue' - gracefully handling error");
-										itemdb.deleteById(item.driveId, item.id);
-										return;
+						if (!dryRun) {
+							// Are we using OneDrive Personal or OneDrive Business?
+							// To solve 'Multiple versions of file shown on website after single upload' (https://github.com/abraunegg/onedrive/issues/2)
+							// check what 'account type' this is as this issue only affects OneDrive Business so we need some extra logic here
+							if (accountType == "personal"){
+								// Original file upload logic
+								if (getSize(path) <= thresholdFileSize) {
+									try {
+										response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
+									} catch (OneDriveException e) {
+										if (e.httpStatusCode == 404) {
+											// HTTP request returned status code 404 - the eTag provided does not exist
+											// Delete record from the local database - file will be uploaded as a new file
+											log.vlog("OneDrive returned a 'HTTP 404 - eTag Issue' - gracefully handling error");
+											itemdb.deleteById(item.driveId, item.id);
+											return;
+										}
+									
+										// Resolve https://github.com/abraunegg/onedrive/issues/36
+										if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
+											// The file is currently checked out or locked for editing by another user
+											// We cant upload this file at this time
+											writeln(" skipped.");
+											log.fileOnly("Uploading modified file ", path, " ... skipped.");
+											write("", path, " is currently checked out or locked for editing by another user.");
+											log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+											return;
+										}
+										
+										if (e.httpStatusCode == 412) {
+											// HTTP request returned status code 412 - ETag does not match current item's value
+											// Delete record from the local database - file will be uploaded as a new file
+											log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
+											log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
+											itemdb.deleteById(item.driveId, item.id);
+											return;
+										}
+										
+										if (e.httpStatusCode == 504) {
+											// HTTP request returned status code 504 (Gateway Timeout)
+											// Try upload as a session
+											response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+										}
+										else throw e;
 									}
+									writeln("done.");
+								} else {
+									writeln("");
+									try {
+										response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+									} catch (OneDriveException e) {	
+										if (e.httpStatusCode == 412) {
+											// HTTP request returned status code 412 - ETag does not match current item's value
+											// Delete record from the local database - file will be uploaded as a new file
+											log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
+											log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
+											itemdb.deleteById(item.driveId, item.id);
+											return;
+										}
+									}
+									writeln("done.");
+								}		
+							} else {
+								// OneDrive Business Account - always use a session to upload
+								writeln("");
+								
+								try {
+									response = session.upload(path, item.driveId, item.parentId, baseName(path));
+								} catch (OneDriveException e) {
 								
 									// Resolve https://github.com/abraunegg/onedrive/issues/36
 									if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
@@ -1161,75 +1229,34 @@ final class SyncEngine
 										// We cant upload this file at this time
 										writeln(" skipped.");
 										log.fileOnly("Uploading modified file ", path, " ... skipped.");
-										write("", path, " is currently checked out or locked for editing by another user.");
+										writeln("", path, " is currently checked out or locked for editing by another user.");
 										log.fileOnly(path, " is currently checked out or locked for editing by another user.");
 										return;
 									}
-									
-									if (e.httpStatusCode == 412) {
-										// HTTP request returned status code 412 - ETag does not match current item's value
-										// Delete record from the local database - file will be uploaded as a new file
-										log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
-										log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
-										itemdb.deleteById(item.driveId, item.id);
-										return;
-									}
-									
-									if (e.httpStatusCode == 504) {
-										// HTTP request returned status code 504 (Gateway Timeout)
-										// Try upload as a session
-										response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
-									}
-									else throw e;
 								}
+															
 								writeln("done.");
-							} else {
-								writeln("");
-								try {
-									response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
-								} catch (OneDriveException e) {	
-									if (e.httpStatusCode == 412) {
-										// HTTP request returned status code 412 - ETag does not match current item's value
-										// Delete record from the local database - file will be uploaded as a new file
-										log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
-										log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
-										itemdb.deleteById(item.driveId, item.id);
-										return;
-									}
-								}
-								writeln("done.");
-							}		
-						} else {
-							// OneDrive Business Account - always use a session to upload
-							writeln("");
-							
-							try {
-								response = session.upload(path, item.driveId, item.parentId, baseName(path));
-							} catch (OneDriveException e) {
-							
-								// Resolve https://github.com/abraunegg/onedrive/issues/36
-								if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
-									// The file is currently checked out or locked for editing by another user
-									// We cant upload this file at this time
-									writeln(" skipped.");
-									log.fileOnly("Uploading modified file ", path, " ... skipped.");
-									writeln("", path, " is currently checked out or locked for editing by another user.");
-									log.fileOnly(path, " is currently checked out or locked for editing by another user.");
-									return;
-								}
+								// As the session.upload includes the last modified time, save the response
+								saveItem(response);
 							}
-														
-							writeln("done.");
-							// As the session.upload includes the last modified time, save the response
+							log.fileOnly("Uploading modified file ", path, " ... done.");
+							// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded via simple upload
+							eTag = response["cTag"].str;
+						} else {
+							// we are --dry-run - simulate the file upload
+							writeln(" done.");
+							response = createFakeResponse(path);
+							// Log action to log file
+							log.fileOnly("Uploading modified file ", path, " ... done.");
 							saveItem(response);
+							return;
 						}
-						log.fileOnly("Uploading modified file ", path, " ... done.");
-						// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded via simple upload
-						eTag = response["cTag"].str;
 					}
 					if (accountType == "personal"){
 						// If Personal, call to update the modified time as stored on OneDrive
-						uploadLastModifiedTime(item.driveId, item.id, eTag, localModifiedTime.toUTC());
+						if (!dryRun) {
+							uploadLastModifiedTime(item.driveId, item.id, eTag, localModifiedTime.toUTC());
+						}
 					}
 				} else {
 					log.vlog("The file has not changed");

@@ -14,7 +14,7 @@ import std.uri;
 import qxor;
 static import log;
 
-private string deviceName;
+shared string deviceName;
 
 static this()
 {
