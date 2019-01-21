@@ -44,6 +44,11 @@ private bool isItemRemote(const ref JSONValue item)
 	return ("remoteItem" in item) != null;
 }
 
+private bool hasParentReference(const ref JSONValue item)
+{
+	return ("parentReference" in item) != null;
+}
+
 private bool hasParentReferenceId(const ref JSONValue item)
 {
 	return ("id" in item["parentReference"]) != null;
@@ -518,11 +523,26 @@ final class SyncEngine
 				// Use the 'id' that was passed in (folderId)
 				idToQuery = id;
 			}
-		
+			
 			try {
 				// Fetch the changes relative to the path id we want to query
 				changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
 			} catch (OneDriveException e) {
+				// OneDrive threw an error
+				log.vdebug("OneDrive threw an error when querying for these changes:");
+				log.vdebug("driveId: ", driveId);
+				log.vdebug("idToQuery: ", idToQuery);
+				log.vdebug("deltaLink: ", deltaLink);
+				
+				// HTTP request returned status code 404 (Not Found)
+				if (e.httpStatusCode == 404) {
+					// Stop application
+					log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
+					log.log("The item id to query was not found on OneDrive");
+					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
+					return;
+				}
+				
 				// HTTP request returned status code 410 (The requested resource is no longer available at the server)
 				if (e.httpStatusCode == 410) {
 					log.vlog("Delta link expired, re-syncing...");
@@ -530,12 +550,12 @@ final class SyncEngine
 					continue;
 				}
 				
+				// HTTP request returned status code 500 (Internal Server Error)
 				if (e.httpStatusCode == 500) {
-					// HTTP request returned status code 500 (Internal Server Error)
-					// Exit Application
+					// Stop application
 					log.log("\n\nOneDrive returned a 'HTTP 500 - Internal Server Error'");
 					log.log("This is a OneDrive API Bug - https://github.com/OneDrive/onedrive-api-docs/issues/844\n\n");
-					log.log("Remove your 'items.sqlite3' file and try to sync again\n\n");
+					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
 					return;
 				}
 				
@@ -546,7 +566,17 @@ final class SyncEngine
 					applyDifferences(driveId, idToQuery);
 				}
 				
-				else throw e;
+				else {
+					// Default operation if not 404, 410, 500, 504 errors
+					log.log("\n\nOneDrive returned an error with the following message:\n");
+					auto errorArray = splitLines(e.msg);
+					log.log("Error Message: ", errorArray[0]);
+					// extract 'message' as the reason
+					JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+					log.log("Error Reason:  ", errorMessage["error"]["message"].str);
+					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
+					return;
+				}
 			}
 			
 			// Are there any changes to process?
@@ -1402,10 +1432,14 @@ final class SyncEngine
 				string parentPath = dirName(path);		// will be either . or something else
 								
 				try {
+					log.vdebug("Attempting to query OneDrive for this path: ", parentPath);
 					onedrivePathDetails = onedrive.getPathDetails(parentPath);
 				} catch (OneDriveException e) {
+					// exception - set onedriveParentRootDetails to a blank valid JSON
+					onedrivePathDetails = parseJSON("{}");
 					if (e.httpStatusCode == 404) {
 						// Parent does not exist ... need to create parent
+						log.vdebug("Parent path does not exist: ", parentPath);
 						uploadCreateDir(parentPath);
 					}
 					
@@ -1415,14 +1449,25 @@ final class SyncEngine
 					}
 				}
 								
-				// configure the data
-				parent.driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
-				parent.id = onedrivePathDetails["id"].str; // This item's ID. Should give something like 12345ABCDE1234A1!101
+				// configure the parent item data
+				if (hasId(onedrivePathDetails) && hasParentReference(onedrivePathDetails)){
+					log.vdebug("Parent path found, configuring parent item");
+					parent.id = onedrivePathDetails["id"].str; // This item's ID. Should give something like 12345ABCDE1234A1!101
+					parent.driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
+				} else {
+					// OneDrive API query failed
+					log.error("\nERROR: Unable to query the following path due to OneDrive API regression: ", path);
+					log.error("ERROR: Refer to https://github.com/OneDrive/onedrive-api-docs/issues/976 for further details");
+					log.error("WORKAROUND: Manually create the path above on OneDrive to workaround API issue\n");
+					// return
+					return;
+				}
 			}
 		
 			JSONValue response;
 			// test if the path we are going to create already exists on OneDrive
 			try {
+				log.vdebug("Attempting to query OneDrive for this path: ", path);
 				response = onedrive.getPathDetails(path);
 			} catch (OneDriveException e) {
 				if (e.httpStatusCode == 404) {
@@ -1748,7 +1793,10 @@ final class SyncEngine
 		
 		if ((item.driveId == "") && (item.id == "") && (item.eTag == "")){
 			// These are empty ... we cannot delete if this is empty ....
+			log.vdebug("item.driveId, item.id & item.eTag are empty ... need to query OneDrive for values");
+			log.vdebug("Checking OneDrive for path: ", path);
 			JSONValue onedrivePathDetails = onedrive.getPathDetails(path); // Returns a JSON String for the OneDrive Path
+			log.vdebug("OneDrive path details: ", onedrivePathDetails);
 			item.driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
 			item.id = onedrivePathDetails["id"].str; // This item's ID. Should give something like 12345ABCDE1234A1!101
 			item.eTag = onedrivePathDetails["eTag"].str; // Should be something like aNjM2NjJFRUVGQjY2NjJFMSE5MzUuMA
@@ -1757,11 +1805,41 @@ final class SyncEngine
 		try {
 			onedrive.deleteById(item.driveId, item.id, item.eTag);
 		} catch (OneDriveException e) {
-			if (e.httpStatusCode == 404) log.vlog("OneDrive reported: The resource could not be found.");
-			else throw e;
+			if (e.httpStatusCode == 404) {
+				// item.id, item.eTag could not be found on driveId
+				log.vlog("OneDrive reported: The resource could not be found.");
+			}
+			
+			else {
+				// Not a 404 response .. is this a 403 response due to OneDrive Business Retention Policy being enabled?
+				if ((e.httpStatusCode == 403) && (accountType != "personal")) {
+					auto errorArray = splitLines(e.msg);
+					JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+					if (errorMessage["error"]["message"].str == "Request was cancelled by event received. If attempting to delete a non-empty folder, it's possible that it's on hold") {
+						// Issue #338 - Unable to delete OneDrive content when OneDrive Business Retention Policy is enabled
+						// TODO: We have to recursively delete all files & folders from this path to delete
+						// WARN: 
+						log.error("\nERROR: Unable to delete the requested remote path from OneDrive: ", path);
+						log.error("ERROR: This error is due to OneDrive Business Retention Policy being applied");
+						log.error("WORKAROUND: Manually delete all files and folders from the above path as per Business Retention Policy\n");
+					}
+				} else {
+					// Not a 403 response & OneDrive Business Account / O365 Shared Folder / Library
+					log.log("\n\nOneDrive returned an error with the following message:\n");
+					auto errorArray = splitLines(e.msg);
+					log.log("Error Message: ", errorArray[0]);
+					// extract 'message' as the reason
+					JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+					log.log("Error Reason:  ", errorMessage["error"]["message"].str);
+					return;
+				}
+			}
 		}
+		
+		// delete the reference in the local database
 		itemdb.deleteById(item.driveId, item.id);
 		if (item.remoteId != null) {
+			// If the item is a remote item, delete the reference in the local database
 			itemdb.deleteById(item.remoteDriveId, item.remoteId);
 		}
 	}
@@ -1904,24 +1982,30 @@ final class SyncEngine
 		
 		string site_id;
 		string drive_id;
+		string webUrl;
+		bool found = false;
 		JSONValue siteQuery = onedrive.o365SiteSearch(encodeComponent(o365SharedLibraryName));
+		
+		log.log("Office 365 Library Name Query: ", o365SharedLibraryName);
 		
 		foreach (searchResult; siteQuery["value"].array) {
 			// Need an 'exclusive' match here with o365SharedLibraryName as entered
 			if (o365SharedLibraryName == searchResult["displayName"].str){
 				// 'displayName' matches search request
 				site_id = searchResult["id"].str;
+				webUrl = searchResult["webUrl"].str;
 				JSONValue siteDriveQuery = onedrive.o365SiteDrives(site_id);
 				foreach (driveResult; siteDriveQuery["value"].array) {
-					drive_id = driveResult["id"].str;
+					// Display results
+					found = true;
+					writeln("SiteName: ", searchResult["displayName"].str);
+					writeln("drive_id: ", driveResult["id"].str);
+					writeln("URL:      ", webUrl);
 				}
 			}
 		}
 		
-		log.log("Office 365 Library Name: ", o365SharedLibraryName);
-		if(drive_id != null) {
-			log.log("drive_id: ", drive_id);
-		} else {
+		if(!found) {
 			writeln("ERROR: This site could not be found. Please check it's name and your permissions to access the site.");
 		}
 	}

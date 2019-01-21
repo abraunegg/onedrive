@@ -17,7 +17,7 @@ A complete tool to interact with OneDrive on Linux. Built following the UNIX phi
 ## Build Requirements
 *   Build environment must have at least 1GB of memory & 1GB swap space
 *   [libcurl](http://curl.haxx.se/libcurl/)
-*   [SQLite 3](https://www.sqlite.org/)
+*   [SQLite 3](https://www.sqlite.org/) >= 3.7.15
 *   [Digital Mars D Compiler (DMD)](http://dlang.org/download.html)
 
 ### Dependencies: Ubuntu/Debian - x86_64
@@ -80,6 +80,17 @@ curl -fsS https://dlang.org/install.sh | bash -s dmd
 For notifications the following is necessary:
 ```text
 sudo yum install libnotify-devel
+```
+
+### Dependencies: CentOS 6.x / RHEL 6.x
+In addition to the above requirements, the `sqlite` version used on CentOS 6.x / RHEL 6.x needs to be upgraded. Use the following instructions to update your version of `sqlite` so that it can support the client:
+```text
+sudo yum -y update
+sudo yum -y install epel-release, wget
+sudo yum -y install mock
+wget https://kojipkgs.fedoraproject.org//packages/sqlite/3.7.15.2/2.fc19/src/sqlite-3.7.15.2-2.fc19.src.rpm
+sudo mock --rebuild sqlite-3.7.15.2-2.fc19.src.rpm
+sudo yum -y upgrade /var/lib/mock/epel-6-{arch}/result/sqlite-*
 ```
 
 ### Dependencies: Fedora > Version 18
@@ -169,11 +180,14 @@ sudo make install
 ```
 
 ### Build options
+
+By passing `PKGCONFIG=1` to the `make` call, necessary libraries (`sqlite3`,
+`curl`, and `libnotify` for notifications) are searched for using `pkg-config`
+instead of using the hard-coded values.
+
 By passing `NOTIFICATIONS=1` to the `make` call, notifications via
-libnotify are enabled. Necessary libraries are 
-`gmodule-2.0`, `glib-2.0`, and `notify`. If these libraries are
-named differently on the build system, the make variable
-`DFLAGSNOTIFICATIONS` can be adjusted.
+libnotify are enabled. If `pkg-config` is not used (see above), the necessary
+libraries are `gmodule-2.0`, `glib-2.0`, and `notify`.
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
 #### Debian - i386 / i686
@@ -329,6 +343,14 @@ An example of the log file is below:
 2018-Apr-07 17:09:38.0263547 Uploading new items of .
 2018-Apr-07 17:09:38.5708652 Applying changes of Path ID: <redacted>
 ```
+
+### Notifications
+If notification support is compiled in, the following events will trigger a notification within the display manager session:
+*   Aborting a sync if .nosync file is found
+*   Cannot create remote directory
+*   Cannot upload file changes
+*   Cannot delete remote file / folder
+*   Cannot move remote file / folder
 
 ### Uninstall
 ```text
