@@ -251,6 +251,7 @@ Config option 'sync_dir'            = /home/alex/OneDrive
 Config option 'skip_file'           = ~*
 Config option 'skip_symlinks'       = false
 Config option 'monitor_interval'    = 45
+Config option 'min_notif_changes'   = 5
 Config option 'log_dir'             = /var/log/onedrive/
 Selective sync configured           = false
 ```
@@ -380,6 +381,7 @@ Available options:
 *   `skip_file`: any files or directories that match this pattern will be skipped during sync
 *   `skip_symlinks`: any files or directories that are symlinked will be skipped during sync
 *   `monitor_interval`: time interval in seconds by which the monitor process will process local and remote changes
+*   `min_notif_changes`: minimum number of pending incoming changes to trigger a desktop notification
 
 ### sync_dir
 Example: `sync_dir="~/MyDirToSync"`
@@ -405,6 +407,11 @@ Setting this to `"true"` will skip all symlinks while syncing.
 Example: `monitor_interval = "300"`
 
 The monitor interval is defined as the wait time 'between' sync's when running in monitor mode. By default without configuration, the monitor_interval is set to 45 seconds. Setting this value to 300 will run the sync process every 5 minutes.
+
+### min_notif_changes
+Example: `min_notif_changes = "5"`
+
+This option defines the minimum number of pending incoming changes necessary to trigger a desktop notification. This allows controlling the frequency of notifications.
 
 ### Selective sync
 Selective sync allows you to sync only specific files and directories.

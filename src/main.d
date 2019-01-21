@@ -298,6 +298,7 @@ int main(string[] args)
 		writeln("Config option 'skip_file'           = ", cfg.getValue("skip_file"));
 		writeln("Config option 'skip_symlinks'       = ", cfg.getValue("skip_symlinks"));
 		writeln("Config option 'monitor_interval'    = ", cfg.getValue("monitor_interval"));
+		writeln("Config option 'min_notif_changes'   = ", cfg.getValue("min_notif_changes"));
 		writeln("Config option 'log_dir'             = ", cfg.getValue("log_dir"));
 		
 		// Is config option drive_id configured?

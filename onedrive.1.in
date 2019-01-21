@@ -147,6 +147,10 @@ skip symbolic links during sync, defaults to \fB"false"\fP
 the number of seconds by which each sync operation is undertaken when
 idle under monitor mode, defaults to \fB"45"\fP
 .TP
+\fBmin_notif_changes\fP
+the minimum number of pending incoming changes necessary to trigger
+a desktop notification, defaults to \fB"5"\fP
+.TP
 \fBlog_dir\fP
 defines the directory where logging output is saved to, needs to end with a slash
 .PP
