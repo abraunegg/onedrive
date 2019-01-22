@@ -77,6 +77,26 @@ int main(string[] args)
 	// print the version and exit
 	bool printVersion = false;
 	
+
+	auto cfg2settingBool = [
+		"upload_only": &uploadOnly,
+		"check_for_nomount": &checkMount,
+		"download_only": &downloadOnly,
+		"disable_notifications": &disableNotifications,
+		"disable_upload_validation": &disableUploadValidation,
+		"enable_logging": &enableLogFile,
+		"force_http_11": &forceHTTP11,
+		"local_first": &localFirst,
+		"no_remote_delete": &noRemoteDelete,
+		"skip_symlinks": &skipSymlinks,
+		"verbose": &verbose
+			];
+	auto cfg2settingString = [
+		"single_directory": &singleDirectory,
+		"syncdir": &syncDirName
+			];
+
+
 	// Application Startup option validation
 	try {
 		auto opt = getopt(
@@ -204,6 +224,21 @@ int main(string[] args)
 		return EXIT_FAILURE;
 	}
 	
+	foreach (cfgKey, p; cfg2settingBool) {
+		if (*p) {
+			// the user passed in an alternate setting via cmd line
+			log.vdebug("CLI override to set", cfgKey, "to true");
+			cfg.setValue(cfgKey, "true");
+		}
+	}
+	foreach (cfgKey, p; cfg2settingString) {
+		if (*p) {
+			// the user passed in an alternate setting via cmd line
+			log.vdebug("CLI override to set", cfgKey, "to", *p);
+			cfg.setValue(cfgKey, *p);
+		}
+	}
+
 	// command line parameters to override default 'config' & take precedence
 	// Set the client to skip symbolic links if --skip-symlinks was passed in
 	if (skipSymlinks) {
