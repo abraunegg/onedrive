@@ -17,18 +17,18 @@ docker pull driveone/onedrive
 
 ### 2. Prepare required stuff
 
-Onedrive needs two volumns. One is config volumn, which is recommanded to be a docker volumn. You can create it with:
+Onedrive needs two volumes. One is config volume, which is recommanded to be a docker volume. You can create it with:
 ```bash
 docker volume create onedrive_conf;
 ```
 
-This will create a docker volumn labeled 'onedrive_conf', which we will use it later.
+This will create a docker volume labeled 'onedrive_conf', which we will use it later.
 
 The second one is your data folder that needs to sync with. The owner of the folder must not be root, and you must have permission to its parent directory (because onedrive will try to setup a monitor for the sync folder).
 
 ### 3. First run
 
-Onedrive also needs to be authurized with your account. This is done by running docker in interactive mode. 
+Onedrive also needs to be authorized with your account. This is done by running docker in interactive mode. 
 
 **make sure to change onedriveDir to your own.**
 ```bash
@@ -40,7 +40,7 @@ You will be asked to open a specific link using your web browser where you will 
 
 If your onedrive is working as expected, you can detach from the container with Ctrl+p, Ctrl+q.
 
-### 4. Status, stop, and restart, etc.
+### 4. Status, stop, and restart
 
 Check if monitor service is running
 ```bash
@@ -67,9 +67,9 @@ Unregister onedrive monitor
 docker rm -f onedrive
 ```
 
-### 5. Eidt the config
+### 5. Edit the config
 
-Onedrive should run in default configuration, but however you can change your configuration. First download the default config from [https://raw.githubusercontent.com/abraunegg/onedrive/master/config] and put it into your onedrive_conf volumn. The detailed document can be found here: [https://github.com/abraunegg/onedrive#additional-configuration]
+Onedrive should run in default configuration, but however you can change your configuration. First download the default config from [here](https://raw.githubusercontent.com/abraunegg/onedrive/master/config) and put it into your onedrive_conf volumn. The detailed document can be found here: [additional-configuration](https://github.com/abraunegg/onedrive#additional-configuration)
 
 ## Run or update with one script
 If you are experienced with docker and onedrive, you can use the following script:
