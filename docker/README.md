@@ -6,16 +6,16 @@ This container offers simple monitoring-mode service for 'Free Client for OneDri
 
 ## Usage instructions
 
-0. Install the docker under your own platform's instructions
+### 0. Install the docker under your own platform's instructions 
 
-1. Pull the image
+### 1. Pull the image
 
 ```bash
 docker pull driveone/onedrive
 ```
 **NOTE:** SELinux context needs to be configured or disabled for Docker, to be able to write to OneDrive host directory.
 
-2. Prepare required stuff
+### 2. Prepare required stuff
 
 Onedrive needs two volumns. One is config volumn, which is recommanded to be a docker volumn. You can create it with:
 ```bash
@@ -26,7 +26,7 @@ This will create a docker volumn labeled 'onedrive_conf', which we will use it l
 
 The second one is your data folder that needs to sync with. The owner of the folder must not be root, and you must have permission to its parent directory (because onedrive will try to setup a monitor for the sync folder).
 
-3. First run
+### 3. First run
 
 Onedrive also needs to be authurized with your account. This is done by running docker in interactive mode. 
 
@@ -40,7 +40,7 @@ You will be asked to open a specific link using your web browser where you will 
 
 If your onedrive is working as expected, you can detach from the container with Ctrl+p, Ctrl+q.
 
-4. Status, stop, and restart, etc.
+### 4. Status, stop, and restart, etc.
 
 Check if monitor service is running
 ```bash
@@ -67,7 +67,7 @@ Unregister onedrive monitor
 docker rm -f onedrive
 ```
 
-5. Eidt the config
+### 5. Eidt the config
 
 Onedrive should run in default configuration, but however you can change your configuration. First download the default config from [https://raw.githubusercontent.com/abraunegg/onedrive/master/config] and put it into your onedrive_conf volumn. The detailed document can be found here: [https://github.com/abraunegg/onedrive#additional-configuration]
 
