@@ -1826,12 +1826,15 @@ final class SyncEngine
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_move
+	// This function is only called in monitor mode when an move event is coming from
+	// inotify and we try to move the item.
 	void uploadMoveItem(string from, string to)
 	{
 		log.log("Moving ", from, " to ", to);
 		Item fromItem, toItem, parentItem;
 		if (!itemdb.selectByPath(from, defaultDriveId, fromItem)) {
-			throw new SyncException("Can't move an unsynced item");
+			uploadNewFile(to);
+			return;
 		}
 		if (fromItem.parentId == null) {
 			// the item is a remote folder, need to do the operation on the parent
