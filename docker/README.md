@@ -17,18 +17,25 @@ docker pull driveone/onedrive
 
 ### 2. Prepare required stuff
 
-Onedrive needs two volumes. One is config volume, which is recommanded to be a docker volume. You can create it with:
+Onedrive needs two volumes. One of them is the config volume. 
+
+If you dont't need an extra config file, You can create a docker volume:
 ```bash
 docker volume create onedrive_conf;
 ```
 
 This will create a docker volume labeled 'onedrive_conf', which we will use it later.
 
-The second one is your data folder that needs to sync with. The owner of the folder must not be root, and you must have permission to its parent directory (because onedrive will try to setup a monitor for the sync folder).
+The second one is your data folder that needs to sync with. Keep in mind that:
+
+- The owner of the folder must not be root
+- The owner have permission to its parent directory  
+  (because onedrive will try to setup a monitor for the sync folder).
 
 ### 3. First run
 
-Onedrive also needs to be authorized with your account. This is done by running docker in interactive mode. 
+Onedrive also needs to be authorized with your account.  
+This is done by running docker in interactive mode. 
 
 **make sure to change onedriveDir to your own.**
 ```bash
@@ -36,7 +43,10 @@ onedriveDir="${HOME}/OneDrive"
 docker run -it --restart unless-stopped --name onedrive -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive
 ```
 
-You will be asked to open a specific link using your web browser where you will have to login into your Microsoft Account and give the application the permission to access your files. After giving the permission, you will be redirected to a blank page. Copy the URI of the blank page into the application.
+- You will be asked to open a specific link using your web browser 
+- login into your Microsoft Account and give the application the permission  
+- After giving the permission, you will be redirected to a blank page.  
+- Copy the URI of the blank page into the application.
 
 If your onedrive is working as expected, you can detach from the container with Ctrl+p, Ctrl+q.
 
@@ -69,7 +79,14 @@ docker rm -f onedrive
 
 ### 5. Edit the config
 
-Onedrive should run in default configuration, but however you can change your configuration. First download the default config from [here](https://raw.githubusercontent.com/abraunegg/onedrive/master/config) and put it into your onedrive_conf volumn. The detailed document can be found here: [additional-configuration](https://github.com/abraunegg/onedrive#additional-configuration)
+Onedrive should run in default configuration, but however you can change your configuration.  
+
+First download the default config from [here](https://raw.githubusercontent.com/abraunegg/onedrive/master/config)   
+Then put it into your onedrive_conf volume: `/var/lib/docker/volumes/onedrive_conf/_data`
+
+Or you can map your own config folder to config volume (copy stuffs from docker volume first)
+
+The detailed document for the config can be found here: [additional-configuration](https://github.com/abraunegg/onedrive#additional-configuration)
 
 ## Run or update with one script
 If you are experienced with docker and onedrive, you can use the following script:
@@ -87,6 +104,6 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 ## Build instructions
 ```bash
 git clone https://github.com/abraunegg/onedrive
-cd onedrive/docker
-docker build . -t driveone/onedrive
+cd onedrive
+docker build . -f docker/Dockerfile -t driveone/onedrive
 ```
