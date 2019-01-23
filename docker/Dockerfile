@@ -16,7 +16,7 @@ RUN yum install -y make git gcc libcurl-devel sqlite-devel && \
     && gosu nobody true
 RUN mkdir -p /onedrive/conf /onedrive/data
 COPY onedrive /usr/src/onedrive
-RUN . "`bash install.sh -a`" && \
+RUN . "$(bash install.sh -a)" && \
     make -C /usr/src/onedrive install.noservice && \
     make -C /usr/src/onedrive clean
 COPY entrypoint.sh /entrypoint.sh
