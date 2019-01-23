@@ -91,7 +91,11 @@ docker rm -f onedrive
 Onedrive should run in default configuration, but however you can change your configuration.  
 
 First download the default config from [here](https://raw.githubusercontent.com/abraunegg/onedrive/master/config)  
-Then put it into your onedrive_conf volume: `/var/lib/docker/volumes/onedrive_conf/_data`
+Then put it into your onedrive_conf volume path, which can be found with:  
+
+```bash
+docker volume inspect onedrive_conf
+```
 
 Or you can map your own config folder to config volume (copy stuffs from docker volume first)
 
@@ -116,6 +120,7 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 
 ```bash
 git clone https://github.com/abraunegg/onedrive
-cd onedrive
-docker build . -f docker/Dockerfile -t driveone/onedrive
+cd onedrive/docker
+git clone https://github.com/abraunegg/onedrive
+docker build . -t driveone/onedrive
 ```
