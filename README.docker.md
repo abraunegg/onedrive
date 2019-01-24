@@ -43,8 +43,7 @@ docker start onedrive
 docker rm -f onedrive
 ```
 ## Build instructions
+You can also build your own image instead of pulling the one from dockerhub:
 ```bash
-cd docker
-git clone https://github.com/abraunegg/onedrive
-docker build . -t driveone/onedrive
+docker build . -t onedrive
 ```
