@@ -1,4 +1,4 @@
-FROM centos
+FROM centos:7
 ENV GOSU_VERSION=1.11
 
 RUN yum install -y make git gcc libcurl-devel sqlite-devel && \
@@ -15,12 +15,11 @@ RUN yum install -y make git gcc libcurl-devel sqlite-devel && \
     && chmod +x /usr/local/bin/gosu \
     && gosu nobody true
 RUN mkdir -p /onedrive/conf /onedrive/data
-ADD . /usr/src/onedrive
-RUN . `bash install.sh -a` && \
-    cd /usr/src/onedrive && \
-    make install.noservice && \
-    make clean
-ADD entrypoint.sh /entrypoint.sh
+COPY . /usr/src/onedrive
+RUN . "$(bash install.sh -a)" && \
+    make -C /usr/src/onedrive install.noservice && \
+    make -C /usr/src/onedrive clean
+COPY entrypoint.sh /entrypoint.sh
 VOLUME ["/onedrive/conf"]
 
 ENTRYPOINT ["/entrypoint.sh"]
