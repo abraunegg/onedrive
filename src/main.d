@@ -15,11 +15,44 @@ int main(string[] args)
 	// Disable buffering on stdout
 	stdout.setvbuf(0, _IONBF);
 	
+	// configuration directory
+	string configDirName;
+
+	try {
+		// print the version and exit
+		bool printVersion = false;
+		auto opt = getopt(
+			args,
+			std.getopt.config.passThrough,
+			std.getopt.config.bundling,
+			std.getopt.config.caseSensitive,
+			"confdir", "Set the directory used to store the configuration files", &configDirName,
+			"version", "Print the version and exit", &printVersion
+		);
+		// TODO deal with delayed help output!!!
+		if (opt.helpWanted) {
+			outputLongHelp(opt.options);
+			return EXIT_SUCCESS;
+		}
+		if (printVersion) {
+			std.stdio.write("onedrive ", import("version"));
+			return EXIT_SUCCESS;
+		}
+	} catch (GetOptException e) {
+		log.error(e.msg);
+		log.error("Try 'onedrive -h' for more information");
+		return EXIT_FAILURE;
+	} catch (Exception e) {
+		// error
+		log.error(e.msg);
+		log.error("Try 'onedrive -h' for more information");
+		return EXIT_FAILURE;
+	}
+
+
 	// Application Option Variables
 	// Add a check mounts option to resolve https://github.com/abraunegg/onedrive/issues/8
 	bool checkMount = false;
-	// configuration directory
-	string configDirName;
 	// Create a single root directory on OneDrive
 	string createDirectory;
 	// The destination directory if we are using the OneDrive client to rename a directory
@@ -74,8 +107,6 @@ int main(string[] args)
 	bool uploadOnly = false;
 	// enable verbose logging
 	bool verbose = false;
-	// print the version and exit
-	bool printVersion = false;
 	
 
 	auto cfg2settingBool = [
@@ -96,6 +127,12 @@ int main(string[] args)
 		"syncdir": &syncDirName
 			];
 
+
+	//
+	// IDEA TODO TODO
+	// first run of getopt that leaves options (passThrough etc) only for the conffile
+	// then load config files
+	// then second getopt run with all other options overwriting config files options
 
 	// Application Startup option validation
 	try {
@@ -130,7 +167,6 @@ int main(string[] args)
 			"synchronize", "Perform a synchronization", &synchronize,
 			"upload-only", "Only upload to OneDrive, do not sync changes from OneDrive locally", &uploadOnly,
 			"verbose|v+", "Print more details, useful for debugging (repeat for extra debugging)", &log.verbose,
-			"version", "Print the version and exit", &printVersion
 		);
 		if (opt.helpWanted) {
 			outputLongHelp(opt.options);
@@ -155,74 +191,15 @@ int main(string[] args)
 	// Are we able to reach the OneDrive Service
 	bool online = false;
 	
-	// Determine the users home directory. 
-	// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
-	// Check for HOME environment variable
-	if (environment.get("HOME") != ""){
-		// Use HOME environment variable
-		log.vdebug("homePath: HOME environment variable set");
-		homePath = environment.get("HOME");
-	} else {
-		if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
-			// No shell is set or username - observed case when running as systemd service under CentOS 7.x
-			log.vdebug("homePath: WARNING - no HOME environment variable set");
-			log.vdebug("homePath: WARNING - no SHELL environment variable set");
-			log.vdebug("homePath: WARNING - no USER environment variable set");
-			homePath = "/root";
-		} else {
-			// A shell & valid user is set, but no HOME is set, use ~ which can be expanded
-			log.vdebug("homePath: WARNING - no HOME environment variable set");
-			homePath = "~";
-		}
-	}
-	
-	// Output homePath calculation
-	log.vdebug("homePath: ", homePath);
-
-	// Determine the base directory relative to which user specific configuration files should be stored.
-	if (environment.get("XDG_CONFIG_HOME") != ""){
-		log.vdebug("configDirBase: XDG_CONFIG_HOME environment variable set");
-		configDirBase = environment.get("XDG_CONFIG_HOME");
-	} else {
-		// XDG_CONFIG_HOME does not exist on systems where X11 is not present - ie - headless systems / servers
-		log.vdebug("configDirBase: WARNING - no XDG_CONFIG_HOME environment variable set");
-		configDirBase = homePath ~ "/.config";
-	}
-	
-	// Output configDirBase calculation
-	log.vdebug("configDirBase: ", configDirBase);
-	
-	// Determine the correct configuration directory to use
-	if (configDirName != "") {
-		// A CLI 'confdir' was passed in
-		log.vdebug("configDirName: CLI override to set configDirName to: ", configDirName);
-		if (canFind(configDirName,"~")) {
-			// A ~ was found
-			log.vdebug("configDirName: A '~' was found in configDirName, using the calculated 'homePath' to replace '~'");
-			configDirName = homePath ~ strip(configDirName,"~","~");
-		}
-	} else {
-		// Set the default application configuration directory
-		log.vdebug("configDirName: Configuring application to use default config path");
-		// configDirBase contains the correct path so we do not need to check for presence of '~'
-		configDirName = configDirBase ~ "/onedrive";
-	}
-	
-	if (printVersion) {
-		std.stdio.write("onedrive ", import("version"));
-		return EXIT_SUCCESS;
-	}
-
-	// load application configuration
-	log.vlog("Loading config ...");
-	log.vlog("Using Config Dir: ", configDirName);
-	if (!exists(configDirName)) mkdirRecurse(configDirName);
 	auto cfg = new config.Config(configDirName);
 	if(!cfg.init()){
 		// There was an error loading the configuration
 		// Error message already printed
 		return EXIT_FAILURE;
 	}
+
+	config.updateConfigFromCmdLine(args);
+
 	
 	foreach (cfgKey, p; cfg2settingBool) {
 		if (*p) {
