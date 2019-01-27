@@ -3,7 +3,7 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-##  2.2.5 - 2019-01-16
+## 2.2.5 - 2019-01-16
 ### Fixed
 *   Update handling of HTTP 412 - Precondition Failed errors
 *   Update --display-config to display sync_list if configured
@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Add --force-http-1.1 flag to downgrade any HTTP/2 curl operations to HTTP 1.1 protocol
 *   Support building with ldc2 and usage of pkg-config for lib finding
 
-##  2.2.4 - 2018-12-28
+## 2.2.4 - 2018-12-28
 ### Fixed
 *   Resolve JSONException when supplying --get-O365-drive-id option with a string containing spaces
 *   Resolve 'sync_dir' not read from 'config' file when run in Docker container
@@ -34,11 +34,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Add debug handling if syncDir is created
 *   Implement Feature Request: Add status command or switch
 
-##  2.2.3 - 2018-12-20
+## 2.2.3 - 2018-12-20
 ### Fixed
 *   Fix syncdir option is ignored
 
-##  2.2.2 - 2018-12-20
+## 2.2.2 - 2018-12-20
 ### Fixed
 *   Handle short lived files in monitor mode
 *   Provide better log messages, less noise on temporary timeouts
@@ -54,7 +54,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Add very verbose (debug) mode by double -v -v
 *   Implement option --display-config
 
-##  2.2.1 - 2018-12-04
+## 2.2.1 - 2018-12-04
 ### Fixed
 *   Gracefully handle connection errors in monitor mode 
 *   Fix renaming of files when syncing 
@@ -68,7 +68,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Implement --get-O365-drive-id to get correct SharePoint Shared Library (#248)
 *   Docker buildfiles for onedrive service (#262) 
 
-##  2.2.0 - 2018-11-24
+## 2.2.0 - 2018-11-24
 ### Fixed
 *   Updated client to output additional logging when debugging
 *   Resolve database assertion failure due to authentication
@@ -80,13 +80,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Change '--download' to '--download-only' to align with '--upload-only'
 *   Change logging so that logging to a separate file is no longer the default
 
-##  2.1.6 - 2018-11-15
+## 2.1.6 - 2018-11-15
 ### Fixed
 *   Updated HTTP/2 transport handling when using curl 7.62.0 for session uploads
 ### Added
 *   Added PKGBUILD for makepkg for building packages under Arch Linux
 
-##  2.1.5 - 2018-11-11
+## 2.1.5 - 2018-11-11
 ### Fixed
 *   Resolve 'Key not found: path' when syncing from some shared folders due to OneDrive API change
 *   Resolve to only upload changes on remote folder if the item is in the database - dont assert if false
@@ -99,12 +99,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Updated Makefile to use 'install -D -m 644' rather than 'cp -raf'
 *   Updated default config to be aligned to code defaults
 
-##  2.1.4 - 2018-10-10
+## 2.1.4 - 2018-10-10
 ### Fixed
 *   Resolve syncing of OneDrive Personal Shared Folders due to OneDrive API change
 *   Resolve incorrect systemd installation location(s) in Makefile
 
-##  2.1.3 - 2018-10-04
+## 2.1.3 - 2018-10-04
 ### Fixed
 *   Resolve File download fails if the file is marked as malware in OneDrive
 *   Resolve high CPU usage when running in monitor mode
@@ -117,7 +117,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 *   Update Travis CI building to test build on ARM64
 
-##  2.1.2 - 2018-08-27
+## 2.1.2 - 2018-08-27
 ### Fixed
 *   Resolve skipping of symlinks in monitor mode
 *   Resolve Gateway Timeout - JSONValue is not an object
@@ -128,7 +128,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Resolve Correctly handle file case sensitivity issues in same folder
 *   Update unit files documentation link
 
-##  2.1.1 - 2018-08-14
+## 2.1.1 - 2018-08-14
 ### Fixed
 *   Fix handling no remote delete of remote directories when using --no-remote-delete
 *   Fix handling of no permission to access a local file / corrupt local file
@@ -136,7 +136,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 *   Build instructions for openSUSE Leap 15.0
 
-##  2.1.0 - 2018-08-10
+## 2.1.0 - 2018-08-10
 ### Fixed
 *   Fix handling of database exit scenarios when there is zero disk space left on drive where the items database resides
 *   Fix handling of incorrect database permissions
@@ -154,21 +154,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Travis CI files to automate building on x32, x64 and ARM32 architectures
 *   Travis CI files to test built application against valid, invalid and problem files from previous issues
 
-##  2.0.2 - 2018-07-18
+## 2.0.2 - 2018-07-18
 ### Fixed
 *   Fix systemd service install for builds with DESTDIR defined
 *   Fix 'HTTP 412 - Precondition Failed' error handling
 *   Gracefully handle OneDrive account password change
 *   Update logic handling of --upload-only and --local-first
 
-##  2.0.1 - 2018-07-11
+## 2.0.1 - 2018-07-11
 ### Fixed
 *   Resolve computeQuickXorHash generates a different hash when files are > 64Kb
 
-##  2.0.0 - 2018-07-10
+## 2.0.0 - 2018-07-10
 ### Fixed
 *   Resolve conflict resolution issue during syncing - the client does not handle conflicts very well & keeps on adding the hostname to files
-*   Resolve Skilion #356 by adding additional check for 409 response from OneDrive
+*   Resolve skilion #356 by adding additional check for 409 response from OneDrive
 *   Resolve multiple versions of file shown on website after single upload
 *   Resolve to gracefully fail when 'onedrive' process cannot get exclusive database lock
 *   Resolve 'Key not found: fileSystemInfo' when then item is a remote item (OneDrive Personal)
@@ -188,12 +188,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Update sync_dir handling to use the absolute path for setting parameter to something other than ~/OneDrive via config file or command line
 *   Update Fedora build instructions
 
-##  1.1.2 - 2018-05-17
+## 1.1.2 - 2018-05-17
 ### Fixed
 *   Fix 4xx errors including (412 pre-condition, 409 conflict)
 *   Fix Key not found: lastModifiedDateTime (OneDrive API change)
 *   Fix configuration directory not found when run via init.d
-*   Fix Skillion Issues #73, #121, #132, #224, #257, #294, #295, #297, #298, #300, #306, #315, #320, #329, #334, #337, #341
+*   Fix skilion Issues #73, #121, #132, #224, #257, #294, #295, #297, #298, #300, #306, #315, #320, #329, #334, #337, #341
 ### Added
 *   Add logging - log client activities to a file (/var/log/onedrive/%username%.onedrive.log or ~/onedrive.log)
 *   Add https debugging as a flag
@@ -211,17 +211,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Add upload file size validation & retry if does not match
 *   Add graceful handling of some fatal errors (OneDrive 5xx error handling)
 
-##  Unreleased - 2018-02-19
+## Unreleased - 2018-02-19
 ### Fixed
 *   Crash when the delta link is expired
 ### Changed
 *   Disabled buffering on stdout
 
-##  1.1.1 - 2018-01-20
+## 1.1.1 - 2018-01-20
 ### Fixed
 *   Wrong regex for parsing authentication uri
 
-##  1.1.0 - 2018-01-19
+## 1.1.0 - 2018-01-19
 ### Added
 *   Support for shared folders (OneDrive Personal only)
 *   `--download` option to only download changes
@@ -230,7 +230,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Print logs on stdout instead of stderr
 *   Improve log messages
 
-##  1.0.1 - 2017-08-01
+## 1.0.1 - 2017-08-01
 ### Added
 *   `--syncdir` option
 ### Changed
@@ -239,6 +239,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Fixed
 *   Fix crash caused by remotely deleted and recreated directories
 
-##  1.0.0 - 2017-07-14
+## 1.0.0 - 2017-07-14
 ### Added
 *   `--version` option
