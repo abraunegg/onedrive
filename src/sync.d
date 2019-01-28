@@ -582,7 +582,6 @@ final class SyncEngine
 			if (("value" in changes) != null) {
 				auto nrChanges = count(changes["value"].array);
 
-
 				if (nrChanges >= to!long(cfg.getValue("min_notif_changes"))) {
 					log.logAndNotify("Processing ", nrChanges, " changes");
 				} else {
