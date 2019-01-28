@@ -60,6 +60,15 @@ class NotificationError : Exception {
 
 void init(in char[] name) {
     notify_init(name.toStringz());
+    // notify_init might return without dbus server actually started
+    // try to check for running dbus server
+    char **ret_name;
+    char **ret_vendor;
+    char **ret_version;
+    char **ret_spec_version;
+    if (!notify_get_server_info(ret_name, ret_vendor, ret_version, ret_spec_version)) {
+	    throw new NotificationError("Cannot find dbus server!");
+    }
 }
 
 alias notify_is_initted is_initted;
