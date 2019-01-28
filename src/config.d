@@ -41,6 +41,8 @@ final class Config
 		setValue("log_dir", "/var/log/onedrive/");
 		// Configure a default empty value for drive_id
 		setValue("drive_id", "");
+		// Minimal changes that trigger a log and notification on sync
+		setValue("min_notif_changes", "5");
 		
 		if (!load(userConfigFilePath)) {
 			// What was the reason for failure?

@@ -5,6 +5,7 @@ import std.exception: enforce;
 import std.file, std.json, std.path;
 import std.regex;
 import std.stdio, std.string, std.uni, std.uri;
+import std.conv;
 import core.time, core.thread;
 import core.stdc.stdlib;
 import config, itemdb, onedrive, selective, upload, util;
@@ -579,8 +580,14 @@ final class SyncEngine
 			
 			// Are there any changes to process?
 			if (("value" in changes) != null) {
-				// There are valid changes
-				log.vdebug("Number of changes from OneDrive to process: ", count(changes["value"].array));
+				auto nrChanges = count(changes["value"].array);
+
+				if (nrChanges >= to!long(cfg.getValue("min_notif_changes"))) {
+					log.logAndNotify("Processing ", nrChanges, " changes");
+				} else {
+					// There are valid changes
+					log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
+				}
 				
 				foreach (item; changes["value"].array) {
 					bool isRoot = false;
