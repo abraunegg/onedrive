@@ -30,7 +30,7 @@ This will create a docker volume labeled 'onedrive_conf', which we will use it l
 
 The second one is your data folder that needs to sync with. Keep in mind that:
 
--   The owner of the folder must not be root
+-   The owner of the folder must **NOT** be root
 
 -   The owner have permission to its parent directory  
     (because onedrive will try to setup a monitor for the sync folder).
@@ -43,7 +43,7 @@ This is done by running docker in interactive mode.
 **make sure to change onedriveDir to your own.**
 
 ```bash
-onedriveDir="${HOME}/OneDrive"
+onedriveDir="/FULL/PATH/TO/YOUR/LOCAL/SYNC/DIR"
 docker run -it --restart unless-stopped --name onedrive -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive
 ```
 
