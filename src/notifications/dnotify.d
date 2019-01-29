@@ -6,7 +6,6 @@ private {
     import std.traits : isPointer, isArray;
     import std.variant : Variant;
     import std.array : appender;
-    import std.stdio : writeln;
     
     import deimos.notify.notify;
 }
@@ -58,9 +57,7 @@ class NotificationError : Exception {
     }
 }
 
-
-void init(in char[] name) {
-    notify_init(name.toStringz());
+bool check_availability() {
     // notify_init might return without dbus server actually started
     // try to check for running dbus server
     char **ret_name;
@@ -69,17 +66,14 @@ void init(in char[] name) {
     char **ret_spec_version;
     bool ret;
     try {
-	writeln("trying to get info from server!");
-	ret = notify_get_server_info(ret_name, ret_vendor, ret_version, ret_spec_version);
-	if (!ret) {
-	    writeln("trying to get info from server!");
-	} else {
-	    writeln("get server info success: ", ret_name, ret_vendor, ret_spec_version);
-	}
+	return notify_get_server_info(ret_name, ret_vendor, ret_version, ret_spec_version);
     } catch (NotificationError e) {
-	    writeln("didn't work");
 	throw new NotificationError("Cannot find dbus server!");
     }
+}
+
+void init(in char[] name) {
+    notify_init(name.toStringz());
 }
 
 alias notify_is_initted is_initted;
