@@ -69,8 +69,13 @@ void init(in char[] name) {
     char **ret_spec_version;
     bool ret;
     try {
+	writeln("trying to get info from server!");
+	ret = notify_get_server_info(ret_name, ret_vendor, ret_version, ret_spec_version);
+	if (!ret) {
 	    writeln("trying to get info from server!");
-	    ret = notify_get_server_info(ret_name, ret_vendor, ret_version, ret_spec_version);
+	} else {
+	    writeln("get server info success: ", ret_name, ret_vendor, ret_spec_version);
+	}
     } catch (NotificationError e) {
 	    writeln("didn't work");
 	throw new NotificationError("Cannot find dbus server!");
