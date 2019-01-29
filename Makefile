@@ -1,16 +1,19 @@
 DC ?= dmd
 
-ifdef PKGCONFIG
-	LIBS = $(shell pkg-config --libs sqlite3 libcurl)
+pkgconfig := $(shell if [ $(PKGCONFIG) ] && [ "$(PKGCONFIG)" != 0 ] ; then echo 1 ; else echo "" ; fi)
+notifications := $(shell if [ $(NOTIFICATIONS) ] && [ "$(NOTIFICATIONS)" != 0 ] ; then echo 1 ; else echo "" ; fi)
+
+ifeq ($(pkgconfig),1)
+LIBS = $(shell pkg-config --libs sqlite3 libcurl)
 else
-	LIBS = -lcurl -lsqlite3
+LIBS = -lcurl -lsqlite3
 endif
-ifdef NOTIFICATIONS
-	NOTIF_VERSIONS = -version=NoPragma -version=NoGdk -version=Notifications
-ifdef PKGCONFIG
-	LIBS += $(shell pkg-config --libs libnotify)
+ifeq ($(notifications),1)
+NOTIF_VERSIONS = -version=NoPragma -version=NoGdk -version=Notifications
+ifeq ($(pkgconfig),1)
+LIBS += $(shell pkg-config --libs libnotify)
 else
-	LIBS += -lgmodule-2.0 -lglib-2.0 -lnotify
+LIBS += -lgmodule-2.0 -lglib-2.0 -lnotify
 endif
 endif
 LIBS += -ldl
@@ -53,7 +56,7 @@ SOURCES = \
 	src/util.d \
 	src/progress.d
 
-ifdef NOTIFICATIONS
+ifeq ($(notifications),1)
 SOURCES += src/notifications/notify.d src/notifications/dnotify.d
 endif
 
