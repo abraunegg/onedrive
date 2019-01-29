@@ -6,6 +6,7 @@ private {
     import std.traits : isPointer, isArray;
     import std.variant : Variant;
     import std.array : appender;
+    import std.stdio : writeln;
     
     import deimos.notify.notify;
 }
@@ -66,8 +67,13 @@ void init(in char[] name) {
     char **ret_vendor;
     char **ret_version;
     char **ret_spec_version;
-    if (!notify_get_server_info(ret_name, ret_vendor, ret_version, ret_spec_version)) {
-	    throw new NotificationError("Cannot find dbus server!");
+    bool ret;
+    try {
+	    writeln("trying to get info from server!");
+	    ret = notify_get_server_info(ret_name, ret_vendor, ret_version, ret_spec_version);
+    } catch (NotificationError e) {
+	    writeln("didn't work");
+	throw new NotificationError("Cannot find dbus server!");
     }
 }
 
