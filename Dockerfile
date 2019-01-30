@@ -15,7 +15,7 @@ RUN yum install -y make git gcc libcurl-devel sqlite-devel && \
     && chmod +x /usr/local/bin/gosu \
     && gosu nobody true
 RUN mkdir -p /onedrive/conf /onedrive/data
-COPY onedrive /usr/src/onedrive
+COPY . /usr/src/onedrive
 RUN . "$(bash install.sh -a)" && \
     make -C /usr/src/onedrive install.noservice && \
     make -C /usr/src/onedrive clean
