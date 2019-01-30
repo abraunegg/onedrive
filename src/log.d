@@ -47,7 +47,7 @@ void setNotifications(bool value)
 		if (value) {
 			auto serverAvailable = dnotify.check_availability();
 			if (!serverAvailable) {
-				log("notification (dbus) server not available, disabling");
+				log("Notification (dbus) server not available, disabling");
 				value = false;
 			}
 		}
