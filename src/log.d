@@ -41,6 +41,17 @@ void init(string logDir)
 
 void setNotifications(bool value)
 {
+	version(Notifications) {
+		// if we try to enable notifications, check for server availability
+		// and disable in case dbus server is not reachable
+		if (value) {
+			auto serverAvailable = dnotify.check_availability();
+			if (!serverAvailable) {
+				log("Notification (dbus) server not available, disabling");
+				value = false;
+			}
+		}
+	}
 	doNotifications = value;
 }
 
