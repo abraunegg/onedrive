@@ -617,18 +617,18 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 				log.vlog("Syncing changes from this selected path: ", singleDirectory);
 				if (uploadOnly){
 					// Upload Only of selected single directory
-					log.log("Syncing changes from selected local path only - NOT syncing data changes from OneDrive ...");
+					log.vlog("Syncing changes from selected local path only - NOT syncing data changes from OneDrive ...");
 					sync.scanForDifferences(localPath);
 				} else {
 					// No upload only
 					if (localFirst) {
 						// Local First
-						log.log("Syncing changes from selected local path first before downloading changes from OneDrive ...");
+						log.vlog("Syncing changes from selected local path first before downloading changes from OneDrive ...");
 						sync.scanForDifferences(localPath);
 						sync.applyDifferencesSingleDirectory(remotePath);
 					} else {
 						// OneDrive First
-						log.log("Syncing changes from selected OneDrive path ...");
+						log.vlog("Syncing changes from selected OneDrive path ...");
 						sync.applyDifferencesSingleDirectory(remotePath);
 						// is this a download only request?
 						if (!downloadOnly) {
@@ -643,18 +643,18 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 				// no single directory sync
 				if (uploadOnly){
 					// Upload Only of entire sync_dir
-					log.log("Syncing changes from local path only - NOT syncing data changes from OneDrive ...");
+					log.vlog("Syncing changes from local path only - NOT syncing data changes from OneDrive ...");
 					sync.scanForDifferences(localPath);
 				} else {
 					// No upload only
 					if (localFirst) {
 						// sync local files first before downloading from OneDrive
-						log.log("Syncing changes from local path first before downloading changes from OneDrive ...");
+						log.vlog("Syncing changes from local path first before downloading changes from OneDrive ...");
 						sync.scanForDifferences(localPath);
 						sync.applyDifferences();
 					} else {
 						// sync from OneDrive first before uploading files to OneDrive
-						log.log("Syncing changes from OneDrive ...");
+						log.vlog("Syncing changes from OneDrive ...");
 						sync.applyDifferences();
 						// is this a download only request?
 						if (!downloadOnly) {
