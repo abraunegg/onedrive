@@ -198,7 +198,7 @@ libraries are `gmodule-2.0`, `glib-2.0`, and `notify`.
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-make DC=/usr/bin/ldmd2
+make DC=/usr/bin/ldc2
 sudo make install
 ```
 
