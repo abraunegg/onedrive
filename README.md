@@ -20,6 +20,8 @@ A complete tool to interact with OneDrive on Linux. Built following the UNIX phi
 *   [SQLite 3](https://www.sqlite.org/) >= 3.7.15
 *   [Digital Mars D Compiler (DMD)](http://dlang.org/download.html)
 
+**Note:** DMD version >= 2.081.1 or LDC version >= 1.11.0 is required to compile this application
+
 ### Dependencies: Ubuntu/Debian - x86_64
 ```text
 sudo apt install build-essential
@@ -46,25 +48,20 @@ sudo apt install libnotify-dev
 ```
 
 ### Dependencies: Debian - i386 / i686
-**Note:** Validated with `Linux debian-i386 4.9.0-7-686-pae #1 SMP Debian 4.9.110-1 (2018-07-05) i686 GNU/Linux` and LDC - the LLVM D compiler (1.8.0).
+**Note:** Validated with `Linux debian-i386 4.9.0-8-686-pae #1 SMP Debian 4.9.130-2 (2018-10-27) i686 GNU/Linux` and LDC - the LLVM D compiler (1.12.0).
 
 First install development dependencies as per below:
 ```text
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
-sudo apt install git
+sudo apt install git wget
 ```
 Second, install the LDC compiler as per below:
-```text
-mkdir ldc && cd ldc
-wget http://ftp.us.debian.org/debian/pool/main/l/ldc/ldc_1.8.0-3_i386.deb
-wget http://ftp.us.debian.org/debian/pool/main/l/ldc/libphobos2-ldc-shared-dev_1.8.0-3_i386.deb
-wget http://ftp.us.debian.org/debian/pool/main/l/ldc/libphobos2-ldc-shared78_1.8.0-3_i386.deb
-wget http://ftp.us.debian.org/debian/pool/main/l/llvm-toolchain-5.0/libllvm5.0_5.0.1-2~bpo9+1_i386.deb
-wget http://ftp.us.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.1+20180714-1_i386.deb
-sudo dpkg -i ./*.deb
-```
+1. Add `deb http://ftp.us.debian.org/debian sid main` to your `/etc/apt/sources.list`
+2. Run `sudo apt update`
+3. Run `sudo apt install ldc`
+
 For notifications the following is necessary:
 ```text
 sudo apt install libnotify-dev
