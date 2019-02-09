@@ -55,7 +55,7 @@ First install development dependencies as per below:
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
-sudo apt install git wget
+sudo apt install git
 ```
 Second, install the LDC compiler as per below:
 1. Add `deb http://ftp.us.debian.org/debian sid main` to your `/etc/apt/sources.list`
