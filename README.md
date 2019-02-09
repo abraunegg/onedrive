@@ -20,6 +20,8 @@ A complete tool to interact with OneDrive on Linux. Built following the UNIX phi
 *   [SQLite 3](https://www.sqlite.org/) >= 3.7.15
 *   [Digital Mars D Compiler (DMD)](http://dlang.org/download.html)
 
+**Note:** DMD version >= 2.081.1 or LDC version >= 1.11.0 is required to compile this application
+
 ### Dependencies: Ubuntu/Debian - x86_64
 ```text
 sudo apt install build-essential
