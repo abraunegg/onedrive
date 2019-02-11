@@ -1814,21 +1814,28 @@ final class SyncEngine
 				response = onedrive.updateById(driveId, id, data, nullTag);
 			}
 		} 
-		// Check if the response JSON has an 'id', otherwise makeItem() fails with 'Key not found: id'
-		if (hasId(response)) {
-			// save the updated response from OneDrive in the database
-			saveItem(response);
-		}
+		// save the updated response from OneDrive in the database
+		saveItem(response);
 	}
 
 	private void saveItem(JSONValue jsonItem)
 	{
 		// jsonItem has to be a valid object
 		if (jsonItem.object()){
-			// Takes a JSON input and formats to an item which can be used by the database
-			Item item = makeItem(jsonItem);
-			// Add to the local database
-			itemdb.upsert(item);
+			// Check if the response JSON has an 'id', otherwise makeItem() fails with 'Key not found: id'
+			if (hasId(jsonItem)) {
+				// Takes a JSON input and formats to an item which can be used by the database
+				Item item = makeItem(jsonItem);
+				// Add to the local database
+				itemdb.upsert(item);
+			} else {
+				// log error
+				log.error("ERROR: OneDrive response missing required 'id' element:");
+				log.error("ERROR: ", jsonItem);
+			}
+		} else {
+			// log error
+			log.error("ERROR: OneDrive response not a valid JSON object");
 		}
 	}
 
