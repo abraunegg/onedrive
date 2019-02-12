@@ -13,7 +13,28 @@ final class Config
 
 	private string userConfigFilePath;
 	// hashmap for the values found in the user config file
-	private string[string] values;
+	private string[string] values = [
+		"upload_only": 			"false",
+		"check_for_nomount":		"false",
+		"download_only":		"false",
+		"disable_notifications":	"false",
+		"disable_upload_validation":	"false",
+		"enable_logging":		"false",
+		"force_http_11":		"false",
+		"local_first":			"false",
+		"no_remote_delete":		"false",
+		"skip_symlinks":		"false",
+		"debug_https":			"false",
+		"verbose": 			"0",
+		"monitor_interval" :		"45",
+		"min_notif_changes":		"5",
+		"single_directory":		"",
+		"sync_dir": 			"~/OneDrive",
+		"skip_file": 			"~*",
+		"log_dir": 			"/var/log/onedrive/",
+		"drive_id": 			""
+	]:
+
 
 	this(string configDirName)
 	{
@@ -82,26 +103,8 @@ final class Config
 		syncListFilePath = configDirName ~ "/sync_list";
 	}
 
-	bool init()
+	bool initialize()
 	{
-		// Default configuration directory
-		setValue("sync_dir", "~/OneDrive");
-		// Configure to skip ONLY temp files (~*.doc etc) by default
-		// Prior configuration was: .*|~*
-		setValue("skip_file", "~*");
-		// By default symlinks are not skipped (using string type
-		// instead of boolean because hashmap only stores string types)
-		setValue("skip_symlinks", "false");
-		// Configure the monitor mode loop - the number of seconds by which
-		// each sync operation is undertaken when idle under monitor mode
-		setValue("monitor_interval", "45");
-		// Configure the default logging directory to be /var/log/onedrive/
-		setValue("log_dir", "/var/log/onedrive/");
-		// Configure a default empty value for drive_id
-		setValue("drive_id", "");
-		// Minimal changes that trigger a log and notification on sync
-		setValue("min_notif_changes", "5");
-		
 		if (!load(userConfigFilePath)) {
 			// What was the reason for failure?
 			if (!exists(userConfigFilePath)) {
@@ -114,6 +117,72 @@ final class Config
 		}
 		return true;
 	}
+
+
+	bool update_from_args(string[] args)
+	{
+		// Debug the HTTPS submit operations if required
+		bool debugHttp = cfg.getValue("debug_https") == "false" ? false : true;
+		// Do not use notifications in monitor mode
+		bool disableNotifications = cfg.getValue("disable_notifications") == "false" ? false : true;
+		// only download remote changes
+		bool downloadOnly = cfg.getValue("download_only") == "false" ? false : true;
+		// Does the user want to disable upload validation - https://github.com/abraunegg/onedrive/issues/205
+		// SharePoint will associate some metadata from the library the file is uploaded to directly in the file - thus change file size & checksums
+		bool disableUploadValidation = cfg.getValue("disable_upload_validation") == "false" ? false : true;
+		// Do we enable a log file
+		bool enableLogFile = cfg.getValue("enable_logging") == "false" ? false : true;
+		// Force the use of HTTP 1.1 to overcome curl => 7.62.0 where some operations are now sent via HTTP/2
+		// Whilst HTTP/2 operations are handled, in some cases the handling of this outside of the client is not being done correctly (router, other) thus the client breaks
+		// This flag then allows the user to downgrade all HTTP operations to HTTP 1.1 for maximum network path compatibility
+		bool forceHTTP11 = cfg.getValue("force_http_11") == "false" ? false : true;
+		// Local sync - Upload local changes first before downloading changes from OneDrive
+		bool localFirst = cfg.getValue("local_first") == "false" ? false : true;
+		// Add option for no remote delete
+		bool noRemoteDelete = cfg.getValue("no_remote_delete") == "false" ? false : true;
+		// Add option to skip symlinks
+		bool skipSymlinks = cfg.getValue("skip_symlinks") == "false" ? false : true;
+		// override the sync directory
+		string syncDirName = cfg.getValue("sync_dir");
+		// Upload Only
+		bool uploadOnly = cfg.getValue("upload_only") == "false" ? false : true;
+	
+
+		// Application Startup option validation
+		try {
+			auto opt = getopt(
+				args,
+				std.getopt.config.bundling,
+				std.getopt.config.caseSensitive,
+				"check-for-nomount", "Check for the presence of .nosync in the syncdir root. If found, do not perform sync.", &checkMount,
+			"debug-https", "Debug OneDrive HTTPS communication.", &debugHttp,
+			"disable-notifications", "Do not use desktop notifications in monitor mode.", &disableNotifications,
+			"download-only|d", "Only download remote changes", &downloadOnly,
+			"disable-upload-validation", "Disable upload validation when uploading to OneDrive", &disableUploadValidation,
+			"enable-logging", "Enable client activity to a separate log file", &enableLogFile,
+			"force-http-1.1", "Force the use of HTTP 1.1 for all operations", &forceHTTP11,
+			"local-first", "Synchronize from the local directory source first, before downloading changes from OneDrive.", &localFirst,
+			"no-remote-delete", "Do not delete local file 'deletes' from OneDrive when using --upload-only", &noRemoteDelete,
+			"skip-symlinks", "Skip syncing of symlinks", &skipSymlinks,
+			"syncdir", "Specify the local directory used for synchronization to OneDrive", &syncDirName,
+			"upload-only", "Only upload to OneDrive, do not sync changes from OneDrive locally", &uploadOnly,
+		);
+		if (opt.helpWanted) {
+			outputLongHelp(opt.options);
+			return EXIT_SUCCESS;
+		}
+	} catch (GetOptException e) {
+		log.error(e.msg);
+		log.error("Try 'onedrive -h' for more information");
+		return EXIT_FAILURE;
+	} catch (Exception e) {
+		// error
+		log.error(e.msg);
+		log.error("Try 'onedrive -h' for more information");
+		return EXIT_FAILURE;
+	}
+	}
+
 
 	string getValue(string key)
 	{
@@ -155,6 +224,7 @@ final class Config
 				auto p = key in values;
 				if (p) {
 					c.popFront();
+					// TODO add check for correct format (numbers, booleans)
 					setValue(key, c.front.dup);
 				} else {
 					log.log("Unknown key in config file: ", key);
@@ -167,268 +237,6 @@ final class Config
 		}
 		return true;
 	}
-
-	bool updateConfigFromCmdLine(string[] args) {
-
-	auto cfg2settingBool = [
-		"upload_only": &uploadOnly,
-		"check_for_nomount": &checkMount,
-		"download_only": &downloadOnly,
-		"disable_notifications": &disableNotifications,
-		"disable_upload_validation": &disableUploadValidation,
-		"enable_logging": &enableLogFile,
-		"force_http_11": &forceHTTP11,
-		"local_first": &localFirst,
-		"no_remote_delete": &noRemoteDelete,
-		"skip_symlinks": &skipSymlinks,
-		"verbose": &verbose
-			];
-	auto cfg2settingString = [
-		"single_directory": &singleDirectory,
-		"syncdir": &syncDirName
-			];
-
-		void boolHandler(string option) {
-			switch (option) {
-				case "upload_only":
-				case "check_for_nomount":
-				case "download_only":
-				case "disable_notifications":
-				case "disable_upload_validation":
-				case "enable_logging":
-				case "force_http_11":
-				case "local_first":
-				case "no_remote_delete":
-				case "skip_symlinks":
-				case "verbose":
-					setValue(option, "true");
-
-
-
-
-				case "quiet": verbosityLevel = 0; break;
-				case "verbose": verbosityLevel = 2; break;
-				case "shouting": verbosityLevel = verbosityLevel.max; break;
-				default:
-					stderr.writeln("Unknown verbosity level ", value);
-					handlerFailed = true;
-					break;
-			}
-		}
-
-
-		// Application Option Variables
-		// Add a check mounts option to resolve https://github.com/abraunegg/onedrive/issues/8
-		bool checkMount = false;
-		// Create a single root directory on OneDrive
-		string createDirectory;
-		// The destination directory if we are using the OneDrive client to rename a directory
-		string destinationDirectory;
-		// Debug the HTTPS submit operations if required
-		bool debugHttp = false;
-		// Do not use notifications in monitor mode
-		bool disableNotifications = false;
-		// Display application configuration but do not sync
-		bool displayConfiguration = false;
-		// Display sync status
-		bool displaySyncStatus = false;
-		// only download remote changes
-		bool downloadOnly = false;
-		// Does the user want to disable upload validation - https://github.com/abraunegg/onedrive/issues/205
-		// SharePoint will associate some metadata from the library the file is uploaded to directly in the file - thus change file size & checksums
-		bool disableUploadValidation = false;
-		// Do we enable a log file
-		bool enableLogFile = false;
-		// Force the use of HTTP 1.1 to overcome curl => 7.62.0 where some operations are now sent via HTTP/2
-		// Whilst HTTP/2 operations are handled, in some cases the handling of this outside of the client is not being done correctly (router, other) thus the client breaks
-		// This flag then allows the user to downgrade all HTTP operations to HTTP 1.1 for maximum network path compatibility
-		bool forceHTTP11 = false;
-		// SharePoint / Office 365 Shared Library name to query
-		string o365SharedLibraryName;
-		// Local sync - Upload local changes first before downloading changes from OneDrive
-		bool localFirst = false;
-		// remove the current user and sync state
-		bool logout = false;
-		// enable monitor mode
-		bool monitor = false;
-		// Add option for no remote delete
-		bool noRemoteDelete = false;
-		// print the access token
-		bool printAccessToken = false;
-		// force a full resync
-		bool resync = false;
-		// Remove a single directory on OneDrive
-		string removeDirectory;
-		// This allows for selective directory syncing instead of everything under ~/OneDrive/
-		string singleDirectory;
-		// Add option to skip symlinks
-		bool skipSymlinks = false;
-		// The source directory if we are using the OneDrive client to rename a directory
-		string sourceDirectory;
-		// override the sync directory
-		string syncDirName;
-		// Configure a flag to perform a sync
-		// This is beneficial so that if just running the client itself - without any options, or sync check, the client does not perform a sync
-		bool synchronize = false;
-		// Upload Only
-		bool uploadOnly = false;
-		// enable verbose logging
-		bool verbose = false;
-	
-
-
-	//
-	// IDEA TODO TODO
-	// first run of getopt that leaves options (passThrough etc) only for the conffile
-	// then load config files
-	// then second getopt run with all other options overwriting config files options
-
-	// Application Startup option validation
-	try {
-		auto opt = getopt(
-			args,
-			std.getopt.config.bundling,
-			std.getopt.config.caseSensitive,
-			"check-for-nomount", "Check for the presence of .nosync in the syncdir root. If found, do not perform sync.", &checkMount,
-			"confdir", "Set the directory used to store the configuration files", &configDirName,
-			"create-directory", "Create a directory on OneDrive - no sync will be performed.", &createDirectory,
-			"destination-directory", "Destination directory for renamed or move on OneDrive - no sync will be performed.", &destinationDirectory,
-			"debug-https", "Debug OneDrive HTTPS communication.", &debugHttp,
-			"disable-notifications", "Do not use desktop notifications in monitor mode.", &disableNotifications,
-			"display-config", "Display what options the client will use as currently configured - no sync will be performed.", &displayConfiguration,
-			"display-sync-status", "Display the sync status of the client - no sync will be performed.", &displaySyncStatus,
-			"download-only|d", "Only download remote changes", &downloadOnly,
-			"disable-upload-validation", "Disable upload validation when uploading to OneDrive", &disableUploadValidation,
-			"enable-logging", "Enable client activity to a separate log file", &enableLogFile,
-			"force-http-1.1", "Force the use of HTTP 1.1 for all operations", &forceHTTP11,
-			"get-O365-drive-id", "Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library", &o365SharedLibraryName,
-			"local-first", "Synchronize from the local directory source first, before downloading changes from OneDrive.", &localFirst,
-			"logout", "Logout the current user", &logout,
-			"monitor|m", "Keep monitoring for local and remote changes", &monitor,
-			"no-remote-delete", "Do not delete local file 'deletes' from OneDrive when using --upload-only", &noRemoteDelete,
-			"print-token", "Print the access token, useful for debugging", &printAccessToken,
-			"resync", "Forget the last saved state, perform a full sync", &resync,
-			"remove-directory", "Remove a directory on OneDrive - no sync will be performed.", &removeDirectory,
-			"single-directory", "Specify a single local directory within the OneDrive root to sync.", &singleDirectory,
-			"skip-symlinks", "Skip syncing of symlinks", &skipSymlinks,
-			"source-directory", "Source directory to rename or move on OneDrive - no sync will be performed.", &sourceDirectory,
-			"syncdir", "Specify the local directory used for synchronization to OneDrive", &syncDirName,
-			"synchronize", "Perform a synchronization", &synchronize,
-			"upload-only", "Only upload to OneDrive, do not sync changes from OneDrive locally", &uploadOnly,
-			"verbose|v+", "Print more details, useful for debugging (repeat for extra debugging)", &log.verbose,
-		);
-		if (opt.helpWanted) {
-			outputLongHelp(opt.options);
-			return EXIT_SUCCESS;
-		}
-	} catch (GetOptException e) {
-		log.error(e.msg);
-		log.error("Try 'onedrive -h' for more information");
-		return EXIT_FAILURE;
-	} catch (Exception e) {
-		// error
-		log.error(e.msg);
-		log.error("Try 'onedrive -h' for more information");
-		return EXIT_FAILURE;
-	}
-
-	// Main function variables
-	string homePath = "";
-	string configDirBase = "";
-	// Debug the HTTPS response operations if required
-	bool debugHttpSubmit;
-	// Are we able to reach the OneDrive Service
-	bool online = false;
-	
-	auto cfg = new config.Config(configDirName);
-	if(!cfg.init()){
-		// There was an error loading the configuration
-		// Error message already printed
-		return EXIT_FAILURE;
-	}
-
-	config.updateConfigFromCmdLine(args);
-
-	
-	foreach (cfgKey, p; cfg2settingBool) {
-		if (*p) {
-			// the user passed in an alternate setting via cmd line
-			log.vdebug("CLI override to set", cfgKey, "to true");
-			cfg.setValue(cfgKey, "true");
-		}
-	}
-	foreach (cfgKey, p; cfg2settingString) {
-		if (*p) {
-			// the user passed in an alternate setting via cmd line
-			log.vdebug("CLI override to set", cfgKey, "to", *p);
-			cfg.setValue(cfgKey, *p);
-		}
-	}
-
-	// command line parameters to override default 'config' & take precedence
-	// Set the client to skip symbolic links if --skip-symlinks was passed in
-	if (skipSymlinks) {
-		// The user passed in an alternate skip_symlinks as to what was either in 'config' file or application default
-		log.vdebug("CLI override to set skip_symlinks to: true");
-		cfg.setValue("skip_symlinks", "true");
-	}
-	
-	// Set the OneDrive Local Sync Directory if was passed in via --syncdir
-	if (syncDirName) {
-		// The user passed in an alternate sync_dir as to what was either in 'config' file or application default
-		// Do not expandTilde here as we do not know if we reliably can
-		log.vdebug("CLI override to set sync_dir to: ", syncDirName);
-		cfg.setValue("sync_dir", syncDirName);
-	}
-	
-	// sync_dir environment handling to handle ~ expansion properly
-	string syncDir;
-	if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
-		log.vdebug("sync_dir: No SHELL or USER environment variable configuration detected");
-		// No shell or user set, so expandTilde() will fail - usually headless system running under init.d / systemd or potentially Docker
-		// Does the 'currently configured' sync_dir include a ~
-		if (canFind(cfg.getValue("sync_dir"),"~")) {
-			// A ~ was found
-			log.vdebug("sync_dir: A '~' was found in sync_dir, using the calculated 'homePath' to replace '~'");
-			syncDir = homePath ~ strip(cfg.getValue("sync_dir"),"~","~");
-		} else {
-			// No ~ found in sync_dir, use as is
-			log.vdebug("sync_dir: Getting syncDir from config value sync_dir");
-			syncDir = cfg.getValue("sync_dir");
-		}
-	} else {
-		// A shell and user is set, expand any ~ as this will be expanded correctly if present
-		log.vdebug("sync_dir: Getting syncDir from config value sync_dir");
-		if (canFind(cfg.getValue("sync_dir"),"~")) {
-			log.vdebug("sync_dir: A '~' was found in configured sync_dir, automatically expanding as SHELL and USER environment variable is set");
-			syncDir = expandTilde(cfg.getValue("sync_dir"));
-		} else {
-			syncDir = cfg.getValue("sync_dir");
-		}
-	}
-	
-	// vdebug syncDir as set and calculated
-	log.vdebug("syncDir: ", syncDir);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	}
-
-
 }
 
 unittest
