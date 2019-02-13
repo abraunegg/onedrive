@@ -48,7 +48,7 @@ sudo apt install libnotify-dev
 ```
 
 ### Dependencies: Debian - i386 / i686
-**Note:** Validated with `Linux debian-i386 4.9.0-7-686-pae #1 SMP Debian 4.9.110-1 (2018-07-05) i686 GNU/Linux` and LDC - the LLVM D compiler (1.8.0).
+**Note:** Validated with `Linux debian-i386 4.9.0-8-686-pae #1 SMP Debian 4.9.130-2 (2018-10-27) i686 GNU/Linux` and LDC - the LLVM D compiler (1.12.0).
 
 First install development dependencies as per below:
 ```text
@@ -60,11 +60,13 @@ sudo apt install git
 Second, install the LDC compiler as per below:
 ```text
 mkdir ldc && cd ldc
-wget http://ftp.us.debian.org/debian/pool/main/l/ldc/ldc_1.8.0-3_i386.deb
-wget http://ftp.us.debian.org/debian/pool/main/l/ldc/libphobos2-ldc-shared-dev_1.8.0-3_i386.deb
-wget http://ftp.us.debian.org/debian/pool/main/l/ldc/libphobos2-ldc-shared78_1.8.0-3_i386.deb
-wget http://ftp.us.debian.org/debian/pool/main/l/llvm-toolchain-5.0/libllvm5.0_5.0.1-2~bpo9+1_i386.deb
-wget http://ftp.us.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.1+20180714-1_i386.deb
+wget http://httpredir.debian.org/debian/pool/main/g/gcc-8/gcc-8-base_8.2.0-19_i386.deb
+wget http://httpredir.debian.org/debian/pool/main/g/gcc-8/libgcc1_8.2.0-19_i386.deb
+wget http://httpredir.debian.org/debian/pool/main/l/ldc/libphobos2-ldc-shared82_1.12.0-1_i386.deb
+wget http://httpredir.debian.org/debian/pool/main/l/ldc/libphobos2-ldc-shared-dev_1.12.0-1_i386.deb
+wget http://httpredir.debian.org/debian/pool/main/l/ldc/ldc_1.12.0-1_i386.deb
+wget http://httpredir.debian.org/debian/pool/main/l/llvm-toolchain-6.0/libllvm6.0_6.0.1-10_i386.deb
+wget http://httpredir.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.1+20181013-1_i386.deb
 sudo dpkg -i ./*.deb
 ```
 For notifications the following is necessary:
@@ -196,7 +198,7 @@ libraries are `gmodule-2.0`, `glib-2.0`, and `notify`.
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-make DC=/usr/bin/ldmd2
+make DC=/usr/bin/ldc2
 sudo make install
 ```
 
