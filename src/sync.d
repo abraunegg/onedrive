@@ -5,6 +5,7 @@ import std.exception: enforce;
 import std.file, std.json, std.path;
 import std.regex;
 import std.stdio, std.string, std.uni, std.uri;
+import std.conv;
 import core.time, core.thread;
 import core.stdc.stdlib;
 import config, itemdb, onedrive, selective, upload, util;
@@ -581,8 +582,14 @@ final class SyncEngine
 			
 			// Are there any changes to process?
 			if (("value" in changes) != null) {
-				// There are valid changes
-				log.vdebug("Number of changes from OneDrive to process: ", count(changes["value"].array));
+				auto nrChanges = count(changes["value"].array);
+
+				if (nrChanges >= to!long(cfg.getValue("min_notif_changes"))) {
+					log.logAndNotify("Processing ", nrChanges, " changes");
+				} else {
+					// There are valid changes
+					log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
+				}
 				
 				foreach (item; changes["value"].array) {
 					bool isRoot = false;
@@ -1865,31 +1872,41 @@ final class SyncEngine
 				response = onedrive.updateById(driveId, id, data, nullTag);
 			}
 		} 
-		// Check if the response JSON has an 'id', otherwise makeItem() fails with 'Key not found: id'
-		if (hasId(response)) {
-			// save the updated response from OneDrive in the database
-			saveItem(response);
-		}
+		// save the updated response from OneDrive in the database
+		saveItem(response);
 	}
 
 	private void saveItem(JSONValue jsonItem)
 	{
 		// jsonItem has to be a valid object
 		if (jsonItem.object()){
-			// Takes a JSON input and formats to an item which can be used by the database
-			Item item = makeItem(jsonItem);
-			// Add to the local database
-			itemdb.upsert(item);
+			// Check if the response JSON has an 'id', otherwise makeItem() fails with 'Key not found: id'
+			if (hasId(jsonItem)) {
+				// Takes a JSON input and formats to an item which can be used by the database
+				Item item = makeItem(jsonItem);
+				// Add to the local database
+				itemdb.upsert(item);
+			} else {
+				// log error
+				log.error("ERROR: OneDrive response missing required 'id' element:");
+				log.error("ERROR: ", jsonItem);
+			}
+		} else {
+			// log error
+			log.error("ERROR: OneDrive response not a valid JSON object");
 		}
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_move
+	// This function is only called in monitor mode when an move event is coming from
+	// inotify and we try to move the item.
 	void uploadMoveItem(string from, string to)
 	{
 		log.log("Moving ", from, " to ", to);
 		Item fromItem, toItem, parentItem;
 		if (!itemdb.selectByPath(from, defaultDriveId, fromItem)) {
-			throw new SyncException("Can't move an unsynced item");
+			uploadNewFile(to);
+			return;
 		}
 		if (fromItem.parentId == null) {
 			// the item is a remote folder, need to do the operation on the parent
