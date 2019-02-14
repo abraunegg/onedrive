@@ -654,7 +654,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 						sync.applyDifferences();
 					} else {
 						// sync from OneDrive first before uploading files to OneDrive
-						log.vlog("Syncing changes from OneDrive ...");
+						log.log("Syncing changes from OneDrive ...");
 						sync.applyDifferences();
 						// is this a download only request?
 						if (!downloadOnly) {
