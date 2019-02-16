@@ -22,12 +22,14 @@ class Progress
 
 
     size_t getTerminalWidth() {
-      size_t column;
-      winsize ws;
-      if(ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) != -1) {
-        column = ws.ws_col;
+      size_t column = default_width;
+      version (CRuntime_Musl) {
+      } else {
+	winsize ws;
+	if(ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) != -1 && ws.ws_col > 0) {
+	  column = ws.ws_col;
+	}
       }
-      if(column == 0) column = default_width;
 
       return column;
     }

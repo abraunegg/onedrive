@@ -123,3 +123,17 @@ git clone https://github.com/abraunegg/onedrive
 cd onedrive
 docker build . -t local-onedrive
 ```
+
+There are alternate, smaller images available by building
+Dockerfile-stretch or Dockerfile-alpine.  These [multi-stage builder
+pattern](https://docs.docker.com/develop/develop-images/multistage-build/)
+Dockerfiles require Docker version at least 17.05.
+
+``` bash
+docker build . -t local-ondrive-stretch -f Dockerfile-stretch
+```
+or
+
+``` bash
+docker build . -t local-ondrive-alpine -f Dockerfile-alpine
+```
