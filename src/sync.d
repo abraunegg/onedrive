@@ -869,7 +869,9 @@ final class SyncEngine
 		case ItemType.dir:
 		case ItemType.remote:
 			log.log("Creating directory: ", path);
-			mkdirRecurse(path);
+			if (!dryRun) {
+				mkdirRecurse(path);
+			}
 			break;
 		}
 	}
@@ -937,39 +939,43 @@ final class SyncEngine
 		}
 		
 		auto fileSize = fileDetails["size"].integer;
-		try {
-			onedrive.downloadById(item.driveId, item.id, path, fileSize);
-		} catch (OneDriveException e) {
-			if (e.httpStatusCode == 429) {
-				// HTTP request returned status code 429 (Too Many Requests)
-				// https://github.com/abraunegg/onedrive/issues/133
-				// Back off & retry with incremental delay
-				int retryCount = 10; 
-				int retryAttempts = 1;
-				int backoffInterval = 2;
-				while (retryAttempts < retryCount){
-					Thread.sleep(dur!"seconds"(retryAttempts*backoffInterval));
-					try {
-						onedrive.downloadById(item.driveId, item.id, path, fileSize);
-						// successful download
-						retryAttempts = retryCount;
-					} catch (OneDriveException e) {
-						if (e.httpStatusCode == 429) {
-							// Increment & loop around
-							retryAttempts++;
+		
+		if (!dryRun) {
+			try {
+				onedrive.downloadById(item.driveId, item.id, path, fileSize);
+			} catch (OneDriveException e) {
+				if (e.httpStatusCode == 429) {
+					// HTTP request returned status code 429 (Too Many Requests)
+					// https://github.com/abraunegg/onedrive/issues/133
+					// Back off & retry with incremental delay
+					int retryCount = 10; 
+					int retryAttempts = 1;
+					int backoffInterval = 2;
+					while (retryAttempts < retryCount){
+						Thread.sleep(dur!"seconds"(retryAttempts*backoffInterval));
+						try {
+							onedrive.downloadById(item.driveId, item.id, path, fileSize);
+							// successful download
+							retryAttempts = retryCount;
+						} catch (OneDriveException e) {
+							if (e.httpStatusCode == 429) {
+								// Increment & loop around
+								retryAttempts++;
+							}
 						}
 					}
 				}
+			} catch (std.exception.ErrnoException e) {
+				// There was a file system error
+				log.error("ERROR: ", e.msg);
+				downloadFailed = true;
+				return;
 			}
-		} catch (std.exception.ErrnoException e) {
-			// There was a file system error
-			log.error("ERROR: ", e.msg);
-			downloadFailed = true;
-			return;
+			setTimes(path, item.mtime, item.mtime);
 		}
+		
 		writeln("done.");
 		log.fileOnly("Downloading file ", path, " ... done.");
-		setTimes(path, item.mtime, item.mtime);
 	}
 
 	// returns true if the given item corresponds to the local one
@@ -1281,7 +1287,7 @@ final class SyncEngine
 							eTag = response["cTag"].str;
 						} else {
 							// we are --dry-run - simulate the file upload
-							writeln(" done.");
+							writeln("done.");
 							response = createFakeResponse(path);
 							// Log action to log file
 							log.fileOnly("Uploading modified file ", path, " ... done.");
