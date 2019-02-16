@@ -1143,12 +1143,16 @@ final class SyncEngine
 				}
 			}
 		} else {
-			log.vlog("The directory has been deleted locally");
-			if (noRemoteDelete) {
-				// do not process remote directory delete
-				log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
-			} else {
-				uploadDeleteItem(item, path);
+			// Directory does not exist locally
+			// If we are in a --dry-run situation - this directory may never have existed as we never downloaded it
+			if (!dryRun) {
+				log.vlog("The directory has been deleted locally");
+				if (noRemoteDelete) {
+					// do not process remote directory delete
+					log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+				} else {
+					uploadDeleteItem(item, path);
+				}
 			}
 		}
 	}
