@@ -600,7 +600,7 @@ int main(string[] args)
 		string dryRunFilename = replace(cfg.databaseFilePath, "sqlite3", "dryRun");
 		if (exists(dryRunFilename)) {
 			// safely remove items.dryRun to cleanup
-			//safeRemove(dryRunFilename); //temp disabled so it can be checked
+			safeRemove(dryRunFilename);
 		}
 	}
 	
