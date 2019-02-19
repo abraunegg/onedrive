@@ -1,4 +1,4 @@
-.TH ONEDRIVE "1" "January 2019" "2.2.5" "User Commands"
+.TH ONEDRIVE "1" "February 2019" "2.2.5" "User Commands"
 .SH NAME
 onedrive \- folder synchronization with OneDrive
 .SH SYNOPSIS
@@ -47,6 +47,9 @@ Display the sync status of the client \- no sync will be performed.
 .TP
 \fB\-d \-\-download\-only\fP
 Only download remote changes
+.TP
+\fB\-d \-\-dry\-run\fP
+Perform a trial sync with no changes made
 .TP
 \fB\-\-enable\-logging\fP
 Enable client activity to a separate log file

@@ -242,6 +242,37 @@ After installing the application you must run it at least once from the terminal
 
 You will be asked to open a specific link using your web browser where you will have to login into your Microsoft Account and give the application the permission to access your files. After giving the permission, you will be redirected to a blank page. Copy the URI of the blank page into the application.
 
+### Testing your configuration
+You are able to test your configuration by utilising the `--dry-run` CLI option. No files will be downloaded, uploaded or removed, however the application will display what 'would' have occurred. For example:
+```text
+onedrive --synchronize --verbose --dry-run
+DRY-RUN Configured. Output below shows what 'would' have occurred.
+Loading config ...
+Using Config Dir: /home/user/.config/onedrive
+Initializing the OneDrive API ...
+Opening the item database ...
+All operations will be performed in: /home/user/OneDrive
+Initializing the Synchronization Engine ...
+Account Type: personal
+Default Drive ID: <redacted>
+Default Root ID: <redacted>
+Remaining Free Space: 5368709120
+Fetching details for OneDrive Root
+OneDrive Root exists in the database
+Syncing changes from OneDrive ...
+Applying changes of Path ID: <redacted>
+Uploading differences of .
+Processing root
+The directory has not changed
+Uploading new items of .
+OneDrive Client requested to create remote path: ./newdir
+The requested directory to create was not found on OneDrive - creating remote directory: ./newdir
+Successfully created the remote directory ./newdir on OneDrive
+Uploading new file ./newdir/newfile.txt ... done.
+Remaining free space: 5368709076
+Applying changes of Path ID: <redacted>
+```
+
 ### Show your configuration
 To validate your configuration the application will use, utilise the following:
 ```text
@@ -583,6 +614,8 @@ Options:
       Only download remote changes
   --disable-upload-validation
       Disable upload validation when uploading to OneDrive
+  --dry-run
+      Perform a trial sync with no changes made	  
   --enable-logging
       Enable client activity to a separate log file
   --force-http-1.1
