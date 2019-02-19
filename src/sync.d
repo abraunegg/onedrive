@@ -1454,10 +1454,16 @@ final class SyncEngine
 
 					// Perform the database lookup
 					enforce(itemdb.selectByPath(dirName(path), parent.driveId, parent), "The parent item id is not in the database");
+					
 					JSONValue driveItem = [
 							"name": JSONValue(baseName(path)),
 							"folder": parseJSON("{}")
 					];
+					
+					// #380 Debug
+					writeln("parent.driveId: ", parent.driveId);
+					writeln("parent.id: ", parent.id);
+					writeln("driveItem JSON: ", driveItem);
 					
 					// Submit the creation request
 					// Fix for https://github.com/skilion/onedrive/issues/356
@@ -1472,6 +1478,9 @@ final class SyncEngine
 						}
 					}
 					
+					// #380 Debug
+					writeln("onedrive.createById response: ", response);
+										
 					saveItem(response);
 					log.vlog("Successfully created the remote directory ", path, " on OneDrive");
 					return;
