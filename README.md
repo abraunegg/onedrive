@@ -273,6 +273,8 @@ Remaining free space: 5368709076
 Applying changes of Path ID: <redacted>
 ```
 
+**Note:** `--dry-run` can only be used with `--synchronize`. It cannot be used with `--monitor` and will be ignored.
+
 ### Show your configuration
 To validate your configuration the application will use, utilise the following:
 ```text
