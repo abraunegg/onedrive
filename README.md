@@ -235,6 +235,7 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 The 'skilion' version contains a significant number of defect's in how the local sync state is managed. When upgrading from the 'skilion' version to this version, it is advisable to stop any service / onedrive process from running and then remove any `items.sqlite3` file from your configuration directory (`~/.config/onedrive/`) as this will force the creation of a new local cache file.
 
 Additionally, if you are using a 'config' file within your configuration directory (`~/.config/onedrive/`), please ensure that you update the `skip_file = ` option as per below:
+
 **Invalid configuration:**
 ```
 skip_file = "= .*|~*"
