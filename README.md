@@ -414,6 +414,8 @@ Patterns are case insensitive. `*` and `?` [wildcards characters](https://techne
 
 **Note:** after changing `skip_file`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
+**Note:** Do not use a skip_file entry of `.*` as this will prevent correct searching of local changes to process.
+
 ### skip_symlinks
 Example: `skip_symlinks = "true"`
 
