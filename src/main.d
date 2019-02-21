@@ -558,7 +558,7 @@ int main(string[] args)
 							// we already tried three times in the performSync routine
 							// if we still have problems, then the sync handle might have
 							// gone stale and we need to re-initialize the sync engine
-							log.log("Pesistent connection errors, reinitializing connection");
+							log.log("Persistent connection errors, reinitializing connection");
 							sync.reset();
 						}
 					} catch (CurlException e) {
