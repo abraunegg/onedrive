@@ -61,6 +61,8 @@ int main(string[] args)
 	string removeDirectory;
 	// This allows for selective directory syncing instead of everything under ~/OneDrive/
 	string singleDirectory;
+	// Skip dot files & folders - eg .file or /.folder/
+	bool skipDotFiles = false;
 	// Add option to skip symlinks
 	bool skipSymlinks = false;
 	// The source directory if we are using the OneDrive client to rename a directory
