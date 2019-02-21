@@ -48,7 +48,7 @@ Display the sync status of the client \- no sync will be performed.
 \fB\-d \-\-download\-only\fP
 Only download remote changes
 .TP
-\fB\-d \-\-dry\-run\fP
+\fB\-\-dry\-run\fP
 Perform a trial sync with no changes made. Can ONLY be used with --synchronize. Will be ignored for --monitor
 .TP
 \fB\-\-enable\-logging\fP
