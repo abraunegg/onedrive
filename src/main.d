@@ -492,6 +492,8 @@ int main(string[] args)
 				log.vlog("[M] Directory created: ", path);
 				try {
 					sync.scanForDifferences(path);
+				} catch (CurlException e) {
+					log.vlog("Offline, cannot create remote dir!");
 				} catch(Exception e) {
 					log.logAndNotify("Cannot create remote directory: ", e.msg);
 				}
@@ -500,6 +502,8 @@ int main(string[] args)
 				log.vlog("[M] File changed: ", path);
 				try {
 					sync.scanForDifferences(path);
+				} catch (CurlException e) {
+					log.vlog("Offline, cannot upload changed item!");
 				} catch(Exception e) {
 					log.logAndNotify("Cannot upload file changes/creation: ", e.msg);
 				}
@@ -508,6 +512,8 @@ int main(string[] args)
 				log.vlog("[M] Item deleted: ", path);
 				try {
 					sync.deleteByPath(path);
+				} catch (CurlException e) {
+					log.vlog("Offline, cannot delete item!");
 				} catch(SyncException e) {
 					if (e.msg == "The item to delete is not in the local database") {
 						log.vlog("Item cannot be deleted because not found in database");
@@ -522,6 +528,8 @@ int main(string[] args)
 				log.vlog("[M] Item moved: ", from, " -> ", to);
 				try {
 					sync.uploadMoveItem(from, to);
+				} catch (CurlException e) {
+					log.vlog("Offline, cannot move item!");
 				} catch(Exception e) {
 					log.logAndNotify("Cannot move item:, ", e.msg);
 				}
