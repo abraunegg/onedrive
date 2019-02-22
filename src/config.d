@@ -1,4 +1,5 @@
-import std.file, std.string, std.regex, std.stdio;
+import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
+import std.file, std.string, std.regex, std.stdio, std.process, std.algorithm.searching, std.getopt, std.conv;
 import selective;
 static import log;
 
@@ -13,31 +14,36 @@ final class Config
 
 	private string userConfigFilePath;
 	// hashmap for the values found in the user config file
-	private string[string] values = [
-		"upload_only": 			"false",
-		"check_for_nomount":		"false",
-		"download_only":		"false",
-		"disable_notifications":	"false",
-		"disable_upload_validation":	"false",
-		"enable_logging":		"false",
-		"force_http_11":		"false",
-		"local_first":			"false",
-		"no_remote_delete":		"false",
-		"skip_symlinks":		"false",
-		"debug_https":			"false",
-		"verbose": 			"0",
-		"monitor_interval" :		"45",
-		"min_notif_changes":		"5",
-		"single_directory":		"",
-		"sync_dir": 			"~/OneDrive",
-		"skip_file": 			"~*",
-		"log_dir": 			"/var/log/onedrive/",
-		"drive_id": 			""
-	]:
+	// ARGGGG D is stupid and cannot make hashmap initializations!!!
+	// private string[string] foobar = [ "aa": "bb" ] does NOT work!!!
+	private string[string] stringValues;
+	private bool[string] boolValues;
+	private long[string] longValues;
 
 
 	this(string configDirName)
 	{
+		// default configuration
+		stringValues["single_directory"] = "";
+		stringValues["sync_dir"]         = "~/OneDrive";
+		stringValues["skip_file"]        = "~*";
+		stringValues["log_dir"]          = "/var/log/onedrive/";
+		stringValues["drive_id"]         = "";
+		boolValues["upload_only"]        = false;
+		boolValues["check_for_nomount"]  = false;
+		boolValues["download_only"]      = false;
+		boolValues["disable_notifications"] = false;
+		boolValues["disable_upload_validation"] = false;
+		boolValues["enable_logging"]     = false;
+		boolValues["force_http_11"]      = false;
+		boolValues["local_first"]        = false;
+		boolValues["no_remote_delete"]   = false;
+		boolValues["skip_symlinks"]      = false;
+		boolValues["debug_https"]        = false;
+		longValues["verbose"]            = 0;
+		longValues["monitor_interval"]   = 45,
+		longValues["min_notif_changes"]  = 5;
+
 		// Determine the users home directory. 
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
 		// Check for HOME environment variable
@@ -64,6 +70,7 @@ final class Config
 
 	
 		// Determine the correct configuration directory to use
+		string configDirBase;
 		if (configDirName != "") {
 			// A CLI 'confdir' was passed in
 			log.vdebug("configDirName: CLI override to set configDirName to: ", configDirName);
@@ -119,74 +126,73 @@ final class Config
 	}
 
 
-	bool update_from_args(string[] args)
+	Option[] update_from_args(string[] args)
 	{
-		// Debug the HTTPS submit operations if required
-		bool debugHttp = cfg.getValue("debug_https") == "false" ? false : true;
-		// Do not use notifications in monitor mode
-		bool disableNotifications = cfg.getValue("disable_notifications") == "false" ? false : true;
-		// only download remote changes
-		bool downloadOnly = cfg.getValue("download_only") == "false" ? false : true;
-		// Does the user want to disable upload validation - https://github.com/abraunegg/onedrive/issues/205
-		// SharePoint will associate some metadata from the library the file is uploaded to directly in the file - thus change file size & checksums
-		bool disableUploadValidation = cfg.getValue("disable_upload_validation") == "false" ? false : true;
-		// Do we enable a log file
-		bool enableLogFile = cfg.getValue("enable_logging") == "false" ? false : true;
-		// Force the use of HTTP 1.1 to overcome curl => 7.62.0 where some operations are now sent via HTTP/2
-		// Whilst HTTP/2 operations are handled, in some cases the handling of this outside of the client is not being done correctly (router, other) thus the client breaks
-		// This flag then allows the user to downgrade all HTTP operations to HTTP 1.1 for maximum network path compatibility
-		bool forceHTTP11 = cfg.getValue("force_http_11") == "false" ? false : true;
-		// Local sync - Upload local changes first before downloading changes from OneDrive
-		bool localFirst = cfg.getValue("local_first") == "false" ? false : true;
-		// Add option for no remote delete
-		bool noRemoteDelete = cfg.getValue("no_remote_delete") == "false" ? false : true;
-		// Add option to skip symlinks
-		bool skipSymlinks = cfg.getValue("skip_symlinks") == "false" ? false : true;
-		// override the sync directory
-		string syncDirName = cfg.getValue("sync_dir");
-		// Upload Only
-		bool uploadOnly = cfg.getValue("upload_only") == "false" ? false : true;
-	
-
 		// Application Startup option validation
 		try {
 			auto opt = getopt(
 				args,
 				std.getopt.config.bundling,
 				std.getopt.config.caseSensitive,
-				"check-for-nomount", "Check for the presence of .nosync in the syncdir root. If found, do not perform sync.", &checkMount,
-			"debug-https", "Debug OneDrive HTTPS communication.", &debugHttp,
-			"disable-notifications", "Do not use desktop notifications in monitor mode.", &disableNotifications,
-			"download-only|d", "Only download remote changes", &downloadOnly,
-			"disable-upload-validation", "Disable upload validation when uploading to OneDrive", &disableUploadValidation,
-			"enable-logging", "Enable client activity to a separate log file", &enableLogFile,
-			"force-http-1.1", "Force the use of HTTP 1.1 for all operations", &forceHTTP11,
-			"local-first", "Synchronize from the local directory source first, before downloading changes from OneDrive.", &localFirst,
-			"no-remote-delete", "Do not delete local file 'deletes' from OneDrive when using --upload-only", &noRemoteDelete,
-			"skip-symlinks", "Skip syncing of symlinks", &skipSymlinks,
-			"syncdir", "Specify the local directory used for synchronization to OneDrive", &syncDirName,
-			"upload-only", "Only upload to OneDrive, do not sync changes from OneDrive locally", &uploadOnly,
-		);
-		if (opt.helpWanted) {
-			outputLongHelp(opt.options);
-			return EXIT_SUCCESS;
+				std.getopt.config.passThrough,
+				"check-for-nomount", 
+					"Check for the presence of .nosync in the syncdir root. If found, do not perform sync.", 
+					&boolValues["check_for_nomount"],
+				"debug-https", 
+					"Debug OneDrive HTTPS communication.", 
+					&boolValues["debug_https"],
+				"disable-notifications",
+					"Do not use desktop notifications in monitor mode.",
+				       	&boolValues["disable_notifications"],
+				"download-only|d",
+					"Only download remote changes",
+				       	&boolValues["download_only"],
+				"disable-upload-validation",
+					"Disable upload validation when uploading to OneDrive",
+				       	&boolValues["disable_upload_validation"],
+				"enable-logging",
+					"Enable client activity to a separate log file",
+				       &boolValues["enable_logging"],
+				"force-http-1.1",
+					"Force the use of HTTP 1.1 for all operations",
+				       &boolValues["force_http_11"],
+				"local-first",
+					"Synchronize from the local directory source first, before downloading changes from OneDrive.",
+				       &boolValues["local_first"],
+				"no-remote-delete",
+					"Do not delete local file 'deletes' from OneDrive when using --upload-only",
+					&boolValues["no_remote_delete"],
+				"skip-symlinks",
+					"Skip syncing of symlinks",
+					&boolValues["skip_symlinks"],
+				"syncdir",
+					"Specify the local directory used for synchronization to OneDrive",
+				       	&stringValues["sync_dir"],
+				"upload-only",
+					"Only upload to OneDrive, do not sync changes from OneDrive locally",
+				       	&boolValues["upload_only"],
+				"verbose|v+",
+					"Print more details, useful for debugging (repeat for extra debugging)",
+					&longValues["verbose"]
+			);
+			return opt.options;
+		} catch (GetOptException e) {
+			log.error(e.msg);
+			log.error("Try 'onedrive -h' for more information");
+			exit(EXIT_FAILURE);
+		} catch (Exception e) {
+			// error
+			log.error(e.msg);
+			log.error("Try 'onedrive -h' for more information");
+			exit(EXIT_FAILURE);
 		}
-	} catch (GetOptException e) {
-		log.error(e.msg);
-		log.error("Try 'onedrive -h' for more information");
-		return EXIT_FAILURE;
-	} catch (Exception e) {
-		// error
-		log.error(e.msg);
-		log.error("Try 'onedrive -h' for more information");
-		return EXIT_FAILURE;
-	}
+		return null;
 	}
 
 
-	string getValue(string key)
+	string getValueString(string key)
 	{
-		auto p = key in values;
+		auto p = key in stringValues;
 		if (p) {
 			return *p;
 		} else {
@@ -194,19 +200,39 @@ final class Config
 		}
 	}
 
-	string getValue(string key, string value)
+	long getValueLong(string key)
 	{
-		auto p = key in values;
+		auto p = key in longValues;
 		if (p) {
 			return *p;
 		} else {
-			return value;
+			throw new Exception("Missing config value: " ~ key);
 		}
 	}
 
-	void setValue(string key, string value)
+	bool getValueBool(string key)
 	{
-		values[key] = value;
+		auto p = key in boolValues;
+		if (p) {
+			return *p;
+		} else {
+			throw new Exception("Missing config value: " ~ key);
+		}
+	}
+
+	void setValueBool(string key, bool value)
+	{
+		boolValues[key] = value;
+	}
+
+	void setValueString(string key, string value)
+	{
+		stringValues[key] = value;
+	}
+
+	void setValueLong(string key, long value)
+	{
+		longValues[key] = value;
 	}
 
 	private bool load(string filename)
@@ -221,14 +247,26 @@ final class Config
 			if (!c.empty) {
 				c.popFront(); // skip the whole match
 				string key = c.front.dup;
-				auto p = key in values;
+				auto p = key in boolValues;
 				if (p) {
 					c.popFront();
-					// TODO add check for correct format (numbers, booleans)
-					setValue(key, c.front.dup);
+					// only accept "true" as true value. TODO Should we support other formats?
+					setValueBool(key, c.front.dup == "true" ? true : false);
 				} else {
-					log.log("Unknown key in config file: ", key);
-					return false;
+					auto pp = key in stringValues;
+					if (pp) {
+						c.popFront();
+						setValueString(key, c.front.dup);
+					} else {
+						auto ppp = key in longValues;
+						if (ppp) {
+							c.popFront();
+							setValueLong(key, to!long(c.front.dup));
+						} else {
+							log.log("Unknown key in config file: ", key);
+							return false;
+						}
+					}
 				}
 			} else {
 				log.log("Malformed config line: ", line);
@@ -243,6 +281,5 @@ unittest
 {
 	auto cfg = new Config("");
 	cfg.load("config");
-	assert(cfg.getValue("sync_dir") == "~/OneDrive");
-	assert(cfg.getValue("empty", "default") == "default");
+	assert(cfg.getValueString("sync_dir") == "~/OneDrive");
 }

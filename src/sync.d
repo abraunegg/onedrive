@@ -219,7 +219,7 @@ final class SyncEngine
 				// OneDrive responded with 400 error: Bad Request
 				log.error("\nERROR: OneDrive returned a 'HTTP 400 Bad Request' - Cannot Initialize Sync Engine");
 				// Check this
-				if (cfg.getValue("drive_id").length) {
+				if (cfg.getValueString("drive_id").length) {
 					log.error("ERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
 				}
 				// Must exit here
@@ -582,7 +582,7 @@ final class SyncEngine
 			if (("value" in changes) != null) {
 				auto nrChanges = count(changes["value"].array);
 
-				if (nrChanges >= to!long(cfg.getValue("min_notif_changes"))) {
+				if (nrChanges >= cfg.getValueLong("min_notif_changes")) {
 					log.logAndNotify("Processing ", nrChanges, " changes");
 				} else {
 					// There are valid changes
@@ -1314,7 +1314,7 @@ final class SyncEngine
 
 			if (isSymlink(path)) {
 				// if config says so we skip all symlinked items
-				if (cfg.getValue("skip_symlinks") == "true") {
+				if (cfg.getValueBool("skip_symlinks")) {
 					log.vlog("Skipping item - skip symbolic links configured: ", path);
 					return;
 
