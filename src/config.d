@@ -128,6 +128,23 @@ final class Config
 
 	Option[] update_from_args(string[] args)
 	{
+
+		// Add additional options that are NOT configurable via config file
+		stringValues["create-directory"]  = "";
+		stringValues["destination-directory"] = "";
+		stringValues["get-o365-drive-id"] = "";
+		stringValues["remove-directory"]  = "";
+		stringValues["single-directory"]  = "";
+		stringValues["source-directory"]  = "";
+		boolValues["display-config"]      = false;
+		boolValues["display-sync-status"] = false;
+		boolValues["resync"]              = false;
+		boolValues["print-token"]         = false;
+		boolValues["logout"]              = false;
+		boolValues["monitor"]             = false;
+		boolValues["synchronize"]         = false;
+
+
 		// Application Startup option validation
 		try {
 			auto opt = getopt(
@@ -152,13 +169,13 @@ final class Config
 				       	&boolValues["disable_upload_validation"],
 				"enable-logging",
 					"Enable client activity to a separate log file",
-				       &boolValues["enable_logging"],
+					&boolValues["enable_logging"],
 				"force-http-1.1",
 					"Force the use of HTTP 1.1 for all operations",
-				       &boolValues["force_http_11"],
+					&boolValues["force_http_11"],
 				"local-first",
 					"Synchronize from the local directory source first, before downloading changes from OneDrive.",
-				       &boolValues["local_first"],
+					&boolValues["local_first"],
 				"no-remote-delete",
 					"Do not delete local file 'deletes' from OneDrive when using --upload-only",
 					&boolValues["no_remote_delete"],
@@ -173,7 +190,46 @@ final class Config
 				       	&boolValues["upload_only"],
 				"verbose|v+",
 					"Print more details, useful for debugging (repeat for extra debugging)",
-					&longValues["verbose"]
+					&longValues["verbose"],
+				"create-directory",
+					"Create a directory on OneDrive - no sync will be performed.",
+				       	&stringValues["create_directory"],
+				"destination-directory",
+					"Destination directory for renamed or move on OneDrive - no sync will be performed.",
+					&stringValues["destination_directory"],
+				"display-config",
+					"Display what options the client will use as currently configured - no sync will be performed.",
+					&boolValues["display_config"],
+				"display-sync-status",
+					"Display the sync status of the client - no sync will be performed.",
+					&boolValues["display_sync_status"],
+				"get-O365-drive-id",
+					"Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library",
+					&boolValues["get_o365_drive_id"],
+				"logout",
+					"Logout the current user",
+				       	&boolValues["logout"],
+				"monitor|m",
+					"Keep monitoring for local and remote changes",
+					&boolValues["monitor"],
+				"print-token",
+					"Print the access token, useful for debugging",
+					&boolValues["print_token"],
+				"resync",
+					"Forget the last saved state, perform a full sync",
+					&boolValues["resync"],
+				"remove-directory",
+					"Remove a directory on OneDrive - no sync will be performed.",
+					&stringValues["remove_directory"],
+				"single-directory",
+					"Specify a single local directory within the OneDrive root to sync.",
+					&stringValues["single_directory"],
+				"source-directory",
+					"Source directory to rename or move on OneDrive - no sync will be performed.",
+					&stringValues["source_directory"],
+				"synchronize",
+					"Perform a synchronization",
+					&boolValues["synchronize"]
 			);
 			return opt.options;
 		} catch (GetOptException e) {

@@ -64,75 +64,6 @@ int main(string[] args)
 	// update configuration from command line args
 	savedOpts ~= cfg.update_from_args(args);
 
-	//
-	// parse the remaining arguments that do not have a corresponding config file entry
-
-	// Application Option Variables
-	// Create a single root directory on OneDrive
-	string createDirectory;
-	// The destination directory if we are using the OneDrive client to rename a directory
-	string destinationDirectory;
-	// Display application configuration but do not sync
-	bool displayConfiguration = false;
-	// Display sync status
-	bool displaySyncStatus = false;
-	// SharePoint / Office 365 Shared Library name to query
-	string o365SharedLibraryName;
-	// remove the current user and sync state
-	bool logout = false;
-	// enable monitor mode
-	bool monitor = false;
-	// print the access token
-	bool printAccessToken = false;
-	// force a full resync
-	bool resync = false;
-	// Remove a single directory on OneDrive
-	string removeDirectory;
-	// This allows for selective directory syncing instead of everything under ~/OneDrive/
-	string singleDirectory;
-	// The source directory if we are using the OneDrive client to rename a directory
-	string sourceDirectory;
-	// Configure a flag to perform a sync
-	// This is beneficial so that if just running the client itself - without any options, or sync check, the client does not perform a sync
-	bool synchronize = false;
-
-
-
-	// Options without respective config file setting
-	try {
-		auto opt = getopt(
-			args,
-			std.getopt.config.bundling,
-			std.getopt.config.caseSensitive,
-			"create-directory", "Create a directory on OneDrive - no sync will be performed.", &createDirectory,
-			"destination-directory", "Destination directory for renamed or move on OneDrive - no sync will be performed.", &destinationDirectory,
-			"display-config", "Display what options the client will use as currently configured - no sync will be performed.", &displayConfiguration,
-			"display-sync-status", "Display the sync status of the client - no sync will be performed.", &displaySyncStatus,
-			"get-O365-drive-id", "Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library", &o365SharedLibraryName,
-			"logout", "Logout the current user", &logout,
-			"monitor|m", "Keep monitoring for local and remote changes", &monitor,
-			"print-token", "Print the access token, useful for debugging", &printAccessToken,
-			"resync", "Forget the last saved state, perform a full sync", &resync,
-			"remove-directory", "Remove a directory on OneDrive - no sync will be performed.", &removeDirectory,
-			"single-directory", "Specify a single local directory within the OneDrive root to sync.", &singleDirectory,
-			"source-directory", "Source directory to rename or move on OneDrive - no sync will be performed.", &sourceDirectory,
-			"synchronize", "Perform a synchronization", &synchronize,
-		);
-		if (opt.helpWanted) {
-			outputLongHelp(opt.options ~ savedOpts);
-			return EXIT_SUCCESS;
-		}
-	} catch (GetOptException e) {
-		log.error(e.msg);
-		log.error("Try 'onedrive -h' for more information");
-		return EXIT_FAILURE;
-	} catch (Exception e) {
-		// error
-		log.error(e.msg);
-		log.error("Try 'onedrive -h' for more information");
-		return EXIT_FAILURE;
-	}
-
 	
 	// Are we able to reach the OneDrive Service
 	bool online = false;
@@ -176,27 +107,27 @@ int main(string[] args)
 	}
 
 	// Configure whether notifications are used
-	log.setNotifications(monitor && !cfg.getValueBool("disable_notifications"));
+	log.setNotifications(cfg.getValueBool("monitor") && !cfg.getValueBool("disable_notifications"));
 	
 	// upgrades
 	if (exists(configDirName ~ "/items.db")) {
 		remove(configDirName ~ "/items.db");
 		log.logAndNotify("Database schema changed, resync needed");
-		resync = true;
+		cfg.setValueBool("resync", true);
 	}
 
-	if (resync || logout) {
+	if (cfg.getValueBool("resync") || cfg.getValueBool("logout")) {
 		log.vlog("Deleting the saved status ...");
 		safeRemove(cfg.databaseFilePath);
 		safeRemove(cfg.deltaLinkFilePath);
 		safeRemove(cfg.uploadStateFilePath);
-		if (logout) {
+		if (cfg.getValueBool("logout")) {
 			safeRemove(cfg.refreshTokenFilePath);
 		}
 	}
 
 	// Display current application configuration, no application initialisation
-	if (displayConfiguration){
+	if (cfg.getValueBool("display_config")){
 		string userConfigFilePath = configDirName ~ "/config";
 		string userSyncList = configDirName ~ "/sync_list";
 		// Display application version
@@ -248,14 +179,14 @@ int main(string[] args)
 	} catch (CurlException e) {
 		// No network connection to OneDrive Service
 		log.error("No network connection to Microsoft OneDrive Service");
-		if (!monitor) {
+		if (!cfg.getValueBool("monitor")) {
 			return EXIT_FAILURE;
 		}
 	}
 
 	// Initialize OneDrive, check for authorization
 	oneDrive = new OneDriveApi(cfg);
-	oneDrive.printAccessToken = printAccessToken;
+	oneDrive.printAccessToken = cfg.getValueBool("print_token");
 	if (!oneDrive.init()) {
 		log.error("Could not initialize the OneDrive API");
 		// workaround for segfault in std.net.curl.Curl.shutdown() on exit
@@ -266,13 +197,13 @@ int main(string[] args)
 	// if --synchronize or --monitor not passed in, exit & display help
 	auto performSyncOK = false;
 	
-	if (synchronize || monitor) {
+	if (cfg.getValueBool("synchronize") || cfg.getValueBool("monitor")) {
 		performSyncOK = true;
 	}
 	
 	// create-directory, remove-directory, source-directory, destination-directory 
 	// are activities that dont perform a sync no error message for these items either
-	if (((createDirectory != "") || (removeDirectory != "")) || ((sourceDirectory != "") && (destinationDirectory != "")) || (o365SharedLibraryName != "") || (displaySyncStatus == true)) {
+	if (((cfg.getValueString("create_directory") != "") || (cfg.getValueString("remove_directory") != "")) || ((cfg.getValueString("source_directory") != "") && (cfg.getValueString("destination_directory") != "")) || (cfg.getValueString("get-o365-drive-id") != "") || (cfg.getValueBool("display_sync_status") == true)) {
 		performSyncOK = true;
 	}
 	
@@ -319,7 +250,7 @@ int main(string[] args)
 			return EXIT_FAILURE;
 		}
 	} catch (CurlException e) {
-		if (!monitor) {
+		if (!cfg.getValueBool("monitor")) {
 			log.log("\nNo internet connection.");
 			oneDrive.http.shutdown();
 			return EXIT_FAILURE;
@@ -343,53 +274,53 @@ int main(string[] args)
 	}
 	
 	// Do we need to create or remove a directory?
-	if ((createDirectory != "") || (removeDirectory != "")) {
+	if ((cfg.getValueString("create_directory") != "") || (cfg.getValueString("remove_directory") != "")) {
 	
-		if (createDirectory != "") {
+		if (cfg.getValueString("create_directory") != "") {
 			// create a directory on OneDrive
-			sync.createDirectoryNoSync(createDirectory);
+			sync.createDirectoryNoSync(cfg.getValueString("create_directory"));
 		}
 	
-		if (removeDirectory != "") {
+		if (cfg.getValueString("remove_directory") != "") {
 			// remove a directory on OneDrive
-			sync.deleteDirectoryNoSync(removeDirectory);			
+			sync.deleteDirectoryNoSync(cfg.getValueString("remove_directory"));			
 		}
 	}
 	
 	// Are we renaming or moving a directory?
-	if ((sourceDirectory != "") && (destinationDirectory != "")) {
+	if ((cfg.getValueString("source_directory") != "") && (cfg.getValueString("destination_directory") != "")) {
 		// We are renaming or moving a directory
-		sync.renameDirectoryNoSync(sourceDirectory, destinationDirectory);
+		sync.renameDirectoryNoSync(cfg.getValueString("source_directory"), cfg.getValueString("destination_directory"));
 	}
 	
 	// Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
-	if (o365SharedLibraryName != ""){
-		sync.querySiteCollectionForDriveID(o365SharedLibraryName);
+	if (cfg.getValueString("get-o365-drive-id") != ""){
+		sync.querySiteCollectionForDriveID(cfg.getValueString("get-o365-drive-id"));
 	}
 	
 	// Are we displaying the sync status of the client?
-	if (displaySyncStatus) {
+	if (cfg.getValueBool("display_sync_status")) {
 		string remotePath = "/";
 		string localPath = ".";
 		
 		// Are we doing a single directory check?
-		if (singleDirectory != ""){
+		if (cfg.getValueString("single_directory") != ""){
 			// Need two different path strings here
-			remotePath = singleDirectory;
-			localPath = singleDirectory;
+			remotePath = cfg.getValueString("single_directory");
+			localPath = cfg.getValueString("single_directory");
 		}
 		sync.queryDriveForChanges(remotePath);
 	}
 	
 	// Are we performing a sync, resync or monitor operation?
-	if ((synchronize) || (resync) || (monitor)) {
+	if ((cfg.getValueBool("synchronize")) || (cfg.getValueBool("resync")) || (cfg.getValueBool("monitor"))) {
 
-		if ((synchronize) || (resync)) {
+		if ((cfg.getValueBool("synchronize")) || (cfg.getValueBool("resync"))) {
 			if (online) {
 				// Check user entry for local path - the above chdir means we are already in ~/OneDrive/ thus singleDirectory is local to this path
-				if (singleDirectory != ""){
+				if (cfg.getValueString("single_directory") != ""){
 					// Does the directory we want to sync actually exist?
-					if (!exists(singleDirectory)){
+					if (!exists(cfg.getValueString("single_directory"))){
 						// the requested directory does not exist .. 
 						log.logAndNotify("ERROR: The requested local directory does not exist. Please check ~/OneDrive/ for requested path");
 						oneDrive.http.shutdown();
@@ -398,11 +329,11 @@ int main(string[] args)
 				}
 						
 				// Perform the sync
-				performSync(sync, singleDirectory, cfg.getValueBool("download_only"), cfg.getValueBool("local_first"), cfg.getValueBool("upload_only"), monitor);
+				performSync(sync, cfg.getValueString("single_directory"), cfg.getValueBool("download_only"), cfg.getValueBool("local_first"), cfg.getValueBool("upload_only"), cfg.getValueBool("monitor"));
 			}
 		}
 			
-		if (monitor) {
+		if (cfg.getValueBool("monitor")) {
 			log.logAndNotify("Initializing monitor ...");
 			log.log("OneDrive monitor interval (seconds): ", cfg.getValueLong("monitor_interval"));
 			Monitor m = new Monitor(selectiveSync);
@@ -474,7 +405,7 @@ int main(string[] args)
 							return EXIT_FAILURE;
 						}
 						try {
-							performSync(sync, singleDirectory, cfg.getValueBool("download_only"), cfg.getValueBool("local_first"), cfg.getValueBool("upload_only"), monitor);
+							performSync(sync, cfg.getValueString("single_directory"), cfg.getValueBool("download_only"), cfg.getValueBool("local_first"), cfg.getValueBool("upload_only"), cfg.getValueBool("monitor"));
 							if (!cfg.getValueBool("download_only")) {
 								// discard all events that may have been generated by the sync
 								m.update(false);
