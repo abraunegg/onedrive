@@ -782,6 +782,14 @@ final class SyncEngine
 				unwanted = true;
 			}
 		}
+		
+		// skip downloading dot files if configured
+		if (cfg.getValue("skip_dotfiles") == "true") {
+			if (isDotFile(path)) {
+				log.vlog("Skipping item - .file or .folder: ", path);
+				unwanted = true;
+			}
+		}
 
 		// skip unwanted items early
 		if (unwanted) {
