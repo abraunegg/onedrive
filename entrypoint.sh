@@ -23,4 +23,12 @@ else
 fi
 
 chown "${oduser}:${odgroup}" /onedrive/ /onedrive/conf
-exec gosu "${oduser}" /usr/local/bin/onedrive --monitor --verbose --confdir /onedrive/conf --syncdir /onedrive/data
+
+# Default parameters
+ARGS="--monitor --verbose --confdir /onedrive/conf --syncdir /onedrive/data"
+
+if [ "${#}" -gt "0" ]; then
+  ARGS="${*}"
+fi
+
+exec gosu "${oduser}" /usr/local/bin/onedrive "${ARGS}"
