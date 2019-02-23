@@ -74,6 +74,9 @@ final class Monitor
 
 		// skip filtered items
 		if (dirname != ".") {
+			if (selectiveSync.isDirNameExcluded(strip(dirname,"./"))) {
+				return;
+			}
 			if (selectiveSync.isFileNameExcluded(baseName(dirname))) {
 				return;
 			}
@@ -178,6 +181,9 @@ final class Monitor
 
 				// skip filtered items
 				path = getPath(event);
+				if (selectiveSync.isDirNameExcluded(strip(path,"./"))) {
+					goto skip;
+				}
 				if (selectiveSync.isFileNameExcluded(baseName(path))) {
 					goto skip;
 				}
