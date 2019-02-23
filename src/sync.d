@@ -1346,9 +1346,17 @@ final class SyncEngine
 
 			// filter out user configured items to skip
 			if (path != ".") {
-				if (selectiveSync.isFileNameExcluded(baseName(path))) {
-					log.vlog("Skipping item - excluded by skip_file config: ", path);
-					return;
+				if (isDir(path)) {
+					if (selectiveSync.isDirNameExcluded(strip(path,"./"))) {
+						log.vlog("Skipping item - excluded by skip_dir config: ", path);
+						return;
+					}
+				}
+				if (isFile(path)) {
+					if (selectiveSync.isFileNameExcluded(baseName(path))) {
+						log.vlog("Skipping item - excluded by skip_file config: ", path);
+						return;
+					}
 				}
 				if (selectiveSync.isPathExcluded(path)) {
 					log.vlog("Skipping item - path excluded by sync_list: ", path);
