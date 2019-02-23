@@ -264,6 +264,7 @@ This will display all the pertinent runtime interpretation of the options and co
 Config path                         = /home/alex/.config/onedrive
 Config file found in config path    = false
 Config option 'sync_dir'            = /home/alex/OneDrive
+Config option 'skip_dir'            = 
 Config option 'skip_file'           = ~*
 Config option 'skip_symlinks'       = false
 Config option 'monitor_interval'    = 45
@@ -406,6 +407,13 @@ Example: `sync_dir="~/MyDirToSync"`
 Proceed with caution here when changing the default sync dir from ~/OneDrive to ~/MyDirToSync
 
 The issue here is around how the client stores the sync_dir path in the database. If the config file is missing, or you don't use the `--syncdir` parameter - what will happen is the client will default back to `~/OneDrive` and 'think' that either all your data has been deleted - thus delete the content on OneDrive, or will start downloading all data from OneDrive into the default location.
+
+### skip_dir
+Example: `skip_dir = "mydirectory|dir1/dir2/dir3|somedir/someotherdir"
+
+Patterns are case sensitive.
+
+**Note:** after changing `skip_dir`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
 ### skip_file
 Example: `skip_file = "~*|Desktop|Documents/OneNote*|Documents/IISExpress|Documents/SQL Server Management Studio|Documents/Visual Studio*|Documents/config.xlaunch|Documents/WindowsPowerShell"`
