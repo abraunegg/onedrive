@@ -74,7 +74,7 @@ final class Monitor
 
 		// skip filtered items
 		if (dirname != ".") {
-			if (selectiveSync.isNameExcluded(baseName(dirname))) {
+			if (selectiveSync.isFileNameExcluded(baseName(dirname))) {
 				return;
 			}
 			if (selectiveSync.isPathExcluded(buildNormalizedPath(dirname))) {
@@ -178,7 +178,7 @@ final class Monitor
 
 				// skip filtered items
 				path = getPath(event);
-				if (selectiveSync.isNameExcluded(baseName(path))) {
+				if (selectiveSync.isFileNameExcluded(baseName(path))) {
 					goto skip;
 				}
 				if (selectiveSync.isPathExcluded(path)) {

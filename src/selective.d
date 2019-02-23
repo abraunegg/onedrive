@@ -10,6 +10,7 @@ final class SelectiveSync
 {
 	private string[] paths;
 	private Regex!char mask;
+	private Regex!char dirmask;
 
 	void load(string filepath)
 	{
@@ -22,20 +23,34 @@ final class SelectiveSync
 		}
 	}
 
-	void setMask(const(char)[] mask)
+	void setFileMask(const(char)[] mask)
 	{
 		this.mask = wild2regex(mask);
 	}
 
-	// config file skip_file parameter
-	bool isNameExcluded(string name)
+	void setDirMask(const(char)[] dirmask)
 	{
-		// Does the file match skip_file config entry?
-		// Returns true if the file matches a skip_file config entry
+		this.dirmask = wild2regex(dirmask);
+	}
+	
+	// config file skip_dir parameter
+	bool isDirNameExcluded(string name)
+	{
+		// Does the directory name match skip_dir config entry?
+		// Returns true if the name matches a skip_dir config entry
+		// Returns false if no match
+		return !name.matchFirst(dirmask).empty;
+	}
+	
+	// config file skip_file parameter
+	bool isFileNameExcluded(string name)
+	{
+		// Does the file name match skip_file config entry?
+		// Returns true if the name matches a skip_file config entry
 		// Returns false if no match
 		return !name.matchFirst(mask).empty;
 	}
-
+	
 	// config sync_list file handling
 	bool isPathExcluded(string path)
 	{
