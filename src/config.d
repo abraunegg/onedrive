@@ -40,6 +40,7 @@ final class Config
 		boolValues["no_remote_delete"]   = false;
 		boolValues["skip_symlinks"]      = false;
 		boolValues["debug_https"]        = false;
+		boolValues["skip_dotfiles"]        = false;
 		longValues["verbose"]            = 0;
 		longValues["monitor_interval"]   = 45,
 		longValues["min_notif_changes"]  = 5;
@@ -179,6 +180,9 @@ final class Config
 				"no-remote-delete",
 					"Do not delete local file 'deletes' from OneDrive when using --upload-only",
 					&boolValues["no_remote_delete"],
+				"skip-dot-files",
+					"Skip dot files and folders from syncing",
+					&boolValues["skip_dotfiles"],
 				"skip-symlinks",
 					"Skip syncing of symlinks",
 					&boolValues["skip_symlinks"],

@@ -68,7 +68,6 @@ int main(string[] args)
 	// Are we able to reach the OneDrive Service
 	bool online = false;
 	
-	
 	// sync_dir environment handling to handle ~ expansion properly
 	string syncDir;
 	if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
@@ -145,6 +144,7 @@ int main(string[] args)
 		// Config Options
 		writeln("Config option 'sync_dir'            = ", syncDir);
 		writeln("Config option 'skip_file'           = ", cfg.getValueString("skip_file"));
+		writeln("Config option 'skip_dotfiles'       = ", cfg.getValueBool("skip_dotfiles"));
 		writeln("Config option 'skip_symlinks'       = ", cfg.getValueBool("skip_symlinks"));
 		writeln("Config option 'monitor_interval'    = ", cfg.getValueLong("monitor_interval"));
 		writeln("Config option 'min_notif_changes'   = ", cfg.getValueLong("min_notif_changes"));
