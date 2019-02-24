@@ -1,5 +1,6 @@
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import std.file, std.string, std.regex, std.stdio, std.process, std.algorithm.searching, std.getopt, std.conv;
+import std.algorithm.sorting: sort;
 import selective;
 static import log;
 
@@ -127,20 +128,20 @@ final class Config
 	}
 
 
-	Option[] update_from_args(string[] args)
+	void update_from_args(string[] args)
 	{
 
 		// Add additional options that are NOT configurable via config file
-		stringValues["create-directory"]  = "";
-		stringValues["destination-directory"] = "";
-		stringValues["get-o365-drive-id"] = "";
-		stringValues["remove-directory"]  = "";
-		stringValues["single-directory"]  = "";
-		stringValues["source-directory"]  = "";
-		boolValues["display-config"]      = false;
-		boolValues["display-sync-status"] = false;
+		stringValues["create_directory"]  = "";
+		stringValues["destination_directory"] = "";
+		stringValues["get_o365_drive_id"] = "";
+		stringValues["remove_directory"]  = "";
+		stringValues["single_directory"]  = "";
+		stringValues["source_directory"]  = "";
+		boolValues["display_config"]      = false;
+		boolValues["display_sync_status"] = false;
 		boolValues["resync"]              = false;
-		boolValues["print-token"]         = false;
+		boolValues["print_token"]         = false;
 		boolValues["logout"]              = false;
 		boolValues["monitor"]             = false;
 		boolValues["synchronize"]         = false;
@@ -148,11 +149,12 @@ final class Config
 
 		// Application Startup option validation
 		try {
+			string tmpStr;
+			bool tmpBol;
 			auto opt = getopt(
 				args,
 				std.getopt.config.bundling,
 				std.getopt.config.caseSensitive,
-				std.getopt.config.passThrough,
 				"check-for-nomount", 
 					"Check for the presence of .nosync in the syncdir root. If found, do not perform sync.", 
 					&boolValues["check_for_nomount"],
@@ -209,7 +211,7 @@ final class Config
 					&boolValues["display_sync_status"],
 				"get-O365-drive-id",
 					"Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library",
-					&boolValues["get_o365_drive_id"],
+					&stringValues["get_o365_drive_id"],
 				"logout",
 					"Logout the current user",
 				       	&boolValues["logout"],
@@ -233,9 +235,20 @@ final class Config
 					&stringValues["source_directory"],
 				"synchronize",
 					"Perform a synchronization",
-					&boolValues["synchronize"]
+					&boolValues["synchronize"],
+				// duplicated from main.d to get full help output!
+	                        "confdir",
+					"Set the directory used to store the configuration files",
+					&tmpStr,
+				"version",
+					"Print the version and exit",
+					&tmpBol
+
 			);
-			return opt.options;
+			if (opt.helpWanted) {
+				outputLongHelp(opt.options);
+				exit(EXIT_SUCCESS);
+			}
 		} catch (GetOptException e) {
 			log.error(e.msg);
 			log.error("Try 'onedrive -h' for more information");
@@ -246,7 +259,6 @@ final class Config
 			log.error("Try 'onedrive -h' for more information");
 			exit(EXIT_FAILURE);
 		}
-		return null;
 	}
 
 
@@ -337,9 +349,52 @@ final class Config
 	}
 }
 
+
+void outputLongHelp(Option[] opt)
+{
+	auto argsNeedingOptions = [
+		"--confdir",
+		"--create-directory",
+		"--destination-directory",
+		"--get-O365-drive-id",
+		"--remove-directory",
+		"--single-directory",
+		"--source-directory",
+		"--syncdir" ];
+	writeln(`OneDrive - a client for OneDrive Cloud Services
+
+Usage:
+  onedrive [options] --synchronize
+      Do a one time synchronization
+  onedrive [options] --monitor
+      Monitor filesystem and sync regularly
+  onedrive [options] --display-config
+      Display the currently used configuration
+  onedrive [options] --display-sync-status
+      Query OneDrive service and report on pending changes
+  onedrive -h | --help
+      Show this help screen
+  onedrive --version
+      Show version
+
+Options:
+`);
+	foreach (it; opt.sort!("a.optLong < b.optLong")) {
+		if (it.optLong == "--help") continue;
+		writefln("  %s%s%s%s\n      %s",
+				it.optLong,
+				it.optShort == "" ? "" : " " ~ it.optShort,
+				argsNeedingOptions.canFind(it.optLong) ? " ARG" : "",
+				it.required ? " (required)" : "", it.help);
+	}
+	// write help last
+	writefln("  --help -h\n      This help information.");
+}
+
 unittest
 {
 	auto cfg = new Config("");
 	cfg.load("config");
 	assert(cfg.getValueString("sync_dir") == "~/OneDrive");
 }
+

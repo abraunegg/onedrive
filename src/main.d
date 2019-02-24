@@ -1,7 +1,6 @@
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.memory, core.time, core.thread;
 import std.getopt, std.file, std.path, std.process, std.stdio, std.conv, std.algorithm.searching, std.string;
-import std.algorithm.sorting: sort;
 import config, itemdb, monitor, onedrive, selective, sync, util;
 import std.net.curl: CurlException;
 import core.stdc.signal;
@@ -62,7 +61,7 @@ int main(string[] args)
 		return EXIT_FAILURE;
 	}
 	// update configuration from command line args
-	savedOpts ~= cfg.update_from_args(args);
+	cfg.update_from_args(args);
 
 	
 	// Are we able to reach the OneDrive Service
@@ -203,7 +202,7 @@ int main(string[] args)
 	
 	// create-directory, remove-directory, source-directory, destination-directory 
 	// are activities that dont perform a sync no error message for these items either
-	if (((cfg.getValueString("create_directory") != "") || (cfg.getValueString("remove_directory") != "")) || ((cfg.getValueString("source_directory") != "") && (cfg.getValueString("destination_directory") != "")) || (cfg.getValueString("get-o365-drive-id") != "") || (cfg.getValueBool("display_sync_status") == true)) {
+	if (((cfg.getValueString("create_directory") != "") || (cfg.getValueString("remove_directory") != "")) || ((cfg.getValueString("source_directory") != "") && (cfg.getValueString("destination_directory") != "")) || (cfg.getValueString("get_o365_drive_id") != "") || (cfg.getValueBool("display_sync_status") == true)) {
 		performSyncOK = true;
 	}
 	
@@ -294,8 +293,8 @@ int main(string[] args)
 	}
 	
 	// Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
-	if (cfg.getValueString("get-o365-drive-id") != ""){
-		sync.querySiteCollectionForDriveID(cfg.getValueString("get-o365-drive-id"));
+	if (cfg.getValueString("get_o365_drive_id") != ""){
+		sync.querySiteCollectionForDriveID(cfg.getValueString("get_o365_drive_id"));
 	}
 	
 	// Are we displaying the sync status of the client?
@@ -552,45 +551,5 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 		})();
 	} catch(Exception e) {}
 	exit(0);
-}
-void outputLongHelp(Option[] opt)
-{
-	auto argsNeedingOptions = [
-		"--confdir",
-		"--create-directory",
-		"--destination-directory",
-		"--get-O365-drive-id",
-		"--remove-directory",
-		"--single-directory",
-		"--source-directory",
-		"--syncdir" ];
-	writeln(`OneDrive - a client for OneDrive Cloud Services
-
-Usage:
-  onedrive [options] --synchronize
-      Do a one time synchronization
-  onedrive [options] --monitor
-      Monitor filesystem and sync regularly
-  onedrive [options] --display-config
-      Display the currently used configuration
-  onedrive [options] --display-sync-status
-      Query OneDrive service and report on pending changes
-  onedrive -h | --help
-      Show this help screen
-  onedrive --version
-      Show version
-
-Options:
-`);
-	foreach (it; opt.sort!("a.optLong < b.optLong")) {
-		if (it.optLong == "--help") continue;
-		writefln("  %s%s%s%s\n      %s",
-				it.optLong,
-				it.optShort == "" ? "" : " " ~ it.optShort,
-				argsNeedingOptions.canFind(it.optLong) ? " ARG" : "",
-				it.required ? " (required)" : "", it.help);
-	}
-	// write help last
-	writefln("  --help -h\n      This help information.");
 }
 
