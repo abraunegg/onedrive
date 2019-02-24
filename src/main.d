@@ -61,6 +61,8 @@ int main(string[] args)
 	string removeDirectory;
 	// This allows for selective directory syncing instead of everything under ~/OneDrive/
 	string singleDirectory;
+	// Skip dot files & folders - eg .file or /.folder/
+	bool skipDotFiles = false;
 	// Add option to skip symlinks
 	bool skipSymlinks = false;
 	// The source directory if we are using the OneDrive client to rename a directory
@@ -104,6 +106,7 @@ int main(string[] args)
 			"resync", "Forget the last saved state, perform a full sync", &resync,
 			"remove-directory", "Remove a directory on OneDrive - no sync will be performed.", &removeDirectory,
 			"single-directory", "Specify a single local directory within the OneDrive root to sync.", &singleDirectory,
+			"skip-dot-files", "Skip dot files and folders from syncing", &skipDotFiles,
 			"skip-symlinks", "Skip syncing of symlinks", &skipSymlinks,
 			"source-directory", "Source directory to rename or move on OneDrive - no sync will be performed.", &sourceDirectory,
 			"syncdir", "Specify the local directory used for synchronization to OneDrive", &syncDirName,
@@ -205,6 +208,13 @@ int main(string[] args)
 	}
 	
 	// command line parameters to override default 'config' & take precedence
+	// Set the client to skip dot files & folders if --skip-dot-files was passed in
+	if (skipDotFiles) {
+		// The user passed in an alternate skip_dotfiles as to what was either in 'config' file or application default
+		log.vdebug("CLI override to set skip_dotfiles to: true");
+		cfg.setValue("skip_dotfiles", "true");
+	}
+	
 	// Set the client to skip symbolic links if --skip-symlinks was passed in
 	if (skipSymlinks) {
 		// The user passed in an alternate skip_symlinks as to what was either in 'config' file or application default
@@ -296,6 +306,7 @@ int main(string[] args)
 		// Config Options
 		writeln("Config option 'sync_dir'            = ", syncDir);
 		writeln("Config option 'skip_file'           = ", cfg.getValue("skip_file"));
+		writeln("Config option 'skip_dotfiles'       = ", cfg.getValue("skip_dotfiles"));
 		writeln("Config option 'skip_symlinks'       = ", cfg.getValue("skip_symlinks"));
 		writeln("Config option 'monitor_interval'    = ", cfg.getValue("monitor_interval"));
 		writeln("Config option 'min_notif_changes'   = ", cfg.getValue("min_notif_changes"));

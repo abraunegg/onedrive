@@ -75,6 +75,21 @@ private bool hasId(const ref JSONValue item)
 	return ("id" in item) != null;
 }
 
+private bool isDotFile(string path)
+{
+	// always allow the root
+	if (path == ".") return false;
+	
+	path = buildNormalizedPath(path);
+	auto paths = pathSplitter(path);
+	foreach(base; paths) {
+		if (startsWith(base, ".")){
+			return true;
+		}
+	}
+	return false;
+}
+
 // construct an Item struct from a JSON driveItem
 private Item makeItem(const ref JSONValue driveItem)
 {
@@ -767,6 +782,14 @@ final class SyncEngine
 				unwanted = true;
 			}
 		}
+		
+		// skip downloading dot files if configured
+		if (cfg.getValue("skip_dotfiles") == "true") {
+			if (isDotFile(path)) {
+				log.vlog("Skipping item - .file or .folder: ", path);
+				unwanted = true;
+			}
+		}
 
 		// skip unwanted items early
 		if (unwanted) {
@@ -1311,7 +1334,15 @@ final class SyncEngine
 		
 		if(path.byGrapheme.walkLength < maxPathLength){
 			// path is less than maxPathLength
-
+			
+			// skip dot files if configured
+			if (cfg.getValue("skip_dotfiles") == "true") {
+				if (isDotFile(path)) {
+					log.vlog("Skipping item - .file or .folder: ", path);
+					return;
+				}
+			}
+			
 			if (isSymlink(path)) {
 				// if config says so we skip all symlinked items
 				if (cfg.getValue("skip_symlinks") == "true") {
