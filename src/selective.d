@@ -48,7 +48,19 @@ final class SelectiveSync
 		// Does the file name match skip_file config entry?
 		// Returns true if the name matches a skip_file config entry
 		// Returns false if no match
-		return !name.matchFirst(mask).empty;
+	
+		// Try full path match first
+		if (!name.matchFirst(mask).empty) {
+			return true;
+		} else {
+			// check just the file name
+			string filename = baseName(name);
+			if(!filename.matchFirst(mask).empty) {
+				return true;
+			}
+		}
+		// no match
+		return false;
 	}
 	
 	// config sync_list file handling

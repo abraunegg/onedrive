@@ -1384,7 +1384,7 @@ final class SyncEngine
 					}
 				}
 				if (isFile(path)) {
-					if (selectiveSync.isFileNameExcluded(baseName(path))) {
+					if (selectiveSync.isFileNameExcluded(strip(path,"./"))) {
 						log.vlog("Skipping item - excluded by skip_file config: ", path);
 						return;
 					}
