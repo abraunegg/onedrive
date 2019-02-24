@@ -84,6 +84,9 @@ Remove a directory on OneDrive \- no sync will be performed.
 \fB\-\-single\-directory\fP ARG
 Specify a single local directory within the OneDrive root to sync.
 .TP
+\fB\-\-skip\-dot\-files\fP
+Skip dot files and folders from syncing
+.TP
 \fB\-\-skip\-symlinks\fP
 Skip syncing of symlinks
 .TP

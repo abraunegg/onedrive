@@ -234,7 +234,19 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 ### Upgrading from 'skilion' client
 The 'skilion' version contains a significant number of defect's in how the local sync state is managed. When upgrading from the 'skilion' version to this version, it is advisable to stop any service / onedrive process from running and then remove any `items.sqlite3` file from your configuration directory (`~/.config/onedrive/`) as this will force the creation of a new local cache file.
 
-### Important - curl compatability
+Additionally, if you are using a 'config' file within your configuration directory (`~/.config/onedrive/`), please ensure that you update the `skip_file = ` option as per below:
+
+**Invalid configuration:**
+```text
+skip_file = "= .*|~*"
+```
+**Minimum valid configuration:**
+```text
+skip_file = "~*"
+```
+Do not use a skip_file entry of `.*` as this will prevent correct searching of local changes to process.
+
+### Important - curl compatibility
 If your system utilises curl >= 7.62.0 you may need to use `--force-http-1.1` in order for the client to work correctly due to changes in curl to prefer HTTP/2 over HTTP/1.1 by default.
 
 ### First run :zap:
@@ -286,6 +298,7 @@ Config path                         = /home/alex/.config/onedrive
 Config file found in config path    = false
 Config option 'sync_dir'            = /home/alex/OneDrive
 Config option 'skip_file'           = ~*
+Config option 'skip_dotfiles'       = false
 Config option 'skip_symlinks'       = false
 Config option 'monitor_interval'    = 45
 Config option 'min_notif_changes'   = 5
@@ -416,6 +429,7 @@ This file does not get created by default, and should only be created if you wan
 Available options:
 *   `sync_dir`: directory where the files will be synced
 *   `skip_file`: any files or directories that match this pattern will be skipped during sync
+*   `skip_dotfiles`: skip any .files or .folders during sync
 *   `skip_symlinks`: any files or directories that are symlinked will be skipped during sync
 *   `monitor_interval`: time interval in seconds by which the monitor process will process local and remote changes
 *   `min_notif_changes`: minimum number of pending incoming changes to trigger a desktop notification
@@ -429,11 +443,18 @@ Proceed with caution here when changing the default sync dir from ~/OneDrive to 
 The issue here is around how the client stores the sync_dir path in the database. If the config file is missing, or you don't use the `--syncdir` parameter - what will happen is the client will default back to `~/OneDrive` and 'think' that either all your data has been deleted - thus delete the content on OneDrive, or will start downloading all data from OneDrive into the default location.
 
 ### skip_file
-Example: `skip_file = ".*|~*|Desktop|Documents/OneNote*|Documents/IISExpress|Documents/SQL Server Management Studio|Documents/Visual Studio*|Documents/config.xlaunch|Documents/WindowsPowerShell"`
+Example: `skip_file = "~*|Desktop|Documents/OneNote*|Documents/IISExpress|Documents/SQL Server Management Studio|Documents/Visual Studio*|Documents/config.xlaunch|Documents/WindowsPowerShell"`
 
 Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns.
 
 **Note:** after changing `skip_file`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
+
+**Note:** Do not use a skip_file entry of `.*` as this will prevent correct searching of local changes to process.
+
+### skip_dotfiles
+Example: `skip_dotfiles = "true"`
+
+Setting this to `"true"` will skip all .files and .folders while syncing.
 
 ### skip_symlinks
 Example: `skip_symlinks = "true"`
@@ -640,6 +661,8 @@ Options:
       Remove a directory on OneDrive - no sync will be performed.
   --single-directory ARG
       Specify a single local directory within the OneDrive root to sync.
+  --skip-dot-files
+      Skip dot files and folders from syncing
   --skip-symlinks
       Skip syncing of symlinks
   --source-directory ARG
