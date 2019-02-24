@@ -25,10 +25,10 @@ fi
 chown "${oduser}:${odgroup}" /onedrive/ /onedrive/conf
 
 # Default parameters
-ARGS="--monitor --verbose --confdir /onedrive/conf --syncdir /onedrive/data"
+ARGS=(--monitor --verbose --confdir /onedrive/conf --syncdir /onedrive/data)
 
-if [ "${#}" -gt "0" ]; then
-  ARGS="${*}"
+if [ ${#} -gt 0 ]; then
+  ARGS=("${@}")
 fi
 
-exec gosu "${oduser}" /usr/local/bin/onedrive "${ARGS}"
+exec gosu "${oduser}" /usr/local/bin/onedrive "${ARGS[@]}"
