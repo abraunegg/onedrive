@@ -33,6 +33,8 @@ final class Config
 		// Configure to skip ONLY temp files (~*.doc etc) by default
 		// Prior configuration was: .*|~*
 		setValue("skip_file", "~*");
+		// By default skip dot files & folders are not skipped 
+		setValue("skip_dotfiles", "false");
 		// By default symlinks are not skipped (using string type
 		// instead of boolean because hashmap only stores string types)
 		setValue("skip_symlinks", "false");

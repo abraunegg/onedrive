@@ -237,11 +237,11 @@ The 'skilion' version contains a significant number of defect's in how the local
 Additionally, if you are using a 'config' file within your configuration directory (`~/.config/onedrive/`), please ensure that you update the `skip_file = ` option as per below:
 
 **Invalid configuration:**
-```
+```text
 skip_file = "= .*|~*"
 ```
 **Minimum valid configuration:**
-```
+```text
 skip_file = "~*"
 ```
 Do not use a skip_file entry of `.*` as this will prevent correct searching of local changes to process.
@@ -266,6 +266,7 @@ Config file found in config path    = false
 Config option 'sync_dir'            = /home/alex/OneDrive
 Config option 'skip_dir'            = 
 Config option 'skip_file'           = ~*
+Config option 'skip_dotfiles'       = false
 Config option 'skip_symlinks'       = false
 Config option 'monitor_interval'    = 45
 Config option 'min_notif_changes'   = 5
@@ -396,6 +397,7 @@ This file does not get created by default, and should only be created if you wan
 Available options:
 *   `sync_dir`: directory where the files will be synced
 *   `skip_file`: any files or directories that match this pattern will be skipped during sync
+*   `skip_dotfiles`: skip any .files or .folders during sync
 *   `skip_symlinks`: any files or directories that are symlinked will be skipped during sync
 *   `monitor_interval`: time interval in seconds by which the monitor process will process local and remote changes
 *   `min_notif_changes`: minimum number of pending incoming changes to trigger a desktop notification
@@ -423,6 +425,11 @@ Patterns are case insensitive. `*` and `?` [wildcards characters](https://techne
 **Note:** after changing `skip_file`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
 **Note:** Do not use a skip_file entry of `.*` as this will prevent correct searching of local changes to process.
+
+### skip_dotfiles
+Example: `skip_dotfiles = "true"`
+
+Setting this to `"true"` will skip all .files and .folders while syncing.
 
 ### skip_symlinks
 Example: `skip_symlinks = "true"`
@@ -627,6 +634,8 @@ Options:
       Remove a directory on OneDrive - no sync will be performed.
   --single-directory ARG
       Specify a single local directory within the OneDrive root to sync.
+  --skip-dot-files
+      Skip dot files and folders from syncing
   --skip-symlinks
       Skip syncing of symlinks
   --source-directory ARG
