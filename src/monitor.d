@@ -184,7 +184,7 @@ final class Monitor
 				if (selectiveSync.isDirNameExcluded(strip(path,"./"))) {
 					goto skip;
 				}
-				if (selectiveSync.isFileNameExcluded(baseName(path))) {
+				if (selectiveSync.isFileNameExcluded(strip(path,"./"))) {
 					goto skip;
 				}
 				if (selectiveSync.isPathExcluded(path)) {
