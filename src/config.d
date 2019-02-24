@@ -380,15 +380,12 @@ Usage:
 Options:
 `);
 	foreach (it; opt.sort!("a.optLong < b.optLong")) {
-		if (it.optLong == "--help") continue;
 		writefln("  %s%s%s%s\n      %s",
 				it.optLong,
 				it.optShort == "" ? "" : " " ~ it.optShort,
 				argsNeedingOptions.canFind(it.optLong) ? " ARG" : "",
 				it.required ? " (required)" : "", it.help);
 	}
-	// write help last
-	writefln("  --help -h\n      This help information.");
 }
 
 unittest
