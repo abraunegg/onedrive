@@ -1343,6 +1343,14 @@ final class SyncEngine
 				}
 			}
 			
+			// Do we need to check for .nosync? Only if --check-for-nosync was passed in
+			if (cfg.getValue("check_nosync") == "true") {
+				if (exists(path ~ "/.nosync")) {
+					log.vlog("Skipping item - .nosync found & --check-for-nosync enabled: ", path);
+					return;
+				}
+			}
+			
 			if (isSymlink(path)) {
 				// if config says so we skip all symlinked items
 				if (cfg.getValue("skip_symlinks") == "true") {
