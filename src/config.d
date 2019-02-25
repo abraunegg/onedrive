@@ -249,6 +249,8 @@ final class Config
 				outputLongHelp(opt.options);
 				exit(EXIT_SUCCESS);
 			}
+			// update verbosity setting
+			log.verbose = longValues["verbose"];
 		} catch (GetOptException e) {
 			log.error(e.msg);
 			log.error("Try 'onedrive -h' for more information");
