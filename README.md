@@ -418,9 +418,14 @@ Patterns are case insensitive. `*` and `?` [wildcards characters](https://techne
 **Note:** after changing `skip_dir`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
 ### skip_file
-Example: `skip_file = "~*|Documents/OneNote*|Documents/config.xlaunch"`
+Example: `skip_file = "~*|Documents/OneNote*|Documents/config.xlaunch|myfile.ext"`
 
 Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns.
+
+Files can be skipped in the following fashion:
+*   Specify a wildcard, eg: '*.txt' (skip all txt files)
+*   Explicitly specify the filename and it's full path relative to your sync_dir, eg: 'path/to/file/filename.ext'
+*   Explicitly specify the filename only and skip every instance of this filename, eg: 'filename.ext'
 
 **Note:** after changing `skip_file`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
