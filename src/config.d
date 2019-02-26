@@ -47,6 +47,8 @@ final class Config
 		setValue("drive_id", "");
 		// Minimal changes that trigger a log and notification on sync
 		setValue("min_notif_changes", "5");
+		// Frequency of log messages in monitor, ie after n sync runs ship out a log message
+		setValue("monitor_log_frequency", "5");
 		
 		if (!load(userConfigFilePath)) {
 			// What was the reason for failure?
