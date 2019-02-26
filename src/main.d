@@ -22,10 +22,6 @@ int main(string[] args)
 	// configuration directory
 	string configDirName;
 
-	Option[] savedOpts;
-
-	bool helpWanted = false;
-
 	try {
 		// print the version and exit
 		bool printVersion = false;
@@ -39,8 +35,6 @@ int main(string[] args)
 		);
 		if (opt.helpWanted) {
 			args ~= "--help";
-			helpWanted = true;
-			savedOpts ~= opt.options;
 		}
 		if (printVersion) {
 			std.stdio.write("onedrive ", import("version"));
@@ -206,7 +200,7 @@ int main(string[] args)
 	
 	// create-directory, remove-directory, source-directory, destination-directory 
 	// are activities that dont perform a sync no error message for these items either
-	if (((cfg.getValueString("create_directory") != "") || (cfg.getValueString("remove_directory") != "")) || ((cfg.getValueString("source_directory") != "") && (cfg.getValueString("destination_directory") != "")) || (cfg.getValueString("get_o365_drive_id") != "") || (cfg.getValueBool("display_sync_status") == true)) {
+	if (((cfg.getValueString("create_directory") != "") || (cfg.getValueString("remove_directory") != "")) || ((cfg.getValueString("source_directory") != "") && (cfg.getValueString("destination_directory") != "")) || (cfg.getValueString("get_o365_drive_id") != "") || cfg.getValueBool("display_sync_status")) {
 		performSyncOK = true;
 	}
 	
