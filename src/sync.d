@@ -208,7 +208,7 @@ final class SyncEngine
 		this.onedrive = onedrive;
 		this.itemdb = itemdb;
 		this.selectiveSync = selectiveSync;
-		session = UploadSession(onedrive, cfg.uploadStateFilePath);
+		// session = UploadSession(onedrive, cfg.uploadStateFilePath);
 	}
 
 	void reset()
@@ -225,6 +225,8 @@ final class SyncEngine
 		if (initDone) {
 			return;
 		}
+
+		session = UploadSession(onedrive, cfg.uploadStateFilePath);
 
 		// Need to catch 400 or 5xx server side errors at initialization
 		try {
