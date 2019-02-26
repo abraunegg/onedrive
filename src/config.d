@@ -45,6 +45,8 @@ final class Config
 		longValues["verbose"]            = 0;
 		longValues["monitor_interval"]   = 45,
 		longValues["min_notif_changes"]  = 5;
+		longValues["min_notif_changes"]  = 5;
+		longValues["monitor_log_frequency"] = 5;
 
 		// Determine the users home directory. 
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
@@ -200,6 +202,9 @@ final class Config
 				"monitor|m",
 					"Keep monitoring for local and remote changes",
 					&boolValues["monitor"],
+				"monitor-log-frequency",
+					"Frequency of logging in monitor mode",
+					&longValues["monitor_log_frequency"],
 				"no-remote-delete",
 					"Do not delete local file 'deletes' from OneDrive when using --upload-only",
 					&boolValues["no_remote_delete"],
