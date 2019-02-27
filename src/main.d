@@ -317,6 +317,7 @@ int main(string[] args)
 		}
 		
 		// Config Options
+		writeln("Config option 'check_nosync'        = ", cfg.getValue("check_nosync"));
 		writeln("Config option 'sync_dir'            = ", syncDir);
 		writeln("Config option 'skip_file'           = ", cfg.getValue("skip_file"));
 		writeln("Config option 'skip_dotfiles'       = ", cfg.getValue("skip_dotfiles"));
