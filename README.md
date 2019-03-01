@@ -383,6 +383,18 @@ If you want to just delete the application key, but keep the items database:
 rm -f ~/.config/onedrive/refresh_token
 ```
 
+### Handling a OneDrive account password change
+If you change your OneDrive account password, the client will no longer be authorised to sync, and will generate the following error:
+```text
+ERROR: OneDrive returned a 'HTTP 401 Unauthorized' - Cannot Initialize Sync Engine
+```
+To re-authorise the client, follow the steps below:
+1.   If running the client as a service (init.d or systemd), stop the service
+2.   Run the command `onedrive --logout`. This will clean up the previous authorisation, and will prompt you to re-authorise as per initial configuration.
+3.   Restart the client if running as a service or perform a manual sync
+
+The application will now sync with OneDrive with the new credentials.
+
 ## Additional Configuration
 Additional configuration is optional.
 If you want to change the defaults, you can copy and edit the included config file into your `~/.config/onedrive` directory:
