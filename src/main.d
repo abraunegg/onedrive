@@ -22,6 +22,8 @@ int main(string[] args)
 	// Application Option Variables
 	// Add a check mounts option to resolve https://github.com/abraunegg/onedrive/issues/8
 	bool checkMount = false;
+	// Check if we should ignore a directory if a special file (.nosync) is present - https://github.com/abraunegg/onedrive/issues/163
+	bool checkNoSync = false;
 	// configuration directory
 	string configDirName;
 	// Create a single root directory on OneDrive
@@ -92,6 +94,7 @@ int main(string[] args)
 			std.getopt.config.bundling,
 			std.getopt.config.caseSensitive,
 			"check-for-nomount", "Check for the presence of .nosync in the syncdir root. If found, do not perform sync.", &checkMount,
+			"check-for-nosync", "Check for the presence of .nosync in each directory. If found, skip directory from sync.", &checkNoSync,
 			"confdir", "Set the directory used to store the configuration files", &configDirName,
 			"create-directory", "Create a directory on OneDrive - no sync will be performed.", &createDirectory,
 			"destination-directory", "Destination directory for renamed or move on OneDrive - no sync will be performed.", &destinationDirectory,
@@ -222,6 +225,12 @@ int main(string[] args)
 	}
 	
 	// command line parameters to override default 'config' & take precedence
+	// Set the client to skip specific directories if .nosync is found AND ONLY if --check-for-nosync was passed in
+	if (checkNoSync) {
+		log.vdebug("CLI override to set check_nosync to: true");
+		cfg.setValue("check_nosync", "true");
+	}
+	
 	// Set the client to skip dot files & folders if --skip-dot-files was passed in
 	if (skipDotFiles) {
 		// The user passed in an alternate skip_dotfiles as to what was either in 'config' file or application default
@@ -327,6 +336,7 @@ int main(string[] args)
 		}
 		
 		// Config Options
+		writeln("Config option 'check_nosync'        = ", cfg.getValue("check_nosync"));
 		writeln("Config option 'sync_dir'            = ", syncDir);
 		writeln("Config option 'skip_file'           = ", cfg.getValue("skip_file"));
 		writeln("Config option 'skip_dotfiles'       = ", cfg.getValue("skip_dotfiles"));
@@ -573,7 +583,8 @@ int main(string[] args)
 
 			// initialise the monitor class
 			if (cfg.getValue("skip_symlinks") == "true") skipSymlinks = true;
-			if (!downloadOnly) m.init(cfg, verbose, skipSymlinks);
+			if (cfg.getValue("check_nosync") == "true") checkNoSync = true;
+			if (!downloadOnly) m.init(cfg, verbose, skipSymlinks, checkNoSync);
 			// monitor loop
 			immutable auto checkInterval = dur!"seconds"(to!long(cfg.getValue("monitor_interval")));
 			immutable auto logInterval = to!long(cfg.getValue("monitor_log_frequency"));
