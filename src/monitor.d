@@ -32,6 +32,8 @@ final class Monitor
 	private void[] buffer;
 	// skip symbolic links
 	bool skip_symlinks;
+	// check for .nosync if enabled
+	bool check_nosync;
 	
 	private SelectiveSync selectiveSync;
 
@@ -46,10 +48,11 @@ final class Monitor
 		this.selectiveSync = selectiveSync;
 	}
 
-	void init(Config cfg, bool verbose, bool skip_symlinks)
+	void init(Config cfg, bool verbose, bool skip_symlinks, bool check_nosync)
 	{
 		this.verbose = verbose;
 		this.skip_symlinks = skip_symlinks;
+		this.check_nosync = check_nosync;
 		
 		assert(onDirCreated && onFileChanged && onDelete && onMove);
 		fd = inotify_init();
@@ -87,6 +90,14 @@ final class Monitor
 			// if config says so we skip all symlinked items
 			if (skip_symlinks) {
 				// dont add a watch for this directory
+				return;
+			}
+		}
+		
+		// Do we need to check for .nosync? Only if check_nosync is true
+		if (check_nosync) {
+			if (exists(buildNormalizedPath(dirname) ~ "/.nosync")) {
+				log.vlog("Skipping watching path - .nosync found & --check-for-nosync enabled: ", buildNormalizedPath(dirname));
 				return;
 			}
 		}

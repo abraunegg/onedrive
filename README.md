@@ -468,6 +468,17 @@ Year 2
 ```
 **Note:** after changing the sync_list, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
+### Skipping directories from syncing
+There are several mechanisms available to 'skip' a directory from scanning:
+*   Utilise 'skip_file'
+*   Utilise 'sync_list'
+
+One further method is to add a '.nosync' empty file to any folder. When this file is present, adding `--check-for-nosync` to your command line will now make the sync process skip any folder where the '.nosync' file is present.
+
+To make this a permanent change to always skip folders when a '.nosync' empty file is present, add the following to your config file:
+
+Example: `check_nosync = "true"`
+
 ### Shared folders
 Folders shared with you can be synced by adding them to your OneDrive. To do that open your Onedrive, go to the Shared files list, right click on the folder you want to sync and then click on "Add to my OneDrive".
 
@@ -598,6 +609,8 @@ Options:
 
   --check-for-nomount
       Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
+  --check-for-nosync
+      Check for the presence of .nosync in each directory. If found, skip directory from sync.
   --confdir ARG
       Set the directory used to store the configuration files
   --create-directory ARG
