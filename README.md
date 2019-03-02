@@ -483,7 +483,6 @@ Year 2
 
 ### Skipping directories from syncing
 There are several mechanisms available to 'skip' a directory from scanning:
-*   Utilise 'skip_file'
 *   Utilise 'skip_dir'
 *   Utilise 'sync_list'
 
