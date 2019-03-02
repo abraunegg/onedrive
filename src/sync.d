@@ -1467,7 +1467,6 @@ final class SyncEngine
 						return;
 					}
 				}
-
 				
 				// configure the parent item data
 				if (hasId(onedrivePathDetails) && hasParentReference(onedrivePathDetails)){
