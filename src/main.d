@@ -564,7 +564,8 @@ int main(string[] args)
 
 			// initialise the monitor class
 			if (cfg.getValue("skip_symlinks") == "true") skipSymlinks = true;
-			if (!downloadOnly) m.init(cfg, verbose, skipSymlinks);
+			if (cfg.getValue("check_nosync") == "true") checkNoSync = true;
+			if (!downloadOnly) m.init(cfg, verbose, skipSymlinks, checkNoSync);
 			// monitor loop
 			immutable auto checkInterval = dur!"seconds"(to!long(cfg.getValue("monitor_interval")));
 			immutable auto logInterval = to!long(cfg.getValue("monitor_log_frequency"));
