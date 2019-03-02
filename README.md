@@ -484,6 +484,7 @@ Year 2
 ### Skipping directories from syncing
 There are several mechanisms available to 'skip' a directory from scanning:
 *   Utilise 'skip_file'
+*   Utilise 'skip_dir'
 *   Utilise 'sync_list'
 
 One further method is to add a '.nosync' empty file to any folder. When this file is present, adding `--check-for-nosync` to your command line will now make the sync process skip any folder where the '.nosync' file is present.
