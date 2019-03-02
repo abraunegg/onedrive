@@ -1,4 +1,4 @@
-.TH ONEDRIVE "1" "January 2019" "2.2.5" "User Commands"
+.TH ONEDRIVE "1" "February 2019" "2.2.5" "User Commands"
 .SH NAME
 onedrive \- folder synchronization with OneDrive
 .SH SYNOPSIS
@@ -20,6 +20,9 @@ Without any option given, no sync is done and the program exits.
 .TP
 \fB\-\-check\-for\-nomount\fP
 Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
+.TP
+\fB\-\-check\-for\-nosync\fP
+Check for the presence of .nosync in each directory. If found, skip directory from sync.
 .TP
 \fB\-\-confdir\fP ARG
 Set the directory used to store the configuration files

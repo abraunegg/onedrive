@@ -49,6 +49,8 @@ final class Config
 		setValue("min_notif_changes", "5");
 		// Frequency of log messages in monitor, ie after n sync runs ship out a log message
 		setValue("monitor_log_frequency", "5");
+		// Check if we should ignore a directory if a special file (.nosync) is present
+		setValue("check_nosync", "false");
 		
 		if (!load(userConfigFilePath)) {
 			// What was the reason for failure?
