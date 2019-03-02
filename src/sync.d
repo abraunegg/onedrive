@@ -1467,7 +1467,8 @@ final class SyncEngine
 						return;
 					}
 				}
-								
+
+				
 				// configure the parent item data
 				if (hasId(onedrivePathDetails) && hasParentReference(onedrivePathDetails)){
 					log.vdebug("Parent path found, configuring parent item");
