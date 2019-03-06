@@ -692,6 +692,12 @@ final class OneDriveApi
 	{
 		switch(http.statusLine.code)
 		{
+			// 400 - Bad Request
+			case 400:
+				// Bad Request .. how should we act?
+				log.vlog("OneDrive returned a 'HTTP 400 - Bad Request' - gracefully handling error");
+				break;	
+			
 			//	412 - Precondition Failed
 			case 412:
 				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
