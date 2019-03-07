@@ -591,6 +591,7 @@ Repeat these steps for each OneDrive account that you wish to use.
 If you have a requirement to run the client through a proxy, there are a couple of ways to achieve this:
 1.  Set proxy configuration in `~/.bashrc` to allow the authorization process and when utilizing `--synchronize`
 2.  If running as a systemd service, edit the applicable systemd service file to include the proxy configuration information:
+```text
 [Unit]
 Description=OneDrive Free Client
 Documentation=https://github.com/abraunegg/onedrive
@@ -606,7 +607,7 @@ RestartSec=3
 
 [Install]
 WantedBy=default.target
-
+```
 
 ## Extra
 
