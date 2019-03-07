@@ -609,6 +609,8 @@ RestartSec=3
 WantedBy=default.target
 ```
 
+**Note:** After modifying the service files, you will need to run `sudo systemctl daemon-reload` to ensure the service file changes are picked up. A restart of the OneDrive service will also be required to pick up the change to send the traffic via the proxy server
+
 ## Extra
 
 ### Reporting issues
