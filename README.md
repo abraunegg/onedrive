@@ -253,6 +253,17 @@ If your system utilises curl >= 7.62.0 you may need to use `--force-http-1.1` in
 After installing the application you must run it at least once from the terminal to authorize it.
 
 You will be asked to open a specific link using your web browser where you will have to login into your Microsoft Account and give the application the permission to access your files. After giving the permission, you will be redirected to a blank page. Copy the URI of the blank page into the application.
+```text
+[user@hostname ~]$ onedrive 
+
+Authorize this app visiting:
+
+https://.....
+
+Enter the response uri: 
+
+```
+
 
 ### Show your configuration
 To validate your configuration the application will use, utilise the following:
@@ -575,6 +586,30 @@ systemctl --user enable onedrive-work
 systemctl --user start onedrive-work
 ```
 Repeat these steps for each OneDrive account that you wish to use.
+
+### Access OneDrive service through a proxy
+If you have a requirement to run the client through a proxy, there are a couple of ways to achieve this:
+1.  Set proxy configuration in `~/.bashrc` to allow the authorization process and when utilizing `--synchronize`
+2.  If running as a systemd service, edit the applicable systemd service file to include the proxy configuration information:
+```text
+[Unit]
+Description=OneDrive Free Client
+Documentation=https://github.com/abraunegg/onedrive
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Environment="HTTP_PROXY=http://ip.address:port"
+Environment="HTTPS_PROXY=http://ip.address:port"
+ExecStart=/usr/local/bin/onedrive --monitor
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
+```
+
+**Note:** After modifying the service files, you will need to run `sudo systemctl daemon-reload` to ensure the service file changes are picked up. A restart of the OneDrive service will also be required to pick up the change to send the traffic via the proxy server
 
 ## Extra
 
