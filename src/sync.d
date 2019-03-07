@@ -1467,7 +1467,7 @@ final class SyncEngine
 						return;
 					}
 				}
-								
+				
 				// configure the parent item data
 				if (hasId(onedrivePathDetails) && hasParentReference(onedrivePathDetails)){
 					log.vdebug("Parent path found, configuring parent item");
@@ -1475,11 +1475,10 @@ final class SyncEngine
 					parent.driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
 				} else {
 					// OneDrive API query failed
-					log.error("\nERROR: Unable to query the following path due to OneDrive API regression: ", path);
-					log.error("ERROR: Refer to https://github.com/OneDrive/onedrive-api-docs/issues/976 for further details");
-					log.error("WORKAROUND: Manually create the path above on OneDrive to workaround API issue\n");
-					// return
-					return;
+					// Assume client defaults
+					log.vdebug("Parent path could not be queried, using OneDrive account defaults");
+					parent.id = defaultRootId;  // Should give something like 12345ABCDE1234A1!101
+					parent.driveId = defaultDriveId;  // Should give something like 12345abcde1234a1
 				}
 			}
 		
