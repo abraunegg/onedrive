@@ -114,7 +114,6 @@ final class OneDriveApi
 		if (simulateNoRefreshTokenFile) {
 			.simulateNoRefreshTokenFile = true;
 		}
-		
 	}
 
 	bool init()
@@ -137,8 +136,8 @@ final class OneDriveApi
 			}
 			return true;
 		} else {
+			// --dry-run
 			if (!.simulateNoRefreshTokenFile) {
-				// --dry-run
 				try {
 					refreshToken = readText(cfg.refreshTokenFilePath);
 				} catch (FileException e) {

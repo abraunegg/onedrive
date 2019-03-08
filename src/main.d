@@ -224,6 +224,16 @@ int main(string[] args)
 		return EXIT_FAILURE;
 	}
 	
+	// dry-run database setup
+	if (dryRun) {
+		// Make a copy of the original items.sqlite3 for use as the dry run copy if it exists
+		if (exists(cfg.databaseFilePath)) {
+			// copy the file
+			log.vdebug("Copying items.sqlite3 to items-dryrun.sqlite3 to use for dry run operations");
+			copy(cfg.databaseFilePath,cfg.databaseFilePathDryRun);
+		}
+	}
+	
 	// command line parameters to override default 'config' & take precedence
 	// Set the client to skip specific directories if .nosync is found AND ONLY if --check-for-nosync was passed in
 	if (checkNoSync) {
@@ -319,7 +329,7 @@ int main(string[] args)
 		}
 	}
 
-	// Display current application configuration, no application initialization
+	// Display current application configuration, no application initialisation
 	if (displayConfiguration){
 		string userConfigFilePath = configDirName ~ "/config";
 		string userSyncList = configDirName ~ "/sync_list";
@@ -409,9 +419,17 @@ int main(string[] args)
 		return EXIT_FAILURE;
 	}
 	
-	// initialize system
+	// Initialize the item database
 	log.vlog("Opening the item database ...");
-	itemDb = new ItemDatabase(cfg.databaseFilePath, dryRun);
+	if (!dryRun) {
+		// Load the items.sqlite3 file as the database
+		log.vdebug("Using database file: ", cfg.databaseFilePath);
+		itemDb = new ItemDatabase(cfg.databaseFilePath);
+	} else {
+		// Load the items-dryrun.sqlite3 file as the database
+		log.vdebug("Using database file: ", cfg.databaseFilePathDryRun);
+		itemDb = new ItemDatabase(cfg.databaseFilePathDryRun);
+	}
 	
 	log.vlog("All operations will be performed in: ", syncDir);
 	if (!exists(syncDir)) {
@@ -435,7 +453,7 @@ int main(string[] args)
 	selectiveSync.load(cfg.syncListFilePath);
 	selectiveSync.setMask(cfg.getValue("skip_file"));
 	
-	// Initialise the sync engine
+	// Initialize the sync engine
 	log.logAndNotify("Initializing the Synchronization Engine ...");
 	auto sync = new SyncEngine(cfg, oneDrive, itemDb, selectiveSync, dryRun);
 	
@@ -631,15 +649,18 @@ int main(string[] args)
 		}
 	}
 
-	// workaround for segfault in std.net.curl.Curl.shutdown() on exit
+	// Workaround for segfault in std.net.curl.Curl.shutdown() on exit
 	oneDrive.http.shutdown();
+	
+	// Make sure the .wal file is incorporated into the main db before we exit
+	destroy(itemDb);
 	
 	// --dry-run temp database cleanup
 	if (dryRun) {
-		string dryRunFilename = replace(cfg.databaseFilePath, "sqlite3", "dryRun");
-		if (exists(dryRunFilename)) {
-			// safely remove items.dryRun to cleanup
-			safeRemove(dryRunFilename);
+		if (exists(cfg.databaseFilePathDryRun)) {
+			// remove the file
+			log.vdebug("Removing items-dryrun.sqlite3 as dry run operations complete");
+			safeRemove(cfg.databaseFilePathDryRun);	
 		}
 	}
 	

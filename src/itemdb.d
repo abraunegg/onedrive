@@ -4,7 +4,6 @@ import std.path;
 import std.string;
 import core.stdc.stdlib;
 import sqlite;
-import std.file;
 static import log;
 
 enum ItemType {
@@ -41,26 +40,10 @@ final class ItemDatabase
 	string selectItemByParentIdStmt;
 	string deleteItemByIdStmt;
 
-	this(const string filename, bool dryRun)
+	this(const(char)[] filename)
 	{
+		db = Database(filename);
 		int dbVersion;
-		// For --dry-run to 'work' we need to create a dry-run database, otherwise DB queries in code would fail
-		if (dryRun) {
-			string dryRunFilename = replace(filename, "sqlite3", "dryRun");
-			// temp database file - make a copy of the existing file if it exists
-			if (exists(filename)) {
-				// make a copy of existing items.sqlite3 as items.dryRun
-				copy(filename,dryRunFilename);
-				db = Database(dryRunFilename);
-			} else {
-				// configure as new file
-				db = Database(dryRunFilename);
-			}
-		} else {
-			// production database file
-			db = Database(filename);
-		}
-		
 		try {
 			dbVersion = db.getVersion();
 		} catch (SqliteException e) {
@@ -73,7 +56,6 @@ final class ItemDatabase
 			createTable();
 		} else if (db.getVersion() != itemDatabaseVersion) {
 			log.log("The item database is incompatible, re-creating database table structures");
-			// dryRun execution is against a separate database file, thus this modification is allowed
 			db.exec("DROP TABLE item");
 			createTable();
 		}

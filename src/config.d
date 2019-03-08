@@ -7,6 +7,7 @@ final class Config
 	public string refreshTokenFilePath;
 	public string deltaLinkFilePath;
 	public string databaseFilePath;
+	public string databaseFilePathDryRun;
 	public string uploadStateFilePath;
 	public string syncListFilePath;
 
@@ -19,6 +20,7 @@ final class Config
 		refreshTokenFilePath = configDirName ~ "/refresh_token";
 		deltaLinkFilePath = configDirName ~ "/delta_link";
 		databaseFilePath = configDirName ~ "/items.sqlite3";
+		databaseFilePathDryRun = configDirName ~ "/items-dryrun.sqlite3";
 		uploadStateFilePath = configDirName ~ "/resume_upload";
 		userConfigFilePath = configDirName ~ "/config";
 		syncListFilePath = configDirName ~ "/sync_list";
