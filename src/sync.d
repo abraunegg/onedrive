@@ -1605,7 +1605,7 @@ final class SyncEngine
 		Item parent;
 		// Check the database for the parent
 		//enforce(itemdb.selectByPath(dirName(path), defaultDriveId, parent), "The parent item is not in the local database");
-		if (itemdb.selectByPath(dirName(path), defaultDriveId, parent)) {
+		if ((dryRun) || (itemdb.selectByPath(dirName(path), defaultDriveId, parent))) {
 			// Maximum file size upload
 			//	https://support.microsoft.com/en-au/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
 			//	1. OneDrive Business say's 15GB
