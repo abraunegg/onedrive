@@ -1169,15 +1169,18 @@ final class SyncEngine
 			}
 		} else {
 			// Directory does not exist locally
+			log.vlog("The directory has been deleted locally");
 			// If we are in a --dry-run situation - this directory may never have existed as we never downloaded it
 			if (!dryRun) {
-				log.vlog("The directory has been deleted locally");
 				if (noRemoteDelete) {
 					// do not process remote directory delete
 					log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
 				} else {
 					uploadDeleteItem(item, path);
 				}
+			} else {
+				// we are in a --dry-run situation, directory deleted locally
+				uploadDeleteItem(item, path);
 			}
 		}
 	}
@@ -1847,57 +1850,59 @@ final class SyncEngine
 	private void uploadDeleteItem(Item item, string path)
 	{
 		log.log("Deleting item from OneDrive: ", path);
-		
-		if ((item.driveId == "") && (item.id == "") && (item.eTag == "")){
-			// These are empty ... we cannot delete if this is empty ....
-			log.vdebug("item.driveId, item.id & item.eTag are empty ... need to query OneDrive for values");
-			log.vdebug("Checking OneDrive for path: ", path);
-			JSONValue onedrivePathDetails = onedrive.getPathDetails(path); // Returns a JSON String for the OneDrive Path
-			log.vdebug("OneDrive path details: ", onedrivePathDetails);
-			item.driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
-			item.id = onedrivePathDetails["id"].str; // This item's ID. Should give something like 12345ABCDE1234A1!101
-			item.eTag = onedrivePathDetails["eTag"].str; // Should be something like aNjM2NjJFRUVGQjY2NjJFMSE5MzUuMA
-		}
-			
-		try {
-			onedrive.deleteById(item.driveId, item.id, item.eTag);
-		} catch (OneDriveException e) {
-			if (e.httpStatusCode == 404) {
-				// item.id, item.eTag could not be found on driveId
-				log.vlog("OneDrive reported: The resource could not be found.");
+		if (!dryRun) {
+			// we are not in a --dry-run situation, process deletion to OneDrive
+			if ((item.driveId == "") && (item.id == "") && (item.eTag == "")){
+				// These are empty ... we cannot delete if this is empty ....
+				log.vdebug("item.driveId, item.id & item.eTag are empty ... need to query OneDrive for values");
+				log.vdebug("Checking OneDrive for path: ", path);
+				JSONValue onedrivePathDetails = onedrive.getPathDetails(path); // Returns a JSON String for the OneDrive Path
+				log.vdebug("OneDrive path details: ", onedrivePathDetails);
+				item.driveId = onedrivePathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
+				item.id = onedrivePathDetails["id"].str; // This item's ID. Should give something like 12345ABCDE1234A1!101
+				item.eTag = onedrivePathDetails["eTag"].str; // Should be something like aNjM2NjJFRUVGQjY2NjJFMSE5MzUuMA
 			}
-			
-			else {
-				// Not a 404 response .. is this a 403 response due to OneDrive Business Retention Policy being enabled?
-				if ((e.httpStatusCode == 403) && (accountType != "personal")) {
-					auto errorArray = splitLines(e.msg);
-					JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-					if (errorMessage["error"]["message"].str == "Request was cancelled by event received. If attempting to delete a non-empty folder, it's possible that it's on hold") {
-						// Issue #338 - Unable to delete OneDrive content when OneDrive Business Retention Policy is enabled
-						// TODO: We have to recursively delete all files & folders from this path to delete
-						// WARN: 
-						log.error("\nERROR: Unable to delete the requested remote path from OneDrive: ", path);
-						log.error("ERROR: This error is due to OneDrive Business Retention Policy being applied");
-						log.error("WORKAROUND: Manually delete all files and folders from the above path as per Business Retention Policy\n");
+				
+			try {
+				onedrive.deleteById(item.driveId, item.id, item.eTag);
+			} catch (OneDriveException e) {
+				if (e.httpStatusCode == 404) {
+					// item.id, item.eTag could not be found on driveId
+					log.vlog("OneDrive reported: The resource could not be found.");
+				}
+				
+				else {
+					// Not a 404 response .. is this a 403 response due to OneDrive Business Retention Policy being enabled?
+					if ((e.httpStatusCode == 403) && (accountType != "personal")) {
+						auto errorArray = splitLines(e.msg);
+						JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+						if (errorMessage["error"]["message"].str == "Request was cancelled by event received. If attempting to delete a non-empty folder, it's possible that it's on hold") {
+							// Issue #338 - Unable to delete OneDrive content when OneDrive Business Retention Policy is enabled
+							// TODO: We have to recursively delete all files & folders from this path to delete
+							// WARN: 
+							log.error("\nERROR: Unable to delete the requested remote path from OneDrive: ", path);
+							log.error("ERROR: This error is due to OneDrive Business Retention Policy being applied");
+							log.error("WORKAROUND: Manually delete all files and folders from the above path as per Business Retention Policy\n");
+						}
+					} else {
+						// Not a 403 response & OneDrive Business Account / O365 Shared Folder / Library
+						log.log("\n\nOneDrive returned an error with the following message:\n");
+						auto errorArray = splitLines(e.msg);
+						log.log("Error Message: ", errorArray[0]);
+						// extract 'message' as the reason
+						JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+						log.log("Error Reason:  ", errorMessage["error"]["message"].str);
+						return;
 					}
-				} else {
-					// Not a 403 response & OneDrive Business Account / O365 Shared Folder / Library
-					log.log("\n\nOneDrive returned an error with the following message:\n");
-					auto errorArray = splitLines(e.msg);
-					log.log("Error Message: ", errorArray[0]);
-					// extract 'message' as the reason
-					JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-					log.log("Error Reason:  ", errorMessage["error"]["message"].str);
-					return;
 				}
 			}
-		}
-		
-		// delete the reference in the local database
-		itemdb.deleteById(item.driveId, item.id);
-		if (item.remoteId != null) {
-			// If the item is a remote item, delete the reference in the local database
-			itemdb.deleteById(item.remoteDriveId, item.remoteId);
+			
+			// delete the reference in the local database
+			itemdb.deleteById(item.driveId, item.id);
+			if (item.remoteId != null) {
+				// If the item is a remote item, delete the reference in the local database
+				itemdb.deleteById(item.remoteDriveId, item.remoteId);
+			}
 		}
 	}
 
