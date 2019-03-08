@@ -264,7 +264,6 @@ Enter the response uri:
 
 ```
 
-
 ### Testing your configuration
 You are able to test your configuration by utilising the `--dry-run` CLI option. No files will be downloaded, uploaded or removed, however the application will display what 'would' have occurred. For example:
 ```text
