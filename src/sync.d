@@ -1169,9 +1169,9 @@ final class SyncEngine
 			}
 		} else {
 			// Directory does not exist locally
-			log.vlog("The directory has been deleted locally");
 			// If we are in a --dry-run situation - this directory may never have existed as we never downloaded it
 			if (!dryRun) {
+				log.vlog("The directory has been deleted locally");
 				if (noRemoteDelete) {
 					// do not process remote directory delete
 					log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
@@ -1179,8 +1179,11 @@ final class SyncEngine
 					uploadDeleteItem(item, path);
 				}
 			} else {
-				// we are in a --dry-run situation, directory deleted locally
-				uploadDeleteItem(item, path);
+				// we are in a --dry-run situation, directory deleted locally - this directory may never have existed as we never downloaded it ..
+				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+					log.vlog("The directory has been deleted locally");
+					uploadDeleteItem(item, path);
+				}
 			}
 		}
 	}
