@@ -186,6 +186,8 @@ final class SyncEngine
 	private string[] skippedItems;
 	// list of items to delete after the changes has been downloaded
 	private string[2][] idsToDelete;
+	// list of items we fake created when running --dry-run
+	private string[2][] idsFaked;
 	// default drive id
 	private string defaultDriveId;
 	// default root id
@@ -896,6 +898,9 @@ final class SyncEngine
 			log.log("Creating directory: ", path);
 			if (!dryRun) {
 				mkdirRecurse(path);
+			} else {
+				// we dont create the directory, but we need to track that we 'faked it'
+				idsFaked ~= [item.driveId, item.id];
 			}
 			break;
 		}
@@ -1196,9 +1201,9 @@ final class SyncEngine
 			}
 		} else {
 			// Directory does not exist locally
-			log.vlog("The directory has been deleted locally");
 			// If we are in a --dry-run situation - this directory may never have existed as we never downloaded it
 			if (!dryRun) {
+				log.vlog("The directory has been deleted locally");
 				if (noRemoteDelete) {
 					// do not process remote directory delete
 					log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
@@ -1206,10 +1211,28 @@ final class SyncEngine
 					uploadDeleteItem(item, path);
 				}
 			} else {
-					// we are in a --dry-run situation, directory deleted locally - this directory may never have existed as we never downloaded it ..
-					// 1. Check if path still exists
-					// 2. Check if path does not exist in database
-					if ((!exists(path)) || (!itemdb.selectByPath(path, defaultDriveId, item))) {
+				// we are in a --dry-run situation, directory appears to have deleted locally - this directory may never have existed as we never downloaded it ..
+				// Check if path does not exist in database
+				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+					// Path not found in database
+					log.vlog("The directory has been deleted locally");
+					if (noRemoteDelete) {
+						// do not process remote directory delete
+						log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+					} else {
+						uploadDeleteItem(item, path);
+					}
+				} else {
+					// Path was found in the database
+					// Did we 'fake create it' as part of --dry-run ?
+					foreach (i; idsFaked) {
+						if (i[1] == item.id) {
+							log.vdebug("Matched faked dir which is 'supposed' to exist but not created due to --dry-run use");
+							return;
+						}
+					}
+					// item.id did not match a 'faked' download new directory creation
+					log.vlog("The directory has been deleted locally");
 					uploadDeleteItem(item, path);
 				}
 			}
