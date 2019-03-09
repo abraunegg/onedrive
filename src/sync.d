@@ -1047,10 +1047,13 @@ final class SyncEngine
 			if (!itemdb.selectById(i[0], i[1], item)) continue; // check if the item is in the db
 			string path = itemdb.computePath(i[0], i[1]);
 			log.log("Trying to delete item ", path);
-			itemdb.deleteById(item.driveId, item.id);
-			if (item.remoteDriveId != null) {
-				// delete the linked remote folder
-				itemdb.deleteById(item.remoteDriveId, item.remoteId);
+			if (!dryRun) {
+				// Actually process the database entry removal
+				itemdb.deleteById(item.driveId, item.id);
+				if (item.remoteDriveId != null) {
+					// delete the linked remote folder
+					itemdb.deleteById(item.remoteDriveId, item.remoteId);
+				}
 			}
 			bool needsRemoval = false;
 			if (exists(path)) {
@@ -1070,25 +1073,31 @@ final class SyncEngine
 			}
 			if (needsRemoval) {
 				log.log("Deleting item ", path);
-				if (isFile(path)) {
-					remove(path);
-				} else {
-					try {
-						// Remove any children of this path if they still exist
-						// Resolve 'Directory not empty' error when deleting local files
-						foreach (DirEntry child; dirEntries(path, SpanMode.depth, false)) {
-							attrIsDir(child.linkAttributes) ? rmdir(child.name) : remove(child.name);
+				if (!dryRun) {
+					if (isFile(path)) {
+						remove(path);
+					} else {
+						try {
+							// Remove any children of this path if they still exist
+							// Resolve 'Directory not empty' error when deleting local files
+							foreach (DirEntry child; dirEntries(path, SpanMode.depth, false)) {
+								attrIsDir(child.linkAttributes) ? rmdir(child.name) : remove(child.name);
+							}
+							// Remove the path now that it is empty of children
+							rmdirRecurse(path);
+						} catch (FileException e) {
+							log.log(e.msg);
 						}
-						// Remove the path now that it is empty of children
-						rmdirRecurse(path);
-					} catch (FileException e) {
-						log.log(e.msg);
 					}
 				}
 			}
 		}
-		idsToDelete.length = 0;
-		assumeSafeAppend(idsToDelete);
+		
+		if (!dryRun) {
+			// clean up idsToDelete
+			idsToDelete.length = 0;
+			assumeSafeAppend(idsToDelete);
+		}
 	}
 	
 	// scan the given directory for differences and new items
@@ -1102,14 +1111,32 @@ final class SyncEngine
 		}
 		log.vlog("Uploading new items of ", path);
 		uploadNewItems(path);
+		
+		// clean up idsToDelete only if --dry-run is set
+		if (dryRun) {
+			idsToDelete.length = 0;
+			assumeSafeAppend(idsToDelete);
+		}
 	}
 
 	private void uploadDifferences(Item item)
 	{
+		// see if this item.id we were supposed to have deleted
+		// match early and return
+		if (dryRun) {
+			foreach (i; idsToDelete) {
+				if (i[1] == item.id) {
+					return;
+				}	
+			}
+		}
+		
 		log.vlog("Processing ", item.name);
-
+		bool unwanted = false;
 		string path;
-		bool unwanted = selectiveSync.isNameExcluded(item.name);
+		
+		// Is item.name or the path excluded
+		unwanted = selectiveSync.isNameExcluded(item.name);
 		if (!unwanted) {
 			path = itemdb.computePath(item.driveId, item.id);
 			unwanted = selectiveSync.isPathExcluded(path);
