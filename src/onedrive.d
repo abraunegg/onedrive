@@ -358,11 +358,17 @@ final class OneDriveApi
 	private void acquireToken(const(char)[] postData)
 	{
 		JSONValue response = post(tokenUrl, postData);
-		accessToken = "bearer " ~ response["access_token"].str();
-		refreshToken = response["refresh_token"].str();
-		accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
-		std.file.write(cfg.refreshTokenFilePath, refreshToken);
-		if (printAccessToken) writeln("New access token: ", accessToken);
+		if ("access_token" in response){
+			accessToken = "bearer " ~ response["access_token"].str();
+			refreshToken = response["refresh_token"].str();
+			accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
+			std.file.write(cfg.refreshTokenFilePath, refreshToken);
+			if (printAccessToken) writeln("New access token: ", accessToken);
+		} else {
+			log.error("\nInvalid authentication response from OneDrive. Please check the response uri\n");
+			// re-authorize
+			authorize();
+		}
 	}
 
 	private void checkAccessTokenExpired()
