@@ -1141,7 +1141,7 @@ final class SyncEngine
 		string path;
 		
 		// Is item.name or the path excluded
-		unwanted = selectiveSync.isNameExcluded(item.name);
+		unwanted = selectiveSync.isFileNameExcluded(item.name);
 
 		if (!unwanted) {
 			path = itemdb.computePath(item.driveId, item.id);
