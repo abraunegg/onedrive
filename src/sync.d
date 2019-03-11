@@ -1139,8 +1139,8 @@ final class SyncEngine
 		log.vlog("Processing ", item.name);
 		bool unwanted = false;
 		string path;
-    
-    // Is item.name or the path excluded
+		
+		// Is item.name or the path excluded
 		unwanted = selectiveSync.isNameExcluded(item.name);
 
 		if (!unwanted) {
