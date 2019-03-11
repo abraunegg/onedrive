@@ -8,6 +8,8 @@ import progress;
 import config;
 static import log;
 shared bool debugResponse = false;
+shared bool dryRun = false;
+shared bool simulateNoRefreshTokenFile = false;
 
 private immutable {
 	// Client Identifier
@@ -64,7 +66,7 @@ final class OneDriveApi
 	// if true, every new access token is printed
 	bool printAccessToken;
 
-	this(Config cfg, bool debugHttp, bool forceHTTP11)
+	this(Config cfg, bool debugHttp, bool forceHTTP11, bool dryRun, bool simulateNoRefreshTokenFile)
 	{
 		this.cfg = cfg;
 		http = HTTP();
@@ -104,6 +106,14 @@ final class OneDriveApi
 			// Downgrade to HTTP 1.1 - yes version = 2 is HTTP 1.1
 			http.handle.set(CurlOption.http_version,2);
 		}
+		
+		// Do we set the dryRun handlers?
+		if (dryRun) {
+			.dryRun = true;
+		}
+		if (simulateNoRefreshTokenFile) {
+			.simulateNoRefreshTokenFile = true;
+		}
 	}
 
 	bool init()
@@ -117,12 +127,28 @@ final class OneDriveApi
 			}
 		} catch (Exception e) {}
 	
-		try {
-			refreshToken = readText(cfg.refreshTokenFilePath);
-		} catch (FileException e) {
-			return authorize();
+		if (!.dryRun) {
+			// original code
+			try {
+				refreshToken = readText(cfg.refreshTokenFilePath);
+			} catch (FileException e) {
+				return authorize();
+			}
+			return true;
+		} else {
+			// --dry-run
+			if (!.simulateNoRefreshTokenFile) {
+				try {
+					refreshToken = readText(cfg.refreshTokenFilePath);
+				} catch (FileException e) {
+					return authorize();
+				}
+				return true;
+			} else {
+				// --dry-run & --logout
+				return authorize();
+			}
 		}
-		return true;
 	}
 
 	bool authorize()
@@ -361,7 +387,9 @@ final class OneDriveApi
 		accessToken = "bearer " ~ response["access_token"].str();
 		refreshToken = response["refresh_token"].str();
 		accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
-		std.file.write(cfg.refreshTokenFilePath, refreshToken);
+		if (!.dryRun) {
+			std.file.write(cfg.refreshTokenFilePath, refreshToken);
+		}
 		if (printAccessToken) writeln("New access token: ", accessToken);
 	}
 
