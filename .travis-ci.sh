@@ -18,6 +18,9 @@ HOST_DEPENDENCIES="qemu-user-static binfmt-support debootstrap sbuild wget"
 # Debian package dependencies for the chrooted environment
 GUEST_DEPENDENCIES="build-essential libcurl4-openssl-dev libsqlite3-dev libgnutls-openssl27 git"
 
+# LDC Version
+LDC_VERSION=1.14.0
+
 function setup_arm32_chroot {
 	# Update apt repository details
 	sudo apt-get update
@@ -27,10 +30,10 @@ function setup_arm32_chroot {
 	# Host dependencies
 	sudo apt-get install -qq -y ${HOST_DEPENDENCIES}
 	# Download LDC compiler
-	wget https://github.com/ldc-developers/ldc/releases/download/v1.11.0/ldc2-1.11.0-linux-armhf.tar.xz
-	tar -xf ldc2-1.11.0-linux-armhf.tar.xz
-	mv ldc2-1.11.0-linux-armhf dlang-${ARCH}
-	rm -rf ldc2-1.11.0-linux-armhf.tar.xz
+	wget https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-linux-armhf.tar.xz
+	tar -xf ldc2-${LDC_VERSION}-linux-armhf.tar.xz
+	mv ldc2-${LDC_VERSION}-linux-armhf dlang-${ARCH}
+	rm -rf ldc2-${LDC_VERSION}-linux-armhf.tar.xz
 	# Create chrooted environment
 	sudo mkdir ${CHROOT_DIR}
 	sudo debootstrap --foreign --no-check-gpg --variant=buildd --arch=${CHROOT_ARCH} ${VERSION} ${CHROOT_DIR} ${DEBIAN_MIRROR}
@@ -49,10 +52,10 @@ function setup_arm64_chroot {
 	# Host dependencies
 	sudo apt-get install -qq -y ${HOST_DEPENDENCIES}
 	# Download LDC compiler
-	wget https://github.com/ldc-developers/ldc/releases/download/v1.11.0/ldc2-1.11.0-linux-aarch64.tar.xz
-	tar -xf ldc2-1.11.0-linux-aarch64.tar.xz
-	mv ldc2-1.11.0-linux-aarch64 dlang-${ARCH}
-	rm -rf ldc2-1.11.0-linux-aarch64.tar.xz
+	wget https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-linux-aarch64.tar.xz
+	tar -xf ldc2-${LDC_VERSION}-linux-aarch64.tar.xz
+	mv ldc2-${LDC_VERSION}-linux-aarch64 dlang-${ARCH}
+	rm -rf ldc2-${LDC_VERSION}-linux-aarch64.tar.xz
 	
 	# ARM64 qemu-debootstrap needs to be 1.0.78, Trusty is 1.0.59
 	#sudo echo "deb http://archive.ubuntu.com/ubuntu xenial main restricted universe multiverse" >> /etc/apt/sources.list
