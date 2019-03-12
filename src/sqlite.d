@@ -3,6 +3,7 @@ import std.stdio;
 import etc.c.sqlite3;
 import std.string: fromStringz, toStringz;
 import core.stdc.stdlib;
+import std.conv;
 static import log;
 
 extern (C) immutable(char)* sqlite3_errstr(int); // missing from the std library
@@ -176,9 +177,9 @@ struct Statement
 				// https://www.sqlite.org/c3ref/data_count.html
 				int count = sqlite3_data_count(pStmt);
 				row = new const(char)[][count];
-				foreach (int i, ref column; row) {
+				foreach (size_t i, ref column; row) {
 					// https://www.sqlite.org/c3ref/column_blob.html
-					column = fromStringz(sqlite3_column_text(pStmt, i));
+					column = fromStringz(sqlite3_column_text(pStmt, to!int(i)));
 				}
 			} else {
 				string errorMessage = ifromStringz(sqlite3_errmsg(sqlite3_db_handle(pStmt)));
