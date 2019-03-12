@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Resolve Key not found: nextExpectedRanges when attempting session uploads and incorrect response is returned
 *   Resolve application crash when re-using an authentication URI twice after previous --logout
 *   Resolve creating a folder on a shared personal folder appears successful but returns a JSON error
+*   Resolve to treat mv of new file as upload of mv target
 *   Update Debian i386 build dependencies
 *   Update handling of --get-O365-drive-id to print out all 'site names' that match the explicit search entry rather than just the last match
 *   Update Docker readme & documentation
