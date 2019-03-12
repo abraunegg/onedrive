@@ -234,16 +234,16 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 
 Meson/Ninja is a supported build system. Configuration options are
 
-*  `notifications=enabled|disabled` (default: `disabled`)
-*  `systemd_user_unit_dir=<path>` (default: automatically determined from `pkg-config`)
-*  `systemd_system_unit_dir=<path>` (default: automatically determined from `pkg-config`)
+*   `notifications=enabled|disabled` (default: `disabled`)
+*   `systemd_user_unit_dir=<path>` (default: automatically determined from `pkg-config`)
+*   `systemd_system_unit_dir=<path>` (default: automatically determined from `pkg-config`)
 
 Set these options via `-D<option>`
 
 A different compiler can be selected by setting the `DC` environment variable.
 
 A typical compile/run
-```
+```text
 DC=dmd meson -Dnotifications=enabled build
 ninja -C build
 ninja -C build install
