@@ -111,8 +111,16 @@ struct UploadSession
 
 	JSONValue upload()
 	{
-		long offset = session["nextExpectedRanges"][0].str.splitter('-').front.to!long;
-		long fileSize = getSize(session["localPath"].str);
+		long offset;
+		long fileSize;
+		
+		if ("nextExpectedRanges" in session){
+			offset = session["nextExpectedRanges"][0].str.splitter('-').front.to!long;
+		}
+		
+		if ("localPath" in session){
+			fileSize = getSize(session["localPath"].str);
+		}
 		
 		// Upload Progress Bar
 		size_t iteration = (roundTo!int(double(fileSize)/double(fragmentSize)))+1;
