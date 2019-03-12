@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Resolve where on OneDrive query failure, default root and drive id is used if a response is not returned
 *   Resolve Key not found: nextExpectedRanges when attempting session uploads and incorrect response is returned
 *   Resolve application crash when re-using an authentication URI twice after previous --logout
+*   Resolve creating a folder on a shared personal folder appears successful but returns a JSON error
 *   Update Debian i386 build dependencies
 *   Update handling of --get-O365-drive-id to print out all 'site names' that match the explicit search entry rather than just the last match
 *   Update Docker readme & documentation
