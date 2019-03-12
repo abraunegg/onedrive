@@ -384,13 +384,19 @@ final class OneDriveApi
 	private void acquireToken(const(char)[] postData)
 	{
 		JSONValue response = post(tokenUrl, postData);
-		accessToken = "bearer " ~ response["access_token"].str();
-		refreshToken = response["refresh_token"].str();
-		accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
-		if (!.dryRun) {
-			std.file.write(cfg.refreshTokenFilePath, refreshToken);
+		if ("access_token" in response){
+			accessToken = "bearer " ~ response["access_token"].str();
+			refreshToken = response["refresh_token"].str();
+			accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
+			if (!.dryRun) {
+				std.file.write(cfg.refreshTokenFilePath, refreshToken);
+			}
+			if (printAccessToken) writeln("New access token: ", accessToken);
+		} else {
+			log.error("\nInvalid authentication response from OneDrive. Please check the response uri\n");
+			// re-authorize
+			authorize();
 		}
-		if (printAccessToken) writeln("New access token: ", accessToken);
 	}
 
 	private void checkAccessTokenExpired()
@@ -720,6 +726,12 @@ final class OneDriveApi
 	{
 		switch(http.statusLine.code)
 		{
+			// 400 - Bad Request
+			case 400:
+				// Bad Request .. how should we act?
+				log.vlog("OneDrive returned a 'HTTP 400 - Bad Request' - gracefully handling error");
+				break;	
+			
 			//	412 - Precondition Failed
 			case 412:
 				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
