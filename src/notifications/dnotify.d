@@ -57,6 +57,20 @@ class NotificationError : Exception {
     }
 }
 
+bool check_availability() {
+    // notify_init might return without dbus server actually started
+    // try to check for running dbus server
+    char **ret_name;
+    char **ret_vendor;
+    char **ret_version;
+    char **ret_spec_version;
+    bool ret;
+    try {
+	return notify_get_server_info(ret_name, ret_vendor, ret_version, ret_spec_version);
+    } catch (NotificationError e) {
+	throw new NotificationError("Cannot find dbus server!");
+    }
+}
 
 void init(in char[] name) {
     notify_init(name.toStringz());

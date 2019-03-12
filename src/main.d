@@ -10,6 +10,10 @@ static import log;
 OneDriveApi oneDrive;
 ItemDatabase itemDb;
 
+enum MONITOR_LOG_SILENT = 2;
+enum MONITOR_LOG_QUIET  = 1;
+enum LOG_NORMAL = 0;
+
 int main(string[] args)
 {
 	// Disable buffering on stdout
@@ -18,6 +22,8 @@ int main(string[] args)
 	// Application Option Variables
 	// Add a check mounts option to resolve https://github.com/abraunegg/onedrive/issues/8
 	bool checkMount = false;
+	// Check if we should ignore a directory if a special file (.nosync) is present - https://github.com/abraunegg/onedrive/issues/163
+	bool checkNoSync = false;
 	// configuration directory
 	string configDirName;
 	// Create a single root directory on OneDrive
@@ -37,6 +43,8 @@ int main(string[] args)
 	// Does the user want to disable upload validation - https://github.com/abraunegg/onedrive/issues/205
 	// SharePoint will associate some metadata from the library the file is uploaded to directly in the file - thus change file size & checksums
 	bool disableUploadValidation = false;
+	// Perform only a dry run - not applicable for --monitor mode
+	bool dryRun = false;
 	// Do we enable a log file
 	bool enableLogFile = false;
 	// Force the use of HTTP 1.1 to overcome curl => 7.62.0 where some operations are now sent via HTTP/2
@@ -61,6 +69,8 @@ int main(string[] args)
 	string removeDirectory;
 	// This allows for selective directory syncing instead of everything under ~/OneDrive/
 	string singleDirectory;
+	// Skip dot files & folders - eg .file or /.folder/
+	bool skipDotFiles = false;
 	// Add option to skip symlinks
 	bool skipSymlinks = false;
 	// The source directory if we are using the OneDrive client to rename a directory
@@ -84,6 +94,7 @@ int main(string[] args)
 			std.getopt.config.bundling,
 			std.getopt.config.caseSensitive,
 			"check-for-nomount", "Check for the presence of .nosync in the syncdir root. If found, do not perform sync.", &checkMount,
+			"check-for-nosync", "Check for the presence of .nosync in each directory. If found, skip directory from sync.", &checkNoSync,
 			"confdir", "Set the directory used to store the configuration files", &configDirName,
 			"create-directory", "Create a directory on OneDrive - no sync will be performed.", &createDirectory,
 			"destination-directory", "Destination directory for renamed or move on OneDrive - no sync will be performed.", &destinationDirectory,
@@ -93,6 +104,7 @@ int main(string[] args)
 			"display-sync-status", "Display the sync status of the client - no sync will be performed.", &displaySyncStatus,
 			"download-only|d", "Only download remote changes", &downloadOnly,
 			"disable-upload-validation", "Disable upload validation when uploading to OneDrive", &disableUploadValidation,
+			"dry-run", "Perform a trial sync with no changes made", &dryRun,
 			"enable-logging", "Enable client activity to a separate log file", &enableLogFile,
 			"force-http-1.1", "Force the use of HTTP 1.1 for all operations", &forceHTTP11,
 			"get-O365-drive-id", "Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library", &o365SharedLibraryName,
@@ -104,6 +116,7 @@ int main(string[] args)
 			"resync", "Forget the last saved state, perform a full sync", &resync,
 			"remove-directory", "Remove a directory on OneDrive - no sync will be performed.", &removeDirectory,
 			"single-directory", "Specify a single local directory within the OneDrive root to sync.", &singleDirectory,
+			"skip-dot-files", "Skip dot files and folders from syncing", &skipDotFiles,
 			"skip-symlinks", "Skip syncing of symlinks", &skipSymlinks,
 			"source-directory", "Source directory to rename or move on OneDrive - no sync will be performed.", &sourceDirectory,
 			"syncdir", "Specify the local directory used for synchronization to OneDrive", &syncDirName,
@@ -134,6 +147,8 @@ int main(string[] args)
 	bool debugHttpSubmit;
 	// Are we able to reach the OneDrive Service
 	bool online = false;
+	// simulateNoRefreshTokenFile in case of --dry-run & --logout
+	bool simulateNoRefreshTokenFile = false;
 	
 	// Determine the users home directory. 
 	// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
@@ -192,6 +207,11 @@ int main(string[] args)
 		std.stdio.write("onedrive ", import("version"));
 		return EXIT_SUCCESS;
 	}
+	
+	// dry-run notification
+	if (dryRun) {
+		log.log("DRY-RUN Configured. Output below shows what 'would' have occurred.");
+	}
 
 	// load application configuration
 	log.vlog("Loading config ...");
@@ -204,7 +224,30 @@ int main(string[] args)
 		return EXIT_FAILURE;
 	}
 	
+	// dry-run database setup
+	if (dryRun) {
+		// Make a copy of the original items.sqlite3 for use as the dry run copy if it exists
+		if (exists(cfg.databaseFilePath)) {
+			// copy the file
+			log.vdebug("Copying items.sqlite3 to items-dryrun.sqlite3 to use for dry run operations");
+			copy(cfg.databaseFilePath,cfg.databaseFilePathDryRun);
+		}
+	}
+	
 	// command line parameters to override default 'config' & take precedence
+	// Set the client to skip specific directories if .nosync is found AND ONLY if --check-for-nosync was passed in
+	if (checkNoSync) {
+		log.vdebug("CLI override to set check_nosync to: true");
+		cfg.setValue("check_nosync", "true");
+	}
+	
+	// Set the client to skip dot files & folders if --skip-dot-files was passed in
+	if (skipDotFiles) {
+		// The user passed in an alternate skip_dotfiles as to what was either in 'config' file or application default
+		log.vdebug("CLI override to set skip_dotfiles to: true");
+		cfg.setValue("skip_dotfiles", "true");
+	}
+	
 	// Set the client to skip symbolic links if --skip-symlinks was passed in
 	if (skipSymlinks) {
 		// The user passed in an alternate skip_symlinks as to what was either in 'config' file or application default
@@ -262,18 +305,27 @@ int main(string[] args)
 	
 	// upgrades
 	if (exists(configDirName ~ "/items.db")) {
-		remove(configDirName ~ "/items.db");
+		if (!dryRun) {
+			safeRemove(configDirName ~ "/items.db");
+		}
 		log.logAndNotify("Database schema changed, resync needed");
 		resync = true;
 	}
 
 	if (resync || logout) {
 		log.vlog("Deleting the saved status ...");
-		safeRemove(cfg.databaseFilePath);
-		safeRemove(cfg.deltaLinkFilePath);
-		safeRemove(cfg.uploadStateFilePath);
+		if (!dryRun) {
+			safeRemove(cfg.databaseFilePath);
+			safeRemove(cfg.deltaLinkFilePath);
+			safeRemove(cfg.uploadStateFilePath);
+		}
 		if (logout) {
-			safeRemove(cfg.refreshTokenFilePath);
+			if (!dryRun) {
+				safeRemove(cfg.refreshTokenFilePath);
+			} else {
+				// simulate file being removed / unavailable
+				simulateNoRefreshTokenFile = true;
+			}
 		}
 	}
 
@@ -294,10 +346,13 @@ int main(string[] args)
 		}
 		
 		// Config Options
+		writeln("Config option 'check_nosync'        = ", cfg.getValue("check_nosync"));
 		writeln("Config option 'sync_dir'            = ", syncDir);
 		writeln("Config option 'skip_file'           = ", cfg.getValue("skip_file"));
+		writeln("Config option 'skip_dotfiles'       = ", cfg.getValue("skip_dotfiles"));
 		writeln("Config option 'skip_symlinks'       = ", cfg.getValue("skip_symlinks"));
 		writeln("Config option 'monitor_interval'    = ", cfg.getValue("monitor_interval"));
+		writeln("Config option 'min_notif_changes'   = ", cfg.getValue("min_notif_changes"));
 		writeln("Config option 'log_dir'             = ", cfg.getValue("log_dir"));
 		
 		// Is config option drive_id configured?
@@ -335,7 +390,7 @@ int main(string[] args)
 	}
 
 	// Initialize OneDrive, check for authorization
-	oneDrive = new OneDriveApi(cfg, debugHttp, forceHTTP11);
+	oneDrive = new OneDriveApi(cfg, debugHttp, forceHTTP11, dryRun, simulateNoRefreshTokenFile);
 	oneDrive.printAccessToken = printAccessToken;
 	if (!oneDrive.init()) {
 		log.error("Could not initialize the OneDrive API");
@@ -364,9 +419,17 @@ int main(string[] args)
 		return EXIT_FAILURE;
 	}
 	
-	// initialize system
+	// Initialize the item database
 	log.vlog("Opening the item database ...");
-	itemDb = new ItemDatabase(cfg.databaseFilePath);
+	if (!dryRun) {
+		// Load the items.sqlite3 file as the database
+		log.vdebug("Using database file: ", cfg.databaseFilePath);
+		itemDb = new ItemDatabase(cfg.databaseFilePath);
+	} else {
+		// Load the items-dryrun.sqlite3 file as the database
+		log.vdebug("Using database file: ", cfg.databaseFilePathDryRun);
+		itemDb = new ItemDatabase(cfg.databaseFilePathDryRun);
+	}
 	
 	log.vlog("All operations will be performed in: ", syncDir);
 	if (!exists(syncDir)) {
@@ -390,9 +453,9 @@ int main(string[] args)
 	selectiveSync.load(cfg.syncListFilePath);
 	selectiveSync.setMask(cfg.getValue("skip_file"));
 	
-	// Initialise the sync engine
+	// Initialize the sync engine
 	log.logAndNotify("Initializing the Synchronization Engine ...");
-	auto sync = new SyncEngine(cfg, oneDrive, itemDb, selectiveSync);
+	auto sync = new SyncEngine(cfg, oneDrive, itemDb, selectiveSync, dryRun);
 	
 	try {
 		if (!initSyncEngine(sync)) {
@@ -479,7 +542,7 @@ int main(string[] args)
 				}
 						
 				// Perform the sync
-				performSync(sync, singleDirectory, downloadOnly, localFirst, uploadOnly);
+				performSync(sync, singleDirectory, downloadOnly, localFirst, uploadOnly, LOG_NORMAL);
 			}
 		}
 			
@@ -491,6 +554,8 @@ int main(string[] args)
 				log.vlog("[M] Directory created: ", path);
 				try {
 					sync.scanForDifferences(path);
+				} catch (CurlException e) {
+					log.vlog("Offline, cannot create remote dir!");
 				} catch(Exception e) {
 					log.logAndNotify("Cannot create remote directory: ", e.msg);
 				}
@@ -499,6 +564,8 @@ int main(string[] args)
 				log.vlog("[M] File changed: ", path);
 				try {
 					sync.scanForDifferences(path);
+				} catch (CurlException e) {
+					log.vlog("Offline, cannot upload changed item!");
 				} catch(Exception e) {
 					log.logAndNotify("Cannot upload file changes/creation: ", e.msg);
 				}
@@ -507,6 +574,8 @@ int main(string[] args)
 				log.vlog("[M] Item deleted: ", path);
 				try {
 					sync.deleteByPath(path);
+				} catch (CurlException e) {
+					log.vlog("Offline, cannot delete item!");
 				} catch(SyncException e) {
 					if (e.msg == "The item to delete is not in the local database") {
 						log.vlog("Item cannot be deleted because not found in database");
@@ -521,6 +590,8 @@ int main(string[] args)
 				log.vlog("[M] Item moved: ", from, " -> ", to);
 				try {
 					sync.uploadMoveItem(from, to);
+				} catch (CurlException e) {
+					log.vlog("Offline, cannot move item!");
 				} catch(Exception e) {
 					log.logAndNotify("Cannot move item:, ", e.msg);
 				}
@@ -530,14 +601,20 @@ int main(string[] args)
 
 			// initialise the monitor class
 			if (cfg.getValue("skip_symlinks") == "true") skipSymlinks = true;
-			if (!downloadOnly) m.init(cfg, verbose, skipSymlinks);
+			if (cfg.getValue("check_nosync") == "true") checkNoSync = true;
+			if (!downloadOnly) m.init(cfg, verbose, skipSymlinks, checkNoSync);
 			// monitor loop
 			immutable auto checkInterval = dur!"seconds"(to!long(cfg.getValue("monitor_interval")));
+			immutable auto logInterval = to!long(cfg.getValue("monitor_log_frequency"));
 			auto lastCheckTime = MonoTime.currTime();
+			auto logMonitorCounter = 0;
 			while (true) {
 				if (!downloadOnly) m.update(online);
 				auto currTime = MonoTime.currTime();
 				if (currTime - lastCheckTime > checkInterval) {
+					logMonitorCounter += 1;
+					if (logMonitorCounter > logInterval) 
+						logMonitorCounter = 1;
 					// log.logAndNotify("DEBUG trying to create checkpoint");
 					// auto res = itemdb.db_checkpoint();
 					// log.logAndNotify("Checkpoint return: ", res);
@@ -548,7 +625,7 @@ int main(string[] args)
 							return EXIT_FAILURE;
 						}
 						try {
-							performSync(sync, singleDirectory, downloadOnly, localFirst, uploadOnly);
+							performSync(sync, singleDirectory, downloadOnly, localFirst, uploadOnly, (logMonitorCounter == logInterval ? MONITOR_LOG_QUIET : MONITOR_LOG_SILENT));
 							if (!downloadOnly) {
 								// discard all events that may have been generated by the sync
 								m.update(false);
@@ -557,7 +634,7 @@ int main(string[] args)
 							// we already tried three times in the performSync routine
 							// if we still have problems, then the sync handle might have
 							// gone stale and we need to re-initialize the sync engine
-							log.log("Pesistent connection errors, reinitializing connection");
+							log.log("Persistent connection errors, reinitializing connection");
 							sync.reset();
 						}
 					} catch (CurlException e) {
@@ -572,8 +649,21 @@ int main(string[] args)
 		}
 	}
 
-	// workaround for segfault in std.net.curl.Curl.shutdown() on exit
+	// Workaround for segfault in std.net.curl.Curl.shutdown() on exit
 	oneDrive.http.shutdown();
+	
+	// Make sure the .wal file is incorporated into the main db before we exit
+	destroy(itemDb);
+	
+	// --dry-run temp database cleanup
+	if (dryRun) {
+		if (exists(cfg.databaseFilePathDryRun)) {
+			// remove the file
+			log.vdebug("Removing items-dryrun.sqlite3 as dry run operations complete");
+			safeRemove(cfg.databaseFilePathDryRun);	
+		}
+	}
+	
 	return EXIT_SUCCESS;
 }
 
@@ -596,7 +686,7 @@ bool initSyncEngine(SyncEngine sync)
 }
 
 // try to synchronize the folder three times
-void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, bool localFirst, bool uploadOnly)
+void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, bool localFirst, bool uploadOnly, long logLevel)
 {
 	int count;
 	string remotePath = "/";
@@ -616,18 +706,18 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 				log.vlog("Syncing changes from this selected path: ", singleDirectory);
 				if (uploadOnly){
 					// Upload Only of selected single directory
-					log.log("Syncing changes from selected local path only - NOT syncing data changes from OneDrive ...");
+					if (logLevel < MONITOR_LOG_QUIET) log.log("Syncing changes from selected local path only - NOT syncing data changes from OneDrive ...");
 					sync.scanForDifferences(localPath);
 				} else {
 					// No upload only
 					if (localFirst) {
 						// Local First
-						log.log("Syncing changes from selected local path first before downloading changes from OneDrive ...");
+						if (logLevel < MONITOR_LOG_QUIET) log.log("Syncing changes from selected local path first before downloading changes from OneDrive ...");
 						sync.scanForDifferences(localPath);
 						sync.applyDifferencesSingleDirectory(remotePath);
 					} else {
 						// OneDrive First
-						log.log("Syncing changes from selected OneDrive path ...");
+						if (logLevel < MONITOR_LOG_QUIET) log.log("Syncing changes from selected OneDrive path ...");
 						sync.applyDifferencesSingleDirectory(remotePath);
 						// is this a download only request?
 						if (!downloadOnly) {
@@ -642,18 +732,18 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 				// no single directory sync
 				if (uploadOnly){
 					// Upload Only of entire sync_dir
-					log.log("Syncing changes from local path only - NOT syncing data changes from OneDrive ...");
+					if (logLevel < MONITOR_LOG_QUIET) log.log("Syncing changes from local path only - NOT syncing data changes from OneDrive ...");
 					sync.scanForDifferences(localPath);
 				} else {
 					// No upload only
 					if (localFirst) {
 						// sync local files first before downloading from OneDrive
-						log.log("Syncing changes from local path first before downloading changes from OneDrive ...");
+						if (logLevel < MONITOR_LOG_QUIET) log.log("Syncing changes from local path first before downloading changes from OneDrive ...");
 						sync.scanForDifferences(localPath);
 						sync.applyDifferences();
 					} else {
 						// sync from OneDrive first before uploading files to OneDrive
-						log.log("Syncing changes from OneDrive ...");
+						if (logLevel < MONITOR_LOG_SILENT) log.log("Syncing changes from OneDrive ...");
 						sync.applyDifferences();
 						// is this a download only request?
 						if (!downloadOnly) {

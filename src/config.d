@@ -7,6 +7,7 @@ final class Config
 	public string refreshTokenFilePath;
 	public string deltaLinkFilePath;
 	public string databaseFilePath;
+	public string databaseFilePathDryRun;
 	public string uploadStateFilePath;
 	public string syncListFilePath;
 
@@ -19,6 +20,7 @@ final class Config
 		refreshTokenFilePath = configDirName ~ "/refresh_token";
 		deltaLinkFilePath = configDirName ~ "/delta_link";
 		databaseFilePath = configDirName ~ "/items.sqlite3";
+		databaseFilePathDryRun = configDirName ~ "/items-dryrun.sqlite3";
 		uploadStateFilePath = configDirName ~ "/resume_upload";
 		userConfigFilePath = configDirName ~ "/config";
 		syncListFilePath = configDirName ~ "/sync_list";
@@ -31,6 +33,8 @@ final class Config
 		// Configure to skip ONLY temp files (~*.doc etc) by default
 		// Prior configuration was: .*|~*
 		setValue("skip_file", "~*");
+		// By default skip dot files & folders are not skipped 
+		setValue("skip_dotfiles", "false");
 		// By default symlinks are not skipped (using string type
 		// instead of boolean because hashmap only stores string types)
 		setValue("skip_symlinks", "false");
@@ -41,6 +45,12 @@ final class Config
 		setValue("log_dir", "/var/log/onedrive/");
 		// Configure a default empty value for drive_id
 		setValue("drive_id", "");
+		// Minimal changes that trigger a log and notification on sync
+		setValue("min_notif_changes", "5");
+		// Frequency of log messages in monitor, ie after n sync runs ship out a log message
+		setValue("monitor_log_frequency", "5");
+		// Check if we should ignore a directory if a special file (.nosync) is present
+		setValue("check_nosync", "false");
 		
 		if (!load(userConfigFilePath)) {
 			// What was the reason for failure?

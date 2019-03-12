@@ -1,4 +1,4 @@
-.TH ONEDRIVE "1" "December 2018" "@PACKAGE_VERSION@" "User Commands"
+.TH ONEDRIVE "1" "February 2019" "@PACKAGE_VERSION@" "User Commands"
 .SH NAME
 onedrive \- folder synchronization with OneDrive
 .SH SYNOPSIS
@@ -20,6 +20,9 @@ Without any option given, no sync is done and the program exits.
 .TP
 \fB\-\-check\-for\-nomount\fP
 Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
+.TP
+\fB\-\-check\-for\-nosync\fP
+Check for the presence of .nosync in each directory. If found, skip directory from sync.
 .TP
 \fB\-\-confdir\fP ARG
 Set the directory used to store the configuration files
@@ -48,8 +51,14 @@ Display the sync status of the client \- no sync will be performed.
 \fB\-d \-\-download\-only\fP
 Only download remote changes
 .TP
+\fB\-\-dry\-run\fP
+Perform a trial sync with no changes made. Can ONLY be used with --synchronize. Will be ignored for --monitor
+.TP
 \fB\-\-enable\-logging\fP
 Enable client activity to a separate log file
+.TP
+\fB\-\-force\-http\-1.1\fP
+Force the use of HTTP 1.1 for all operations
 .TP
 \fB\-\-get\-O365\-drive\-id\fP ARG
 Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library
@@ -77,6 +86,9 @@ Remove a directory on OneDrive \- no sync will be performed.
 .TP
 \fB\-\-single\-directory\fP ARG
 Specify a single local directory within the OneDrive root to sync.
+.TP
+\fB\-\-skip\-dot\-files\fP
+Skip dot files and folders from syncing
 .TP
 \fB\-\-skip\-symlinks\fP
 Skip syncing of symlinks
@@ -143,6 +155,10 @@ skip symbolic links during sync, defaults to \fB"false"\fP
 \fBmonitor_interval\fP
 the number of seconds by which each sync operation is undertaken when
 idle under monitor mode, defaults to \fB"45"\fP
+.TP
+\fBmin_notif_changes\fP
+the minimum number of pending incoming changes necessary to trigger
+a desktop notification, defaults to \fB"5"\fP
 .TP
 \fBlog_dir\fP
 defines the directory where logging output is saved to, needs to end with a slash
