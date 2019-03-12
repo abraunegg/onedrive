@@ -1649,7 +1649,7 @@ final class SyncEngine
 				}
 			} else {
 				// They are the "same" name wise but different in case sensitivity
-				log.error("ERROR: A local directory has the same name as another local directory.");
+				log.error("ERROR: Current directory has a 'case-insensitive match' to an existing directory on OneDrive");
 				log.error("ERROR: To resolve, rename this local directory: ", absolutePath(path));
 				log.log("Skipping: ", absolutePath(path));
 				return;
