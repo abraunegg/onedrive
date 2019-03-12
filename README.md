@@ -184,7 +184,7 @@ make
 sudo make install
 ```
 
-### Build options ###
+### Build options
 
 Notifications can be enabled using the `configure` switch `--enable-notifications`.
 
