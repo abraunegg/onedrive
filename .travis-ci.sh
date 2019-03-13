@@ -16,7 +16,7 @@ DEBIAN_MIRROR="http://ftp.us.debian.org/debian"
 HOST_DEPENDENCIES="qemu-user-static binfmt-support debootstrap sbuild wget"
 
 # Debian package dependencies for the chrooted environment
-GUEST_DEPENDENCIES="build-essential libcurl4-openssl-dev libsqlite3-dev libgnutls-openssl27 git"
+GUEST_DEPENDENCIES="build-essential libcurl4-openssl-dev libsqlite3-dev libgnutls-openssl27 git libxml2"
 
 # LDC Version
 LDC_VERSION=1.13.0
