@@ -19,7 +19,7 @@ HOST_DEPENDENCIES="qemu-user-static binfmt-support debootstrap sbuild wget"
 GUEST_DEPENDENCIES="build-essential libcurl4-openssl-dev libsqlite3-dev libgnutls-openssl27 git"
 
 # LDC Version
-LDC_VERSION=1.14.0
+LDC_VERSION=1.13.0
 
 function setup_arm32_chroot {
 	# Update apt repository details
