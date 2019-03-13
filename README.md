@@ -123,7 +123,7 @@ sudo pacman -S libnotify
 sudo apt-get install libcurl4-openssl-dev
 sudo apt-get install libsqlite3-dev
 sudo apt-get install libxml2
-wget https://github.com/ldc-developers/ldc/releases/download/v1.11.0/ldc2-1.13.0-linux-armhf.tar.xz
+wget https://github.com/ldc-developers/ldc/releases/download/v1.13.0/ldc2-1.13.0-linux-armhf.tar.xz
 tar -xvf ldc2-1.13.0-linux-armhf.tar.xz
 ```
 For notifications the following is necessary:
@@ -136,7 +136,7 @@ sudo apt install libnotify-dev
 sudo apt-get install libcurl4-openssl-dev
 sudo apt-get install libsqlite3-dev
 sudo apt-get install libxml2
-wget https://github.com/ldc-developers/ldc/releases/download/v1.11.0/ldc2-1.13.0-linux-aarch64.tar.xz
+wget https://github.com/ldc-developers/ldc/releases/download/v1.13.0/ldc2-1.13.0-linux-aarch64.tar.xz
 tar -xvf ldc2-1.13.0-linux-aarch64.tar.xz
 ```
 For notifications the following is necessary:
