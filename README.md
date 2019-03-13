@@ -122,8 +122,8 @@ sudo pacman -S libnotify
 ```text
 sudo apt-get install libcurl4-openssl-dev
 sudo apt-get install libsqlite3-dev
-wget https://github.com/ldc-developers/ldc/releases/download/v1.11.0/ldc2-1.11.0-linux-armhf.tar.xz
-tar -xvf ldc2-1.11.0-linux-armhf.tar.xz
+wget https://github.com/ldc-developers/ldc/releases/download/v1.11.0/ldc2-1.13.0-linux-armhf.tar.xz
+tar -xvf ldc2-1.13.0-linux-armhf.tar.xz
 ```
 For notifications the following is necessary:
 ```text
@@ -134,8 +134,8 @@ sudo apt install libnotify-dev
 ```text
 sudo apt-get install libcurl4-openssl-dev
 sudo apt-get install libsqlite3-dev
-wget https://github.com/ldc-developers/ldc/releases/download/v1.11.0/ldc2-1.11.0-linux-aarch64.tar.xz
-tar -xvf ldc2-1.11.0-linux-aarch64.tar.xz
+wget https://github.com/ldc-developers/ldc/releases/download/v1.11.0/ldc2-1.13.0-linux-aarch64.tar.xz
+tar -xvf ldc2-1.13.0-linux-aarch64.tar.xz
 ```
 For notifications the following is necessary:
 ```text
@@ -206,7 +206,7 @@ sudo make install
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-make DC=~/ldc2-1.11.0-linux-armhf/bin/ldmd2
+make DC=~/ldc2-1.13.0-linux-armhf/bin/ldmd2
 sudo make install
 ```
 
@@ -214,7 +214,7 @@ sudo make install
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-make DC=~/ldc2-1.11.0-linux-aarch64/bin/ldmd2
+make DC=~/ldc2-1.13.0-linux-aarch64/bin/ldmd2
 sudo make install
 ```
 
