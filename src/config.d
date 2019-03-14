@@ -30,6 +30,8 @@ final class Config
 	{
 		// Default configuration directory
 		setValue("sync_dir", "~/OneDrive");
+		// Skip Directories - no directories are skipped by default
+		setValue("skip_dir", "");
 		// Configure to skip ONLY temp files (~*.doc etc) by default
 		// Prior configuration was: .*|~*
 		setValue("skip_file", "~*");

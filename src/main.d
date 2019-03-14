@@ -348,6 +348,7 @@ int main(string[] args)
 		// Config Options
 		writeln("Config option 'check_nosync'        = ", cfg.getValue("check_nosync"));
 		writeln("Config option 'sync_dir'            = ", syncDir);
+		writeln("Config option 'skip_dir'            = ", cfg.getValue("skip_dir"));
 		writeln("Config option 'skip_file'           = ", cfg.getValue("skip_file"));
 		writeln("Config option 'skip_dotfiles'       = ", cfg.getValue("skip_dotfiles"));
 		writeln("Config option 'skip_symlinks'       = ", cfg.getValue("skip_symlinks"));
@@ -451,7 +452,14 @@ int main(string[] args)
 		}
 	}
 	selectiveSync.load(cfg.syncListFilePath);
-	selectiveSync.setMask(cfg.getValue("skip_file"));
+	
+	// Configure skip_dir & skip_file from config entries
+	log.vdebug("Configuring skip_dir ...");
+	log.vdebug("skip_dir: ", cfg.getValue("skip_dir"));
+	selectiveSync.setDirMask(cfg.getValue("skip_dir"));
+	log.vdebug("Configuring skip_file ...");
+	log.vdebug("skip_file: ", cfg.getValue("skip_file"));
+	selectiveSync.setFileMask(cfg.getValue("skip_file"));
 	
 	// Initialize the sync engine
 	log.logAndNotify("Initializing the Synchronization Engine ...");
@@ -464,7 +472,7 @@ int main(string[] args)
 		}
 	} catch (CurlException e) {
 		if (!monitor) {
-			log.log("\nNo internet connection.");
+			log.log("\nNo Internet connection.");
 			oneDrive.http.shutdown();
 			return EXIT_FAILURE;
 		}

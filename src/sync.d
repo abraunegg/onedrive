@@ -754,7 +754,7 @@ final class SyncEngine
 		bool unwanted;
 		unwanted |= skippedItems.find(item.parentId).length != 0;
 		if (unwanted) log.vdebug("Flagging as unwanted: find(item.parentId).length != 0");
-		unwanted |= selectiveSync.isNameExcluded(item.name);
+		unwanted |= selectiveSync.isFileNameExcluded(item.name);
 		if (unwanted) log.vdebug("Flagging as unwanted: item name is excluded: ", item.name);
 
 		// check the item type
@@ -1141,7 +1141,8 @@ final class SyncEngine
 		string path;
 		
 		// Is item.name or the path excluded
-		unwanted = selectiveSync.isNameExcluded(item.name);
+		unwanted = selectiveSync.isFileNameExcluded(item.name);
+
 		if (!unwanted) {
 			path = itemdb.computePath(item.driveId, item.id);
 			unwanted = selectiveSync.isPathExcluded(path);
@@ -1483,12 +1484,20 @@ final class SyncEngine
 
 			// filter out user configured items to skip
 			if (path != ".") {
-				if (selectiveSync.isNameExcluded(baseName(path))) {
-					log.vlog("Skipping item - excluded by skip_file config: ", path);
-					return;
+				if (isDir(path)) {
+					if (selectiveSync.isDirNameExcluded(strip(path,"./"))) {
+						log.vlog("Skipping item - excluded by skip_dir config: ", path);
+						return;
+					}
+				}
+				if (isFile(path)) {
+					if (selectiveSync.isFileNameExcluded(strip(path,"./"))) {
+						log.vlog("Skipping item - excluded by skip_file config: ", path);
+						return;
+					}
 				}
 				if (selectiveSync.isPathExcluded(path)) {
-					log.vlog("Skipping item - path excluded: ", path);
+					log.vlog("Skipping item - path excluded by sync_list: ", path);
 					return;
 				}
 			}
