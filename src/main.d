@@ -31,6 +31,7 @@ int main(string[] args)
 			std.getopt.config.bundling,
 			std.getopt.config.caseSensitive,
 			"confdir", "Set the directory used to store the configuration files", &confdirOption,
+			"verbose|v+", "Print more details, useful for debugging (repeat for extra debugging)", &log.verbose,
 			"version", "Print the version and exit", &printVersion
 		);
 		if (opt.helpWanted) {

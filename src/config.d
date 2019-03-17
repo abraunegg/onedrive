@@ -47,7 +47,7 @@ final class Config
 		boolValues["debug_https"]        = false;
 		boolValues["skip_dotfiles"]      = false;
 		boolValues["dry_run"]            = false;
-		longValues["verbose"]            = 0;
+		longValues["verbose"]            = log.verbose; // might be initialized by the first getopt call!
 		longValues["monitor_interval"]   = 45,
 		longValues["min_notif_changes"]  = 5;
 		longValues["min_notif_changes"]  = 5;
@@ -161,6 +161,7 @@ final class Config
 		try {
 			string tmpStr;
 			bool tmpBol;
+			long tmpVerb;
 			auto opt = getopt(
 				args,
 				std.getopt.config.bundling,
@@ -252,13 +253,13 @@ final class Config
 				"upload-only",
 					"Only upload to OneDrive, do not sync changes from OneDrive locally",
 					&boolValues["upload_only"],
-				"verbose|v+",
-					"Print more details, useful for debugging (repeat for extra debugging)",
-					&longValues["verbose"],
 				// duplicated from main.d to get full help output!
 				"confdir",
 					"Set the directory used to store the configuration files",
 					&tmpStr,
+				"verbose|v+",
+					"Print more details, useful for debugging (repeat for extra debugging)",
+					&tmpVerb,
 				"version",
 					"Print the version and exit",
 					&tmpBol
@@ -268,8 +269,6 @@ final class Config
 				outputLongHelp(opt.options);
 				exit(EXIT_SUCCESS);
 			}
-			// update verbosity setting
-			log.verbose = longValues["verbose"];
 		} catch (GetOptException e) {
 			log.error(e.msg);
 			log.error("Try 'onedrive -h' for more information");
