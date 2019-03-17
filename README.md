@@ -122,8 +122,9 @@ sudo pacman -S libnotify
 ```text
 sudo apt-get install libcurl4-openssl-dev
 sudo apt-get install libsqlite3-dev
-wget https://github.com/ldc-developers/ldc/releases/download/v1.11.0/ldc2-1.11.0-linux-armhf.tar.xz
-tar -xvf ldc2-1.11.0-linux-armhf.tar.xz
+sudo apt-get install libxml2
+wget https://github.com/ldc-developers/ldc/releases/download/v1.13.0/ldc2-1.13.0-linux-armhf.tar.xz
+tar -xvf ldc2-1.13.0-linux-armhf.tar.xz
 ```
 For notifications the following is necessary:
 ```text
@@ -134,8 +135,9 @@ sudo apt install libnotify-dev
 ```text
 sudo apt-get install libcurl4-openssl-dev
 sudo apt-get install libsqlite3-dev
-wget https://github.com/ldc-developers/ldc/releases/download/v1.11.0/ldc2-1.11.0-linux-aarch64.tar.xz
-tar -xvf ldc2-1.11.0-linux-aarch64.tar.xz
+sudo apt-get install libxml2
+wget https://github.com/ldc-developers/ldc/releases/download/v1.14.0/ldc2-1.14.0-linux-aarch64.tar.xz
+tar -xvf ldc2-1.14.0-linux-aarch64.tar.xz
 ```
 For notifications the following is necessary:
 ```text
@@ -209,7 +211,7 @@ sudo make install
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-./configure DC=~/ldc2-1.11.0-linux-armhf/bin/ldmd2
+./configure DC=~/ldc2-1.13.0-linux-armhf/bin/ldmd2
 make
 sudo make install
 ```
@@ -218,7 +220,7 @@ sudo make install
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-./configure DC=~/ldc2-1.11.0-linux-aarch64/bin/ldmd2
+./configure DC=~/ldc2-1.14.0-linux-aarch64/bin/ldmd2
 make
 sudo make install
 ```
@@ -312,6 +314,7 @@ This will display all the pertinent runtime interpretation of the options and co
 Config path                         = /home/alex/.config/onedrive
 Config file found in config path    = false
 Config option 'sync_dir'            = /home/alex/OneDrive
+Config option 'skip_dir'            = 
 Config option 'skip_file'           = ~*
 Config option 'skip_dotfiles'       = false
 Config option 'skip_symlinks'       = false
@@ -469,10 +472,22 @@ Proceed with caution here when changing the default sync dir from ~/OneDrive to 
 
 The issue here is around how the client stores the sync_dir path in the database. If the config file is missing, or you don't use the `--syncdir` parameter - what will happen is the client will default back to `~/OneDrive` and 'think' that either all your data has been deleted - thus delete the content on OneDrive, or will start downloading all data from OneDrive into the default location.
 
-### skip_file
-Example: `skip_file = "~*|Desktop|Documents/OneNote*|Documents/IISExpress|Documents/SQL Server Management Studio|Documents/Visual Studio*|Documents/config.xlaunch|Documents/WindowsPowerShell"`
+### skip_dir
+Example: `skip_dir = "Desktop|Documents/IISExpress|Documents/SQL Server Management Studio|Documents/Visual Studio*|Documents/WindowsPowerShell"`
 
 Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns.
+
+**Note:** after changing `skip_dir`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
+
+### skip_file
+Example: `skip_file = "~*|Documents/OneNote*|Documents/config.xlaunch|myfile.ext"`
+
+Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns.
+
+Files can be skipped in the following fashion:
+*   Specify a wildcard, eg: '*.txt' (skip all txt files)
+*   Explicitly specify the filename and it's full path relative to your sync_dir, eg: 'path/to/file/filename.ext'
+*   Explicitly specify the filename only and skip every instance of this filename, eg: 'filename.ext'
 
 **Note:** after changing `skip_file`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
@@ -518,7 +533,7 @@ Year 2
 
 ### Skipping directories from syncing
 There are several mechanisms available to 'skip' a directory from scanning:
-*   Utilise 'skip_file'
+*   Utilise 'skip_dir'
 *   Utilise 'sync_list'
 
 One further method is to add a '.nosync' empty file to any folder. When this file is present, adding `--check-for-nosync` to your command line will now make the sync process skip any folder where the '.nosync' file is present.
