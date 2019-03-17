@@ -3,6 +3,37 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.2.6 - 2019-03-12
+### Fixed
+*   Resolve application crash when unable to delete remote folders when business retention policies are enabled
+*   Resolve deprecation warning: loop index implicitly converted from size_t to int
+*   Resolve warnings regarding 'bashisms'
+*   Resolve handling of notification failure is dbus server has not started or available
+*   Resolve handling of response JSON to ensure that 'id' key element is always checked for
+*   Resolve excessive & needless logging in monitor mode
+*   Resolve compiling with LDC on Alpine as musl lacks some standard interfaces
+*   Resolve notification issues when offline and cannot act on changes
+*   Resolve Docker entrypoint.sh to accept command line arguments
+*   Resolve to create a new upload session on reinit 
+*   Resolve where on OneDrive query failure, default root and drive id is used if a response is not returned
+*   Resolve Key not found: nextExpectedRanges when attempting session uploads and incorrect response is returned
+*   Resolve application crash when re-using an authentication URI twice after previous --logout
+*   Resolve creating a folder on a shared personal folder appears successful but returns a JSON error
+*   Resolve to treat mv of new file as upload of mv target
+*   Update Debian i386 build dependencies
+*   Update handling of --get-O365-drive-id to print out all 'site names' that match the explicit search entry rather than just the last match
+*   Update Docker readme & documentation
+*   Update handling of validating local file permissions for new file uploads
+### Added
+*   Add support for install & uninstall on RHEL / CentOS 6.x
+*   Add support for when notifications are enabled, display the number of OneDrive changes to process if any are found
+*   Add 'config' option 'min_notif_changes' for minimum number of changes to notify on, default = 5
+*   Add additional Docker container builds utilising a smaller OS footprint
+*   Add configurable interval of logging in monitor mode
+*   Implement new CLI option --skip-dot-files to skip .files and .folders if option is used
+*   Implement new CLI option --check-for-nosync to ignore folder when special file (.nosync) present
+*   Implement new CLI option --dry-run
+
 ## 2.2.5 - 2019-01-16
 ### Fixed
 *   Update handling of HTTP 412 - Precondition Failed errors
