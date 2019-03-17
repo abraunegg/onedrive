@@ -20,7 +20,7 @@ int main(string[] args)
 	stdout.setvbuf(0, _IONBF);
 	
 	// configuration directory
-	string configDirName;
+	string confdirOption;
 
 	try {
 		// print the version and exit
@@ -30,7 +30,7 @@ int main(string[] args)
 			std.getopt.config.passThrough,
 			std.getopt.config.bundling,
 			std.getopt.config.caseSensitive,
-			"confdir", "Set the directory used to store the configuration files", &configDirName,
+			"confdir", "Set the directory used to store the configuration files", &confdirOption,
 			"version", "Print the version and exit", &printVersion
 		);
 		if (opt.helpWanted) {
@@ -51,8 +51,9 @@ int main(string[] args)
 		return EXIT_FAILURE;
 	}
 
+
 	// load configuration file if available
-	auto cfg = new config.Config(configDirName);
+	auto cfg = new config.Config(confdirOption);
 	if (!cfg.initialize()) {
 		// There was an error loading the configuration
 		// Error message already printed
@@ -60,6 +61,11 @@ int main(string[] args)
 	}
 	// update configuration from command line args
 	cfg.update_from_args(args);
+
+	// dry-run notification
+	if (cfg.getValueBool("dry_run")) {
+		log.log("DRY-RUN Configured. Output below shows what 'would' have occurred.");
+	}
 
 	
 	// Are we able to reach the OneDrive Service
@@ -116,9 +122,9 @@ int main(string[] args)
 	log.setNotifications(cfg.getValueBool("monitor") && !cfg.getValueBool("disable_notifications"));
 	
 	// upgrades
-	if (exists(configDirName ~ "/items.db")) {
+	if (exists(cfg.configDirName ~ "/items.db")) {
 		if (!cfg.getValueBool("dry_run")) {
-			safeRemove(configDirName ~ "/items.db");
+			safeRemove(cfg.configDirName ~ "/items.db");
 		}
 		log.logAndNotify("Database schema changed, resync needed");
 		cfg.setValueBool("resync", true);
@@ -140,12 +146,12 @@ int main(string[] args)
 
 	// Display current application configuration, no application initialisation
 	if (cfg.getValueBool("display_config")){
-		string userConfigFilePath = configDirName ~ "/config";
-		string userSyncList = configDirName ~ "/sync_list";
+		string userConfigFilePath = cfg.configDirName ~ "/config";
+		string userSyncList = cfg.configDirName ~ "/sync_list";
 		// Display application version
 		std.stdio.write("onedrive version                    = ", import("version"));
 		// Display all of the pertinent configuration options
-		writeln("Config path                         = ", configDirName);
+		writeln("Config path                         = ", cfg.configDirName);
 		
 		// Does a config file exist or are we using application defaults
 		if (exists(userConfigFilePath)){
@@ -294,7 +300,7 @@ int main(string[] args)
 	if (cfg.getValueBool("disable_upload_validation")) sync.setDisableUploadValidation();
 	
 	// Do we need to validate the syncDir to check for the presence of a '.nosync' file
-	if (cfg.getValueBool("check_for_nomount")) {
+	if (cfg.getValueBool("check_nomount")) {
 		// we were asked to check the mounts
 		if (exists(syncDir ~ "/.nosync")) {
 			log.logAndNotify("ERROR: .nosync file found. Aborting synchronization process to safeguard data.");

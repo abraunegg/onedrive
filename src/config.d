@@ -13,6 +13,7 @@ final class Config
 	public string uploadStateFilePath;
 	public string syncListFilePath;
 	public string homePath;
+	public string configDirName;
 
 	private string userConfigFilePath;
 	// hashmap for the values found in the user config file
@@ -23,7 +24,7 @@ final class Config
 	private long[string] longValues;
 
 
-	this(string configDirName)
+	this(string confdirOption)
 	{
 		// default configuration
 		stringValues["single_directory"] = "";
@@ -79,13 +80,15 @@ final class Config
 	
 		// Determine the correct configuration directory to use
 		string configDirBase;
-		if (configDirName != "") {
+		if (confdirOption != "") {
 			// A CLI 'confdir' was passed in
-			log.vdebug("configDirName: CLI override to set configDirName to: ", configDirName);
+			log.vdebug("configDirName: CLI override to set configDirName to: ", confdirOption);
 			if (canFind(configDirName,"~")) {
 				// A ~ was found
 				log.vdebug("configDirName: A '~' was found in configDirName, using the calculated 'homePath' to replace '~'");
-				configDirName = homePath ~ strip(configDirName,"~","~");
+				configDirName = homePath ~ strip(confdirOption,"~","~");
+			} else {
+				configDirName = confdirOption;
 			}
 		} else {
 			// Determine the base directory relative to which user specific configuration files should be stored.
