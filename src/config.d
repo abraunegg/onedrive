@@ -9,6 +9,7 @@ final class Config
 	public string refreshTokenFilePath;
 	public string deltaLinkFilePath;
 	public string databaseFilePath;
+	public string databaseFilePathDryRun;
 	public string uploadStateFilePath;
 	public string syncListFilePath;
 	public string homePath;
@@ -28,10 +29,12 @@ final class Config
 		stringValues["single_directory"] = "";
 		stringValues["sync_dir"]         = "~/OneDrive";
 		stringValues["skip_file"]        = "~*";
+		stringValues["skip_dir"]         = "";
 		stringValues["log_dir"]          = "/var/log/onedrive/";
 		stringValues["drive_id"]         = "";
 		boolValues["upload_only"]        = false;
-		boolValues["check_for_nomount"]  = false;
+		boolValues["check_nomount"]      = false;
+		boolValues["check_nosync"]       = false;
 		boolValues["download_only"]      = false;
 		boolValues["disable_notifications"] = false;
 		boolValues["disable_upload_validation"] = false;
@@ -41,7 +44,8 @@ final class Config
 		boolValues["no_remote_delete"]   = false;
 		boolValues["skip_symlinks"]      = false;
 		boolValues["debug_https"]        = false;
-		boolValues["skip_dotfiles"]        = false;
+		boolValues["skip_dotfiles"]      = false;
+		boolValues["dry_run"]            = false;
 		longValues["verbose"]            = 0;
 		longValues["monitor_interval"]   = 45,
 		longValues["min_notif_changes"]  = 5;
@@ -109,6 +113,7 @@ final class Config
 		refreshTokenFilePath = configDirName ~ "/refresh_token";
 		deltaLinkFilePath = configDirName ~ "/delta_link";
 		databaseFilePath = configDirName ~ "/items.sqlite3";
+		databaseFilePathDryRun = configDirName ~ "/items-dryrun.sqlite3";
 		uploadStateFilePath = configDirName ~ "/resume_upload";
 		userConfigFilePath = configDirName ~ "/config";
 		syncListFilePath = configDirName ~ "/sync_list";
@@ -157,9 +162,12 @@ final class Config
 				args,
 				std.getopt.config.bundling,
 				std.getopt.config.caseSensitive,
-				"check-for-nomount", 
+				"check-for-nomount",
 					"Check for the presence of .nosync in the syncdir root. If found, do not perform sync.", 
-					&boolValues["check_for_nomount"],
+					&boolValues["check_nomount"],
+				"check-for-nosync",
+					"Check for the presence of .nosync in each directory. If found, skip directory from sync.",
+					&boolValues["check_nosync"],
 				"create-directory",
 					"Create a directory on OneDrive - no sync will be performed.",
 					&stringValues["create_directory"],
@@ -184,6 +192,9 @@ final class Config
 				"download-only|d",
 					"Only download remote changes",
 					&boolValues["download_only"],
+				"dry-run",
+					"Perform a trial sync with no changes made",
+					&boolValues["dry_run"],
 				"enable-logging",
 					"Enable client activity to a separate log file",
 					&boolValues["enable_logging"],

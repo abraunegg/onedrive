@@ -14,7 +14,7 @@ import std.uri;
 import qxor;
 static import log;
 
-private string deviceName;
+shared string deviceName;
 
 static this()
 {
@@ -136,8 +136,9 @@ bool testNetwork()
 bool readLocalFile(string path)
 {
 	try {
-		// attempt to read the first 10MB of the file
-		read(path,10000000);
+		// attempt to read up to the first 1 byte of the file
+		// validates we can 'read' the file based on file permissions
+		read(path,1);
 	} catch (std.file.FileException e) {
 		// unable to read the new local file
 		log.log("Skipping uploading this file as it cannot be read (file permissions or file corruption): ", path);

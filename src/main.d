@@ -64,6 +64,16 @@ int main(string[] args)
 	
 	// Are we able to reach the OneDrive Service
 	bool online = false;
+
+	// dry-run database setup
+	if (cfg.getValueBool("dry_run")) {
+		// Make a copy of the original items.sqlite3 for use as the dry run copy if it exists
+		if (exists(cfg.databaseFilePath)) {
+			// copy the file
+			log.vdebug("Copying items.sqlite3 to items-dryrun.sqlite3 to use for dry run operations");
+			copy(cfg.databaseFilePath,cfg.databaseFilePathDryRun);
+		}
+	}
 	
 	// sync_dir environment handling to handle ~ expansion properly
 	string syncDir;
@@ -107,18 +117,24 @@ int main(string[] args)
 	
 	// upgrades
 	if (exists(configDirName ~ "/items.db")) {
-		remove(configDirName ~ "/items.db");
+		if (!cfg.getValueBool("dry_run")) {
+			safeRemove(configDirName ~ "/items.db");
+		}
 		log.logAndNotify("Database schema changed, resync needed");
 		cfg.setValueBool("resync", true);
 	}
 
 	if (cfg.getValueBool("resync") || cfg.getValueBool("logout")) {
 		log.vlog("Deleting the saved status ...");
-		safeRemove(cfg.databaseFilePath);
-		safeRemove(cfg.deltaLinkFilePath);
-		safeRemove(cfg.uploadStateFilePath);
+		if (!cfg.getValueBool("dry_run")) {
+			safeRemove(cfg.databaseFilePath);
+			safeRemove(cfg.deltaLinkFilePath);
+			safeRemove(cfg.uploadStateFilePath);
+		}
 		if (cfg.getValueBool("logout")) {
-			safeRemove(cfg.refreshTokenFilePath);
+			if (!cfg.getValueBool("dry_run")) {
+				safeRemove(cfg.refreshTokenFilePath);
+			}
 		}
 	}
 
@@ -139,7 +155,9 @@ int main(string[] args)
 		}
 		
 		// Config Options
+		writeln("Config option 'check_nosync'        = ", cfg.getValueBool("check_nosync"));
 		writeln("Config option 'sync_dir'            = ", syncDir);
+		writeln("Config option 'skip_dir'            = ", cfg.getValueString("skip_dir"));
 		writeln("Config option 'skip_file'           = ", cfg.getValueString("skip_file"));
 		writeln("Config option 'skip_dotfiles'       = ", cfg.getValueBool("skip_dotfiles"));
 		writeln("Config option 'skip_symlinks'       = ", cfg.getValueBool("skip_symlinks"));
@@ -211,9 +229,17 @@ int main(string[] args)
 		return EXIT_FAILURE;
 	}
 	
-	// initialize system
+	// Initialize the item database
 	log.vlog("Opening the item database ...");
-	itemDb = new ItemDatabase(cfg.databaseFilePath);
+	if (!cfg.getValueBool("dry_run")) {
+		// Load the items.sqlite3 file as the database
+		log.vdebug("Using database file: ", cfg.databaseFilePath);
+		itemDb = new ItemDatabase(cfg.databaseFilePath);
+	} else {
+		// Load the items-dryrun.sqlite3 file as the database
+		log.vdebug("Using database file: ", cfg.databaseFilePathDryRun);
+		itemDb = new ItemDatabase(cfg.databaseFilePathDryRun);
+	}
 	
 	log.vlog("All operations will be performed in: ", syncDir);
 	if (!exists(syncDir)) {
@@ -235,9 +261,16 @@ int main(string[] args)
 		}
 	}
 	selectiveSync.load(cfg.syncListFilePath);
-	selectiveSync.setMask(cfg.getValueString("skip_file"));
 	
-	// Initialise the sync engine
+	// Configure skip_dir & skip_file from config entries
+	log.vdebug("Configuring skip_dir ...");
+	log.vdebug("skip_dir: ", cfg.getValueString("skip_dir"));
+	selectiveSync.setDirMask(cfg.getValueString("skip_dir"));
+	log.vdebug("Configuring skip_file ...");
+	log.vdebug("skip_file: ", cfg.getValueString("skip_file"));
+	selectiveSync.setFileMask(cfg.getValueString("skip_file"));
+	
+	// Initialize the sync engine
 	log.logAndNotify("Initializing the Synchronization Engine ...");
 	auto sync = new SyncEngine(cfg, oneDrive, itemDb, selectiveSync);
 	
@@ -280,7 +313,7 @@ int main(string[] args)
 	
 		if (cfg.getValueString("remove_directory") != "") {
 			// remove a directory on OneDrive
-			sync.deleteDirectoryNoSync(cfg.getValueString("remove_directory"));			
+			sync.deleteDirectoryNoSync(cfg.getValueString("remove_directory"));
 		}
 	}
 	
@@ -384,7 +417,7 @@ int main(string[] args)
 			signal(SIGTERM, &exitHandler);
 
 			// initialise the monitor class
-			if (!cfg.getValueBool("download_only")) m.init(cfg, cfg.getValueLong("verbose") > 0, cfg.getValueBool("skip_symlinks"));
+			if (!cfg.getValueBool("download_only")) m.init(cfg, cfg.getValueLong("verbose") > 0, cfg.getValueBool("skip_symlinks"), cfg.getValueBool("check_nosync"));
 			// monitor loop
 			immutable auto checkInterval = dur!"seconds"(cfg.getValueLong("monitor_interval"));
 			immutable auto logInterval = cfg.getValueLong("monitor_log_frequency");
@@ -431,8 +464,21 @@ int main(string[] args)
 		}
 	}
 
-	// workaround for segfault in std.net.curl.Curl.shutdown() on exit
+	// Workaround for segfault in std.net.curl.Curl.shutdown() on exit
 	oneDrive.http.shutdown();
+	
+	// Make sure the .wal file is incorporated into the main db before we exit
+	destroy(itemDb);
+	
+	// --dry-run temp database cleanup
+	if (cfg.getValueBool("dry_run")) {
+		if (exists(cfg.databaseFilePathDryRun)) {
+			// remove the file
+			log.vdebug("Removing items-dryrun.sqlite3 as dry run operations complete");
+			safeRemove(cfg.databaseFilePathDryRun);	
+		}
+	}
+	
 	return EXIT_SUCCESS;
 }
 

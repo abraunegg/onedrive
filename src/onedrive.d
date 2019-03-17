@@ -8,6 +8,8 @@ import progress;
 import config;
 static import log;
 shared bool debugResponse = false;
+private bool dryRun = false;
+private bool simulateNoRefreshTokenFile = false;
 
 private immutable {
 	// Client Identifier
@@ -104,6 +106,14 @@ final class OneDriveApi
 			// Downgrade to HTTP 1.1 - yes version = 2 is HTTP 1.1
 			http.handle.set(CurlOption.http_version,2);
 		}
+		
+		// Do we set the dryRun handlers?
+		if (cfg.getValueBool("dry_run")) {
+			.dryRun = true;
+			if (cfg.getValueBool("logout")) {
+				.simulateNoRefreshTokenFile = true;
+			}
+		}
 	}
 
 	bool init()
@@ -112,17 +122,33 @@ final class OneDriveApi
 			driveId = cfg.getValueString("drive_id");
 			if (driveId.length) {
 				driveUrl = driveByIdUrl ~ driveId;
-                itemByIdUrl = driveUrl ~ "/items";
-                itemByPathUrl = driveUrl ~ "/root:/";
+				itemByIdUrl = driveUrl ~ "/items";
+				itemByPathUrl = driveUrl ~ "/root:/";
 			}
 		} catch (Exception e) {}
 	
-		try {
-			refreshToken = readText(cfg.refreshTokenFilePath);
-		} catch (FileException e) {
-			return authorize();
+		if (!.dryRun) {
+			// original code
+			try {
+				refreshToken = readText(cfg.refreshTokenFilePath);
+			} catch (FileException e) {
+				return authorize();
+			}
+			return true;
+		} else {
+			// --dry-run
+			if (!.simulateNoRefreshTokenFile) {
+				try {
+					refreshToken = readText(cfg.refreshTokenFilePath);
+				} catch (FileException e) {
+					return authorize();
+				}
+				return true;
+			} else {
+				// --dry-run & --logout
+				return authorize();
+			}
 		}
-		return true;
 	}
 
 	bool authorize()
@@ -358,11 +384,19 @@ final class OneDriveApi
 	private void acquireToken(const(char)[] postData)
 	{
 		JSONValue response = post(tokenUrl, postData);
-		accessToken = "bearer " ~ response["access_token"].str();
-		refreshToken = response["refresh_token"].str();
-		accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
-		std.file.write(cfg.refreshTokenFilePath, refreshToken);
-		if (printAccessToken) writeln("New access token: ", accessToken);
+		if ("access_token" in response){
+			accessToken = "bearer " ~ response["access_token"].str();
+			refreshToken = response["refresh_token"].str();
+			accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
+			if (!.dryRun) {
+				std.file.write(cfg.refreshTokenFilePath, refreshToken);
+			}
+			if (printAccessToken) writeln("New access token: ", accessToken);
+		} else {
+			log.error("\nInvalid authentication response from OneDrive. Please check the response uri\n");
+			// re-authorize
+			authorize();
+		}
 	}
 
 	private void checkAccessTokenExpired()
@@ -692,6 +726,12 @@ final class OneDriveApi
 	{
 		switch(http.statusLine.code)
 		{
+			// 400 - Bad Request
+			case 400:
+				// Bad Request .. how should we act?
+				log.vlog("OneDrive returned a 'HTTP 400 - Bad Request' - gracefully handling error");
+				break;	
+			
 			//	412 - Precondition Failed
 			case 412:
 				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
