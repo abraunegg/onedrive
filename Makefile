@@ -1,7 +1,8 @@
 DC ?= dmd
-
+RELEASEVER = v2.2.6
 pkgconfig := $(shell if [ $(PKGCONFIG) ] && [ "$(PKGCONFIG)" != 0 ] ; then echo 1 ; else echo "" ; fi)
 notifications := $(shell if [ $(NOTIFICATIONS) ] && [ "$(NOTIFICATIONS)" != 0 ] ; then echo 1 ; else echo "" ; fi)
+gitversion := $(shell if [ -f .git/HEAD ] ; then echo 1 ; else echo "" ; fi)
 
 ifeq ($(pkgconfig),1)
 LIBS = $(shell pkg-config --libs sqlite3 libcurl)
@@ -126,5 +127,9 @@ endif
 	for i in $(DOCFILES) ; do rm -f $(DESTDIR)$(DOCDIR)/$$i ; done
 	rm -f $(DESTDIR)$(MANDIR)/onedrive.1
 
-version: .git/HEAD .git/index
+version:
+ifeq ($(gitversion),1)
 	echo $(shell git describe --tags) > version
+else
+	echo $(RELEASEVER) > version
+endif
