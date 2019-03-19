@@ -59,11 +59,21 @@ final class ItemDatabase
 			db.exec("DROP TABLE item");
 			createTable();
 		}
+		// Set the enforcement of foreign key constraints.
+		// https://www.sqlite.org/pragma.html#pragma_foreign_keys
 		db.exec("PRAGMA foreign_keys = ON");
+		// Set the recursive trigger capability
+		// https://www.sqlite.org/pragma.html#pragma_recursive_triggers
 		db.exec("PRAGMA recursive_triggers = ON");
+		// Set the journal mode for databases associated with the current connection
+		// https://www.sqlite.org/pragma.html#pragma_journal_mode
 		db.exec("PRAGMA journal_mode = WAL");
-		// Automatic indexing is enabled by default as of version 3.7.17 
+		// Automatic indexing is enabled by default as of version 3.7.17
+		// https://www.sqlite.org/pragma.html#pragma_automatic_index 
 		db.exec("PRAGMA automatic_index = OFF");
+		// Tell SQLite to store temporary tables in memory. This will speed up many read operations that rely on temporary tables, indices, and views.
+		// https://www.sqlite.org/pragma.html#pragma_temp_store
+		db.exec("PRAGMA temp_store = MEMORY");
 		
 		insertItemStmt = "
 			INSERT OR REPLACE INTO item (driveId, id, name, type, eTag, cTag, mtime, parentId, crc32Hash, sha1Hash, quickXorHash, remoteDriveId, remoteId)
