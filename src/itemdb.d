@@ -62,6 +62,8 @@ final class ItemDatabase
 		db.exec("PRAGMA foreign_keys = ON");
 		db.exec("PRAGMA recursive_triggers = ON");
 		db.exec("PRAGMA journal_mode = WAL");
+		// Automatic indexing is enabled by default as of version 3.7.17 
+		db.exec("PRAGMA automatic_index = OFF");
 		
 		insertItemStmt = "
 			INSERT OR REPLACE INTO item (driveId, id, name, type, eTag, cTag, mtime, parentId, crc32Hash, sha1Hash, quickXorHash, remoteDriveId, remoteId)
