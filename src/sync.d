@@ -755,11 +755,15 @@ final class SyncEngine
 		unwanted |= skippedItems.find(item.parentId).length != 0;
 		if (unwanted) log.vdebug("Flagging as unwanted: find(item.parentId).length != 0");
 		// Check if this is a directory to skip
-		unwanted |= selectiveSync.isDirNameExcluded(item.name);
-		if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
+		if (!unwanted) {
+			unwanted = selectiveSync.isDirNameExcluded(item.name);
+			if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
+		}
 		// Check if this is a file to skip
-		unwanted |= selectiveSync.isFileNameExcluded(item.name);
-		if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
+		if (!unwanted) {
+			unwanted = selectiveSync.isFileNameExcluded(item.name);
+			if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
+		}
 		
 		// check the item type
 		if (!unwanted) {
