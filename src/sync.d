@@ -754,9 +754,17 @@ final class SyncEngine
 		bool unwanted;
 		unwanted |= skippedItems.find(item.parentId).length != 0;
 		if (unwanted) log.vdebug("Flagging as unwanted: find(item.parentId).length != 0");
-		unwanted |= selectiveSync.isFileNameExcluded(item.name);
-		if (unwanted) log.vdebug("Flagging as unwanted: item name is excluded: ", item.name);
-
+		// Check if this is a directory to skip
+		if (!unwanted) {
+			unwanted = selectiveSync.isDirNameExcluded(item.name);
+			if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
+		}
+		// Check if this is a file to skip
+		if (!unwanted) {
+			unwanted = selectiveSync.isFileNameExcluded(item.name);
+			if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
+		}
+		
 		// check the item type
 		if (!unwanted) {
 			if (isItemFile(driveItem)) {
@@ -1485,12 +1493,14 @@ final class SyncEngine
 			// filter out user configured items to skip
 			if (path != ".") {
 				if (isDir(path)) {
+					log.vdebug("Checking path: ", path);
 					if (selectiveSync.isDirNameExcluded(strip(path,"./"))) {
 						log.vlog("Skipping item - excluded by skip_dir config: ", path);
 						return;
 					}
 				}
 				if (isFile(path)) {
+					log.vdebug("Checking file: ", path);
 					if (selectiveSync.isFileNameExcluded(strip(path,"./"))) {
 						log.vlog("Skipping item - excluded by skip_file config: ", path);
 						return;
@@ -1682,6 +1692,8 @@ final class SyncEngine
 			auto maxUploadFileSize = 16106127360; // 15GB
 			//auto maxUploadFileSize = 21474836480; // 20GB
 			auto thisFileSize = getSize(path);
+			// To avoid a 409 Conflict error - does the file actually exist on OneDrive already?
+			JSONValue fileDetailsFromOneDrive;
 			
 			// Can we read the file - as a permissions issue or file corruption will cause a failure
 			// https://github.com/abraunegg/onedrive/issues/113
@@ -1689,10 +1701,6 @@ final class SyncEngine
 				// able to read the file
 				if (thisFileSize <= maxUploadFileSize){
 					// Resolves: https://github.com/skilion/onedrive/issues/121, https://github.com/skilion/onedrive/issues/294, https://github.com/skilion/onedrive/issues/329
-				
-					// To avoid a 409 Conflict error - does the file actually exist on OneDrive already?
-					JSONValue fileDetailsFromOneDrive;
-					
 					// Does this 'file' already exist on OneDrive?
 					try {
 						// test if the local path exists on OneDrive
@@ -1839,7 +1847,8 @@ final class SyncEngine
 					// even though some file systems (such as a POSIX-compliant file system) may consider them as different. 
 					// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior.
 					
-					if (fileDetailsFromOneDrive["name"].str == baseName(path)){
+					// Check that 'name' is in the JSON response (validates data) and that 'name' == the path we are looking for
+					if (("name" in fileDetailsFromOneDrive) && (fileDetailsFromOneDrive["name"].str == baseName(path))) {
 						// OneDrive 'name' matches local path name
 						log.vlog("Requested file to upload exists on OneDrive - local database is out of sync for this file: ", path);
 						

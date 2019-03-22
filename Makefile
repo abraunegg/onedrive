@@ -133,3 +133,6 @@ ifeq ($(gitversion),1)
 else
 	echo $(RELEASEVER) > version
 endif
+
+.PHONY: version
+
