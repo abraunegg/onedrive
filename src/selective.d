@@ -78,7 +78,7 @@ final class SelectiveSync
 	// config sync_list file handling
 	bool isPathExcluded(string path)
 	{
-		return .isPathExcluded(path, paths) || .isPathMatched(path, mask);
+		return .isPathExcluded(path, paths) || .isPathMatched(path, mask) || .isPathMatched(path, dirmask);
 	}
 }
 
