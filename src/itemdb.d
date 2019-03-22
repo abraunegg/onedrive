@@ -118,7 +118,8 @@ final class ItemDatabase
 			)");
 		db.exec("CREATE INDEX name_idx ON item (name)");
 		db.exec("CREATE INDEX remote_idx ON item (remoteDriveId, remoteId)");
-		db.exec("CREATE INDEX item_children ON item (driveId, parentId)");
+		db.exec("CREATE INDEX item_children_idx ON item (driveId, parentId)");
+		db.exec("CREATE INDEX selectByPath_idx ON item (name, driveId, parentId)");
 		db.setVersion(itemDatabaseVersion);
 	}
 	
