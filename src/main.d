@@ -402,7 +402,6 @@ int main(string[] args)
 	
 	// if --synchronize or --monitor not passed in, exit & display help
 	auto performSyncOK = false;
-	
 	if (synchronize || monitor) {
 		performSyncOK = true;
 	}
@@ -416,6 +415,14 @@ int main(string[] args)
 	if (!performSyncOK) {
 		writeln("\n--synchronize or --monitor missing from your command options or use --help for further assistance\n");
 		writeln("No OneDrive sync will be performed without either of these two arguments being present\n");
+		oneDrive.http.shutdown();
+		return EXIT_FAILURE;
+	}
+	
+	// if --synchronize && --monitor passed in, exit & display help as these conflict with each other
+	if (synchronize && monitor) {
+		writeln("\nERROR: --synchronize and --monitor cannot be used together\n");
+		writeln("Refer to --help to determine which command option you should use.\n");
 		oneDrive.http.shutdown();
 		return EXIT_FAILURE;
 	}
