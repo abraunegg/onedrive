@@ -27,6 +27,10 @@ ifeq ($(notdir $(DC)),ldc2)
 	NOTIF_VERSIONS := $(addprefix -d,$(NOTIF_VERSIONS))
 endif
 
+ifeq ($(DEBUG),1)
+DFLAGS += -gs -debug
+endif
+
 DFLAGS += -w -g -ofonedrive -O $(NOTIF_VERSIONS) $(LIBS) -J.
 
 PREFIX ?= /usr/local
