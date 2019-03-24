@@ -3,6 +3,21 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.3.0 - 2019-03-25
+### Fixed
+*   Resolve application crash if no 'size' value is returned when uploading a new file
+*   Resolve application crash if a 5xx error is returned when uploading a new file
+*   Resolve not 'refreshing' version file when rebuilding
+*   Resolve unexpected application processing by preventing use of --synchronize & --monitor together
+*   Resolve high CPU usage when performing DB reads
+*   Update error logging around directory case-insensitive match
+*   Update Travis CI and ARM dependencies for LDC 1.14.0
+*   Update Makefile due to build failure if building from release archive file
+*   Update logging as to why a OneDrive object was skipped
+
+### Added
+*   Implement config option 'skip_dir'
+
 ## 2.2.6 - 2019-03-12
 ### Fixed
 *   Resolve application crash when unable to delete remote folders when business retention policies are enabled
