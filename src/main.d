@@ -760,14 +760,17 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 						// sync from OneDrive first before uploading files to OneDrive
 						if (logLevel < MONITOR_LOG_SILENT) log.log("Syncing changes from OneDrive ...");
 						sync.applyDifferences();
+						writeln("monitor value: ", monitor);
 						// is this a download only request or are we running in monitor mode?
-						if (!downloadOnly || !monitor) {
-							// process local changes walking the entire path checking for changes
-							// in monitor mode all local changes are captured via inotify
-							// thus scanning every 'monitor_interval' (default 45 seconds) for local changes is excessive and not required
-							sync.scanForDifferences(localPath);
-							// ensure that the current remote state is updated locally
-							sync.applyDifferences();
+						if (!monitor) {
+							if (!downloadOnly) {
+								// process local changes walking the entire path checking for changes
+								// in monitor mode all local changes are captured via inotify
+								// thus scanning every 'monitor_interval' (default 45 seconds) for local changes is excessive and not required
+								sync.scanForDifferences(localPath);
+								// ensure that the current remote state is updated locally
+								sync.applyDifferences();
+							}
 						}
 					}
 				}
