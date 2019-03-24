@@ -1148,9 +1148,15 @@ final class SyncEngine
 		bool unwanted = false;
 		string path;
 		
-		// Is item.name or the path excluded
-		unwanted = selectiveSync.isFileNameExcluded(item.name);
+		// Is the path excluded?
+		unwanted = selectiveSync.isDirNameExcluded(item.name);
+		
+		// If the path is not excluded, is the filename excluded?
+		if (!unwanted) {
+			unwanted = selectiveSync.isFileNameExcluded(item.name);
+		}
 
+		// If path or filename does not exclude, is this excluded due to use of selective sync?
 		if (!unwanted) {
 			path = itemdb.computePath(item.driveId, item.id);
 			unwanted = selectiveSync.isPathExcluded(path);
