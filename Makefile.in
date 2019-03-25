@@ -101,7 +101,7 @@ endif
 	for i in $(DOCFILES) ; do rm -f $(DESTDIR)$(DOCDIR)/$$i ; done
 
 version:
-	if [ -d .git/ ] ; then \
+	if [ -f .git/HEAD ] ; then \
 		echo $(shell git describe --tags) > version ; \
 	else \
 		echo $(version) > version ; \

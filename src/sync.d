@@ -754,9 +754,17 @@ final class SyncEngine
 		bool unwanted;
 		unwanted |= skippedItems.find(item.parentId).length != 0;
 		if (unwanted) log.vdebug("Flagging as unwanted: find(item.parentId).length != 0");
-		unwanted |= selectiveSync.isFileNameExcluded(item.name);
-		if (unwanted) log.vdebug("Flagging as unwanted: item name is excluded: ", item.name);
-
+		// Check if this is a directory to skip
+		if (!unwanted) {
+			unwanted = selectiveSync.isDirNameExcluded(item.name);
+			if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
+		}
+		// Check if this is a file to skip
+		if (!unwanted) {
+			unwanted = selectiveSync.isFileNameExcluded(item.name);
+			if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
+		}
+		
 		// check the item type
 		if (!unwanted) {
 			if (isItemFile(driveItem)) {
@@ -1140,9 +1148,15 @@ final class SyncEngine
 		bool unwanted = false;
 		string path;
 		
-		// Is item.name or the path excluded
-		unwanted = selectiveSync.isFileNameExcluded(item.name);
+		// Is the path excluded?
+		unwanted = selectiveSync.isDirNameExcluded(item.name);
+		
+		// If the path is not excluded, is the filename excluded?
+		if (!unwanted) {
+			unwanted = selectiveSync.isFileNameExcluded(item.name);
+		}
 
+		// If path or filename does not exclude, is this excluded due to use of selective sync?
 		if (!unwanted) {
 			path = itemdb.computePath(item.driveId, item.id);
 			unwanted = selectiveSync.isPathExcluded(path);
@@ -1485,12 +1499,14 @@ final class SyncEngine
 			// filter out user configured items to skip
 			if (path != ".") {
 				if (isDir(path)) {
+					log.vdebug("Checking path: ", path);
 					if (selectiveSync.isDirNameExcluded(strip(path,"./"))) {
 						log.vlog("Skipping item - excluded by skip_dir config: ", path);
 						return;
 					}
 				}
 				if (isFile(path)) {
+					log.vdebug("Checking file: ", path);
 					if (selectiveSync.isFileNameExcluded(strip(path,"./"))) {
 						log.vlog("Skipping item - excluded by skip_file config: ", path);
 						return;
@@ -1682,6 +1698,8 @@ final class SyncEngine
 			auto maxUploadFileSize = 16106127360; // 15GB
 			//auto maxUploadFileSize = 21474836480; // 20GB
 			auto thisFileSize = getSize(path);
+			// To avoid a 409 Conflict error - does the file actually exist on OneDrive already?
+			JSONValue fileDetailsFromOneDrive;
 			
 			// Can we read the file - as a permissions issue or file corruption will cause a failure
 			// https://github.com/abraunegg/onedrive/issues/113
@@ -1689,10 +1707,6 @@ final class SyncEngine
 				// able to read the file
 				if (thisFileSize <= maxUploadFileSize){
 					// Resolves: https://github.com/skilion/onedrive/issues/121, https://github.com/skilion/onedrive/issues/294, https://github.com/skilion/onedrive/issues/329
-				
-					// To avoid a 409 Conflict error - does the file actually exist on OneDrive already?
-					JSONValue fileDetailsFromOneDrive;
-					
 					// Does this 'file' already exist on OneDrive?
 					try {
 						// test if the local path exists on OneDrive
@@ -1771,47 +1785,50 @@ final class SyncEngine
 								// Log action to log file
 								log.fileOnly("Uploading new file ", path, " ... done.");
 								
-								// The file was uploaded
-								ulong uploadFileSize = response["size"].integer;
-								
-								// In some cases the file that was uploaded was not complete, but 'completed' without errors on OneDrive
-								// This has been seen with PNG / JPG files mainly, which then contributes to generating a 412 error when we attempt to update the metadata
-								// Validate here that the file uploaded, at least in size, matches in the response to what the size is on disk
-								if (thisFileSize != uploadFileSize){
-									if(disableUploadValidation){
-										// Print a warning message
-										log.log("WARNING: Uploaded file size does not match local file - skipping upload validation");
+								// The file was uploaded, or a 4xx / 5xx error was generated
+								if ("size" in response){
+									// The response JSON contains size, high likelihood valid response returned 
+									ulong uploadFileSize = response["size"].integer;
+									
+									// In some cases the file that was uploaded was not complete, but 'completed' without errors on OneDrive
+									// This has been seen with PNG / JPG files mainly, which then contributes to generating a 412 error when we attempt to update the metadata
+									// Validate here that the file uploaded, at least in size, matches in the response to what the size is on disk
+									if (thisFileSize != uploadFileSize){
+										if(disableUploadValidation){
+											// Print a warning message
+											log.log("WARNING: Uploaded file size does not match local file - skipping upload validation");
+										} else {
+											// OK .. the uploaded file does not match and we did not disable this validation
+											log.log("Uploaded file size does not match local file - upload failure - retrying");
+											// Delete uploaded bad file
+											onedrive.deleteById(response["parentReference"]["driveId"].str, response["id"].str, response["eTag"].str);
+											// Re-upload
+											uploadNewFile(path);
+											return;
+										}
+									} 
+									
+									// File validation is OK
+									if ((accountType == "personal") || (thisFileSize == 0)){
+										// Update the item's metadata on OneDrive
+										string id = response["id"].str;
+										string cTag = response["cTag"].str;
+										if (exists(path)) {
+											SysTime mtime = timeLastModified(path).toUTC();
+											// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
+											uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+										} else {
+											// will be removed in different event!
+											log.log("File disappeared after upload: ", path);
+										}
+										return;
 									} else {
-										// OK .. the uploaded file does not match and we did not disable this validation
-										log.log("Uploaded file size does not match local file - upload failure - retrying");
-										// Delete uploaded bad file
-										onedrive.deleteById(response["parentReference"]["driveId"].str, response["id"].str, response["eTag"].str);
-										// Re-upload
-										uploadNewFile(path);
+										// OneDrive Business Account - always use a session to upload
+										// The session includes a Request Body element containing lastModifiedDateTime
+										// which negates the need for a modify event against OneDrive
+										saveItem(response);
 										return;
 									}
-								} 
-								
-								// File validation is OK
-								if ((accountType == "personal") || (thisFileSize == 0)){
-									// Update the item's metadata on OneDrive
-									string id = response["id"].str;
-									string cTag = response["cTag"].str;
-									if (exists(path)) {
-										SysTime mtime = timeLastModified(path).toUTC();
-										// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
-										uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
-									} else {
-										// will be removed in different event!
-										log.log("File disappeared after upload: ", path);
-									}
-									return;
-								} else {
-									// OneDrive Business Account - always use a session to upload
-									// The session includes a Request Body element containing lastModifiedDateTime
-									// which negates the need for a modify event against OneDrive
-									saveItem(response);
-									return;
 								}
 							} else {
 								// we are --dry-run - simulate the file upload
@@ -1836,7 +1853,8 @@ final class SyncEngine
 					// even though some file systems (such as a POSIX-compliant file system) may consider them as different. 
 					// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior.
 					
-					if (fileDetailsFromOneDrive["name"].str == baseName(path)){
+					// Check that 'name' is in the JSON response (validates data) and that 'name' == the path we are looking for
+					if (("name" in fileDetailsFromOneDrive) && (fileDetailsFromOneDrive["name"].str == baseName(path))) {
 						// OneDrive 'name' matches local path name
 						log.vlog("Requested file to upload exists on OneDrive - local database is out of sync for this file: ", path);
 						

@@ -197,6 +197,9 @@ the Systemd system unit location), and `--with-systemduserunitdir` (for the
 Systemd user unit location) can be specified. Passing in `no` to one of these
 options disabled service file installation.
 
+By passing `DEBUG=1` to the `make` call, `onedrive` gets built with additional debug
+information, useful (for example) to get `perf`-issued figures.
+
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
 #### Debian - i386 / i686
 ```text
