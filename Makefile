@@ -72,7 +72,7 @@ endif
 all: onedrive onedrive.service onedrive.1
 
 clean:
-	rm -f onedrive onedrive.o onedrive.service onedrive@.service onedrive.1
+	rm -f onedrive onedrive.o onedrive.service onedrive@.service onedrive.1 version
 
 onedrive: version $(SOURCES)
 	$(DC) $(DFLAGS) $(SOURCES)
@@ -141,6 +141,3 @@ ifeq ($(gitversion),1)
 else
 	echo $(RELEASEVER) > version
 endif
-
-.PHONY: version
-
