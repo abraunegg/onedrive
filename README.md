@@ -195,6 +195,9 @@ By passing `NOTIFICATIONS=1` to the `make` call, notifications via
 libnotify are enabled. If `pkg-config` is not used (see above), the necessary
 libraries are `gmodule-2.0`, `glib-2.0`, and `notify`.
 
+By passing `DEBUG=1` to the `make` call, `onedrive` gets built with additional debug
+information, useful (for example) to get `perf`-issued figures.
+
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
 #### Debian - i386 / i686
 ```text

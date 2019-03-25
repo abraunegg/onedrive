@@ -1,5 +1,5 @@
 pkgname=onedrive
-pkgver=2.2.6
+pkgver=2.3.0
 pkgrel=1 #patch-level (Increment this when patch is applied)
 pkgdesc="A free OneDrive Client for Linux. This is a fork of the https://github.com/skilion/onedrive repository"
 license=("unknown")
