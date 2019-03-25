@@ -39,7 +39,19 @@ final class SelectiveSync
 		// Does the directory name match skip_dir config entry?
 		// Returns true if the name matches a skip_dir config entry
 		// Returns false if no match
-		return !name.matchFirst(dirmask).empty;
+		
+		// Try full path match first
+		if (!name.matchFirst(dirmask).empty) {
+			return true;
+		} else {
+			// check just the file name
+			string filename = baseName(name);
+			if(!filename.matchFirst(dirmask).empty) {
+				return true;
+			}
+		}
+		// no match
+		return false;
 	}
 	
 	// config file skip_file parameter
@@ -66,7 +78,7 @@ final class SelectiveSync
 	// config sync_list file handling
 	bool isPathExcluded(string path)
 	{
-		return .isPathExcluded(path, paths) || .isPathMatched(path, mask);
+		return .isPathExcluded(path, paths) || .isPathMatched(path, mask) || .isPathMatched(path, dirmask);
 	}
 }
 

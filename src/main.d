@@ -236,6 +236,14 @@ int main(string[] args)
 		return EXIT_FAILURE;
 	}
 	
+	// if --synchronize && --monitor passed in, exit & display help as these conflict with each other
+	if (synchronize && monitor) {
+		writeln("\nERROR: --synchronize and --monitor cannot be used together\n");
+		writeln("Refer to --help to determine which command option you should use.\n");
+		oneDrive.http.shutdown();
+		return EXIT_FAILURE;
+	}
+	
 	// Initialize the item database
 	log.vlog("Opening the item database ...");
 	if (!cfg.getValueBool("dry_run")) {

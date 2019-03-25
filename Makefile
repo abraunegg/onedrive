@@ -1,7 +1,8 @@
 DC ?= dmd
-
+RELEASEVER = v2.3.0
 pkgconfig := $(shell if [ $(PKGCONFIG) ] && [ "$(PKGCONFIG)" != 0 ] ; then echo 1 ; else echo "" ; fi)
 notifications := $(shell if [ $(NOTIFICATIONS) ] && [ "$(NOTIFICATIONS)" != 0 ] ; then echo 1 ; else echo "" ; fi)
+gitversion := $(shell if [ -f .git/HEAD ] ; then echo 1 ; else echo "" ; fi)
 
 ifeq ($(pkgconfig),1)
 LIBS = $(shell pkg-config --libs sqlite3 libcurl)
@@ -24,6 +25,14 @@ LIBS := $(addprefix -L,$(LIBS))
 # support ldc2 which needs -d prefix for version specification
 ifeq ($(notdir $(DC)),ldc2)
 	NOTIF_VERSIONS := $(addprefix -d,$(NOTIF_VERSIONS))
+endif
+
+ifeq ($(DEBUG),1)
+ifeq ($(notdir $(DC)),ldc2)
+DFLAGS += -d-debug -gc
+else
+DFLAGS += -debug -gs
+endif
 endif
 
 DFLAGS += -w -g -ofonedrive -O $(NOTIF_VERSIONS) $(LIBS) -J.
@@ -126,5 +135,12 @@ endif
 	for i in $(DOCFILES) ; do rm -f $(DESTDIR)$(DOCDIR)/$$i ; done
 	rm -f $(DESTDIR)$(MANDIR)/onedrive.1
 
-version: .git/HEAD .git/index
+version:
+ifeq ($(gitversion),1)
 	echo $(shell git describe --tags) > version
+else
+	echo $(RELEASEVER) > version
+endif
+
+.PHONY: version
+
