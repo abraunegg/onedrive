@@ -237,7 +237,7 @@ int main(string[] args)
 	}
 	
 	// if --synchronize && --monitor passed in, exit & display help as these conflict with each other
-	if (synchronize && monitor) {
+	if (cfg.getValueBool("synchronize") && cfg.getValueBool("monitor")) {
 		writeln("\nERROR: --synchronize and --monitor cannot be used together\n");
 		writeln("Refer to --help to determine which command option you should use.\n");
 		oneDrive.http.shutdown();
