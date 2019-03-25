@@ -3,6 +3,12 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.3.1 - 2019-03-26
+### Fixed
+*   Resolve 'make install' issue where rebuild of application would occur due to 'version' being flagged as .PHONY
+*   Update readme build instructions to include 'make clean;' before build to ensure that 'version' is cleanly removed and can be updated correctly
+*   Update Debian Travis CI build URL's
+
 ## 2.3.0 - 2019-03-25
 ### Fixed
 *   Resolve application crash if no 'size' value is returned when uploading a new file
