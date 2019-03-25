@@ -1,4 +1,4 @@
-project('onedrive', 'd', version: '2.2.5')
+project('onedrive', 'd', version: '2.3.0')
 
 prefix = get_option('prefix')
 docdir = join_paths(get_option('datadir'), 'doc', meson.project_name())

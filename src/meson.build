@@ -22,6 +22,17 @@ onedrive_src = [
 dargs = [ '-J' + meson.build_root() ]
 dmodvers = []
 
+# update debug options to include -gs/-gc
+compiler = meson.get_compiler('d')
+if get_option('buildtype') == 'debug'
+  if compiler.get_id() == 'dmd'
+    dargs += [ '-gs' ]
+  else
+    dargs += [ '-gc' ]
+  endif
+endif
+
+
 notifications_dep = dependency('libnotify', required : get_option('notifications'))
 if notifications_dep.found()
   deps += [ notifications_dep ]
