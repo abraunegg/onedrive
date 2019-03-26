@@ -308,6 +308,7 @@ final class SyncEngine
 	void setDisableUploadValidation()
 	{
 		disableUploadValidation = true;
+		log.vdebug("documentLibrary account type - flagging to disable upload validation checks due to Microsoft SharePoint file modification enrichments");
 	}
 	
 	
@@ -2024,7 +2025,7 @@ final class SyncEngine
 				itemdb.upsert(item);
 			} else {
 				// log error
-				log.error("ERROR: OneDrive response missing required 'id' element:");
+				log.error("ERROR: OneDrive response missing required 'id' element");
 				log.error("ERROR: ", jsonItem);
 			}
 		} else {
