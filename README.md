@@ -181,7 +181,7 @@ Without performing this step, the compilation process will fail.
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-make
+make clean; make;
 sudo make install
 ```
 
@@ -203,7 +203,7 @@ information, useful (for example) to get `perf`-issued figures.
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-make DC=/usr/bin/ldc2
+make clean; make DC=/usr/bin/ldc2
 sudo make install
 ```
 
@@ -211,7 +211,7 @@ sudo make install
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-make DC=~/ldc2-1.13.0-linux-armhf/bin/ldmd2
+make clean; make DC=~/ldc2-1.13.0-linux-armhf/bin/ldmd2
 sudo make install
 ```
 
@@ -219,7 +219,7 @@ sudo make install
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-make DC=~/ldc2-1.14.0-linux-aarch64/bin/ldmd2
+make clean; make DC=~/ldc2-1.14.0-linux-aarch64/bin/ldmd2
 sudo make install
 ```
 
