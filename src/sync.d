@@ -1376,7 +1376,7 @@ final class SyncEngine
 										if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
 											// The file is currently checked out or locked for editing by another user
 											// We cant upload this file at this time
-											writeln(" skipped.");
+											writeln("skipped.");
 											log.fileOnly("Uploading modified file ", path, " ... skipped.");
 											writeln("", path, " is currently checked out or locked for editing by another user.");
 											log.fileOnly(path, " is currently checked out or locked for editing by another user.");
@@ -1393,7 +1393,7 @@ final class SyncEngine
 									// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
 									// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
 									// Delete record from the local database - file will be uploaded as a new file
-									writeln(" skipped.");
+									writeln("skipped.");
 									log.fileOnly("Uploading modified file ", path, " ... skipped.");
 									log.vlog("Skip Reason: Microsoft Sharepoint 'enrichment' after upload issue");
 									log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
@@ -1923,11 +1923,12 @@ final class SyncEngine
 									if (accountType == "documentLibrary"){
 										// If this is a Microsoft SharePoint site, we need to remove the existing file before upload
 										onedrive.deleteById(fileDetailsFromOneDrive["parentReference"]["driveId"].str, fileDetailsFromOneDrive["id"].str, fileDetailsFromOneDrive["eTag"].str);	
-										// simple upload
+										// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+										// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
+										// Upload modified file via simpleUpload to avoid the session 404 problem
 										response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
 										writeln(" done.");
 										saveItem(response);
-										// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
 										// So - now the 'local' and 'remote' file is technically DIFFERENT ... thanks Microsoft .. NO way to disable this stupidity
 										// Download the Microsoft 'modified' file so 'local' is now in sync
 										log.vlog("Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync");
