@@ -757,8 +757,11 @@ final class SyncEngine
 		if (unwanted) log.vdebug("Flagging as unwanted: find(item.parentId).length != 0");
 		// Check if this is a directory to skip
 		if (!unwanted) {
-			unwanted = selectiveSync.isDirNameExcluded(item.name);
-			if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
+			// Only check path if config is != ""
+			if (cfg.getValue("skip_dir") != "") {
+				unwanted = selectiveSync.isDirNameExcluded(item.name);
+				if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
+			}
 		}
 		// Check if this is a file to skip
 		if (!unwanted) {
@@ -1361,28 +1364,45 @@ final class SyncEngine
 									writeln("done.");
 								}		
 							} else {
-								// OneDrive Business Account - always use a session to upload
-								writeln("");
-								
-								try {
-									response = session.upload(path, item.driveId, item.parentId, baseName(path));
-								} catch (OneDriveException e) {
-								
-									// Resolve https://github.com/abraunegg/onedrive/issues/36
-									if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
-										// The file is currently checked out or locked for editing by another user
-										// We cant upload this file at this time
-										writeln(" skipped.");
-										log.fileOnly("Uploading modified file ", path, " ... skipped.");
-										writeln("", path, " is currently checked out or locked for editing by another user.");
-										log.fileOnly(path, " is currently checked out or locked for editing by another user.");
-										return;
+								// OneDrive Business Account
+								// We need to always use a session to upload, but handle the changed file correctly
+								if (accountType == "business"){
+									// For logging consistency
+									writeln("");
+									try {
+										response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+									} catch (OneDriveException e) {
+										// Resolve https://github.com/abraunegg/onedrive/issues/36
+										if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
+											// The file is currently checked out or locked for editing by another user
+											// We cant upload this file at this time
+											writeln(" skipped.");
+											log.fileOnly("Uploading modified file ", path, " ... skipped.");
+											writeln("", path, " is currently checked out or locked for editing by another user.");
+											log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+											return;
+										}
+										// what is this error?????
+										else throw e;
 									}
+									// As the session.upload includes the last modified time, save the response
+									saveItem(response);
 								}
-															
+								// OneDrive documentLibrary
+								if (accountType == "documentLibrary"){
+									// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+									// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
+									// Delete record from the local database - file will be uploaded as a new file
+									writeln(" skipped.");
+									log.fileOnly("Uploading modified file ", path, " ... skipped.");
+									log.vlog("Skip Reason: Microsoft Sharepoint 'enrichment' after upload issue");
+									log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+									itemdb.deleteById(item.driveId, item.id);
+									return;
+								}
+					
+								// log line completion							
 								writeln("done.");
-								// As the session.upload includes the last modified time, save the response
-								saveItem(response);
 							}
 							log.fileOnly("Uploading modified file ", path, " ... done.");
 							// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded via simple upload
@@ -1501,9 +1521,12 @@ final class SyncEngine
 			if (path != ".") {
 				if (isDir(path)) {
 					log.vdebug("Checking path: ", path);
-					if (selectiveSync.isDirNameExcluded(strip(path,"./"))) {
-						log.vlog("Skipping item - excluded by skip_dir config: ", path);
-						return;
+					// Only check path if config is != ""
+					if (cfg.getValue("skip_dir") != "") {
+						if (selectiveSync.isDirNameExcluded(strip(path,"./"))) {
+							log.vlog("Skipping item - excluded by skip_dir config: ", path);
+							return;
+						}
 					}
 				}
 				if (isFile(path)) {
@@ -1887,11 +1910,31 @@ final class SyncEngine
 									// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
 									uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
 								} else {
-									// OneDrive Business account upload handling
-									writeln("");
-									response = session.upload(path, parent.driveId, parent.id, baseName(path));
-									writeln(" done.");
-									saveItem(response);
+									// OneDrive Business account modified file upload handling
+									if (accountType == "business"){
+										writeln("");
+										// session upload
+										response = session.upload(path, parent.driveId, parent.id, baseName(path), fileDetailsFromOneDrive["eTag"].str);
+										writeln(" done.");
+										saveItem(response);
+									}
+									
+									// OneDrive SharePoint account modified file upload handling
+									if (accountType == "documentLibrary"){
+										// If this is a Microsoft SharePoint site, we need to remove the existing file before upload
+										onedrive.deleteById(fileDetailsFromOneDrive["parentReference"]["driveId"].str, fileDetailsFromOneDrive["id"].str, fileDetailsFromOneDrive["eTag"].str);	
+										// simple upload
+										response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+										writeln(" done.");
+										saveItem(response);
+										// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+										// So - now the 'local' and 'remote' file is technically DIFFERENT ... thanks Microsoft .. NO way to disable this stupidity
+										// Download the Microsoft 'modified' file so 'local' is now in sync
+										log.vlog("Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync");
+										log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+										auto fileSize = response["size"].integer;
+										onedrive.downloadById(response["parentReference"]["driveId"].str, response["id"].str, path, fileSize);
+									}
 								}
 							} else {
 								// we are --dry-run - simulate the file upload
@@ -2022,6 +2065,7 @@ final class SyncEngine
 				// Takes a JSON input and formats to an item which can be used by the database
 				Item item = makeItem(jsonItem);
 				// Add to the local database
+				log.vdebug("Adding to database: ", item);
 				itemdb.upsert(item);
 			} else {
 				// log error
