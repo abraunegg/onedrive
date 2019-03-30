@@ -1,5 +1,5 @@
 DC ?= dmd
-RELEASEVER = v2.3.0
+RELEASEVER = v2.3.1
 pkgconfig := $(shell if [ $(PKGCONFIG) ] && [ "$(PKGCONFIG)" != 0 ] ; then echo 1 ; else echo "" ; fi)
 notifications := $(shell if [ $(NOTIFICATIONS) ] && [ "$(NOTIFICATIONS)" != 0 ] ; then echo 1 ; else echo "" ; fi)
 gitversion := $(shell if [ -f .git/HEAD ] ; then echo 1 ; else echo "" ; fi)
@@ -72,7 +72,7 @@ endif
 all: onedrive onedrive.service onedrive.1
 
 clean:
-	rm -f onedrive onedrive.o onedrive.service onedrive@.service onedrive.1
+	rm -f onedrive onedrive.o onedrive.service onedrive@.service onedrive.1 version
 
 onedrive: version $(SOURCES)
 	$(DC) $(DFLAGS) $(SOURCES)
@@ -141,6 +141,3 @@ ifeq ($(gitversion),1)
 else
 	echo $(RELEASEVER) > version
 endif
-
-.PHONY: version
-
