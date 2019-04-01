@@ -1,5 +1,5 @@
 DC ?= dmd
-RELEASEVER = v2.3.1
+RELEASEVER = v2.3.2
 pkgconfig := $(shell if [ $(PKGCONFIG) ] && [ "$(PKGCONFIG)" != 0 ] ; then echo 1 ; else echo "" ; fi)
 notifications := $(shell if [ $(NOTIFICATIONS) ] && [ "$(NOTIFICATIONS)" != 0 ] ; then echo 1 ; else echo "" ; fi)
 gitversion := $(shell if [ -f .git/HEAD ] ; then echo 1 ; else echo "" ; fi)
