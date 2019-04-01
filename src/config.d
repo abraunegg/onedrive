@@ -52,6 +52,9 @@ final class Config
 		longValues["min_notif_changes"]  = 5;
 		longValues["min_notif_changes"]  = 5;
 		longValues["monitor_log_frequency"] = 5;
+		// Number of n sync runs before performing a full local scan of sync_dir
+		// By default 10 which means every ~7.5 minutes a full disk scan of sync_dir will occur
+		longValues["monitor_fullscan_frequency"] = 10;
 
 		// Determine the users home directory. 
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
