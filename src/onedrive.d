@@ -265,7 +265,7 @@ final class OneDriveApi
 		//		string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
 		if ((path == ".")||(path == "/")) url = driveUrl ~ "/root/";
 		else url = itemByPathUrl ~ encodeComponent(path) ~ ":/";
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		return get(url);
 	}
 	
@@ -277,7 +277,7 @@ final class OneDriveApi
 		const(char)[] url;
 		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		return get(url);
 	}
 	
@@ -730,8 +730,8 @@ final class OneDriveApi
 			case 400:
 				// Bad Request .. how should we act?
 				log.vlog("OneDrive returned a 'HTTP 400 - Bad Request' - gracefully handling error");
-				break;	
-			
+				break;
+
 			//	412 - Precondition Failed
 			case 412:
 				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");

@@ -29,7 +29,7 @@ final class Config
 		// default configuration
 		stringValues["single_directory"] = "";
 		stringValues["sync_dir"]         = "~/OneDrive";
-		stringValues["skip_file"]        = "~*";
+		stringValues["skip_file"]        = "~*|.~*|*.tmp";
 		stringValues["skip_dir"]         = "";
 		stringValues["log_dir"]          = "/var/log/onedrive/";
 		stringValues["drive_id"]         = "";
