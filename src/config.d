@@ -51,6 +51,9 @@ final class Config
 		setValue("min_notif_changes", "5");
 		// Frequency of log messages in monitor, ie after n sync runs ship out a log message
 		setValue("monitor_log_frequency", "5");
+		// Number of n sync runs before performing a full local scan of sync_dir
+		// By default 10 which means every ~7.5 minutes a full disk scan of sync_dir will occur
+		setValue("monitor_fullscan_frequency", "10");
 		// Check if we should ignore a directory if a special file (.nosync) is present
 		setValue("check_nosync", "false");
 		
