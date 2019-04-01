@@ -205,7 +205,7 @@ final class SyncEngine
 	// sync engine dryRun flag
 	private bool dryRun = false;
 
-	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync, bool dryRun)
+	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
 		assert(onedrive && itemdb && selectiveSync);
 		this.cfg = cfg;
@@ -213,7 +213,7 @@ final class SyncEngine
 		this.itemdb = itemdb;
 		this.selectiveSync = selectiveSync;
 		// session = UploadSession(onedrive, cfg.uploadStateFilePath);
-		this.dryRun = dryRun;
+		this.dryRun = cfg.getValueBool("dry_run");
 	}
 
 	void reset()
@@ -240,7 +240,7 @@ final class SyncEngine
 				// OneDrive responded with 400 error: Bad Request
 				log.error("\nERROR: OneDrive returned a 'HTTP 400 Bad Request' - Cannot Initialize Sync Engine");
 				// Check this
-				if (cfg.getValue("drive_id").length) {
+				if (cfg.getValueString("drive_id").length) {
 					log.error("ERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
 				}
 				// Must exit here
@@ -603,7 +603,7 @@ final class SyncEngine
 			if (("value" in changes) != null) {
 				auto nrChanges = count(changes["value"].array);
 
-				if (nrChanges >= to!long(cfg.getValue("min_notif_changes"))) {
+				if (nrChanges >= cfg.getValueLong("min_notif_changes")) {
 					log.logAndNotify("Processing ", nrChanges, " changes");
 				} else {
 					// There are valid changes
@@ -798,7 +798,7 @@ final class SyncEngine
 		}
 		
 		// skip downloading dot files if configured
-		if (cfg.getValue("skip_dotfiles") == "true") {
+		if (cfg.getValueBool("skip_dotfiles")) {
 			if (isDotFile(path)) {
 				log.vlog("Skipping item - .file or .folder: ", path);
 				unwanted = true;
@@ -1449,7 +1449,7 @@ final class SyncEngine
 			// path is less than maxPathLength
 			
 			// skip dot files if configured
-			if (cfg.getValue("skip_dotfiles") == "true") {
+			if (cfg.getValueBool("skip_dotfiles")) {
 				if (isDotFile(path)) {
 					log.vlog("Skipping item - .file or .folder: ", path);
 					return;
@@ -1457,7 +1457,7 @@ final class SyncEngine
 			}
 			
 			// Do we need to check for .nosync? Only if --check-for-nosync was passed in
-			if (cfg.getValue("check_nosync") == "true") {
+			if (cfg.getValueBool("check_nosync")) {
 				if (exists(path ~ "/.nosync")) {
 					log.vlog("Skipping item - .nosync found & --check-for-nosync enabled: ", path);
 					return;
@@ -1466,7 +1466,7 @@ final class SyncEngine
 			
 			if (isSymlink(path)) {
 				// if config says so we skip all symlinked items
-				if (cfg.getValue("skip_symlinks") == "true") {
+				if (cfg.getValueBool("skip_symlinks")) {
 					log.vlog("Skipping item - skip symbolic links configured: ", path);
 					return;
 
