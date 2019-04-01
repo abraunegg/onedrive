@@ -8,8 +8,8 @@ import progress;
 import config;
 static import log;
 shared bool debugResponse = false;
-private bool dryRun = false;
-private bool simulateNoRefreshTokenFile = false;
+shared bool dryRun = false;
+shared bool simulateNoRefreshTokenFile = false;
 
 private immutable {
 	// Client Identifier
@@ -66,7 +66,7 @@ final class OneDriveApi
 	// if true, every new access token is printed
 	bool printAccessToken;
 
-	this(Config cfg)
+	this(Config cfg, bool debugHttp, bool forceHTTP11, bool dryRun, bool simulateNoRefreshTokenFile)
 	{
 		this.cfg = cfg;
 		http = HTTP();
@@ -94,36 +94,36 @@ final class OneDriveApi
 		http.maxRedirects(5);
 		
 		// Do we enable curl debugging?
-		if (cfg.getValueBool("debug_https")) {
+		if (debugHttp) {
 			http.verbose = true;
 			.debugResponse = true;
         }
 		
 		// What version of HTTP protocol do we use?
 		// Curl >= 7.62.0 defaults to http2 for a significant number of operations
-		if (cfg.getValueBool("force_http_11")) {
+		if (forceHTTP11) {
 			log.vdebug("Downgrading all HTTP operations to HTTP 1.1");
 			// Downgrade to HTTP 1.1 - yes version = 2 is HTTP 1.1
 			http.handle.set(CurlOption.http_version,2);
 		}
 		
 		// Do we set the dryRun handlers?
-		if (cfg.getValueBool("dry_run")) {
+		if (dryRun) {
 			.dryRun = true;
-			if (cfg.getValueBool("logout")) {
-				.simulateNoRefreshTokenFile = true;
-			}
+		}
+		if (simulateNoRefreshTokenFile) {
+			.simulateNoRefreshTokenFile = true;
 		}
 	}
 
 	bool init()
 	{
 		try {
-			driveId = cfg.getValueString("drive_id");
+			driveId = cfg.getValue("drive_id");
 			if (driveId.length) {
 				driveUrl = driveByIdUrl ~ driveId;
-				itemByIdUrl = driveUrl ~ "/items";
-				itemByPathUrl = driveUrl ~ "/root:/";
+                itemByIdUrl = driveUrl ~ "/items";
+                itemByPathUrl = driveUrl ~ "/root:/";
 			}
 		} catch (Exception e) {}
 	
@@ -265,7 +265,7 @@ final class OneDriveApi
 		//		string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
 		if ((path == ".")||(path == "/")) url = driveUrl ~ "/root/";
 		else url = itemByPathUrl ~ encodeComponent(path) ~ ":/";
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
 		return get(url);
 	}
 	
@@ -277,7 +277,7 @@ final class OneDriveApi
 		const(char)[] url;
 		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
 		return get(url);
 	}
 	
@@ -730,8 +730,8 @@ final class OneDriveApi
 			case 400:
 				// Bad Request .. how should we act?
 				log.vlog("OneDrive returned a 'HTTP 400 - Bad Request' - gracefully handling error");
-				break;
-
+				break;	
+			
 			//	412 - Precondition Failed
 			case 412:
 				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
