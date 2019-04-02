@@ -31,7 +31,7 @@ struct Item {
 final class ItemDatabase
 {
 	// increment this for every change in the db schema
-	immutable int itemDatabaseVersion = 8;
+	immutable int itemDatabaseVersion = 9;
 
 	Database db;
 	string insertItemStmt;
