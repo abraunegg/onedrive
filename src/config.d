@@ -86,7 +86,7 @@ final class Config
 		if (confdirOption != "") {
 			// A CLI 'confdir' was passed in
 			log.vdebug("configDirName: CLI override to set configDirName to: ", confdirOption);
-			if (canFind(configDirName,"~")) {
+			if (canFind(confdirOption,"~")) {
 				// A ~ was found
 				log.vdebug("configDirName: A '~' was found in configDirName, using the calculated 'homePath' to replace '~'");
 				configDirName = homePath ~ strip(confdirOption,"~","~");
