@@ -1937,14 +1937,18 @@ final class SyncEngine
 										response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
 										writeln(" done.");
 										saveItem(response);
+										// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+										// So - now the 'local' and 'remote' file is technically DIFFERENT ... thanks Microsoft .. NO way to disable this stupidity
 										if(!uploadOnly){
-											// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
-											// So - now the 'local' and 'remote' file is technically DIFFERENT ... thanks Microsoft .. NO way to disable this stupidity
 											// Download the Microsoft 'modified' file so 'local' is now in sync
 											log.vlog("Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync");
 											log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
 											auto fileSize = response["size"].integer;
 											onedrive.downloadById(response["parentReference"]["driveId"].str, response["id"].str, path, fileSize);
+										} else {
+											// we are not downloading a file, warn that file differences will exist
+											log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
+											log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
 										}
 									}
 								}
