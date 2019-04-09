@@ -43,7 +43,7 @@ ifeq ($(pkgconfig),1)
 else
 	BASHCOMPLETIONDIR ?= $(PREFIX)/share/bash-completion/completions
 endif
-ZSHCOMPLETIONDIR ?= $(PREFIX)/share/zsh/site-functions
+ZSHCOMPLETIONDIR ?= /usr/local/share/zsh/site-functions
 endif
 
 DFLAGS += -w -g -ofonedrive -O $(NOTIF_VERSIONS) $(LIBS) -J.
