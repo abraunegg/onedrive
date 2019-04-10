@@ -122,9 +122,8 @@ else
 	install -D -m 644 onedrive.service $(DESTDIR)/usr/lib/systemd/user/onedrive.service
 endif
 ifeq ($(completions),1)
-	mkdir -p $(DESTDIR)/$(ZSHCOMPLETIONDIR)
-	install -D -m 644 completions/complete.zsh $(DESTDIR)/$(ZSHCOMPLETIONDIR)/_onedrive
-	install -D -m 644 completions/complete.bash $(DESTDIR)/$(BASHCOMPLETIONDIR)/onedrive
+	install -D -m 644 completions/complete.zsh $(DESTDIR)$(ZSHCOMPLETIONDIR)/_onedrive
+	install -D -m 644 completions/complete.bash $(DESTDIR)$(BASHCOMPLETIONDIR)/onedrive
 endif
 
 onedrive.service:
@@ -151,8 +150,8 @@ endif
 	for i in $(DOCFILES) ; do rm -f $(DESTDIR)$(DOCDIR)/$$i ; done
 	rm -f $(DESTDIR)$(MANDIR)/onedrive.1
 ifeq ($(completions),1)
-	rm -f $(DESTDIR)/$(ZSHCOMPLETIONDIR)/_onedrive
-	rm -f $(DESTDIR)/$(BASHCOMPLETIONDIR)/onedrive
+	rm -f $(DESTDIR)$(ZSHCOMPLETIONDIR)/_onedrive
+	rm -f $(DESTDIR)$(BASHCOMPLETIONDIR)/onedrive
 endif
 
 version:
