@@ -197,20 +197,21 @@ the Systemd system unit location), and `--with-systemduserunitdir` (for the
 Systemd user unit location) can be specified. Passing in `no` to one of these
 options disabled service file installation.
 
-By passing `DEBUG=1` to the `make` call, `onedrive` gets built with additional debug
+By passing `--enable-debug` to the `configure` call, `onedrive` gets built with additional debug
 information, useful (for example) to get `perf`-issued figures.
 
-By passing `COMPLETIONS=1` to the `make` call, shell completion functions are
+By passing `--enable-completions` to the `configure` call, shell completion functions are
 installed for `bash` and `zsh`. The installation directories are determined
-as far as possible automatically, but can be overridden by setting the
-environment variables `BASHCOMPLETIONDIR` and `ZSHCOMPLETIONDIR`.
+as far as possible automatically, but can be overridden by passing
+`--with-bash-completion-dir=<DIR>` and 
+`--with-zsh-completion-dir=<DIR>` to `configure`.
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
 #### Debian - i386 / i686
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-./configure DC=/usr/bin/ldc2
+./configure DC=ldc2
 make clean; make
 sudo make install
 ```
