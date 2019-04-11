@@ -1887,95 +1887,102 @@ final class SyncEngine
 					// even though some file systems (such as a POSIX-compliant file system) may consider them as different. 
 					// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior.
 					
-					// Check that 'name' is in the JSON response (validates data) and that 'name' == the path we are looking for
-					if (("name" in fileDetailsFromOneDrive) && (fileDetailsFromOneDrive["name"].str == baseName(path))) {
-						// OneDrive 'name' matches local path name
-						log.vlog("Requested file to upload exists on OneDrive - local database is out of sync for this file: ", path);
-						
-						// Is the local file newer than the uploaded file?
-						SysTime localFileModifiedTime = timeLastModified(path).toUTC();
-						SysTime remoteFileModifiedTime = SysTime.fromISOExtString(fileDetailsFromOneDrive["fileSystemInfo"]["lastModifiedDateTime"].str);
-						localFileModifiedTime.fracSecs = Duration.zero;
-						
-						if (localFileModifiedTime > remoteFileModifiedTime){
-							// local file is newer
-							log.vlog("Requested file to upload is newer than existing file on OneDrive");
-							write("Uploading modified file ", path, " ...");
-							JSONValue response;
+					// fileDetailsFromOneDrive has to be a valid object
+					if (fileDetailsFromOneDrive.object()){
+						// Check that 'name' is in the JSON response (validates data) and that 'name' == the path we are looking for
+						if (("name" in fileDetailsFromOneDrive) && (fileDetailsFromOneDrive["name"].str == baseName(path))) {
+							// OneDrive 'name' matches local path name
+							log.vlog("Requested file to upload exists on OneDrive - local database is out of sync for this file: ", path);
 							
-							if (!dryRun) {
-								if (accountType == "personal"){
-									// OneDrive Personal account upload handling
-									if (getSize(path) <= thresholdFileSize) {
-										response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-										writeln(" done.");
-									} else {
-										writeln("");
-										response = session.upload(path, parent.driveId, parent.id, baseName(path));
-										writeln(" done.");
-									}
-									string id = response["id"].str;
-									string cTag = response["cTag"].str;
-									SysTime mtime = timeLastModified(path).toUTC();
-									// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
-									uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
-								} else {
-									// OneDrive Business account modified file upload handling
-									if (accountType == "business"){
-										writeln("");
-										// session upload
-										response = session.upload(path, parent.driveId, parent.id, baseName(path), fileDetailsFromOneDrive["eTag"].str);
-										writeln(" done.");
-										saveItem(response);
-									}
-									
-									// OneDrive SharePoint account modified file upload handling
-									if (accountType == "documentLibrary"){
-										// If this is a Microsoft SharePoint site, we need to remove the existing file before upload
-										onedrive.deleteById(fileDetailsFromOneDrive["parentReference"]["driveId"].str, fileDetailsFromOneDrive["id"].str, fileDetailsFromOneDrive["eTag"].str);	
-										// simple upload
-										response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-										writeln(" done.");
-										saveItem(response);
-										// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
-										// So - now the 'local' and 'remote' file is technically DIFFERENT ... thanks Microsoft .. NO way to disable this stupidity
-										if(!uploadOnly){
-											// Download the Microsoft 'modified' file so 'local' is now in sync
-											log.vlog("Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync");
-											log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
-											auto fileSize = response["size"].integer;
-											onedrive.downloadById(response["parentReference"]["driveId"].str, response["id"].str, path, fileSize);
+							// Is the local file newer than the uploaded file?
+							SysTime localFileModifiedTime = timeLastModified(path).toUTC();
+							SysTime remoteFileModifiedTime = SysTime.fromISOExtString(fileDetailsFromOneDrive["fileSystemInfo"]["lastModifiedDateTime"].str);
+							localFileModifiedTime.fracSecs = Duration.zero;
+							
+							if (localFileModifiedTime > remoteFileModifiedTime){
+								// local file is newer
+								log.vlog("Requested file to upload is newer than existing file on OneDrive");
+								write("Uploading modified file ", path, " ...");
+								JSONValue response;
+								
+								if (!dryRun) {
+									if (accountType == "personal"){
+										// OneDrive Personal account upload handling
+										if (getSize(path) <= thresholdFileSize) {
+											response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+											writeln(" done.");
 										} else {
-											// we are not downloading a file, warn that file differences will exist
-											log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
-											log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+											writeln("");
+											response = session.upload(path, parent.driveId, parent.id, baseName(path));
+											writeln(" done.");
+										}
+										string id = response["id"].str;
+										string cTag = response["cTag"].str;
+										SysTime mtime = timeLastModified(path).toUTC();
+										// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
+										uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+									} else {
+										// OneDrive Business account modified file upload handling
+										if (accountType == "business"){
+											writeln("");
+											// session upload
+											response = session.upload(path, parent.driveId, parent.id, baseName(path), fileDetailsFromOneDrive["eTag"].str);
+											writeln(" done.");
+											saveItem(response);
+										}
+										
+										// OneDrive SharePoint account modified file upload handling
+										if (accountType == "documentLibrary"){
+											// If this is a Microsoft SharePoint site, we need to remove the existing file before upload
+											onedrive.deleteById(fileDetailsFromOneDrive["parentReference"]["driveId"].str, fileDetailsFromOneDrive["id"].str, fileDetailsFromOneDrive["eTag"].str);	
+											// simple upload
+											response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+											writeln(" done.");
+											saveItem(response);
+											// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+											// So - now the 'local' and 'remote' file is technically DIFFERENT ... thanks Microsoft .. NO way to disable this stupidity
+											if(!uploadOnly){
+												// Download the Microsoft 'modified' file so 'local' is now in sync
+												log.vlog("Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync");
+												log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+												auto fileSize = response["size"].integer;
+												onedrive.downloadById(response["parentReference"]["driveId"].str, response["id"].str, path, fileSize);
+											} else {
+												// we are not downloading a file, warn that file differences will exist
+												log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
+												log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+											}
 										}
 									}
+								} else {
+									// we are --dry-run - simulate the file upload
+									writeln(" done.");
+									response = createFakeResponse(path);
+									// Log action to log file
+									log.fileOnly("Uploading modified file ", path, " ... done.");
+									saveItem(response);
+									return;
 								}
-							} else {
-								// we are --dry-run - simulate the file upload
-								writeln(" done.");
-								response = createFakeResponse(path);
+								
 								// Log action to log file
 								log.fileOnly("Uploading modified file ", path, " ... done.");
-								saveItem(response);
-								return;
+								
+							} else {
+								// Save the details of the file that we got from OneDrive
+								// --dry-run safe
+								log.vlog("Updating the local database with details for this file: ", path);
+								saveItem(fileDetailsFromOneDrive);
 							}
-							
-							// Log action to log file
-							log.fileOnly("Uploading modified file ", path, " ... done.");
-							
 						} else {
-							// Save the details of the file that we got from OneDrive
-							// --dry-run safe
-							log.vlog("Updating the local database with details for this file: ", path);
-							saveItem(fileDetailsFromOneDrive);
+							// The files are the "same" name wise but different in case sensitivity
+							log.error("ERROR: A local file has the same name as another local file.");
+							log.error("ERROR: To resolve, rename this local file: ", absolutePath(path));
+							log.log("Skipping uploading this new file: ", absolutePath(path));
 						}
 					} else {
-						// The files are the "same" name wise but different in case sensitivity
-						log.error("ERROR: A local file has the same name as another local file.");
-						log.error("ERROR: To resolve, rename this local file: ", absolutePath(path));
-						log.log("Skipping uploading this new file: ", absolutePath(path));
+						// fileDetailsFromOneDrive is not valid JSON, an error was returned from OneDrive
+						log.error("ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object");
+						log.error("ERROR: Increase logging verbosity to assist determining why.");
 					}
 				} else {
 					// Skip file - too large
@@ -2090,7 +2097,8 @@ final class SyncEngine
 			}
 		} else {
 			// log error
-			log.error("ERROR: OneDrive response not a valid JSON object");
+			log.error("ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object");
+			log.error("ERROR: Increase logging verbosity to assist determining why.");
 		}
 	}
 
