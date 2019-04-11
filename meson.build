@@ -20,6 +20,8 @@ subdir('src')
 # install systemd stuff
 subdir('systemd.units')
 
+# install completion stuff
+subdir('completions')
 
 configure_file(input: 'onedrive.1.in',
                output: 'onedrive.1',
@@ -32,5 +34,4 @@ install_data(docfiles, install_dir: docdir)
 
 install_data('logrotate/onedrive.logrotate',
              install_dir: join_paths(get_option('sysconfdir'), 'logrotate.d'))
-
 

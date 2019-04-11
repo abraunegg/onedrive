@@ -13,3 +13,18 @@ option('systemd_system_unit_dir',
        value: '',
        description: 'systemd system service directory')
 
+option('completions',
+       type        : 'feature',
+       value       : 'disabled',
+       description : 'Install shell completions for bash and zsh')
+
+option('bash_completion_dir',
+       type: 'string',
+       value: '',
+       description: 'directory where bash completions are installed')
+
+option('zsh_completion_dir',
+       type: 'string',
+       value: '',
+       description: 'directory where zsh completions are installed')
+
