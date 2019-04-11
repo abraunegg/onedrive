@@ -23,12 +23,27 @@ notify_LIBS = @notify_LIBS@
 COMPLETIONS = @COMPLETIONS@
 BASH_COMPLETION_DIR = @BASH_COMPLETION_DIR@
 ZSH_COMPLETION_DIR = @ZSH_COMPLETION_DIR@
+DEBUG = @DEBUG@
 
 DC = @DC@
+DC_TYPE = @DC_TYPE@
 DCFLAGS = @DCFLAGS@
-DCFLAGS += -J.
+DCFLAGS += -w -g -O -J.
+ifeq ($(DEBUG),yes)
+ifeq ($(DC_TYPE),dmd)
+DCFLAGS += -debug -gs
+else
+DCFLAGS += -d-debug -gc
+endif
+endif
+
 ifeq ($(NOTIFICATIONS),yes)
-DCFLAGS += -version=NoPragma -version=NoGdk -version=Notifications
+NOTIF_VERSIONS=-version=NoPragma -version=NoGdk -version=Notifications
+# support ldc2 which needs -d prefix for version specification
+ifeq ($(DC_TYPE),ldc)
+        NOTIF_VERSIONS := $(addprefix -d,$(NOTIF_VERSIONS))
+endif
+DCFLAGS += $(NOTIF_VERSIONS)
 endif
 
 system_unit_files = systemd.units/onedrive@.service

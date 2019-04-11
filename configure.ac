@@ -1,29 +1,33 @@
 AC_PREREQ([2.69])
-AC_INIT([onedrive],[2.2.3], [https://github.com/abraunegg/onedrive], [onedrive])
+AC_INIT([onedrive],[2.3.2], [https://github.com/abraunegg/onedrive], [onedrive])
 AC_CONFIG_SRCDIR([src/main.d])
 
 
 AC_ARG_VAR([DC], [D compiler executable])
 AC_ARG_VAR([DCFLAGS], [flags for D compiler])
 
-: ${DCFLAGS='-w -g -O'}
-AC_SUBST([DCFLAGS])
-
 AC_PROG_INSTALL
 AC_PROG_SED
 PKG_PROG_PKG_CONFIG
 
-AC_PATH_PROGS([DC], [dmd ldmd2], NOT_FOUND)
-DC_SUFFIX=
+AC_CHECK_PROGS([DC], [dmd ldmd2 ldc2], NOT_FOUND)
+DC_TYPE=
 case $(basename $DC) in
-	dmd) DC_SUFFIX=-dmd ;;
-	ldmd2) DC_SUFFIX=-ldc ;;
+	dmd) DC_TYPE=dmd ;;
+	ldmd2) DC_TYPE=dmd ;;
+	ldc2) DC_TYPE=ldc ;;
 	NOT_FOUND) AC_MSG_ERROR(Could not find any compatible D compiler, 1)
 esac
+AC_SUBST([DC_TYPE])
+
+AC_SUBST([DCFLAGS])
 
 PKG_CHECK_MODULES([curl],[libcurl])
 PKG_CHECK_MODULES([sqlite],[sqlite3])
 
+#
+# systemd and unit file directories
+#
 AC_ARG_WITH([systemdsystemunitdir],
      [AS_HELP_STRING([--with-systemdsystemunitdir=DIR], [Directory for systemd system service files])],,
      [with_systemdsystemunitdir=auto])
@@ -108,6 +112,15 @@ AS_IF([test "x$enable_completions" = "xyes"],[
   AC_SUBST([ZSH_COMPLETION_DIR], $with_zsh_completion_dir)
   ])
 
+
+#
+# Debug support
+AC_ARG_ENABLE(debug,
+       [AS_HELP_STRING([--enable-debug],
+          [Pass debug option to the compiler])],
+       enable_debug=yes,
+       enable_debug=no)
+AC_SUBST([DEBUG],$enable_debug)
 
 AC_CONFIG_FILES([Makefile pacman/PKGBUILD spec/onedrive.spec onedrive.1])
 AC_OUTPUT
