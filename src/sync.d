@@ -2204,6 +2204,7 @@ final class SyncEngine
 		
 		foreach (searchResult; siteQuery["value"].array) {
 			// Need an 'exclusive' match here with o365SharedLibraryName as entered
+			log.vdebug("Found O365 Site: ", searchResult);
 			if (o365SharedLibraryName == searchResult["displayName"].str){
 				// 'displayName' matches search request
 				site_id = searchResult["id"].str;
