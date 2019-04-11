@@ -728,6 +728,11 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 		localPath = singleDirectory;
 	}
 	
+	// Due to Microsoft Sharepoint 'enrichment' of files, we try to download the Microsoft modified file automatically
+	// Set flag if we are in upload only state to handle this differently
+	// See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details   
+	if (uploadOnly) sync.setUploadOnly();
+	
 	do {
 		try {
 			if (singleDirectory != ""){

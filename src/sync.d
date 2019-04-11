@@ -17,6 +17,9 @@ private long thresholdFileSize = 4 * 2^^20; // 4 MiB
 // flag to set whether local files should be deleted
 private bool noRemoteDelete = false;
 
+// flag to set if we are running as uploadOnly
+private bool uploadOnly = false;
+
 // Do we configure to disable the upload validation routine
 private bool disableUploadValidation = false;
 
@@ -297,6 +300,13 @@ final class SyncEngine
 	void setNoRemoteDelete()
 	{
 		noRemoteDelete = true;
+	}
+	
+	// Configure uploadOnly if function is called
+	// By default, uploadOnly = false;
+	void setUploadOnly()
+	{
+		uploadOnly = true;
 	}
 	
 	// Configure disableUploadValidation if function is called
@@ -624,9 +634,9 @@ final class SyncEngine
 					if(!isItemDeleted(item)){
 						// This is not a deleted item
 						// Test is this is the OneDrive Users Root?
-						// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
-						if ((id == defaultRootId) && (item["name"].str == "root")) { 
-							// This IS the OneDrive Root
+						// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls 
+						if ((id == defaultRootId) && (isItemRoot(item)) && (item["name"].str == "root")) { 
+							// This IS a OneDrive Root item
 							isRoot = true;
 						}
 					}
@@ -1929,11 +1939,17 @@ final class SyncEngine
 										saveItem(response);
 										// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
 										// So - now the 'local' and 'remote' file is technically DIFFERENT ... thanks Microsoft .. NO way to disable this stupidity
-										// Download the Microsoft 'modified' file so 'local' is now in sync
-										log.vlog("Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync");
-										log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
-										auto fileSize = response["size"].integer;
-										onedrive.downloadById(response["parentReference"]["driveId"].str, response["id"].str, path, fileSize);
+										if(!uploadOnly){
+											// Download the Microsoft 'modified' file so 'local' is now in sync
+											log.vlog("Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync");
+											log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+											auto fileSize = response["size"].integer;
+											onedrive.downloadById(response["parentReference"]["driveId"].str, response["id"].str, path, fileSize);
+										} else {
+											// we are not downloading a file, warn that file differences will exist
+											log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
+											log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+										}
 									}
 								}
 							} else {
@@ -2188,6 +2204,7 @@ final class SyncEngine
 		
 		foreach (searchResult; siteQuery["value"].array) {
 			// Need an 'exclusive' match here with o365SharedLibraryName as entered
+			log.vdebug("Found O365 Site: ", searchResult);
 			if (o365SharedLibraryName == searchResult["displayName"].str){
 				// 'displayName' matches search request
 				site_id = searchResult["id"].str;

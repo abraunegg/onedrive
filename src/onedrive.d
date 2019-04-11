@@ -711,10 +711,25 @@ final class OneDriveApi
 			// 	502 - Bad Gateway
 			//	503 - Service Unavailable
 			//  504 - Gateway Timeout (Issue #320)
-			case 500,502,503,504:
+			case 500:
 				// No actions
-				log.vlog("OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error");
-				break;	
+				log.vlog("OneDrive returned a 'HTTP 500 Internal Server Error' - gracefully handling error");
+				break;
+				
+			case 502:
+				// No actions
+				log.vlog("OneDrive returned a 'HTTP 502 Bad Gateway Error' - gracefully handling error");
+				break;
+			
+			case 503:
+				// No actions
+				log.vlog("OneDrive returned a 'HTTP 503 Service Unavailable Error' - gracefully handling error");
+				break;
+			
+			case 504:
+				// No actions
+				log.vlog("OneDrive returned a 'HTTP 504 Gateway Timeout Error' - gracefully handling error");
+				break;
 
 			// "else"
 			default:
@@ -742,9 +757,24 @@ final class OneDriveApi
 			// 	502 - Bad Gateway
 			//	503 - Service Unavailable
 			//  504 - Gateway Timeout (Issue #320)
-			case 500,502,503,504:
+			case 500:
 				// No actions
-				log.vlog("OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error");
+				log.vlog("OneDrive returned a 'HTTP 500 Internal Server Error' - gracefully handling error");
+				break;
+				
+			case 502:
+				// No actions
+				log.vlog("OneDrive returned a 'HTTP 502 Bad Gateway Error' - gracefully handling error");
+				break;
+			
+			case 503:
+				// No actions
+				log.vlog("OneDrive returned a 'HTTP 503 Service Unavailable Error' - gracefully handling error");
+				break;
+			
+			case 504:
+				// No actions
+				log.vlog("OneDrive returned a 'HTTP 504 Gateway Timeout Error' - gracefully handling error");
 				break;
 			
 			// Default - all other errors that are not a 2xx or a 302

@@ -2,6 +2,7 @@ DC ?= dmd
 RELEASEVER = v2.3.2
 pkgconfig := $(shell if [ $(PKGCONFIG) ] && [ "$(PKGCONFIG)" != 0 ] ; then echo 1 ; else echo "" ; fi)
 notifications := $(shell if [ $(NOTIFICATIONS) ] && [ "$(NOTIFICATIONS)" != 0 ] ; then echo 1 ; else echo "" ; fi)
+completions := $(shell if [ $(COMPLETIONS) ] && [ "$(COMPLETIONS)" != 0 ] ; then echo 1 ; else echo "" ; fi)
 gitversion := $(shell if [ -f .git/HEAD ] ; then echo 1 ; else echo "" ; fi)
 
 ifeq ($(pkgconfig),1)
@@ -33,6 +34,16 @@ DFLAGS += -d-debug -gc
 else
 DFLAGS += -debug -gs
 endif
+endif
+
+# set up completion directories
+ifeq ($(completions),1)
+ifeq ($(pkgconfig),1)
+	BASHCOMPLETIONDIR ?= $(shell pkg-config --variable=completionsdir bash-completion)
+else
+	BASHCOMPLETIONDIR ?= $(PREFIX)/share/bash-completion/completions
+endif
+ZSHCOMPLETIONDIR ?= /usr/local/share/zsh/site-functions
 endif
 
 DFLAGS += -w -g -ofonedrive -O $(NOTIF_VERSIONS) $(LIBS) -J.
@@ -110,6 +121,10 @@ else
 	install -D -m 644 onedrive@.service $(DESTDIR)/usr/lib/systemd/system/
 	install -D -m 644 onedrive.service $(DESTDIR)/usr/lib/systemd/user/onedrive.service
 endif
+ifeq ($(completions),1)
+	install -D -m 644 completions/complete.zsh $(DESTDIR)$(ZSHCOMPLETIONDIR)/_onedrive
+	install -D -m 644 completions/complete.bash $(DESTDIR)$(BASHCOMPLETIONDIR)/onedrive
+endif
 
 onedrive.service:
 	sed "s|@PREFIX@|$(PREFIX)|g" systemd.units/onedrive.service.in > onedrive.service
@@ -135,6 +150,10 @@ else
 endif
 	for i in $(DOCFILES) ; do rm -f $(DESTDIR)$(DOCDIR)/$$i ; done
 	rm -f $(DESTDIR)$(MANDIR)/onedrive.1
+ifeq ($(completions),1)
+	rm -f $(DESTDIR)$(ZSHCOMPLETIONDIR)/_onedrive
+	rm -f $(DESTDIR)$(BASHCOMPLETIONDIR)/onedrive
+endif
 
 version:
 ifeq ($(gitversion),1)
