@@ -1,4 +1,4 @@
-.TH ONEDRIVE "1" "April 2019" "@PACKAGE_VERSION@" "User Commands"
+.TH ONEDRIVE "1" "@PACKAGE_DATE@" "@PACKAGE_VERSION@" "User Commands"
 .SH NAME
 onedrive \- folder synchronization with OneDrive
 .SH SYNOPSIS

@@ -603,6 +603,7 @@ sqlite_LIBS
 sqlite_CFLAGS
 curl_LIBS
 curl_CFLAGS
+PACKAGE_DATE
 DC_TYPE
 PKG_CONFIG_LIBDIR
 PKG_CONFIG_PATH
@@ -2132,6 +2133,9 @@ case $(basename $DC) in
 	ldc2) DC_TYPE=ldc ;;
 	NOT_FOUND) as_fn_error 1 "Could not find any compatible D compiler" "$LINENO" 5
 esac
+
+
+PACKAGE_DATE="April 2019"
 
 
 

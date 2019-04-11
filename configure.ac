@@ -20,6 +20,9 @@ case $(basename $DC) in
 esac
 AC_SUBST([DC_TYPE])
 
+PACKAGE_DATE="m4_esyscmd([date "+%B %Y" | tr -d '\n'])" 
+AC_SUBST([PACKAGE_DATE])
+
 AC_SUBST([DCFLAGS])
 
 PKG_CHECK_MODULES([curl],[libcurl])
