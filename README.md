@@ -247,6 +247,9 @@ Meson/Ninja is a supported build system. Configuration options are
 *   `notifications=enabled|disabled` (default: `disabled`)
 *   `systemd_user_unit_dir=<path>` (default: automatically determined from `pkg-config`)
 *   `systemd_system_unit_dir=<path>` (default: automatically determined from `pkg-config`)
+*   `completions=enabled|disabled` (default: `disabled`)
+*   `bash_completion_dir=<path>` (default: automatically determined from `pkg-config`)
+*   `zsh_completion_dir=<path>` (default: `/usr/local/share/zsh/site-functions`)
 
 Set these options via `-D<option>`
 
