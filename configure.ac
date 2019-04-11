@@ -74,6 +74,40 @@ else
 fi
 AC_SUBST([NOTIFICATIONS],$enable_notifications)
 
+#
+# Completion support
+# only check for libnotify if --enable-notifications is given
+AC_ARG_ENABLE(completions,
+       [AS_HELP_STRING([--enable-completions],
+          [Install shell completions for bash and zsh])],
+       enable_completions=yes,
+       enable_completions=no)
+AC_SUBST([COMPLETIONS],$enable_completions)
+
+
+AS_IF([test "x$enable_completions" = "xyes"],[
+  AC_ARG_WITH([bash-completion-dir],
+              [AS_HELP_STRING([--with-bash-completion-dir=DIR], [Directory for bash completion files])],
+              ,
+              [with_bash_completion_dir=auto])
+  AS_IF([test "x$with_bash_completion_dir" = "xyes" -o "x$with_bash_completion_dir" = "xauto"], 
+    [
+      PKG_CHECK_VAR(bashcompdir, [bash-completion], [completionsdir], ,
+                    bashcompdir="${sysconfdir}/bash_completion.d")
+      with_bash_completion_dir=$bashcompdir
+    ])
+  AC_SUBST([BASH_COMPLETION_DIR], $with_bash_completion_dir)
+
+  AC_ARG_WITH([zsh-completion-dir],
+              [AS_HELP_STRING([--with-zsh-completion-dir=DIR], [Directory for zsh completion files])],,
+              [with_zsh_completion_dir=auto])
+  AS_IF([test "x$with_zsh_completion_dir" = "xyes" -o "x$with_zsh_completion_dir" = "xauto"], 
+    [
+      with_zsh_completion_dir="/usr/local/share/zsh/site-functions"
+    ])
+  AC_SUBST([ZSH_COMPLETION_DIR], $with_zsh_completion_dir)
+  ])
+
 
 AC_CONFIG_FILES([Makefile pacman/PKGBUILD spec/onedrive.spec onedrive.1])
 AC_OUTPUT

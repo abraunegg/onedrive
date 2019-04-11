@@ -588,6 +588,10 @@ PACKAGE_URL=''
 ac_unique_file="src/main.d"
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
+ZSH_COMPLETION_DIR
+BASH_COMPLETION_DIR
+bashcompdir
+COMPLETIONS
 NOTIFICATIONS
 notify_LIBS
 notify_CFLAGS
@@ -652,6 +656,9 @@ enable_option_checking
 with_systemdsystemunitdir
 with_systemduserunitdir
 enable_notifications
+enable_completions
+with_bash_completion_dir
+with_zsh_completion_dir
 '
       ac_precious_vars='build_alias
 host_alias
@@ -666,7 +673,8 @@ curl_LIBS
 sqlite_CFLAGS
 sqlite_LIBS
 notify_CFLAGS
-notify_LIBS'
+notify_LIBS
+bashcompdir'
 
 
 # Initialize some variables set by options.
@@ -1288,6 +1296,7 @@ Optional Features:
   --disable-FEATURE       do not include FEATURE (same as --enable-FEATURE=no)
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
   --enable-notifications  Enable desktop notifications via libnotify
+  --enable-completions    Install shell completions for bash and zsh
 
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
@@ -1296,6 +1305,10 @@ Optional Packages:
                           Directory for systemd system service files
   --with-systemduserunitdir=DIR
                           Directory for systemd user service files
+  --with-bash-completion-dir=DIR
+                          Directory for bash completion files
+  --with-zsh-completion-dir=DIR
+                          Directory for zsh completion files
 
 Some influential environment variables:
   DC          D compiler executable
@@ -1313,6 +1326,8 @@ Some influential environment variables:
   notify_CFLAGS
               C compiler flags for notify, overriding pkg-config
   notify_LIBS linker flags for notify, overriding pkg-config
+  bashcompdir value of completionsdir for bash-completion, overriding
+              pkg-config
 
 Use these variables to override the choices made by `configure' or to help
 it to find libraries and programs with nonstandard names/locations.
@@ -2453,6 +2468,79 @@ else
 fi
 NOTIFICATIONS=$enable_notifications
 
+
+#
+# Completion support
+# only check for libnotify if --enable-notifications is given
+# Check whether --enable-completions was given.
+if test "${enable_completions+set}" = set; then :
+  enableval=$enable_completions; enable_completions=yes
+else
+  enable_completions=no
+fi
+
+COMPLETIONS=$enable_completions
+
+
+
+if test "x$enable_completions" = "xyes"; then :
+
+
+# Check whether --with-bash-completion-dir was given.
+if test "${with_bash_completion_dir+set}" = set; then :
+  withval=$with_bash_completion_dir;
+else
+  with_bash_completion_dir=auto
+fi
+
+  if test "x$with_bash_completion_dir" = "xyes" -o "x$with_bash_completion_dir" = "xauto"; then :
+
+
+if test -n "$bashcompdir"; then
+    pkg_cv_bashcompdir="$bashcompdir"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"bash-completion\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "bash-completion") 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_bashcompdir=`$PKG_CONFIG --variable="completionsdir" "bash-completion" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
+else
+  pkg_failed=yes
+fi
+ else
+    pkg_failed=untried
+fi
+bashcompdir=$pkg_cv_bashcompdir
+
+if test "x$bashcompdir" = x""; then :
+  bashcompdir="${sysconfdir}/bash_completion.d"
+fi
+      with_bash_completion_dir=$bashcompdir
+
+fi
+  BASH_COMPLETION_DIR=$with_bash_completion_dir
+
+
+
+# Check whether --with-zsh-completion-dir was given.
+if test "${with_zsh_completion_dir+set}" = set; then :
+  withval=$with_zsh_completion_dir;
+else
+  with_zsh_completion_dir=auto
+fi
+
+  if test "x$with_zsh_completion_dir" = "xyes" -o "x$with_zsh_completion_dir" = "xauto"; then :
+
+      with_zsh_completion_dir="/usr/local/share/zsh/site-functions"
+
+fi
+  ZSH_COMPLETION_DIR=$with_zsh_completion_dir
+
+
+fi
 
 
 ac_config_files="$ac_config_files Makefile pacman/PKGBUILD spec/onedrive.spec onedrive.1"

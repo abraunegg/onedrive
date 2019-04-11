@@ -20,6 +20,9 @@ systemdsystemunitdir = @systemdsystemunitdir@
 curl_LIBS = @curl_LIBS@
 sqlite_LIBS = @sqlite_LIBS@
 notify_LIBS = @notify_LIBS@
+COMPLETIONS = @COMPLETIONS@
+BASH_COMPLETION_DIR = @BASH_COMPLETION_DIR@
+ZSH_COMPLETION_DIR = @ZSH_COMPLETION_DIR@
 
 DC = @DC@
 DCFLAGS = @DCFLAGS@
@@ -87,7 +90,10 @@ ifeq ($(HAVE_SYSTEMD),yes)
 	$(INSTALL) -m 0644 $(system_unit_files) $(DESTDIR)$(systemdsystemunitdir)
 	$(INSTALL) -m 0644 $(user_unit_files) $(DESTDIR)$(systemduserunitdir)
 endif
-
+ifeq ($(COMPLETIONS),yes)
+	$(INSTALL) -D -m 644 completions/complete.zsh $(DESTDIR)$(ZSH_COMPLETION_DIR)/_onedrive
+	$(INSTALL) -D -m 644 completions/complete.bash $(DESTDIR)$(BASH_COMPLETION_DIR)/onedrive
+endif
 
 
 uninstall:
@@ -99,6 +105,10 @@ ifeq ($(HAVE_SYSTEMD),yes)
 	for i in $(user_unit_files) ; do rm -f $(DESTDIR)$(systemduserunitdir)/$$i ; done
 endif
 	for i in $(DOCFILES) ; do rm -f $(DESTDIR)$(DOCDIR)/$$i ; done
+ifeq ($(COMPLETIONS),yes)
+	rm -f $(DESTDIR)$(ZSH_COMPLETION_DIR)/_onedrive
+	rm -f $(DESTDIR)$(BASH_COMPLETION_DIR)/onedrive
+endif
 
 version:
 	if [ -f .git/HEAD ] ; then \
