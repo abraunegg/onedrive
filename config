@@ -1,6 +1,30 @@
-# Directory where the files will be synced
-sync_dir = "~/OneDrive"
-# Skip files and directories that match this pattern
-skip_file = "~*"
-# Wait time (seconds) between sync operations in monitor mode
-monitor_interval = "45"
+# Configuration for OneDrive Linux Client
+# This file contains the list of supported configuration fields
+# with their default values.
+# All values need to be enclosed in quotes
+# For explanations see the README.md or the man page.
+#
+# sync_dir = "~/OneDrive"
+# skip_file = "~*|.~*|*.tmp"
+# monitor_interval = "45"
+# skip_dir = ""
+# log_dir = "/var/log/onedrive/"
+# drive_id = ""
+# upload_only = "false"
+# check_nomount = "false"
+# check_nosync = "false"
+# download_only = "false"
+# disable_notifications = "false"
+# disable_upload_validation = "false"
+# enable_logging = "false"
+# force_http_11 = "false"
+# local_first = "false"
+# no_remote_delete = "false"
+# skip_symlinks = "false"
+# debug_https = "false"
+# skip_dotfiles = "false"
+# dry_run = "false"
+# monitor_interval = "45"
+# min_notif_changes = "5"
+# monitor_log_frequency = "5"
+# monitor_fullscan_frequency = "10"

@@ -17,6 +17,9 @@ private long thresholdFileSize = 4 * 2^^20; // 4 MiB
 // flag to set whether local files should be deleted
 private bool noRemoteDelete = false;
 
+// flag to set if we are running as uploadOnly
+private bool uploadOnly = false;
+
 // Do we configure to disable the upload validation routine
 private bool disableUploadValidation = false;
 
@@ -205,7 +208,7 @@ final class SyncEngine
 	// sync engine dryRun flag
 	private bool dryRun = false;
 
-	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync, bool dryRun)
+	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
 		assert(onedrive && itemdb && selectiveSync);
 		this.cfg = cfg;
@@ -213,7 +216,7 @@ final class SyncEngine
 		this.itemdb = itemdb;
 		this.selectiveSync = selectiveSync;
 		// session = UploadSession(onedrive, cfg.uploadStateFilePath);
-		this.dryRun = dryRun;
+		this.dryRun = cfg.getValueBool("dry_run");
 	}
 
 	void reset()
@@ -240,7 +243,7 @@ final class SyncEngine
 				// OneDrive responded with 400 error: Bad Request
 				log.error("\nERROR: OneDrive returned a 'HTTP 400 Bad Request' - Cannot Initialize Sync Engine");
 				// Check this
-				if (cfg.getValue("drive_id").length) {
+				if (cfg.getValueString("drive_id").length) {
 					log.error("ERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
 				}
 				// Must exit here
@@ -299,6 +302,13 @@ final class SyncEngine
 		noRemoteDelete = true;
 	}
 	
+	// Configure uploadOnly if function is called
+	// By default, uploadOnly = false;
+	void setUploadOnly()
+	{
+		uploadOnly = true;
+	}
+	
 	// Configure disableUploadValidation if function is called
 	// By default, disableUploadValidation = false;
 	// Meaning we will always validate our uploads
@@ -308,6 +318,7 @@ final class SyncEngine
 	void setDisableUploadValidation()
 	{
 		disableUploadValidation = true;
+		log.vdebug("documentLibrary account type - flagging to disable upload validation checks due to Microsoft SharePoint file modification enrichments");
 	}
 	
 	
@@ -603,7 +614,7 @@ final class SyncEngine
 			if (("value" in changes) != null) {
 				auto nrChanges = count(changes["value"].array);
 
-				if (nrChanges >= to!long(cfg.getValue("min_notif_changes"))) {
+				if (nrChanges >= cfg.getValueLong("min_notif_changes")) {
 					log.logAndNotify("Processing ", nrChanges, " changes");
 				} else {
 					// There are valid changes
@@ -623,9 +634,9 @@ final class SyncEngine
 					if(!isItemDeleted(item)){
 						// This is not a deleted item
 						// Test is this is the OneDrive Users Root?
-						// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
-						if ((id == defaultRootId) && (item["name"].str == "root")) { 
-							// This IS the OneDrive Root
+						// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls 
+						if ((id == defaultRootId) && (isItemRoot(item)) && (item["name"].str == "root")) { 
+							// This IS a OneDrive Root item
 							isRoot = true;
 						}
 					}
@@ -756,8 +767,11 @@ final class SyncEngine
 		if (unwanted) log.vdebug("Flagging as unwanted: find(item.parentId).length != 0");
 		// Check if this is a directory to skip
 		if (!unwanted) {
-			unwanted = selectiveSync.isDirNameExcluded(item.name);
-			if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
+			// Only check path if config is != ""
+			if (cfg.getValueString("skip_dir") != "") {
+				unwanted = selectiveSync.isDirNameExcluded(item.name);
+				if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
+			}
 		}
 		// Check if this is a file to skip
 		if (!unwanted) {
@@ -798,7 +812,7 @@ final class SyncEngine
 		}
 		
 		// skip downloading dot files if configured
-		if (cfg.getValue("skip_dotfiles") == "true") {
+		if (cfg.getValueBool("skip_dotfiles")) {
 			if (isDotFile(path)) {
 				log.vlog("Skipping item - .file or .folder: ", path);
 				unwanted = true;
@@ -1360,28 +1374,45 @@ final class SyncEngine
 									writeln("done.");
 								}		
 							} else {
-								// OneDrive Business Account - always use a session to upload
-								writeln("");
-								
-								try {
-									response = session.upload(path, item.driveId, item.parentId, baseName(path));
-								} catch (OneDriveException e) {
-								
-									// Resolve https://github.com/abraunegg/onedrive/issues/36
-									if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
-										// The file is currently checked out or locked for editing by another user
-										// We cant upload this file at this time
-										writeln(" skipped.");
-										log.fileOnly("Uploading modified file ", path, " ... skipped.");
-										writeln("", path, " is currently checked out or locked for editing by another user.");
-										log.fileOnly(path, " is currently checked out or locked for editing by another user.");
-										return;
+								// OneDrive Business Account
+								// We need to always use a session to upload, but handle the changed file correctly
+								if (accountType == "business"){
+									// For logging consistency
+									writeln("");
+									try {
+										response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+									} catch (OneDriveException e) {
+										// Resolve https://github.com/abraunegg/onedrive/issues/36
+										if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
+											// The file is currently checked out or locked for editing by another user
+											// We cant upload this file at this time
+											writeln(" skipped.");
+											log.fileOnly("Uploading modified file ", path, " ... skipped.");
+											writeln("", path, " is currently checked out or locked for editing by another user.");
+											log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+											return;
+										}
+										// what is this error?????
+										else throw e;
 									}
+									// As the session.upload includes the last modified time, save the response
+									saveItem(response);
 								}
-															
+								// OneDrive documentLibrary
+								if (accountType == "documentLibrary"){
+									// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+									// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
+									// Delete record from the local database - file will be uploaded as a new file
+									writeln(" skipped.");
+									log.fileOnly("Uploading modified file ", path, " ... skipped.");
+									log.vlog("Skip Reason: Microsoft Sharepoint 'enrichment' after upload issue");
+									log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+									itemdb.deleteById(item.driveId, item.id);
+									return;
+								}
+					
+								// log line completion							
 								writeln("done.");
-								// As the session.upload includes the last modified time, save the response
-								saveItem(response);
 							}
 							log.fileOnly("Uploading modified file ", path, " ... done.");
 							// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded via simple upload
@@ -1449,7 +1480,7 @@ final class SyncEngine
 			// path is less than maxPathLength
 			
 			// skip dot files if configured
-			if (cfg.getValue("skip_dotfiles") == "true") {
+			if (cfg.getValueBool("skip_dotfiles")) {
 				if (isDotFile(path)) {
 					log.vlog("Skipping item - .file or .folder: ", path);
 					return;
@@ -1457,7 +1488,7 @@ final class SyncEngine
 			}
 			
 			// Do we need to check for .nosync? Only if --check-for-nosync was passed in
-			if (cfg.getValue("check_nosync") == "true") {
+			if (cfg.getValueBool("check_nosync")) {
 				if (exists(path ~ "/.nosync")) {
 					log.vlog("Skipping item - .nosync found & --check-for-nosync enabled: ", path);
 					return;
@@ -1466,7 +1497,7 @@ final class SyncEngine
 			
 			if (isSymlink(path)) {
 				// if config says so we skip all symlinked items
-				if (cfg.getValue("skip_symlinks") == "true") {
+				if (cfg.getValueBool("skip_symlinks")) {
 					log.vlog("Skipping item - skip symbolic links configured: ", path);
 					return;
 
@@ -1500,9 +1531,12 @@ final class SyncEngine
 			if (path != ".") {
 				if (isDir(path)) {
 					log.vdebug("Checking path: ", path);
-					if (selectiveSync.isDirNameExcluded(strip(path,"./"))) {
-						log.vlog("Skipping item - excluded by skip_dir config: ", path);
-						return;
+					// Only check path if config is != ""
+					if (cfg.getValueString("skip_dir") != "") {
+						if (selectiveSync.isDirNameExcluded(strip(path,"./"))) {
+							log.vlog("Skipping item - excluded by skip_dir config: ", path);
+							return;
+						}
 					}
 				}
 				if (isFile(path)) {
@@ -1886,11 +1920,37 @@ final class SyncEngine
 									// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
 									uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
 								} else {
-									// OneDrive Business account upload handling
-									writeln("");
-									response = session.upload(path, parent.driveId, parent.id, baseName(path));
-									writeln(" done.");
-									saveItem(response);
+									// OneDrive Business account modified file upload handling
+									if (accountType == "business"){
+										writeln("");
+										// session upload
+										response = session.upload(path, parent.driveId, parent.id, baseName(path), fileDetailsFromOneDrive["eTag"].str);
+										writeln(" done.");
+										saveItem(response);
+									}
+									
+									// OneDrive SharePoint account modified file upload handling
+									if (accountType == "documentLibrary"){
+										// If this is a Microsoft SharePoint site, we need to remove the existing file before upload
+										onedrive.deleteById(fileDetailsFromOneDrive["parentReference"]["driveId"].str, fileDetailsFromOneDrive["id"].str, fileDetailsFromOneDrive["eTag"].str);	
+										// simple upload
+										response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+										writeln(" done.");
+										saveItem(response);
+										// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+										// So - now the 'local' and 'remote' file is technically DIFFERENT ... thanks Microsoft .. NO way to disable this stupidity
+										if(!uploadOnly){
+											// Download the Microsoft 'modified' file so 'local' is now in sync
+											log.vlog("Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync");
+											log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+											auto fileSize = response["size"].integer;
+											onedrive.downloadById(response["parentReference"]["driveId"].str, response["id"].str, path, fileSize);
+										} else {
+											// we are not downloading a file, warn that file differences will exist
+											log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
+											log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+										}
+									}
 								}
 							} else {
 								// we are --dry-run - simulate the file upload
@@ -2021,10 +2081,11 @@ final class SyncEngine
 				// Takes a JSON input and formats to an item which can be used by the database
 				Item item = makeItem(jsonItem);
 				// Add to the local database
+				log.vdebug("Adding to database: ", item);
 				itemdb.upsert(item);
 			} else {
 				// log error
-				log.error("ERROR: OneDrive response missing required 'id' element:");
+				log.error("ERROR: OneDrive response missing required 'id' element");
 				log.error("ERROR: ", jsonItem);
 			}
 		} else {
@@ -2143,6 +2204,7 @@ final class SyncEngine
 		
 		foreach (searchResult; siteQuery["value"].array) {
 			// Need an 'exclusive' match here with o365SharedLibraryName as entered
+			log.vdebug("Found O365 Site: ", searchResult);
 			if (o365SharedLibraryName == searchResult["displayName"].str){
 				// 'displayName' matches search request
 				site_id = searchResult["id"].str;

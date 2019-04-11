@@ -8,8 +8,8 @@ import progress;
 import config;
 static import log;
 shared bool debugResponse = false;
-shared bool dryRun = false;
-shared bool simulateNoRefreshTokenFile = false;
+private bool dryRun = false;
+private bool simulateNoRefreshTokenFile = false;
 
 private immutable {
 	// Client Identifier
@@ -66,7 +66,7 @@ final class OneDriveApi
 	// if true, every new access token is printed
 	bool printAccessToken;
 
-	this(Config cfg, bool debugHttp, bool forceHTTP11, bool dryRun, bool simulateNoRefreshTokenFile)
+	this(Config cfg)
 	{
 		this.cfg = cfg;
 		http = HTTP();
@@ -94,36 +94,36 @@ final class OneDriveApi
 		http.maxRedirects(5);
 		
 		// Do we enable curl debugging?
-		if (debugHttp) {
+		if (cfg.getValueBool("debug_https")) {
 			http.verbose = true;
 			.debugResponse = true;
         }
 		
 		// What version of HTTP protocol do we use?
 		// Curl >= 7.62.0 defaults to http2 for a significant number of operations
-		if (forceHTTP11) {
+		if (cfg.getValueBool("force_http_11")) {
 			log.vdebug("Downgrading all HTTP operations to HTTP 1.1");
 			// Downgrade to HTTP 1.1 - yes version = 2 is HTTP 1.1
 			http.handle.set(CurlOption.http_version,2);
 		}
 		
 		// Do we set the dryRun handlers?
-		if (dryRun) {
+		if (cfg.getValueBool("dry_run")) {
 			.dryRun = true;
-		}
-		if (simulateNoRefreshTokenFile) {
-			.simulateNoRefreshTokenFile = true;
+			if (cfg.getValueBool("logout")) {
+				.simulateNoRefreshTokenFile = true;
+			}
 		}
 	}
 
 	bool init()
 	{
 		try {
-			driveId = cfg.getValue("drive_id");
+			driveId = cfg.getValueString("drive_id");
 			if (driveId.length) {
 				driveUrl = driveByIdUrl ~ driveId;
-                itemByIdUrl = driveUrl ~ "/items";
-                itemByPathUrl = driveUrl ~ "/root:/";
+				itemByIdUrl = driveUrl ~ "/items";
+				itemByPathUrl = driveUrl ~ "/root:/";
 			}
 		} catch (Exception e) {}
 	
@@ -265,7 +265,7 @@ final class OneDriveApi
 		//		string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
 		if ((path == ".")||(path == "/")) url = driveUrl ~ "/root/";
 		else url = itemByPathUrl ~ encodeComponent(path) ~ ":/";
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		return get(url);
 	}
 	
@@ -277,7 +277,7 @@ final class OneDriveApi
 		const(char)[] url;
 		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		return get(url);
 	}
 	
@@ -711,10 +711,25 @@ final class OneDriveApi
 			// 	502 - Bad Gateway
 			//	503 - Service Unavailable
 			//  504 - Gateway Timeout (Issue #320)
-			case 500,502,503,504:
+			case 500:
 				// No actions
-				log.vlog("OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error");
-				break;	
+				log.vlog("OneDrive returned a 'HTTP 500 Internal Server Error' - gracefully handling error");
+				break;
+				
+			case 502:
+				// No actions
+				log.vlog("OneDrive returned a 'HTTP 502 Bad Gateway Error' - gracefully handling error");
+				break;
+			
+			case 503:
+				// No actions
+				log.vlog("OneDrive returned a 'HTTP 503 Service Unavailable Error' - gracefully handling error");
+				break;
+			
+			case 504:
+				// No actions
+				log.vlog("OneDrive returned a 'HTTP 504 Gateway Timeout Error' - gracefully handling error");
+				break;
 
 			// "else"
 			default:
@@ -742,9 +757,24 @@ final class OneDriveApi
 			// 	502 - Bad Gateway
 			//	503 - Service Unavailable
 			//  504 - Gateway Timeout (Issue #320)
-			case 500,502,503,504:
+			case 500:
 				// No actions
-				log.vlog("OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error");
+				log.vlog("OneDrive returned a 'HTTP 500 Internal Server Error' - gracefully handling error");
+				break;
+				
+			case 502:
+				// No actions
+				log.vlog("OneDrive returned a 'HTTP 502 Bad Gateway Error' - gracefully handling error");
+				break;
+			
+			case 503:
+				// No actions
+				log.vlog("OneDrive returned a 'HTTP 503 Service Unavailable Error' - gracefully handling error");
+				break;
+			
+			case 504:
+				// No actions
+				log.vlog("OneDrive returned a 'HTTP 504 Gateway Timeout Error' - gracefully handling error");
 				break;
 			
 			// Default - all other errors that are not a 2xx or a 302

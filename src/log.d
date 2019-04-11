@@ -10,7 +10,7 @@ version(Notifications) {
 }
 
 // enable verbose logging
-int verbose;
+long verbose;
 bool writeLogFile = false;
 
 private bool doNotifications;
