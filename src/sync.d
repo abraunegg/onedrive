@@ -207,6 +207,8 @@ final class SyncEngine
 	private bool initDone = false;
 	// sync engine dryRun flag
 	private bool dryRun = false;
+	// quota details available
+	private bool quotaAvailable = true;
 
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
@@ -264,11 +266,22 @@ final class SyncEngine
 			}
 		}
 		
+		// Debug OneDrive Account details response
+		log.vdebug("OneDrive Account Details: ", oneDriveDetails);
+		
 		// Successfully got details from OneDrive without a server side error such as HTTP/1.1 504 Gateway Timeout
 		accountType = oneDriveDetails["driveType"].str;
 		defaultDriveId = oneDriveDetails["id"].str;
 		defaultRootId = onedrive.getDefaultRoot["id"].str;
 		remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+		
+		// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
+		if (remainingFreeSpace <= 0) {
+			// quota details not available
+			log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+			log.error("ERROR: Flagging to disable upload space checks - this MAY have undesirable results if a file cannot be uploaded due to out of space.");
+			quotaAvailable = false;
+		}
 		
 		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
 		log.vlog("Account Type: ", accountType);
@@ -1572,9 +1585,13 @@ final class SyncEngine
 				}
 			} else {
 				// This item is a file
-				// Can we upload this file - is there enough free space? - https://github.com/skilion/onedrive/issues/73
 				auto fileSize = getSize(path);
-				if ((remainingFreeSpace - fileSize) > 0){
+				// Can we upload this file - is there enough free space? - https://github.com/skilion/onedrive/issues/73
+				// However if the OneDrive account does not provide the quota details, we have no idea how much free space is available
+				if ((!quotaAvailable) || ((remainingFreeSpace - fileSize) > 0)){
+					if (!quotaAvailable) {
+						log.vlog("Ignoring OneDrive account quota details to upload file - this may fail if not enough space on OneDrive ..");
+					}
 					Item item;
 					if (!itemdb.selectByPath(path, defaultDriveId, item)) {
 						uploadNewFile(path);
