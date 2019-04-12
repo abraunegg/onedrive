@@ -1746,6 +1746,12 @@ final class SyncEngine
 						// test if the local path exists on OneDrive
 						fileDetailsFromOneDrive = onedrive.getPathDetails(path);
 					} catch (OneDriveException e) {
+						if (e.httpStatusCode == 401) {
+							// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - no error message logged
+							log.error("ERROR: OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+							return;
+						}
+					
 						if (e.httpStatusCode == 404) {
 							// The file was not found on OneDrive, need to upload it		
 							write("Uploading new file ", path, " ...");
