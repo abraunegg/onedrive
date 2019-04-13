@@ -84,14 +84,14 @@ endif
 all: $(ALLTARGETS)
 
 clean:
-	rm -f onedrive onedrive.o version \
-	     systemd.units/onedrive.service systemd.units/onedrive@.service
+	rm -f onedrive onedrive.o version
 	rm -rf autom4te.cache
 	rm -f config.log config.status
 
 # also remove files generated via ./configure
 distclean: clean
-	rm -f Makefile pacman/PKGBUILD spec/onedrive.spec onedrive.1
+	rm -f Makefile pacman/PKGBUILD spec/onedrive.spec onedrive.1 \
+	     systemd.units/onedrive.service systemd.units/onedrive@.service
 
 onedrive: version $(SOURCES)
 	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) -L-ldl $(SOURCES) -of$@
