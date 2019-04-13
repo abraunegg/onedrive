@@ -197,8 +197,7 @@ test -x / || exit 1"
   as_suggested="  as_lineno_1=";as_suggested=$as_suggested$LINENO;as_suggested=$as_suggested" as_lineno_1a=\$LINENO
   as_lineno_2=";as_suggested=$as_suggested$LINENO;as_suggested=$as_suggested" as_lineno_2a=\$LINENO
   eval 'test \"x\$as_lineno_1'\$as_run'\" != \"x\$as_lineno_2'\$as_run'\" &&
-  test \"x\`expr \$as_lineno_1'\$as_run' + 1\`\" = \"x\$as_lineno_2'\$as_run'\"' || exit 1
-test \$(( 1 + 1 )) = 2 || exit 1"
+  test \"x\`expr \$as_lineno_1'\$as_run' + 1\`\" = \"x\$as_lineno_2'\$as_run'\"' || exit 1"
   if (eval "$as_required") 2>/dev/null; then :
   as_have_required=yes
 else
@@ -608,7 +607,6 @@ DC_TYPE
 PKG_CONFIG_LIBDIR
 PKG_CONFIG_PATH
 PKG_CONFIG
-SED
 INSTALL_DATA
 INSTALL_SCRIPT
 INSTALL_PROGRAM
@@ -1893,75 +1891,6 @@ test -z "$INSTALL_SCRIPT" && INSTALL_SCRIPT='${INSTALL}'
 
 test -z "$INSTALL_DATA" && INSTALL_DATA='${INSTALL} -m 644'
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for a sed that does not truncate output" >&5
-$as_echo_n "checking for a sed that does not truncate output... " >&6; }
-if ${ac_cv_path_SED+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-            ac_script=s/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/
-     for ac_i in 1 2 3 4 5 6 7; do
-       ac_script="$ac_script$as_nl$ac_script"
-     done
-     echo "$ac_script" 2>/dev/null | sed 99q >conftest.sed
-     { ac_script=; unset ac_script;}
-     if test -z "$SED"; then
-  ac_path_SED_found=false
-  # Loop through the user's path and test for each of PROGNAME-LIST
-  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
-for as_dir in $PATH
-do
-  IFS=$as_save_IFS
-  test -z "$as_dir" && as_dir=.
-    for ac_prog in sed gsed; do
-    for ac_exec_ext in '' $ac_executable_extensions; do
-      ac_path_SED="$as_dir/$ac_prog$ac_exec_ext"
-      as_fn_executable_p "$ac_path_SED" || continue
-# Check for GNU ac_path_SED and select it if it is found.
-  # Check for GNU $ac_path_SED
-case `"$ac_path_SED" --version 2>&1` in
-*GNU*)
-  ac_cv_path_SED="$ac_path_SED" ac_path_SED_found=:;;
-*)
-  ac_count=0
-  $as_echo_n 0123456789 >"conftest.in"
-  while :
-  do
-    cat "conftest.in" "conftest.in" >"conftest.tmp"
-    mv "conftest.tmp" "conftest.in"
-    cp "conftest.in" "conftest.nl"
-    $as_echo '' >> "conftest.nl"
-    "$ac_path_SED" -f conftest.sed < "conftest.nl" >"conftest.out" 2>/dev/null || break
-    diff "conftest.out" "conftest.nl" >/dev/null 2>&1 || break
-    as_fn_arith $ac_count + 1 && ac_count=$as_val
-    if test $ac_count -gt ${ac_path_SED_max-0}; then
-      # Best one so far, save it but keep looking for a better one
-      ac_cv_path_SED="$ac_path_SED"
-      ac_path_SED_max=$ac_count
-    fi
-    # 10*(2^10) chars as input seems more than enough
-    test $ac_count -gt 10 && break
-  done
-  rm -f conftest.in conftest.tmp conftest.nl conftest.out;;
-esac
-
-      $ac_path_SED_found && break 3
-    done
-  done
-  done
-IFS=$as_save_IFS
-  if test -z "$ac_cv_path_SED"; then
-    as_fn_error $? "no acceptable sed could be found in \$PATH" "$LINENO" 5
-  fi
-else
-  ac_cv_path_SED=$SED
-fi
-
-fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_path_SED" >&5
-$as_echo "$ac_cv_path_SED" >&6; }
- SED="$ac_cv_path_SED"
-  rm -f conftest.sed
-
 
 
 
@@ -2128,16 +2057,15 @@ test -n "$DC" || DC="NOT_FOUND"
 
 DC_TYPE=
 case $(basename $DC) in
-	dmd) DC_TYPE=dmd ;;
-	ldmd2) DC_TYPE=dmd ;;
-	ldc2) DC_TYPE=ldc ;;
-	NOT_FOUND) as_fn_error 1 "Could not find any compatible D compiler" "$LINENO" 5
+        dmd) DC_TYPE=dmd ;;
+        ldmd2) DC_TYPE=dmd ;;
+        ldc2) DC_TYPE=ldc ;;
+        NOT_FOUND) as_fn_error 1 "Could not find any compatible D compiler" "$LINENO" 5
 esac
 
 
+
 PACKAGE_DATE="April 2019"
-
-
 
 
 
@@ -2323,9 +2251,6 @@ $as_echo "yes" >&6; }
 
 fi
 
-#
-# systemd and unit file directories
-#
 
 # Check whether --with-systemdsystemunitdir was given.
 if test "${with_systemdsystemunitdir+set}" = set; then :
@@ -2335,17 +2260,20 @@ else
 fi
 
 if test "x$with_systemdsystemunitdir" = "xyes" -o "x$with_systemdsystemunitdir" = "xauto"; then :
-
-     def_systemdsystemunitdir=$($PKG_CONFIG --variable=systemdsystemunitdir systemd)
-
-     if test "x$def_systemdsystemunitdir" = "x"; then :
-  if test "x$with_systemdsystemunitdir" = "xyes"; then :
+           def_systemdsystemunitdir=$($PKG_CONFIG --variable=systemdsystemunitdir systemd)
+                        if test "x$def_systemdsystemunitdir" = "x"; then :
+                    if test "x$with_systemdsystemunitdir" = "xyes"; then :
   as_fn_error $? "systemd support requested but pkg-config unable to query systemd package" "$LINENO" 5
 fi
-    with_systemdsystemunitdir=no
+                with_systemdsystemunitdir=no
+
 else
-  with_systemdsystemunitdir="$def_systemdsystemunitdir"
+                   with_systemdsystemunitdir="$def_systemdsystemunitdir"
+
+
 fi
+
+
 fi
 if test "x$with_systemdsystemunitdir" != "xno"; then :
   systemdsystemunitdir=$with_systemdsystemunitdir
@@ -2362,16 +2290,22 @@ fi
 
 if test "x$with_systemduserunitdir" = "xyes" -o "x$with_systemduserunitdir" = "xauto"; then :
 
-     def_systemduserunitdir=$($PKG_CONFIG --variable=systemduserunitdir systemd)
+        def_systemduserunitdir=$($PKG_CONFIG --variable=systemduserunitdir systemd)
+        if test "x$def_systemduserunitdir" = "x"; then :
 
-     if test "x$def_systemduserunitdir" = "x"; then :
-  if test "x$with_systemduserunitdir" = "xyes"; then :
+                if test "x$with_systemduserunitdir" = "xyes"; then :
   as_fn_error $? "systemd support requested but pkg-config unable to query systemd package" "$LINENO" 5
 fi
-    with_systemduserunitdir=no
+                with_systemduserunitdir=no
+
 else
-  with_systemduserunitdir="$def_systemduserunitdir"
+
+                with_systemduserunitdir="$def_systemduserunitdir"
+
+
 fi
+
+
 fi
 if test "x$with_systemduserunitdir" != "xno"; then :
   systemduserunitdir=$with_systemduserunitdir
@@ -2388,9 +2322,6 @@ HAVE_SYSTEMD=$havesystemd
 
 
 
-#
-# Notification support
-# only check for libnotify if --enable-notifications is given
 # Check whether --enable-notifications was given.
 if test "${enable_notifications+set}" = set; then :
   enableval=$enable_notifications; enable_notifications=yes
@@ -2398,8 +2329,7 @@ else
   enable_notifications=no
 fi
 
-if test "x$enable_notifications" = "xyes"
-then
+if test "x$enable_notifications" = "xyes"; then :
 
 pkg_failed=no
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for notify" >&5
@@ -2472,15 +2402,12 @@ $as_echo "yes" >&6; }
 
 fi
 else
-	notify_LIBS=""
+  notify_LIBS=""
 
 fi
 NOTIFICATIONS=$enable_notifications
 
 
-#
-# Completion support
-# only check for libnotify if --enable-notifications is given
 # Check whether --enable-completions was given.
 if test "${enable_completions+set}" = set; then :
   enableval=$enable_completions; enable_completions=yes
@@ -2552,19 +2479,17 @@ fi
 fi
 
 
-#
-# Debug support
 # Check whether --enable-debug was given.
 if test "${enable_debug+set}" = set; then :
-  enableval=$enable_debug; enable_debug=yes
+  enableval=$enable_debug; DEBUG=yes
+
 else
-  enable_debug=no
+  DEBUG=no
+
 fi
 
-DEBUG=$enable_debug
 
-
-ac_config_files="$ac_config_files Makefile pacman/PKGBUILD spec/onedrive.spec onedrive.1"
+ac_config_files="$ac_config_files Makefile pacman/PKGBUILD spec/onedrive.spec onedrive.1 systemd.units/onedrive.service systemd.units/onedrive@.service"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -3276,6 +3201,8 @@ do
     "pacman/PKGBUILD") CONFIG_FILES="$CONFIG_FILES pacman/PKGBUILD" ;;
     "spec/onedrive.spec") CONFIG_FILES="$CONFIG_FILES spec/onedrive.spec" ;;
     "onedrive.1") CONFIG_FILES="$CONFIG_FILES onedrive.1" ;;
+    "systemd.units/onedrive.service") CONFIG_FILES="$CONFIG_FILES systemd.units/onedrive.service" ;;
+    "systemd.units/onedrive@.service") CONFIG_FILES="$CONFIG_FILES systemd.units/onedrive@.service" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;
   esac
