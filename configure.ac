@@ -6,9 +6,8 @@ AC_CONFIG_SRCDIR([src/main.d])
 AC_ARG_VAR([DC], [D compiler executable])
 AC_ARG_VAR([DCFLAGS], [flags for D compiler])
 
-dnl necessary programs: install, sed, and pkg-config
+dnl necessary programs: install, pkg-config
 AC_PROG_INSTALL
-AC_PROG_SED
 PKG_PROG_PKG_CONFIG
 
 dnl Determine D compiler
@@ -165,5 +164,5 @@ AC_ARG_ENABLE(debug,
        AC_SUBST([DEBUG],no))
 
 dnl generate necessary files
-AC_CONFIG_FILES([Makefile pacman/PKGBUILD spec/onedrive.spec onedrive.1])
+AC_CONFIG_FILES([Makefile pacman/PKGBUILD spec/onedrive.spec onedrive.1 systemd.units/onedrive.service  systemd.units/onedrive@.service])
 AC_OUTPUT

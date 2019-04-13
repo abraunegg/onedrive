@@ -5,7 +5,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=@PREFIX@/bin/onedrive --monitor --confdir=/home/%i/.config/onedrive
+ExecStart=@prefix@/bin/onedrive --monitor --confdir=/home/%i/.config/onedrive
 User=%i
 Group=users
 Restart=on-failure

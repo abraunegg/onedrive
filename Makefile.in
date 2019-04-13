@@ -1,7 +1,13 @@
 package = @PACKAGE_NAME@
 version = @PACKAGE_VERSION@
 prefix = @prefix@
-exec_prefix = @exec_prefix@
+# we don't use @exec_prefix@ because it usually contains '${prefix}' literally
+# but we use @prefix@/bin/onedrive in the systemd unit files which are generated
+# from the configure script.
+# Thus, set exec_prefix unconditionally to prefix
+# Alternative approach would be add dep on sed, and do manual generation in the Makefile.
+# exec_prefix = @exec_prefix@
+exec_prefix = @prefix@
 datarootdir = @datarootdir@
 datadir = @datadir@
 srcdir = @srcdir@
@@ -89,10 +95,6 @@ distclean: clean
 
 onedrive: version $(SOURCES)
 	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) -L-ldl $(SOURCES) -of$@
-
-%.service : %.service.in
-	$(SED) -e 's,[@]bindir[@],$(bindir),g' < $< > $@
-
 
 install: all
 	$(INSTALL) -d -o root -g users -m 0775 $(DESTDIR)/var/log/onedrive
