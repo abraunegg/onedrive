@@ -76,12 +76,7 @@ ifeq ($(NOTIFICATIONS),yes)
 SOURCES += src/notifications/notify.d src/notifications/dnotify.d
 endif
 
-ALLTARGETS=onedrive onedrive.1
-ifeq ($(HAVE_SYSTEMD),yes)
-ALLTARGETS += systemd.units/onedrive.service systemd.units/onedrive@.service
-endif
-
-all: $(ALLTARGETS)
+all: onedrive
 
 clean:
 	rm -f onedrive onedrive.o version
