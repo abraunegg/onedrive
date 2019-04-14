@@ -98,7 +98,7 @@ Configuration file key: \fBlog_dir\fP (default: \fB/var/log/onedrive/\fP)
 the minimum number of pending incoming changes necessary to trigger
 a desktop notification
 .br
-Configuration file key: \fBmin_notif_changes\fP (default: \fB5\fP)
+Configuration file key: \fBmin_notify_changes\fP (default: \fB5\fP)
 .TP
 \fB\-m \-\-monitor\fP
 Keep monitoring for local and remote changes

@@ -333,7 +333,7 @@ Config option 'skip_file'           = ~*|.~*|*.tmp
 Config option 'skip_dotfiles'       = false
 Config option 'skip_symlinks'       = false
 Config option 'monitor_interval'    = 45
-Config option 'min_notif_changes'   = 5
+Config option 'min_notify_changes'   = 5
 Config option 'log_dir'             = /var/log/onedrive/
 Selective sync configured           = false
 ```
@@ -527,8 +527,8 @@ Example: `monitor_interval = "300"`
 
 The monitor interval is defined as the wait time 'between' sync's when running in monitor mode. By default without configuration, the monitor_interval is set to 45 seconds. Setting this value to 300 will run the sync process every 5 minutes.
 
-### min_notif_changes
-Example: `min_notif_changes = "5"`
+### min_notify_changes
+Example: `min_notify_changes = "5"`
 
 This option defines the minimum number of pending incoming changes necessary to trigger a desktop notification. This allows controlling the frequency of notifications.
 
