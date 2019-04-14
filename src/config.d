@@ -48,7 +48,7 @@ final class Config
 		boolValues["dry_run"]            = false;
 		longValues["verbose"]            = log.verbose; // might be initialized by the first getopt call!
 		longValues["monitor_interval"]   = 45,
-		longValues["min_notif_changes"]  = 5;
+		longValues["min_notify_changes"]  = 5;
 		longValues["monitor_log_frequency"] = 5;
 		// Number of n sync runs before performing a full local scan of sync_dir
 		// By default 10 which means every ~7.5 minutes a full disk scan of sync_dir will occur
@@ -220,7 +220,7 @@ final class Config
 					&boolValues["logout"],
 				"min-notif-changes",
 					"Minimum number of pending incoming changes necessary to trigger a desktop notification",
-					&longValues["min_notif_changes"],
+					&longValues["min_notify_changes"],
 				"monitor|m",
 					"Keep monitoring for local and remote changes",
 					&boolValues["monitor"],
