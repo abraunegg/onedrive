@@ -1,3 +1,13 @@
+dnl configure.ac for OneDrive Linux Client
+dnl Copyright 2019 Norbert Preining
+dnl Licensed GPL v3 or later
+
+dnl How to make a release
+dnl - increase the version number in the AC_INIT call below
+dnl - run autoconf which generates configure
+dnl - commit the changed files (configure.ac, configure)
+dnl - tag the release
+
 AC_PREREQ([2.69])
 AC_INIT([onedrive],[2.3.2], [https://github.com/abraunegg/onedrive], [onedrive])
 AC_CONFIG_SRCDIR([src/main.d])
