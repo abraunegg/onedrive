@@ -83,6 +83,7 @@ struct UploadSession
 							throw e;
 						}
 					}
+					
 					// do we have a valid response from OneDrive?
 					if (response.object()){
 						// JSON object
@@ -96,10 +97,18 @@ struct UploadSession
 							}
 						} else {
 							// bad data
+							log.vlog("Restore file upload session failed - invalid data response from OneDrive");
+							if (exists(sessionFilePath)) {
+								remove(sessionFilePath);
+							}
 							return false;
 						}
 					} else {
 						// not a JSON object
+						log.vlog("Restore file upload session failed - invalid response from OneDrive");
+						if (exists(sessionFilePath)) {
+							remove(sessionFilePath);
+						}
 						return false;
 					}
 					return true;
