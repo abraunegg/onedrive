@@ -75,6 +75,7 @@ struct UploadSession
 					try {
 						response = onedrive.requestUploadStatus(session["uploadUrl"].str);
 					} catch (OneDriveException e) {
+						// handle any onedrive error response
 						if (e.httpStatusCode == 400) {
 							log.vlog("Upload session not found");
 							return false;
@@ -82,10 +83,32 @@ struct UploadSession
 							throw e;
 						}
 					}
-					session["expirationDateTime"] = response["expirationDateTime"];
-					session["nextExpectedRanges"] = response["nextExpectedRanges"];
-					if (session["nextExpectedRanges"].array.length == 0) {
-						log.vlog("The upload session is completed");
+					
+					// do we have a valid response from OneDrive?
+					if (response.object()){
+						// JSON object
+						if (("expirationDateTime" in response) && ("nextExpectedRanges" in response)){
+							// has the elements we need
+							session["expirationDateTime"] = response["expirationDateTime"];
+							session["nextExpectedRanges"] = response["nextExpectedRanges"];
+							if (session["nextExpectedRanges"].array.length == 0) {
+								log.vlog("The upload session is completed");
+								return false;
+							}
+						} else {
+							// bad data
+							log.vlog("Restore file upload session failed - invalid data response from OneDrive");
+							if (exists(sessionFilePath)) {
+								remove(sessionFilePath);
+							}
+							return false;
+						}
+					} else {
+						// not a JSON object
+						log.vlog("Restore file upload session failed - invalid response from OneDrive");
+						if (exists(sessionFilePath)) {
+							remove(sessionFilePath);
+						}
 						return false;
 					}
 					return true;
