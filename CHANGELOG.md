@@ -3,6 +3,24 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.3.3 - 2019-04-16
+### Fixed
+*   Fix --upload-only check for Sharepoint uploads
+*   Fix check to ensure item root we flag as 'root' actually is OneDrive account 'root'
+*   Handle object error response from OneDrive when uploading to OneDrive Business
+*   Fix handling of some OneDrive accounts not providing 'quota' details
+*   Fix 'resume_upload' handling in the event of bad OneDrive response
+
+### Added
+*   Add debugging for --get-O365-drive-id function
+*   Add shell (bash,zsh) completion support
+*   Add config options for command line switches to allow for better config handling in docker containers
+
+### Updated
+*   Implement more meaningful 5xx error responses
+*   Update onedrive.logrotate indentations and comments
+*   Update 'min_notif_changes' to 'min_notify_changes'
+
 ## 2.3.2 - 2019-04-02
 ### Fixed
 *   Reduce scanning the entire local system in monitor mode for local changes

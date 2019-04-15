@@ -6,7 +6,7 @@
 %endif
 
 Name:       onedrive
-Version:    2.3.2
+Version:    2.3.3
 Release:    1%{?dist}
 Summary:    Microsoft OneDrive Client
 Group:      System Environment/Network
@@ -16,7 +16,7 @@ URL:        https://github.com/abraunegg/onedrive
 BuildRoot:  %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 BuildRequires:	git
-BuildRequires:	dmd >= 2.079.0
+BuildRequires:	dmd >= 2.085.0
 BuildRequires:	sqlite-devel >= 3.7.15
 BuildRequires:	libcurl-devel
 Requires:		sqlite >= 3.7.15
