@@ -1,5 +1,5 @@
 DC ?= dmd
-RELEASEVER = v2.3.2
+RELEASEVER = v2.3.3
 pkgconfig := $(shell if [ $(PKGCONFIG) ] && [ "$(PKGCONFIG)" != 0 ] ; then echo 1 ; else echo "" ; fi)
 notifications := $(shell if [ $(NOTIFICATIONS) ] && [ "$(NOTIFICATIONS)" != 0 ] ; then echo 1 ; else echo "" ; fi)
 completions := $(shell if [ $(COMPLETIONS) ] && [ "$(COMPLETIONS)" != 0 ] ; then echo 1 ; else echo "" ; fi)
