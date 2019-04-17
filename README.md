@@ -181,34 +181,38 @@ Without performing this step, the compilation process will fail.
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
+./configure
 make clean; make;
 sudo make install
 ```
 
 ### Build options
 
-By passing `PKGCONFIG=1` to the `make` call, necessary libraries (`sqlite3`,
-`curl`, and `libnotify` for notifications) are searched for using `pkg-config`
-instead of using the hard-coded values.
+Notifications can be enabled using the `configure` switch `--enable-notifications`.
 
-By passing `NOTIFICATIONS=1` to the `make` call, notifications via
-libnotify are enabled. If `pkg-config` is not used (see above), the necessary
-libraries are `gmodule-2.0`, `glib-2.0`, and `notify`.
+Systemd service files are installed in the appropriate directories on the system,
+as provided by `pkg-config systemd` settings. If the need for overriding the
+deduced path are necessary, the two options `--with-systemdsystemunitdir` (for
+the Systemd system unit location), and `--with-systemduserunitdir` (for the
+Systemd user unit location) can be specified. Passing in `no` to one of these
+options disabled service file installation.
 
-By passing `DEBUG=1` to the `make` call, `onedrive` gets built with additional debug
+By passing `--enable-debug` to the `configure` call, `onedrive` gets built with additional debug
 information, useful (for example) to get `perf`-issued figures.
 
-By passing `COMPLETIONS=1` to the `make` call, shell completion functions are
+By passing `--enable-completions` to the `configure` call, shell completion functions are
 installed for `bash` and `zsh`. The installation directories are determined
-as far as possible automatically, but can be overridden by setting the
-environment variables `BASHCOMPLETIONDIR` and `ZSHCOMPLETIONDIR`.
+as far as possible automatically, but can be overridden by passing
+`--with-bash-completion-dir=<DIR>` and 
+`--with-zsh-completion-dir=<DIR>` to `configure`.
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
 #### Debian - i386 / i686
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-make clean; make DC=/usr/bin/ldc2
+./configure DC=ldc2
+make clean; make
 sudo make install
 ```
 
@@ -216,7 +220,8 @@ sudo make install
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-make clean; make DC=~/ldc2-1.13.0-linux-armhf/bin/ldmd2
+./configure DC=~/ldc2-1.13.0-linux-armhf/bin/ldmd2
+make clean; make
 sudo make install
 ```
 
@@ -224,7 +229,8 @@ sudo make install
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-make clean; make DC=~/ldc2-1.14.0-linux-aarch64/bin/ldmd2
+./configure DC=~/ldc2-1.14.0-linux-aarch64/bin/ldmd2
+make clean; make
 sudo make install
 ```
 

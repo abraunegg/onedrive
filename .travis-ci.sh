@@ -16,7 +16,7 @@ DEBIAN_MIRROR="http://httpredir.debian.org/debian"
 HOST_DEPENDENCIES="qemu-user-static binfmt-support debootstrap sbuild wget"
 
 # Debian package dependencies for the chrooted environment
-GUEST_DEPENDENCIES="build-essential libcurl4-openssl-dev libsqlite3-dev libgnutls-openssl27 git libxml2"
+GUEST_DEPENDENCIES="build-essential libcurl4-openssl-dev libsqlite3-dev libgnutls-openssl27 git pkg-config libxml2"
 
 # LDC Version
 # Different versions due to https://github.com/ldc-developers/ldc/issues/3027
@@ -122,16 +122,19 @@ function build_onedrive {
 	HOMEDIR=$(pwd)
 	if [ "${ARCH}" = "x64" ]; then
 		# Build on x86_64 as normal
+		./configure
 		make clean; make;
 	else
 		if [ "${ARCH}" = "x32" ]; then
 			# 32Bit DMD Build
+			./configure DC=${HOMEDIR}/dlang-${ARCH}/linux/bin32/dmd
 			make clean;
-			make DC=${HOMEDIR}/dlang-${ARCH}/linux/bin32/dmd
+			make
 		else
 			# LDC Build - ARM32, ARM64
+			./configure DC=${HOMEDIR}/dlang-${ARCH}/bin/ldmd2
 			make clean;
-			make DC=${HOMEDIR}/dlang-${ARCH}/bin/ldmd2
+			make
 		fi
 	fi
 	# Functional testing of built application

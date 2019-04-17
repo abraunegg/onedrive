@@ -5,3 +5,9 @@ onedrive.o
 onedrive.service
 onedrive@.service
 version
+Makefile
+config.log
+config.status
+autom4te.cache/
+pacman/PKGBUILD
+spec/onedrive.spec

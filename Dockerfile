@@ -1,7 +1,7 @@
 FROM centos:7
 ENV GOSU_VERSION=1.11
 
-RUN yum install -y make git gcc libcurl-devel sqlite-devel && \
+RUN yum install -y make git gcc libcurl-devel sqlite-devel pkg-config && \
     rm -rf /var/cache/yum/ && \
     curl -fsS -o install.sh https://dlang.org/install.sh && \
     bash install.sh dmd && \
@@ -17,7 +17,9 @@ RUN yum install -y make git gcc libcurl-devel sqlite-devel && \
 RUN mkdir -p /onedrive/conf /onedrive/data
 COPY . /usr/src/onedrive
 RUN . "$(bash install.sh -a)" && \
-    make -C /usr/src/onedrive install.noservice && \
+    /usr/src/onedrive/configure && \
+    make -C /usr/src/onedrive && \
+    make -C /usr/src/onedrive install && \
     make -C /usr/src/onedrive clean
 COPY entrypoint.sh /entrypoint.sh
 VOLUME ["/onedrive/conf"]

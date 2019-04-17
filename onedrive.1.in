@@ -1,4 +1,4 @@
-.TH ONEDRIVE "1" "April 2019" "2.3.3" "User Commands"
+.TH ONEDRIVE "1" "@PACKAGE_DATE@" "@PACKAGE_VERSION@" "User Commands"
 .SH NAME
 onedrive \- folder synchronization with OneDrive
 .SH SYNOPSIS
@@ -276,5 +276,5 @@ for a user via the \fBonedrive@<username>\fP service.
 .SH SEE ALSO
 
 Further examples and documentation is available in
-\f[C]@DOCDIR@/README.md\f[]
-\f[C]@DOCDIR@/README.Office365.md\f[]
+\f[C]README.md\f[]
+\f[C]README.Office365.md\f[]

@@ -1,0 +1,131 @@
+package = @PACKAGE_NAME@
+version = @PACKAGE_VERSION@
+prefix = @prefix@
+# we don't use @exec_prefix@ because it usually contains '${prefix}' literally
+# but we use @prefix@/bin/onedrive in the systemd unit files which are generated
+# from the configure script.
+# Thus, set exec_prefix unconditionally to prefix
+# Alternative approach would be add dep on sed, and do manual generation in the Makefile.
+# exec_prefix = @exec_prefix@
+exec_prefix = @prefix@
+datarootdir = @datarootdir@
+datadir = @datadir@
+srcdir = @srcdir@
+bindir = @bindir@
+mandir = @mandir@
+sysconfdir = @sysconfdir@
+docdir = $(datadir)/doc/$(package)
+VPATH = @srcdir@
+SED = @SED@
+INSTALL = @INSTALL@
+
+NOTIFICATIONS = @NOTIFICATIONS@
+HAVE_SYSTEMD = @HAVE_SYSTEMD@
+systemduserunitdir = @systemduserunitdir@
+systemdsystemunitdir = @systemdsystemunitdir@
+curl_LIBS = @curl_LIBS@
+sqlite_LIBS = @sqlite_LIBS@
+notify_LIBS = @notify_LIBS@
+COMPLETIONS = @COMPLETIONS@
+BASH_COMPLETION_DIR = @BASH_COMPLETION_DIR@
+ZSH_COMPLETION_DIR = @ZSH_COMPLETION_DIR@
+DEBUG = @DEBUG@
+
+DC = @DC@
+DC_TYPE = @DC_TYPE@
+DCFLAGS = @DCFLAGS@
+DCFLAGS += -w -g -O -J.
+ifeq ($(DEBUG),yes)
+ifeq ($(DC_TYPE),dmd)
+DCFLAGS += -debug -gs
+else
+DCFLAGS += -d-debug -gc
+endif
+endif
+
+ifeq ($(NOTIFICATIONS),yes)
+NOTIF_VERSIONS=-version=NoPragma -version=NoGdk -version=Notifications
+# support ldc2 which needs -d prefix for version specification
+ifeq ($(DC_TYPE),ldc)
+        NOTIF_VERSIONS := $(addprefix -d,$(NOTIF_VERSIONS))
+endif
+DCFLAGS += $(NOTIF_VERSIONS)
+endif
+
+system_unit_files = systemd.units/onedrive@.service
+user_unit_files = systemd.units/onedrive.service
+
+DOCFILES = README.md README.Office365.md config LICENSE CHANGELOG.md
+
+SOURCES = \
+	src/config.d \
+	src/itemdb.d \
+	src/log.d \
+	src/main.d \
+	src/monitor.d \
+	src/onedrive.d \
+	src/qxor.d \
+	src/selective.d \
+	src/sqlite.d \
+	src/sync.d \
+	src/upload.d \
+	src/util.d \
+	src/progress.d
+
+ifeq ($(NOTIFICATIONS),yes)
+SOURCES += src/notifications/notify.d src/notifications/dnotify.d
+endif
+
+all: onedrive
+
+clean:
+	rm -f onedrive onedrive.o version
+	rm -rf autom4te.cache
+	rm -f config.log config.status
+
+# also remove files generated via ./configure
+distclean: clean
+	rm -f Makefile pacman/PKGBUILD spec/onedrive.spec onedrive.1 \
+	     systemd.units/onedrive.service systemd.units/onedrive@.service
+
+onedrive: version $(SOURCES)
+	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) -L-ldl $(SOURCES) -of$@
+
+install: all
+	$(INSTALL) -d -o root -g users -m 0775 $(DESTDIR)/var/log/onedrive
+	$(INSTALL) -D onedrive $(DESTDIR)$(bindir)/onedrive
+	$(INSTALL) -D onedrive.1 $(DESTDIR)$(mandir)/man1/onedrive.1
+	$(INSTALL) -D -m 644 logrotate/onedrive.logrotate $(DESTDIR)$(sysconfdir)/logrotate.d/onedrive
+	for i in $(DOCFILES) ; do $(INSTALL) -D -m 644 $$i $(DESTDIR)$(docdir)/$$i ; done
+ifeq ($(HAVE_SYSTEMD),yes)
+	$(INSTALL) -d -o root -g root -m 0755 $(DESTDIR)$(systemduserunitdir) $(DESTDIR)$(systemdsystemunitdir)
+	$(INSTALL) -m 0644 $(system_unit_files) $(DESTDIR)$(systemdsystemunitdir)
+	$(INSTALL) -m 0644 $(user_unit_files) $(DESTDIR)$(systemduserunitdir)
+endif
+ifeq ($(COMPLETIONS),yes)
+	$(INSTALL) -D -m 644 completions/complete.zsh $(DESTDIR)$(ZSH_COMPLETION_DIR)/_onedrive
+	$(INSTALL) -D -m 644 completions/complete.bash $(DESTDIR)$(BASH_COMPLETION_DIR)/onedrive
+endif
+
+
+uninstall:
+	rm -f $(DESTDIR)$(bindir)/onedrive
+	rm -f $(DESTDIR)$(mandir)/man1/onedrive.1
+	rm -f $(DESTDIR)$(sysconfdir)/logrotate.d/onedrive
+ifeq ($(HAVE_SYSTEMD),yes)
+	for i in $(system_unit_files) ; do rm -f $(DESTDIR)$(systemdsystemunitdir)/$$i ; done
+	for i in $(user_unit_files) ; do rm -f $(DESTDIR)$(systemduserunitdir)/$$i ; done
+endif
+	for i in $(DOCFILES) ; do rm -f $(DESTDIR)$(DOCDIR)/$$i ; done
+ifeq ($(COMPLETIONS),yes)
+	rm -f $(DESTDIR)$(ZSH_COMPLETION_DIR)/_onedrive
+	rm -f $(DESTDIR)$(BASH_COMPLETION_DIR)/onedrive
+endif
+
+version:
+	if [ -f .git/HEAD ] ; then \
+		echo $(shell git describe --tags) > version ; \
+	else \
+		echo $(version) > version ; \
+	fi
+
