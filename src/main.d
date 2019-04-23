@@ -149,6 +149,8 @@ int main(string[] args)
 	if (cfg.getValueBool("display_config")){
 		string userConfigFilePath = cfg.configDirName ~ "/config";
 		string userSyncList = cfg.configDirName ~ "/sync_list";
+		string businessSharedFolderFile = cfg.configDirName ~ "/business_shared_folders";
+		
 		// Display application version
 		std.stdio.write("onedrive version                    = ", import("version"));
 		// Display all of the pertinent configuration options
@@ -192,6 +194,23 @@ int main(string[] args)
 			writeln("Selective sync configured           = false");
 		}
 		
+		// Is business_shared_folders configured
+		if (exists(businessSharedFolderFile)){
+			writeln("Selective Business Shared Folders configured = true");
+			writeln("business_shared_folders contents:");
+			// Output the business_shared_folders contents
+			auto businessSharedFolderFileList = File(businessSharedFolderFile);
+			auto range = businessSharedFolderFileList.byLine();
+			foreach (line; range)
+			{
+				writeln(line);
+			}
+		} else {
+			writeln("Selective Business Shared Folders configured = false");
+		}
+		
+		
+		
 		return EXIT_SUCCESS;
 	}
 	
@@ -225,7 +244,7 @@ int main(string[] args)
 	
 	// create-directory, remove-directory, source-directory, destination-directory 
 	// are activities that dont perform a sync no error message for these items either
-	if (((cfg.getValueString("create_directory") != "") || (cfg.getValueString("remove_directory") != "")) || ((cfg.getValueString("source_directory") != "") && (cfg.getValueString("destination_directory") != "")) || (cfg.getValueString("get_o365_drive_id") != "") || cfg.getValueBool("display_sync_status")) {
+	if (((cfg.getValueString("create_directory") != "") || (cfg.getValueString("remove_directory") != "")) || ((cfg.getValueString("source_directory") != "") && (cfg.getValueString("destination_directory") != "")) || (cfg.getValueString("get_o365_drive_id") != "") || cfg.getValueBool("display_sync_status") || cfg.getValueBool("list_business_shared_folders")) {
 		performSyncOK = true;
 	}
 	
@@ -265,6 +284,8 @@ int main(string[] args)
 	
 	// Configure selective sync by parsing and getting a regex for skip_file config component
 	auto selectiveSync = new SelectiveSync();
+	
+	// load sync_list if it exists
 	if (exists(cfg.syncListFilePath)){
 		log.vdebug("Loading user configured sync_list file ...");
 		// list what will be synced
@@ -276,6 +297,19 @@ int main(string[] args)
 		}
 	}
 	selectiveSync.load(cfg.syncListFilePath);
+	
+	// load business_shared_folders if it exists
+	if (exists(cfg.businessSharedFolderFilePath)){
+		log.vdebug("Loading user configured business_shared_folders file ...");
+		// list what will be synced
+		auto businessSharedFolderFile = File(cfg.businessSharedFolderFilePath);
+		auto range = businessSharedFolderFile.byLine();
+		foreach (line; range)
+		{
+			log.vdebug("business_shared_folders: ", line);
+		}
+	}
+	selectiveSync.loadSharedFolders(cfg.businessSharedFolderFilePath);
 	
 	// Configure skip_dir & skip_file from config entries
 	log.vdebug("Configuring skip_dir ...");
@@ -340,7 +374,38 @@ int main(string[] args)
 	
 	// Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
 	if (cfg.getValueString("get_o365_drive_id") != ""){
+		// Query for Office365 SharePoint Libraries
 		sync.querySiteCollectionForDriveID(cfg.getValueString("get_o365_drive_id"));
+		// Exit, no sync
+		oneDrive.http.shutdown();
+		destroy(itemDb);
+		return EXIT_SUCCESS;
+	}
+	
+	// Are we listing OneDrive Business Shared Folders
+	if (cfg.getValueBool("list_business_shared_folders")){
+		// Is this a business account type?
+		if (sync.getAccountType() == "business"){
+			// List OneDrive Business Shared Folders
+			sync.listOneDriveBusinessSharedFolders();
+		} else {
+			log.error("ERROR: Unsupported account type for listing OneDrive Business Shared Folders");
+		}
+		// Exit, no sync
+		oneDrive.http.shutdown();
+		destroy(itemDb);
+		return EXIT_SUCCESS;
+	}
+	
+	// Are we going to sync OneDrive Business Shared Folders
+	if (cfg.getValueBool("sync_business_shared_folders")){
+		// Is this a business account type?
+		if (sync.getAccountType() == "business"){
+			// Configure flag to sync business folders
+			sync.setSyncBusinessFolders();
+		} else {
+			log.error("ERROR: Unsupported account type for syncing OneDrive Business Shared Folders");
+		}
 	}
 	
 	// Are we displaying the sync status of the client?
@@ -540,6 +605,8 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 		// Need two different path strings here
 		remotePath = singleDirectory;
 		localPath = singleDirectory;
+		// Set flag for scope debug output handling
+		sync.setSingleDirectoryScope();
 	}
 	
 	// Due to Microsoft Sharepoint 'enrichment' of files, we try to download the Microsoft modified file automatically

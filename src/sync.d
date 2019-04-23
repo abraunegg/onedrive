@@ -209,7 +209,13 @@ final class SyncEngine
 	private bool dryRun = false;
 	// quota details available
 	private bool quotaAvailable = true;
-
+	// sync business shared folders flag
+	private bool syncBusinessFolders = false;
+	// single directory scope flag
+	private bool singleDirectoryScope = false;
+	// array of all OneDrive driveId's
+	private string[] driveIDsArray;
+	
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
 		assert(onedrive && itemdb && selectiveSync);
@@ -275,6 +281,9 @@ final class SyncEngine
 		defaultRootId = onedrive.getDefaultRoot["id"].str;
 		remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
 		
+		// Make sure that defaultDriveId is in our driveIDs array to use when checking if item is in database
+		driveIDsArray ~= defaultDriveId;
+		
 		// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
 		if (remainingFreeSpace <= 0) {
 			// quota details not available
@@ -322,6 +331,17 @@ final class SyncEngine
 		uploadOnly = true;
 	}
 	
+	// set the flag that we are going to sync business shared folders
+	void setSyncBusinessFolders()
+	{
+		syncBusinessFolders = true;
+	}
+	
+	void setSingleDirectoryScope()
+	{
+		singleDirectoryScope = true;
+	}
+	
 	// Configure disableUploadValidation if function is called
 	// By default, disableUploadValidation = false;
 	// Meaning we will always validate our uploads
@@ -335,7 +355,7 @@ final class SyncEngine
 	}
 	
 	
-	// download all new changes from OneDrive
+	// Download all new changes from OneDrive
 	void applyDifferences()
 	{
 		// Set defaults for the root folder
@@ -344,10 +364,31 @@ final class SyncEngine
 		string rootId = defaultRootId;
 		applyDifferences(driveId, rootId);
 
-		// check all remote folders
+		// Check OneDrive Personal Shared Folders
 		// https://github.com/OneDrive/onedrive-api-docs/issues/764
 		Item[] items = itemdb.selectRemoteItems();
-		foreach (item; items) applyDifferences(item.remoteDriveId, item.remoteId);
+		foreach (item; items) {
+			log.vlog("Syncing OneDrive Shared Folder: ", item.name);
+			applyDifferences(item.remoteDriveId, item.remoteId);
+		}
+		
+		// Check OneDrive Business Shared Folders, if configured to do so
+		if (syncBusinessFolders){
+			// query OneDrive Business Shared Folders shared with me
+			JSONValue graphQuery = onedrive.getSharedWithMe();
+			string sharedFolderName;
+			foreach (searchResult; graphQuery["value"].array) {
+				sharedFolderName = searchResult["name"].str;
+				// Compare this to values in business_shared_folders
+				if(selectiveSync.isSharedFolderMatched(sharedFolderName)){
+					log.vlog("Syncing OneDrive Business Shared Folder: ", sharedFolderName);
+					// Folder matches a user configured entry
+					Item businessSharedFolder = makeItem(searchResult);
+					applyDifferences(businessSharedFolder.remoteDriveId, businessSharedFolder.remoteId);
+					driveIDsArray ~= searchResult["remoteItem"]["parentReference"]["driveId"].str;
+				}
+			}
+		}
 	}
 
 	// download all new changes from a specified folder on OneDrive
@@ -570,7 +611,18 @@ final class SyncEngine
 			
 			try {
 				// Fetch the changes relative to the path id we want to query
-				changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
+				// Have to query the right 'delta' otherwise we get a HTTP request returned status code 501 (Not Implemented)
+				// view.delta can only be called on the root.
+				// So we need to select the right root, especially if we are checking a remote folder item
+				if ((driveId == defaultDriveId) || (!syncBusinessFolders)) {
+					// Should always be selected unless we are syncing a Business Shared Folder
+					log.vdebug("selected to use onedrive.viewChangesByItemId");
+					changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink);
+				} else {
+					// Should ONLY be selected if we are syncing a Business Shared Folder
+					log.vdebug("selected to use onedrive.viewChangesByDriveId");
+					changes = onedrive.viewChangesByDriveId(driveId, deltaLink);
+				}
 			} catch (OneDriveException e) {
 				// OneDrive threw an error
 				log.vdebug("OneDrive threw an error when querying for these changes:");
@@ -642,7 +694,7 @@ final class SyncEngine
 					log.vdebug("------------------------------------------------------------------");
 					log.vdebug("OneDrive Change: ", item);
 					
-					// Deleted items returned from onedrive.viewChangesById (/delta) do not have a 'name' attribute
+					// Deleted items returned from onedrive.viewChangesByItemId (/delta) do not have a 'name' attribute
 					// Thus we cannot name check for 'root' below on deleted items
 					if(!isItemDeleted(item)){
 						// This is not a deleted item
@@ -721,7 +773,24 @@ final class SyncEngine
 									idsToDelete ~= [driveId, item["id"].str];
 								}
 							} else {
-								log.vlog("Remote change discarded - not in --single-directory scope");
+								// item is not in the database
+								if (singleDirectoryScope){
+									// We are syncing a single directory, so this is the reason why it is out of scope
+									log.vlog("Remote change discarded - not in --single-directory sync scope");
+								} else {
+									// Not a single directory sync
+									if (syncBusinessFolders) {
+										// if we are syncing shared business folders, a 'change' may be out of scope as we are not syncing that 'folder'
+										// but we are sent all changes from the 'parent root' as we cannot query the 'delta' for this folder
+										// as that is a 501 error - not implemented
+										log.vdebug("Remote change discarded - not in business shared folders sync scope");
+										log.vdebug("Remote change discarded: ", item);
+									} else {
+										// out of scope for some other reason
+										log.vlog("Remote change discarded - not in sync scope");
+										log.vdebug("Remote change discarded: ", item);
+									}
+								}
 							}
 						} 
 					}
@@ -930,7 +999,7 @@ final class SyncEngine
 			break;
 		case ItemType.dir:
 		case ItemType.remote:
-			log.log("Creating directory: ", path);
+			log.log("Creating local directory: ", path);
 			if (!dryRun) {
 				mkdirRecurse(path);
 			} else {
@@ -1143,13 +1212,23 @@ final class SyncEngine
 	// scan the given directory for differences and new items
 	void scanForDifferences(string path)
 	{
+		// To improve logging output, what is the 'logical path' we are scanning for file & folder differences?
+		string logPath;
+		if (path == ".") {
+			// get the configured sync_dir
+			logPath = expandTilde(cfg.getValueString("sync_dir"));
+		} else {
+			// use what was passed in
+			logPath = path;
+		}
+	
 		// scan for changes
-		log.vlog("Uploading differences of ", path);
+		log.vlog("Uploading differences of ", logPath);
 		Item item;
 		if (itemdb.selectByPath(path, defaultDriveId, item)) {
 			uploadDifferences(item);
 		}
-		log.vlog("Uploading new items of ", path);
+		log.vlog("Uploading new items of ", logPath);
 		uploadNewItems(path);
 		
 		// clean up idsToDelete only if --dry-run is set
@@ -1569,9 +1648,19 @@ final class SyncEngine
 			// We want to upload this new item
 			if (isDir(path)) {
 				Item item;
-				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+				bool pathFoundInDB = false;
+				foreach (driveId; driveIDsArray) {
+					if (itemdb.selectByPath(path, driveId, item)) {
+						pathFoundInDB = true; 
+					}
+				}
+				
+				// Was the path found in the database?
+				if (!pathFoundInDB) {
+					// Path not found in database when searching all drive id's
 					uploadCreateDir(path);
 				}
+				
 				// recursively traverse children
 				// the above operation takes time and the directory might have
 				// disappeared in the meantime
@@ -1584,6 +1673,7 @@ final class SyncEngine
 					uploadNewItems(entry.name);
 				}
 			} else {
+				bool fileFoundInDB = false;
 				// This item is a file
 				auto fileSize = getSize(path);
 				// Can we upload this file - is there enough free space? - https://github.com/skilion/onedrive/issues/73
@@ -1593,7 +1683,15 @@ final class SyncEngine
 						log.vlog("Ignoring OneDrive account quota details to upload file - this may fail if not enough space on OneDrive ..");
 					}
 					Item item;
-					if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+					foreach (driveId; driveIDsArray) {
+						if (itemdb.selectByPath(path, driveId, item)) {
+							fileFoundInDB = true; 
+						}
+					}
+					
+					// Was the file found in the database?
+					if (!fileFoundInDB) {
+						// File not found in database when searching all drive id's
 						uploadNewFile(path);
 						remainingFreeSpace = (remainingFreeSpace - fileSize);
 						log.vlog("Remaining free space: ", remainingFreeSpace);
@@ -1614,16 +1712,32 @@ final class SyncEngine
 		log.vlog("OneDrive Client requested to create remote path: ", path);
 		JSONValue onedrivePathDetails;
 		Item parent;
-		
 		// Was the path entered the root path?
 		if (path != "."){
-			// If this is null or empty - we cant query the database properly
+			// What parent path to use?
+			string parentPath = dirName(path);		// will be either . or something else
+			if (parentPath == "."){
+				// Assume this is a new 'local' folder in the users configured sync_dir
+				// Use client defaults
+				parent.id = defaultRootId;  // Should give something like 12345ABCDE1234A1!101
+				parent.driveId = defaultDriveId;  // Should give something like 12345abcde1234a1
+			} else {
+				// Query the database using each of the driveId's we are using
+				foreach (driveId; driveIDsArray) {
+					// Query the database for this parent path using each driveId
+					Item dbResponse;
+					if(itemdb.selectByPathNoRemote(parentPath, driveId, dbResponse)){
+						// parent path was found in the database
+						parent = dbResponse;
+					}
+				}
+			}
+			
+			// If this is still null or empty - we cant query the database properly later on
+			// Query OneDrive API for parent details
 			if ((parent.driveId == "") && (parent.id == "")){
-				// What path to use?
-				string parentPath = dirName(path);		// will be either . or something else
-								
 				try {
-					log.vdebug("Attempting to query OneDrive for this path: ", parentPath);
+					log.vdebug("Attempting to query OneDrive for this parent path: ", parentPath);
 					onedrivePathDetails = onedrive.getPathDetails(parentPath);
 				} catch (OneDriveException e) {
 					// exception - set onedriveParentRootDetails to a blank valid JSON
@@ -1658,10 +1772,10 @@ final class SyncEngine
 			// test if the path we are going to create already exists on OneDrive
 			try {
 				log.vdebug("Attempting to query OneDrive for this path: ", path);
-				response = onedrive.getPathDetails(path);
+				response = onedrive.getPathDetailsByDriveId(parent.driveId, path);
 			} catch (OneDriveException e) {
 				if (e.httpStatusCode == 404) {
-					// The directory was not found 
+					// The directory was not found on the drive id we queried
 					log.vlog("The requested directory to create was not found on OneDrive - creating remote directory: ", path);
 
 					if (!dryRun) {
@@ -1675,6 +1789,7 @@ final class SyncEngine
 						// Submit the creation request
 						// Fix for https://github.com/skilion/onedrive/issues/356
 						try {
+							// Attempt to create a new folder on the configured parent driveId & parent id
 							response = onedrive.createById(parent.driveId, parent.id, driveItem);
 						} catch (OneDriveException e) {
 							if (e.httpStatusCode == 409) {
@@ -1715,7 +1830,7 @@ final class SyncEngine
 				if (!itemdb.selectById(parent.driveId, parent.id, parent)){
 					// parent for 'path' is NOT in the database
 					log.vlog("The parent for this path is not in the local database - need to add parent to local database");
-					string parentPath = dirName(path);
+					parentPath = dirName(path);
 					uploadCreateDir(parentPath);
 				} else {
 					// parent is in database
@@ -1736,9 +1851,31 @@ final class SyncEngine
 	private void uploadNewFile(string path)
 	{
 		Item parent;
-		// Check the database for the parent
-		//enforce(itemdb.selectByPath(dirName(path), defaultDriveId, parent), "The parent item is not in the local database");
-		if ((dryRun) || (itemdb.selectByPath(dirName(path), defaultDriveId, parent))) {
+		bool parentPathFoundInDB = false;
+		// Check the database for the parent path
+		// What parent path to use?
+		string parentPath = dirName(path);		// will be either . or something else
+		if (parentPath == "."){
+			// Assume this is a new file in the users configured sync_dir root
+			// Use client defaults
+			parent.id = defaultRootId;  // Should give something like 12345ABCDE1234A1!101
+			parent.driveId = defaultDriveId;  // Should give something like 12345abcde1234a1
+			parentPathFoundInDB = true;
+		} else {
+			// Query the database using each of the driveId's we are using
+			foreach (driveId; driveIDsArray) {
+				// Query the database for this parent path using each driveId
+				Item dbResponse;
+				if(itemdb.selectByPathNoRemote(parentPath, driveId, dbResponse)){
+					// parent path was found in the database
+					parent = dbResponse;
+					parentPathFoundInDB = true;
+				}
+			}
+		}
+				
+		// If performing a dry-run or parent path is found in the database
+		if ((dryRun) || (parentPathFoundInDB)) {
 			// Maximum file size upload
 			//	https://support.microsoft.com/en-au/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
 			//	1. OneDrive Business say's 15GB
@@ -2321,7 +2458,7 @@ final class SyncEngine
 		}
 		
 		// Query OneDrive changes
-		changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
+		changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink);
 		
 		// Are there any changes on OneDrive?
 		if (count(changes["value"].array) != 0) {
@@ -2453,5 +2590,25 @@ final class SyncEngine
 						
 		log.vdebug("Generated Fake OneDrive Response: ", fakeResponse);
 		return fakeResponse;
+	}
+	
+	auto getAccountType(){
+		// return account type in use
+		return accountType;
+	}
+	
+	void listOneDriveBusinessSharedFolders(){
+		// List OneDrive Business Shared Folders
+		log.log("\nListing available OneDrive Business Shared Folders:");
+		// Query the GET /me/drive/sharedWithMe API
+		JSONValue graphQuery = onedrive.getSharedWithMe();
+		
+		string sharedFolderName;
+		
+		foreach (searchResult; graphQuery["value"].array) {
+			sharedFolderName = searchResult["name"].str;
+			// Output query result
+			log.log("Shared Folder: ", sharedFolderName);
+		}
 	}
 }

@@ -30,6 +30,7 @@ private {
     string driveUrl = "https://graph.microsoft.com/v1.0/me/drive";
     string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
     string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
+	string sharedWithMe = "https://graph.microsoft.com/v1.0/me/drive/sharedWithMe";
     string driveId = "";
 }
 
@@ -184,8 +185,15 @@ final class OneDriveApi
 		return get(driveUrl ~ "/root");
 	}
 
+	// https://docs.microsoft.com/en-us/graph/api/drive-sharedwithme?view=graph-rest-1.0
+	JSONValue getSharedWithMe()
+	{
+		checkAccessTokenExpired();
+		return get(sharedWithMe);
+	}
+	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
-	JSONValue viewChangesById(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink)
+	JSONValue viewChangesByItemId(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink)
 	{
 		checkAccessTokenExpired();
 		const(char)[] url = deltaLink;
@@ -195,6 +203,19 @@ final class OneDriveApi
 		}
 		return get(url);
 	}
+	
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta?view=odsp-graph-online
+	JSONValue viewChangesByDriveId(const(char)[] driveId, const(char)[] deltaLink)
+	{
+		checkAccessTokenExpired();
+		const(char)[] url = deltaLink;
+		if (url == null) {
+			url = driveByIdUrl ~ driveId ~ "/root/delta";
+			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		}
+		return get(url);
+	}
+	
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
 	void downloadById(const(char)[] driveId, const(char)[] id, string saveToPath, long fileSize)
@@ -280,6 +301,19 @@ final class OneDriveApi
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		return get(url);
 	}
+	
+	// Return the requested details of the specified path on the specified drive id
+	JSONValue getPathDetailsByDriveId(const(char)[] driveId, const(string) path)
+	{
+		checkAccessTokenExpired();
+		const(char)[] url;
+		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
+		// Required format: /drives/{drive-id}/root:/{item-path}
+		url = driveByIdUrl ~ driveId ~ "/root:/" ~ encodeComponent(path);
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		return get(url);
+	}
+		
 	
 	// Return the requested details of the specified id
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get

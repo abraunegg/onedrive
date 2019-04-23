@@ -22,6 +22,7 @@ final class Config
 	private string[string] stringValues;
 	private bool[string] boolValues;
 	private long[string] longValues;
+	public string businessSharedFolderFilePath;
 
 
 	this(string confdirOption)
@@ -121,6 +122,8 @@ final class Config
 		uploadStateFilePath = configDirName ~ "/resume_upload";
 		userConfigFilePath = configDirName ~ "/config";
 		syncListFilePath = configDirName ~ "/sync_list";
+		businessSharedFolderFilePath = configDirName ~ "/business_shared_folders";
+		
 	}
 
 	bool initialize()
@@ -141,7 +144,6 @@ final class Config
 
 	void update_from_args(string[] args)
 	{
-
 		// Add additional options that are NOT configurable via config file
 		stringValues["create_directory"]  = "";
 		stringValues["destination_directory"] = "";
@@ -156,14 +158,17 @@ final class Config
 		boolValues["logout"]              = false;
 		boolValues["monitor"]             = false;
 		boolValues["synchronize"]         = false;
-
+		boolValues["list_business_shared_folders"] = false;
+		boolValues["sync_business_shared_folders"] = false;
 
 		// Application Startup option validation
 		try {
 			string tmpStr;
 			bool tmpBol;
 			long tmpVerb;
+			// duplicated from main.d to get full help output!
 			auto opt = getopt(
+				
 				args,
 				std.getopt.config.bundling,
 				std.getopt.config.caseSensitive,
@@ -269,7 +274,6 @@ final class Config
 				"upload-only",
 					"Only upload to OneDrive, do not sync changes from OneDrive locally",
 					&boolValues["upload_only"],
-				// duplicated from main.d to get full help output!
 				"confdir",
 					"Set the directory used to store the configuration files",
 					&tmpStr,
@@ -278,8 +282,13 @@ final class Config
 					&tmpVerb,
 				"version",
 					"Print the version and exit",
-					&tmpBol
-
+					&tmpBol,
+				"list-shared-folders",
+					"List OneDrive Business Shared Folders",
+					&boolValues["list_business_shared_folders"],
+				"sync-shared-folders",
+					"Sync OneDrive Business Shared Folders",
+					&boolValues["sync_business_shared_folders"]
 			);
 			if (opt.helpWanted) {
 				outputLongHelp(opt.options);

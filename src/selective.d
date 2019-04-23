@@ -11,7 +11,8 @@ final class SelectiveSync
 	private string[] paths;
 	private Regex!char mask;
 	private Regex!char dirmask;
-
+	private string[] businessSharedFoldersList;
+	
 	void load(string filepath)
 	{
 		if (exists(filepath)) {
@@ -23,6 +24,17 @@ final class SelectiveSync
 		}
 	}
 
+	void loadSharedFolders(string filepath)
+	{
+		if (exists(filepath)) {
+			businessSharedFoldersList = File(filepath)
+				.byLine()
+				.map!(a => buildNormalizedPath(a))
+				.filter!(a => a.length > 0)
+				.array;
+		}
+	}
+	
 	void setFileMask(const(char)[] mask)
 	{
 		this.mask = wild2regex(mask);
@@ -80,6 +92,18 @@ final class SelectiveSync
 	{
 		return .isPathExcluded(path, paths) || .isPathMatched(path, mask) || .isPathMatched(path, dirmask);
 	}
+	
+	bool isSharedFolderMatched(string name)
+	{
+		// if there are no shared folder always return false
+		if (businessSharedFoldersList.empty) return false;
+		
+		if (!name.matchFirst(businessSharedFoldersList).empty) {
+			return true;
+		} else {
+			return false;
+		}
+	}
 }
 
 // test if the given path is not included in the allowed paths
@@ -124,6 +148,7 @@ private bool isPathMatched(string path, Regex!char mask) {
 	return false;
 }
 
+// unit tests
 unittest
 {
 	assert(isPathExcluded("Documents2", ["Documents"]));
