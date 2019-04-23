@@ -1222,12 +1222,16 @@ final class SyncEngine
 			logPath = path;
 		}
 	
-		// scan for changes
+		// scan for any changes made locally
 		log.vlog("Uploading differences of ", logPath);
 		Item item;
-		if (itemdb.selectByPath(path, defaultDriveId, item)) {
-			uploadDifferences(item);
-		}
+		
+		foreach (driveId; driveIDsArray) {
+			if (itemdb.selectByPath(path, driveId, item)) {
+				uploadDifferences(item);
+			}
+		}	
+			
 		log.vlog("Uploading new items of ", logPath);
 		uploadNewItems(path);
 		
