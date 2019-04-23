@@ -127,8 +127,8 @@ ifeq ($(completions),1)
 endif
 
 onedrive.service:
-	sed "s|@PREFIX@|$(PREFIX)|g" systemd.units/onedrive.service.in > onedrive.service
-	sed "s|@PREFIX@|$(PREFIX)|g" systemd.units/onedrive@.service.in > onedrive@.service
+	sed "s|@prefix@|$(PREFIX)|g" systemd.units/onedrive.service.in > onedrive.service
+	sed "s|@prefix@|$(PREFIX)|g" systemd.units/onedrive@.service.in > onedrive@.service
 
 onedrive.1: onedrive.1.in
 	sed "s|@DOCDIR@|$(DOCDIR)|g" onedrive.1.in > onedrive.1
