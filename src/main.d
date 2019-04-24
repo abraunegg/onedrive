@@ -282,8 +282,17 @@ int main(string[] args)
 	log.vdebug("skip_dir: ", cfg.getValueString("skip_dir"));
 	selectiveSync.setDirMask(cfg.getValueString("skip_dir"));
 	log.vdebug("Configuring skip_file ...");
-	log.vdebug("skip_file: ", cfg.getValueString("skip_file"));
-	selectiveSync.setFileMask(cfg.getValueString("skip_file"));
+	// Validate skip_file to ensure that this does not contain an invalid configuration
+	// Do not use a skip_file entry of .* as this will prevent correct searching of local changes to process.
+	if (canFind(cfg.getValueString("skip_file"), ".*")) {
+		// invalid entry
+		log.logAndNotify("ERROR: Invalid skip_file entry '.*' detected");
+		return EXIT_FAILURE;
+	} else {
+		// valid entry
+		log.vdebug("skip_file: ", cfg.getValueString("skip_file"));
+		selectiveSync.setFileMask(cfg.getValueString("skip_file"));
+	}
 	
 	// Initialize the sync engine
 	log.logAndNotify("Initializing the Synchronization Engine ...");
