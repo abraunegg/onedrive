@@ -9,7 +9,7 @@ dnl - commit the changed files (configure.ac, configure)
 dnl - tag the release
 
 AC_PREREQ([2.69])
-AC_INIT([onedrive],[2.3.2], [https://github.com/abraunegg/onedrive], [onedrive])
+AC_INIT([onedrive],[2.3.4dev], [https://github.com/abraunegg/onedrive], [onedrive])
 AC_CONFIG_SRCDIR([src/main.d])
 
 
