@@ -432,9 +432,7 @@ int main(string[] args)
 					// Does the directory we want to sync actually exist?
 					if (!exists(cfg.getValueString("single_directory"))){
 						// the requested directory does not exist .. 
-						log.logAndNotify("ERROR: The requested local directory does not exist. Please check ~/OneDrive/ for requested path");
-						oneDrive.http.shutdown();
-						return EXIT_FAILURE;
+						log.vlog("WARNING: The requested local directory does not exist. Please check ~/OneDrive/ for requested path");
 					}
 				}
 						
