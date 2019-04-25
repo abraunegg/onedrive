@@ -74,7 +74,7 @@ Syncing OneDrive Business Shared Folder: SomeRubbishFolder
 Applying changes of Path ID: 01DBFNO5QIQCS5F3EUOVAKDH7TL7ROL6BM
 Syncing OneDrive Business Shared Folder: TestSharedFolder
 Applying changes of Path ID: 01DBFNO5VLLTCOGVRW6ZBYFBKAXHJI5IGF
-Uploading differences of /home/alex/OneDrivePreining
+Uploading differences of /home/alex/OneDrive
 Processing root
 The directory has not changed
 Processing Cygwin.zip
@@ -83,7 +83,7 @@ Processing local_dir
 The directory has not changed
 Processing asdf.txt
 The file has not changed
-Uploading new items of /home/alex/OneDrivePreining
+Uploading new items of /home/alex/OneDrive
 Applying changes of Path ID: 01WOGXO2N6Y2GOVW7725BZO354PWSELRRZ
 Syncing OneDrive Business Shared Folder: SomeRubbishFolder
 Applying changes of Path ID: 01DBFNO5QIQCS5F3EUOVAKDH7TL7ROL6BM
