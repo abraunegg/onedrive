@@ -27,11 +27,11 @@ private immutable {
 }
 
 private {
-    string driveUrl = "https://graph.microsoft.com/v1.0/me/drive";
-    string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
-    string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
+	string driveUrl = "https://graph.microsoft.com/v1.0/me/drive";
+	string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
+	string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
 	string sharedWithMe = "https://graph.microsoft.com/v1.0/me/drive/sharedWithMe";
-    string driveId = "";
+	string driveId = "";
 }
 
 class OneDriveException: Exception

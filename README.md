@@ -6,7 +6,8 @@ A complete tool to interact with OneDrive on Linux. Built following the UNIX phi
 *   Real-Time file monitoring with Inotify
 *   Resumable uploads
 *   Support OneDrive for Business (part of Office 365)
-*   Shared folders (OneDrive Personal)
+*   OneDrive Personal Shared folders
+*   OneDrive Business Shared folders (refer to README.BusinessSharedFolders.md to configure)
 *   SharePoint / Office 365 Shared Libraries (refer to README.Office365.md to configure)
 *   Notifications
 

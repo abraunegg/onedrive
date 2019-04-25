@@ -425,7 +425,6 @@ final class SyncEngine
 						driveId = searchResult["remoteItem"]["parentReference"]["driveId"].str;
 						// Add this drive id to the array to search with
 						driveIDsArray ~= driveId;
-						//writeln("drive item: ", searchResult);
 					} 
 				} 
 			}

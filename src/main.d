@@ -51,8 +51,7 @@ int main(string[] args)
 		log.error("Try 'onedrive -h' for more information");
 		return EXIT_FAILURE;
 	}
-
-
+	
 	// load configuration file if available
 	auto cfg = new config.Config(confdirOption);
 	if (!cfg.initialize()) {
@@ -67,7 +66,6 @@ int main(string[] args)
 	if (cfg.getValueBool("dry_run")) {
 		log.log("DRY-RUN Configured. Output below shows what 'would' have occurred.");
 	}
-
 	
 	// Are we able to reach the OneDrive Service
 	bool online = false;
@@ -208,9 +206,7 @@ int main(string[] args)
 		} else {
 			writeln("Selective Business Shared Folders configured = false");
 		}
-		
-		
-		
+		// Exit
 		return EXIT_SUCCESS;
 	}
 	
