@@ -9,14 +9,30 @@ List the available OneDrive Business Shared folders with the following command:
 ```text
 onedrive --list-shared-folders
 ```
-   This will return a listing of all OneDrive Business Shared folders which have been shared with you:
+   This will return a listing of all OneDrive Business Shared folders which have been shared with you and by whom. This is important for conflict resolution:
 ```text
 Initializing the Synchronization Engine ...
 
 Listing available OneDrive Business Shared Folders:
-Shared Folder: SomeRubbishFolder
-Shared Folder: AnotherSharedFolder
-Shared Folder: TestSharedFolder
+---------------------------------------
+Shared Folder:   SharedFolder0
+Shared By:       Firstname Lastname
+---------------------------------------
+Shared Folder:   SharedFolder1
+Shared By:       Firstname Lastname
+---------------------------------------
+Shared Folder:   SharedFolder2
+Shared By:       Firstname Lastname
+---------------------------------------
+Shared Folder:   SharedFolder0
+Shared By:       Firstname Lastname (user@domain)
+---------------------------------------
+Shared Folder:   SharedFolder1
+Shared By:       Firstname Lastname (user@domain)
+---------------------------------------
+Shared Folder:   SharedFolder2
+Shared By:       Firstname Lastname (user@domain)
+...
 
 ```
 
@@ -91,6 +107,7 @@ Syncing OneDrive Business Shared Folder: TestSharedFolder
 Applying changes of Path ID: 01DBFNO5VLLTCOGVRW6ZBYFBKAXHJI5IGF
 ```
 
+**Note:** Whenever you modify the `business_shared_folders` file you must perform a `--resync` of your database to clean up stale entries due to changes in your configuration.
 
 
 
