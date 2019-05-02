@@ -245,8 +245,37 @@ final class SyncEngine
 		session = UploadSession(onedrive, cfg.uploadStateFilePath);
 
 		// Need to catch 400 or 5xx server side errors at initialization
+		// Get Default Drive
 		try {
 			oneDriveDetails	= onedrive.getDefaultDrive();
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 400) {
+				// OneDrive responded with 400 error: Bad Request
+				log.error("\nERROR: OneDrive returned a 'HTTP 400 Bad Request' - Cannot Initialize Sync Engine");
+				// Check this
+				if (cfg.getValueString("drive_id").length) {
+					log.error("ERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
+				}
+				// Must exit here
+				exit(-1);
+			}
+			if (e.httpStatusCode == 401) {
+				// HTTP request returned status code 401 (Unauthorized)
+				log.error("\nERROR: OneDrive returned a 'HTTP 401 Unauthorized' - Cannot Initialize Sync Engine");
+				log.error("ERROR: Check your configuration as your access token may be empty or invalid\n");
+				// Must exit here
+				exit(-1);
+			}
+			if (e.httpStatusCode >= 500) {
+				// There was a HTTP 5xx Server Side Error
+				log.error("ERROR: OneDrive returned a 'HTTP 5xx Server Side Error' - Cannot Initialize Sync Engine");
+				// Must exit here
+				exit(-1);
+			}
+		}
+		
+		// Get Default Root
+		try {
 			oneDriveRootDetails = onedrive.getDefaultRoot();
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 400) {
@@ -274,49 +303,59 @@ final class SyncEngine
 			}
 		}
 		
-		// Debug OneDrive Account details response
-		log.vdebug("OneDrive Account Details:      ", oneDriveDetails);
-		log.vdebug("OneDrive Account Root Details: ", oneDriveRootDetails);
+		if ((hasId(oneDriveDetails)) && (hasId(oneDriveRootDetails))) {
+			// JSON elements are valid
+			// Debug OneDrive Account details response
+			log.vdebug("OneDrive Account Details:      ", oneDriveDetails);
+			log.vdebug("OneDrive Account Root Details: ", oneDriveRootDetails);
+			
+			// Successfully got details from OneDrive without a server side error such as 'HTTP/1.1 500 Internal Server Error' or 'HTTP/1.1 504 Gateway Timeout' 
+			accountType = oneDriveDetails["driveType"].str;
+			defaultDriveId = oneDriveDetails["id"].str;
+			defaultRootId = oneDriveRootDetails["id"].str;
+			remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+			
+			// Make sure that defaultDriveId is in our driveIDs array to use when checking if item is in database
+			driveIDsArray ~= defaultDriveId;
+			
+			// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
+			if (remainingFreeSpace <= 0) {
+				// quota details not available
+				log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+				log.error("ERROR: Flagging to disable upload space checks - this MAY have undesirable results if a file cannot be uploaded due to out of space.");
+				quotaAvailable = false;
+			}
+			
+			// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
+			log.vlog("Account Type: ", accountType);
+			log.vlog("Default Drive ID: ", defaultDriveId);
+			log.vlog("Default Root ID: ", defaultRootId);
+			log.vlog("Remaining Free Space: ", remainingFreeSpace);
 		
-		// Successfully got details from OneDrive without a server side error such as 'HTTP/1.1 500 Internal Server Error' or 'HTTP/1.1 504 Gateway Timeout' 
-		accountType = oneDriveDetails["driveType"].str;
-		defaultDriveId = oneDriveDetails["id"].str;
-		defaultRootId = oneDriveRootDetails["id"].str;
-		remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+			// If account type is documentLibrary - then most likely this is a SharePoint repository
+			// and files 'may' be modified after upload. See: https://github.com/abraunegg/onedrive/issues/205
+			if(accountType == "documentLibrary") {
+				setDisableUploadValidation();
+			}
 		
-		// Make sure that defaultDriveId is in our driveIDs array to use when checking if item is in database
-		driveIDsArray ~= defaultDriveId;
+			// Check the local database to ensure the OneDrive Root details are in the database
+			checkDatabaseForOneDriveRoot();
 		
-		// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
-		if (remainingFreeSpace <= 0) {
-			// quota details not available
-			log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
-			log.error("ERROR: Flagging to disable upload space checks - this MAY have undesirable results if a file cannot be uploaded due to out of space.");
-			quotaAvailable = false;
+			// Check if there is an interrupted upload session
+			if (session.restore()) {
+				log.log("Continuing the upload session ...");
+				auto item = session.upload();
+				saveItem(item);
+			}		
+			initDone = true;
+		} else {
+			// init failure
+			initDone = false;
+			// log why
+			log.error("ERROR: Unable to query OneDrive to initialize application");
+			// Must exit here
+			exit(-1);
 		}
-		
-		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
-		log.vlog("Account Type: ", accountType);
-		log.vlog("Default Drive ID: ", defaultDriveId);
-		log.vlog("Default Root ID: ", defaultRootId);
-		log.vlog("Remaining Free Space: ", remainingFreeSpace);
-    
-		// If account type is documentLibrary - then most likely this is a SharePoint repository
-		// and files 'may' be modified after upload. See: https://github.com/abraunegg/onedrive/issues/205
-		if(accountType == "documentLibrary") {
-			setDisableUploadValidation();
-		}
-    
-		// Check the local database to ensure the OneDrive Root details are in the database
-		checkDatabaseForOneDriveRoot();
-	
-		// Check if there is an interrupted upload session
-		if (session.restore()) {
-			log.log("Continuing the upload session ...");
-			auto item = session.upload();
-			saveItem(item);
-		}		
-		initDone = true;
 	}
 
 	// Configure noRemoteDelete if function is called
@@ -386,6 +425,10 @@ final class SyncEngine
 				// Compare this to values in business_shared_folders
 				if(selectiveSync.isSharedFolderMatched(sharedFolderName)){
 					// Folder name matches what we are looking for
+					// Flags for matching
+					bool itemInDatabase = false;
+					bool itemLocalDirExists = false;
+					bool itemPathIsLocal = false;
 					
 					// "what if" there are 2 or more folders shared with me have the "same" name?
 					// The folder name will be the same, but driveId will be different
@@ -394,14 +437,19 @@ final class SyncEngine
 					log.vdebug("Parent Drive Id:    ", searchResult["remoteItem"]["parentReference"]["driveId"].str);
 					log.vdebug("Shared Item Id:     ", searchResult["remoteItem"]["id"].str);
 					Item databaseItem;
-					bool itemInDatabase = false;
-					bool itemLocalDirExists = false;
+					
+					// for each driveid in the existing driveIDsArray 
 					foreach (searchDriveId; driveIDsArray) {
 						log.vdebug("searching database for: ", searchDriveId, " ", sharedFolderName);
 						if (itemdb.selectByPath(sharedFolderName, searchDriveId, databaseItem)) {
 							log.vdebug("Found shared folder name in database");
 							itemInDatabase = true;
 							log.vdebug("databaseItem: ", databaseItem);
+							// Does the databaseItem.driveId == defaultDriveId?
+							if (databaseItem.driveId == defaultDriveId) {
+								itemPathIsLocal = true;
+							}
+							
 						} else {	
 							log.vdebug("Shared folder name not found in database");
 							// "what if" there is 'already' a local folder with this name
@@ -417,19 +465,26 @@ final class SyncEngine
 						}
 					}
 					
-					if ( ((!itemInDatabase) && (!itemLocalDirExists)) || ((databaseItem.driveId == searchResult["remoteItem"]["parentReference"]["driveId"].str) && (databaseItem.id == searchResult["remoteItem"]["id"].str))) {
+					// Shared Folder Evaluation Debugging
+					log.vdebug("item in database:                         ", itemInDatabase);
+					log.vdebug("path exists on disk:                      ", itemLocalDirExists);
+					log.vdebug("database drive id matches defaultDriveId: ", itemPathIsLocal);
+					log.vdebug("database data matches search data:        ", ((databaseItem.driveId == searchResult["remoteItem"]["parentReference"]["driveId"].str) && (databaseItem.id == searchResult["remoteItem"]["id"].str)));
+										
+					if ( ((!itemInDatabase) || (!itemLocalDirExists)) || (((databaseItem.driveId == searchResult["remoteItem"]["parentReference"]["driveId"].str) && (databaseItem.id == searchResult["remoteItem"]["id"].str)) && (!itemPathIsLocal)) ) {
 						// This shared folder does not exist in the database
 						log.vlog("Syncing this OneDrive Business Shared Folder: ", sharedFolderName);
 						Item businessSharedFolder = makeItem(searchResult);
 						applyDifferences(businessSharedFolder.remoteDriveId, businessSharedFolder.remoteId);
+						// add drive id to the array to search for, for the next entry
 						driveIDsArray ~= searchResult["remoteItem"]["parentReference"]["driveId"].str;	
 					} else {
 						string sharedByName;
 						string sharedByEmail;
 						// Shared Folder Name Conflict ...
-						log.log("Skipping shared folder due to existing name conflict: ", sharedFolderName);
-						log.log("Skipping changes of Path ID: ", searchResult["remoteItem"]["id"].str);
-						log.log("To sync this shared folder, this shared folder needs to be renamed");
+						log.log("WARNING: Skipping shared folder due to existing name conflict: ", sharedFolderName);
+						log.log("WARNING: Skipping changes of Path ID: ", searchResult["remoteItem"]["id"].str);
+						log.log("WARNING: To sync this shared folder, this shared folder needs to be renamed");
 						
 						// Extra details for verbose logging
 						if ("displayName" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
@@ -441,10 +496,10 @@ final class SyncEngine
 						
 						// Log who shared this
 						if ((sharedByName != "") && (sharedByEmail != "")) {	
-							log.vlog("Conflict Shared By:          ", sharedByName, " (", sharedByEmail, ")");
+							log.vlog("WARNING: Conflict Shared By:          ", sharedByName, " (", sharedByEmail, ")");
 						} else {
 							if (sharedByName != "") {
-								log.vlog("Conflict Shared By:          ", sharedByName);
+								log.vlog("WARNING: Conflict Shared By:          ", sharedByName);
 							}
 						}
 					}	
