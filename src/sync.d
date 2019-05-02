@@ -309,9 +309,6 @@ final class SyncEngine
 			defaultRootId = oneDriveRootDetails["id"].str;
 			remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
 			
-			// Make sure that defaultDriveId is in our driveIDs array to use when checking if item is in database
-			driveIDsArray ~= defaultDriveId;
-			
 			// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
 			if (remainingFreeSpace <= 0) {
 				// quota details not available
