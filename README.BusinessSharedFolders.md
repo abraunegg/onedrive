@@ -33,7 +33,6 @@ Shared By:       Firstname Lastname (user@domain)
 Shared Folder:   SharedFolder2
 Shared By:       Firstname Lastname (user@domain)
 ...
-
 ```
 
 ## Configuring OneDrive Business Shared Folders
@@ -106,5 +105,4 @@ Applying changes of Path ID: 01DBFNO5QIQCS5F3EUOVAKDH7TL7ROL6BM
 Syncing OneDrive Business Shared Folder: TestSharedFolder
 Applying changes of Path ID: 01DBFNO5VLLTCOGVRW6ZBYFBKAXHJI5IGF
 ```
-
 **Note:** Whenever you modify the `business_shared_folders` file you must perform a `--resync` of your database to clean up stale entries due to changes in your configuration.
