@@ -826,9 +826,9 @@ final class SyncEngine
 			}
 			
 			// Debug Output
-			log.vdebug("Sync Folder Name:       ", syncFolderName);
-			log.vdebug("Sync Folder Path:       ", syncFolderPath);
-			log.vdebug("Sync Folder Child Path: ", syncFolderChildPath);
+			log.vdebug("Sync Folder Name:        ", syncFolderName);
+			log.vdebug("Sync Folder Parent Path: ", syncFolderPath);
+			log.vdebug("Sync Folder Actual Path: ", syncFolderChildPath);
 		}
 		
 		for (;;) {
@@ -971,6 +971,9 @@ final class SyncEngine
 							thisItemPath = "";
 						}
 						
+						// Business Shared Folders special case handling
+						bool sharedFoldersSpecialCase = false;
+						
 						// Debug output of change evaluation items
 						log.vdebug("'parentReference id'                                 = ", item["parentReference"]["id"].str);
 						log.vdebug("syncFolderPath                                       = ", syncFolderPath);
@@ -981,16 +984,47 @@ final class SyncEngine
 						log.vdebug("'parentReference id' matches search 'id'             = ", (item["parentReference"]["id"].str == id));
 						log.vdebug("'thisItemPath' contains 'syncFolderChildPath'        = ", (canFind(thisItemPath, syncFolderChildPath)) );
 						log.vdebug("'thisItemPath' contains search 'id'                  = ", (canFind(thisItemPath, id)) );
-												
+						
+						// Special case handling
+						// - IF we are syncing shared folders, and the shared folder is not the 'top level' folder being shared out
+						// canFind(thisItemPath, syncFolderChildPath) will never match:
+						//		Syncing this OneDrive Business Shared Folder: MyFolderName
+						//		OneDrive Business Shared By:                  Firstname Lastname (email@address)
+						//		Applying changes of Path ID:    pathId
+						//		[DEBUG] Sync Folder Name:       MyFolderName
+						//		[DEBUG] Sync Folder Path:       /drives/driveId/root:/TopLevel/ABCD
+						//		[DEBUG] Sync Folder Child Path: /drives/driveId/root:/TopLevel/ABCD/MyFolderName/
+						//		...
+						//		[DEBUG] 'item id' matches search 'id'                        = false
+						//		[DEBUG] 'parentReference id' matches search 'id'             = false
+						//		[DEBUG] 'thisItemPath' contains 'syncFolderChildPath'        = false
+						//		[DEBUG] 'thisItemPath' contains search 'id'                  = false
+						//		[DEBUG] Change does not match any criteria to apply
+						//		Remote change discarded - not in business shared folders sync scope
+						
+						if ((!canFind(thisItemPath, syncFolderChildPath)) && (syncBusinessFolders)) {
+							// Syncing Shared Business folders & we dont have a path match
+							// is this a reverse path match?
+							if (canFind(syncFolderChildPath, thisItemPath)) {
+								log.vdebug("'syncFolderChildPath' contains 'thisItemPath'      = ", (canFind(syncFolderChildPath, thisItemPath)) );
+								sharedFoldersSpecialCase = true;
+							}
+						}
+						
 						// Check this item's path to see if this is a change on the path we want:
 						// 1. 'item id' matches 'id'
 						// 2. 'parentReference id' matches 'id'
 						// 3. 'item path' contains 'syncFolderChildPath'
 						// 4. 'item path' contains 'id'
 						
-						if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderChildPath)) || (canFind(thisItemPath, id)) ){
+						if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderChildPath)) || (canFind(thisItemPath, id)) || (sharedFoldersSpecialCase) ){
 							// This is a change we want to apply
-							log.vdebug("Change matches search criteria to apply");
+							if (!sharedFoldersSpecialCase) {
+								log.vdebug("Change matches search criteria to apply");
+							} else {
+								log.vdebug("Change matches search criteria to apply - special case criteria - reverse path matching used");
+							}
+							// Apply OneDrive change
 							applyDifference(item, driveId, isRoot);
 						} else {
 							// No item ID match or folder sync match
