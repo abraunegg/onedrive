@@ -2911,7 +2911,9 @@ final class SyncEngine
 			}
 			log.vlog("Item Id:         ", searchResult["remoteItem"]["id"].str);
 			log.vlog("Parent Drive Id: ", searchResult["remoteItem"]["parentReference"]["driveId"].str);
-			log.vlog("Parent Item Id:  ", searchResult["remoteItem"]["parentReference"]["id"].str);
+			if ("id" in searchResult["remoteItem"]["parentReference"]) {
+				log.vlog("Parent Item Id:  ", searchResult["remoteItem"]["parentReference"]["id"].str);
+			}
 		}
 		write("\n");
 	}
