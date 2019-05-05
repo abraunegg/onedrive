@@ -230,6 +230,7 @@ final class SyncEngine
 	{
 		// Set accountType, defaultDriveId, defaultRootId & remainingFreeSpace once and reuse where possible
 		JSONValue oneDriveDetails;
+		JSONValue oneDriveRootDetails;
 
 		if (initDone) {
 			return;
@@ -238,6 +239,7 @@ final class SyncEngine
 		session = UploadSession(onedrive, cfg.uploadStateFilePath);
 
 		// Need to catch 400 or 5xx server side errors at initialization
+		// Get Default Drive
 		try {
 			oneDriveDetails	= onedrive.getDefaultDrive();
 		} catch (OneDriveException e) {
@@ -266,45 +268,85 @@ final class SyncEngine
 			}
 		}
 		
-		// Debug OneDrive Account details response
-		log.vdebug("OneDrive Account Details: ", oneDriveDetails);
-		
-		// Successfully got details from OneDrive without a server side error such as HTTP/1.1 504 Gateway Timeout
-		accountType = oneDriveDetails["driveType"].str;
-		defaultDriveId = oneDriveDetails["id"].str;
-		defaultRootId = onedrive.getDefaultRoot["id"].str;
-		remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
-		
-		// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
-		if (remainingFreeSpace <= 0) {
-			// quota details not available
-			log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
-			log.error("ERROR: Flagging to disable upload space checks - this MAY have undesirable results if a file cannot be uploaded due to out of space.");
-			quotaAvailable = false;
+		// Get Default Root
+		try {
+			oneDriveRootDetails = onedrive.getDefaultRoot();
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 400) {
+				// OneDrive responded with 400 error: Bad Request
+				log.error("\nERROR: OneDrive returned a 'HTTP 400 Bad Request' - Cannot Initialize Sync Engine");
+				// Check this
+				if (cfg.getValueString("drive_id").length) {
+					log.error("ERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
+				}
+				// Must exit here
+				exit(-1);
+			}
+			if (e.httpStatusCode == 401) {
+				// HTTP request returned status code 401 (Unauthorized)
+				log.error("\nERROR: OneDrive returned a 'HTTP 401 Unauthorized' - Cannot Initialize Sync Engine");
+				log.error("ERROR: Check your configuration as your access token may be empty or invalid\n");
+				// Must exit here
+				exit(-1);
+			}
+			if (e.httpStatusCode >= 500) {
+				// There was a HTTP 5xx Server Side Error
+				log.error("ERROR: OneDrive returned a 'HTTP 5xx Server Side Error' - Cannot Initialize Sync Engine");
+				// Must exit here
+				exit(-1);
+			}
 		}
 		
-		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
-		log.vlog("Account Type: ", accountType);
-		log.vlog("Default Drive ID: ", defaultDriveId);
-		log.vlog("Default Root ID: ", defaultRootId);
-		log.vlog("Remaining Free Space: ", remainingFreeSpace);
-    
-		// If account type is documentLibrary - then most likely this is a SharePoint repository
-		// and files 'may' be modified after upload. See: https://github.com/abraunegg/onedrive/issues/205
-		if(accountType == "documentLibrary") {
-			setDisableUploadValidation();
+		if ((hasId(oneDriveDetails)) && (hasId(oneDriveRootDetails))) {
+			// JSON elements are valid
+			// Debug OneDrive Account details response
+			log.vdebug("OneDrive Account Details:      ", oneDriveDetails);
+			log.vdebug("OneDrive Account Root Details: ", oneDriveRootDetails);
+			
+			// Successfully got details from OneDrive without a server side error such as 'HTTP/1.1 500 Internal Server Error' or 'HTTP/1.1 504 Gateway Timeout' 
+			accountType = oneDriveDetails["driveType"].str;
+			defaultDriveId = oneDriveDetails["id"].str;
+			defaultRootId = oneDriveRootDetails["id"].str;
+			remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+			
+			// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
+			if (remainingFreeSpace <= 0) {
+				// quota details not available
+				log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+				log.error("ERROR: Flagging to disable upload space checks - this MAY have undesirable results if a file cannot be uploaded due to out of space.");
+				quotaAvailable = false;
+			}
+			
+			// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
+			log.vlog("Account Type: ", accountType);
+			log.vlog("Default Drive ID: ", defaultDriveId);
+			log.vlog("Default Root ID: ", defaultRootId);
+			log.vlog("Remaining Free Space: ", remainingFreeSpace);
+		
+			// If account type is documentLibrary - then most likely this is a SharePoint repository
+			// and files 'may' be modified after upload. See: https://github.com/abraunegg/onedrive/issues/205
+			if(accountType == "documentLibrary") {
+				setDisableUploadValidation();
+			}
+		
+			// Check the local database to ensure the OneDrive Root details are in the database
+			checkDatabaseForOneDriveRoot();
+		
+			// Check if there is an interrupted upload session
+			if (session.restore()) {
+				log.log("Continuing the upload session ...");
+				auto item = session.upload();
+				saveItem(item);
+			}		
+			initDone = true;
+		} else {
+			// init failure
+			initDone = false;
+			// log why
+			log.error("ERROR: Unable to query OneDrive to initialize application");
+			// Must exit here
+			exit(-1);
 		}
-    
-		// Check the local database to ensure the OneDrive Root details are in the database
-		checkDatabaseForOneDriveRoot();
-	
-		// Check if there is an interrupted upload session
-		if (session.restore()) {
-			log.log("Continuing the upload session ...");
-			auto item = session.upload();
-			saveItem(item);
-		}		
-		initDone = true;
 	}
 
 	// Configure noRemoteDelete if function is called
