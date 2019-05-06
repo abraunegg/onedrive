@@ -976,6 +976,7 @@ final class SyncEngine
 						
 						// Debug output of change evaluation items
 						log.vdebug("'parentReference id'                                 = ", item["parentReference"]["id"].str);
+						log.vdebug("syncFolderName                                       = ", syncFolderName);
 						log.vdebug("syncFolderPath                                       = ", syncFolderPath);
 						log.vdebug("syncFolderChildPath                                  = ", syncFolderChildPath);
 						log.vdebug("thisItemId                                           = ", item["id"].str);
@@ -1005,8 +1006,8 @@ final class SyncEngine
 						if ((!canFind(thisItemPath, syncFolderChildPath)) && (syncBusinessFolders)) {
 							// Syncing Shared Business folders & we dont have a path match
 							// is this a reverse path match?
-							if (canFind(syncFolderChildPath, thisItemPath)) {
-								log.vdebug("'syncFolderChildPath' contains 'thisItemPath'      = ", (canFind(syncFolderChildPath, thisItemPath)) );
+							log.vdebug("'thisItemPath' contains 'syncFolderName'             = ", (canFind(thisItemPath, syncFolderName)) );
+							if (canFind(thisItemPath, syncFolderName)) {
 								sharedFoldersSpecialCase = true;
 							}
 						}
