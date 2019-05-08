@@ -969,6 +969,10 @@ final class SyncEngine
 		final switch (item.type) {
 		case ItemType.file:
 			downloadFileItem(item, path);
+			if (dryRun) {
+				// we dont download the file, but we need to track that we 'faked it'
+				idsFaked ~= [item.driveId, item.id];
+			}
 			break;
 		case ItemType.dir:
 		case ItemType.remote:
@@ -1497,12 +1501,42 @@ final class SyncEngine
 				uploadCreateDir(path);
 			}
 		} else {
-			log.vlog("The file has been deleted locally");
-			if (noRemoteDelete) {
-				// do not process remote file delete
-				log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
+			// File does not exist locally
+			// If we are in a --dry-run situation - this file may never have existed as we never downloaded it
+			if (!dryRun) {
+				// Not --dry-run situation
+				log.vlog("The file has been deleted locally");
+				if (noRemoteDelete) {
+					// do not process remote file delete
+					log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
+				} else {
+					uploadDeleteItem(item, path);
+				}
 			} else {
-				uploadDeleteItem(item, path);
+				// We are in a --dry-run situation, file appears to have deleted locally - this file may never have existed as we never downloaded it ..
+				// Check if path does not exist in database
+				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+					// file not found in database
+					log.vlog("The file has been deleted locally");
+					if (noRemoteDelete) {
+						// do not process remote file delete
+						log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
+					} else {
+						uploadDeleteItem(item, path);
+					}
+				}  else {
+					// file was found in the database
+					// Did we 'fake create it' as part of --dry-run ?
+					foreach (i; idsFaked) {
+						if (i[1] == item.id) {
+							log.vdebug("Matched faked file which is 'supposed' to exist but not created due to --dry-run use");
+							return;
+						}
+					}
+					// item.id did not match a 'faked' download new file creation
+					log.vlog("The file has been deleted locally");
+					uploadDeleteItem(item, path);
+				}
 			}
 		}
 	}
