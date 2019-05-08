@@ -1316,6 +1316,7 @@ final class SyncEngine
 					foreach (i; idsFaked) {
 						if (i[1] == item.id) {
 							log.vdebug("Matched faked dir which is 'supposed' to exist but not created due to --dry-run use");
+							log.vlog("The directory has not changed");
 							return;
 						}
 					}
@@ -1530,6 +1531,7 @@ final class SyncEngine
 					foreach (i; idsFaked) {
 						if (i[1] == item.id) {
 							log.vdebug("Matched faked file which is 'supposed' to exist but not created due to --dry-run use");
+							log.vlog("The file has not changed");
 							return;
 						}
 					}
