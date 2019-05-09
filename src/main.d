@@ -179,7 +179,7 @@ int main(string[] args)
 		
 		// Is sync_list configured?
 		if (exists(userSyncList)){
-			writeln("Config option 'sync_all_files'      = ", cfg.getValueBool("sync_all_files"));
+			writeln("Config option 'sync_root_files'      = ", cfg.getValueBool("sync_root_files"));
 			writeln("Selective sync configured           = true");
 			writeln("sync_list contents:");
 			// Output the sync_list contents
@@ -190,7 +190,7 @@ int main(string[] args)
 				writeln(line);
 			}
 		} else {
-			writeln("Config option 'sync_all_files'      = ", cfg.getValueBool("sync_all_files"));
+			writeln("Config option 'sync_root_files'      = ", cfg.getValueBool("sync_root_files"));
 			writeln("Selective sync configured           = false");
 		}
 		

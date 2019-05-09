@@ -860,7 +860,7 @@ final class SyncEngine
 				path = buildNormalizedPath(path);
 				if (selectiveSync.isPathExcluded(path)) {
 					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
-					if ((isItemFile(driveItem)) && (cfg.getValueBool("sync_all_files")) && (rootName(path) == "") ) {
+					if ((isItemFile(driveItem)) && (cfg.getValueBool("sync_root_files")) && (rootName(path) == "") ) {
 						// This is a file
 						// We are configured to sync all files in the root
 						// This is a file in the logical root
@@ -1649,8 +1649,8 @@ final class SyncEngine
 					}
 				}
 				if (selectiveSync.isPathExcluded(path)) {
-					if ((isFile(path)) && (cfg.getValueBool("sync_all_files")) && (rootName(strip(path,"./")) == "")) {
-						log.vdebug("Not skipping path due to sync_all_files inclusion: ", path);
+					if ((isFile(path)) && (cfg.getValueBool("sync_root_files")) && (rootName(strip(path,"./")) == "")) {
+						log.vdebug("Not skipping path due to sync_root_files inclusion: ", path);
 					} else {
 						log.vlog("Skipping item - path excluded by sync_list: ", path);
 						return;

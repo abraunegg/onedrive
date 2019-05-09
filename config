@@ -28,4 +28,4 @@
 # min_notify_changes = "5"
 # monitor_log_frequency = "5"
 # monitor_fullscan_frequency = "10"
-# sync_all_files = "false"
+# sync_root_files = "false"
