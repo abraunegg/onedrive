@@ -858,8 +858,19 @@ final class SyncEngine
 				// compute the item path to see if the path is excluded
 				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
 				path = buildNormalizedPath(path);
-				unwanted = selectiveSync.isPathExcluded(path);
-				if (unwanted) log.vdebug("OneDrive change path is to be excluded by user configuration: ", path);
+				if (selectiveSync.isPathExcluded(path)) {
+					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
+					if ((isItemFile(driveItem)) && (cfg.getValueBool("sync_root_files")) && (rootName(path) == "") ) {
+						// This is a file
+						// We are configured to sync all files in the root
+						// This is a file in the logical root
+						unwanted = false;
+					} else {
+						// path is unwanted
+						unwanted = true;
+						log.vdebug("OneDrive change path is to be excluded by user configuration: ", path);
+					}
+				}
 			} else {
 				log.vdebug("Flagging as unwanted: item.driveId (", item.driveId,"), item.parentId (", item.parentId,") not in local database");
 				unwanted = true;
@@ -1638,8 +1649,12 @@ final class SyncEngine
 					}
 				}
 				if (selectiveSync.isPathExcluded(path)) {
-					log.vlog("Skipping item - path excluded by sync_list: ", path);
-					return;
+					if ((isFile(path)) && (cfg.getValueBool("sync_root_files")) && (rootName(strip(path,"./")) == "")) {
+						log.vdebug("Not skipping path due to sync_root_files inclusion: ", path);
+					} else {
+						log.vlog("Skipping item - path excluded by sync_list: ", path);
+						return;
+					}
 				}
 			}
 
