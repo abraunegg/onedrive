@@ -52,10 +52,18 @@ endif
 DCFLAGS += $(NOTIF_VERSIONS)
 endif
 
-system_unit_files = systemd.units/onedrive@.service
-user_unit_files = systemd.units/onedrive.service
+system_unit_files = systemd.units/onedrive.service
+user_unit_files = systemd.units/onedrive@.service
 
 DOCFILES = README.md README.Office365.md config LICENSE CHANGELOG.md
+
+ifneq ("$(wildcard /etc/redhat-release)","")
+RHEL = $(shell cat /etc/redhat-release | grep -E "(Red Hat Enterprise Linux Server|CentOS)" | wc -l)
+RHEL_VERSION = $(shell rpm --eval "%{centos_ver}")
+else
+RHEL = 0
+RHEL_VERSION = 0
+endif
 
 SOURCES = \
 	src/config.d \
@@ -99,8 +107,13 @@ install: all
 	for i in $(DOCFILES) ; do $(INSTALL) -D -m 644 $$i $(DESTDIR)$(docdir)/$$i ; done
 ifeq ($(HAVE_SYSTEMD),yes)
 	$(INSTALL) -d -o root -g root -m 0755 $(DESTDIR)$(systemduserunitdir) $(DESTDIR)$(systemdsystemunitdir)
+ifeq ($(RHEL),1)
+	$(INSTALL) -m 0644 $(system_unit_files) $(DESTDIR)$(systemdsystemunitdir)
+	$(INSTALL) -m 0644 $(user_unit_files) $(DESTDIR)$(systemdsystemunitdir)
+else
 	$(INSTALL) -m 0644 $(system_unit_files) $(DESTDIR)$(systemdsystemunitdir)
 	$(INSTALL) -m 0644 $(user_unit_files) $(DESTDIR)$(systemduserunitdir)
+endif	
 endif
 ifeq ($(COMPLETIONS),yes)
 	$(INSTALL) -D -m 644 completions/complete.zsh $(DESTDIR)$(ZSH_COMPLETION_DIR)/_onedrive
