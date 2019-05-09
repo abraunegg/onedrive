@@ -1181,8 +1181,19 @@ final class SyncEngine
 				// compute the item path to see if the path is excluded
 				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
 				path = buildNormalizedPath(path);
-				unwanted = selectiveSync.isPathExcluded(path);
-				if (unwanted) log.vdebug("OneDrive change path is to be excluded by user configuration: ", path);
+				if (selectiveSync.isPathExcluded(path)) {
+					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
+					if ((isItemFile(driveItem)) && (cfg.getValueBool("sync_root_files")) && (rootName(path) == "") ) {
+						// This is a file
+						// We are configured to sync all files in the root
+						// This is a file in the logical root
+						unwanted = false;
+					} else {
+						// path is unwanted
+						unwanted = true;
+						log.vdebug("OneDrive change path is to be excluded by user configuration: ", path);
+					}
+				}
 			} else {
 				log.vdebug("Flagging as unwanted: item.driveId (", item.driveId,"), item.parentId (", item.parentId,") not in local database");
 				unwanted = true;
@@ -1292,6 +1303,10 @@ final class SyncEngine
 		final switch (item.type) {
 		case ItemType.file:
 			downloadFileItem(item, path);
+			if (dryRun) {
+				// we dont download the file, but we need to track that we 'faked it'
+				idsFaked ~= [item.driveId, item.id];
+			}
 			break;
 		case ItemType.dir:
 		case ItemType.remote:
@@ -1649,6 +1664,7 @@ final class SyncEngine
 					foreach (i; idsFaked) {
 						if (i[1] == item.id) {
 							log.vdebug("Matched faked dir which is 'supposed' to exist but not created due to --dry-run use");
+							log.vlog("The directory has not changed");
 							return;
 						}
 					}
@@ -1834,12 +1850,43 @@ final class SyncEngine
 				uploadCreateDir(path);
 			}
 		} else {
-			log.vlog("The file has been deleted locally");
-			if (noRemoteDelete) {
-				// do not process remote file delete
-				log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
+			// File does not exist locally
+			// If we are in a --dry-run situation - this file may never have existed as we never downloaded it
+			if (!dryRun) {
+				// Not --dry-run situation
+				log.vlog("The file has been deleted locally");
+				if (noRemoteDelete) {
+					// do not process remote file delete
+					log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
+				} else {
+					uploadDeleteItem(item, path);
+				}
 			} else {
-				uploadDeleteItem(item, path);
+				// We are in a --dry-run situation, file appears to have deleted locally - this file may never have existed as we never downloaded it ..
+				// Check if path does not exist in database
+				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+					// file not found in database
+					log.vlog("The file has been deleted locally");
+					if (noRemoteDelete) {
+						// do not process remote file delete
+						log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
+					} else {
+						uploadDeleteItem(item, path);
+					}
+				}  else {
+					// file was found in the database
+					// Did we 'fake create it' as part of --dry-run ?
+					foreach (i; idsFaked) {
+						if (i[1] == item.id) {
+							log.vdebug("Matched faked file which is 'supposed' to exist but not created due to --dry-run use");
+							log.vlog("The file has not changed");
+							return;
+						}
+					}
+					// item.id did not match a 'faked' download new file creation
+					log.vlog("The file has been deleted locally");
+					uploadDeleteItem(item, path);
+				}
 			}
 		}
 	}
@@ -1953,8 +2000,12 @@ final class SyncEngine
 					}
 				}
 				if (selectiveSync.isPathExcluded(path)) {
-					log.vlog("Skipping item - path excluded by sync_list: ", path);
-					return;
+					if ((isFile(path)) && (cfg.getValueBool("sync_root_files")) && (rootName(strip(path,"./")) == "")) {
+						log.vdebug("Not skipping path due to sync_root_files inclusion: ", path);
+					} else {
+						log.vlog("Skipping item - path excluded by sync_list: ", path);
+						return;
+					}
 				}
 			}
 
