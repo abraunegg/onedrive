@@ -127,11 +127,10 @@ uninstall:
 	rm -f $(DESTDIR)$(sysconfdir)/logrotate.d/onedrive
 ifeq ($(HAVE_SYSTEMD),yes)
 ifeq ($(RHEL),1)
-	for i in $(system_unit_files) ; do rm -f $(DESTDIR)$(systemdsystemunitdir)/$$i ; done
-	for i in $(user_unit_files) ; do rm -f $(DESTDIR)$(systemdsystemunitdir)/$$i ; done
+	rm -f $(DESTDIR)$(systemdsystemunitdir)/onedrive*.service
 else
-	for i in $(system_unit_files) ; do rm -f $(DESTDIR)$(systemdsystemunitdir)/$$i ; done
-	for i in $(user_unit_files) ; do rm -f $(DESTDIR)$(systemduserunitdir)/$$i ; done
+	rm -f $(DESTDIR)$(systemdsystemunitdir)/onedrive*.service
+	rm -f $(DESTDIR)$(systemduserunitdir)/onedrive*.service
 endif
 endif
 	for i in $(DOCFILES) ; do rm -f $(DESTDIR)$(DOCDIR)/$$i ; done
