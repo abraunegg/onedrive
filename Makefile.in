@@ -52,8 +52,8 @@ endif
 DCFLAGS += $(NOTIF_VERSIONS)
 endif
 
-system_unit_files = systemd.units/onedrive.service
-user_unit_files = systemd.units/onedrive@.service
+system_unit_files = systemd.units/onedrive@.service
+user_unit_files = systemd.units/onedrive.service
 
 DOCFILES = README.md README.Office365.md config LICENSE CHANGELOG.md
 
