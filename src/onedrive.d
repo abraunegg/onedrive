@@ -591,6 +591,10 @@ final class OneDriveApi
 			// we issue warning/error in the catch routines so no need to warn here
 			// log.error("\nAccess to the Microsoft OneDrive service timed out - Internet connectivity issue?\n");
 			throw e;
+		} catch (CurlTimeoutException e) {
+			// Curl time out
+			log.error("\nAccess to the Microsoft OneDrive service timed out - Internet connectivity issue?\n");
+			throw e;
 		}
 		
 		JSONValue json;
