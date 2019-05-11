@@ -1093,11 +1093,20 @@ final class SyncEngine
 				downloadFailed = true;
 				return;
 			}
-			setTimes(path, item.mtime, item.mtime);
+			// file has to have downloaded in order to set the times / data for the file
+			if (exists(path)) {
+				setTimes(path, item.mtime, item.mtime);
+			} else {
+				log.error("ERROR: File failed to download. Increase logging verbosity to determine why.");
+				downloadFailed = true;
+				return;
+			}
 		}
 		
-		writeln("done.");
-		log.fileOnly("Downloading file ", path, " ... done.");
+		if (!downloadFailed) {
+			writeln("done.");
+			log.fileOnly("Downloading file ", path, " ... done.");
+		}
 	}
 
 	// returns true if the given item corresponds to the local one
