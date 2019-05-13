@@ -593,8 +593,7 @@ final class OneDriveApi
 			http.perform();
 		} catch (CurlException e) {
 			// Potentially Timeout was reached on handle error
-			// we issue warning/error in the catch routines so no need to warn here
-			// log.error("\nAccess to the Microsoft OneDrive service timed out - Internet connectivity issue?\n");
+			log.error("\nThere was a problem in accessing the Microsoft OneDrive service - Internet connectivity issue?\n");
 			throw e;
 		}
 		
