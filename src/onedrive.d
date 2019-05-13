@@ -132,7 +132,12 @@ final class OneDriveApi
 			try {
 				refreshToken = readText(cfg.refreshTokenFilePath);
 			} catch (FileException e) {
-				return authorize();
+				try {
+					return authorize();
+				} catch (CurlException e) {
+					log.error("Cannot authorize with Microsoft OneDrive Service");
+					return false;
+				}
 			}
 			return true;
 		} else {
@@ -590,10 +595,6 @@ final class OneDriveApi
 			// Potentially Timeout was reached on handle error
 			// we issue warning/error in the catch routines so no need to warn here
 			// log.error("\nAccess to the Microsoft OneDrive service timed out - Internet connectivity issue?\n");
-			throw e;
-		} catch (CurlTimeoutException e) {
-			// Curl time out
-			log.error("\nAccess to the Microsoft OneDrive service timed out - Internet connectivity issue?\n");
 			throw e;
 		}
 		
