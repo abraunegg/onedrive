@@ -6,6 +6,7 @@ import std.file, std.json, std.path;
 import std.regex;
 import std.stdio, std.string, std.uni, std.uri;
 import std.conv;
+import std.encoding;
 import core.time, core.thread;
 import core.stdc.stdlib;
 import config, itemdb, onedrive, selective, upload, util;
@@ -1416,11 +1417,20 @@ final class SyncEngine
 				downloadFailed = true;
 				return;
 			}
-			setTimes(path, item.mtime, item.mtime);
+			// file has to have downloaded in order to set the times / data for the file
+			if (exists(path)) {
+				setTimes(path, item.mtime, item.mtime);
+			} else {
+				log.error("ERROR: File failed to download. Increase logging verbosity to determine why.");
+				downloadFailed = true;
+				return;
+			}
 		}
 		
-		writeln("done.");
-		log.fileOnly("Downloading file ", path, " ... done.");
+		if (!downloadFailed) {
+			writeln("done.");
+			log.fileOnly("Downloading file ", path, " ... done.");
+		}
 	}
 
 	// returns true if the given item corresponds to the local one
@@ -1912,6 +1922,15 @@ final class SyncEngine
 		// A short lived file that has disappeared will cause an error - is the path valid?
 		if (!exists(path)) {
 			log.log("Skipping item - has disappeared: ", path);
+			return;
+		}
+		
+		// Invalid UTF-8 sequence check
+		// https://github.com/skilion/onedrive/issues/57
+		// https://github.com/abraunegg/onedrive/issues/487
+		if(!isValid(path)) {
+			// Path is not valid according to https://dlang.org/phobos/std_encoding.html
+			log.vlog("Skipping item - invalid character sequences: ", path);
 			return;
 		}
 		
