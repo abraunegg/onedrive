@@ -6,6 +6,7 @@ import std.file, std.json, std.path;
 import std.regex;
 import std.stdio, std.string, std.uni, std.uri;
 import std.conv;
+import std.encoding;
 import core.time, core.thread;
 import core.stdc.stdlib;
 import config, itemdb, onedrive, selective, upload, util;
@@ -1584,6 +1585,15 @@ final class SyncEngine
 		// A short lived file that has disappeared will cause an error - is the path valid?
 		if (!exists(path)) {
 			log.log("Skipping item - has disappeared: ", path);
+			return;
+		}
+		
+		// Invalid UTF-8 sequence check
+		// https://github.com/skilion/onedrive/issues/57
+		// https://github.com/abraunegg/onedrive/issues/487
+		if(!isValid(path)) {
+			// Path is not valid according to https://dlang.org/phobos/std_encoding.html
+			log.vlog("Skipping item - invalid character sequences: ", path);
 			return;
 		}
 		
