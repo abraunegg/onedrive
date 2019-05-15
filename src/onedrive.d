@@ -178,6 +178,7 @@ final class OneDriveApi
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_get
 	JSONValue getDefaultDrive()
 	{
+		log.vdebug("onedrive.d getDefaultDrive() called");
 		checkAccessTokenExpired();
 		return get(driveUrl);
 	}
@@ -185,6 +186,7 @@ final class OneDriveApi
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
 	JSONValue getDefaultRoot()
 	{
+		log.vdebug("onedrive.d getDefaultRoot() called");
 		checkAccessTokenExpired();
 		return get(driveUrl ~ "/root");
 	}
@@ -192,6 +194,7 @@ final class OneDriveApi
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
 	JSONValue viewChangesById(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink)
 	{
+		log.vdebug("onedrive.d viewChangesById() called");
 		checkAccessTokenExpired();
 		const(char)[] url = deltaLink;
 		if (url == null) {
@@ -204,6 +207,7 @@ final class OneDriveApi
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
 	void downloadById(const(char)[] driveId, const(char)[] id, string saveToPath, long fileSize)
 	{
+		log.vdebug("onedrive.d downloadById() called");
 		checkAccessTokenExpired();
 		scope(failure) {
 			if (exists(saveToPath)) remove(saveToPath);
@@ -216,6 +220,7 @@ final class OneDriveApi
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
 	JSONValue simpleUpload(string localPath, string parentDriveId, string parentId, string filename, const(char)[] eTag = null)
 	{
+		log.vdebug("onedrive.d simpleUpload() called");
 		checkAccessTokenExpired();
 		string url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ ":/" ~ encodeComponent(filename) ~ ":/content";
 		// TODO: investigate why this fails for remote folders
@@ -227,6 +232,7 @@ final class OneDriveApi
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
 	JSONValue simpleUploadReplace(string localPath, string driveId, string id, const(char)[] eTag = null)
 	{
+		log.vdebug("onedrive.d simpleUploadReplace() called");
 		checkAccessTokenExpired();
 		string url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content";
 		if (eTag) http.addRequestHeader("If-Match", eTag);
@@ -236,6 +242,7 @@ final class OneDriveApi
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_update
 	JSONValue updateById(const(char)[] driveId, const(char)[] id, JSONValue data, const(char)[] eTag = null)
 	{
+		log.vdebug("onedrive.d updateById() called");
 		checkAccessTokenExpired();
 		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
 		if (eTag) http.addRequestHeader("If-Match", eTag);
@@ -246,6 +253,7 @@ final class OneDriveApi
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delete
 	void deleteById(const(char)[] driveId, const(char)[] id, const(char)[] eTag = null)
 	{
+		log.vdebug("onedrive.d deleteById() called");
 		checkAccessTokenExpired();
 		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
 		//TODO: investigate why this always fail with 412 (Precondition Failed)
@@ -256,6 +264,7 @@ final class OneDriveApi
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_post_children
 	JSONValue createById(const(char)[] parentDriveId, const(char)[] parentId, JSONValue item)
 	{
+		log.vdebug("onedrive.d createById() called");
 		checkAccessTokenExpired();
 		const(char)[] url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ "/children";
 		http.addRequestHeader("Content-Type", "application/json");		
@@ -265,6 +274,7 @@ final class OneDriveApi
 	// Return the details of the specified path
 	JSONValue getPathDetails(const(string) path)
 	{
+		log.vdebug("onedrive.d getPathDetails() called");
 		checkAccessTokenExpired();
 		const(char)[] url;
 		//		string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
@@ -278,6 +288,7 @@ final class OneDriveApi
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
 	JSONValue getPathDetailsById(const(char)[] driveId, const(char)[] id)
 	{
+		log.vdebug("onedrive.d getPathDetailsById() called");
 		checkAccessTokenExpired();
 		const(char)[] url;
 		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
@@ -290,6 +301,7 @@ final class OneDriveApi
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
 	JSONValue getFileDetails(const(char)[] driveId, const(char)[] id)
 	{
+		log.vdebug("onedrive.d getFileDetails() called");
 		checkAccessTokenExpired();
 		const(char)[] url;
 		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
@@ -301,6 +313,7 @@ final class OneDriveApi
 	// https://dev.onedrive.com/items/move.htm
 	JSONValue moveByPath(const(char)[] sourcePath, JSONValue moveData)
 	{
+		log.vdebug("onedrive.d moveByPath() called");
 		// Need to use itemByPathUrl
 		checkAccessTokenExpired();
 		string url = itemByPathUrl ~ encodeComponent(sourcePath);
@@ -311,19 +324,21 @@ final class OneDriveApi
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createuploadsession
 	JSONValue createUploadSession(const(char)[] parentDriveId, const(char)[] parentId, const(char)[] filename, const(char)[] eTag = null, JSONValue item = null)
 	{
+		log.vdebug("onedrive.d createUploadSession() called");
 		checkAccessTokenExpired();
 		const(char)[] url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ ":/" ~ encodeComponent(filename) ~ ":/createUploadSession";
 		if (eTag) http.addRequestHeader("If-Match", eTag);
 		// Issue #501 debug - do not pass any JSON or data when creating the upload session
-		return post(url, null);
-		//http.addRequestHeader("Content-Type", "application/json");
-		//return post(url, item.toString());
+		//return post(url, null);
+		http.addRequestHeader("Content-Type", "application/json");
+		return post(url, item.toString());
 		
 	}
 
 	// https://dev.onedrive.com/items/upload_large_files.htm
 	JSONValue uploadFragment(const(char)[] uploadUrl, string filepath, long offset, long offsetSize, long fileSize)
 	{
+		log.vdebug("onedrive.d uploadFragment() called");
 		checkAccessTokenExpired();
 		scope(exit) {
 			http.clearRequestHeaders();
@@ -348,6 +363,7 @@ final class OneDriveApi
 	// https://dev.onedrive.com/items/upload_large_files.htm
 	JSONValue requestUploadStatus(const(char)[] uploadUrl)
 	{
+		log.vdebug("onedrive.d requestUploadStatus() called");
 		checkAccessTokenExpired();
 		// when using microsoft graph the auth code is different
 		return get(uploadUrl, true);
@@ -355,6 +371,7 @@ final class OneDriveApi
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/site_search?view=odsp-graph-online
 	JSONValue o365SiteSearch(string o365SharedLibraryName){
+		log.vdebug("onedrive.d o365SiteSearch() called");
 		checkAccessTokenExpired();
 		const(char)[] url;
 		url = siteSearchUrl ~ "=" ~ o365SharedLibraryName;
@@ -363,6 +380,7 @@ final class OneDriveApi
 		
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_list?view=odsp-graph-online
 	JSONValue o365SiteDrives(string site_id){
+		log.vdebug("onedrive.d o365SiteDrives() called");
 		checkAccessTokenExpired();
 		const(char)[] url;
 		url = siteDriveUrl ~ site_id ~ "/drives";
@@ -371,6 +389,7 @@ final class OneDriveApi
 
 	private void redeemToken(const(char)[] authCode)
 	{
+		log.vdebug("onedrive.d redeemToken() called");
 		const(char)[] postData =
 			"client_id=" ~ clientId ~
 			"&redirect_uri=" ~ redirectUrl ~
@@ -381,6 +400,7 @@ final class OneDriveApi
 
 	private void newToken()
 	{
+		log.vdebug("onedrive.d newToken() called");
 		string postData =
 			"client_id=" ~ clientId ~
 			"&redirect_uri=" ~ redirectUrl ~
@@ -391,6 +411,7 @@ final class OneDriveApi
 
 	private void acquireToken(const(char)[] postData)
 	{
+		log.vdebug("onedrive.d acquireToken() called");
 		JSONValue response = post(tokenUrl, postData);
 		if ("access_token" in response){
 			accessToken = "bearer " ~ response["access_token"].str();
@@ -409,6 +430,7 @@ final class OneDriveApi
 
 	private void checkAccessTokenExpired()
 	{
+		log.vdebug("onedrive.d checkAccessTokenExpired() called");
 		try {
 			if (Clock.currTime() >= accessTokenExpiration) {
 				newToken();
@@ -422,11 +444,13 @@ final class OneDriveApi
 
 	private void addAccessTokenHeader()
 	{
+		log.vdebug("onedrive.d addAccessTokenHeader() called");
 		http.addRequestHeader("Authorization", accessToken);
 	}
 
 	private JSONValue get(const(char)[] url, bool skipToken = false)
 	{
+		log.vdebug("onedrive.d get() called");
 		scope(exit) http.clearRequestHeaders();
 		http.method = HTTP.Method.get;
 		http.url = url;
@@ -442,6 +466,7 @@ final class OneDriveApi
 
 	private void del(const(char)[] url)
 	{
+		log.vdebug("onedrive.d del() called");
 		scope(exit) http.clearRequestHeaders();
 		http.method = HTTP.Method.del;
 		http.url = url;
@@ -452,6 +477,7 @@ final class OneDriveApi
 
 	private void download(const(char)[] url, string filename, long fileSize)
 	{
+		log.vdebug("onedrive.d download() called");
 		// Threshold for displaying download bar
 		long thresholdFileSize = 4 * 2^^20; // 4 MiB
 		
@@ -506,6 +532,7 @@ final class OneDriveApi
 
 	private auto patch(T)(const(char)[] url, const(T)[] patchData)
 	{
+		log.vdebug("onedrive.d patch() called");
 		scope(exit) http.clearRequestHeaders();
 		http.method = HTTP.Method.patch;
 		http.url = url;
@@ -517,6 +544,7 @@ final class OneDriveApi
 
 	private auto post(T)(const(char)[] url, const(T)[] postData)
 	{
+		log.vdebug("onedrive.d post() called");
 		scope(exit) http.clearRequestHeaders();
 		http.method = HTTP.Method.post;
 		http.url = url;
@@ -528,6 +556,7 @@ final class OneDriveApi
 
 	private auto move(T)(const(char)[] url, const(T)[] postData)
 	{
+		log.vdebug("onedrive.d move() called");
 		scope(exit) http.clearRequestHeaders();
 		http.method = HTTP.Method.patch;
 		http.url = url;
@@ -539,6 +568,7 @@ final class OneDriveApi
 	
 	private JSONValue upload(string filepath, string url)
 	{
+		log.vdebug("onedrive.d upload() called");
 		scope(exit) {
 			http.clearRequestHeaders();
 			http.onSend = null;
@@ -558,6 +588,7 @@ final class OneDriveApi
 
 	private JSONValue perform(const(void)[] sendData)
 	{
+		log.vdebug("onedrive.d perform() sendData called");
 		scope(exit) {
 			http.onSend = null;
 			http.contentLength = 0;
@@ -580,6 +611,7 @@ final class OneDriveApi
 
 	private JSONValue perform()
 	{
+		log.vdebug("onedrive.d perform() called");
 		scope(exit) http.onReceive = null;
 		char[] content;
 		http.onReceive = (ubyte[] data) {
@@ -613,6 +645,7 @@ final class OneDriveApi
 
 	private void checkHttpCode()
 	{
+		log.vdebug("onedrive.d checkHttpCode() called");
 		// https://dev.onedrive.com/misc/errors.htm
 		// https://developer.overdrive.com/docs/reference-guide
 		
@@ -746,6 +779,7 @@ final class OneDriveApi
 
 	private void checkHttpCode(ref const JSONValue response)
 	{
+		log.vdebug("onedrive.d checkHttpCode() JSON Response called");
 		switch(http.statusLine.code)
 		{
 			// 400 - Bad Request
