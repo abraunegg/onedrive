@@ -314,8 +314,11 @@ final class OneDriveApi
 		checkAccessTokenExpired();
 		const(char)[] url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ ":/" ~ encodeComponent(filename) ~ ":/createUploadSession";
 		if (eTag) http.addRequestHeader("If-Match", eTag);
-		http.addRequestHeader("Content-Type", "application/json");
-		return post(url, item.toString());
+		// Issue #501 debug - do not pass any JSON or data when creating the upload session
+		return post(url, null);
+		//http.addRequestHeader("Content-Type", "application/json");
+		//return post(url, item.toString());
+		
 	}
 
 	// https://dev.onedrive.com/items/upload_large_files.htm
