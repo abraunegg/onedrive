@@ -332,7 +332,6 @@ final class OneDriveApi
 		//return post(url, null);
 		http.addRequestHeader("Content-Type", "application/json");
 		return post(url, item.toString());
-		
 	}
 
 	// https://dev.onedrive.com/items/upload_large_files.htm
