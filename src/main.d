@@ -22,9 +22,6 @@ int main(string[] args)
 	// configuration directory
 	string confdirOption;
 	
-	// client version when running in debug mode
-	log.vdebug("onedrive version = ", import("version"));
-
 	try {
 		// print the version and exit
 		bool printVersion = false;
@@ -54,6 +51,9 @@ int main(string[] args)
 		log.error("Try 'onedrive -h' for more information");
 		return EXIT_FAILURE;
 	}
+	
+	// client version when running in debug mode
+	log.vdebug("onedrive version = ", import("version"));
 
 	// load configuration file if available
 	auto cfg = new config.Config(confdirOption);
