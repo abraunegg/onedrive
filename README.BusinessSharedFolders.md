@@ -106,3 +106,32 @@ Syncing OneDrive Business Shared Folder: TestSharedFolder
 Applying changes of Path ID: 01DBFNO5VLLTCOGVRW6ZBYFBKAXHJI5IGF
 ```
 **Note:** Whenever you modify the `business_shared_folders` file you must perform a `--resync` of your database to clean up stale entries due to changes in your configuration.
+
+
+## Known Issues
+When syncing a OneDrive Business Shared Folder, the folder that is shared with you **must** be a root folder in the account holders OneDrive. For example, consider the following directory structure on OneDrive:
+```text
+├── dir1
+│   └── document1.pdf
+├── archive.zip
+├── myfile.txt
+├── newfile.txt
+├── dir2
+├── shared_folder
+│   ├── dir3
+│   ├── dir4
+│   ├── dir5
+│   ├── document2.pdf
+│   └── sub_shared_folder
+│       ├── dir6
+│       ├── dir7
+│       ├── dir8
+│       └── dir9
+└── zfile.txt
+```
+
+If 'shared_folder' is shared with me, then this folder and all it's contents will sync without issue.
+
+If 'sub_shared_folder' is shared wth me, then no files or folders will sync with me.
+
+This is a OneDrive API issue, and can only be resolved once the OneDrive API provides a mechanism to query shared folders for changes. Refer to https://github.com/OneDrive/onedrive-api-docs/issues/1060 for further details.
