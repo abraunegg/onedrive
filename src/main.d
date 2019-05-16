@@ -21,6 +21,9 @@ int main(string[] args)
 	
 	// configuration directory
 	string confdirOption;
+	
+	// client version when running in debug mode
+	log.vdebug("onedrive version = ", import("version"));
 
 	try {
 		// print the version and exit
@@ -52,7 +55,6 @@ int main(string[] args)
 		return EXIT_FAILURE;
 	}
 
-
 	// load configuration file if available
 	auto cfg = new config.Config(confdirOption);
 	if (!cfg.initialize()) {
@@ -68,7 +70,6 @@ int main(string[] args)
 		log.log("DRY-RUN Configured. Output below shows what 'would' have occurred.");
 	}
 
-	
 	// Are we able to reach the OneDrive Service
 	bool online = false;
 
