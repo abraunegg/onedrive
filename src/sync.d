@@ -928,7 +928,7 @@ final class SyncEngine
 							// local file is newer than item on OneDrive
 							// no local rename
 							// no download needed
-							log.vlog("Local item modified time is newer based on UTC time conversion");
+							log.vlog("Local item modified time is newer based on UTC time conversion - keeping local item");
 							log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer than OneDrive item");
 							skippedItems ~= item.id;
 							return;
@@ -995,7 +995,7 @@ final class SyncEngine
 					// local file is newer than item on OneDrive
 					// no local rename
 					// no download needed
-					log.vlog("Local item modified time is newer based on UTC time conversion");
+					log.vlog("Local item modified time is newer based on UTC time conversion - keeping local item");
 					log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer than OneDrive item");
 					return;
 				} else {
