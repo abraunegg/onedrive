@@ -1242,14 +1242,31 @@ final class SyncEngine
 				oldPath = itemdb.computePath(item.driveId, item.id);
 				if (!isItemSynced(oldItem, oldPath)) {
 					if (exists(oldPath)) {
-						auto ext = extension(oldPath);
-						auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
-						log.vlog("The local item is unsynced, renaming: ", oldPath, " -> ", newPath);
-						if (!dryRun) {
-							safeRename(oldPath);
+						// Is the local file technically 'newer' based on UTC timestamp?
+						SysTime localModifiedTime = timeLastModified(oldPath).toUTC();
+						localModifiedTime.fracSecs = Duration.zero;
+						item.mtime.fracSecs = Duration.zero;
+						
+						if (localModifiedTime > item.mtime) {
+							// local file is newer than item on OneDrive
+							// no local rename
+							// no download needed
+							log.vlog("Local item modified time is newer based on UTC time conversion - keeping local item");
+							log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer than OneDrive item");
+							skippedItems ~= item.id;
+							return;
 						} else {
-							log.vdebug("DRY-RUN: Skipping local file rename");
-							// Expectation here is that there is a new file locally (newPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
+							// remote file is newer than local item
+							log.vlog("Remote item modified time is newer based on UTC time conversion");
+							auto ext = extension(oldPath);
+							auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
+							log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file: ", oldPath, " -> ", newPath);
+							if (!dryRun) {
+								safeRename(oldPath);
+							} else {
+								// Expectation here is that there is a new file locally (newPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
+								log.vdebug("DRY-RUN: Skipping local file rename");
+							}
 						}
 					}
 					cached = false;
@@ -1291,13 +1308,31 @@ final class SyncEngine
 				return;
 			} else {
 				// TODO: force remote sync by deleting local item
-				auto ext = extension(path);
-				auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
-				log.vlog("The local item is out of sync, renaming: ", path, " -> ", newPath);
-				if (!dryRun) {
-					safeRename(path);
+				
+				// Is the local file technically 'newer' based on UTC timestamp?
+				SysTime localModifiedTime = timeLastModified(path).toUTC();
+				localModifiedTime.fracSecs = Duration.zero;
+				item.mtime.fracSecs = Duration.zero;
+				
+				if (localModifiedTime > item.mtime) {
+					// local file is newer than item on OneDrive
+					// no local rename
+					// no download needed
+					log.vlog("Local item modified time is newer based on UTC time conversion - keeping local item");
+					log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer than OneDrive item");
+					return;
 				} else {
-					log.vdebug("DRY-RUN: Skipping local file rename");
+					// remote file is newer than local item
+					log.vlog("Remote item modified time is newer based on UTC time conversion");
+					auto ext = extension(path);
+					auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
+					log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file: ", path, " -> ", newPath);
+					if (!dryRun) {
+						safeRename(path);
+					} else {
+						// Expectation here is that there is a new file locally (newPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
+						log.vdebug("DRY-RUN: Skipping local file rename");
+					}
 				}
 			}
 		}
