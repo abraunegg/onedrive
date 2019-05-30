@@ -19,7 +19,7 @@ A clear and concise description of what the bug is.
 
 **Note:** If curl version is >= 7.62.0 please generate a full debug log as per [https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support](https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support) and email to support@mynas.com.au
 
-Once the full degug log has been generated & emailed, please retry your sync by adding `--force-http-1.1`. If this is successful, please advise in issue ticket that `--force-http-1.1` was sucessful in resolving your issue.
+Once the full debug log has been generated & emailed, please retry your sync by adding `--force-http-1.1`. If this is successful, please advise in issue ticket that `--force-http-1.1` was successful in resolving your issue.
 
 **To Reproduce**
 Steps to reproduce the behavior if not causing an application crash:
