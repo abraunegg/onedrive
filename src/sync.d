@@ -1868,8 +1868,13 @@ final class SyncEngine
 								writeln("done.");
 							}
 							log.fileOnly("Uploading modified file ", path, " ... done.");
-							// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded via simple upload
-							eTag = response["cTag"].str;
+							if ("cTag" in response) {
+								// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded via simple upload
+								eTag = response["cTag"].str;
+							} else {
+								// cTag missing in response, use the original item.etag
+								eTag = item.eTag;
+							}
 						} else {
 							// we are --dry-run - simulate the file upload
 							writeln("done.");
