@@ -1535,8 +1535,16 @@ final class SyncEngine
 								// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded via simple upload
 								eTag = response["cTag"].str;
 							} else {
-								// cTag missing in response, use the original item.etag
-								eTag = item.eTag;
+								// cTag missing in response, if we use the original item.etag - this error is generated: ETag does not match current item's value
+								// Is there an eTag in the response?
+								if ("eTag" in response) {
+									// eTag in the response
+									eTag = response["eTag"].str;
+								} else {
+									// nothing
+									eTag = "";
+									writeln("actual response: ", response);
+								}
 							}
 						} else {
 							// we are --dry-run - simulate the file upload
