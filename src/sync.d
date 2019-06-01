@@ -1535,13 +1535,12 @@ final class SyncEngine
 								// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded via simple upload
 								eTag = response["cTag"].str;
 							} else {
-								// cTag missing in response, if we use the original item.etag - this error is generated: ETag does not match current item's value
 								// Is there an eTag in the response?
 								if ("eTag" in response) {
-									// eTag in the response
+									// use the eTag from the response as there was no cTag
 									eTag = response["eTag"].str;
 								} else {
-									// nothing
+									// no tag available - set to nothing
 									eTag = "";
 									writeln("actual response: ", response);
 								}
@@ -2029,10 +2028,25 @@ final class SyncEngine
 									if ((accountType == "personal") || (thisFileSize == 0)){
 										// Update the item's metadata on OneDrive
 										string id = response["id"].str;
-										string cTag = response["cTag"].str;
+										string cTag; 
+										
+										// Is there a valid cTag in the response?
+										if ("cTag" in response) {
+											// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
+											cTag = response["cTag"].str;
+										} else {
+											// Is there an eTag in the response?
+											if ("eTag" in response) {
+												// use the eTag from the response as there was no cTag
+												cTag = response["eTag"].str;
+											} else {
+												// no tag available - set to nothing
+												cTag = "";
+											}
+										}
+										
 										if (exists(path)) {
 											SysTime mtime = timeLastModified(path).toUTC();
-											// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
 											uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
 										} else {
 											// will be removed in different event!
@@ -2100,9 +2114,24 @@ final class SyncEngine
 											writeln(" done.");
 										}
 										string id = response["id"].str;
-										string cTag = response["cTag"].str;
+										string cTag;
+										
+										// Is there a valid cTag in the response?
+										if ("cTag" in response) {
+											// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
+											cTag = response["cTag"].str;
+										} else {
+											// Is there an eTag in the response?
+											if ("eTag" in response) {
+												// use the eTag from the response as there was no cTag
+												cTag = response["eTag"].str;
+											} else {
+												// no tag available - set to nothing
+												cTag = "";
+											}
+										}
+										
 										SysTime mtime = timeLastModified(path).toUTC();
-										// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
 										uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
 									} else {
 										// OneDrive Business account modified file upload handling
