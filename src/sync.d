@@ -1542,7 +1542,6 @@ final class SyncEngine
 								} else {
 									// no tag available - set to nothing
 									eTag = "";
-									writeln("actual response: ", response);
 								}
 							}
 						} else {
