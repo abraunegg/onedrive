@@ -579,8 +579,8 @@ MAKEFLAGS=
 # Identity of this package.
 PACKAGE_NAME='onedrive'
 PACKAGE_TARNAME='onedrive'
-PACKAGE_VERSION='2.3.4dev'
-PACKAGE_STRING='onedrive 2.3.4dev'
+PACKAGE_VERSION='2.3.5-dev'
+PACKAGE_STRING='onedrive 2.3.5-dev'
 PACKAGE_BUGREPORT='https://github.com/abraunegg/onedrive'
 PACKAGE_URL=''
 

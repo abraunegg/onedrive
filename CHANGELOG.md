@@ -3,6 +3,26 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.3.4 - 2019-06-06
+### Fixed
+*   Fix 'Local files not deleted' when using bad 'skip_file' entry
+*   Fix --dry-run logging output for faking downloading new files
+*   Fix install unit files to correct location on RHEL/CentOS 7
+*   Fix up unit file removal on all platforms
+*   Fix setting times on a file by adding a check to see if the file was actually downloaded before attempting to set the times on the file
+*   Fix an unhandled curl exception when OneDrive throws an internal timout error
+*   Check timestamp to ensure that latest timestamp is used when comparing OneDrive changes
+*   Fix handling responses where cTag JSON elements are missing
+
+### Added
+*   Add autoconf based build system
+*   Implement --sync-root-files to sync all files in the OneDrive root when using a sync_list file that would normally exclude these files from being synced
+*   Add an encoding validation check before any path length checks are performed as if the path contains any invalid UTF-8 sequences
+
+### Updated
+*   Better handle initialisation issues when OneDrive / MS Graph is experiencing problems that generate 401 & 5xx error codes
+*   Enhance error message when unable to connect to Microsoft OneDrive service when the local CA SSL certificate(s) have issues
+
 ## 2.3.3 - 2019-04-16
 ### Fixed
 *   Fix --upload-only check for Sharepoint uploads
