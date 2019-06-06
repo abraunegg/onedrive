@@ -522,6 +522,11 @@ Example: `skip_symlinks = "true"`
 
 Setting this to `"true"` will skip all symlinks while syncing.
 
+### skip_size
+Example: `skip_size = "500"
+
+Setting this to anything other than 0 (default), will skip files greater than its value in MB. This only applies to new files e.g. earlier synchronized files now exceeding `skip_size` will stay synchronized.
+
 ### monitor_interval
 Example: `monitor_interval = "300"`
 
