@@ -200,6 +200,8 @@ final class SyncEngine
 	private string accountType;
 	// free space remaining at init()
 	private long remainingFreeSpace;
+	// file size limit for a new file
+	private long newSizeLimit;
 	// is file malware flag
 	private bool malwareDetected = false;
 	// download filesystem issue flag
@@ -226,6 +228,8 @@ final class SyncEngine
 		this.selectiveSync = selectiveSync;
 		// session = UploadSession(onedrive, cfg.uploadStateFilePath);
 		this.dryRun = cfg.getValueBool("dry_run");
+		this.newSizeLimit = cfg.getValueLong("skip_size") * 2^^20;
+		this.newSizeLimit = (this.newSizeLimit == 0) ? long.max : this.newSizeLimit;
 	}
 
 	void reset()
@@ -1157,7 +1161,7 @@ final class SyncEngine
 			unwanted = selectiveSync.isFileNameExcluded(item.name);
 			if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
 		}
-		
+
 		// check the item type
 		if (!unwanted) {
 			if (isItemFile(driveItem)) {
@@ -1280,6 +1284,13 @@ final class SyncEngine
 			applyChangedItem(oldItem, oldPath, item, path);
 		} else {
 			log.vdebug("OneDrive change is a new local item");
+			// Check if file should be skipped based on size limit
+			if (isItemFile(driveItem)) {
+				if (onedrive.getFileDetails(item.driveId, item.id)["size"].integer >= this.newSizeLimit) {
+					log.vlog("Skipping item - excluded by skip_size config: ", item.name, " (", onedrive.getFileDetails(item.driveId, item.id)["size"].integer/2^^20, " MB)");
+					return;
+				}
+			}
 			applyNewItem(item, path);
 		}
 
@@ -2338,6 +2349,11 @@ final class SyncEngine
 					
 						if (e.httpStatusCode == 404) {
 							// The file was not found on OneDrive, need to upload it		
+							// Check if file should be skipped based on skip_size config
+							if (thisFileSize >= this.newSizeLimit) {
+								writeln("Skipping item - excluded by skip_size config: ", path, " (", thisFileSize/2^^20," MB)");
+								return;
+							}
 							write("Uploading new file ", path, " ...");
 							JSONValue response;
 							
