@@ -49,6 +49,7 @@ final class Config
 		boolValues["sync_root_files"]	 = false;
 		longValues["verbose"]            = log.verbose; // might be initialized by the first getopt call!
 		longValues["monitor_interval"]   = 45,
+		longValues["skip_size"]          = 0,
 		longValues["min_notify_changes"]  = 5;
 		longValues["monitor_log_frequency"] = 5;
 		// Number of n sync runs before performing a full local scan of sync_dir
@@ -255,6 +256,9 @@ final class Config
 				"skip-file",
 					"Skip any files that match this pattern from syncing",
 					&stringValues["skip_file"],
+				"skip-size",
+					"Skip new files larger than this size (in MB)",
+					&longValues["skip_size"],
 				"skip-symlinks",
 					"Skip syncing of symlinks",
 					&boolValues["skip_symlinks"],
