@@ -15,25 +15,18 @@ A complete tool to interact with OneDrive on Linux. Built following the UNIX phi
 *   No GUI
 
 ## Building and Installation
-
 See [docs/INSTALL.md](docs/INSTALL.md)
 
-
 ## Configuration and Usage
-
 See [docs/USAGE.md](docs/USAGE.md)
 
 ## Docker support
-
 See [docs/Docker.md](docs/Docker.md)
 
-
 ## Sharepoint group drive in Office 365 business or education
-
 See [docs/Office365.md](docs/Office365.md)
 
 ## Reporting issues
-
 If you encounter any bugs you can report them here on Github. Before filing an issue be sure to:
 
 1.  Check the version of the application you are using `onedrive --version` and ensure that you are running either the latest [release](https://github.com/abraunegg/onedrive/releases) or built from master.

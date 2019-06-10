@@ -6,6 +6,7 @@ import std.file, std.json, std.path;
 import std.regex;
 import std.stdio, std.string, std.uni, std.uri;
 import std.conv;
+import std.encoding;
 import core.time, core.thread;
 import core.stdc.stdlib;
 import config, itemdb, onedrive, selective, upload, util;
@@ -199,6 +200,8 @@ final class SyncEngine
 	private string accountType;
 	// free space remaining at init()
 	private long remainingFreeSpace;
+	// file size limit for a new file
+	private long newSizeLimit;
 	// is file malware flag
 	private bool malwareDetected = false;
 	// download filesystem issue flag
@@ -219,6 +222,8 @@ final class SyncEngine
 		this.selectiveSync = selectiveSync;
 		// session = UploadSession(onedrive, cfg.uploadStateFilePath);
 		this.dryRun = cfg.getValueBool("dry_run");
+		this.newSizeLimit = cfg.getValueLong("skip_size") * 2^^20;
+		this.newSizeLimit = (this.newSizeLimit == 0) ? long.max : this.newSizeLimit;
 	}
 
 	void reset()
@@ -230,6 +235,7 @@ final class SyncEngine
 	{
 		// Set accountType, defaultDriveId, defaultRootId & remainingFreeSpace once and reuse where possible
 		JSONValue oneDriveDetails;
+		JSONValue oneDriveRootDetails;
 
 		if (initDone) {
 			return;
@@ -238,6 +244,7 @@ final class SyncEngine
 		session = UploadSession(onedrive, cfg.uploadStateFilePath);
 
 		// Need to catch 400 or 5xx server side errors at initialization
+		// Get Default Drive
 		try {
 			oneDriveDetails	= onedrive.getDefaultDrive();
 		} catch (OneDriveException e) {
@@ -266,45 +273,85 @@ final class SyncEngine
 			}
 		}
 		
-		// Debug OneDrive Account details response
-		log.vdebug("OneDrive Account Details: ", oneDriveDetails);
-		
-		// Successfully got details from OneDrive without a server side error such as HTTP/1.1 504 Gateway Timeout
-		accountType = oneDriveDetails["driveType"].str;
-		defaultDriveId = oneDriveDetails["id"].str;
-		defaultRootId = onedrive.getDefaultRoot["id"].str;
-		remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
-		
-		// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
-		if (remainingFreeSpace <= 0) {
-			// quota details not available
-			log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
-			log.error("ERROR: Flagging to disable upload space checks - this MAY have undesirable results if a file cannot be uploaded due to out of space.");
-			quotaAvailable = false;
+		// Get Default Root
+		try {
+			oneDriveRootDetails = onedrive.getDefaultRoot();
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 400) {
+				// OneDrive responded with 400 error: Bad Request
+				log.error("\nERROR: OneDrive returned a 'HTTP 400 Bad Request' - Cannot Initialize Sync Engine");
+				// Check this
+				if (cfg.getValueString("drive_id").length) {
+					log.error("ERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
+				}
+				// Must exit here
+				exit(-1);
+			}
+			if (e.httpStatusCode == 401) {
+				// HTTP request returned status code 401 (Unauthorized)
+				log.error("\nERROR: OneDrive returned a 'HTTP 401 Unauthorized' - Cannot Initialize Sync Engine");
+				log.error("ERROR: Check your configuration as your access token may be empty or invalid\n");
+				// Must exit here
+				exit(-1);
+			}
+			if (e.httpStatusCode >= 500) {
+				// There was a HTTP 5xx Server Side Error
+				log.error("ERROR: OneDrive returned a 'HTTP 5xx Server Side Error' - Cannot Initialize Sync Engine");
+				// Must exit here
+				exit(-1);
+			}
 		}
 		
-		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
-		log.vlog("Account Type: ", accountType);
-		log.vlog("Default Drive ID: ", defaultDriveId);
-		log.vlog("Default Root ID: ", defaultRootId);
-		log.vlog("Remaining Free Space: ", remainingFreeSpace);
-    
-		// If account type is documentLibrary - then most likely this is a SharePoint repository
-		// and files 'may' be modified after upload. See: https://github.com/abraunegg/onedrive/issues/205
-		if(accountType == "documentLibrary") {
-			setDisableUploadValidation();
+		if ((hasId(oneDriveDetails)) && (hasId(oneDriveRootDetails))) {
+			// JSON elements are valid
+			// Debug OneDrive Account details response
+			log.vdebug("OneDrive Account Details:      ", oneDriveDetails);
+			log.vdebug("OneDrive Account Root Details: ", oneDriveRootDetails);
+			
+			// Successfully got details from OneDrive without a server side error such as 'HTTP/1.1 500 Internal Server Error' or 'HTTP/1.1 504 Gateway Timeout' 
+			accountType = oneDriveDetails["driveType"].str;
+			defaultDriveId = oneDriveDetails["id"].str;
+			defaultRootId = oneDriveRootDetails["id"].str;
+			remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+			
+			// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
+			if (remainingFreeSpace <= 0) {
+				// quota details not available
+				log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+				log.error("ERROR: Flagging to disable upload space checks - this MAY have undesirable results if a file cannot be uploaded due to out of space.");
+				quotaAvailable = false;
+			}
+			
+			// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
+			log.vlog("Account Type: ", accountType);
+			log.vlog("Default Drive ID: ", defaultDriveId);
+			log.vlog("Default Root ID: ", defaultRootId);
+			log.vlog("Remaining Free Space: ", remainingFreeSpace);
+		
+			// If account type is documentLibrary - then most likely this is a SharePoint repository
+			// and files 'may' be modified after upload. See: https://github.com/abraunegg/onedrive/issues/205
+			if(accountType == "documentLibrary") {
+				setDisableUploadValidation();
+			}
+		
+			// Check the local database to ensure the OneDrive Root details are in the database
+			checkDatabaseForOneDriveRoot();
+		
+			// Check if there is an interrupted upload session
+			if (session.restore()) {
+				log.log("Continuing the upload session ...");
+				auto item = session.upload();
+				saveItem(item);
+			}		
+			initDone = true;
+		} else {
+			// init failure
+			initDone = false;
+			// log why
+			log.error("ERROR: Unable to query OneDrive to initialize application");
+			// Must exit here
+			exit(-1);
 		}
-    
-		// Check the local database to ensure the OneDrive Root details are in the database
-		checkDatabaseForOneDriveRoot();
-	
-		// Check if there is an interrupted upload session
-		if (session.restore()) {
-			log.log("Continuing the upload session ...");
-			auto item = session.upload();
-			saveItem(item);
-		}		
-		initDone = true;
 	}
 
 	// Configure noRemoteDelete if function is called
@@ -791,7 +838,7 @@ final class SyncEngine
 			unwanted = selectiveSync.isFileNameExcluded(item.name);
 			if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
 		}
-		
+
 		// check the item type
 		if (!unwanted) {
 			if (isItemFile(driveItem)) {
@@ -816,8 +863,19 @@ final class SyncEngine
 				// compute the item path to see if the path is excluded
 				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
 				path = buildNormalizedPath(path);
-				unwanted = selectiveSync.isPathExcluded(path);
-				if (unwanted) log.vdebug("OneDrive change path is to be excluded by user configuration: ", path);
+				if (selectiveSync.isPathExcluded(path)) {
+					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
+					if ((isItemFile(driveItem)) && (cfg.getValueBool("sync_root_files")) && (rootName(path) == "") ) {
+						// This is a file
+						// We are configured to sync all files in the root
+						// This is a file in the logical root
+						unwanted = false;
+					} else {
+						// path is unwanted
+						unwanted = true;
+						log.vdebug("OneDrive change path is to be excluded by user configuration: ", path);
+					}
+				}
 			} else {
 				log.vdebug("Flagging as unwanted: item.driveId (", item.driveId,"), item.parentId (", item.parentId,") not in local database");
 				unwanted = true;
@@ -865,14 +923,31 @@ final class SyncEngine
 				oldPath = itemdb.computePath(item.driveId, item.id);
 				if (!isItemSynced(oldItem, oldPath)) {
 					if (exists(oldPath)) {
-						auto ext = extension(oldPath);
-						auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
-						log.vlog("The local item is unsynced, renaming: ", oldPath, " -> ", newPath);
-						if (!dryRun) {
-							safeRename(oldPath);
+						// Is the local file technically 'newer' based on UTC timestamp?
+						SysTime localModifiedTime = timeLastModified(oldPath).toUTC();
+						localModifiedTime.fracSecs = Duration.zero;
+						item.mtime.fracSecs = Duration.zero;
+						
+						if (localModifiedTime > item.mtime) {
+							// local file is newer than item on OneDrive
+							// no local rename
+							// no download needed
+							log.vlog("Local item modified time is newer based on UTC time conversion - keeping local item");
+							log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer than OneDrive item");
+							skippedItems ~= item.id;
+							return;
 						} else {
-							log.vdebug("DRY-RUN: Skipping local file rename");
-							// Expectation here is that there is a new file locally (newPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
+							// remote file is newer than local item
+							log.vlog("Remote item modified time is newer based on UTC time conversion");
+							auto ext = extension(oldPath);
+							auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
+							log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file: ", oldPath, " -> ", newPath);
+							if (!dryRun) {
+								safeRename(oldPath);
+							} else {
+								// Expectation here is that there is a new file locally (newPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
+								log.vdebug("DRY-RUN: Skipping local file rename");
+							}
 						}
 					}
 					cached = false;
@@ -886,6 +961,13 @@ final class SyncEngine
 			applyChangedItem(oldItem, oldPath, item, path);
 		} else {
 			log.vdebug("OneDrive change is a new local item");
+			// Check if file should be skipped based on size limit
+			if (isItemFile(driveItem)) {
+				if (onedrive.getFileDetails(item.driveId, item.id)["size"].integer >= this.newSizeLimit) {
+					log.vlog("Skipping item - excluded by skip_size config: ", item.name, " (", onedrive.getFileDetails(item.driveId, item.id)["size"].integer/2^^20, " MB)");
+					return;
+				}
+			}
 			applyNewItem(item, path);
 		}
 
@@ -914,19 +996,41 @@ final class SyncEngine
 				return;
 			} else {
 				// TODO: force remote sync by deleting local item
-				auto ext = extension(path);
-				auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
-				log.vlog("The local item is out of sync, renaming: ", path, " -> ", newPath);
-				if (!dryRun) {
-					safeRename(path);
+				
+				// Is the local file technically 'newer' based on UTC timestamp?
+				SysTime localModifiedTime = timeLastModified(path).toUTC();
+				localModifiedTime.fracSecs = Duration.zero;
+				item.mtime.fracSecs = Duration.zero;
+				
+				if (localModifiedTime > item.mtime) {
+					// local file is newer than item on OneDrive
+					// no local rename
+					// no download needed
+					log.vlog("Local item modified time is newer based on UTC time conversion - keeping local item");
+					log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer than OneDrive item");
+					return;
 				} else {
-					log.vdebug("DRY-RUN: Skipping local file rename");
+					// remote file is newer than local item
+					log.vlog("Remote item modified time is newer based on UTC time conversion");
+					auto ext = extension(path);
+					auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
+					log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file: ", path, " -> ", newPath);
+					if (!dryRun) {
+						safeRename(path);
+					} else {
+						// Expectation here is that there is a new file locally (newPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
+						log.vdebug("DRY-RUN: Skipping local file rename");
+					}
 				}
 			}
 		}
 		final switch (item.type) {
 		case ItemType.file:
 			downloadFileItem(item, path);
+			if (dryRun) {
+				// we dont download the file, but we need to track that we 'faked it'
+				idsFaked ~= [item.driveId, item.id];
+			}
 			break;
 		case ItemType.dir:
 		case ItemType.remote:
@@ -1036,11 +1140,20 @@ final class SyncEngine
 				downloadFailed = true;
 				return;
 			}
-			setTimes(path, item.mtime, item.mtime);
+			// file has to have downloaded in order to set the times / data for the file
+			if (exists(path)) {
+				setTimes(path, item.mtime, item.mtime);
+			} else {
+				log.error("ERROR: File failed to download. Increase logging verbosity to determine why.");
+				downloadFailed = true;
+				return;
+			}
 		}
 		
-		writeln("done.");
-		log.fileOnly("Downloading file ", path, " ... done.");
+		if (!downloadFailed) {
+			writeln("done.");
+			log.fileOnly("Downloading file ", path, " ... done.");
+		}
 	}
 
 	// returns true if the given item corresponds to the local one
@@ -1270,6 +1383,7 @@ final class SyncEngine
 					foreach (i; idsFaked) {
 						if (i[1] == item.id) {
 							log.vdebug("Matched faked dir which is 'supposed' to exist but not created due to --dry-run use");
+							log.vlog("The directory has not changed");
 							return;
 						}
 					}
@@ -1428,8 +1542,19 @@ final class SyncEngine
 								writeln("done.");
 							}
 							log.fileOnly("Uploading modified file ", path, " ... done.");
-							// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded via simple upload
-							eTag = response["cTag"].str;
+							if ("cTag" in response) {
+								// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded via simple upload
+								eTag = response["cTag"].str;
+							} else {
+								// Is there an eTag in the response?
+								if ("eTag" in response) {
+									// use the eTag from the response as there was no cTag
+									eTag = response["eTag"].str;
+								} else {
+									// no tag available - set to nothing
+									eTag = "";
+								}
+							}
 						} else {
 							// we are --dry-run - simulate the file upload
 							writeln("done.");
@@ -1455,12 +1580,43 @@ final class SyncEngine
 				uploadCreateDir(path);
 			}
 		} else {
-			log.vlog("The file has been deleted locally");
-			if (noRemoteDelete) {
-				// do not process remote file delete
-				log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
+			// File does not exist locally
+			// If we are in a --dry-run situation - this file may never have existed as we never downloaded it
+			if (!dryRun) {
+				// Not --dry-run situation
+				log.vlog("The file has been deleted locally");
+				if (noRemoteDelete) {
+					// do not process remote file delete
+					log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
+				} else {
+					uploadDeleteItem(item, path);
+				}
 			} else {
-				uploadDeleteItem(item, path);
+				// We are in a --dry-run situation, file appears to have deleted locally - this file may never have existed as we never downloaded it ..
+				// Check if path does not exist in database
+				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+					// file not found in database
+					log.vlog("The file has been deleted locally");
+					if (noRemoteDelete) {
+						// do not process remote file delete
+						log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
+					} else {
+						uploadDeleteItem(item, path);
+					}
+				}  else {
+					// file was found in the database
+					// Did we 'fake create it' as part of --dry-run ?
+					foreach (i; idsFaked) {
+						if (i[1] == item.id) {
+							log.vdebug("Matched faked file which is 'supposed' to exist but not created due to --dry-run use");
+							log.vlog("The file has not changed");
+							return;
+						}
+					}
+					// item.id did not match a 'faked' download new file creation
+					log.vlog("The file has been deleted locally");
+					uploadDeleteItem(item, path);
+				}
 			}
 		}
 	}
@@ -1486,6 +1642,15 @@ final class SyncEngine
 		// A short lived file that has disappeared will cause an error - is the path valid?
 		if (!exists(path)) {
 			log.log("Skipping item - has disappeared: ", path);
+			return;
+		}
+		
+		// Invalid UTF-8 sequence check
+		// https://github.com/skilion/onedrive/issues/57
+		// https://github.com/abraunegg/onedrive/issues/487
+		if(!isValid(path)) {
+			// Path is not valid according to https://dlang.org/phobos/std_encoding.html
+			log.vlog("Skipping item - invalid character sequences: ", path);
 			return;
 		}
 		
@@ -1560,8 +1725,12 @@ final class SyncEngine
 					}
 				}
 				if (selectiveSync.isPathExcluded(path)) {
-					log.vlog("Skipping item - path excluded by sync_list: ", path);
-					return;
+					if ((isFile(path)) && (cfg.getValueBool("sync_root_files")) && (rootName(strip(path,"./")) == "")) {
+						log.vdebug("Not skipping path due to sync_root_files inclusion: ", path);
+					} else {
+						log.vlog("Skipping item - path excluded by sync_list: ", path);
+						return;
+					}
 				}
 			}
 
@@ -1771,6 +1940,11 @@ final class SyncEngine
 					
 						if (e.httpStatusCode == 404) {
 							// The file was not found on OneDrive, need to upload it		
+							// Check if file should be skipped based on skip_size config
+							if (thisFileSize >= this.newSizeLimit) {
+								writeln("Skipping item - excluded by skip_size config: ", path, " (", thisFileSize/2^^20," MB)");
+								return;
+							}
 							write("Uploading new file ", path, " ...");
 							JSONValue response;
 							
@@ -1869,10 +2043,25 @@ final class SyncEngine
 									if ((accountType == "personal") || (thisFileSize == 0)){
 										// Update the item's metadata on OneDrive
 										string id = response["id"].str;
-										string cTag = response["cTag"].str;
+										string cTag; 
+										
+										// Is there a valid cTag in the response?
+										if ("cTag" in response) {
+											// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
+											cTag = response["cTag"].str;
+										} else {
+											// Is there an eTag in the response?
+											if ("eTag" in response) {
+												// use the eTag from the response as there was no cTag
+												cTag = response["eTag"].str;
+											} else {
+												// no tag available - set to nothing
+												cTag = "";
+											}
+										}
+										
 										if (exists(path)) {
 											SysTime mtime = timeLastModified(path).toUTC();
-											// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
 											uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
 										} else {
 											// will be removed in different event!
@@ -1940,9 +2129,24 @@ final class SyncEngine
 											writeln(" done.");
 										}
 										string id = response["id"].str;
-										string cTag = response["cTag"].str;
+										string cTag;
+										
+										// Is there a valid cTag in the response?
+										if ("cTag" in response) {
+											// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
+											cTag = response["cTag"].str;
+										} else {
+											// Is there an eTag in the response?
+											if ("eTag" in response) {
+												// use the eTag from the response as there was no cTag
+												cTag = response["eTag"].str;
+											} else {
+												// no tag available - set to nothing
+												cTag = "";
+											}
+										}
+										
 										SysTime mtime = timeLastModified(path).toUTC();
-										// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
 										uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
 									} else {
 										// OneDrive Business account modified file upload handling

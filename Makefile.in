@@ -57,6 +57,14 @@ user_unit_files = systemd.units/onedrive.service
 
 DOCFILES = README.md README.Office365.md config LICENSE CHANGELOG.md
 
+ifneq ("$(wildcard /etc/redhat-release)","")
+RHEL = $(shell cat /etc/redhat-release | grep -E "(Red Hat Enterprise Linux Server|CentOS)" | wc -l)
+RHEL_VERSION = $(shell rpm --eval "%{centos_ver}")
+else
+RHEL = 0
+RHEL_VERSION = 0
+endif
+
 SOURCES = \
 	src/config.d \
 	src/itemdb.d \
@@ -99,8 +107,13 @@ install: all
 	for i in $(DOCFILES) ; do $(INSTALL) -D -m 644 $$i $(DESTDIR)$(docdir)/$$i ; done
 ifeq ($(HAVE_SYSTEMD),yes)
 	$(INSTALL) -d -o root -g root -m 0755 $(DESTDIR)$(systemduserunitdir) $(DESTDIR)$(systemdsystemunitdir)
+ifeq ($(RHEL),1)
+	$(INSTALL) -m 0644 $(system_unit_files) $(DESTDIR)$(systemdsystemunitdir)
+	$(INSTALL) -m 0644 $(user_unit_files) $(DESTDIR)$(systemdsystemunitdir)
+else
 	$(INSTALL) -m 0644 $(system_unit_files) $(DESTDIR)$(systemdsystemunitdir)
 	$(INSTALL) -m 0644 $(user_unit_files) $(DESTDIR)$(systemduserunitdir)
+endif	
 endif
 ifeq ($(COMPLETIONS),yes)
 	$(INSTALL) -D -m 644 contrib/completions/complete.zsh $(DESTDIR)$(ZSH_COMPLETION_DIR)/_onedrive
@@ -113,8 +126,12 @@ uninstall:
 	rm -f $(DESTDIR)$(mandir)/man1/onedrive.1
 	rm -f $(DESTDIR)$(sysconfdir)/logrotate.d/onedrive
 ifeq ($(HAVE_SYSTEMD),yes)
-	for i in $(system_unit_files) ; do rm -f $(DESTDIR)$(systemdsystemunitdir)/$$i ; done
-	for i in $(user_unit_files) ; do rm -f $(DESTDIR)$(systemduserunitdir)/$$i ; done
+ifeq ($(RHEL),1)
+	rm -f $(DESTDIR)$(systemdsystemunitdir)/onedrive*.service
+else
+	rm -f $(DESTDIR)$(systemdsystemunitdir)/onedrive*.service
+	rm -f $(DESTDIR)$(systemduserunitdir)/onedrive*.service
+endif
 endif
 	for i in $(DOCFILES) ; do rm -f $(DESTDIR)$(DOCDIR)/$$i ; done
 ifeq ($(COMPLETIONS),yes)

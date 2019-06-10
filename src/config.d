@@ -46,8 +46,10 @@ final class Config
 		boolValues["debug_https"]        = false;
 		boolValues["skip_dotfiles"]      = false;
 		boolValues["dry_run"]            = false;
+		boolValues["sync_root_files"]	 = false;
 		longValues["verbose"]            = log.verbose; // might be initialized by the first getopt call!
 		longValues["monitor_interval"]   = 45,
+		longValues["skip_size"]          = 0,
 		longValues["min_notify_changes"]  = 5;
 		longValues["monitor_log_frequency"] = 5;
 		// Number of n sync runs before performing a full local scan of sync_dir
@@ -254,6 +256,9 @@ final class Config
 				"skip-file",
 					"Skip any files that match this pattern from syncing",
 					&stringValues["skip_file"],
+				"skip-size",
+					"Skip new files larger than this size (in MB)",
+					&longValues["skip_size"],
 				"skip-symlinks",
 					"Skip syncing of symlinks",
 					&boolValues["skip_symlinks"],
@@ -266,6 +271,9 @@ final class Config
 				"synchronize",
 					"Perform a synchronization",
 					&boolValues["synchronize"],
+				"sync-root-files",
+					"Sync all files in sync_dir root when using sync_list.",
+					&boolValues["sync_root_files"],
 				"upload-only",
 					"Only upload to OneDrive, do not sync changes from OneDrive locally",
 					&boolValues["upload_only"],

@@ -179,6 +179,7 @@ int main(string[] args)
 		
 		// Is sync_list configured?
 		if (exists(userSyncList)){
+			writeln("Config option 'sync_root_files'     = ", cfg.getValueBool("sync_root_files"));
 			writeln("Selective sync configured           = true");
 			writeln("sync_list contents:");
 			// Output the sync_list contents
@@ -189,6 +190,7 @@ int main(string[] args)
 				writeln(line);
 			}
 		} else {
+			writeln("Config option 'sync_root_files'     = ", cfg.getValueBool("sync_root_files"));
 			writeln("Selective sync configured           = false");
 		}
 		
@@ -200,7 +202,8 @@ int main(string[] args)
 		online = testNetwork();
 	} catch (CurlException e) {
 		// No network connection to OneDrive Service
-		log.error("No network connection to Microsoft OneDrive Service");
+		log.error("Cannot connect to Microsoft OneDrive Service");
+		log.error("Reason: ", e.msg);
 		if (!cfg.getValueBool("monitor")) {
 			return EXIT_FAILURE;
 		}
@@ -282,9 +285,20 @@ int main(string[] args)
 	log.vdebug("skip_dir: ", cfg.getValueString("skip_dir"));
 	selectiveSync.setDirMask(cfg.getValueString("skip_dir"));
 	log.vdebug("Configuring skip_file ...");
+	// Validate skip_file to ensure that this does not contain an invalid configuration
+	// Do not use a skip_file entry of .* as this will prevent correct searching of local changes to process.
+	foreach(entry; cfg.getValueString("skip_file").split("|")){
+		if (entry == ".*") {
+			// invalid entry element detected
+			log.logAndNotify("ERROR: Invalid skip_file entry '.*' detected");
+			return EXIT_FAILURE;
+		}
+	}
+	
+	// valid entry
 	log.vdebug("skip_file: ", cfg.getValueString("skip_file"));
 	selectiveSync.setFileMask(cfg.getValueString("skip_file"));
-	
+		
 	// Initialize the sync engine
 	log.logAndNotify("Initializing the Synchronization Engine ...");
 	auto sync = new SyncEngine(cfg, oneDrive, itemDb, selectiveSync);
