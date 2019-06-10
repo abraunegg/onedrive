@@ -1,12 +1,11 @@
 # Building and Installing the OneDrive Free Client
-
 ## Build Requirements
 *   Build environment must have at least 1GB of memory & 1GB swap space
 *   [libcurl](http://curl.haxx.se/libcurl/)
 *   [SQLite 3](https://www.sqlite.org/) >= 3.7.15
 *   [Digital Mars D Compiler (DMD)](http://dlang.org/download.html)
 
-**Note:** DMD version >= 2.081.1 or LDC version >= 1.11.0 is required to compile this application
+**Note:** DMD version >= 2.083.1 or LDC version >= 1.11.0 is required to compile this application
 
 ### Dependencies: Ubuntu/Debian - x86_64
 ```text
@@ -173,7 +172,6 @@ sudo make install
 ```
 
 ### Build options
-
 Notifications can be enabled using the `configure` switch `--enable-notifications`.
 
 Systemd service files are installed in the appropriate directories on the system,
@@ -219,7 +217,6 @@ cd onedrive
 make clean; make
 sudo make install
 ```
-
 
 ## Uninstall
 ```text
