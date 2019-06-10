@@ -17,10 +17,11 @@ RUN yum install -y make git gcc libcurl-devel sqlite-devel pkg-config && \
 RUN mkdir -p /onedrive/conf /onedrive/data
 COPY . /usr/src/onedrive
 RUN . "$(bash install.sh -a)" && \
-    /usr/src/onedrive/configure && \
-    make -C /usr/src/onedrive && \
-    make -C /usr/src/onedrive install && \
-    make -C /usr/src/onedrive clean
+    cd /usr/src/onedrive/ && \
+	./configure && \
+    make clean && \
+    make && \
+    make install
 COPY entrypoint.sh /entrypoint.sh
 VOLUME ["/onedrive/conf"]
 
