@@ -18,7 +18,7 @@ RUN mkdir -p /onedrive/conf /onedrive/data
 COPY . /usr/src/onedrive
 RUN . "$(bash install.sh -a)" && \
     cd /usr/src/onedrive/ && \
-	./configure && \
+    ./configure && \
     make clean && \
     make && \
     make install
