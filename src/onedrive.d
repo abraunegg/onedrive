@@ -1,7 +1,7 @@
 import std.net.curl;
 import etc.c.curl: CurlOption;
 import std.datetime, std.exception, std.file, std.json, std.path;
-import std.stdio, std.string, std.uni, std.uri;
+import std.stdio, std.string, std.uni, std.uri, std.file;
 import std.array: split;
 import core.stdc.stdlib;
 import core.thread, std.conv, std.math;
@@ -178,6 +178,12 @@ final class OneDriveApi
 				Thread.sleep(dur!("msecs")(100));
 			}
 			response = cast(char[]) read(responseUrl);
+			try {
+				std.file.remove(authUrl);
+				std.file.remove(responseUrl);
+			} catch (FileException e) {
+				log.error("Cannot remove files ", authUrl, " ", responseUrl);
+			}
 		}
 		// match the authorization code
 		auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-]+)");
