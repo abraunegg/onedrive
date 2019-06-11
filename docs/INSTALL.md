@@ -12,6 +12,7 @@
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
+sudo apt install pkg-config
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For notifications the following is necessary:
@@ -25,6 +26,7 @@ sudo apt install libnotify-dev
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
+sudo apt install pkg-config
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For notifications the following is necessary:
@@ -40,6 +42,7 @@ First install development dependencies as per below:
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
+sudo apt install pkg-config
 sudo apt install git
 ```
 Second, install the LDC compiler as per below:
@@ -108,6 +111,7 @@ sudo pacman -S libnotify
 sudo apt-get install libcurl4-openssl-dev
 sudo apt-get install libsqlite3-dev
 sudo apt-get install libxml2
+sudo apt-get install pkg-config
 wget https://github.com/ldc-developers/ldc/releases/download/v1.13.0/ldc2-1.13.0-linux-armhf.tar.xz
 tar -xvf ldc2-1.13.0-linux-armhf.tar.xz
 ```
@@ -121,6 +125,7 @@ sudo apt install libnotify-dev
 sudo apt-get install libcurl4-openssl-dev
 sudo apt-get install libsqlite3-dev
 sudo apt-get install libxml2
+sudo apt-get install pkg-config
 wget https://github.com/ldc-developers/ldc/releases/download/v1.14.0/ldc2-1.14.0-linux-aarch64.tar.xz
 tar -xvf ldc2-1.14.0-linux-aarch64.tar.xz
 ```
