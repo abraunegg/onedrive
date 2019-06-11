@@ -21,5 +21,5 @@ FROM alpine
 ENTRYPOINT ["/entrypoint.sh"]
 RUN apk add --no-cache bash libcurl libgcc shadow sqlite-libs && \
     mkdir -p /onedrive/conf /onedrive/data
-COPY entrypoint.sh /
+COPY contrib/docker/entrypoint.sh /
 COPY --from=0 /go/bin/gosu /usr/local/bin/onedrive /usr/local/bin/

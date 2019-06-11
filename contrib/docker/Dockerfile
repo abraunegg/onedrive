@@ -22,7 +22,7 @@ RUN . "$(bash install.sh -a)" && \
     make clean && \
     make && \
     make install
-COPY entrypoint.sh /entrypoint.sh
+COPY contrib/docker/entrypoint.sh /entrypoint.sh
 VOLUME ["/onedrive/conf"]
 
 ENTRYPOINT ["/entrypoint.sh"]

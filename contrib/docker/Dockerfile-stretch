@@ -18,5 +18,5 @@ RUN apt update && \
     apt install -y gosu libcurl3 libsqlite3-0 && \
     rm -rf /var/*/apt && \
     mkdir -p /onedrive/conf /onedrive/data
-COPY entrypoint.sh /
+COPY contrib/docker/entrypoint.sh /
 COPY --from=0 /usr/local/bin/onedrive /usr/local/bin/
