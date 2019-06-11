@@ -18,6 +18,11 @@ A complete tool to interact with OneDrive on Linux.
 .SH OPTIONS
 Without any option given, no sync is done and the program exits. 
 .TP
+\fB\-\-auth\-files\fP ARG
+Perform authorization via two files passed in as \fBARG\fP in the format \fBauthUrl:responseUrl\fP.
+The authorization URL is written to the \fBauthUrl\fP, then \fBonedrive\fP waits for
+the file \fBresponseUrl\fP to be present, and reads the response from that file.
+.TP
 \fB\-\-check\-for\-nomount\fP
 Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
 .br

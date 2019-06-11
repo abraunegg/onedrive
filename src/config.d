@@ -151,6 +151,7 @@ final class Config
 		stringValues["remove_directory"]  = "";
 		stringValues["single_directory"]  = "";
 		stringValues["source_directory"]  = "";
+		stringValues["auth_files"]        = "";
 		boolValues["display_config"]      = false;
 		boolValues["display_sync_status"] = false;
 		boolValues["resync"]              = false;
@@ -169,6 +170,9 @@ final class Config
 				args,
 				std.getopt.config.bundling,
 				std.getopt.config.caseSensitive,
+				"auth-files",
+					"Perform authentication not via interactive dialog but via files read/writes to these files.",
+					&stringValues["auth_files"],
 				"check-for-nomount",
 					"Check for the presence of .nosync in the syncdir root. If found, do not perform sync.", 
 					&boolValues["check_nomount"],
