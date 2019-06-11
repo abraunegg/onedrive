@@ -52,8 +52,8 @@ endif
 DCFLAGS += $(NOTIF_VERSIONS)
 endif
 
-system_unit_files = systemd.units/onedrive@.service
-user_unit_files = systemd.units/onedrive.service
+system_unit_files = contrib/systemd/onedrive@.service
+user_unit_files = contrib/systemd/onedrive.service
 
 DOCFILES = README.md config LICENSE CHANGELOG.md docs/Docker.md docs/INSTALL.md docs/Office365.md docs/USAGE.md
 
@@ -94,7 +94,7 @@ clean:
 # also remove files generated via ./configure
 distclean: clean
 	rm -f Makefile contrib/pacman/PKGBUILD contrib/spec/onedrive.spec onedrive.1 \
-	     systemd.units/onedrive.service systemd.units/onedrive@.service
+	      $(system_unit_files) $(user_unit_files)
 
 onedrive: version $(SOURCES)
 	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) -L-ldl $(SOURCES) -of$@

@@ -179,7 +179,7 @@ AC_CONFIG_FILES([
 		 contrib/pacman/PKGBUILD
 		 contrib/spec/onedrive.spec
 		 onedrive.1
-		 systemd.units/onedrive.service
-		 systemd.units/onedrive@.service
+		 contrib/systemd/onedrive.service
+		 contrib/systemd/onedrive@.service
 		])
 AC_OUTPUT
