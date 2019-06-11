@@ -121,7 +121,7 @@ You can also build your own image instead of pulling the one from dockerhub:
 ```bash
 git clone https://github.com/abraunegg/onedrive
 cd onedrive
-docker build . -t local-onedrive
+docker build . -t local-onedrive -f contrib/docker/Dockerfile
 ```
 
 There are alternate, smaller images available by building
@@ -130,10 +130,10 @@ pattern](https://docs.docker.com/develop/develop-images/multistage-build/)
 Dockerfiles require Docker version at least 17.05.
 
 ``` bash
-docker build . -t local-ondrive-stretch -f Dockerfile-stretch
+docker build . -t local-ondrive-stretch -f contrib/docker/Dockerfile-stretch
 ```
 or
 
 ``` bash
-docker build . -t local-ondrive-alpine -f Dockerfile-alpine
+docker build . -t local-ondrive-alpine -f contrib/docker/Dockerfile-alpine
 ```

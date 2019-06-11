@@ -18,6 +18,11 @@ A complete tool to interact with OneDrive on Linux.
 .SH OPTIONS
 Without any option given, no sync is done and the program exits. 
 .TP
+\fB\-\-auth\-files\fP ARG
+Perform authorization via two files passed in as \fBARG\fP in the format \fBauthUrl:responseUrl\fP.
+The authorization URL is written to the \fBauthUrl\fP, then \fBonedrive\fP waits for
+the file \fBresponseUrl\fP to be present, and reads the response from that file.
+.TP
 \fB\-\-check\-for\-nomount\fP
 Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
 .br
@@ -94,7 +99,7 @@ defines the directory where logging output is saved to, needs to end with a slas
 .br
 Configuration file key: \fBlog_dir\fP (default: \fB/var/log/onedrive/\fP)
 .TP
-\fB\-\-min-notif-changes\fP
+\fB\-\-min-notify-changes\fP
 the minimum number of pending incoming changes necessary to trigger
 a desktop notification
 .br
@@ -148,6 +153,9 @@ Configuration file key: \fBskip_symlinks\fP (default: \fBfalse\fP)
 .TP
 \fB\-\-source\-directory\fP ARG
 Source directory to rename or move on OneDrive \- no sync will be performed.
+.TP
+\fB\-\-sync\-root\-files\fP
+Sync all files in sync_dir root when using sync_list.
 .TP
 \fB\-\-syncdir\fP ARG
 Set the directory used to sync the files that are synced

@@ -174,5 +174,12 @@ AC_ARG_ENABLE(debug,
        AC_SUBST([DEBUG],no))
 
 dnl generate necessary files
-AC_CONFIG_FILES([Makefile pacman/PKGBUILD spec/onedrive.spec onedrive.1 systemd.units/onedrive.service  systemd.units/onedrive@.service])
+AC_CONFIG_FILES([
+		 Makefile
+		 contrib/pacman/PKGBUILD
+		 contrib/spec/onedrive.spec
+		 onedrive.1
+		 contrib/systemd/onedrive.service
+		 contrib/systemd/onedrive@.service
+		])
 AC_OUTPUT
