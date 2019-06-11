@@ -2,6 +2,7 @@ import std.net.curl;
 import etc.c.curl: CurlOption;
 import std.datetime, std.exception, std.file, std.json, std.path;
 import std.stdio, std.string, std.uni, std.uri;
+import std.array: split;
 import core.stdc.stdlib;
 import core.thread, std.conv, std.math;
 import progress;
@@ -161,9 +162,23 @@ final class OneDriveApi
 		import std.stdio, std.regex;
 		char[] response;
 		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=files.readwrite%20files.readwrite.all%20offline_access&response_type=code&redirect_uri=" ~ redirectUrl;
-		log.log("Authorize this app visiting:\n");
-		write(url, "\n\n", "Enter the response uri: ");
-		readln(response);
+		string authFilesString = cfg.getValueString("auth_files");
+		if (authFilesString == "") {
+			log.log("Authorize this app visiting:\n");
+			write(url, "\n\n", "Enter the response uri: ");
+			readln(response);
+		} else {
+			string[] authFiles = authFilesString.split(":");
+			string authUrl = authFiles[0];
+			string responseUrl = authFiles[1];
+			auto authUrlFile = File(authUrl, "w");
+			authUrlFile.write(url);
+			authUrlFile.close();
+			while (!exists(responseUrl)) {
+				Thread.sleep(dur!("msecs")(100));
+			}
+			response = cast(char[]) read(responseUrl);
+		}
 		// match the authorization code
 		auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-]+)");
 		if (c.empty) {
