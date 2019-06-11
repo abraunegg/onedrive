@@ -121,7 +121,7 @@ You can also build your own image instead of pulling the one from dockerhub:
 ```bash
 git clone https://github.com/abraunegg/onedrive
 cd onedrive
-docker build . -t local-onedrive -f contrib/docker/Dockerfile
+docker build . -t local-onedrive
 ```
 
 There are alternate, smaller images available by building
