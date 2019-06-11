@@ -99,7 +99,7 @@ defines the directory where logging output is saved to, needs to end with a slas
 .br
 Configuration file key: \fBlog_dir\fP (default: \fB/var/log/onedrive/\fP)
 .TP
-\fB\-\-min-notif-changes\fP
+\fB\-\-min-notify-changes\fP
 the minimum number of pending incoming changes necessary to trigger
 a desktop notification
 .br
@@ -153,6 +153,9 @@ Configuration file key: \fBskip_symlinks\fP (default: \fBfalse\fP)
 .TP
 \fB\-\-source\-directory\fP ARG
 Source directory to rename or move on OneDrive \- no sync will be performed.
+.TP
+\fB\-\-sync\-root\-files\fP
+Sync all files in sync_dir root when using sync_list.
 .TP
 \fB\-\-syncdir\fP ARG
 Set the directory used to sync the files that are synced

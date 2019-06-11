@@ -11,11 +11,15 @@ ENV PATH="/ldc/bin:${PATH}" \
     LIBRARY_PATH="/ldc/lib:/usr/lib:/lib:${LD_LIBRARY_PATH}"
 RUN go get github.com/tianon/gosu
 COPY . /usr/src/onedrive
-RUN make -C /usr/src/onedrive install.noservice DC=ldmd2
+RUN cd /usr/src/onedrive/ && \
+    DC=ldmd2 ./configure && \
+    make clean && \
+    make && \
+    make install
 
 FROM alpine
 ENTRYPOINT ["/entrypoint.sh"]
 RUN apk add --no-cache bash libcurl libgcc shadow sqlite-libs && \
     mkdir -p /onedrive/conf /onedrive/data
-COPY entrypoint.sh /
+COPY contrib/docker/entrypoint.sh /
 COPY --from=0 /go/bin/gosu /usr/local/bin/onedrive /usr/local/bin/

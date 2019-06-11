@@ -2065,7 +2065,7 @@ esac
 
 
 
-PACKAGE_DATE="April 2019"
+PACKAGE_DATE="June 2019"
 
 
 
@@ -2489,7 +2489,7 @@ else
 fi
 
 
-ac_config_files="$ac_config_files Makefile pacman/PKGBUILD spec/onedrive.spec onedrive.1 systemd.units/onedrive.service systemd.units/onedrive@.service"
+ac_config_files="$ac_config_files Makefile contrib/pacman/PKGBUILD contrib/spec/onedrive.spec onedrive.1 contrib/systemd/onedrive.service contrib/systemd/onedrive@.service"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -3198,11 +3198,11 @@ for ac_config_target in $ac_config_targets
 do
   case $ac_config_target in
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
-    "pacman/PKGBUILD") CONFIG_FILES="$CONFIG_FILES pacman/PKGBUILD" ;;
-    "spec/onedrive.spec") CONFIG_FILES="$CONFIG_FILES spec/onedrive.spec" ;;
+    "contrib/pacman/PKGBUILD") CONFIG_FILES="$CONFIG_FILES contrib/pacman/PKGBUILD" ;;
+    "contrib/spec/onedrive.spec") CONFIG_FILES="$CONFIG_FILES contrib/spec/onedrive.spec" ;;
     "onedrive.1") CONFIG_FILES="$CONFIG_FILES onedrive.1" ;;
-    "systemd.units/onedrive.service") CONFIG_FILES="$CONFIG_FILES systemd.units/onedrive.service" ;;
-    "systemd.units/onedrive@.service") CONFIG_FILES="$CONFIG_FILES systemd.units/onedrive@.service" ;;
+    "contrib/systemd/onedrive.service") CONFIG_FILES="$CONFIG_FILES contrib/systemd/onedrive.service" ;;
+    "contrib/systemd/onedrive@.service") CONFIG_FILES="$CONFIG_FILES contrib/systemd/onedrive@.service" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;
   esac

@@ -18,11 +18,11 @@ RUN mkdir -p /onedrive/conf /onedrive/data
 COPY . /usr/src/onedrive
 RUN . "$(bash install.sh -a)" && \
     cd /usr/src/onedrive/ && \
-	./configure && \
+    ./configure && \
     make clean && \
     make && \
     make install
-COPY entrypoint.sh /entrypoint.sh
+COPY contrib/docker/entrypoint.sh /entrypoint.sh
 VOLUME ["/onedrive/conf"]
 
 ENTRYPOINT ["/entrypoint.sh"]
