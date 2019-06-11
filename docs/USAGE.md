@@ -448,6 +448,10 @@ Usage:
 
 Options:
 
+  --auth-files ARG
+      Perform  authorization  via  two files passed in as ARG in the format `authUrl:responseUrl`  
+      The authorization URL is written to the `authUrl`, then onedrive waits for the file `responseUrl` 
+      to be present, and reads the response from that file.
   --check-for-nomount
       Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
   --check-for-nosync
@@ -486,7 +490,7 @@ Options:
       Directory where logging output is saved to, needs to end with a slash.
   --logout
       Logout the current user
-  --min-notif-changes ARG
+  --min-notify-changes ARG
       Minimum number of pending incoming changes necessary to trigger a desktop notification
   --monitor -m
       Keep monitoring for local and remote changes
@@ -514,6 +518,8 @@ Options:
       Skip syncing of symlinks
   --source-directory ARG
       Source directory to rename or move on OneDrive - no sync will be performed.
+  --sync-root-files
+      Sync all files in sync_dir root when using sync_list.	  
   --syncdir ARG
       Specify the local directory used for synchronization to OneDrive
   --synchronize
