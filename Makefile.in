@@ -104,7 +104,7 @@ install: all
 	$(INSTALL) -D onedrive $(DESTDIR)$(bindir)/onedrive
 	$(INSTALL) -D onedrive.1 $(DESTDIR)$(mandir)/man1/onedrive.1
 	$(INSTALL) -D -m 644 contrib/logrotate/onedrive.logrotate $(DESTDIR)$(sysconfdir)/logrotate.d/onedrive
-	for i in $(DOCFILES) ; do $(INSTALL) -D -m 644 $$i $(DESTDIR)$(docdir)/$$i ; done
+	$(INSTALL) -D -m 644 -t $(DESTDIR)$(docdir) $(DOCFILES)
 ifeq ($(HAVE_SYSTEMD),yes)
 	$(INSTALL) -d -o root -g root -m 0755 $(DESTDIR)$(systemduserunitdir) $(DESTDIR)$(systemdsystemunitdir)
 ifeq ($(RHEL),1)
