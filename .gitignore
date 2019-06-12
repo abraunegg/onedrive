@@ -2,12 +2,12 @@
 onedrive
 onedrive.1
 onedrive.o
-onedrive.service
-onedrive@.service
+contrib/systemd/onedrive.service
+contrib/systemd/onedrive@.service
 version
 Makefile
 config.log
 config.status
 autom4te.cache/
-pacman/PKGBUILD
-spec/onedrive.spec
+contrib/pacman/PKGBUILD
+contrib/spec/onedrive.spec
