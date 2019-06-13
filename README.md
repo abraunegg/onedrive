@@ -24,6 +24,9 @@ See [docs/USAGE.md](docs/USAGE.md)
 ## Docker support
 See [docs/Docker.md](docs/Docker.md)
 
+## OneDrive Business Shared folders
+See [docs/README.BusinessSharedFolders.md](docs/README.BusinessSharedFolders.md)
+
 ## Sharepoint group drive in Office 365 business or education
 See [docs/Office365.md](docs/Office365.md)
 
