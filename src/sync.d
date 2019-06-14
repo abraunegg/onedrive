@@ -1748,9 +1748,16 @@ final class SyncEngine
 					log.vlog("Directory disappeared during upload: ", path);
 					return;
 				}
-				auto entries = dirEntries(path, SpanMode.shallow, false);
-				foreach (DirEntry entry; entries) {
-					uploadNewItems(entry.name);
+				
+				// Try and access the directory and any path below
+				try {
+					auto entries = dirEntries(path, SpanMode.shallow, false);
+					foreach (DirEntry entry; entries) {
+						uploadNewItems(entry.name);
+					}
+				} catch (std.file.FileException e) {
+					log.error("ERROR: ", e.msg);
+					return;
 				}
 			} else {
 				// This item is a file

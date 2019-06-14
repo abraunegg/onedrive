@@ -106,10 +106,16 @@ final class Monitor
 		}
 		
 		add(dirname);
-		foreach(DirEntry entry; dirEntries(dirname, SpanMode.shallow, false)) {
-			if (entry.isDir) {
-				addRecursive(entry.name);
+		try {
+			auto pathList = dirEntries(dirname, SpanMode.shallow, false);
+			foreach(DirEntry entry; pathList) {
+				if (entry.isDir) {
+					addRecursive(entry.name);
+				}
 			}
+		} catch (std.file.FileException e) {
+			log.vdebug("ERROR: ", e.msg);
+			return;
 		}
 	}
 
@@ -124,7 +130,13 @@ final class Monitor
 				log.log("To change the current max number of watches to 524288 run:");
 				log.log("sudo sysctl fs.inotify.max_user_watches=524288");
 			}
-			throw new MonitorException("inotify_add_watch failed");
+			if (errno() == 13) {
+				log.vlog("WARNING: inotify_add_watch failed - permission denied: ", pathname);
+				return;
+			}
+			// Flag any other errors
+			log.error("ERROR: inotify_add_watch failed: ", pathname);
+			return;
 		}
 		wdToDirName[wd] = buildNormalizedPath(pathname) ~ "/";
 		log.vlog("Monitor directory: ", pathname);
