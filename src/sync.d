@@ -1756,7 +1756,7 @@ final class SyncEngine
 						uploadNewItems(entry.name);
 					}
 				} catch (std.file.FileException e) {
-					log.vdebug("ERROR: ", e.msg);
+					log.error("ERROR: ", e.msg);
 					return;
 				}
 			} else {
