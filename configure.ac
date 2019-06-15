@@ -117,10 +117,10 @@ dnl
 dnl Notification support
 dnl only check for libnotify if --enable-notifications is given
 AC_ARG_ENABLE(notifications,
-       [AS_HELP_STRING([--enable-notifications],
-          [Enable desktop notifications via libnotify])],
-       enable_notifications=yes,
-       enable_notifications=no)
+  AS_HELP_STRING([--enable-notifications], [Enable desktop notifications via libnotify]))
+
+AS_IF([test "x$enable_notifications" = "xyes"], [enable_notifications=yes], [enable_notifications=no])
+
 dnl if --enable-notifications was given, check for libnotify, and disable if not found
 dnl otherwise substitute the notifu
 AS_IF([test "x$enable_notifications" = "xyes"],
@@ -131,11 +131,11 @@ AC_SUBST([NOTIFICATIONS],$enable_notifications)
 dnl
 dnl Completion support
 dnl First determine whether completions are requested, pass that to Makefile
-AC_ARG_ENABLE(completions,
-       [AS_HELP_STRING([--enable-completions],
-          [Install shell completions for bash and zsh])],
-       enable_completions=yes,
-       enable_completions=no)
+AC_ARG_ENABLE([completions],
+  AS_HELP_STRING([--enable-completions], [Install shell completions for bash and zsh]))
+
+AS_IF([test "x$enable_completions" = "xyes"], [enable_completions=yes], [enable_completions=no])
+
 AC_SUBST([COMPLETIONS],$enable_completions)
 
 
@@ -164,14 +164,11 @@ AS_IF([test "x$enable_completions" = "xyes"],[
   AC_SUBST([ZSH_COMPLETION_DIR], $with_zsh_completion_dir)
   ])
 
-
 dnl
 dnl Debug support
 AC_ARG_ENABLE(debug,
-       [AS_HELP_STRING([--enable-debug],
-          [Pass debug option to the compiler])],
-       AC_SUBST([DEBUG],yes),
-       AC_SUBST([DEBUG],no))
+  AS_HELP_STRING([--enable-debug], [Pass debug option to the compiler]))
+AS_IF([test "x$enable_debug" = "xyes"], AC_SUBST([DEBUG],yes), AC_SUBST([DEBUG],no))
 
 dnl generate necessary files
 AC_CONFIG_FILES([
