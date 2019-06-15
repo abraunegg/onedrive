@@ -100,14 +100,13 @@ onedrive: version $(SOURCES)
 	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) -L-ldl $(SOURCES) -of$@
 
 install: all
-	$(INSTALL) -d -o root -g users -m 0775 $(DESTDIR)/var/log/onedrive
 	$(INSTALL) -D onedrive $(DESTDIR)$(bindir)/onedrive
 	$(INSTALL) -D onedrive.1 $(DESTDIR)$(mandir)/man1/onedrive.1
 	$(INSTALL) -D -m 644 contrib/logrotate/onedrive.logrotate $(DESTDIR)$(sysconfdir)/logrotate.d/onedrive
 	mkdir -p $(DESTDIR)$(docdir)
 	$(INSTALL) -D -m 644 $(DOCFILES) $(DESTDIR)$(docdir)
 ifeq ($(HAVE_SYSTEMD),yes)
-	$(INSTALL) -d -o root -g root -m 0755 $(DESTDIR)$(systemduserunitdir) $(DESTDIR)$(systemdsystemunitdir)
+	$(INSTALL) -d -m 0755 $(DESTDIR)$(systemduserunitdir) $(DESTDIR)$(systemdsystemunitdir)
 ifeq ($(RHEL),1)
 	$(INSTALL) -m 0644 $(system_unit_files) $(DESTDIR)$(systemdsystemunitdir)
 	$(INSTALL) -m 0644 $(user_unit_files) $(DESTDIR)$(systemdsystemunitdir)
