@@ -134,11 +134,18 @@ onedrive --synchronize --verbose
 ### Client Activity Log
 When running onedrive all actions can be logged to a separate log file. This can be enabled by using the `--enable-logging` flag. By default, log files will be written to `/var/log/onedrive/`
 
-**Note:** You will need to ensure your user has the applicable permissions to write to this directory or the following warning will be printed:
+**Note:** You will need to ensure the existence of this directory, and that your user has the applicable permissions to write to this directory or the following warning will be printed:
 ```text
 Unable to access /var/log/onedrive/
 Please manually create '/var/log/onedrive/' and set appropriate permissions to allow write access
 The requested client activity log will instead be located in the users home directory
+```
+
+On many systems this can be achieved by
+```text
+mkdir /var/log/onedrive
+chown root.users /var/log/onedrive
+chmod 0775 /var/log/onedrive
 ```
 
 All logfiles will be in the format of `%username%.onedrive.log`, where `%username%` represents the user who ran the client.
