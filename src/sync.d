@@ -1099,7 +1099,20 @@ final class SyncEngine
 	{
 		assert(item.type == ItemType.file);
 		write("Downloading file ", path, " ... ");
-		JSONValue fileDetails = onedrive.getFileDetails(item.driveId, item.id);
+		JSONValue fileDetails;
+		
+		try {
+			fileDetails = onedrive.getFileDetails(item.driveId, item.id);
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode >= 500) {
+				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+				return;
+			} else {
+				// Default operation if not a 500 error
+				log.error("ERROR: Query of OneDrive for file details failed");
+				return;
+			}
+		}
 		
 		if (isMalware(fileDetails)){
 			// OneDrive reports that this file is malware
