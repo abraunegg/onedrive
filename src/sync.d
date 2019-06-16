@@ -964,8 +964,8 @@ final class SyncEngine
 			// Check if file should be skipped based on size limit
 			if (isItemFile(driveItem)) {
 				if (cfg.getValueLong("skip_size") != 0) {
-					if (onedrive.getFileDetails(item.driveId, item.id)["size"].integer >= this.newSizeLimit) {
-						log.vlog("Skipping item - excluded by skip_size config: ", item.name, " (", onedrive.getFileDetails(item.driveId, item.id)["size"].integer/2^^20, " MB)");
+					if (driveItem["size"].integer >= this.newSizeLimit) {
+						log.vlog("Skipping item - excluded by skip_size config: ", item.name, " (", driveItem["size"].integer/2^^20, " MB)");
 						return;
 					}
 				}
