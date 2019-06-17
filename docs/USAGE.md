@@ -318,7 +318,7 @@ Folders shared with you can be synced by adding them to your OneDrive. To do tha
 Currently not supported.
 
 ### SharePoint / Office 365 Shared Libraries
-Refer to [docs/Office365.md](docs/Office365.md)
+Refer to [./Office365.md](Office365.md)
 
 ### OneDrive service running as root user
 There are two ways that onedrive can be used as a service
