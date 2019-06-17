@@ -32,6 +32,102 @@ case $(basename $DC) in
         ldc2) DC_TYPE=ldc ;;
         NOT_FOUND) AC_MSG_ERROR(Could not find any compatible D compiler, 1)
 esac
+
+dnl dash/POSIX version of version comparison
+vercomp () {
+    IFS=. read -r a0 a1 a2 aa <<EOF
+$1
+EOF
+    IFS=. read -r b0 b1 b2 bb <<EOF
+$2
+EOF
+    # leading 0 are ignored: 01 == 1, this also
+    # converts empty strings into 0: 1..2 == 1.0.2
+    a0=$(expr $a0 + 0)
+    a1=$(expr $a1 + 0)
+    a2=$(expr $a2 + 0)
+    b0=$(expr $b0 + 0)
+    b1=$(expr $b1 + 0)
+    b2=$(expr $b2 + 0)
+    #echo "$1 parsed to a=$a0 b=$a1 c=$a2 rest=$aa"
+    #echo "$2 parsed to a=$b0 b=$b1 c=$b2 rest=$bb"
+    if test $a0 -lt $b0 
+    then
+      return 2
+    elif test $a0 -gt $b0 
+    then
+      return 1
+    else
+      if test $a1 -lt $b1
+      then
+        return 2
+      elif test $a1 -gt $b1
+      then
+        return 1
+      else
+        if test $a2 -lt $b2
+	then
+	  return 2
+	elif test $a2 -gt $b2
+	then
+	  return 1
+	else
+	  if test $aa '<' $bb
+	  then
+	    return 2
+	  elif test $aa '>' $bb
+	  then
+	    return 1
+          else
+	    return 0
+	  fi
+	fi
+      fi
+    fi
+}
+
+DO_VERSION_CHECK=1
+AC_ARG_ENABLE(version-check,
+  AS_HELP_STRING([--disable-version-check], [Disable checks of compiler version during configure time]))
+AS_IF([test "x$enable_version_check" = "xno"], DO_VERSION_CHECK=0,)
+
+AS_IF([test "$DO_VERSION_CHECK" = "1"],
+      [ dnl do the version check
+AC_MSG_CHECKING([version of D compiler])
+# check for valid versions
+case $(basename $DC) in
+	ldmd2|ldc2)
+		# LDC - the LLVM D compiler (1.12.0): ...
+		VERSION=`$DC --version`
+		# remove  everything up to first (
+		VERSION=${VERSION#* (}
+		# remove everthing after ):
+		VERSION=${VERSION%%):*}
+		# now version should be something like L.M.N
+		MINVERSION=1.11.0
+		;;
+	dmd)
+		# DMD64 D Compiler v2.085.1\n...
+		VERSION=`$DC --version | tr '\n' ' '`
+		VERSION=${VERSION#*Compiler v}
+		VERSION=${VERSION%% *}
+		# now version should be something like L.M.N
+		MINVERSION=2.083.1
+		;;
+esac
+
+AC_MSG_RESULT([$VERSION])
+
+vercomp $MINVERSION $VERSION
+if test $? = 1
+then
+	AC_MSG_ERROR(Compiler version insufficient, current compiler version $VERSION, minimum version $MINVERSION, 1)
+fi
+#echo "MINVERSION=$MINVERSION VERSION=$VERSION"
+      ])
+
+
+
 AC_SUBST([DC_TYPE])
 dnl In case the environment variable DCFLAGS is set, we export it to the
 dnl generated Makefile at configure run:
