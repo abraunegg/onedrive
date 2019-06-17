@@ -311,8 +311,14 @@ To make this a permanent change to always skip folders when a '.nosync' empty fi
 
 Example: `check_nosync = "true"`
 
-### Shared folders
+### Shared folders (OneDrive Personal)
 Folders shared with you can be synced by adding them to your OneDrive. To do that open your Onedrive, go to the Shared files list, right click on the folder you want to sync and then click on "Add to my OneDrive".
+
+### Shared folders (OneDrive Business or Office 365)
+Currently not supported.
+
+### SharePoint / Office 365 Shared Libraries
+Refer to [./Office365.md](Office365.md)
 
 ### OneDrive service running as root user
 There are two ways that onedrive can be used as a service
