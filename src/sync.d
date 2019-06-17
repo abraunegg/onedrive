@@ -1104,14 +1104,8 @@ final class SyncEngine
 		try {
 			fileDetails = onedrive.getFileDetails(item.driveId, item.id);
 		} catch (OneDriveException e) {
-			log.error("ISSUE-DEBUG: onedrive.getFileDetails failed ... ");
-			log.error("ISSUE-DEBUG: e = ", e);
 			if (e.httpStatusCode >= 500) {
 				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
-				return;
-			} else {
-				// Default operation if not a 500 error
-				log.error("ERROR: Query of OneDrive for file details failed");
 				return;
 			}
 		}
@@ -1130,9 +1124,9 @@ final class SyncEngine
 				// Set the file size from the returned data
 				fileSize = fileDetails["size"].integer;
 			} else {
-				// Issue #540 extra debugging
-				log.error("ISSUE-DEBUG: fileDetails = ", fileDetails);
-				// We want to return 
+				// Issue #540 handling
+				log.vdebug("ERROR: onedrive.getFileDetails call returned a OneDriveException error");
+				// We want to return, cant download
 				return;
 			}
 		
