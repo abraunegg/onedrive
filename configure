@@ -2159,7 +2159,7 @@ $as_echo "$VERSION" >&6; }
 vercomp $MINVERSION $VERSION
 if test $? = 1
 then
-	as_fn_error current compiler version $VERSION "Compiler version insufficient" "$LINENO" 5
+	as_fn_error 1 "Compiler version insufficient, current compiler version $VERSION, minimum version $MINVERSION" "$LINENO" 5
 fi
 #echo "MINVERSION=$MINVERSION VERSION=$VERSION"
 

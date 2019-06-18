@@ -121,7 +121,7 @@ AC_MSG_RESULT([$VERSION])
 vercomp $MINVERSION $VERSION
 if test $? = 1
 then
-	AC_MSG_ERROR(Compiler version insufficient, current compiler version $VERSION, minimum version $MINVERSION, 1)
+	AC_MSG_ERROR([Compiler version insufficient, current compiler version $VERSION, minimum version $MINVERSION], 1)
 fi
 #echo "MINVERSION=$MINVERSION VERSION=$VERSION"
       ])
