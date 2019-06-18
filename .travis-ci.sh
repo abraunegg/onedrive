@@ -80,10 +80,11 @@ function setup_x32_chroot {
 	# Host dependencies
 	sudo apt-get install -qq -y ${HOST_DEPENDENCIES}
 	# Download DMD compiler
-	wget http://downloads.dlang.org/releases/2.x/2.081.1/dmd.2.081.1.linux.tar.xz
-	tar -xf dmd.2.081.1.linux.tar.xz
+	DMDVER=2.083.1
+	wget http://downloads.dlang.org/releases/2.x/${DMDVER}/dmd.${DMDVER}.linux.tar.xz
+	tar -xf dmd.${DMDVER}.linux.tar.xz
 	mv dmd2 dlang-${ARCH}
-	rm -rf dmd.2.081.1.linux.tar.xz
+	rm -rf dmd.${DMDVER}.linux.tar.xz
 	# Create chrooted environment
 	sudo mkdir ${CHROOT_DIR}
 	sudo debootstrap --foreign --no-check-gpg --variant=buildd --arch=${CHROOT_ARCH32} ${VERSION} ${CHROOT_DIR} ${DEBIAN_MIRROR}
