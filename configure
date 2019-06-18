@@ -654,6 +654,7 @@ SHELL'
 ac_subst_files=''
 ac_user_opts='
 enable_option_checking
+enable_version_check
 with_systemdsystemunitdir
 with_systemduserunitdir
 enable_notifications
@@ -1297,6 +1298,8 @@ Optional Features:
   --disable-option-checking  ignore unrecognized --enable/--with options
   --disable-FEATURE       do not include FEATURE (same as --enable-FEATURE=no)
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
+  --disable-version-check Disable checks of compiler version during configure
+                          time
   --enable-notifications  Enable desktop notifications via libnotify
   --enable-completions    Install shell completions for bash and zsh
   --enable-debug          Pass debug option to the compiler
@@ -2062,6 +2065,108 @@ case $(basename $DC) in
         ldc2) DC_TYPE=ldc ;;
         NOT_FOUND) as_fn_error 1 "Could not find any compatible D compiler" "$LINENO" 5
 esac
+
+vercomp () {
+    IFS=. read -r a0 a1 a2 aa <<EOF
+$1
+EOF
+    IFS=. read -r b0 b1 b2 bb <<EOF
+$2
+EOF
+    # leading 0 are ignored: 01 == 1, this also
+    # converts empty strings into 0: 1..2 == 1.0.2
+    a0=$(expr $a0 + 0)
+    a1=$(expr $a1 + 0)
+    a2=$(expr $a2 + 0)
+    b0=$(expr $b0 + 0)
+    b1=$(expr $b1 + 0)
+    b2=$(expr $b2 + 0)
+    #echo "$1 parsed to a=$a0 b=$a1 c=$a2 rest=$aa"
+    #echo "$2 parsed to a=$b0 b=$b1 c=$b2 rest=$bb"
+    if test $a0 -lt $b0
+    then
+      return 2
+    elif test $a0 -gt $b0
+    then
+      return 1
+    else
+      if test $a1 -lt $b1
+      then
+        return 2
+      elif test $a1 -gt $b1
+      then
+        return 1
+      else
+        if test $a2 -lt $b2
+	then
+	  return 2
+	elif test $a2 -gt $b2
+	then
+	  return 1
+	else
+	  if test $aa '<' $bb
+	  then
+	    return 2
+	  elif test $aa '>' $bb
+	  then
+	    return 1
+          else
+	    return 0
+	  fi
+	fi
+      fi
+    fi
+}
+
+DO_VERSION_CHECK=1
+# Check whether --enable-version-check was given.
+if test "${enable_version_check+set}" = set; then :
+  enableval=$enable_version_check;
+fi
+
+if test "x$enable_version_check" = "xno"; then :
+  DO_VERSION_CHECK=0
+fi
+
+if test "$DO_VERSION_CHECK" = "1"; then :
+   { $as_echo "$as_me:${as_lineno-$LINENO}: checking version of D compiler" >&5
+$as_echo_n "checking version of D compiler... " >&6; }
+# check for valid versions
+case $(basename $DC) in
+	ldmd2|ldc2)
+		# LDC - the LLVM D compiler (1.12.0): ...
+		VERSION=`$DC --version`
+		# remove  everything up to first (
+		VERSION=${VERSION#* (}
+		# remove everthing after ):
+		VERSION=${VERSION%%):*}
+		# now version should be something like L.M.N
+		MINVERSION=1.11.0
+		;;
+	dmd)
+		# DMD64 D Compiler v2.085.1\n...
+		VERSION=`$DC --version | tr '\n' ' '`
+		VERSION=${VERSION#*Compiler v}
+		VERSION=${VERSION%% *}
+		# now version should be something like L.M.N
+		MINVERSION=2.083.1
+		;;
+esac
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $VERSION" >&5
+$as_echo "$VERSION" >&6; }
+
+vercomp $MINVERSION $VERSION
+if test $? = 1
+then
+	as_fn_error current compiler version $VERSION "Compiler version insufficient" "$LINENO" 5
+fi
+#echo "MINVERSION=$MINVERSION VERSION=$VERSION"
+
+fi
+
+
+
 
 
 
