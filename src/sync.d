@@ -1430,10 +1430,6 @@ final class SyncEngine
 			if (e.httpStatusCode >= 500) {
 				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
 				return;
-			} else {
-				// Default operation if not a 500 error
-				log.error("ERROR: Query of OneDrive for file details failed");
-				return;
 			}
 		}
 		
@@ -1445,9 +1441,18 @@ final class SyncEngine
 			return;
 		}
 		
-		auto fileSize = fileDetails["size"].integer;
-		
 		if (!dryRun) {
+			ulong fileSize = 0;
+			if (hasFileSize(fileDetails)) {
+				// Set the file size from the returned data
+				fileSize = fileDetails["size"].integer;
+			} else {
+				// Issue #540 handling
+				log.vdebug("ERROR: onedrive.getFileDetails call returned a OneDriveException error");
+				// We want to return, cant download
+				return;
+			}
+		
 			try {
 				onedrive.downloadById(item.driveId, item.id, path, fileSize);
 			} catch (OneDriveException e) {
