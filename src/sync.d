@@ -1107,20 +1107,32 @@ final class SyncEngine
 			if (e.httpStatusCode >= 500) {
 				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
 				return;
+			} else {
+				// Default operation if not a 500 error
+				log.error("ERROR: Query of OneDrive for file details failed");
+				return;
 			}
 		}
 		
-		if (isMalware(fileDetails)){
-			// OneDrive reports that this file is malware
-			log.error("ERROR: MALWARE DETECTED IN FILE - DOWNLOAD SKIPPED");
-			// set global flag
-			malwareDetected = true;
+		// fileDetails has to be a valid JSON object
+		if (fileDetails.object()){
+			if (isMalware(fileDetails)){
+				// OneDrive reports that this file is malware
+				log.error("ERROR: MALWARE DETECTED IN FILE - DOWNLOAD SKIPPED");
+				// set global flag
+				malwareDetected = true;
+				return;
+			}
+		} else {
+			// Issue #550 handling
+			log.vdebug("ERROR: onedrive.getFileDetails call returned a OneDriveException error");
+			// We want to return, cant download
 			return;
 		}
 		
 		if (!dryRun) {
 			ulong fileSize = 0;
-			if (hasFileSize(fileDetails)) {
+			if ( (hasFileSize(fileDetails)) && (fileDetails.object()) ) {
 				// Set the file size from the returned data
 				fileSize = fileDetails["size"].integer;
 			} else {
