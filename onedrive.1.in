@@ -79,7 +79,7 @@ Enable client activity to a separate log file
 Configuration file key: \fBenable_logging\fP (default: \fBfalse\fP)
 .TP
 \fB\-\-force\-http\-1.1\fP
-Force the use of HTTP 1.1 for all operations (DEPRACIATED)
+Force the use of HTTP 1.1 for all operations (DEPRECIATED)
 .br
 Configuration file key: \fBforce_http_11\fP (default: \fBfalse\fP)
 .TP
