@@ -23,7 +23,7 @@ skip_file = "~*|.~*|*.tmp"
 Do not use a skip_file entry of `.*` as this will prevent correct searching of local changes to process.
 
 ### Important - curl compatibility
-If your system utilises curl >= 7.62.0 you may need to use `--force-http-1.1` in order for the client to work correctly due to changes in curl to prefer HTTP/2 over HTTP/1.1 by default.
+If your system utilises curl >= 7.62.0 curl defaults to prefer HTTP/2 over HTTP/1.1 by default. If you wish to use HTTP/2 for some operations you will need to use the `--force-http-2` config option to enable otherwise all operations will use HTTP/1.1.
 
 ### First run :zap:
 After installing the application you must run it at least once from the terminal to authorize it.
@@ -492,7 +492,9 @@ Options:
   --enable-logging
       Enable client activity to a separate log file
   --force-http-1.1
-      Force the use of HTTP 1.1 for all operations
+      Force the use of HTTP/1.1 for all operations (DEPRECIATED)
+  --force-http-2
+      Force the use of HTTP/2 for all operations where applicable
   --get-O365-drive-id ARG
       Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library
   --help -h

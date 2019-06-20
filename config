@@ -18,6 +18,7 @@
 # disable_upload_validation = "false"
 # enable_logging = "false"
 # force_http_11 = "false"
+# force_http_2 = "false"
 # local_first = "false"
 # no_remote_delete = "false"
 # skip_symlinks = "false"
