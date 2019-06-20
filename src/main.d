@@ -197,6 +197,10 @@ int main(string[] args)
 		return EXIT_SUCCESS;
 	}
 	
+	if (cfg.getValueBool("force_http_11")) {
+		log.log("NOTE: The use of --force-http-1.1 is depreciated");
+	}
+	
 	log.vlog("Initializing the OneDrive API ...");
 	try {
 		online = testNetwork();
