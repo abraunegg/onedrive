@@ -3,6 +3,17 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.3.5 - 2019-06-19
+### Fixed
+*   Handle a directory in the sync_dir when no permission to access
+*   Get rid of forced root necessity during installation
+*   Fix broken autoconf code for --enable-XXX options
+*   Fix so that skip_size check should only be used if configured
+*   Fix a OneDrive Internal Error exception occurring before attempting to download a file
+
+### Added
+*   Check for supported version of D compiler
+
 ## 2.3.4 - 2019-06-13
 ### Fixed
 *   Fix 'Local files not deleted' when using bad 'skip_file' entry

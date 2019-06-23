@@ -41,6 +41,7 @@ final class Config
 		boolValues["disable_upload_validation"] = false;
 		boolValues["enable_logging"]     = false;
 		boolValues["force_http_11"]      = false;
+		boolValues["force_http_2"]      = false;
 		boolValues["local_first"]        = false;
 		boolValues["no_remote_delete"]   = false;
 		boolValues["skip_symlinks"]      = false;
@@ -215,8 +216,11 @@ final class Config
 					"Enable client activity to a separate log file",
 					&boolValues["enable_logging"],
 				"force-http-1.1",
-					"Force the use of HTTP 1.1 for all operations",
+					"Force the use of HTTP/1.1 for all operations (DEPRECIATED)",
 					&boolValues["force_http_11"],
+				"force-http-2",
+					"Force the use of HTTP/2 for all operations where applicable",
+					&boolValues["force_http_2"],
 				"get-O365-drive-id",
 					"Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library",
 					&stringValues["get_o365_drive_id"],

@@ -141,7 +141,7 @@ endif
 
 version:
 	if [ -f .git/HEAD ] ; then \
-		echo $(shell git describe --tags) > version ; \
+		git describe --tags > version ; \
 	else \
 		echo $(version) > version ; \
 	fi
