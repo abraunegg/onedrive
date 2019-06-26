@@ -48,7 +48,9 @@ struct UploadSession
 		} catch (OneDriveException e) {
 			// there was an error
 			log.vlog("Create file upload session failed ... skipping file upload");
-			return;
+			// return upload() will return a JSONValue response, create an empty JSONValue response to return
+			JSONValue response;
+			return response;
 		}
 	}
 
