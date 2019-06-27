@@ -143,6 +143,10 @@ struct UploadSession
 
 	JSONValue upload()
 	{
+		// Response for upload
+		JSONValue response;
+		
+		// session JSON needs to contain valid elements
 		long offset;
 		long fileSize;
 		
@@ -154,45 +158,52 @@ struct UploadSession
 			fileSize = getSize(session["localPath"].str);
 		}
 		
-		// Upload Progress Bar
-		size_t iteration = (roundTo!int(double(fileSize)/double(fragmentSize)))+1;
-		Progress p = new Progress(iteration);
-		p.title = "Uploading";
-				
-		JSONValue response;
-		while (true) {
-			p.next();
-			long fragSize = fragmentSize < fileSize - offset ? fragmentSize : fileSize - offset;
-			// If the resume upload fails, we need to check for a return code here
-			try {
-				response = onedrive.uploadFragment(
-					session["uploadUrl"].str,
-					session["localPath"].str,
-					offset,
-					fragSize,
-					fileSize
-				);
-				offset += fragmentSize;
-				if (offset >= fileSize) break;
-				// update the session details
-				session["expirationDateTime"] = response["expirationDateTime"];
-				session["nextExpectedRanges"] = response["nextExpectedRanges"];
-				save();
-			} catch (OneDriveException e) {
-				// there was an error remove session file
-				if (exists(sessionFilePath)) {
-					remove(sessionFilePath);
+		if ("uploadUrl" in session){
+			// Upload file via session created
+			// Upload Progress Bar
+			size_t iteration = (roundTo!int(double(fileSize)/double(fragmentSize)))+1;
+			Progress p = new Progress(iteration);
+			p.title = "Uploading";
+			
+			while (true) {
+				p.next();
+				long fragSize = fragmentSize < fileSize - offset ? fragmentSize : fileSize - offset;
+				// If the resume upload fails, we need to check for a return code here
+				try {
+					response = onedrive.uploadFragment(
+						session["uploadUrl"].str,
+						session["localPath"].str,
+						offset,
+						fragSize,
+						fileSize
+					);
+					offset += fragmentSize;
+					if (offset >= fileSize) break;
+					// update the session details
+					session["expirationDateTime"] = response["expirationDateTime"];
+					session["nextExpectedRanges"] = response["nextExpectedRanges"];
+					save();
+				} catch (OneDriveException e) {
+					// there was an error remove session file
+					if (exists(sessionFilePath)) {
+						remove(sessionFilePath);
+					}
+					return response;
 				}
-				return response;
 			}
+			// upload complete
+			p.next();
+			writeln();
+			if (exists(sessionFilePath)) {
+				remove(sessionFilePath);
+			}
+			return response;
+		} else {
+			// session elements were not present
+			log.vlog("Session has no valid upload URL ... skipping this file upload");
+			// return an empty JSON response
+			return response;
 		}
-		// upload complete
-		p.next();
-		writeln();
-		if (exists(sessionFilePath)) {
-			remove(sessionFilePath);
-		}
-		return response;
 	}
 
 	private void save()
