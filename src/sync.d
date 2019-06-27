@@ -1196,7 +1196,7 @@ final class SyncEngine
 					}
 					// hash error?
 					if (OneDriveFileHash != quickXorHash) {
-						// downloaded file size does not match
+						// downloaded file hash does not match
 						log.error("ERROR: File download hash mis-match. Increase logging verbosity to determine why.");
 					}	
 					// we do not want this local file to remain on the local file system
