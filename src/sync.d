@@ -1132,6 +1132,7 @@ final class SyncEngine
 		
 		if (!dryRun) {
 			ulong fileSize = 0;
+			string OneDriveFileHash;
 			if ( (hasFileSize(fileDetails)) && (fileDetails.object()) ) {
 				// Set the file size from the returned data
 				fileSize = fileDetails["size"].integer;
@@ -1140,6 +1141,10 @@ final class SyncEngine
 				log.vdebug("ERROR: onedrive.getFileDetails call returned a OneDriveException error");
 				// We want to return, cant download
 				return;
+			}
+			
+			if ("quickXorHash" in fileDetails["file"]["hashes"]) {
+				OneDriveFileHash = fileDetails["file"]["hashes"]["quickXorHash"].str;
 			}
 		
 			try {
@@ -1174,13 +1179,23 @@ final class SyncEngine
 			}
 			// file has to have downloaded in order to set the times / data for the file
 			if (exists(path)) {
-				// A 'file' was downloaded - does what we downloaded = reported filesize?
-				if (getSize(path) == fileSize) {
+				// A 'file' was downloaded - does what we downloaded = reported fileSize or if there is some sort of funky local disk compression going on
+				// does the file hash OneDrive reports match what we have locally?
+				string quickXorHash = computeQuickXorHash(path);
+				if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash)) {
 					// downloaded fileSize = reported file size
 					setTimes(path, item.mtime, item.mtime);
 				} else {
-					// downloaded file size does not match
-					log.error("ERROR: File download size mis-match. Increase logging verbosity to determine why.");
+					// size error?
+					if (getSize(path) != fileSize) {
+						// downloaded file size does not match
+						log.error("ERROR: File download size mis-match. Increase logging verbosity to determine why.");
+					}
+					// hash error?
+					if (OneDriveFileHash != quickXorHash) {
+						// downloaded file size does not match
+						log.error("ERROR: File download hash mis-match. Increase logging verbosity to determine why.");
+					}	
 					// we do not want this local file to remain on the local file system
 					safeRemove(path);	
 					downloadFailed = true;
