@@ -79,6 +79,11 @@ private bool hasId(const ref JSONValue item)
 	return ("id" in item) != null;
 }
 
+private bool hasQuickXorHash(const ref JSONValue item)
+{
+	return ("quickXorHash" in item["file"]["hashes"]) != null;
+}
+
 private bool isDotFile(string path)
 {
 	// always allow the root
@@ -1133,9 +1138,11 @@ final class SyncEngine
 		if (!dryRun) {
 			ulong fileSize = 0;
 			string OneDriveFileHash;
-			if ( (hasFileSize(fileDetails)) && (fileDetails.object()) ) {
+			if ( (hasFileSize(fileDetails)) && (hasQuickXorHash(fileDetails)) && (fileDetails.object()) ) {
+				// fileDetails is a valid JSON object with the elements we need
 				// Set the file size from the returned data
 				fileSize = fileDetails["size"].integer;
+				OneDriveFileHash = fileDetails["file"]["hashes"]["quickXorHash"].str;
 			} else {
 				// Issue #540 handling
 				log.vdebug("ERROR: onedrive.getFileDetails call returned a OneDriveException error");
@@ -1143,10 +1150,6 @@ final class SyncEngine
 				return;
 			}
 			
-			if ("quickXorHash" in fileDetails["file"]["hashes"]) {
-				OneDriveFileHash = fileDetails["file"]["hashes"]["quickXorHash"].str;
-			}
-		
 			try {
 				onedrive.downloadById(item.driveId, item.id, path, fileSize);
 			} catch (OneDriveException e) {
