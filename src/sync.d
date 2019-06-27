@@ -1174,7 +1174,18 @@ final class SyncEngine
 			}
 			// file has to have downloaded in order to set the times / data for the file
 			if (exists(path)) {
-				setTimes(path, item.mtime, item.mtime);
+				// A 'file' was downloaded - does what we downloaded = reported filesize?
+				if (getSize(path) == fileSize) {
+					// downloaded fileSize = reported file size
+					setTimes(path, item.mtime, item.mtime);
+				} else {
+					// downloaded file size does not match
+					log.error("ERROR: File download size mis-match. Increase logging verbosity to determine why.");
+					// we do not want this local file to remain on the local file system
+					safeRemove(path);	
+					downloadFailed = true;
+					return;
+				}
 			} else {
 				log.error("ERROR: File failed to download. Increase logging verbosity to determine why.");
 				downloadFailed = true;
