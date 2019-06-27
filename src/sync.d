@@ -1186,7 +1186,7 @@ final class SyncEngine
 				// does the file hash OneDrive reports match what we have locally?
 				string quickXorHash = computeQuickXorHash(path);
 				if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash)) {
-					// downloaded fileSize = reported file size
+					// downloaded matches either size or hash
 					setTimes(path, item.mtime, item.mtime);
 				} else {
 					// size error?
