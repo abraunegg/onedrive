@@ -79,6 +79,11 @@ private bool hasId(const ref JSONValue item)
 	return ("id" in item) != null;
 }
 
+private bool hasQuickXorHash(const ref JSONValue item)
+{
+	return ("quickXorHash" in item["file"]["hashes"]) != null;
+}
+
 private bool isDotFile(string path)
 {
 	// always allow the root
@@ -1455,16 +1460,19 @@ final class SyncEngine
 		
 		if (!dryRun) {
 			ulong fileSize = 0;
-			if ( (hasFileSize(fileDetails)) && (fileDetails.object()) ) {
+			string OneDriveFileHash;
+			if ( (hasFileSize(fileDetails)) && (hasQuickXorHash(fileDetails)) && (fileDetails.object()) ) {
+				// fileDetails is a valid JSON object with the elements we need
 				// Set the file size from the returned data
 				fileSize = fileDetails["size"].integer;
+				OneDriveFileHash = fileDetails["file"]["hashes"]["quickXorHash"].str;
 			} else {
 				// Issue #540 handling
 				log.vdebug("ERROR: onedrive.getFileDetails call returned a OneDriveException error");
 				// We want to return, cant download
 				return;
 			}
-		
+			
 			try {
 				onedrive.downloadById(item.driveId, item.id, path, fileSize);
 			} catch (OneDriveException e) {
@@ -1497,7 +1505,28 @@ final class SyncEngine
 			}
 			// file has to have downloaded in order to set the times / data for the file
 			if (exists(path)) {
-				setTimes(path, item.mtime, item.mtime);
+				// A 'file' was downloaded - does what we downloaded = reported fileSize or if there is some sort of funky local disk compression going on
+				// does the file hash OneDrive reports match what we have locally?
+				string quickXorHash = computeQuickXorHash(path);
+				if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash)) {
+					// downloaded matches either size or hash
+					setTimes(path, item.mtime, item.mtime);
+				} else {
+					// size error?
+					if (getSize(path) != fileSize) {
+						// downloaded file size does not match
+						log.error("ERROR: File download size mis-match. Increase logging verbosity to determine why.");
+					}
+					// hash error?
+					if (OneDriveFileHash != quickXorHash) {
+						// downloaded file hash does not match
+						log.error("ERROR: File download hash mis-match. Increase logging verbosity to determine why.");
+					}	
+					// we do not want this local file to remain on the local file system
+					safeRemove(path);	
+					downloadFailed = true;
+					return;
+				}
 			} else {
 				log.error("ERROR: File failed to download. Increase logging verbosity to determine why.");
 				downloadFailed = true;
