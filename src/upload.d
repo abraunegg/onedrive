@@ -39,13 +39,14 @@ struct UploadSession
 				])
 			];
 		
-		try {
-			// Try to create the upload session for this file
-			session = onedrive.createUploadSession(parentDriveId, parentId, filename, eTag, fileSystemInfo);
+		// Try to create the upload session for this file
+		session = onedrive.createUploadSession(parentDriveId, parentId, filename, eTag, fileSystemInfo);
+		
+		if ("uploadUrl" in session){
 			session["localPath"] = localPath;
 			save();
 			return upload();
-		} catch (OneDriveException e) {
+		} else {
 			// there was an error
 			log.vlog("Create file upload session failed ... skipping file upload");
 			// return upload() will return a JSONValue response, create an empty JSONValue response to return

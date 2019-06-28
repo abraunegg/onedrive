@@ -2058,7 +2058,6 @@ final class SyncEngine
 											writeln("");
 											try {
 												response = session.upload(path, parent.driveId, parent.id, baseName(path));
-												writeln(" done.");
 											} catch (OneDriveException e) {
 												// error uploading file
 												log.vlog("Upload failed with OneDriveException: ", e.msg);
@@ -2067,17 +2066,22 @@ final class SyncEngine
 												log.vlog("Upload failed with File Exception: ", e.msg);
 												return;
 											}
+											writeln(" done.");
 										}
 									} else {
 										// OneDrive Business Account - always use a session to upload
 										writeln("");
 										try {
 											response = session.upload(path, parent.driveId, parent.id, baseName(path));
-											writeln(" done.");
 										} catch (OneDriveException e) {
 											// error uploading file
+											log.vlog("Upload failed with OneDriveException: ", e.msg);
+											return;
+										} catch (FileException e) {
+											log.vlog("Upload failed with File Exception: ", e.msg);
 											return;
 										}
+										writeln(" done.");
 									}
 								}
 								
