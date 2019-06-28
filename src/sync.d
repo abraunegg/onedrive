@@ -2055,64 +2055,67 @@ final class SyncEngine
 								// Log action to log file
 								log.fileOnly("Uploading new file ", path, " ... done.");
 								
-								// The file was uploaded, or a 4xx / 5xx error was generated
-								if ("size" in response){
-									// The response JSON contains size, high likelihood valid response returned 
-									ulong uploadFileSize = response["size"].integer;
-									
-									// In some cases the file that was uploaded was not complete, but 'completed' without errors on OneDrive
-									// This has been seen with PNG / JPG files mainly, which then contributes to generating a 412 error when we attempt to update the metadata
-									// Validate here that the file uploaded, at least in size, matches in the response to what the size is on disk
-									if (thisFileSize != uploadFileSize){
-										if(disableUploadValidation){
-											// Print a warning message
-											log.log("WARNING: Uploaded file size does not match local file - skipping upload validation");
+								// response from OneDrive has to be a valid JSON object
+								if (response.object()){
+									// The file was uploaded, or a 4xx / 5xx error was generated
+									if ("size" in response){
+										// The response JSON contains size, high likelihood valid response returned 
+										ulong uploadFileSize = response["size"].integer;
+										
+										// In some cases the file that was uploaded was not complete, but 'completed' without errors on OneDrive
+										// This has been seen with PNG / JPG files mainly, which then contributes to generating a 412 error when we attempt to update the metadata
+										// Validate here that the file uploaded, at least in size, matches in the response to what the size is on disk
+										if (thisFileSize != uploadFileSize){
+											if(disableUploadValidation){
+												// Print a warning message
+												log.log("WARNING: Uploaded file size does not match local file - skipping upload validation");
+											} else {
+												// OK .. the uploaded file does not match and we did not disable this validation
+												log.log("Uploaded file size does not match local file - upload failure - retrying");
+												// Delete uploaded bad file
+												onedrive.deleteById(response["parentReference"]["driveId"].str, response["id"].str, response["eTag"].str);
+												// Re-upload
+												uploadNewFile(path);
+												return;
+											}
+										} 
+										
+										// File validation is OK
+										if ((accountType == "personal") || (thisFileSize == 0)){
+											// Update the item's metadata on OneDrive
+											string id = response["id"].str;
+											string cTag; 
+											
+											// Is there a valid cTag in the response?
+											if ("cTag" in response) {
+												// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
+												cTag = response["cTag"].str;
+											} else {
+												// Is there an eTag in the response?
+												if ("eTag" in response) {
+													// use the eTag from the response as there was no cTag
+													cTag = response["eTag"].str;
+												} else {
+													// no tag available - set to nothing
+													cTag = "";
+												}
+											}
+											
+											if (exists(path)) {
+												SysTime mtime = timeLastModified(path).toUTC();
+												uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+											} else {
+												// will be removed in different event!
+												log.log("File disappeared after upload: ", path);
+											}
+											return;
 										} else {
-											// OK .. the uploaded file does not match and we did not disable this validation
-											log.log("Uploaded file size does not match local file - upload failure - retrying");
-											// Delete uploaded bad file
-											onedrive.deleteById(response["parentReference"]["driveId"].str, response["id"].str, response["eTag"].str);
-											// Re-upload
-											uploadNewFile(path);
+											// OneDrive Business Account - always use a session to upload
+											// The session includes a Request Body element containing lastModifiedDateTime
+											// which negates the need for a modify event against OneDrive
+											saveItem(response);
 											return;
 										}
-									} 
-									
-									// File validation is OK
-									if ((accountType == "personal") || (thisFileSize == 0)){
-										// Update the item's metadata on OneDrive
-										string id = response["id"].str;
-										string cTag; 
-										
-										// Is there a valid cTag in the response?
-										if ("cTag" in response) {
-											// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded
-											cTag = response["cTag"].str;
-										} else {
-											// Is there an eTag in the response?
-											if ("eTag" in response) {
-												// use the eTag from the response as there was no cTag
-												cTag = response["eTag"].str;
-											} else {
-												// no tag available - set to nothing
-												cTag = "";
-											}
-										}
-										
-										if (exists(path)) {
-											SysTime mtime = timeLastModified(path).toUTC();
-											uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
-										} else {
-											// will be removed in different event!
-											log.log("File disappeared after upload: ", path);
-										}
-										return;
-									} else {
-										// OneDrive Business Account - always use a session to upload
-										// The session includes a Request Body element containing lastModifiedDateTime
-										// which negates the need for a modify event against OneDrive
-										saveItem(response);
-										return;
 									}
 								}
 							} else {
