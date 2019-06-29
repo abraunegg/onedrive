@@ -306,58 +306,49 @@ final class SyncEngine
 				exit(-1);
 			}
 		}
-		
-		if ((oneDriveDetails.type() == JSONType.object) && (oneDriveRootDetails.type() == JSONType.object)) {
-			if ((hasId(oneDriveDetails)) && (hasId(oneDriveRootDetails))) {
-				// JSON elements are valid
-				// Debug OneDrive Account details response
-				log.vdebug("OneDrive Account Details:      ", oneDriveDetails);
-				log.vdebug("OneDrive Account Root Details: ", oneDriveRootDetails);
-				
-				// Successfully got details from OneDrive without a server side error such as 'HTTP/1.1 500 Internal Server Error' or 'HTTP/1.1 504 Gateway Timeout' 
-				accountType = oneDriveDetails["driveType"].str;
-				defaultDriveId = oneDriveDetails["id"].str;
-				defaultRootId = oneDriveRootDetails["id"].str;
-				remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
-				
-				// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
-				if (remainingFreeSpace <= 0) {
-					// quota details not available
-					log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
-					log.error("ERROR: Flagging to disable upload space checks - this MAY have undesirable results if a file cannot be uploaded due to out of space.");
-					quotaAvailable = false;
-				}
-				
-				// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
-				log.vlog("Account Type: ", accountType);
-				log.vlog("Default Drive ID: ", defaultDriveId);
-				log.vlog("Default Root ID: ", defaultRootId);
-				log.vlog("Remaining Free Space: ", remainingFreeSpace);
+
+		if ((oneDriveDetails.type() == JSONType.object) && (oneDriveRootDetails.type() == JSONType.object) && (hasId(oneDriveDetails)) && (hasId(oneDriveRootDetails))) {
+			// JSON elements are valid
+			// Debug OneDrive Account details response
+			log.vdebug("OneDrive Account Details:      ", oneDriveDetails);
+			log.vdebug("OneDrive Account Root Details: ", oneDriveRootDetails);
 			
-				// If account type is documentLibrary - then most likely this is a SharePoint repository
-				// and files 'may' be modified after upload. See: https://github.com/abraunegg/onedrive/issues/205
-				if(accountType == "documentLibrary") {
-					setDisableUploadValidation();
-				}
+			// Successfully got details from OneDrive without a server side error such as 'HTTP/1.1 500 Internal Server Error' or 'HTTP/1.1 504 Gateway Timeout' 
+			accountType = oneDriveDetails["driveType"].str;
+			defaultDriveId = oneDriveDetails["id"].str;
+			defaultRootId = oneDriveRootDetails["id"].str;
+			remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
 			
-				// Check the local database to ensure the OneDrive Root details are in the database
-				checkDatabaseForOneDriveRoot();
-			
-				// Check if there is an interrupted upload session
-				if (session.restore()) {
-					log.log("Continuing the upload session ...");
-					auto item = session.upload();
-					saveItem(item);
-				}		
-				initDone = true;
-			} else {
-				// init failure
-				initDone = false;
-				// log why
-				log.error("ERROR: Unable to query OneDrive to initialize application");
-				// Must exit here
-				exit(-1);
+			// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
+			if (remainingFreeSpace <= 0) {
+				// quota details not available
+				log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+				log.error("ERROR: Flagging to disable upload space checks - this MAY have undesirable results if a file cannot be uploaded due to out of space.");
+				quotaAvailable = false;
 			}
+			
+			// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
+			log.vlog("Account Type: ", accountType);
+			log.vlog("Default Drive ID: ", defaultDriveId);
+			log.vlog("Default Root ID: ", defaultRootId);
+			log.vlog("Remaining Free Space: ", remainingFreeSpace);
+		
+			// If account type is documentLibrary - then most likely this is a SharePoint repository
+			// and files 'may' be modified after upload. See: https://github.com/abraunegg/onedrive/issues/205
+			if(accountType == "documentLibrary") {
+				setDisableUploadValidation();
+			}
+		
+			// Check the local database to ensure the OneDrive Root details are in the database
+			checkDatabaseForOneDriveRoot();
+		
+			// Check if there is an interrupted upload session
+			if (session.restore()) {
+				log.log("Continuing the upload session ...");
+				auto item = session.upload();
+				saveItem(item);
+			}		
+			initDone = true;
 		} else {
 			// init failure
 			initDone = false;
