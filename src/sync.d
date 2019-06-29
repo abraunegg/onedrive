@@ -2159,6 +2159,11 @@ final class SyncEngine
 											return;
 										}
 									}
+								} else {
+									// response is not valid JSON, an error was returned from OneDrive
+									log.error("ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object");
+									log.error("ERROR: Increase logging verbosity to assist determining why.");
+									return;
 								}
 							} else {
 								// we are --dry-run - simulate the file upload
