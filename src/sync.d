@@ -2032,12 +2032,10 @@ final class SyncEngine
 									// https://github.com/OneDrive/onedrive-api-docs/issues/53
 									try {
 										response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-										writeln(" done.");
 									} catch (OneDriveException e) {
 										// error uploading file
 										return;
 									}
-									
 								} else {
 									// File is not a zero byte file
 									// Are we using OneDrive Personal or OneDrive Business?
@@ -2061,7 +2059,6 @@ final class SyncEngine
 												}
 												else throw e;
 											}
-											writeln(" done.");
 										} else {
 											// File larger than threshold - use a session to upload
 											writeln("");
@@ -2075,7 +2072,6 @@ final class SyncEngine
 												log.vlog("Upload failed with File Exception: ", e.msg);
 												return;
 											}
-											writeln(" done.");
 										}
 									} else {
 										// OneDrive Business Account - always use a session to upload
@@ -2090,15 +2086,14 @@ final class SyncEngine
 											log.vlog("Upload failed with File Exception: ", e.msg);
 											return;
 										}
-										writeln(" done.");
 									}
 								}
 								
-								// Log action to log file
-								log.fileOnly("Uploading new file ", path, " ... done.");
-								
 								// response from OneDrive has to be a valid JSON object
 								if (response.type() == JSONType.object){
+									// Log action to log file
+									log.fileOnly("Uploading new file ", path, " ... done.");
+									writeln(" done.");
 									// The file was uploaded, or a 4xx / 5xx error was generated
 									if ("size" in response){
 										// The response JSON contains size, high likelihood valid response returned 
@@ -2161,8 +2156,8 @@ final class SyncEngine
 									}
 								} else {
 									// response is not valid JSON, an error was returned from OneDrive
-									log.error("ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object");
-									log.error("ERROR: Increase logging verbosity to assist determining why.");
+									log.fileOnly("Uploading new file ", path, " ... error");
+									writeln(" error");
 									return;
 								}
 							} else {
