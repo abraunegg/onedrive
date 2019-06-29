@@ -95,7 +95,7 @@ struct UploadSession
 					}
 					
 					// do we have a valid response from OneDrive?
-					if (response.object()){
+					if (response.type() == JSONType.object){
 						// JSON object
 						if (("expirationDateTime" in response) && ("nextExpectedRanges" in response)){
 							// has the elements we need

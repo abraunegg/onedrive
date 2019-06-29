@@ -307,48 +307,57 @@ final class SyncEngine
 			}
 		}
 		
-		if ((hasId(oneDriveDetails)) && (hasId(oneDriveRootDetails))) {
-			// JSON elements are valid
-			// Debug OneDrive Account details response
-			log.vdebug("OneDrive Account Details:      ", oneDriveDetails);
-			log.vdebug("OneDrive Account Root Details: ", oneDriveRootDetails);
+		if ((oneDriveDetails.type() == JSONType.object) && (oneDriveRootDetails.type() == JSONType.object)) {
+			if ((hasId(oneDriveDetails)) && (hasId(oneDriveRootDetails))) {
+				// JSON elements are valid
+				// Debug OneDrive Account details response
+				log.vdebug("OneDrive Account Details:      ", oneDriveDetails);
+				log.vdebug("OneDrive Account Root Details: ", oneDriveRootDetails);
+				
+				// Successfully got details from OneDrive without a server side error such as 'HTTP/1.1 500 Internal Server Error' or 'HTTP/1.1 504 Gateway Timeout' 
+				accountType = oneDriveDetails["driveType"].str;
+				defaultDriveId = oneDriveDetails["id"].str;
+				defaultRootId = oneDriveRootDetails["id"].str;
+				remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+				
+				// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
+				if (remainingFreeSpace <= 0) {
+					// quota details not available
+					log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+					log.error("ERROR: Flagging to disable upload space checks - this MAY have undesirable results if a file cannot be uploaded due to out of space.");
+					quotaAvailable = false;
+				}
+				
+				// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
+				log.vlog("Account Type: ", accountType);
+				log.vlog("Default Drive ID: ", defaultDriveId);
+				log.vlog("Default Root ID: ", defaultRootId);
+				log.vlog("Remaining Free Space: ", remainingFreeSpace);
 			
-			// Successfully got details from OneDrive without a server side error such as 'HTTP/1.1 500 Internal Server Error' or 'HTTP/1.1 504 Gateway Timeout' 
-			accountType = oneDriveDetails["driveType"].str;
-			defaultDriveId = oneDriveDetails["id"].str;
-			defaultRootId = oneDriveRootDetails["id"].str;
-			remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+				// If account type is documentLibrary - then most likely this is a SharePoint repository
+				// and files 'may' be modified after upload. See: https://github.com/abraunegg/onedrive/issues/205
+				if(accountType == "documentLibrary") {
+					setDisableUploadValidation();
+				}
 			
-			// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
-			if (remainingFreeSpace <= 0) {
-				// quota details not available
-				log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
-				log.error("ERROR: Flagging to disable upload space checks - this MAY have undesirable results if a file cannot be uploaded due to out of space.");
-				quotaAvailable = false;
+				// Check the local database to ensure the OneDrive Root details are in the database
+				checkDatabaseForOneDriveRoot();
+			
+				// Check if there is an interrupted upload session
+				if (session.restore()) {
+					log.log("Continuing the upload session ...");
+					auto item = session.upload();
+					saveItem(item);
+				}		
+				initDone = true;
+			} else {
+				// init failure
+				initDone = false;
+				// log why
+				log.error("ERROR: Unable to query OneDrive to initialize application");
+				// Must exit here
+				exit(-1);
 			}
-			
-			// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
-			log.vlog("Account Type: ", accountType);
-			log.vlog("Default Drive ID: ", defaultDriveId);
-			log.vlog("Default Root ID: ", defaultRootId);
-			log.vlog("Remaining Free Space: ", remainingFreeSpace);
-		
-			// If account type is documentLibrary - then most likely this is a SharePoint repository
-			// and files 'may' be modified after upload. See: https://github.com/abraunegg/onedrive/issues/205
-			if(accountType == "documentLibrary") {
-				setDisableUploadValidation();
-			}
-		
-			// Check the local database to ensure the OneDrive Root details are in the database
-			checkDatabaseForOneDriveRoot();
-		
-			// Check if there is an interrupted upload session
-			if (session.restore()) {
-				log.log("Continuing the upload session ...");
-				auto item = session.upload();
-				saveItem(item);
-			}		
-			initDone = true;
 		} else {
 			// init failure
 			initDone = false;
@@ -1120,7 +1129,7 @@ final class SyncEngine
 		}
 		
 		// fileDetails has to be a valid JSON object
-		if (fileDetails.object()){
+		if (fileDetails.type() == JSONType.object){
 			if (isMalware(fileDetails)){
 				// OneDrive reports that this file is malware
 				log.error("ERROR: MALWARE DETECTED IN FILE - DOWNLOAD SKIPPED");
@@ -1138,7 +1147,7 @@ final class SyncEngine
 		if (!dryRun) {
 			ulong fileSize = 0;
 			string OneDriveFileHash;
-			if ( (hasFileSize(fileDetails)) && (hasQuickXorHash(fileDetails)) && (fileDetails.object()) ) {
+			if ( (hasFileSize(fileDetails)) && (hasQuickXorHash(fileDetails)) && (fileDetails.type() == JSONType.object) ) {
 				// fileDetails is a valid JSON object with the elements we need
 				// Set the file size from the returned data
 				fileSize = fileDetails["size"].integer;
@@ -2089,7 +2098,7 @@ final class SyncEngine
 								log.fileOnly("Uploading new file ", path, " ... done.");
 								
 								// response from OneDrive has to be a valid JSON object
-								if (response.object()){
+								if (response.type() == JSONType.object){
 									// The file was uploaded, or a 4xx / 5xx error was generated
 									if ("size" in response){
 										// The response JSON contains size, high likelihood valid response returned 
@@ -2175,7 +2184,7 @@ final class SyncEngine
 					// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior.
 					
 					// fileDetailsFromOneDrive has to be a valid object
-					if (fileDetailsFromOneDrive.object()){
+					if (fileDetailsFromOneDrive.type() == JSONType.object){
 						// Check that 'name' is in the JSON response (validates data) and that 'name' == the path we are looking for
 						if (("name" in fileDetailsFromOneDrive) && (fileDetailsFromOneDrive["name"].str == baseName(path))) {
 							// OneDrive 'name' matches local path name
@@ -2384,7 +2393,7 @@ final class SyncEngine
 	private void saveItem(JSONValue jsonItem)
 	{
 		// jsonItem has to be a valid object
-		if (jsonItem.object()){
+		if (jsonItem.type() == JSONType.object){
 			// Check if the response JSON has an 'id', otherwise makeItem() fails with 'Key not found: id'
 			if (hasId(jsonItem)) {
 				// Takes a JSON input and formats to an item which can be used by the database
