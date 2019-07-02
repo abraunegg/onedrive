@@ -3,6 +3,20 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.3.6 - 2019-07-03
+### Fixed
+*   Fix JSONValue object validation
+*   Fix building without git being available
+*   Fix some spelling/grammatical errors
+*   Fix OneDrive error response on creating upload session
+
+### Added
+*   Add download size & hash check to ensure downloaded files are valid and not corrupt
+*   Added --force-http-2 to use HTTP/2 if desired
+
+### Changed
+*   Depreciated --force-http-1.1 (enabled by default) due to OneDrive inconsistent behavior with HTTP/2 protocol
+
 ## 2.3.5 - 2019-06-19
 ### Fixed
 *   Handle a directory in the sync_dir when no permission to access
