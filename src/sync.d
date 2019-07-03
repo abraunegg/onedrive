@@ -1111,10 +1111,12 @@ final class SyncEngine
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode >= 500) {
 				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+				downloadFailed = true;
 				return;
 			} else {
 				// Default operation if not a 500 error
 				log.error("ERROR: Query of OneDrive for file details failed");
+				downloadFailed = true;
 				return;
 			}
 		}
@@ -1132,6 +1134,7 @@ final class SyncEngine
 			// Issue #550 handling
 			log.vdebug("ERROR: onedrive.getFileDetails call returned a OneDriveException error");
 			// We want to return, cant download
+			downloadFailed = true;
 			return;
 		}
 		
@@ -1147,6 +1150,7 @@ final class SyncEngine
 				// Issue #540 handling
 				log.vdebug("ERROR: onedrive.getFileDetails call returned a OneDriveException error");
 				// We want to return, cant download
+				downloadFailed = true;
 				return;
 			}
 			
