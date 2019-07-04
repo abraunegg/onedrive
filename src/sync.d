@@ -1146,11 +1146,17 @@ final class SyncEngine
 			if (hasFileSize(fileDetails)) {
 				// Use the configured filesize as reported by OneDrive
 				fileSize = fileDetails["size"].integer;
+			} else {
+				// filesize missing
+				log.vdebug("WARNING: fileDetails['size'] is missing");
 			}
 			
 			if (hasQuickXorHash(fileDetails)) {
 				// Use the configured quickXorHash as reported by OneDrive
 				OneDriveFileHash = fileDetails["file"]["hashes"]["quickXorHash"].str;
+			} else {
+				// filesize missing
+				log.vdebug("WARNING: fileDetails['file']['hashes']['quickXorHash'] is missing");
 			}
 			
 			try {
