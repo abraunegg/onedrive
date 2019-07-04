@@ -1141,19 +1141,16 @@ final class SyncEngine
 		if (!dryRun) {
 			ulong fileSize = 0;
 			string OneDriveFileHash;
-			if ( (hasFileSize(fileDetails)) && (hasQuickXorHash(fileDetails)) && (fileDetails.type() == JSONType.object) ) {
-				// fileDetails is a valid JSON object with the elements we need
-				// Set the file size from the returned data
+			
+			// fileDetails should be a valid JSON due to prior check
+			if (hasFileSize(fileDetails)) {
+				// Use the configured filesize as reported by OneDrive
 				fileSize = fileDetails["size"].integer;
+			}
+			
+			if (hasQuickXorHash(fileDetails)) {
+				// Use the configured quickXorHash as reported by OneDrive
 				OneDriveFileHash = fileDetails["file"]["hashes"]["quickXorHash"].str;
-			} else {
-				// Issue #540 handling
-				log.error("ERROR: onedrive.getFileDetails call did not return valid data or returned an invalid JSON Object");
-				writeln("fileDetails: ", fileDetails);
-				writeln("type:        ", fileDetails.type());
-				// We want to return, cant download
-				downloadFailed = true;
-				return;
 			}
 			
 			try {
