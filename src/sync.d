@@ -1149,6 +1149,8 @@ final class SyncEngine
 			} else {
 				// Issue #540 handling
 				log.error("ERROR: onedrive.getFileDetails call did not return valid data or returned an invalid JSON Object");
+				writeln("fileDetails: ", fileDetails);
+				writeln("type:        ", fileDetails.type());
 				// We want to return, cant download
 				downloadFailed = true;
 				return;
