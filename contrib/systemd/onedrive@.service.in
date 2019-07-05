@@ -10,6 +10,7 @@ User=%i
 Group=users
 Restart=on-failure
 RestartSec=3
+RestartPreventExitStatus=3
 
 [Install]
 WantedBy=multi-user.target
