@@ -81,7 +81,7 @@ sudo yum -y update
 sudo yum -y install epel-release, wget
 sudo yum -y install mock
 wget https://kojipkgs.fedoraproject.org//packages/sqlite/3.7.15.2/2.fc19/src/sqlite-3.7.15.2-2.fc19.src.rpm
-mock --rebuild sqlite-3.7.15.2-2.fc19.src.rpm
+sudo mock --rebuild sqlite-3.7.15.2-2.fc19.src.rpm
 sudo yum -y upgrade /var/lib/mock/epel-6-{arch}/result/sqlite-*
 ```
 
