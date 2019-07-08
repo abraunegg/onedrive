@@ -10,6 +10,8 @@ static import log;
 OneDriveApi oneDrive;
 ItemDatabase itemDb;
 
+const int EXIT_UNAUTHORIZED = 3;
+
 enum MONITOR_LOG_SILENT = 2;
 enum MONITOR_LOG_QUIET  = 1;
 enum LOG_NORMAL = 0;
@@ -220,7 +222,7 @@ int main(string[] args)
 		log.error("Could not initialize the OneDrive API");
 		// workaround for segfault in std.net.curl.Curl.shutdown() on exit
 		oneDrive.http.shutdown();
-		return EXIT_FAILURE;
+		return EXIT_UNAUTHORIZED;
 	}
 	
 	// if --synchronize or --monitor not passed in, exit & display help

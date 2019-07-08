@@ -8,6 +8,7 @@ Wants=network-online.target
 ExecStart=@prefix@/bin/onedrive --monitor
 Restart=on-failure
 RestartSec=3
+RestartPreventExitStatus=3
 
 [Install]
 WantedBy=default.target

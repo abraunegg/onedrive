@@ -328,6 +328,7 @@ final class SyncEngine
 			}
 			
 			// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
+			log.vlog("Application version: ", strip(import("version")));
 			log.vlog("Account Type: ", accountType);
 			log.vlog("Default Drive ID: ", defaultDriveId);
 			log.vlog("Default Root ID: ", defaultRootId);
@@ -396,10 +397,13 @@ final class SyncEngine
 		string rootId = defaultRootId;
 		applyDifferences(driveId, rootId);
 
-		// check all remote folders
+		// Check OneDrive Personal Shared Folders
 		// https://github.com/OneDrive/onedrive-api-docs/issues/764
 		Item[] items = itemdb.selectRemoteItems();
-		foreach (item; items) applyDifferences(item.remoteDriveId, item.remoteId);
+		foreach (item; items) {
+			log.vlog("Syncing OneDrive Shared Folder: ", item.name);
+			applyDifferences(item.remoteDriveId, item.remoteId);
+		}
 	}
 
 	// download all new changes from a specified folder on OneDrive
@@ -1109,13 +1113,9 @@ final class SyncEngine
 		try {
 			fileDetails = onedrive.getFileDetails(item.driveId, item.id);
 		} catch (OneDriveException e) {
+			log.error("ERROR: Query of OneDrive for file details failed");
 			if (e.httpStatusCode >= 500) {
 				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
-				downloadFailed = true;
-				return;
-			} else {
-				// Default operation if not a 500 error
-				log.error("ERROR: Query of OneDrive for file details failed");
 				downloadFailed = true;
 				return;
 			}
@@ -1132,7 +1132,7 @@ final class SyncEngine
 			}
 		} else {
 			// Issue #550 handling
-			log.vdebug("ERROR: onedrive.getFileDetails call returned a OneDriveException error");
+			log.error("ERROR: onedrive.getFileDetails call returned an invalid JSON Object");
 			// We want to return, cant download
 			downloadFailed = true;
 			return;
@@ -1141,17 +1141,22 @@ final class SyncEngine
 		if (!dryRun) {
 			ulong fileSize = 0;
 			string OneDriveFileHash;
-			if ( (hasFileSize(fileDetails)) && (hasQuickXorHash(fileDetails)) && (fileDetails.type() == JSONType.object) ) {
-				// fileDetails is a valid JSON object with the elements we need
-				// Set the file size from the returned data
+			
+			// fileDetails should be a valid JSON due to prior check
+			if (hasFileSize(fileDetails)) {
+				// Use the configured filesize as reported by OneDrive
 				fileSize = fileDetails["size"].integer;
+			} else {
+				// filesize missing
+				log.vdebug("WARNING: fileDetails['size'] is missing");
+			}
+			
+			if (hasQuickXorHash(fileDetails)) {
+				// Use the configured quickXorHash as reported by OneDrive
 				OneDriveFileHash = fileDetails["file"]["hashes"]["quickXorHash"].str;
 			} else {
-				// Issue #540 handling
-				log.vdebug("ERROR: onedrive.getFileDetails call returned a OneDriveException error");
-				// We want to return, cant download
-				downloadFailed = true;
-				return;
+				// filesize missing
+				log.vdebug("WARNING: fileDetails['file']['hashes']['quickXorHash'] is missing");
 			}
 			
 			try {
