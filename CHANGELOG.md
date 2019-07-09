@@ -3,7 +3,12 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## 2.3.6 - 2019-07-03
+## 2.3.7 - 2019-07-03
+### Fixed
+*   Fix not all files being downloaded due to OneDrive query failure
+*   False DB update which potentially could had lead to false data loss on OneDrive
+
+## 2.3.6 - 2019-07-03 (DO NOT USE)
 ### Fixed
 *   Fix JSONValue object validation
 *   Fix building without git being available
