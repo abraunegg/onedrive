@@ -201,7 +201,7 @@ final class Config
 				"display-sync-status",
 					"Display the sync status of the client - no sync will be performed.",
 					&boolValues["display_sync_status"],
-				"download-only|d",
+				"download-only",
 					"Only download remote changes",
 					&boolValues["download_only"],
 				"dry-run",

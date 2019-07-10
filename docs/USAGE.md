@@ -485,7 +485,7 @@ Options:
       Display what options the client will use as currently configured - no sync will be performed.
   --display-sync-status
       Display the sync status of the client - no sync will be performed.
-  --download-only -d
+  --download-only
       Only download remote changes
   --dry-run
       Perform a trial sync with no changes made
