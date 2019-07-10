@@ -15,7 +15,7 @@ all_opts=(
   '--disable-notifications[Do not use desktop notifications in monitor mode.]'
   '--display-config[Display what options the client will use as currently configured - no sync will be performed.]'
   '--display-sync-status[Display the sync status of the client - no sync will be performed.]'
-  '(-d --download-only)'{-d,--download-only}'[Only download remote changes]'
+  '--download-only[Only download remote changes]'
   '--disable-upload-validation[Disable upload validation when uploading to OneDrive]'
   '--dry-run[Perform a trial sync with no changes made]'
   '--enable-logging[Enable client activity to a separate log file]'

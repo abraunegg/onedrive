@@ -2,8 +2,8 @@
 
 set +H -xeuo pipefail
 
-ONEDRIVE_UID=$(stat /onedrive/data -c '%u')
-ONEDRIVE_GID=$(stat /onedrive/data -c '%g')
+: ${ONEDRIVE_UID:=$(stat /onedrive/data -c '%u')}
+: ${ONEDRIVE_GID:=$(stat /onedrive/data -c '%g')}
 
 # Create new group using target GID
 if ! odgroup="$(getent group $ONEDRIVE_GID)"; then
@@ -16,7 +16,7 @@ fi
 # Create new user using target UID
 if ! oduser="$(getent passwd $ONEDRIVE_UID)"; then
   oduser='onedrive'
-  useradd "${oduser}" -u $ONEDRIVE_UID -g $ONEDRIVE_GID
+  useradd -m "${oduser}" -u $ONEDRIVE_UID -g $ONEDRIVE_GID
 else
   oduser="${oduser%%:*}"
   usermod -g "${odgroup}" "${oduser}"
