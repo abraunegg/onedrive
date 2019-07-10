@@ -2,8 +2,8 @@
 
 set +H -xeuo pipefail
 
-ONEDRIVE_UID=$(stat /onedrive/data -c '%u')
-ONEDRIVE_GID=$(stat /onedrive/data -c '%g')
+: ${ONEDRIVE_UID:=$(stat /onedrive/data -c '%u')}
+: ${ONEDRIVE_GID:=$(stat /onedrive/data -c '%g')}
 
 # Create new group using target GID
 if ! odgroup="$(getent group $ONEDRIVE_GID)"; then
