@@ -214,7 +214,7 @@ final class ItemDatabase
 		Item currItem = { driveId: rootDriveId };
 		
 		// Issue https://github.com/abraunegg/onedrive/issues/578
-		if (startsWith(path, "./")) {
+		if (startsWith(path, "./") || path == ".") {
 			// Need to remove the . from the path prefix
 			path = "root/" ~ path.chompPrefix(".");
 		} else {
@@ -249,7 +249,7 @@ final class ItemDatabase
 		Item currItem = { driveId: rootDriveId };
 		
 		// Issue https://github.com/abraunegg/onedrive/issues/578
-		if (startsWith(path, "./")) {
+		if (startsWith(path, "./") || path == ".") {
 			// Need to remove the . from the path prefix
 			path = "root/" ~ path.chompPrefix(".");
 		} else {
