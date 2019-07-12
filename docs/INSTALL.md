@@ -94,7 +94,7 @@ curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For notifications the following is necessary:
 ```text
-sudo yum install libnotify-devel
+sudo dnf install libnotify-devel
 ```
 
 ### Dependencies: Arch Linux
