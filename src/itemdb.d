@@ -212,7 +212,16 @@ final class ItemDatabase
 	bool selectByPath(const(char)[] path, string rootDriveId, out Item item)
 	{
 		Item currItem = { driveId: rootDriveId };
-		path = "root/" ~ path.chompPrefix(".");
+		
+		// Issue https://github.com/abraunegg/onedrive/issues/578
+		if (startsWith(path, "./") || path == ".") {
+			// Need to remove the . from the path prefix
+			path = "root/" ~ path.chompPrefix(".");
+		} else {
+			// Leave path as it is
+			path = "root/" ~ path;
+		}
+		
 		auto s = db.prepare("SELECT * FROM item WHERE name = ?1 AND driveId IS ?2 AND parentId IS ?3");
 		foreach (name; pathSplitter(path)) {
 			s.bind(1, name);
@@ -238,7 +247,16 @@ final class ItemDatabase
 	bool selectByPathNoRemote(const(char)[] path, string rootDriveId, out Item item)
 	{
 		Item currItem = { driveId: rootDriveId };
-		path = "root/" ~ path.chompPrefix(".");
+		
+		// Issue https://github.com/abraunegg/onedrive/issues/578
+		if (startsWith(path, "./") || path == ".") {
+			// Need to remove the . from the path prefix
+			path = "root/" ~ path.chompPrefix(".");
+		} else {
+			// Leave path as it is
+			path = "root/" ~ path;
+		}
+		
 		auto s = db.prepare("SELECT * FROM item WHERE name IS ?1 AND driveId IS ?2 AND parentId IS ?3");
 		foreach (name; pathSplitter(path)) {
 			s.bind(1, name);
