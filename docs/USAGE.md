@@ -438,6 +438,12 @@ WantedBy=default.target
 
 **Note:** After modifying the service files, you will need to run `sudo systemctl daemon-reload` to ensure the service file changes are picked up. A restart of the OneDrive service will also be required to pick up the change to send the traffic via the proxy server
 
+### Setup selinux for a sync folder outside of the home folder
+If selinux is enforced and the sync folder is outside of the home folder, as long as there is no policy for cloud fileservice providers, label the file system folder to user_home_t.
+```text
+sudo semanage fcontext -a -t user_home_t /path/to/onedriveSyncFolder
+sudo restorecon -R -v /path/to/onedriveSyncFolder
+```
 
 ## All available commands
 
