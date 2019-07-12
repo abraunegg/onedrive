@@ -1597,15 +1597,41 @@ final class SyncEngine
 								}
 								// OneDrive documentLibrary
 								if (accountType == "documentLibrary"){
-									// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
-									// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
-									// Delete record from the local database - file will be uploaded as a new file
-									writeln(" skipped.");
-									log.fileOnly("Uploading modified file ", path, " ... skipped.");
-									log.vlog("Skip Reason: Microsoft Sharepoint 'enrichment' after upload issue");
-									log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
-									itemdb.deleteById(item.driveId, item.id);
-									return;
+									// Handle certain file types differently
+									if ((extension(path) == ".txt") || (extension(path) == ".csv")) {
+										// .txt and .csv are unaffected by https://github.com/OneDrive/onedrive-api-docs/issues/935 
+										// For logging consistency
+										writeln("");
+										try {
+											response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+										} catch (OneDriveException e) {
+											// Resolve https://github.com/abraunegg/onedrive/issues/36
+											if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
+												// The file is currently checked out or locked for editing by another user
+												// We cant upload this file at this time
+												writeln(" skipped.");
+												log.fileOnly("Uploading modified file ", path, " ... skipped.");
+												writeln("", path, " is currently checked out or locked for editing by another user.");
+												log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+												return;
+											}
+											// what is this error?????
+											else throw e;
+										}
+										// As the session.upload includes the last modified time, save the response
+										saveItem(response);
+										
+									} else {									
+										// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+										// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
+										writeln("skipped.");
+										log.fileOnly("Uploading modified file ", path, " ... skipped.");
+										log.vlog("Skip Reason: Microsoft Sharepoint 'enrichment' after upload issue");
+										log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+										// Delete record from the local database - file will be uploaded as a new file
+										itemdb.deleteById(item.driveId, item.id);
+										return;
+									}
 								}
 					
 								// log line completion							
@@ -2244,10 +2270,8 @@ final class SyncEngine
 										
 										// OneDrive SharePoint account modified file upload handling
 										if (accountType == "documentLibrary"){
-											// If this is a Microsoft SharePoint site, we need to remove the existing file before upload
-											onedrive.deleteById(fileDetailsFromOneDrive["parentReference"]["driveId"].str, fileDetailsFromOneDrive["id"].str, fileDetailsFromOneDrive["eTag"].str);	
-											// simple upload
-											response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+											// We cant use a session to upload the file, we have to use simpleUploadReplace
+											response = onedrive.simpleUploadReplace(path, fileDetailsFromOneDrive["parentReference"]["driveId"].str, fileDetailsFromOneDrive["id"].str, fileDetailsFromOneDrive["eTag"].str);
 											writeln(" done.");
 											saveItem(response);
 											// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
