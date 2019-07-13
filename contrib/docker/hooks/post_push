@@ -1,0 +1,6 @@
+#!/bin/bash
+
+BUILD_DATE=`date "+%Y%m%d%H%M"`
+
+docker tag ${IMAGE_NAME} "${IMAGE_NAME}-${BUILD_DATE}"
+docker push "${IMAGE_NAME}-${BUILD_DATE}"
