@@ -79,9 +79,19 @@ private bool hasId(const ref JSONValue item)
 	return ("id" in item) != null;
 }
 
+private bool hasHashes(const ref JSONValue item)
+{
+	return ("hashes" in item["file"]) != null;
+}
+
 private bool hasQuickXorHash(const ref JSONValue item)
 {
 	return ("quickXorHash" in item["file"]["hashes"]) != null;
+}
+
+private bool hasSha1Hash(const ref JSONValue item)
+{
+	return ("sha1Hash" in item["file"]["hashes"]) != null;
 }
 
 private bool isDotFile(string path)
@@ -1151,15 +1161,27 @@ final class SyncEngine
 				log.vdebug("WARNING: fileDetails['size'] is missing");
 			}
 
-			// Issue #591 Debugging
-			writeln("fileDetails: ", fileDetails);
-			
-			if (hasQuickXorHash(fileDetails)) {
-				// Use the configured quickXorHash as reported by OneDrive
-				OneDriveFileHash = fileDetails["file"]["hashes"]["quickXorHash"].str;
+			if (hasHashes(fileDetails)) {
+				// File details returned has has details
+				// QuickXorHash
+				if (hasQuickXorHash(fileDetails)) {
+					// Use the configured quickXorHash as reported by OneDrive
+					if (fileDetails["file"]["hashes"]["quickXorHash"].str != "") {
+						OneDriveFileHash = fileDetails["file"]["hashes"]["quickXorHash"].str;
+						writeln("using quickXorHash");
+					}
+				} 
+				// Check for Sha1Hash
+				if (hasSha1Hash(fileDetails)) {
+					// Use the configured sha1Hash as reported by OneDrive
+					if (fileDetails["file"]["hashes"]["sha1Hash"].str != "") {
+						OneDriveFileHash = fileDetails["file"]["hashes"]["sha1Hash"].str;
+						writeln("using sha1Hash");
+					}
+				}
 			} else {
-				// filesize missing
-				log.vdebug("WARNING: fileDetails['file']['hashes']['quickXorHash'] is missing");
+				// file hash data missing
+				log.vdebug("WARNING: fileDetails['file']['hashes'] is missing - unable to compare file hash after download");
 			}
 			
 			try {
@@ -1197,8 +1219,11 @@ final class SyncEngine
 				// A 'file' was downloaded - does what we downloaded = reported fileSize or if there is some sort of funky local disk compression going on
 				// does the file hash OneDrive reports match what we have locally?
 				string quickXorHash = computeQuickXorHash(path);
-				if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash)) {
+				string sha1Hash = computeSha1Hash(path);
+				
+				if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash) || (OneDriveFileHash == sha1Hash) ) {
 					// downloaded matches either size or hash
+					log.vdebug("Downloaded file matches reported size and or reported file hash");
 					setTimes(path, item.mtime, item.mtime);
 				} else {
 					// size error?
@@ -1207,7 +1232,7 @@ final class SyncEngine
 						log.error("ERROR: File download size mis-match. Increase logging verbosity to determine why.");
 					}
 					// hash error?
-					if (OneDriveFileHash != quickXorHash) {
+					if ((OneDriveFileHash != quickXorHash) || (OneDriveFileHash != sha1Hash))  {
 						// downloaded file hash does not match
 						log.error("ERROR: File download hash mis-match. Increase logging verbosity to determine why.");
 					}	
