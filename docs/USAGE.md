@@ -444,6 +444,11 @@ If selinux is enforced and the sync folder is outside of the home folder, as lon
 sudo semanage fcontext -a -t user_home_t /path/to/onedriveSyncFolder
 sudo restorecon -R -v /path/to/onedriveSyncFolder
 ```
+To remove this change from selinux and restore the default behaivor:
+```text
+sudo semanage fcontext -d /path/to/onedriveSyncFolder
+sudo restorecon -R -v /path/to/onedriveSyncFolder
+```
 
 ## All available commands
 
