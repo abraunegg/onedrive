@@ -1162,7 +1162,7 @@ final class SyncEngine
 			}
 
 			if (hasHashes(fileDetails)) {
-				// File details returned has has details
+				// File details returned hash details
 				// QuickXorHash
 				if (hasQuickXorHash(fileDetails)) {
 					// Use the configured quickXorHash as reported by OneDrive
@@ -1219,7 +1219,7 @@ final class SyncEngine
 				string quickXorHash = computeQuickXorHash(path);
 				string sha1Hash = computeSha1Hash(path);
 				
-				if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash) || (OneDriveFileHash == sha1Hash) ) {
+				if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash) || (OneDriveFileHash == sha1Hash)) {
 					// downloaded matches either size or hash
 					log.vdebug("Downloaded file matches reported size and or reported file hash");
 					setTimes(path, item.mtime, item.mtime);
