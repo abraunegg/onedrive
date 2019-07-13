@@ -1150,6 +1150,9 @@ final class SyncEngine
 				// filesize missing
 				log.vdebug("WARNING: fileDetails['size'] is missing");
 			}
+
+			// Issue #591 Debugging
+			writeln("fileDetails: ", fileDetails);
 			
 			if (hasQuickXorHash(fileDetails)) {
 				// Use the configured quickXorHash as reported by OneDrive
