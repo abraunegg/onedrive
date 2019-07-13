@@ -1168,7 +1168,6 @@ final class SyncEngine
 					// Use the configured quickXorHash as reported by OneDrive
 					if (fileDetails["file"]["hashes"]["quickXorHash"].str != "") {
 						OneDriveFileHash = fileDetails["file"]["hashes"]["quickXorHash"].str;
-						writeln("using quickXorHash");
 					}
 				} 
 				// Check for Sha1Hash
@@ -1176,7 +1175,6 @@ final class SyncEngine
 					// Use the configured sha1Hash as reported by OneDrive
 					if (fileDetails["file"]["hashes"]["sha1Hash"].str != "") {
 						OneDriveFileHash = fileDetails["file"]["hashes"]["sha1Hash"].str;
-						writeln("using sha1Hash");
 					}
 				}
 			} else {
