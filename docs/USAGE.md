@@ -241,7 +241,9 @@ Example: `skip_dir = "Desktop|Documents/IISExpress|Documents/SQL Server Manageme
 
 Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns.
 
-**Note:** after changing `skip_dir`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
+**Note:** After changing `skip_dir`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
+
+**Note:** Entries under `skip_dir` are relative to your `sync_dir` path.
 
 ### skip_file
 Example: `skip_file = "~*|Documents/OneNote*|Documents/config.xlaunch|myfile.ext"`
