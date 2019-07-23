@@ -780,7 +780,8 @@ final class OneDriveApi
 			//	412 - Precondition Failed
 			case 412:
 				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
-				break;
+				// Throw this as a specific exception so this is caught when performing uploadLastModifiedTime
+				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
 				
 			// Server side (OneDrive) Errors
 			//  500 - Internal Server Error
