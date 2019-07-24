@@ -1921,7 +1921,7 @@ final class SyncEngine
 				string parentPath = dirName(path);		// will be either . or something else
 								
 				try {
-					log.vdebug("Attempting to query OneDrive for this path: ", parentPath);
+					log.vdebug("Attempting to query OneDrive for this parent path: ", parentPath);
 					onedrivePathDetails = onedrive.getPathDetails(parentPath);
 				} catch (OneDriveException e) {
 					// exception - set onedriveParentRootDetails to a blank valid JSON
@@ -2001,30 +2001,39 @@ final class SyncEngine
 				}
 			} 
 			
-			// https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
-			// Do not assume case sensitivity. For example, consider the names OSCAR, Oscar, and oscar to be the same, 
-			// even though some file systems (such as a POSIX-compliant file system) may consider them as different. 
-			// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior.
-			
-			if (response["name"].str == baseName(path)){
-				// OneDrive 'name' matches local path name
-				log.vlog("The requested directory to create was found on OneDrive - skipping creating the directory: ", path );
-				// Check that this path is in the database
-				if (!itemdb.selectById(parent.driveId, parent.id, parent)){
-					// parent for 'path' is NOT in the database
-					log.vlog("The parent for this path is not in the local database - need to add parent to local database");
-					string parentPath = dirName(path);
-					uploadCreateDir(parentPath);
+			// response from OneDrive has to be a valid JSON object
+			if (response.type() == JSONType.object){
+				// https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
+				// Do not assume case sensitivity. For example, consider the names OSCAR, Oscar, and oscar to be the same, 
+				// even though some file systems (such as a POSIX-compliant file system) may consider them as different. 
+				// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior.
+				
+				if (response["name"].str == baseName(path)){
+					// OneDrive 'name' matches local path name
+					log.vlog("The requested directory to create was found on OneDrive - skipping creating the directory: ", path );
+					// Check that this path is in the database
+					if (!itemdb.selectById(parent.driveId, parent.id, parent)){
+						// parent for 'path' is NOT in the database
+						log.vlog("The parent for this path is not in the local database - need to add parent to local database");
+						string parentPath = dirName(path);
+						uploadCreateDir(parentPath);
+					} else {
+						// parent is in database
+						log.vlog("The parent for this path is in the local database - adding requested path (", path ,") to database");
+						auto res = onedrive.getPathDetails(path);
+						saveItem(res);
+					}
 				} else {
-					// parent is in database
-					log.vlog("The parent for this path is in the local database - adding requested path (", path ,") to database");
-					auto res = onedrive.getPathDetails(path);
-					saveItem(res);
+					// They are the "same" name wise but different in case sensitivity
+					log.error("ERROR: Current directory has a 'case-insensitive match' to an existing directory on OneDrive");
+					log.error("ERROR: To resolve, rename this local directory: ", absolutePath(path));
+					log.log("Skipping: ", absolutePath(path));
+					return;
 				}
 			} else {
-				// They are the "same" name wise but different in case sensitivity
-				log.error("ERROR: Current directory has a 'case-insensitive match' to an existing directory on OneDrive");
-				log.error("ERROR: To resolve, rename this local directory: ", absolutePath(path));
+				// response is not valid JSON, an error was returned from OneDrive
+				log.error("ERROR: There was an error performing this operation on OneDrive");
+				log.error("ERROR: Increase logging verbosity to assist determining why.");
 				log.log("Skipping: ", absolutePath(path));
 				return;
 			}

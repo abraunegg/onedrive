@@ -627,9 +627,8 @@ final class OneDriveApi
 		try {
 			json = content.parseJSON();
 		} catch (JSONException e) {
-			e.msg ~= "\n";
-			e.msg ~= content;
-			throw e;
+			// Log that a JSON Exception was caught, dont output the HTML response from OneDrive
+			log.vdebug("JSON Exception caught when performing HTTP operations - use --debug-https to diagnose further");
 		}
 		return json;
 	}
