@@ -78,11 +78,11 @@ sudo yum install libnotify-devel
 In addition to the above requirements, the `sqlite` version used on CentOS 6.x / RHEL 6.x needs to be upgraded. Use the following instructions to update your version of `sqlite` so that it can support the client:
 ```text
 sudo yum -y update
-sudo yum -y install epel-release, wget
+sudo yum -y install epel-release wget
 sudo yum -y install mock
 wget https://kojipkgs.fedoraproject.org//packages/sqlite/3.7.15.2/2.fc19/src/sqlite-3.7.15.2-2.fc19.src.rpm
-sudo mock --rebuild sqlite-3.7.15.2-2.fc19.src.rpm
-sudo yum -y upgrade /var/lib/mock/epel-6-{arch}/result/sqlite-*
+mock --rebuild sqlite-3.7.15.2-2.fc19.src.rpm
+sudo yum -y upgrade /var/lib/mock/epel-6-`arch`/result/sqlite-*
 ```
 
 ### Dependencies: Fedora > Version 18

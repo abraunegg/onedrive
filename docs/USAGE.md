@@ -40,6 +40,26 @@ Enter the response uri:
 
 ```
 
+### Show your configuration
+To validate your configuration the application will use, utilize the following:
+```text
+onedrive --display-config
+```
+This will display all the pertinent runtime interpretation of the options and configuration you are using. This is helpful to validate the client will perform the operations your asking without performing a sync. Example output is as follows:
+```text
+Config path                         = /home/alex/.config/onedrive
+Config file found in config path    = false
+Config option 'sync_dir'            = /home/alex/OneDrive
+Config option 'skip_dir'            = 
+Config option 'skip_file'           = ~*|.~*|*.tmp
+Config option 'skip_dotfiles'       = false
+Config option 'skip_symlinks'       = false
+Config option 'monitor_interval'    = 45
+Config option 'min_notify_changes'   = 5
+Config option 'log_dir'             = /var/log/onedrive/
+Selective sync configured           = false
+```
+
 ### Testing your configuration
 You are able to test your configuration by utilising the `--dry-run` CLI option. No files will be downloaded, uploaded or removed, however the application will display what 'would' have occurred. For example:
 ```text
@@ -72,26 +92,6 @@ Applying changes of Path ID: <redacted>
 ```
 
 **Note:** `--dry-run` can only be used with `--synchronize`. It cannot be used with `--monitor` and will be ignored.
-
-### Show your configuration
-To validate your configuration the application will use, utilize the following:
-```text
-onedrive --display-config
-```
-This will display all the pertinent runtime interpretation of the options and configuration you are using. This is helpful to validate the client will perform the operations your asking without performing a sync. Example output is as follows:
-```text
-Config path                         = /home/alex/.config/onedrive
-Config file found in config path    = false
-Config option 'sync_dir'            = /home/alex/OneDrive
-Config option 'skip_dir'            = 
-Config option 'skip_file'           = ~*|.~*|*.tmp
-Config option 'skip_dotfiles'       = false
-Config option 'skip_symlinks'       = false
-Config option 'monitor_interval'    = 45
-Config option 'min_notify_changes'   = 5
-Config option 'log_dir'             = /var/log/onedrive/
-Selective sync configured           = false
-```
 
 ### Performing a sync
 By default all files are downloaded in `~/OneDrive`. After authorizing the application, a sync of your data can be performed by running:
@@ -241,7 +241,9 @@ Example: `skip_dir = "Desktop|Documents/IISExpress|Documents/SQL Server Manageme
 
 Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns.
 
-**Note:** after changing `skip_dir`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
+**Note:** After changing `skip_dir`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
+
+**Note:** Entries under `skip_dir` are relative to your `sync_dir` path.
 
 ### skip_file
 Example: `skip_file = "~*|Documents/OneNote*|Documents/config.xlaunch|myfile.ext"`
