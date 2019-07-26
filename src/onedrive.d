@@ -627,9 +627,8 @@ final class OneDriveApi
 		try {
 			json = content.parseJSON();
 		} catch (JSONException e) {
-			e.msg ~= "\n";
-			e.msg ~= content;
-			throw e;
+			// Log that a JSON Exception was caught, dont output the HTML response from OneDrive
+			log.vdebug("JSON Exception caught when performing HTTP operations - use --debug-https to diagnose further");
 		}
 		return json;
 	}
@@ -780,7 +779,8 @@ final class OneDriveApi
 			//	412 - Precondition Failed
 			case 412:
 				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
-				break;
+				// Throw this as a specific exception so this is caught when performing uploadLastModifiedTime
+				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
 				
 			// Server side (OneDrive) Errors
 			//  500 - Internal Server Error
