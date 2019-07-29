@@ -842,8 +842,26 @@ final class SyncEngine
 		}
 
 		bool unwanted;
-		unwanted |= skippedItems.find(item.parentId).length != 0;
-		if (unwanted) log.vdebug("Flagging as unwanted: find(item.parentId).length != 0");
+		// Check if the parent id is something we need to skip
+		if (skippedItems.find(item.parentId).length != 0) {
+			// Potentially need to flag as unwanted
+			log.vdebug("Flagging as unwanted: find(item.parentId).length != 0");
+			unwanted = true;
+			
+			// Is this item id in the database?
+			if (itemdb.idInLocalDatabase(item.driveId, item.id)){
+				// item exists in database, most likely moved out of scope for current client configuration
+				log.vdebug("This item was previously synced / seen by the client");
+				if (selectiveSync.isPathExcluded(driveItem["parentReference"]["name"].str)) {
+					// Previously synced item is now out of scope
+					log.vdebug("This item is excluded from being synced due to sync_dir exclusion");
+					// flag to delete local file as it now is no longer in sync with OneDrive
+					idsToDelete ~= [item.driveId, item.id];
+				}
+			}
+		}
+		
+		
 		// Check if this is a directory to skip
 		if (!unwanted) {
 			// Only check path if config is != ""
