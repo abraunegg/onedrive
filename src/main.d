@@ -268,7 +268,15 @@ int main(string[] args)
 	log.vlog("All operations will be performed in: ", syncDir);
 	if (!exists(syncDir)) {
 		log.vdebug("syncDir: Configured syncDir is missing. Creating: ", syncDir);
-		mkdirRecurse(syncDir);
+		try {
+			// Attempt to create the sync dir we have been configured with
+			mkdirRecurse(syncDir);
+		} catch (std.file.FileException e) {
+			// Creating the sync directory failed
+			log.error("ERROR: Unable to create local OneDrive syncDir - ", e.msg);
+			oneDrive.http.shutdown();
+			return EXIT_FAILURE;
+		}
 	}
 	chdir(syncDir);
 	
