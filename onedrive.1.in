@@ -91,6 +91,9 @@ Configuration file key: \fBforce_http_2\fP (default: \fBfalse\fP)
 \fB\-\-get\-O365\-drive\-id\fP ARG
 Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library
 .TP
+\fB\-\-get\-file\-link\fP ARG
+Display the file link of a synced file
+.TP
 \fB\-\-local\-first\fP
 Synchronize from the local directory source first, before downloading changes from OneDrive.
 .br
