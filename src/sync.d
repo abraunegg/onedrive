@@ -2635,6 +2635,38 @@ final class SyncEngine
 		}
 	}
 	
+	// Query OneDrive for a URL path of a file
+	void queryOneDriveForFileURL(string localFilePath, string syncDir) {
+		// Query if file is valid locally
+		if (exists(localFilePath)) {
+			// File exists locally, does it exist in the database
+			// Path needs to be relative to sync_dir path
+			string relativePath = relativePath(localFilePath, syncDir);
+			Item item;
+			if (itemdb.selectByPath(relativePath, defaultDriveId, item)) {
+				// File is in the local database cache
+				JSONValue fileDetails;
+		
+				try {
+					fileDetails = onedrive.getFileDetails(item.driveId, item.id);
+				} catch (OneDriveException e) {
+					log.error("ERROR: Query of OneDrive for file details failed");
+				}
+
+				if ((fileDetails.type() == JSONType.object) && ("webUrl" in fileDetails)) {
+					// Valid JSON object
+					log.log("File URL: ", fileDetails["webUrl"].str);
+				}
+			} else {
+				// File has not been synced with OneDrive
+				log.log("File has not been synced with OneDrive: ", localFilePath);
+			}
+		} else {
+			// File does not exist locally
+			log.log("File not found on local system: ", localFilePath);
+		}
+	}
+	
 	// Query the OneDrive 'drive' to determine if we are 'in sync' or if there are pending changes
 	void queryDriveForChanges(string path) {
 		
