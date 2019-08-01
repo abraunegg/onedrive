@@ -2655,7 +2655,7 @@ final class SyncEngine
 
 				if ((fileDetails.type() == JSONType.object) && ("webUrl" in fileDetails)) {
 					// Valid JSON object
-					log.log("File URL: ", fileDetails["webUrl"].str);
+					log.log(fileDetails["webUrl"].str);
 				}
 			} else {
 				// File has not been synced with OneDrive
