@@ -314,7 +314,10 @@ int main(string[] args)
 	selectiveSync.setFileMask(cfg.getValueString("skip_file"));
 		
 	// Initialize the sync engine
-	log.logAndNotify("Initializing the Synchronization Engine ...");
+	if (cfg.getValueString("get_file_link") != "") {
+		// Print out that we are initializing the engine only if we are not grabbing the file link
+		log.logAndNotify("Initializing the Synchronization Engine ...");
+	}
 	auto sync = new SyncEngine(cfg, oneDrive, itemDb, selectiveSync);
 	
 	try {
