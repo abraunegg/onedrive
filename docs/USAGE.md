@@ -510,6 +510,8 @@ Options:
       Force the use of HTTP/2 for all operations where applicable
   --get-O365-drive-id ARG
       Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library
+  --get-file-link ARG
+      Display the file link of a synced file
   --help -h
       This help information.
   --local-first

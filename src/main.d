@@ -234,7 +234,7 @@ int main(string[] args)
 	
 	// create-directory, remove-directory, source-directory, destination-directory 
 	// are activities that dont perform a sync no error message for these items either
-	if (((cfg.getValueString("create_directory") != "") || (cfg.getValueString("remove_directory") != "")) || ((cfg.getValueString("source_directory") != "") && (cfg.getValueString("destination_directory") != "")) || (cfg.getValueString("get_o365_drive_id") != "") || cfg.getValueBool("display_sync_status")) {
+	if (((cfg.getValueString("create_directory") != "") || (cfg.getValueString("remove_directory") != "")) || ((cfg.getValueString("source_directory") != "") && (cfg.getValueString("destination_directory") != "")) || (cfg.getValueString("get_file_link") != "") || (cfg.getValueString("get_o365_drive_id") != "") || cfg.getValueBool("display_sync_status")) {
 		performSyncOK = true;
 	}
 	
@@ -314,7 +314,10 @@ int main(string[] args)
 	selectiveSync.setFileMask(cfg.getValueString("skip_file"));
 		
 	// Initialize the sync engine
-	log.logAndNotify("Initializing the Synchronization Engine ...");
+	if (cfg.getValueString("get_file_link") == "") {
+		// Print out that we are initializing the engine only if we are not grabbing the file link
+		log.logAndNotify("Initializing the Synchronization Engine ...");
+	}
 	auto sync = new SyncEngine(cfg, oneDrive, itemDb, selectiveSync);
 	
 	try {
@@ -367,8 +370,13 @@ int main(string[] args)
 	}
 	
 	// Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
-	if (cfg.getValueString("get_o365_drive_id") != ""){
+	if (cfg.getValueString("get_o365_drive_id") != "") {
 		sync.querySiteCollectionForDriveID(cfg.getValueString("get_o365_drive_id"));
+	}
+	
+	// Are we obtaining the URL path for a synced file?
+	if (cfg.getValueString("get_file_link") != "") {
+		sync.queryOneDriveForFileURL(cfg.getValueString("get_file_link"), syncDir);
 	}
 	
 	// Are we displaying the sync status of the client?

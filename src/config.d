@@ -40,7 +40,7 @@ final class Config
 		boolValues["disable_upload_validation"] = false;
 		boolValues["enable_logging"]     = false;
 		boolValues["force_http_11"]      = false;
-		boolValues["force_http_2"]      = false;
+		boolValues["force_http_2"]       = false;
 		boolValues["local_first"]        = false;
 		boolValues["no_remote_delete"]   = false;
 		boolValues["skip_symlinks"]      = false;
@@ -148,6 +148,7 @@ final class Config
 		// Add additional options that are NOT configurable via config file
 		stringValues["create_directory"]  = "";
 		stringValues["destination_directory"] = "";
+		stringValues["get_file_link"]     = "";
 		stringValues["get_o365_drive_id"] = "";
 		stringValues["remove_directory"]  = "";
 		stringValues["single_directory"]  = "";
@@ -216,6 +217,9 @@ final class Config
 				"force-http-2",
 					"Force the use of HTTP/2 for all operations where applicable",
 					&boolValues["force_http_2"],
+				"get-file-link",
+					"Display the file link of a synced file",
+					&stringValues["get_file_link"],
 				"get-O365-drive-id",
 					"Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library",
 					&stringValues["get_o365_drive_id"],
