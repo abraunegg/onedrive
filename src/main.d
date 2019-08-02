@@ -314,7 +314,7 @@ int main(string[] args)
 	selectiveSync.setFileMask(cfg.getValueString("skip_file"));
 		
 	// Initialize the sync engine
-	if (cfg.getValueString("get_file_link") != "") {
+	if (cfg.getValueString("get_file_link") == "") {
 		// Print out that we are initializing the engine only if we are not grabbing the file link
 		log.logAndNotify("Initializing the Synchronization Engine ...");
 	}
