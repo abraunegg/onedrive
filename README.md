@@ -4,11 +4,12 @@ A complete tool to interact with OneDrive on Linux. Built following the UNIX phi
 ## Features
 *   State caching
 *   Real-Time file monitoring with Inotify
+*   File upload / download validation to ensure data integrity
 *   Resumable uploads
 *   Support OneDrive for Business (part of Office 365)
 *   Shared folders (OneDrive Personal)
 *   SharePoint / Office 365 Shared Libraries (refer to README.Office365.md to configure)
-*   Notifications
+*   Desktop notifications via libnotify
 
 ## What's missing
 *   While local changes are uploaded right away, remote changes are delayed
