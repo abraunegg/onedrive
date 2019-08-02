@@ -2659,11 +2659,11 @@ final class SyncEngine
 				}
 			} else {
 				// File has not been synced with OneDrive
-				log.log("File has not been synced with OneDrive: ", localFilePath);
+				log.error("File has not been synced with OneDrive: ", localFilePath);
 			}
 		} else {
 			// File does not exist locally
-			log.log("File not found on local system: ", localFilePath);
+			log.error("File not found on local system: ", localFilePath);
 		}
 	}
 	
