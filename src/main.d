@@ -370,12 +370,12 @@ int main(string[] args)
 	}
 	
 	// Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
-	if (cfg.getValueString("get_o365_drive_id") != ""){
+	if (cfg.getValueString("get_o365_drive_id") != "") {
 		sync.querySiteCollectionForDriveID(cfg.getValueString("get_o365_drive_id"));
 	}
 	
 	// Are we obtaining the URL path for a synced file?
-	if (cfg.getValueString("get_file_link") != ""){
+	if (cfg.getValueString("get_file_link") != "") {
 		sync.queryOneDriveForFileURL(cfg.getValueString("get_file_link"), syncDir);
 	}
 	
