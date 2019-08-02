@@ -249,7 +249,7 @@ int main(string[] args)
 	
 	// create-directory, remove-directory, source-directory, destination-directory 
 	// are activities that dont perform a sync no error message for these items either
-	if (((cfg.getValueString("create_directory") != "") || (cfg.getValueString("remove_directory") != "")) || ((cfg.getValueString("source_directory") != "") && (cfg.getValueString("destination_directory") != "")) || (cfg.getValueString("get_o365_drive_id") != "") || cfg.getValueBool("display_sync_status") || cfg.getValueBool("list_business_shared_folders")) {
+	if (((cfg.getValueString("create_directory") != "") || (cfg.getValueString("remove_directory") != "")) || ((cfg.getValueString("source_directory") != "") && (cfg.getValueString("destination_directory") != "")) || (cfg.getValueString("get_file_link") != "") || (cfg.getValueString("get_o365_drive_id") != "") || cfg.getValueBool("display_sync_status") || cfg.getValueBool("list_business_shared_folders")) {
 		performSyncOK = true;
 	}
 	
@@ -283,7 +283,15 @@ int main(string[] args)
 	log.vlog("All operations will be performed in: ", syncDir);
 	if (!exists(syncDir)) {
 		log.vdebug("syncDir: Configured syncDir is missing. Creating: ", syncDir);
-		mkdirRecurse(syncDir);
+		try {
+			// Attempt to create the sync dir we have been configured with
+			mkdirRecurse(syncDir);
+		} catch (std.file.FileException e) {
+			// Creating the sync directory failed
+			log.error("ERROR: Unable to create local OneDrive syncDir - ", e.msg);
+			oneDrive.http.shutdown();
+			return EXIT_FAILURE;
+		}
 	}
 	chdir(syncDir);
 	
@@ -336,7 +344,10 @@ int main(string[] args)
 	selectiveSync.setFileMask(cfg.getValueString("skip_file"));
 		
 	// Initialize the sync engine
-	log.logAndNotify("Initializing the Synchronization Engine ...");
+	if (cfg.getValueString("get_file_link") == "") {
+		// Print out that we are initializing the engine only if we are not grabbing the file link
+		log.logAndNotify("Initializing the Synchronization Engine ...");
+	}
 	auto sync = new SyncEngine(cfg, oneDrive, itemDb, selectiveSync);
 	
 	try {
@@ -388,9 +399,8 @@ int main(string[] args)
 		sync.renameDirectoryNoSync(cfg.getValueString("source_directory"), cfg.getValueString("destination_directory"));
 	}
 	
-	// Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
-	if (cfg.getValueString("get_o365_drive_id") != ""){
-		// Query for Office365 SharePoint Libraries
+	// Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?	
+	if (cfg.getValueString("get_o365_drive_id") != "") {
 		sync.querySiteCollectionForDriveID(cfg.getValueString("get_o365_drive_id"));
 		// Exit, no sync
 		oneDrive.http.shutdown();
@@ -398,8 +408,17 @@ int main(string[] args)
 		return EXIT_SUCCESS;
 	}
 	
+	// Are we obtaining the URL path for a synced file?
+	if (cfg.getValueString("get_file_link") != "") {
+		sync.queryOneDriveForFileURL(cfg.getValueString("get_file_link"), syncDir);
+		// Exit, no sync
+		oneDrive.http.shutdown();
+		destroy(itemDb);
+		return EXIT_SUCCESS;
+	}
+	
 	// Are we listing OneDrive Business Shared Folders
-	if (cfg.getValueBool("list_business_shared_folders")){
+	if (cfg.getValueBool("list_business_shared_folders")) {
 		// Is this a business account type?
 		if (sync.getAccountType() == "business"){
 			// List OneDrive Business Shared Folders
@@ -414,7 +433,7 @@ int main(string[] args)
 	}
 	
 	// Are we going to sync OneDrive Business Shared Folders
-	if (cfg.getValueBool("sync_business_shared_folders")){
+	if (cfg.getValueBool("sync_business_shared_folders")) {
 		// Is this a business account type?
 		if (sync.getAccountType() == "business"){
 			// Configure flag to sync business folders
@@ -444,9 +463,9 @@ int main(string[] args)
 		if ((cfg.getValueBool("synchronize")) || (cfg.getValueBool("resync"))) {
 			if (online) {
 				// Check user entry for local path - the above chdir means we are already in ~/OneDrive/ thus singleDirectory is local to this path
-				if (cfg.getValueString("single_directory") != ""){
+				if (cfg.getValueString("single_directory") != "") {
 					// Does the directory we want to sync actually exist?
-					if (!exists(cfg.getValueString("single_directory"))){
+					if (!exists(cfg.getValueString("single_directory"))) {
 						// the requested directory does not exist .. 
 						log.vlog("WARNING: The requested local directory does not exist. Please check ~/OneDrive/ for requested path");
 					}

@@ -1162,8 +1162,26 @@ final class SyncEngine
 		}
 
 		bool unwanted;
-		unwanted |= skippedItems.find(item.parentId).length != 0;
-		if (unwanted) log.vdebug("Flagging as unwanted: find(item.parentId).length != 0");
+		// Check if the parent id is something we need to skip
+		if (skippedItems.find(item.parentId).length != 0) {
+			// Potentially need to flag as unwanted
+			log.vdebug("Flagging as unwanted: find(item.parentId).length != 0");
+			unwanted = true;
+			
+			// Is this item id in the database?
+			if (itemdb.idInLocalDatabase(item.driveId, item.id)){
+				// item exists in database, most likely moved out of scope for current client configuration
+				log.vdebug("This item was previously synced / seen by the client");
+				if (selectiveSync.isPathExcluded(driveItem["parentReference"]["name"].str)) {
+					// Previously synced item is now out of scope as it has been moved out of what is included in sync_list
+					log.vdebug("This previously synced item is now excluded from being synced due to sync_list exclusion");
+					// flag to delete local file as it now is no longer in sync with OneDrive
+					log.vdebug("Flagging to delete item locally");
+					idsToDelete ~= [item.driveId, item.id];
+				}
+			}
+		}
+		
 		// Check if this is a directory to skip
 		if (!unwanted) {
 			// Only check path if config is != ""
@@ -2385,30 +2403,39 @@ final class SyncEngine
 				}
 			} 
 			
-			// https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
-			// Do not assume case sensitivity. For example, consider the names OSCAR, Oscar, and oscar to be the same, 
-			// even though some file systems (such as a POSIX-compliant file system) may consider them as different. 
-			// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior.
-			
-			if (response["name"].str == baseName(path)){
-				// OneDrive 'name' matches local path name
-				log.vlog("The requested directory to create was found on OneDrive - skipping creating the directory: ", path );
-				// Check that this path is in the database
-				if (!itemdb.selectById(parent.driveId, parent.id, parent)){
-					// parent for 'path' is NOT in the database
-					log.vlog("The parent for this path is not in the local database - need to add parent to local database");
-					parentPath = dirName(path);
-					uploadCreateDir(parentPath);
+			// response from OneDrive has to be a valid JSON object
+			if (response.type() == JSONType.object){
+				// https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
+				// Do not assume case sensitivity. For example, consider the names OSCAR, Oscar, and oscar to be the same, 
+				// even though some file systems (such as a POSIX-compliant file system) may consider them as different. 
+				// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior.
+				
+				if (response["name"].str == baseName(path)){
+					// OneDrive 'name' matches local path name
+					log.vlog("The requested directory to create was found on OneDrive - skipping creating the directory: ", path );
+					// Check that this path is in the database
+					if (!itemdb.selectById(parent.driveId, parent.id, parent)){
+						// parent for 'path' is NOT in the database
+						log.vlog("The parent for this path is not in the local database - need to add parent to local database");
+						string parentPath = dirName(path);
+						uploadCreateDir(parentPath);
+					} else {
+						// parent is in database
+						log.vlog("The parent for this path is in the local database - adding requested path (", path ,") to database");
+						auto res = onedrive.getPathDetails(path);
+						saveItem(res);
+					}
 				} else {
-					// parent is in database
-					log.vlog("The parent for this path is in the local database - adding requested path (", path ,") to database");
-					auto res = onedrive.getPathDetails(path);
-					saveItem(res);
+					// They are the "same" name wise but different in case sensitivity
+					log.error("ERROR: Current directory has a 'case-insensitive match' to an existing directory on OneDrive");
+					log.error("ERROR: To resolve, rename this local directory: ", absolutePath(path));
+					log.log("Skipping: ", absolutePath(path));
+					return;
 				}
 			} else {
-				// They are the "same" name wise but different in case sensitivity
-				log.error("ERROR: Current directory has a 'case-insensitive match' to an existing directory on OneDrive");
-				log.error("ERROR: To resolve, rename this local directory: ", absolutePath(path));
+				// response is not valid JSON, an error was returned from OneDrive
+				log.error("ERROR: There was an error performing this operation on OneDrive");
+				log.error("ERROR: Increase logging verbosity to assist determining why.");
 				log.log("Skipping: ", absolutePath(path));
 				return;
 			}
@@ -3011,6 +3038,38 @@ final class SyncEngine
 		
 		if(!found) {
 			writeln("ERROR: This site could not be found. Please check it's name and your permissions to access the site.");
+		}
+	}
+	
+	// Query OneDrive for a URL path of a file
+	void queryOneDriveForFileURL(string localFilePath, string syncDir) {
+		// Query if file is valid locally
+		if (exists(localFilePath)) {
+			// File exists locally, does it exist in the database
+			// Path needs to be relative to sync_dir path
+			string relativePath = relativePath(localFilePath, syncDir);
+			Item item;
+			if (itemdb.selectByPath(relativePath, defaultDriveId, item)) {
+				// File is in the local database cache
+				JSONValue fileDetails;
+		
+				try {
+					fileDetails = onedrive.getFileDetails(item.driveId, item.id);
+				} catch (OneDriveException e) {
+					log.error("ERROR: Query of OneDrive for file details failed");
+				}
+
+				if ((fileDetails.type() == JSONType.object) && ("webUrl" in fileDetails)) {
+					// Valid JSON object
+					writeln(fileDetails["webUrl"].str);
+				}
+			} else {
+				// File has not been synced with OneDrive
+				log.error("File has not been synced with OneDrive: ", localFilePath);
+			}
+		} else {
+			// File does not exist locally
+			log.error("File not found on local system: ", localFilePath);
 		}
 	}
 	
