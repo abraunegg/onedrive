@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Update Sharepoint modified file handling for files > 4Mb in size
 
 ### Removed
-*    Remove -d shorthand for --download-only to avoid confusion with other GNU applications where -d stands for 'debug'
+*   Remove -d shorthand for --download-only to avoid confusion with other GNU applications where -d stands for 'debug'
 
 ## 2.3.7 - 2019-07-03
 ### Fixed
