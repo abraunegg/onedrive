@@ -3,6 +3,37 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.3.8 - 2019-08-04
+### Fixed
+*   Fix unable to download all files when OneDrive fails to return file level details used to validate file integrity
+*   Included the flag "-m" to create the home directory when creating the user
+*   Fix entrypoint.sh to work with "sudo docker run"
+*   Fix docker build error on stretch
+*   Fix hidden directories in 'root' from having prefix removed
+*   Fix Sharepoint Document Library handling for .txt & .csv files
+*   Fix logging for init.d service
+*   Fix OneDrive response missing required 'id' element when uploading images
+*   Fix 'Unexpected character '<'. (Line 1:1)' when OneDrive has an exception error
+*   Fix error when creating the sync dir fails when there is no permission to create the sync dir
+
+### Added
+*   Add explicit check for hashes to be returned in cases where OneDrive API fails to provide them despite requested to do so
+*   Add comparison with sha1 if OneDrive provides that rather than quickXor
+*   Add selinux configuration details for a sync folder outside of the home folder
+*   Add date tag on docker.hub
+*   Add back CentOS 6 install & uninstall to Makefile
+*   Add a check to handle moving items out of sync_list sync scope & delete locally if true
+*   Implement --get-file-link which will return the weburl of a file which has been synced to OneDrive
+
+### Changed
+*   Change unauthorized-api exit code to 3
+*   Update LDC to v1.16.0 for Travis CI testing
+*   Use replace function for modified Sharepoint Document Library files rather than delete and upload as new file, preserving file history
+*   Update Sharepoint modified file handling for files > 4Mb in size
+
+### Removed
+*   Remove -d shorthand for --download-only to avoid confusion with other GNU applications where -d stands for 'debug'
+
 ## 2.3.7 - 2019-07-03
 ### Fixed
 *   Fix not all files being downloaded due to OneDrive query failure
