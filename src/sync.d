@@ -2417,7 +2417,7 @@ final class SyncEngine
 					if (!itemdb.selectById(parent.driveId, parent.id, parent)){
 						// parent for 'path' is NOT in the database
 						log.vlog("The parent for this path is not in the local database - need to add parent to local database");
-						string parentPath = dirName(path);
+						parentPath = dirName(path);
 						uploadCreateDir(parentPath);
 					} else {
 						// parent is in database
