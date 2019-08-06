@@ -66,6 +66,11 @@ int main(string[] args)
 	cfg.update_from_args(args);
 	
 	// Has any of our configuration that would require a --resync been changed?
+	string currentConfigHash;
+	string currentSyncListHash;
+	string previousConfigHash;
+	string previousSyncListHash;
+	
 	if ((exists(cfg.configDirName ~ "/config")) && (!exists(cfg.configDirName ~ "/config.hash"))) {
 		// Hash of config file needs to be created
 		std.file.write(cfg.configDirName ~ "/config.hash", computeQuickXorHash(cfg.configDirName ~ "/config"));
@@ -76,11 +81,20 @@ int main(string[] args)
 		std.file.write(cfg.configDirName ~ "/sync_list.hash", computeQuickXorHash(cfg.configDirName ~ "/sync_list"));
 	}
 	
-	// Read config hashes
-	string currentConfigHash = computeQuickXorHash(cfg.configDirName ~ "/config");
-	string currentSyncListHash = computeQuickXorHash(cfg.configDirName ~ "/sync_list");
-	string previousConfigHash = readText(cfg.configDirName ~ "/config.hash");
-	string previousSyncListHash = readText(cfg.configDirName ~ "/sync_list.hash");
+	// If hash files exist, but config files do not ... remove the hash
+	if ((!exists(cfg.configDirName ~ "/config")) && (exists(cfg.configDirName ~ "/config.hash"))) {
+		safeRemove(cfg.configDirName ~ "/config.hash");
+	}
+	
+	if ((!exists(cfg.configDirName ~ "/sync_list")) && (exists(cfg.configDirName ~ "/sync_list.hash"))) {
+		safeRemove(cfg.configDirName ~ "/sync_list.hash");
+	}
+	
+	// Read config hashes if they exist
+	if (exists(cfg.configDirName ~ "/config")) currentConfigHash = computeQuickXorHash(cfg.configDirName ~ "/config");
+	if (exists(cfg.configDirName ~ "/sync_list")) currentSyncListHash = computeQuickXorHash(cfg.configDirName ~ "/sync_list");
+	if (exists(cfg.configDirName ~ "/config.hash")) previousConfigHash = readText(cfg.configDirName ~ "/config.hash");
+	if (exists(cfg.configDirName ~ "/sync_list.hash")) previousSyncListHash = readText(cfg.configDirName ~ "/sync_list.hash");
 	
 	if ((currentConfigHash != previousConfigHash) || (currentSyncListHash != previousSyncListHash)) {
 		// --resync needed
