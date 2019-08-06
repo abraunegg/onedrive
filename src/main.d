@@ -105,9 +105,9 @@ int main(string[] args)
 		} else {
 			// resync issued, update hashes
 			if (!cfg.getValueBool("dry_run")) {
-				// not doing a dry run, update files
-				std.file.write(cfg.configDirName ~ "/config.hash", computeQuickXorHash(cfg.configDirName ~ "/config"));
-				std.file.write(cfg.configDirName ~ "/sync_list.hash", computeQuickXorHash(cfg.configDirName ~ "/sync_list"));
+				// not doing a dry run, update hash files if config & sync_list exist
+				if (exists(cfg.configDirName ~ "/config")) std.file.write(cfg.configDirName ~ "/config.hash", computeQuickXorHash(cfg.configDirName ~ "/config"));
+				if (exists(cfg.configDirName ~ "/sync_list")) std.file.write(cfg.configDirName ~ "/sync_list.hash", computeQuickXorHash(cfg.configDirName ~ "/sync_list"));
 			}
 		}
 	}
