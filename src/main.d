@@ -53,8 +53,7 @@ int main(string[] args)
 		log.error("Try 'onedrive -h' for more information");
 		return EXIT_FAILURE;
 	}
-
-
+	
 	// load configuration file if available
 	auto cfg = new config.Config(confdirOption);
 	if (!cfg.initialize()) {
@@ -62,15 +61,45 @@ int main(string[] args)
 		// Error message already printed
 		return EXIT_FAILURE;
 	}
+	
 	// update configuration from command line args
 	cfg.update_from_args(args);
-
+	
+	// Has any of our configuration that would require a --resync been changed?
+	if ((exists(cfg.configDirName ~ "/config")) && (!exists(cfg.configDirName ~ "/config.hash"))) {
+		// Hash of config file needs to be created
+		std.file.write(cfg.configDirName ~ "/config.hash", computeQuickXorHash(cfg.configDirName ~ "/config"));
+	}
+	
+	if ((exists(cfg.configDirName ~ "/sync_list")) && (!exists(cfg.configDirName ~ "/sync_list.hash"))) {
+		// Hash of sync_list file needs to be created
+		std.file.write(cfg.configDirName ~ "/sync_list.hash", computeQuickXorHash(cfg.configDirName ~ "/sync_list"));
+	}
+	
+	// Read config hashes
+	string currentConfigHash = computeQuickXorHash(cfg.configDirName ~ "/config");
+	string currentSyncListHash = computeQuickXorHash(cfg.configDirName ~ "/sync_list");
+	string previousConfigHash = readText(cfg.configDirName ~ "/config.hash");
+	string previousSyncListHash = readText(cfg.configDirName ~ "/sync_list.hash");
+	
+	if ((currentConfigHash != previousConfigHash) || (currentSyncListHash != previousSyncListHash)) {
+		// --resync needed
+		if (!cfg.getValueBool("resync")) {
+			// resync not issued, fail fast
+			log.error("A configuration file change has been detected where a --resync is required");
+			return EXIT_FAILURE;
+		} else {
+			// resync issued, update hashes
+			std.file.write(cfg.configDirName ~ "/config.hash", computeQuickXorHash(cfg.configDirName ~ "/config"));
+			std.file.write(cfg.configDirName ~ "/sync_list.hash", computeQuickXorHash(cfg.configDirName ~ "/sync_list"));
+		}
+	}
+	
 	// dry-run notification
 	if (cfg.getValueBool("dry_run")) {
 		log.log("DRY-RUN Configured. Output below shows what 'would' have occurred.");
 	}
 
-	
 	// Are we able to reach the OneDrive Service
 	bool online = false;
 
