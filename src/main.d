@@ -90,8 +90,11 @@ int main(string[] args)
 			return EXIT_FAILURE;
 		} else {
 			// resync issued, update hashes
-			std.file.write(cfg.configDirName ~ "/config.hash", computeQuickXorHash(cfg.configDirName ~ "/config"));
-			std.file.write(cfg.configDirName ~ "/sync_list.hash", computeQuickXorHash(cfg.configDirName ~ "/sync_list"));
+			if (!cfg.getValueBool("dry_run")) {
+				// not doing a dry run, update files
+				std.file.write(cfg.configDirName ~ "/config.hash", computeQuickXorHash(cfg.configDirName ~ "/config"));
+				std.file.write(cfg.configDirName ~ "/sync_list.hash", computeQuickXorHash(cfg.configDirName ~ "/sync_list"));
+			}
 		}
 	}
 	
