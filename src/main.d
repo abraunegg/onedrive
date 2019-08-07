@@ -279,7 +279,7 @@ int main(string[] args)
 			safeRemove(cfg.uploadStateFilePath);
 		}
 		if (cfg.getValueBool("logout")) {
-			if (cfg.getValueBool("logout")) log.vdebug("--logout requested");
+			log.vdebug("--logout requested");
 			if (!cfg.getValueBool("dry_run")) {
 				safeRemove(cfg.refreshTokenFilePath);
 			}
