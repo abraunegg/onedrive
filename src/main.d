@@ -271,6 +271,7 @@ int main(string[] args)
 	}
 
 	if (cfg.getValueBool("resync") || cfg.getValueBool("logout")) {
+		if (cfg.getValueBool("resync")) log.vdebug("--resync requested");
 		log.vlog("Deleting the saved status ...");
 		if (!cfg.getValueBool("dry_run")) {
 			safeRemove(cfg.databaseFilePath);
@@ -278,6 +279,7 @@ int main(string[] args)
 			safeRemove(cfg.uploadStateFilePath);
 		}
 		if (cfg.getValueBool("logout")) {
+			if (cfg.getValueBool("logout")) log.vdebug("--logout requested");
 			if (!cfg.getValueBool("dry_run")) {
 				safeRemove(cfg.refreshTokenFilePath);
 			}
