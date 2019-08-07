@@ -66,10 +66,17 @@ int main(string[] args)
 	cfg.update_from_args(args);
 	
 	// Has any of our configuration that would require a --resync been changed?
+	// 1. sync_list file modification
+	// 2. config file modification
+	// 3. CLI input overriding configured config file option
+	// 4. CLI input overriding application defaults where no config file is being used
 	string currentConfigHash;
 	string currentSyncListHash;
 	string previousConfigHash;
 	string previousSyncListHash;
+	bool syncDirDifferent = false;
+	bool skipFileDifferent = false;
+	bool skipDirDifferent = false;
 	
 	if ((exists(cfg.configDirName ~ "/config")) && (!exists(cfg.configDirName ~ "/config.hash"))) {
 		// Hash of config file needs to be created
@@ -81,13 +88,15 @@ int main(string[] args)
 		std.file.write(cfg.configDirName ~ "/sync_list.hash", computeQuickXorHash(cfg.configDirName ~ "/sync_list"));
 	}
 	
-	// If hash files exist, but config files do not ... remove the hash
+	// If hash files exist, but config files do not ... remove the hash, but only if --resync was issued as now the application will use 'defaults' which 'may' be different
 	if ((!exists(cfg.configDirName ~ "/config")) && (exists(cfg.configDirName ~ "/config.hash"))) {
-		safeRemove(cfg.configDirName ~ "/config.hash");
+		// if --resync safe remove config.hash
+		if (cfg.getValueBool("resync")) safeRemove(cfg.configDirName ~ "/config.hash");
 	}
 	
 	if ((!exists(cfg.configDirName ~ "/sync_list")) && (exists(cfg.configDirName ~ "/sync_list.hash"))) {
-		safeRemove(cfg.configDirName ~ "/sync_list.hash");
+		// if --resync safe remove sync_list.hash
+		if (cfg.getValueBool("resync")) safeRemove(cfg.configDirName ~ "/sync_list.hash");
 	}
 	
 	// Read config hashes if they exist
@@ -96,18 +105,100 @@ int main(string[] args)
 	if (exists(cfg.configDirName ~ "/config.hash")) previousConfigHash = readText(cfg.configDirName ~ "/config.hash");
 	if (exists(cfg.configDirName ~ "/sync_list.hash")) previousSyncListHash = readText(cfg.configDirName ~ "/sync_list.hash");
 	
-	if ((currentConfigHash != previousConfigHash) || (currentSyncListHash != previousSyncListHash)) {
-		// --resync needed
-		if (!cfg.getValueBool("resync")) {
-			// resync not issued, fail fast
-			log.error("A configuration file change has been detected where a --resync is required");
-			return EXIT_FAILURE;
+	// Debugging output to assist what changed
+	if (currentConfigHash != previousConfigHash) log.vdebug("config file has been updated, --resync needed");
+	if (currentSyncListHash != previousSyncListHash) log.vdebug("sync_list file has been updated, --resync needed");
+	
+	// config file set options can be changed via CLI input, specifically these will impact sync:
+	//  --syncdir ARG
+	//  --skip-file ARG
+	//  --skip-dir ARG
+	
+	if (exists(cfg.configDirName ~ "/config")) {
+		// config file exists
+		// was the sync_dir updated by CLI?
+		if (cfg.configFileSyncDir != "") {
+			// sync_dir was set in config file
+			if (cfg.configFileSyncDir != cfg.getValueString("sync_dir")) {
+				// config file was set and CLI input changed this
+				log.vdebug("sync_dir: CLI override of config file option, --resync needed");
+				syncDirDifferent = true;
+			}
+		}
+		
+		// was the skip_file updated by CLI?
+		if (cfg.configFileSkipFile != "") {
+			// skip_file was set in config file
+			if (cfg.configFileSkipFile != cfg.getValueString("skip_file")) {
+				// config file was set and CLI input changed this
+				log.vdebug("skip_file: CLI override of config file option, --resync needed");
+				skipFileDifferent = true;
+			}
 		} else {
-			// resync issued, update hashes
-			if (!cfg.getValueBool("dry_run")) {
-				// not doing a dry run, update hash files if config & sync_list exist
-				if (exists(cfg.configDirName ~ "/config")) std.file.write(cfg.configDirName ~ "/config.hash", computeQuickXorHash(cfg.configDirName ~ "/config"));
-				if (exists(cfg.configDirName ~ "/sync_list")) std.file.write(cfg.configDirName ~ "/sync_list.hash", computeQuickXorHash(cfg.configDirName ~ "/sync_list"));
+			// config option not set but was skip_file application defaults updated via CLI
+			if (cfg.defaultSkipFile != cfg.getValueString("skip_file")) {
+				// config file was set and CLI input changed this
+				log.vdebug("skip_file: CLI override of application defaults, --resync needed");
+				skipFileDifferent = true;
+			}
+		}
+		
+		// was the skip_dir updated by CLI?
+		if (cfg.configFileSkipDir != "") {
+			// skip_dir was set in config file
+			if (cfg.configFileSkipDir != cfg.getValueString("skip_dir")) {
+				// config file was set and CLI input changed this
+				log.vdebug("skip_dir: CLI override of config file option, --resync needed");
+				skipDirDifferent = true;
+			}
+		} else {
+			// config option not set but was skip_dir application defaults updated via CLI
+			if (cfg.defaultSkipDir != cfg.getValueString("skip_dir")) {
+				// config file was set and CLI input changed this
+				log.vdebug("skip_dir: CLI override of application defaults, --resync needed");
+				skipDirDifferent = true;
+			}
+		}
+	} else {
+		// no config file detected evaluate against application defaults
+		// dont check sync dir for this one, as this 'may' be normal
+		
+		// was skip_file default updated via CLI
+		if (cfg.defaultSkipFile != cfg.getValueString("skip_file")) {
+			// default was set and CLI input changed this
+			log.vdebug("skip_file: CLI override of application defaults, --resync needed");
+			skipFileDifferent = true;
+		}
+		
+		// was skip_dir default updated via CLI
+		if (cfg.defaultSkipDir != cfg.getValueString("skip_dir")) {
+			// default was set and CLI input changed this
+			log.vdebug("skip_dir: CLI override of application defaults, --resync needed");
+			skipDirDifferent = true;
+		}
+	}
+	
+	// Compare:
+	// - config file hashes
+	// - sync_list file hashes
+	// - sync_dir config file option vs --syncdir CLI input
+	// - skip_file config file option vs --skip-file CLI input
+	// - skip_dir config file option vs --skip-dir CLI input
+	if ((currentConfigHash != previousConfigHash) || (currentSyncListHash != previousSyncListHash) || syncDirDifferent || skipFileDifferent || skipDirDifferent) {
+		// --resync needed, is the user just testing configuration changes?
+		if (!cfg.getValueBool("display_config")){
+			// not testing configuration changes
+			if (!cfg.getValueBool("resync")) {
+				// --resync not issued, fail fast
+				log.error("An application configuration change has been detected where a --resync is required");
+				return EXIT_FAILURE;
+			} else {
+				// --resync issued, update hashes of config files if they exist
+				if (!cfg.getValueBool("dry_run")) {
+					// not doing a dry run, update hash files if config & sync_list exist
+					if (exists(cfg.configDirName ~ "/config")) std.file.write(cfg.configDirName ~ "/config.hash", computeQuickXorHash(cfg.configDirName ~ "/config"));
+					if (exists(cfg.configDirName ~ "/sync_list")) std.file.write(cfg.configDirName ~ "/sync_list.hash", computeQuickXorHash(cfg.configDirName ~ "/sync_list"));
+				}
 			}
 		}
 	}
@@ -242,6 +333,7 @@ int main(string[] args)
 			writeln("Selective sync configured           = false");
 		}
 		
+		// exit
 		return EXIT_SUCCESS;
 	}
 	
