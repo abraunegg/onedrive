@@ -134,14 +134,7 @@ int main(string[] args)
 				log.vdebug("skip_file: CLI override of config file option, --resync needed");
 				skipFileDifferent = true;
 			}
-		} else {
-			// config option not set but was skip_file application defaults updated via CLI
-			if (cfg.defaultSkipFile != cfg.getValueString("skip_file")) {
-				// config file was set and CLI input changed this
-				log.vdebug("skip_file: CLI override of application defaults, --resync needed");
-				skipFileDifferent = true;
-			}
-		}
+		} 
 		
 		// was the skip_dir updated by CLI?
 		if (cfg.configFileSkipDir != "") {
@@ -151,30 +144,6 @@ int main(string[] args)
 				log.vdebug("skip_dir: CLI override of config file option, --resync needed");
 				skipDirDifferent = true;
 			}
-		} else {
-			// config option not set but was skip_dir application defaults updated via CLI
-			if (cfg.defaultSkipDir != cfg.getValueString("skip_dir")) {
-				// config file was set and CLI input changed this
-				log.vdebug("skip_dir: CLI override of application defaults, --resync needed");
-				skipDirDifferent = true;
-			}
-		}
-	} else {
-		// no config file detected evaluate against application defaults
-		// dont check sync dir for this one, as this 'may' be normal
-		
-		// was skip_file default updated via CLI
-		if (cfg.defaultSkipFile != cfg.getValueString("skip_file")) {
-			// default was set and CLI input changed this
-			log.vdebug("skip_file: CLI override of application defaults, --resync needed");
-			skipFileDifferent = true;
-		}
-		
-		// was skip_dir default updated via CLI
-		if (cfg.defaultSkipDir != cfg.getValueString("skip_dir")) {
-			// default was set and CLI input changed this
-			log.vdebug("skip_dir: CLI override of application defaults, --resync needed");
-			skipDirDifferent = true;
 		}
 	}
 	
