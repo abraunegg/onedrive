@@ -2616,12 +2616,19 @@ final class SyncEngine
 			siteQuery = onedrive.o365SiteSearch(encodeComponent(o365SharedLibraryName));
 		} catch (OneDriveException e) {
 			log.error("ERROR: Query of OneDrive for Office 365 Library Name failed");
-			auto errorArray = splitLines(e.msg);
-			log.error("Error Message: ", errorArray[0]);
-			// extract 'message' as the reason
-			JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-			log.error("Error Reason:  ", errorMessage["error"]["message"].str);
-			return;
+			if (e.httpStatusCode == 403) {
+				// Forbidden - most likely authentication scope needs to be updated
+				log.error("ERROR: Authentication scope needs to be updated. Use --logout and re-authenticate client.");
+				return;
+			} else {
+				// display what the error is
+				auto errorArray = splitLines(e.msg);
+				log.error("Error Message: ", errorArray[0]);
+				// extract 'message' as the reason
+				JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+				log.error("Error Reason:  ", errorMessage["error"]["message"].str);
+				return;
+			}
 		}
 		
 		// is siteQuery a valid JSON object & contain data we can use?
