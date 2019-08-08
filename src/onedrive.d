@@ -702,9 +702,15 @@ final class OneDriveApi
 			case 400:
 				// Bad Request .. how should we act?
 				log.vlog("OneDrive returned a 'HTTP 400 - Bad Request' - gracefully handling error");
-				break;	
+				break;
 			
-			// Item not found
+			// 403 - Forbidden
+			case 403:
+				// OneDrive responded that the user is forbidden
+				log.vlog("OneDrive returned a 'HTTP 403 - Forbidden' - gracefully handling error");
+				break;
+			
+			// 404 - Item not found
 			case 404:
 				// Item was not found - do not throw an exception
 				log.vlog("OneDrive returned a 'HTTP 404 - Item not found' - gracefully handling error");
@@ -774,12 +780,19 @@ final class OneDriveApi
 			case 400:
 				// Bad Request .. how should we act?
 				log.vlog("OneDrive returned a 'HTTP 400 - Bad Request' - gracefully handling error");
-				break;	
+				break;
+			
+			// 403 - Forbidden
+			case 403:
+				// OneDrive responded that the user is forbidden
+				log.vlog("OneDrive returned a 'HTTP 403 - Forbidden' - gracefully handling error");
+				// Throw this as a specific exception so this is caught when performing sync.o365SiteSearch
+				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
 			
 			//	412 - Precondition Failed
 			case 412:
 				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
-				// Throw this as a specific exception so this is caught when performing uploadLastModifiedTime
+				// Throw this as a specific exception so this is caught when performing sync.uploadLastModifiedTime
 				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
 				
 			// Server side (OneDrive) Errors
