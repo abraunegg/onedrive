@@ -177,8 +177,8 @@ int main(string[] args)
 		std.file.copy(cfg.configDirName ~ "/config", configBackupFile);
 	}
 	
-	// Is there a backup of the config file?
-	if (!exists(configBackupFile)) {
+	// Is there a backup of the config file if the config file exists?
+	if (exists(cfg.configDirName ~ "/config")) && (!exists(configBackupFile)) {
 		// create backup copy of current config file
 		std.file.copy(cfg.configDirName ~ "/config", configBackupFile);
 	}
@@ -220,7 +220,7 @@ int main(string[] args)
 		}
 	}
 	
-	// Has anything triggered an --resync requirement?
+	// Has anything triggered a --resync requirement?
 	if (configOptionsDifferent || syncListDifferent || syncDirDifferent || skipFileDifferent || skipDirDifferent) {
 		// --resync needed, is the user just testing configuration changes?
 		if (!cfg.getValueBool("display_config")){
