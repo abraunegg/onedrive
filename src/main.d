@@ -178,7 +178,7 @@ int main(string[] args)
 	}
 	
 	// Is there a backup of the config file if the config file exists?
-	if (exists(cfg.configDirName ~ "/config")) && (!exists(configBackupFile)) {
+	if ((exists(cfg.configDirName ~ "/config")) && (!exists(configBackupFile))) {
 		// create backup copy of current config file
 		std.file.copy(cfg.configDirName ~ "/config", configBackupFile);
 	}
