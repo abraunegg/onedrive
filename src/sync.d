@@ -2608,30 +2608,80 @@ final class SyncEngine
 		string drive_id;
 		string webUrl;
 		bool found = false;
-		JSONValue siteQuery = onedrive.o365SiteSearch(encodeComponent(o365SharedLibraryName));
+		JSONValue siteQuery; 
 		
 		log.log("Office 365 Library Name Query: ", o365SharedLibraryName);
 		
-		foreach (searchResult; siteQuery["value"].array) {
-			// Need an 'exclusive' match here with o365SharedLibraryName as entered
-			log.vdebug("Found O365 Site: ", searchResult);
-			if (o365SharedLibraryName == searchResult["displayName"].str){
-				// 'displayName' matches search request
-				site_id = searchResult["id"].str;
-				webUrl = searchResult["webUrl"].str;
-				JSONValue siteDriveQuery = onedrive.o365SiteDrives(site_id);
-				foreach (driveResult; siteDriveQuery["value"].array) {
-					// Display results
-					found = true;
-					writeln("SiteName: ", searchResult["displayName"].str);
-					writeln("drive_id: ", driveResult["id"].str);
-					writeln("URL:      ", webUrl);
-				}
+		try {
+			siteQuery = onedrive.o365SiteSearch(encodeComponent(o365SharedLibraryName));
+		} catch (OneDriveException e) {
+			log.error("ERROR: Query of OneDrive for Office 365 Library Name failed");
+			if (e.httpStatusCode == 403) {
+				// Forbidden - most likely authentication scope needs to be updated
+				log.error("ERROR: Authentication scope needs to be updated. Use --logout and re-authenticate client.");
+				return;
+			} else {
+				// display what the error is
+				auto errorArray = splitLines(e.msg);
+				log.error("Error Message: ", errorArray[0]);
+				// extract 'message' as the reason
+				JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+				log.error("Error Reason:  ", errorMessage["error"]["message"].str);
+				return;
 			}
 		}
 		
-		if(!found) {
-			writeln("ERROR: This site could not be found. Please check it's name and your permissions to access the site.");
+		// is siteQuery a valid JSON object & contain data we can use?
+		if ((siteQuery.type() == JSONType.object) && ("value" in siteQuery)) {
+			// valid JSON object
+			foreach (searchResult; siteQuery["value"].array) {
+				// Need an 'exclusive' match here with o365SharedLibraryName as entered
+				log.vdebug("Found O365 Site: ", searchResult);
+				if (o365SharedLibraryName == searchResult["displayName"].str){
+					// 'displayName' matches search request
+					site_id = searchResult["id"].str;
+					webUrl = searchResult["webUrl"].str;
+					JSONValue siteDriveQuery;
+					
+					try {
+						siteDriveQuery = onedrive.o365SiteDrives(site_id);
+					} catch (OneDriveException e) {
+						log.error("ERROR: Query of OneDrive for Office Site ID failed");
+						auto errorArray = splitLines(e.msg);
+						log.error("Error Message: ", errorArray[0]);
+						// extract 'message' as the reason
+						JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+						log.error("Error Reason:  ", errorMessage["error"]["message"].str);
+						return;
+					}
+					
+					// is siteDriveQuery a valid JSON object & contain data we can use?
+					if ((siteDriveQuery.type() == JSONType.object) && ("value" in siteDriveQuery)) {
+						// valid JSON object
+						foreach (driveResult; siteDriveQuery["value"].array) {
+							// Display results
+							found = true;
+							writeln("SiteName: ", searchResult["displayName"].str);
+							writeln("drive_id: ", driveResult["id"].str);
+							writeln("URL:      ", webUrl);
+						}
+					} else {
+						// not a valid JSON object
+						log.error("ERROR: There was an error performing this operation on OneDrive");
+						log.error("ERROR: Increase logging verbosity to assist determining why.");
+						return;
+					}
+				}
+			}
+			
+			if(!found) {
+				log.error("ERROR: This site could not be found. Please check it's name and your permissions to access the site.");
+			}
+		} else {
+			// not a valid JSON object
+			log.error("ERROR: There was an error performing this operation on OneDrive");
+			log.error("ERROR: Increase logging verbosity to assist determining why.");
+			return;
 		}
 	}
 	
