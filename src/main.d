@@ -1,6 +1,6 @@
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.memory, core.time, core.thread;
-import std.getopt, std.file, std.path, std.process, std.stdio, std.conv, std.algorithm.searching, std.string;
+import std.getopt, std.file, std.path, std.process, std.stdio, std.conv, std.algorithm.searching, std.string, std.regex;
 import config, itemdb, monitor, onedrive, selective, sync, util;
 import std.net.curl: CurlException;
 import core.stdc.signal;
@@ -67,53 +67,126 @@ int main(string[] args)
 	
 	// Has any of our configuration that would require a --resync been changed?
 	// 1. sync_list file modification
-	// 2. config file modification
+	// 2. config file modification - but only if sync_dir, skip_dir, skip_file or drive_id was modified
 	// 3. CLI input overriding configured config file option
-	// 4. CLI input overriding application defaults where no config file is being used
+	
 	string currentConfigHash;
 	string currentSyncListHash;
 	string previousConfigHash;
 	string previousSyncListHash;
+	string configHashFile = cfg.configDirName ~ "/.config.hash";
+	string syncListHashFile = cfg.configDirName ~ "/.sync_list.hash";
+	string configBackupFile = cfg.configDirName ~ "/.config.backup";
+	bool configOptionsDifferent = false;
+	bool syncListDifferent = false;
 	bool syncDirDifferent = false;
 	bool skipFileDifferent = false;
 	bool skipDirDifferent = false;
 	
-	if ((exists(cfg.configDirName ~ "/config")) && (!exists(cfg.configDirName ~ "/config.hash"))) {
+	if ((exists(cfg.configDirName ~ "/config")) && (!exists(configHashFile))) {
 		// Hash of config file needs to be created
-		std.file.write(cfg.configDirName ~ "/config.hash", computeQuickXorHash(cfg.configDirName ~ "/config"));
+		std.file.write(configHashFile, computeQuickXorHash(cfg.configDirName ~ "/config"));
 	}
 	
-	if ((exists(cfg.configDirName ~ "/sync_list")) && (!exists(cfg.configDirName ~ "/sync_list.hash"))) {
+	if ((exists(cfg.configDirName ~ "/sync_list")) && (!exists(syncListHashFile))) {
 		// Hash of sync_list file needs to be created
-		std.file.write(cfg.configDirName ~ "/sync_list.hash", computeQuickXorHash(cfg.configDirName ~ "/sync_list"));
+		std.file.write(syncListHashFile, computeQuickXorHash(cfg.configDirName ~ "/sync_list"));
 	}
 	
 	// If hash files exist, but config files do not ... remove the hash, but only if --resync was issued as now the application will use 'defaults' which 'may' be different
-	if ((!exists(cfg.configDirName ~ "/config")) && (exists(cfg.configDirName ~ "/config.hash"))) {
+	if ((!exists(cfg.configDirName ~ "/config")) && (exists(configHashFile))) {
 		// if --resync safe remove config.hash
-		if (cfg.getValueBool("resync")) safeRemove(cfg.configDirName ~ "/config.hash");
+		if (cfg.getValueBool("resync")) safeRemove(configHashFile);
 	}
 	
-	if ((!exists(cfg.configDirName ~ "/sync_list")) && (exists(cfg.configDirName ~ "/sync_list.hash"))) {
+	if ((!exists(cfg.configDirName ~ "/sync_list")) && (exists(syncListHashFile))) {
 		// if --resync safe remove sync_list.hash
-		if (cfg.getValueBool("resync")) safeRemove(cfg.configDirName ~ "/sync_list.hash");
+		if (cfg.getValueBool("resync")) safeRemove(syncListHashFile);
 	}
 	
 	// Read config hashes if they exist
 	if (exists(cfg.configDirName ~ "/config")) currentConfigHash = computeQuickXorHash(cfg.configDirName ~ "/config");
 	if (exists(cfg.configDirName ~ "/sync_list")) currentSyncListHash = computeQuickXorHash(cfg.configDirName ~ "/sync_list");
-	if (exists(cfg.configDirName ~ "/config.hash")) previousConfigHash = readText(cfg.configDirName ~ "/config.hash");
-	if (exists(cfg.configDirName ~ "/sync_list.hash")) previousSyncListHash = readText(cfg.configDirName ~ "/sync_list.hash");
+	if (exists(configHashFile)) previousConfigHash = readText(configHashFile);
+	if (exists(syncListHashFile)) previousSyncListHash = readText(syncListHashFile);
 	
-	// Debugging output to assist what changed
-	if (currentConfigHash != previousConfigHash) log.vdebug("config file has been updated, --resync needed");
-	if (currentSyncListHash != previousSyncListHash) log.vdebug("sync_list file has been updated, --resync needed");
+	// Was sync_list updated?
+	if (currentSyncListHash != previousSyncListHash) {
+		// Debugging output to assist what changed
+		log.vdebug("sync_list file has been updated, --resync needed");
+		syncListDifferent = true;
+	}
 	
-	// config file set options can be changed via CLI input, specifically these will impact sync:
+	// Was config updated?
+	if (currentConfigHash != previousConfigHash) {
+		// config file was updated, however we only want to trigger a --resync requirement if sync_dir, skip_dir, skip_file or drive_id was modified
+		if (exists(configBackupFile)) {
+			// check backup config what has changed for these configuration options if anything
+			// # sync_dir = "~/OneDrive"
+			// # skip_file = "~*|.~*|*.tmp"
+			// # skip_dir = ""
+			// # drive_id = ""
+			string[string] stringValues;
+			stringValues["sync_dir"] = "";
+			stringValues["skip_file"] = "";
+			stringValues["skip_dir"] = "";
+			stringValues["drive_id"] = "";
+			
+			auto file = File(configBackupFile, "r");
+			auto r = regex(`^(\w+)\s*=\s*"(.*)"\s*$`);
+			foreach (line; file.byLine()) {
+				line = stripLeft(line);
+				if (line.length == 0 || line[0] == ';' || line[0] == '#') continue;
+				auto c = line.matchFirst(r);
+				if (!c.empty) {
+					c.popFront(); // skip the whole match
+					string key = c.front.dup;
+					auto p = key in stringValues;
+					if (p) {
+						c.popFront();
+						// compare this key
+						if ((key == "sync_dir") && (c.front.dup != cfg.getValueString("sync_dir"))) {
+							log.vdebug(key, " was modified since the last time the application was successfully run");
+							configOptionsDifferent = true;
+						}
+						
+						if ((key == "skip_file") && (c.front.dup != cfg.getValueString("skip_file"))){
+							log.vdebug(key, " was modified since the last time the application was successfully run");
+							configOptionsDifferent = true;
+						}
+						if ((key == "skip_dir") && (c.front.dup != cfg.getValueString("skip_dir"))){
+							log.vdebug(key, " was modified since the last time the application was successfully run");
+							configOptionsDifferent = true;
+						}
+						if ((key == "drive_id") && (c.front.dup != cfg.getValueString("drive_id"))){
+							log.vdebug(key, " was modified since the last time the application was successfully run");
+							configOptionsDifferent = true;
+						}
+					}
+				}
+			}
+		} else {
+			// no backup to check
+		
+		}
+		
+		// If there was a backup, any modified values we need to worry about would have been checked
+		// update hash
+		std.file.write(configHashFile, computeQuickXorHash(cfg.configDirName ~ "/config"));
+		// create backup copy of current config file
+		std.file.copy(cfg.configDirName ~ "/config", configBackupFile);
+	}
+	
+	// Is there a backup of the config file?
+	if (!exists(configBackupFile)) {
+		// create backup copy of current config file
+		std.file.copy(cfg.configDirName ~ "/config", configBackupFile);
+	}
+	
+	// config file set options can be changed via CLI input, specifically these will impact sync and --resync will be needed:
 	//  --syncdir ARG
 	//  --skip-file ARG
 	//  --skip-dir ARG
-	
 	if (exists(cfg.configDirName ~ "/config")) {
 		// config file exists
 		// was the sync_dir updated by CLI?
@@ -147,13 +220,8 @@ int main(string[] args)
 		}
 	}
 	
-	// Compare:
-	// - config file hashes
-	// - sync_list file hashes
-	// - sync_dir config file option vs --syncdir CLI input
-	// - skip_file config file option vs --skip-file CLI input
-	// - skip_dir config file option vs --skip-dir CLI input
-	if ((currentConfigHash != previousConfigHash) || (currentSyncListHash != previousSyncListHash) || syncDirDifferent || skipFileDifferent || skipDirDifferent) {
+	// Has anything triggered an --resync requirement?
+	if (configOptionsDifferent || syncListDifferent || syncDirDifferent || skipFileDifferent || skipDirDifferent) {
 		// --resync needed, is the user just testing configuration changes?
 		if (!cfg.getValueBool("display_config")){
 			// not testing configuration changes
@@ -165,8 +233,13 @@ int main(string[] args)
 				// --resync issued, update hashes of config files if they exist
 				if (!cfg.getValueBool("dry_run")) {
 					// not doing a dry run, update hash files if config & sync_list exist
-					if (exists(cfg.configDirName ~ "/config")) std.file.write(cfg.configDirName ~ "/config.hash", computeQuickXorHash(cfg.configDirName ~ "/config"));
-					if (exists(cfg.configDirName ~ "/sync_list")) std.file.write(cfg.configDirName ~ "/sync_list.hash", computeQuickXorHash(cfg.configDirName ~ "/sync_list"));
+					if (exists(cfg.configDirName ~ "/config")) {
+						// update hash
+						std.file.write(configHashFile, computeQuickXorHash(cfg.configDirName ~ "/config"));
+						// create backup copy of current config file
+						std.file.copy(cfg.configDirName ~ "/config", configBackupFile);
+					}
+					if (exists(cfg.configDirName ~ "/sync_list")) std.file.write(syncListHashFile, computeQuickXorHash(cfg.configDirName ~ "/sync_list"));
 				}
 			}
 		}
@@ -366,11 +439,11 @@ int main(string[] args)
 	log.vlog("Opening the item database ...");
 	if (!cfg.getValueBool("dry_run")) {
 		// Load the items.sqlite3 file as the database
-		log.vdebug("Using database file: ", cfg.databaseFilePath);
+		log.vdebug("Using database file: ", asNormalizedPath(cfg.databaseFilePath));
 		itemDb = new ItemDatabase(cfg.databaseFilePath);
 	} else {
 		// Load the items-dryrun.sqlite3 file as the database
-		log.vdebug("Using database file: ", cfg.databaseFilePathDryRun);
+		log.vdebug("Using database file: ", asNormalizedPath(cfg.databaseFilePathDryRun));
 		itemDb = new ItemDatabase(cfg.databaseFilePathDryRun);
 	}
 	
