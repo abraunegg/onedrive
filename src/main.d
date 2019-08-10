@@ -95,8 +95,11 @@ int main(string[] args)
 	
 	// If hash files exist, but config files do not ... remove the hash, but only if --resync was issued as now the application will use 'defaults' which 'may' be different
 	if ((!exists(cfg.configDirName ~ "/config")) && (exists(configHashFile))) {
-		// if --resync safe remove config.hash
-		if (cfg.getValueBool("resync")) safeRemove(configHashFile);
+		// if --resync safe remove config.hash and config.backup
+		if (cfg.getValueBool("resync")) {
+			safeRemove(configHashFile);
+			safeRemove(configBackupFile);
+		}
 	}
 	
 	if ((!exists(cfg.configDirName ~ "/sync_list")) && (exists(syncListHashFile))) {
@@ -120,6 +123,7 @@ int main(string[] args)
 	// Was config updated?
 	if (currentConfigHash != previousConfigHash) {
 		// config file was updated, however we only want to trigger a --resync requirement if sync_dir, skip_dir, skip_file or drive_id was modified
+		log.vdebug("config file has been updated, checking if --resync needed");
 		if (exists(configBackupFile)) {
 			// check backup config what has changed for these configuration options if anything
 			// # sync_dir = "~/OneDrive"
@@ -146,20 +150,20 @@ int main(string[] args)
 						c.popFront();
 						// compare this key
 						if ((key == "sync_dir") && (c.front.dup != cfg.getValueString("sync_dir"))) {
-							log.vdebug(key, " was modified since the last time the application was successfully run");
+							log.vdebug(key, " was modified since the last time the application was successfully run, --resync needed");
 							configOptionsDifferent = true;
 						}
 						
 						if ((key == "skip_file") && (c.front.dup != cfg.getValueString("skip_file"))){
-							log.vdebug(key, " was modified since the last time the application was successfully run");
+							log.vdebug(key, " was modified since the last time the application was successfully run, --resync needed");
 							configOptionsDifferent = true;
 						}
 						if ((key == "skip_dir") && (c.front.dup != cfg.getValueString("skip_dir"))){
-							log.vdebug(key, " was modified since the last time the application was successfully run");
+							log.vdebug(key, " was modified since the last time the application was successfully run, --resync needed");
 							configOptionsDifferent = true;
 						}
 						if ((key == "drive_id") && (c.front.dup != cfg.getValueString("drive_id"))){
-							log.vdebug(key, " was modified since the last time the application was successfully run");
+							log.vdebug(key, " was modified since the last time the application was successfully run, --resync needed");
 							configOptionsDifferent = true;
 						}
 					}
@@ -167,14 +171,25 @@ int main(string[] args)
 			}
 		} else {
 			// no backup to check
-		
+			log.vdebug("WARNING: no backup config file was found, unable to validate if any changes made");
 		}
 		
-		// If there was a backup, any modified values we need to worry about would have been checked
-		// update hash
-		std.file.write(configHashFile, computeQuickXorHash(cfg.configDirName ~ "/config"));
-		// create backup copy of current config file
-		std.file.copy(cfg.configDirName ~ "/config", configBackupFile);
+		// If there was a backup, any modified values we need to worry about would been detected
+		if (!cfg.getValueBool("display_config")) {
+			// we are not testing the configuration
+			if (!configOptionsDifferent) {
+				// no options are different
+				if (!cfg.getValueBool("dry_run")) {
+					// we are not in a dry-run scenario
+					// update config hash
+					log.vdebug("updating config hash as it is out of date");
+					std.file.write(configHashFile, computeQuickXorHash(cfg.configDirName ~ "/config"));
+					// create backup copy of current config file
+					log.vdebug("making backup of config file as it is out of date");
+					std.file.copy(cfg.configDirName ~ "/config", configBackupFile);
+				}
+			}
+		}
 	}
 	
 	// Is there a backup of the config file if the config file exists?
@@ -235,11 +250,17 @@ int main(string[] args)
 					// not doing a dry run, update hash files if config & sync_list exist
 					if (exists(cfg.configDirName ~ "/config")) {
 						// update hash
+						log.vdebug("updating config hash as --resync issued");
 						std.file.write(configHashFile, computeQuickXorHash(cfg.configDirName ~ "/config"));
 						// create backup copy of current config file
+						log.vdebug("making backup of config file as --resync issued");
 						std.file.copy(cfg.configDirName ~ "/config", configBackupFile);
 					}
-					if (exists(cfg.configDirName ~ "/sync_list")) std.file.write(syncListHashFile, computeQuickXorHash(cfg.configDirName ~ "/sync_list"));
+					if (exists(cfg.configDirName ~ "/sync_list")) {
+						// update sync_list hash
+						log.vdebug("updating sync_list hash as --resync issued");
+						std.file.write(syncListHashFile, computeQuickXorHash(cfg.configDirName ~ "/sync_list"));
+					}
 				}
 			}
 		}
