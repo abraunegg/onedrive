@@ -2400,6 +2400,34 @@ final class SyncEngine
 	private void uploadDeleteItem(Item item, string path)
 	{
 		log.log("Deleting item from OneDrive: ", path);
+		bool flagAsBigDelete = false;
+		
+		// query the database - how many objects will this remove?
+		long itemsToDelete = 0;
+		auto children = itemdb.selectChildren(item.driveId, item.id);
+		itemsToDelete = count(children);
+		foreach (Item child; children) {
+			if (child.type != ItemType.file) {
+				// recursively count the children of this child
+				itemsToDelete = itemsToDelete + countChildren(child.driveId, child.id);
+			}
+		}
+		
+		// Are we running in monitor mode? A local delete of a file will issue a inotify event, which will trigger the local & remote data immediately
+		if (!cfg.getValueBool("monitor")) {
+			// not running in monitor mode
+			if (itemsToDelete > cfg.getValueLong("classify_as_big_delete")) {
+				// A big delete detected
+				flagAsBigDelete = true;
+				if (!cfg.getValueBool("force")) {
+					log.error("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on OneDrive");
+					log.error("ERROR: To delete delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
+					// Must exit here to preserve data on OneDrive
+					exit(-1);
+				}
+			}
+		}
+		
 		if (!dryRun) {
 			// we are not in a --dry-run situation, process deletion to OneDrive
 			if ((item.driveId == "") && (item.id == "") && (item.eTag == "")){
@@ -2412,16 +2440,15 @@ final class SyncEngine
 				item.id = onedrivePathDetails["id"].str; // This item's ID. Should give something like 12345ABCDE1234A1!101
 				item.eTag = onedrivePathDetails["eTag"].str; // Should be something like aNjM2NjJFRUVGQjY2NjJFMSE5MzUuMA
 			}
-				
+			
+			//	do the delete
 			try {
 				onedrive.deleteById(item.driveId, item.id, item.eTag);
 			} catch (OneDriveException e) {
 				if (e.httpStatusCode == 404) {
 					// item.id, item.eTag could not be found on driveId
 					log.vlog("OneDrive reported: The resource could not be found.");
-				}
-				
-				else {
+				} else {
 					// Not a 404 response .. is this a 403 response due to OneDrive Business Retention Policy being enabled?
 					if ((e.httpStatusCode == 403) && (accountType != "personal")) {
 						auto errorArray = splitLines(e.msg);
@@ -2454,6 +2481,20 @@ final class SyncEngine
 				itemdb.deleteById(item.remoteDriveId, item.remoteId);
 			}
 		}
+	}
+	
+	private long countChildren(string driveId, string id){
+		// count children
+		long childrenCount = 0;
+		auto children = itemdb.selectChildren(driveId, id);
+		childrenCount = count(children);
+		foreach (Item child; children) {	
+			if (child.type != ItemType.file) {
+				// recursively count the children of this child
+				childrenCount = childrenCount + countChildren(child.driveId, child.id);
+			}
+		}
+		return childrenCount;
 	}
 
 	private void uploadLastModifiedTime(const(char)[] driveId, const(char)[] id, const(char)[] eTag, SysTime mtime)

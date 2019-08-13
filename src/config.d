@@ -56,6 +56,8 @@ final class Config
 		// Number of n sync runs before performing a full local scan of sync_dir
 		// By default 10 which means every ~7.5 minutes a full disk scan of sync_dir will occur
 		longValues["monitor_fullscan_frequency"] = 10;
+		// Number of children in a path that is locally removed which will be classified as a 'big data delete'
+		longValues["classify_as_big_delete"] = 1000;
 
 		// Determine the users home directory. 
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
@@ -144,7 +146,6 @@ final class Config
 
 	void update_from_args(string[] args)
 	{
-
 		// Add additional options that are NOT configurable via config file
 		stringValues["create_directory"]  = "";
 		stringValues["destination_directory"] = "";
@@ -161,7 +162,7 @@ final class Config
 		boolValues["logout"]              = false;
 		boolValues["monitor"]             = false;
 		boolValues["synchronize"]         = false;
-
+		boolValues["force"]               = false;
 
 		// Application Startup option validation
 		try {
@@ -181,6 +182,9 @@ final class Config
 				"check-for-nosync",
 					"Check for the presence of .nosync in each directory. If found, skip directory from sync.",
 					&boolValues["check_nosync"],
+				"classify-as-big-delete",
+					"Number of children in a path that is locally removed which will be classified as a 'big data delete'",
+					&longValues["classify_as_big_delete"],
 				"create-directory",
 					"Create a directory on OneDrive - no sync will be performed.",
 					&stringValues["create_directory"],
@@ -217,6 +221,9 @@ final class Config
 				"force-http-2",
 					"Force the use of HTTP/2 for all operations where applicable",
 					&boolValues["force_http_2"],
+				"force",
+					"Force the deletion of data when a 'big delete' is detected",
+					&boolValues["force"],
 				"get-file-link",
 					"Display the file link of a synced file",
 					&stringValues["get_file_link"],

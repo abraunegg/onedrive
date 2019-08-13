@@ -30,3 +30,4 @@
 # monitor_log_frequency = "5"
 # monitor_fullscan_frequency = "10"
 # sync_root_files = "false"
+# classify_as_big_delete = "1000"

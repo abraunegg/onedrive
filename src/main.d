@@ -152,37 +152,43 @@ int main(string[] args)
 		string userConfigFilePath = cfg.configDirName ~ "/config";
 		string userSyncList = cfg.configDirName ~ "/sync_list";
 		// Display application version
-		std.stdio.write("onedrive version                    = ", import("version"));
+		writeln("onedrive version                       = ", strip(import("version")));
+		
 		// Display all of the pertinent configuration options
-		writeln("Config path                         = ", cfg.configDirName);
+		writeln("Config path                            = ", cfg.configDirName);
 		
 		// Does a config file exist or are we using application defaults
 		if (exists(userConfigFilePath)){
-			writeln("Config file found in config path    = true");
+			writeln("Config file found in config path       = true");
 		} else {
-			writeln("Config file found in config path    = false");
+			writeln("Config file found in config path       = false");
 		}
 		
 		// Config Options
-		writeln("Config option 'check_nosync'        = ", cfg.getValueBool("check_nosync"));
-		writeln("Config option 'sync_dir'            = ", syncDir);
-		writeln("Config option 'skip_dir'            = ", cfg.getValueString("skip_dir"));
-		writeln("Config option 'skip_file'           = ", cfg.getValueString("skip_file"));
-		writeln("Config option 'skip_dotfiles'       = ", cfg.getValueBool("skip_dotfiles"));
-		writeln("Config option 'skip_symlinks'       = ", cfg.getValueBool("skip_symlinks"));
-		writeln("Config option 'monitor_interval'    = ", cfg.getValueLong("monitor_interval"));
-		writeln("Config option 'min_notify_changes'  = ", cfg.getValueLong("min_notify_changes"));
-		writeln("Config option 'log_dir'             = ", cfg.getValueString("log_dir"));
+		
+		
+		writeln("Config option 'check_nosync'           = ", cfg.getValueBool("check_nosync"));
+		writeln("Config option 'sync_dir'               = ", syncDir);
+		writeln("Config option 'skip_dir'               = ", cfg.getValueString("skip_dir"));
+		writeln("Config option 'skip_file'              = ", cfg.getValueString("skip_file"));
+		writeln("Config option 'skip_dotfiles'          = ", cfg.getValueBool("skip_dotfiles"));
+		writeln("Config option 'skip_symlinks'          = ", cfg.getValueBool("skip_symlinks"));
+		writeln("Config option 'monitor_interval'       = ", cfg.getValueLong("monitor_interval"));
+		writeln("Config option 'min_notify_changes'     = ", cfg.getValueLong("min_notify_changes"));
+		writeln("Config option 'log_dir'                = ", cfg.getValueString("log_dir"));
+		writeln("Config option 'classify_as_big_delete' = ", cfg.getValueLong("classify_as_big_delete"));
+		
+		
 		
 		// Is config option drive_id configured?
 		if (cfg.getValueString("drive_id") != ""){
-			writeln("Config option 'drive_id'            = ", cfg.getValueString("drive_id"));
+			writeln("Config option 'drive_id'               = ", cfg.getValueString("drive_id"));
 		}
 		
 		// Is sync_list configured?
 		if (exists(userSyncList)){
-			writeln("Config option 'sync_root_files'     = ", cfg.getValueBool("sync_root_files"));
-			writeln("Selective sync configured           = true");
+			writeln("Config option 'sync_root_files'        = ", cfg.getValueBool("sync_root_files"));
+			writeln("Selective sync configured              = true");
 			writeln("sync_list contents:");
 			// Output the sync_list contents
 			auto syncListFile = File(userSyncList);
@@ -192,8 +198,8 @@ int main(string[] args)
 				writeln(line);
 			}
 		} else {
-			writeln("Config option 'sync_root_files'     = ", cfg.getValueBool("sync_root_files"));
-			writeln("Selective sync configured           = false");
+			writeln("Config option 'sync_root_files'        = ", cfg.getValueBool("sync_root_files"));
+			writeln("Selective sync configured              = false");
 		}
 		
 		return EXIT_SUCCESS;
