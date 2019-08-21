@@ -678,12 +678,9 @@ final class SyncEngine
 				
 				else {
 					// Default operation if not 404, 410, 500, 504 errors
-					log.log("\n\nOneDrive returned an error with the following message:\n");
-					auto errorArray = splitLines(e.msg);
-					log.log("Error Message: ", errorArray[0]);
-					// extract 'message' as the reason
-					JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-					log.log("Error Reason:  ", errorMessage["error"]["message"].str);
+					
+					// display what the error is
+					displayErrorMessage(e.msg);
 					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
 					return;
 				}
@@ -1596,11 +1593,7 @@ final class SyncEngine
 											response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
 										} else {
 											// display what the error is
-											auto errorArray = splitLines(e.msg);
-											log.error("Error Message: ", errorArray[0]);
-											// extract 'message' as the reason
-											JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-											log.error("Error Reason:  ", errorMessage["error"]["message"].str);
+											displayErrorMessage(e.msg);
 											return;
 										}
 									}
@@ -1641,11 +1634,7 @@ final class SyncEngine
 											return;
 										} else {
 											// display what the error is
-											auto errorArray = splitLines(e.msg);
-											log.error("Error Message: ", errorArray[0]);
-											// extract 'message' as the reason
-											JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-											log.error("Error Reason:  ", errorMessage["error"]["message"].str);
+											displayErrorMessage(e.msg);
 											return;
 										}
 									}
@@ -1673,11 +1662,7 @@ final class SyncEngine
 												return;
 											} else {
 												// display what the error is
-												auto errorArray = splitLines(e.msg);
-												log.error("Error Message: ", errorArray[0]);
-												// extract 'message' as the reason
-												JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-												log.error("Error Reason:  ", errorMessage["error"]["message"].str);
+												displayErrorMessage(e.msg);
 												return;
 											}
 										}
@@ -2156,11 +2141,7 @@ final class SyncEngine
 													}
 												} else {
 													// display what the error is
-													auto errorArray = splitLines(e.msg);
-													log.error("Error Message: ", errorArray[0]);
-													// extract 'message' as the reason
-													JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-													log.error("Error Reason:  ", errorMessage["error"]["message"].str);
+													displayErrorMessage(e.msg);
 													return;
 												}
 											}
@@ -2462,12 +2443,8 @@ final class SyncEngine
 						}
 					} else {
 						// Not a 403 response & OneDrive Business Account / O365 Shared Folder / Library
-						log.log("\n\nOneDrive returned an error with the following message:\n");
-						auto errorArray = splitLines(e.msg);
-						log.log("Error Message: ", errorArray[0]);
-						// extract 'message' as the reason
-						JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-						log.log("Error Reason:  ", errorMessage["error"]["message"].str);
+						// display what the error is
+						displayErrorMessage(e.msg);
 						return;
 					}
 				}
@@ -2530,6 +2507,16 @@ final class SyncEngine
 		}
 	}
 
+	// Parse and display error message 
+	private void displayErrorMessage(string message) {
+		log.error("\n\nOneDrive returned an error with the following message:\n");
+		auto errorArray = splitLines(message);
+		log.error("Error Message: ", errorArray[0]);
+		// extract 'message' as the reason
+		JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
+		log.error("Error Reason:  ", errorMessage["error"]["message"].str);	
+	}
+	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_move
 	// This function is only called in monitor mode when an move event is coming from
 	// inotify and we try to move the item.
@@ -2594,12 +2581,7 @@ final class SyncEngine
 				log.log(e.msg);
 			} else {
 				// display what the error is
-				auto errorArray = splitLines(e.msg);
-				log.error("Error Message: ", errorArray[0]);
-				// extract 'message' as the reason
-				JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-				log.error("Error Reason:  ", errorMessage["error"]["message"].str);
-				return;
+				displayErrorMessage(e.msg);
 			}
 		}
 	}
@@ -2657,11 +2639,7 @@ final class SyncEngine
 				return;
 			} else {
 				// display what the error is
-				auto errorArray = splitLines(e.msg);
-				log.error("Error Message: ", errorArray[0]);
-				// extract 'message' as the reason
-				JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-				log.error("Error Reason:  ", errorMessage["error"]["message"].str);
+				displayErrorMessage(e.msg);
 				return;
 			}
 		}
@@ -2682,11 +2660,8 @@ final class SyncEngine
 						siteDriveQuery = onedrive.o365SiteDrives(site_id);
 					} catch (OneDriveException e) {
 						log.error("ERROR: Query of OneDrive for Office Site ID failed");
-						auto errorArray = splitLines(e.msg);
-						log.error("Error Message: ", errorArray[0]);
-						// extract 'message' as the reason
-						JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-						log.error("Error Reason:  ", errorMessage["error"]["message"].str);
+						// display what the error is
+						displayErrorMessage(e.msg);
 						return;
 					}
 					
