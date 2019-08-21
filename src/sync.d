@@ -1594,8 +1594,15 @@ final class SyncEngine
 											// HTTP request returned status code 504 (Gateway Timeout)
 											// Try upload as a session
 											response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+										} else {
+											// display what the error is
+											auto errorArray = splitLines(e.msg);
+											log.error("Error Message: ", errorArray[0]);
+											// extract 'message' as the reason
+											JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+											log.error("Error Reason:  ", errorMessage["error"]["message"].str);
+											return;
 										}
-										else throw e;
 									}
 									writeln("done.");
 								} else {
@@ -1632,9 +1639,15 @@ final class SyncEngine
 											writeln("", path, " is currently checked out or locked for editing by another user.");
 											log.fileOnly(path, " is currently checked out or locked for editing by another user.");
 											return;
+										} else {
+											// display what the error is
+											auto errorArray = splitLines(e.msg);
+											log.error("Error Message: ", errorArray[0]);
+											// extract 'message' as the reason
+											JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+											log.error("Error Reason:  ", errorMessage["error"]["message"].str);
+											return;
 										}
-										// what is this error?????
-										else throw e;
 									}
 									// As the session.upload includes the last modified time, save the response
 									saveItem(response);
@@ -1658,9 +1671,15 @@ final class SyncEngine
 												writeln("", path, " is currently checked out or locked for editing by another user.");
 												log.fileOnly(path, " is currently checked out or locked for editing by another user.");
 												return;
+											} else {
+												// display what the error is
+												auto errorArray = splitLines(e.msg);
+												log.error("Error Message: ", errorArray[0]);
+												// extract 'message' as the reason
+												JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+												log.error("Error Reason:  ", errorMessage["error"]["message"].str);
+												return;
 											}
-											// what is this error?????
-											else throw e;
 										}
 										// As the session.upload includes the last modified time, save the response
 										saveItem(response);
@@ -2135,8 +2154,15 @@ final class SyncEngine
 														// error uploading file
 														return;
 													}
+												} else {
+													// display what the error is
+													auto errorArray = splitLines(e.msg);
+													log.error("Error Message: ", errorArray[0]);
+													// extract 'message' as the reason
+													JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+													log.error("Error Reason:  ", errorMessage["error"]["message"].str);
+													return;
 												}
-												else throw e;
 											}
 										} else {
 											// File larger than threshold - use a session to upload
@@ -2564,8 +2590,17 @@ final class SyncEngine
 		try {
 			uploadDeleteItem(item, path);
 		} catch (OneDriveException e) {
-			if (e.httpStatusCode == 404) log.log(e.msg);
-			else throw e;
+			if (e.httpStatusCode == 404) {
+				log.log(e.msg);
+			} else {
+				// display what the error is
+				auto errorArray = splitLines(e.msg);
+				log.error("Error Message: ", errorArray[0]);
+				// extract 'message' as the reason
+				JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+				log.error("Error Reason:  ", errorMessage["error"]["message"].str);
+				return;
+			}
 		}
 	}
 	
