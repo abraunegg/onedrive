@@ -5,7 +5,7 @@
 *   [SQLite 3](https://www.sqlite.org/) >= 3.7.15
 *   [Digital Mars D Compiler (DMD)](http://dlang.org/download.html)
 
-**Note:** DMD version >= 2.083.1 or LDC version >= 1.11.0 is required to compile this application
+**Note:** DMD version >= 2.083.1 or LDC version >= 1.12.0 is required to compile this application
 
 ### Dependencies: Ubuntu/Debian - x86_64
 ```text
