@@ -104,7 +104,7 @@ case $(basename $DC) in
 		# remove everthing after ):
 		VERSION=${VERSION%%):*}
 		# now version should be something like L.M.N
-		MINVERSION=1.11.0
+		MINVERSION=1.12.0
 		;;
 	dmd)
 		# DMD64 D Compiler v2.085.1\n...
