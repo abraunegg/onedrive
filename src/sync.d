@@ -221,6 +221,8 @@ final class SyncEngine
 	private bool malwareDetected = false;
 	// download filesystem issue flag
 	private bool downloadFailed = false;
+	// upload failure - OneDrive or filesystem issue (reading data)
+	private bool uploadFailed = false;
 	// initialization has been done
 	private bool initDone = false;
 	// sync engine dryRun flag
@@ -674,9 +676,7 @@ final class SyncEngine
 					// Retry by calling applyDifferences() again
 					log.vlog("OneDrive returned a 'HTTP 504 - Gateway Timeout' - gracefully handling error");
 					applyDifferences(driveId, idToQuery);
-				}
-				
-				else {
+				} else {
 					// Default operation if not 404, 410, 500, 504 errors
 					// display what the error is
 					displayOneDriveErrorMessage(e.msg);
@@ -1560,6 +1560,11 @@ final class SyncEngine
 									try {
 										response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
 									} catch (OneDriveException e) {
+										if (e.httpStatusCode == 401) {
+											// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - no error message logged
+											log.error("ERROR: OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+											return;
+										}
 										if (e.httpStatusCode == 404) {
 											// HTTP request returned status code 404 - the eTag provided does not exist
 											// Delete record from the local database - file will be uploaded as a new file
@@ -1597,13 +1602,23 @@ final class SyncEngine
 											displayOneDriveErrorMessage(e.msg);
 											return;
 										}
+									} catch (FileException e) {
+										// display the error message
+										displayFileSystemErrorMessage(e.msg);
+										return;
 									}
 									writeln("done.");
 								} else {
 									writeln("");
 									try {
 										response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
-									} catch (OneDriveException e) {	
+									} catch (OneDriveException e) {
+										if (e.httpStatusCode == 401) {
+											// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - no error message logged
+											log.error("ERROR: OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+											return;
+										}
+										
 										if (e.httpStatusCode == 412) {
 											// HTTP request returned status code 412 - ETag does not match current item's value
 											// Delete record from the local database - file will be uploaded as a new file
@@ -1611,7 +1626,15 @@ final class SyncEngine
 											log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 											itemdb.deleteById(item.driveId, item.id);
 											return;
+										} else {
+											// display what the error is
+											displayOneDriveErrorMessage(e.msg);
+											return;
 										}
+									} catch (FileException e) {
+										// display the error message
+										displayFileSystemErrorMessage(e.msg);
+										return;
 									}
 									writeln("done.");
 								}		
@@ -1624,6 +1647,11 @@ final class SyncEngine
 									try {
 										response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
 									} catch (OneDriveException e) {
+										if (e.httpStatusCode == 401) {
+											// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - no error message logged
+											log.error("ERROR: OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+											return;
+										}
 										// Resolve https://github.com/abraunegg/onedrive/issues/36
 										if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
 											// The file is currently checked out or locked for editing by another user
@@ -1638,6 +1666,10 @@ final class SyncEngine
 											displayOneDriveErrorMessage(e.msg);
 											return;
 										}
+									} catch (FileException e) {
+										// display the error message
+										displayFileSystemErrorMessage(e.msg);
+										return;
 									}
 									// As the session.upload includes the last modified time, save the response
 									saveItem(response);
@@ -1652,6 +1684,11 @@ final class SyncEngine
 										try {
 											response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
 										} catch (OneDriveException e) {
+											if (e.httpStatusCode == 401) {
+												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - no error message logged
+												log.error("ERROR: OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+												return;
+											}										
 											// Resolve https://github.com/abraunegg/onedrive/issues/36
 											if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
 												// The file is currently checked out or locked for editing by another user
@@ -1666,6 +1703,10 @@ final class SyncEngine
 												displayOneDriveErrorMessage(e.msg);
 												return;
 											}
+										} catch (FileException e) {
+											// display the error message
+											displayFileSystemErrorMessage(e.msg);
+											return;
 										}
 										// As the session.upload includes the last modified time, save the response
 										saveItem(response);
@@ -2646,19 +2687,19 @@ final class SyncEngine
 
 	// Parse and display error message received from OneDrive
 	private void displayOneDriveErrorMessage(string message) {
-		log.error("\nOneDrive returned an error with the following message:\n");
+		log.error("\nERROR: OneDrive returned an error with the following message:");
 		auto errorArray = splitLines(message);
-		log.error("Error Message: ", errorArray[0]);
+		log.error("  Error Message: ", errorArray[0]);
 		// extract 'message' as the reason
 		JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
-		log.error("Error Reason:  ", errorMessage["error"]["message"].str);	
+		log.error("  Error Reason:  ", errorMessage["error"]["message"].str);	
 	}
 	
-	// Parse and display error message received from the local filesystem
+	// Parse and display error message received from the local file system
 	private void displayFileSystemErrorMessage(string message) {
-		log.error("\nThe local filesystem returned an error with the following message:\n");
+		log.error("\nERROR: The local file system returned an error with the following message:");
 		auto errorArray = splitLines(message);
-		log.error("Error Message: ", errorArray[0]);
+		log.error("  Error Message: ", errorArray[0]);
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_move
