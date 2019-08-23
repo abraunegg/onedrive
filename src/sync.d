@@ -1565,7 +1565,7 @@ final class SyncEngine
 									} catch (OneDriveException e) {
 										if (e.httpStatusCode == 401) {
 											// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-											writeln(" skipped.");
+											writeln("skipped.");
 											log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 											uploadFailed = true;
 											return;
@@ -1573,54 +1573,52 @@ final class SyncEngine
 										if (e.httpStatusCode == 404) {
 											// HTTP request returned status code 404 - the eTag provided does not exist
 											// Delete record from the local database - file will be uploaded as a new file
-											writeln(" skipped.");
+											writeln("skipped.");
 											log.vlog("OneDrive returned a 'HTTP 404 - eTag Issue' - gracefully handling error");
 											itemdb.deleteById(item.driveId, item.id);
 											uploadFailed = true;
 											return;
 										}
-									
 										// Resolve https://github.com/abraunegg/onedrive/issues/36
 										if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
 											// The file is currently checked out or locked for editing by another user
 											// We cant upload this file at this time
-											writeln(" skipped.");
+											writeln("skipped.");
 											log.fileOnly("Uploading modified file ", path, " ... skipped.");
 											write("", path, " is currently checked out or locked for editing by another user.");
 											log.fileOnly(path, " is currently checked out or locked for editing by another user.");
 											uploadFailed = true;
 											return;
 										}
-										
 										if (e.httpStatusCode == 412) {
 											// HTTP request returned status code 412 - ETag does not match current item's value
 											// Delete record from the local database - file will be uploaded as a new file
-											writeln(" skipped.");
+											writeln("skipped.");
 											log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
 											log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 											itemdb.deleteById(item.driveId, item.id);
 											uploadFailed = true;
 											return;
 										}
-										
 										if (e.httpStatusCode == 504) {
 											// HTTP request returned status code 504 (Gateway Timeout)
 											// Try upload as a session
 											response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
 										} else {
 											// display what the error is
-											writeln(" skipped.");
+											writeln("skipped.");
 											displayOneDriveErrorMessage(e.msg);
 											uploadFailed = true;
 											return;
 										}
 									} catch (FileException e) {
 										// display the error message
-										writeln(" skipped.");
+										writeln("skipped.");
 										displayFileSystemErrorMessage(e.msg);
 										uploadFailed = true;
 										return;
 									}
+									// upload done without error
 									writeln("done.");
 								} else {
 									writeln("");
@@ -1629,16 +1627,15 @@ final class SyncEngine
 									} catch (OneDriveException e) {
 										if (e.httpStatusCode == 401) {
 											// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-											writeln(" skipped.");
+											writeln("skipped.");
 											log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 											uploadFailed = true;
 											return;
 										}
-										
 										if (e.httpStatusCode == 412) {
 											// HTTP request returned status code 412 - ETag does not match current item's value
 											// Delete record from the local database - file will be uploaded as a new file
-											writeln(" skipped.");
+											writeln("skipped.");
 											log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
 											log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 											itemdb.deleteById(item.driveId, item.id);
@@ -1646,20 +1643,21 @@ final class SyncEngine
 											return;
 										} else {
 											// display what the error is
-											writeln(" skipped.");
+											writeln("skipped.");
 											displayOneDriveErrorMessage(e.msg);
 											uploadFailed = true;
 											return;
 										}
 									} catch (FileException e) {
 										// display the error message
-										writeln(" skipped.");
+										writeln("skipped.");
 										displayFileSystemErrorMessage(e.msg);
 										uploadFailed = true;
 										return;
 									}
+									// upload done without error
 									writeln("done.");
-								}		
+								}
 							} else {
 								// OneDrive Business Account
 								// We need to always use a session to upload, but handle the changed file correctly
@@ -1671,7 +1669,7 @@ final class SyncEngine
 									} catch (OneDriveException e) {
 										if (e.httpStatusCode == 401) {
 											// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-											writeln(" skipped.");
+											writeln("skipped.");
 											log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 											uploadFailed = true;
 											return;
@@ -1680,7 +1678,7 @@ final class SyncEngine
 										if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
 											// The file is currently checked out or locked for editing by another user
 											// We cant upload this file at this time
-											writeln(" skipped.");
+											writeln("skipped.");
 											log.fileOnly("Uploading modified file ", path, " ... skipped.");
 											writeln("", path, " is currently checked out or locked for editing by another user.");
 											log.fileOnly(path, " is currently checked out or locked for editing by another user.");
@@ -1688,18 +1686,20 @@ final class SyncEngine
 											return;
 										} else {
 											// display what the error is
-											writeln(" skipped.");
+											writeln("skipped.");
 											displayOneDriveErrorMessage(e.msg);
 											uploadFailed = true;
 											return;
 										}
 									} catch (FileException e) {
 										// display the error message
-										writeln(" skipped.");
+										writeln("skipped.");
 										displayFileSystemErrorMessage(e.msg);
 										uploadFailed = true;
 										return;
 									}
+									// upload done without error
+									writeln("done.");
 									// As the session.upload includes the last modified time, save the response
 									saveItem(response);
 								}
@@ -1715,7 +1715,7 @@ final class SyncEngine
 										} catch (OneDriveException e) {
 											if (e.httpStatusCode == 401) {
 												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-												writeln(" skipped.");
+												writeln("skipped.");
 												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 												uploadFailed = true;
 												return;
@@ -1724,7 +1724,7 @@ final class SyncEngine
 											if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
 												// The file is currently checked out or locked for editing by another user
 												// We cant upload this file at this time
-												writeln(" skipped.");
+												writeln("skipped.");
 												log.fileOnly("Uploading modified file ", path, " ... skipped.");
 												writeln("", path, " is currently checked out or locked for editing by another user.");
 												log.fileOnly(path, " is currently checked out or locked for editing by another user.");
@@ -1732,24 +1732,26 @@ final class SyncEngine
 												return;
 											} else {
 												// display what the error is
-												writeln(" skipped.");
+												writeln("skipped.");
 												displayOneDriveErrorMessage(e.msg);
 												uploadFailed = true;
 												return;
 											}
 										} catch (FileException e) {
 											// display the error message
-											writeln(" skipped.");
+											writeln("skipped.");
 											displayFileSystemErrorMessage(e.msg);
 											uploadFailed = true;
 											return;
 										}
+										// upload done without error
+										writeln("done.");
 										// As the session.upload includes the last modified time, save the response
 										saveItem(response);
 									} else {									
 										// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
 										// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
-										writeln(" skipped.");
+										writeln("skipped.");
 										log.fileOnly("Uploading modified file ", path, " ... skipped.");
 										log.vlog("Skip Reason: Microsoft Sharepoint 'enrichment' after upload issue");
 										log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
@@ -1758,9 +1760,6 @@ final class SyncEngine
 										return;
 									}
 								}
-					
-								// log line completion							
-								writeln("done.");
 							}
 							log.fileOnly("Uploading modified file ", path, " ... done.");
 							if ("cTag" in response) {
@@ -2194,7 +2193,7 @@ final class SyncEngine
 								writeln("Skipping item - excluded by skip_size config: ", path, " (", thisFileSize/2^^20," MB)");
 								return;
 							}
-							write("Uploading new file ", path, " ...");
+							write("Uploading new file ", path, " ... ");
 							JSONValue response;
 							
 							if (!dryRun) {
@@ -2207,13 +2206,13 @@ final class SyncEngine
 									} catch (OneDriveException e) {
 										// error uploading file
 										// display what the error is
-										writeln(" skipped.");
+										writeln("skipped.");
 										displayOneDriveErrorMessage(e.msg);
 										uploadFailed = true;
 										return;
 									} catch (FileException e) {
 										// display the error message
-										writeln(" skipped.");
+										writeln("skipped.");
 										displayFileSystemErrorMessage(e.msg);
 										uploadFailed = true;
 										return;
@@ -2231,7 +2230,7 @@ final class SyncEngine
 											} catch (OneDriveException e) {
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-													writeln(" skipped.");
+													writeln("skipped.");
 													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 													uploadFailed = true;
 													return;
@@ -2244,21 +2243,21 @@ final class SyncEngine
 													} catch (OneDriveException e) {
 														// error uploading file
 														// display what the error is
-														writeln(" skipped.");
+														writeln("skipped.");
 														displayOneDriveErrorMessage(e.msg);
 														uploadFailed = true;
 														return;
 													}
 												} else {
 													// display what the error is
-													writeln(" skipped.");
+													writeln("skipped.");
 													displayOneDriveErrorMessage(e.msg);
 													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
-												writeln(" skipped.");
+												writeln("skipped.");
 												displayFileSystemErrorMessage(e.msg);
 												uploadFailed = true;
 												return;
@@ -2271,20 +2270,20 @@ final class SyncEngine
 											} catch (OneDriveException e) {
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-													writeln(" skipped.");
+													writeln("skipped.");
 													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 													uploadFailed = true;
 													return;
 												} else {
 													// display what the error is
-													writeln(" skipped.");
+													writeln("skipped.");
 													displayOneDriveErrorMessage(e.msg);
 													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
-												writeln(" skipped.");
+												writeln("skipped.");
 												displayFileSystemErrorMessage(e.msg);
 												uploadFailed = true;
 												return;
@@ -2298,20 +2297,20 @@ final class SyncEngine
 										} catch (OneDriveException e) {
 											if (e.httpStatusCode == 401) {
 												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-												writeln(" skipped.");
+												writeln("skipped.");
 												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 												uploadFailed = true;
 												return;
 											} else {
 												// display what the error is
-												writeln(" skipped.");
+												writeln("skipped.");
 												displayOneDriveErrorMessage(e.msg);
 												uploadFailed = true;
 												return;
 											}
 										} catch (FileException e) {
 											// display the error message
-											writeln(" skipped.");
+											writeln("skipped.");
 											displayFileSystemErrorMessage(e.msg);
 											uploadFailed = true;
 											return;
@@ -2321,9 +2320,10 @@ final class SyncEngine
 								
 								// response from OneDrive has to be a valid JSON object
 								if (response.type() == JSONType.object){
+									// upload done without error
+									writeln("done.");
 									// Log action to log file
 									log.fileOnly("Uploading new file ", path, " ... done.");
-									writeln(" done.");
 									// The file was uploaded, or a 4xx / 5xx error was generated
 									if ("size" in response){
 										// The response JSON contains size, high likelihood valid response returned 
@@ -2392,7 +2392,7 @@ final class SyncEngine
 								}
 							} else {
 								// we are --dry-run - simulate the file upload
-								writeln(" done.");
+								writeln("done.");
 								response = createFakeResponse(path);
 								// Log action to log file
 								log.fileOnly("Uploading new file ", path, " ... done.");
@@ -2428,7 +2428,7 @@ final class SyncEngine
 							if (localFileModifiedTime > remoteFileModifiedTime){
 								// local file is newer
 								log.vlog("Requested file to upload is newer than existing file on OneDrive");
-								write("Uploading modified file ", path, " ...");
+								write("Uploading modified file ", path, " ... ");
 								JSONValue response;
 								
 								if (!dryRun) {
@@ -2437,11 +2437,11 @@ final class SyncEngine
 										if (thisFileSize <= thresholdFileSize) {
 											try {
 												response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-												writeln(" done.");
+												writeln("done.");
 											} catch (OneDriveException e) {
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-													writeln(" skipped.");
+													writeln("skipped.");
 													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 													uploadFailed = true;
 													return;
@@ -2451,25 +2451,25 @@ final class SyncEngine
 													// Try upload as a session
 													try {
 														response = session.upload(path, parent.driveId, parent.id, baseName(path));
-														writeln(" done.");
+														writeln("done.");
 													} catch (OneDriveException e) {
 														// error uploading file
 														// display what the error is
-														writeln(" skipped.");
+														writeln("skipped.");
 														displayOneDriveErrorMessage(e.msg);
 														uploadFailed = true;
 														return;
 													}
 												} else {
 													// display what the error is
-													writeln(" skipped.");
+													writeln("skipped.");
 													displayOneDriveErrorMessage(e.msg);
 													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
-												writeln(" skipped.");
+												writeln("skipped.");
 												displayFileSystemErrorMessage(e.msg);
 												uploadFailed = true;
 												return;
@@ -2479,24 +2479,24 @@ final class SyncEngine
 											writeln("");
 											try {
 												response = session.upload(path, parent.driveId, parent.id, baseName(path));
-												writeln(" done.");
+												writeln("done.");
 											} catch (OneDriveException e) {
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-													writeln(" skipped.");
+													writeln("skipped.");
 													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 													uploadFailed = true;
 													return;
 												} else {
 													// display what the error is
-													writeln(" skipped.");
+													writeln("skipped.");
 													displayOneDriveErrorMessage(e.msg);
 													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
-												writeln(" skipped.");
+												writeln("skipped.");
 												displayFileSystemErrorMessage(e.msg);
 												uploadFailed = true;
 												return;
@@ -2542,27 +2542,26 @@ final class SyncEngine
 											} catch (OneDriveException e) {
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-													writeln(" skipped.");
+													writeln("skipped.");
 													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 													uploadFailed = true;
 													return;
 												} else {
 													// display what the error is
-													writeln(" skipped.");
+													writeln("skipped.");
 													displayOneDriveErrorMessage(e.msg);
 													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
-												writeln(" skipped.");
+												writeln("skipped.");
 												displayFileSystemErrorMessage(e.msg);
 												uploadFailed = true;
 												return;
 											}
-											
 											// upload complete
-											writeln(" done.");
+											writeln("done.");
 											saveItem(response);
 										}
 										
@@ -2580,20 +2579,20 @@ final class SyncEngine
 												} catch (OneDriveException e) {
 													if (e.httpStatusCode == 401) {
 														// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-														writeln(" skipped.");
+														writeln("skipped.");
 														log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 														uploadFailed = true;
 														return;
 													} else {
 														// display what the error is
-														writeln(" skipped.");
+														writeln("skipped.");
 														displayOneDriveErrorMessage(e.msg);
 														uploadFailed = true;
 														return;
 													}
 												} catch (FileException e) {
 													// display the error message
-													writeln(" skipped.");
+													writeln("skipped.");
 													displayFileSystemErrorMessage(e.msg);
 													uploadFailed = true;
 													return;
@@ -2609,26 +2608,26 @@ final class SyncEngine
 												} catch (OneDriveException e) {
 													if (e.httpStatusCode == 401) {
 														// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-														writeln(" skipped.");
+														writeln("skipped.");
 														log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 														uploadFailed = true;
 														return;
 													} else {
 														// display what the error is
-														writeln(" skipped.");
+														writeln("skipped.");
 														displayOneDriveErrorMessage(e.msg);
 														uploadFailed = true;
 														return;
 													}
 												} catch (FileException e) {
 													// display the error message
-													writeln(" skipped.");
+													writeln("skipped.");
 													displayFileSystemErrorMessage(e.msg);
 													uploadFailed = true;
 													return;
 												}
 											}
-											writeln(" done.");
+											writeln("done.");
 											saveItem(response);
 											// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
 											// So - now the 'local' and 'remote' file is technically DIFFERENT ... thanks Microsoft .. NO way to disable this stupidity
@@ -2647,7 +2646,7 @@ final class SyncEngine
 									}
 								} else {
 									// we are --dry-run - simulate the file upload
-									writeln(" done.");
+									writeln("done.");
 									response = createFakeResponse(path);
 									// Log action to log file
 									log.fileOnly("Uploading modified file ", path, " ... done.");
