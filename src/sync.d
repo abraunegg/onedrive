@@ -399,7 +399,6 @@ final class SyncEngine
 		log.vdebug("documentLibrary account type - flagging to disable upload validation checks due to Microsoft SharePoint file modification enrichments");
 	}
 	
-	
 	// download all new changes from OneDrive
 	void applyDifferences()
 	{
@@ -1532,6 +1531,7 @@ final class SyncEngine
 		}
 	}
 
+	// upload local file system differences to OneDrive
 	private void uploadFileDifferences(Item item, string path)
 	{
 		assert(item.type == ItemType.file);
@@ -1806,6 +1806,7 @@ final class SyncEngine
 		}
 	}
 
+	// upload new items to OneDrive
 	private void uploadNewItems(string path)
 	{
 		//	https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
@@ -1956,9 +1957,13 @@ final class SyncEngine
 					}
 					Item item;
 					if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+						// item is not in the database, upload new file
 						uploadNewFile(path);
-						remainingFreeSpace = (remainingFreeSpace - fileSize);
-						log.vlog("Remaining free space: ", remainingFreeSpace);
+						if (!uploadFailed) {
+							// upload did not fail
+							remainingFreeSpace = (remainingFreeSpace - fileSize);
+							log.vlog("Remaining free space: ", remainingFreeSpace);
+						}
 					}
 				} else {
 					// Not enough free space
@@ -1971,6 +1976,7 @@ final class SyncEngine
 		}
 	}
 
+	// create new directory on OneDrive
 	private void uploadCreateDir(const(string) path)
 	{
 		log.vlog("OneDrive Client requested to create remote path: ", path);
@@ -2104,8 +2110,12 @@ final class SyncEngine
 		}
 	}
 	
+	// upload a new file to OneDrive
 	private void uploadNewFile(string path)
 	{
+		// Reset upload failure - OneDrive or filesystem issue (reading data)
+		uploadFailed = false;
+	
 		Item parent;
 		// Check the database for the parent
 		//enforce(itemdb.selectByPath(dirName(path), defaultDriveId, parent), "The parent item is not in the local database");
@@ -2161,10 +2171,12 @@ final class SyncEngine
 										// error uploading file
 										// display what the error is
 										displayOneDriveErrorMessage(e.msg);
+										uploadFailed = true;
 										return;
 									} catch (FileException e) {
 										// display the error message
 										displayFileSystemErrorMessage(e.msg);
+										uploadFailed = true;
 										return;
 									}
 								} else {
@@ -2181,6 +2193,7 @@ final class SyncEngine
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - no error message logged
 													log.error("ERROR: OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													uploadFailed = true;
 													return;
 												}
 												if (e.httpStatusCode == 504) {
@@ -2192,16 +2205,19 @@ final class SyncEngine
 														// error uploading file
 														// display what the error is
 														displayOneDriveErrorMessage(e.msg);
+														uploadFailed = true;
 														return;
 													}
 												} else {
 													// display what the error is
 													displayOneDriveErrorMessage(e.msg);
+													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
 												displayFileSystemErrorMessage(e.msg);
+												uploadFailed = true;
 												return;
 											}
 										} else {
@@ -2213,15 +2229,18 @@ final class SyncEngine
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - no error message logged
 													log.error("ERROR: OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													uploadFailed = true;
 													return;
 												} else {
 													// display what the error is
 													displayOneDriveErrorMessage(e.msg);
+													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
 												displayFileSystemErrorMessage(e.msg);
+												uploadFailed = true;
 												return;
 											}
 										}
@@ -2234,15 +2253,18 @@ final class SyncEngine
 											if (e.httpStatusCode == 401) {
 												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - no error message logged
 												log.error("ERROR: OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+												uploadFailed = true;
 												return;
 											} else {
 												// display what the error is
 												displayOneDriveErrorMessage(e.msg);
+												uploadFailed = true;
 												return;
 											}
 										} catch (FileException e) {
 											// display the error message
 											displayFileSystemErrorMessage(e.msg);
+											uploadFailed = true;
 											return;
 										}
 									}
@@ -2371,6 +2393,7 @@ final class SyncEngine
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - no error message logged
 													log.error("ERROR: OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													uploadFailed = true;
 													return;
 												}
 												if (e.httpStatusCode == 504) {
@@ -2383,16 +2406,19 @@ final class SyncEngine
 														// error uploading file
 														// display what the error is
 														displayOneDriveErrorMessage(e.msg);
+														uploadFailed = true;
 														return;
 													}
 												} else {
 													// display what the error is
 													displayOneDriveErrorMessage(e.msg);
+													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
 												displayFileSystemErrorMessage(e.msg);
+												uploadFailed = true;
 												return;
 											}
 										} else {
@@ -2405,15 +2431,18 @@ final class SyncEngine
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - no error message logged
 													log.error("ERROR: OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													uploadFailed = true;
 													return;
 												} else {
 													// display what the error is
 													displayOneDriveErrorMessage(e.msg);
+													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
 												displayFileSystemErrorMessage(e.msg);
+												uploadFailed = true;
 												return;
 											}
 										}
@@ -2458,15 +2487,18 @@ final class SyncEngine
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - no error message logged
 													log.error("ERROR: OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													uploadFailed = true;
 													return;
 												} else {
 													// display what the error is
 													displayOneDriveErrorMessage(e.msg);
+													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
 												displayFileSystemErrorMessage(e.msg);
+												uploadFailed = true;
 												return;
 											}
 											
@@ -2490,15 +2522,18 @@ final class SyncEngine
 													if (e.httpStatusCode == 401) {
 														// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - no error message logged
 														log.error("ERROR: OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+														uploadFailed = true;
 														return;
 													} else {
 														// display what the error is
 														displayOneDriveErrorMessage(e.msg);
+														uploadFailed = true;
 														return;
 													}
 												} catch (FileException e) {
 													// display the error message
 													displayFileSystemErrorMessage(e.msg);
+													uploadFailed = true;
 													return;
 												}
 											} else {
@@ -2513,15 +2548,18 @@ final class SyncEngine
 													if (e.httpStatusCode == 401) {
 														// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - no error message logged
 														log.error("ERROR: OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+														uploadFailed = true;
 														return;
 													} else {
 														// display what the error is
 														displayOneDriveErrorMessage(e.msg);
+														uploadFailed = true;
 														return;
 													}
 												} catch (FileException e) {
 													// display the error message
 													displayFileSystemErrorMessage(e.msg);
+													uploadFailed = true;
 													return;
 												}
 											}
@@ -2582,6 +2620,7 @@ final class SyncEngine
 		}
 	}
 
+	// delete an item on OneDrive
 	private void uploadDeleteItem(Item item, string path)
 	{
 		log.log("Deleting item from OneDrive: ", path);
@@ -2637,6 +2676,7 @@ final class SyncEngine
 		}
 	}
 
+	// update the item's last modified time
 	private void uploadLastModifiedTime(const(char)[] driveId, const(char)[] id, const(char)[] eTag, SysTime mtime)
 	{
 		JSONValue data = [
@@ -2662,6 +2702,7 @@ final class SyncEngine
 		saveItem(response);
 	}
 
+	// save item details into database
 	private void saveItem(JSONValue jsonItem)
 	{
 		// jsonItem has to be a valid object
@@ -2749,6 +2790,7 @@ final class SyncEngine
 		}
 	}
 
+	// delete an item by it's path
 	void deleteByPath(string path)
 	{
 		Item item;
