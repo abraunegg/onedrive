@@ -2792,7 +2792,7 @@ final class SyncEngine
 
 	// Parse and display error message received from OneDrive
 	private void displayOneDriveErrorMessage(string message) {
-		log.error("\nERROR: OneDrive returned an error with the following message:");
+		log.error("ERROR: OneDrive returned an error with the following message:");
 		auto errorArray = splitLines(message);
 		log.error("  Error Message: ", errorArray[0]);
 		// extract 'message' as the reason
@@ -2802,7 +2802,7 @@ final class SyncEngine
 	
 	// Parse and display error message received from the local file system
 	private void displayFileSystemErrorMessage(string message) {
-		log.error("\nERROR: The local file system returned an error with the following message:");
+		log.error("ERROR: The local file system returned an error with the following message:");
 		auto errorArray = splitLines(message);
 		log.error("  Error Message: ", errorArray[0]);
 	}
