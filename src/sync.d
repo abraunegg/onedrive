@@ -420,9 +420,12 @@ final class SyncEngine
 	// download all new changes from a specified folder on OneDrive
 	void applyDifferencesSingleDirectory(string path)
 	{
+		log.vlog("Getting path details from OneDrive ...");
+		JSONValue onedrivePathDetails;
+		
 		// test if the path we are going to sync from actually exists on OneDrive
 		try {
-			onedrive.getPathDetails(path);
+			onedrivePathDetails = onedrive.getPathDetails(path); // Returns a JSON String for the OneDrive Path
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 404) {
 				// The directory was not found 
@@ -436,32 +439,34 @@ final class SyncEngine
 			}
 		} 
 		// OK - the path on OneDrive should exist, get the driveId and rootId for this folder
-		log.vlog("Getting path details from OneDrive ...");
-		JSONValue onedrivePathDetails = onedrive.getPathDetails(path); // Returns a JSON String for the OneDrive Path
-		
-		string driveId;
-		string folderId;
-		
-		if(isItemRemote(onedrivePathDetails)){
-			// 2 step approach:
-			//		1. Ensure changes for the root remote path are captured
-			//		2. Download changes specific to the remote path
+		// Was the response a valid JSON Object?
+		if (onedrivePathDetails.type() == JSONType.object) {
+			string driveId;
+			string folderId;
 			
-			// root remote
-			applyDifferences(defaultDriveId, onedrivePathDetails["id"].str);
-		
-			// remote changes
-			driveId = onedrivePathDetails["remoteItem"]["parentReference"]["driveId"].str; // Should give something like 66d53be8a5056eca
-			folderId = onedrivePathDetails["remoteItem"]["id"].str; // Should give something like BC7D88EC1F539DCF!107
+			if(isItemRemote(onedrivePathDetails)){
+				// 2 step approach:
+				//		1. Ensure changes for the root remote path are captured
+				//		2. Download changes specific to the remote path
+				
+				// root remote
+				applyDifferences(defaultDriveId, onedrivePathDetails["id"].str);
 			
-			// Apply any differences found on OneDrive for this path (download data)
-			applyDifferences(driveId, folderId);
-			
+				// remote changes
+				driveId = onedrivePathDetails["remoteItem"]["parentReference"]["driveId"].str; // Should give something like 66d53be8a5056eca
+				folderId = onedrivePathDetails["remoteItem"]["id"].str; // Should give something like BC7D88EC1F539DCF!107
+				
+				// Apply any differences found on OneDrive for this path (download data)
+				applyDifferences(driveId, folderId);
+			} else {
+				// use the item id as folderId
+				folderId = onedrivePathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
+				// Apply any differences found on OneDrive for this path (download data)
+				applyDifferences(defaultDriveId, folderId);
+			}
 		} else {
-			// use the item id as folderId
-			folderId = onedrivePathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
-			// Apply any differences found on OneDrive for this path (download data)
-			applyDifferences(defaultDriveId, folderId);
+			// Log that an invalid JSON object was returned
+			log.error("ERROR: onedrive.getPathDetails call returned an invalid JSON Object");
 		}
 	}
 	
@@ -470,21 +475,29 @@ final class SyncEngine
 	{
 		log.vlog("Fetching details for OneDrive Root");
 		JSONValue rootPathDetails = onedrive.getDefaultRoot(); // Returns a JSON Value
-		Item rootPathItem = makeItem(rootPathDetails);
 		
-		// configure driveId and rootId for the OneDrive Root
-		
-		// Set defaults for the root folder
-		string driveId = rootPathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
-		string rootId = rootPathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
-		
-		// Query the database
-		if (!itemdb.selectById(driveId, rootId, rootPathItem)) {
-			log.vlog("OneDrive Root does not exist in the database. We need to add it.");	
-			applyDifference(rootPathDetails, driveId, true);
-			log.vlog("Added OneDrive Root to the local database");
+		// validate object is a JSON value
+		if (rootPathDetails.type() == JSONType.object) {
+			// valid JSON object
+			Item rootPathItem = makeItem(rootPathDetails);
+			// configure driveId and rootId for the OneDrive Root
+			// Set defaults for the root folder
+			string driveId = rootPathDetails["parentReference"]["driveId"].str; // Should give something like 12345abcde1234a1
+			string rootId = rootPathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
+			
+			// Query the database
+			if (!itemdb.selectById(driveId, rootId, rootPathItem)) {
+				log.vlog("OneDrive Root does not exist in the database. We need to add it.");	
+				applyDifference(rootPathDetails, driveId, true);
+				log.vlog("Added OneDrive Root to the local database");
+			} else {
+				log.vlog("OneDrive Root exists in the database");
+			}
 		} else {
-			log.vlog("OneDrive Root exists in the database");
+			// Log that an invalid JSON object was returned
+			log.error("ERROR: onedrive.getDefaultRoot call returned an invalid JSON Object");
+			// Must exit here as we cant configure our required variables
+			exit(-1);
 		}
 	}
 	
@@ -587,36 +600,42 @@ final class SyncEngine
 			}
 		} 
 		
-		// Get the name of this 'Path ID'
-		if (("id" in idDetails) != null) {
-			// valid response from onedrive.getPathDetailsById(driveId, id) - a JSON item object present
-			if ((idDetails["id"].str == id) && (!isItemFile(idDetails))){
-				// Is a Folder or Remote Folder
-				syncFolderName = idDetails["name"].str;
-			}
-			// Is this a 'local' or 'remote' item?
-			if(isItemRemote(idDetails)){
-				// A remote drive item will not have ["parentReference"]["path"]
-				syncFolderPath = "";
-				syncFolderChildPath = "";
-			} else {
-				if (hasParentReferencePath(idDetails)) {
-					syncFolderPath = idDetails["parentReference"]["path"].str;
-					syncFolderChildPath = syncFolderPath ~ "/" ~ idDetails["name"].str ~ "/";
-				} else {
-					// root drive item will not have ["parentReference"]["path"] 
+		// validate that idDetails is a JSON value
+		if (idDetails.type() == JSONType.object) {
+			// Get the name of this 'Path ID'
+			if (("id" in idDetails) != null) {
+				// valid response from onedrive.getPathDetailsById(driveId, id) - a JSON item object present
+				if ((idDetails["id"].str == id) && (!isItemFile(idDetails))){
+					// Is a Folder or Remote Folder
+					syncFolderName = idDetails["name"].str;
+				}
+				// Is this a 'local' or 'remote' item?
+				if(isItemRemote(idDetails)){
+					// A remote drive item will not have ["parentReference"]["path"]
 					syncFolderPath = "";
 					syncFolderChildPath = "";
+				} else {
+					if (hasParentReferencePath(idDetails)) {
+						syncFolderPath = idDetails["parentReference"]["path"].str;
+						syncFolderChildPath = syncFolderPath ~ "/" ~ idDetails["name"].str ~ "/";
+					} else {
+						// root drive item will not have ["parentReference"]["path"] 
+						syncFolderPath = "";
+						syncFolderChildPath = "";
+					}
+				}
+				
+				// Debug Output
+				log.vdebug("Sync Folder Name: ", syncFolderName);
+				// Debug Output of path if only set, generally only set if using --single-directory
+				if (hasParentReferencePath(idDetails)) {
+					log.vdebug("Sync Folder Path: ", syncFolderPath);
+					log.vdebug("Sync Folder Child Path: ", syncFolderChildPath);
 				}
 			}
-			
-			// Debug Output
-			log.vdebug("Sync Folder Name: ", syncFolderName);
-			// Debug Output of path if only set, generally only set if using --single-directory
-			if (hasParentReferencePath(idDetails)) {
-				log.vdebug("Sync Folder Path: ", syncFolderPath);
-				log.vdebug("Sync Folder Child Path: ", syncFolderChildPath);
-			}
+		} else {
+			// Log that an invalid JSON object was returned
+			log.error("ERROR: onedrive.getPathDetailsById call returned an invalid JSON Object");
 		}
 		
 		for (;;) {
@@ -684,116 +703,122 @@ final class SyncEngine
 				}
 			}
 			
-			// Are there any changes to process?
-			if (("value" in changes) != null) {
-				auto nrChanges = count(changes["value"].array);
+			// is changes a valid JSON response
+			if (changes.type() == JSONType.object) {
+				// Are there any changes to process?
+				if (("value" in changes) != null) {
+					auto nrChanges = count(changes["value"].array);
 
-				if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
-					log.logAndNotify("Processing ", nrChanges, " changes");
-				} else {
-					// There are valid changes
-					log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
-				}
-				
-				foreach (item; changes["value"].array) {
-					bool isRoot = false;
-					string thisItemPath;
-					
-					// Change as reported by OneDrive
-					log.vdebug("------------------------------------------------------------------");
-					log.vdebug("OneDrive Change: ", item);
-					
-					// Deleted items returned from onedrive.viewChangesById (/delta) do not have a 'name' attribute
-					// Thus we cannot name check for 'root' below on deleted items
-					if(!isItemDeleted(item)){
-						// This is not a deleted item
-						// Test is this is the OneDrive Users Root?
-						// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls 
-						if ((id == defaultRootId) && (isItemRoot(item)) && (item["name"].str == "root")) { 
-							// This IS a OneDrive Root item
-							isRoot = true;
-						}
-					}
-
-					// How do we handle this change?
-					if (isRoot || !hasParentReferenceId(item) || isItemDeleted(item)){
-						// Is a root item, has no id in parentReference or is a OneDrive deleted item
-						log.vdebug("Handling change as 'root item', has no parent reference or is a deleted item");
-						applyDifference(item, driveId, isRoot);
+					if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
+						log.logAndNotify("Processing ", nrChanges, " changes");
 					} else {
-						// What is this item's path?
-						if (hasParentReferencePath(item)) {
-							thisItemPath = item["parentReference"]["path"].str;
-						} else {
-							thisItemPath = "";
+						// There are valid changes
+						log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
+					}
+					
+					foreach (item; changes["value"].array) {
+						bool isRoot = false;
+						string thisItemPath;
+						
+						// Change as reported by OneDrive
+						log.vdebug("------------------------------------------------------------------");
+						log.vdebug("OneDrive Change: ", item);
+						
+						// Deleted items returned from onedrive.viewChangesById (/delta) do not have a 'name' attribute
+						// Thus we cannot name check for 'root' below on deleted items
+						if(!isItemDeleted(item)){
+							// This is not a deleted item
+							// Test is this is the OneDrive Users Root?
+							// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls 
+							if ((id == defaultRootId) && (isItemRoot(item)) && (item["name"].str == "root")) { 
+								// This IS a OneDrive Root item
+								isRoot = true;
+							}
 						}
-						
-						// Debug output of change evaluation items
-						log.vdebug("'search id'                                       = ", id);
-						log.vdebug("'parentReference id'                              = ", item["parentReference"]["id"].str);
-						log.vdebug("syncFolderPath                                    = ", syncFolderPath);
-						log.vdebug("syncFolderChildPath                               = ", syncFolderChildPath);
-						log.vdebug("thisItemId                                        = ", item["id"].str);
-						log.vdebug("thisItemPath                                      = ", thisItemPath);
-						log.vdebug("'item id' matches search 'id'                     = ", (item["id"].str == id));
-						log.vdebug("'parentReference id' matches search 'id'          = ", (item["parentReference"]["id"].str == id));
-						log.vdebug("'item path' contains 'syncFolderChildPath'        = ", (canFind(thisItemPath, syncFolderChildPath)));
-						log.vdebug("'item path' contains search 'id'                  = ", (canFind(thisItemPath, id)));
-						
-						// Check this item's path to see if this is a change on the path we want:
-						// 1. 'item id' matches 'id'
-						// 2. 'parentReference id' matches 'id'
-						// 3. 'item path' contains 'syncFolderChildPath'
-						// 4. 'item path' contains 'id'
-						
-						if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderChildPath)) || (canFind(thisItemPath, id)) ){
-							// This is a change we want to apply
-							log.vdebug("Change matches search criteria to apply");
+
+						// How do we handle this change?
+						if (isRoot || !hasParentReferenceId(item) || isItemDeleted(item)){
+							// Is a root item, has no id in parentReference or is a OneDrive deleted item
+							log.vdebug("Handling change as 'root item', has no parent reference or is a deleted item");
 							applyDifference(item, driveId, isRoot);
 						} else {
-							// No item ID match or folder sync match
-							// Before discarding change - does this ID still exist on OneDrive - as in IS this 
-							// potentially a --single-directory sync and the user 'moved' the file out of the 'sync-dir' to another OneDrive folder
-							// This is a corner edge case - https://github.com/skilion/onedrive/issues/341
-							JSONValue oneDriveMovedNotDeleted;
-							try {
-								oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item["id"].str);
-							} catch (OneDriveException e) {
-								if (e.httpStatusCode == 404) {
-									// No .. that ID is GONE
-									log.vlog("Remote change discarded - item cannot be found");
-									return;
-								}
-								
-								if (e.httpStatusCode >= 500) {
-									// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
-									return;
-								}
-							}
-							// Yes .. ID is still on OneDrive but elsewhere .... #341 edge case handling
-							// What is the original local path for this ID in the database? Does it match 'syncFolderChildPath'
-							if (itemdb.idInLocalDatabase(driveId, item["id"].str)){
-								// item is in the database
-								string originalLocalPath = itemdb.computePath(driveId, item["id"].str);
-								if (canFind(originalLocalPath, syncFolderChildPath)){
-									// This 'change' relates to an item that WAS in 'syncFolderChildPath' but is now 
-									// stored elsewhere on OneDrive - outside the path we are syncing from
-									// Remove this item locally as it's local path is now obsolete
-									idsToDelete ~= [driveId, item["id"].str];
-								}
+							// What is this item's path?
+							if (hasParentReferencePath(item)) {
+								thisItemPath = item["parentReference"]["path"].str;
 							} else {
-								log.vlog("Remote change discarded - not in --single-directory scope");
+								thisItemPath = "";
 							}
-						} 
+							
+							// Debug output of change evaluation items
+							log.vdebug("'search id'                                       = ", id);
+							log.vdebug("'parentReference id'                              = ", item["parentReference"]["id"].str);
+							log.vdebug("syncFolderPath                                    = ", syncFolderPath);
+							log.vdebug("syncFolderChildPath                               = ", syncFolderChildPath);
+							log.vdebug("thisItemId                                        = ", item["id"].str);
+							log.vdebug("thisItemPath                                      = ", thisItemPath);
+							log.vdebug("'item id' matches search 'id'                     = ", (item["id"].str == id));
+							log.vdebug("'parentReference id' matches search 'id'          = ", (item["parentReference"]["id"].str == id));
+							log.vdebug("'item path' contains 'syncFolderChildPath'        = ", (canFind(thisItemPath, syncFolderChildPath)));
+							log.vdebug("'item path' contains search 'id'                  = ", (canFind(thisItemPath, id)));
+							
+							// Check this item's path to see if this is a change on the path we want:
+							// 1. 'item id' matches 'id'
+							// 2. 'parentReference id' matches 'id'
+							// 3. 'item path' contains 'syncFolderChildPath'
+							// 4. 'item path' contains 'id'
+							
+							if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderChildPath)) || (canFind(thisItemPath, id)) ){
+								// This is a change we want to apply
+								log.vdebug("Change matches search criteria to apply");
+								applyDifference(item, driveId, isRoot);
+							} else {
+								// No item ID match or folder sync match
+								// Before discarding change - does this ID still exist on OneDrive - as in IS this 
+								// potentially a --single-directory sync and the user 'moved' the file out of the 'sync-dir' to another OneDrive folder
+								// This is a corner edge case - https://github.com/skilion/onedrive/issues/341
+								JSONValue oneDriveMovedNotDeleted;
+								try {
+									oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item["id"].str);
+								} catch (OneDriveException e) {
+									if (e.httpStatusCode == 404) {
+										// No .. that ID is GONE
+										log.vlog("Remote change discarded - item cannot be found");
+										return;
+									}
+									
+									if (e.httpStatusCode >= 500) {
+										// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+										return;
+									}
+								}
+								// Yes .. ID is still on OneDrive but elsewhere .... #341 edge case handling
+								// What is the original local path for this ID in the database? Does it match 'syncFolderChildPath'
+								if (itemdb.idInLocalDatabase(driveId, item["id"].str)){
+									// item is in the database
+									string originalLocalPath = itemdb.computePath(driveId, item["id"].str);
+									if (canFind(originalLocalPath, syncFolderChildPath)){
+										// This 'change' relates to an item that WAS in 'syncFolderChildPath' but is now 
+										// stored elsewhere on OneDrive - outside the path we are syncing from
+										// Remove this item locally as it's local path is now obsolete
+										idsToDelete ~= [driveId, item["id"].str];
+									}
+								} else {
+									log.vlog("Remote change discarded - not in --single-directory scope");
+								}
+							} 
+						}
 					}
 				}
+				
+				// the response may contain either @odata.deltaLink or @odata.nextLink
+				if ("@odata.deltaLink" in changes) deltaLink = changes["@odata.deltaLink"].str;
+				if (deltaLink) itemdb.setDeltaLink(driveId, id, deltaLink);
+				if ("@odata.nextLink" in changes) deltaLink = changes["@odata.nextLink"].str;
+				else break;	
+			} else {
+				// Log that an invalid JSON object was returned
+				log.error("ERROR: onedrive.viewChangesById call returned an invalid JSON Object");
 			}
-			
-			// the response may contain either @odata.deltaLink or @odata.nextLink
-			if ("@odata.deltaLink" in changes) deltaLink = changes["@odata.deltaLink"].str;
-			if (deltaLink) itemdb.setDeltaLink(driveId, id, deltaLink);
-			if ("@odata.nextLink" in changes) deltaLink = changes["@odata.nextLink"].str;
-			else break;
 		}
 
 		// delete items in idsToDelete
@@ -1701,6 +1726,7 @@ final class SyncEngine
 									// upload done without error
 									writeln("done.");
 									// As the session.upload includes the last modified time, save the response
+									// Is the response a valid JSON object - validation checking done in saveItem
 									saveItem(response);
 								}
 								// OneDrive documentLibrary
@@ -1747,6 +1773,7 @@ final class SyncEngine
 										// upload done without error
 										writeln("done.");
 										// As the session.upload includes the last modified time, save the response
+										// Is the response a valid JSON object - validation checking done in saveItem
 										saveItem(response);
 									} else {									
 										// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
@@ -1781,6 +1808,7 @@ final class SyncEngine
 							response = createFakeResponse(path);
 							// Log action to log file
 							log.fileOnly("Uploading modified file ", path, " ... done.");
+							// Is the response a valid JSON object - validation checking done in saveItem
 							saveItem(response);
 							return;
 						}
@@ -2087,7 +2115,7 @@ final class SyncEngine
 								return;
 							}
 						}
-						// save the created directory
+						// Is the response a valid JSON object - validation checking done in saveItem
 						saveItem(response);
 					} else {
 						// Simulate a successful 'directory create' & save it to the dryRun database copy
@@ -2126,6 +2154,7 @@ final class SyncEngine
 						// parent is in database
 						log.vlog("The parent for this path is in the local database - adding requested path (", path ,") to database");
 						auto res = onedrive.getPathDetails(path);
+						// Is the response a valid JSON object - validation checking done in saveItem
 						saveItem(res);
 					}
 				} else {
@@ -2380,6 +2409,7 @@ final class SyncEngine
 											// OneDrive Business Account - always use a session to upload
 											// The session includes a Request Body element containing lastModifiedDateTime
 											// which negates the need for a modify event against OneDrive
+											// Is the response a valid JSON object - validation checking done in saveItem
 											saveItem(response);
 											return;
 										}
@@ -2396,6 +2426,7 @@ final class SyncEngine
 								response = createFakeResponse(path);
 								// Log action to log file
 								log.fileOnly("Uploading new file ", path, " ... done.");
+								// Is the response a valid JSON object - validation checking done in saveItem
 								saveItem(response);
 								return;
 							}
@@ -2523,7 +2554,7 @@ final class SyncEngine
 													cTag = "";
 												}
 											}
-											
+											// validate if path exists so mtime can be calculated
 											if (exists(path)) {
 												SysTime mtime = timeLastModified(path).toUTC();
 												uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
@@ -2531,6 +2562,10 @@ final class SyncEngine
 												// will be removed in different event!
 												log.log("File disappeared after upload: ", path);
 											}
+										} else {
+											// Log that an invalid JSON object was returned
+											log.error("ERROR: onedrive.simpleUpload or session.upload call returned an invalid JSON Object");
+											return;
 										}
 									} else {
 										// OneDrive Business account modified file upload handling
@@ -2627,7 +2662,8 @@ final class SyncEngine
 													return;
 												}
 											}
-											writeln("done.");
+											writeln(" done.");
+											// Is the response a valid JSON object - validation checking done in saveItem
 											saveItem(response);
 											// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
 											// So - now the 'local' and 'remote' file is technically DIFFERENT ... thanks Microsoft .. NO way to disable this stupidity
@@ -2650,6 +2686,7 @@ final class SyncEngine
 									response = createFakeResponse(path);
 									// Log action to log file
 									log.fileOnly("Uploading modified file ", path, " ... done.");
+									// Is the response a valid JSON object - validation checking done in saveItem
 									saveItem(response);
 									return;
 								}
@@ -2763,6 +2800,7 @@ final class SyncEngine
 			}
 		} 
 		// save the updated response from OneDrive in the database
+		// Is the response a valid JSON object - validation checking done in saveItem
 		saveItem(response);
 	}
 
@@ -2850,6 +2888,7 @@ final class SyncEngine
 			];
 			auto res = onedrive.updateById(fromItem.driveId, fromItem.id, diff, fromItem.eTag);
 			// update itemdb
+			// Is the response a valid JSON object - validation checking done in saveItem
 			saveItem(res);
 		}
 	}
