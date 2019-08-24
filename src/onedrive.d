@@ -802,22 +802,22 @@ final class OneDriveApi
 			case 500:
 				// No actions
 				log.vlog("OneDrive returned a 'HTTP 500 Internal Server Error' - gracefully handling error");
-				break;
+				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
 				
 			case 502:
 				// No actions
 				log.vlog("OneDrive returned a 'HTTP 502 Bad Gateway Error' - gracefully handling error");
-				break;
+				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
 			
 			case 503:
 				// No actions
 				log.vlog("OneDrive returned a 'HTTP 503 Service Unavailable Error' - gracefully handling error");
-				break;
+				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
 			
 			case 504:
 				// No actions
 				log.vlog("OneDrive returned a 'HTTP 504 Gateway Timeout Error' - gracefully handling error");
-				break;
+				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
 			
 			// Default - all other errors that are not a 2xx or a 302
 			default:

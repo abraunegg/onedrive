@@ -221,6 +221,8 @@ final class SyncEngine
 	private bool malwareDetected = false;
 	// download filesystem issue flag
 	private bool downloadFailed = false;
+	// upload failure - OneDrive or filesystem issue (reading data)
+	private bool uploadFailed = false;
 	// initialization has been done
 	private bool initDone = false;
 	// sync engine dryRun flag
@@ -692,16 +694,10 @@ final class SyncEngine
 					// Retry by calling applyDifferences() again
 					log.vlog("OneDrive returned a 'HTTP 504 - Gateway Timeout' - gracefully handling error");
 					applyDifferences(driveId, idToQuery);
-				}
-				
-				else {
+				} else {
 					// Default operation if not 404, 410, 500, 504 errors
-					log.log("\n\nOneDrive returned an error with the following message:\n");
-					auto errorArray = splitLines(e.msg);
-					log.log("Error Message: ", errorArray[0]);
-					// extract 'message' as the reason
-					JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-					log.log("Error Reason:  ", errorMessage["error"]["message"].str);
+					// display what the error is
+					displayOneDriveErrorMessage(e.msg);
 					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
 					return;
 				}
@@ -1250,7 +1246,8 @@ final class SyncEngine
 				}
 			} catch (std.exception.ErrnoException e) {
 				// There was a file system error
-				log.error("ERROR: ", e.msg);
+				// display the error message
+				displayFileSystemErrorMessage(e.msg);							
 				downloadFailed = true;
 				return;
 			}
@@ -1377,7 +1374,8 @@ final class SyncEngine
 							// Remove the path now that it is empty of children
 							rmdirRecurse(path);
 						} catch (FileException e) {
-							log.log(e.msg);
+							// display the error message
+							displayFileSystemErrorMessage(e.msg);
 						}
 					}
 				}
@@ -1558,8 +1556,12 @@ final class SyncEngine
 		}
 	}
 
+	// upload local file system differences to OneDrive
 	private void uploadFileDifferences(Item item, string path)
 	{
+		// Reset upload failure - OneDrive or filesystem issue (reading data)
+		uploadFailed = false;
+	
 		assert(item.type == ItemType.file);
 		if (exists(path)) {
 			if (isFile(path)) {
@@ -1586,58 +1588,101 @@ final class SyncEngine
 									try {
 										response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
 									} catch (OneDriveException e) {
+										if (e.httpStatusCode == 401) {
+											// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+											writeln("skipped.");
+											log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+											uploadFailed = true;
+											return;
+										}
 										if (e.httpStatusCode == 404) {
 											// HTTP request returned status code 404 - the eTag provided does not exist
 											// Delete record from the local database - file will be uploaded as a new file
+											writeln("skipped.");
 											log.vlog("OneDrive returned a 'HTTP 404 - eTag Issue' - gracefully handling error");
 											itemdb.deleteById(item.driveId, item.id);
+											uploadFailed = true;
 											return;
 										}
-									
 										// Resolve https://github.com/abraunegg/onedrive/issues/36
 										if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
 											// The file is currently checked out or locked for editing by another user
 											// We cant upload this file at this time
-											writeln(" skipped.");
+											writeln("skipped.");
 											log.fileOnly("Uploading modified file ", path, " ... skipped.");
 											write("", path, " is currently checked out or locked for editing by another user.");
 											log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+											uploadFailed = true;
 											return;
 										}
-										
 										if (e.httpStatusCode == 412) {
 											// HTTP request returned status code 412 - ETag does not match current item's value
 											// Delete record from the local database - file will be uploaded as a new file
+											writeln("skipped.");
 											log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
 											log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 											itemdb.deleteById(item.driveId, item.id);
+											uploadFailed = true;
 											return;
 										}
-										
 										if (e.httpStatusCode == 504) {
 											// HTTP request returned status code 504 (Gateway Timeout)
 											// Try upload as a session
 											response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+										} else {
+											// display what the error is
+											writeln("skipped.");
+											displayOneDriveErrorMessage(e.msg);
+											uploadFailed = true;
+											return;
 										}
-										else throw e;
+									} catch (FileException e) {
+										// display the error message
+										writeln("skipped.");
+										displayFileSystemErrorMessage(e.msg);
+										uploadFailed = true;
+										return;
 									}
+									// upload done without error
 									writeln("done.");
 								} else {
 									writeln("");
 									try {
 										response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
-									} catch (OneDriveException e) {	
+									} catch (OneDriveException e) {
+										if (e.httpStatusCode == 401) {
+											// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+											writeln("skipped.");
+											log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+											uploadFailed = true;
+											return;
+										}
 										if (e.httpStatusCode == 412) {
 											// HTTP request returned status code 412 - ETag does not match current item's value
 											// Delete record from the local database - file will be uploaded as a new file
+											writeln("skipped.");
 											log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
 											log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 											itemdb.deleteById(item.driveId, item.id);
+											uploadFailed = true;
+											return;
+										} else {
+											// display what the error is
+											writeln("skipped.");
+											displayOneDriveErrorMessage(e.msg);
+											uploadFailed = true;
 											return;
 										}
+									} catch (FileException e) {
+										// display the error message
+										writeln("skipped.");
+										displayFileSystemErrorMessage(e.msg);
+										uploadFailed = true;
+										return;
 									}
+									// upload done without error
 									writeln("done.");
-								}		
+								}
 							} else {
 								// OneDrive Business Account
 								// We need to always use a session to upload, but handle the changed file correctly
@@ -1647,19 +1692,39 @@ final class SyncEngine
 									try {
 										response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
 									} catch (OneDriveException e) {
+										if (e.httpStatusCode == 401) {
+											// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+											writeln("skipped.");
+											log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+											uploadFailed = true;
+											return;
+										}
 										// Resolve https://github.com/abraunegg/onedrive/issues/36
 										if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
 											// The file is currently checked out or locked for editing by another user
 											// We cant upload this file at this time
-											writeln(" skipped.");
+											writeln("skipped.");
 											log.fileOnly("Uploading modified file ", path, " ... skipped.");
 											writeln("", path, " is currently checked out or locked for editing by another user.");
 											log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+											uploadFailed = true;
+											return;
+										} else {
+											// display what the error is
+											writeln("skipped.");
+											displayOneDriveErrorMessage(e.msg);
+											uploadFailed = true;
 											return;
 										}
-										// what is this error?????
-										else throw e;
+									} catch (FileException e) {
+										// display the error message
+										writeln("skipped.");
+										displayFileSystemErrorMessage(e.msg);
+										uploadFailed = true;
+										return;
 									}
+									// upload done without error
+									writeln("done.");
 									// As the session.upload includes the last modified time, save the response
 									// Is the response a valid JSON object - validation checking done in saveItem
 									saveItem(response);
@@ -1674,19 +1739,39 @@ final class SyncEngine
 										try {
 											response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
 										} catch (OneDriveException e) {
+											if (e.httpStatusCode == 401) {
+												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+												writeln("skipped.");
+												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+												uploadFailed = true;
+												return;
+											}										
 											// Resolve https://github.com/abraunegg/onedrive/issues/36
 											if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
 												// The file is currently checked out or locked for editing by another user
 												// We cant upload this file at this time
-												writeln(" skipped.");
+												writeln("skipped.");
 												log.fileOnly("Uploading modified file ", path, " ... skipped.");
 												writeln("", path, " is currently checked out or locked for editing by another user.");
 												log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+												uploadFailed = true;
+												return;
+											} else {
+												// display what the error is
+												writeln("skipped.");
+												displayOneDriveErrorMessage(e.msg);
+												uploadFailed = true;
 												return;
 											}
-											// what is this error?????
-											else throw e;
+										} catch (FileException e) {
+											// display the error message
+											writeln("skipped.");
+											displayFileSystemErrorMessage(e.msg);
+											uploadFailed = true;
+											return;
 										}
+										// upload done without error
+										writeln("done.");
 										// As the session.upload includes the last modified time, save the response
 										// Is the response a valid JSON object - validation checking done in saveItem
 										saveItem(response);
@@ -1702,9 +1787,6 @@ final class SyncEngine
 										return;
 									}
 								}
-					
-								// log line completion							
-								writeln("done.");
 							}
 							log.fileOnly("Uploading modified file ", path, " ... done.");
 							if ("cTag" in response) {
@@ -1787,6 +1869,7 @@ final class SyncEngine
 		}
 	}
 
+	// upload new items to OneDrive
 	private void uploadNewItems(string path)
 	{
 		//	https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
@@ -1921,8 +2004,9 @@ final class SyncEngine
 					foreach (DirEntry entry; entries) {
 						uploadNewItems(entry.name);
 					}
-				} catch (std.file.FileException e) {
-					log.error("ERROR: ", e.msg);
+				} catch (FileException e) {
+					// display the error message
+					displayFileSystemErrorMessage(e.msg);
 					return;
 				}
 			} else {
@@ -1936,9 +2020,13 @@ final class SyncEngine
 					}
 					Item item;
 					if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+						// item is not in the database, upload new file
 						uploadNewFile(path);
-						remainingFreeSpace = (remainingFreeSpace - fileSize);
-						log.vlog("Remaining free space: ", remainingFreeSpace);
+						if (!uploadFailed) {
+							// upload did not fail
+							remainingFreeSpace = (remainingFreeSpace - fileSize);
+							log.vlog("Remaining free space: ", remainingFreeSpace);
+						}
 					}
 				} else {
 					// Not enough free space
@@ -1951,6 +2039,7 @@ final class SyncEngine
 		}
 	}
 
+	// create new directory on OneDrive
 	private void uploadCreateDir(const(string) path)
 	{
 		log.vlog("OneDrive Client requested to create remote path: ", path);
@@ -2085,8 +2174,12 @@ final class SyncEngine
 		}
 	}
 	
+	// upload a new file to OneDrive
 	private void uploadNewFile(string path)
 	{
+		// Reset upload failure - OneDrive or filesystem issue (reading data)
+		uploadFailed = false;
+	
 		Item parent;
 		// Check the database for the parent
 		//enforce(itemdb.selectByPath(dirName(path), defaultDriveId, parent), "The parent item is not in the local database");
@@ -2116,8 +2209,9 @@ final class SyncEngine
 						fileDetailsFromOneDrive = onedrive.getPathDetails(path);
 					} catch (OneDriveException e) {
 						if (e.httpStatusCode == 401) {
-							// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - no error message logged
-							log.error("ERROR: OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+							// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error'
+							writeln("Skipping item - OneDrive returned a 'HTTP 401 - Unauthorized' when attempting to query if file exists"); 
+							log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 							return;
 						}
 					
@@ -2128,7 +2222,7 @@ final class SyncEngine
 								writeln("Skipping item - excluded by skip_size config: ", path, " (", thisFileSize/2^^20," MB)");
 								return;
 							}
-							write("Uploading new file ", path, " ...");
+							write("Uploading new file ", path, " ... ");
 							JSONValue response;
 							
 							if (!dryRun) {
@@ -2140,6 +2234,16 @@ final class SyncEngine
 										response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
 									} catch (OneDriveException e) {
 										// error uploading file
+										// display what the error is
+										writeln("skipped.");
+										displayOneDriveErrorMessage(e.msg);
+										uploadFailed = true;
+										return;
+									} catch (FileException e) {
+										// display the error message
+										writeln("skipped.");
+										displayFileSystemErrorMessage(e.msg);
+										uploadFailed = true;
 										return;
 									}
 								} else {
@@ -2153,6 +2257,13 @@ final class SyncEngine
 											try {
 												response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
 											} catch (OneDriveException e) {
+												if (e.httpStatusCode == 401) {
+													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+													writeln("skipped.");
+													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													uploadFailed = true;
+													return;
+												}
 												if (e.httpStatusCode == 504) {
 													// HTTP request returned status code 504 (Gateway Timeout)
 													// Try upload as a session
@@ -2160,10 +2271,25 @@ final class SyncEngine
 														response = session.upload(path, parent.driveId, parent.id, baseName(path));
 													} catch (OneDriveException e) {
 														// error uploading file
+														// display what the error is
+														writeln("skipped.");
+														displayOneDriveErrorMessage(e.msg);
+														uploadFailed = true;
 														return;
 													}
+												} else {
+													// display what the error is
+													writeln("skipped.");
+													displayOneDriveErrorMessage(e.msg);
+													uploadFailed = true;
+													return;
 												}
-												else throw e;
+											} catch (FileException e) {
+												// display the error message
+												writeln("skipped.");
+												displayFileSystemErrorMessage(e.msg);
+												uploadFailed = true;
+												return;
 											}
 										} else {
 											// File larger than threshold - use a session to upload
@@ -2171,11 +2297,24 @@ final class SyncEngine
 											try {
 												response = session.upload(path, parent.driveId, parent.id, baseName(path));
 											} catch (OneDriveException e) {
-												// error uploading file
-												log.vlog("Upload failed with OneDriveException: ", e.msg);
-												return;
+												if (e.httpStatusCode == 401) {
+													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+													writeln("skipped.");
+													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													uploadFailed = true;
+													return;
+												} else {
+													// display what the error is
+													writeln("skipped.");
+													displayOneDriveErrorMessage(e.msg);
+													uploadFailed = true;
+													return;
+												}
 											} catch (FileException e) {
-												log.vlog("Upload failed with File Exception: ", e.msg);
+												// display the error message
+												writeln("skipped.");
+												displayFileSystemErrorMessage(e.msg);
+												uploadFailed = true;
 												return;
 											}
 										}
@@ -2185,11 +2324,24 @@ final class SyncEngine
 										try {
 											response = session.upload(path, parent.driveId, parent.id, baseName(path));
 										} catch (OneDriveException e) {
-											// error uploading file
-											log.vlog("Upload failed with OneDriveException: ", e.msg);
-											return;
+											if (e.httpStatusCode == 401) {
+												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+												writeln("skipped.");
+												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+												uploadFailed = true;
+												return;
+											} else {
+												// display what the error is
+												writeln("skipped.");
+												displayOneDriveErrorMessage(e.msg);
+												uploadFailed = true;
+												return;
+											}
 										} catch (FileException e) {
-											log.vlog("Upload failed with File Exception: ", e.msg);
+											// display the error message
+											writeln("skipped.");
+											displayFileSystemErrorMessage(e.msg);
+											uploadFailed = true;
 											return;
 										}
 									}
@@ -2197,9 +2349,10 @@ final class SyncEngine
 								
 								// response from OneDrive has to be a valid JSON object
 								if (response.type() == JSONType.object){
+									// upload done without error
+									writeln("done.");
 									// Log action to log file
 									log.fileOnly("Uploading new file ", path, " ... done.");
-									writeln(" done.");
 									// The file was uploaded, or a 4xx / 5xx error was generated
 									if ("size" in response){
 										// The response JSON contains size, high likelihood valid response returned 
@@ -2269,7 +2422,7 @@ final class SyncEngine
 								}
 							} else {
 								// we are --dry-run - simulate the file upload
-								writeln(" done.");
+								writeln("done.");
 								response = createFakeResponse(path);
 								// Log action to log file
 								log.fileOnly("Uploading new file ", path, " ... done.");
@@ -2306,27 +2459,87 @@ final class SyncEngine
 							if (localFileModifiedTime > remoteFileModifiedTime){
 								// local file is newer
 								log.vlog("Requested file to upload is newer than existing file on OneDrive");
-								write("Uploading modified file ", path, " ...");
+								write("Uploading modified file ", path, " ... ");
 								JSONValue response;
 								
 								if (!dryRun) {
 									if (accountType == "personal"){
 										// OneDrive Personal account upload handling
-										if (getSize(path) <= thresholdFileSize) {
-											response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-											writeln(" done.");
+										if (thisFileSize <= thresholdFileSize) {
+											try {
+												response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
+												writeln("done.");
+											} catch (OneDriveException e) {
+												if (e.httpStatusCode == 401) {
+													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+													writeln("skipped.");
+													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													uploadFailed = true;
+													return;
+												}
+												if (e.httpStatusCode == 504) {
+													// HTTP request returned status code 504 (Gateway Timeout)
+													// Try upload as a session
+													try {
+														response = session.upload(path, parent.driveId, parent.id, baseName(path));
+														writeln("done.");
+													} catch (OneDriveException e) {
+														// error uploading file
+														// display what the error is
+														writeln("skipped.");
+														displayOneDriveErrorMessage(e.msg);
+														uploadFailed = true;
+														return;
+													}
+												} else {
+													// display what the error is
+													writeln("skipped.");
+													displayOneDriveErrorMessage(e.msg);
+													uploadFailed = true;
+													return;
+												}
+											} catch (FileException e) {
+												// display the error message
+												writeln("skipped.");
+												displayFileSystemErrorMessage(e.msg);
+												uploadFailed = true;
+												return;
+											}
 										} else {
+											// File larger than threshold - use a session to upload
 											writeln("");
-											response = session.upload(path, parent.driveId, parent.id, baseName(path));
-											writeln(" done.");
+											try {
+												response = session.upload(path, parent.driveId, parent.id, baseName(path));
+												writeln("done.");
+											} catch (OneDriveException e) {
+												if (e.httpStatusCode == 401) {
+													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+													writeln("skipped.");
+													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													uploadFailed = true;
+													return;
+												} else {
+													// display what the error is
+													writeln("skipped.");
+													displayOneDriveErrorMessage(e.msg);
+													uploadFailed = true;
+													return;
+												}
+											} catch (FileException e) {
+												// display the error message
+												writeln("skipped.");
+												displayFileSystemErrorMessage(e.msg);
+												uploadFailed = true;
+												return;
+											}
 										}
 										
-										// is response a valid JSON object
-										if (response.type() == JSONType.object) {
-											// valid JSON object
+										// response from OneDrive has to be a valid JSON object
+										if (response.type() == JSONType.object){
+											// response is a valid JSON object
 											string id = response["id"].str;
 											string cTag;
-											
+										
 											// Is there a valid cTag in the response?
 											if ("cTag" in response) {
 												// use the cTag instead of the eTag because Onedrive may update the metadata of files AFTER they have been uploaded
@@ -2341,10 +2554,14 @@ final class SyncEngine
 													cTag = "";
 												}
 											}
-											
-											// update the system time on OneDrive
-											SysTime mtime = timeLastModified(path).toUTC();
-											uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+											// validate if path exists so mtime can be calculated
+											if (exists(path)) {
+												SysTime mtime = timeLastModified(path).toUTC();
+												uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
+											} else {
+												// will be removed in different event!
+												log.log("File disappeared after upload: ", path);
+											}
 										} else {
 											// Log that an invalid JSON object was returned
 											log.error("ERROR: onedrive.simpleUpload or session.upload call returned an invalid JSON Object");
@@ -2353,11 +2570,33 @@ final class SyncEngine
 									} else {
 										// OneDrive Business account modified file upload handling
 										if (accountType == "business"){
+											// OneDrive Business Account - always use a session to upload
 											writeln("");
-											// session upload
-											response = session.upload(path, parent.driveId, parent.id, baseName(path), fileDetailsFromOneDrive["eTag"].str);
-											writeln(" done.");
-											// Is the response a valid JSON object - validation checking done in saveItem
+											try {
+												response = session.upload(path, parent.driveId, parent.id, baseName(path), fileDetailsFromOneDrive["eTag"].str);
+											} catch (OneDriveException e) {
+												if (e.httpStatusCode == 401) {
+													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+													writeln("skipped.");
+													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													uploadFailed = true;
+													return;
+												} else {
+													// display what the error is
+													writeln("skipped.");
+													displayOneDriveErrorMessage(e.msg);
+													uploadFailed = true;
+													return;
+												}
+											} catch (FileException e) {
+												// display the error message
+												writeln("skipped.");
+												displayFileSystemErrorMessage(e.msg);
+												uploadFailed = true;
+												return;
+											}
+											// upload complete
+											writeln("done.");
 											saveItem(response);
 										}
 										
@@ -2369,15 +2608,59 @@ final class SyncEngine
 											// We also cant use a session to upload the file, we have to use simpleUploadReplace
 											
 											if (getSize(path) <= thresholdFileSize) {
-												// Upload file via simpleUploadReplace as below threshhold size
-												response = onedrive.simpleUploadReplace(path, fileDetailsFromOneDrive["parentReference"]["driveId"].str, fileDetailsFromOneDrive["id"].str, fileDetailsFromOneDrive["eTag"].str);
+												// Upload file via simpleUploadReplace as below threshold size
+												try {
+													response = onedrive.simpleUploadReplace(path, fileDetailsFromOneDrive["parentReference"]["driveId"].str, fileDetailsFromOneDrive["id"].str, fileDetailsFromOneDrive["eTag"].str);
+												} catch (OneDriveException e) {
+													if (e.httpStatusCode == 401) {
+														// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+														writeln("skipped.");
+														log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+														uploadFailed = true;
+														return;
+													} else {
+														// display what the error is
+														writeln("skipped.");
+														displayOneDriveErrorMessage(e.msg);
+														uploadFailed = true;
+														return;
+													}
+												} catch (FileException e) {
+													// display the error message
+													writeln("skipped.");
+													displayFileSystemErrorMessage(e.msg);
+													uploadFailed = true;
+													return;
+												}
 											} else {
 												// Have to upload via a session, however we have to delete the file first otherwise this will generate a 404 error post session upload
 												// Remove the existing file
 												onedrive.deleteById(fileDetailsFromOneDrive["parentReference"]["driveId"].str, fileDetailsFromOneDrive["id"].str, fileDetailsFromOneDrive["eTag"].str);	
 												// Upload as a session, as a new file
 												writeln("");
-												response = session.upload(path, parent.driveId, parent.id, baseName(path));
+												try {
+													response = session.upload(path, parent.driveId, parent.id, baseName(path));
+												} catch (OneDriveException e) {
+													if (e.httpStatusCode == 401) {
+														// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+														writeln("skipped.");
+														log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+														uploadFailed = true;
+														return;
+													} else {
+														// display what the error is
+														writeln("skipped.");
+														displayOneDriveErrorMessage(e.msg);
+														uploadFailed = true;
+														return;
+													}
+												} catch (FileException e) {
+													// display the error message
+													writeln("skipped.");
+													displayFileSystemErrorMessage(e.msg);
+													uploadFailed = true;
+													return;
+												}
 											}
 											writeln(" done.");
 											// Is the response a valid JSON object - validation checking done in saveItem
@@ -2399,7 +2682,7 @@ final class SyncEngine
 									}
 								} else {
 									// we are --dry-run - simulate the file upload
-									writeln(" done.");
+									writeln("done.");
 									response = createFakeResponse(path);
 									// Log action to log file
 									log.fileOnly("Uploading modified file ", path, " ... done.");
@@ -2410,7 +2693,6 @@ final class SyncEngine
 								
 								// Log action to log file
 								log.fileOnly("Uploading modified file ", path, " ... done.");
-								
 							} else {
 								// Save the details of the file that we got from OneDrive
 								// --dry-run safe
@@ -2439,6 +2721,7 @@ final class SyncEngine
 		}
 	}
 
+	// delete an item on OneDrive
 	private void uploadDeleteItem(Item item, string path)
 	{
 		log.log("Deleting item from OneDrive: ", path);
@@ -2478,12 +2761,8 @@ final class SyncEngine
 						}
 					} else {
 						// Not a 403 response & OneDrive Business Account / O365 Shared Folder / Library
-						log.log("\n\nOneDrive returned an error with the following message:\n");
-						auto errorArray = splitLines(e.msg);
-						log.log("Error Message: ", errorArray[0]);
-						// extract 'message' as the reason
-						JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-						log.log("Error Reason:  ", errorMessage["error"]["message"].str);
+						// display what the error is
+						displayOneDriveErrorMessage(e.msg);
 						return;
 					}
 				}
@@ -2498,6 +2777,7 @@ final class SyncEngine
 		}
 	}
 
+	// update the item's last modified time
 	private void uploadLastModifiedTime(const(char)[] driveId, const(char)[] id, const(char)[] eTag, SysTime mtime)
 	{
 		JSONValue data = [
@@ -2524,6 +2804,7 @@ final class SyncEngine
 		saveItem(response);
 	}
 
+	// save item details into database
 	private void saveItem(JSONValue jsonItem)
 	{
 		// jsonItem has to be a valid object
@@ -2547,6 +2828,23 @@ final class SyncEngine
 		}
 	}
 
+	// Parse and display error message received from OneDrive
+	private void displayOneDriveErrorMessage(string message) {
+		log.error("ERROR: OneDrive returned an error with the following message:");
+		auto errorArray = splitLines(message);
+		log.error("  Error Message: ", errorArray[0]);
+		// extract 'message' as the reason
+		JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
+		log.error("  Error Reason:  ", errorMessage["error"]["message"].str);	
+	}
+	
+	// Parse and display error message received from the local file system
+	private void displayFileSystemErrorMessage(string message) {
+		log.error("ERROR: The local file system returned an error with the following message:");
+		auto errorArray = splitLines(message);
+		log.error("  Error Message: ", errorArray[0]);
+	}
+	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_move
 	// This function is only called in monitor mode when an move event is coming from
 	// inotify and we try to move the item.
@@ -2595,6 +2893,7 @@ final class SyncEngine
 		}
 	}
 
+	// delete an item by it's path
 	void deleteByPath(string path)
 	{
 		Item item;
@@ -2608,8 +2907,12 @@ final class SyncEngine
 		try {
 			uploadDeleteItem(item, path);
 		} catch (OneDriveException e) {
-			if (e.httpStatusCode == 404) log.log(e.msg);
-			else throw e;
+			if (e.httpStatusCode == 404) {
+				log.log(e.msg);
+			} else {
+				// display what the error is
+				displayOneDriveErrorMessage(e.msg);
+			}
 		}
 	}
 	
@@ -2666,11 +2969,7 @@ final class SyncEngine
 				return;
 			} else {
 				// display what the error is
-				auto errorArray = splitLines(e.msg);
-				log.error("Error Message: ", errorArray[0]);
-				// extract 'message' as the reason
-				JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-				log.error("Error Reason:  ", errorMessage["error"]["message"].str);
+				displayOneDriveErrorMessage(e.msg);
 				return;
 			}
 		}
@@ -2691,11 +2990,8 @@ final class SyncEngine
 						siteDriveQuery = onedrive.o365SiteDrives(site_id);
 					} catch (OneDriveException e) {
 						log.error("ERROR: Query of OneDrive for Office Site ID failed");
-						auto errorArray = splitLines(e.msg);
-						log.error("Error Message: ", errorArray[0]);
-						// extract 'message' as the reason
-						JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
-						log.error("Error Reason:  ", errorMessage["error"]["message"].str);
+						// display what the error is
+						displayOneDriveErrorMessage(e.msg);
 						return;
 					}
 					
@@ -2744,7 +3040,9 @@ final class SyncEngine
 				try {
 					fileDetails = onedrive.getFileDetails(item.driveId, item.id);
 				} catch (OneDriveException e) {
-					log.error("ERROR: Query of OneDrive for file details failed");
+					// display what the error is
+					displayOneDriveErrorMessage(e.msg);
+					return;
 				}
 
 				if ((fileDetails.type() == JSONType.object) && ("webUrl" in fileDetails)) {
