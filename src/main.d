@@ -72,25 +72,37 @@ int main(string[] args)
 	
 	string currentConfigHash;
 	string currentSyncListHash;
+	string currentBusinessSharedFoldersHash;
 	string previousConfigHash;
 	string previousSyncListHash;
+	string previousBusinessSharedFoldersHash;
 	string configHashFile = cfg.configDirName ~ "/.config.hash";
 	string syncListHashFile = cfg.configDirName ~ "/.sync_list.hash";
 	string configBackupFile = cfg.configDirName ~ "/.config.backup";
+	string businessSharedFoldersHashFile = cfg.configDirName ~ "/.business_shared_folders.hash";
 	bool configOptionsDifferent = false;
 	bool syncListDifferent = false;
+	bool businessSharedFoldersDifferent = false;
 	bool syncDirDifferent = false;
 	bool skipFileDifferent = false;
 	bool skipDirDifferent = false;
 	
+	// check if config file & config hash exists
 	if ((exists(cfg.configDirName ~ "/config")) && (!exists(configHashFile))) {
 		// Hash of config file needs to be created
 		std.file.write(configHashFile, computeQuickXorHash(cfg.configDirName ~ "/config"));
 	}
 	
+	// check if sync_list & sync_list hash exists
 	if ((exists(cfg.configDirName ~ "/sync_list")) && (!exists(syncListHashFile))) {
 		// Hash of sync_list file needs to be created
 		std.file.write(syncListHashFile, computeQuickXorHash(cfg.configDirName ~ "/sync_list"));
+	}
+	
+	// check if business_shared_folders & business_shared_folders hash exists
+	if ((exists(cfg.configDirName ~ "/business_shared_folders")) && (!exists(businessSharedFoldersHashFile))) {
+		// Hash of business_shared_folders file needs to be created
+		std.file.write(businessSharedFoldersHashFile, computeQuickXorHash(cfg.configDirName ~ "/business_shared_folders"));
 	}
 	
 	// If hash files exist, but config files do not ... remove the hash, but only if --resync was issued as now the application will use 'defaults' which 'may' be different
@@ -107,17 +119,31 @@ int main(string[] args)
 		if (cfg.getValueBool("resync")) safeRemove(syncListHashFile);
 	}
 	
+	if ((!exists(cfg.configDirName ~ "/business_shared_folders")) && (exists(businessSharedFoldersHashFile))) {
+		// if --resync safe remove business_shared_folders.hash
+		if (cfg.getValueBool("resync")) safeRemove(businessSharedFoldersHashFile);
+	}
+	
 	// Read config hashes if they exist
 	if (exists(cfg.configDirName ~ "/config")) currentConfigHash = computeQuickXorHash(cfg.configDirName ~ "/config");
 	if (exists(cfg.configDirName ~ "/sync_list")) currentSyncListHash = computeQuickXorHash(cfg.configDirName ~ "/sync_list");
+	if (exists(cfg.configDirName ~ "/business_shared_folders")) currentBusinessSharedFoldersHash = computeQuickXorHash(cfg.configDirName ~ "/business_shared_folders");
 	if (exists(configHashFile)) previousConfigHash = readText(configHashFile);
 	if (exists(syncListHashFile)) previousSyncListHash = readText(syncListHashFile);
+	if (exists(businessSharedFoldersHashFile)) previousBusinessSharedFoldersHash = readText(businessSharedFoldersHashFile);
 	
 	// Was sync_list updated?
 	if (currentSyncListHash != previousSyncListHash) {
 		// Debugging output to assist what changed
 		log.vdebug("sync_list file has been updated, --resync needed");
 		syncListDifferent = true;
+	}
+	
+	// Was business_shared_folders updated?
+	if (currentBusinessSharedFoldersHash != previousBusinessSharedFoldersHash) {
+		// Debugging output to assist what changed
+		log.vdebug("business_shared_folders file has been updated, --resync needed");
+		businessSharedFoldersDifferent = true;
 	}
 	
 	// Was config updated?
@@ -236,7 +262,7 @@ int main(string[] args)
 	}
 	
 	// Has anything triggered a --resync requirement?
-	if (configOptionsDifferent || syncListDifferent || syncDirDifferent || skipFileDifferent || skipDirDifferent) {
+	if (configOptionsDifferent || syncListDifferent || syncDirDifferent || skipFileDifferent || skipDirDifferent || businessSharedFoldersDifferent) {
 		// --resync needed, is the user just testing configuration changes?
 		if (!cfg.getValueBool("display_config")){
 			// not testing configuration changes
@@ -260,6 +286,11 @@ int main(string[] args)
 						// update sync_list hash
 						log.vdebug("updating sync_list hash as --resync issued");
 						std.file.write(syncListHashFile, computeQuickXorHash(cfg.configDirName ~ "/sync_list"));
+					}
+					if (exists(cfg.configDirName ~ "/business_shared_folders")) {
+						// update business_shared_folders hash
+						log.vdebug("updating business_shared_folders hash as --resync issued");
+						std.file.write(businessSharedFoldersHashFile, computeQuickXorHash(cfg.configDirName ~ "/business_shared_folders"));
 					}
 				}
 			}
