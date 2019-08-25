@@ -14,7 +14,13 @@ final class Config
 	public string syncListFilePath;
 	public string homePath;
 	public string configDirName;
-
+	public string defaultSyncDir = "~/OneDrive";
+	public string defaultSkipFile = "~*|.~*|*.tmp";
+	public string defaultSkipDir = "";
+	public string configFileSyncDir;
+	public string configFileSkipFile;
+	public string configFileSkipDir;
+		
 	private string userConfigFilePath;
 	// hashmap for the values found in the user config file
 	// ARGGGG D is stupid and cannot make hashmap initializations!!!
@@ -24,13 +30,12 @@ final class Config
 	private long[string] longValues;
 	public string businessSharedFolderFilePath;
 
-
 	this(string confdirOption)
 	{
 		// default configuration
-		stringValues["sync_dir"]         = "~/OneDrive";
-		stringValues["skip_file"]        = "~*|.~*|*.tmp";
-		stringValues["skip_dir"]         = "";
+		stringValues["sync_dir"]         = defaultSyncDir;
+		stringValues["skip_file"]        = defaultSkipFile;
+		stringValues["skip_dir"]         = defaultSkipDir;
 		stringValues["log_dir"]          = "/var/log/onedrive/";
 		stringValues["drive_id"]         = "";
 		boolValues["upload_only"]        = false;
@@ -81,8 +86,7 @@ final class Config
 	
 		// Output homePath calculation
 		log.vdebug("homePath: ", homePath);
-
-	
+		
 		// Determine the correct configuration directory to use
 		string configDirBase;
 		if (confdirOption != "") {
@@ -114,7 +118,6 @@ final class Config
 			configDirName = configDirBase ~ "/onedrive";
 		}
 	
-
 		log.vlog("Using Config Dir: ", configDirName);
 		if (!exists(configDirName)) mkdirRecurse(configDirName);
 
@@ -143,7 +146,6 @@ final class Config
 		}
 		return true;
 	}
-
 
 	void update_from_args(string[] args)
 	{
@@ -273,6 +275,9 @@ final class Config
 				"skip-file",
 					"Skip any files that match this pattern from syncing",
 					&stringValues["skip_file"],
+				"skip-dir",
+					"Skip any directories that match this pattern from syncing",
+					&stringValues["skip_dir"],
 				"skip-size",
 					"Skip new files larger than this size (in MB)",
 					&longValues["skip_size"],
@@ -325,7 +330,6 @@ final class Config
 			exit(EXIT_FAILURE);
 		}
 	}
-
 
 	string getValueString(string key)
 	{
@@ -394,6 +398,13 @@ final class Config
 					if (pp) {
 						c.popFront();
 						setValueString(key, c.front.dup);
+						// detect need for --resync for these:
+						//  --syncdir ARG
+						//  --skip-file ARG
+						//  --skip-dir ARG
+						if (key == "sync_dir") configFileSyncDir = c.front.dup;
+						if (key == "skip_file") configFileSkipFile = c.front.dup;
+						if (key == "skip_dir") configFileSkipDir = c.front.dup;
 					} else {
 						auto ppp = key in longValues;
 						if (ppp) {
