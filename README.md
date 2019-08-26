@@ -1,7 +1,7 @@
 # OneDrive Free Client
 A complete tool to interact with OneDrive on Linux. Built following the UNIX philosophy
 
-https://img.shields.io/github/v/release/abraunegg/onedrive
+[![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://img.shields.io/github/v/release/abraunegg/onedrive)
 https://img.shields.io/github/release-date/abraunegg/onedrive
 
 ## Features
