@@ -11,7 +11,7 @@ A complete tool to interact with OneDrive on Linux. Built following the UNIX phi
 
 [![Downloads](https://img.shields.io/github/downloads/abraunegg/onedrive/total)](https://img.shields.io/github/downloads/abraunegg/onedrive/total)
 
-[!Docker Pulls](https://img.shields.io/docker/pulls/driveone/onedrive)](https://img.shields.io/docker/pulls/driveone/onedrive)
+[![Docker Pulls](https://img.shields.io/docker/pulls/driveone/onedrive)](https://img.shields.io/docker/pulls/driveone/onedrive)
 
 ## Features
 *   State caching
