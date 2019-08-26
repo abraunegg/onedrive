@@ -2,7 +2,10 @@
 A complete tool to interact with OneDrive on Linux. Built following the UNIX philosophy
 
 [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://img.shields.io/github/v/release/abraunegg/onedrive)
-https://img.shields.io/github/release-date/abraunegg/onedrive
+
+[![Release Date](https://img.shields.io/github/release-date/abraunegg/onedrive)](https://img.shields.io/github/release-date/abraunegg/onedrive)
+
+
 
 ## Features
 *   State caching
