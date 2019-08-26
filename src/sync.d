@@ -10,6 +10,7 @@ import std.encoding;
 import core.time, core.thread;
 import core.stdc.stdlib;
 import config, itemdb, onedrive, selective, upload, util;
+import std.parallelism;
 static import log;
 
 // threshold after which files will be uploaded using an upload session
@@ -98,10 +99,9 @@ private bool isDotFile(string path)
 {
 	// always allow the root
 	if (path == ".") return false;
-	
 	path = buildNormalizedPath(path);
 	auto paths = pathSplitter(path);
-	foreach(base; paths) {
+	foreach(base; parallel(paths)) {
 		if (startsWith(base, ".")){
 			return true;
 		}
@@ -237,10 +237,9 @@ final class SyncEngine
 		this.onedrive = onedrive;
 		this.itemdb = itemdb;
 		this.selectiveSync = selectiveSync;
-		// session = UploadSession(onedrive, cfg.uploadStateFilePath);
 		this.dryRun = cfg.getValueBool("dry_run");
 		this.newSizeLimit = cfg.getValueLong("skip_size") * 2^^20;
-		this.newSizeLimit = (this.newSizeLimit == 0) ? long.max : this.newSizeLimit;
+		this.newSizeLimit = (this.newSizeLimit == 0) ? long.max : this.newSizeLimit;	
 	}
 
 	void reset()
@@ -411,7 +410,7 @@ final class SyncEngine
 		// Check OneDrive Personal Shared Folders
 		// https://github.com/OneDrive/onedrive-api-docs/issues/764
 		Item[] items = itemdb.selectRemoteItems();
-		foreach (item; items) {
+		foreach (item; parallel(items)) {
 			log.vlog("Syncing OneDrive Shared Folder: ", item.name);
 			applyDifferences(item.remoteDriveId, item.remoteId);
 		}
@@ -716,7 +715,7 @@ final class SyncEngine
 						log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
 					}
 					
-					foreach (item; changes["value"].array) {
+					foreach (item; parallel(changes["value"].array)) {
 						bool isRoot = false;
 						string thisItemPath;
 						
@@ -1368,7 +1367,7 @@ final class SyncEngine
 						try {
 							// Remove any children of this path if they still exist
 							// Resolve 'Directory not empty' error when deleting local files
-							foreach (DirEntry child; dirEntries(path, SpanMode.depth, false)) {
+							foreach (DirEntry child; parallel(dirEntries(path, SpanMode.depth, false))) {
 								attrIsDir(child.linkAttributes) ? rmdir(child.name) : remove(child.name);
 							}
 							// Remove the path now that it is empty of children
@@ -1413,7 +1412,7 @@ final class SyncEngine
 		// see if this item.id we were supposed to have deleted
 		// match early and return
 		if (dryRun) {
-			foreach (i; idsToDelete) {
+			foreach (i; parallel(idsToDelete)) {
 				if (i[1] == item.id) {
 					return;
 				}	
@@ -1486,7 +1485,7 @@ final class SyncEngine
 			} else {
 				log.vlog("The directory has not changed");
 				// loop through the children
-				foreach (Item child; itemdb.selectChildren(item.driveId, item.id)) {
+				foreach (Item child; parallel(itemdb.selectChildren(item.driveId, item.id))) {
 					uploadDifferences(child);
 				}
 			}
@@ -1516,7 +1515,7 @@ final class SyncEngine
 				} else {
 					// Path was found in the database
 					// Did we 'fake create it' as part of --dry-run ?
-					foreach (i; idsFaked) {
+					foreach (i; parallel(idsFaked)) {
 						if (i[1] == item.id) {
 							log.vdebug("Matched faked dir which is 'supposed' to exist but not created due to --dry-run use");
 							log.vlog("The directory has not changed");
@@ -1854,7 +1853,7 @@ final class SyncEngine
 				}  else {
 					// file was found in the database
 					// Did we 'fake create it' as part of --dry-run ?
-					foreach (i; idsFaked) {
+					foreach (i; parallel(idsFaked)) {
 						if (i[1] == item.id) {
 							log.vdebug("Matched faked file which is 'supposed' to exist but not created due to --dry-run use");
 							log.vlog("The file has not changed");
@@ -2001,7 +2000,7 @@ final class SyncEngine
 				// Try and access the directory and any path below
 				try {
 					auto entries = dirEntries(path, SpanMode.shallow, false);
-					foreach (DirEntry entry; entries) {
+					foreach (DirEntry entry; parallel(entries)) {
 						uploadNewItems(entry.name);
 					}
 				} catch (FileException e) {
@@ -2977,7 +2976,7 @@ final class SyncEngine
 		// is siteQuery a valid JSON object & contain data we can use?
 		if ((siteQuery.type() == JSONType.object) && ("value" in siteQuery)) {
 			// valid JSON object
-			foreach (searchResult; siteQuery["value"].array) {
+			foreach (searchResult; parallel(siteQuery["value"].array)) {
 				// Need an 'exclusive' match here with o365SharedLibraryName as entered
 				log.vdebug("Found O365 Site: ", searchResult);
 				if (o365SharedLibraryName == searchResult["displayName"].str){
@@ -2998,7 +2997,7 @@ final class SyncEngine
 					// is siteDriveQuery a valid JSON object & contain data we can use?
 					if ((siteDriveQuery.type() == JSONType.object) && ("value" in siteDriveQuery)) {
 						// valid JSON object
-						foreach (driveResult; siteDriveQuery["value"].array) {
+						foreach (driveResult; parallel(siteDriveQuery["value"].array)) {
 							// Display results
 							found = true;
 							writeln("SiteName: ", searchResult["displayName"].str);
@@ -3131,7 +3130,7 @@ final class SyncEngine
 			// Were we given a remote path to check if we are in sync for, or the root?
 			if (path != "/") {
 				// we were given a directory to check, we need to validate the list of changes against this path only
-				foreach (item; changes["value"].array) {
+				foreach (item; parallel(changes["value"].array)) {
 					// Is this change valid for the 'path' we are checking?
 					if (hasParentReferencePath(item)) {
 						thisItemId = item["parentReference"]["id"].str;
@@ -3172,7 +3171,7 @@ final class SyncEngine
 				}
 			} else {
 				writeln("Local directory is out of sync with OneDrive");
-				foreach (item; changes["value"].array) {
+				foreach (item; parallel(changes["value"].array)) {
 					if ((isItemFile(item)) && (hasFileSize(item))) {
 						downloadSize = downloadSize + item["size"].integer;
 					}
