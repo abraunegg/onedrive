@@ -715,7 +715,7 @@ final class SyncEngine
 						log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
 					}
 					
-					foreach (item; parallel(changes["value"].array)) {
+					foreach (item; changes["value"].array) {
 						bool isRoot = false;
 						string thisItemPath;
 						
