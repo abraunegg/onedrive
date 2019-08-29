@@ -2435,6 +2435,7 @@ final class SyncEngine
 					
 						if (e.httpStatusCode >= 500) {
 							// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+							uploadFailed = true;
 							return;
 						}
 					}
@@ -2710,14 +2711,19 @@ final class SyncEngine
 						// fileDetailsFromOneDrive is not valid JSON, an error was returned from OneDrive
 						log.error("ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object");
 						log.error("ERROR: Increase logging verbosity to assist determining why.");
+						uploadFailed = true;
+						return;
 					}
 				} else {
 					// Skip file - too large
 					log.log("Skipping uploading this new file as it exceeds the maximum size allowed by OneDrive: ", path);
+					uploadFailed = true;
+					return;
 				}
 			}
 		} else {
 			log.log("Skipping uploading this new file as parent path is not in the database: ", path);
+			uploadFailed = true;
 			return;
 		}
 	}
