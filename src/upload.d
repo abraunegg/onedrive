@@ -178,14 +178,24 @@ struct UploadSession
 						fragSize,
 						fileSize
 					);
+				} catch (OneDriveException e) {
+					// there was an error remove session file
+					if (exists(sessionFilePath)) {
+						remove(sessionFilePath);
+					}
+					return response;
+				}
+				// fragment uploaded without issue
+				if (response.type() == JSONType.object){
 					offset += fragmentSize;
 					if (offset >= fileSize) break;
 					// update the session details
 					session["expirationDateTime"] = response["expirationDateTime"];
 					session["nextExpectedRanges"] = response["nextExpectedRanges"];
 					save();
-				} catch (OneDriveException e) {
-					// there was an error remove session file
+				} else {
+					// not a JSON object
+					log.vlog("File upload session failed - invalid response from OneDrive");
 					if (exists(sessionFilePath)) {
 						remove(sessionFilePath);
 					}
