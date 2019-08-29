@@ -89,8 +89,6 @@ struct UploadSession
 						if (e.httpStatusCode == 400) {
 							log.vlog("Upload session not found");
 							return false;
-						} else {
-							throw e;
 						}
 					}
 					
