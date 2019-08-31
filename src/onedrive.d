@@ -364,7 +364,7 @@ final class OneDriveApi
 		http.contentLength = offsetSize;
 		auto response = perform();
 		// TODO: retry on 5xx errors
-		checkHttpCode();
+		checkHttpCode(response);
 		return response;
 	}
 
@@ -620,7 +620,6 @@ final class OneDriveApi
 		} catch (CurlException e) {
 			// Potentially Timeout was reached on handle error
 			log.error("\nThere was a problem in accessing the Microsoft OneDrive service - Internet connectivity issue?\n");
-			throw e;
 		}
 		
 		JSONValue json;
@@ -680,6 +679,7 @@ final class OneDriveApi
 	
 		switch(http.statusLine.code)
 		{
+			//  0 - OK ... HTTP2 version of 200 OK
 			case 0:
 				break;
 			//	200 - OK
@@ -776,6 +776,25 @@ final class OneDriveApi
 	{
 		switch(http.statusLine.code)
 		{
+			//  0 - OK ... HTTP2 version of 200 OK
+			case 0:
+				break;
+			//	200 - OK
+			case 200:
+				// No Log .. 
+				break;
+			//	201 - Created OK
+			//  202 - Accepted
+			//	204 - Deleted OK
+			case 201,202,204:
+				// No actions, but log if verbose logging
+				//log.vlog("OneDrive Response: '", http.statusLine.code, " - ", http.statusLine.reason, "'");
+				break;
+				
+			// 302 - resource found and available at another location, redirect
+			case 302:
+				break;
+			
 			// 400 - Bad Request
 			case 400:
 				// Bad Request .. how should we act?
