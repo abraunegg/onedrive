@@ -3,6 +3,22 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.3.9 - 2019-09-01
+### Fixed
+*   Catch a 403 Forbidden exception when querying Sharepoint Library Names
+*   Fix unhandled error exceptions that cause application to exit / crash when uploading files
+*   Fix JSON object validation for queries made against OneDrive where a JSON response is expected and where that response is to be used and expected to be valid
+*   Fix handling of 5xx responses from OneDrive when uploading via a session
+
+### Added
+*   Detect the need for --resync when config changes either via config file or cli override
+
+### Changed
+*   Change minimum required version of LDC to v1.12.0
+
+### Removed
+*   Remove redundant logging output due to change in how errors are reported from OneDrive
+
 ## 2.3.8 - 2019-08-04
 ### Fixed
 *   Fix unable to download all files when OneDrive fails to return file level details used to validate file integrity
