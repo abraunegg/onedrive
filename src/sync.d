@@ -229,6 +229,10 @@ final class SyncEngine
 	private bool dryRun = false;
 	// quota details available
 	private bool quotaAvailable = true;
+	// sync business shared folders flag
+	private bool syncBusinessFolders = false;
+	// single directory scope flag
+	private bool singleDirectoryScope = false;
 
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
@@ -385,6 +389,13 @@ final class SyncEngine
 	void setUploadOnly()
 	{
 		uploadOnly = true;
+	}
+	
+	// Configure singleDirectoryScope if function is called
+	// By default, singleDirectoryScope = false
+	void setSingleDirectoryScope()
+	{
+		singleDirectoryScope = true;
 	}
 	
 	// Configure disableUploadValidation if function is called
@@ -609,29 +620,110 @@ final class SyncEngine
 					// Is a Folder or Remote Folder
 					syncFolderName = idDetails["name"].str;
 				}
-				// Is this a 'local' or 'remote' item?
-				if(isItemRemote(idDetails)){
-					// A remote drive item will not have ["parentReference"]["path"]
-					syncFolderPath = "";
-					syncFolderChildPath = "";
+				
+				// Debug output of path details as queried from OneDrive
+				log.vdebug("OneDrive Path Details: ", idDetails);
+							
+				// OneDrive Personal Folder Item Reference (24/4/2019)
+				//	"@odata.context": "https://graph.microsoft.com/v1.0/$metadata#drives('66d53be8a5056eca')/items/$entity",
+				//	"cTag": "adDo2NkQ1M0JFOEE1MDU2RUNBITEwMS42MzY5MTY5NjQ1ODcwNzAwMDA",
+				//	"eTag": "aNjZENTNCRThBNTA1NkVDQSExMDEuMQ",
+				//	"fileSystemInfo": {
+				//		"createdDateTime": "2018-06-06T20:45:24.436Z",
+				//		"lastModifiedDateTime": "2019-04-24T07:09:31.29Z"
+				//	},
+				//	"folder": {
+				//		"childCount": 3,
+				//		"view": {
+				//			"sortBy": "takenOrCreatedDateTime",
+				//			"sortOrder": "ascending",
+				//			"viewType": "thumbnails"
+				//		}
+				//	},
+				//	"id": "66D53BE8A5056ECA!101",
+				//	"name": "root",
+				//	"parentReference": {
+				//		"driveId": "66d53be8a5056eca",
+				//		"driveType": "personal"
+				//	},
+				//	"root": {},
+				//	"size": 0
+			
+				// OneDrive Personal Remote / Shared Folder Item Reference (4/9/2019)
+				//	"@odata.context": "https://graph.microsoft.com/v1.0/$metadata#drives('driveId')/items/$entity",
+				//	"cTag": "cTag",
+				//	"eTag": "eTag",
+				//	"id": "itemId",
+				//	"name": "shared",
+				//	"parentReference": {
+				//		"driveId": "driveId",
+				//		"driveType": "personal",
+				//		"id": "parentItemId",
+				//		"path": "/drive/root:"
+				//	},
+				//	"remoteItem": {
+				//		"fileSystemInfo": {
+				//			"createdDateTime": "2019-01-14T18:54:43.2666667Z",
+				//			"lastModifiedDateTime": "2019-04-24T03:47:22.53Z"
+				//		},
+				//		"folder": {
+				//			"childCount": 0,
+				//			"view": {
+				//				"sortBy": "takenOrCreatedDateTime",
+				//				"sortOrder": "ascending",
+				//				"viewType": "thumbnails"
+				//			}
+				//		},
+				//		"id": "remoteItemId",
+				//		"parentReference": {
+				//			"driveId": "remoteDriveId",
+				//			"driveType": "personal"
+				//			"id": "id",
+				//			"name": "name",
+				//			"path": "/drives/<remote_drive_id>/items/<remote_parent_id>:/<parent_name>"
+				//		},
+				//		"size": 0,
+				//		"webUrl": "webUrl"
+				//	}
+				
+				// OneDrive Business Folder & Shared Folder Item Reference (24/4/2019)
+				//	"@odata.context": "https://graph.microsoft.com/v1.0/$metadata#drives('driveId')/items/$entity",
+				//	"@odata.etag": "\"{eTag},1\"",
+				//	"cTag": "\"c:{cTag},0\"",
+				//	"eTag": "\"{eTag},1\"",
+				//	"fileSystemInfo": {
+				//		"createdDateTime": "2019-04-17T04:00:43Z",
+				//		"lastModifiedDateTime": "2019-04-17T04:00:43Z"
+				//	},
+				//	"folder": {
+				//		"childCount": 2
+				//	},
+				//	"id": "itemId",
+				//	"name": "shared_folder",
+				//	"parentReference": {
+				//		"driveId": "parentDriveId",
+				//		"driveType": "business",
+				//		"id": "parentId",
+				//		"path": "/drives/driveId/root:"
+				//	},
+				//	"size": 0
+				
+				// To evaluate a change received from OneDrive, this must be set correctly
+				if (hasParentReferencePath(idDetails)) {
+					// Path from OneDrive has a parentReference we can use
+					log.vdebug("Item details returned contains parent reference path - potentially shared folder object");
+					syncFolderPath = idDetails["parentReference"]["path"].str;
+					syncFolderChildPath = syncFolderPath ~ "/" ~ idDetails["name"].str ~ "/";
 				} else {
-					if (hasParentReferencePath(idDetails)) {
-						syncFolderPath = idDetails["parentReference"]["path"].str;
-						syncFolderChildPath = syncFolderPath ~ "/" ~ idDetails["name"].str ~ "/";
-					} else {
-						// root drive item will not have ["parentReference"]["path"] 
-						syncFolderPath = "";
-						syncFolderChildPath = "";
-					}
+					// No parentReference, set these to blank
+					syncFolderPath = "";
+					syncFolderChildPath = ""; 
 				}
 				
 				// Debug Output
-				log.vdebug("Sync Folder Name: ", syncFolderName);
-				// Debug Output of path if only set, generally only set if using --single-directory
-				if (hasParentReferencePath(idDetails)) {
-					log.vdebug("Sync Folder Path: ", syncFolderPath);
-					log.vdebug("Sync Folder Child Path: ", syncFolderChildPath);
-				}
+				log.vdebug("Sync Folder Name:        ", syncFolderName);
+				log.vdebug("Sync Folder Parent Path: ", syncFolderPath);
+				log.vdebug("Sync Folder Actual Path: ", syncFolderChildPath);
 			}
 		} else {
 			// Log that an invalid JSON object was returned
@@ -724,14 +816,25 @@ final class SyncEngine
 						log.vdebug("------------------------------------------------------------------");
 						log.vdebug("OneDrive Change: ", item);
 						
-						// Deleted items returned from onedrive.viewChangesById (/delta) do not have a 'name' attribute
+						// Deleted items returned from onedrive.viewChangesByItemId or onedrive.viewChangesByDriveId (/delta) do not have a 'name' attribute
 						// Thus we cannot name check for 'root' below on deleted items
 						if(!isItemDeleted(item)){
 							// This is not a deleted item
+							log.vdebug("Not a OneDrive deleted item change");
 							// Test is this is the OneDrive Users Root?
-							// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls 
-							if ((id == defaultRootId) && (isItemRoot(item)) && (item["name"].str == "root")) { 
+							// Debug output of change evaluation items
+							log.vdebug("defaultRootId                                        = ", defaultRootId);
+							log.vdebug("'search id'                                          = ", id);
+							log.vdebug("id == defaultRootId                                  = ", (id == defaultRootId));
+							log.vdebug("isItemRoot(item)                                     = ", (isItemRoot(item)));
+							log.vdebug("item['name'].str == 'root'                           = ", (item["name"].str == "root"));
+							log.vdebug("singleDirectoryScope                                 = ", (singleDirectoryScope));
+							
+							// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
+							// In a --single-directory scenario however, '(id == defaultRootId) = false' for root items
+							if ( ((id == defaultRootId) || (singleDirectoryScope)) && (isItemRoot(item)) && (item["name"].str == "root")) { 
 								// This IS a OneDrive Root item
+								log.vdebug("Change will flagged as a 'root' item change");
 								isRoot = true;
 							}
 						}
@@ -739,6 +842,9 @@ final class SyncEngine
 						// How do we handle this change?
 						if (isRoot || !hasParentReferenceId(item) || isItemDeleted(item)){
 							// Is a root item, has no id in parentReference or is a OneDrive deleted item
+							log.vdebug("isRoot                                               = ", isRoot);
+							log.vdebug("!hasParentReferenceId(item)                          = ", (!hasParentReferenceId(item)));
+							log.vdebug("isItemDeleted(item)                                  = ", (isItemDeleted(item)));
 							log.vdebug("Handling change as 'root item', has no parent reference or is a deleted item");
 							applyDifference(item, driveId, isRoot);
 						} else {
@@ -749,17 +855,46 @@ final class SyncEngine
 								thisItemPath = "";
 							}
 							
+							// Business Shared Folders special case handling
+							bool sharedFoldersSpecialCase = false;
+							
 							// Debug output of change evaluation items
-							log.vdebug("'search id'                                       = ", id);
-							log.vdebug("'parentReference id'                              = ", item["parentReference"]["id"].str);
-							log.vdebug("syncFolderPath                                    = ", syncFolderPath);
-							log.vdebug("syncFolderChildPath                               = ", syncFolderChildPath);
-							log.vdebug("thisItemId                                        = ", item["id"].str);
-							log.vdebug("thisItemPath                                      = ", thisItemPath);
-							log.vdebug("'item id' matches search 'id'                     = ", (item["id"].str == id));
-							log.vdebug("'parentReference id' matches search 'id'          = ", (item["parentReference"]["id"].str == id));
-							log.vdebug("'item path' contains 'syncFolderChildPath'        = ", (canFind(thisItemPath, syncFolderChildPath)));
-							log.vdebug("'item path' contains search 'id'                  = ", (canFind(thisItemPath, id)));
+							log.vdebug("'parentReference id'                                 = ", item["parentReference"]["id"].str);
+							log.vdebug("syncFolderName                                       = ", syncFolderName);
+							log.vdebug("syncFolderPath                                       = ", syncFolderPath);
+							log.vdebug("syncFolderChildPath                                  = ", syncFolderChildPath);
+							log.vdebug("thisItemId                                           = ", item["id"].str);
+							log.vdebug("thisItemPath                                         = ", thisItemPath);
+							log.vdebug("'item id' matches search 'id'                        = ", (item["id"].str == id));
+							log.vdebug("'parentReference id' matches search 'id'             = ", (item["parentReference"]["id"].str == id));
+							log.vdebug("'thisItemPath' contains 'syncFolderChildPath'        = ", (canFind(thisItemPath, syncFolderChildPath)) );
+							log.vdebug("'thisItemPath' contains search 'id'                  = ", (canFind(thisItemPath, id)) );
+							
+							// Special case handling
+							// - IF we are syncing shared folders, and the shared folder is not the 'top level' folder being shared out
+							// canFind(thisItemPath, syncFolderChildPath) will never match:
+							//		Syncing this OneDrive Business Shared Folder: MyFolderName
+							//		OneDrive Business Shared By:                  Firstname Lastname (email@address)
+							//		Applying changes of Path ID:    pathId
+							//		[DEBUG] Sync Folder Name:       MyFolderName
+							//		[DEBUG] Sync Folder Path:       /drives/driveId/root:/TopLevel/ABCD
+							//		[DEBUG] Sync Folder Child Path: /drives/driveId/root:/TopLevel/ABCD/MyFolderName/
+							//		...
+							//		[DEBUG] 'item id' matches search 'id'                        = false
+							//		[DEBUG] 'parentReference id' matches search 'id'             = false
+							//		[DEBUG] 'thisItemPath' contains 'syncFolderChildPath'        = false
+							//		[DEBUG] 'thisItemPath' contains search 'id'                  = false
+							//		[DEBUG] Change does not match any criteria to apply
+							//		Remote change discarded - not in business shared folders sync scope
+							
+							if ((!canFind(thisItemPath, syncFolderChildPath)) && (syncBusinessFolders)) {
+								// Syncing Shared Business folders & we dont have a path match
+								// is this a reverse path match?
+								log.vdebug("'thisItemPath' contains 'syncFolderName'             = ", (canFind(thisItemPath, syncFolderName)) );
+								if (canFind(thisItemPath, syncFolderName)) {
+									sharedFoldersSpecialCase = true;
+								}
+							}
 							
 							// Check this item's path to see if this is a change on the path we want:
 							// 1. 'item id' matches 'id'
@@ -767,12 +902,18 @@ final class SyncEngine
 							// 3. 'item path' contains 'syncFolderChildPath'
 							// 4. 'item path' contains 'id'
 							
-							if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderChildPath)) || (canFind(thisItemPath, id)) ){
+							if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderChildPath)) || (canFind(thisItemPath, id)) || (sharedFoldersSpecialCase) ){
 								// This is a change we want to apply
-								log.vdebug("Change matches search criteria to apply");
+								if (!sharedFoldersSpecialCase) {
+									log.vdebug("Change matches search criteria to apply");
+								} else {
+									log.vdebug("Change matches search criteria to apply - special case criteria - reverse path matching used");
+								}
+								// Apply OneDrive change
 								applyDifference(item, driveId, isRoot);
 							} else {
 								// No item ID match or folder sync match
+								log.vdebug("Change does not match any criteria to apply");
 								// Before discarding change - does this ID still exist on OneDrive - as in IS this 
 								// potentially a --single-directory sync and the user 'moved' the file out of the 'sync-dir' to another OneDrive folder
 								// This is a corner edge case - https://github.com/skilion/onedrive/issues/341
@@ -801,9 +942,35 @@ final class SyncEngine
 										// stored elsewhere on OneDrive - outside the path we are syncing from
 										// Remove this item locally as it's local path is now obsolete
 										idsToDelete ~= [driveId, item["id"].str];
+									} else {
+										// out of scope for some other reason
+										if (singleDirectoryScope){
+											log.vlog("Remote change discarded - not in --single-directory sync scope");
+										} else {
+											log.vlog("Remote change discarded - not in sync scope");
+										}
+										log.vdebug("Remote change discarded: ", item); 
 									}
 								} else {
-									log.vlog("Remote change discarded - not in --single-directory scope");
+									// item is not in the database
+									if (singleDirectoryScope){
+										// We are syncing a single directory, so this is the reason why it is out of scope
+										log.vlog("Remote change discarded - not in --single-directory sync scope");
+										log.vdebug("Remote change discarded: ", item);
+									} else {
+										// Not a single directory sync
+										if (syncBusinessFolders) {
+											// if we are syncing shared business folders, a 'change' may be out of scope as we are not syncing that 'folder'
+											// but we are sent all changes from the 'parent root' as we cannot query the 'delta' for this folder
+											// as that is a 501 error - not implemented
+											log.vlog("Remote change discarded - not in business shared folders sync scope");
+											log.vdebug("Remote change discarded: ", item);
+										} else {
+											// out of scope for some other reason
+											log.vlog("Remote change discarded - not in sync scope");
+											log.vdebug("Remote change discarded: ", item);
+										}
+									}
 								}
 							} 
 						}
@@ -814,11 +981,15 @@ final class SyncEngine
 				if ("@odata.deltaLink" in changes) deltaLink = changes["@odata.deltaLink"].str;
 				if (deltaLink) itemdb.setDeltaLink(driveId, id, deltaLink);
 				if ("@odata.nextLink" in changes) deltaLink = changes["@odata.nextLink"].str;
-				else break;	
+				else break;
 			} else {
 				// Log that an invalid JSON object was returned
-				log.error("ERROR: onedrive.viewChangesById call returned an invalid JSON Object");
-			}
+				if ((driveId == defaultDriveId) || (!syncBusinessFolders)) {
+					log.error("ERROR: onedrive.viewChangesByItemId call returned an invalid JSON Object");
+				} else {
+					log.error("ERROR: onedrive.viewChangesByDriveId call returned an invalid JSON Object");
+				}
+			}	
 		}
 
 		// delete items in idsToDelete
@@ -915,7 +1086,7 @@ final class SyncEngine
 		// check for selective sync
 		string path;
 		if (!unwanted) {
-			// Is the item in the local database
+			// Is the item parent in the local database
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
 				// compute the item path to see if the path is excluded
 				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
@@ -934,8 +1105,16 @@ final class SyncEngine
 					}
 				}
 			} else {
-				log.vdebug("Flagging as unwanted: item.driveId (", item.driveId,"), item.parentId (", item.parentId,") not in local database");
-				unwanted = true;
+				// Parent not in the database
+				// Is the parent a 'folder' from another user? ie - is this a 'shared folder' that has been shared with us?
+				if (defaultDriveId == item.driveId){
+					// Flagging as unwanted
+					log.vdebug("Flagging as unwanted: item.driveId (", item.driveId,"), item.parentId (", item.parentId,") not in local database");
+					unwanted = true;
+				} else {
+					// Edge case as the parent will never be in the database
+					log.vdebug("Parent not in database but appears to be a shared folder: item.driveId (", item.driveId,"), item.parentId (", item.parentId,") not in local database");
+				}
 			}
 		}
 		

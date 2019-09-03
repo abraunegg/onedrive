@@ -779,6 +779,8 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 		// Need two different path strings here
 		remotePath = singleDirectory;
 		localPath = singleDirectory;
+		// Set flag for singleDirectoryScope for change handling
+		sync.setSingleDirectoryScope();
 	}
 	
 	// Due to Microsoft Sharepoint 'enrichment' of files, we try to download the Microsoft modified file automatically
