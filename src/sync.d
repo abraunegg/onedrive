@@ -716,6 +716,7 @@ final class SyncEngine
 					syncFolderChildPath = syncFolderPath ~ "/" ~ idDetails["name"].str ~ "/";
 				} else {
 					// No parentReference, set these to blank
+					log.vdebug("Item details returned no parent reference path");
 					syncFolderPath = "";
 					syncFolderChildPath = ""; 
 				}
@@ -800,6 +801,7 @@ final class SyncEngine
 				// Are there any changes to process?
 				if (("value" in changes) != null) {
 					auto nrChanges = count(changes["value"].array);
+					auto changeCount = 0;
 
 					if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
 						log.logAndNotify("Processing ", nrChanges, " changes");
@@ -811,9 +813,11 @@ final class SyncEngine
 					foreach (item; changes["value"].array) {
 						bool isRoot = false;
 						string thisItemPath;
+						changeCount++;
 						
 						// Change as reported by OneDrive
 						log.vdebug("------------------------------------------------------------------");
+						log.vdebug("Processing change ", changeCount, " of ", nrChanges);
 						log.vdebug("OneDrive Change: ", item);
 						
 						// Deleted items returned from onedrive.viewChangesByItemId or onedrive.viewChangesByDriveId (/delta) do not have a 'name' attribute
