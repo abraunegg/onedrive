@@ -423,6 +423,7 @@ final class SyncEngine
 		// https://github.com/OneDrive/onedrive-api-docs/issues/764
 		Item[] items = itemdb.selectRemoteItems();
 		foreach (item; items) {
+			log.vdebug("------------------------------------------------------------------");
 			log.vlog("Syncing OneDrive Shared Folder: ", item.name);
 			applyDifferences(item.remoteDriveId, item.remoteId);
 		}
@@ -1116,8 +1117,9 @@ final class SyncEngine
 					log.vdebug("Flagging as unwanted: item.driveId (", item.driveId,"), item.parentId (", item.parentId,") not in local database");
 					unwanted = true;
 				} else {
-					// Edge case as the parent will never be in the database
+					// Edge case as the parent (from another users OneDrive account) will never be in the database
 					log.vdebug("Parent not in database but appears to be a shared folder: item.driveId (", item.driveId,"), item.parentId (", item.parentId,") not in local database");
+					item.parentId = null; // ensures that it has no parent
 				}
 			}
 		}
