@@ -26,7 +26,15 @@ fi
 chown "${oduser}:${odgroup}" /onedrive/ /onedrive/conf
 
 # Default parameters
-ARGS=(--monitor --verbose --confdir /onedrive/conf --syncdir /onedrive/data)
+ARGS=(--monitor --confdir /onedrive/conf --syncdir /onedrive/data)
+
+#Make Verbose output optional, based on an environment variable
+# default behaviour is verbose (to continue to behave as before)
+if ! [ "${ONEDRIVE_VERBOSE:=1}" == "0" ]; then
+   echo "# We are being verbose"
+   echo "# set ONEDRIVE_VERBOSE environment to 0 (Zero) to be less chatty"
+   ARGS=(--verbose ${ARGS})
+fi
 
 if [ ${#} -gt 0 ]; then
   ARGS=("${@}")
