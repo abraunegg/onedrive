@@ -1120,6 +1120,10 @@ final class SyncEngine
 					// Edge case as the parent (from another users OneDrive account) will never be in the database
 					log.vdebug("Parent not in database but appears to be a shared folder: item.driveId (", item.driveId,"), item.parentId (", item.parentId,") not in local database");
 					item.parentId = null; // ensures that it has no parent
+					log.vdebug("Update/Insert local database with item details");
+					itemdb.upsert(item);
+					log.vdebug("item details: ", item);
+					return;
 				}
 			}
 		}
