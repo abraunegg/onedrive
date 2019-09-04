@@ -101,6 +101,16 @@ Or you can map your own config folder to config volume (copy stuffs from docker 
 
 The detailed document for the config can be found here: [additional-configuration](https://github.com/abraunegg/onedrive#additional-configuration)
 
+
+## Environment Variables
+
+
+| Variable | Purpose | Sample Value  |
+| ---------------- | --------------------------------------------------- |:-------------:|
+| <B>ONEDRIVE_UID</B> | UserID (UID) to run as  | 1000 |
+| <B>ONEDRIVE_GID</B> | GroupID (GID) to run as | 1000 |
+| <B>ONEDRIVE_VERBOSE</B> | Controls "verbose" switch on onedrive sync. Default (i.e. not set or non-zero value) behaviour is to continue to be verbose as before | 0 |
+
 ## Run or update with one script
 
 If you are experienced with docker and onedrive, you can use the following script:
