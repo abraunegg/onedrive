@@ -449,18 +449,22 @@ final class OneDriveApi
 	private void acquireToken(const(char)[] postData)
 	{
 		JSONValue response = post(tokenUrl, postData);
-		if ("access_token" in response){
-			accessToken = "bearer " ~ response["access_token"].str();
-			refreshToken = response["refresh_token"].str();
-			accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
-			if (!.dryRun) {
-				std.file.write(cfg.refreshTokenFilePath, refreshToken);
+		if (response.type() == JSONType.object) {
+			if ("access_token" in response){
+				accessToken = "bearer " ~ response["access_token"].str();
+				refreshToken = response["refresh_token"].str();
+				accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
+				if (!.dryRun) {
+					std.file.write(cfg.refreshTokenFilePath, refreshToken);
+				}
+				if (printAccessToken) writeln("New access token: ", accessToken);
+			} else {
+				log.error("\nInvalid authentication response from OneDrive. Please check the response uri\n");
+				// re-authorize
+				authorize();
 			}
-			if (printAccessToken) writeln("New access token: ", accessToken);
 		} else {
-			log.error("\nInvalid authentication response from OneDrive. Please check the response uri\n");
-			// re-authorize
-			authorize();
+			log.vdebug("Invalid JSON response from OneDrive unable to initialize application");
 		}
 	}
 
@@ -645,18 +649,18 @@ final class OneDriveApi
 			if (.debugResponse){
 				writeln("OneDrive HTTP Server Response: ", http.statusLine.code);
 			}
-			
 			return data.length;
 		};
 		
+		JSONValue json;
 		try {
 			http.perform();
 		} catch (CurlException e) {
 			// Potentially Timeout was reached on handle error
-			log.error("\nThere was a problem in accessing the Microsoft OneDrive service - Internet connectivity issue?\n");
+			log.error("ERROR: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
+			return json;
 		}
 		
-		JSONValue json;
 		try {
 			json = content.parseJSON();
 		} catch (JSONException e) {
