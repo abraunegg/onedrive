@@ -116,6 +116,16 @@ docker inspect onedrive > /dev/null && docker rm -f onedrive
 docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive
 ```
 
+
+## Environment Variables
+
+
+| Variable | Purpose | Sample Value  |
+| ---------------- | --------------------------------------------------- |:-------------:|
+| <B>ONEDRIVE_UID</B> | UserID (UID) to run as  | 1000 |
+| <B>ONEDRIVE_GID</B> | GroupID (GID) to run as | 1000 |
+| <B>ONEDRIVE_VERBOSE</B> | Controls "verbose" switch on onedrive sync. Default (i.e. not set or non-zero value) behaviour is to continue to be verbose as before | 0 |
+
 ## Build instructions
 You can also build your own image instead of pulling the one from dockerhub:
 ```bash

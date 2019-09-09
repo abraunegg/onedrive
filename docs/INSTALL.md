@@ -7,7 +7,7 @@
 
 **Note:** DMD version >= 2.083.1 or LDC version >= 1.12.0 is required to compile this application
 
-### Dependencies: Ubuntu/Debian - x86_64
+### Dependencies: Ubuntu / Debian - x86_64
 ```text
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
@@ -20,22 +20,12 @@ For notifications the following is necessary:
 sudo apt install libnotify-dev
 ```
 
-### Dependencies: Ubuntu - i386 / i686
-**Note:** Validated with `Linux ubuntu-i386-vm 4.13.0-36-generic #40~16.04.1-Ubuntu SMP Fri Feb 16 23:26:51 UTC 2018 i686 i686 i686 GNU/Linux` and DMD 2.081.1
-```text
-sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev
-sudo apt install libsqlite3-dev
-sudo apt install pkg-config
-curl -fsS https://dlang.org/install.sh | bash -s dmd
-```
-For notifications the following is necessary:
-```text
-sudo apt install libnotify-dev
-```
+### Dependencies: Ubuntu / Lubuntu / Debian - i386 / i686
+**Note:** Ubuntu validated with `Linux ubuntu-1804-lts-i386 4.13.0-36-generic #40~16.04.1-Ubuntu SMP Fri Feb 16 23:26:51 UTC 2018 i686 i686 i686 GNU/Linux` and LDC - the LLVM D compiler (1.12.0).
 
-### Dependencies: Debian - i386 / i686
-**Note:** Validated with `Linux debian-i386 4.9.0-8-686-pae #1 SMP Debian 4.9.130-2 (2018-10-27) i686 GNU/Linux` and LDC - the LLVM D compiler (1.12.0).
+**Note:** Debian validated with `Linux debian-i386 4.9.0-8-686-pae #1 SMP Debian 4.9.130-2 (2018-10-27) i686 GNU/Linux` and LDC - the LLVM D compiler (1.12.0).
+
+**Note:** Lubuntu validated with `Linux alex-lubuntu-i686 4.18.0-10-generic #11-Ubuntu SMP Thu Oct 11 15:07:11 UTC 2018 i686 i686 i686 GNU/Linux` and LDC - the LLVM D compiler (1.12.0).
 
 First install development dependencies as per below:
 ```text
@@ -44,17 +34,18 @@ sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
 sudo apt install pkg-config
 sudo apt install git
+sudo apt install curl
 ```
 Second, install the LDC compiler as per below:
 ```text
 mkdir ldc && cd ldc
-wget http://httpredir.debian.org/debian/pool/main/g/gcc-8/gcc-8-base_8.2.0-19_i386.deb
-wget http://httpredir.debian.org/debian/pool/main/g/gcc-8/libgcc1_8.2.0-19_i386.deb
+wget http://httpredir.debian.org/debian/pool/main/g/gcc-8/gcc-8-base_8.3.0-6_i386.deb
+wget http://httpredir.debian.org/debian/pool/main/g/gcc-8/libgcc1_8.3.0-6_i386.deb
 wget http://httpredir.debian.org/debian/pool/main/l/ldc/libphobos2-ldc-shared82_1.12.0-1_i386.deb
 wget http://httpredir.debian.org/debian/pool/main/l/ldc/libphobos2-ldc-shared-dev_1.12.0-1_i386.deb
 wget http://httpredir.debian.org/debian/pool/main/l/ldc/ldc_1.12.0-1_i386.deb
 wget http://httpredir.debian.org/debian/pool/main/l/llvm-toolchain-6.0/libllvm6.0_6.0.1-10_i386.deb
-wget http://httpredir.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.1+20181013-1_i386.deb
+wget http://httpredir.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.1+20190803-1_i386.deb
 sudo dpkg -i ./*.deb
 ```
 For notifications the following is necessary:
@@ -196,7 +187,7 @@ as far as possible automatically, but can be overridden by passing
 `--with-zsh-completion-dir=<DIR>` to `configure`.
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
-#### Debian - i386 / i686
+#### Ubuntu / Lubuntu / Debian - i386 / i686
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
