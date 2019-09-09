@@ -209,7 +209,7 @@ sudo make install
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-./configure DC=~/ldc2-1.13.0-linux-armhf/bin/ldmd2
+./configure DC=~/ldc2-1.16.0-linux-armhf/bin/ldmd2
 make clean; make
 sudo make install
 ```
@@ -218,7 +218,7 @@ sudo make install
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-./configure DC=~/ldc2-1.14.0-linux-aarch64/bin/ldmd2
+./configure DC=~/ldc2-1.16.0-linux-aarch64/bin/ldmd2
 make clean; make
 sudo make install
 ```
