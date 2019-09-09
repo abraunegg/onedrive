@@ -235,7 +235,7 @@ final class SyncEngine
 	private bool singleDirectoryScope = false;
 	// array of all OneDrive driveId's
 	private string[] driveIDsArray;
-	
+
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
 		assert(onedrive && itemdb && selectiveSync);
@@ -402,6 +402,8 @@ final class SyncEngine
 		syncBusinessFolders = true;
 	}
 	
+	// Configure singleDirectoryScope if function is called
+	// By default, singleDirectoryScope = false
 	void setSingleDirectoryScope()
 	{
 		singleDirectoryScope = true;
@@ -432,6 +434,7 @@ final class SyncEngine
 		// https://github.com/OneDrive/onedrive-api-docs/issues/764
 		Item[] items = itemdb.selectRemoteItems();
 		foreach (item; items) {
+			log.vdebug("------------------------------------------------------------------");
 			log.vlog("Syncing OneDrive Shared Folder: ", item.name);
 			applyDifferences(item.remoteDriveId, item.remoteId);
 		}
@@ -807,7 +810,7 @@ final class SyncEngine
 				//	"root": {},
 				//	"size": 0
 			
-				// OneDrive Personal Remote / Shared Folder Item Reference (24/4/2019)
+				// OneDrive Personal Remote / Shared Folder Item Reference (4/9/2019)
 				//	"@odata.context": "https://graph.microsoft.com/v1.0/$metadata#drives('driveId')/items/$entity",
 				//	"cTag": "cTag",
 				//	"eTag": "eTag",
@@ -836,6 +839,9 @@ final class SyncEngine
 				//		"parentReference": {
 				//			"driveId": "remoteDriveId",
 				//			"driveType": "personal"
+				//			"id": "id",
+				//			"name": "name",
+				//			"path": "/drives/<remote_drive_id>/items/<remote_parent_id>:/<parent_name>"
 				//		},
 				//		"size": 0,
 				//		"webUrl": "webUrl"
@@ -866,10 +872,12 @@ final class SyncEngine
 				// To evaluate a change received from OneDrive, this must be set correctly
 				if (hasParentReferencePath(idDetails)) {
 					// Path from OneDrive has a parentReference we can use
+					log.vdebug("Item details returned contains parent reference path - potentially shared folder object");
 					syncFolderPath = idDetails["parentReference"]["path"].str;
 					syncFolderChildPath = syncFolderPath ~ "/" ~ idDetails["name"].str ~ "/";
 				} else {
 					// No parentReference, set these to blank
+					log.vdebug("Item details returned no parent reference path");
 					syncFolderPath = "";
 					syncFolderChildPath = ""; 
 				}
@@ -965,6 +973,7 @@ final class SyncEngine
 				// Are there any changes to process?
 				if (("value" in changes) != null) {
 					auto nrChanges = count(changes["value"].array);
+					auto changeCount = 0;
 
 					if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
 						log.logAndNotify("Processing ", nrChanges, " changes");
@@ -976,9 +985,11 @@ final class SyncEngine
 					foreach (item; changes["value"].array) {
 						bool isRoot = false;
 						string thisItemPath;
+						changeCount++;
 						
 						// Change as reported by OneDrive
 						log.vdebug("------------------------------------------------------------------");
+						log.vdebug("Processing change ", changeCount, " of ", nrChanges);
 						log.vdebug("OneDrive Change: ", item);
 						
 						// Deleted items returned from onedrive.viewChangesByItemId or onedrive.viewChangesByDriveId (/delta) do not have a 'name' attribute
@@ -1253,7 +1264,7 @@ final class SyncEngine
 		// check for selective sync
 		string path;
 		if (!unwanted) {
-			// Is the item in the local database
+			// Is the item parent in the local database
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
 				// compute the item path to see if the path is excluded
 				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
@@ -1272,8 +1283,21 @@ final class SyncEngine
 					}
 				}
 			} else {
-				log.vdebug("Flagging as unwanted: item.driveId (", item.driveId,"), item.parentId (", item.parentId,") not in local database");
-				unwanted = true;
+				// Parent not in the database
+				// Is the parent a 'folder' from another user? ie - is this a 'shared folder' that has been shared with us?
+				if (defaultDriveId == item.driveId){
+					// Flagging as unwanted
+					log.vdebug("Flagging as unwanted: item.driveId (", item.driveId,"), item.parentId (", item.parentId,") not in local database");
+					unwanted = true;
+				} else {
+					// Edge case as the parent (from another users OneDrive account) will never be in the database
+					log.vdebug("Parent not in database but appears to be a shared folder: item.driveId (", item.driveId,"), item.parentId (", item.parentId,") not in local database");
+					item.parentId = null; // ensures that it has no parent
+					log.vdebug("Update/Insert local database with item details");
+					itemdb.upsert(item);
+					log.vdebug("item details: ", item);
+					return;
+				}
 			}
 		}
 		

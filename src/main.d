@@ -874,7 +874,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 		// Need two different path strings here
 		remotePath = singleDirectory;
 		localPath = singleDirectory;
-		// Set flag for scope debug output handling
+		// Set flag for singleDirectoryScope for change handling
 		sync.setSingleDirectoryScope();
 	}
 	
