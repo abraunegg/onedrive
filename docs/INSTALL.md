@@ -22,7 +22,9 @@ sudo apt install libnotify-dev
 
 ### Dependencies: Ubuntu / Lubuntu / Debian - i386 / i686
 **Note:** Ubuntu validated with `Linux ubuntu-1804-lts-i386 4.13.0-36-generic #40~16.04.1-Ubuntu SMP Fri Feb 16 23:26:51 UTC 2018 i686 i686 i686 GNU/Linux` and LDC - the LLVM D compiler (1.12.0).
+
 **Note:** Debian validated with `Linux debian-i386 4.9.0-8-686-pae #1 SMP Debian 4.9.130-2 (2018-10-27) i686 GNU/Linux` and LDC - the LLVM D compiler (1.12.0).
+
 **Note:** Lubuntu validated with `Linux alex-lubuntu-i686 4.18.0-10-generic #11-Ubuntu SMP Thu Oct 11 15:07:11 UTC 2018 i686 i686 i686 GNU/Linux` and LDC - the LLVM D compiler (1.12.0).
 
 First install development dependencies as per below:
