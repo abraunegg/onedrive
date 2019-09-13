@@ -590,7 +590,14 @@ final class SyncEngine
 	{
 		log.vlog("Applying changes of Path ID: " ~ id);
 		JSONValue changes;
-		string deltaLink = itemdb.getDeltaLink(driveId, id);
+		
+		// If we are using a sync_list file, using deltaLink will actually 'miss' changes (moves & deletes) on OneDrive as using sync_list discards changes
+		string deltaLink = "";
+		string userSyncList = cfg.configDirName ~ "/sync_list";
+		if (!exists(userSyncList)){
+			// not using sync_list file, use the delta link
+			deltaLink = itemdb.getDeltaLink(driveId, id);
+		}
 		
 		// Query the name of this folder id
 		string syncFolderName;
