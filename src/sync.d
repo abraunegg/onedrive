@@ -776,10 +776,8 @@ final class SyncEngine
 				
 				// HTTP request returned status code 500 (Internal Server Error)
 				if (e.httpStatusCode == 500) {
-					// Stop application
-					log.log("\n\nOneDrive returned a 'HTTP 500 - Internal Server Error'");
-					log.log("This is a OneDrive API Bug - https://github.com/OneDrive/onedrive-api-docs/issues/844\n\n");
-					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
+					// display what the error is
+					displayOneDriveErrorMessage(e.msg);
 					return;
 				}
 				
