@@ -100,6 +100,9 @@ final class OneDriveApi
 			.debugResponse = true;
         }
 		
+		// Custom User Agent
+		http.setUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36";
+		
 		// What version of HTTP protocol do we use?
 		// Curl >= 7.62.0 defaults to http2 for a significant number of operations
 		if (cfg.getValueBool("force_http_2")) {
