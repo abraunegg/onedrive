@@ -1344,7 +1344,12 @@ final class SyncEngine
 			
 			// handle changed time
 			if (newItem.type == ItemType.file && oldItem.mtime != newItem.mtime) {
-				setTimes(newPath, newItem.mtime, newItem.mtime);
+				try {
+					setTimes(newPath, newItem.mtime, newItem.mtime);
+				} catch (FileException e) {
+					// display the error message
+					displayFileSystemErrorMessage(e.msg);
+				}
 			}
 		} 
 	}
@@ -1459,7 +1464,12 @@ final class SyncEngine
 				if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash) || (OneDriveFileHash == sha1Hash)) {
 					// downloaded matches either size or hash
 					log.vdebug("Downloaded file matches reported size and or reported file hash");
-					setTimes(path, item.mtime, item.mtime);
+					try {
+						setTimes(path, item.mtime, item.mtime);
+					} catch (FileException e) {
+						// display the error message
+						displayFileSystemErrorMessage(e.msg);
+					}
 				} else {
 					// size error?
 					if (getSize(path) != fileSize) {
