@@ -124,7 +124,27 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 | ---------------- | --------------------------------------------------- |:-------------:|
 | <B>ONEDRIVE_UID</B> | UserID (UID) to run as  | 1000 |
 | <B>ONEDRIVE_GID</B> | GroupID (GID) to run as | 1000 |
-| <B>ONEDRIVE_VERBOSE</B> | Controls "verbose" switch on onedrive sync. Default (i.e. not set or non-zero value) behaviour is to continue to be verbose as before | 0 |
+| <B>ONEDRIVE_VERBOSE</B> | Controls "--verbose" switch on onedrive sync. Default is 0 | 1 |
+| <B>ONEDRIVE_DEBUG</B> | Controls "--verbose --verbose" switch on onedrive sync. Default is 0 | 1 |
+| <B>ONEDRIVE_RESYNC</B> | Controls "--resync" switch on onedrive sync. Default is 0 | 1 |
+
+### Usage Examples
+**Verbose Output:**
+```bash
+docker container run -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive
+```
+**Debug Output:**
+```bash
+docker container run -e ONEDRIVE_DEBUG=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive
+```
+**Perform a --resync:**
+```bash
+docker container run -e ONEDRIVE_RESYNC=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive
+```
+**Perform a --resync and --verbose:**
+```bash
+docker container run -e ONEDRIVE_RESYNC=1 -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive
+```
 
 ## Build instructions
 You can also build your own image instead of pulling the one from dockerhub:
