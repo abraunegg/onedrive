@@ -62,7 +62,16 @@ struct UploadSession
 	{
 		if (exists(sessionFilePath)) {
 			log.vlog("Trying to restore the upload session ...");
-			session = readText(sessionFilePath).parseJSON();
+			// We cant use JSONType.object check, as this is currently a string
+			// We cant use a try & catch block, as it does not catch std.json.JSONException
+			auto sessionFileText = readText(sessionFilePath);
+			if(canFind(sessionFileText,"@odata.context")) {
+				session = readText(sessionFilePath).parseJSON();
+			} else {
+				log.vlog("Upload session resume data is invalid");
+				remove(sessionFilePath);
+				return false;
+			}
 			
 			// Check the session resume file for expirationDateTime
 			if ("expirationDateTime" in session){

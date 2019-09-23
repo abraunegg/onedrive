@@ -1342,7 +1342,12 @@ final class SyncEngine
 			
 			// handle changed time
 			if (newItem.type == ItemType.file && oldItem.mtime != newItem.mtime) {
-				setTimes(newPath, newItem.mtime, newItem.mtime);
+				try {
+					setTimes(newPath, newItem.mtime, newItem.mtime);
+				} catch (FileException e) {
+					// display the error message
+					displayFileSystemErrorMessage(e.msg);
+				}
 			}
 		} 
 	}
@@ -1457,7 +1462,12 @@ final class SyncEngine
 				if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash) || (OneDriveFileHash == sha1Hash)) {
 					// downloaded matches either size or hash
 					log.vdebug("Downloaded file matches reported size and or reported file hash");
-					setTimes(path, item.mtime, item.mtime);
+					try {
+						setTimes(path, item.mtime, item.mtime);
+					} catch (FileException e) {
+						// display the error message
+						displayFileSystemErrorMessage(e.msg);
+					}
 				} else {
 					// size error?
 					if (getSize(path) != fileSize) {
@@ -2357,6 +2367,7 @@ final class SyncEngine
 					// They are the "same" name wise but different in case sensitivity
 					log.error("ERROR: Current directory has a 'case-insensitive match' to an existing directory on OneDrive");
 					log.error("ERROR: To resolve, rename this local directory: ", absolutePath(path));
+					log.error("ERROR: Remote OneDrive directory: ", response["name"].str);
 					log.log("Skipping: ", absolutePath(path));
 					return;
 				}
