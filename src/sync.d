@@ -2367,6 +2367,7 @@ final class SyncEngine
 					// They are the "same" name wise but different in case sensitivity
 					log.error("ERROR: Current directory has a 'case-insensitive match' to an existing directory on OneDrive");
 					log.error("ERROR: To resolve, rename this local directory: ", absolutePath(path));
+					log.error("ERROR: Remote OneDrive directory: ", response["name"].str);
 					log.log("Skipping: ", absolutePath(path));
 					return;
 				}
