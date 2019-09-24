@@ -37,6 +37,7 @@ final class Config
 		stringValues["skip_dir"]         = defaultSkipDir;
 		stringValues["log_dir"]          = "/var/log/onedrive/";
 		stringValues["drive_id"]         = "";
+		stringValues["user_agent"]       = "";
 		boolValues["upload_only"]        = false;
 		boolValues["check_nomount"]      = false;
 		boolValues["check_nosync"]       = false;
@@ -292,6 +293,9 @@ final class Config
 				"upload-only",
 					"Only upload to OneDrive, do not sync changes from OneDrive locally",
 					&boolValues["upload_only"],
+				"user-agent",
+					"Specify a User Agent string to the http client",
+					&stringValues["user_agent"],
 				// duplicated from main.d to get full help output!
 				"confdir",
 					"Set the directory used to store the configuration files",
@@ -430,7 +434,8 @@ void outputLongHelp(Option[] opt)
 		"--single-directory",
 		"--skip-file",
 		"--source-directory",
-		"--syncdir" ];
+		"--syncdir",
+	        "--user-agent" ];
 	writeln(`OneDrive - a client for OneDrive Cloud Services
 
 Usage:
