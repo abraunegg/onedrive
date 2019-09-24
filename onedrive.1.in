@@ -178,6 +178,11 @@ Only upload to OneDrive, do not sync changes from OneDrive locally
 .br
 Configuration file key: \fBupload_only\fP (default: \fBfalse\fP)
 .TP
+\fB\-\-user\-agent\fP ARG
+Set the used User Agent identifier
+.br
+Configuration file key: \fBuser_agent\fP (default: don't change)
+.TP
 \fB\-v \-\-verbose\fP
 Print more details, useful for debugging. Given two times (or more)
 enables even more verbose debug statements.
