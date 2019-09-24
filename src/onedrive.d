@@ -103,8 +103,9 @@ final class OneDriveApi
 		// Custom User Agent
 		if (cfg.getValueString("user_agent") != "") {
 			http.setUserAgent = cfg.getValueString("user_agent");
+		} else {
+			http.setUserAgent = "OneDrive Client for Linux " ~ strip(import("version"));
 		}
-
 		
 		// What version of HTTP protocol do we use?
 		// Curl >= 7.62.0 defaults to http2 for a significant number of operations
