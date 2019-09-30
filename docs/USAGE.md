@@ -226,11 +226,21 @@ This file does not get created by default, and should only be created if you wan
 
 See the [config](config) file for the full list of options, and [All available commands](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#all-available-commands) for all possible keys and there default values.
 
-Comments regarding some of the options:
+### 'config' file configuration examples:
+The below are 'config' file examples to assist with configuration of the 'config' file:
 
-### sync_dir
-Example: `sync_dir="~/MyDirToSync"`
-
+#### sync_dir
+Example:
+```text
+# When changing a config option below, remove the '#' from the start of the option line to make that config change active
+# For explanations of all config options below see docs/USAGE.md or the man page.
+#
+sync_dir="~/MyDirToSync"
+# skip_file = "~*|.~*|*.tmp"
+# monitor_interval = "45"
+# skip_dir = ""
+# log_dir = "/var/log/onedrive/"
+```
 **Please Note:**
 Proceed with caution here when changing the default sync dir from ~/OneDrive to ~/MyDirToSync
 
