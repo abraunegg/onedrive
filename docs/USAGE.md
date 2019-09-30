@@ -242,7 +242,7 @@ sync_dir="~/MyDirToSync"
 # log_dir = "/var/log/onedrive/"
 ```
 **Please Note:**
-Proceed with caution here when changing the default sync dir from ~/OneDrive to ~/MyDirToSync
+Proceed with caution here when changing the default sync dir from `~/OneDrive` to `~/MyDirToSync`
 
 The issue here is around how the client stores the sync_dir path in the database. If the config file is missing, or you don't use the `--syncdir` parameter - what will happen is the client will default back to `~/OneDrive` and 'think' that either all your data has been deleted - thus delete the content on OneDrive, or will start downloading all data from OneDrive into the default location.
 
@@ -294,27 +294,51 @@ By default, the following files will be skipped:
 
 **Note:** after changing `skip_file`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
-### skip_dotfiles
-Example: `skip_dotfiles = "true"`
-
+#### skip_dotfiles
+Example: 
+```text
+# skip_symlinks = "false"
+# debug_https = "false"
+skip_dotfiles = "true"
+# dry_run = "false"
+# monitor_interval = "45"
+```
 Setting this to `"true"` will skip all .files and .folders while syncing.
 
-### skip_symlinks
-Example: `skip_symlinks = "true"`
-
+#### skip_symlinks
+Example:
+```text
+# local_first = "false"
+# no_remote_delete = "false"
+skip_symlinks = "true"
+# debug_https = "false"
+# skip_dotfiles = "false"
+```
 Setting this to `"true"` will skip all symlinks while syncing.
 
-### monitor_interval
-Example: `monitor_interval = "300"`
-
+#### monitor_interval
+Example:
+```text
+# skip_dotfiles = "false"
+# dry_run = "false"
+monitor_interval = "300"
+# min_notify_changes = "5"
+# monitor_log_frequency = "5"
+```
 The monitor interval is defined as the wait time 'between' sync's when running in monitor mode. By default without configuration, the monitor_interval is set to 45 seconds. Setting this value to 300 will run the sync process every 5 minutes.
 
-### min_notify_changes
-Example: `min_notify_changes = "5"`
-
+#### min_notify_changes
+Example:
+```text
+# dry_run = "false"
+# monitor_interval = "45"
+min_notify_changes = "50"
+# monitor_log_frequency = "5"
+# monitor_fullscan_frequency = "10"
+```
 This option defines the minimum number of pending incoming changes necessary to trigger a desktop notification. This allows controlling the frequency of notifications.
 
-### Selective sync
+#### Selective sync via 'sync_list' file
 Selective sync allows you to sync only specific files and directories.
 To enable selective sync create a file named `sync_list` in `~/.config/onedrive`.
 Each line of the file represents a relative path from your `sync_dir`. All files and directories not matching any line of the file will be skipped during all operations.
@@ -332,8 +356,8 @@ Year 2
 ```
 **Note:** after changing the sync_list, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
-### Skipping directories from syncing
-There are several mechanisms available to 'skip' a directory from scanning:
+### How to 'skip' directories from syncing?
+There are several mechanisms available to 'skip' a directory from the sync process:
 *   Utilise 'skip_dir'
 *   Utilise 'sync_list'
 
@@ -341,18 +365,25 @@ One further method is to add a '.nosync' empty file to any folder. When this fil
 
 To make this a permanent change to always skip folders when a '.nosync' empty file is present, add the following to your config file:
 
-Example: `check_nosync = "true"`
+Example:
+```text
+# upload_only = "false"
+# check_nomount = "false"
+check_nosync = "true"
+# download_only = "false"
+# disable_notifications = "false"
+```
 
-## Shared folders (OneDrive Personal)
+### Shared folders (OneDrive Personal)
 Folders shared with you can be synced by adding them to your OneDrive. To do that open your Onedrive, go to the Shared files list, right click on the folder you want to sync and then click on "Add to my OneDrive".
 
-## Shared folders (OneDrive Business or Office 365)
+### Shared folders (OneDrive Business or Office 365)
 Currently not supported.
 
-## SharePoint / Office 365 Shared Libraries
-Refer to [./Office365.md](Office365.md)
+### SharePoint / Office 365 Shared Libraries
+Refer to [./Office365.md](Office365.md) for configuration assistance.
 
-## Running 'onedrive' as a service
+## Running 'onedrive' as a system service
 There are two ways that onedrive can be used as a service
 *   via init.d
 *   via systemd
