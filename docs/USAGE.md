@@ -22,12 +22,12 @@ skip_file = "~*|.~*|*.tmp"
 
 Do not use a skip_file entry of `.*` as this will prevent correct searching of local changes to process.
 
-#### Important: curl compatibility
-If your system utilises curl >= 7.62.0 curl defaults to prefer HTTP/2 over HTTP/1.1 by default. If you wish to use HTTP/2 for some operations you will need to use the `--force-http-2` config option to enable otherwise all operations will use HTTP/1.1.
-
-### File and Folder Naming Conventions
+### Local File and Folder Naming Conventions
 The files and directories in the synchronization directory must follow the [Windows naming conventions](https://msdn.microsoft.com/en-us/library/aa365247).
 The application will attempt to handle instances where you have two files with the same names but with different capitalization. Where there is a namespace clash, the file name which clashes will not be synced. This is expected behavior and won't be fixed.
+
+### curl compatibility
+If your system utilises curl >= 7.62.0 curl defaults to prefer HTTP/2 over HTTP/1.1 by default. If you wish to use HTTP/2 for some operations you will need to use the `--force-http-2` config option to enable otherwise all operations will use HTTP/1.1.
 
 ### First run :zap:
 After installing the application you must run it at least once from the terminal to authorize it.
