@@ -541,9 +541,9 @@ Usage:
 Options:
 
   --auth-files ARG
-      Perform  authorization  via  two files passed in as ARG in the format `authUrl:responseUrl`  
-      The authorization URL is written to the `authUrl`, then onedrive waits for the file `responseUrl` 
-      to be present, and reads the response from that file.
+      Perform authorization via two files passed in as ARG in the format `authUrl:responseUrl`
+	  The authorization URL is written to the `authUrl`, then onedrive waits for the file `responseUrl`
+	  to be present, and reads the response from that file.
   --check-for-nomount
       Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
   --check-for-nosync
@@ -606,22 +606,28 @@ Options:
       Forget the last saved state, perform a full sync
   --single-directory ARG
       Specify a single local directory within the OneDrive root to sync.
+  --skip-dir
+      Skip any directories that match this pattern from syncing
   --skip-dot-files
       Skip dot files and folders from syncing
   --skip-file ARG
       Skip any files that match this pattern from syncing
+  --skip-size
+      Skip new files larger than this size (in MB)
   --skip-symlinks
       Skip syncing of symlinks
   --source-directory ARG
       Source directory to rename or move on OneDrive - no sync will be performed.
   --sync-root-files
-      Sync all files in sync_dir root when using sync_list.	  
+      Sync all files in sync_dir root when using sync_list.
   --syncdir ARG
       Specify the local directory used for synchronization to OneDrive
   --synchronize
       Perform a synchronization
   --upload-only
       Only upload to OneDrive, do not sync changes from OneDrive locally
+  --user-agent ARG
+      Specify a User Agent string to the http client
   --verbose -v+
       Print more details, useful for debugging (repeat for extra debugging)
   --version
