@@ -3,6 +3,26 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.3.10 - 2019-10-01
+### Fixed
+*   Fix searching for 'name' when deleting a synced item, if the OneDrive API does not return the expected details in the API call
+*   Fix abnormal termination when no Internet connection
+*   Fix downloading of files from OneDrive Personal Shared Folders when the OneDrive API responds with unexpected additional path data
+*   Fix logging of 'initialisation' of client to actually when the attempt to initialise is performed
+*   Fix when using a sync_list file, using deltaLink will actually 'miss' changes (moves & deletes) on OneDrive as using sync_list discards changes
+*   Fix OneDrive API status code 500 handling when uploading files as error message is not correct
+*   Fix crash when resume_upload file is not a valid JSON 
+*   Fix crash when a file system exception is generated when attempting to update the file date & time and this fails
+
+### Added
+*   If there is a case-insensitive match error, also return the remote name from the response
+*   Make user-agent string a configuration option & add to config file
+*   Set default User-Agent to 'OneDrive Client for Linux v{version}'
+
+### Changed
+*   Make verbose logging output optional on Docker
+*   Enable --resync & debug client output via environment variables on Docker
+
 ## 2.3.9 - 2019-09-01
 ### Fixed
 *   Catch a 403 Forbidden exception when querying Sharepoint Library Names
