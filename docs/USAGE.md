@@ -216,7 +216,7 @@ The application will now sync with OneDrive with the new credentials.
 
 ## Configuration
 
-Configuration is determined by three layer: the default values, values set in the configuration file, and values passed in via the command line. The default values provide a reasonable default, and configuration is optionally.
+Configuration is determined by three layers: the default values, values set in the configuration file, and values passed in via the command line. The default values provide a reasonable default, and configuration is optional.
 
 Most command line options have a respective configuration file setting.
 
@@ -229,6 +229,46 @@ nano ~/.config/onedrive/config
 This file does not get created by default, and should only be created if you want to change the 'default' operational parameters.
 
 See the [config](config) file for the full list of options, and [All available commands](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#all-available-commands) for all possible keys and there default values.
+
+The default configuration file is listed below:
+```text
+# Configuration for OneDrive Linux Client
+# This file contains the list of supported configuration fields
+# with their default values.
+# All values need to be enclosed in quotes
+# When changing a config option below, remove the '#' from the start of the line
+# For explanations of all config options below see docs/USAGE.md or the man page.
+#
+# sync_dir = "~/OneDrive"
+# skip_file = "~*|.~*|*.tmp"
+# monitor_interval = "45"
+# skip_dir = ""
+# log_dir = "/var/log/onedrive/"
+# drive_id = ""
+# upload_only = "false"
+# check_nomount = "false"
+# check_nosync = "false"
+# download_only = "false"
+# disable_notifications = "false"
+# disable_upload_validation = "false"
+# enable_logging = "false"
+# force_http_11 = "false"
+# force_http_2 = "false"
+# local_first = "false"
+# no_remote_delete = "false"
+# skip_symlinks = "false"
+# debug_https = "false"
+# skip_dotfiles = "false"
+# dry_run = "false"
+# monitor_interval = "45"
+# min_notify_changes = "5"
+# monitor_log_frequency = "5"
+# monitor_fullscan_frequency = "10"
+# sync_root_files = "false"
+# user_agent = ""
+```
+
+
 
 ### 'config' file configuration examples:
 The below are 'config' file examples to assist with configuration of the 'config' file:
