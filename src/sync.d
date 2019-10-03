@@ -808,12 +808,18 @@ final class SyncEngine
 				if (("value" in changes) != null) {
 					auto nrChanges = count(changes["value"].array);
 					auto changeCount = 0;
-
-					if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
-						log.logAndNotify("Processing ", nrChanges, " changes");
+					
+					if (!exists(userSyncList)){
+						// Display the number of changes we are processing
+						if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
+							log.logAndNotify("Processing ", nrChanges, " changes");
+						} else {
+							// There are valid changes
+							log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
+						}
 					} else {
-						// There are valid changes
-						log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
+						// Do not display anything unless we are doing a verbose debug as due to #658 we are essentially doing a --resync each time when using sync_list
+						log.vdebug("Number of items from OneDrive to process: ", nrChanges);
 					}
 					
 					foreach (item; changes["value"].array) {
