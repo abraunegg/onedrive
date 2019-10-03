@@ -819,7 +819,13 @@ final class SyncEngine
 						}
 					} else {
 						// Do not display anything unless we are doing a verbose debug as due to #658 we are essentially doing a --resync each time when using sync_list
-						log.vdebug("Number of items from OneDrive to process: ", nrChanges);
+						// Display the number of items we are processing
+						if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
+							log.logAndNotify("Processing ", nrChanges, " OneDrive items to ensure consistent state due to sync_list being used");
+						} else {
+							// There are valid changes
+							log.vdebug("Number of items from OneDrive to process: ", nrChanges);
+						}
 					}
 					
 					foreach (item; changes["value"].array) {
