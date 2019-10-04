@@ -411,13 +411,13 @@ final class SyncEngine
 	}
 	
 	// download all new changes from OneDrive
-	void applyDifferences()
+	void applyDifferences(bool performFullItemScan)
 	{
 		// Set defaults for the root folder
 		// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
 		string driveId = defaultDriveId;
 		string rootId = defaultRootId;
-		applyDifferences(driveId, rootId);
+		applyDifferences(driveId, rootId, performFullItemScan);
 
 		// Check OneDrive Personal Shared Folders
 		// https://github.com/OneDrive/onedrive-api-docs/issues/764
@@ -425,7 +425,7 @@ final class SyncEngine
 		foreach (item; items) {
 			log.vdebug("------------------------------------------------------------------");
 			log.vlog("Syncing OneDrive Shared Folder: ", item.name);
-			applyDifferences(item.remoteDriveId, item.remoteId);
+			applyDifferences(item.remoteDriveId, item.remoteId, performFullItemScan);
 		}
 	}
 
@@ -462,19 +462,19 @@ final class SyncEngine
 				//		2. Download changes specific to the remote path
 				
 				// root remote
-				applyDifferences(defaultDriveId, onedrivePathDetails["id"].str);
+				applyDifferences(defaultDriveId, onedrivePathDetails["id"].str, false);
 			
 				// remote changes
 				driveId = onedrivePathDetails["remoteItem"]["parentReference"]["driveId"].str; // Should give something like 66d53be8a5056eca
 				folderId = onedrivePathDetails["remoteItem"]["id"].str; // Should give something like BC7D88EC1F539DCF!107
 				
 				// Apply any differences found on OneDrive for this path (download data)
-				applyDifferences(driveId, folderId);
+				applyDifferences(driveId, folderId, false);
 			} else {
 				// use the item id as folderId
 				folderId = onedrivePathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
 				// Apply any differences found on OneDrive for this path (download data)
-				applyDifferences(defaultDriveId, folderId);
+				applyDifferences(defaultDriveId, folderId, false);
 			}
 		} else {
 			// Log that an invalid JSON object was returned
@@ -586,16 +586,24 @@ final class SyncEngine
 	
 	// download the new changes of a specific item
 	// id is the root of the drive or a shared folder
-	private void applyDifferences(string driveId, const(char)[] id)
+	private void applyDifferences(string driveId, const(char)[] id, bool performFullItemScan)
 	{
 		log.vlog("Applying changes of Path ID: " ~ id);
 		JSONValue changes;
 		
 		// If we are using a sync_list file, using deltaLink will actually 'miss' changes (moves & deletes) on OneDrive as using sync_list discards changes
+		// Use the performFullItemScan boolean to control whether we perform a full object scan of use the delta link for the root folder
+		// When using --synchronize the process order is:
+		//   1. Scan OneDrive for changes
+		//   2. Scan local folder for changes
+		//   3. Scan OneDrive for changes
+		// When using sync_list and performing a full scan, what this means is a full scan is performed twice, which leads to massive processing & time overheads 
+		// Control this via performFullItemScan
+		
 		string deltaLink = "";
-		string userSyncList = cfg.configDirName ~ "/sync_list";
-		if (!exists(userSyncList)){
-			// not using sync_list file, use the delta link
+		if (!performFullItemScan){
+			// performFullItemScan == false
+			// use delta link
 			deltaLink = itemdb.getDeltaLink(driveId, id);
 		}
 		
@@ -792,7 +800,7 @@ final class SyncEngine
 					// HTTP request returned status code 504 (Gateway Timeout)
 					// Retry by calling applyDifferences() again
 					log.vlog("OneDrive returned a 'HTTP 504 - Gateway Timeout' - gracefully handling error");
-					applyDifferences(driveId, idToQuery);
+					applyDifferences(driveId, idToQuery, performFullItemScan);
 				} else {
 					// Default operation if not 404, 410, 500, 504 errors
 					// display what the error is
@@ -809,7 +817,7 @@ final class SyncEngine
 					auto nrChanges = count(changes["value"].array);
 					auto changeCount = 0;
 					
-					if (!exists(userSyncList)){
+					if (!performFullItemScan){
 						// Display the number of changes we are processing
 						if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
 							log.logAndNotify("Processing ", nrChanges, " changes");
