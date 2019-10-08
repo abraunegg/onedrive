@@ -1120,7 +1120,7 @@ final class SyncEngine
 					} else {
 						// path is unwanted
 						unwanted = true;
-						log.vdebug("OneDrive change path is to be excluded by user configuration: ", path);
+						log.vlog("Skipping item - path excluded by user config: ",  path);
 					}
 				}
 			} else {
