@@ -83,7 +83,7 @@ final class Monitor
 			if (selectiveSync.isFileNameExcluded(baseName(dirname))) {
 				return;
 			}
-			if (selectiveSync.isPathExcluded(buildNormalizedPath(dirname))) {
+			if (selectiveSync.isPathExcludedViaSyncList(buildNormalizedPath(dirname))) {
 				return;
 			}
 		}
@@ -210,7 +210,7 @@ final class Monitor
 				if (selectiveSync.isFileNameExcluded(strip(path,"./"))) {
 					goto skip;
 				}
-				if (selectiveSync.isPathExcluded(path)) {
+				if (selectiveSync.isPathExcludedViaSyncList(path)) {
 					goto skip;
 				}
 

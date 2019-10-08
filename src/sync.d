@@ -1074,7 +1074,7 @@ final class SyncEngine
 				// item exists in database, most likely moved out of scope for current client configuration
 				log.vdebug("This item was previously synced / seen by the client");				
 				if (("name" in driveItem["parentReference"]) != null) {
-					if (selectiveSync.isPathExcluded(driveItem["parentReference"]["name"].str)) {
+					if (selectiveSync.isPathExcludedViaSyncList(driveItem["parentReference"]["name"].str)) {
 						// Previously synced item is now out of scope as it has been moved out of what is included in sync_list
 						log.vdebug("This previously synced item is now excluded from being synced due to sync_list exclusion");
 						// flag to delete local file as it now is no longer in sync with OneDrive
@@ -1085,18 +1085,25 @@ final class SyncEngine
 			}
 		}
 		
-		// Check if this is a directory to skip
+		// Check if this is excluded by config option: skip_dir
 		if (!unwanted) {
 			// Only check path if config is != ""
 			if (cfg.getValueString("skip_dir") != "") {
-				unwanted = selectiveSync.isDirNameExcluded(item.name);
-				if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
+				// Is the item a folder?
+				if (isItemFolder(driveItem)) {
+					unwanted = selectiveSync.isDirNameExcluded(item.name);
+					if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
+				}
 			}
 		}
-		// Check if this is a file to skip
+		
+		// Check if this is excluded by config option: skip_file
 		if (!unwanted) {
-			unwanted = selectiveSync.isFileNameExcluded(item.name);
-			if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
+			// Is the item a file?
+			if (isItemFile(driveItem)) {
+				unwanted = selectiveSync.isFileNameExcluded(item.name);
+				if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
+			}
 		}
 
 		// check the item type
@@ -1123,7 +1130,7 @@ final class SyncEngine
 				// compute the item path to see if the path is excluded
 				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
 				path = buildNormalizedPath(path);
-				if (selectiveSync.isPathExcluded(path)) {
+				if (selectiveSync.isPathExcludedViaSyncList(path)) {
 					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
 					if ((isItemFile(driveItem)) && (cfg.getValueBool("sync_root_files")) && (rootName(path) == "") ) {
 						// This is a file
@@ -1133,7 +1140,7 @@ final class SyncEngine
 					} else {
 						// path is unwanted
 						unwanted = true;
-						log.vdebug("OneDrive change path is to be excluded by user configuration: ", path);
+						log.vlog("Skipping item - path excluded by user config: ",  path);
 					}
 				}
 			} else {
@@ -1661,7 +1668,7 @@ final class SyncEngine
 		// If path or filename does not exclude, is this excluded due to use of selective sync?
 		if (!unwanted) {
 			path = itemdb.computePath(item.driveId, item.id);
-			unwanted = selectiveSync.isPathExcluded(path);
+			unwanted = selectiveSync.isPathExcludedViaSyncList(path);
 		}
 
 		// skip unwanted items
@@ -2199,12 +2206,20 @@ final class SyncEngine
 						return;
 					}
 				}
-				if (selectiveSync.isPathExcluded(path)) {
+				if (selectiveSync.isPathExcludedViaSyncList(path)) {
 					if ((isFile(path)) && (cfg.getValueBool("sync_root_files")) && (rootName(strip(path,"./")) == "")) {
 						log.vdebug("Not skipping path due to sync_root_files inclusion: ", path);
 					} else {
-						log.vlog("Skipping item - path excluded by sync_list: ", path);
-						return;
+						string userSyncList = cfg.configDirName ~ "/sync_list";
+						if (exists(userSyncList)){
+							// skipped most likely due to inclusion in sync_list
+							log.vlog("Skipping item - excluded by skip_list config: ", path);
+							return;
+						} else {
+							// skipped for some other reason
+							log.vlog("Skipping item - path excluded by user config: ", path);
+							return;
+						}
 					}
 				}
 			}
