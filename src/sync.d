@@ -1120,7 +1120,7 @@ final class SyncEngine
 					} else {
 						// path is unwanted
 						unwanted = true;
-						log.vlog("Skipping item - path excluded by user config: ",  path);
+						log.vlog("Skipping item - excluded by sync_list config: ", path);
 					}
 				}
 			} else {
