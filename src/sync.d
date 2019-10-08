@@ -2193,7 +2193,7 @@ final class SyncEngine
 						string userSyncList = cfg.configDirName ~ "/sync_list";
 						if (exists(userSyncList)){
 							// skipped most likely due to inclusion in sync_list
-							log.vlog("Skipping item - excluded by skip_list config: ", path);
+							log.vlog("Skipping item - excluded by sync_list config: ", path);
 							return;
 						} else {
 							// skipped for some other reason
