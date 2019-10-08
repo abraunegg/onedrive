@@ -1065,18 +1065,25 @@ final class SyncEngine
 			}
 		}
 		
-		// Check if this is a directory to skip
+		// Check if this is excluded by config option: skip_dir
 		if (!unwanted) {
 			// Only check path if config is != ""
 			if (cfg.getValueString("skip_dir") != "") {
-				unwanted = selectiveSync.isDirNameExcluded(item.name);
-				if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
+				// Is the item a folder?
+				if (isItemFolder(driveItem)) {
+					unwanted = selectiveSync.isDirNameExcluded(item.name);
+					if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
+				}
 			}
 		}
-		// Check if this is a file to skip
+		
+		// Check if this is excluded by config option: skip_file
 		if (!unwanted) {
-			unwanted = selectiveSync.isFileNameExcluded(item.name);
-			if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
+			// Is the item a file?
+			if (isItemFile(driveItem)) {
+				unwanted = selectiveSync.isFileNameExcluded(item.name);
+				if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
+			}
 		}
 
 		// check the item type
@@ -2183,8 +2190,16 @@ final class SyncEngine
 					if ((isFile(path)) && (cfg.getValueBool("sync_root_files")) && (rootName(strip(path,"./")) == "")) {
 						log.vdebug("Not skipping path due to sync_root_files inclusion: ", path);
 					} else {
-						log.vlog("Skipping item - path excluded by sync_list: ", path);
-						return;
+						string userSyncList = cfg.configDirName ~ "/sync_list";
+						if (exists(userSyncList)){
+							// skipped most likely due to inclusion in sync_list
+							log.vlog("Skipping item - path excluded by sync_list: ", path);
+							return;
+						} else {
+							// skipped for some other reason
+							log.vlog("Skipping item - path excluded by user config: ", path);
+							return;
+						}
 					}
 				}
 			}
