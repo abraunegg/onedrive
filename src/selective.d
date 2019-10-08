@@ -75,8 +75,14 @@ final class SelectiveSync
 		return false;
 	}
 	
-	// config sync_list file handling
-	bool isPathExcluded(string path)
+	// Match against sync_list only
+	bool isPathExcludedViaSyncList(string path)
+	{
+		return .isPathExcluded(path, paths);
+	}
+	
+	// Match against skip_dir, skip_file & sync_list entries
+	bool isPathExcludedMatchAll(string path)
 	{
 		return .isPathExcluded(path, paths) || .isPathMatched(path, mask) || .isPathMatched(path, dirmask);
 	}
