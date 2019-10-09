@@ -16,7 +16,6 @@ mandir = @mandir@
 sysconfdir = @sysconfdir@
 docdir = $(datadir)/doc/$(package)
 VPATH = @srcdir@
-SED = @SED@
 INSTALL = @INSTALL@
 
 NOTIFICATIONS = @NOTIFICATIONS@
