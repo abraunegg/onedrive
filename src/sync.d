@@ -525,7 +525,7 @@ final class SyncEngine
 						}
 						
 						// Do the actual sync
-						applyDifferences(businessSharedFolder.remoteDriveId, businessSharedFolder.remoteId);
+						applyDifferences(businessSharedFolder.remoteDriveId, businessSharedFolder.remoteId, performFullItemScan);
 						// add drive id to the array to search for, for the next entry
 						driveIDsArray ~= searchResult["remoteItem"]["parentReference"]["driveId"].str;	
 					} else {
