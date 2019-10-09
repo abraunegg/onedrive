@@ -422,13 +422,14 @@ final class SyncEngine
 	}
 	
 	// Download all new changes from OneDrive
-	void applyDifferences()
+	void applyDifferences(bool performFullItemScan)
+
 	{
 		// Set defaults for the root folder
 		// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
 		string driveId = defaultDriveId;
 		string rootId = defaultRootId;
-		applyDifferences(driveId, rootId);
+		applyDifferences(driveId, rootId, performFullItemScan);
 
 		// Check OneDrive Personal Shared Folders
 		// https://github.com/OneDrive/onedrive-api-docs/issues/764
@@ -436,7 +437,7 @@ final class SyncEngine
 		foreach (item; items) {
 			log.vdebug("------------------------------------------------------------------");
 			log.vlog("Syncing OneDrive Shared Folder: ", item.name);
-			applyDifferences(item.remoteDriveId, item.remoteId);
+			applyDifferences(item.remoteDriveId, item.remoteId, performFullItemScan);
 		}
 		
 		// Check OneDrive Business Shared Folders, if configured to do so
@@ -622,19 +623,19 @@ final class SyncEngine
 				//		2. Download changes specific to the remote path
 				
 				// root remote
-				applyDifferences(defaultDriveId, onedrivePathDetails["id"].str);
+				applyDifferences(defaultDriveId, onedrivePathDetails["id"].str, false);
 			
 				// remote changes
 				driveId = onedrivePathDetails["remoteItem"]["parentReference"]["driveId"].str; // Should give something like 66d53be8a5056eca
 				folderId = onedrivePathDetails["remoteItem"]["id"].str; // Should give something like BC7D88EC1F539DCF!107
 				
 				// Apply any differences found on OneDrive for this path (download data)
-				applyDifferences(driveId, folderId);
+				applyDifferences(driveId, folderId, false);
 			} else {
 				// use the item id as folderId
 				folderId = onedrivePathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
 				// Apply any differences found on OneDrive for this path (download data)
-				applyDifferences(defaultDriveId, folderId);
+				applyDifferences(defaultDriveId, folderId, false);
 			}
 		} else {
 			// Log that an invalid JSON object was returned
@@ -746,16 +747,24 @@ final class SyncEngine
 	
 	// download the new changes of a specific item
 	// id is the root of the drive or a shared folder
-	private void applyDifferences(string driveId, const(char)[] id)
+	private void applyDifferences(string driveId, const(char)[] id, bool performFullItemScan)
 	{
 		log.vlog("Applying changes of Path ID: " ~ id);
 		JSONValue changes;
 		
 		// If we are using a sync_list file, using deltaLink will actually 'miss' changes (moves & deletes) on OneDrive as using sync_list discards changes
+		// Use the performFullItemScan boolean to control whether we perform a full object scan of use the delta link for the root folder
+		// When using --synchronize the process order is:
+		//   1. Scan OneDrive for changes
+		//   2. Scan local folder for changes
+		//   3. Scan OneDrive for changes
+		// When using sync_list and performing a full scan, what this means is a full scan is performed twice, which leads to massive processing & time overheads 
+		// Control this via performFullItemScan
+		
 		string deltaLink = "";
-		string userSyncList = cfg.configDirName ~ "/sync_list";
-		if (!exists(userSyncList)){
-			// not using sync_list file, use the delta link
+		if (!performFullItemScan){
+			// performFullItemScan == false
+			// use delta link
 			deltaLink = itemdb.getDeltaLink(driveId, id);
 		}
 		
@@ -963,7 +972,7 @@ final class SyncEngine
 					// HTTP request returned status code 504 (Gateway Timeout)
 					// Retry by calling applyDifferences() again
 					log.vlog("OneDrive returned a 'HTTP 504 - Gateway Timeout' - gracefully handling error");
-					applyDifferences(driveId, idToQuery);
+					applyDifferences(driveId, idToQuery, performFullItemScan);
 				} else {
 					// Default operation if not 404, 410, 500, 504 errors
 					// display what the error is
@@ -979,12 +988,24 @@ final class SyncEngine
 				if (("value" in changes) != null) {
 					auto nrChanges = count(changes["value"].array);
 					auto changeCount = 0;
-
-					if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
-						log.logAndNotify("Processing ", nrChanges, " changes");
+					
+					if (!performFullItemScan){
+						// Display the number of changes we are processing
+						if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
+							log.logAndNotify("Processing ", nrChanges, " changes");
+						} else {
+							// There are valid changes
+							log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
+						}
 					} else {
-						// There are valid changes
-						log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
+						// Do not display anything unless we are doing a verbose debug as due to #658 we are essentially doing a --resync each time when using sync_list
+						// Display the number of items we are processing
+						if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
+							log.logAndNotify("Processing ", nrChanges, " OneDrive items to ensure consistent state due to sync_list being used");
+						} else {
+							// There are valid changes
+							log.vdebug("Number of items from OneDrive to process: ", nrChanges);
+						}
 					}
 					
 					foreach (item; changes["value"].array) {
@@ -1225,7 +1246,7 @@ final class SyncEngine
 				// item exists in database, most likely moved out of scope for current client configuration
 				log.vdebug("This item was previously synced / seen by the client");				
 				if (("name" in driveItem["parentReference"]) != null) {
-					if (selectiveSync.isPathExcluded(driveItem["parentReference"]["name"].str)) {
+					if (selectiveSync.isPathExcludedViaSyncList(driveItem["parentReference"]["name"].str)) {
 						// Previously synced item is now out of scope as it has been moved out of what is included in sync_list
 						log.vdebug("This previously synced item is now excluded from being synced due to sync_list exclusion");
 						// flag to delete local file as it now is no longer in sync with OneDrive
@@ -1236,18 +1257,25 @@ final class SyncEngine
 			}
 		}
 		
-		// Check if this is a directory to skip
+		// Check if this is excluded by config option: skip_dir
 		if (!unwanted) {
 			// Only check path if config is != ""
 			if (cfg.getValueString("skip_dir") != "") {
-				unwanted = selectiveSync.isDirNameExcluded(item.name);
-				if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
+				// Is the item a folder?
+				if (isItemFolder(driveItem)) {
+					unwanted = selectiveSync.isDirNameExcluded(item.name);
+					if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
+				}
 			}
 		}
-		// Check if this is a file to skip
+		
+		// Check if this is excluded by config option: skip_file
 		if (!unwanted) {
-			unwanted = selectiveSync.isFileNameExcluded(item.name);
-			if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
+			// Is the item a file?
+			if (isItemFile(driveItem)) {
+				unwanted = selectiveSync.isFileNameExcluded(item.name);
+				if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
+			}
 		}
 
 		// check the item type
@@ -1274,7 +1302,7 @@ final class SyncEngine
 				// compute the item path to see if the path is excluded
 				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
 				path = buildNormalizedPath(path);
-				if (selectiveSync.isPathExcluded(path)) {
+				if (selectiveSync.isPathExcludedViaSyncList(path)) {
 					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
 					if ((isItemFile(driveItem)) && (cfg.getValueBool("sync_root_files")) && (rootName(path) == "") ) {
 						// This is a file
@@ -1284,7 +1312,7 @@ final class SyncEngine
 					} else {
 						// path is unwanted
 						unwanted = true;
-						log.vdebug("OneDrive change path is to be excluded by user configuration: ", path);
+						log.vlog("Skipping item - excluded by sync_list config: ", path);
 					}
 				}
 			} else {
@@ -1826,7 +1854,7 @@ final class SyncEngine
 		// If path or filename does not exclude, is this excluded due to use of selective sync?
 		if (!unwanted) {
 			path = itemdb.computePath(item.driveId, item.id);
-			unwanted = selectiveSync.isPathExcluded(path);
+			unwanted = selectiveSync.isPathExcludedViaSyncList(path);
 		}
 
 		// skip unwanted items
@@ -2378,12 +2406,20 @@ final class SyncEngine
 						return;
 					}
 				}
-				if (selectiveSync.isPathExcluded(path)) {
+				if (selectiveSync.isPathExcludedViaSyncList(path)) {
 					if ((isFile(path)) && (cfg.getValueBool("sync_root_files")) && (rootName(strip(path,"./")) == "")) {
 						log.vdebug("Not skipping path due to sync_root_files inclusion: ", path);
 					} else {
-						log.vlog("Skipping item - path excluded by sync_list: ", path);
-						return;
+						string userSyncList = cfg.configDirName ~ "/sync_list";
+						if (exists(userSyncList)){
+							// skipped most likely due to inclusion in sync_list
+							log.vlog("Skipping item - excluded by sync_list config: ", path);
+							return;
+						} else {
+							// skipped for some other reason
+							log.vlog("Skipping item - path excluded by user config: ", path);
+							return;
+						}
 					}
 				}
 			}

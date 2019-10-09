@@ -9,7 +9,7 @@ Additionally, if you are using a 'config' file within your configuration directo
 
 **Invalid configuration:**
 ```text
-skip_file = "= .*|~*"
+skip_file = ".*|~*"
 ```
 **Minimum valid configuration:**
 ```text
