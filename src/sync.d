@@ -590,22 +590,7 @@ final class SyncEngine
 	{
 		log.vlog("Applying changes of Path ID: " ~ id);
 		JSONValue changes;
-		
-		// If we are using a sync_list file, using deltaLink will actually 'miss' changes (moves & deletes) on OneDrive as using sync_list discards changes
-		// Use the performFullItemScan boolean to control whether we perform a full object scan of use the delta link for the root folder
-		// When using --synchronize the process order is:
-		//   1. Scan OneDrive for changes
-		//   2. Scan local folder for changes
-		//   3. Scan OneDrive for changes
-		// When using sync_list and performing a full scan, what this means is a full scan is performed twice, which leads to massive processing & time overheads 
-		// Control this via performFullItemScan
-		
-		string deltaLink = "";
-		if (!performFullItemScan){
-			// performFullItemScan == false
-			// use delta link
-			deltaLink = itemdb.getDeltaLink(driveId, id);
-		}
+		JSONValue changesAvailable;
 		
 		// Query the name of this folder id
 		string syncFolderName;
@@ -747,6 +732,24 @@ final class SyncEngine
 			log.error("ERROR: onedrive.getPathDetailsById call returned an invalid JSON Object");
 		}
 		
+		// If we are using a sync_list file, using deltaLink will actually 'miss' changes (moves & deletes) on OneDrive as using sync_list discards changes
+		// Use the performFullItemScan boolean to control whether we perform a full object scan of use the delta link for the root folder
+		// When using --synchronize the process order is:
+		//   1. Scan OneDrive for changes
+		//   2. Scan local folder for changes
+		//   3. Scan OneDrive for changes
+		// When using sync_list and performing a full scan, what this means is a full scan is performed twice, which leads to massive processing & time overheads 
+		// Control this via performFullItemScan
+		
+		// Get the current delta link
+		string deltaLink = "";
+		string deltaLinkAvailable = itemdb.getDeltaLink(driveId, id);
+		if (!performFullItemScan){
+			// performFullItemScan == false
+			// use delta link
+			deltaLink = deltaLinkAvailable;
+		}
+		
 		for (;;) {
 			// Due to differences in OneDrive API's between personal and business we need to get changes only from defaultRootId
 			// If we used the 'id' passed in & when using --single-directory with a business account we get:
@@ -766,6 +769,7 @@ final class SyncEngine
 			try {
 				// Fetch the changes relative to the path id we want to query
 				changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
+				changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
 			} catch (OneDriveException e) {
 				// OneDrive threw an error
 				log.vdebug("OneDrive threw an error when querying for these changes:");
@@ -810,10 +814,19 @@ final class SyncEngine
 				}
 			}
 			
+			// is changesAvailable a valid JSON response
+			long deltaChanges = 0;
+			if (changesAvailable.type() == JSONType.object) {
+				// are there any delta changes?
+				if (("value" in changesAvailable) != null) {
+					deltaChanges = count(changesAvailable["value"].array);
+				}
+			}
+			
 			// is changes a valid JSON response
 			if (changes.type() == JSONType.object) {
 				// Are there any changes to process?
-				if (("value" in changes) != null) {
+				if ((("value" in changes) != null) && (deltaChanges > 0)) {
 					auto nrChanges = count(changes["value"].array);
 					auto changeCount = 0;
 					
@@ -1005,6 +1018,9 @@ final class SyncEngine
 							} 
 						}
 					}
+				} else {
+					// No changes reported on OneDrive
+					log.vdebug("OneDrive Reported no delta changes - Local path and OneDrive in-sync");
 				}
 				
 				// the response may contain either @odata.deltaLink or @odata.nextLink
