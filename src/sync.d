@@ -1092,16 +1092,44 @@ final class SyncEngine
 				// Is the item a folder and not a deleted item?
 				if ((isItemFolder(driveItem)) && (!isItemDeleted(driveItem))) {
 					// work out the 'snippet' path where this folder would be created
-					string pathToCheck = "";
+					string simplePathToCheck = "";
+					string complexPathToCheck = "";
+					string matchDisplay = "";
+					
 					if (hasParentReference(driveItem)) {
-						pathToCheck = driveItem["parentReference"]["name"].str ~ "/" ~ driveItem["name"].str;
+						// we need to workout the FULL path for this item
+						string parentDriveId = driveItem["parentReference"]["driveId"].str;
+						string parentItem = driveItem["parentReference"]["id"].str;
+						simplePathToCheck = driveItem["parentReference"]["name"].str ~ "/" ~ driveItem["name"].str;
+						complexPathToCheck = itemdb.computePath(parentDriveId, parentItem) ~ "/" ~ driveItem["name"].str;
+						complexPathToCheck = buildNormalizedPath(complexPathToCheck);
+						log.vdebug("skip_dir path to check (simple):  ", simplePathToCheck);
+						log.vdebug("skip_dir path to check (complex): ", complexPathToCheck);
 					} else {
-						pathToCheck = driveItem["name"].str;
+						simplePathToCheck = driveItem["name"].str;
 					}
-					log.vdebug("skip_dir path to check: ", pathToCheck);
-					unwanted = selectiveSync.isDirNameExcluded(pathToCheck);
+					
+					// OK .. what checks are we doing?
+					if ((simplePathToCheck != "") && (complexPathToCheck == "")) {
+						// just a simple check
+						log.vdebug("Performing a simple check only");
+						unwanted = selectiveSync.isDirNameExcluded(simplePathToCheck);
+					} else {
+						// simple and complex
+						log.vdebug("Performing a simple & complex path match if required");
+						// simple first
+						unwanted = selectiveSync.isDirNameExcluded(simplePathToCheck);
+						matchDisplay = simplePathToCheck;
+						if (!unwanted) {
+							log.vdebug("Simple match was false, attempting complex match");
+							// simple didnt match, perform a complex check
+							unwanted = selectiveSync.isDirNameExcluded(complexPathToCheck);
+							matchDisplay = complexPathToCheck;
+						}
+					}
+					
 					log.vdebug("Result: ", unwanted);
-					if (unwanted) log.vlog("Skipping item - excluded by skip_dir config match: ", pathToCheck);
+					if (unwanted) log.vlog("Skipping item - excluded by skip_dir config match: ", matchDisplay);
 				}
 			}
 		}
