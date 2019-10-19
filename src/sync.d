@@ -1101,7 +1101,7 @@ final class SyncEngine
 					log.vdebug("skip_dir path to check: ", pathToCheck);
 					unwanted = selectiveSync.isDirNameExcluded(pathToCheck);
 					log.vdebug("Result: ", unwanted);
-					if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
+					if (unwanted) log.vlog("Skipping item - excluded by skip_dir config match: ", pathToCheck);
 				}
 			}
 		}
@@ -1110,7 +1110,7 @@ final class SyncEngine
 		if (!unwanted) {
 			// Is the item a file and not a deleted item?
 			if ((isItemFile(driveItem)) && (!isItemDeleted(driveItem))) {
-				log.vdebug("skip_file item to check: ", pathToCheck);
+				log.vdebug("skip_file item to check: ", item.name);
 				unwanted = selectiveSync.isFileNameExcluded(item.name);
 				log.vdebug("Result: ", unwanted);
 				if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
