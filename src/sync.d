@@ -1089,9 +1089,18 @@ final class SyncEngine
 		if (!unwanted) {
 			// Only check path if config is != ""
 			if (cfg.getValueString("skip_dir") != "") {
-				// Is the item a folder?
-				if (isItemFolder(driveItem)) {
-					unwanted = selectiveSync.isDirNameExcluded(item.name);
+				// Is the item a folder and not a deleted item?
+				if ((isItemFolder(driveItem)) && (!isItemDeleted(driveItem))) {
+					// work out the 'snippet' path where this folder would be created
+					string pathToCheck = "";
+					if (hasParentReference(driveItem)) {
+						pathToCheck = driveItem["parentReference"]["name"].str ~ "/" ~ driveItem["name"].str;
+					} else {
+						pathToCheck = driveItem["name"].str;
+					}
+					log.vdebug("skip_dir path to check: ", pathToCheck);
+					unwanted = selectiveSync.isDirNameExcluded(pathToCheck);
+					log.vdebug("Result: ", unwanted);
 					if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
 				}
 			}
@@ -1099,9 +1108,11 @@ final class SyncEngine
 		
 		// Check if this is excluded by config option: skip_file
 		if (!unwanted) {
-			// Is the item a file?
-			if (isItemFile(driveItem)) {
+			// Is the item a file and not a deleted item?
+			if ((isItemFile(driveItem)) && (!isItemDeleted(driveItem))) {
+				log.vdebug("skip_file item to check: ", pathToCheck);
 				unwanted = selectiveSync.isFileNameExcluded(item.name);
+				log.vdebug("Result: ", unwanted);
 				if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
 			}
 		}
