@@ -645,7 +645,9 @@ final class OneDriveApi
 				int retryAttempts = 1;
 				int backoffInterval = 2;
 				int maxBackoffInterval = 3600;
-				while (retryAttempts < retryCount){
+				bool retrySucess = false;
+				while (!retrySucess){
+					log.vdebug("  Retry Attempt: ", retryAttempts);
 					int thisBackOff = retryAttempts*backoffInterval;
 					if (thisBackOff <= maxBackoffInterval) {
 						Thread.sleep(dur!"seconds"(retryAttempts*backoffInterval));
@@ -654,7 +656,9 @@ final class OneDriveApi
 					}
 					try {
 						http.perform();
-						retryAttempts = retryCount;
+						// no error from http.perform() on re-try
+						log.log("Connectivity to Microsoft OneDrive service has returned");
+						retrySucess = true;
 					} catch (CurlException e) {
 						if (canFind(e.msg, "Couldn't connect to server on handle")) {
 							log.error("  Error Message: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
@@ -706,8 +710,8 @@ final class OneDriveApi
 			404				Not Found							The requested resource doesn’t exist.
 			405				Method Not Allowed					The HTTP method in the request is not allowed on the resource.
 			406				Not Acceptable						This service doesn’t support the format requested in the Accept header.
+			408				Request Time out					Not expected from OneDrive, but can be used to handle Internet connection failures the same (fallback and try again)
 			409				Conflict							The current state conflicts with what the request expects. For example, the specified parent folder might not exist.
-			408             Request Time out                    Not expected from OneDrive, but can be used to handle Internet connection failures the same (fallback and try again)
 			410				Gone								The requested resource is no longer available at the server.
 			411				Length Required						A Content-Length header is required on the request.
 			412				Precondition Failed					A precondition provided in the request (such as an if-match header) does not match the resource's current state.
