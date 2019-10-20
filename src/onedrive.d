@@ -636,11 +636,11 @@ final class OneDriveApi
 			string errorMessage = errorArray[0];
 			
 			if (canFind(errorMessage, "Couldn't connect to server on handle")) {
-                // This is a curl timeout
-                log.error("  Error Message: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
-                // Must exit here
-                log.error("Exiting application due to Internet connectivity issues");
-                exit(-1);
+				// This is a curl timeout
+				log.error("  Error Message: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
+				// Must exit here
+				log.error("Exiting application due to Internet connectivity issues");
+				exit(-1);
 			} else {
 				// Some other error was returned
 				log.error("  Error Message: ", errorMessage);
