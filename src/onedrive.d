@@ -657,13 +657,18 @@ final class OneDriveApi
 					try {
 						http.perform();
 						// no error from http.perform() on re-try
-						log.log("Connectivity to Microsoft OneDrive service has returned");
+						log.log("Internet connectivity to Microsoft OneDrive service has been restored");
 						retrySucess = true;
 					} catch (CurlException e) {
 						if (canFind(e.msg, "Couldn't connect to server on handle")) {
 							log.error("  Error Message: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
 							// Increment & loop around
 							retryAttempts++;
+						}
+						if (retryAttempts == retryCount) {
+							// we have attempted to re-connect X number of times
+							// false set this to true to break out of while loop
+							retrySucess = true;
 						}
 					}
 				}
