@@ -478,7 +478,7 @@ final class SyncEngine
 			}
 		} else {
 			// Log that an invalid JSON object was returned
-			log.error("ERROR: onedrive.getPathDetails call returned an invalid JSON Object");
+			log.vdebug("onedrive.getPathDetails call returned an invalid JSON Object");
 		}
 	}
 	
@@ -507,7 +507,8 @@ final class SyncEngine
 			}
 		} else {
 			// Log that an invalid JSON object was returned
-			log.error("ERROR: onedrive.getDefaultRoot call returned an invalid JSON Object");
+			log.error("ERROR: Unable to query OneDrive for account details");
+			log.vdebug("onedrive.getDefaultRoot call returned an invalid JSON Object");
 			// Must exit here as we cant configure our required variables
 			exit(-1);
 		}
@@ -744,7 +745,7 @@ final class SyncEngine
 			}
 		} else {
 			// Log that an invalid JSON object was returned
-			log.error("ERROR: onedrive.getPathDetailsById call returned an invalid JSON Object");
+			log.vdebug("onedrive.getPathDetailsById call returned an invalid JSON Object");
 		}
 		
 		for (;;) {
@@ -1015,9 +1016,9 @@ final class SyncEngine
 			} else {
 				// Log that an invalid JSON object was returned
 				if ((driveId == defaultDriveId) || (!syncBusinessFolders)) {
-					log.error("ERROR: onedrive.viewChangesByItemId call returned an invalid JSON Object");
+					log.vdebug("onedrive.viewChangesByItemId call returned an invalid JSON Object");
 				} else {
-					log.error("ERROR: onedrive.viewChangesByDriveId call returned an invalid JSON Object");
+					log.vdebug("onedrive.viewChangesByDriveId call returned an invalid JSON Object");
 				}
 			}	
 		}
@@ -1408,7 +1409,8 @@ final class SyncEngine
 			}
 		} else {
 			// Issue #550 handling
-			log.error("ERROR: onedrive.getFileDetails call returned an invalid JSON Object");
+			log.error("ERROR: Query of OneDrive for file details failed");
+			log.vdebug("onedrive.getFileDetails call returned an invalid JSON Object");
 			// We want to return, cant download
 			downloadFailed = true;
 			return;
@@ -2808,7 +2810,7 @@ final class SyncEngine
 											}
 										} else {
 											// Log that an invalid JSON object was returned
-											log.error("ERROR: onedrive.simpleUpload or session.upload call returned an invalid JSON Object");
+											log.vdebug("onedrive.simpleUpload or session.upload call returned an invalid JSON Object");
 											return;
 										}
 									} else {
