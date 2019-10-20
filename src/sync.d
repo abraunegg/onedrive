@@ -1454,7 +1454,7 @@ final class SyncEngine
 				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 408)) {
 					// HTTP request returned status code 429 (Too Many Requests)
 					// https://github.com/abraunegg/onedrive/issues/133
-                    // or 408 request timeout
+					// or 408 request timeout
 					// https://github.com/abraunegg/onedrive/issues/694
 					// Back off & retry with incremental delay
 					int retryCount = 10; 
