@@ -5,6 +5,7 @@ import std.stdio, std.string, std.uni, std.uri, std.file;
 import std.array: split;
 import core.stdc.stdlib;
 import core.thread, std.conv, std.math;
+import std.algorithm.searching;
 import progress;
 import config;
 static import log;
@@ -629,8 +630,22 @@ final class OneDriveApi
 		try {
 			http.perform();
 		} catch (CurlException e) {
-			// Potentially Timeout was reached on handle error
-			log.error("ERROR: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
+			// Parse and display error message received from OneDrive
+			log.error("ERROR: OneDrive returned an error with the following message:");
+			auto errorArray = splitLines(e.msg);
+			string errorMessage = errorArray[0];
+			
+			if (canFind(errorMessage, "Couldn't connect to server on handle")) {
+				// This is a curl timeout
+				log.error("  Error Message: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
+				// Must exit here
+				log.error("Exiting application due to Internet connectivity issues");
+                exit(-1);
+			} else {
+				// Some other error was returned
+				log.error("  Error Message: ", errorMessage);
+			}
+			// return an empty JSON for handling
 			return json;
 		}
 		
