@@ -643,14 +643,15 @@ final class OneDriveApi
 				// Back off & retry with incremental delay
 				int retryCount = 10000;
 				int retryAttempts = 1;
-				int backoffInterval = 2;
+				int backoffInterval = 1;
 				int maxBackoffInterval = 3600;
 				bool retrySucess = false;
 				while (!retrySucess){
+					backoffInterval++;
 					log.vdebug("  Retry Attempt: ", retryAttempts);
-					int thisBackOff = retryAttempts*backoffInterval;
-					if (thisBackOff <= maxBackoffInterval) {
-						Thread.sleep(dur!"seconds"(retryAttempts*backoffInterval));
+					int thisBackOffInterval = retryAttempts*backoffInterval;
+					if (thisBackOffInterval <= maxBackoffInterval) {
+						Thread.sleep(dur!"seconds"(thisBackOffInterval));
 					} else {
 						Thread.sleep(dur!"seconds"(maxBackoffInterval));
 					}
