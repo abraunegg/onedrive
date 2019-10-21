@@ -645,8 +645,8 @@ final class OneDriveApi
 				int retryAttempts = 1;
 				int backoffInterval = 1;
 				int maxBackoffInterval = 3600;
-				bool retrySucess = false;
-				while (!retrySucess){
+				bool retrySuccess = false;
+				while (!retrySuccess){
 					backoffInterval++;
 					log.vdebug("  Retry Attempt: ", retryAttempts);
 					int thisBackOffInterval = retryAttempts*backoffInterval;
@@ -659,7 +659,7 @@ final class OneDriveApi
 						http.perform();
 						// no error from http.perform() on re-try
 						log.log("Internet connectivity to Microsoft OneDrive service has been restored");
-						retrySucess = true;
+						retrySuccess = true;
 					} catch (CurlException e) {
 						if (canFind(e.msg, "Couldn't connect to server on handle")) {
 							log.error("  Error Message: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
@@ -669,7 +669,7 @@ final class OneDriveApi
 						if (retryAttempts == retryCount) {
 							// we have attempted to re-connect X number of times
 							// false set this to true to break out of while loop
-							retrySucess = true;
+							retrySuccess = true;
 						}
 					}
 				}
