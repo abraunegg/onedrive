@@ -849,6 +849,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 					} else {
 						// sync from OneDrive first before uploading files to OneDrive
 						if (logLevel < MONITOR_LOG_SILENT) log.log("Syncing changes from OneDrive ...");
+						// if sync_list is configured, syncListConfigured = true, thus a FULL walk of all OneDrive objects will be performed
 						sync.applyDifferences(syncListConfigured);
 						// Is a full scan of the entire sync_dir required?
 						if (fullScanRequired) {

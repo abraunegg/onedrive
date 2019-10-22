@@ -478,7 +478,7 @@ final class SyncEngine
 			}
 		} else {
 			// Log that an invalid JSON object was returned
-			log.error("ERROR: onedrive.getPathDetails call returned an invalid JSON Object");
+			log.vdebug("onedrive.getPathDetails call returned an invalid JSON Object");
 		}
 	}
 	
@@ -507,7 +507,8 @@ final class SyncEngine
 			}
 		} else {
 			// Log that an invalid JSON object was returned
-			log.error("ERROR: onedrive.getDefaultRoot call returned an invalid JSON Object");
+			log.error("ERROR: Unable to query OneDrive for account details");
+			log.vdebug("onedrive.getDefaultRoot call returned an invalid JSON Object");
 			// Must exit here as we cant configure our required variables
 			exit(-1);
 		}
@@ -590,22 +591,7 @@ final class SyncEngine
 	{
 		log.vlog("Applying changes of Path ID: " ~ id);
 		JSONValue changes;
-		
-		// If we are using a sync_list file, using deltaLink will actually 'miss' changes (moves & deletes) on OneDrive as using sync_list discards changes
-		// Use the performFullItemScan boolean to control whether we perform a full object scan of use the delta link for the root folder
-		// When using --synchronize the process order is:
-		//   1. Scan OneDrive for changes
-		//   2. Scan local folder for changes
-		//   3. Scan OneDrive for changes
-		// When using sync_list and performing a full scan, what this means is a full scan is performed twice, which leads to massive processing & time overheads 
-		// Control this via performFullItemScan
-		
-		string deltaLink = "";
-		if (!performFullItemScan){
-			// performFullItemScan == false
-			// use delta link
-			deltaLink = itemdb.getDeltaLink(driveId, id);
-		}
+		JSONValue changesAvailable;
 		
 		// Query the name of this folder id
 		string syncFolderName;
@@ -744,7 +730,25 @@ final class SyncEngine
 			}
 		} else {
 			// Log that an invalid JSON object was returned
-			log.error("ERROR: onedrive.getPathDetailsById call returned an invalid JSON Object");
+			log.vdebug("onedrive.getPathDetailsById call returned an invalid JSON Object");
+		}
+		
+		// If we are using a sync_list file, using deltaLink will actually 'miss' changes (moves & deletes) on OneDrive as using sync_list discards changes
+		// Use the performFullItemScan boolean to control whether we perform a full object scan of use the delta link for the root folder
+		// When using --synchronize the process order is:
+		//   1. Scan OneDrive for changes
+		//   2. Scan local folder for changes
+		//   3. Scan OneDrive for changes
+		// When using sync_list and performing a full scan, what this means is a full scan is performed twice, which leads to massive processing & time overheads 
+		// Control this via performFullItemScan
+		
+		// Get the current delta link
+		string deltaLink = "";
+		string deltaLinkAvailable = itemdb.getDeltaLink(driveId, id);
+		if (!performFullItemScan){
+			// performFullItemScan == false
+			// use delta link
+			deltaLink = deltaLinkAvailable;
 		}
 		
 		for (;;) {
@@ -766,6 +770,7 @@ final class SyncEngine
 			try {
 				// Fetch the changes relative to the path id we want to query
 				changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
+				changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
 			} catch (OneDriveException e) {
 				// OneDrive threw an error
 				log.vdebug("OneDrive threw an error when querying for these changes:");
@@ -810,10 +815,19 @@ final class SyncEngine
 				}
 			}
 			
+			// is changesAvailable a valid JSON response
+			long deltaChanges = 0;
+			if (changesAvailable.type() == JSONType.object) {
+				// are there any delta changes?
+				if (("value" in changesAvailable) != null) {
+					deltaChanges = count(changesAvailable["value"].array);
+				}
+			}
+			
 			// is changes a valid JSON response
 			if (changes.type() == JSONType.object) {
 				// Are there any changes to process?
-				if (("value" in changes) != null) {
+				if ((("value" in changes) != null) && (deltaChanges > 0)) {
 					auto nrChanges = count(changes["value"].array);
 					auto changeCount = 0;
 					
@@ -1005,6 +1019,9 @@ final class SyncEngine
 							} 
 						}
 					}
+				} else {
+					// No changes reported on OneDrive
+					log.vdebug("OneDrive Reported no delta changes - Local path and OneDrive in-sync");
 				}
 				
 				// the response may contain either @odata.deltaLink or @odata.nextLink
@@ -1015,9 +1032,9 @@ final class SyncEngine
 			} else {
 				// Log that an invalid JSON object was returned
 				if ((driveId == defaultDriveId) || (!syncBusinessFolders)) {
-					log.error("ERROR: onedrive.viewChangesByItemId call returned an invalid JSON Object");
+					log.vdebug("onedrive.viewChangesByItemId call returned an invalid JSON Object");
 				} else {
-					log.error("ERROR: onedrive.viewChangesByDriveId call returned an invalid JSON Object");
+					log.vdebug("onedrive.viewChangesByDriveId call returned an invalid JSON Object");
 				}
 			}	
 		}
@@ -1089,19 +1106,58 @@ final class SyncEngine
 		if (!unwanted) {
 			// Only check path if config is != ""
 			if (cfg.getValueString("skip_dir") != "") {
-				// Is the item a folder?
-				if (isItemFolder(driveItem)) {
-					unwanted = selectiveSync.isDirNameExcluded(item.name);
-					if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
+				// Is the item a folder and not a deleted item?
+				if ((isItemFolder(driveItem)) && (!isItemDeleted(driveItem))) {
+					// work out the 'snippet' path where this folder would be created
+					string simplePathToCheck = "";
+					string complexPathToCheck = "";
+					string matchDisplay = "";
+					
+					if (hasParentReference(driveItem)) {
+						// we need to workout the FULL path for this item
+						string parentDriveId = driveItem["parentReference"]["driveId"].str;
+						string parentItem = driveItem["parentReference"]["id"].str;
+						simplePathToCheck = driveItem["parentReference"]["name"].str ~ "/" ~ driveItem["name"].str;
+						complexPathToCheck = itemdb.computePath(parentDriveId, parentItem) ~ "/" ~ driveItem["name"].str;
+						complexPathToCheck = buildNormalizedPath(complexPathToCheck);
+						log.vdebug("skip_dir path to check (simple):  ", simplePathToCheck);
+						log.vdebug("skip_dir path to check (complex): ", complexPathToCheck);
+					} else {
+						simplePathToCheck = driveItem["name"].str;
+					}
+					
+					// OK .. what checks are we doing?
+					if ((simplePathToCheck != "") && (complexPathToCheck == "")) {
+						// just a simple check
+						log.vdebug("Performing a simple check only");
+						unwanted = selectiveSync.isDirNameExcluded(simplePathToCheck);
+					} else {
+						// simple and complex
+						log.vdebug("Performing a simple & complex path match if required");
+						// simple first
+						unwanted = selectiveSync.isDirNameExcluded(simplePathToCheck);
+						matchDisplay = simplePathToCheck;
+						if (!unwanted) {
+							log.vdebug("Simple match was false, attempting complex match");
+							// simple didnt match, perform a complex check
+							unwanted = selectiveSync.isDirNameExcluded(complexPathToCheck);
+							matchDisplay = complexPathToCheck;
+						}
+					}
+					
+					log.vdebug("Result: ", unwanted);
+					if (unwanted) log.vlog("Skipping item - excluded by skip_dir config match: ", matchDisplay);
 				}
 			}
 		}
 		
 		// Check if this is excluded by config option: skip_file
 		if (!unwanted) {
-			// Is the item a file?
-			if (isItemFile(driveItem)) {
+			// Is the item a file and not a deleted item?
+			if ((isItemFile(driveItem)) && (!isItemDeleted(driveItem))) {
+				log.vdebug("skip_file item to check: ", item.name);
 				unwanted = selectiveSync.isFileNameExcluded(item.name);
+				log.vdebug("Result: ", unwanted);
 				if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
 			}
 		}
@@ -1408,7 +1464,8 @@ final class SyncEngine
 			}
 		} else {
 			// Issue #550 handling
-			log.error("ERROR: onedrive.getFileDetails call returned an invalid JSON Object");
+			log.error("ERROR: Query of OneDrive for file details failed");
+			log.vdebug("onedrive.getFileDetails call returned an invalid JSON Object");
 			// We want to return, cant download
 			downloadFailed = true;
 			return;
@@ -1451,9 +1508,11 @@ final class SyncEngine
 			try {
 				onedrive.downloadById(item.driveId, item.id, path, fileSize);
 			} catch (OneDriveException e) {
-				if (e.httpStatusCode == 429) {
+				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 408)) {
 					// HTTP request returned status code 429 (Too Many Requests)
 					// https://github.com/abraunegg/onedrive/issues/133
+					// or 408 request timeout
+					// https://github.com/abraunegg/onedrive/issues/694
 					// Back off & retry with incremental delay
 					int retryCount = 10; 
 					int retryAttempts = 1;
@@ -1465,7 +1524,7 @@ final class SyncEngine
 							// successful download
 							retryAttempts = retryCount;
 						} catch (OneDriveException e) {
-							if (e.httpStatusCode == 429) {
+							if ((e.httpStatusCode == 429) || (e.httpStatusCode == 408)) {
 								// Increment & loop around
 								retryAttempts++;
 							}
@@ -2808,7 +2867,7 @@ final class SyncEngine
 											}
 										} else {
 											// Log that an invalid JSON object was returned
-											log.error("ERROR: onedrive.simpleUpload or session.upload call returned an invalid JSON Object");
+											log.vdebug("onedrive.simpleUpload or session.upload call returned an invalid JSON Object");
 											return;
 										}
 									} else {

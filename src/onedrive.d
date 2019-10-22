@@ -5,6 +5,7 @@ import std.stdio, std.string, std.uni, std.uri, std.file;
 import std.array: split;
 import core.stdc.stdlib;
 import core.thread, std.conv, std.math;
+import std.algorithm.searching;
 import progress;
 import config;
 static import log;
@@ -629,8 +630,58 @@ final class OneDriveApi
 		try {
 			http.perform();
 		} catch (CurlException e) {
-			// Potentially Timeout was reached on handle error
-			log.error("ERROR: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
+			// Parse and display error message received from OneDrive
+			log.error("ERROR: OneDrive returned an error with the following message:");
+			auto errorArray = splitLines(e.msg);
+			string errorMessage = errorArray[0];
+			
+			if (canFind(errorMessage, "Couldn't connect to server on handle")) {
+				// This is a curl timeout
+				log.error("  Error Message: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
+				// or 408 request timeout
+				// https://github.com/abraunegg/onedrive/issues/694
+				// Back off & retry with incremental delay
+				int retryCount = 10000;
+				int retryAttempts = 1;
+				int backoffInterval = 1;
+				int maxBackoffInterval = 3600;
+				bool retrySuccess = false;
+				while (!retrySuccess){
+					backoffInterval++;
+					log.vdebug("  Retry Attempt: ", retryAttempts);
+					int thisBackOffInterval = retryAttempts*backoffInterval;
+					if (thisBackOffInterval <= maxBackoffInterval) {
+						Thread.sleep(dur!"seconds"(thisBackOffInterval));
+					} else {
+						Thread.sleep(dur!"seconds"(maxBackoffInterval));
+					}
+					try {
+						http.perform();
+						// no error from http.perform() on re-try
+						log.log("Internet connectivity to Microsoft OneDrive service has been restored");
+						retrySuccess = true;
+					} catch (CurlException e) {
+						if (canFind(e.msg, "Couldn't connect to server on handle")) {
+							log.error("  Error Message: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
+							// Increment & loop around
+							retryAttempts++;
+						}
+						if (retryAttempts == retryCount) {
+							// we have attempted to re-connect X number of times
+							// false set this to true to break out of while loop
+							retrySuccess = true;
+						}
+					}
+				}
+				if (retryAttempts >= retryCount) {
+					log.error("  Error Message: Was unable to reconnect to the Microsoft OneDrive service after 10000 attempts lasting over 1.2 years!");
+					throw new OneDriveException(408, "Request Timeout - HTTP 408 or Internet down?");
+				}
+			} else {
+				// Some other error was returned
+				log.error("  Error Message: ", errorMessage);
+			}
+			// return an empty JSON for handling
 			return json;
 		}
 		
@@ -665,6 +716,7 @@ final class OneDriveApi
 			404				Not Found							The requested resource doesn’t exist.
 			405				Method Not Allowed					The HTTP method in the request is not allowed on the resource.
 			406				Not Acceptable						This service doesn’t support the format requested in the Accept header.
+			408				Request Time out					Not expected from OneDrive, but can be used to handle Internet connection failures the same (fallback and try again)
 			409				Conflict							The current state conflicts with what the request expects. For example, the specified parent folder might not exist.
 			410				Gone								The requested resource is no longer available at the server.
 			411				Length Required						A Content-Length header is required on the request.
@@ -727,6 +779,12 @@ final class OneDriveApi
 				log.vlog("OneDrive returned a 'HTTP 404 - Item not found' - gracefully handling error");
 				break;
 			
+			//	408 - Request Timeout
+			case 408:
+				// Request to connect to OneDrive service timed out
+				log.vlog("Request Timeout - gracefully handling error");
+				throw new OneDriveException(408, "Request Timeout - HTTP 408 or Internet down?"); 
+
 			//	409 - Conflict
 			case 409:
 				// Conflict handling .. how should we act? This only really gets triggered if we are using --local-first & we remove items.db as the DB thinks the file is not uploaded but it is
