@@ -1117,7 +1117,13 @@ final class SyncEngine
 						// we need to workout the FULL path for this item
 						string parentDriveId = driveItem["parentReference"]["driveId"].str;
 						string parentItem = driveItem["parentReference"]["id"].str;
-						simplePathToCheck = driveItem["parentReference"]["name"].str ~ "/" ~ driveItem["name"].str;
+						// simple path
+						if (("name" in driveItem["parentReference"]) != null) {
+							simplePathToCheck = driveItem["parentReference"]["name"].str ~ "/" ~ driveItem["name"].str;
+						} else {
+							simplePathToCheck = driveItem["name"].str;
+						}
+						// complex path
 						complexPathToCheck = itemdb.computePath(parentDriveId, parentItem) ~ "/" ~ driveItem["name"].str;
 						complexPathToCheck = buildNormalizedPath(complexPathToCheck);
 						log.vdebug("skip_dir path to check (simple):  ", simplePathToCheck);
