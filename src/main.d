@@ -680,7 +680,6 @@ int main(string[] args)
 				exit(-1);
 			}
 			
-			//if (!cfg.getValueBool("download_only")) m.init(cfg, cfg.getValueLong("verbose") > 0, cfg.getValueBool("skip_symlinks"), cfg.getValueBool("check_nosync"));
 			if (!cfg.getValueBool("download_only")) {
 				// monitor loop
 				immutable auto checkInterval = dur!"seconds"(cfg.getValueLong("monitor_interval"));
