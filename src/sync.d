@@ -3219,7 +3219,12 @@ final class SyncEngine
 			enforce(itemdb.selectByPathNoRemote(path, defaultDriveId, item));
 		}
 		try {
-			uploadDeleteItem(item, path);
+			if (noRemoteDelete) {
+				// do not process remote delete
+				log.vlog("Skipping remote delete as --upload-only & --no-remote-delete configured");
+			} else {
+				uploadDeleteItem(item, path);
+			}
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 404) {
 				log.log(e.msg);
