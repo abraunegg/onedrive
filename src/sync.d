@@ -3216,7 +3216,7 @@ final class SyncEngine
 					response = onedrive.updateById(fromItem.driveId, fromItem.id, diff, nullTag);
 				}
 			} 
-			// save the updated response from OneDrive in the database
+			// save the move response from OneDrive in the database
 			// Is the response a valid JSON object - validation checking done in saveItem
 			saveItem(response);
 		}
