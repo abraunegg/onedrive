@@ -3213,7 +3213,8 @@ final class SyncEngine
 					log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting to move the file - gracefully handling error");
 					string nullTag = null;
 					// move the file but without the eTag
-					response = onedrive.updateById(driveId, id, data, nullTag);
+					response = onedrive.updateById(fromItem.driveId, fromItem.id, diff, nullTag);
+					
 				}
 			} 
 			// save the updated response from OneDrive in the database
