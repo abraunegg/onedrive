@@ -3214,7 +3214,6 @@ final class SyncEngine
 					string nullTag = null;
 					// move the file but without the eTag
 					response = onedrive.updateById(fromItem.driveId, fromItem.id, diff, nullTag);
-					
 				}
 			} 
 			// save the updated response from OneDrive in the database
