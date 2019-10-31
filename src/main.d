@@ -672,12 +672,14 @@ int main(string[] args)
 			signal(SIGTERM, &exitHandler);
 
 			// attempt to initialise monitor class
-			try {
-				m.init(cfg, cfg.getValueLong("verbose") > 0, cfg.getValueBool("skip_symlinks"), cfg.getValueBool("check_nosync"));
-			} catch (MonitorException e) {
-				// monitor initialisation failed
-				log.error("ERROR: ", e.msg);
-				exit(-1);
+			if (!cfg.getValueBool("download_only")) {
+				try {
+					m.init(cfg, cfg.getValueLong("verbose") > 0, cfg.getValueBool("skip_symlinks"), cfg.getValueBool("check_nosync"));
+				} catch (MonitorException e) {
+					// monitor initialisation failed
+					log.error("ERROR: ", e.msg);
+					exit(-1);
+				}
 			}
 
 			// monitor loop
