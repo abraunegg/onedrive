@@ -766,8 +766,17 @@ int main(string[] args)
 			signal(SIGINT, &exitHandler);
 			signal(SIGTERM, &exitHandler);
 
-			// initialise the monitor class
-			if (!cfg.getValueBool("download_only")) m.init(cfg, cfg.getValueLong("verbose") > 0, cfg.getValueBool("skip_symlinks"), cfg.getValueBool("check_nosync"));
+			// attempt to initialise monitor class
+			if (!cfg.getValueBool("download_only")) {
+				try {
+					m.init(cfg, cfg.getValueLong("verbose") > 0, cfg.getValueBool("skip_symlinks"), cfg.getValueBool("check_nosync"));
+				} catch (MonitorException e) {
+					// monitor initialisation failed
+					log.error("ERROR: ", e.msg);
+					exit(-1);
+				}
+			}
+
 			// monitor loop
 			immutable auto checkInterval = dur!"seconds"(cfg.getValueLong("monitor_interval"));
 			immutable auto logInterval = cfg.getValueLong("monitor_log_frequency");
@@ -785,7 +794,7 @@ int main(string[] args)
 					logMonitorCounter += 1;
 					if (logMonitorCounter > logInterval) 
 						logMonitorCounter = 1;
-					
+
 					// full scan of sync_dir
 					fullScanCounter += 1;
 					if (fullScanCounter > fullScanFrequency){
@@ -795,12 +804,12 @@ int main(string[] args)
 							syncListConfiguredOverride = true;
 						}
 					}
-					
+
 					// log.logAndNotify("DEBUG trying to create checkpoint");
 					// auto res = itemdb.db_checkpoint();
 					// log.logAndNotify("Checkpoint return: ", res);
 					// itemdb.dump_open_statements();
-					
+
 					try {
 						if (!initSyncEngine(sync)) {
 							oneDrive.http.shutdown();
@@ -938,6 +947,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 					} else {
 						// sync from OneDrive first before uploading files to OneDrive
 						if (logLevel < MONITOR_LOG_SILENT) log.log("Syncing changes from OneDrive ...");
+						// if sync_list is configured, syncListConfigured = true, thus a FULL walk of all OneDrive objects will be performed
 						sync.applyDifferences(syncListConfigured);
 						// Is a full scan of the entire sync_dir required?
 						if (fullScanRequired) {
