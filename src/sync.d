@@ -937,12 +937,12 @@ final class SyncEngine
 					// Should always be selected unless we are syncing a Business Shared Folder
 					log.vdebug("Selected to use onedrive.viewChangesByItemId");
 					changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink);
-					changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
+					changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable);
 				} else {
 					// Should ONLY be selected if we are syncing a Business Shared Folder
 					log.vdebug("Selected to use onedrive.viewChangesByDriveId");
 					changes = onedrive.viewChangesByDriveId(driveId, deltaLink);
-					changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
+					changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable);
 				}
 			} catch (OneDriveException e) {
 				// OneDrive threw an error
