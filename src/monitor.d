@@ -255,6 +255,7 @@ final class Monitor
 			// assume that the items moved outside the watched directory have been deleted
 			foreach (cookie, path; cookieToPath) {
 				log.vdebug("deleting (post loop): ", path);
+				if (!exists(path)) log.vdebug("path no longer exists - was removed / deleted on disk: ", path);
 				if (useCallbacks) onDelete(path);
 				remove(path);
 				cookieToPath.remove(cookie);
