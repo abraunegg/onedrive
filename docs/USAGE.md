@@ -260,7 +260,6 @@ The default configuration file is listed below:
 # debug_https = "false"
 # skip_dotfiles = "false"
 # dry_run = "false"
-# monitor_interval = "45"
 # min_notify_changes = "5"
 # monitor_log_frequency = "5"
 # monitor_fullscan_frequency = "10"
