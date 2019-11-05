@@ -58,7 +58,17 @@ final class Monitor
 		fd = inotify_init();
 		if (fd < 0) throw new MonitorException("inotify_init failed");
 		if (!buffer) buffer = new void[4096];
-		addRecursive(".");
+		
+		// from which point do we start watching for changes?
+		string monitorPath;
+		if (cfg.getValueString("single_directory") != ""){
+			// single directory in use, monitor only this
+			monitorPath = "./" ~ cfg.getValueString("single_directory");
+		} else {
+			// default 
+			monitorPath = ".";
+		}
+		addRecursive(monitorPath);
 	}
 
 	void shutdown()
