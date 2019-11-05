@@ -3,6 +3,27 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.3.11 - 2019-11-05
+### Fixed
+*   Fix typo in the documentation regarding invalid config when upgrading from 'skilion' codebase
+*   Fix handling of skip_dir, skip_file & sync_list config options
+*   Fix typo in the documentation regarding sync_list
+*   Fix log output to be consistent with sync_list exclusion
+*   Fix 'Processing X changes' output to be more reflective of actual activity when using sync_list
+*   Remove unused and unexported SED variable in Makefile.in 
+*   Handle curl exceptions and timeouts better with backoff/retry logic
+*   Update skip_dir pattern matching when using wildcards
+*   Fix when a full rescan is performed when using sync_list
+*   Fix 'Key not found: name' when computing skip_dir path
+*   Fix call from --monitor to observe --no-remote-delete
+*   Fix unhandled exception when monitor initialisation failure occurs due to too many open local files
+*   Fix unhandled 412 error response from OneDrive API when moving files right after upload
+*   Fix --monitor when used with --download-only. This fixes a regression introduced in 12947d1.
+*   Fix if --single-directory is being used, and we are using --monitor, only set inotify watches on the single directory
+
+### Changed
+*   Move JSON logging output from error messages to debug output
+
 ## 2.3.10 - 2019-10-01
 ### Fixed
 *   Fix searching for 'name' when deleting a synced item, if the OneDrive API does not return the expected details in the API call
