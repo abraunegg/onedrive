@@ -189,10 +189,7 @@ struct UploadSession
 						fileSize
 					);
 				} catch (OneDriveException e) {
-					// there was an error remove session file
-					if (exists(sessionFilePath)) {
-						remove(sessionFilePath);
-					}
+					// there was an error retry fragment
 					writeln("Fragment upload failed - exception response from OneDrive");
 					// response
 					writeln("Response: ", response);
