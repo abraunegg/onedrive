@@ -176,7 +176,7 @@ struct UploadSession
 			
 			while (true) {
 				fragmentCount++;
-				writeln("Fragment: ", fragmentCount);
+				writeln("\nFragment: ", fragmentCount, " of ", iteration);
 				p.next();
 				long fragSize = fragmentSize < fileSize - offset ? fragmentSize : fileSize - offset;
 				// If the resume upload fails, we need to check for a return code here
