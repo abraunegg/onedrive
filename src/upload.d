@@ -172,8 +172,11 @@ struct UploadSession
 			size_t iteration = (roundTo!int(double(fileSize)/double(fragmentSize)))+1;
 			Progress p = new Progress(iteration);
 			p.title = "Uploading";
+			long fragmentCount = 0;
 			
 			while (true) {
+				fragmentCount++;
+				writeln("Fragment: ", fragmentCount);
 				p.next();
 				long fragSize = fragmentSize < fileSize - offset ? fragmentSize : fileSize - offset;
 				// If the resume upload fails, we need to check for a return code here
@@ -190,7 +193,20 @@ struct UploadSession
 					if (exists(sessionFilePath)) {
 						remove(sessionFilePath);
 					}
-					return response;
+					writeln("Fragment upload failed - exception response from OneDrive");
+					// response
+					writeln("Response: ", response);
+					// print error
+					writeln("Error: ", e);
+					// retry
+					writeln("Retrying fragment upload");
+					response = onedrive.uploadFragment(
+						session["uploadUrl"].str,
+						session["localPath"].str,
+						offset,
+						fragSize,
+						fileSize
+					);
 				}
 				// fragment uploaded without issue
 				if (response.type() == JSONType.object){
