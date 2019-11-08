@@ -204,8 +204,14 @@ struct UploadSession
 						fragSize,
 						fileSize
 					);
+					// was retry successful?
+					if (response.type() == JSONType.object){
+						writeln("Retry fragment upload was successful");
+					} else {
+						writeln("Retry fragment failed");
+					}
 				}
-				// fragment uploaded without issue
+				// was the fragment uploaded without issue?
 				if (response.type() == JSONType.object){
 					offset += fragmentSize;
 					if (offset >= fileSize) break;
@@ -214,7 +220,7 @@ struct UploadSession
 					session["nextExpectedRanges"] = response["nextExpectedRanges"];
 					save();
 				} else {
-					// not a JSON object
+					// not a JSON object - fragment upload failed
 					log.vlog("File upload session failed - invalid response from OneDrive");
 					if (exists(sessionFilePath)) {
 						remove(sessionFilePath);
