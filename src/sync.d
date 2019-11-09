@@ -942,7 +942,7 @@ final class SyncEngine
 					// Should ONLY be selected if we are syncing a Business Shared Folder
 					log.vdebug("Selected to use onedrive.viewChangesByDriveId");
 					changes = onedrive.viewChangesByDriveId(driveId, deltaLink);
-					changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable);
+					changesAvailable = onedrive.viewChangesByDriveId(driveId, deltaLink);
 				}
 			} catch (OneDriveException e) {
 				// OneDrive threw an error
