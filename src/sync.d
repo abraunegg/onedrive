@@ -2724,7 +2724,6 @@ final class SyncEngine
 								} else {
 									// response is not valid JSON, an error was returned from OneDrive
 									log.fileOnly("Uploading new file ", path, " ... error");
-									writeln("error");
 									uploadFailed = true;
 									return;
 								}
