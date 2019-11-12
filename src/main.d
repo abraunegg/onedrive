@@ -690,7 +690,7 @@ int main(string[] args)
 			auto logMonitorCounter = 0;
 			auto fullScanCounter = 0;
 			bool fullScanRequired = true;
-			bool syncListConfiguredOverride = false;
+			bool syncListConfiguredOverride = true;
 			while (true) {
 				if (!cfg.getValueBool("download_only")) m.update(online);
 				auto currTime = MonoTime.currTime();
@@ -709,6 +709,11 @@ int main(string[] args)
 							syncListConfiguredOverride = true;
 						}
 					}
+					
+					// sync option handling per sync loop
+					log.vdebug("syncListConfigured =         ", syncListConfigured);
+					log.vdebug("fullScanRequired =           ", fullScanRequired);
+					log.vdebug("syncListConfiguredOverride = ", syncListConfiguredOverride);
 
 					// log.logAndNotify("DEBUG trying to create checkpoint");
 					// auto res = itemdb.db_checkpoint();
