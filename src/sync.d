@@ -1187,7 +1187,7 @@ final class SyncEngine
 		// check for selective sync
 		string path;
 		if (!unwanted) {
-			// Is the item parent in the local database
+			// Is the item parent in the local database?
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
 				// compute the item path to see if the path is excluded
 				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
@@ -1203,6 +1203,12 @@ final class SyncEngine
 						// path is unwanted
 						unwanted = true;
 						log.vlog("Skipping item - excluded by sync_list config: ", path);
+						// flagging to skip this file now, but does this exist in the DB thus needs to be removed / deleted?
+						if (itemdb.idInLocalDatabase(item.driveId, item.id)){
+							log.vlog("Flagging item for local delete as item exists in database: ", path);
+							// flag to delete
+							idsToDelete ~= [item.driveId, item.id];
+						}
 					}
 				}
 			} else {
@@ -1249,9 +1255,11 @@ final class SyncEngine
 			// Item name we will attempt to delete will be printed out later
 			if (cached) {
 				// flag to delete
+				log.vdebug("Flagging item for deletion: ", item);
 				idsToDelete ~= [item.driveId, item.id];
 			} else {
 				// flag to ignore
+				log.vdebug("Flagging item to skip: ", item);
 				skippedItems ~= item.id;
 			}
 			return;
