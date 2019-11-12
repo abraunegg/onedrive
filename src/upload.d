@@ -1,5 +1,5 @@
 import std.algorithm, std.conv, std.datetime, std.file, std.json;
-import std.stdio, core.thread;
+import std.stdio, core.thread, std.string;
 import progress, onedrive, util;
 static import log;
 
@@ -172,8 +172,11 @@ struct UploadSession
 			size_t iteration = (roundTo!int(double(fileSize)/double(fragmentSize)))+1;
 			Progress p = new Progress(iteration);
 			p.title = "Uploading";
+			long fragmentCount = 0;
 			
 			while (true) {
+				fragmentCount++;
+				log.vdebugUpload("Fragment: ", fragmentCount, " of ", iteration);
 				p.next();
 				long fragSize = fragmentSize < fileSize - offset ? fragmentSize : fileSize - offset;
 				// If the resume upload fails, we need to check for a return code here
@@ -186,13 +189,31 @@ struct UploadSession
 						fileSize
 					);
 				} catch (OneDriveException e) {
-					// there was an error remove session file
-					if (exists(sessionFilePath)) {
-						remove(sessionFilePath);
+					// there was an error response from OneDrive when uploading the file fragment
+					// insert a new line as well, so that the below error is inserted on the console in the right location
+					log.vlog("\nFragment upload failed - received an exception response from OneDrive");
+					// display what the error is
+					displayOneDriveErrorMessage(e.msg);
+					// retry fragment upload in case error is transient
+					log.vlog("Retrying fragment upload");
+					try {
+						response = onedrive.uploadFragment(
+							session["uploadUrl"].str,
+							session["localPath"].str,
+							offset,
+							fragSize,
+							fileSize
+						);
+					} catch (OneDriveException e) {
+						// OneDrive threw another error on retry
+						log.vlog("Retry to upload fragment failed");
+						// display what the error is
+						displayOneDriveErrorMessage(e.msg);
+						// set response to null as the fragment upload was in error twice
+						response = null;
 					}
-					return response;
 				}
-				// fragment uploaded without issue
+				// was the fragment uploaded without issue?
 				if (response.type() == JSONType.object){
 					offset += fragmentSize;
 					if (offset >= fileSize) break;
@@ -201,11 +222,13 @@ struct UploadSession
 					session["nextExpectedRanges"] = response["nextExpectedRanges"];
 					save();
 				} else {
-					// not a JSON object
+					// not a JSON object - fragment upload failed
 					log.vlog("File upload session failed - invalid response from OneDrive");
 					if (exists(sessionFilePath)) {
 						remove(sessionFilePath);
 					}
+					// set response to null as error
+					response = null;
 					return response;
 				}
 			}
@@ -220,8 +243,19 @@ struct UploadSession
 			// session elements were not present
 			log.vlog("Session has no valid upload URL ... skipping this file upload");
 			// return an empty JSON response
+			response = null;
 			return response;
 		}
+	}
+	
+	// Parse and display error message received from OneDrive
+	private void displayOneDriveErrorMessage(string message) {
+		log.error("ERROR: OneDrive returned an error with the following message:");
+		auto errorArray = splitLines(message);
+		log.error("  Error Message: ", errorArray[0]);
+		// extract 'message' as the reason
+		JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
+		log.error("  Error Reason:  ", errorMessage["error"]["message"].str);	
 	}
 
 	private void save()
