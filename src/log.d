@@ -100,6 +100,17 @@ void vdebug(T...)(T args)
 	}
 }
 
+void vdebugUpload(T...)(T args)
+{
+	if (verbose >= 2) {
+		writeln("\n[DEBUG] ", args);
+		if(writeLogFile){
+			// Write to log file
+			logfileWriteLine("\n[DEBUG] ", args);
+		}
+	}
+}
+
 void error(T...)(T args)
 {
 	stderr.writeln(args);
