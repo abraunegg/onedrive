@@ -412,7 +412,7 @@ final class SyncEngine
 		log.vdebug("documentLibrary account type - flagging to disable upload validation checks due to Microsoft SharePoint file modification enrichments");
 	}
 	
-	// Issue #568 Handling
+	// Issue #658 Handling
 	// If an existing folder is moved into a sync_list valid path (where it previously was out of scope due to sync_list), 
 	// then set this flag to true, so that on the second 'true-up' sync, we force a rescan of the OneDrive path to capture any 'files'
 	void setSyncListFullScanTrigger()
@@ -751,7 +751,7 @@ final class SyncEngine
 			log.vdebug("onedrive.getPathDetailsById call returned an invalid JSON Object");
 		}
 		
-		// Issue #568
+		// Issue #658
 		// If we are using a sync_list file, using deltaLink will actually 'miss' changes (moves & deletes) on OneDrive as using sync_list discards changes
 		// Use the performFullItemScan boolean to control whether we perform a full object scan of use the delta link for the root folder
 		// When using --synchronize the normal process order is:
@@ -1412,7 +1412,7 @@ final class SyncEngine
 		case ItemType.remote:
 			log.log("Creating directory: ", path);
 			
-			// Issue #568 handling
+			// Issue #658 handling
 			auto syncListExcluded = selectiveSync.isPathExcludedViaSyncList(path);
 			log.vdebug("sync_list excluded: ", syncListExcluded);
 			if (!syncListExcluded) {
