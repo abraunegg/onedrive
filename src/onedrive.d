@@ -868,7 +868,8 @@ final class OneDriveApi
 			case 400:
 				// Bad Request .. how should we act?
 				log.vlog("OneDrive returned a 'HTTP 400 - Bad Request' - gracefully handling error");
-				break;
+				// make sure this is thrown so that it is caught
+				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
 			
 			// 403 - Forbidden
 			case 403:

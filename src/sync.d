@@ -2460,6 +2460,11 @@ final class SyncEngine
 								// but when we attempted to create it, OneDrive responded that it now already exists
 								log.vlog("OneDrive reported that ", path, " already exists .. OneDrive API race condition");
 								return;
+							} else {
+								// some other error from OneDrive was returned - display what it is
+								log.error("OneDrive generated an error when creating this path: ", path);
+								displayOneDriveErrorMessage(e.msg);
+								return;
 							}
 						}
 						// Is the response a valid JSON object - validation checking done in saveItem
