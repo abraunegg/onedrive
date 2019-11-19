@@ -492,7 +492,7 @@ To see the logs run:
 journalctl onedrive -f
 ```
 
-### OneDrive service running as a non-root user via systemd (without notifications) 
+### OneDrive service running as a non-root user via systemd (without notifications or GUI) 
 
 In some cases it is desirable to run the OneDrive client as a service, but not running as the 'root' user. In this case, follow the directions below to configure the service for a non-root user.
 
@@ -525,6 +525,13 @@ sudo systemctl disable onedrive@alex.service
 systemctl --user enable onedrive
 systemctl --user start onedrive
 ```
+
+To see the logs run:
+```text
+journalctl --user-unit onedrive -f
+```
+
+**Note:** `systemctl --user` is not applicable for Red Hat Enterprise Linux (RHEL) or CentOS Linux platforms
 
 ## Additional Configuration
 ### Using multiple OneDrive accounts
