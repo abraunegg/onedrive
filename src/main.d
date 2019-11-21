@@ -696,7 +696,7 @@ int main(string[] args)
 			auto logMonitorCounter = 0;
 			auto fullScanCounter = 0;
 			bool fullScanRequired = true;
-			bool syncListConfiguredOverride = false;
+			bool syncListConfiguredOverride = true;
 			while (true) {
 				if (!cfg.getValueBool("download_only")) m.update(online);
 				auto currTime = MonoTime.currTime();
@@ -715,6 +715,11 @@ int main(string[] args)
 							syncListConfiguredOverride = true;
 						}
 					}
+					
+					// sync option handling per sync loop
+					log.vdebug("syncListConfigured =         ", syncListConfigured);
+					log.vdebug("fullScanRequired =           ", fullScanRequired);
+					log.vdebug("syncListConfiguredOverride = ", syncListConfiguredOverride);
 
 					// log.logAndNotify("DEBUG trying to create checkpoint");
 					// auto res = itemdb.db_checkpoint();
@@ -858,8 +863,8 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 					} else {
 						// sync from OneDrive first before uploading files to OneDrive
 						if (logLevel < MONITOR_LOG_SILENT) log.log("Syncing changes from OneDrive ...");
-						// if sync_list is configured, syncListConfigured = true, thus a FULL walk of all OneDrive objects will be performed
-						sync.applyDifferences(syncListConfigured);
+						// For the initial sync, always use the delta link so that we capture all the right delta changes including adds, moves & deletes
+						sync.applyDifferences(false);
 						// Is a full scan of the entire sync_dir required?
 						if (fullScanRequired) {
 							// is this a download only request?						
@@ -868,9 +873,9 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 								// in monitor mode all local changes are captured via inotify
 								// thus scanning every 'monitor_interval' (default 45 seconds) for local changes is excessive and not required
 								sync.scanForDifferences(localPath);
-								// ensure that the current remote state is updated locally
-								// for the 'true-up' set this to false so that we use the delta link for second operation
-								sync.applyDifferences(false);
+								// ensure that the current remote state is updated locally to ensure everything is consistent
+								// for the 'true-up' sync, if sync_list is configured, syncListConfigured = true, thus a FULL walk of all OneDrive objects will be requested and used if required
+								sync.applyDifferences(syncListConfigured);
 							}
 						}
 					}
