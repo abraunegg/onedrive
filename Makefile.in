@@ -148,6 +148,7 @@ ifeq ($(COMPLETIONS),yes)
 	rm -f $(DESTDIR)$(BASH_COMPLETION_DIR)/onedrive
 endif
 
+.PHONY: version
 version:
 	if [ -f .git/HEAD ] ; then \
 		git describe --tags > version ; \
