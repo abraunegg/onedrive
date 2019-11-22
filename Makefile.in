@@ -95,7 +95,12 @@ distclean: clean
 	rm -f Makefile contrib/pacman/PKGBUILD contrib/spec/onedrive.spec onedrive.1 \
 	      $(system_unit_files) $(user_unit_files)
 
-onedrive: version $(SOURCES)
+onedrive: $(SOURCES)
+	if [ -f .git/HEAD ] ; then \
+		git describe --tags > version ; \
+	else \
+		echo $(version) > version ; \
+	fi
 	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) -L-ldl $(SOURCES) -of$@
 
 install: all
@@ -148,11 +153,4 @@ ifeq ($(COMPLETIONS),yes)
 	rm -f $(DESTDIR)$(BASH_COMPLETION_DIR)/onedrive
 endif
 
-.PHONY: version
-version:
-	if [ -f .git/HEAD ] ; then \
-		git describe --tags > version ; \
-	else \
-		echo $(version) > version ; \
-	fi
 
