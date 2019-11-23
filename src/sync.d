@@ -1115,14 +1115,15 @@ final class SyncEngine
 				// item exists in database, most likely moved out of scope for current client configuration
 				log.vdebug("This item was previously synced / seen by the client");				
 				if (("name" in driveItem["parentReference"]) != null) {
+					// How is this out of scope?
 					if (selectiveSync.isPathExcludedViaSyncList(driveItem["parentReference"]["name"].str)) {
 						// Previously synced item is now out of scope as it has been moved out of what is included in sync_list
 						log.vdebug("This previously synced item is now excluded from being synced due to sync_list exclusion");
-						// flag to delete local file as it now is no longer in sync with OneDrive
-						log.vdebug("Flagging to delete item locally");
-						idsToDelete ~= [item.driveId, item.id];
 					}
-				}
+					// flag to delete local file as it now is no longer in sync with OneDrive
+					log.vdebug("Flagging to delete item locally");
+					idsToDelete ~= [item.driveId, item.id];					
+				} 
 			}
 		}
 		
