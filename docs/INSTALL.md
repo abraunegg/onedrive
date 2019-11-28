@@ -49,6 +49,7 @@ curl -fsS https://dlang.org/install.sh | bash -s dmd
 
 ### Dependencies: Ubuntu 18.x / Lubuntu 18.x / Debian 9 - i386 / i686
 **Important:** The DMD compiler cannot be used in its default configuration on Ubuntu 18.x / Lubuntu 18.x / Debian 9 i386 / i686 architectures due to an issue in the Ubuntu / Debian linking process. See [https://issues.dlang.org/show_bug.cgi?id=19116](https://issues.dlang.org/show_bug.cgi?id=19116) for further details.
+
 **Note:** Ubuntu 18.x validated with the DMD compiler on the following Ubuntu i386 / i686 platform:
 ```text
 DISTRIB_ID=Ubuntu
