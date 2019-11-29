@@ -190,6 +190,8 @@ bool isValidName(string path)
 	if (itemName == "desktop.ini") {matched = false;}
 	// _vti_ cannot appear anywhere in a file or folder name
 	if(canFind(itemName, "_vti_")){matched = false;}
+	// Item name cannot equal '~'
+	if (itemName == "~") {matched = false;}
 	
 	// return response
 	return matched;

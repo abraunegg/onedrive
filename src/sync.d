@@ -233,6 +233,8 @@ final class SyncEngine
 	private bool syncBusinessFolders = false;
 	// single directory scope flag
 	private bool singleDirectoryScope = false;
+	// sync_list new folder added, trigger delta scan override
+	private bool syncListFullScanTrigger = false;
 	// array of all OneDrive driveId's
 	private string[] driveIDsArray;
 
@@ -421,7 +423,23 @@ final class SyncEngine
 		log.vdebug("documentLibrary account type - flagging to disable upload validation checks due to Microsoft SharePoint file modification enrichments");
 	}
 	
-	// Download all new changes from OneDrive
+	// Issue #658 Handling
+	// If an existing folder is moved into a sync_list valid path (where it previously was out of scope due to sync_list), 
+	// then set this flag to true, so that on the second 'true-up' sync, we force a rescan of the OneDrive path to capture any 'files'
+	void setSyncListFullScanTrigger()
+	{
+		syncListFullScanTrigger = true;
+		log.vdebug("Setting syncListFullScanTrigger = true due to new folder creation request in a location that is in-scope via sync_list");
+	}
+	
+	// unset method
+	void unsetSyncListFullScanTrigger()
+	{
+		syncListFullScanTrigger = false;
+		log.vdebug("Setting syncListFullScanTrigger = false");
+	}
+	
+	// download all new changes from OneDrive
 	void applyDifferences(bool performFullItemScan)
 
 	{
@@ -894,9 +912,10 @@ final class SyncEngine
 			log.vdebug("onedrive.getPathDetailsById call returned an invalid JSON Object");
 		}
 		
+		// Issue #658
 		// If we are using a sync_list file, using deltaLink will actually 'miss' changes (moves & deletes) on OneDrive as using sync_list discards changes
 		// Use the performFullItemScan boolean to control whether we perform a full object scan of use the delta link for the root folder
-		// When using --synchronize the process order is:
+		// When using --synchronize the normal process order is:
 		//   1. Scan OneDrive for changes
 		//   2. Scan local folder for changes
 		//   3. Scan OneDrive for changes
@@ -1000,7 +1019,7 @@ final class SyncEngine
 			// is changes a valid JSON response
 			if (changes.type() == JSONType.object) {
 				// Are there any changes to process?
-				if ((("value" in changes) != null) && (deltaChanges > 0)) {
+				if ((("value" in changes) != null) && ((deltaChanges > 0) || (syncListFullScanTrigger))) {
 					auto nrChanges = count(changes["value"].array);
 					auto changeCount = 0;
 					
@@ -1020,6 +1039,11 @@ final class SyncEngine
 						} else {
 							// There are valid changes
 							log.vdebug("Number of items from OneDrive to process: ", nrChanges);
+						}
+						
+						// unset now the full scan trigger if set
+						if (syncListFullScanTrigger) {
+							unsetSyncListFullScanTrigger();
 						}
 					}
 					
@@ -1264,14 +1288,15 @@ final class SyncEngine
 				// item exists in database, most likely moved out of scope for current client configuration
 				log.vdebug("This item was previously synced / seen by the client");				
 				if (("name" in driveItem["parentReference"]) != null) {
+					// How is this out of scope?
 					if (selectiveSync.isPathExcludedViaSyncList(driveItem["parentReference"]["name"].str)) {
 						// Previously synced item is now out of scope as it has been moved out of what is included in sync_list
 						log.vdebug("This previously synced item is now excluded from being synced due to sync_list exclusion");
-						// flag to delete local file as it now is no longer in sync with OneDrive
-						log.vdebug("Flagging to delete item locally");
-						idsToDelete ~= [item.driveId, item.id];
 					}
-				}
+					// flag to delete local file as it now is no longer in sync with OneDrive
+					log.vdebug("Flagging to delete item locally");
+					idsToDelete ~= [item.driveId, item.id];					
+				} 
 			}
 		}
 		
@@ -1360,7 +1385,7 @@ final class SyncEngine
 		// check for selective sync
 		string path;
 		if (!unwanted) {
-			// Is the item parent in the local database
+			// Is the item parent in the local database?
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
 				// compute the item path to see if the path is excluded
 				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
@@ -1376,6 +1401,12 @@ final class SyncEngine
 						// path is unwanted
 						unwanted = true;
 						log.vlog("Skipping item - excluded by sync_list config: ", path);
+						// flagging to skip this file now, but does this exist in the DB thus needs to be removed / deleted?
+						if (itemdb.idInLocalDatabase(item.driveId, item.id)){
+							log.vlog("Flagging item for local delete as item exists in database: ", path);
+							// flag to delete
+							idsToDelete ~= [item.driveId, item.id];
+						}
 					}
 				}
 			} else {
@@ -1422,9 +1453,11 @@ final class SyncEngine
 			// Item name we will attempt to delete will be printed out later
 			if (cached) {
 				// flag to delete
+				log.vdebug("Flagging item for deletion: ", item);
 				idsToDelete ~= [item.driveId, item.id];
 			} else {
 				// flag to ignore
+				log.vdebug("Flagging item to skip: ", item);
 				skippedItems ~= item.id;
 			}
 			return;
@@ -1552,6 +1585,15 @@ final class SyncEngine
 		case ItemType.dir:
 		case ItemType.remote:
 			log.log("Creating local directory: ", path);
+			
+			// Issue #658 handling
+			auto syncListExcluded = selectiveSync.isPathExcludedViaSyncList(path);
+			log.vdebug("sync_list excluded: ", syncListExcluded);
+			if (!syncListExcluded) {
+				// path we are creating is not excluded via sync_list
+				setSyncListFullScanTrigger();
+			}
+			
 			if (!dryRun) {
 				mkdirRecurse(path);
 			} else {
@@ -2654,6 +2696,11 @@ final class SyncEngine
 								// OneDrive API returned a 404 (above) to say the directory did not exist
 								// but when we attempted to create it, OneDrive responded that it now already exists
 								log.vlog("OneDrive reported that ", path, " already exists .. OneDrive API race condition");
+								return;
+							} else {
+								// some other error from OneDrive was returned - display what it is
+								log.error("OneDrive generated an error when creating this path: ", path);
+								displayOneDriveErrorMessage(e.msg);
 								return;
 							}
 						}
