@@ -47,7 +47,7 @@ Second, install the DMD compiler as per below:
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
-### Dependencies: Ubuntu 18.x / Lubuntu 18.x / Debian 9 - i386 / i686
+### Dependencies: Ubuntu 18.x / Lubuntu 18.x / Debian 9 - i386 / i686 using DMD (Preferred Method)
 **Important:** The DMD compiler cannot be used in its default configuration on Ubuntu 18.x / Lubuntu 18.x / Debian 9 i386 / i686 architectures due to an issue in the Ubuntu / Debian linking process. See [https://issues.dlang.org/show_bug.cgi?id=19116](https://issues.dlang.org/show_bug.cgi?id=19116) for further details.
 
 **Note:** Ubuntu 18.x validated with the DMD compiler on the following Ubuntu i386 / i686 platform:
@@ -91,6 +91,45 @@ Thirdly, reconfigure the default linker as per below:
 ```text
 sudo update-alternatives --install "/usr/bin/ld" "ld" "/usr/bin/ld.gold" 20
 sudo update-alternatives --install "/usr/bin/ld" "ld" "/usr/bin/ld.bfd" 10
+```
+
+### Dependencies: Peppermint 7 / Ubuntu 18.x - i386 / i686 using LDC (Optional)
+**Important:** Build environment must have at least 512 of memory & 1GB swap space
+
+**Important:** Only use this method if you have <1GB of physical memory.
+
+**Note:** Peppermint 7 validated with the LDC compiler on the following i386 / i686 platform:
+```text
+DISTRIB_ID=Peppermint
+DISTRIB_RELEASE=7
+DISTRIB_CODENAME=xenial
+DISTRIB_DESCRIPTION="Peppermint 7 Seven"
+```
+**Note:** Ubuntu 18.x validated with the LDC compiler on the following Ubuntu i386 / i686 platform:
+```text
+DISTRIB_ID=Ubuntu
+DISTRIB_RELEASE=18.04
+DISTRIB_CODENAME=bionic
+DISTRIB_DESCRIPTION="Ubuntu 18.04.3 LTS"
+```
+
+First install development dependencies as per below:
+```text
+sudo apt install build-essential
+sudo apt install libcurl4-openssl-dev
+sudo apt install libsqlite3-dev
+sudo apt install pkg-config
+sudo apt install git
+sudo apt install curl
+```
+For notifications the following is also necessary:
+```text
+sudo apt install libnotify-dev
+```
+Second, install the LDC compiler as per below:
+```text
+git clone https://github.com/abraunegg/ldc-debian-i386.git
+sudo dpkg -i ./ldc-debian-i386/*.deb
 ```
 
 ### Dependencies: Fedora < Version 18 / CentOS / RHEL
@@ -227,6 +266,15 @@ as far as possible automatically, but can be overridden by passing
 `--with-zsh-completion-dir=<DIR>` to `configure`.
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
+#### Peppermint 7 / Ubuntu 18.x - i386 / i686 (Optional)
+```text
+git clone https://github.com/abraunegg/onedrive.git
+cd onedrive
+./configure DC=ldc2
+make clean; make
+sudo make install
+```
+
 #### ARMHF Architecture
 ```text
 git clone https://github.com/abraunegg/onedrive.git
