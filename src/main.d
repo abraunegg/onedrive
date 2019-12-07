@@ -690,7 +690,12 @@ int main(string[] args)
 			auto logMonitorCounter = 0;
 			auto fullScanCounter = 0;
 			bool fullScanRequired = true;
-			bool syncListConfiguredOverride = true;
+			bool syncListConfiguredOverride = false;
+			// if sync list is configured, set to true
+			if (syncListConfigured) {
+				syncListConfiguredOverride = true;
+			}
+			
 			while (true) {
 				if (!cfg.getValueBool("download_only")) m.update(online);
 				auto currTime = MonoTime.currTime();
