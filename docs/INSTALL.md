@@ -1,4 +1,11 @@
 # Building and Installing the OneDrive Free Client
+
+## Linux Packages
+This project has been packaged for the following Linux distribtuions:
+
+* Fedora, simply install with `sudo dnf install onedrive`
+* Arch Linux, available from AUR as [onedrive-abraunegg](https://aur.archlinux.org/packages/onedrive-abraunegg/)
+
 ## Build Requirements
 *   Build environment must have at least 1GB of memory & 1GB swap space
 *   [libcurl](http://curl.haxx.se/libcurl/)
