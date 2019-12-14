@@ -1,10 +1,12 @@
 # Building and Installing the OneDrive Free Client
 
 ## Linux Packages
-This project has been packaged for the following Linux distribtuions:
+This project has been packaged for the following Linux distributions:
 
 * Fedora, simply install with `sudo dnf install onedrive`
 * Arch Linux, available from AUR as [onedrive-abraunegg](https://aur.archlinux.org/packages/onedrive-abraunegg/)
+
+**Important:** Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If a package is out out date, please contact the package maintainer for resolution.
 
 ## Build Requirements
 *   Build environment must have at least 1GB of memory & 1GB swap space
@@ -135,7 +137,28 @@ For notifications the following is also necessary:
 sudo apt install libnotify-dev
 ```
 
-### Dependencies: Fedora < Version 18 / CentOS / RHEL
+### Dependencies: CentOS 6.x / RHEL 6.x
+```text
+sudo yum groupinstall 'Development Tools'
+sudo yum install libcurl-devel
+sudo yum install sqlite-devel
+curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+For notifications the following is also necessary:
+```text
+sudo yum install libnotify-devel
+```
+In addition to the above requirements, the `sqlite` version used on CentOS 6.x / RHEL 6.x needs to be upgraded. Use the following instructions to update your version of `sqlite` so that it can support this client:
+```text
+sudo yum -y update
+sudo yum -y install epel-release wget
+sudo yum -y install mock
+wget https://kojipkgs.fedoraproject.org//packages/sqlite/3.7.15.2/2.fc19/src/sqlite-3.7.15.2-2.fc19.src.rpm
+mock --rebuild sqlite-3.7.15.2-2.fc19.src.rpm
+sudo yum -y upgrade /var/lib/mock/epel-6-`arch`/result/sqlite-*
+```
+
+### Dependencies: Fedora < Version 18 / CentOS 7.x / RHEL 7.x
 ```text
 sudo yum groupinstall 'Development Tools'
 sudo yum install libcurl-devel
@@ -147,18 +170,7 @@ For notifications the following is also necessary:
 sudo yum install libnotify-devel
 ```
 
-### Dependencies: CentOS 6.x / RHEL 6.x
-In addition to the above requirements, the `sqlite` version used on CentOS 6.x / RHEL 6.x needs to be upgraded. Use the following instructions to update your version of `sqlite` so that it can support the client:
-```text
-sudo yum -y update
-sudo yum -y install epel-release wget
-sudo yum -y install mock
-wget https://kojipkgs.fedoraproject.org//packages/sqlite/3.7.15.2/2.fc19/src/sqlite-3.7.15.2-2.fc19.src.rpm
-mock --rebuild sqlite-3.7.15.2-2.fc19.src.rpm
-sudo yum -y upgrade /var/lib/mock/epel-6-`arch`/result/sqlite-*
-```
-
-### Dependencies: Fedora > Version 18
+### Dependencies: Fedora > Version 18 / CentOS 8.x / RHEL 8.x
 ```text
 sudo dnf groupinstall 'Development Tools'
 sudo dnf install libcurl-devel
