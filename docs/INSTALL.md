@@ -1,4 +1,13 @@
 # Building and Installing the OneDrive Free Client
+
+## Linux Packages
+This project has been packaged for the following Linux distributions:
+
+* Fedora, simply install with `sudo dnf install onedrive`
+* Arch Linux, available from AUR as [onedrive-abraunegg](https://aur.archlinux.org/packages/onedrive-abraunegg/)
+
+**Important:** Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If a package is out out date, please contact the package maintainer for resolution.
+
 ## Build Requirements
 *   Build environment must have at least 1GB of memory & 1GB swap space
 *   [libcurl](http://curl.haxx.se/libcurl/)
@@ -7,20 +16,40 @@
 
 **Note:** DMD version >= 2.083.1 or LDC version >= 1.12.0 is required to compile this application
 
-### Dependencies: Ubuntu / Debian - x86_64
+### Dependencies: Ubuntu 16.x - i386 / i686 (less than 1GB Memory) 
+**Important:** Build environment must have at least 512 of memory & 1GB swap space
+
+**Important:** Only use this method if you have <1GB of physical memory.
+
+**Note:** Peppermint 7 validated with the DMD compiler on the following i386 / i686 platform:
+```text
+DISTRIB_ID=Peppermint
+DISTRIB_RELEASE=7
+DISTRIB_CODENAME=xenial
+DISTRIB_DESCRIPTION="Peppermint 7 Seven"
+```
+
+First install development dependencies as per below:
 ```text
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
 sudo apt install libsqlite3-dev
 sudo apt install pkg-config
-curl -fsS https://dlang.org/install.sh | bash -s dmd
+sudo apt install git
+sudo apt install curl
 ```
 For notifications the following is also necessary:
 ```text
 sudo apt install libnotify-dev
 ```
+Second, install the DMD compiler as per below:
+```text
+sudo wget http://master.dl.sourceforge.net/project/d-apt/files/d-apt.list -O /etc/apt/sources.list.d/d-apt.list
+sudo apt-get update && sudo apt-get -y --allow-unauthenticated install --reinstall d-apt-keyring
+sudo apt-get update && sudo apt-get install dmd-compiler dub
+```
 
-### Dependencies: Ubuntu 16.x - i386 / i686
+### Dependencies: Ubuntu 16.x - i386 / i686 (1GB Memory)
 **Note:** Ubuntu 16.x validated with the DMD compiler on the following Ubuntu i386 / i686 platform:
 ```text
 DISTRIB_ID=Ubuntu
@@ -47,7 +76,7 @@ Second, install the DMD compiler as per below:
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
-### Dependencies: Ubuntu 18.x / Lubuntu 18.x / Debian 9 - i386 / i686
+### Dependencies: Ubuntu 18.x / Lubuntu 18.x / Debian 9 - i386 / i686 
 **Important:** The DMD compiler cannot be used in its default configuration on Ubuntu 18.x / Lubuntu 18.x / Debian 9 i386 / i686 architectures due to an issue in the Ubuntu / Debian linking process. See [https://issues.dlang.org/show_bug.cgi?id=19116](https://issues.dlang.org/show_bug.cgi?id=19116) for further details.
 
 **Note:** Ubuntu 18.x validated with the DMD compiler on the following Ubuntu i386 / i686 platform:
@@ -93,7 +122,43 @@ sudo update-alternatives --install "/usr/bin/ld" "ld" "/usr/bin/ld.gold" 20
 sudo update-alternatives --install "/usr/bin/ld" "ld" "/usr/bin/ld.bfd" 10
 ```
 
-### Dependencies: Fedora < Version 18 / CentOS / RHEL
+### Dependencies: Ubuntu 18.x, Ubuntu 19.x / Debian 9, Debian 10 - x86_64
+```text
+sudo apt install build-essential
+sudo apt install libcurl4-openssl-dev
+sudo apt install libsqlite3-dev
+sudo apt install pkg-config
+sudo apt install git
+sudo apt install curl
+curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+For notifications the following is also necessary:
+```text
+sudo apt install libnotify-dev
+```
+
+### Dependencies: CentOS 6.x / RHEL 6.x
+```text
+sudo yum groupinstall 'Development Tools'
+sudo yum install libcurl-devel
+sudo yum install sqlite-devel
+curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+For notifications the following is also necessary:
+```text
+sudo yum install libnotify-devel
+```
+In addition to the above requirements, the `sqlite` version used on CentOS 6.x / RHEL 6.x needs to be upgraded. Use the following instructions to update your version of `sqlite` so that it can support this client:
+```text
+sudo yum -y update
+sudo yum -y install epel-release wget
+sudo yum -y install mock
+wget https://kojipkgs.fedoraproject.org//packages/sqlite/3.7.15.2/2.fc19/src/sqlite-3.7.15.2-2.fc19.src.rpm
+mock --rebuild sqlite-3.7.15.2-2.fc19.src.rpm
+sudo yum -y upgrade /var/lib/mock/epel-6-`arch`/result/sqlite-*
+```
+
+### Dependencies: Fedora < Version 18 / CentOS 7.x / RHEL 7.x
 ```text
 sudo yum groupinstall 'Development Tools'
 sudo yum install libcurl-devel
@@ -105,18 +170,7 @@ For notifications the following is also necessary:
 sudo yum install libnotify-devel
 ```
 
-### Dependencies: CentOS 6.x / RHEL 6.x
-In addition to the above requirements, the `sqlite` version used on CentOS 6.x / RHEL 6.x needs to be upgraded. Use the following instructions to update your version of `sqlite` so that it can support the client:
-```text
-sudo yum -y update
-sudo yum -y install epel-release wget
-sudo yum -y install mock
-wget https://kojipkgs.fedoraproject.org//packages/sqlite/3.7.15.2/2.fc19/src/sqlite-3.7.15.2-2.fc19.src.rpm
-mock --rebuild sqlite-3.7.15.2-2.fc19.src.rpm
-sudo yum -y upgrade /var/lib/mock/epel-6-`arch`/result/sqlite-*
-```
-
-### Dependencies: Fedora > Version 18
+### Dependencies: Fedora > Version 18 / CentOS 8.x / RHEL 8.x
 ```text
 sudo dnf groupinstall 'Development Tools'
 sudo dnf install libcurl-devel

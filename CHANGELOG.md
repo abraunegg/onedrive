@@ -3,6 +3,21 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.3.11 - 2019-12-04
+### Fixed
+*   Retry session upload fragment when transient errors occur to prevent silent upload failure
+*   Update Microsoft restriction and limitations about windows naming files to include '~' for folder names
+*   Docker guide fixes, add multiple account setup instructions
+*   Check database for excluded sync_list items previously in scope
+*   Catch DNS resolution error
+*   Fix where an item now out of scope should be flagged for local delete
+*   Fix rebuilding of onedrive, but ensure version is properly updated 
+*   Update Ubuntu i386 build instructions to use DMD using preferred method
+
+### Added
+*   Add debug message to when a message is sent to dbus or notification daemon
+*   Add i386 instructions for legacy low memory platforms using LDC
+
 ## 2.3.11 - 2019-11-05
 ### Fixed
 *   Fix typo in the documentation regarding invalid config when upgrading from 'skilion' codebase
