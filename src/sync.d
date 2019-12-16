@@ -1025,8 +1025,10 @@ final class SyncEngine
 					
 					if (!performFullItemScan){
 						// Display the number of changes we are processing
+						// OneDrive ships 'changes' in ~200 bundles. These messages then get displayed for each bundle
 						if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
-							log.logAndNotify("Processing ", nrChanges, " changes");
+							// verbose log, no 'notify' .. it is over the top
+							log.vlog("Processing ", nrChanges, " changes");
 						} else {
 							// There are valid changes
 							log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
@@ -1035,7 +1037,8 @@ final class SyncEngine
 						// Do not display anything unless we are doing a verbose debug as due to #658 we are essentially doing a --resync each time when using sync_list
 						// Display the number of items we are processing
 						if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
-							log.logAndNotify("Processing ", nrChanges, " OneDrive items to ensure consistent state due to sync_list being used");
+							// verbose log, no 'notify' .. it is over the top
+							log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent state due to sync_list being used");
 						} else {
 							// There are valid changes
 							log.vdebug("Number of items from OneDrive to process: ", nrChanges);
