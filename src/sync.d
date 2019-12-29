@@ -2194,7 +2194,7 @@ final class SyncEngine
 					} else {
 						uploadDeleteItem(item, path);
 					}
-				}  else {
+				} else {
 					// file was found in the database
 					// Did we 'fake create it' as part of --dry-run ?
 					foreach (i; idsFaked) {
@@ -2206,7 +2206,12 @@ final class SyncEngine
 					}
 					// item.id did not match a 'faked' download new file creation
 					log.vlog("The file has been deleted locally");
-					uploadDeleteItem(item, path);
+					if (noRemoteDelete) {
+						// do not process remote file delete
+						log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
+					} else {
+						uploadDeleteItem(item, path);
+					}
 				}
 			}
 		}
