@@ -3,7 +3,23 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## 2.3.11 - 2019-12-04
+## 2.3.13 - 2019-12-31
+### Fixed
+*   Change the sync list override flag to false as default when not using sync_list
+*   Fix --dry-run output when using --upload-only & --no-remote-delete and deleting local files
+
+### Added
+*   Add a verbose log entry when a monitor sync loop with OneDrive starts & completes
+
+### Changed
+*   Remove logAndNotify for 'processing X changes' as it is excessive for each change bundle to inform the desktop of the number of changes the client is processing
+
+### Updated
+*   Updated INSTALL.md with Ubuntu 16.x i386 build instructions to reflect working configuration on legacy hardware
+*   Updated INSTALL.md with details of Linux packages
+*   Updated INSTALL.md build instructions for CentOS platforms
+
+## 2.3.12 - 2019-12-04
 ### Fixed
 *   Retry session upload fragment when transient errors occur to prevent silent upload failure
 *   Update Microsoft restriction and limitations about windows naming files to include '~' for folder names
