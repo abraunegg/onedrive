@@ -5,14 +5,15 @@ ARG LDC_VERSION=1.16.0
 ENV LDC_VERSION=${LDC_VERSION}
 RUN curl -fsSL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-linux-x86_64.tar.xz" |\
     tar xJf - -C / && \
-    mv "/ldc2-${LDC_VERSION}-linux-x86_64" "/ldc"
+    mv "/ldc2-${LDC_VERSION}-linux-x86_64" "/ldc" && \
+	ls -la /
 ENV PATH="/ldc/bin:${PATH}" \
     LD_LIBRARY_PATH="/ldc/lib:/usr/lib:/lib:${LD_LIBRARY_PATH}" \
     LIBRARY_PATH="/ldc/lib:/usr/lib:/lib:${LD_LIBRARY_PATH}"
 RUN go get github.com/tianon/gosu
 COPY . /usr/src/onedrive
 RUN cd /usr/src/onedrive/ && \
-    DC=ldmd2 ./configure && \
+    DC=/ldc/bin/ldmd2 ./configure && \
     make clean && \
     make && \
     make install
