@@ -1,9 +1,9 @@
 # -*-Dockerfile-*-
 FROM golang:alpine
 RUN apk add alpine-sdk bash llvm5 gnupg xz jq curl-dev sqlite-dev binutils-gold
-ARG LDC_VERSION=1.13.0
+ARG LDC_VERSION=1.16.0
 ENV LDC_VERSION=${LDC_VERSION}
-RUN curl -fsSL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-alpine-linux-x86_64.tar.xz" |\
+RUN curl -fsSL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-linux-x86_64.tar.xz" |\
     tar xJf - -C / && \
     mv "/ldc2-${LDC_VERSION}-alpine-linux-x86_64" "/ldc"
 ENV PATH="/ldc/bin:${PATH}" \
