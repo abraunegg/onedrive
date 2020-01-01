@@ -13,7 +13,7 @@ RUN which ldmd2
 RUN go get github.com/tianon/gosu
 COPY . /usr/src/onedrive
 RUN cd /usr/src/onedrive/ && \
-    ./configure && \
+    ./configure DC=/ldc/bin/ldmd2 && \
     make clean && \
     make && \
     make install
