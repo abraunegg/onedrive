@@ -1,19 +1,15 @@
 # -*-Dockerfile-*-
 FROM golang:alpine
-RUN apk add alpine-sdk bash llvm5 gnupg xz jq curl-dev sqlite-dev binutils-gold
-ARG LDC_VERSION=1.16.0
-ENV LDC_VERSION=${LDC_VERSION}
-RUN curl -fsSL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-linux-x86_64.tar.xz" |\
-    tar xJf - -C / && \
-    mv "/ldc2-${LDC_VERSION}-linux-x86_64" "/ldc"
-ENV PATH="/ldc/bin:${PATH}" \
-    LD_LIBRARY_PATH="/ldc/lib:/usr/lib:/lib:${LD_LIBRARY_PATH}" \
-    LIBRARY_PATH="/ldc/lib:/usr/lib:/lib:${LD_LIBRARY_PATH}"
-RUN which ldmd2
+RUN echo http://dl-cdn.alpinelinux.org/alpine/edge/testing >>/etc/apk/repositories
+RUN apk add alpine-sdk bash llvm5 gnupg xz jq curl-dev sqlite-dev binutils-gold autoconf automake ldc ldc-runtime
+RUN cd /usr/lib &&\
+    ln -s libdruntime-ldc-shared.so libdruntime-ldc.so &&\
+    ln -s libphobos2-ldc-shared.so libphobos2-ldc.so
 RUN go get github.com/tianon/gosu
 COPY . /usr/src/onedrive
 RUN cd /usr/src/onedrive/ && \
-    ./configure DC=/ldc/bin/ldmd2 && \
+    autoreconf -fiv && \
+    ./configure && \
     make clean && \
     make && \
     make install
