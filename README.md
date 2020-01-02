@@ -16,9 +16,11 @@ A complete tool to interact with OneDrive on Linux. Built following the UNIX phi
 *   Shared folders (OneDrive Personal)
 *   SharePoint / Office 365 Shared Libraries (refer to README.Office365.md to configure)
 *   Desktop notifications via libnotify
+*   Dry-run capability to test configuration changes
+*   Prevent major OneDrive accidental data deletion after configuration change
 
 ## What's missing
-*   While local changes are uploaded right away, remote changes are delayed
+*   While local changes are uploaded right away, remote changes are delayed until next sync when using --monitor
 *   No GUI
 
 ## Building and Installation
