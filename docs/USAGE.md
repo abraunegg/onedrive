@@ -51,17 +51,21 @@ onedrive --display-config
 ```
 This will display all the pertinent runtime interpretation of the options and configuration you are using. This is helpful to validate the client will perform the operations your asking without performing a sync. Example output is as follows:
 ```text
-Config path                         = /home/alex/.config/onedrive
-Config file found in config path    = false
-Config option 'sync_dir'            = /home/alex/OneDrive
-Config option 'skip_dir'            = 
-Config option 'skip_file'           = ~*|.~*|*.tmp
-Config option 'skip_dotfiles'       = false
-Config option 'skip_symlinks'       = false
-Config option 'monitor_interval'    = 45
-Config option 'min_notify_changes'   = 5
-Config option 'log_dir'             = /var/log/onedrive/
-Selective sync configured           = false
+onedrive version                       = vX.Y.Z-A-bcdefghi
+Config path                            = /home/alex/.config/onedrive
+Config file found in config path       = false
+Config option 'check_nosync'           = false
+Config option 'sync_dir'               = /home/alex/OneDrive
+Config option 'skip_dir'               = 
+Config option 'skip_file'              = ~*|.~*|*.tmp
+Config option 'skip_dotfiles'          = false
+Config option 'skip_symlinks'          = false
+Config option 'monitor_interval'       = 45
+Config option 'min_notify_changes'     = 5
+Config option 'log_dir'                = /var/log/onedrive/
+Config option 'classify_as_big_delete' = 1000
+Config option 'sync_root_files'        = false
+Selective sync configured              = false
 ```
 
 ### Testing your configuration
@@ -264,6 +268,7 @@ The default configuration file is listed below:
 # monitor_log_frequency = "5"
 # monitor_fullscan_frequency = "10"
 # sync_root_files = "false"
+# classify_as_big_delete = "1000"
 # user_agent = ""
 ```
 
@@ -656,6 +661,8 @@ Options:
       Perform a trial sync with no changes made
   --enable-logging
       Enable client activity to a separate log file
+  --force
+      Force the deletion of data when a 'big delete' is detected
   --force-http-1.1
       Force the use of HTTP/1.1 for all operations (DEPRECIATED)
   --force-http-2
