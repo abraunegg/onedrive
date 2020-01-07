@@ -15,7 +15,11 @@ private bool simulateNoRefreshTokenFile = false;
 
 private immutable {
 	// Client Identifier
-	string clientId = "22c49a0d-d21c-4792-aed1-8f163c982546";
+	// Original Client ID (skilion)
+	//string clientId = "22c49a0d-d21c-4792-aed1-8f163c982546";
+	
+	// New Client ID (abraunegg)
+	string clientId = "d50ca740-c83f-4d1b-b616-12c519384f0c";
 	
 	// Personal & Business Queries
 	string authUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
@@ -174,7 +178,7 @@ final class OneDriveApi
 	{
 		import std.stdio, std.regex;
 		char[] response;
-		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=" ~ redirectUrl;
+		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.Read.All%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=" ~ redirectUrl;
 		string authFilesString = cfg.getValueString("auth_files");
 		if (authFilesString == "") {
 			log.log("Authorize this app visiting:\n");
