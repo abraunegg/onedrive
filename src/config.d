@@ -64,6 +64,8 @@ final class Config
 		longValues["monitor_fullscan_frequency"] = 10;
 		// Number of children in a path that is locally removed which will be classified as a 'big data delete'
 		longValues["classify_as_big_delete"] = 1000;
+		// Strict matching for skip_dir
+		boolValues["skip_dir_strict_match"] = false;
 
 		// Determine the users home directory. 
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
@@ -166,6 +168,7 @@ final class Config
 		boolValues["monitor"]             = false;
 		boolValues["synchronize"]         = false;
 		boolValues["force"]               = false;
+		boolValues["skip_dir_strict_match"] = false;
 
 		// Application Startup option validation
 		try {
@@ -284,6 +287,9 @@ final class Config
 				"skip-size",
 					"Skip new files larger than this size (in MB)",
 					&longValues["skip_size"],
+				"skip-dir-strict-match",
+					"When matching skip_dir directories, only match explicit matches",
+					&boolValues["skip_dir_strict_match"],
 				"skip-symlinks",
 					"Skip syncing of symlinks",
 					&boolValues["skip_symlinks"],
