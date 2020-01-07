@@ -15,8 +15,11 @@ static import log;
 // threshold after which files will be uploaded using an upload session
 private long thresholdFileSize = 4 * 2^^20; // 4 MiB
 
-// flag to set whether local files should be deleted
+// flag to set whether local files should be deleted from OneDrive
 private bool noRemoteDelete = false;
+
+// flag to set whether the local file should be deleted once it is successfully uploaded to OneDrive
+private bool localDeleteAfterUpload = false;
 
 // flag to set if we are running as uploadOnly
 private bool uploadOnly = false;
@@ -378,6 +381,13 @@ final class SyncEngine
 		}
 	}
 
+	// Configure uploadOnly if function is called
+	// By default, uploadOnly = false;
+	void setUploadOnly()
+	{
+		uploadOnly = true;
+	}
+	
 	// Configure noRemoteDelete if function is called
 	// By default, noRemoteDelete = false;
 	// Meaning we will process local deletes to delete item on OneDrive
@@ -386,11 +396,12 @@ final class SyncEngine
 		noRemoteDelete = true;
 	}
 	
-	// Configure uploadOnly if function is called
-	// By default, uploadOnly = false;
-	void setUploadOnly()
+	// Configure localDeleteAfterUpload if function is called
+	// By default, localDeleteAfterUpload = false;
+	// Meaning we will not delete any local file after upload is successful
+	void setLocalDeleteAfterUpload()
 	{
-		uploadOnly = true;
+		localDeleteAfterUpload = true;
 	}
 	
 	// Configure singleDirectoryScope if function is called
@@ -2378,10 +2389,29 @@ final class SyncEngine
 					if (!itemdb.selectByPath(path, defaultDriveId, item)) {
 						// item is not in the database, upload new file
 						uploadNewFile(path);
+						
+						// did the upload fail?
 						if (!uploadFailed) {
 							// upload did not fail
+							// Issue #763 - Delete local files after sync handling
+							// are we in an --upload-only scenario?
+							if (uploadOnly) {
+								// are we in a delete local file after upload?
+								if (localDeleteAfterUpload) {
+									// Log that we are deleting a local item
+									log.log("Removing local file as --upload-only & --remove-source-files configured");
+									// are we in a --dry-run scenario?
+									if (!dryRun) {
+										// No --dry-run ... process local file delete
+										log.vdebug("Removing local file: ", path);
+										safeRemove(path);
+									}
+								}
+							}
+							
+							// how much space is left on OneDrive after upload?
 							remainingFreeSpace = (remainingFreeSpace - fileSize);
-							log.vlog("Remaining free space: ", remainingFreeSpace);
+							log.vlog("Remaining free space on OneDrive: ", remainingFreeSpace);
 						}
 					}
 				} else {
@@ -3686,4 +3716,5 @@ final class SyncEngine
 		log.vdebug("Generated Fake OneDrive Response: ", fakeResponse);
 		return fakeResponse;
 	}
+
 }
