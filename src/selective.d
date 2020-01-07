@@ -28,7 +28,6 @@ final class SelectiveSync
 	// By default, skipDirStrictMatch = false;
 	void setSkipDirStrictMatch()
 	{
-		writeln("skipDirStrictMatch = true");
 		skipDirStrictMatch = true;
 	}
 
