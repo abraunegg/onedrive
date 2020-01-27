@@ -274,7 +274,7 @@ int main(string[] args)
 
 	// Are we able to reach the OneDrive Service
 	bool online = false;
-
+	
 	// dry-run database setup
 	if (cfg.getValueBool("dry_run")) {
 		// Make a copy of the original items.sqlite3 for use as the dry run copy if it exists
@@ -551,9 +551,21 @@ int main(string[] args)
 		}
 	}
 
-	// We should only set noRemoteDelete in an upload-only scenario
-	if ((cfg.getValueBool("upload_only"))&&(cfg.getValueBool("no_remote_delete"))) sync.setNoRemoteDelete();
-	
+	// Do we need to configure specific --upload-only options?
+	if (cfg.getValueBool("upload_only")) {
+		// --upload-only was passed in or configured
+		// was --no-remote-delete passed in or configured
+		if (cfg.getValueBool("no_remote_delete")) {
+			// Configure the noRemoteDelete flag
+			sync.setNoRemoteDelete();
+		}
+		// was --remove-source-files passed in or configured
+		if (cfg.getValueBool("remove_source_files")) {
+			// Configure the localDeleteAfterUpload flag
+			sync.setLocalDeleteAfterUpload();
+		}
+	}
+			
 	// Do we configure to disable the upload validation routine
 	if (cfg.getValueBool("disable_upload_validation")) sync.setDisableUploadValidation();
 	

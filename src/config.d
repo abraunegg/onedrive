@@ -64,6 +64,8 @@ final class Config
 		longValues["monitor_fullscan_frequency"] = 10;
 		// Number of children in a path that is locally removed which will be classified as a 'big data delete'
 		longValues["classify_as_big_delete"] = 1000;
+    // Delete source after successful transfer
+		boolValues["remove_source_files"] = false;
 		// Strict matching for skip_dir
 		boolValues["skip_dir_strict_match"] = false;
 
@@ -168,6 +170,7 @@ final class Config
 		boolValues["monitor"]             = false;
 		boolValues["synchronize"]         = false;
 		boolValues["force"]               = false;
+    boolValues["remove_source_files"] = false;
 		boolValues["skip_dir_strict_match"] = false;
 
 		// Application Startup option validation
@@ -272,6 +275,9 @@ final class Config
 				"remove-directory",
 					"Remove a directory on OneDrive - no sync will be performed.",
 					&stringValues["remove_directory"],
+				"remove-source-files",
+					"Remove source file after successful transfer to OneDrive when using --upload-only",
+					&boolValues["remove_source_files"],
 				"single-directory",
 					"Specify a single local directory within the OneDrive root to sync.",
 					&stringValues["single_directory"],
@@ -450,7 +456,7 @@ void outputLongHelp(Option[] opt)
 		"--skip-file",
 		"--source-directory",
 		"--syncdir",
-	        "--user-agent" ];
+		"--user-agent" ];
 	writeln(`OneDrive - a client for OneDrive Cloud Services
 
 Usage:
@@ -484,4 +490,3 @@ unittest
 	cfg.load("config");
 	assert(cfg.getValueString("sync_dir") == "~/OneDrive");
 }
-
