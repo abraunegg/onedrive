@@ -64,7 +64,7 @@ final class Config
 		longValues["monitor_fullscan_frequency"] = 10;
 		// Number of children in a path that is locally removed which will be classified as a 'big data delete'
 		longValues["classify_as_big_delete"] = 1000;
-    // Delete source after successful transfer
+		// Delete source after successful transfer
 		boolValues["remove_source_files"] = false;
 		// Strict matching for skip_dir
 		boolValues["skip_dir_strict_match"] = false;
