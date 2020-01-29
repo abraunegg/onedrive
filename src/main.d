@@ -305,7 +305,7 @@ int main(string[] args)
 	
 	// Are we able to reach the OneDrive Service
 	bool online = false;
-
+	
 	// dry-run database setup
 	if (cfg.getValueBool("dry_run")) {
 		// Make a copy of the original items.sqlite3 for use as the dry run copy if it exists
@@ -569,9 +569,16 @@ int main(string[] args)
 	selectiveSync.loadSharedFolders(cfg.businessSharedFolderFilePath);
 	
 	// Configure skip_dir & skip_file from config entries
+	// skip_dir items
 	log.vdebug("Configuring skip_dir ...");
 	log.vdebug("skip_dir: ", cfg.getValueString("skip_dir"));
 	selectiveSync.setDirMask(cfg.getValueString("skip_dir"));
+	// Was --skip-dir-strict-match configured?
+	if (cfg.getValueBool("skip_dir_strict_match")) {
+		selectiveSync.setSkipDirStrictMatch();
+	}
+	
+	// skip_file items
 	log.vdebug("Configuring skip_file ...");
 	// Validate skip_file to ensure that this does not contain an invalid configuration
 	// Do not use a skip_file entry of .* as this will prevent correct searching of local changes to process.
@@ -607,9 +614,21 @@ int main(string[] args)
 		}
 	}
 
-	// We should only set noRemoteDelete in an upload-only scenario
-	if ((cfg.getValueBool("upload_only"))&&(cfg.getValueBool("no_remote_delete"))) sync.setNoRemoteDelete();
-	
+	// Do we need to configure specific --upload-only options?
+	if (cfg.getValueBool("upload_only")) {
+		// --upload-only was passed in or configured
+		// was --no-remote-delete passed in or configured
+		if (cfg.getValueBool("no_remote_delete")) {
+			// Configure the noRemoteDelete flag
+			sync.setNoRemoteDelete();
+		}
+		// was --remove-source-files passed in or configured
+		if (cfg.getValueBool("remove_source_files")) {
+			// Configure the localDeleteAfterUpload flag
+			sync.setLocalDeleteAfterUpload();
+		}
+	}
+			
 	// Do we configure to disable the upload validation routine
 	if (cfg.getValueBool("disable_upload_validation")) sync.setDisableUploadValidation();
 	

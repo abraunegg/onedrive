@@ -13,9 +13,10 @@ A complete tool to interact with OneDrive on Linux. Built following the UNIX phi
 *   File upload / download validation to ensure data integrity
 *   Resumable uploads
 *   Support OneDrive for Business (part of Office 365)
-*   OneDrive Personal Shared folders
+*   Shared folders (OneDrive Personal)
 *   OneDrive Business Shared folders (refer to README.BusinessSharedFolders.md to configure)
-*   SharePoint / Office 365 Shared Libraries (refer to README.Office365.md to configure)
+*   OneDrive Business Shared folders (refer to [docs/README.BusinessSharedFolders.md](https://github.com/abraunegg/onedrive/blob/master/docs/README.BusinessSharedFolders.md) to configure)
+*   SharePoint / Office 365 Shared Libraries (refer to [docs/Office365.md](https://github.com/abraunegg/onedrive/blob/master/docs/Office365.md) to configure)
 *   Desktop notifications via libnotify
 *   Dry-run capability to test configuration changes
 *   Prevent major OneDrive accidental data deletion after configuration change

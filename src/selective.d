@@ -11,7 +11,8 @@ final class SelectiveSync
 	private string[] paths;
 	private Regex!char mask;
 	private Regex!char dirmask;
-	private string[] businessSharedFoldersList;
+  private bool skipDirStrictMatch = false;
+  private string[] businessSharedFoldersList;
 	
 	void load(string filepath)
 	{
@@ -22,6 +23,13 @@ final class SelectiveSync
 				.filter!(a => a.length > 0)
 				.array;
 		}
+	}
+	
+	// Configure skipDirStrictMatch if function is called
+	// By default, skipDirStrictMatch = false;
+	void setSkipDirStrictMatch()
+	{
+		skipDirStrictMatch = true;
 	}
 
 	void loadSharedFolders(string filepath)
@@ -56,10 +64,13 @@ final class SelectiveSync
 		if (!name.matchFirst(dirmask).empty) {
 			return true;
 		} else {
-			// check just the file name
-			string filename = baseName(name);
-			if(!filename.matchFirst(dirmask).empty) {
-				return true;
+			// Do we check the base name as well?
+			if (!skipDirStrictMatch) {
+				// check just the basename in the path
+				string filename = baseName(name);
+				if(!filename.matchFirst(dirmask).empty) {
+					return true;
+				}
 			}
 		}
 		// no match
