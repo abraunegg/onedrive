@@ -180,10 +180,18 @@ private string getUserName()
 {
 	auto pw = getpwuid(getuid);
 	auto uinfo = pw.pw_gecos[0 .. strlen(pw.pw_gecos)].splitter(',');
+	
+	// user identifiers
+	vdebug("Process ID: ", pw);
+	vdebug("UID Info:   ", uinfo);
+		
 	if (!uinfo.empty && uinfo.front.length){
+		// user resolved
+		vdebug("UID Name: ", uinfo.front.idup);
 		return uinfo.front.idup;
 	} else {
 		// Unknown user?
+		vdebug("UID Name: unknown");
 		return "unknown";
 	}
 }
