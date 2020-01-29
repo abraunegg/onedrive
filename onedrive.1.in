@@ -33,6 +33,11 @@ Check for the presence of .nosync in each directory. If found, skip directory fr
 .br
 Configuration file key: \fBcheck_nosync\fP (default: \fBfalse\fP)
 .TP
+\fB\-\-classify\-as\-big\-delete\fP
+Number of children in a path that is locally removed which will be classified as a 'big data delete'
+.br
+Configuration file key: \fBclassify_as_big_delete\fP (default: \fB1000\fP)
+.TP
 \fB\-\-confdir\fP ARG
 Set the directory used to store the configuration files
 .TP
@@ -141,8 +146,21 @@ Forget the last saved state, perform a full sync
 \fB\-\-remove\-directory\fP ARG
 Remove a directory on OneDrive \- no sync will be performed.
 .TP
+\fB\-\-remove\-source\-files\fP
+Remove source file after successful transfer to OneDrive when using \-\-upload-only
+.br
+Configuration file key: \fBremove_source_files\fP (default: \fBfalse\fP)
+.TP
 \fB\-\-single\-directory\fP ARG
 Specify a single local directory within the OneDrive root to sync.
+.TP
+\fB\-\-skip\-dir\fP ARG
+Skip any directories that match this pattern from syncing
+.TP
+\fB\-\-skip\-dir\-strict\-match\fP
+When matching skip_dir directories, only match explicit matches
+.br
+Configuration file key: \fBskip_dir_strict_match\fP (default: \fBfalse\fP)
 .TP
 \fB\-\-skip\-dot\-files\fP
 Skip dot files and folders from syncing

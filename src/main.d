@@ -506,9 +506,16 @@ int main(string[] args)
 	selectiveSync.load(cfg.syncListFilePath);
 	
 	// Configure skip_dir & skip_file from config entries
+	// skip_dir items
 	log.vdebug("Configuring skip_dir ...");
 	log.vdebug("skip_dir: ", cfg.getValueString("skip_dir"));
 	selectiveSync.setDirMask(cfg.getValueString("skip_dir"));
+	// Was --skip-dir-strict-match configured?
+	if (cfg.getValueBool("skip_dir_strict_match")) {
+		selectiveSync.setSkipDirStrictMatch();
+	}
+	
+	// skip_file items
 	log.vdebug("Configuring skip_file ...");
 	// Validate skip_file to ensure that this does not contain an invalid configuration
 	// Do not use a skip_file entry of .* as this will prevent correct searching of local changes to process.

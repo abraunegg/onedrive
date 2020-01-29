@@ -639,6 +639,8 @@ Options:
       Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
   --check-for-nosync
       Check for the presence of .nosync in each directory. If found, skip directory from sync.
+  --classify-as-big-delete
+      Number of children in a path that is locally removed which will be classified as a 'big data delete'
   --confdir ARG
       Set the directory used to store the configuration files
   --create-directory ARG
@@ -695,12 +697,16 @@ Options:
       Print the access token, useful for debugging
   --remove-directory ARG
       Remove a directory on OneDrive - no sync will be performed.
+  --remove-source-files
+      Remove source file after successful transfer to OneDrive when using --upload-only
   --resync
       Forget the last saved state, perform a full sync
   --single-directory ARG
       Specify a single local directory within the OneDrive root to sync.
-  --skip-dir
+  --skip-dir ARG
       Skip any directories that match this pattern from syncing
+  --skip-dir-strict-match
+      When matching skip_dir directories, only match explicit matches
   --skip-dot-files
       Skip dot files and folders from syncing
   --skip-file ARG
