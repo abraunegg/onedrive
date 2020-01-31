@@ -194,11 +194,11 @@ private string getUserName()
 	// What should be returned as username?
 	if (!runtime_pw_name.empty && runtime_pw_name.front.length){
 		// user resolved
-		vdebug("User Name: ", runtime_pw_name.front.idup);
+		vdebug("User Name:  ", runtime_pw_name.front.idup);
 		return runtime_pw_name.front.idup;
 	} else {
 		// Unknown user?
-		vdebug("User Name: unknown");
+		vdebug("User Name:  unknown");
 		return "unknown";
 	}
 }
