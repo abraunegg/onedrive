@@ -181,7 +181,6 @@ private string getUserName()
 	auto pw = getpwuid(getuid);
 	
 	// get required details
-	auto uinfo = pw.pw_gecos[0 .. strlen(pw.pw_gecos)].splitter(',');
 	auto runtime_pw_name = pw.pw_name[0 .. strlen(pw.pw_name)].splitter(',');
 	auto runtime_pw_uid = pw.pw_uid;
 	auto runtime_pw_gid = pw.pw_gid;
