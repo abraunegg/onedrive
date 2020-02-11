@@ -291,6 +291,13 @@ final class SyncEngine
 				// Must exit here
 				exit(-1);
 			}
+			if (e.httpStatusCode == 429) {
+				// HTTP request returned status code 429 (Too Many Requests)
+				log.error("\nERROR: OneDrive returned a 'HTTP 429 - Too Many Requests' - Cannot Initialize Sync Engine");
+				log.error("ERROR: Please try to access OneDrive again later\n");
+				// Must exit here
+				exit(-1);
+			}
 			if (e.httpStatusCode >= 500) {
 				// There was a HTTP 5xx Server Side Error
 				log.error("ERROR: OneDrive returned a 'HTTP 5xx Server Side Error' - Cannot Initialize Sync Engine");
@@ -317,6 +324,13 @@ final class SyncEngine
 				// HTTP request returned status code 401 (Unauthorized)
 				log.error("\nERROR: OneDrive returned a 'HTTP 401 Unauthorized' - Cannot Initialize Sync Engine");
 				log.error("ERROR: Check your configuration as your access token may be empty or invalid\n");
+				// Must exit here
+				exit(-1);
+			}
+			if (e.httpStatusCode == 429) {
+				// HTTP request returned status code 429 (Too Many Requests)
+				log.error("\nERROR: OneDrive returned a 'HTTP 429 - Too Many Requests' - Cannot Initialize Sync Engine");
+				log.error("ERROR: Please try to access OneDrive again later\n");
 				// Must exit here
 				exit(-1);
 			}
@@ -376,6 +390,9 @@ final class SyncEngine
 			initDone = false;
 			// log why
 			log.error("ERROR: Unable to query OneDrive to initialize application");
+			// Debug OneDrive Account details response
+			log.vdebug("OneDrive Account Details:      ", oneDriveDetails);
+			log.vdebug("OneDrive Account Root Details: ", oneDriveRootDetails);
 			// Must exit here
 			exit(-1);
 		}
