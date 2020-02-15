@@ -5,7 +5,10 @@ This project has been packaged for the following Linux distributions:
 
 *   Fedora, simply install with `sudo dnf install onedrive`
 *   Arch Linux, available from AUR as [onedrive-abraunegg](https://aur.archlinux.org/packages/onedrive-abraunegg/)
+*   Debian, available from the package repository as [onedrive](https://packages.debian.org/sid/net/onedrive)
 *   Slackware, available from the slackbuilds.org repository as [onedrive](https://slackbuilds.org/repository/14.2/network/onedrive/)
+*   Solus, available from the package repository as [onedrive](https://dev.getsol.us/search/query/FB7PIf1jG9Z9/#R)
+*   Ubuntu, available from the package repository as [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all)
 *   NixOS, available on unstable channel (and stable since 20.03). Use package `onedrive` either by adding it to `configuration.nix` or by using the command `nix-env -iA <channel name>.onedrive`. This does not install a service. There is a (rejected) [PR](https://github.com/NixOS/nixpkgs/pull/77734) which has code which can be used to install a service. See documentation in the same PR.
 
 **Important:** Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If a package is out out date, please contact the package maintainer for resolution.
@@ -51,7 +54,7 @@ sudo apt-get update && sudo apt-get -y --allow-unauthenticated install --reinsta
 sudo apt-get update && sudo apt-get install dmd-compiler dub
 ```
 
-### Dependencies: Ubuntu 16.x - i386 / i686 (1GB Memory)
+### Dependencies: Ubuntu 16.x - i386 / i686 / x86_64 (1GB Memory or more)
 **Note:** Ubuntu 16.x validated with the DMD compiler on the following Ubuntu i386 / i686 platform:
 ```text
 DISTRIB_ID=Ubuntu
