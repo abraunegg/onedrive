@@ -291,6 +291,13 @@ final class SyncEngine
 				// Must exit here
 				exit(-1);
 			}
+			if (e.httpStatusCode == 429) {
+				// HTTP request returned status code 429 (Too Many Requests)
+				log.error("\nERROR: OneDrive returned a 'HTTP 429 - Too Many Requests' - Cannot Initialize Sync Engine");
+				log.error("ERROR: Please try to access OneDrive again later\n");
+				// Must exit here
+				exit(-1);
+			}
 			if (e.httpStatusCode >= 500) {
 				// There was a HTTP 5xx Server Side Error
 				log.error("ERROR: OneDrive returned a 'HTTP 5xx Server Side Error' - Cannot Initialize Sync Engine");
@@ -317,6 +324,13 @@ final class SyncEngine
 				// HTTP request returned status code 401 (Unauthorized)
 				log.error("\nERROR: OneDrive returned a 'HTTP 401 Unauthorized' - Cannot Initialize Sync Engine");
 				log.error("ERROR: Check your configuration as your access token may be empty or invalid\n");
+				// Must exit here
+				exit(-1);
+			}
+			if (e.httpStatusCode == 429) {
+				// HTTP request returned status code 429 (Too Many Requests)
+				log.error("\nERROR: OneDrive returned a 'HTTP 429 - Too Many Requests' - Cannot Initialize Sync Engine");
+				log.error("ERROR: Please try to access OneDrive again later\n");
 				// Must exit here
 				exit(-1);
 			}
@@ -376,6 +390,9 @@ final class SyncEngine
 			initDone = false;
 			// log why
 			log.error("ERROR: Unable to query OneDrive to initialize application");
+			// Debug OneDrive Account details response
+			log.vdebug("OneDrive Account Details:      ", oneDriveDetails);
+			log.vdebug("OneDrive Account Root Details: ", oneDriveRootDetails);
 			// Must exit here
 			exit(-1);
 		}
@@ -1394,12 +1411,18 @@ final class SyncEngine
 				item.mtime.fracSecs = Duration.zero;
 				
 				if (localModifiedTime > item.mtime) {
-					// local file is newer than item on OneDrive
-					// no local rename
-					// no download needed
-					log.vlog("Local item modified time is newer based on UTC time conversion - keeping local item");
-					log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer than OneDrive item");
-					return;
+					// local file is newer than item on OneDrive based on file modified time
+					// Is this item id in the database?
+					if (itemdb.idInLocalDatabase(item.driveId, item.id)){
+						// no local rename
+						// no download needed
+						log.vlog("Local item modified time is newer based on UTC time conversion - keeping local item as this exists in the local database");
+						log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer than OneDrive item and present in the sqlite database");
+						return;
+					} else {
+						// file exists locally but is not in the sqlite database - maybe a failed download?
+						log.vlog("Local item does not exist in local database - replacing with file from OneDrive - failed download?");
+					}
 				} else {
 					// remote file is newer than local item
 					log.vlog("Remote item modified time is newer based on UTC time conversion");
