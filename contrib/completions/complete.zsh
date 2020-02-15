@@ -20,6 +20,7 @@ all_opts=(
   '--dry-run[Perform a trial sync with no changes made]'
   '--enable-logging[Enable client activity to a separate log file]'
   '--force-http-1.1[Force the use of HTTP 1.1 for all operations]'
+  '--force-http-2[Force the use of HTTP 2 for all operations]'
   '--get-O365-drive-id[Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library]:'
   '--local-first[Synchronize from the local directory source first, before downloading changes from OneDrive.]'
   '--logout[Logout the current user]'
