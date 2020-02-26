@@ -196,6 +196,14 @@ final class OneDriveApi
 				std.file.remove(responseUrl);
 			} catch (FileException e) {
 				log.error("Cannot remove files ", authUrl, " ", responseUrl);
+				return false;
+			} catch (OneDriveException e) {
+				// exception generated
+				string message = e.msg;
+				log.error("ERROR: OneDrive returned an error with the following message:");
+				auto errorArray = splitLines(message);
+				log.error("  Error Message: ", errorArray[0]);
+				return false;
 			}
 		}
 		// match the authorization code
