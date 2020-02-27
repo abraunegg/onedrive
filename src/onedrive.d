@@ -436,7 +436,18 @@ final class OneDriveApi
 
 	private void acquireToken(const(char)[] postData)
 	{
-		JSONValue response = post(tokenUrl, postData);
+		JSONValue response;
+
+		try {
+			response = post(tokenUrl, postData);
+		} catch (OneDriveException e) {
+			// an error was generated
+			string message = e.msg;
+			log.error("ERROR: OneDrive returned an error with the following message:");
+			auto errorArray = splitLines(message);
+			log.error("  Error Message: ", errorArray[0]);
+		}
+		
 		if (response.type() == JSONType.object) {
 			if ("access_token" in response){
 				accessToken = "bearer " ~ response["access_token"].str();
