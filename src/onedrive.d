@@ -190,19 +190,25 @@ final class OneDriveApi
 			while (!exists(responseUrl)) {
 				Thread.sleep(dur!("msecs")(100));
 			}
-			response = cast(char[]) read(responseUrl);
+			
+			// read response from OneDrive
 			try {
-				std.file.remove(authUrl);
-				std.file.remove(responseUrl);
-			} catch (FileException e) {
-				log.error("Cannot remove files ", authUrl, " ", responseUrl);
-				return false;
+				response = cast(char[]) read(responseUrl);
 			} catch (OneDriveException e) {
 				// exception generated
 				string message = e.msg;
 				log.error("ERROR: OneDrive returned an error with the following message:");
 				auto errorArray = splitLines(message);
 				log.error("  Error Message: ", errorArray[0]);
+				return false;
+			}	
+			
+			// try to remove old files
+			try {
+				std.file.remove(authUrl);
+				std.file.remove(responseUrl);
+			} catch (FileException e) {
+				log.error("Cannot remove files ", authUrl, " ", responseUrl);
 				return false;
 			}
 		}
