@@ -446,6 +446,10 @@ final class OneDriveApi
 			log.error("ERROR: OneDrive returned an error with the following message:");
 			auto errorArray = splitLines(message);
 			log.error("  Error Message: ", errorArray[0]);
+			
+			// extra debug
+			writeln("Response: ", response);
+			writeln("Error Data: ", e);
 		}
 		
 		if (response.type() == JSONType.object) {
