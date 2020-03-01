@@ -196,10 +196,7 @@ final class OneDriveApi
 				response = cast(char[]) read(responseUrl);
 			} catch (OneDriveException e) {
 				// exception generated
-				string message = e.msg;
-				log.error("ERROR: OneDrive returned an error with the following message:");
-				auto errorArray = splitLines(message);
-				log.error("  Error Message: ", errorArray[0]);
+				displayOneDriveErrorMessage(e.msg);
 				return false;
 			}	
 			
@@ -442,19 +439,7 @@ final class OneDriveApi
 			response = post(tokenUrl, postData);
 		} catch (OneDriveException e) {
 			// an error was generated
-			string message = e.msg;
-			log.error("ERROR: OneDrive returned an error with the following message:");
-			auto errorArray = splitLines(message);
-			log.error("  Error Message: ", errorArray[0]);
-			// Strip cause from error to leave a JSON
-			JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
-			// extra debug
-			log.vdebug("Raw Error Data: ", e);
-			log.vdebug("JSON Message: ", errorMessage);
-			
-			if (errorMessage.type() == JSONType.object) {
-				log.error("  Error Reason:  ", errorMessage["error_description"].str);
-			}
+			displayOneDriveErrorMessage(e.msg);
 		}
 		
 		if (response.type() == JSONType.object) {
@@ -945,6 +930,21 @@ final class OneDriveApi
 			if (http.statusLine.code / 100 != 2 && http.statusLine.code != 302) {
 				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
 			}
+		}
+	}
+	
+	// Parse and display error message received from OneDrive
+	private void displayOneDriveErrorMessage(string message) {
+		log.error("\nERROR: OneDrive returned an error with the following message:");
+		auto errorArray = splitLines(message);
+		log.error("  Error Message: ", errorArray[0]);
+		// Strip cause from error to leave a JSON
+		JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
+		// extra debug
+		log.vdebug("Raw Error Data: ", message);
+		log.vdebug("JSON Message: ", errorMessage);
+		if (errorMessage.type() == JSONType.object) {
+			log.error("  Error Reason:  ", errorMessage["error_description"].str);
 		}
 	}
 }
