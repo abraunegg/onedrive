@@ -437,7 +437,7 @@ final class OneDriveApi
 	private void acquireToken(const(char)[] postData)
 	{
 		JSONValue response;
-
+		
 		try {
 			response = post(tokenUrl, postData);
 		} catch (OneDriveException e) {
@@ -446,10 +446,15 @@ final class OneDriveApi
 			log.error("ERROR: OneDrive returned an error with the following message:");
 			auto errorArray = splitLines(message);
 			log.error("  Error Message: ", errorArray[0]);
-			
+			// Strip cause from error to leave a JSON
+			JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
 			// extra debug
-			writeln("Response: ", response);
-			writeln("Error Data: ", e);
+			log.vdebug("Raw Error Data: ", e);
+			log.vdebug("JSON Message: ", errorMessage);
+			
+			if (errorMessage.type() == JSONType.object) {
+				log.error("  Error Reason:  ", errorMessage["error_description"].str);
+			}
 		}
 		
 		if (response.type() == JSONType.object) {
