@@ -270,6 +270,8 @@ The default configuration file is listed below:
 # sync_root_files = "false"
 # classify_as_big_delete = "1000"
 # user_agent = ""
+# remove_source_files = "false"
+# skip_dir_strict_match = "false"
 ```
 
 
