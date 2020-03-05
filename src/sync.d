@@ -1823,19 +1823,19 @@ final class SyncEngine
 		
 		// Restriction and limitations about windows naming files
 		if (!isValidName(path)) {
-			log.vlog("Skipping item - invalid name (Microsoft Naming Convention): ", path);
+			log.log("Skipping item - invalid name (Microsoft Naming Convention): ", path);
 			return;
 		}
 		
 		// Check for bad whitespace items
 		if (!containsBadWhiteSpace(path)) {
-			log.vlog("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
+			log.log("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
 			return;
 		}
 		
 		// Check for HTML ASCII Codes as part of file name
 		if (!containsASCIIHTMLCodes(path)) {
-			log.vlog("Skipping item - invalid name (Contains HTML ASCII Code): ", path);
+			log.log("Skipping item - invalid name (Contains HTML ASCII Code): ", path);
 			return;
 		}
 		
@@ -2313,26 +2313,26 @@ final class SyncEngine
 				}
 				// skip unexisting symbolic links
 				else if (!exists(readLink(path))) {
-					log.vlog("Skipping item - invalid symbolic link: ", path);
+					log.log("Skipping item - invalid symbolic link: ", path);
 					return;
 				}
 			}
 			
 			// Restriction and limitations about windows naming files
 			if (!isValidName(path)) {
-				log.vlog("Skipping item - invalid name (Microsoft Naming Convention): ", path);
+				log.log("Skipping item - invalid name (Microsoft Naming Convention): ", path);
 				return;
 			}
 			
 			// Check for bad whitespace items
 			if (!containsBadWhiteSpace(path)) {
-				log.vlog("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
+				log.log("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
 				return;
 			}
 			
 			// Check for HTML ASCII Codes as part of file name
 			if (!containsASCIIHTMLCodes(path)) {
-				log.vlog("Skipping item - invalid name (Contains HTML ASCII Code): ", path);
+				log.log("Skipping item - invalid name (Contains HTML ASCII Code): ", path);
 				return;
 			}
 
@@ -2625,8 +2625,7 @@ final class SyncEngine
 					} catch (OneDriveException e) {
 						if (e.httpStatusCode == 401) {
 							// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error'
-							writeln("Skipping item - OneDrive returned a 'HTTP 401 - Unauthorized' when attempting to query if file exists"); 
-							log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+							log.vlog("Skipping item - OneDrive returned a 'HTTP 401 - Unauthorized' when attempting to query if file exists");
 							return;
 						}
 					
@@ -2634,7 +2633,7 @@ final class SyncEngine
 							// The file was not found on OneDrive, need to upload it		
 							// Check if file should be skipped based on skip_size config
 							if (thisFileSize >= this.newSizeLimit) {
-								writeln("Skipping item - excluded by skip_size config: ", path, " (", thisFileSize/2^^20," MB)");
+								log.vlog("Skipping item - excluded by skip_size config: ", path, " (", thisFileSize/2^^20," MB)");
 								return;
 							}
 							write("Uploading new file ", path, " ... ");
