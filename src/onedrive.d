@@ -489,7 +489,7 @@ final class OneDriveApi
 		checkHttpCode(response);
 		// OneDrive API Response Debugging
 		if (.debugResponse){
-			writeln("OneDrive API Response: ", response);
+			log.vdebug("OneDrive API Response: ", response);
         }
 		return response;
 	}
@@ -640,7 +640,7 @@ final class OneDriveApi
 			content ~= data;
 			// HTTP Server Response Code Debugging
 			if (.debugResponse){
-				writeln("OneDrive HTTP Server Response: ", http.statusLine.code);
+				log.vdebug("onedrive.perform() => OneDrive HTTP Server Response: ", http.statusLine.code);
 			}
 			return data.length;
 		};
@@ -653,6 +653,11 @@ final class OneDriveApi
 			log.error("ERROR: OneDrive returned an error with the following message:");
 			auto errorArray = splitLines(e.msg);
 			string errorMessage = errorArray[0];
+			
+			if (e.httpStatusCode == 429) {
+				// Display 429 content
+				displayOneDriveErrorMessage(e.msg);
+			}
 			
 			if (canFind(errorMessage, "Couldn't connect to server on handle") ||
 			    canFind(errorMessage, "Couldn't resolve host name on handle")) {
@@ -829,6 +834,7 @@ final class OneDriveApi
 				// Too many requests in a certain time window
 				// https://docs.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
 				log.vlog("OneDrive returned a 'HTTP 429 - Too Many Requests' - gracefully handling error");
+				throw new OneDriveException(http.statusLine.code, http.statusLine.reason);
 				break;
 			
 			// Server side (OneDrive) Errors
