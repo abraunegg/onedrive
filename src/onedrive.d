@@ -12,6 +12,7 @@ static import log;
 shared bool debugResponse = false;
 private bool dryRun = false;
 private bool simulateNoRefreshTokenFile = false;
+private ulong retryAfterValue = 0;
 
 private immutable {
 	// Client Identifier
@@ -218,6 +219,12 @@ final class OneDriveApi
 		c.popFront(); // skip the whole match
 		redeemToken(c.front);
 		return true;
+	}
+
+	ulong getRetryAfterValue()
+	{
+		// Return the current value of retryAfterValue if it has been set to something other than 0
+		return .retryAfterValue;
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_get
@@ -487,7 +494,7 @@ final class OneDriveApi
 		if (!skipToken) addAccessTokenHeader(); // HACK: requestUploadStatus
 		auto response = perform();
 		checkHttpCode(response);
-		// HTTP Server Response Code Debugging if --https-debug is being used
+		// OneDrive API Response Debugging if --https-debug is being used
 		if (.debugResponse){
 			log.vdebug("OneDrive API Response: ", response);
         }
@@ -663,10 +670,11 @@ final class OneDriveApi
 			string errorMessage = errorArray[0];
 			
 			if (http.statusLine.code == 429) {
-				// Display 429 content
+				// Set the value
+				log.vdebug("onedrive.perform() => HTTP 429 Retry-After: ", http.responseHeaders["Retry-After"]);
+				.retryAfterValue = to!ulong(http.responseHeaders["Retry-After"]);
+				// Display 429 content error message
 				displayOneDriveErrorMessage(e.msg);
-				auto retryAfter = http.responseHeaders["Retry-After"];
-				log.vdebug("onedrive.perform() => HTTP 429 Retry-After: ", retryAfter);
 			}
 			
 			if (canFind(errorMessage, "Couldn't connect to server on handle") ||
