@@ -487,7 +487,7 @@ final class OneDriveApi
 		if (!skipToken) addAccessTokenHeader(); // HACK: requestUploadStatus
 		auto response = perform();
 		checkHttpCode(response);
-		// OneDrive API Response Debugging
+		// HTTP Server Response Code Debugging if --https-debug is being used
 		if (.debugResponse){
 			log.vdebug("OneDrive API Response: ", response);
         }
@@ -638,7 +638,7 @@ final class OneDriveApi
 		char[] content;
 		http.onReceive = (ubyte[] data) {
 			content ~= data;
-			// HTTP Server Response Code Debugging
+			// HTTP Server Response Code Debugging if --https-debug is being used
 			if (.debugResponse){
 				log.vdebug("onedrive.perform() => OneDrive HTTP Server Response: ", http.statusLine.code);
 			}
@@ -646,8 +646,16 @@ final class OneDriveApi
 		};
 		
 		JSONValue json;
+		
 		try {
 			http.perform();
+			// Get the HTTP Response headers - needed for correct 429 handling
+			auto responseHeaders = http.responseHeaders();
+			// HTTP Server Response Headers Debugging if --https-debug is being used
+			if (.debugResponse){
+				log.vdebug("onedrive.perform() => HTTP Response Headers: ", responseHeaders);
+			}
+			
 		} catch (CurlException e) {
 			// Parse and display error message received from OneDrive
 			log.error("ERROR: OneDrive returned an error with the following message:");
