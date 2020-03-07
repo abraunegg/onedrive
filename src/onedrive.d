@@ -663,20 +663,20 @@ final class OneDriveApi
 				log.vdebug("onedrive.perform() => HTTP Response Headers: ", responseHeaders);
 			}
 			
+			if ("retry-after" in http.responseHeaders) {
+				// retry-after as in the response headers
+				// Set the value
+				log.vdebug("onedrive.perform() => Received HTTP 429 Retry-After Header Response: ", http.responseHeaders["retry-after"]);
+				log.vdebug("onedrive.perform() => Setting retryAfterValue to: ", http.responseHeaders["retry-after"]);
+				.retryAfterValue = to!ulong(http.responseHeaders["retry-after"]);
+			}
+			
 		} catch (CurlException e) {
 			// Parse and display error message received from OneDrive
 			log.error("ERROR: OneDrive returned an error with the following message:");
 			auto errorArray = splitLines(e.msg);
 			string errorMessage = errorArray[0];
-			
-			if (http.statusLine.code == 429) {
-				// Set the value
-				log.vdebug("onedrive.perform() => HTTP 429 Retry-After: ", http.responseHeaders["Retry-After"]);
-				.retryAfterValue = to!ulong(http.responseHeaders["Retry-After"]);
-				// Display 429 content error message
-				displayOneDriveErrorMessage(e.msg);
-			}
-			
+						
 			if (canFind(errorMessage, "Couldn't connect to server on handle") ||
 			    canFind(errorMessage, "Couldn't resolve host name on handle")) {
 				// This is a curl timeout
