@@ -197,8 +197,8 @@ struct UploadSession
 						log.vdebug("Using Retry-After Value = ", retryAfterValue);
 						// Sleep thread as per request
 						log.log("Thread sleeping due to 'HTTP request returned status code 429' - The request has been throttled");
-						log.log("Sleeping for ", delayBeforeRetry, " seconds");
-						Thread.sleep(dur!"seconds"(delayBeforeRetry));
+						log.log("Sleeping for ", retryAfterValue, " seconds");
+						Thread.sleep(dur!"seconds"(retryAfterValue));
 						log.log("Retrying fragment upload");
 					} else {
 						// insert a new line as well, so that the below error is inserted on the console in the right location
