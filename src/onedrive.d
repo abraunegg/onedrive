@@ -654,7 +654,7 @@ final class OneDriveApi
 			auto errorArray = splitLines(e.msg);
 			string errorMessage = errorArray[0];
 			
-			if (e.httpStatusCode == 429) {
+			if (http.statusLine.code == 429) {
 				// Display 429 content
 				displayOneDriveErrorMessage(e.msg);
 			}
@@ -835,7 +835,6 @@ final class OneDriveApi
 				// https://docs.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
 				log.vlog("OneDrive returned a 'HTTP 429 - Too Many Requests' - gracefully handling error");
 				throw new OneDriveException(http.statusLine.code, http.statusLine.reason);
-				break;
 			
 			// Server side (OneDrive) Errors
 			//  500 - Internal Server Error
