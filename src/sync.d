@@ -301,6 +301,7 @@ final class SyncEngine
 					// A further error was generated
 					displayOneDriveErrorMessage(e.msg);
 					// Must exit here
+					log.error("ERROR: Unable to query OneDrive. Please try to access OneDrive again later.\n");
 					exit(-1);
 				}
 			}
@@ -343,6 +344,7 @@ final class SyncEngine
 					// A further error was generated
 					displayOneDriveErrorMessage(e.msg);
 					// Must exit here
+					log.error("ERROR: Unable to query OneDrive. Please try to access OneDrive again later.\n");
 					exit(-1);
 				}
 			}
