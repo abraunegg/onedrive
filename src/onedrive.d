@@ -665,6 +665,8 @@ final class OneDriveApi
 			if (http.statusLine.code == 429) {
 				// Display 429 content
 				displayOneDriveErrorMessage(e.msg);
+				auto retryAfter = http.responseHeaders["Retry-After"];
+				log.vdebug("onedrive.perform() => HTTP 429 Retry-After: ", retryAfter);
 			}
 			
 			if (canFind(errorMessage, "Couldn't connect to server on handle") ||
