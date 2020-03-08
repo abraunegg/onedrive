@@ -898,7 +898,7 @@ final class SyncEngine
 				if (e.httpStatusCode == 504) {
 					// HTTP request returned status code 504 (Gateway Timeout)
 					// Retry by calling applyDifferences() again
-					log.vlog("OneDrive returned a 'HTTP 504 - Gateway Timeout' - gracefully handling error");
+					log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying request");
 					applyDifferences(driveId, idToQuery, performFullItemScan);
 				} else {
 					// Default operation if not 404, 410, 500, 504 errors
@@ -2116,6 +2116,7 @@ final class SyncEngine
 										}
 										if (e.httpStatusCode == 504) {
 											// HTTP request returned status code 504 (Gateway Timeout)
+											log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request as a session");
 											// Try upload as a session
 											response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
 										} else {
@@ -2778,11 +2779,35 @@ final class SyncEngine
 										response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
 									} catch (OneDriveException e) {
 										// error uploading file
-										// display what the error is
-										writeln("skipped.");
-										displayOneDriveErrorMessage(e.msg);
-										uploadFailed = true;
-										return;
+										if (e.httpStatusCode == 401) {
+											// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+											writeln("skipped.");
+											log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+											uploadFailed = true;
+											return;
+										}
+										if (e.httpStatusCode == 429) {
+											// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+											handleOneDriveThrottleRequest();
+											// Retry original request by calling function again to avoid replicating any further error handling
+											uploadNewFile(path);
+											// return back to original call
+											return;
+										}
+										if (e.httpStatusCode == 504) {
+											// HTTP request returned status code 504 (Gateway Timeout)
+											log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
+											// Retry original request by calling function again to avoid replicating any further error handling
+											uploadNewFile(path);
+											// return back to original call
+											return;
+										} else {
+											// display what the error is
+											writeln("skipped.");
+											displayOneDriveErrorMessage(e.msg);
+											uploadFailed = true;
+											return;
+										}
 									} catch (FileException e) {
 										// display the error message
 										writeln("skipped.");
@@ -2820,16 +2845,26 @@ final class SyncEngine
 												
 												if (e.httpStatusCode == 504) {
 													// HTTP request returned status code 504 (Gateway Timeout)
+													log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request as a session");
 													// Try upload as a session
 													try {
 														response = session.upload(path, parent.driveId, parent.id, baseName(path));
 													} catch (OneDriveException e) {
 														// error uploading file
-														// display what the error is
-														writeln("skipped.");
-														displayOneDriveErrorMessage(e.msg);
-														uploadFailed = true;
-														return;
+														if (e.httpStatusCode == 429) {
+															// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+															handleOneDriveThrottleRequest();
+															// Retry original request by calling function again to avoid replicating any further error handling
+															uploadNewFile(path);
+															// return back to original call
+															return;
+														} else {
+															// display what the error is
+															writeln("skipped.");
+															displayOneDriveErrorMessage(e.msg);
+															uploadFailed = true;
+															return;
+														}
 													}
 												} else {
 													// display what the error is
@@ -2865,6 +2900,14 @@ final class SyncEngine
 													uploadNewFile(path);
 													// return back to original call
 													return;
+												} 
+												if (e.httpStatusCode == 504) {
+													// HTTP request returned status code 504 (Gateway Timeout)
+													log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
+													// Retry original request by calling function again to avoid replicating any further error handling
+													uploadNewFile(path);
+													// return back to original call
+													return;
 												} else {
 													// display what the error is
 													writeln("skipped.");
@@ -2896,6 +2939,14 @@ final class SyncEngine
 											if (e.httpStatusCode == 429) {
 												// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 												handleOneDriveThrottleRequest();
+												// Retry original request by calling function again to avoid replicating any further error handling
+												uploadNewFile(path);
+												// return back to original call
+												return;
+											}
+											if (e.httpStatusCode == 504) {
+												// HTTP request returned status code 504 (Gateway Timeout)
+												log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
 												// Retry original request by calling function again to avoid replicating any further error handling
 												uploadNewFile(path);
 												// return back to original call
@@ -3069,6 +3120,7 @@ final class SyncEngine
 												
 												if (e.httpStatusCode == 504) {
 													// HTTP request returned status code 504 (Gateway Timeout)
+													log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request as a session");
 													// Try upload as a session
 													try {
 														response = session.upload(path, parent.driveId, parent.id, baseName(path));
@@ -3121,6 +3173,14 @@ final class SyncEngine
 												if (e.httpStatusCode == 429) {
 													// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 													handleOneDriveThrottleRequest();
+													// Retry original request by calling function again to avoid replicating any further error handling
+													uploadNewFile(path);
+													// return back to original call
+													return;
+												} 
+												if (e.httpStatusCode == 504) {
+													// HTTP request returned status code 504 (Gateway Timeout)
+													log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
 													// Retry original request by calling function again to avoid replicating any further error handling
 													uploadNewFile(path);
 													// return back to original call
@@ -3193,6 +3253,14 @@ final class SyncEngine
 												if (e.httpStatusCode == 429) {
 													// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 													handleOneDriveThrottleRequest();
+													// Retry original request by calling function again to avoid replicating any further error handling
+													uploadNewFile(path);
+													// return back to original call
+													return;
+												} 
+												if (e.httpStatusCode == 504) {
+													// HTTP request returned status code 504 (Gateway Timeout)
+													log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
 													// Retry original request by calling function again to avoid replicating any further error handling
 													uploadNewFile(path);
 													// return back to original call
@@ -3775,6 +3843,19 @@ final class SyncEngine
 				// Retry original request by calling function again to avoid replicating any further error handling
 				queryDriveForChanges(path);
 				// return back to original call
+				return;
+			}
+			
+			if (e.httpStatusCode == 504) {
+				// HTTP request returned status code 504 (Gateway Timeout)
+				log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying request");
+				// Retry original request by calling function again to avoid replicating any further error handling
+				queryDriveForChanges(path);
+				// return back to original call
+				return;
+			} else {
+				// display what the error is
+				displayOneDriveErrorMessage(e.msg);
 				return;
 			}
 		} 
