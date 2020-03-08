@@ -193,7 +193,7 @@ struct UploadSession
 					// handle 'HTTP request returned status code 429 (Too Many Requests)' first
 					if (e.httpStatusCode == 429) {
 						auto retryAfterValue = onedrive.getRetryAfterValue();
-						log.vdebug("\nFragment upload failed - received throttle request response from OneDrive");
+						log.vdebug("Fragment upload failed - received throttle request response from OneDrive");
 						log.vdebug("Using Retry-After Value = ", retryAfterValue);
 						// Sleep thread as per request
 						log.log("\nThread sleeping due to 'HTTP request returned status code 429' - The request has been throttled");

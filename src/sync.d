@@ -879,6 +879,7 @@ final class SyncEngine
 					continue;
 				}
 				
+				// HTTP request returned status code 429 (Too Many Requests)
 				if (e.httpStatusCode == 429) {
 					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 					handleOneDriveThrottleRequest();
@@ -895,13 +896,13 @@ final class SyncEngine
 					return;
 				}
 				
+				// HTTP request returned status code 504 (Gateway Timeout)
 				if (e.httpStatusCode == 504) {
-					// HTTP request returned status code 504 (Gateway Timeout)
 					// Retry by calling applyDifferences() again
 					log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying request");
 					applyDifferences(driveId, idToQuery, performFullItemScan);
 				} else {
-					// Default operation if not 404, 410, 500, 504 errors
+					// Default operation if not 404, 410, 429, 500 or 504 errors
 					// display what the error is
 					displayOneDriveErrorMessage(e.msg);
 					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
@@ -4065,11 +4066,16 @@ final class SyncEngine
 			// Use a 120 second delay as a default given header value was zero
 			// This value is based on log files and data when determining correct process for 429 response handling
 			delayBeforeRetry = 120;
+			// Update that we are over-riding the provided value with a default
+			log.vdebug("HTTP Response Header retry-after value was 0 - Using a preconfigured default of: ", delayBeforeRetry);
 		}
 		
 		// Sleep thread as per request
 		log.log("Thread sleeping due to 'HTTP request returned status code 429' - The request has been throttled");
 		log.log("Sleeping for ", delayBeforeRetry, " seconds");
 		Thread.sleep(dur!"seconds"(delayBeforeRetry));
+		
+		// Reset retry-after value to zero as we have used this value now and it may be changed in the future to a different value
+		onedrive.resetRetryAfterValue();
 	}
 }

@@ -226,6 +226,12 @@ final class OneDriveApi
 		// Return the current value of retryAfterValue if it has been set to something other than 0
 		return .retryAfterValue;
 	}
+	
+	void resetRetryAfterValue()
+	{
+		// Reset the current value of retryAfterValue to 0 after it has been used
+		.retryAfterValue = 0;
+	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_get
 	JSONValue getDefaultDrive()
