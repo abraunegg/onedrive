@@ -196,7 +196,7 @@ struct UploadSession
 						log.vdebug("\nFragment upload failed - received throttle request response from OneDrive");
 						log.vdebug("Using Retry-After Value = ", retryAfterValue);
 						// Sleep thread as per request
-						log.log("Thread sleeping due to 'HTTP request returned status code 429' - The request has been throttled");
+						log.log("\nThread sleeping due to 'HTTP request returned status code 429' - The request has been throttled");
 						log.log("Sleeping for ", retryAfterValue, " seconds");
 						Thread.sleep(dur!"seconds"(retryAfterValue));
 						log.log("Retrying fragment upload");
