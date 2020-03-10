@@ -550,7 +550,12 @@ int main(string[] args)
 			return EXIT_FAILURE;
 		}
 	}
-
+	
+	// if sync list is configured, set to true now that the sync engine is initialised
+	if (syncListConfigured) {
+		sync.setSyncListConfigured();
+	}
+	
 	// Do we need to configure specific --upload-only options?
 	if (cfg.getValueBool("upload_only")) {
 		// --upload-only was passed in or configured

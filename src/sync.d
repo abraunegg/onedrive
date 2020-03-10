@@ -236,6 +236,8 @@ final class SyncEngine
 	private bool syncBusinessFolders = false;
 	// single directory scope flag
 	private bool singleDirectoryScope = false;
+	// is sync_list configured
+	private bool syncListConfigured = false;
 	// sync_list new folder added, trigger delta scan override
 	private bool syncListFullScanTrigger = false;
 
@@ -454,6 +456,13 @@ final class SyncEngine
 	{
 		syncListFullScanTrigger = false;
 		log.vdebug("Setting syncListFullScanTrigger = false");
+	}
+	
+	// set syncListConfigured to true
+	void setSyncListConfigured()
+	{
+		syncListConfigured = true;
+		log.vdebug("Setting syncListConfigured = true");
 	}
 	
 	// download all new changes from OneDrive
@@ -792,10 +801,21 @@ final class SyncEngine
 		// Get the current delta link
 		string deltaLink = "";
 		string deltaLinkAvailable = itemdb.getDeltaLink(driveId, id);
+		log.vdebug("syncListConfigured = ", syncListConfigured);
+		log.vdebug("syncListFullScanTrigger = ", syncListFullScanTrigger);
+		log.vdebug("performFullItemScan = ", performFullItemScan);
+		// if sync_list is not configured, syncListConfigured should be false
+		// depending on the scan type (--monitor or --synchronize) performFullItemScan is set depending on the number of sync passes performed (--monitor) or ALWAYS if just --synchronize is used
 		if (!performFullItemScan){
 			// performFullItemScan == false
 			// use delta link
 			deltaLink = deltaLinkAvailable;
+			log.vdebug("performFullItemScan is false, using the deltaLink as per database entry");
+			if (deltaLinkAvailable == ""){
+				log.vdebug("deltaLink was requested to be used, but contains no data - resulting API query will be treated as a full scan of OneDrive");
+			} else {
+				log.vdebug("deltaLink contains valid data - resulting API query will be treated as a delta scan of OneDrive");
+			}
 		}
 		
 		for (;;) {
@@ -883,7 +903,13 @@ final class SyncEngine
 						// OneDrive ships 'changes' in ~200 bundles. These messages then get displayed for each bundle
 						if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
 							// verbose log, no 'notify' .. it is over the top
-							log.vlog("Processing ", nrChanges, " changes");
+							if (!syncListConfigured) {
+								// sync_list is not being used - lets use the right messaging here
+								log.vlog("Processing ", nrChanges, " changes");
+							} else {
+								// sync_list is being used - why are we going through the entire OneDrive contents?
+								log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent state due to sync_list being used");
+							}
 						} else {
 							// There are valid changes
 							log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
@@ -893,7 +919,13 @@ final class SyncEngine
 						// Display the number of items we are processing
 						if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
 							// verbose log, no 'notify' .. it is over the top
-							log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent state due to sync_list being used");
+							if (!syncListConfigured) {
+								// sync_list is not being used - lets use the right messaging here
+								log.vlog("Processing ", nrChanges, " changes");
+							} else {
+								// sync_list is being used - why are we going through the entire OneDrive contents?
+								log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent state due to sync_list being used");
+							}
 						} else {
 							// There are valid changes
 							log.vdebug("Number of items from OneDrive to process: ", nrChanges);
