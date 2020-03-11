@@ -68,6 +68,8 @@ final class Config
 		boolValues["remove_source_files"] = false;
 		// Strict matching for skip_dir
 		boolValues["skip_dir_strict_match"] = false;
+		// was the application just authorised - paste of response uri
+		boolValues["applicationAuthorizeResponseUri"] = false;
 
 		// Determine the users home directory. 
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts

@@ -413,7 +413,8 @@ int main(string[] args)
 		log.log("NOTE: The use of --force-http-1.1 is depreciated");
 	}
 	
-	log.vlog("Initializing the OneDrive API ...");
+	// Test if OneDrive service can be reached
+	log.vdebug("Testing network to ensure network connectivity to Microsoft OneDrive Service");
 	try {
 		online = testNetwork();
 	} catch (CurlException e) {
@@ -424,8 +425,9 @@ int main(string[] args)
 			return EXIT_FAILURE;
 		}
 	}
-
+	
 	// Initialize OneDrive, check for authorization
+	log.vlog("Initializing the OneDrive API ...");
 	oneDrive = new OneDriveApi(cfg);
 	oneDrive.printAccessToken = cfg.getValueBool("print_token");
 	if (!oneDrive.init()) {
@@ -435,9 +437,8 @@ int main(string[] args)
 		return EXIT_UNAUTHORIZED;
 	}
 	
-	// if --synchronize or --monitor not passed in, exit & display help
+	// if --synchronize or --monitor not passed in, configure the flag to display help & exit
 	auto performSyncOK = false;
-	
 	if (cfg.getValueBool("synchronize") || cfg.getValueBool("monitor")) {
 		performSyncOK = true;
 	}
@@ -449,10 +450,20 @@ int main(string[] args)
 	}
 	
 	if (!performSyncOK) {
-		writeln("\n--synchronize or --monitor missing from your command options or use --help for further assistance\n");
-		writeln("No OneDrive sync will be performed without either of these two arguments being present\n");
-		oneDrive.http.shutdown();
-		return EXIT_FAILURE;
+		// was the application just authorised?
+		if (cfg.getValueBool("applicationAuthorizeResponseUri")) {
+			// Application was just authorised
+			log.log("\nApplication has been sucessfully authorised, however no additional command switches were provided.\n");
+			log.log("Please use --help for further assistance in regards to running this application.\n");
+			oneDrive.http.shutdown();
+			return EXIT_SUCCESS;
+		} else {
+			// Application was not just authorised
+			log.log("\n--synchronize or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use --help for further assistance.\n");
+			log.log("No OneDrive sync will be performed one of these two arguments being present.\n");
+			oneDrive.http.shutdown();
+			return EXIT_FAILURE;
+		}
 	}
 	
 	// if --synchronize && --monitor passed in, exit & display help as these conflict with each other
