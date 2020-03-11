@@ -453,7 +453,7 @@ int main(string[] args)
 		// was the application just authorised?
 		if (cfg.getValueBool("applicationAuthorizeResponseUri")) {
 			// Application was just authorised
-			log.log("\nApplication has been sucessfully authorised, however no additional command switches were provided.\n");
+			log.log("\nApplication has been successfully authorised, however no additional command switches were provided.\n");
 			log.log("Please use --help for further assistance in regards to running this application.\n");
 			oneDrive.http.shutdown();
 			return EXIT_SUCCESS;
