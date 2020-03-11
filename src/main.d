@@ -460,7 +460,7 @@ int main(string[] args)
 		} else {
 			// Application was not just authorised
 			log.log("\n--synchronize or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use --help for further assistance.\n");
-			log.log("No OneDrive sync will be performed one of these two arguments being present.\n");
+			log.log("No OneDrive sync will be performed without one of these two arguments being present.\n");
 			oneDrive.http.shutdown();
 			return EXIT_FAILURE;
 		}
