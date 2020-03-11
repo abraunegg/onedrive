@@ -274,6 +274,7 @@ final class SyncEngine
 		try {
 			oneDriveDetails	= onedrive.getDefaultDrive();
 		} catch (OneDriveException e) {
+			log.vdebug("oneDriveDetails	= onedrive.getDefaultDrive() generated a OneDriveException");
 			if (e.httpStatusCode == 400) {
 				// OneDrive responded with 400 error: Bad Request
 				log.error("\nERROR: OneDrive returned a 'HTTP 400 Bad Request' - Cannot Initialize Sync Engine");
@@ -295,6 +296,7 @@ final class SyncEngine
 				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 				handleOneDriveThrottleRequest();
 				// Retry original request by calling function again to avoid replicating any further error handling
+				log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling init();");
 				init();
 				// return back to original call
 				return;
@@ -311,6 +313,7 @@ final class SyncEngine
 		try {
 			oneDriveRootDetails = onedrive.getDefaultRoot();
 		} catch (OneDriveException e) {
+			log.vdebug("oneDriveRootDetails = onedrive.getDefaultRoot() generated a OneDriveException");
 			if (e.httpStatusCode == 400) {
 				// OneDrive responded with 400 error: Bad Request
 				log.error("\nERROR: OneDrive returned a 'HTTP 400 Bad Request' - Cannot Initialize Sync Engine");
@@ -332,6 +335,7 @@ final class SyncEngine
 				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 				handleOneDriveThrottleRequest();
 				// Retry original request by calling function again to avoid replicating any further error handling
+				log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling init();");
 				init();
 				// return back to original call
 				return;
@@ -487,6 +491,7 @@ final class SyncEngine
 		try {
 			onedrivePathDetails = onedrive.getPathDetails(path); // Returns a JSON String for the OneDrive Path
 		} catch (OneDriveException e) {
+			log.vdebug("onedrivePathDetails = onedrive.getPathDetails(path) generated a OneDriveException");
 			if (e.httpStatusCode == 404) {
 				// The directory was not found 
 				log.error("ERROR: The requested single directory to sync was not found on OneDrive");
@@ -497,6 +502,7 @@ final class SyncEngine
 				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 				handleOneDriveThrottleRequest();
 				// Retry original request by calling function again to avoid replicating any further error handling
+				log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling applyDifferencesSingleDirectory(path);");
 				applyDifferencesSingleDirectory(path);
 				// return back to original call
 				return;
@@ -594,6 +600,7 @@ final class SyncEngine
 		try {
 			onedrive.getPathDetails(path);
 		} catch (OneDriveException e) {
+			log.vdebug("onedrive.getPathDetails(path) generated a OneDriveException");
 			if (e.httpStatusCode == 404) {
 				// The directory was not found on OneDrive - no need to delete it
 				log.vlog("The requested directory to delete was not found on OneDrive - skipping removing the remote directory as it doesn't exist");
@@ -604,6 +611,7 @@ final class SyncEngine
 				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 				handleOneDriveThrottleRequest();
 				// Retry original request by calling function again to avoid replicating any further error handling
+				log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling deleteDirectoryNoSync(path);");
 				deleteDirectoryNoSync(path);
 				// return back to original call
 				return;
@@ -635,6 +643,7 @@ final class SyncEngine
 			// test if the local path exists on OneDrive
 			onedrive.getPathDetails(source);
 		} catch (OneDriveException e) {
+			log.vdebug("onedrive.getPathDetails(source); generated a OneDriveException");
 			if (e.httpStatusCode == 404) {
 				// The directory was not found 
 				log.vlog("The requested directory to rename was not found on OneDrive");
@@ -645,6 +654,7 @@ final class SyncEngine
 				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 				handleOneDriveThrottleRequest();
 				// Retry original request by calling function again to avoid replicating any further error handling
+				log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling renameDirectoryNoSync(source, destination);");
 				renameDirectoryNoSync(source, destination);
 				// return back to original call
 				return;
@@ -676,6 +686,7 @@ final class SyncEngine
 		try {
 			idDetails = onedrive.getPathDetailsById(driveId, id);
 		} catch (OneDriveException e) {
+			log.vdebug("idDetails = onedrive.getPathDetailsById(driveId, id) generated a OneDriveException");
 			if (e.httpStatusCode == 404) {
 				// id was not found - possibly a remote (shared) folder
 				log.vlog("No details returned for given Path ID");
@@ -686,6 +697,7 @@ final class SyncEngine
 				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 				handleOneDriveThrottleRequest();
 				// Retry original request by calling function again to avoid replicating any further error handling
+				log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling applyDifferences(driveId, id, performFullItemScan);");
 				applyDifferences(driveId, id, performFullItemScan);
 				// return back to original call
 				return;
@@ -884,6 +896,7 @@ final class SyncEngine
 					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 					handleOneDriveThrottleRequest();
 					// Retry original request by calling function again to avoid replicating any further error handling
+					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling applyDifferences(driveId, idToQuery, performFullItemScan);");
 					applyDifferences(driveId, idToQuery, performFullItemScan);
 					// return back to original call
 					return;
@@ -1068,6 +1081,7 @@ final class SyncEngine
 								try {
 									oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item["id"].str);
 								} catch (OneDriveException e) {
+									log.vdebug("oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item['id'].str); generated a OneDriveException");
 									if (e.httpStatusCode == 404) {
 										// No .. that ID is GONE
 										log.vlog("Remote change discarded - item cannot be found");
@@ -1078,6 +1092,7 @@ final class SyncEngine
 										// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 										handleOneDriveThrottleRequest();
 										// Retry request after delay
+										log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item['id'].str);");
 										try {
 											oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item["id"].str);
 										} catch (OneDriveException e) {
@@ -1661,6 +1676,7 @@ final class SyncEngine
 			try {
 				onedrive.downloadById(item.driveId, item.id, path, fileSize);
 			} catch (OneDriveException e) {
+				log.vdebug("onedrive.downloadById(item.driveId, item.id, path, fileSize); generated a OneDriveException");
 				// 408 = Request Time Out 
 				// 429 = Too Many Requests - need to delay
 				
@@ -1679,16 +1695,19 @@ final class SyncEngine
 							// successful download
 							retryAttempts = retryCount;
 						} catch (OneDriveException e) {
+							log.vdebug("onedrive.downloadById(item.driveId, item.id, path, fileSize); generated a OneDriveException");
 							if ((e.httpStatusCode == 429) || (e.httpStatusCode == 408)) {
 								// If another 408 .. 
 								if (e.httpStatusCode == 408) {
 									// Increment & loop around
+									log.vdebug("HTTP 408 generated - incrementing retryAttempts");
 									retryAttempts++;
 								}
 								// If a 429 ..
 								if (e.httpStatusCode == 429) {
 									// Increment & loop around
 									handleOneDriveThrottleRequest();
+									log.vdebug("HTTP 429 generated - incrementing retryAttempts");
 									retryAttempts++;
 								}
 							} else {
@@ -1711,16 +1730,19 @@ final class SyncEngine
 							// successful download
 							retryAttempts = retryCount;
 						} catch (OneDriveException e) {
+							log.vdebug("onedrive.downloadById(item.driveId, item.id, path, fileSize); generated a OneDriveException");
 							if ((e.httpStatusCode == 429) || (e.httpStatusCode == 408)) {
 								// If another 408 .. 
 								if (e.httpStatusCode == 408) {
 									// Increment & loop around
+									log.vdebug("HTTP 408 generated - incrementing retryAttempts");
 									retryAttempts++;
 								}
 								// If a 429 ..
 								if (e.httpStatusCode == 429) {
 									// Increment & loop around
 									handleOneDriveThrottleRequest();
+									log.vdebug("HTTP 429 generated - incrementing retryAttempts");
 									retryAttempts++;
 								}
 							} else {
@@ -2580,6 +2602,7 @@ final class SyncEngine
 					log.vdebug("Attempting to query OneDrive for this parent path: ", parentPath);
 					onedrivePathDetails = onedrive.getPathDetails(parentPath);
 				} catch (OneDriveException e) {
+					log.vdebug("onedrivePathDetails = onedrive.getPathDetails(parentPath); generated a OneDriveException");
 					// exception - set onedriveParentRootDetails to a blank valid JSON
 					onedrivePathDetails = parseJSON("{}");
 					if (e.httpStatusCode == 404) {
@@ -2592,6 +2615,7 @@ final class SyncEngine
 						// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 						handleOneDriveThrottleRequest();
 						// Retry original request by calling function again to avoid replicating any further error handling
+						log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling uploadCreateDir(path);");
 						uploadCreateDir(path);
 						// return back to original call
 						return;
@@ -2623,6 +2647,7 @@ final class SyncEngine
 				log.vdebug("Attempting to query OneDrive for this path: ", path);
 				response = onedrive.getPathDetails(path);
 			} catch (OneDriveException e) {
+				log.vdebug("response = onedrive.getPathDetails(path); generated a OneDriveException");
 				if (e.httpStatusCode == 404) {
 					// The directory was not found 
 					log.vlog("The requested directory to create was not found on OneDrive - creating remote directory: ", path);
@@ -2669,6 +2694,7 @@ final class SyncEngine
 					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 					handleOneDriveThrottleRequest();
 					// Retry original request by calling function again to avoid replicating any further error handling
+					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling uploadCreateDir(path);");
 					uploadCreateDir(path);
 					// return back to original call
 					return;
@@ -2755,6 +2781,7 @@ final class SyncEngine
 						// test if the local path exists on OneDrive
 						fileDetailsFromOneDrive = onedrive.getPathDetails(path);
 					} catch (OneDriveException e) {
+						log.vdebug("fileDetailsFromOneDrive = onedrive.getPathDetails(path); generated a OneDriveException");
 						if (e.httpStatusCode == 401) {
 							// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error'
 							log.vlog("Skipping item - OneDrive returned a 'HTTP 401 - Unauthorized' when attempting to query if file exists");
@@ -3058,6 +3085,7 @@ final class SyncEngine
 							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 							handleOneDriveThrottleRequest();
 							// Retry original request by calling function again to avoid replicating any further error handling
+							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling uploadNewFile(path);");
 							uploadNewFile(path);
 							// return back to original call
 							return;
@@ -3102,6 +3130,7 @@ final class SyncEngine
 												response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
 												writeln("done.");
 											} catch (OneDriveException e) {
+												log.vdebug("response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path)); generated a OneDriveException");
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
 													writeln("skipped.");
@@ -3114,6 +3143,7 @@ final class SyncEngine
 													// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 													handleOneDriveThrottleRequest();
 													// Retry original request by calling function again to avoid replicating any further error handling
+													log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling uploadNewFile(path);");
 													uploadNewFile(path);
 													// return back to original call
 													return;
@@ -3164,6 +3194,7 @@ final class SyncEngine
 												response = session.upload(path, parent.driveId, parent.id, baseName(path));
 												writeln("done.");
 											} catch (OneDriveException e) {
+												log.vdebug("response = session.upload(path, parent.driveId, parent.id, baseName(path)); generated a OneDriveException");
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
 													writeln("skipped.");
@@ -3175,6 +3206,7 @@ final class SyncEngine
 													// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 													handleOneDriveThrottleRequest();
 													// Retry original request by calling function again to avoid replicating any further error handling
+													log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling uploadNewFile(path);");
 													uploadNewFile(path);
 													// return back to original call
 													return;
@@ -3244,6 +3276,7 @@ final class SyncEngine
 											try {
 												response = session.upload(path, parent.driveId, parent.id, baseName(path), fileDetailsFromOneDrive["eTag"].str);
 											} catch (OneDriveException e) {
+												log.vdebug("response = session.upload(path, parent.driveId, parent.id, baseName(path), fileDetailsFromOneDrive['eTag'].str); generated a OneDriveException");
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
 													writeln("skipped.");
@@ -3255,6 +3288,7 @@ final class SyncEngine
 													// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 													handleOneDriveThrottleRequest();
 													// Retry original request by calling function again to avoid replicating any further error handling
+													log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling uploadNewFile(path);");
 													uploadNewFile(path);
 													// return back to original call
 													return;
@@ -3832,6 +3866,7 @@ final class SyncEngine
 		try {
 			onedrivePathDetails = onedrive.getPathDetails(path); // Returns a JSON String for the OneDrive Path
 		} catch (OneDriveException e) {
+			log.vdebug("onedrivePathDetails = onedrive.getPathDetails(path); generated a OneDriveException");
 			if (e.httpStatusCode == 404) {
 				// Requested path could not be found
 				log.error("ERROR: The requested path to query was not found on OneDrive");
@@ -3842,6 +3877,7 @@ final class SyncEngine
 				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 				handleOneDriveThrottleRequest();
 				// Retry original request by calling function again to avoid replicating any further error handling
+				log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling queryDriveForChanges(path);");
 				queryDriveForChanges(path);
 				// return back to original call
 				return;
@@ -3901,10 +3937,17 @@ final class SyncEngine
 		try {
 			changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
 		} catch (OneDriveException e) {
+			// OneDrive threw an error
+			log.vdebug("OneDrive threw an error when querying for these changes:");
+			log.vdebug("driveId: ", driveId);
+			log.vdebug("idToQuery: ", idToQuery);
+			log.vdebug("deltaLink: ", deltaLink);
+			
 			if (e.httpStatusCode == 429) {
 				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 				handleOneDriveThrottleRequest();
 				// Retry original request by calling function again to avoid replicating any further error handling
+				log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling queryDriveForChanges(path);");
 				queryDriveForChanges(path);
 				// return back to original call
 				return;
@@ -4048,6 +4091,7 @@ final class SyncEngine
 	
 	void handleOneDriveThrottleRequest() {
 		// If OneDrive sends a status code 429 then this function will be used to process the Retry-After response header which contains the value by which we need to wait
+		log.vdebug("Handling a OneDrive HTTP 429 Response Code (Too Many Requests)");
 		// Read in the Retry-After HTTP header as set and delay as per this value before retrying the request
 		auto retryAfterValue = onedrive.getRetryAfterValue();
 		log.vdebug("Using Retry-After Value = ", retryAfterValue);
