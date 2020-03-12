@@ -180,7 +180,7 @@ final class OneDriveApi
 			log.log("Authorize this app visiting:\n");
 			write(url, "\n\n", "Enter the response uri: ");
 			readln(response);
-			cfg.setValueBool("applicationAuthorizeResponseUri", true);
+			cfg.applicationAuthorizeResponseUri = true;
 		} else {
 			string[] authFiles = authFilesString.split(":");
 			string authUrl = authFiles[0];

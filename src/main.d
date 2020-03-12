@@ -451,7 +451,7 @@ int main(string[] args)
 	
 	if (!performSyncOK) {
 		// was the application just authorised?
-		if (cfg.getValueBool("applicationAuthorizeResponseUri")) {
+		if (cfg.applicationAuthorizeResponseUri) {
 			// Application was just authorised
 			log.log("\nApplication has been successfully authorised, however no additional command switches were provided.\n");
 			log.log("Please use --help for further assistance in regards to running this application.\n");
