@@ -902,7 +902,9 @@ final class SyncEngine
 					// OneDrive ships 'changes' in ~200 bundles. We display that we are processing X number of objects
 					// Do not display anything unless we are doing a verbose debug as due to #658 we are essentially doing a --resync each time when using sync_list
 					
+					// is nrChanges >= min_notify_changes (default of min_notify_changes = 5)
 					if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
+						// nrChanges is >= than min_notify_changes
 						// verbose log, no 'notify' .. it is over the top
 						if (!syncListConfigured) {
 							// sync_list is not being used - lets use the right messaging here
@@ -912,11 +914,13 @@ final class SyncEngine
 							log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent state due to sync_list being used");
 						}
 					} else {
-						// There are valid changes
-						if (!performFullItemScan){
-							// we are not doing a full scan, triggered from using sync_list
-							log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
-						} else {
+						// There are valid changes but less than the min_notify_changes configured threshold
+						// We will only output the number of changes being processed to debug log if this is set to assist with debugging
+						// As this is debug logging, messaging can be the same, regardless of sync_list being used or not
+						log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
+						
+						// is performFullItemScan set due to a full scan required?
+						if (performFullItemScan){
 							// full scan was triggered due to using sync_list
 							log.vdebug("Number of items from OneDrive to process: ", nrChanges);
 							// unset now the full scan trigger if set
