@@ -22,7 +22,7 @@ private immutable {
 	// Default User Agent configuration
 	string isvTag = "ISV";
 	string companyName = "abraunegg";
-	string appName = "OneDrive_Client_for_Linux";
+	string appTitle = "OneDrive_Client_for_Linux";
 	
 	// Personal & Business Queries
 	string authUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
@@ -115,8 +115,8 @@ final class OneDriveApi
 			// https://docs.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
 			// - Identify as ISV and include Company Name, App Name separated by a pipe character and then adding Version number separated with a slash character
 			// Note: If you've created an application, the recommendation is to register and use AppID and AppTitle
-			// The issue here is that currently the application is still using the 'skilion' application ID, thus no idea what the AppName used was.
-			http.setUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appName ~ "/" ~ strip(import("version"));
+			// The issue here is that currently the application is still using the 'skilion' application ID, thus no idea what the AppTitle used was.
+			http.setUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ strip(import("version"));
 		} else {
 			// Use the value entered by the user
 			http.setUserAgent = cfg.getValueString("user_agent");
