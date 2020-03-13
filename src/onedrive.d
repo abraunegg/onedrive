@@ -685,7 +685,7 @@ final class OneDriveApi
 			if ("retry-after" in http.responseHeaders) {
 				// retry-after as in the response headers
 				// Set the value
-				log.vdebug("onedrive.perform() => Received HTTP 429 Retry-After Header Response: ", http.responseHeaders["retry-after"]);
+				log.vdebug("onedrive.perform() => Received a 'Retry-After' Header Response with the following value: ", http.responseHeaders["retry-after"]);
 				log.vdebug("onedrive.perform() => Setting retryAfterValue to: ", http.responseHeaders["retry-after"]);
 				.retryAfterValue = to!ulong(http.responseHeaders["retry-after"]);
 			}

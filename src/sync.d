@@ -4098,9 +4098,7 @@ final class SyncEngine
 		
 		// HTTP request returned status code 429 (Too Many Requests)
 		// https://github.com/abraunegg/onedrive/issues/133
-		// or 408 request timeout
-		// https://github.com/abraunegg/onedrive/issues/694
-		// Back off & retry with incremental delay
+		// https://github.com/abraunegg/onedrive/issues/815
 		
 		ulong delayBeforeRetry = 0;
 		if (retryAfterValue != 0) {
