@@ -14,12 +14,15 @@ private bool dryRun = false;
 private bool simulateNoRefreshTokenFile = false;
 
 private immutable {
-	// Client Identifier
-	// Original Client ID (skilion)
+	// Client ID / Application ID (skilion)
 	//string clientId = "22c49a0d-d21c-4792-aed1-8f163c982546";
 	
-	// New Client ID (abraunegg)
+	// Client ID / Application ID (abraunegg)
 	string clientId = "d50ca740-c83f-4d1b-b616-12c519384f0c";
+	// Default User Agent configuration
+	string isvTag = "ISV";
+	string companyName = "abraunegg";
+	string appTitle = "OneDrive_Client_for_Linux";
 	
 	// Personal & Business Queries
 	string authUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
@@ -105,11 +108,18 @@ final class OneDriveApi
 			.debugResponse = true;
 		}
 
-		// Custom User Agent
-		if (cfg.getValueString("user_agent") != "") {
-			http.setUserAgent = cfg.getValueString("user_agent");
+		// Configure the User Agent string
+		if (cfg.getValueString("user_agent") == "") {
+			// Application defaults
+			// Comply with OneDrive traffic decoration requirements
+			// https://docs.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
+			// - Identify as ISV and include Company Name, App Name separated by a pipe character and then adding Version number separated with a slash character
+			// Note: If you've created an application, the recommendation is to register and use AppID and AppTitle
+			// The issue here is that currently the application is still using the 'skilion' application ID, thus no idea what the AppTitle used was.
+			http.setUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ strip(import("version"));
 		} else {
-			http.setUserAgent = "OneDrive Client for Linux " ~ strip(import("version"));
+			// Use the value entered by the user
+			http.setUserAgent = cfg.getValueString("user_agent");
 		}
 		
 		// What version of HTTP protocol do we use?
