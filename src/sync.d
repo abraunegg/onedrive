@@ -236,6 +236,8 @@ final class SyncEngine
 	private bool syncBusinessFolders = false;
 	// single directory scope flag
 	private bool singleDirectoryScope = false;
+	// is sync_list configured
+	private bool syncListConfigured = false;
 	// sync_list new folder added, trigger delta scan override
 	private bool syncListFullScanTrigger = false;
 
@@ -454,6 +456,13 @@ final class SyncEngine
 	{
 		syncListFullScanTrigger = false;
 		log.vdebug("Setting syncListFullScanTrigger = false");
+	}
+	
+	// set syncListConfigured to true
+	void setSyncListConfigured()
+	{
+		syncListConfigured = true;
+		log.vdebug("Setting syncListConfigured = true");
 	}
 	
 	// download all new changes from OneDrive
@@ -792,10 +801,21 @@ final class SyncEngine
 		// Get the current delta link
 		string deltaLink = "";
 		string deltaLinkAvailable = itemdb.getDeltaLink(driveId, id);
+		log.vdebug("syncListConfigured = ", syncListConfigured);
+		log.vdebug("syncListFullScanTrigger = ", syncListFullScanTrigger);
+		log.vdebug("performFullItemScan = ", performFullItemScan);
+		// if sync_list is not configured, syncListConfigured should be false
+		// depending on the scan type (--monitor or --synchronize) performFullItemScan is set depending on the number of sync passes performed (--monitor) or ALWAYS if just --synchronize is used
 		if (!performFullItemScan){
 			// performFullItemScan == false
 			// use delta link
 			deltaLink = deltaLinkAvailable;
+			log.vdebug("performFullItemScan is false, using the deltaLink as per database entry");
+			if (deltaLinkAvailable == ""){
+				log.vdebug("deltaLink was requested to be used, but contains no data - resulting API query will be treated as a full scan of OneDrive");
+			} else {
+				log.vdebug("deltaLink contains valid data - resulting API query will be treated as a delta scan of OneDrive");
+			}
 		}
 		
 		for (;;) {
@@ -878,33 +898,38 @@ final class SyncEngine
 					auto nrChanges = count(changes["value"].array);
 					auto changeCount = 0;
 					
-					if (!performFullItemScan){
-						// Display the number of changes we are processing
-						// OneDrive ships 'changes' in ~200 bundles. These messages then get displayed for each bundle
-						if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
-							// verbose log, no 'notify' .. it is over the top
+					// Display the number of changes or OneDrive objects we are processing
+					// OneDrive ships 'changes' in ~200 bundles. We display that we are processing X number of objects
+					// Do not display anything unless we are doing a verbose debug as due to #658 we are essentially doing a --resync each time when using sync_list
+					
+					// is nrChanges >= min_notify_changes (default of min_notify_changes = 5)
+					if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
+						// nrChanges is >= than min_notify_changes
+						// verbose log, no 'notify' .. it is over the top
+						if (!syncListConfigured) {
+							// sync_list is not being used - lets use the right messaging here
 							log.vlog("Processing ", nrChanges, " changes");
 						} else {
-							// There are valid changes
-							log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
+							// sync_list is being used - why are we going through the entire OneDrive contents?
+							log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent state due to sync_list being used");
 						}
 					} else {
-						// Do not display anything unless we are doing a verbose debug as due to #658 we are essentially doing a --resync each time when using sync_list
-						// Display the number of items we are processing
-						if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
-							// verbose log, no 'notify' .. it is over the top
-							log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent state due to sync_list being used");
-						} else {
-							// There are valid changes
-							log.vdebug("Number of items from OneDrive to process: ", nrChanges);
-						}
+						// There are valid changes but less than the min_notify_changes configured threshold
+						// We will only output the number of changes being processed to debug log if this is set to assist with debugging
+						// As this is debug logging, messaging can be the same, regardless of sync_list being used or not
+						log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
 						
-						// unset now the full scan trigger if set
-						if (syncListFullScanTrigger) {
-							unsetSyncListFullScanTrigger();
+						// is performFullItemScan set due to a full scan required?
+						if (performFullItemScan){
+							// full scan was triggered due to using sync_list
+							log.vdebug("Number of items from OneDrive to process: ", nrChanges);
+							// unset now the full scan trigger if set
+							if (syncListFullScanTrigger) {
+								unsetSyncListFullScanTrigger();
+							}
 						}
 					}
-					
+
 					foreach (item; changes["value"].array) {
 						bool isRoot = false;
 						string thisItemPath;
@@ -1823,19 +1848,19 @@ final class SyncEngine
 		
 		// Restriction and limitations about windows naming files
 		if (!isValidName(path)) {
-			log.vlog("Skipping item - invalid name (Microsoft Naming Convention): ", path);
+			log.log("Skipping item - invalid name (Microsoft Naming Convention): ", path);
 			return;
 		}
 		
 		// Check for bad whitespace items
 		if (!containsBadWhiteSpace(path)) {
-			log.vlog("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
+			log.log("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
 			return;
 		}
 		
 		// Check for HTML ASCII Codes as part of file name
 		if (!containsASCIIHTMLCodes(path)) {
-			log.vlog("Skipping item - invalid name (Contains HTML ASCII Code): ", path);
+			log.log("Skipping item - invalid name (Contains HTML ASCII Code): ", path);
 			return;
 		}
 		
@@ -2313,26 +2338,26 @@ final class SyncEngine
 				}
 				// skip unexisting symbolic links
 				else if (!exists(readLink(path))) {
-					log.vlog("Skipping item - invalid symbolic link: ", path);
+					log.log("Skipping item - invalid symbolic link: ", path);
 					return;
 				}
 			}
 			
 			// Restriction and limitations about windows naming files
 			if (!isValidName(path)) {
-				log.vlog("Skipping item - invalid name (Microsoft Naming Convention): ", path);
+				log.log("Skipping item - invalid name (Microsoft Naming Convention): ", path);
 				return;
 			}
 			
 			// Check for bad whitespace items
 			if (!containsBadWhiteSpace(path)) {
-				log.vlog("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
+				log.log("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
 				return;
 			}
 			
 			// Check for HTML ASCII Codes as part of file name
 			if (!containsASCIIHTMLCodes(path)) {
-				log.vlog("Skipping item - invalid name (Contains HTML ASCII Code): ", path);
+				log.log("Skipping item - invalid name (Contains HTML ASCII Code): ", path);
 				return;
 			}
 
@@ -2625,8 +2650,7 @@ final class SyncEngine
 					} catch (OneDriveException e) {
 						if (e.httpStatusCode == 401) {
 							// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error'
-							writeln("Skipping item - OneDrive returned a 'HTTP 401 - Unauthorized' when attempting to query if file exists"); 
-							log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+							log.vlog("Skipping item - OneDrive returned a 'HTTP 401 - Unauthorized' when attempting to query if file exists");
 							return;
 						}
 					
@@ -2634,7 +2658,7 @@ final class SyncEngine
 							// The file was not found on OneDrive, need to upload it		
 							// Check if file should be skipped based on skip_size config
 							if (thisFileSize >= this.newSizeLimit) {
-								writeln("Skipping item - excluded by skip_size config: ", path, " (", thisFileSize/2^^20," MB)");
+								log.vlog("Skipping item - excluded by skip_size config: ", path, " (", thisFileSize/2^^20," MB)");
 								return;
 							}
 							write("Uploading new file ", path, " ... ");
