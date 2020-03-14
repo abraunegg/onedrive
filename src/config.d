@@ -20,6 +20,8 @@ final class Config
 	public string configFileSyncDir;
 	public string configFileSkipFile;
 	public string configFileSkipDir;
+	// was the application just authorised - paste of response uri
+	public bool applicationAuthorizeResponseUri = false;
 		
 	private string userConfigFilePath;
 	// hashmap for the values found in the user config file
@@ -31,7 +33,8 @@ final class Config
 
 	this(string confdirOption)
 	{
-		// default configuration
+		// default configuration - entries in config file ~/.config/onedrive/config
+		// an entry here means it can be set via the config file if there is a coresponding read and set in update_from_args()
 		stringValues["sync_dir"]         = defaultSyncDir;
 		stringValues["skip_file"]        = defaultSkipFile;
 		stringValues["skip_dir"]         = defaultSkipDir;
