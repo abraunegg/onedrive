@@ -12,6 +12,7 @@ static import log;
 shared bool debugResponse = false;
 private bool dryRun = false;
 private bool simulateNoRefreshTokenFile = false;
+private ulong retryAfterValue = 0;
 
 private immutable {
 	// Client ID / Application ID (skilion)
@@ -19,6 +20,7 @@ private immutable {
 	
 	// Client ID / Application ID (abraunegg)
 	string clientId = "d50ca740-c83f-4d1b-b616-12c519384f0c";
+	
 	// Default User Agent configuration
 	string isvTag = "ISV";
 	string companyName = "abraunegg";
@@ -110,7 +112,7 @@ final class OneDriveApi
 
 		// Configure the User Agent string
 		if (cfg.getValueString("user_agent") == "") {
-			// Application defaults
+			// Application User Agent string defaults
 			// Comply with OneDrive traffic decoration requirements
 			// https://docs.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
 			// - Identify as ISV and include Company Name, App Name separated by a pipe character and then adding Version number separated with a slash character
@@ -233,6 +235,18 @@ final class OneDriveApi
 		c.popFront(); // skip the whole match
 		redeemToken(c.front);
 		return true;
+	}
+
+	ulong getRetryAfterValue()
+	{
+		// Return the current value of retryAfterValue if it has been set to something other than 0
+		return .retryAfterValue;
+	}
+	
+	void resetRetryAfterValue()
+	{
+		// Reset the current value of retryAfterValue to 0 after it has been used
+		.retryAfterValue = 0;
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_get
@@ -502,9 +516,9 @@ final class OneDriveApi
 		if (!skipToken) addAccessTokenHeader(); // HACK: requestUploadStatus
 		auto response = perform();
 		checkHttpCode(response);
-		// OneDrive API Response Debugging
+		// OneDrive API Response Debugging if --https-debug is being used
 		if (.debugResponse){
-			writeln("OneDrive API Response: ", response);
+			log.vdebug("OneDrive API Response: ", response);
         }
 		return response;
 	}
@@ -653,22 +667,38 @@ final class OneDriveApi
 		char[] content;
 		http.onReceive = (ubyte[] data) {
 			content ~= data;
-			// HTTP Server Response Code Debugging
+			// HTTP Server Response Code Debugging if --https-debug is being used
 			if (.debugResponse){
-				writeln("OneDrive HTTP Server Response: ", http.statusLine.code);
+				log.vdebug("onedrive.perform() => OneDrive HTTP Server Response: ", http.statusLine.code);
 			}
 			return data.length;
 		};
 		
 		JSONValue json;
+		
 		try {
 			http.perform();
+			// Get the HTTP Response headers - needed for correct 429 handling
+			auto responseHeaders = http.responseHeaders();
+			// HTTP Server Response Headers Debugging if --https-debug is being used
+			if (.debugResponse){
+				log.vdebug("onedrive.perform() => HTTP Response Headers: ", responseHeaders);
+			}
+			
+			if ("retry-after" in http.responseHeaders) {
+				// retry-after as in the response headers
+				// Set the value
+				log.vdebug("onedrive.perform() => Received a 'Retry-After' Header Response with the following value: ", http.responseHeaders["retry-after"]);
+				log.vdebug("onedrive.perform() => Setting retryAfterValue to: ", http.responseHeaders["retry-after"]);
+				.retryAfterValue = to!ulong(http.responseHeaders["retry-after"]);
+			}
+			
 		} catch (CurlException e) {
 			// Parse and display error message received from OneDrive
 			log.error("ERROR: OneDrive returned an error with the following message:");
 			auto errorArray = splitLines(e.msg);
 			string errorMessage = errorArray[0];
-			
+						
 			if (canFind(errorMessage, "Couldn't connect to server on handle") ||
 			    canFind(errorMessage, "Couldn't resolve host name on handle")) {
 				// This is a curl timeout
@@ -844,7 +874,7 @@ final class OneDriveApi
 				// Too many requests in a certain time window
 				// https://docs.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
 				log.vlog("OneDrive returned a 'HTTP 429 - Too Many Requests' - gracefully handling error");
-				break;
+				throw new OneDriveException(http.statusLine.code, http.statusLine.reason);
 			
 			// Server side (OneDrive) Errors
 			//  500 - Internal Server Error

@@ -190,12 +190,25 @@ struct UploadSession
 					);
 				} catch (OneDriveException e) {
 					// there was an error response from OneDrive when uploading the file fragment
-					// insert a new line as well, so that the below error is inserted on the console in the right location
-					log.vlog("\nFragment upload failed - received an exception response from OneDrive");
-					// display what the error is
-					displayOneDriveErrorMessage(e.msg);
-					// retry fragment upload in case error is transient
-					log.vlog("Retrying fragment upload");
+					// handle 'HTTP request returned status code 429 (Too Many Requests)' first
+					if (e.httpStatusCode == 429) {
+						auto retryAfterValue = onedrive.getRetryAfterValue();
+						log.vdebug("Fragment upload failed - received throttle request response from OneDrive");
+						log.vdebug("Using Retry-After Value = ", retryAfterValue);
+						// Sleep thread as per request
+						log.log("\nThread sleeping due to 'HTTP request returned status code 429' - The request has been throttled");
+						log.log("Sleeping for ", retryAfterValue, " seconds");
+						Thread.sleep(dur!"seconds"(retryAfterValue));
+						log.log("Retrying fragment upload");
+					} else {
+						// insert a new line as well, so that the below error is inserted on the console in the right location
+						log.vlog("\nFragment upload failed - received an exception response from OneDrive");
+						// display what the error is
+						displayOneDriveErrorMessage(e.msg);
+						// retry fragment upload in case error is transient
+						log.vlog("Retrying fragment upload");
+					}
+					
 					try {
 						response = onedrive.uploadFragment(
 							session["uploadUrl"].str,
