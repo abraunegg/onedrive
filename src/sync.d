@@ -3359,6 +3359,7 @@ final class SyncEngine
 					// target location is a .folder
 					log.vdebug("Target location is excluded from sync due to skip_dotfiles = true");
 					// item will have been moved locally, but as this is now to a location that is not synced, needs to be removed from OneDrive
+					log.log("Item has been moved to a location that is excluded from sync operations. Removing item from OneDrive");
 					uploadDeleteItem(fromItem, from);
 					return;
 				}
