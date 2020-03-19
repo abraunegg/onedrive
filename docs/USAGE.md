@@ -29,10 +29,10 @@ The application will attempt to handle instances where you have two files with t
 ### curl compatibility
 If your system utilises curl >= 7.62.0 curl defaults to prefer HTTP/2 over HTTP/1.1 by default. If you wish to use HTTP/2 for some operations you will need to use the `--force-http-2` config option to enable otherwise all operations will use HTTP/1.1.
 
-### First run :zap:
-After installing the application you must run it at least once from the terminal to authorize it.
+### Authorize the application with your OneDrive Account
+After installing the application you must authorize the application with your OneDrive Account. This is done by running the application without any additional command switches.
 
-You will be asked to open a specific link using your web browser where you will have to login into your Microsoft Account and give the application the permission to access your files. After giving the permission, you will be redirected to a blank page. Copy the URI of the blank page into the application.
+You will be asked to open a specific URL by using your web browser where you will have to login into your Microsoft Account and give the application the permission to access your files. After giving permission to the application, you will be redirected to a blank page. Copy the URI of the blank page into the application.
 ```text
 [user@hostname ~]$ onedrive 
 
@@ -42,6 +42,20 @@ https://.....
 
 Enter the response uri: 
 
+```
+
+**Example:**
+```
+[user@hostname ~]$ onedrive 
+Authorize this app visiting:
+
+https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=22c49a0d-d21c-4792-aed1-8f163c982546&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
+
+Enter the response uri: https://login.microsoftonline.com/common/oauth2/nativeclient?code=<redacted>
+
+Application has been successfully authorised, however no additional command switches were provided.
+
+Please use --help for further assistance in regards to running this application.
 ```
 
 ### Show your configuration
@@ -270,6 +284,8 @@ The default configuration file is listed below:
 # sync_root_files = "false"
 # classify_as_big_delete = "1000"
 # user_agent = ""
+# remove_source_files = "false"
+# skip_dir_strict_match = "false"
 ```
 
 
