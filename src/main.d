@@ -706,7 +706,7 @@ int main(string[] args)
 				} catch (CurlException e) {
 					log.vlog("Offline, cannot move item!");
 				} catch(Exception e) {
-					log.logAndNotify("Cannot move item:, ", e.msg);
+					log.logAndNotify("Cannot move item: ", e.msg);
 				}
 			};
 			signal(SIGINT, &exitHandler);
