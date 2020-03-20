@@ -15,17 +15,6 @@ private bool simulateNoRefreshTokenFile = false;
 private ulong retryAfterValue = 0;
 
 private immutable {
-	// Client ID / Application ID (skilion)
-	//string clientId = "22c49a0d-d21c-4792-aed1-8f163c982546";
-	
-	// Client ID / Application ID (abraunegg)
-	string clientId = "d50ca740-c83f-4d1b-b616-12c519384f0c";
-	
-	// Default User Agent configuration
-	string isvTag = "ISV";
-	string companyName = "abraunegg";
-	string appTitle = "OneDrive_Client_for_Linux";
-	
 	// Personal & Business Queries
 	string authUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
 	string redirectUrl = "https://login.microsoftonline.com/common/oauth2/nativeclient";
@@ -38,10 +27,21 @@ private immutable {
 }
 
 private {
-    string driveUrl = "https://graph.microsoft.com/v1.0/me/drive";
-    string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
-    string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
-    string driveId = "";
+	// Client ID / Application ID (abraunegg)
+	string clientId = "d50ca740-c83f-4d1b-b616-12c519384f0c";
+
+	// Default User Agent configuration
+	string isvTag = "ISV";
+	string companyName = "abraunegg";
+	string appTitle = "OneDrive_Client_for_Linux";
+
+	// Default Drive ID
+	string driveId = "";
+
+	// Common URL's
+	string driveUrl = "https://graph.microsoft.com/v1.0/me/drive";
+	string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
+	string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
 }
 
 class OneDriveException: Exception
@@ -148,6 +148,18 @@ final class OneDriveApi
 
 	bool init()
 	{
+		// Update clientId if application_id is set in config file
+		if (cfg.getValueString("application_id") != "") {
+			// an application_id is set in config file
+			clientId = cfg.getValueString("application_id");
+			companyName = "custom_application";
+		}
+		
+		// detail what we are using for applicaion identification
+		log.vdebug("clientId    = ", clientId);
+		log.vdebug("companyName = ", companyName);
+		log.vdebug("appTitle    = ", appTitle);
+		
 		try {
 			driveId = cfg.getValueString("drive_id");
 			if (driveId.length) {

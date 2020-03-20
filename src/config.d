@@ -71,6 +71,9 @@ final class Config
 		boolValues["remove_source_files"] = false;
 		// Strict matching for skip_dir
 		boolValues["skip_dir_strict_match"] = false;
+		// Allow for a custom Client ID / Application ID to be used to replace the inbuilt default
+		// This is a config file option ONLY
+		stringValues["application_id"]       = "";
 
 		// Determine the users home directory. 
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
