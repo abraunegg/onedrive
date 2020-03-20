@@ -227,7 +227,7 @@ final class OneDriveApi
 			}
 		}
 		// match the authorization code
-		auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-]+)");
+		auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
 		if (c.empty) {
 			log.log("Invalid uri");
 			return false;
