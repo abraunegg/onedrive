@@ -71,6 +71,9 @@ final class Config
 		boolValues["remove_source_files"] = false;
 		// Strict matching for skip_dir
 		boolValues["skip_dir_strict_match"] = false;
+		// Ignore data safety checks and overwrite local data rather than preserve & rename
+		// This is a config file option ONLY
+		boolValues["bypass_data_preservation"] = false;
 
 		// Determine the users home directory. 
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
