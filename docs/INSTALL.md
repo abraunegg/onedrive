@@ -8,10 +8,13 @@ This project has been packaged for the following Linux distributions:
 *   Debian, available from the package repository as [onedrive](https://packages.debian.org/sid/net/onedrive)
 *   Slackware, available from the slackbuilds.org repository as [onedrive](https://slackbuilds.org/repository/14.2/network/onedrive/)
 *   Solus, available from the package repository as [onedrive](https://dev.getsol.us/search/query/FB7PIf1jG9Z9/#R)
-*   Ubuntu, available from the package repository as [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all)
 *   NixOS, available on unstable channel (and stable since 20.03). Use package `onedrive` either by adding it to `configuration.nix` or by using the command `nix-env -iA <channel name>.onedrive`. This does not install a service. There is a (rejected) [PR](https://github.com/NixOS/nixpkgs/pull/77734) which has code which can be used to install a service. See documentation in the same PR.
 
-**Important:** Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If a package is out out date, please contact the package maintainer for resolution.
+#### Important Note:
+Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If a package is out out date, please contact the package maintainer for resolution.
+
+#### Important information for Ubuntu users:
+Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) packages available for Ubuntu, **DO NOT INSTALL 'onedrive' FROM THE AVAILABLE UBUNTU PACKAGES**. The packages are out of date and should never be used. Compile from source for all Ubuntu platforms. If you are passionate about changing this, please become the Ubuntu Package Maintainer and keep the packages up-to-date by using the Debian packages as a base.
 
 ## Build Requirements
 *   Build environment must have at least 1GB of memory & 1GB swap space
