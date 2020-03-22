@@ -3,7 +3,7 @@
 ## Linux Packages
 This project has been packaged for the following Linux distributions:
 
-*   Fedora, simply install with `sudo dnf install onedrive`
+*   Fedora, available via package repositories as [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)
 *   Arch Linux, available from AUR as [onedrive-abraunegg](https://aur.archlinux.org/packages/onedrive-abraunegg/)
 *   Debian, available from the package repository as [onedrive](https://packages.debian.org/sid/net/onedrive)
 *   Slackware, available from the slackbuilds.org repository as [onedrive](https://slackbuilds.org/repository/14.2/network/onedrive/)
@@ -14,7 +14,7 @@ This project has been packaged for the following Linux distributions:
 Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If a package is out of date, please contact the package maintainer for resolution.
 
 #### Important information for Ubuntu users:
-Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) packages available for Ubuntu, **DO NOT INSTALL 'onedrive' FROM THE AVAILABLE UBUNTU PACKAGES**. The packages are out of date and should never be used. Compile from source for all Ubuntu platforms. If you are passionate about changing this, consider publishing the up-to-date release on a PPA. Instructions [here](https://itsfoss.com/ppa-guide/) (or become the package manager for onedrive!)
+Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) packages available for Ubuntu, **DO NOT INSTALL 'onedrive' FROM THE AVAILABLE UBUNTU PACKAGES**. The packages are out of date and should not be used. Compile from source for all Ubuntu platforms. If you are passionate about changing this, consider publishing the up-to-date release on a PPA. Instructions [here](https://itsfoss.com/ppa-guide/) (or become the Ubuntu package manager for onedrive!)
 
 ## Build Requirements
 *   Build environment must have at least 1GB of memory & 1GB swap space
