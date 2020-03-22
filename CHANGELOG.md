@@ -14,10 +14,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Fixed the regex parsing of response URI to avoid potentially generating a bad request to OneDrive, leading to a 'AADSTS9002313: Invalid request. Request is malformed or invalid.' response.
 
 ### Added
+*   Added a Dockerfile for building on Rasberry Pi / ARM platforms
 *   Implement Feature: warning on big deletes to safeguard data on OneDrive
 *   Implement Feature: delete local files after sync
 *   Implement Feature: perform skip_dir explicit match only
-*   Added a Dockerfile for building on Rasberry Pi / ARM platforms
 *   Implement Feature: provide config file option for specifying the Client Identifier
 
 ### Changed
