@@ -15,15 +15,6 @@ private bool simulateNoRefreshTokenFile = false;
 private ulong retryAfterValue = 0;
 
 private immutable {
-	// Client Identifier
-	// Client ID (skilion)
-	string clientId = "22c49a0d-d21c-4792-aed1-8f163c982546";
-	
-	// Default User Agent configuration
-	string isvTag = "ISV";
-	string companyName = "abraunegg";
-	string appTitle = "OneDrive_Client_for_Linux";
-	
 	// Personal & Business Queries
 	string authUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
 	string redirectUrl = "https://login.microsoftonline.com/common/oauth2/nativeclient";
@@ -36,10 +27,22 @@ private immutable {
 }
 
 private {
-    string driveUrl = "https://graph.microsoft.com/v1.0/me/drive";
-    string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
-    string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
-    string driveId = "";
+	// Client ID / Application ID (abraunegg)
+	string clientId = "d50ca740-c83f-4d1b-b616-12c519384f0c";
+
+	// Default User Agent configuration
+	string isvTag = "ISV";
+	string companyName = "abraunegg";
+	// Application name as per Microsoft Azure application registration
+	string appTitle = "OneDrive Client for Linux";
+
+	// Default Drive ID
+	string driveId = "";
+
+	// Common URL's
+	string driveUrl = "https://graph.microsoft.com/v1.0/me/drive";
+	string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
+	string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
 }
 
 class OneDriveException: Exception
@@ -110,8 +113,8 @@ final class OneDriveApi
 
 		// Configure the User Agent string
 		if (cfg.getValueString("user_agent") == "") {
-			// Application defaults
-			// Comply with traffic decoration requirements
+			// Application User Agent string defaults
+			// Comply with OneDrive traffic decoration requirements
 			// https://docs.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
 			// - Identify as ISV and include Company Name, App Name separated by a pipe character and then adding Version number separated with a slash character
 			// Note: If you've created an application, the recommendation is to register and use AppID and AppTitle
@@ -146,6 +149,18 @@ final class OneDriveApi
 
 	bool init()
 	{
+		// Update clientId if application_id is set in config file
+		if (cfg.getValueString("application_id") != "") {
+			// an application_id is set in config file
+			clientId = cfg.getValueString("application_id");
+			companyName = "custom_application";
+		}
+		
+		// detail what we are using for applicaion identification
+		log.vdebug("clientId    = ", clientId);
+		log.vdebug("companyName = ", companyName);
+		log.vdebug("appTitle    = ", appTitle);
+		
 		try {
 			driveId = cfg.getValueString("drive_id");
 			if (driveId.length) {
@@ -188,7 +203,7 @@ final class OneDriveApi
 	{
 		import std.stdio, std.regex;
 		char[] response;
-		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=" ~ redirectUrl;
+		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.Read.All%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=" ~ redirectUrl;
 		string authFilesString = cfg.getValueString("auth_files");
 		if (authFilesString == "") {
 			log.log("Authorize this app visiting:\n");
@@ -931,7 +946,6 @@ final class OneDriveApi
 			// 400 - Bad Request
 			case 400:
 				// Bad Request .. how should we act?
-				log.vlog("OneDrive returned a 'HTTP 400 - Bad Request' - gracefully handling error");
 				// make sure this is thrown so that it is caught
 				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
 			

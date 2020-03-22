@@ -3,6 +3,33 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.4.0 - 2020-03-22
+### Fixed
+*   Fixed how the application handles 429 response codes from OneDrive (critical update)
+*   Fixed building on Alpine Linux under Docker
+*   Fixed how the 'username' is determined from the running process for logfile naming
+*   Fixed file handling when a failed download has occured due to exiting via CTRL-C
+*   Fixed an unhandled exception when OneDrive throws an error response on initialising
+*   Fixed the handling of moving files into a skipped .folder when skip_dotfiles = true
+*   Fixed the regex parsing of response URI to avoid potentially generating a bad request to OneDrive, leading to a 'AADSTS9002313: Invalid request. Request is malformed or invalid.' response.
+
+### Added
+*   Added a Dockerfile for building on Rasberry Pi / ARM platforms
+*   Implement Feature: warning on big deletes to safeguard data on OneDrive
+*   Implement Feature: delete local files after sync
+*   Implement Feature: perform skip_dir explicit match only
+*   Implement Feature: provide config file option for specifying the Client Identifier
+
+### Changed
+*   Updated the 'Client Identifier' to a new Application ID
+
+### Updated
+*   Updated relevant documentation (README.md, USAGE.md) to add new feature details and clarify existing information
+*   Update completions to include the --force-http-2 option
+*   Update to always log when a file is skipped due to the item being invalid
+*   Update application output when just authorising application to make information clearer
+*   Update logging output when using sync_list to be clearer as to what is actually being processed and why
+
 ## 2.3.13 - 2019-12-31
 ### Fixed
 *   Change the sync list override flag to false as default when not using sync_list
