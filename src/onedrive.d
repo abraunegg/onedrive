@@ -33,7 +33,8 @@ private {
 	// Default User Agent configuration
 	string isvTag = "ISV";
 	string companyName = "abraunegg";
-	string appTitle = "OneDrive_Client_for_Linux";
+	// Application name as per Microsoft Azure application registration
+	string appTitle = "OneDrive Client for Linux";
 
 	// Default Drive ID
 	string driveId = "";
