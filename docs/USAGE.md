@@ -286,6 +286,7 @@ The default configuration file is listed below:
 # user_agent = ""
 # remove_source_files = "false"
 # skip_dir_strict_match = "false"
+# application_id = ""
 ```
 
 

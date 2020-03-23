@@ -292,7 +292,7 @@ final class SyncEngine
 			if (e.httpStatusCode == 401) {
 				// HTTP request returned status code 401 (Unauthorized)
 				log.error("\nERROR: OneDrive returned a 'HTTP 401 Unauthorized' - Cannot Initialize Sync Engine");
-				log.error("ERROR: Check your configuration as your access token may be empty or invalid\n");
+				log.error("ERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
 				// Must exit here
 				exit(-1);
 			}
@@ -331,7 +331,7 @@ final class SyncEngine
 			if (e.httpStatusCode == 401) {
 				// HTTP request returned status code 401 (Unauthorized)
 				log.error("\nERROR: OneDrive returned a 'HTTP 401 Unauthorized' - Cannot Initialize Sync Engine");
-				log.error("ERROR: Check your configuration as your access token may be empty or invalid\n");
+				log.error("ERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
 				// Must exit here
 				exit(-1);
 			}
