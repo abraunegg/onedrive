@@ -3931,6 +3931,11 @@ final class SyncEngine
 			// some other error
 			throw new SyncException("Can't move an item to an unsynced directory");
 		}
+		if (cfg.getValueBool("skip_dotfiles") && isDotFile(to)){
+			log.log("Removing item from OneDrive due to skip_dotfiles = true");
+			uploadDeleteItem(fromItem, from);
+			return;
+		}
 		if (fromItem.driveId != parentItem.driveId) {
 			// items cannot be moved between drives
 			uploadDeleteItem(fromItem, from);
