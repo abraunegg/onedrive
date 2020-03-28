@@ -277,6 +277,13 @@ int main(string[] args)
 	
 	// dry-run database setup
 	if (cfg.getValueBool("dry_run")) {
+		// If the dry run database exists, clean this up
+		if (exists(cfg.databaseFilePathDryRun)) {
+			// remove the existing file
+			log.vdebug("Removing items-dryrun.sqlite3 as it still exists for some reason");
+			safeRemove(cfg.databaseFilePathDryRun);	
+		}
+		
 		// Make a copy of the original items.sqlite3 for use as the dry run copy if it exists
 		if (exists(cfg.databaseFilePath)) {
 			// in a --dry-run --resync scenario, we should not copy the existing database file
