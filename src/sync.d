@@ -3902,8 +3902,13 @@ final class SyncEngine
 		log.log("Moving ", from, " to ", to);
 		Item fromItem, toItem, parentItem;
 		if (!itemdb.selectByPath(from, defaultDriveId, fromItem)) {
-			uploadNewFile(to);
-			return;
+			if (cfg.getValueBool("skip_dotfiles") && isDotFile(to)){	
+				log.log("Skipping upload due to skip_dotfile = true");
+				return;
+			} else {
+				uploadNewFile(to);
+				return;
+			}
 		}
 		if (fromItem.parentId == null) {
 			// the item is a remote folder, need to do the operation on the parent
