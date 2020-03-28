@@ -279,9 +279,15 @@ int main(string[] args)
 	if (cfg.getValueBool("dry_run")) {
 		// Make a copy of the original items.sqlite3 for use as the dry run copy if it exists
 		if (exists(cfg.databaseFilePath)) {
-			// copy the file
-			log.vdebug("Copying items.sqlite3 to items-dryrun.sqlite3 to use for dry run operations");
-			copy(cfg.databaseFilePath,cfg.databaseFilePathDryRun);
+			// in a --dry-run --resync scenario, we should not copy the existing database file
+			if (!cfg.getValueBool("resync")) {
+				// copy the existing DB file to the dry-run copy
+				log.vdebug("Copying items.sqlite3 to items-dryrun.sqlite3 to use for dry run operations");
+				copy(cfg.databaseFilePath,cfg.databaseFilePathDryRun);
+			} else {
+				// no database copy due to --resync
+				log.vdebug("No database copy created for --dry-run due to --resync also being used");
+			}
 		}
 	}
 	
