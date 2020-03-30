@@ -87,6 +87,7 @@ struct Database
 		int rc = sqlite3_exec(pDb, toStringz(sql), null, null, null);
 		if (rc != SQLITE_OK) {
 			log.error("\nA database execution error occurred: "~ getErrorMessage() ~ "\n");
+			log.error("Please retry your command with --resync to fix any local database corruption issues.\n");
 			close();
 			exit(-1);
 		}
@@ -184,6 +185,7 @@ struct Statement
 			} else {
 				string errorMessage = ifromStringz(sqlite3_errmsg(sqlite3_db_handle(pStmt)));
 				log.error("\nA database statement execution error occurred: "~ errorMessage ~ "\n");
+				log.error("Please retry your command with --resync to fix any local database corruption issues.\n");
 				exit(-1);
 			}
 		}
