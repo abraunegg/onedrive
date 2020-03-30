@@ -87,17 +87,32 @@ final class Monitor
 
 		// skip filtered items
 		if (dirname != ".") {
+			// is the directory name a match to a skip_dir entry?
 			if (selectiveSync.isDirNameExcluded(strip(dirname,"./"))) {
+				// dont add a watch for this item
 				return;
 			}
+			// is the filename a match to a skip_file entry?
 			if (selectiveSync.isFileNameExcluded(baseName(dirname))) {
+				// dont add a watch for this item
 				return;
 			}
+			// is the path exluded by sync_list?
 			if (selectiveSync.isPathExcludedViaSyncList(buildNormalizedPath(dirname))) {
+				// dont add a watch for this item
 				return;
+			}
+
+			// is the path exluded if skip_dotfiles configured and path is a .folder?
+			if (selectiveSync.getSkipDotfiles()) {
+				// is the path a .folder / .file?
+				if (selectiveSync.isDotFile(dirname)) {
+					// dont add a watch for this item
+					return;
+				}
 			}
 		}
-
+		
 		// skip symlinks if configured
 		if (isSymlink(dirname)) {
 			// if config says so we skip all symlinked items

@@ -1929,7 +1929,7 @@ final class SyncEngine
 	// scan the given directory for differences and new items
 	void scanForDifferences(string path)
 	{
-		// scan for changes
+		// scan for changes in the path provided
 		log.vlog("Uploading differences of ", path);
 		Item item;
 		if (itemdb.selectByPath(path, defaultDriveId, item)) {
