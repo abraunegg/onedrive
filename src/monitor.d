@@ -90,7 +90,7 @@ final class Monitor
 			if (selectiveSync.isDirNameExcluded(dirname.strip('.').strip('/'))) {
 				return;
 			}
-			if (selectiveSync.isFileNameExcluded(dirname.strip('.').strip('/'))) {
+			if (selectiveSync.isFileNameExcluded(baseName(dirname))) {
 				return;
 			}
 			if (selectiveSync.isPathExcludedViaSyncList(buildNormalizedPath(dirname))) {
