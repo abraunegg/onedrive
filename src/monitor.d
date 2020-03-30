@@ -1,7 +1,7 @@
 import core.sys.linux.sys.inotify;
 import core.stdc.errno;
 import core.sys.posix.poll, core.sys.posix.unistd;
-import std.exception, std.file, std.path, std.regex, std.stdio, std.string;
+import std.exception, std.file, std.path, std.regex, std.stdio, std.string, std.algorithm.mutation;
 import config;
 import selective;
 import util;
@@ -87,10 +87,10 @@ final class Monitor
 
 		// skip filtered items
 		if (dirname != ".") {
-			if (selectiveSync.isDirNameExcluded(strip(dirname,"./"))) {
+			if (selectiveSync.isDirNameExcluded(dirname.strip('.').strip('/'))) {
 				return;
 			}
-			if (selectiveSync.isFileNameExcluded(baseName(dirname))) {
+			if (selectiveSync.isFileNameExcluded(dirname.strip('.').strip('/'))) {
 				return;
 			}
 			if (selectiveSync.isPathExcludedViaSyncList(buildNormalizedPath(dirname))) {
@@ -214,10 +214,10 @@ final class Monitor
 
 				// skip filtered items
 				path = getPath(event);
-				if (selectiveSync.isDirNameExcluded(strip(path,"./"))) {
+				if (selectiveSync.isDirNameExcluded(path.strip('.').strip('/'))) {
 					goto skip;
 				}
-				if (selectiveSync.isFileNameExcluded(strip(path,"./"))) {
+				if (selectiveSync.isFileNameExcluded(path.strip('.').strip('/'))) {
 					goto skip;
 				}
 				if (selectiveSync.isPathExcludedViaSyncList(path)) {

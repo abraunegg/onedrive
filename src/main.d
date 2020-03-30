@@ -516,7 +516,7 @@ int main(string[] args)
 	}
 	selectiveSync.load(cfg.syncListFilePath);
 	
-	// Configure skip_dir & skip_file from config entries
+	// Configure skip_dir, skip_file & skip_dotfiles from config entries
 	// skip_dir items
 	log.vdebug("Configuring skip_dir ...");
 	log.vdebug("skip_dir: ", cfg.getValueString("skip_dir"));
@@ -524,6 +524,10 @@ int main(string[] args)
 	// Was --skip-dir-strict-match configured?
 	if (cfg.getValueBool("skip_dir_strict_match")) {
 		selectiveSync.setSkipDirStrictMatch();
+	}
+	// Was --skip_dotfiles configured?
+	if (cfg.getValueBool("skip_dotfiles")) {
+		selectiveSync.setSkipDotfiles();
 	}
 	
 	// skip_file items

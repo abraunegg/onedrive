@@ -12,6 +12,7 @@ final class SelectiveSync
 	private Regex!char mask;
 	private Regex!char dirmask;
 	private bool skipDirStrictMatch = false;
+	private bool skipDotfiles = true;
 
 	void load(string filepath)
 	{
@@ -31,6 +32,13 @@ final class SelectiveSync
 		skipDirStrictMatch = true;
 	}
 
+	// Configure skipDotfiles if function is called
+	// By default, skipDotfiles = false;
+	void setSkipDotfiles() 
+	{
+		skipDotfiles = true;
+	}
+
 	void setFileMask(const(char)[] mask)
 	{
 		this.mask = wild2regex(mask);
@@ -44,21 +52,25 @@ final class SelectiveSync
 	// config file skip_dir parameter
 	bool isDirNameExcluded(string name)
 	{
-		// Does the directory name match skip_dir config entry?
-		// Returns true if the name matches a skip_dir config entry
+		// Does the directory name match skip_dir config entry or starts with a dot?
+		// Returns true if the name matches a skip_dir config entry or starts with a dot when skipDotFile Option enabled
 		// Returns false if no match
 		
 		// Try full path match first
 		if (!name.matchFirst(dirmask).empty) {
 			return true;
-		} else {
-			// Do we check the base name as well?
-			if (!skipDirStrictMatch) {
-				// check just the basename in the path
-				string filename = baseName(name);
-				if(!filename.matchFirst(dirmask).empty) {
-					return true;
-				}
+		} 
+		// Do we check the base name as well?
+		if (!skipDirStrictMatch) {
+			// check just the basename in the path
+			string filename = baseName(name);
+			if(!filename.matchFirst(dirmask).empty) {
+				return true;
+			}
+		}
+		if (skipDotfiles) {
+			if (.isDotFile(name)){
+				return true;
 			}
 		}
 		// no match
@@ -80,6 +92,13 @@ final class SelectiveSync
 			string filename = baseName(name);
 			if(!filename.matchFirst(mask).empty) {
 				return true;
+			} else {
+				// check dot file
+				if (skipDotfiles) {
+					if (.isDotFile(name)){
+						return true;
+					}
+				}
 			}
 		}
 		// no match
@@ -140,6 +159,22 @@ private bool isPathMatched(string path, Regex!char mask) {
 	}
 	return false;
 }
+
+private bool isDotFile(string path)
+{
+	// always allow the root
+	if (path == ".") return false;
+	
+	path = buildNormalizedPath(path);
+	auto paths = pathSplitter(path);
+	foreach(base; paths) {
+		if (startsWith(base, ".")){
+			return true;
+		}
+	}
+	return false;
+}
+
 
 unittest
 {

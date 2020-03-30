@@ -2,7 +2,7 @@ import std.algorithm;
 import std.array: array;
 import std.datetime;
 import std.exception: enforce;
-import std.file, std.json, std.path;
+import std.file, std.json, std.path, std.algorithm.mutation;
 import std.regex;
 import std.stdio, std.string, std.uni, std.uri;
 import std.conv;
@@ -95,21 +95,6 @@ private bool hasQuickXorHash(const ref JSONValue item)
 private bool hasSha1Hash(const ref JSONValue item)
 {
 	return ("sha1Hash" in item["file"]["hashes"]) != null;
-}
-
-private bool isDotFile(string path)
-{
-	// always allow the root
-	if (path == ".") return false;
-	
-	path = buildNormalizedPath(path);
-	auto paths = pathSplitter(path);
-	foreach(base; paths) {
-		if (startsWith(base, ".")){
-			return true;
-		}
-	}
-	return false;
 }
 
 // construct an Item struct from a JSON driveItem
@@ -1316,7 +1301,7 @@ final class SyncEngine
 					}
 					
 					log.vdebug("Result: ", unwanted);
-					if (unwanted) log.vlog("Skipping item - excluded by skip_dir config match: ", matchDisplay);
+					if (unwanted) log.vlog("Skipping item - excluded by skip_dir config match or enabled skip_dotfiles option: ", matchDisplay);
 				}
 			}
 		}
@@ -1328,7 +1313,7 @@ final class SyncEngine
 				log.vdebug("skip_file item to check: ", item.name);
 				unwanted = selectiveSync.isFileNameExcluded(item.name);
 				log.vdebug("Result: ", unwanted);
-				if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
+				if (unwanted) log.vlog("Skipping item - excluded by skip_file config or enabled skip_dotfiles option: ", item.name);
 			}
 		}
 
@@ -1394,14 +1379,6 @@ final class SyncEngine
 			}
 		}
 		
-		// skip downloading dot files if configured
-		if (cfg.getValueBool("skip_dotfiles")) {
-			if (isDotFile(path)) {
-				log.vlog("Skipping item - .file or .folder: ", path);
-				unwanted = true;
-			}
-		}
-
 		// skip unwanted items early
 		if (unwanted) {
 			log.vdebug("Skipping OneDrive change as this is determined to be unwanted");
@@ -2449,14 +2426,6 @@ final class SyncEngine
 		if(path.byGrapheme.walkLength < maxPathLength){
 			// path is less than maxPathLength
 			
-			// skip dot files if configured
-			if (cfg.getValueBool("skip_dotfiles")) {
-				if (isDotFile(path)) {
-					log.vlog("Skipping item - .file or .folder: ", path);
-					return;
-				}
-			}
-			
 			// Do we need to check for .nosync? Only if --check-for-nosync was passed in
 			if (cfg.getValueBool("check_nosync")) {
 				if (exists(path ~ "/.nosync")) {
@@ -2503,16 +2472,16 @@ final class SyncEngine
 					log.vdebug("Checking path: ", path);
 					// Only check path if config is != ""
 					if (cfg.getValueString("skip_dir") != "") {
-						if (selectiveSync.isDirNameExcluded(strip(path,"./"))) {
-							log.vlog("Skipping item - excluded by skip_dir config: ", path);
+						if (selectiveSync.isDirNameExcluded(path.strip(".").strip("/"))) {
+							log.vlog("Skipping item - excluded by skip_dir config or enabled skip_dotfiles option:", path);
 							return;
 						}
 					}
 				}
 				if (isFile(path)) {
 					log.vdebug("Checking file: ", path);
-					if (selectiveSync.isFileNameExcluded(strip(path,"./"))) {
-						log.vlog("Skipping item - excluded by skip_file config: ", path);
+					if (selectiveSync.isFileNameExcluded(path.strip(".").strip("/"))) {
+						log.vlog("Skipping item - excluded by skip_file config or enabled skip_dotfiles option: ", path);
 						return;
 					}
 				}
@@ -3644,13 +3613,8 @@ final class SyncEngine
 		log.log("Moving ", from, " to ", to);
 		Item fromItem, toItem, parentItem;
 		if (!itemdb.selectByPath(from, defaultDriveId, fromItem)) {
-			if (cfg.getValueBool("skip_dotfiles") && isDotFile(to)){	
-				log.log("Skipping upload due to skip_dotfile = true");
-				return;
-			} else {
 				uploadNewFile(to);
 				return;
-			}
 		}
 		if (fromItem.parentId == null) {
 			// the item is a remote folder, need to do the operation on the parent
@@ -3662,26 +3626,7 @@ final class SyncEngine
 		}
 		if (!itemdb.selectByPath(dirName(to), defaultDriveId, parentItem)) {
 			// the parent item is not in the database
-			
-			// is the destination a .folder that is being skipped?
-			if (cfg.getValueBool("skip_dotfiles")) {
-				if (isDotFile(dirName(to))) {
-					// target location is a .folder
-					log.vdebug("Target location is excluded from sync due to skip_dotfiles = true");
-					// item will have been moved locally, but as this is now to a location that is not synced, needs to be removed from OneDrive
-					log.log("Item has been moved to a location that is excluded from sync operations. Removing item from OneDrive");
-					uploadDeleteItem(fromItem, from);
-					return;
-				}
-			}
-			
-			// some other error
 			throw new SyncException("Can't move an item to an unsynced directory");
-		}
-		if (cfg.getValueBool("skip_dotfiles") && isDotFile(to)){
-			log.log("Removing item from OneDrive due to skip_dotfiles = true");
-			uploadDeleteItem(fromItem, from);
-			return;
 		}
 		if (fromItem.driveId != parentItem.driveId) {
 			// items cannot be moved between drives
