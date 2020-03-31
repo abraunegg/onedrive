@@ -1530,6 +1530,21 @@ final class SyncEngine
 						log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer than OneDrive item and present in the sqlite database");
 						return;
 					} else {
+						// Should this 'download' be skipped?
+						// Do we need to check for .nosync? Only if --check-for-nosync was passed in
+						if (cfg.getValueBool("check_nosync")) {
+							// need the parent path for this object
+							string parentPath = dirName(path);		
+							if (exists(parentPath ~ "/.nosync")) {
+								log.vlog("Skipping downloading item - .nosync found in parent folder & --check-for-nosync is enabled: ", path);
+								// flag that this download failed, otherwise the 'item' is added to the database - then, as not present on the local disk, would get deleted from OneDrive
+								downloadFailed = true;
+								// clean up this partial file, otherwise every sync we will get theis warning
+								log.vlog("Removing previous partial file download due to .nosync found in parent folder & --check-for-nosync is enabled");
+								safeRemove(path);
+								return;
+							}
+						}
 						// file exists locally but is not in the sqlite database - maybe a failed download?
 						log.vlog("Local item does not exist in local database - replacing with file from OneDrive - failed download?");
 					}
@@ -1550,14 +1565,13 @@ final class SyncEngine
 			}
 		} else {
 			// path does not exist locally - this will be a new file download or folder creation
-			// for any reason, should this 'download' be skipped?
-			
+			// Should this 'download' be skipped?
 			// Do we need to check for .nosync? Only if --check-for-nosync was passed in
 			if (cfg.getValueBool("check_nosync")) {
 				// need the parent path for this object
 				string parentPath = dirName(path);		
 				if (exists(parentPath ~ "/.nosync")) {
-					log.vlog("Skipping downloading item - .nosync found in parent folder & --check-for-nosync enabled: ", path);
+					log.vlog("Skipping downloading item - .nosync found in parent folder & --check-for-nosync is enabled: ", path);
 					// flag that this download failed, otherwise the 'item' is added to the database - then, as not present on the local disk, would get deleted from OneDrive
 					downloadFailed = true;
 					return;
