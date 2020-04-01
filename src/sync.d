@@ -2678,8 +2678,15 @@ final class SyncEngine
 					log.vlog("The requested directory to create was not found on OneDrive - creating remote directory: ", path);
 
 					if (!dryRun) {
-						// Perform the database lookup
+						// Perform the database lookup - is the parent in the database?
+						if (!itemdb.selectByPath(dirName(path), parent.driveId, parent)) {
+							// parent is not in the database
+							log.vdebug("Parent path is not in the database - need to add it");
+							uploadCreateDir(dirName(path));
+						}
+						// still enforce check of parent path. if the above was triggered, the below will generate a sync retry and will now be sucessful
 						enforce(itemdb.selectByPath(dirName(path), parent.driveId, parent), "The parent item id is not in the database");
+						
 						JSONValue driveItem = [
 								"name": JSONValue(baseName(path)),
 								"folder": parseJSON("{}")
@@ -2750,9 +2757,18 @@ final class SyncEngine
 					} else {
 						// parent is in database
 						log.vlog("The parent for this path is in the local database - adding requested path (", path ,") to database");
-						auto res = onedrive.getPathDetails(path);
-						// Is the response a valid JSON object - validation checking done in saveItem
-						saveItem(res);
+						
+						// are we in a --dry-run scenario?
+						if (!dryRun) {
+							// get the live data
+							auto res = onedrive.getPathDetails(path);
+							// Is the response a valid JSON object - validation checking done in saveItem
+							saveItem(res);
+						} else {
+							// need to fake this data
+							auto fakeResponse = createFakeResponse(path);
+							saveItem(fakeResponse);
+						}
 					}
 				} else {
 					// They are the "same" name wise but different in case sensitivity
@@ -3442,7 +3458,14 @@ final class SyncEngine
 								// Save the details of the file that we got from OneDrive
 								// --dry-run safe
 								log.vlog("Updating the local database with details for this file: ", path);
-								saveItem(fileDetailsFromOneDrive);
+								if (!dryRun) {
+									// use the live data
+									saveItem(fileDetailsFromOneDrive);
+								} else {
+									// need to fake this data
+									auto fakeResponse = createFakeResponse(path);
+									saveItem(fakeResponse);
+								}
 							}
 						} else {
 							// The files are the "same" name wise but different in case sensitivity
