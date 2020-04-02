@@ -686,6 +686,7 @@ int main(string[] args)
 			log.log("OneDrive monitor interval (seconds): ", cfg.getValueLong("monitor_interval"));
 			Monitor m = new Monitor(selectiveSync);
 			m.onDirCreated = delegate(string path) {
+				// Handle .folder creation if skip_dotfiles is enabled
 				if ((cfg.getValueBool("skip_dotfiles")) && (selectiveSync.isDotFile(path))) {
 					log.vlog("[M] Skipping watching path - .folder found & --skip-dot-files enabled: ", path);
 				} else {
@@ -728,7 +729,13 @@ int main(string[] args)
 			m.onMove = delegate(string from, string to) {
 				log.vlog("[M] Item moved: ", from, " -> ", to);
 				try {
-					sync.uploadMoveItem(from, to);
+					// Handle .folder -> folder if skip_dotfiles is enabled
+					if ((cfg.getValueBool("skip_dotfiles")) && (selectiveSync.isDotFile(from))) {
+						// .folder -> folder handling - has to be handled as a new folder
+						sync.scanForDifferences(to);
+					} else {
+						sync.uploadMoveItem(from, to);
+					}
 				} catch (CurlException e) {
 					log.vlog("Offline, cannot move item!");
 				} catch(Exception e) {
