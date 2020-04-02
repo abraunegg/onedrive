@@ -1517,17 +1517,19 @@ final class SyncEngine
 	private void applyNewItem(Item item, string path)
 	{
 		if (exists(path)) {
+			// path exists locally
 			if (isItemSynced(item, path)) {
-				//log.vlog("The item is already present");
+				// file details from OneDrive and local file details in database are in-sync
+				log.vdebug("The item to sync is already present on the local file system and is in-sync with the local database");
 				return;
 			} else {
-				// TODO: force remote sync by deleting local item
-				
-				// Is the local file technically 'newer' based on UTC timestamp?
+				// file is not in sync with the database
+				// is the local file technically 'newer' based on UTC timestamp?
 				SysTime localModifiedTime = timeLastModified(path).toUTC();
 				localModifiedTime.fracSecs = Duration.zero;
 				item.mtime.fracSecs = Duration.zero;
 				
+				// is the local modified time greater than that from OneDrive?
 				if (localModifiedTime > item.mtime) {
 					// local file is newer than item on OneDrive based on file modified time
 					// Is this item id in the database?
@@ -1538,6 +1540,21 @@ final class SyncEngine
 						log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer than OneDrive item and present in the sqlite database");
 						return;
 					} else {
+						// Should this 'download' be skipped?
+						// Do we need to check for .nosync? Only if --check-for-nosync was passed in
+						if (cfg.getValueBool("check_nosync")) {
+							// need the parent path for this object
+							string parentPath = dirName(path);		
+							if (exists(parentPath ~ "/.nosync")) {
+								log.vlog("Skipping downloading item - .nosync found in parent folder & --check-for-nosync is enabled: ", path);
+								// flag that this download failed, otherwise the 'item' is added to the database - then, as not present on the local disk, would get deleted from OneDrive
+								downloadFailed = true;
+								// clean up this partial file, otherwise every sync we will get theis warning
+								log.vlog("Removing previous partial file download due to .nosync found in parent folder & --check-for-nosync is enabled");
+								safeRemove(path);
+								return;
+							}
+						}
 						// file exists locally but is not in the sqlite database - maybe a failed download?
 						log.vlog("Local item does not exist in local database - replacing with file from OneDrive - failed download?");
 					}
@@ -1554,8 +1571,7 @@ final class SyncEngine
 					} else {
 						// local data protection is configured, renaming local file
 						log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent data loss: ", path, " -> ", newPath);
-						
-						// perform the rename action
+						// perform the rename action of the local file
 						if (!dryRun) {
 							safeRename(path);
 						} else {
@@ -1565,7 +1581,23 @@ final class SyncEngine
 					}
 				}
 			}
+		} else {
+			// path does not exist locally - this will be a new file download or folder creation
+			// Should this 'download' be skipped?
+			// Do we need to check for .nosync? Only if --check-for-nosync was passed in
+			if (cfg.getValueBool("check_nosync")) {
+				// need the parent path for this object
+				string parentPath = dirName(path);		
+				if (exists(parentPath ~ "/.nosync")) {
+					log.vlog("Skipping downloading item - .nosync found in parent folder & --check-for-nosync is enabled: ", path);
+					// flag that this download failed, otherwise the 'item' is added to the database - then, as not present on the local disk, would get deleted from OneDrive
+					downloadFailed = true;
+					return;
+				}
+			}
 		}
+		
+		// how to handle this item?
 		final switch (item.type) {
 		case ItemType.file:
 			downloadFileItem(item, path);
@@ -2245,10 +2277,26 @@ final class SyncEngine
 								// OneDrive Business Account
 								// We need to always use a session to upload, but handle the changed file correctly
 								if (accountType == "business"){
-									// For logging consistency
-									writeln("");
+									
 									try {
-										response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+										// is this a zero-byte file?
+										if (getSize(path) == 0) {
+											// the file we are trying to upload as a session is a zero byte file - we cant use a session to upload or replace the file 
+											// as OneDrive technically does not support zero byte files
+											writeln("skipped.");
+											log.fileOnly("Uploading modified file ", path, " ... skipped.");
+											log.vlog("Skip Reason: Microsoft OneDrive does not support 'zero-byte' files as a modified upload. Will upload as new file.");
+											// delete file on OneDrive
+											onedrive.deleteById(item.driveId, item.id, item.eTag);
+											// delete file from local database
+											itemdb.deleteById(item.driveId, item.id);
+											return;
+										} else {
+											// For logging consistency
+											writeln("");
+											// normal session upload
+											response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+										}
 									} catch (OneDriveException e) {
 										if (e.httpStatusCode == 401) {
 											// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
@@ -2283,66 +2331,81 @@ final class SyncEngine
 									}
 									// upload done without error
 									writeln("done.");
+									
 									// As the session.upload includes the last modified time, save the response
 									// Is the response a valid JSON object - validation checking done in saveItem
 									saveItem(response);
 								}
 								// OneDrive documentLibrary
 								if (accountType == "documentLibrary"){
-									// Handle certain file types differently
-									if ((extension(path) == ".txt") || (extension(path) == ".csv")) {
-										// .txt and .csv are unaffected by https://github.com/OneDrive/onedrive-api-docs/issues/935 
-										// For logging consistency
-										writeln("");
-										try {
-											response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
-										} catch (OneDriveException e) {
-											if (e.httpStatusCode == 401) {
-												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+									// is this a zero-byte file?
+									if (getSize(path) == 0) {
+										// the file we are trying to upload as a session is a zero byte file - we cant use a session to upload or replace the file 
+										// as OneDrive technically does not support zero byte files
+										writeln("skipped.");
+										log.fileOnly("Uploading modified file ", path, " ... skipped.");
+										log.vlog("Skip Reason: Microsoft OneDrive does not support 'zero-byte' files as a modified upload. Will upload as new file.");
+										// delete file on OneDrive
+										onedrive.deleteById(item.driveId, item.id, item.eTag);
+										// delete file from local database
+										itemdb.deleteById(item.driveId, item.id);
+										return;
+									} else {
+										// Handle certain file types differently
+										if ((extension(path) == ".txt") || (extension(path) == ".csv")) {
+											// .txt and .csv are unaffected by https://github.com/OneDrive/onedrive-api-docs/issues/935 
+											// For logging consistency
+											writeln("");
+											try {
+												response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+											} catch (OneDriveException e) {
+												if (e.httpStatusCode == 401) {
+													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+													writeln("skipped.");
+													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													uploadFailed = true;
+													return;
+												}										
+												// Resolve https://github.com/abraunegg/onedrive/issues/36
+												if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
+													// The file is currently checked out or locked for editing by another user
+													// We cant upload this file at this time
+													writeln("skipped.");
+													log.fileOnly("Uploading modified file ", path, " ... skipped.");
+													writeln("", path, " is currently checked out or locked for editing by another user.");
+													log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+													uploadFailed = true;
+													return;
+												} else {
+													// display what the error is
+													writeln("skipped.");
+													displayOneDriveErrorMessage(e.msg);
+													uploadFailed = true;
+													return;
+												}
+											} catch (FileException e) {
+												// display the error message
 												writeln("skipped.");
-												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
-												uploadFailed = true;
-												return;
-											}										
-											// Resolve https://github.com/abraunegg/onedrive/issues/36
-											if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
-												// The file is currently checked out or locked for editing by another user
-												// We cant upload this file at this time
-												writeln("skipped.");
-												log.fileOnly("Uploading modified file ", path, " ... skipped.");
-												writeln("", path, " is currently checked out or locked for editing by another user.");
-												log.fileOnly(path, " is currently checked out or locked for editing by another user.");
-												uploadFailed = true;
-												return;
-											} else {
-												// display what the error is
-												writeln("skipped.");
-												displayOneDriveErrorMessage(e.msg);
+												displayFileSystemErrorMessage(e.msg);
 												uploadFailed = true;
 												return;
 											}
-										} catch (FileException e) {
-											// display the error message
+											// upload done without error
+											writeln("done.");
+											// As the session.upload includes the last modified time, save the response
+											// Is the response a valid JSON object - validation checking done in saveItem
+											saveItem(response);
+										} else {									
+											// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+											// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
 											writeln("skipped.");
-											displayFileSystemErrorMessage(e.msg);
-											uploadFailed = true;
+											log.fileOnly("Uploading modified file ", path, " ... skipped.");
+											log.vlog("Skip Reason: Microsoft Sharepoint 'enrichment' after upload issue");
+											log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+											// Delete record from the local database - file will be uploaded as a new file
+											itemdb.deleteById(item.driveId, item.id);
 											return;
 										}
-										// upload done without error
-										writeln("done.");
-										// As the session.upload includes the last modified time, save the response
-										// Is the response a valid JSON object - validation checking done in saveItem
-										saveItem(response);
-									} else {									
-										// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
-										// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
-										writeln("skipped.");
-										log.fileOnly("Uploading modified file ", path, " ... skipped.");
-										log.vlog("Skip Reason: Microsoft Sharepoint 'enrichment' after upload issue");
-										log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
-										// Delete record from the local database - file will be uploaded as a new file
-										itemdb.deleteById(item.driveId, item.id);
-										return;
 									}
 								}
 							}
@@ -2698,8 +2761,15 @@ final class SyncEngine
 					log.vlog("The requested directory to create was not found on OneDrive - creating remote directory: ", path);
 
 					if (!dryRun) {
-						// Perform the database lookup
+						// Perform the database lookup - is the parent in the database?
+						if (!itemdb.selectByPath(dirName(path), parent.driveId, parent)) {
+							// parent is not in the database
+							log.vdebug("Parent path is not in the database - need to add it");
+							uploadCreateDir(dirName(path));
+						}
+						// still enforce check of parent path. if the above was triggered, the below will generate a sync retry and will now be sucessful
 						enforce(itemdb.selectByPath(dirName(path), parent.driveId, parent), "The parent item id is not in the database");
+						
 						JSONValue driveItem = [
 								"name": JSONValue(baseName(path)),
 								"folder": parseJSON("{}")
@@ -2770,9 +2840,18 @@ final class SyncEngine
 					} else {
 						// parent is in database
 						log.vlog("The parent for this path is in the local database - adding requested path (", path ,") to database");
-						auto res = onedrive.getPathDetails(path);
-						// Is the response a valid JSON object - validation checking done in saveItem
-						saveItem(res);
+						
+						// are we in a --dry-run scenario?
+						if (!dryRun) {
+							// get the live data
+							auto res = onedrive.getPathDetails(path);
+							// Is the response a valid JSON object - validation checking done in saveItem
+							saveItem(res);
+						} else {
+							// need to fake this data
+							auto fakeResponse = createFakeResponse(path);
+							saveItem(fakeResponse);
+						}
 					}
 				} else {
 					// They are the "same" name wise but different in case sensitivity
@@ -3462,7 +3541,14 @@ final class SyncEngine
 								// Save the details of the file that we got from OneDrive
 								// --dry-run safe
 								log.vlog("Updating the local database with details for this file: ", path);
-								saveItem(fileDetailsFromOneDrive);
+								if (!dryRun) {
+									// use the live data
+									saveItem(fileDetailsFromOneDrive);
+								} else {
+									// need to fake this data
+									auto fakeResponse = createFakeResponse(path);
+									saveItem(fakeResponse);
+								}
 							}
 						} else {
 							// The files are the "same" name wise but different in case sensitivity
