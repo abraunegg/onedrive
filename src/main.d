@@ -530,7 +530,7 @@ int main(string[] args)
 	selectiveSync.load(cfg.syncListFilePath);
 	
 	// Configure skip_dir, skip_file, skip-dir-strict-match & skip_dotfiles from config entries
-	// skip_dir items
+	// Handle skip_dir configuration in config file
 	log.vdebug("Configuring skip_dir ...");
 	log.vdebug("skip_dir: ", cfg.getValueString("skip_dir"));
 	selectiveSync.setDirMask(cfg.getValueString("skip_dir"));
@@ -549,7 +549,7 @@ int main(string[] args)
 		selectiveSync.setSkipDotfiles();
 	}
 	
-	// skip_file items
+	// Handle skip_file configuration in config file
 	log.vdebug("Configuring skip_file ...");
 	// Validate skip_file to ensure that this does not contain an invalid configuration
 	// Do not use a skip_file entry of .* as this will prevent correct searching of local changes to process.
@@ -560,7 +560,7 @@ int main(string[] args)
 			return EXIT_FAILURE;
 		}
 	}
-	// valid skip_file entries
+	// All skip_file entries are valid
 	log.vdebug("skip_file: ", cfg.getValueString("skip_file"));
 	selectiveSync.setFileMask(cfg.getValueString("skip_file"));
 		
@@ -710,7 +710,7 @@ int main(string[] args)
 					log.logAndNotify("Cannot upload file changes/creation: ", e.msg);
 				}
 			};
-			m.onDelete = delegate(string path) {				
+			m.onDelete = delegate(string path) {
 				log.vlog("[M] Item deleted: ", path);
 				try {
 					sync.deleteByPath(path);

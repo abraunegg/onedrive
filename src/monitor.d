@@ -1,7 +1,7 @@
 import core.sys.linux.sys.inotify;
 import core.stdc.errno;
 import core.sys.posix.poll, core.sys.posix.unistd;
-import std.exception, std.file, std.path, std.regex, std.stdio, std.string;
+import std.exception, std.file, std.path, std.regex, std.stdio, std.string, std.algorithm.mutation;
 import config;
 import selective;
 import util;
@@ -85,31 +85,25 @@ final class Monitor
 			return;
 		}
 
-		// skip filtered items
+		// skip monitoring any filtered items
 		if (dirname != ".") {
 			// is the directory name a match to a skip_dir entry?
-			if (selectiveSync.isDirNameExcluded(strip(dirname,"./"))) {
+			if (selectiveSync.isDirNameExcluded(dirname.strip('.').strip('/'))) {
 				// dont add a watch for this item
+				log.vdebug("Skipping monitoring due to skip_dir match: ", dirname);
 				return;
 			}
 			// is the filename a match to a skip_file entry?
 			if (selectiveSync.isFileNameExcluded(baseName(dirname))) {
 				// dont add a watch for this item
+				log.vdebug("Skipping monitoring due to skip_file match: ", dirname);
 				return;
 			}
 			// is the path exluded by sync_list?
 			if (selectiveSync.isPathExcludedViaSyncList(buildNormalizedPath(dirname))) {
 				// dont add a watch for this item
+				log.vdebug("Skipping monitoring due to sync_list match: ", dirname);
 				return;
-			}
-
-			// is the path exluded if skip_dotfiles configured and path is a .folder?
-			if (selectiveSync.getSkipDotfiles()) {
-				// is the path a .folder / .file?
-				if (selectiveSync.isDotFile(dirname)) {
-					// dont add a watch for this item
-					return;
-				}
 			}
 		}
 		
@@ -130,6 +124,7 @@ final class Monitor
 			}
 		}
 		
+		// passed all potential exclusions
 		add(dirname);
 		try {
 			auto pathList = dirEntries(dirname, SpanMode.shallow, false);
@@ -163,8 +158,23 @@ final class Monitor
 			log.error("ERROR: inotify_add_watch failed: ", pathname);
 			return;
 		}
+		
+		// Add path to inotify watch - required regardless if a '.folder' or 'folder'
 		wdToDirName[wd] = buildNormalizedPath(pathname) ~ "/";
-		log.vlog("Monitor directory: ", pathname);
+		
+		// Do we log that we are monitoring this directory?
+		if (isDir(pathname)) {
+			// This is a directory			
+			// is the path exluded if skip_dotfiles configured and path is a .folder?
+			if (selectiveSync.getSkipDotfiles()) {
+				if (selectiveSync.isDotFile(pathname)) {
+					// no misleading output that we are monitoring this directory
+					return;
+				}
+			}
+			// Log that this is directory is being monitored
+			log.vlog("Monitor directory: ", pathname);
+		}
 	}
 
 	// remove a watch descriptor
@@ -196,6 +206,7 @@ final class Monitor
 	{
 		string path = wdToDirName[event.wd];
 		if (event.len > 0) path ~= fromStringz(event.name.ptr);
+		log.vdebug("inotify path event for: ", path);
 		return path;
 	}
 
@@ -229,16 +240,17 @@ final class Monitor
 
 				// skip filtered items
 				path = getPath(event);
-				if (selectiveSync.isDirNameExcluded(strip(path,"./"))) {
+				if (selectiveSync.isDirNameExcluded(path.strip('.').strip('/'))) {
 					goto skip;
 				}
-				if (selectiveSync.isFileNameExcluded(strip(path,"./"))) {
+				if (selectiveSync.isFileNameExcluded(path.strip('.').strip('/'))) {
 					goto skip;
 				}
 				if (selectiveSync.isPathExcludedViaSyncList(path)) {
 					goto skip;
 				}
-
+				
+				// handle events
 				if (event.mask & IN_MOVED_FROM) {
 					log.vdebug("event IN_MOVED_FROM: ", path);
 					cookieToPath[event.cookie] = path;
