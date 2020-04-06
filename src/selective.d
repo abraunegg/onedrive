@@ -11,8 +11,9 @@ final class SelectiveSync
 	private string[] paths;
 	private Regex!char mask;
 	private Regex!char dirmask;
-  private bool skipDirStrictMatch = false;
-  private string[] businessSharedFoldersList;
+	private bool skipDirStrictMatch = false;
+	private bool skipDotfiles = false;
+	private string[] businessSharedFoldersList;
 	
 	void load(string filepath)
 	{
@@ -51,6 +52,19 @@ final class SelectiveSync
 	void setDirMask(const(char)[] dirmask)
 	{
 		this.dirmask = wild2regex(dirmask);
+	}
+	
+	// Configure skipDotfiles if function is called
+	// By default, skipDotfiles = false;
+	void setSkipDotfiles() 
+	{
+		skipDotfiles = true;
+	}
+	
+	// return value of skipDotfiles
+	bool getSkipDotfiles()
+	{
+		return skipDotfiles;
 	}
 	
 	// config file skip_dir parameter
@@ -108,6 +122,22 @@ final class SelectiveSync
 	bool isPathExcludedMatchAll(string path)
 	{
 		return .isPathExcluded(path, paths) || .isPathMatched(path, mask) || .isPathMatched(path, dirmask);
+	}
+	
+	// is the path a dotfile?
+	bool isDotFile(string path)
+	{
+		// always allow the root
+		if (path == ".") return false;
+
+		path = buildNormalizedPath(path);
+		auto paths = pathSplitter(path);
+		foreach(base; paths) {
+			if (startsWith(base, ".")){
+				return true;
+			}
+		}
+		return false;
 	}
 	
 	bool isSharedFolderMatched(string name)

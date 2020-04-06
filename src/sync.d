@@ -281,18 +281,19 @@ final class SyncEngine
 			log.vdebug("oneDriveDetails	= onedrive.getDefaultDrive() generated a OneDriveException");
 			if (e.httpStatusCode == 400) {
 				// OneDrive responded with 400 error: Bad Request
-				log.error("\nERROR: OneDrive returned a 'HTTP 400 Bad Request' - Cannot Initialize Sync Engine");
+				displayOneDriveErrorMessage(e.msg);
+				
 				// Check this
 				if (cfg.getValueString("drive_id").length) {
-					log.error("ERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
+					log.error("\nERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
 				}
 				// Must exit here
 				exit(-1);
 			}
 			if (e.httpStatusCode == 401) {
 				// HTTP request returned status code 401 (Unauthorized)
-				log.error("\nERROR: OneDrive returned a 'HTTP 401 Unauthorized' - Cannot Initialize Sync Engine");
-				log.error("ERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
+				displayOneDriveErrorMessage(e.msg);
+				log.error("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
 				// Must exit here
 				exit(-1);
 			}
@@ -307,7 +308,7 @@ final class SyncEngine
 			}
 			if (e.httpStatusCode >= 500) {
 				// There was a HTTP 5xx Server Side Error
-				log.error("ERROR: OneDrive returned a 'HTTP 5xx Server Side Error' - Cannot Initialize Sync Engine");
+				displayOneDriveErrorMessage(e.msg);
 				// Must exit here
 				exit(-1);
 			}
@@ -320,18 +321,18 @@ final class SyncEngine
 			log.vdebug("oneDriveRootDetails = onedrive.getDefaultRoot() generated a OneDriveException");
 			if (e.httpStatusCode == 400) {
 				// OneDrive responded with 400 error: Bad Request
-				log.error("\nERROR: OneDrive returned a 'HTTP 400 Bad Request' - Cannot Initialize Sync Engine");
+				displayOneDriveErrorMessage(e.msg);
 				// Check this
 				if (cfg.getValueString("drive_id").length) {
-					log.error("ERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
+					log.error("\nERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
 				}
 				// Must exit here
 				exit(-1);
 			}
 			if (e.httpStatusCode == 401) {
 				// HTTP request returned status code 401 (Unauthorized)
-				log.error("\nERROR: OneDrive returned a 'HTTP 401 Unauthorized' - Cannot Initialize Sync Engine");
-				log.error("ERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
+				displayOneDriveErrorMessage(e.msg);
+				log.error("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
 				// Must exit here
 				exit(-1);
 			}
@@ -346,7 +347,7 @@ final class SyncEngine
 			}
 			if (e.httpStatusCode >= 500) {
 				// There was a HTTP 5xx Server Side Error
-				log.error("ERROR: OneDrive returned a 'HTTP 5xx Server Side Error' - Cannot Initialize Sync Engine");
+				displayOneDriveErrorMessage(e.msg);
 				// Must exit here
 				exit(-1);
 			}
@@ -2145,8 +2146,8 @@ final class SyncEngine
 			// use what was passed in
 			logPath = path;
 		}
-	
-		// scan for any changes made locally
+
+		// scan for changes in the path provided
 		log.vlog("Uploading differences of ", logPath);
 		Item item;
 		
@@ -3967,12 +3968,21 @@ final class SyncEngine
 
 	// Parse and display error message received from OneDrive
 	private void displayOneDriveErrorMessage(string message) {
-		log.error("ERROR: OneDrive returned an error with the following message:");
+		log.error("\nERROR: OneDrive returned an error with the following message:");
 		auto errorArray = splitLines(message);
 		log.error("  Error Message: ", errorArray[0]);
 		// extract 'message' as the reason
 		JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
-		log.error("  Error Reason:  ", errorMessage["error"]["message"].str);	
+		string errorReason = errorMessage["error"]["message"].str;
+		// display reason
+		if (errorReason.startsWith("<!DOCTYPE")) {
+			// a HTML Error Reason was given
+			log.error("  Error Reason:  A HTML Error response was provided. Use debug logging (--verbose --verbose) to view.");
+			log.vdebug(errorReason);
+		} else {
+			// a non HTML Error Reason was given
+			log.error("  Error Reason:  ", errorReason);
+		}
 	}
 	
 	// Parse and display error message received from the local file system

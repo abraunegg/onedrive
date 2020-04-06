@@ -592,17 +592,27 @@ int main(string[] args)
 	}
 	selectiveSync.loadSharedFolders(cfg.businessSharedFolderFilePath);
 	
-	// Configure skip_dir & skip_file from config entries
-	// skip_dir items
+	// Configure skip_dir, skip_file, skip-dir-strict-match & skip_dotfiles from config entries
+	// Handle skip_dir configuration in config file
 	log.vdebug("Configuring skip_dir ...");
 	log.vdebug("skip_dir: ", cfg.getValueString("skip_dir"));
 	selectiveSync.setDirMask(cfg.getValueString("skip_dir"));
+	
 	// Was --skip-dir-strict-match configured?
+	log.vdebug("Configuring skip_dir_strict_match ...");
+	log.vdebug("skip_dir_strict_match: ", cfg.getValueBool("skip_dir_strict_match"));
 	if (cfg.getValueBool("skip_dir_strict_match")) {
 		selectiveSync.setSkipDirStrictMatch();
 	}
 	
-	// skip_file items
+	// Was --skip-dot-files configured?
+	log.vdebug("Configuring skip_dotfiles ...");
+	log.vdebug("skip_dotfiles: ", cfg.getValueBool("skip_dotfiles"));
+	if (cfg.getValueBool("skip_dotfiles")) {
+		selectiveSync.setSkipDotfiles();
+	}
+	
+	// Handle skip_file configuration in config file
 	log.vdebug("Configuring skip_file ...");
 	// Validate skip_file to ensure that this does not contain an invalid configuration
 	// Do not use a skip_file entry of .* as this will prevent correct searching of local changes to process.
@@ -613,8 +623,7 @@ int main(string[] args)
 			return EXIT_FAILURE;
 		}
 	}
-	
-	// valid entry
+	// All skip_file entries are valid
 	log.vdebug("skip_file: ", cfg.getValueString("skip_file"));
 	selectiveSync.setFileMask(cfg.getValueString("skip_file"));
 		
@@ -772,13 +781,18 @@ int main(string[] args)
 			log.log("OneDrive monitor interval (seconds): ", cfg.getValueLong("monitor_interval"));
 			Monitor m = new Monitor(selectiveSync);
 			m.onDirCreated = delegate(string path) {
-				log.vlog("[M] Directory created: ", path);
-				try {
-					sync.scanForDifferences(path);
-				} catch (CurlException e) {
-					log.vlog("Offline, cannot create remote dir!");
-				} catch(Exception e) {
-					log.logAndNotify("Cannot create remote directory: ", e.msg);
+				// Handle .folder creation if skip_dotfiles is enabled
+				if ((cfg.getValueBool("skip_dotfiles")) && (selectiveSync.isDotFile(path))) {
+					log.vlog("[M] Skipping watching path - .folder found & --skip-dot-files enabled: ", path);
+				} else {
+					log.vlog("[M] Directory created: ", path);
+					try {
+						sync.scanForDifferences(path);
+					} catch (CurlException e) {
+						log.vlog("Offline, cannot create remote dir!");
+					} catch(Exception e) {
+						log.logAndNotify("Cannot create remote directory: ", e.msg);
+					}
 				}
 			};
 			m.onFileChanged = delegate(string path) {
@@ -799,7 +813,7 @@ int main(string[] args)
 					log.vlog("Offline, cannot delete item!");
 				} catch(SyncException e) {
 					if (e.msg == "The item to delete is not in the local database") {
-						log.vlog("Item cannot be deleted because not found in database");
+						log.vlog("Item cannot be deleted from OneDrive because not found in the local database");
 					} else {
 						log.logAndNotify("Cannot delete remote item: ", e.msg);
 					}
@@ -810,7 +824,13 @@ int main(string[] args)
 			m.onMove = delegate(string from, string to) {
 				log.vlog("[M] Item moved: ", from, " -> ", to);
 				try {
-					sync.uploadMoveItem(from, to);
+					// Handle .folder -> folder if skip_dotfiles is enabled
+					if ((cfg.getValueBool("skip_dotfiles")) && (selectiveSync.isDotFile(from))) {
+						// .folder -> folder handling - has to be handled as a new folder
+						sync.scanForDifferences(to);
+					} else {
+						sync.uploadMoveItem(from, to);
+					}
 				} catch (CurlException e) {
 					log.vlog("Offline, cannot move item!");
 				} catch(Exception e) {
