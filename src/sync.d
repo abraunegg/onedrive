@@ -455,7 +455,7 @@ final class SyncEngine
 	void setSyncListFullScanTrigger()
 	{
 		syncListFullScanTrigger = true;
-		log.vdebug("Setting syncListFullScanTrigger = true due to new folder creation request in a location that is in-scope via sync_list");
+		log.vdebug("Setting syncListFullScanTrigger = true due to new folder creation request in a location that is now in-scope which was previously out of scope");
 	}
 	
 	// unset method
@@ -856,6 +856,15 @@ final class SyncEngine
 		log.vdebug("syncListFullScanTrigger = ", syncListFullScanTrigger);
 		log.vdebug("performFullItemScan = ", performFullItemScan);
 		// if sync_list is not configured, syncListConfigured should be false
+		
+		// do we override performFullItemScan if it is calse and syncListFullScanTrigger is true?
+		if ((!performFullItemScan) && (syncListFullScanTrigger)) {
+			// forcing a full scan earlier than potentially normal
+			// syncListFullScanTrigger = true due to new folder creation request in a location that is now in-scope which was previously out of scope
+			performFullItemScan = true;
+			log.vdebug("overriding performFullItemScan as syncListFullScanTrigger was set");
+		}
+		
 		// depending on the scan type (--monitor or --synchronize) performFullItemScan is set depending on the number of sync passes performed (--monitor) or ALWAYS if just --synchronize is used
 		if (!performFullItemScan){
 			// performFullItemScan == false
