@@ -867,6 +867,8 @@ final class SyncEngine
 			} else {
 				log.vdebug("deltaLink contains valid data - resulting API query will be treated as a delta scan of OneDrive");
 			}
+		} else {
+			log.vdebug("performFullItemScan is true, not using deltaLink or deltaLinkAvailable to force query of all OneDrive items");
 		}
 		
 		for (;;) {
