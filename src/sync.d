@@ -981,25 +981,33 @@ final class SyncEngine
 						// verbose log, no 'notify' .. it is over the top
 						if (!syncListConfigured) {
 							// sync_list is not being used - lets use the right messaging here
-							log.vlog("Processing ", nrChanges, " changes");
+							if (syncListFullScanTrigger) {
+								// full scan was triggered out of cycle
+								log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being triggered by actions on OneDrive");
+							} else {
+								// no sync_list, no full scan was triggered
+								log.vlog("Processing ", nrChanges, " changes");
+							}
 						} else {
 							// sync_list is being used - why are we going through the entire OneDrive contents?
-							log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent state due to sync_list being used");
+							log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to sync_list being used");
 						}
 					} else {
 						// There are valid changes but less than the min_notify_changes configured threshold
 						// We will only output the number of changes being processed to debug log if this is set to assist with debugging
 						// As this is debug logging, messaging can be the same, regardless of sync_list being used or not
-						log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
 						
 						// is performFullItemScan set due to a full scan required?
 						if (performFullItemScan){
-							// full scan was triggered due to using sync_list
-							log.vdebug("Number of items from OneDrive to process: ", nrChanges);
+							// full scan was triggered due to sync_list or skip_dir being used
+							log.vdebug("Number of items from OneDrive to process due to a full scan being triggered: ", nrChanges);
 							// unset now the full scan trigger if set
 							if (syncListFullScanTrigger) {
 								unsetSyncListFullScanTrigger();
 							}
+						} else {
+							// standard message
+							log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
 						}
 					}
 
