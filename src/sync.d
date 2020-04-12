@@ -857,7 +857,7 @@ final class SyncEngine
 		log.vdebug("performFullItemScan = ", performFullItemScan);
 		// if sync_list is not configured, syncListConfigured should be false
 		
-		// do we override performFullItemScan if it is calse and oneDriveFullScanTrigger is true?
+		// do we override performFullItemScan if it is currently false and oneDriveFullScanTrigger is true?
 		if ((!performFullItemScan) && (oneDriveFullScanTrigger)) {
 			// forcing a full scan earlier than potentially normal
 			// oneDriveFullScanTrigger = true due to new folder creation request in a location that is now in-scope which was previously out of scope
