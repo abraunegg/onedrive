@@ -1334,6 +1334,7 @@ final class SyncEngine
 		}
 
 		// check the item type
+		string path;
 		if (!unwanted) {
 			if (isItemFile(driveItem)) {
 				log.vdebug("The item we are syncing is a file");
@@ -1343,14 +1344,22 @@ final class SyncEngine
 				log.vdebug("The item we are syncing is a remote item");
 				assert(isItemFolder(driveItem["remoteItem"]), "The remote item is not a folder");
 			} else {
-				log.vlog("This item type (", item.name, ") is not supported");
+				// Why was this unwanted?
+				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
+				// Microsoft OneNote container objects present as neither folder or file but has file size
+				if ((!isItemFile(driveItem)) && (!isItemFolder(driveItem)) && (hasFileSize(driveItem))) {
+					// Log that this was skipped as this was a Microsoft OneNote item and unsupported
+					log.vlog("The Microsoft OneNote Notebook '", path, "' is not supported by this client");
+				} else {
+					// Log that this item was skipped as unsupported 
+					log.vlog("The OneDrive item '", path, "' is not supported by this client");
+				}
 				unwanted = true;
 				log.vdebug("Flagging as unwanted: item type is not supported");
 			}
 		}
 
 		// check for selective sync
-		string path;
 		if (!unwanted) {
 			// Is the item parent in the local database?
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
