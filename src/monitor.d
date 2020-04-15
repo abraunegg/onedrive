@@ -151,8 +151,13 @@ final class Monitor
 				log.log("sudo sysctl fs.inotify.max_user_watches=524288");
 			}
 			if (errno() == 13) {
-				log.vlog("WARNING: inotify_add_watch failed - permission denied: ", pathname);
-				return;
+				if ((selectiveSync.getSkipDotfiles()) && (selectiveSync.isDotFile(pathname))) {
+					// no misleading output that we could not add a watch due to permission denied
+					return;
+				} else {
+					log.vlog("WARNING: inotify_add_watch failed - permission denied: ", pathname);
+					return;
+				}
 			}
 			// Flag any other errors
 			log.error("ERROR: inotify_add_watch failed: ", pathname);
@@ -166,11 +171,9 @@ final class Monitor
 		if (isDir(pathname)) {
 			// This is a directory			
 			// is the path exluded if skip_dotfiles configured and path is a .folder?
-			if (selectiveSync.getSkipDotfiles()) {
-				if (selectiveSync.isDotFile(pathname)) {
-					// no misleading output that we are monitoring this directory
-					return;
-				}
+			if ((selectiveSync.getSkipDotfiles()) && (selectiveSync.isDotFile(pathname))) {
+				// no misleading output that we are monitoring this directory
+				return;
 			}
 			// Log that this is directory is being monitored
 			log.vlog("Monitor directory: ", pathname);
