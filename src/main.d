@@ -885,6 +885,8 @@ int main(string[] args)
 						}
 					}
 					
+					// Monitor Loop Counter
+					log.vdebug("fullScanCounter =            ", fullScanCounter);
 					// sync option handling per sync loop
 					log.vdebug("syncListConfigured =         ", syncListConfigured);
 					log.vdebug("fullScanRequired =           ", fullScanRequired);
@@ -1045,8 +1047,13 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 								// thus scanning every 'monitor_interval' (default 45 seconds) for local changes is excessive and not required
 								sync.scanForDifferences(localPath);
 								// ensure that the current remote state is updated locally to ensure everything is consistent
-								// for the 'true-up' sync, if sync_list is configured, syncListConfigured = true, thus a FULL walk of all OneDrive objects will be requested and used if required
-								sync.applyDifferences(syncListConfigured);
+								if (syncListConfigured) {
+									// for the 'true-up' sync, if sync_list is configured, syncListConfigured = true, thus a FULL walk of all OneDrive objects will be requested and used if required
+									sync.applyDifferences(syncListConfigured);
+								} else {
+									// for the 'true-up' sync, if fullScanRequired = true, thus a FULL walk of all OneDrive objects will be requested and used if required
+									sync.applyDifferences(fullScanRequired);
+								}
 							}
 						}
 					}

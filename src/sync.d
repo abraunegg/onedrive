@@ -239,7 +239,7 @@ final class SyncEngine
 	// is sync_list configured
 	private bool syncListConfigured = false;
 	// sync_list new folder added, trigger delta scan override
-	private bool syncListFullScanTrigger = false;
+	private bool oneDriveFullScanTrigger = false;
 	// array of all OneDrive driveId's
 	private string[] driveIDsArray;
 
@@ -463,17 +463,17 @@ final class SyncEngine
 	// Issue #658 Handling
 	// If an existing folder is moved into a sync_list valid path (where it previously was out of scope due to sync_list), 
 	// then set this flag to true, so that on the second 'true-up' sync, we force a rescan of the OneDrive path to capture any 'files'
-	void setSyncListFullScanTrigger()
+	void setOneDriveFullScanTrigger()
 	{
-		syncListFullScanTrigger = true;
-		log.vdebug("Setting syncListFullScanTrigger = true due to new folder creation request in a location that is in-scope via sync_list");
+		oneDriveFullScanTrigger = true;
+		log.vdebug("Setting oneDriveFullScanTrigger = true due to new folder creation request in a location that is now in-scope which was previously out of scope");
 	}
 	
 	// unset method
-	void unsetSyncListFullScanTrigger()
+	void unsetOneDriveFullScanTrigger()
 	{
-		syncListFullScanTrigger = false;
-		log.vdebug("Setting syncListFullScanTrigger = false");
+		oneDriveFullScanTrigger = false;
+		log.vdebug("Setting oneDriveFullScanTrigger = false");
 	}
 	
 	// set syncListConfigured to true
@@ -1014,9 +1014,18 @@ final class SyncEngine
 		string deltaLink = "";
 		string deltaLinkAvailable = itemdb.getDeltaLink(driveId, id);
 		log.vdebug("syncListConfigured = ", syncListConfigured);
-		log.vdebug("syncListFullScanTrigger = ", syncListFullScanTrigger);
+		log.vdebug("oneDriveFullScanTrigger = ", oneDriveFullScanTrigger);
 		log.vdebug("performFullItemScan = ", performFullItemScan);
 		// if sync_list is not configured, syncListConfigured should be false
+		
+		// do we override performFullItemScan if it is currently false and oneDriveFullScanTrigger is true?
+		if ((!performFullItemScan) && (oneDriveFullScanTrigger)) {
+			// forcing a full scan earlier than potentially normal
+			// oneDriveFullScanTrigger = true due to new folder creation request in a location that is now in-scope which was previously out of scope
+			performFullItemScan = true;
+			log.vdebug("overriding performFullItemScan as oneDriveFullScanTrigger was set");
+		}
+		
 		// depending on the scan type (--monitor or --synchronize) performFullItemScan is set depending on the number of sync passes performed (--monitor) or ALWAYS if just --synchronize is used
 		if (!performFullItemScan){
 			// performFullItemScan == false
@@ -1028,6 +1037,8 @@ final class SyncEngine
 			} else {
 				log.vdebug("deltaLink contains valid data - resulting API query will be treated as a delta scan of OneDrive");
 			}
+		} else {
+			log.vdebug("performFullItemScan is true, not using deltaLink or deltaLinkAvailable to force query of all OneDrive items");
 		}
 		
 		for (;;) {
@@ -1129,7 +1140,7 @@ final class SyncEngine
 			// is changes a valid JSON response
 			if (changes.type() == JSONType.object) {
 				// Are there any changes to process?
-				if ((("value" in changes) != null) && ((deltaChanges > 0) || (syncListFullScanTrigger))) {
+				if ((("value" in changes) != null) && ((deltaChanges > 0) || (oneDriveFullScanTrigger))) {
 					auto nrChanges = count(changes["value"].array);
 					auto changeCount = 0;
 					
@@ -1143,25 +1154,33 @@ final class SyncEngine
 						// verbose log, no 'notify' .. it is over the top
 						if (!syncListConfigured) {
 							// sync_list is not being used - lets use the right messaging here
-							log.vlog("Processing ", nrChanges, " changes");
+							if (oneDriveFullScanTrigger) {
+								// full scan was triggered out of cycle
+								log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being triggered by actions on OneDrive");
+							} else {
+								// no sync_list, no full scan was triggered
+								log.vlog("Processing ", nrChanges, " changes");
+							}
 						} else {
 							// sync_list is being used - why are we going through the entire OneDrive contents?
-							log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent state due to sync_list being used");
+							log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to sync_list being used");
 						}
 					} else {
 						// There are valid changes but less than the min_notify_changes configured threshold
 						// We will only output the number of changes being processed to debug log if this is set to assist with debugging
 						// As this is debug logging, messaging can be the same, regardless of sync_list being used or not
-						log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
 						
 						// is performFullItemScan set due to a full scan required?
 						if (performFullItemScan){
-							// full scan was triggered due to using sync_list
-							log.vdebug("Number of items from OneDrive to process: ", nrChanges);
+							// full scan was triggered due to sync_list or skip_dir being used
+							log.vdebug("Number of items from OneDrive to process due to a full scan being triggered: ", nrChanges);
 							// unset now the full scan trigger if set
-							if (syncListFullScanTrigger) {
-								unsetSyncListFullScanTrigger();
+							if (oneDriveFullScanTrigger) {
+								unsetOneDriveFullScanTrigger();
 							}
+						} else {
+							// standard message
+							log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
 						}
 					}
 
@@ -1507,6 +1526,7 @@ final class SyncEngine
 		}
 
 		// check the item type
+		string path;
 		if (!unwanted) {
 			if (isItemFile(driveItem)) {
 				log.vdebug("The item we are syncing is a file");
@@ -1516,14 +1536,22 @@ final class SyncEngine
 				log.vdebug("The item we are syncing is a remote item");
 				assert(isItemFolder(driveItem["remoteItem"]), "The remote item is not a folder");
 			} else {
-				log.vlog("This item type (", item.name, ") is not supported");
+				// Why was this unwanted?
+				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
+				// Microsoft OneNote container objects present as neither folder or file but has file size
+				if ((!isItemFile(driveItem)) && (!isItemFolder(driveItem)) && (hasFileSize(driveItem))) {
+					// Log that this was skipped as this was a Microsoft OneNote item and unsupported
+					log.vlog("The Microsoft OneNote Notebook '", path, "' is not supported by this client");
+				} else {
+					// Log that this item was skipped as unsupported 
+					log.vlog("The OneDrive item '", path, "' is not supported by this client");
+				}
 				unwanted = true;
 				log.vdebug("Flagging as unwanted: item type is not supported");
 			}
 		}
 
 		// check for selective sync
-		string path;
 		if (!unwanted) {
 			// Is the item parent in the local database?
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
@@ -1771,7 +1799,7 @@ final class SyncEngine
 			log.vdebug("sync_list excluded: ", syncListExcluded);
 			if (!syncListExcluded) {
 				// path we are creating is not excluded via sync_list
-				setSyncListFullScanTrigger();
+				setOneDriveFullScanTrigger();
 			}
 			
 			if (!dryRun) {

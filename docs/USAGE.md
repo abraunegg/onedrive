@@ -23,7 +23,7 @@ skip_file = "~*|.~*|*.tmp"
 Do not use a skip_file entry of `.*` as this will prevent correct searching of local changes to process.
 
 ### Local File and Folder Naming Conventions
-The files and directories in the synchronization directory must follow the [Windows naming conventions](https://msdn.microsoft.com/en-us/library/aa365247).
+The files and directories in the synchronization directory must follow the [Windows naming conventions](https://docs.microsoft.com/windows/win32/fileio/naming-a-file).
 The application will attempt to handle instances where you have two files with the same names but with different capitalization. Where there is a namespace clash, the file name which clashes will not be synced. This is expected behavior and won't be fixed.
 
 ### curl compatibility
