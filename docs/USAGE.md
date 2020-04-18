@@ -246,7 +246,7 @@ nano ~/.config/onedrive/config
 ```
 This file does not get created by default, and should only be created if you want to change the 'default' operational parameters.
 
-See the [config](config) file for the full list of options, and [All available commands](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#all-available-commands) for all possible keys and there default values.
+See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/config) file for the full list of options, and [All available commands](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#all-available-commands) for all possible keys and there default values.
 
 The default configuration file is listed below:
 ```text
