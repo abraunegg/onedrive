@@ -5,7 +5,9 @@
 [![Docker Build](https://img.shields.io/docker/automated/driveone/onedrive)](https://hub.docker.com/r/driveone/onedrive)
 [![Docker Pulls](https://img.shields.io/docker/pulls/driveone/onedrive)](https://hub.docker.com/r/driveone/onedrive)
 
-A complete tool to interact with OneDrive on Linux. Built following the UNIX philosophy
+A free Microsoft OneDrive Client which supports OneDrive Personal, OneDrive for Business, OneDrive for Office365 and Sharepoint.
+
+This powerful and highly configurable client can run on all major Linux distributions, as a Docker container and on FreeBSD. It supports one-way and two-way sync capabilities and securely connects to Microsoft OneDrive services.
 
 ## Features
 *   State caching
