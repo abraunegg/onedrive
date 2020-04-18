@@ -172,7 +172,6 @@ final class Config
 		stringValues["auth_files"]        = "";
 		boolValues["display_config"]      = false;
 		boolValues["display_sync_status"] = false;
-		boolValues["resync"]              = false;
 		boolValues["print_token"]         = false;
 		boolValues["logout"]              = false;
 		boolValues["monitor"]             = false;
