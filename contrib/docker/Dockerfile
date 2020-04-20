@@ -15,8 +15,8 @@ RUN yum install -y make git gcc libcurl-devel sqlite-devel pkg-config && \
     && gosu nobody true
 RUN mkdir -p /onedrive/conf /onedrive/data
 COPY . /usr/src/onedrive
-RUN cd /usr/src/onedrive/ && \
-    ./configure && \
+WORKDIR /usr/src/onedrive
+RUN ./configure && \
     make clean && \
     make && \
     make install
