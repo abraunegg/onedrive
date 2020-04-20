@@ -44,3 +44,6 @@ If you encounter any bugs you can report them here on Github. Before filing an i
 2.  Fill in a new bug report using the [issue template](https://github.com/abraunegg/onedrive/issues/new?template=bug_report.md)
 3.  Generate a debug log for support using the following [process](https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support)
 4.  Upload the debug log to [pastebin](https://pastebin.com/) or archive and email to support@mynas.com.au
+
+## Known issues
+See [docs/known-issues.md](https://github.com/abraunegg/onedrive/blob/master/docs/known-issues.md)
