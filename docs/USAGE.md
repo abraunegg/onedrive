@@ -287,8 +287,8 @@ The default configuration file is listed below:
 # remove_source_files = "false"
 # skip_dir_strict_match = "false"
 # application_id = ""
+# resync = "false"
 ```
-
 
 
 ### 'config' file configuration examples:
