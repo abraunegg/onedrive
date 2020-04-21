@@ -35,7 +35,7 @@ function setup_arm32_chroot {
 	# Download LDC compiler
 	wget "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION_ARMHF}/ldc2-${LDC_VERSION_ARMHF}-linux-armhf.tar.xz"
 	tar -xf "ldc2-${LDC_VERSION_ARMHF}-linux-armhf.tar.xz"
-	mv "ldc2-${LDC_VERSION_ARMHF}-linux-armhf dlang-${ARCH}"
+	mv "ldc2-${LDC_VERSION_ARMHF}-linux-armhf" "dlang-${ARCH}"
 	rm -rf "ldc2-${LDC_VERSION_ARMHF}-linux-armhf.tar.xz"
 	# Create chrooted environment
 	sudo mkdir "${CHROOT_DIR}"
@@ -55,10 +55,10 @@ function setup_arm64_chroot {
 	# Host dependencies
 	sudo apt-get install -qq -y ${HOST_DEPENDENCIES}
 	# Download LDC compiler
-	wget https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION_ARM64}/ldc2-${LDC_VERSION_ARM64}-linux-aarch64.tar.xz
-	tar -xf ldc2-${LDC_VERSION_ARM64}-linux-aarch64.tar.xz
-	mv ldc2-${LDC_VERSION_ARM64}-linux-aarch64 dlang-${ARCH}
-	rm -rf ldc2-${LDC_VERSION_ARM64}-linux-aarch64.tar.xz
+	wget "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION_ARM64}/ldc2-${LDC_VERSION_ARM64}-linux-aarch64.tar.xz"
+	tar -xf "ldc2-${LDC_VERSION_ARM64}-linux-aarch64.tar.xz"
+	mv "ldc2-${LDC_VERSION_ARM64}-linux-aarch64" "dlang-${ARCH}"
+	rm -rf "ldc2-${LDC_VERSION_ARM64}-linux-aarch64.tar.xz"
 	
 	# ARM64 qemu-debootstrap needs to be 1.0.78, Trusty is 1.0.59
 	#sudo echo "deb http://archive.ubuntu.com/ubuntu xenial main restricted universe multiverse" >> /etc/apt/sources.list
@@ -67,7 +67,7 @@ function setup_arm64_chroot {
 	sudo apt-get install -t xenial debootstrap
 	
 	# Create chrooted environment
-	sudo mkdir ${CHROOT_DIR}
+	sudo mkdir "${CHROOT_DIR}"
 	sudo qemu-debootstrap --arch=${CHROOT_ARCH64} ${VERSION64} ${CHROOT_DIR} ${DEBIAN_MIRROR}
 	configure_chroot
 }
@@ -82,16 +82,16 @@ function setup_x32_chroot {
 	sudo apt-get install -qq -y ${HOST_DEPENDENCIES}
 	# Download DMD compiler
 	DMDVER=2.083.1
-	wget http://downloads.dlang.org/releases/2.x/${DMDVER}/dmd.${DMDVER}.linux.tar.xz
-	tar -xf dmd.${DMDVER}.linux.tar.xz
-	mv dmd2 dlang-${ARCH}
-	rm -rf dmd.${DMDVER}.linux.tar.xz
+	wget "http://downloads.dlang.org/releases/2.x/${DMDVER}/dmd.${DMDVER}.linux.tar.xz"
+	tar -xf "dmd.${DMDVER}.linux.tar.xz"
+	mv dmd2 "dlang-${ARCH}"
+	rm -rf "dmd.${DMDVER}.linux.tar.xz"
 	# Create chrooted environment
-	sudo mkdir ${CHROOT_DIR}
+	sudo mkdir "${CHROOT_DIR}"
 	sudo debootstrap --foreign --no-check-gpg --variant=buildd --arch=${CHROOT_ARCH32} ${VERSION} ${CHROOT_DIR} ${DEBIAN_MIRROR}
-	sudo cp /usr/bin/qemu-i386-static ${CHROOT_DIR}/usr/bin/
-	sudo cp /usr/bin/qemu-x86_64-static ${CHROOT_DIR}/usr/bin/
-	sudo chroot ${CHROOT_DIR} /debootstrap/debootstrap --second-stage
+	sudo cp /usr/bin/qemu-i386-static "${CHROOT_DIR}/usr/bin/"
+	sudo cp /usr/bin/qemu-x86_64-static "${CHROOT_DIR}/usr/bin/"
+	sudo chroot "${CHROOT_DIR}" /debootstrap/debootstrap --second-stage
 	sudo sbuild-createchroot --arch=${CHROOT_ARCH32} --foreign --setup-only ${VERSION} ${CHROOT_DIR} ${DEBIAN_MIRROR}
 	configure_chroot
 }
