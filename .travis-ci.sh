@@ -33,15 +33,15 @@ function setup_arm32_chroot {
 	# Host dependencies
 	sudo apt-get install -qq -y ${HOST_DEPENDENCIES}
 	# Download LDC compiler
-	wget https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION_ARMHF}/ldc2-${LDC_VERSION_ARMHF}-linux-armhf.tar.xz
-	tar -xf ldc2-${LDC_VERSION_ARMHF}-linux-armhf.tar.xz
-	mv ldc2-${LDC_VERSION_ARMHF}-linux-armhf dlang-${ARCH}
-	rm -rf ldc2-${LDC_VERSION_ARMHF}-linux-armhf.tar.xz
+	wget "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION_ARMHF}/ldc2-${LDC_VERSION_ARMHF}-linux-armhf.tar.xz"
+	tar -xf "ldc2-${LDC_VERSION_ARMHF}-linux-armhf.tar.xz"
+	mv "ldc2-${LDC_VERSION_ARMHF}-linux-armhf dlang-${ARCH}"
+	rm -rf "ldc2-${LDC_VERSION_ARMHF}-linux-armhf.tar.xz"
 	# Create chrooted environment
-	sudo mkdir ${CHROOT_DIR}
-	sudo debootstrap --foreign --no-check-gpg --variant=buildd --arch=${CHROOT_ARCH} ${VERSION} ${CHROOT_DIR} ${DEBIAN_MIRROR}
-	sudo cp /usr/bin/qemu-arm-static ${CHROOT_DIR}/usr/bin/
-	sudo chroot ${CHROOT_DIR} /debootstrap/debootstrap --second-stage
+	sudo mkdir "${CHROOT_DIR}"
+	sudo debootstrap --foreign --no-check-gpg --variant=buildd --arch="${CHROOT_ARCH}" "${VERSION}" "${CHROOT_DIR}" "${DEBIAN_MIRROR}"
+	sudo cp /usr/bin/qemu-arm-static "${CHROOT_DIR}"/usr/bin/
+	sudo chroot "${CHROOT_DIR}" /debootstrap/debootstrap --second-stage
 	sudo sbuild-createchroot --arch=${CHROOT_ARCH} --foreign --setup-only ${VERSION} ${CHROOT_DIR} ${DEBIAN_MIRROR}
 	configure_chroot
 }
