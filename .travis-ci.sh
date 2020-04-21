@@ -16,7 +16,7 @@ DEBIAN_MIRROR="http://httpredir.debian.org/debian"
 HOST_DEPENDENCIES="qemu-user-static binfmt-support debootstrap sbuild wget"
 
 # Debian package dependencies for the chrooted environment
-GUEST_DEPENDENCIES="build-essential libcurl4-openssl-dev libsqlite3-dev libgnutls-openssl27 git pkg-config libxml2"
+GUEST_DEPENDENCIES=(build-essential libcurl4-openssl-dev libsqlite3-dev libgnutls-openssl27 git pkg-config libxml2)
 
 # LDC Version
 # Different versions due to https://github.com/ldc-developers/ldc/issues/3027
@@ -104,7 +104,7 @@ function configure_chroot {
 	
 	# Install dependencies inside chroot
 	sudo chroot "${CHROOT_DIR}" apt-get update
-	sudo chroot "${CHROOT_DIR}" "apt-get --allow-unauthenticated install -qq -y ${GUEST_DEPENDENCIES}"
+	sudo chroot "${CHROOT_DIR}" apt-get --allow-unauthenticated install -qq -y "${GUEST_DEPENDENCIES[@]}"
 	
 	# Create build dir and copy travis build files to our chroot environment
 	sudo mkdir -p "${CHROOT_DIR}"/"${TRAVIS_BUILD_DIR}"
