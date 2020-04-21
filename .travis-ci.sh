@@ -103,19 +103,19 @@ function configure_chroot {
 	chmod a+x envvars.sh
 	
 	# Install dependencies inside chroot
-	sudo chroot ${CHROOT_DIR} apt-get update
-	sudo chroot ${CHROOT_DIR} apt-get --allow-unauthenticated install -qq -y ${GUEST_DEPENDENCIES}
+	sudo chroot "${CHROOT_DIR}" apt-get update
+	sudo chroot "${CHROOT_DIR}" apt-get --allow-unauthenticated install -qq -y "${GUEST_DEPENDENCIES}"
 	
 	# Create build dir and copy travis build files to our chroot environment
-	sudo mkdir -p ${CHROOT_DIR}/${TRAVIS_BUILD_DIR}
-	sudo rsync -a ${TRAVIS_BUILD_DIR}/ ${CHROOT_DIR}/${TRAVIS_BUILD_DIR}/
+	sudo mkdir -p "${CHROOT_DIR}"/"${TRAVIS_BUILD_DIR}"
+	sudo rsync -a "${TRAVIS_BUILD_DIR}"/ "${CHROOT_DIR}"/"${TRAVIS_BUILD_DIR}"/
 
 	# Indicate chroot environment has been set up
-	sudo touch ${CHROOT_DIR}/.chroot_is_done
+	sudo touch "${CHROOT_DIR}"/.chroot_is_done
 
 	# Call ourselves again which will cause tests to run
-	sudo chroot ${CHROOT_DIR} bash -c "cd ${TRAVIS_BUILD_DIR} && chmod a+x ./.travis-ci.sh"
-	sudo chroot ${CHROOT_DIR} bash -c "cd ${TRAVIS_BUILD_DIR} && ./.travis-ci.sh"
+	sudo chroot "${CHROOT_DIR}" bash -c "cd ${TRAVIS_BUILD_DIR} && chmod a+x ./.travis-ci.sh"
+	sudo chroot "${CHROOT_DIR}" bash -c "cd ${TRAVIS_BUILD_DIR} && ./.travis-ci.sh"
 }
 
 function build_onedrive {
@@ -129,12 +129,12 @@ function build_onedrive {
 	else
 		if [ "${ARCH}" = "x32" ]; then
 			# 32Bit DMD Build
-			./configure DC=${HOMEDIR}/dlang-${ARCH}/linux/bin32/dmd
+			./configure DC="${HOMEDIR}"/dlang-"${ARCH}"/linux/bin32/dmd
 			make clean;
 			make
 		else
 			# LDC Build - ARM32, ARM64
-			./configure DC=${HOMEDIR}/dlang-${ARCH}/bin/ldmd2
+			./configure DC="${HOMEDIR}"/dlang-"${ARCH}"/bin/ldmd2
 			make clean;
 			make
 		fi
@@ -154,7 +154,7 @@ function test_onedrive {
 		./makefiles.sh
 		cd ..
 		mkdir -p ~/.config/onedrive/
-		echo $ODP > ~/.config/onedrive/refresh_token
+		echo "$ODP" > ~/.config/onedrive/refresh_token
 		./onedrive --synchronize --verbose --syncdir '~/OneDriveALT'
 		# OneDrive Cleanup
 		rm -rf ~/OneDriveALT/*
