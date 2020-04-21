@@ -104,7 +104,7 @@ function configure_chroot {
 	
 	# Install dependencies inside chroot
 	sudo chroot "${CHROOT_DIR}" apt-get update
-	sudo chroot "${CHROOT_DIR}" apt-get --allow-unauthenticated install -qq -y "${GUEST_DEPENDENCIES}"
+	sudo chroot "${CHROOT_DIR}" apt-get --allow-unauthenticated install -qq -y ${GUEST_DEPENDENCIES}
 	
 	# Create build dir and copy travis build files to our chroot environment
 	sudo mkdir -p "${CHROOT_DIR}"/"${TRAVIS_BUILD_DIR}"
