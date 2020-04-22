@@ -3,6 +3,33 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.4.1 - 2020-04-23
+### Fixed
+*   Fixed the handling of renaming files to a name starting with a dot when skip_dotfiles = true
+*   Fixed the handling of parentheses from path or file names, when doing comparison with regex
+*   Fixed the handling of renaming dotfiles to another dotfile when skip_dotfile=true in monitor mode
+*   Fixed the handling of --dry-run and --resync together correctly as current database may be corrupt
+*   Fixed building on Alpine Linux under Docker
+*   Fixed the handling of --single-directory for --dry-run and --resync scenarios
+*   Fixed the handling of .nosync directive when downloading new files into existing directories that is (was) in sync
+*   Fixed the handling of zero-byte modified files for OneDrive Business
+*   Fixed skip_dotfiles handling of .folders when in monitor mode to prevent monitoring
+*   Fixed the handling of '.folder' -> 'folder' move when skip_dotfiles is enabled
+*   Fixed the handling of folders that cannot be read (permission error) if parent should be skipped
+*   Fixed the handling of moving folders from skipped directory to non-skipped directory via OneDrive web interface
+*   Fixed building on CentOS Linux under Docker
+*   Fixed Codacy reported issues: double quote to prevent globbing and word splitting
+
+### Added
+*   Implement Feature: Implement the ability to set --resync as a config option, default is false
+
+### Updated
+*   Update error logging to be consistent when initialising fails
+*   Update error logging output to handle HTML error response reasoning if present
+*   Update link to new Microsoft documentation
+*   Update logging output to differentiate between OneNote objects and other unsupported objects
+*   Update RHEL/CentOS spec file example
+
 ## 2.4.0 - 2020-03-22
 ### Fixed
 *   Fixed how the application handles 429 response codes from OneDrive (critical update)
