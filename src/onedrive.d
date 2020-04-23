@@ -575,8 +575,14 @@ final class OneDriveApi
 			{
 				// For each onProgress, what is the % of dlnow to dltotal
 				real currentDLPercent = round(double(dlnow)/dltotal*100);
+				
 				// If matching 5% of download, increment progress bar
 				if ((isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) && (previousDLPercent != currentDLPercent)) {
+				
+					writeln("\ndlnow = ", dlnow);
+					writeln("dltotal = ", dltotal);
+					writeln("currentDLPercent = ", currentDLPercent);
+				
 					p.next();
 					previousDLPercent = currentDLPercent;
 				}
