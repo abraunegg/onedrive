@@ -82,11 +82,11 @@ final class OneDriveApi
 	{
 		this.cfg = cfg;
 		http = HTTP();
+		// Curl Timeout Handling
 		// DNS lookup timeout
 		http.dnsTimeout = (dur!"seconds"(5));
-		// timeout for connecting
+		// Timeout for connecting
 		http.connectTimeout = (dur!"seconds"(10));
-		// Timeouts
 		// with the following settings we force
 		// - if there is no data flow for 5min, abort
 		// - if the download time for one item exceeds 1h, abort
@@ -584,16 +584,26 @@ final class OneDriveApi
 			};
 		
 			// Perform download & display progress bar
-			http.perform();
-			writeln();
-			// Reset onProgress to not display anything for next download
-			http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
-			{
-				return 0;
-			};
+			try {
+				// try and catch any curl error
+				http.perform();
+				writeln();
+				// Reset onProgress to not display anything for next download
+				http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
+				{
+					return 0;
+				};
+			} catch (CurlException e) {
+				displayOneDriveErrorMessage(e.msg);
+			}
 		} else {
 			// No progress bar
-			http.perform();
+			try {
+				// try and catch any curl error
+				http.perform();
+			} catch (CurlException e) {
+				displayOneDriveErrorMessage(e.msg);
+			}
 		}
 		
 		// Check the HTTP response code
