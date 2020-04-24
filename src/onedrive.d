@@ -576,7 +576,10 @@ final class OneDriveApi
 			http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
 			{
 				// For each onProgress, what is the % of dlnow to dltotal
-				real currentDLPercent = round(double(dlnow)/dltotal*100);
+				// round - rounds up to nearest whole number
+				//real currentDLPercent = round(double(dlnow)/dltotal*100);
+				// floor - rounds down to nearest whole number
+				real currentDLPercent = floor(double(dlnow)/dltotal*100);
 				if (currentDLPercent > 0){
 					// We have started downloading
 					// If matching 5% of download, increment progress bar
@@ -585,7 +588,6 @@ final class OneDriveApi
 						writeln("\ndlnow = ", dlnow);
 						writeln("dltotal = ", dltotal);
 						writeln("currentDLPercent = ", currentDLPercent);
-					
 						// Increment counter & show bar update
 						p.next();
 						previousDLPercent = currentDLPercent;
