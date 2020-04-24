@@ -35,8 +35,11 @@ If the tracking of moving data to new local directories is requried, it is bette
 
 ## Application 'stops' running without any visible reason
 **Issue Tracker:** https://github.com/abraunegg/onedrive/issues/494
+
 **Issue Tracker:** https://github.com/abraunegg/onedrive/issues/753
+
 **Issue Tracker:** https://github.com/abraunegg/onedrive/issues/792
+
 **Issue Tracker:** https://github.com/abraunegg/onedrive/issues/884
 
 **Description:**
