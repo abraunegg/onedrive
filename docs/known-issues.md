@@ -62,6 +62,7 @@ This is indicative of the following:
 * Some sort of 'broken' HTTPS transparent inspection service inspecting your traffic somewhere between you and the OneDrive service
 
 **How to resolve:**
+
 The best avenue's of action here are:
 * Ensure your OS is as up-to-date as possible
 * Get support from your OS vendor
