@@ -32,3 +32,40 @@ Technically, the client is 'working' correctly, as, when moving files, you are '
 **Workaround:**
 
 If the tracking of moving data to new local directories is requried, it is better to run the client in service mode (`--monitor`) rather than in standalone mode, as the 'move' of files can then be handled at the point when it occurs, so that the data is moved to the new location on OneDrive without the need to be deleted and re-uploaded.
+
+## Application 'stops' running without any visible reason
+**Issue Tracker:** https://github.com/abraunegg/onedrive/issues/494
+**Issue Tracker:** https://github.com/abraunegg/onedrive/issues/753
+**Issue Tracker:** https://github.com/abraunegg/onedrive/issues/792
+**Issue Tracker:** https://github.com/abraunegg/onedrive/issues/884
+
+**Description:**
+
+When running the client and performing an upload or download operation, the application just stops working without any reason or explanation.
+
+**Explanation:**
+
+The client is heavilly dependant on Curl and OpenSSL to perform the activities with the Microsoft OneDrive service. Generally, when this issue occurs, the following is found in the HTTPS Debug Log:
+```
+OpenSSL SSL_read: SSL_ERROR_SYSCALL, errno 104
+```
+The only way to determine this is the cause of the application ceasing to work is to generate a HTTPS debug log using the following additional flags:
+```
+--verbose --verbose --debug-https
+```
+
+This is indicative of the following:
+* Some sort of flaky Internet connection somewhere between you and the OneDrive service
+* Some sort of 'broken' HTTPS transparent inspection service inspecting your traffic somewhere between you and the OneDrive service
+
+**How to resolve:**
+The best avenue's of action here are:
+* Ensure your OS is as up-to-date as possible
+* Get support from your OS vendor
+* Speak to your ISP or Help Desk for assistance
+* Open a ticket with OpenSSL and/or Curl teams to better handle this sort of connection failure
+* Generate a HTTPS Debug Log for this application and open a new support request with Microsoft and provide the debug log file for their analysis.
+
+If you wish to diagnosing this issue further, refer to the following:
+
+https://maulwuff.de/research/ssl-debugging.html
