@@ -563,21 +563,17 @@ final class OneDriveApi
 		
 		if (fileSize >= thresholdFileSize){
 			// Download Progress Bar
-			
 			size_t iteration = 20;
 			Progress p = new Progress(iteration);
 			p.title = "Downloading";
 			writeln();
 			bool barInit = false;
-	
 			real previousDLPercent = -1.0;
 			real percentCheck = 5.0;
 			// Setup progress bar to display
 			http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
 			{
 				// For each onProgress, what is the % of dlnow to dltotal
-				// round - rounds up to nearest whole number
-				//real currentDLPercent = round(double(dlnow)/dltotal*100);
 				// floor - rounds down to nearest whole number
 				real currentDLPercent = floor(double(dlnow)/dltotal*100);
 				if (currentDLPercent > 0){
@@ -585,16 +581,16 @@ final class OneDriveApi
 					// If matching 5% of download, increment progress bar
 					if ((isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) && (previousDLPercent != currentDLPercent)) {
 						// What have we downloaded thus far
-						writeln("\ndlnow = ", dlnow);
-						writeln("dltotal = ", dltotal);
-						writeln("currentDLPercent = ", currentDLPercent);
+						log.vdebugNewLine("Data Received  = ", dlnow);
+						log.vdebug("Expected Total = ", dltotal);
+						log.vdebug("Percent Complete = ", currentDLPercent);
 						// Increment counter & show bar update
 						p.next();
 						previousDLPercent = currentDLPercent;
 					}
 				} else {
 					if ((currentDLPercent == 0) && (!barInit)) {
-						// This will display the bar at 0% - eg:
+						// Initialise the download bar at 0%
 						// Downloading   0% |                                        |   ETA   --:--:--:^C
 						p.next();
 						barInit = true;
