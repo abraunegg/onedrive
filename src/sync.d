@@ -1307,10 +1307,14 @@ final class SyncEngine
 						} else {
 							simplePathToCheck = driveItem["name"].str;
 						}
-						// complex path
-						complexPathToCheck = itemdb.computePath(parentDriveId, parentItem) ~ "/" ~ driveItem["name"].str;
-						complexPathToCheck = buildNormalizedPath(complexPathToCheck);
 						log.vdebug("skip_dir path to check (simple):  ", simplePathToCheck);
+						// complex path
+						if (itemdb.idInLocalDatabase(parentDriveId, parentItem)){
+							complexPathToCheck = itemdb.computePath(parentDriveId, parentItem) ~ "/" ~ driveItem["name"].str;
+							complexPathToCheck = buildNormalizedPath(complexPathToCheck);
+						} else {
+							log.vdebug("Parent details not in database - unable to compute complex path to check");
+						}
 						log.vdebug("skip_dir path to check (complex): ", complexPathToCheck);
 					} else {
 						simplePathToCheck = driveItem["name"].str;
