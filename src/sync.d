@@ -455,7 +455,7 @@ final class SyncEngine
 	void setOneDriveFullScanTrigger()
 	{
 		oneDriveFullScanTrigger = true;
-		log.vlog("Setting oneDriveFullScanTrigger = true due to new folder creation request in a location that is now in-scope which was previously out of scope");
+		log.vlog("Setting oneDriveFullScanTrigger = true due to new folder creation request in a location that is now in-scope which may have previously out of scope");
 	}
 	
 	// unset method
@@ -1384,7 +1384,7 @@ final class SyncEngine
 			}
 		}
 
-		// check for selective sync
+		// Check if this is included by use of sync_list
 		if (!unwanted) {
 			// Is the item parent in the local database?
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
@@ -1629,22 +1629,18 @@ final class SyncEngine
 			
 			// Issue #658 handling - is sync_list in use?
 			if (syncListConfigured) {
-				auto syncListExcluded = selectiveSync.isPathExcludedViaSyncList(path);
-				log.vdebug("sync_list excluded: ", syncListExcluded);
-				if (!syncListExcluded) {
-					// path we are creating is not excluded via sync_list but potentially previously was
-					log.vlog("Issue #658 handling");
-					setOneDriveFullScanTrigger();
-				}
+				// sync_list in use
+				// path to create was previously checked if this should be included / excluded. No need to check again.
+				log.vlog("Issue #658 handling");
+				setOneDriveFullScanTrigger();
 			}
 			
 			// Issue #865 handling - is skip_dir in use?
 			if (cfg.getValueString("skip_dir") != "") {
-				if (!selectiveSync.isDirNameExcluded(path)) {
-					// path we are creating is not excluded via sync_list but potentially previously was
-					log.vlog("Issue #865 handling");
-					setOneDriveFullScanTrigger();
-				}
+				// we have some entries in skip_dir
+				// path to create was previously checked if this should be included / excluded. No need to check again.
+				log.vlog("Issue #865 handling");
+				setOneDriveFullScanTrigger();
 			}
 			
 			if (!dryRun) {
