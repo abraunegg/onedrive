@@ -1005,15 +1005,19 @@ final class SyncEngine
 						// is performFullItemScan set due to a full scan required?
 						// is oneDriveFullScanTrigger set due to a potentially out-of-scope item now being in-scope
 						if ((performFullItemScan) || (oneDriveFullScanTrigger)) {
+							// oneDriveFullScanTrigger should be false unless set by actions on OneDrive and only if sync_list or skip_dir is used
+							log.vlog("oneDriveFullScanTrigger = ", oneDriveFullScanTrigger);
+							// should only be set if 10th scan in monitor mode or as final true up sync in stand alone mode
+							log.vlog("performFullItemScan = ", performFullItemScan);
 							// full scan was requested or triggered
-							log.vdebug("Number of items from OneDrive to process due to a full scan being triggered: ", nrChanges);
+							log.vlog("Number of items from OneDrive to process due to a full scan being triggered: ", nrChanges);
 							// unset now the full scan trigger if set
 							if (oneDriveFullScanTrigger) {
 								unsetOneDriveFullScanTrigger();
 							}
 						} else {
 							// standard message
-							log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
+							log.vlog("Number of changes from OneDrive to process: ", nrChanges);
 						}
 					}
 
