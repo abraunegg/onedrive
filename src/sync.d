@@ -881,7 +881,7 @@ final class SyncEngine
 		} else {
 			// performFullItemScan == true
 			// do not use delta-link
-			log.vlog("performFullItemScan is true, not using deltaLink to force query of all OneDrive items");
+			log.vlog("performFullItemScan is true, not using the database deltaLink so that we query all objects on OneDrive to compare against all local objects");
 		}
 		
 		for (;;) {
@@ -965,6 +965,7 @@ final class SyncEngine
 				// are there any delta changes?
 				if (("value" in changesAvailable) != null) {
 					deltaChanges = count(changesAvailable["value"].array);
+					log.vlog("deltaLink query reports that there are " , deltaChanges , " changes that need processing on OneDrive");
 				}
 			}
 			
@@ -1209,7 +1210,7 @@ final class SyncEngine
 					}
 				} else {
 					// No changes reported on OneDrive
-					log.vdebug("OneDrive Reported no delta changes - Local path and OneDrive in-sync");
+					log.vlog("OneDrive Reported no delta changes - Local path and OneDrive in-sync");
 				}
 				
 				// the response may contain either @odata.deltaLink or @odata.nextLink
