@@ -244,7 +244,7 @@ final class ItemDatabase
 	}
 
 	// same as selectByPath() but it does not traverse remote folders
-	bool selectByPathNoRemote(const(char)[] path, string rootDriveId, out Item item)
+	bool selectByPathWithRemote(const(char)[] path, string rootDriveId, out Item item)
 	{
 		Item currItem = { driveId: rootDriveId };
 		
