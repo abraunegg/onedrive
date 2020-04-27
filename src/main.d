@@ -796,11 +796,11 @@ int main(string[] args)
 					}
 					
 					// Monitor Loop Counter
-					log.log("fullScanCounter =                    ", fullScanCounter);
+					log.vdebug("fullScanCounter =                    ", fullScanCounter);
 					// sync option handling per sync loop
-					log.log("syncListConfigured =                 ", syncListConfigured);
-					log.log("fullScanRequired =                   ", fullScanRequired);
-					log.log("syncListConfiguredFullScanOverride = ", syncListConfiguredFullScanOverride);
+					log.vdebug("syncListConfigured =                 ", syncListConfigured);
+					log.vdebug("fullScanRequired =                   ", fullScanRequired);
+					log.vdebug("syncListConfiguredFullScanOverride = ", syncListConfiguredFullScanOverride);
 
 					try {
 						if (!initSyncEngine(sync)) {
@@ -881,6 +881,13 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 	int count;
 	string remotePath = "/";
     string localPath = ".";
+	
+	// performSync API scan triggers
+	log.log("performSync API scan triggers");
+	log.log("-----------------------------");
+	log.log("fullScanRequired =                   ", fullScanRequired);
+	log.log("syncListConfiguredFullScanOverride = ", syncListConfiguredFullScanOverride);
+	log.log("-----------------------------");
 	
 	// Are we doing a single directory sync?
 	if (singleDirectory != ""){
