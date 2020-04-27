@@ -1307,10 +1307,14 @@ final class SyncEngine
 						} else {
 							simplePathToCheck = driveItem["name"].str;
 						}
-						// complex path
-						complexPathToCheck = itemdb.computePath(parentDriveId, parentItem) ~ "/" ~ driveItem["name"].str;
-						complexPathToCheck = buildNormalizedPath(complexPathToCheck);
 						log.vdebug("skip_dir path to check (simple):  ", simplePathToCheck);
+						// complex path
+						if (itemdb.idInLocalDatabase(parentDriveId, parentItem)){
+							complexPathToCheck = itemdb.computePath(parentDriveId, parentItem) ~ "/" ~ driveItem["name"].str;
+							complexPathToCheck = buildNormalizedPath(complexPathToCheck);
+						} else {
+							log.vdebug("Parent details not in database - unable to compute complex path to check");
+						}
 						log.vdebug("skip_dir path to check (complex): ", complexPathToCheck);
 					} else {
 						simplePathToCheck = driveItem["name"].str;
@@ -2151,8 +2155,43 @@ final class SyncEngine
 				}
 			}
 		} else {
-			log.vlog("The directory has been deleted");
-			uploadDeleteItem(item, path);
+			// are we in a dry-run scenario
+			if (!dryRun) {
+				// no dry-run
+				log.vlog("The directory has been deleted locally");
+				if (noRemoteDelete) {
+					// do not process remote directory delete
+					log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+				} else {
+					uploadDeleteItem(item, path);
+				}
+			} else {
+				// we are in a --dry-run situation, directory appears to have deleted locally - this directory may never have existed as we never downloaded it ..
+				// Check if path does not exist in database
+				if (!itemdb.selectByPathWithRemote(path, defaultDriveId, item)) {
+					// Path not found in database
+					log.vlog("The directory has been deleted locally");
+					if (noRemoteDelete) {
+						// do not process remote directory delete
+						log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+					} else {
+						uploadDeleteItem(item, path);
+					}
+				} else {
+					// Path was found in the database
+					// Did we 'fake create it' as part of --dry-run ?
+					foreach (i; idsFaked) {
+						if (i[1] == item.id) {
+							log.vdebug("Matched faked dir which is 'supposed' to exist but not created due to --dry-run use");
+							log.vlog("The directory has not changed");
+							return;
+						}
+					}
+					// item.id did not match a 'faked' download new directory creation
+					log.vlog("The directory has been deleted locally");
+					uploadDeleteItem(item, path);
+				}
+			}
 		}
 	}
 
@@ -3780,7 +3819,7 @@ final class SyncEngine
 		}
 		if (fromItem.parentId == null) {
 			// the item is a remote folder, need to do the operation on the parent
-			enforce(itemdb.selectByPathNoRemote(from, defaultDriveId, fromItem));
+			enforce(itemdb.selectByPathWithRemote(from, defaultDriveId, fromItem));
 		}
 		if (itemdb.selectByPath(to, defaultDriveId, toItem)) {
 			// the destination has been overwritten
@@ -3859,7 +3898,7 @@ final class SyncEngine
 		}
 		if (item.parentId == null) {
 			// the item is a remote folder, need to do the operation on the parent
-			enforce(itemdb.selectByPathNoRemote(path, defaultDriveId, item));
+			enforce(itemdb.selectByPathWithRemote(path, defaultDriveId, item));
 		}
 		try {
 			if (noRemoteDelete) {
