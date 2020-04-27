@@ -455,7 +455,7 @@ final class SyncEngine
 	void setOneDriveFullScanTrigger()
 	{
 		oneDriveFullScanTrigger = true;
-		log.vdebug("Setting oneDriveFullScanTrigger = true due to new folder creation request in a location that is now in-scope which was previously out of scope");
+		log.vdebug("Setting oneDriveFullScanTrigger = true due to new folder creation request in a location that is now in-scope which may have previously out of scope");
 	}
 	
 	// unset method
@@ -852,11 +852,13 @@ final class SyncEngine
 		// Get the current delta link
 		string deltaLink = "";
 		string deltaLinkAvailable = itemdb.getDeltaLink(driveId, id);
-		log.vdebug("syncListConfigured = ", syncListConfigured);
-		log.vdebug("oneDriveFullScanTrigger = ", oneDriveFullScanTrigger);
-		log.vdebug("performFullItemScan = ", performFullItemScan);
 		// if sync_list is not configured, syncListConfigured should be false
-		
+		log.vdebug("syncListConfigured = ", syncListConfigured);
+		// oneDriveFullScanTrigger should be false unless set by actions on OneDrive and only if sync_list or skip_dir is used
+		log.vdebug("oneDriveFullScanTrigger = ", oneDriveFullScanTrigger);
+		// should only be set if 10th scan in monitor mode or as final true up sync in stand alone mode
+		log.vdebug("performFullItemScan = ", performFullItemScan);
+				
 		// do we override performFullItemScan if it is currently false and oneDriveFullScanTrigger is true?
 		if ((!performFullItemScan) && (oneDriveFullScanTrigger)) {
 			// forcing a full scan earlier than potentially normal
@@ -877,7 +879,9 @@ final class SyncEngine
 				log.vdebug("deltaLink contains valid data - resulting API query will be treated as a delta scan of OneDrive");
 			}
 		} else {
-			log.vdebug("performFullItemScan is true, not using deltaLink or deltaLinkAvailable to force query of all OneDrive items");
+			// performFullItemScan == true
+			// do not use delta-link
+			log.vdebug("performFullItemScan is true, not using the database deltaLink so that we query all objects on OneDrive to compare against all local objects");
 		}
 		
 		for (;;) {
@@ -961,6 +965,7 @@ final class SyncEngine
 				// are there any delta changes?
 				if (("value" in changesAvailable) != null) {
 					deltaChanges = count(changesAvailable["value"].array);
+					log.vdebug("deltaLink query reports that there are " , deltaChanges , " changes that need processing on OneDrive");
 				}
 			}
 			
@@ -998,8 +1003,11 @@ final class SyncEngine
 						// As this is debug logging, messaging can be the same, regardless of sync_list being used or not
 						
 						// is performFullItemScan set due to a full scan required?
-						if (performFullItemScan){
-							// full scan was triggered due to sync_list or skip_dir being used
+						// is oneDriveFullScanTrigger set due to a potentially out-of-scope item now being in-scope
+						if ((performFullItemScan) || (oneDriveFullScanTrigger)) {
+							// oneDriveFullScanTrigger should be false unless set by actions on OneDrive and only if sync_list or skip_dir is used
+							log.vdebug("performFullItemScan or oneDriveFullScanTrigger = true");
+							// full scan was requested or triggered
 							log.vdebug("Number of items from OneDrive to process due to a full scan being triggered: ", nrChanges);
 							// unset now the full scan trigger if set
 							if (oneDriveFullScanTrigger) {
@@ -1382,7 +1390,7 @@ final class SyncEngine
 			}
 		}
 
-		// check for selective sync
+		// Check if this is included by use of sync_list
 		if (!unwanted) {
 			// Is the item parent in the local database?
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
@@ -1623,13 +1631,21 @@ final class SyncEngine
 			break;
 		case ItemType.dir:
 		case ItemType.remote:
-			log.log("Creating directory: ", path);
+			log.log("Creating local directory: ", path);
 			
-			// Issue #658 handling
-			auto syncListExcluded = selectiveSync.isPathExcludedViaSyncList(path);
-			log.vdebug("sync_list excluded: ", syncListExcluded);
-			if (!syncListExcluded) {
-				// path we are creating is not excluded via sync_list
+			// Issue #658 handling - is sync_list in use?
+			if (syncListConfigured) {
+				// sync_list in use
+				// path to create was previously checked if this should be included / excluded. No need to check again.
+				log.vdebug("Issue #658 handling");
+				setOneDriveFullScanTrigger();
+			}
+			
+			// Issue #865 handling - is skip_dir in use?
+			if (cfg.getValueString("skip_dir") != "") {
+				// we have some entries in skip_dir
+				// path to create was previously checked if this should be included / excluded. No need to check again.
+				log.vdebug("Issue #865 handling");
 				setOneDriveFullScanTrigger();
 			}
 			
