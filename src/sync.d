@@ -992,8 +992,14 @@ final class SyncEngine
 								// unset now the full scan trigger if set
 								unsetOneDriveFullScanTrigger();
 							} else {
-								// no sync_list, no full scan was triggered
-								log.vlog("Processing ", nrChanges, " changes");
+								// no sync_list in use, oneDriveFullScanTrigger not set via sync_list or skip_dir 
+								if (performFullItemScan){
+									// performFullItemScan was set
+									log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being requested");
+								} else {
+									// default processing message
+									log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state");
+								}
 							}
 						} else {
 							// sync_list is being used - why are we going through the entire OneDrive contents?
@@ -1010,14 +1016,14 @@ final class SyncEngine
 							// oneDriveFullScanTrigger should be false unless set by actions on OneDrive and only if sync_list or skip_dir is used
 							log.vdebug("performFullItemScan or oneDriveFullScanTrigger = true");
 							// full scan was requested or triggered
-							log.vdebug("Number of items from OneDrive to process due to a full scan being triggered: ", nrChanges);
+							log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being requested");
 							// unset now the full scan trigger if set
 							if (oneDriveFullScanTrigger) {
 								unsetOneDriveFullScanTrigger();
 							}
 						} else {
 							// standard message
-							log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
+							log.vlog("Number of items from OneDrive to process: ", nrChanges);
 						}
 					}
 
