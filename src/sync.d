@@ -989,6 +989,8 @@ final class SyncEngine
 							if (oneDriveFullScanTrigger) {
 								// full scan was triggered out of cycle
 								log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being triggered by actions on OneDrive");
+								// unset now the full scan trigger if set
+								unsetOneDriveFullScanTrigger();
 							} else {
 								// no sync_list, no full scan was triggered
 								log.vlog("Processing ", nrChanges, " changes");
