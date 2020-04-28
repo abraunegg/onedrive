@@ -677,9 +677,9 @@ int main(string[] args)
 					}
 				}
 				// perform a --synchronize sync
-				// fullScanRequired = false
+				// fullScanRequired = true, for final true-up
 				// but if we have sync_list configured, use syncListConfigured which = true
-				performSync(sync, cfg.getValueString("single_directory"), cfg.getValueBool("download_only"), cfg.getValueBool("local_first"), cfg.getValueBool("upload_only"), LOG_NORMAL, false, syncListConfigured);
+				performSync(sync, cfg.getValueString("single_directory"), cfg.getValueBool("download_only"), cfg.getValueBool("local_first"), cfg.getValueBool("upload_only"), LOG_NORMAL, true, syncListConfigured);
 			}
 		}
 			
