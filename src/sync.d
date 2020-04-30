@@ -910,7 +910,8 @@ final class SyncEngine
 				}
 			} catch (OneDriveException e) {
 				// OneDrive threw an error
-				log.vdebug("Error query: changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)");
+				log.vdebug("------------------------------------------------------------------");
+				log.vdebug("Query Error: changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)");
 				log.vdebug("driveId: ", driveId);
 				log.vdebug("idToQuery: ", idToQuery);
 				log.vdebug("deltaLink: ", deltaLink);
@@ -938,6 +939,13 @@ final class SyncEngine
 					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query changes from OneDrive using deltaLink");
 				}
 				
+				// HTTP request returned status code 500 (Internal Server Error)
+				if (e.httpStatusCode == 500) {
+					// display what the error is
+					displayOneDriveErrorMessage(e.msg);
+					return;
+				}
+				
 				// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
 				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
 					// If an error is returned when querying 'changes' and we recall the original function, we go into a never ending loop where the sync never ends
@@ -948,19 +956,14 @@ final class SyncEngine
 					}
 					// re-try
 					try {
-						changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
+						log.vdebug("Retrying Query - using empty deltaLink");
+						log.vdebug("Retrying Query: changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)");
+						changes = onedrive.viewChangesById(driveId, idToQuery, "");
 					} catch (OneDriveException e) {
 						// display what the error is
 						displayOneDriveErrorMessage(e.msg);
 						return;
 					}
-				} 
-				
-				// HTTP request returned status code 500 (Internal Server Error)
-				if (e.httpStatusCode == 500) {
-					// display what the error is
-					displayOneDriveErrorMessage(e.msg);
-					return;
 				} else {
 					// Default operation if not 404, 410, 429, 500 or 504 errors
 					// display what the error is
@@ -980,7 +983,8 @@ final class SyncEngine
 				}
 			} catch (OneDriveException e) {
 				// OneDrive threw an error
-				log.vdebug("Error query: changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)");
+				log.vdebug("------------------------------------------------------------------");
+				log.vdebug("Query Error: changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)");
 				log.vdebug("driveId: ", driveId);
 				log.vdebug("idToQuery: ", idToQuery);
 				log.vdebug("deltaLink: ", deltaLink);
@@ -1008,6 +1012,13 @@ final class SyncEngine
 					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query changes from OneDrive using deltaLink");
 				}
 				
+				// HTTP request returned status code 500 (Internal Server Error)
+				if (e.httpStatusCode == 500) {
+					// display what the error is
+					displayOneDriveErrorMessage(e.msg);
+					return;
+				}
+				
 				// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
 				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
 					// If an error is returned when querying 'changes' and we recall the original function, we go into a never ending loop where the sync never ends
@@ -1018,19 +1029,14 @@ final class SyncEngine
 					}
 					// re-try
 					try {
-						changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
+						log.vdebug("Retrying Query - using empty deltaLink");
+						log.vdebug("Retrying Query: changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)");
+						changesAvailable = onedrive.viewChangesById(driveId, idToQuery, "");
 					} catch (OneDriveException e) {
 						// display what the error is
 						displayOneDriveErrorMessage(e.msg);
 						return;
 					}
-				}
-
-				// HTTP request returned status code 500 (Internal Server Error)
-				if (e.httpStatusCode == 500) {
-					// display what the error is
-					displayOneDriveErrorMessage(e.msg);
-					return;
 				} else {
 					// Default operation if not 404, 410, 429, 500 or 504 errors
 					// display what the error is
