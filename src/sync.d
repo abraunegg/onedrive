@@ -953,13 +953,13 @@ final class SyncEngine
 					if (e.httpStatusCode == 504) {
 						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
 						log.vdebug("changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink) previously threw an error - retrying");
-					}
-					// re-try original request
-					try {
 						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
 						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
 						Thread.sleep(dur!"seconds"(30));
 						log.vdebug("Retrying Query - using original deltaLink after delay");
+					}
+					// re-try original request - retried for 429 and 504
+					try {
 						log.vdebug("Retrying Query: changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)");
 						changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
 						log.vdebug("Query 'changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)' performed successfully on re-try");
@@ -1046,13 +1046,13 @@ final class SyncEngine
 					if (e.httpStatusCode == 504) {
 						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
 						log.vdebug("changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying");
-					}
-					// re-try original request
-					try {
 						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
 						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
 						Thread.sleep(dur!"seconds"(30));
 						log.vdebug("Retrying Query - using original deltaLink after delay");
+					}
+					// re-try original request - retried for 429 and 504
+					try {
 						log.vdebug("Retrying Query: changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)");
 						changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
 						log.vdebug("Query 'changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
