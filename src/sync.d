@@ -988,7 +988,6 @@ final class SyncEngine
 					// Default operation if not 404, 410, 429, 500 or 504 errors
 					// display what the error is
 					displayOneDriveErrorMessage(e.msg);
-					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
 					return;
 				}
 			}
@@ -1081,7 +1080,6 @@ final class SyncEngine
 					// Default operation if not 404, 410, 429, 500 or 504 errors
 					// display what the error is
 					displayOneDriveErrorMessage(e.msg);
-					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
 					return;
 				}
 			}
