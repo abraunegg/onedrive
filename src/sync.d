@@ -938,7 +938,7 @@ final class SyncEngine
 					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query changes from OneDrive using deltaLink");
 				}
 				
-				// HTTP request returned status code 504 (Gateway Timeout) + 429 retry
+				// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
 				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
 					// If an error is returned when querying 'changes' and we recall the original function, we go into a never ending loop where the sync never ends
 					// re-try the specific changes queries	
@@ -1008,7 +1008,7 @@ final class SyncEngine
 					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query changes from OneDrive using deltaLink");
 				}
 				
-				// HTTP request returned status code 504 (Gateway Timeout) + 429 retry
+				// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
 				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
 					// If an error is returned when querying 'changes' and we recall the original function, we go into a never ending loop where the sync never ends
 					// re-try the specific changes queries	
