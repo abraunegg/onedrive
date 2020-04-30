@@ -932,26 +932,27 @@ final class SyncEngine
 				}
 				
 				// HTTP request returned status code 429 (Too Many Requests)
-				// HTTP request returned status code 504 (Gateway Timeout)
+				if (e.httpStatusCode == 429) {
+					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+					handleOneDriveThrottleRequest();
+					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query changes from OneDrive using deltaLink");
+				}
+				
+				// HTTP request returned status code 504 (Gateway Timeout) + 429 retry
 				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
 					// If an error is returned when querying 'changes' and we recall the original function, we go into a never ending loop where the sync never ends
-					// re-try the specific changes queries
-					if (e.httpStatusCode == 429) {
-						// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-						handleOneDriveThrottleRequest();
-						log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query changes from OneDrive using deltaLink");
-					}
-					
+					// re-try the specific changes queries	
 					if (e.httpStatusCode == 504) {
 						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
 						log.vdebug("changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink) previously threw an error - retrying");
-						try {
-							changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
-						} catch (OneDriveException e) {
-							// display what the error is
-							displayOneDriveErrorMessage(e.msg);
-							return;
-						}
+					}
+					// re-try
+					try {
+						changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
+					} catch (OneDriveException e) {
+						// display what the error is
+						displayOneDriveErrorMessage(e.msg);
+						return;
 					}
 				} 
 				
@@ -1001,26 +1002,27 @@ final class SyncEngine
 				}
 				
 				// HTTP request returned status code 429 (Too Many Requests)
-				// HTTP request returned status code 504 (Gateway Timeout)
+				if (e.httpStatusCode == 429) {
+					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+					handleOneDriveThrottleRequest();
+					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query changes from OneDrive using deltaLink");
+				}
+				
+				// HTTP request returned status code 504 (Gateway Timeout) + 429 retry
 				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
 					// If an error is returned when querying 'changes' and we recall the original function, we go into a never ending loop where the sync never ends
-					// re-try the specific changes queries
-					if (e.httpStatusCode == 429) {
-						// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-						handleOneDriveThrottleRequest();
-						log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query changes from OneDrive using deltaLink");
-					}
-					
+					// re-try the specific changes queries	
 					if (e.httpStatusCode == 504) {
 						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
 						log.vdebug("changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying");
-						try {
-							changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
-						} catch (OneDriveException e) {
-							// display what the error is
-							displayOneDriveErrorMessage(e.msg);
-							return;
-						}
+					}
+					// re-try
+					try {
+						changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
+					} catch (OneDriveException e) {
+						// display what the error is
+						displayOneDriveErrorMessage(e.msg);
+						return;
 					}
 				}
 
