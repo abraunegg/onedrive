@@ -954,15 +954,35 @@ final class SyncEngine
 						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
 						log.vdebug("changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink) previously threw an error - retrying");
 					}
-					// re-try
+					// re-try original request
 					try {
-						log.vdebug("Retrying Query - using empty deltaLink");
+						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+						Thread.sleep(dur!"seconds"(30));
+						log.vdebug("Retrying Query - using original deltaLink after delay");
 						log.vdebug("Retrying Query: changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)");
-						changes = onedrive.viewChangesById(driveId, idToQuery, "");
+						changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
+						log.vdebug("Query 'changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)' performed successfully on re-try");
 					} catch (OneDriveException e) {
 						// display what the error is
-						displayOneDriveErrorMessage(e.msg);
-						return;
+						log.vdebug("Query Error: changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink) on re-try after delay");
+						if (e.httpStatusCode == 504) {
+							log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
+							log.vdebug("changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink) previously threw an error - retrying with empty deltaLink");
+							try {
+								// try query with empty deltaLink value
+								changes = onedrive.viewChangesById(driveId, idToQuery, "");
+								log.vdebug("Query 'changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)' performed successfully on re-try");
+							} catch (OneDriveException e) {
+								// Tried 3 times, give up
+								displayOneDriveErrorMessage(e.msg);
+								return;
+							}
+						} else {
+							// error was not a 504 this time
+							displayOneDriveErrorMessage(e.msg);
+							return;
+						}
 					}
 				} else {
 					// Default operation if not 404, 410, 429, 500 or 504 errors
@@ -1027,15 +1047,35 @@ final class SyncEngine
 						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
 						log.vdebug("changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying");
 					}
-					// re-try
+					// re-try original request
 					try {
-						log.vdebug("Retrying Query - using empty deltaLink");
+						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+						Thread.sleep(dur!"seconds"(30));
+						log.vdebug("Retrying Query - using original deltaLink after delay");
 						log.vdebug("Retrying Query: changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)");
-						changesAvailable = onedrive.viewChangesById(driveId, idToQuery, "");
+						changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
+						log.vdebug("Query 'changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
 					} catch (OneDriveException e) {
 						// display what the error is
-						displayOneDriveErrorMessage(e.msg);
-						return;
+						log.vdebug("Query Error: changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable) on re-try after delay");
+						if (e.httpStatusCode == 504) {
+							log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
+							log.vdebug("changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying with empty deltaLinkAvailable");
+							try {
+								// try query with empty deltaLink value
+								changesAvailable = onedrive.viewChangesById(driveId, idToQuery, "");
+								log.vdebug("Query 'changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
+							} catch (OneDriveException e) {
+								// Tried 3 times, give up
+								displayOneDriveErrorMessage(e.msg);
+								return;
+							}
+						} else {
+							// error was not a 504 this time
+							displayOneDriveErrorMessage(e.msg);
+							return;
+						}
 					}
 				} else {
 					// Default operation if not 404, 410, 429, 500 or 504 errors
@@ -1052,7 +1092,7 @@ final class SyncEngine
 				// are there any delta changes?
 				if (("value" in changesAvailable) != null) {
 					deltaChanges = count(changesAvailable["value"].array);
-					log.vdebug("deltaLink query reports that there are " , deltaChanges , " changes that need processing on OneDrive");
+					log.vdebug("changesAvailable query reports that there are " , deltaChanges , " changes that need processing on OneDrive");
 				}
 			}
 			
@@ -1311,9 +1351,22 @@ final class SyncEngine
 				}
 				
 				// the response may contain either @odata.deltaLink or @odata.nextLink
-				if ("@odata.deltaLink" in changes) deltaLink = changes["@odata.deltaLink"].str;
-				if (deltaLink) itemdb.setDeltaLink(driveId, id, deltaLink);
-				if ("@odata.nextLink" in changes) deltaLink = changes["@odata.nextLink"].str;
+				if ("@odata.deltaLink" in changes) {
+					deltaLink = changes["@odata.deltaLink"].str;
+					log.vdebug("Setting next deltaLink to (@odata.deltaLink): ", deltaLink);
+				}
+				if (deltaLink != "") {
+					// we initialise deltaLink to a blank string - if it is blank, dont update the DB to be empty
+					log.vdebug("Updating completed deltaLink in DB to: ", deltaLink); 
+					itemdb.setDeltaLink(driveId, id, deltaLink);
+				}
+				if ("@odata.nextLink" in changes) {
+					// Update deltaLink to next changeSet bundle
+					deltaLink = changes["@odata.nextLink"].str;
+					// Update deltaLinkAvailable to next changeSet bundle to quantify how many changes we have to process
+					deltaLinkAvailable = changes["@odata.nextLink"].str;
+					log.vdebug("Setting next deltaLink & deltaLinkAvailable to (@odata.nextLink): ", deltaLink);
+				}
 				else break;
 			} else {
 				// Log that an invalid JSON object was returned
