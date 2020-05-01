@@ -100,7 +100,7 @@ void vdebug(T...)(T args)
 	}
 }
 
-void vdebugUpload(T...)(T args)
+void vdebugNewLine(T...)(T args)
 {
 	if (verbose >= 2) {
 		writeln("\n[DEBUG] ", args);
