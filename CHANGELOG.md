@@ -3,7 +3,7 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## 2.4.1 - 2020-04-23
+## 2.4.1 - 2020-05-02
 ### Fixed
 *   Fixed the handling of renaming files to a name starting with a dot when skip_dotfiles = true
 *   Fixed the handling of parentheses from path or file names, when doing comparison with regex
@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Fixed the handling of moving folders from skipped directory to non-skipped directory via OneDrive web interface
 *   Fixed building on CentOS Linux under Docker
 *   Fixed Codacy reported issues: double quote to prevent globbing and word splitting
+*   Fixed an assertion when attempting to compute complex path comparison from shared folders
+*   Fixed the handling of .folders when being skipped via skip_dir
 
 ### Added
 *   Implement Feature: Implement the ability to set --resync as a config option, default is false
@@ -29,6 +31,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Update link to new Microsoft documentation
 *   Update logging output to differentiate between OneNote objects and other unsupported objects
 *   Update RHEL/CentOS spec file example
+*   Update known-issues.md regarding 'SSL_ERROR_SYSCALL, errno 104'
+*   Update progress bar to be more accurate when downloading large files
+*   Updated #658 and #865 handling of when to trigger a directory walk when changes occur on OneDrive
+*   Updated handling of when a full scan is requried due to utilising sync_list
+*   Updated handling of when OneDrive service throws a 429 or 504 response to retry original request after a delay
 
 ## 2.4.0 - 2020-03-22
 ### Fixed
