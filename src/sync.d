@@ -2798,7 +2798,7 @@ final class SyncEngine
 					log.vdebug("Checking path: ", path);
 					// Only check path if config is != ""
 					if (cfg.getValueString("skip_dir") != "") {
-						if (selectiveSync.isDirNameExcluded(strip(path,"./"))) {
+						if (selectiveSync.isDirNameExcluded(path.strip('.').strip('/'))) {
 							log.vlog("Skipping item - excluded by skip_dir config: ", path);
 							return;
 						}
@@ -2806,13 +2806,13 @@ final class SyncEngine
 				}
 				if (isFile(path)) {
 					log.vdebug("Checking file: ", path);
-					if (selectiveSync.isFileNameExcluded(strip(path,"./"))) {
+					if (selectiveSync.isFileNameExcluded(path.strip('.').strip('/'))) {
 						log.vlog("Skipping item - excluded by skip_file config: ", path);
 						return;
 					}
 				}
 				if (selectiveSync.isPathExcludedViaSyncList(path)) {
-					if ((isFile(path)) && (cfg.getValueBool("sync_root_files")) && (rootName(strip(path,"./")) == "")) {
+					if ((isFile(path)) && (cfg.getValueBool("sync_root_files")) && (rootName(path.strip('.').strip('/')) == "")) {
 						log.vdebug("Not skipping path due to sync_root_files inclusion: ", path);
 					} else {
 						string userSyncList = cfg.configDirName ~ "/sync_list";
