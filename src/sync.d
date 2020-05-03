@@ -927,7 +927,7 @@ final class SyncEngine
 				
 				// HTTP request returned status code 410 (The requested resource is no longer available at the server)
 				if (e.httpStatusCode == 410) {
-					log.vlog("Delta link expired, re-syncing...");
+					log.vdebug("Delta link expired for 'onedrive.viewChangesById(driveId, idToQuery, deltaLink)', setting 'deltaLink = null'");
 					deltaLink = null;
 					continue;
 				}
@@ -971,7 +971,8 @@ final class SyncEngine
 							log.vdebug("changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink) previously threw an error - retrying with empty deltaLink");
 							try {
 								// try query with empty deltaLink value
-								changes = onedrive.viewChangesById(driveId, idToQuery, "");
+								deltaLink = null;
+								changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
 								log.vdebug("Query 'changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)' performed successfully on re-try");
 							} catch (OneDriveException e) {
 								// Tried 3 times, give up
@@ -1019,8 +1020,8 @@ final class SyncEngine
 				
 				// HTTP request returned status code 410 (The requested resource is no longer available at the server)
 				if (e.httpStatusCode == 410) {
-					log.vlog("Delta link expired, re-syncing...");
-					deltaLink = null;
+					log.vdebug("Delta link expired for 'onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)', setting 'deltaLinkAvailable = null'");
+					deltaLinkAvailable = null;
 					continue;
 				}
 				
@@ -1062,8 +1063,9 @@ final class SyncEngine
 							log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
 							log.vdebug("changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying with empty deltaLinkAvailable");
 							try {
-								// try query with empty deltaLink value
-								changesAvailable = onedrive.viewChangesById(driveId, idToQuery, "");
+								// try query with empty deltaLinkAvailable value
+								deltaLinkAvailable = null;
+								changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
 								log.vdebug("Query 'changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
 							} catch (OneDriveException e) {
 								// Tried 3 times, give up

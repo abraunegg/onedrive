@@ -174,6 +174,9 @@ struct UploadSession
 			p.title = "Uploading";
 			long fragmentCount = 0;
 			
+			// Initialise the download bar at 0%
+			p.next();
+			
 			while (true) {
 				fragmentCount++;
 				log.vdebugNewLine("Fragment: ", fragmentCount, " of ", iteration);
@@ -189,11 +192,12 @@ struct UploadSession
 						fileSize
 					);
 				} catch (OneDriveException e) {
-					// there was an error response from OneDrive when uploading the file fragment
-					// handle 'HTTP request returned status code 429 (Too Many Requests)' first
+					// if a 100 response is generated, continue
 					if (e.httpStatusCode == 100) {
 						continue;
 					}
+					// there was an error response from OneDrive when uploading the file fragment
+					// handle 'HTTP request returned status code 429 (Too Many Requests)' first
 					if (e.httpStatusCode == 429) {
 						auto retryAfterValue = onedrive.getRetryAfterValue();
 						log.vdebug("Fragment upload failed - received throttle request response from OneDrive");
