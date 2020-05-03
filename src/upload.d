@@ -191,6 +191,9 @@ struct UploadSession
 				} catch (OneDriveException e) {
 					// there was an error response from OneDrive when uploading the file fragment
 					// handle 'HTTP request returned status code 429 (Too Many Requests)' first
+					if (e.httpStatusCode == 100) {
+						continue;
+					}
 					if (e.httpStatusCode == 429) {
 						auto retryAfterValue = onedrive.getRetryAfterValue();
 						log.vdebug("Fragment upload failed - received throttle request response from OneDrive");
