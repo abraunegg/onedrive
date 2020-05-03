@@ -455,7 +455,7 @@ final class SyncEngine
 	void setOneDriveFullScanTrigger()
 	{
 		oneDriveFullScanTrigger = true;
-		log.vdebug("Setting oneDriveFullScanTrigger = true due to new folder creation request in a location that is now in-scope which was previously out of scope");
+		log.vdebug("Setting oneDriveFullScanTrigger = true due to new folder creation request in a location that is now in-scope which may have previously out of scope");
 	}
 	
 	// unset method
@@ -852,11 +852,13 @@ final class SyncEngine
 		// Get the current delta link
 		string deltaLink = "";
 		string deltaLinkAvailable = itemdb.getDeltaLink(driveId, id);
-		log.vdebug("syncListConfigured = ", syncListConfigured);
-		log.vdebug("oneDriveFullScanTrigger = ", oneDriveFullScanTrigger);
-		log.vdebug("performFullItemScan = ", performFullItemScan);
 		// if sync_list is not configured, syncListConfigured should be false
-		
+		log.vdebug("syncListConfigured = ", syncListConfigured);
+		// oneDriveFullScanTrigger should be false unless set by actions on OneDrive and only if sync_list or skip_dir is used
+		log.vdebug("oneDriveFullScanTrigger = ", oneDriveFullScanTrigger);
+		// should only be set if 10th scan in monitor mode or as final true up sync in stand alone mode
+		log.vdebug("performFullItemScan = ", performFullItemScan);
+				
 		// do we override performFullItemScan if it is currently false and oneDriveFullScanTrigger is true?
 		if ((!performFullItemScan) && (oneDriveFullScanTrigger)) {
 			// forcing a full scan earlier than potentially normal
@@ -877,7 +879,9 @@ final class SyncEngine
 				log.vdebug("deltaLink contains valid data - resulting API query will be treated as a delta scan of OneDrive");
 			}
 		} else {
-			log.vdebug("performFullItemScan is true, not using deltaLink or deltaLinkAvailable to force query of all OneDrive items");
+			// performFullItemScan == true
+			// do not use delta-link
+			log.vdebug("performFullItemScan is true, not using the database deltaLink so that we query all objects on OneDrive to compare against all local objects");
 		}
 		
 		for (;;) {
@@ -896,13 +900,18 @@ final class SyncEngine
 				idToQuery = id;
 			}
 			
+			// query for changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
 			try {
 				// Fetch the changes relative to the path id we want to query
+				// changes with or without deltaLink
 				changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
-				changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
+				if (changes.type() == JSONType.object) {
+					log.vdebug("Query 'changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)' performed successfully");
+				}
 			} catch (OneDriveException e) {
 				// OneDrive threw an error
-				log.vdebug("OneDrive threw an error when querying for these changes:");
+				log.vdebug("------------------------------------------------------------------");
+				log.vdebug("Query Error: changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)");
 				log.vdebug("driveId: ", driveId);
 				log.vdebug("idToQuery: ", idToQuery);
 				log.vdebug("deltaLink: ", deltaLink);
@@ -927,11 +936,7 @@ final class SyncEngine
 				if (e.httpStatusCode == 429) {
 					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 					handleOneDriveThrottleRequest();
-					// Retry original request by calling function again to avoid replicating any further error handling
-					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling applyDifferences(driveId, idToQuery, performFullItemScan);");
-					applyDifferences(driveId, idToQuery, performFullItemScan);
-					// return back to original call
-					return;
+					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query changes from OneDrive using deltaLink");
 				}
 				
 				// HTTP request returned status code 500 (Internal Server Error)
@@ -941,16 +946,140 @@ final class SyncEngine
 					return;
 				}
 				
-				// HTTP request returned status code 504 (Gateway Timeout)
-				if (e.httpStatusCode == 504) {
-					// Retry by calling applyDifferences() again
-					log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying request");
-					applyDifferences(driveId, idToQuery, performFullItemScan);
+				// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
+				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
+					// If an error is returned when querying 'changes' and we recall the original function, we go into a never ending loop where the sync never ends
+					// re-try the specific changes queries	
+					if (e.httpStatusCode == 504) {
+						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
+						log.vdebug("changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink) previously threw an error - retrying");
+						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+						Thread.sleep(dur!"seconds"(30));
+						log.vdebug("Retrying Query - using original deltaLink after delay");
+					}
+					// re-try original request - retried for 429 and 504
+					try {
+						log.vdebug("Retrying Query: changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)");
+						changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
+						log.vdebug("Query 'changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)' performed successfully on re-try");
+					} catch (OneDriveException e) {
+						// display what the error is
+						log.vdebug("Query Error: changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink) on re-try after delay");
+						if (e.httpStatusCode == 504) {
+							log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
+							log.vdebug("changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink) previously threw an error - retrying with empty deltaLink");
+							try {
+								// try query with empty deltaLink value
+								changes = onedrive.viewChangesById(driveId, idToQuery, "");
+								log.vdebug("Query 'changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)' performed successfully on re-try");
+							} catch (OneDriveException e) {
+								// Tried 3 times, give up
+								displayOneDriveErrorMessage(e.msg);
+								return;
+							}
+						} else {
+							// error was not a 504 this time
+							displayOneDriveErrorMessage(e.msg);
+							return;
+						}
+					}
 				} else {
 					// Default operation if not 404, 410, 429, 500 or 504 errors
 					// display what the error is
 					displayOneDriveErrorMessage(e.msg);
+					return;
+				}
+			}
+			
+			// query for changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
+			try {
+				// Fetch the changes relative to the path id we want to query
+				// changes based on deltaLink
+				changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
+				if (changesAvailable.type() == JSONType.object) {
+					log.vdebug("Query 'changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)' performed successfully");
+				}
+			} catch (OneDriveException e) {
+				// OneDrive threw an error
+				log.vdebug("------------------------------------------------------------------");
+				log.vdebug("Query Error: changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)");
+				log.vdebug("driveId: ", driveId);
+				log.vdebug("idToQuery: ", idToQuery);
+				log.vdebug("deltaLink: ", deltaLink);
+				
+				// HTTP request returned status code 404 (Not Found)
+				if (e.httpStatusCode == 404) {
+					// Stop application
+					log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
+					log.log("The item id to query was not found on OneDrive");
 					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
+					return;
+				}
+				
+				// HTTP request returned status code 410 (The requested resource is no longer available at the server)
+				if (e.httpStatusCode == 410) {
+					log.vlog("Delta link expired, re-syncing...");
+					deltaLink = null;
+					continue;
+				}
+				
+				// HTTP request returned status code 429 (Too Many Requests)
+				if (e.httpStatusCode == 429) {
+					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+					handleOneDriveThrottleRequest();
+					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query changes from OneDrive using deltaLink");
+				}
+				
+				// HTTP request returned status code 500 (Internal Server Error)
+				if (e.httpStatusCode == 500) {
+					// display what the error is
+					displayOneDriveErrorMessage(e.msg);
+					return;
+				}
+				
+				// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
+				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
+					// If an error is returned when querying 'changes' and we recall the original function, we go into a never ending loop where the sync never ends
+					// re-try the specific changes queries	
+					if (e.httpStatusCode == 504) {
+						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
+						log.vdebug("changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying");
+						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+						Thread.sleep(dur!"seconds"(30));
+						log.vdebug("Retrying Query - using original deltaLink after delay");
+					}
+					// re-try original request - retried for 429 and 504
+					try {
+						log.vdebug("Retrying Query: changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)");
+						changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
+						log.vdebug("Query 'changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
+					} catch (OneDriveException e) {
+						// display what the error is
+						log.vdebug("Query Error: changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable) on re-try after delay");
+						if (e.httpStatusCode == 504) {
+							log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
+							log.vdebug("changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying with empty deltaLinkAvailable");
+							try {
+								// try query with empty deltaLink value
+								changesAvailable = onedrive.viewChangesById(driveId, idToQuery, "");
+								log.vdebug("Query 'changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
+							} catch (OneDriveException e) {
+								// Tried 3 times, give up
+								displayOneDriveErrorMessage(e.msg);
+								return;
+							}
+						} else {
+							// error was not a 504 this time
+							displayOneDriveErrorMessage(e.msg);
+							return;
+						}
+					}
+				} else {
+					// Default operation if not 404, 410, 429, 500 or 504 errors
+					// display what the error is
+					displayOneDriveErrorMessage(e.msg);
 					return;
 				}
 			}
@@ -961,6 +1090,7 @@ final class SyncEngine
 				// are there any delta changes?
 				if (("value" in changesAvailable) != null) {
 					deltaChanges = count(changesAvailable["value"].array);
+					log.vdebug("changesAvailable query reports that there are " , deltaChanges , " changes that need processing on OneDrive");
 				}
 			}
 			
@@ -984,9 +1114,17 @@ final class SyncEngine
 							if (oneDriveFullScanTrigger) {
 								// full scan was triggered out of cycle
 								log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being triggered by actions on OneDrive");
+								// unset now the full scan trigger if set
+								unsetOneDriveFullScanTrigger();
 							} else {
-								// no sync_list, no full scan was triggered
-								log.vlog("Processing ", nrChanges, " changes");
+								// no sync_list in use, oneDriveFullScanTrigger not set via sync_list or skip_dir 
+								if (performFullItemScan){
+									// performFullItemScan was set
+									log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being requested");
+								} else {
+									// default processing message
+									log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state");
+								}
 							}
 						} else {
 							// sync_list is being used - why are we going through the entire OneDrive contents?
@@ -998,16 +1136,19 @@ final class SyncEngine
 						// As this is debug logging, messaging can be the same, regardless of sync_list being used or not
 						
 						// is performFullItemScan set due to a full scan required?
-						if (performFullItemScan){
-							// full scan was triggered due to sync_list or skip_dir being used
-							log.vdebug("Number of items from OneDrive to process due to a full scan being triggered: ", nrChanges);
+						// is oneDriveFullScanTrigger set due to a potentially out-of-scope item now being in-scope
+						if ((performFullItemScan) || (oneDriveFullScanTrigger)) {
+							// oneDriveFullScanTrigger should be false unless set by actions on OneDrive and only if sync_list or skip_dir is used
+							log.vdebug("performFullItemScan or oneDriveFullScanTrigger = true");
+							// full scan was requested or triggered
+							log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being requested");
 							// unset now the full scan trigger if set
 							if (oneDriveFullScanTrigger) {
 								unsetOneDriveFullScanTrigger();
 							}
 						} else {
 							// standard message
-							log.vdebug("Number of changes from OneDrive to process: ", nrChanges);
+							log.vlog("Number of items from OneDrive to process: ", nrChanges);
 						}
 					}
 
@@ -1208,9 +1349,22 @@ final class SyncEngine
 				}
 				
 				// the response may contain either @odata.deltaLink or @odata.nextLink
-				if ("@odata.deltaLink" in changes) deltaLink = changes["@odata.deltaLink"].str;
-				if (deltaLink) itemdb.setDeltaLink(driveId, id, deltaLink);
-				if ("@odata.nextLink" in changes) deltaLink = changes["@odata.nextLink"].str;
+				if ("@odata.deltaLink" in changes) {
+					deltaLink = changes["@odata.deltaLink"].str;
+					log.vdebug("Setting next deltaLink to (@odata.deltaLink): ", deltaLink);
+				}
+				if (deltaLink != "") {
+					// we initialise deltaLink to a blank string - if it is blank, dont update the DB to be empty
+					log.vdebug("Updating completed deltaLink in DB to: ", deltaLink); 
+					itemdb.setDeltaLink(driveId, id, deltaLink);
+				}
+				if ("@odata.nextLink" in changes) {
+					// Update deltaLink to next changeSet bundle
+					deltaLink = changes["@odata.nextLink"].str;
+					// Update deltaLinkAvailable to next changeSet bundle to quantify how many changes we have to process
+					deltaLinkAvailable = changes["@odata.nextLink"].str;
+					log.vdebug("Setting next deltaLink & deltaLinkAvailable to (@odata.nextLink): ", deltaLink);
+				}
 				else break;
 			} else {
 				// Log that an invalid JSON object was returned
@@ -1307,10 +1461,14 @@ final class SyncEngine
 						} else {
 							simplePathToCheck = driveItem["name"].str;
 						}
-						// complex path
-						complexPathToCheck = itemdb.computePath(parentDriveId, parentItem) ~ "/" ~ driveItem["name"].str;
-						complexPathToCheck = buildNormalizedPath(complexPathToCheck);
 						log.vdebug("skip_dir path to check (simple):  ", simplePathToCheck);
+						// complex path
+						if (itemdb.idInLocalDatabase(parentDriveId, parentItem)){
+							complexPathToCheck = itemdb.computePath(parentDriveId, parentItem) ~ "/" ~ driveItem["name"].str;
+							complexPathToCheck = buildNormalizedPath(complexPathToCheck);
+						} else {
+							log.vdebug("Parent details not in database - unable to compute complex path to check");
+						}
 						log.vdebug("skip_dir path to check (complex): ", complexPathToCheck);
 					} else {
 						simplePathToCheck = driveItem["name"].str;
@@ -1378,7 +1536,7 @@ final class SyncEngine
 			}
 		}
 
-		// check for selective sync
+		// Check if this is included by use of sync_list
 		if (!unwanted) {
 			// Is the item parent in the local database?
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
@@ -1637,13 +1795,21 @@ final class SyncEngine
 			break;
 		case ItemType.dir:
 		case ItemType.remote:
-			log.log("Creating directory: ", path);
+			log.log("Creating local directory: ", path);
 			
-			// Issue #658 handling
-			auto syncListExcluded = selectiveSync.isPathExcludedViaSyncList(path);
-			log.vdebug("sync_list excluded: ", syncListExcluded);
-			if (!syncListExcluded) {
-				// path we are creating is not excluded via sync_list
+			// Issue #658 handling - is sync_list in use?
+			if (syncListConfigured) {
+				// sync_list in use
+				// path to create was previously checked if this should be included / excluded. No need to check again.
+				log.vdebug("Issue #658 handling");
+				setOneDriveFullScanTrigger();
+			}
+			
+			// Issue #865 handling - is skip_dir in use?
+			if (cfg.getValueString("skip_dir") != "") {
+				// we have some entries in skip_dir
+				// path to create was previously checked if this should be included / excluded. No need to check again.
+				log.vdebug("Issue #865 handling");
 				setOneDriveFullScanTrigger();
 			}
 			
@@ -2169,8 +2335,43 @@ final class SyncEngine
 				}
 			}
 		} else {
-			log.vlog("The directory has been deleted");
-			uploadDeleteItem(item, path);
+			// are we in a dry-run scenario
+			if (!dryRun) {
+				// no dry-run
+				log.vlog("The directory has been deleted locally");
+				if (noRemoteDelete) {
+					// do not process remote directory delete
+					log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+				} else {
+					uploadDeleteItem(item, path);
+				}
+			} else {
+				// we are in a --dry-run situation, directory appears to have deleted locally - this directory may never have existed as we never downloaded it ..
+				// Check if path does not exist in database
+				if (!itemdb.selectByPathWithRemote(path, defaultDriveId, item)) {
+					// Path not found in database
+					log.vlog("The directory has been deleted locally");
+					if (noRemoteDelete) {
+						// do not process remote directory delete
+						log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+					} else {
+						uploadDeleteItem(item, path);
+					}
+				} else {
+					// Path was found in the database
+					// Did we 'fake create it' as part of --dry-run ?
+					foreach (i; idsFaked) {
+						if (i[1] == item.id) {
+							log.vdebug("Matched faked dir which is 'supposed' to exist but not created due to --dry-run use");
+							log.vlog("The directory has not changed");
+							return;
+						}
+					}
+					// item.id did not match a 'faked' download new directory creation
+					log.vlog("The directory has been deleted locally");
+					uploadDeleteItem(item, path);
+				}
+			}
 		}
 	}
 
@@ -2615,7 +2816,7 @@ final class SyncEngine
 					log.vdebug("Checking path: ", path);
 					// Only check path if config is != ""
 					if (cfg.getValueString("skip_dir") != "") {
-						if (selectiveSync.isDirNameExcluded(strip(path,"./"))) {
+						if (selectiveSync.isDirNameExcluded(path.strip('.').strip('/'))) {
 							log.vlog("Skipping item - excluded by skip_dir config: ", path);
 							return;
 						}
@@ -2623,13 +2824,13 @@ final class SyncEngine
 				}
 				if (isFile(path)) {
 					log.vdebug("Checking file: ", path);
-					if (selectiveSync.isFileNameExcluded(strip(path,"./"))) {
+					if (selectiveSync.isFileNameExcluded(path.strip('.').strip('/'))) {
 						log.vlog("Skipping item - excluded by skip_file config: ", path);
 						return;
 					}
 				}
 				if (selectiveSync.isPathExcludedViaSyncList(path)) {
-					if ((isFile(path)) && (cfg.getValueBool("sync_root_files")) && (rootName(strip(path,"./")) == "")) {
+					if ((isFile(path)) && (cfg.getValueBool("sync_root_files")) && (rootName(path.strip('.').strip('/')) == "")) {
 						log.vdebug("Not skipping path due to sync_root_files inclusion: ", path);
 					} else {
 						string userSyncList = cfg.configDirName ~ "/sync_list";
@@ -3798,7 +3999,7 @@ final class SyncEngine
 		}
 		if (fromItem.parentId == null) {
 			// the item is a remote folder, need to do the operation on the parent
-			enforce(itemdb.selectByPathNoRemote(from, defaultDriveId, fromItem));
+			enforce(itemdb.selectByPathWithRemote(from, defaultDriveId, fromItem));
 		}
 		if (itemdb.selectByPath(to, defaultDriveId, toItem)) {
 			// the destination has been overwritten
@@ -3877,7 +4078,7 @@ final class SyncEngine
 		}
 		if (item.parentId == null) {
 			// the item is a remote folder, need to do the operation on the parent
-			enforce(itemdb.selectByPathNoRemote(path, defaultDriveId, item));
+			enforce(itemdb.selectByPathWithRemote(path, defaultDriveId, item));
 		}
 		try {
 			if (noRemoteDelete) {
@@ -4131,12 +4332,6 @@ final class SyncEngine
 		try {
 			changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
 		} catch (OneDriveException e) {
-			// OneDrive threw an error
-			log.vdebug("OneDrive threw an error when querying for these changes:");
-			log.vdebug("driveId: ", driveId);
-			log.vdebug("idToQuery: ", idToQuery);
-			log.vdebug("deltaLink: ", deltaLink);
-			
 			if (e.httpStatusCode == 429) {
 				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 				handleOneDriveThrottleRequest();
@@ -4146,6 +4341,12 @@ final class SyncEngine
 				// return back to original call
 				return;
 			} else {
+				// OneDrive threw an error
+				log.vdebug("Error query: changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)");
+				log.vdebug("OneDrive threw an error when querying for these changes:");
+				log.vdebug("driveId: ", driveId);
+				log.vdebug("idToQuery: ", idToQuery);
+				log.vdebug("deltaLink: ", deltaLink);
 				displayOneDriveErrorMessage(e.msg);
 				return;				
 			}

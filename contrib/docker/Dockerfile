@@ -2,9 +2,8 @@ FROM centos:7
 ENV GOSU_VERSION=1.11
 
 RUN yum install -y make git gcc libcurl-devel sqlite-devel pkg-config && \
-    rm -rf /var/cache/yum/ && \
-    curl -fsS -o install.sh https://dlang.org/install.sh && \
-    bash install.sh dmd && \
+    yum install -y http://downloads.dlang.org/releases/2.x/2.091.0/dmd-2.091.0-0.fedora.x86_64.rpm && \
+	rm -rf /var/cache/yum/ && \
     # gosu installation
     gpg --keyserver ha.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
     && curl -o /usr/local/bin/gosu -SL "https://github.com/tianon/gosu/releases/download/${GOSU_VERSION}/gosu-amd64" \
@@ -16,9 +15,8 @@ RUN yum install -y make git gcc libcurl-devel sqlite-devel pkg-config && \
     && gosu nobody true
 RUN mkdir -p /onedrive/conf /onedrive/data
 COPY . /usr/src/onedrive
-RUN . "$(bash install.sh -a)" && \
-    cd /usr/src/onedrive/ && \
-    ./configure && \
+WORKDIR /usr/src/onedrive
+RUN ./configure && \
     make clean && \
     make && \
     make install

@@ -176,7 +176,7 @@ struct UploadSession
 			
 			while (true) {
 				fragmentCount++;
-				log.vdebugUpload("Fragment: ", fragmentCount, " of ", iteration);
+				log.vdebugNewLine("Fragment: ", fragmentCount, " of ", iteration);
 				p.next();
 				long fragSize = fragmentSize < fileSize - offset ? fragmentSize : fileSize - offset;
 				// If the resume upload fails, we need to check for a return code here

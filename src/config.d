@@ -74,6 +74,8 @@ final class Config
 		// Allow for a custom Client ID / Application ID to be used to replace the inbuilt default
 		// This is a config file option ONLY
 		stringValues["application_id"]       = "";
+		// allow for resync to be set via config file
+		boolValues["resync"]              = false;
 		// Ignore data safety checks and overwrite local data rather than preserve & rename
 		// This is a config file option ONLY
 		boolValues["bypass_data_preservation"] = false;
@@ -173,7 +175,6 @@ final class Config
 		stringValues["auth_files"]        = "";
 		boolValues["display_config"]      = false;
 		boolValues["display_sync_status"] = false;
-		boolValues["resync"]              = false;
 		boolValues["print_token"]         = false;
 		boolValues["logout"]              = false;
 		boolValues["monitor"]             = false;

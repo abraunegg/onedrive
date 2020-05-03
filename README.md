@@ -1,11 +1,15 @@
-# OneDrive Free Client
+# OneDrive Client for Linux
 [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases)
 [![Release Date](https://img.shields.io/github/release-date/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases)
 [![Travis CI](https://img.shields.io/travis/com/abraunegg/onedrive)](https://travis-ci.com/abraunegg/onedrive/builds)
 [![Docker Build](https://img.shields.io/docker/automated/driveone/onedrive)](https://hub.docker.com/r/driveone/onedrive)
 [![Docker Pulls](https://img.shields.io/docker/pulls/driveone/onedrive)](https://hub.docker.com/r/driveone/onedrive)
 
-A complete tool to interact with OneDrive on Linux. Built following the UNIX philosophy
+A free Microsoft OneDrive Client which supports OneDrive Personal, OneDrive for Business, OneDrive for Office365 and Sharepoint.
+
+This powerful and highly configurable client can run on all major Linux distributions, as a Docker container and on FreeBSD. It supports one-way and two-way sync capabilities and securely connects to Microsoft OneDrive services.
+
+This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) client which was abandoned in 2018.
 
 ## Features
 *   State caching
@@ -42,3 +46,6 @@ If you encounter any bugs you can report them here on Github. Before filing an i
 2.  Fill in a new bug report using the [issue template](https://github.com/abraunegg/onedrive/issues/new?template=bug_report.md)
 3.  Generate a debug log for support using the following [process](https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support)
 4.  Upload the debug log to [pastebin](https://pastebin.com/) or archive and email to support@mynas.com.au
+
+## Known issues
+See [docs/known-issues.md](https://github.com/abraunegg/onedrive/blob/master/docs/known-issues.md)
