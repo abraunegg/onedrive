@@ -810,7 +810,7 @@ final class OneDriveApi
 			Errors in the OneDrive API are returned using standard HTTP status codes, as well as a JSON error response object. The following HTTP status codes should be expected.
 
 			Status code		Status message						Description
-			
+			100				Continue							Continue 
 			200 			OK									Request was handled OK
 			201 			Created								This means you've made a successful POST to checkout, lock in a format, or place a hold
 			204				No Content							This means you've made a successful DELETE to remove a hold or return a title
@@ -849,6 +849,9 @@ final class OneDriveApi
 		{
 			//  0 - OK ... HTTP2 version of 200 OK
 			case 0:
+				break;
+			//  100 - Continue
+			case 100:
 				break;
 			//	200 - OK
 			case 200:
@@ -952,6 +955,9 @@ final class OneDriveApi
 		{
 			//  0 - OK ... HTTP2 version of 200 OK
 			case 0:
+				break;
+			//  100 - Continue
+			case 100:
 				break;
 			//	200 - OK
 			case 200:
