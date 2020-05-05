@@ -365,8 +365,20 @@ final class SyncEngine
 			
 			// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
 			if (remainingFreeSpace <= 0) {
-				// quota details not available
-				log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+				// free space is <= 0  .. why ?
+				if ("remaining" in oneDriveDetails["quota"]){
+					// json response contained a 'remaining' value
+					log.error("ERROR: OneDrive account currently has zero space available. Please free up some space online.");
+				} else {
+					// json response was missing a 'remaining' value
+					if (accountType == "personal"){
+						log.error("ERROR: OneDrive quota information is missing. Potentially your OneDrive account currently has zero space available. Please free up some space online.");
+					} else {
+						// quota details not available
+						log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+					}				
+				}
+				// flag to not perform quota checks
 				log.error("ERROR: Flagging to disable upload space checks - this MAY have undesirable results if a file cannot be uploaded due to out of space.");
 				quotaAvailable = false;
 			}
@@ -927,7 +939,7 @@ final class SyncEngine
 				
 				// HTTP request returned status code 410 (The requested resource is no longer available at the server)
 				if (e.httpStatusCode == 410) {
-					log.vlog("Delta link expired, re-syncing...");
+					log.vdebug("Delta link expired for 'onedrive.viewChangesById(driveId, idToQuery, deltaLink)', setting 'deltaLink = null'");
 					deltaLink = null;
 					continue;
 				}
@@ -971,7 +983,8 @@ final class SyncEngine
 							log.vdebug("changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink) previously threw an error - retrying with empty deltaLink");
 							try {
 								// try query with empty deltaLink value
-								changes = onedrive.viewChangesById(driveId, idToQuery, "");
+								deltaLink = null;
+								changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
 								log.vdebug("Query 'changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)' performed successfully on re-try");
 							} catch (OneDriveException e) {
 								// Tried 3 times, give up
@@ -1019,8 +1032,8 @@ final class SyncEngine
 				
 				// HTTP request returned status code 410 (The requested resource is no longer available at the server)
 				if (e.httpStatusCode == 410) {
-					log.vlog("Delta link expired, re-syncing...");
-					deltaLink = null;
+					log.vdebug("Delta link expired for 'onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)', setting 'deltaLinkAvailable = null'");
+					deltaLinkAvailable = null;
 					continue;
 				}
 				
@@ -1062,8 +1075,9 @@ final class SyncEngine
 							log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
 							log.vdebug("changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying with empty deltaLinkAvailable");
 							try {
-								// try query with empty deltaLink value
-								changesAvailable = onedrive.viewChangesById(driveId, idToQuery, "");
+								// try query with empty deltaLinkAvailable value
+								deltaLinkAvailable = null;
+								changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
 								log.vdebug("Query 'changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
 							} catch (OneDriveException e) {
 								// Tried 3 times, give up
