@@ -365,8 +365,20 @@ final class SyncEngine
 			
 			// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
 			if (remainingFreeSpace <= 0) {
-				// quota details not available
-				log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+				// free space is <= 0  .. why ?
+				if ("remaining" in oneDriveDetails["quota"]){
+					// json response contained a 'remaining' value
+					log.error("ERROR: OneDrive account currently has zero space available. Please free up some space online.");
+				} else {
+					// json response was missing a 'remaining' value
+					if (accountType == "personal"){
+						log.error("ERROR: OneDrive quota information is missing. Potentially your OneDrive account currently has zero space available. Please free up some space online.");
+					} else {
+						// quota details not available
+						log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+					}				
+				}
+				// flag to not perform quota checks
 				log.error("ERROR: Flagging to disable upload space checks - this MAY have undesirable results if a file cannot be uploaded due to out of space.");
 				quotaAvailable = false;
 			}
