@@ -146,17 +146,24 @@ final class Config
 
 	bool initialize()
 	{
-		if (!load(userConfigFilePath)) {
-			// What was the reason for failure?
-			if (!exists(userConfigFilePath)) {
-				log.vlog("No config file found, using application defaults");
+		// Initialise the application
+		if (!exists(userConfigFilePath)) {
+			// configuration file exists
+			log.vlog("No config file found, using application defaults");
+			return true;
+		} else {
+			// configuration file exists
+			// can we load the configuration file without error?
+			if (load(userConfigFilePath)) {
+				// configuration file loaded without error
+				log.log("Configuration file successfully loaded");
 				return true;
 			} else {
+				// there was a problem loading the configuration file
 				log.log("Configuration file has errors - please check your configuration");
 				return false;
 			}
 		}
-		return true;
 	}
 
 	void update_from_args(string[] args)
