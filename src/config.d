@@ -148,7 +148,7 @@ final class Config
 	{
 		// Initialise the application
 		if (!exists(userConfigFilePath)) {
-			// configuration file exists
+			// configuration file does not exist
 			log.vlog("No config file found, using application defaults");
 			return true;
 		} else {
