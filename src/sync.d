@@ -97,13 +97,11 @@ private bool hasSha1Hash(const ref JSONValue item)
 	return ("sha1Hash" in item["file"]["hashes"]) != null;
 }
 
-private bool isDotFile(string path)
+private bool isDotFile(const(string) path)
 {
 	// always allow the root
 	if (path == ".") return false;
-	
-	path = buildNormalizedPath(path);
-	auto paths = pathSplitter(path);
+	auto paths = pathSplitter(buildNormalizedPath(path));
 	foreach(base; paths) {
 		if (startsWith(base, ".")){
 			return true;
@@ -116,7 +114,7 @@ private bool isDotFile(string path)
 private Item makeItem(const ref JSONValue driveItem)
 {
 	Item item = {
-		id: driveItem["id"].str,
+		id: "id" in driveItem ? driveItem["id"].str : null, // id may be missing if we are just initialising an item
 		name: "name" in driveItem ? driveItem["name"].str : null, // name may be missing for deleted files in OneDrive Biz
 		eTag: "eTag" in driveItem ? driveItem["eTag"].str : null, // eTag is not returned for the root in OneDrive Biz
 		cTag: "cTag" in driveItem ? driveItem["cTag"].str : null, // cTag is missing in old files (and all folders in OneDrive Biz)
@@ -177,7 +175,7 @@ private Item makeItem(const ref JSONValue driveItem)
 	return item;
 }
 
-private bool testFileHash(string path, const ref Item item)
+private bool testFileHash(const(string) path, const ref Item item)
 {
 	if (item.crc32Hash) {
 		if (item.crc32Hash == computeCrc32(path)) return true;
@@ -504,7 +502,7 @@ final class SyncEngine
 	}
 
 	// download all new changes from a specified folder on OneDrive
-	void applyDifferencesSingleDirectory(string path)
+	void applyDifferencesSingleDirectory(const(string) path)
 	{
 		log.vlog("Getting path details from OneDrive ...");
 		JSONValue onedrivePathDetails;
@@ -600,7 +598,7 @@ final class SyncEngine
 	}
 	
 	// create a directory on OneDrive without syncing
-	auto createDirectoryNoSync(string path)
+	auto createDirectoryNoSync(const(string) path)
 	{
 		// Attempt to create the requested path within OneDrive without performing a sync
 		log.vlog("Attempting to create the requested path within OneDrive");
@@ -610,7 +608,7 @@ final class SyncEngine
 	}
 	
 	// delete a directory on OneDrive without syncing
-	auto deleteDirectoryNoSync(string path)
+	auto deleteDirectoryNoSync(const(string) path)
 	{
 		// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
 		const(char)[] rootId = defaultRootId;
@@ -1525,7 +1523,7 @@ final class SyncEngine
 		}
 
 		// check the item type
-		string path;
+		string path = "";
 		if (!unwanted) {
 			if (isItemFile(driveItem)) {
 				log.vdebug("The item we are syncing is a file");
@@ -1705,7 +1703,7 @@ final class SyncEngine
 	}
 
 	// download an item that was not synced before
-	private void applyNewItem(Item item, string path)
+	private void applyNewItem(Item item, const(string) path)
 	{
 		if (exists(path)) {
 			// path exists locally
@@ -1872,7 +1870,7 @@ final class SyncEngine
 	}
 
 	// downloads a File resource
-	private void downloadFileItem(Item item, string path)
+	private void downloadFileItem(Item item, const(string) path)
 	{
 		assert(item.type == ItemType.file);
 		write("Downloading file ", path, " ... ");
@@ -2072,7 +2070,7 @@ final class SyncEngine
 	}
 
 	// returns true if the given item corresponds to the local one
-	private bool isItemSynced(Item item, string path)
+	private bool isItemSynced(Item item, const(string) path)
 	{
 		if (!exists(path)) return false;
 		final switch (item.type) {
@@ -2113,7 +2111,7 @@ final class SyncEngine
 		foreach_reverse (i; idsToDelete) {
 			Item item;
 			if (!itemdb.selectById(i[0], i[1], item)) continue; // check if the item is in the db
-			string path = itemdb.computePath(i[0], i[1]);
+			const(string) path = itemdb.computePath(i[0], i[1]);
 			log.log("Trying to delete item ", path);
 			if (!dryRun) {
 				// Actually process the database entry removal
@@ -2170,7 +2168,7 @@ final class SyncEngine
 	}
 	
 	// scan the given directory for differences and new items
-	void scanForDifferences(string path)
+	void scanForDifferences(const(string) path)
 	{
 		// scan for changes in the path provided
 		log.vlog("Uploading differences of ", path);
@@ -2255,7 +2253,7 @@ final class SyncEngine
 		}
 	}
 
-	private void uploadDirDifferences(Item item, string path)
+	private void uploadDirDifferences(Item item, const(string) path)
 	{
 		assert(item.type == ItemType.dir);
 		if (exists(path)) {
@@ -2311,7 +2309,7 @@ final class SyncEngine
 		}
 	}
 
-	private void uploadRemoteDirDifferences(Item item, string path)
+	private void uploadRemoteDirDifferences(Item item, const(string) path)
 	{
 		assert(item.type == ItemType.remote);
 		if (exists(path)) {
@@ -2372,7 +2370,7 @@ final class SyncEngine
 	}
 
 	// upload local file system differences to OneDrive
-	private void uploadFileDifferences(Item item, string path)
+	private void uploadFileDifferences(Item item, const(string) path)
 	{
 		// Reset upload failure - OneDrive or filesystem issue (reading data)
 		uploadFailed = false;
@@ -2722,24 +2720,27 @@ final class SyncEngine
 	}
 
 	// upload new items to OneDrive
-	private void uploadNewItems(string path)
+	private void uploadNewItems(const(string) path)
 	{
+		import std.range : walkLength;
+		import std.uni : byGrapheme;
 		//	https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
 		//  If the path is greater than allowed characters, then one drive will return a '400 - Bad Request' 
 		//  Need to ensure that the URI is encoded before the check is made
 		//  400 Character Limit for OneDrive Business / Office 365
 		//  430 Character Limit for OneDrive Personal
-		auto maxPathLength = 0;
-		import std.range : walkLength;
-		import std.uni : byGrapheme;
-		if (accountType == "business"){
-			// Business Account
-			maxPathLength = 400;
-		} else {
+		long maxPathLength = 0;
+		long pathWalkLength = path.byGrapheme.walkLength;
+		
+		// Configure maxPathLength based on account type
+		if (accountType == "personal"){
 			// Personal Account
 			maxPathLength = 430;
+		} else {
+			// Business Account / Office365
+			maxPathLength = 400;
 		}
-		
+				
 		// A short lived file that has disappeared will cause an error - is the path valid?
 		if (!exists(path)) {
 			log.log("Skipping item - has disappeared: ", path);
@@ -2755,8 +2756,8 @@ final class SyncEngine
 			return;
 		}
 		
-		if(path.byGrapheme.walkLength < maxPathLength){
-			// path is less than maxPathLength
+		if(pathWalkLength < maxPathLength){
+			// path length is less than maxPathLength
 			
 			// skip dot files if configured
 			if (cfg.getValueBool("skip_dotfiles")) {
@@ -2846,7 +2847,12 @@ final class SyncEngine
 			// This item passed all the unwanted checks
 			// We want to upload this new item
 			if (isDir(path)) {
+				
 				Item item;
+				//JSONValue jsonItem = parseJSON("{}");
+				//Item item = makeItem(jsonItem);
+				writeln("item = ", item);
+				
 				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
 					uploadCreateDir(path);
 				}
@@ -2862,7 +2868,8 @@ final class SyncEngine
 				try {
 					auto entries = dirEntries(path, SpanMode.shallow, false);
 					foreach (DirEntry entry; entries) {
-						uploadNewItems(entry.name);
+						string thisPath = entry.name;
+						uploadNewItems(thisPath);
 					}
 				} catch (FileException e) {
 					// display the error message
@@ -2871,7 +2878,7 @@ final class SyncEngine
 				}
 			} else {
 				// This item is a file
-				auto fileSize = getSize(path);
+				long fileSize = getSize(path);
 				// Can we upload this file - is there enough free space? - https://github.com/skilion/onedrive/issues/73
 				// However if the OneDrive account does not provide the quota details, we have no idea how much free space is available
 				if ((!quotaAvailable) || ((remainingFreeSpace - fileSize) > 0)){
@@ -3098,7 +3105,7 @@ final class SyncEngine
 	}
 	
 	// upload a new file to OneDrive
-	private void uploadNewFile(string path)
+	private void uploadNewFile(const(string) path)
 	{
 		// Reset upload failure - OneDrive or filesystem issue (reading data)
 		uploadFailed = false;
@@ -3804,7 +3811,7 @@ final class SyncEngine
 	}
 
 	// delete an item on OneDrive
-	private void uploadDeleteItem(Item item, string path)
+	private void uploadDeleteItem(Item item, const(string) path)
 	{
 		log.log("Deleting item from OneDrive: ", path);
 		bool flagAsBigDelete = false;
@@ -4066,7 +4073,7 @@ final class SyncEngine
 	}
 
 	// delete an item by it's path
-	void deleteByPath(string path)
+	void deleteByPath(const(string) path)
 	{
 		Item item;
 		if (!itemdb.selectByPath(path, defaultDriveId, item)) {
@@ -4237,7 +4244,7 @@ final class SyncEngine
 	}
 	
 	// Query the OneDrive 'drive' to determine if we are 'in sync' or if there are pending changes
-	void queryDriveForChanges(string path) {
+	void queryDriveForChanges(const(string) path) {
 		
 		// Function variables
 		int validChanges = 0;
@@ -4410,7 +4417,7 @@ final class SyncEngine
 	}
 	
 	// Create a fake OneDrive response suitable for use with saveItem
-	JSONValue createFakeResponse(string path) {
+	JSONValue createFakeResponse(const(string) path) {
 		import std.digest.sha;
 		// Generate a simulated JSON response which can be used
 		// At a minimum we need:

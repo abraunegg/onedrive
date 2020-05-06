@@ -146,17 +146,24 @@ final class Config
 
 	bool initialize()
 	{
-		if (!load(userConfigFilePath)) {
-			// What was the reason for failure?
-			if (!exists(userConfigFilePath)) {
-				log.vlog("No config file found, using application defaults");
+		// Initialise the application
+		if (!exists(userConfigFilePath)) {
+			// configuration file does not exist
+			log.vlog("No config file found, using application defaults");
+			return true;
+		} else {
+			// configuration file exists
+			// can we load the configuration file without error?
+			if (load(userConfigFilePath)) {
+				// configuration file loaded without error
+				log.log("Configuration file successfully loaded");
 				return true;
 			} else {
+				// there was a problem loading the configuration file
 				log.log("Configuration file has errors - please check your configuration");
 				return false;
 			}
 		}
-		return true;
 	}
 
 	void update_from_args(string[] args)
@@ -396,7 +403,7 @@ final class Config
 		longValues[key] = value;
 	}
 
-	private bool load(string filename)
+	private bool load(const ref string filename)
 	{
 		scope(failure) return false;
 		auto file = File(filename, "r");
@@ -404,7 +411,10 @@ final class Config
 		foreach (line; file.byLine()) {
 			line = stripLeft(line);
 			if (line.length == 0 || line[0] == ';' || line[0] == '#') continue;
-			auto c = line.matchFirst(r);
+			
+			//auto c = line.matchFirst(r);
+			auto c = matchFirst(line, r);
+			
 			if (!c.empty) {
 				c.popFront(); // skip the whole match
 				string key = c.front.dup;
@@ -440,6 +450,11 @@ final class Config
 				log.log("Malformed config line: ", line);
 				return false;
 			}
+		}
+		// close file if open
+		if (file.isOpen()){
+			// close file
+			file.close();
 		}
 		return true;
 	}

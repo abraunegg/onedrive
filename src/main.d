@@ -83,6 +83,7 @@ int main(string[] args)
 	bool syncDirDifferent = false;
 	bool skipFileDifferent = false;
 	bool skipDirDifferent = false;
+	long monitorLoopFullCount = 0;
 	
 	if ((exists(cfg.configDirName ~ "/config")) && (!exists(configHashFile))) {
 		// Hash of config file needs to be created
@@ -137,9 +138,9 @@ int main(string[] args)
 			stringValues["skip_dir"] = "";
 			stringValues["drive_id"] = "";
 			
-			auto file = File(configBackupFile, "r");
+			auto backupConfigFile = File(configBackupFile, "r");
 			auto r = regex(`^(\w+)\s*=\s*"(.*)"\s*$`);
-			foreach (line; file.byLine()) {
+			foreach (line; backupConfigFile.byLine()) {
 				line = stripLeft(line);
 				if (line.length == 0 || line[0] == ';' || line[0] == '#') continue;
 				auto c = line.matchFirst(r);
@@ -154,7 +155,6 @@ int main(string[] args)
 							log.vdebug(key, " was modified since the last time the application was successfully run, --resync needed");
 							configOptionsDifferent = true;
 						}
-						
 						if ((key == "skip_file") && (c.front.dup != cfg.getValueString("skip_file"))){
 							log.vdebug(key, " was modified since the last time the application was successfully run, --resync needed");
 							configOptionsDifferent = true;
@@ -169,6 +169,11 @@ int main(string[] args)
 						}
 					}
 				}
+			}
+			// close file if open
+			if (backupConfigFile.isOpen()){
+				// close file
+				backupConfigFile.close();
 			}
 		} else {
 			// no backup to check
@@ -381,8 +386,6 @@ int main(string[] args)
 		}
 		
 		// Config Options
-		
-		
 		writeln("Config option 'check_nosync'           = ", cfg.getValueBool("check_nosync"));
 		writeln("Config option 'sync_dir'               = ", syncDir);
 		writeln("Config option 'skip_dir'               = ", cfg.getValueString("skip_dir"));
@@ -393,8 +396,6 @@ int main(string[] args)
 		writeln("Config option 'min_notify_changes'     = ", cfg.getValueLong("min_notify_changes"));
 		writeln("Config option 'log_dir'                = ", cfg.getValueString("log_dir"));
 		writeln("Config option 'classify_as_big_delete' = ", cfg.getValueLong("classify_as_big_delete"));
-		
-		
 		
 		// Is config option drive_id configured?
 		if (cfg.getValueString("drive_id") != ""){
@@ -412,6 +413,11 @@ int main(string[] args)
 			foreach (line; range)
 			{
 				writeln(line);
+			}
+			// close file if open
+			if (syncListFile.isOpen()){
+				// close file
+				syncListFile.close();
 			}
 		} else {
 			writeln("Config option 'sync_root_files'        = ", cfg.getValueBool("sync_root_files"));
@@ -525,6 +531,11 @@ int main(string[] args)
 		foreach (line; range)
 		{
 			log.vdebug("sync_list: ", line);
+		}
+		// close file if open
+		if (syncListFile.isOpen()){
+			// close file
+			syncListFile.close();
 		}
 	}
 	selectiveSync.load(cfg.syncListFilePath);
@@ -759,12 +770,13 @@ int main(string[] args)
 			}
 
 			// monitor loop
+			bool performMonitor = true;
 			immutable auto checkInterval = dur!"seconds"(cfg.getValueLong("monitor_interval"));
-			immutable auto logInterval = cfg.getValueLong("monitor_log_frequency");
-			immutable auto fullScanFrequency = cfg.getValueLong("monitor_fullscan_frequency");
-			auto lastCheckTime = MonoTime.currTime();
-			auto logMonitorCounter = 0;
-			auto fullScanCounter = 0;
+			immutable long logInterval = cfg.getValueLong("monitor_log_frequency");
+			immutable long fullScanFrequency = cfg.getValueLong("monitor_fullscan_frequency");
+			MonoTime lastCheckTime = MonoTime.currTime();
+			long logMonitorCounter = 0;
+			long fullScanCounter = 0;
 			bool fullScanRequired = false;
 			bool syncListConfiguredFullScanOverride = false;
 			// if sync list is configured, set to true
@@ -773,7 +785,7 @@ int main(string[] args)
 				syncListConfiguredFullScanOverride = true;
 			}
 			
-			while (true) {
+			while (performMonitor) {
 				if (!cfg.getValueBool("download_only")) {
 					try {
 						m.update(online);
@@ -783,14 +795,20 @@ int main(string[] args)
 					}
 				}
 				
-				auto currTime = MonoTime.currTime();
+				MonoTime currTime = MonoTime.currTime();
 				if (currTime - lastCheckTime > checkInterval) {
+					// valgrind
+					monitorLoopFullCount++;
+					log.log("monitorLoopFullCount = ", monitorLoopFullCount);
+					writeln("           Thread Allocated, Free Size, Used Size");
+					writeln("gc.stats() = ", GC.stats());
+									
 					// log monitor output suppression
 					logMonitorCounter += 1;
 					if (logMonitorCounter > logInterval) {
 						logMonitorCounter = 1;
 					}
-
+					
 					// do we perform a full scan of sync_dir?
 					fullScanCounter += 1;
 					if (fullScanCounter > fullScanFrequency){
@@ -804,7 +822,7 @@ int main(string[] args)
 					}
 					
 					// Monitor Loop Counter
-					log.vdebug("fullScanCounter =                    ", fullScanCounter);
+					log.log("fullScanCounter =                    ", fullScanCounter);
 					// sync option handling per sync loop
 					log.vdebug("syncListConfigured =                 ", syncListConfigured);
 					log.vdebug("fullScanRequired =                   ", fullScanRequired);
@@ -845,7 +863,13 @@ int main(string[] args)
 						syncListConfiguredFullScanOverride = false;
 					}
 					lastCheckTime = MonoTime.currTime();
+					// Perform Garbage Cleanup
 					GC.collect();
+					
+					if (monitorLoopFullCount == 6) {
+						performMonitor = false;
+						writeln("Exiting after ", monitorLoopFullCount, " loops");
+					}					
 				} 
 				Thread.sleep(dur!"msecs"(500));
 			}
@@ -970,7 +994,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 						if (logLevel < MONITOR_LOG_SILENT) log.log("Syncing changes from OneDrive ...");
 						
 						// For the initial sync, always use the delta link so that we capture all the right delta changes including adds, moves & deletes
-						log.vdebug("Calling sync.applyDifferences(false);");
+						log.log("Calling sync.applyDifferences(false);");
 						sync.applyDifferences(false);
 						
 						// is this a download only request?						
@@ -978,8 +1002,8 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 							// process local changes walking the entire path checking for changes
 							// in monitor mode all local changes are captured via inotify
 							// thus scanning every 'monitor_interval' (default 45 seconds) for local changes is excessive and not required
-							log.vdebug("Calling sync.scanForDifferences(localPath);");
-							sync.scanForDifferences(localPath);
+							log.log("Calling sync.scanForDifferences(localPath);");
+							//sync.scanForDifferences(localPath);
 							
 							// At this point, all OneDrive changes / local changes should be uploaded and in sync
 							// This MAY not be the case when using sync_list, thus a full walk of OneDrive ojects is required
@@ -997,32 +1021,32 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 							// Do not perform a full walk of the OneDrive objects
 							if ((!fullScanRequired) && (!syncListConfiguredFullScanOverride)){
 								log.vdebug("Final True-Up: Do not perform a full walk of the OneDrive objects - not required");
-								log.vdebug("Calling sync.applyDifferences(false);");
-								sync.applyDifferences(false);
+								log.log("Calling sync.applyDifferences(false);");
+								//sync.applyDifferences(false);
 								return;
 							}
 							
 							// Perform a full walk of OneDrive objects because sync_list is in use / or trigger was set in --monitor loop
 							if ((!fullScanRequired) && (syncListConfiguredFullScanOverride)){
 								log.vdebug("Final True-Up: Perform a full walk of OneDrive objects because sync_list is in use / or trigger was set in --monitor loop");
-								log.vdebug("Calling sync.applyDifferences(true);");
-								sync.applyDifferences(true);
+								log.log("Calling sync.applyDifferences(true);");
+								//sync.applyDifferences(true);
 								return;
 							}
 							
 							// Perform a full walk of OneDrive objects because a full scan was required
 							if ((fullScanRequired) && (!syncListConfiguredFullScanOverride)){
 								log.vdebug("Final True-Up: Perform a full walk of OneDrive objects because a full scan was required");
-								log.vdebug("Calling sync.applyDifferences(true);");
-								sync.applyDifferences(true);
+								log.log("Calling sync.applyDifferences(true);");
+								//sync.applyDifferences(true);
 								return;
 							}
 							
 							// Perform a full walk of OneDrive objects because a full scan was required and sync_list is in use and trigger was set in --monitor loop
 							if ((fullScanRequired) && (syncListConfiguredFullScanOverride)){
 								log.vdebug("Final True-Up: Perform a full walk of OneDrive objects because a full scan was required and sync_list is in use and trigger was set in --monitor loop");
-								log.vdebug("Calling sync.applyDifferences(true);");
-								sync.applyDifferences(true);
+								log.log("Calling sync.applyDifferences(true);");
+								//sync.applyDifferences(true);
 								return;
 							}
 						}

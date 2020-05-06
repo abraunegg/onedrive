@@ -416,7 +416,6 @@ final class OneDriveApi
 		http.method = HTTP.Method.put;
 		http.url = uploadUrl;
 		
-		import std.conv;
 		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
 		http.addRequestHeader("Content-Range", contentRange);
 		auto file = File(filepath, "rb");
