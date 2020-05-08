@@ -2990,11 +2990,9 @@ final class SyncEngine
 						// Perform the database lookup - is the parent in the database?
 						if (!itemdb.selectByPath(dirName(path), parent.driveId, parent)) {
 							// parent is not in the database
-							log.vdebug("Parent path is not in the database - need to add it");
+							log.vdebug("Parent path is not in the database - need to add it: ", dirName(path));
 							uploadCreateDir(dirName(path));
 						}
-						// still enforce check of parent path. if the above was triggered, the below will generate a sync retry and will now be sucessful
-						enforce(itemdb.selectByPath(dirName(path), parent.driveId, parent), "The parent item id is not in the database");
 						
 						JSONValue driveItem = [
 								"name": JSONValue(baseName(path)),
