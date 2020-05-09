@@ -14,6 +14,7 @@ final class Config
 	public string syncListFilePath;
 	public string homePath;
 	public string configDirName;
+	public string systemConfigDirName;
 	public string defaultSyncDir = "~/OneDrive";
 	public string defaultSkipFile = "~*|.~*|*.tmp";
 	public string defaultSkipDir = "";
@@ -24,6 +25,7 @@ final class Config
 	public bool applicationAuthorizeResponseUri = false;
 		
 	private string userConfigFilePath;
+	private string systemConfigFilePath;
 	// hashmap for the values found in the user config file
 	// ARGGGG D is stupid and cannot make hashmap initializations!!!
 	// private string[string] foobar = [ "aa": "bb" ] does NOT work!!!
@@ -103,6 +105,7 @@ final class Config
 		
 		// Determine the correct configuration directory to use
 		string configDirBase;
+		string systemConfigDirBase;
 		if (confdirOption != "") {
 			// A CLI 'confdir' was passed in
 			log.vdebug("configDirName: CLI override to set configDirName to: ", confdirOption);
@@ -122,6 +125,8 @@ final class Config
 				// XDG_CONFIG_HOME does not exist on systems where X11 is not present - ie - headless systems / servers
 				log.vdebug("configDirBase: WARNING - no XDG_CONFIG_HOME environment variable set");
 				configDirBase = homePath ~ "/.config";
+				// Also set up a path to pre-shipped shared configs (which can be overridden by supplying a config file in userspace)
+				systemConfigDirBase = "/etc";
 			}
 	
 			// Output configDirBase calculation
@@ -130,8 +135,10 @@ final class Config
 			log.vdebug("configDirName: Configuring application to use default config path");
 			// configDirBase contains the correct path so we do not need to check for presence of '~'
 			configDirName = configDirBase ~ "/onedrive";
+			systemConfigDirName = systemConfigDirBase ~ "/onedrive";
 		}
 	
+		if (systemConfigDirName == systemConfigDirBase ~ "/onedrive") log.vlog("Using default system Config Dir: ", systemConfigDirName);
 		log.vlog("Using Config Dir: ", configDirName);
 		if (!exists(configDirName)) mkdirRecurse(configDirName);
 
@@ -142,6 +149,8 @@ final class Config
 		uploadStateFilePath = configDirName ~ "/resume_upload";
 		userConfigFilePath = configDirName ~ "/config";
 		syncListFilePath = configDirName ~ "/sync_list";
+
+		userConfigSystemFilePath = systemConfigDirName ~ "/config";
 	}
 
 	bool initialize()
@@ -149,8 +158,17 @@ final class Config
 		if (!load(userConfigFilePath)) {
 			// What was the reason for failure?
 			if (!exists(userConfigFilePath)) {
-				log.vlog("No config file found, using application defaults");
-				return true;
+				log.vlog("No user config file found, attempting to load from shared system config file");
+				if(!load(systemConfigFilePath)) { // Will only attempt to load the shared config file if there's no user config file at all.
+					if (!exists(systemConfigFilePath)) {
+						log.vlog("No user or system config file found, using application defaults");
+						return true;
+					}
+					else { // If there's no user config file, and there's a shared config file but it has errors
+						log.log("System configuration file has errors - falling back to application defaults");
+						return true;
+					}
+				}
 			} else {
 				log.log("Configuration file has errors - please check your configuration");
 				return false;
