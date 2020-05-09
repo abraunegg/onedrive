@@ -2994,6 +2994,14 @@ final class SyncEngine
 							uploadCreateDir(dirName(path));
 						}
 						
+						// Is the parent a 'folder' from another user? ie - is this a 'shared folder' that has been shared with us?
+						if (defaultDriveId == parent.driveId){
+							// enforce check of parent path. if the above was triggered, the below will generate a sync retry and will now be sucessful
+							enforce(itemdb.selectByPath(dirName(path), parent.driveId, parent), "The parent item id is not in the database");
+						} else {
+							log.vdebug("Parent drive ID is not our drive ID - parent most likely a shared folder");
+						}
+						
 						JSONValue driveItem = [
 								"name": JSONValue(baseName(path)),
 								"folder": parseJSON("{}")
