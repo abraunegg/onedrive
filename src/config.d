@@ -150,7 +150,7 @@ final class Config
 		userConfigFilePath = configDirName ~ "/config";
 		syncListFilePath = configDirName ~ "/sync_list";
 
-		userConfigSystemFilePath = systemConfigDirName ~ "/config";
+		systemConfigFilePath = systemConfigDirName ~ "/config";
 	}
 
 	bool initialize()
