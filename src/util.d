@@ -125,11 +125,15 @@ Regex!char wild2regex(const(char)[] pattern)
 // returns true if the network connection is available
 bool testNetwork()
 {
-	try {
-		HTTP http = HTTP("https://login.microsoftonline.com");
-		http.dnsTimeout = (dur!"seconds"(5));
-		http.method = HTTP.Method.head;
+	// Use low level HTTP struct
+	auto http = HTTP();
+	http.url = "https://login.microsoftonline.com";
+	http.dnsTimeout = (dur!"seconds"(5));
+	http.method = HTTP.Method.head;
+	// Attempt to contact the Microsoft Online Service
+	try {	
 		http.perform();
+		http.shutdown();
 		return true;
 	} catch (SocketException) {
 		return false;

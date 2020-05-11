@@ -266,6 +266,8 @@ final class OneDriveApi
 	JSONValue getDefaultDrive()
 	{
 		checkAccessTokenExpired();
+		const(char)[] url;
+		url = driveUrl;
 		return get(driveUrl);
 	}
 
@@ -273,17 +275,22 @@ final class OneDriveApi
 	JSONValue getDefaultRoot()
 	{
 		checkAccessTokenExpired();
-		return get(driveUrl ~ "/root");
+		const(char)[] url;
+		url = driveUrl ~ "/root";
+		return get(url);
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
 	JSONValue viewChangesById(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink)
 	{
 		checkAccessTokenExpired();
-		const(char)[] url = deltaLink;
-		if (url == null) {
+		const(char)[] url;
+		// configure deltaLink to query
+		if (deltaLink.empty) {
 			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/delta";
 			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		} else {
+			url = deltaLink;
 		}
 		return get(url);
 	}
@@ -416,6 +423,7 @@ final class OneDriveApi
 		http.method = HTTP.Method.put;
 		http.url = uploadUrl;
 		
+		import std.conv;
 		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
 		http.addRequestHeader("Content-Range", contentRange);
 		auto file = File(filepath, "rb");
@@ -523,10 +531,12 @@ final class OneDriveApi
 	private JSONValue get(const(char)[] url, bool skipToken = false)
 	{
 		scope(exit) http.clearRequestHeaders();
+		log.vdebug("Request URL = ", url);
 		http.method = HTTP.Method.get;
 		http.url = url;
 		if (!skipToken) addAccessTokenHeader(); // HACK: requestUploadStatus
-		auto response = perform();
+		JSONValue response;
+		response = perform();
 		checkHttpCode(response);
 		// OneDrive API Response Debugging if --https-debug is being used
 		if (.debugResponse){
@@ -703,6 +713,8 @@ final class OneDriveApi
 	{
 		scope(exit) http.onReceive = null;
 		char[] content;
+		JSONValue json;
+
 		http.onReceive = (ubyte[] data) {
 			content ~= data;
 			// HTTP Server Response Code Debugging if --https-debug is being used
@@ -712,8 +724,6 @@ final class OneDriveApi
 			return data.length;
 		};
 		
-		JSONValue json;
-		
 		try {
 			http.perform();
 			// Get the HTTP Response headers - needed for correct 429 handling
@@ -722,18 +732,17 @@ final class OneDriveApi
 			if (.debugResponse){
 				log.vdebug("onedrive.perform() => HTTP Response Headers: ", responseHeaders);
 			}
-			
+			// is retry-after in the response headers
 			if ("retry-after" in http.responseHeaders) {
-				// retry-after as in the response headers
-				// Set the value
+				// Set the retry-after value
 				log.vdebug("onedrive.perform() => Received a 'Retry-After' Header Response with the following value: ", http.responseHeaders["retry-after"]);
 				log.vdebug("onedrive.perform() => Setting retryAfterValue to: ", http.responseHeaders["retry-after"]);
 				.retryAfterValue = to!ulong(http.responseHeaders["retry-after"]);
 			}
-			
 		} catch (CurlException e) {
 			// Parse and display error message received from OneDrive
 			log.error("ERROR: OneDrive returned an error with the following message:");
+			
 			auto errorArray = splitLines(e.msg);
 			string errorMessage = errorArray[0];
 						

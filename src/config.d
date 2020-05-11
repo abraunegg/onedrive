@@ -1,35 +1,37 @@
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
-import std.file, std.string, std.regex, std.stdio, std.process, std.algorithm.searching, std.getopt, std.conv;
+import std.file, std.string, std.regex, std.stdio, std.process, std.algorithm.searching, std.getopt, std.conv, std.path;
 import std.algorithm.sorting: sort;
 import selective;
 static import log;
 
 final class Config
 {
-	public string refreshTokenFilePath;
-	public string deltaLinkFilePath;
-	public string databaseFilePath;
-	public string databaseFilePathDryRun;
-	public string uploadStateFilePath;
-	public string syncListFilePath;
-	public string homePath;
-	public string configDirName;
+	// application defaults
 	public string defaultSyncDir = "~/OneDrive";
 	public string defaultSkipFile = "~*|.~*|*.tmp";
+	// application set items
+	public string refreshTokenFilePath = "";
+	public string deltaLinkFilePath = "";
+	public string databaseFilePath = "";
+	public string databaseFilePathDryRun = "";
+	public string uploadStateFilePath = "";
+	public string syncListFilePath = "";
+	public string homePath = "";
+	public string configDirName = "";
 	public string defaultSkipDir = "";
-	public string configFileSyncDir;
-	public string configFileSkipFile;
-	public string configFileSkipDir;
+	public string configFileSyncDir = "";
+	public string configFileSkipFile = "";
+	public string configFileSkipDir = "";
+	private string userConfigFilePath = "";
 	// was the application just authorised - paste of response uri
 	public bool applicationAuthorizeResponseUri = false;
-		
-	private string userConfigFilePath;
 	// hashmap for the values found in the user config file
 	// ARGGGG D is stupid and cannot make hashmap initializations!!!
 	// private string[string] foobar = [ "aa": "bb" ] does NOT work!!!
 	private string[string] stringValues;
 	private bool[string] boolValues;
 	private long[string] longValues;
+	public auto configRegex = ctRegex!(`^(\w+)\s*=\s*"(.*)"\s*$`);
 
 	this(string confdirOption)
 	{
@@ -131,17 +133,29 @@ final class Config
 			// configDirBase contains the correct path so we do not need to check for presence of '~'
 			configDirName = configDirBase ~ "/onedrive";
 		}
-	
+		
+		// Config directory options all determined
+		// configDirName has a trailing /
 		log.vlog("Using Config Dir: ", configDirName);
 		if (!exists(configDirName)) mkdirRecurse(configDirName);
-
-		refreshTokenFilePath = configDirName ~ "/refresh_token";
-		deltaLinkFilePath = configDirName ~ "/delta_link";
-		databaseFilePath = configDirName ~ "/items.sqlite3";
-		databaseFilePathDryRun = configDirName ~ "/items-dryrun.sqlite3";
-		uploadStateFilePath = configDirName ~ "/resume_upload";
-		userConfigFilePath = configDirName ~ "/config";
-		syncListFilePath = configDirName ~ "/sync_list";
+		
+		// Update application set variables based on configDirName
+		refreshTokenFilePath = buildNormalizedPath(configDirName ~ "/refresh_token");
+		deltaLinkFilePath = buildNormalizedPath(configDirName ~ "/delta_link");
+		databaseFilePath = buildNormalizedPath(configDirName ~ "/items.sqlite3");
+		databaseFilePathDryRun = buildNormalizedPath(configDirName ~ "/items-dryrun.sqlite3");
+		uploadStateFilePath = buildNormalizedPath(configDirName ~ "/resume_upload");
+		userConfigFilePath = buildNormalizedPath(configDirName ~ "/config");
+		syncListFilePath = buildNormalizedPath(configDirName ~ "/sync_list");
+		
+		// Debug Output for application set variables based on configDirName
+		log.vdebug("refreshTokenFilePath = ", refreshTokenFilePath);
+		log.vdebug("deltaLinkFilePath = ", deltaLinkFilePath);
+		log.vdebug("databaseFilePath = ", databaseFilePath);
+		log.vdebug("databaseFilePathDryRun = ", databaseFilePathDryRun);
+		log.vdebug("uploadStateFilePath = ", uploadStateFilePath);
+		log.vdebug("userConfigFilePath = ", userConfigFilePath);
+		log.vdebug("syncListFilePath = ", syncListFilePath);
 	}
 
 	bool initialize()
@@ -403,18 +417,38 @@ final class Config
 		longValues[key] = value;
 	}
 
-	private bool load(const ref string filename)
+	// load a configuration file
+	private bool load(string filename)
 	{
-		scope(failure) return false;
+		// configure function variables
 		auto file = File(filename, "r");
-		auto r = regex(`^(\w+)\s*=\s*"(.*)"\s*$`);
-		foreach (line; file.byLine()) {
-			line = stripLeft(line);
-			if (line.length == 0 || line[0] == ';' || line[0] == '#') continue;
-			
-			//auto c = line.matchFirst(r);
-			auto c = matchFirst(line, r);
-			
+		string lineBuffer;
+		
+		// configure scopes
+		// - failure
+		scope(failure) {
+			// close file if open
+			if (file.isOpen()){
+				// close open file
+				file.close();
+			}
+			return false;
+		}
+		// - exit
+		scope(exit) {
+			// close file if open
+			if (file.isOpen()){
+				// close open file
+				file.close();
+			}
+		}
+	
+		// read file line by line
+		auto range = file.byLine();
+		foreach (line; range) {
+			lineBuffer = stripLeft(line).to!string;
+			if (lineBuffer.length == 0 || lineBuffer[0] == ';' || lineBuffer[0] == '#') continue;
+			auto c = lineBuffer.matchFirst(configRegex);
 			if (!c.empty) {
 				c.popFront(); // skip the whole match
 				string key = c.front.dup;
@@ -447,19 +481,13 @@ final class Config
 					}
 				}
 			} else {
-				log.log("Malformed config line: ", line);
+				log.log("Malformed config line: ", lineBuffer);
 				return false;
 			}
-		}
-		// close file if open
-		if (file.isOpen()){
-			// close file
-			file.close();
 		}
 		return true;
 	}
 }
-
 
 void outputLongHelp(Option[] opt)
 {

@@ -176,7 +176,8 @@ struct Statement
 				row.length = 0;
 			} else if (rc == SQLITE_ROW) {
 				// https://www.sqlite.org/c3ref/data_count.html
-				int count = sqlite3_data_count(pStmt);
+				int count = 0;
+				count = sqlite3_data_count(pStmt);
 				row = new const(char)[][count];
 				foreach (size_t i, ref column; row) {
 					// https://www.sqlite.org/c3ref/column_blob.html

@@ -114,7 +114,7 @@ private bool isDotFile(const(string) path)
 private Item makeItem(const ref JSONValue driveItem)
 {
 	Item item = {
-		id: "id" in driveItem ? driveItem["id"].str : null, // id may be missing if we are just initialising an item
+		id: driveItem["id"].str,
 		name: "name" in driveItem ? driveItem["name"].str : null, // name may be missing for deleted files in OneDrive Biz
 		eTag: "eTag" in driveItem ? driveItem["eTag"].str : null, // eTag is not returned for the root in OneDrive Biz
 		cTag: "cTag" in driveItem ? driveItem["cTag"].str : null, // cTag is missing in old files (and all folders in OneDrive Biz)
@@ -695,14 +695,18 @@ final class SyncEngine
 	private void applyDifferences(string driveId, const(char)[] id, bool performFullItemScan)
 	{
 		log.vlog("Applying changes of Path ID: " ~ id);
+		// function variables
+		const(char)[] idToQuery;
 		JSONValue changes;
 		JSONValue changesAvailable;
-		
-		// Query the name of this folder id
+		JSONValue idDetails;
 		string syncFolderName;
 		string syncFolderPath;
 		string syncFolderChildPath;
-		JSONValue idDetails = parseJSON("{}");
+		string deltaLink;
+		string deltaLinkAvailable;
+		
+		// Query the name of this folder id
 		try {
 			idDetails = onedrive.getPathDetailsById(driveId, id);
 		} catch (OneDriveException e) {
@@ -860,8 +864,7 @@ final class SyncEngine
 		// Control this via performFullItemScan
 		
 		// Get the current delta link
-		string deltaLink = "";
-		string deltaLinkAvailable = itemdb.getDeltaLink(driveId, id);
+		deltaLinkAvailable = itemdb.getDeltaLink(driveId, id);
 		// if sync_list is not configured, syncListConfigured should be false
 		log.vdebug("syncListConfigured = ", syncListConfigured);
 		// oneDriveFullScanTrigger should be false unless set by actions on OneDrive and only if sync_list or skip_dir is used
@@ -881,16 +884,18 @@ final class SyncEngine
 		if (!performFullItemScan){
 			// performFullItemScan == false
 			// use delta link
-			deltaLink = deltaLinkAvailable;
 			log.vdebug("performFullItemScan is false, using the deltaLink as per database entry");
 			if (deltaLinkAvailable == ""){
+				deltaLink = "";
 				log.vdebug("deltaLink was requested to be used, but contains no data - resulting API query will be treated as a full scan of OneDrive");
 			} else {
+				deltaLink = deltaLinkAvailable;
 				log.vdebug("deltaLink contains valid data - resulting API query will be treated as a delta scan of OneDrive");
 			}
 		} else {
 			// performFullItemScan == true
 			// do not use delta-link
+			deltaLink = "";
 			log.vdebug("performFullItemScan is true, not using the database deltaLink so that we query all objects on OneDrive to compare against all local objects");
 		}
 		
@@ -899,7 +904,6 @@ final class SyncEngine
 			// If we used the 'id' passed in & when using --single-directory with a business account we get:
 			//	'HTTP request returned status code 501 (Not Implemented): view.delta can only be called on the root.'
 			// To view changes correctly, we need to use the correct path id for the request
-			const(char)[] idToQuery;
 			if (driveId == defaultDriveId) {
 				// The drive id matches our users default drive id
 				idToQuery = defaultRootId.dup;
@@ -909,6 +913,8 @@ final class SyncEngine
 				// Use the 'id' that was passed in (folderId)
 				idToQuery = id;
 			}
+			// what path id are we going to query?
+			log.vdebug("path idToQuery = ", idToQuery);
 			
 			// query for changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
 			try {
@@ -916,7 +922,7 @@ final class SyncEngine
 				// changes with or without deltaLink
 				changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
 				if (changes.type() == JSONType.object) {
-					log.vdebug("Query 'changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)' performed successfully");
+					log.log("Query 'changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)' performed successfully");
 				}
 			} catch (OneDriveException e) {
 				// OneDrive threw an error
@@ -1385,9 +1391,9 @@ final class SyncEngine
 				} else {
 					log.vdebug("onedrive.viewChangesByDriveId call returned an invalid JSON Object");
 				}
-			}	
+			}
 		}
-
+		
 		// delete items in idsToDelete
 		if (idsToDelete.length > 0) deleteItems();
 		// empty the skipped items
@@ -1703,7 +1709,7 @@ final class SyncEngine
 	}
 
 	// download an item that was not synced before
-	private void applyNewItem(Item item, const(string) path)
+	private void applyNewItem(const ref Item item, const(string) path)
 	{
 		if (exists(path)) {
 			// path exists locally
@@ -1715,11 +1721,13 @@ final class SyncEngine
 				// file is not in sync with the database
 				// is the local file technically 'newer' based on UTC timestamp?
 				SysTime localModifiedTime = timeLastModified(path).toUTC();
+				SysTime itemModifiedTime = item.mtime;
+				// HACK: reduce time resolution to seconds before comparing
+				itemModifiedTime.fracSecs = Duration.zero;
 				localModifiedTime.fracSecs = Duration.zero;
-				item.mtime.fracSecs = Duration.zero;
 				
 				// is the local modified time greater than that from OneDrive?
-				if (localModifiedTime > item.mtime) {
+				if (localModifiedTime > itemModifiedTime) {
 					// local file is newer than item on OneDrive based on file modified time
 					// Is this item id in the database?
 					if (itemdb.idInLocalDatabase(item.driveId, item.id)){
@@ -1870,7 +1878,7 @@ final class SyncEngine
 	}
 
 	// downloads a File resource
-	private void downloadFileItem(Item item, const(string) path)
+	private void downloadFileItem(const ref Item item, const(string) path)
 	{
 		assert(item.type == ItemType.file);
 		write("Downloading file ", path, " ... ");
@@ -2070,20 +2078,21 @@ final class SyncEngine
 	}
 
 	// returns true if the given item corresponds to the local one
-	private bool isItemSynced(Item item, const(string) path)
+	private bool isItemSynced(const ref Item item, const(string) path)
 	{
 		if (!exists(path)) return false;
 		final switch (item.type) {
 		case ItemType.file:
 			if (isFile(path)) {
 				SysTime localModifiedTime = timeLastModified(path).toUTC();
+				SysTime itemModifiedTime = item.mtime;
 				// HACK: reduce time resolution to seconds before comparing
-				item.mtime.fracSecs = Duration.zero;
+				itemModifiedTime.fracSecs = Duration.zero;
 				localModifiedTime.fracSecs = Duration.zero;
-				if (localModifiedTime == item.mtime) {
+				if (localModifiedTime == itemModifiedTime) {
 					return true;
 				} else {
-					log.vlog("The local item has a different modified time ", localModifiedTime, " remote is ", item.mtime);
+					log.vlog("The local item has a different modified time ", localModifiedTime, " remote is ", itemModifiedTime);
 				}
 				if (testFileHash(path, item)) {
 					return true;
@@ -2176,6 +2185,7 @@ final class SyncEngine
 		if (itemdb.selectByPath(path, defaultDriveId, item)) {
 			uploadDifferences(item);
 		}
+		
 		log.vlog("Uploading new items of ", path);
 		uploadNewItems(path);
 		
@@ -2186,7 +2196,7 @@ final class SyncEngine
 		}
 	}
 
-	private void uploadDifferences(Item item)
+	private void uploadDifferences(const ref Item item)
 	{
 		// see if this item.id we were supposed to have deleted
 		// match early and return
@@ -2253,7 +2263,7 @@ final class SyncEngine
 		}
 	}
 
-	private void uploadDirDifferences(Item item, const(string) path)
+	private void uploadDirDifferences(const ref Item item, const(string) path)
 	{
 		assert(item.type == ItemType.dir);
 		if (exists(path)) {
@@ -2282,7 +2292,8 @@ final class SyncEngine
 			} else {
 				// we are in a --dry-run situation, directory appears to have deleted locally - this directory may never have existed as we never downloaded it ..
 				// Check if path does not exist in database
-				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+				Item databaseItem;
+				if (!itemdb.selectByPath(path, defaultDriveId, databaseItem)) {
 					// Path not found in database
 					log.vlog("The directory has been deleted locally");
 					if (noRemoteDelete) {
@@ -2309,7 +2320,7 @@ final class SyncEngine
 		}
 	}
 
-	private void uploadRemoteDirDifferences(Item item, const(string) path)
+	private void uploadRemoteDirDifferences(const ref Item item, const(string) path)
 	{
 		assert(item.type == ItemType.remote);
 		if (exists(path)) {
@@ -2342,7 +2353,8 @@ final class SyncEngine
 			} else {
 				// we are in a --dry-run situation, directory appears to have deleted locally - this directory may never have existed as we never downloaded it ..
 				// Check if path does not exist in database
-				if (!itemdb.selectByPathWithRemote(path, defaultDriveId, item)) {
+				Item databaseItem;
+				if (!itemdb.selectByPathWithRemote(path, defaultDriveId, databaseItem)) {
 					// Path not found in database
 					log.vlog("The directory has been deleted locally");
 					if (noRemoteDelete) {
@@ -2370,7 +2382,7 @@ final class SyncEngine
 	}
 
 	// upload local file system differences to OneDrive
-	private void uploadFileDifferences(Item item, const(string) path)
+	private void uploadFileDifferences(const ref Item item, const(string) path)
 	{
 		// Reset upload failure - OneDrive or filesystem issue (reading data)
 		uploadFailed = false;
@@ -2379,11 +2391,12 @@ final class SyncEngine
 		if (exists(path)) {
 			if (isFile(path)) {
 				SysTime localModifiedTime = timeLastModified(path).toUTC();
+				SysTime itemModifiedTime = item.mtime;
 				// HACK: reduce time resolution to seconds before comparing
-				item.mtime.fracSecs = Duration.zero;
+				itemModifiedTime.fracSecs = Duration.zero;
 				localModifiedTime.fracSecs = Duration.zero;
 				
-				if (localModifiedTime != item.mtime) {
+				if (localModifiedTime != itemModifiedTime) {
 					log.vlog("The file last modified time has changed");					
 					string eTag = item.eTag;
 					if (!testFileHash(path, item)) {
@@ -2687,7 +2700,8 @@ final class SyncEngine
 			} else {
 				// We are in a --dry-run situation, file appears to have deleted locally - this file may never have existed as we never downloaded it ..
 				// Check if path does not exist in database
-				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+				Item databaseItem;
+				if (!itemdb.selectByPath(path, defaultDriveId, databaseItem)) {
 					// file not found in database
 					log.vlog("The file has been deleted locally");
 					if (noRemoteDelete) {
@@ -2849,10 +2863,6 @@ final class SyncEngine
 			if (isDir(path)) {
 				
 				Item item;
-				//JSONValue jsonItem = parseJSON("{}");
-				//Item item = makeItem(jsonItem);
-				writeln("item = ", item);
-				
 				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
 					uploadCreateDir(path);
 				}
@@ -3000,8 +3010,14 @@ final class SyncEngine
 							log.vdebug("Parent path is not in the database - need to add it");
 							uploadCreateDir(dirName(path));
 						}
-						// still enforce check of parent path. if the above was triggered, the below will generate a sync retry and will now be sucessful
-						enforce(itemdb.selectByPath(dirName(path), parent.driveId, parent), "The parent item id is not in the database");
+						
+						// Is the parent a 'folder' from another user? ie - is this a 'shared folder' that has been shared with us?
+						if (defaultDriveId == parent.driveId){
+							// enforce check of parent path. if the above was triggered, the below will generate a sync retry and will now be sucessful
+							enforce(itemdb.selectByPath(dirName(path), parent.driveId, parent), "The parent item id is not in the database");
+						} else {
+							log.vdebug("Parent drive ID is not our drive ID - parent most likely a shared folder");
+						}
 						
 						JSONValue driveItem = [
 								"name": JSONValue(baseName(path)),

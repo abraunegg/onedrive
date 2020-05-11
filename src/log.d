@@ -3,6 +3,7 @@ import std.file;
 import std.datetime;
 import std.process;
 import std.conv;
+import core.memory;
 import core.sys.posix.pwd, core.sys.posix.unistd, core.stdc.string : strlen;
 import std.algorithm : splitter;
 version(Notifications) {
@@ -200,4 +201,14 @@ private string getUserName()
 		vdebug("User Name:  unknown");
 		return "unknown";
 	}
+}
+
+void displayMemoryUsage()
+{
+// Display memory usage
+vdebugNewLine("\nMemory Usage (bytes)");
+vdebug("--------------------");
+vdebug("memory usedSize = ", GC.stats.usedSize);
+vdebug("memory freeSize = ", GC.stats.freeSize);
+vdebug("memory allocatedInCurrentThread = ", GC.stats.allocatedInCurrentThread, "\n");
 }
