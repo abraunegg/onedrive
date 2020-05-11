@@ -3007,7 +3007,7 @@ final class SyncEngine
 						// Perform the database lookup - is the parent in the database?
 						if (!itemdb.selectByPath(dirName(path), parent.driveId, parent)) {
 							// parent is not in the database
-							log.vdebug("Parent path is not in the database - need to add it");
+							log.vdebug("Parent path is not in the database - need to add it: ", dirName(path));
 							uploadCreateDir(dirName(path));
 						}
 						
