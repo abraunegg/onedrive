@@ -922,7 +922,7 @@ final class SyncEngine
 				// changes with or without deltaLink
 				changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
 				if (changes.type() == JSONType.object) {
-					log.log("Query 'changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)' performed successfully");
+					log.vdebug("Query 'changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)' performed successfully");
 				}
 			} catch (OneDriveException e) {
 				// OneDrive threw an error
