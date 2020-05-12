@@ -39,6 +39,34 @@ int main(string[] args)
 	bool skipDirDifferent = false;
 	bool online = false;
 	bool performSyncOK = false;
+	bool onedriveInitialised = false;
+	
+	// Define scopes
+	scope(exit) {
+		// if initialised, shut down the HTTP instance
+		if (onedriveInitialised) {
+			writeln("calling oneDrive.shutdown(); due to exit");
+			oneDrive.shutdown();
+		}
+		// free API instance
+		oneDrive = null;
+		// cleanup memory
+		GC.collect();
+		log.displayMemoryUsage();
+	}
+	
+	scope(failure) {
+		// if initialised, shut down the HTTP instance
+		if (onedriveInitialised) {
+			writeln("calling oneDrive.shutdown(); due to failure");
+			oneDrive.shutdown();
+		}
+		// free API instance
+		oneDrive = null;
+		// cleanup memory
+		GC.collect();
+		log.displayMemoryUsage();
+	}
 
 	// read in application options as passed in
 	try {
@@ -453,11 +481,12 @@ int main(string[] args)
 	// Initialize OneDrive, check for authorization
 	log.vlog("Initializing the OneDrive API ...");
 	oneDrive = new OneDriveApi(cfg);
+	onedriveInitialised = oneDrive.init();
 	oneDrive.printAccessToken = cfg.getValueBool("print_token");
-	if (!oneDrive.init()) {
+	
+	if (!onedriveInitialised) {
 		log.error("Could not initialize the OneDrive API");
-		// workaround for segfault in std.net.curl.Curl.shutdown() on exit
-		oneDrive.http.shutdown();
+		// Use exit scopes to shutdown API
 		return EXIT_UNAUTHORIZED;
 	}
 	
@@ -479,13 +508,13 @@ int main(string[] args)
 			// Application was just authorised
 			log.log("\nApplication has been successfully authorised, however no additional command switches were provided.\n");
 			log.log("Please use --help for further assistance in regards to running this application.\n");
-			oneDrive.http.shutdown();
+			// Use exit scopes to shutdown API
 			return EXIT_SUCCESS;
 		} else {
 			// Application was not just authorised
 			log.log("\n--synchronize or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use --help for further assistance.\n");
 			log.log("No OneDrive sync will be performed without one of these two arguments being present.\n");
-			oneDrive.http.shutdown();
+			// Use exit scopes to shutdown API
 			return EXIT_FAILURE;
 		}
 	}
@@ -494,7 +523,7 @@ int main(string[] args)
 	if (cfg.getValueBool("synchronize") && cfg.getValueBool("monitor")) {
 		writeln("\nERROR: --synchronize and --monitor cannot be used together\n");
 		writeln("Refer to --help to determine which command option you should use.\n");
-		oneDrive.http.shutdown();
+		// Use exit scopes to shutdown API
 		return EXIT_FAILURE;
 	}
 	
@@ -520,7 +549,7 @@ int main(string[] args)
 		} catch (std.file.FileException e) {
 			// Creating the sync directory failed
 			log.error("ERROR: Unable to create local OneDrive syncDir - ", e.msg);
-			oneDrive.http.shutdown();
+			// Use exit scopes to shutdown API
 			return EXIT_FAILURE;
 		}
 	}
@@ -585,7 +614,7 @@ int main(string[] args)
 	auto sync = new SyncEngine(cfg, oneDrive, itemDb, selectiveSync);
 	try {
 		if (!initSyncEngine(sync)) {
-			oneDrive.http.shutdown();
+			// Use exit scopes to shutdown API
 			return EXIT_FAILURE;
 		} else {
 			if (cfg.getValueString("get_file_link") == "") {
@@ -596,7 +625,7 @@ int main(string[] args)
 	} catch (CurlException e) {
 		if (!cfg.getValueBool("monitor")) {
 			log.log("\nNo Internet connection.");
-			oneDrive.http.shutdown();
+			// Use exit scopes to shutdown API
 			return EXIT_FAILURE;
 		}
 	}
@@ -629,7 +658,7 @@ int main(string[] args)
 		// we were asked to check the mounts
 		if (exists(syncDir ~ "/.nosync")) {
 			log.logAndNotify("ERROR: .nosync file found. Aborting synchronization process to safeguard data.");
-			oneDrive.http.shutdown();
+			// Use exit scopes to shutdown API
 			return EXIT_FAILURE;
 		}
 	}
@@ -686,7 +715,7 @@ int main(string[] args)
 					if (!exists(cfg.getValueString("single_directory"))){
 						// the requested directory does not exist .. 
 						log.logAndNotify("ERROR: The requested local directory does not exist. Please check ~/OneDrive/ for requested path");
-						oneDrive.http.shutdown();
+						// Use exit scopes to shutdown API
 						return EXIT_FAILURE;
 					}
 				}
@@ -826,7 +855,7 @@ int main(string[] args)
 
 					try {
 						if (!initSyncEngine(sync)) {
-							oneDrive.http.shutdown();
+							// Use exit scopes to shutdown API
 							return EXIT_FAILURE;
 						}
 						try {
@@ -866,9 +895,6 @@ int main(string[] args)
 		}
 	}
 
-	// Workaround for segfault in std.net.curl.Curl.shutdown() on exit
-	oneDrive.http.shutdown();
-	
 	// Make sure the .wal file is incorporated into the main db before we exit
 	destroy(itemDb);
 	
@@ -881,7 +907,8 @@ int main(string[] args)
 		}
 	}
 	
-	// Exit
+	// Exit application 
+	// Use exit scopes to shutdown API
 	return EXIT_SUCCESS;
 }
 
@@ -1069,8 +1096,7 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 			log.log("Got termination signal, shutting down db connection");
 			// make sure the .wal file is incorporated into the main db
 			destroy(itemDb);
-			// workaround for segfault in std.net.curl.Curl.shutdown() on exit
-			oneDrive.http.shutdown();
+			// Use exit scopes to shutdown OneDrive API
 		})();
 	} catch(Exception e) {}
 	exit(0);

@@ -73,7 +73,7 @@ final class OneDriveApi
 	private Config cfg;
 	private string refreshToken, accessToken;
 	private SysTime accessTokenExpiration;
-	/* private */ HTTP http;
+	private HTTP http;
 
 	// if true, every new access token is printed
 	bool printAccessToken;
@@ -145,6 +145,12 @@ final class OneDriveApi
 				.simulateNoRefreshTokenFile = true;
 			}
 		}
+	}
+
+	// Shutdown OneDrive HTTP construct
+	void shutdown()
+	{
+		http.shutdown();
 	}
 
 	bool init()
@@ -670,16 +676,23 @@ final class OneDriveApi
 	
 	private JSONValue upload(string filepath, string url)
 	{
+		// open file as read-only in binary mode
+		auto file = File(filepath, "rb");
+		// function scopes
 		scope(exit) {
 			http.clearRequestHeaders();
 			http.onSend = null;
 			http.contentLength = 0;
+			// close file if open
+			if (file.isOpen()){
+				// close open file
+				file.close();
+			}
 		}
 		http.method = HTTP.Method.put;
 		http.url = url;
 		addAccessTokenHeader();
 		http.addRequestHeader("Content-Type", "application/octet-stream");
-		auto file = File(filepath, "rb");
 		http.onSend = data => file.rawRead(data).length;
 		http.contentLength = file.size;
 		auto response = perform();
