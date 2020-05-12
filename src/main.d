@@ -45,27 +45,23 @@ int main(string[] args)
 	scope(exit) {
 		// if initialised, shut down the HTTP instance
 		if (onedriveInitialised) {
-			writeln("calling oneDrive.shutdown(); due to exit");
 			oneDrive.shutdown();
 		}
 		// free API instance
 		oneDrive = null;
 		// cleanup memory
 		GC.collect();
-		log.displayMemoryUsage();
 	}
 	
 	scope(failure) {
 		// if initialised, shut down the HTTP instance
 		if (onedriveInitialised) {
-			writeln("calling oneDrive.shutdown(); due to failure");
 			oneDrive.shutdown();
 		}
 		// free API instance
 		oneDrive = null;
 		// cleanup memory
 		GC.collect();
-		log.displayMemoryUsage();
 	}
 
 	// read in application options as passed in
