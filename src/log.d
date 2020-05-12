@@ -206,9 +206,8 @@ private string getUserName()
 void displayMemoryUsage()
 {
 // Display memory usage
-vdebugNewLine("\nMemory Usage (bytes)");
-vdebug("--------------------");
-vdebug("memory usedSize = ", GC.stats.usedSize);
-vdebug("memory freeSize = ", GC.stats.freeSize);
-vdebug("memory allocatedInCurrentThread = ", GC.stats.allocatedInCurrentThread, "\n");
+writeln("\nMemory Usage (bytes)");
+writeln("--------------------");
+writeln("memory usedSize = ", GC.stats.usedSize);
+writeln("memory freeSize = ", GC.stats.freeSize, "\n");
 }
