@@ -1,5 +1,5 @@
 import std.algorithm;
-import std.digest.digest;
+import std.digest;
 
 // implementation of the QuickXorHash algorithm in D
 // https://github.com/OneDrive/onedrive-api-docs/blob/live/docs/code-snippets/quickxorhash.md
