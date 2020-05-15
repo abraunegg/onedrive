@@ -151,7 +151,12 @@ final class OneDriveApi
 	void shutdown()
 	{
 		// reset any values to defaults, freeing any set objects
-		http.init();
+		http.clearRequestHeaders();
+		http.onSend = null;
+		http.onReceive = null;
+		http.onReceiveHeader = null;
+		http.onReceiveStatusLine = null;
+		http.contentLength = 0;
 		// shut down the curl instance
 		http.shutdown();
 	}
@@ -434,6 +439,10 @@ final class OneDriveApi
 		scope(exit) {
 			http.clearRequestHeaders();
 			http.onSend = null;
+			http.onReceive = null;
+			http.onReceiveHeader = null;
+			http.onReceiveStatusLine = null;
+			http.contentLength = 0;
 			// close file if open
 			if (file.isOpen()){
 				// close open file
@@ -583,12 +592,14 @@ final class OneDriveApi
 			http.clearRequestHeaders();
 			http.onSend = null;
 			http.onReceive = null;
+			http.onReceiveHeader = null;
+			http.onReceiveStatusLine = null;
+			http.contentLength = 0;
 			// Reset onProgress to not display anything for next download
 			http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
 			{
 				return 0;
 			};
-			http.contentLength = 0;
 			// close file if open
 			if (file.isOpen()){
 				// close open file
@@ -652,6 +663,8 @@ final class OneDriveApi
 			} catch (CurlException e) {
 				displayOneDriveErrorMessage(e.msg);
 			}
+			// free progress bar memory
+			p = null;
 		} else {
 			// No progress bar
 			try {
@@ -709,6 +722,9 @@ final class OneDriveApi
 		scope(exit) {
 			http.clearRequestHeaders();
 			http.onSend = null;
+			http.onReceive = null;
+			http.onReceiveHeader = null;
+			http.onReceiveStatusLine = null;
 			http.contentLength = 0;
 			// close file if open
 			if (file.isOpen()){

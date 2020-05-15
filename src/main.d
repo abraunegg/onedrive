@@ -40,28 +40,45 @@ int main(string[] args)
 	bool online = false;
 	bool performSyncOK = false;
 	bool onedriveInitialised = false;
+	bool displayMemoryUsage = false;
 	
 	// Define scopes
 	scope(exit) {
+		// Display memory details
+		if (displayMemoryUsage) {
+			log.displayMemoryUsagePreGC();
+		}
 		// if initialised, shut down the HTTP instance
 		if (onedriveInitialised) {
 			oneDrive.shutdown();
 		}
 		// free API instance
 		oneDrive = null;
-		// cleanup memory
+		// Perform Garbage Cleanup
 		GC.collect();
+		// Display memory details
+		if (displayMemoryUsage) {
+			log.displayMemoryUsagePostGC();
+		}
 	}
 	
 	scope(failure) {
+		// Display memory details
+		if (displayMemoryUsage) {
+			log.displayMemoryUsagePreGC();
+		}
 		// if initialised, shut down the HTTP instance
 		if (onedriveInitialised) {
 			oneDrive.shutdown();
 		}
 		// free API instance
 		oneDrive = null;
-		// cleanup memory
+		// Perform Garbage Cleanup
 		GC.collect();
+		// Display memory details
+		if (displayMemoryUsage) {
+			log.displayMemoryUsagePostGC();
+		}
 	}
 
 	// read in application options as passed in
@@ -104,6 +121,9 @@ int main(string[] args)
 		// Error message already printed
 		return EXIT_FAILURE;
 	}
+	
+	// set memory display
+	displayMemoryUsage = cfg.getValueBool("display_memory");
 	
 	// update configuration from command line args
 	cfg.update_from_args(args);
@@ -798,12 +818,14 @@ int main(string[] args)
 			}
 
 			// monitor loop
+			bool performMonitor = true;
+			long monitorLoopFullCount = 0;
 			immutable auto checkInterval = dur!"seconds"(cfg.getValueLong("monitor_interval"));
-			immutable auto logInterval = cfg.getValueLong("monitor_log_frequency");
-			immutable auto fullScanFrequency = cfg.getValueLong("monitor_fullscan_frequency");
-			auto lastCheckTime = MonoTime.currTime();
-			auto logMonitorCounter = 0;
-			auto fullScanCounter = 0;
+			immutable long logInterval = cfg.getValueLong("monitor_log_frequency");
+			immutable long fullScanFrequency = cfg.getValueLong("monitor_fullscan_frequency");
+			MonoTime lastCheckTime = MonoTime.currTime();
+			long logMonitorCounter = 0;
+			long fullScanCounter = 0;
 			bool fullScanRequired = false;
 			bool syncListConfiguredFullScanOverride = false;
 			// if sync list is configured, set to true
@@ -812,7 +834,7 @@ int main(string[] args)
 				syncListConfiguredFullScanOverride = true;
 			}
 			
-			while (true) {
+			while (performMonitor) {
 				if (!cfg.getValueBool("download_only")) {
 					try {
 						m.update(online);
@@ -824,6 +846,13 @@ int main(string[] args)
 				
 				auto currTime = MonoTime.currTime();
 				if (currTime - lastCheckTime > checkInterval) {
+					// Increment monitorLoopFullCount
+					monitorLoopFullCount++;
+					// Display memory details at start of loop
+					if (displayMemoryUsage) {
+						log.displayMemoryUsagePreGC();
+					}
+				
 					// log monitor output suppression
 					logMonitorCounter += 1;
 					if (logMonitorCounter > logInterval) {
@@ -884,8 +913,26 @@ int main(string[] args)
 						syncListConfiguredFullScanOverride = false;
 					}
 					lastCheckTime = MonoTime.currTime();
+					// Display memory details before cleanup
+					if (displayMemoryUsage) {
+						log.displayMemoryUsagePreGC();
+					}
+					// Perform Garbage Cleanup
 					GC.collect();
-				} 
+					// Display memory details after cleanup
+					if (displayMemoryUsage) {
+						log.displayMemoryUsagePostGC();
+					}
+					
+					// Developer break via config option
+					if (cfg.getValueLong("monitor_max_loop") > 0) {
+						// developer set option to limit --monitor loops
+						if (monitorLoopFullCount == (cfg.getValueLong("monitor_max_loop"))) {
+							performMonitor = false;
+							log.log("Exiting after ", monitorLoopFullCount, " loops due to developer set option");
+						}
+					}
+				}
 				Thread.sleep(dur!"msecs"(500));
 			}
 		}

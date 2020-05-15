@@ -9,6 +9,7 @@ final class Config
 	// application defaults
 	public string defaultSyncDir = "~/OneDrive";
 	public string defaultSkipFile = "~*|.~*|*.tmp";
+	public string defaultSkipDir = "";
 	// application set items
 	public string refreshTokenFilePath = "";
 	public string deltaLinkFilePath = "";
@@ -18,7 +19,6 @@ final class Config
 	public string syncListFilePath = "";
 	public string homePath = "";
 	public string configDirName = "";
-	public string defaultSkipDir = "";
 	public string configFileSyncDir = "";
 	public string configFileSkipFile = "";
 	public string configFileSkipDir = "";
@@ -37,32 +37,32 @@ final class Config
 	{
 		// default configuration - entries in config file ~/.config/onedrive/config
 		// an entry here means it can be set via the config file if there is a coresponding read and set in update_from_args()
-		stringValues["sync_dir"]         = defaultSyncDir;
-		stringValues["skip_file"]        = defaultSkipFile;
-		stringValues["skip_dir"]         = defaultSkipDir;
-		stringValues["log_dir"]          = "/var/log/onedrive/";
-		stringValues["drive_id"]         = "";
-		stringValues["user_agent"]       = "";
-		boolValues["upload_only"]        = false;
-		boolValues["check_nomount"]      = false;
-		boolValues["check_nosync"]       = false;
-		boolValues["download_only"]      = false;
+		stringValues["sync_dir"] = defaultSyncDir;
+		stringValues["skip_file"] = defaultSkipFile;
+		stringValues["skip_dir"] = defaultSkipDir;
+		stringValues["log_dir"] = "/var/log/onedrive/";
+		stringValues["drive_id"] = "";
+		stringValues["user_agent"] = "";
+		boolValues["upload_only"] = false;
+		boolValues["check_nomount"] = false;
+		boolValues["check_nosync"] = false;
+		boolValues["download_only"] = false;
 		boolValues["disable_notifications"] = false;
 		boolValues["disable_upload_validation"] = false;
-		boolValues["enable_logging"]     = false;
-		boolValues["force_http_11"]      = false;
-		boolValues["force_http_2"]       = false;
-		boolValues["local_first"]        = false;
-		boolValues["no_remote_delete"]   = false;
-		boolValues["skip_symlinks"]      = false;
-		boolValues["debug_https"]        = false;
-		boolValues["skip_dotfiles"]      = false;
-		boolValues["dry_run"]            = false;
-		boolValues["sync_root_files"]	 = false;
-		longValues["verbose"]            = log.verbose; // might be initialized by the first getopt call!
-		longValues["monitor_interval"]   = 45,
-		longValues["skip_size"]          = 0,
-		longValues["min_notify_changes"]  = 5;
+		boolValues["enable_logging"] = false;
+		boolValues["force_http_11"] = false;
+		boolValues["force_http_2"] = false;
+		boolValues["local_first"] = false;
+		boolValues["no_remote_delete"] = false;
+		boolValues["skip_symlinks"] = false;
+		boolValues["debug_https"] = false;
+		boolValues["skip_dotfiles"] = false;
+		boolValues["dry_run"] = false;
+		boolValues["sync_root_files"] = false;
+		longValues["verbose"] = log.verbose; // might be initialized by the first getopt call!
+		longValues["monitor_interval"] = 45;
+		longValues["skip_size"] = 0;
+		longValues["min_notify_changes"] = 5;
 		longValues["monitor_log_frequency"] = 5;
 		// Number of n sync runs before performing a full local scan of sync_dir
 		// By default 10 which means every ~7.5 minutes a full disk scan of sync_dir will occur
@@ -75,9 +75,19 @@ final class Config
 		boolValues["skip_dir_strict_match"] = false;
 		// Allow for a custom Client ID / Application ID to be used to replace the inbuilt default
 		// This is a config file option ONLY
-		stringValues["application_id"]       = "";
+		stringValues["application_id"] = "";
 		// allow for resync to be set via config file
-		boolValues["resync"]              = false;
+		boolValues["resync"] = false;
+		
+		// DEVELOPER OPTIONS 
+		// display_memory = true | false
+		//  - It may be desirable to display the memory usage of the application to assist with diagnosing memory issues with the application
+		//  - This is especially beneficial when debugging or performing memory tests with Valgrind
+		boolValues["display_memory"] = false;
+		// monitor_max_loop = long value
+		//  - It may be desirable to, when running in monitor mode, force monitor mode to 'quit' after X number of loops
+		//  - This is especially beneficial when debugging or performing memory tests with Valgrind
+		longValues["monitor_max_loop"] = 0;
 
 		// Determine the users home directory. 
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts

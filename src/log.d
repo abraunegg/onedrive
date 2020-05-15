@@ -203,11 +203,24 @@ private string getUserName()
 	}
 }
 
-void displayMemoryUsage()
+void displayMemoryUsagePreGC()
 {
 // Display memory usage
-writeln("\nMemory Usage (bytes)");
+writeln("\nMemory Usage pre GC (bytes)");
 writeln("--------------------");
 writeln("memory usedSize = ", GC.stats.usedSize);
-writeln("memory freeSize = ", GC.stats.freeSize, "\n");
+writeln("memory freeSize = ", GC.stats.freeSize);
+// uncomment this if required, if not using LDC 1.16 as this does not exist in that version
+//writeln("memory allocatedInCurrentThread = ", GC.stats.allocatedInCurrentThread, "\n");
+}
+
+void displayMemoryUsagePostGC()
+{
+// Display memory usage
+writeln("\nMemory Usage post GC (bytes)");
+writeln("--------------------");
+writeln("memory usedSize = ", GC.stats.usedSize);
+writeln("memory freeSize = ", GC.stats.freeSize);
+// uncomment this if required, if not using LDC 1.16 as this does not exist in that version
+//writeln("memory allocatedInCurrentThread = ", GC.stats.allocatedInCurrentThread, "\n");
 }
