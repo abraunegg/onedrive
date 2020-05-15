@@ -52,6 +52,8 @@ int main(string[] args)
 		if (onedriveInitialised) {
 			oneDrive.shutdown();
 		}
+		// Make sure the .wal file is incorporated into the main db before we exit
+		destroy(itemDb);
 		// free API instance
 		oneDrive = null;
 		// Perform Garbage Cleanup
@@ -71,6 +73,8 @@ int main(string[] args)
 		if (onedriveInitialised) {
 			oneDrive.shutdown();
 		}
+		// Make sure the .wal file is incorporated into the main db before we exit
+		destroy(itemDb);
 		// free API instance
 		oneDrive = null;
 		// Perform Garbage Cleanup
@@ -938,9 +942,6 @@ int main(string[] args)
 		}
 	}
 
-	// Make sure the .wal file is incorporated into the main db before we exit
-	destroy(itemDb);
-	
 	// --dry-run temp database cleanup
 	if (cfg.getValueBool("dry_run")) {
 		if (exists(cfg.databaseFilePathDryRun)) {
