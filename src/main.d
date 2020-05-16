@@ -823,7 +823,7 @@ int main(string[] args)
 
 			// monitor loop
 			bool performMonitor = true;
-			long monitorLoopFullCount = 0;
+			ulong monitorLoopFullCount = 0;
 			immutable auto checkInterval = dur!"seconds"(cfg.getValueLong("monitor_interval"));
 			immutable long logInterval = cfg.getValueLong("monitor_log_frequency");
 			immutable long fullScanFrequency = cfg.getValueLong("monitor_fullscan_frequency");

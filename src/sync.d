@@ -3926,9 +3926,11 @@ final class SyncEngine
 	// update the item's last modified time
 	private void uploadLastModifiedTime(const(char)[] driveId, const(char)[] id, const(char)[] eTag, SysTime mtime)
 	{
+		string itemModifiedTime;
+		itemModifiedTime = mtime.toISOExtString();
 		JSONValue data = [
 			"fileSystemInfo": JSONValue([
-				"lastModifiedDateTime": mtime.toISOExtString()
+				"lastModifiedDateTime": itemModifiedTime
 			])
 		];
 		
