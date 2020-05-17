@@ -865,11 +865,11 @@ final class SyncEngine
 		string deltaLink = "";
 		string deltaLinkAvailable = itemdb.getDeltaLink(driveId, id);
 		// if sync_list is not configured, syncListConfigured should be false
-		log.vdebug("syncListConfigured = ", syncListConfigured);
+		log.log("syncListConfigured = ", syncListConfigured);
 		// oneDriveFullScanTrigger should be false unless set by actions on OneDrive and only if sync_list or skip_dir is used
-		log.vdebug("oneDriveFullScanTrigger = ", oneDriveFullScanTrigger);
+		log.log("oneDriveFullScanTrigger = ", oneDriveFullScanTrigger);
 		// should only be set if 10th scan in monitor mode or as final true up sync in stand alone mode
-		log.vdebug("performFullItemScan = ", performFullItemScan);
+		log.log("performFullItemScan = ", performFullItemScan);
 				
 		// do we override performFullItemScan if it is currently false and oneDriveFullScanTrigger is true?
 		if ((!performFullItemScan) && (oneDriveFullScanTrigger)) {
