@@ -787,7 +787,7 @@ int main(string[] args)
 				auto currTime = MonoTime.currTime();
 				if (currTime - lastCheckTime > checkInterval) {
 					// monitor sync loop
-					log.log("################################################## NEW LOOP ##################################################");
+					log.vdebug("################################################## NEW LOOP ##################################################");
 					// log monitor output suppression
 					logMonitorCounter += 1;
 					if (logMonitorCounter > logInterval) {
@@ -925,7 +925,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 	
 	do {
 		try {
-			log.log("################################################## NEW SYNC ##################################################");
+			log.vdebug("################################################## NEW SYNC ##################################################");
 			if (singleDirectory != ""){
 				// we were requested to sync a single directory
 				log.vlog("Syncing changes from this selected path: ", singleDirectory);
@@ -978,7 +978,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 						if (logLevel < MONITOR_LOG_SILENT) log.log("Syncing changes from OneDrive ...");
 						
 						// For the initial sync, always use the delta link so that we capture all the right delta changes including adds, moves & deletes
-						log.log("Calling sync.applyDifferences(false);");
+						log.vdebug("Calling sync.applyDifferences(false);");
 						sync.applyDifferences(false);
 						
 						// is this a download only request?						
@@ -986,7 +986,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 							// process local changes walking the entire path checking for changes
 							// in monitor mode all local changes are captured via inotify
 							// thus scanning every 'monitor_interval' (default 45 seconds) for local changes is excessive and not required
-							log.log("Calling sync.scanForDifferences(localPath);");
+							log.vdebug("Calling sync.scanForDifferences(localPath);");
 							sync.scanForDifferences(localPath);
 							
 							// At this point, all OneDrive changes / local changes should be uploaded and in sync
@@ -1004,32 +1004,32 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 							
 							// Do not perform a full walk of the OneDrive objects
 							if ((!fullScanRequired) && (!syncListConfiguredFullScanOverride)){
-								log.log("Final True-Up: Do not perform a full walk of the OneDrive objects - not required");
-								log.log("Calling sync.applyDifferences(false);");
+								log.vdebug("Final True-Up: Do not perform a full walk of the OneDrive objects - not required");
+								log.vdebug("Calling sync.applyDifferences(false);");
 								sync.applyDifferences(false);
 								return;
 							}
 							
 							// Perform a full walk of OneDrive objects because sync_list is in use / or trigger was set in --monitor loop
 							if ((!fullScanRequired) && (syncListConfiguredFullScanOverride)){
-								log.log("Final True-Up: Perform a full walk of OneDrive objects because sync_list is in use / or trigger was set in --monitor loop");
-								log.log("Calling sync.applyDifferences(true);");
+								log.vdebug("Final True-Up: Perform a full walk of OneDrive objects because sync_list is in use / or trigger was set in --monitor loop");
+								log.vdebug("Calling sync.applyDifferences(true);");
 								sync.applyDifferences(true);
 								return;
 							}
 							
 							// Perform a full walk of OneDrive objects because a full scan was required
 							if ((fullScanRequired) && (!syncListConfiguredFullScanOverride)){
-								log.log("Final True-Up: Perform a full walk of OneDrive objects because a full scan was required");
-								log.log("Calling sync.applyDifferences(true);");
+								log.vdebug("Final True-Up: Perform a full walk of OneDrive objects because a full scan was required");
+								log.vdebug("Calling sync.applyDifferences(true);");
 								sync.applyDifferences(true);
 								return;
 							}
 							
 							// Perform a full walk of OneDrive objects because a full scan was required and sync_list is in use and trigger was set in --monitor loop
 							if ((fullScanRequired) && (syncListConfiguredFullScanOverride)){
-								log.log("Final True-Up: Perform a full walk of OneDrive objects because a full scan was required and sync_list is in use and trigger was set in --monitor loop");
-								log.log("Calling sync.applyDifferences(true);");
+								log.vdebug("Final True-Up: Perform a full walk of OneDrive objects because a full scan was required and sync_list is in use and trigger was set in --monitor loop");
+								log.vdebug("Calling sync.applyDifferences(true);");
 								sync.applyDifferences(true);
 								return;
 							}
