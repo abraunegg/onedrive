@@ -76,6 +76,8 @@ final class Config
 		stringValues["application_id"]       = "";
 		// allow for resync to be set via config file
 		boolValues["resync"]              = false;
+		// Treat new 'remote' files as 'on-demand' - that is, do not download them but save that it exists
+		boolValues["on_demand"] = false;
 
 		// Determine the users home directory. 
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts

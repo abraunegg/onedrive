@@ -271,7 +271,7 @@ int main(string[] args)
 	if (cfg.getValueBool("dry_run")) {
 		log.log("DRY-RUN Configured. Output below shows what 'would' have occurred.");
 	}
-
+	
 	// Are we able to reach the OneDrive Service
 	bool online = false;
 	
@@ -607,6 +607,12 @@ int main(string[] args)
 	// Do we configure to disable the upload validation routine
 	if (cfg.getValueBool("disable_upload_validation")) sync.setDisableUploadValidation();
 	
+	// Do we configure on-demand file access mode .. only and ONLY if --monitor is also in use
+	if (cfg.getValueBool("monitor") && cfg.getValueBool("on_demand")) {
+		log.log("IMPORTANT: On-Demand access of files has been enabled.");
+		sync.setOnDemandAccessEnabled();
+	}
+	
 	// Do we need to validate the syncDir to check for the presence of a '.nosync' file
 	if (cfg.getValueBool("check_nomount")) {
 		// we were asked to check the mounts
@@ -687,6 +693,33 @@ int main(string[] args)
 			log.logAndNotify("Initializing monitor ...");
 			log.log("OneDrive monitor interval (seconds): ", cfg.getValueLong("monitor_interval"));
 			Monitor m = new Monitor(selectiveSync);
+			
+			m.onFileOpened = delegate(string path) {
+				if (sync.getOnDemandAccessEnabled){
+					// On-Demand access is enabled
+					if (sync.validateOnDemandFile(path, syncDir)) {
+						log.log("[M] On-Demand File requested: ", path);
+						// Temp remove watch
+						m.removeFileWatch(path);
+						// Download replacement file
+						sync.downloadOnDemandFile(path, syncDir);
+						// Add watch
+						m.addFileWatch(path);
+					}
+				}
+			};
+			
+			m.onFileChanged = delegate(string path) {
+				log.vlog("[M] File changed: ", path);
+				try {
+					sync.scanForDifferences(path);
+				} catch (CurlException e) {
+					log.vlog("Offline, cannot upload changed item!");
+				} catch(Exception e) {
+					log.logAndNotify("Cannot upload file changes/creation: ", e.msg);
+				}
+			};
+			
 			m.onDirCreated = delegate(string path) {
 				// Handle .folder creation if skip_dotfiles is enabled
 				if ((cfg.getValueBool("skip_dotfiles")) && (selectiveSync.isDotFile(path))) {
@@ -700,16 +733,6 @@ int main(string[] args)
 					} catch(Exception e) {
 						log.logAndNotify("Cannot create remote directory: ", e.msg);
 					}
-				}
-			};
-			m.onFileChanged = delegate(string path) {
-				log.vlog("[M] File changed: ", path);
-				try {
-					sync.scanForDifferences(path);
-				} catch (CurlException e) {
-					log.vlog("Offline, cannot upload changed item!");
-				} catch(Exception e) {
-					log.logAndNotify("Cannot upload file changes/creation: ", e.msg);
 				}
 			};
 			m.onDelete = delegate(string path) {

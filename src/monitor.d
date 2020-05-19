@@ -2,6 +2,7 @@ import core.sys.linux.sys.inotify;
 import core.stdc.errno;
 import core.sys.posix.poll, core.sys.posix.unistd;
 import std.exception, std.file, std.path, std.regex, std.stdio, std.string, std.algorithm.mutation;
+import std.conv;
 import config;
 import selective;
 import util;
@@ -9,7 +10,7 @@ static import log;
 
 // relevant inotify events
 private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE |
-	IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
+	IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW | IN_OPEN;
 
 class MonitorException: ErrnoException
 {
@@ -38,6 +39,7 @@ final class Monitor
 	private SelectiveSync selectiveSync;
 
 	void delegate(string path) onDirCreated;
+	void delegate(string path) onFileOpened;
 	void delegate(string path) onFileChanged;
 	void delegate(string path) onDelete;
 	void delegate(string from, string to) onMove;
@@ -54,7 +56,7 @@ final class Monitor
 		this.skip_symlinks = skip_symlinks;
 		this.check_nosync = check_nosync;
 		
-		assert(onDirCreated && onFileChanged && onDelete && onMove);
+		assert(onDirCreated && onFileChanged && onDelete && onMove && onFileOpened);
 		fd = inotify_init();
 		if (fd < 0) throw new MonitorException("inotify_init failed");
 		if (!buffer) buffer = new void[4096];
@@ -199,9 +201,56 @@ final class Monitor
 				int ret = inotify_rm_watch(fd, wd);
 				if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
 				wdToDirName.remove(wd);
-				log.vlog("Monitored directory removed: ", dirname);
+				log.log("Monitored directory removed: ", dirname);
 			}
 		}
+	}
+	
+	// remove a specific path from being watched
+	void removeFileWatch(const(char)[] path)
+	{
+		string parentPath = to!string(dirName(path));
+		foreach (wd, dirname; wdToDirName) {
+			if (dirname.startsWith(parentPath)) {		
+				int ret = inotify_rm_watch(fd, wd);
+				if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
+				wdToDirName.remove(wd);
+				log.vdebug("Monitor removed for: ", path);
+				
+			}
+		}
+	}
+	
+	// add a specific path to being watched
+	void addFileWatch(const(char)[] path)
+	{
+		string parentPath = to!string(dirName(path));
+		int wd = inotify_add_watch(fd, toStringz(parentPath), mask);
+		if (wd < 0) {
+			if (errno() == ENOSPC) {
+				log.log("The user limit on the total number of inotify watches has been reached.");
+				log.log("To see the current max number of watches run:");
+				log.log("sysctl fs.inotify.max_user_watches");
+				log.log("To change the current max number of watches to 524288 run:");
+				log.log("sudo sysctl fs.inotify.max_user_watches=524288");
+			}
+			if (errno() == 13) {
+				if ((selectiveSync.getSkipDotfiles()) && (selectiveSync.isDotFile(parentPath))) {
+					// no misleading output that we could not add a watch due to permission denied
+					return;
+				} else {
+					log.vlog("WARNING: inotify_add_watch failed - permission denied: ", parentPath);
+					return;
+				}
+			}
+			// Flag any other errors
+			log.error("ERROR: inotify_add_watch failed: ", parentPath);
+			return;
+		}
+		// Add path to inotify watch - required regardless if a '.folder' or 'folder'
+		wdToDirName[wd] = buildNormalizedPath(parentPath) ~ "/";
+		// log that this is agail being monitored
+		log.vdebug("Monitor added for: ", path);
 	}
 
 	// return the file path from an inotify event
@@ -284,6 +333,15 @@ final class Monitor
 				} else if ((event.mask & IN_CLOSE_WRITE) && !(event.mask & IN_ISDIR)) {
 					log.vdebug("event IN_CLOSE_WRITE and ...: ", path);
 					if (useCallbacks) onFileChanged(path);
+				} else if (event.mask & IN_OPEN) {
+					if ((event.mask & IN_OPEN) && !(event.mask & IN_ISDIR)) {
+						// open event for a file
+						log.vdebug("event IN_OPEN detected for: ", path);
+						if (useCallbacks) onFileOpened(path);
+					} else {
+						// open event for a directory
+						goto skip;
+					}
 				} else {
 					log.vdebug("event unhandled: ", path);
 					assert(0);

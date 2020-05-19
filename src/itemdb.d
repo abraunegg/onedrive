@@ -13,25 +13,27 @@ enum ItemType {
 }
 
 struct Item {
-	string   driveId;
-	string   id;
-	string   name;
-	ItemType type;
-	string   eTag;
-	string   cTag;
-	SysTime  mtime;
-	string   parentId;
-	string   crc32Hash;
-	string   sha1Hash;
-	string   quickXorHash;
-	string   remoteDriveId;
-	string   remoteId;
+	string   driveId; 			// #1
+	string   id;				// #2
+	string   name;				// #3
+	ItemType type;				// #4
+	string   eTag;				// #5
+	string   cTag;				// #6
+	SysTime  mtime;				// #7
+	string   parentId;			// #8
+	string   crc32Hash;			// #9
+	string   sha1Hash;			// #10
+	string   quickXorHash;		// #11
+	string   remoteDriveId;		// #12
+	string   remoteId;			// #13
+	string   webUrl;			// #14
+	string   fileSize;			// #15
 }
 
 final class ItemDatabase
 {
 	// increment this for every change in the db schema
-	immutable int itemDatabaseVersion = 9;
+	immutable int itemDatabaseVersion = 10;
 
 	Database db;
 	string insertItemStmt;
@@ -83,12 +85,12 @@ final class ItemDatabase
 		db.exec("PRAGMA auto_vacuum = FULL");
 		
 		insertItemStmt = "
-			INSERT OR REPLACE INTO item (driveId, id, name, type, eTag, cTag, mtime, parentId, crc32Hash, sha1Hash, quickXorHash, remoteDriveId, remoteId)
-			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+			INSERT OR REPLACE INTO item (driveId, id, name, type, eTag, cTag, mtime, parentId, crc32Hash, sha1Hash, quickXorHash, remoteDriveId, remoteId, webUrl, fileSize)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
 		";
 		updateItemStmt = "
 			UPDATE item
-			SET name = ?3, type = ?4, eTag = ?5, cTag = ?6, mtime = ?7, parentId = ?8, crc32Hash = ?9, sha1Hash = ?10, quickXorHash = ?11, remoteDriveId = ?12, remoteId = ?13
+			SET name = ?3, type = ?4, eTag = ?5, cTag = ?6, mtime = ?7, parentId = ?8, crc32Hash = ?9, sha1Hash = ?10, quickXorHash = ?11, remoteDriveId = ?12, remoteId = ?13, webUrl = ?14, fileSize = ?15
 			WHERE driveId = ?1 AND id = ?2
 		";
 		selectItemByIdStmt = "
@@ -117,6 +119,8 @@ final class ItemDatabase
 				remoteDriveId    TEXT,
 				remoteId         TEXT,
 				deltaLink        TEXT,
+				webUrl           TEXT,
+				fileSize         TEXT,
 				PRIMARY KEY (driveId, id),
 				FOREIGN KEY (driveId, parentId)
 				REFERENCES item (driveId, id)
@@ -300,13 +304,15 @@ final class ItemDatabase
 			bind(11, quickXorHash);
 			bind(12, remoteDriveId);
 			bind(13, remoteId);
+			bind(14, webUrl);
+			bind(15, fileSize);
 		}
 	}
 
 	private Item buildItem(Statement.Result result)
 	{
 		assert(!result.empty, "The result must not be empty");
-		assert(result.front.length == 14, "The result must have 14 columns");
+		assert(result.front.length == 16, "The result must have 16 columns");
 		Item item = {
 			driveId: result.front[0].dup,
 			id: result.front[1].dup,
@@ -319,7 +325,9 @@ final class ItemDatabase
 			sha1Hash: result.front[9].dup,
 			quickXorHash: result.front[10].dup,
 			remoteDriveId: result.front[11].dup,
-			remoteId: result.front[12].dup
+			remoteId: result.front[12].dup,
+			webUrl: result.front[14].dup,
+			fileSize: result.front[15].dup
 		};
 		switch (result.front[3]) {
 			case "file":    item.type = ItemType.file;    break;

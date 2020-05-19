@@ -137,15 +137,22 @@ private Item makeItem(const ref JSONValue driveItem)
 			item.mtime = SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
 		}
 	}
-		
+	
+	// Is the driveItem a file?	
 	if (isItemFile(driveItem)) {
 		item.type = ItemType.file;
-	} else if (isItemFolder(driveItem)) {
+		if ("webUrl" in driveItem) item.webUrl = driveItem["webUrl"].str;
+		if ("size" in driveItem) item.fileSize = to!string(driveItem["size"].integer);
+	} 
+	
+	// Is the driveItem a folder?
+	if (isItemFolder(driveItem)) {
 		item.type = ItemType.dir;
-	} else if (isItemRemote(driveItem)) {
+	} 
+	
+	// Is the driveItem a remoteItem (Shared Folder)?
+	if (isItemRemote(driveItem)) {
 		item.type = ItemType.remote;
-	} else {
-		// do not throw exception, item will be removed in applyDifferences()
 	}
 
 	// root and remote items do not have parentReference
@@ -168,12 +175,14 @@ private Item makeItem(const ref JSONValue driveItem)
 			log.vlog("The file does not have any hash");
 		}
 	}
-
+	
+	// If the item is a remote item, set the remote driveID and remoteID properties
 	if (isItemRemote(driveItem)) {
 		item.remoteDriveId = driveItem["remoteItem"]["parentReference"]["driveId"].str;
 		item.remoteId = driveItem["remoteItem"]["id"].str;
 	}
-
+	
+	// return the configured item
 	return item;
 }
 
@@ -240,6 +249,8 @@ final class SyncEngine
 	private bool syncListConfigured = false;
 	// sync_list new folder added, trigger delta scan override
 	private bool oneDriveFullScanTrigger = false;
+	// Has on-demand access of files been enabled?
+	private bool onDemandAccessEnabled = false;
 
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
@@ -482,6 +493,19 @@ final class SyncEngine
 	{
 		syncListConfigured = true;
 		log.vdebug("Setting syncListConfigured = true");
+	}
+	
+	// set onDemandAccessEnabled to true
+	void setOnDemandAccessEnabled()
+	{
+		onDemandAccessEnabled = true;
+		log.vdebug("Setting onDemandAccessEnabled = true");
+	}
+	
+	// get OnDemandAccessEnabled value
+	bool getOnDemandAccessEnabled()
+	{
+		return onDemandAccessEnabled;
 	}
 	
 	// download all new changes from OneDrive
@@ -1878,6 +1902,7 @@ final class SyncEngine
 		write("Downloading file ", path, " ... ");
 		JSONValue fileDetails;
 		
+		// Get the file details from OneDrive
 		try {
 			fileDetails = onedrive.getFileDetails(item.driveId, item.id);
 		} catch (OneDriveException e) {
@@ -1941,122 +1966,138 @@ final class SyncEngine
 				log.vdebug("WARNING: fileDetails['file']['hashes'] is missing - unable to compare file hash after download");
 			}
 			
-			try {
-				onedrive.downloadById(item.driveId, item.id, path, fileSize);
-			} catch (OneDriveException e) {
-				log.vdebug("onedrive.downloadById(item.driveId, item.id, path, fileSize); generated a OneDriveException");
-				// 408 = Request Time Out 
-				// 429 = Too Many Requests - need to delay
+			if (!onDemandAccessEnabled) {
+				// Attempt to download the file from OneDrive
+				try {
+					onedrive.downloadById(item.driveId, item.id, path, fileSize);
+				} catch (OneDriveException e) {
+					log.vdebug("onedrive.downloadById(item.driveId, item.id, path, fileSize); generated a OneDriveException");
+					// 408 = Request Time Out 
+					// 429 = Too Many Requests - need to delay
+					if (e.httpStatusCode == 408) {
+						// 408 error handling - request time out
+						// https://github.com/abraunegg/onedrive/issues/694
+						// Back off & retry with incremental delay
+						int retryCount = 10; 
+						int retryAttempts = 1;
+						int backoffInterval = 2;
+						while (retryAttempts < retryCount){
+							// retry in 2,4,8,16,32,64,128,256,512,1024 seconds
+							Thread.sleep(dur!"seconds"(retryAttempts*backoffInterval));
+							try {
+								onedrive.downloadById(item.driveId, item.id, path, fileSize);
+								// successful download
+								retryAttempts = retryCount;
+							} catch (OneDriveException e) {
+								log.vdebug("onedrive.downloadById(item.driveId, item.id, path, fileSize); generated a OneDriveException");
+								if ((e.httpStatusCode == 429) || (e.httpStatusCode == 408)) {
+									// If another 408 .. 
+									if (e.httpStatusCode == 408) {
+										// Increment & loop around
+										log.vdebug("HTTP 408 generated - incrementing retryAttempts");
+										retryAttempts++;
+									}
+									// If a 429 ..
+									if (e.httpStatusCode == 429) {
+										// Increment & loop around
+										handleOneDriveThrottleRequest();
+										log.vdebug("HTTP 429 generated - incrementing retryAttempts");
+										retryAttempts++;
+									}
+								} else {
+									displayOneDriveErrorMessage(e.msg);
+								}
+							}
+						}
+					}
 				
-				if (e.httpStatusCode == 408) {
-					// 408 error handling - request time out
-					// https://github.com/abraunegg/onedrive/issues/694
-					// Back off & retry with incremental delay
-					int retryCount = 10; 
-					int retryAttempts = 1;
-					int backoffInterval = 2;
-					while (retryAttempts < retryCount){
-						// retry in 2,4,8,16,32,64,128,256,512,1024 seconds
-						Thread.sleep(dur!"seconds"(retryAttempts*backoffInterval));
-						try {
-							onedrive.downloadById(item.driveId, item.id, path, fileSize);
-							// successful download
-							retryAttempts = retryCount;
-						} catch (OneDriveException e) {
-							log.vdebug("onedrive.downloadById(item.driveId, item.id, path, fileSize); generated a OneDriveException");
-							if ((e.httpStatusCode == 429) || (e.httpStatusCode == 408)) {
-								// If another 408 .. 
-								if (e.httpStatusCode == 408) {
-									// Increment & loop around
-									log.vdebug("HTTP 408 generated - incrementing retryAttempts");
-									retryAttempts++;
+					if (e.httpStatusCode == 429) {
+						// HTTP request returned status code 429 (Too Many Requests)
+						// https://github.com/abraunegg/onedrive/issues/133
+						int retryCount = 10; 
+						int retryAttempts = 1;
+						while (retryAttempts < retryCount){
+							// retry after waiting the timeout value from the 429 HTTP response header Retry-After
+							handleOneDriveThrottleRequest();
+							try {
+								onedrive.downloadById(item.driveId, item.id, path, fileSize);
+								// successful download
+								retryAttempts = retryCount;
+							} catch (OneDriveException e) {
+								log.vdebug("onedrive.downloadById(item.driveId, item.id, path, fileSize); generated a OneDriveException");
+								if ((e.httpStatusCode == 429) || (e.httpStatusCode == 408)) {
+									// If another 408 .. 
+									if (e.httpStatusCode == 408) {
+										// Increment & loop around
+										log.vdebug("HTTP 408 generated - incrementing retryAttempts");
+										retryAttempts++;
+									}
+									// If a 429 ..
+									if (e.httpStatusCode == 429) {
+										// Increment & loop around
+										handleOneDriveThrottleRequest();
+										log.vdebug("HTTP 429 generated - incrementing retryAttempts");
+										retryAttempts++;
+									}
+								} else {
+									displayOneDriveErrorMessage(e.msg);
 								}
-								// If a 429 ..
-								if (e.httpStatusCode == 429) {
-									// Increment & loop around
-									handleOneDriveThrottleRequest();
-									log.vdebug("HTTP 429 generated - incrementing retryAttempts");
-									retryAttempts++;
-								}
-							} else {
-								displayOneDriveErrorMessage(e.msg);
 							}
 						}
 					}
+				} catch (std.exception.ErrnoException e) {
+					// There was a file system error
+					// display the error message
+					displayFileSystemErrorMessage(e.msg);							
+					downloadFailed = true;
+					return;
 				}
-			
-				if (e.httpStatusCode == 429) {
-					// HTTP request returned status code 429 (Too Many Requests)
-					// https://github.com/abraunegg/onedrive/issues/133
-					int retryCount = 10; 
-					int retryAttempts = 1;
-					while (retryAttempts < retryCount){
-						// retry after waiting the timeout value from the 429 HTTP response header Retry-After
-						handleOneDriveThrottleRequest();
-						try {
-							onedrive.downloadById(item.driveId, item.id, path, fileSize);
-							// successful download
-							retryAttempts = retryCount;
-						} catch (OneDriveException e) {
-							log.vdebug("onedrive.downloadById(item.driveId, item.id, path, fileSize); generated a OneDriveException");
-							if ((e.httpStatusCode == 429) || (e.httpStatusCode == 408)) {
-								// If another 408 .. 
-								if (e.httpStatusCode == 408) {
-									// Increment & loop around
-									log.vdebug("HTTP 408 generated - incrementing retryAttempts");
-									retryAttempts++;
-								}
-								// If a 429 ..
-								if (e.httpStatusCode == 429) {
-									// Increment & loop around
-									handleOneDriveThrottleRequest();
-									log.vdebug("HTTP 429 generated - incrementing retryAttempts");
-									retryAttempts++;
-								}
-							} else {
-								displayOneDriveErrorMessage(e.msg);
-							}
-						}
-					}
-				}
-			} catch (std.exception.ErrnoException e) {
-				// There was a file system error
-				// display the error message
-				displayFileSystemErrorMessage(e.msg);							
-				downloadFailed = true;
-				return;
+			} else {
+				// On-Demand file access has been configured & in use
+				std.file.write(path, "OneDrive On-Demand File");
 			}
+			
 			// file has to have downloaded in order to set the times / data for the file
 			if (exists(path)) {
-				// A 'file' was downloaded - does what we downloaded = reported fileSize or if there is some sort of funky local disk compression going on
-				// does the file hash OneDrive reports match what we have locally?
-				string quickXorHash = computeQuickXorHash(path);
-				string sha1Hash = computeSha1Hash(path);
-				
-				if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash) || (OneDriveFileHash == sha1Hash)) {
-					// downloaded matches either size or hash
-					log.vdebug("Downloaded file matches reported size and or reported file hash");
+				if (!onDemandAccessEnabled) {
+					// A 'file' was downloaded - does what we downloaded = reported fileSize or if there is some sort of funky local disk compression going on
+					// does the file hash OneDrive reports match what we have locally?
+					string quickXorHash = computeQuickXorHash(path);
+					string sha1Hash = computeSha1Hash(path);
+					
+					if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash) || (OneDriveFileHash == sha1Hash)) {
+						// downloaded matches either size or hash
+						log.vdebug("Downloaded file matches reported size and or reported file hash");
+						try {
+							setTimes(path, item.mtime, item.mtime);
+						} catch (FileException e) {
+							// display the error message
+							displayFileSystemErrorMessage(e.msg);
+						}
+					} else {
+						// size error?
+						if (getSize(path) != fileSize) {
+							// downloaded file size does not match
+							log.error("ERROR: File download size mis-match. Increase logging verbosity to determine why.");
+						}
+						// hash error?
+						if ((OneDriveFileHash != quickXorHash) || (OneDriveFileHash != sha1Hash))  {
+							// downloaded file hash does not match
+							log.error("ERROR: File download hash mis-match. Increase logging verbosity to determine why.");
+						}	
+						// we do not want this local file to remain on the local file system
+						safeRemove(path);	
+						downloadFailed = true;
+						return;
+					}
+				} else {
+					// file validation will never be successful when using on-demand files
 					try {
 						setTimes(path, item.mtime, item.mtime);
 					} catch (FileException e) {
 						// display the error message
 						displayFileSystemErrorMessage(e.msg);
 					}
-				} else {
-					// size error?
-					if (getSize(path) != fileSize) {
-						// downloaded file size does not match
-						log.error("ERROR: File download size mis-match. Increase logging verbosity to determine why.");
-					}
-					// hash error?
-					if ((OneDriveFileHash != quickXorHash) || (OneDriveFileHash != sha1Hash))  {
-						// downloaded file hash does not match
-						log.error("ERROR: File download hash mis-match. Increase logging verbosity to determine why.");
-					}	
-					// we do not want this local file to remain on the local file system
-					safeRemove(path);	
-					downloadFailed = true;
-					return;
 				}
 			} else {
 				log.error("ERROR: File failed to download. Increase logging verbosity to determine why.");
@@ -4215,23 +4256,30 @@ final class SyncEngine
 			// File exists locally, does it exist in the database
 			// Path needs to be relative to sync_dir path
 			string relativePath = relativePath(localFilePath, syncDir);
+			string webUrl;
 			Item item;
 			if (itemdb.selectByPath(relativePath, defaultDriveId, item)) {
 				// File is in the local database cache
-				JSONValue fileDetails;
-		
-				try {
-					fileDetails = onedrive.getFileDetails(item.driveId, item.id);
-				} catch (OneDriveException e) {
-					// display what the error is
-					displayOneDriveErrorMessage(e.msg);
-					return;
+				if (item.webUrl != "") {
+					// use the database entry
+					webUrl = item.webUrl;
+				} else {
+					// value not in database ... query for it
+					JSONValue fileDetails;
+					try {
+						fileDetails = onedrive.getFileDetails(item.driveId, item.id);
+					} catch (OneDriveException e) {
+						// display what the error is
+						displayOneDriveErrorMessage(e.msg);
+						return;
+					}
+					if ((fileDetails.type() == JSONType.object) && ("webUrl" in fileDetails)) {
+						// Valid JSON object
+						webUrl = fileDetails["webUrl"].str;
+					}
 				}
-
-				if ((fileDetails.type() == JSONType.object) && ("webUrl" in fileDetails)) {
-					// Valid JSON object
-					writeln(fileDetails["webUrl"].str);
-				}
+				// respond with webUrl
+				writeln(webUrl);
 			} else {
 				// File has not been synced with OneDrive
 				log.error("File has not been synced with OneDrive: ", localFilePath);
@@ -4241,6 +4289,64 @@ final class SyncEngine
 			log.error("File not found on local system: ", localFilePath);
 		}
 	}
+	
+	// Validate on-demand file from OneDrive
+	bool validateOnDemandFile(string localFilePath, string syncDir) {
+		// Query if file is valid locally
+		if (exists(localFilePath)) {
+			// File exists locally, does it exist in the database
+			// Path needs to be relative to sync_dir path
+			string relativePath = relativePath(localFilePath, syncDir);
+			Item item;
+			if (itemdb.selectByPath(relativePath, defaultDriveId, item)) {
+				// File is in the local database cache
+				// File size
+				ulong fileSize = 0;
+				fileSize = getSize(localFilePath);
+				
+				// Is the local file technically 'newer' based on UTC timestamp?
+				SysTime localModifiedTime = timeLastModified(localFilePath).toUTC();
+				localModifiedTime.fracSecs = Duration.zero;
+				item.mtime.fracSecs = Duration.zero;
+				
+				if ((fileSize < to!long(item.fileSize)) && (localModifiedTime == item.mtime)) {
+					// file on disk is smaller, mtime is the same as OneDrive
+					// high likelihood this is a file that needs to be replaced with the 'real' file
+					return true;
+				} else {
+					// file size or modified time is not what the DB / OneDrive thinks it is ..
+					log.error("File size or modified time is incorrect - not downloading on-demand file: ", localFilePath);
+				}
+			} else {
+				// File has not been synced with OneDrive
+				log.error("File has not been synced with OneDrive: ", localFilePath);
+			}
+		} else {
+			// File does not exist locally
+			log.error("File not found on local system: ", localFilePath);
+		}
+		return false;
+	}
+	
+	
+	// Download on-demand file from OneDrive
+	void downloadOnDemandFile(string localFilePath, string syncDir) {
+		// validation was done with validateOnDemandFile, download file
+		string relativePath = relativePath(localFilePath, syncDir);
+		Item item;
+		if (itemdb.selectByPath(relativePath, defaultDriveId, item)) {
+			try {
+				writeln("downloading on demand file: ", relativePath);
+				onedrive.downloadById(item.driveId, item.id, relativePath, to!long(item.fileSize));
+				setTimes(relativePath, item.mtime, item.mtime);
+			} catch (OneDriveException e) {
+				displayOneDriveErrorMessage(e.msg);
+			}
+		}
+	}
+	
+	
+	
 	
 	// Query the OneDrive 'drive' to determine if we are 'in sync' or if there are pending changes
 	void queryDriveForChanges(string path) {
