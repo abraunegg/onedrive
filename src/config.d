@@ -60,7 +60,8 @@ final class Config
 		boolValues["dry_run"] = false;
 		boolValues["sync_root_files"] = false;
 		longValues["verbose"] = log.verbose; // might be initialized by the first getopt call!
-		longValues["monitor_interval"] = 45;
+		// The amount of time (seconds) between monitor sync loops
+		longValues["monitor_interval"] = 300;
 		longValues["skip_size"] = 0;
 		longValues["min_notify_changes"] = 5;
 		longValues["monitor_log_frequency"] = 5;
@@ -91,6 +92,9 @@ final class Config
 		//  - It may be desirable to, when running in monitor mode, force monitor mode to 'quit' after X number of loops
 		//  - This is especially beneficial when debugging or performing memory tests with Valgrind
 		longValues["monitor_max_loop"] = 0;
+		// display_sync_options = true | false
+		// - It may be desirable to see what options are being passed in to performSync() without enabling the full verbose debug logging
+		boolValues["display_sync_options"] = false;
 
 		// Determine the users home directory. 
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
