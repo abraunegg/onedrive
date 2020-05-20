@@ -73,7 +73,7 @@ final class OneDriveApi
 	private Config cfg;
 	private string refreshToken, accessToken;
 	private SysTime accessTokenExpiration;
-	/* private */ HTTP http;
+	private HTTP http;
 
 	// if true, every new access token is printed
 	bool printAccessToken;
@@ -145,6 +145,20 @@ final class OneDriveApi
 				.simulateNoRefreshTokenFile = true;
 			}
 		}
+	}
+
+	// Shutdown OneDrive HTTP construct
+	void shutdown()
+	{
+		// reset any values to defaults, freeing any set objects
+		http.clearRequestHeaders();
+		http.onSend = null;
+		http.onReceive = null;
+		http.onReceiveHeader = null;
+		http.onReceiveStatusLine = null;
+		http.contentLength = 0;
+		// shut down the curl instance
+		http.shutdown();
 	}
 
 	bool init()
@@ -266,6 +280,8 @@ final class OneDriveApi
 	JSONValue getDefaultDrive()
 	{
 		checkAccessTokenExpired();
+		const(char)[] url;
+		url = driveUrl;
 		return get(driveUrl);
 	}
 
@@ -273,17 +289,22 @@ final class OneDriveApi
 	JSONValue getDefaultRoot()
 	{
 		checkAccessTokenExpired();
-		return get(driveUrl ~ "/root");
+		const(char)[] url;
+		url = driveUrl ~ "/root";
+		return get(url);
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
 	JSONValue viewChangesById(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink)
 	{
 		checkAccessTokenExpired();
-		const(char)[] url = deltaLink;
-		if (url == null) {
+		const(char)[] url;
+		// configure deltaLink to query
+		if (deltaLink.empty) {
 			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/delta";
 			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		} else {
+			url = deltaLink;
 		}
 		return get(url);
 	}
@@ -409,18 +430,29 @@ final class OneDriveApi
 	JSONValue uploadFragment(const(char)[] uploadUrl, string filepath, long offset, long offsetSize, long fileSize)
 	{
 		checkAccessTokenExpired();
+		// open file as read-only in binary mode
+		auto file = File(filepath, "rb");
+		file.seek(offset);
+		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
+		
+		// function scopes
 		scope(exit) {
 			http.clearRequestHeaders();
 			http.onSend = null;
+			http.onReceive = null;
+			http.onReceiveHeader = null;
+			http.onReceiveStatusLine = null;
+			http.contentLength = 0;
+			// close file if open
+			if (file.isOpen()){
+				// close open file
+				file.close();
+			}
 		}
+		
 		http.method = HTTP.Method.put;
 		http.url = uploadUrl;
-		
-		import std.conv;
-		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
 		http.addRequestHeader("Content-Range", contentRange);
-		auto file = File(filepath, "rb");
-		file.seek(offset);
 		http.onSend = data => file.rawRead(data).length;
 		http.contentLength = offsetSize;
 		auto response = perform();
@@ -524,10 +556,12 @@ final class OneDriveApi
 	private JSONValue get(const(char)[] url, bool skipToken = false)
 	{
 		scope(exit) http.clearRequestHeaders();
+		log.vdebug("Request URL = ", url);
 		http.method = HTTP.Method.get;
 		http.url = url;
 		if (!skipToken) addAccessTokenHeader(); // HACK: requestUploadStatus
-		auto response = perform();
+		JSONValue response;
+		response = perform();
 		checkHttpCode(response);
 		// OneDrive API Response Debugging if --https-debug is being used
 		if (.debugResponse){
@@ -550,14 +584,35 @@ final class OneDriveApi
 	{
 		// Threshold for displaying download bar
 		long thresholdFileSize = 4 * 2^^20; // 4 MiB
+		// open file as write in binary mode
+		auto file = File(filename, "wb");
 		
-		scope(exit) http.clearRequestHeaders();
+		// function scopes
+		scope(exit) {
+			http.clearRequestHeaders();
+			http.onSend = null;
+			http.onReceive = null;
+			http.onReceiveHeader = null;
+			http.onReceiveStatusLine = null;
+			http.contentLength = 0;
+			// Reset onProgress to not display anything for next download
+			http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
+			{
+				return 0;
+			};
+			// close file if open
+			if (file.isOpen()){
+				// close open file
+				file.close();
+			}
+		}
+		
 		http.method = HTTP.Method.get;
 		http.url = url;
 		addAccessTokenHeader();
-		auto f = File(filename, "wb");
+		
 		http.onReceive = (ubyte[] data) {
-			f.rawWrite(data);
+			file.rawWrite(data);
 			return data.length;
 		};
 		
@@ -604,14 +659,12 @@ final class OneDriveApi
 				// try and catch any curl error
 				http.perform();
 				writeln();
-				// Reset onProgress to not display anything for next download
-				http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
-				{
-					return 0;
-				};
+				// Reset onProgress to not display anything for next download done using exit scope
 			} catch (CurlException e) {
 				displayOneDriveErrorMessage(e.msg);
 			}
+			// free progress bar memory
+			p = null;
 		} else {
 			// No progress bar
 			try {
@@ -661,16 +714,29 @@ final class OneDriveApi
 	
 	private JSONValue upload(string filepath, string url)
 	{
+		checkAccessTokenExpired();
+		// open file as read-only in binary mode
+		auto file = File(filepath, "rb");
+		
+		// function scopes
 		scope(exit) {
 			http.clearRequestHeaders();
 			http.onSend = null;
+			http.onReceive = null;
+			http.onReceiveHeader = null;
+			http.onReceiveStatusLine = null;
 			http.contentLength = 0;
+			// close file if open
+			if (file.isOpen()){
+				// close open file
+				file.close();
+			}
 		}
+		
 		http.method = HTTP.Method.put;
 		http.url = url;
 		addAccessTokenHeader();
 		http.addRequestHeader("Content-Type", "application/octet-stream");
-		auto file = File(filepath, "rb");
 		http.onSend = data => file.rawRead(data).length;
 		http.contentLength = file.size;
 		auto response = perform();
@@ -704,6 +770,8 @@ final class OneDriveApi
 	{
 		scope(exit) http.onReceive = null;
 		char[] content;
+		JSONValue json;
+
 		http.onReceive = (ubyte[] data) {
 			content ~= data;
 			// HTTP Server Response Code Debugging if --https-debug is being used
@@ -713,8 +781,6 @@ final class OneDriveApi
 			return data.length;
 		};
 		
-		JSONValue json;
-		
 		try {
 			http.perform();
 			// Get the HTTP Response headers - needed for correct 429 handling
@@ -723,18 +789,17 @@ final class OneDriveApi
 			if (.debugResponse){
 				log.vdebug("onedrive.perform() => HTTP Response Headers: ", responseHeaders);
 			}
-			
+			// is retry-after in the response headers
 			if ("retry-after" in http.responseHeaders) {
-				// retry-after as in the response headers
-				// Set the value
+				// Set the retry-after value
 				log.vdebug("onedrive.perform() => Received a 'Retry-After' Header Response with the following value: ", http.responseHeaders["retry-after"]);
 				log.vdebug("onedrive.perform() => Setting retryAfterValue to: ", http.responseHeaders["retry-after"]);
 				.retryAfterValue = to!ulong(http.responseHeaders["retry-after"]);
 			}
-			
 		} catch (CurlException e) {
 			// Parse and display error message received from OneDrive
 			log.error("ERROR: OneDrive returned an error with the following message:");
+			
 			auto errorArray = splitLines(e.msg);
 			string errorMessage = errorArray[0];
 						

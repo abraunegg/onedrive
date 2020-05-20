@@ -97,13 +97,11 @@ private bool hasSha1Hash(const ref JSONValue item)
 	return ("sha1Hash" in item["file"]["hashes"]) != null;
 }
 
-private bool isDotFile(string path)
+private bool isDotFile(const(string) path)
 {
 	// always allow the root
 	if (path == ".") return false;
-	
-	path = buildNormalizedPath(path);
-	auto paths = pathSplitter(path);
+	auto paths = pathSplitter(buildNormalizedPath(path));
 	foreach(base; paths) {
 		if (startsWith(base, ".")){
 			return true;
@@ -177,7 +175,7 @@ private Item makeItem(const ref JSONValue driveItem)
 	return item;
 }
 
-private bool testFileHash(string path, const ref Item item)
+private bool testFileHash(const(string) path, const ref Item item)
 {
 	if (item.crc32Hash) {
 		if (item.crc32Hash == computeCrc32(path)) return true;
@@ -504,7 +502,7 @@ final class SyncEngine
 	}
 
 	// download all new changes from a specified folder on OneDrive
-	void applyDifferencesSingleDirectory(string path)
+	void applyDifferencesSingleDirectory(const(string) path)
 	{
 		log.vlog("Getting path details from OneDrive ...");
 		JSONValue onedrivePathDetails;
@@ -600,7 +598,7 @@ final class SyncEngine
 	}
 	
 	// create a directory on OneDrive without syncing
-	auto createDirectoryNoSync(string path)
+	auto createDirectoryNoSync(const(string) path)
 	{
 		// Attempt to create the requested path within OneDrive without performing a sync
 		log.vlog("Attempting to create the requested path within OneDrive");
@@ -610,7 +608,7 @@ final class SyncEngine
 	}
 	
 	// delete a directory on OneDrive without syncing
-	auto deleteDirectoryNoSync(string path)
+	auto deleteDirectoryNoSync(const(string) path)
 	{
 		// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
 		const(char)[] rootId = defaultRootId;
@@ -697,14 +695,18 @@ final class SyncEngine
 	private void applyDifferences(string driveId, const(char)[] id, bool performFullItemScan)
 	{
 		log.vlog("Applying changes of Path ID: " ~ id);
+		// function variables
+		const(char)[] idToQuery;
 		JSONValue changes;
 		JSONValue changesAvailable;
-		
-		// Query the name of this folder id
+		JSONValue idDetails;
 		string syncFolderName;
 		string syncFolderPath;
 		string syncFolderChildPath;
-		JSONValue idDetails = parseJSON("{}");
+		string deltaLink;
+		string deltaLinkAvailable;
+		
+		// Query the name of this folder id
 		try {
 			idDetails = onedrive.getPathDetailsById(driveId, id);
 		} catch (OneDriveException e) {
@@ -862,8 +864,7 @@ final class SyncEngine
 		// Control this via performFullItemScan
 		
 		// Get the current delta link
-		string deltaLink = "";
-		string deltaLinkAvailable = itemdb.getDeltaLink(driveId, id);
+		deltaLinkAvailable = itemdb.getDeltaLink(driveId, id);
 		// if sync_list is not configured, syncListConfigured should be false
 		log.vdebug("syncListConfigured = ", syncListConfigured);
 		// oneDriveFullScanTrigger should be false unless set by actions on OneDrive and only if sync_list or skip_dir is used
@@ -883,16 +884,18 @@ final class SyncEngine
 		if (!performFullItemScan){
 			// performFullItemScan == false
 			// use delta link
-			deltaLink = deltaLinkAvailable;
 			log.vdebug("performFullItemScan is false, using the deltaLink as per database entry");
 			if (deltaLinkAvailable == ""){
+				deltaLink = "";
 				log.vdebug("deltaLink was requested to be used, but contains no data - resulting API query will be treated as a full scan of OneDrive");
 			} else {
+				deltaLink = deltaLinkAvailable;
 				log.vdebug("deltaLink contains valid data - resulting API query will be treated as a delta scan of OneDrive");
 			}
 		} else {
 			// performFullItemScan == true
 			// do not use delta-link
+			deltaLink = "";
 			log.vdebug("performFullItemScan is true, not using the database deltaLink so that we query all objects on OneDrive to compare against all local objects");
 		}
 		
@@ -901,7 +904,6 @@ final class SyncEngine
 			// If we used the 'id' passed in & when using --single-directory with a business account we get:
 			//	'HTTP request returned status code 501 (Not Implemented): view.delta can only be called on the root.'
 			// To view changes correctly, we need to use the correct path id for the request
-			const(char)[] idToQuery;
 			if (driveId == defaultDriveId) {
 				// The drive id matches our users default drive id
 				idToQuery = defaultRootId.dup;
@@ -911,6 +913,8 @@ final class SyncEngine
 				// Use the 'id' that was passed in (folderId)
 				idToQuery = id;
 			}
+			// what path id are we going to query?
+			log.vdebug("path idToQuery = ", idToQuery);
 			
 			// query for changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
 			try {
@@ -1387,9 +1391,9 @@ final class SyncEngine
 				} else {
 					log.vdebug("onedrive.viewChangesByDriveId call returned an invalid JSON Object");
 				}
-			}	
+			}
 		}
-
+		
 		// delete items in idsToDelete
 		if (idsToDelete.length > 0) deleteItems();
 		// empty the skipped items
@@ -1525,7 +1529,7 @@ final class SyncEngine
 		}
 
 		// check the item type
-		string path;
+		string path = "";
 		if (!unwanted) {
 			if (isItemFile(driveItem)) {
 				log.vdebug("The item we are syncing is a file");
@@ -1705,7 +1709,7 @@ final class SyncEngine
 	}
 
 	// download an item that was not synced before
-	private void applyNewItem(Item item, string path)
+	private void applyNewItem(const ref Item item, const(string) path)
 	{
 		if (exists(path)) {
 			// path exists locally
@@ -1717,11 +1721,13 @@ final class SyncEngine
 				// file is not in sync with the database
 				// is the local file technically 'newer' based on UTC timestamp?
 				SysTime localModifiedTime = timeLastModified(path).toUTC();
+				SysTime itemModifiedTime = item.mtime;
+				// HACK: reduce time resolution to seconds before comparing
+				itemModifiedTime.fracSecs = Duration.zero;
 				localModifiedTime.fracSecs = Duration.zero;
-				item.mtime.fracSecs = Duration.zero;
 				
 				// is the local modified time greater than that from OneDrive?
-				if (localModifiedTime > item.mtime) {
+				if (localModifiedTime > itemModifiedTime) {
 					// local file is newer than item on OneDrive based on file modified time
 					// Is this item id in the database?
 					if (itemdb.idInLocalDatabase(item.driveId, item.id)){
@@ -1872,7 +1878,7 @@ final class SyncEngine
 	}
 
 	// downloads a File resource
-	private void downloadFileItem(Item item, string path)
+	private void downloadFileItem(const ref Item item, const(string) path)
 	{
 		assert(item.type == ItemType.file);
 		write("Downloading file ", path, " ... ");
@@ -2072,20 +2078,21 @@ final class SyncEngine
 	}
 
 	// returns true if the given item corresponds to the local one
-	private bool isItemSynced(Item item, string path)
+	private bool isItemSynced(const ref Item item, const(string) path)
 	{
 		if (!exists(path)) return false;
 		final switch (item.type) {
 		case ItemType.file:
 			if (isFile(path)) {
 				SysTime localModifiedTime = timeLastModified(path).toUTC();
+				SysTime itemModifiedTime = item.mtime;
 				// HACK: reduce time resolution to seconds before comparing
-				item.mtime.fracSecs = Duration.zero;
+				itemModifiedTime.fracSecs = Duration.zero;
 				localModifiedTime.fracSecs = Duration.zero;
-				if (localModifiedTime == item.mtime) {
+				if (localModifiedTime == itemModifiedTime) {
 					return true;
 				} else {
-					log.vlog("The local item has a different modified time ", localModifiedTime, " remote is ", item.mtime);
+					log.vlog("The local item has a different modified time ", localModifiedTime, " remote is ", itemModifiedTime);
 				}
 				if (testFileHash(path, item)) {
 					return true;
@@ -2113,7 +2120,7 @@ final class SyncEngine
 		foreach_reverse (i; idsToDelete) {
 			Item item;
 			if (!itemdb.selectById(i[0], i[1], item)) continue; // check if the item is in the db
-			string path = itemdb.computePath(i[0], i[1]);
+			const(string) path = itemdb.computePath(i[0], i[1]);
 			log.log("Trying to delete item ", path);
 			if (!dryRun) {
 				// Actually process the database entry removal
@@ -2170,7 +2177,7 @@ final class SyncEngine
 	}
 	
 	// scan the given directory for differences and new items
-	void scanForDifferences(string path)
+	void scanForDifferences(const(string) path)
 	{
 		// scan for changes in the path provided
 		log.vlog("Uploading differences of ", path);
@@ -2178,6 +2185,7 @@ final class SyncEngine
 		if (itemdb.selectByPath(path, defaultDriveId, item)) {
 			uploadDifferences(item);
 		}
+		
 		log.vlog("Uploading new items of ", path);
 		uploadNewItems(path);
 		
@@ -2188,7 +2196,7 @@ final class SyncEngine
 		}
 	}
 
-	private void uploadDifferences(Item item)
+	private void uploadDifferences(const ref Item item)
 	{
 		// see if this item.id we were supposed to have deleted
 		// match early and return
@@ -2255,7 +2263,7 @@ final class SyncEngine
 		}
 	}
 
-	private void uploadDirDifferences(Item item, string path)
+	private void uploadDirDifferences(const ref Item item, const(string) path)
 	{
 		assert(item.type == ItemType.dir);
 		if (exists(path)) {
@@ -2284,7 +2292,8 @@ final class SyncEngine
 			} else {
 				// we are in a --dry-run situation, directory appears to have deleted locally - this directory may never have existed as we never downloaded it ..
 				// Check if path does not exist in database
-				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+				Item databaseItem;
+				if (!itemdb.selectByPath(path, defaultDriveId, databaseItem)) {
 					// Path not found in database
 					log.vlog("The directory has been deleted locally");
 					if (noRemoteDelete) {
@@ -2311,7 +2320,7 @@ final class SyncEngine
 		}
 	}
 
-	private void uploadRemoteDirDifferences(Item item, string path)
+	private void uploadRemoteDirDifferences(const ref Item item, const(string) path)
 	{
 		assert(item.type == ItemType.remote);
 		if (exists(path)) {
@@ -2344,7 +2353,8 @@ final class SyncEngine
 			} else {
 				// we are in a --dry-run situation, directory appears to have deleted locally - this directory may never have existed as we never downloaded it ..
 				// Check if path does not exist in database
-				if (!itemdb.selectByPathWithRemote(path, defaultDriveId, item)) {
+				Item databaseItem;
+				if (!itemdb.selectByPathWithRemote(path, defaultDriveId, databaseItem)) {
 					// Path not found in database
 					log.vlog("The directory has been deleted locally");
 					if (noRemoteDelete) {
@@ -2372,7 +2382,7 @@ final class SyncEngine
 	}
 
 	// upload local file system differences to OneDrive
-	private void uploadFileDifferences(Item item, string path)
+	private void uploadFileDifferences(const ref Item item, const(string) path)
 	{
 		// Reset upload failure - OneDrive or filesystem issue (reading data)
 		uploadFailed = false;
@@ -2381,11 +2391,12 @@ final class SyncEngine
 		if (exists(path)) {
 			if (isFile(path)) {
 				SysTime localModifiedTime = timeLastModified(path).toUTC();
+				SysTime itemModifiedTime = item.mtime;
 				// HACK: reduce time resolution to seconds before comparing
-				item.mtime.fracSecs = Duration.zero;
+				itemModifiedTime.fracSecs = Duration.zero;
 				localModifiedTime.fracSecs = Duration.zero;
 				
-				if (localModifiedTime != item.mtime) {
+				if (localModifiedTime != itemModifiedTime) {
 					log.vlog("The file last modified time has changed");					
 					string eTag = item.eTag;
 					if (!testFileHash(path, item)) {
@@ -2689,7 +2700,8 @@ final class SyncEngine
 			} else {
 				// We are in a --dry-run situation, file appears to have deleted locally - this file may never have existed as we never downloaded it ..
 				// Check if path does not exist in database
-				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+				Item databaseItem;
+				if (!itemdb.selectByPath(path, defaultDriveId, databaseItem)) {
 					// file not found in database
 					log.vlog("The file has been deleted locally");
 					if (noRemoteDelete) {
@@ -2722,24 +2734,27 @@ final class SyncEngine
 	}
 
 	// upload new items to OneDrive
-	private void uploadNewItems(string path)
+	private void uploadNewItems(const(string) path)
 	{
+		import std.range : walkLength;
+		import std.uni : byGrapheme;
 		//	https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
 		//  If the path is greater than allowed characters, then one drive will return a '400 - Bad Request' 
 		//  Need to ensure that the URI is encoded before the check is made
 		//  400 Character Limit for OneDrive Business / Office 365
 		//  430 Character Limit for OneDrive Personal
-		auto maxPathLength = 0;
-		import std.range : walkLength;
-		import std.uni : byGrapheme;
-		if (accountType == "business"){
-			// Business Account
-			maxPathLength = 400;
-		} else {
+		long maxPathLength = 0;
+		long pathWalkLength = path.byGrapheme.walkLength;
+		
+		// Configure maxPathLength based on account type
+		if (accountType == "personal"){
 			// Personal Account
 			maxPathLength = 430;
+		} else {
+			// Business Account / Office365
+			maxPathLength = 400;
 		}
-		
+				
 		// A short lived file that has disappeared will cause an error - is the path valid?
 		if (!exists(path)) {
 			log.log("Skipping item - has disappeared: ", path);
@@ -2755,8 +2770,8 @@ final class SyncEngine
 			return;
 		}
 		
-		if(path.byGrapheme.walkLength < maxPathLength){
-			// path is less than maxPathLength
+		if(pathWalkLength < maxPathLength){
+			// path length is less than maxPathLength
 			
 			// skip dot files if configured
 			if (cfg.getValueBool("skip_dotfiles")) {
@@ -2846,6 +2861,7 @@ final class SyncEngine
 			// This item passed all the unwanted checks
 			// We want to upload this new item
 			if (isDir(path)) {
+				
 				Item item;
 				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
 					uploadCreateDir(path);
@@ -2862,7 +2878,8 @@ final class SyncEngine
 				try {
 					auto entries = dirEntries(path, SpanMode.shallow, false);
 					foreach (DirEntry entry; entries) {
-						uploadNewItems(entry.name);
+						string thisPath = entry.name;
+						uploadNewItems(thisPath);
 					}
 				} catch (FileException e) {
 					// display the error message
@@ -2871,7 +2888,7 @@ final class SyncEngine
 				}
 			} else {
 				// This item is a file
-				auto fileSize = getSize(path);
+				long fileSize = getSize(path);
 				// Can we upload this file - is there enough free space? - https://github.com/skilion/onedrive/issues/73
 				// However if the OneDrive account does not provide the quota details, we have no idea how much free space is available
 				if ((!quotaAvailable) || ((remainingFreeSpace - fileSize) > 0)){
@@ -3104,7 +3121,7 @@ final class SyncEngine
 	}
 	
 	// upload a new file to OneDrive
-	private void uploadNewFile(string path)
+	private void uploadNewFile(const(string) path)
 	{
 		// Reset upload failure - OneDrive or filesystem issue (reading data)
 		uploadFailed = false;
@@ -3810,7 +3827,7 @@ final class SyncEngine
 	}
 
 	// delete an item on OneDrive
-	private void uploadDeleteItem(Item item, string path)
+	private void uploadDeleteItem(Item item, const(string) path)
 	{
 		log.log("Deleting item from OneDrive: ", path);
 		bool flagAsBigDelete = false;
@@ -3909,9 +3926,11 @@ final class SyncEngine
 	// update the item's last modified time
 	private void uploadLastModifiedTime(const(char)[] driveId, const(char)[] id, const(char)[] eTag, SysTime mtime)
 	{
+		string itemModifiedTime;
+		itemModifiedTime = mtime.toISOExtString();
 		JSONValue data = [
 			"fileSystemInfo": JSONValue([
-				"lastModifiedDateTime": mtime.toISOExtString()
+				"lastModifiedDateTime": itemModifiedTime
 			])
 		];
 		
@@ -4072,7 +4091,7 @@ final class SyncEngine
 	}
 
 	// delete an item by it's path
-	void deleteByPath(string path)
+	void deleteByPath(const(string) path)
 	{
 		Item item;
 		if (!itemdb.selectByPath(path, defaultDriveId, item)) {
@@ -4243,7 +4262,7 @@ final class SyncEngine
 	}
 	
 	// Query the OneDrive 'drive' to determine if we are 'in sync' or if there are pending changes
-	void queryDriveForChanges(string path) {
+	void queryDriveForChanges(const(string) path) {
 		
 		// Function variables
 		int validChanges = 0;
@@ -4416,7 +4435,7 @@ final class SyncEngine
 	}
 	
 	// Create a fake OneDrive response suitable for use with saveItem
-	JSONValue createFakeResponse(string path) {
+	JSONValue createFakeResponse(const(string) path) {
 		import std.digest.sha;
 		// Generate a simulated JSON response which can be used
 		// At a minimum we need:
