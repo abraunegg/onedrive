@@ -811,7 +811,7 @@ int main(string[] args)
 					}
 					
 					// Monitor Loop Counter
-					log.log("fullScanCounter =                    ", fullScanCounter);
+					log.vdebug("fullScanCounter =                    ", fullScanCounter);
 					// sync option handling per sync loop
 					log.vdebug("syncListConfigured =                 ", syncListConfigured);
 					log.vdebug("fullScanRequired =                   ", fullScanRequired);
