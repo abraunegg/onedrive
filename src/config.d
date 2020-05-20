@@ -60,7 +60,8 @@ final class Config
 		boolValues["dry_run"] = false;
 		boolValues["sync_root_files"] = false;
 		longValues["verbose"] = log.verbose; // might be initialized by the first getopt call!
-		longValues["monitor_interval"] = 45;
+		// The amount of time (seconds) between monitor sync loops
+		longValues["monitor_interval"] = 300;
 		longValues["skip_size"] = 0;
 		longValues["min_notify_changes"] = 5;
 		longValues["monitor_log_frequency"] = 5;
