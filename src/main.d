@@ -724,10 +724,10 @@ int main(string[] args)
 		sync.queryDriveForChanges(remotePath);
 	}
 	
-	// Are we performing a sync, resync or monitor operation?
-	if ((cfg.getValueBool("synchronize")) || (cfg.getValueBool("resync")) || (cfg.getValueBool("monitor"))) {
+	// Are we performing a sync, or monitor operation?
+	if ((cfg.getValueBool("synchronize")) || (cfg.getValueBool("monitor"))) {
 
-		if ((cfg.getValueBool("synchronize")) || (cfg.getValueBool("resync"))) {
+		if (cfg.getValueBool("synchronize")) {
 			if (online) {
 				// Check user entry for local path - the above chdir means we are already in ~/OneDrive/ thus singleDirectory is local to this path
 				if (cfg.getValueString("single_directory") != ""){
@@ -830,7 +830,8 @@ int main(string[] args)
 			MonoTime lastCheckTime = MonoTime.currTime();
 			long logMonitorCounter = 0;
 			long fullScanCounter = 0;
-			bool fullScanRequired = false;
+			// set fullScanRequired to true so that at application startup we perform a full walk
+			bool fullScanRequired = true;
 			bool syncListConfiguredFullScanOverride = false;
 			// if sync list is configured, set to true
 			if (syncListConfigured) {
@@ -850,13 +851,15 @@ int main(string[] args)
 				
 				auto currTime = MonoTime.currTime();
 				if (currTime - lastCheckTime > checkInterval) {
+					// monitor sync loop
+					log.vdebug("################################################## NEW LOOP ##################################################");
 					// Increment monitorLoopFullCount
 					monitorLoopFullCount++;
 					// Display memory details at start of loop
 					if (displayMemoryUsage) {
 						log.displayMemoryUsagePreGC();
 					}
-				
+					
 					// log monitor output suppression
 					logMonitorCounter += 1;
 					if (logMonitorCounter > logInterval) {
@@ -868,10 +871,14 @@ int main(string[] args)
 					if (fullScanCounter > fullScanFrequency){
 						// loop counter has exceeded
 						fullScanCounter = 1;
-						fullScanRequired = true;
 						if (syncListConfigured) {
+							// set fullScanRequired = true due to sync_list being used
+							fullScanRequired = true;
 							// sync list is configured
 							syncListConfiguredFullScanOverride = true;
+						} else {
+							// dont set fullScanRequired to true as this is excessive if sync_list is not being used
+							fullScanRequired = false;
 						}
 					}
 					
@@ -1004,6 +1011,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 	
 	do {
 		try {
+			log.vdebug("################################################## NEW SYNC ##################################################");
 			if (singleDirectory != ""){
 				// we were requested to sync a single directory
 				log.vlog("Syncing changes from this selected path: ", singleDirectory);
