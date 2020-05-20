@@ -3,6 +3,7 @@ import std.file;
 import std.datetime;
 import std.process;
 import std.conv;
+import core.memory;
 import core.sys.posix.pwd, core.sys.posix.unistd, core.stdc.string : strlen;
 import std.algorithm : splitter;
 version(Notifications) {
@@ -200,4 +201,26 @@ private string getUserName()
 		vdebug("User Name:  unknown");
 		return "unknown";
 	}
+}
+
+void displayMemoryUsagePreGC()
+{
+// Display memory usage
+writeln("\nMemory Usage pre GC (bytes)");
+writeln("--------------------");
+writeln("memory usedSize = ", GC.stats.usedSize);
+writeln("memory freeSize = ", GC.stats.freeSize);
+// uncomment this if required, if not using LDC 1.16 as this does not exist in that version
+//writeln("memory allocatedInCurrentThread = ", GC.stats.allocatedInCurrentThread, "\n");
+}
+
+void displayMemoryUsagePostGC()
+{
+// Display memory usage
+writeln("\nMemory Usage post GC (bytes)");
+writeln("--------------------");
+writeln("memory usedSize = ", GC.stats.usedSize);
+writeln("memory freeSize = ", GC.stats.freeSize);
+// uncomment this if required, if not using LDC 1.16 as this does not exist in that version
+//writeln("memory allocatedInCurrentThread = ", GC.stats.allocatedInCurrentThread, "\n");
 }
