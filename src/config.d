@@ -78,6 +78,9 @@ final class Config
 		stringValues["application_id"] = "";
 		// allow for resync to be set via config file
 		boolValues["resync"] = false;
+		// Ignore data safety checks and overwrite local data rather than preserve & rename
+		// This is a config file option ONLY
+		boolValues["bypass_data_preservation"] = false;
 		
 		// DEVELOPER OPTIONS 
 		// display_memory = true | false

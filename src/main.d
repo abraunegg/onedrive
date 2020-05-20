@@ -673,6 +673,12 @@ int main(string[] args)
 	// Do we configure to disable the upload validation routine
 	if (cfg.getValueBool("disable_upload_validation")) sync.setDisableUploadValidation();
 	
+	// Has the user enabled to bypass data preservation of renaming local files when there is a conflict?
+	if (cfg.getValueBool("bypass_data_preservation")) {
+		log.log("WARNING: Application has been configured to bypass local data preservation in the event of file conflict.");
+		log.log("WARNING: Local data loss MAY occur in this scenario.");
+	}
+	
 	// Do we need to validate the syncDir to check for the presence of a '.nosync' file
 	if (cfg.getValueBool("check_nomount")) {
 		// we were asked to check the mounts
