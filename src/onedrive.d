@@ -803,8 +803,7 @@ final class OneDriveApi
 			auto errorArray = splitLines(e.msg);
 			string errorMessage = errorArray[0];
 						
-			if (canFind(errorMessage, "Couldn't connect to server on handle") ||
-			    canFind(errorMessage, "Couldn't resolve host name on handle")) {
+			if (canFind(errorMessage, "Couldn't connect to server on handle") || canFind(errorMessage, "Couldn't resolve host name on handle")) {
 				// This is a curl timeout
 				log.error("  Error Message: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
 				// or 408 request timeout
@@ -817,11 +816,13 @@ final class OneDriveApi
 				bool retrySuccess = false;
 				while (!retrySuccess){
 					backoffInterval++;
-					log.vdebug("  Retry Attempt: ", retryAttempts);
 					int thisBackOffInterval = retryAttempts*backoffInterval;
+					log.vdebug("  Retry Attempt:      ", retryAttempts);					
 					if (thisBackOffInterval <= maxBackoffInterval) {
+						log.vdebug("  Retry In (seconds): ", thisBackOffInterval);
 						Thread.sleep(dur!"seconds"(thisBackOffInterval));
 					} else {
+						log.vdebug("  Retry In (seconds): ", maxBackoffInterval);
 						Thread.sleep(dur!"seconds"(maxBackoffInterval));
 					}
 					try {
@@ -830,8 +831,7 @@ final class OneDriveApi
 						log.log("Internet connectivity to Microsoft OneDrive service has been restored");
 						retrySuccess = true;
 					} catch (CurlException e) {
-						if (canFind(e.msg, "Couldn't connect to server on handle") ||
-			                            canFind(e.msg, "Couldn't resolve host name on handle")) {
+						if (canFind(e.msg, "Couldn't connect to server on handle") || canFind(e.msg, "Couldn't resolve host name on handle")) {
 							log.error("  Error Message: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
 							// Increment & loop around
 							retryAttempts++;
