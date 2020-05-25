@@ -1774,6 +1774,11 @@ final class SyncEngine
 						}
 						// file exists locally but is not in the sqlite database - maybe a failed download?
 						log.vlog("Local item does not exist in local database - replacing with file from OneDrive - failed download?");
+						// has the user configured to IGNORE local data protection rules?
+						if (bypassDataPreservation) {
+							// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
+							log.vlog("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: ", path);
+						}
 					}
 				} else {
 					// remote file is newer than local item
