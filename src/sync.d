@@ -4026,6 +4026,41 @@ final class SyncEngine
 	void uploadMoveItem(string from, string to)
 	{
 		log.log("Moving ", from, " to ", to);
+		
+		// 'to' file validation .. is the 'to' file valid for upload?
+		if (isSymlink(to)) {
+			// if config says so we skip all symlinked items
+			if (cfg.getValueBool("skip_symlinks")) {
+				log.vlog("Skipping item - skip symbolic links configured: ", to);
+				return;
+
+			}
+			// skip unexisting symbolic links
+			else if (!exists(readLink(to))) {
+				log.log("Skipping item - invalid symbolic link: ", to);
+				return;
+			}
+		}
+		
+		// Restriction and limitations about windows naming files
+		if (!isValidName(to)) {
+			log.log("Skipping item - invalid name (Microsoft Naming Convention): ", to);
+			return;
+		}
+		
+		// Check for bad whitespace items
+		if (!containsBadWhiteSpace(to)) {
+			log.log("Skipping item - invalid name (Contains an invalid whitespace item): ", to);
+			return;
+		}
+		
+		// Check for HTML ASCII Codes as part of file name
+		if (!containsASCIIHTMLCodes(to)) {
+			log.log("Skipping item - invalid name (Contains HTML ASCII Code): ", to);
+			return;
+		}
+		
+		// 'to' file has passed file validation
 		Item fromItem, toItem, parentItem;
 		if (!itemdb.selectByPath(from, defaultDriveId, fromItem)) {
 			if (cfg.getValueBool("skip_dotfiles") && isDotFile(to)){	
