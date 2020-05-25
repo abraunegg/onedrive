@@ -31,6 +31,7 @@ int main(string[] args)
 	string syncListHashFile;
 	string configBackupFile;
 	string syncDir;
+	string logOutputMessage;
 	bool configOptionsDifferent = false;
 	bool syncListConfigured = false;
 	bool syncListDifferent = false;
@@ -336,13 +337,9 @@ int main(string[] args)
 		}
 	}
 	
-	// dry-run notification
+	// dry-run notification and database setup
 	if (cfg.getValueBool("dry_run")) {
 		log.log("DRY-RUN Configured. Output below shows what 'would' have occurred.");
-	}
-	
-	// dry-run database setup
-	if (cfg.getValueBool("dry_run")) {
 		// If the dry run database exists, clean this up
 		if (exists(cfg.databaseFilePathDryRun)) {
 			// remove the existing file
@@ -862,10 +859,11 @@ int main(string[] args)
 				auto currTime = MonoTime.currTime();
 				if (currTime - lastCheckTime > checkInterval) {
 					// monitor sync loop
+					logOutputMessage = "################################################## NEW LOOP ##################################################";
 					if (displaySyncOptions) {
-						log.log("################################################## NEW LOOP ##################################################");
+						log.log(logOutputMessage);
 					} else {
-						log.vdebug("################################################## NEW LOOP ##################################################");
+						log.vdebug(logOutputMessage);
 					}
 					// Increment monitorLoopFullCount
 					monitorLoopFullCount++;
@@ -956,10 +954,11 @@ int main(string[] args)
 						log.displayMemoryUsagePostGC();
 					}
 					// monitor loop complete
+					logOutputMessage = "################################################ LOOP COMPLETE ###############################################";
 					if (displaySyncOptions) {
-						log.log("################################################ LOOP COMPLETE ###############################################");
+						log.log(logOutputMessage);
 					} else {
-						log.vdebug("################################################ LOOP COMPLETE ###############################################");
+						log.vdebug(logOutputMessage);
 					}
 					// Developer break via config option
 					if (cfg.getValueLong("monitor_max_loop") > 0) {
@@ -1013,6 +1012,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 	int count;
 	string remotePath = "/";
     string localPath = ".";
+	string logOutputMessage;
 	
 	// performSync API scan triggers
 	log.vdebug("performSync API scan triggers");
@@ -1037,10 +1037,12 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 	
 	do {
 		try {
+			// starting a sync
+			logOutputMessage = "################################################## NEW SYNC ##################################################";
 			if (displaySyncOptions) {
-				log.log("################################################## NEW SYNC ##################################################");
+				log.log(logOutputMessage);
 			} else {
-				log.vdebug("################################################## NEW SYNC ##################################################");
+				log.vdebug(logOutputMessage);
 			}
 			if (singleDirectory != ""){
 				// we were requested to sync a single directory
@@ -1077,6 +1079,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 					sync.scanForDifferences(localPath);
 				} else {
 					// No upload only
+					string syncCallLogOutput;
 					if (localFirst) {
 						// sync local files first before downloading from OneDrive
 						if (logLevel < MONITOR_LOG_QUIET) log.log("Syncing changes from local path first before downloading changes from OneDrive ...");
@@ -1094,12 +1097,14 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 						if (logLevel < MONITOR_LOG_SILENT) log.log("Syncing changes from OneDrive ...");
 						
 						// For the initial sync, always use the delta link so that we capture all the right delta changes including adds, moves & deletes
+						logOutputMessage = "Initial Scan: Call OneDrive Delta API for delta changes as compared to last successful sync.";
+						syncCallLogOutput = "Calling sync.applyDifferences(false);";
 						if (displaySyncOptions) {
-							log.log("Initial Scan: Call OneDrive Delta API for delta changes as compared to last successful sync.");
-							log.log("Calling sync.applyDifferences(false);");
+							log.log(logOutputMessage);
+							log.log(syncCallLogOutput);
 						} else {
-							log.vdebug("Initial Scan: Call OneDrive Delta API for delta changes as compared to last successful sync.");
-							log.vdebug("Calling sync.applyDifferences(false);");
+							log.vdebug(logOutputMessage);
+							log.vdebug(syncCallLogOutput);
 						}
 						sync.applyDifferences(false);
 						
@@ -1108,12 +1113,14 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 							// process local changes walking the entire path checking for changes
 							// in monitor mode all local changes are captured via inotify
 							// thus scanning every 'monitor_interval' (default 300 seconds) for local changes is excessive and not required
+							logOutputMessage = "Process local filesystem (sync_dir) for file changes as compared to database entries";
+							syncCallLogOutput = "Calling sync.scanForDifferences(localPath);";
 							if (displaySyncOptions) {
-								log.log("Process local filesystem (sync_dir) for file changes as compared to database entries");
-								log.log("Calling sync.scanForDifferences(localPath);");
+								log.log(logOutputMessage);
+								log.log(syncCallLogOutput);
 							} else {
-								log.vdebug("Process local filesystem (sync_dir) for file changes as compared to database entries");
-								log.vdebug("Calling sync.scanForDifferences(localPath);");
+								log.vdebug(logOutputMessage);
+								log.vdebug(syncCallLogOutput);
 							}
 							sync.scanForDifferences(localPath);
 							
@@ -1132,48 +1139,56 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 							
 							// Do not perform a full walk of the OneDrive objects
 							if ((!fullScanRequired) && (!syncListConfiguredFullScanOverride)){
+								logOutputMessage = "Final True-Up: Do not perform a full walk of the OneDrive objects - not required";
+								syncCallLogOutput = "Calling sync.applyDifferences(false);";
 								if (displaySyncOptions) {
-									log.log("Final True-Up: Do not perform a full walk of the OneDrive objects - not required");
-									log.log("Calling sync.applyDifferences(false);");
+									log.log(logOutputMessage);
+									log.log(syncCallLogOutput);
 								} else {
-									log.vdebug("Final True-Up: Do not perform a full walk of the OneDrive objects - not required");
-									log.vdebug("Calling sync.applyDifferences(false);");
+									log.vdebug(logOutputMessage);
+									log.vdebug(syncCallLogOutput);
 								}
 								sync.applyDifferences(false);
 							}
 							
 							// Perform a full walk of OneDrive objects because sync_list is in use / or trigger was set in --monitor loop
 							if ((!fullScanRequired) && (syncListConfiguredFullScanOverride)){
+								logOutputMessage = "Final True-Up: Perform a full walk of OneDrive objects because sync_list is in use / or trigger was set in --monitor loop";
+								syncCallLogOutput = "Calling sync.applyDifferences(true);";
 								if (displaySyncOptions) {
-									log.log("Final True-Up: Perform a full walk of OneDrive objects because sync_list is in use / or trigger was set in --monitor loop");
-									log.log("Calling sync.applyDifferences(true);");
+									log.log(logOutputMessage);
+									log.log(syncCallLogOutput);
 								} else {
-									log.vdebug("Final True-Up: Perform a full walk of OneDrive objects because sync_list is in use / or trigger was set in --monitor loop");
-									log.vdebug("Calling sync.applyDifferences(true);");
+									log.vdebug(logOutputMessage);
+									log.vdebug(syncCallLogOutput);
 								}
 								sync.applyDifferences(true);
 							}
 							
 							// Perform a full walk of OneDrive objects because a full scan was required
 							if ((fullScanRequired) && (!syncListConfiguredFullScanOverride)){
+								logOutputMessage = "Final True-Up: Perform a full walk of OneDrive objects because a full scan was required";
+								syncCallLogOutput = "Calling sync.applyDifferences(true);";
 								if (displaySyncOptions) {
-									log.log("Final True-Up: Perform a full walk of OneDrive objects because a full scan was required");
-									log.log("Calling sync.applyDifferences(true);");
+									log.log(logOutputMessage);
+									log.log(syncCallLogOutput);
 								} else {
-									log.vdebug("Final True-Up: Perform a full walk of OneDrive objects because a full scan was required");
-									log.vdebug("Calling sync.applyDifferences(true);");
-								}
+									log.vdebug(logOutputMessage);
+									log.vdebug(syncCallLogOutput);
+								}							
 								sync.applyDifferences(true);
 							}
 							
 							// Perform a full walk of OneDrive objects because a full scan was required and sync_list is in use and trigger was set in --monitor loop
 							if ((fullScanRequired) && (syncListConfiguredFullScanOverride)){
+								logOutputMessage = "Final True-Up: Perform a full walk of OneDrive objects because a full scan was required and sync_list is in use and trigger was set in --monitor loop";
+								syncCallLogOutput = "Calling sync.applyDifferences(true);";
 								if (displaySyncOptions) {
-									log.log("Final True-Up: Perform a full walk of OneDrive objects because a full scan was required and sync_list is in use and trigger was set in --monitor loop");
-									log.log("Calling sync.applyDifferences(true);");
+									log.log(logOutputMessage);
+									log.log(syncCallLogOutput);
 								} else {
-									log.vdebug("Final True-Up: Perform a full walk of OneDrive objects because a full scan was required and sync_list is in use and trigger was set in --monitor loop");
-									log.vdebug("Calling sync.applyDifferences(true);");
+									log.vdebug(logOutputMessage);
+									log.vdebug(syncCallLogOutput);
 								}
 								sync.applyDifferences(true);
 							}
@@ -1182,10 +1197,12 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 				}
 			}
 			
+			// sync is complete
+			logOutputMessage = "################################################ SYNC COMPLETE ###############################################";
 			if (displaySyncOptions) {
-				log.log("################################################ SYNC COMPLETE ###############################################");
+				log.log(logOutputMessage);
 			} else {
-				log.vdebug("################################################ SYNC COMPLETE ###############################################");
+				log.vdebug(logOutputMessage);
 			}
 			
 			count = -1;
