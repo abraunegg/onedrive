@@ -1751,12 +1751,14 @@ final class SyncEngine
 					// local file is newer than item on OneDrive based on file modified time
 					// Is this item id in the database?
 					if (itemdb.idInLocalDatabase(item.driveId, item.id)){
+						// item id is in the database
 						// no local rename
 						// no download needed
 						log.vlog("Local item modified time is newer based on UTC time conversion - keeping local item as this exists in the local database");
 						log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer than OneDrive item and present in the sqlite database");
 						return;
 					} else {
+						// item id is not in the database .. maybe a --resync ?
 						// Should this 'download' be skipped?
 						// Do we need to check for .nosync? Only if --check-for-nosync was passed in
 						if (cfg.getValueBool("check_nosync")) {
@@ -1774,10 +1776,32 @@ final class SyncEngine
 						}
 						// file exists locally but is not in the sqlite database - maybe a failed download?
 						log.vlog("Local item does not exist in local database - replacing with file from OneDrive - failed download?");
-						// has the user configured to IGNORE local data protection rules?
-						if (bypassDataPreservation) {
-							// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
-							log.vlog("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: ", path);
+						
+						// was --resync issued?
+						if (cfg.getValueBool("resync")) {
+							// in a --resync scenario we have zero way of knowing IF the local file is meant to be the right file
+							// we have passed the following checks:
+							// 1. file exists locally
+							// 2. local modified time > remote modified time
+							// 3. id is not in the database
+							// 4. --resync was issued
+							auto ext = extension(path);
+							auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
+							// has the user configured to IGNORE local data protection rules?
+							if (bypassDataPreservation) {
+								// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
+								log.vlog("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: ", path);
+							} else {
+								// local data protection is configured, renaming local file
+								log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent data loss due to --resync: ", path, " -> ", newPath);
+								// perform the rename action of the local file
+								if (!dryRun) {
+									safeRename(path);
+								} else {
+									// Expectation here is that there is a new file locally (newPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
+									log.vdebug("DRY-RUN: Skipping local file rename");
+								}
+							}
 						}
 					}
 				} else {
