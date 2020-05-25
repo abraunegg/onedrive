@@ -238,6 +238,9 @@ final class SyncEngine
 	private bool syncListConfigured = false;
 	// sync_list new folder added, trigger delta scan override
 	private bool oneDriveFullScanTrigger = false;
+	// is bypass_data_preservation set via config file
+	// Local data loss MAY occur in this scenario
+	private bool bypassDataPreservation = false;
 
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
@@ -480,6 +483,13 @@ final class SyncEngine
 	{
 		syncListConfigured = true;
 		log.vdebug("Setting syncListConfigured = true");
+	}
+	
+	// set bypassDataPreservation to true
+	void setBypassDataPreservation()
+	{
+		bypassDataPreservation = true;
+		log.vdebug("Setting bypassDataPreservation = true");
 	}
 	
 	// download all new changes from OneDrive
@@ -1662,7 +1672,7 @@ final class SyncEngine
 							auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
 							
 							// has the user configured to IGNORE local data protection rules?
-							if (cfg.getValueString("bypass_data_preservation")){
+							if (bypassDataPreservation) {
 								// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
 								log.vlog("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: ", oldPath);
 							} else {
@@ -1772,7 +1782,7 @@ final class SyncEngine
 					auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
 					
 					// has the user configured to IGNORE local data protection rules?
-					if (cfg.getValueString("bypass_data_preservation")){
+					if (bypassDataPreservation) {
 						// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
 						log.vlog("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: ", path);
 					} else {
