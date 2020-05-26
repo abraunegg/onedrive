@@ -3162,16 +3162,16 @@ final class SyncEngine
 				} else {
 					// They are the "same" name wise but different in case sensitivity
 					log.error("ERROR: Current directory has a 'case-insensitive match' to an existing directory on OneDrive");
-					log.error("ERROR: To resolve, rename this local directory: ", absolutePath(path));
+					log.error("ERROR: To resolve, rename this local directory: ", buildNormalizedPath(absolutePath(path)));
 					log.error("ERROR: Remote OneDrive directory: ", response["name"].str);
-					log.log("Skipping: ", absolutePath(path));
+					log.log("Skipping: ", buildNormalizedPath(absolutePath(path)));
 					return;
 				}
 			} else {
 				// response is not valid JSON, an error was returned from OneDrive
 				log.error("ERROR: There was an error performing this operation on OneDrive");
 				log.error("ERROR: Increase logging verbosity to assist determining why.");
-				log.log("Skipping: ", absolutePath(path));
+				log.log("Skipping: ", buildNormalizedPath(absolutePath(path)));
 				return;
 			}
 		}
@@ -3859,8 +3859,8 @@ final class SyncEngine
 						} else {
 							// The files are the "same" name wise but different in case sensitivity
 							log.error("ERROR: A local file has the same name as another local file.");
-							log.error("ERROR: To resolve, rename this local file: ", absolutePath(path));
-							log.log("Skipping uploading this new file: ", absolutePath(path));
+							log.error("ERROR: To resolve, rename this local file: ", buildNormalizedPath(absolutePath(path)));
+							log.log("Skipping uploading this new file: ", buildNormalizedPath(absolutePath(path)));
 						}
 					} else {
 						// fileDetailsFromOneDrive is not valid JSON, an error was returned from OneDrive
