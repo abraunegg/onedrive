@@ -46,7 +46,7 @@ The client is heavily dependant on Curl and OpenSSL to perform the activities wi
 ```
 OpenSSL SSL_read: SSL_ERROR_SYSCALL, errno 104
 ```
-The only way to determine this is the cause of the application ceasing to work is to generate a HTTPS debug log using the following additional flags:
+The only way to determine that this is the cause of the application ceasing to work is to generate a HTTPS debug log using the following additional flags:
 ```
 --verbose --verbose --debug-https
 ```
