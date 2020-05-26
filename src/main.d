@@ -678,6 +678,7 @@ int main(string[] args)
 	if (cfg.getValueBool("bypass_data_preservation")) {
 		log.log("WARNING: Application has been configured to bypass local data preservation in the event of file conflict.");
 		log.log("WARNING: Local data loss MAY occur in this scenario.");
+		sync.setBypassDataPreservation();
 	}
 	
 	// Do we need to validate the syncDir to check for the presence of a '.nosync' file
