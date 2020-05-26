@@ -3,6 +3,29 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.4.2 - 2020-05-27
+### Fixed
+*   Fixed the catching of an unhandled exception when inotify throws an error
+*   Fixed an uncaught '100 Continue' response when files are being uploaded
+*   Fixed progress bar for uploads to be more accurate regarding percentage complete
+*   Fixed handling of database query enforcement if item is from a shared folder
+*   Fixed compiler depreciation of std.digest.digest
+*   Fixed checking & loading of configuration file sequence
+*   Fixed multiple issues reported by Valgrind
+*   Fixed double scan at application startup when using --monitor & --resync together
+*   Fixed when renaming a file locally, ensure that the target filename is valid before attempting to upload to OneDrive
+*   Fixed so that if a file is modified locally and --resync is used, rename the local file for data preservation to prevent local data loss
+
+### Added
+*   Implement 'bypass_data_preservation' enhancement
+
+### Changed
+*   Changed the monitor interval default to 300 seconds
+
+### Updated
+*   Updated the handling of out-of-space message when OneDrive is out of space
+*   Updated debug logging for retry wait times
+
 ## 2.4.1 - 2020-05-02
 ### Fixed
 *   Fixed the handling of renaming files to a name starting with a dot when skip_dotfiles = true
