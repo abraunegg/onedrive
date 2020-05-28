@@ -15,7 +15,7 @@ URL:      <your site URL>
 ```
 
 ## Configuring the onedrive client
-Once you have obtained the 'drive_id' above, add to your 'onedrive' configuration file (`~/.config/onedrive/config`)the following:
+Once you have obtained the 'drive_id' above, add to your 'onedrive' configuration file (`~/.config/onedrive/config`) the following:
 ```text
 drive_id = "insert the drive id from above here"
 ```
