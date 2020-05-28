@@ -22,6 +22,7 @@ This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) cl
 *   Desktop notifications via libnotify
 *   Dry-run capability to test configuration changes
 *   Prevent major OneDrive accidental data deletion after configuration change
+*   Support for National cloud deployments (Microsoft Cloud for US Government, Microsoft Cloud Germany, Azure and Office 365 operated by 21Vianet in China)
 
 ## What's missing
 *   While local changes are uploaded right away, remote changes are delayed until next sync when using --monitor
@@ -38,6 +39,9 @@ See [docs/Docker.md](https://github.com/abraunegg/onedrive/blob/master/docs/Dock
 
 ## Sharepoint group drive in Office 365 business or education
 See [docs/Office365.md](https://github.com/abraunegg/onedrive/blob/master/docs/Office365.md)
+
+## National Cloud support
+See [docs/national-cloud-deployments.md](https://github.com/abraunegg/onedrive/blob/master/docs/national-cloud-deployments.md)
 
 ## Reporting issues
 If you encounter any bugs you can report them here on Github. Before filing an issue be sure to:
