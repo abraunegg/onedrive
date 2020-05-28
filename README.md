@@ -18,11 +18,11 @@ This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) cl
 *   Resumable uploads
 *   Support OneDrive for Business (part of Office 365)
 *   Shared folders (OneDrive Personal)
-*   SharePoint / Office 365 Shared Libraries (refer to [docs/Office365.md](https://github.com/abraunegg/onedrive/blob/master/docs/Office365.md) to configure)
+*   SharePoint / Office 365 Shared Libraries
 *   Desktop notifications via libnotify
 *   Dry-run capability to test configuration changes
 *   Prevent major OneDrive accidental data deletion after configuration change
-*   Support for National cloud deployments (Microsoft Cloud for US Government, Microsoft Cloud Germany, Azure and Office 365 operated by 21Vianet in China) (refer to [docs/national-cloud-deployments.md](https://github.com/abraunegg/onedrive/blob/master/docs/national-cloud-deployments.md) to configure)
+*   Support for National cloud deployments (Microsoft Cloud for US Government, Microsoft Cloud Germany, Azure and Office 365 operated by 21Vianet in China)
 
 ## What's missing
 *   While local changes are uploaded right away, remote changes are delayed until next sync when using --monitor
@@ -37,7 +37,7 @@ See [docs/USAGE.md](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE
 ## Docker support
 See [docs/Docker.md](https://github.com/abraunegg/onedrive/blob/master/docs/Docker.md)
 
-## Sharepoint group drive in Office 365 business or education
+## SharePoint / Office 365 Shared Libraries (Business or Education)
 See [docs/Office365.md](https://github.com/abraunegg/onedrive/blob/master/docs/Office365.md)
 
 ## National Cloud support
