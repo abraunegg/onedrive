@@ -15,15 +15,26 @@ private bool simulateNoRefreshTokenFile = false;
 private ulong retryAfterValue = 0;
 
 private immutable {
-	// Personal & Business Queries
-	string authUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
-	string redirectUrl = "https://login.microsoftonline.com/common/oauth2/nativeclient";
-	string tokenUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
-	string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
+	// Azure Active Directory & Graph Explorer Endpoints
+	// Global & Defaults
+	string globalAuthEndpoint = "https://login.microsoftonline.com";
+	string globalGraphEndpoint = "https://graph.microsoft.com";
 	
-	// Office 365 / SharePoint Queries
-	string siteSearchUrl = "https://graph.microsoft.com/v1.0/sites?search";
-	string siteDriveUrl = "https://graph.microsoft.com/v1.0/sites/";
+	// US Government L4
+	string usl4AuthEndpoint = "https://login.microsoftonline.us";
+	string usl4GraphEndpoint = "https://graph.microsoft.us";
+	
+	// US Government L5
+	string usl5AuthEndpoint = "https://login.microsoftonline.us";
+	string usl5GraphEndpoint = "https://dod-graph.microsoft.us";
+	
+	// Germany
+	string deAuthEndpoint = "https://login.microsoftonline.de";
+	string deGraphEndpoint = "https://graph.microsoft.de";
+	
+	// China
+	string cnAuthEndpoint = "https://login.chinacloudapi.cn";
+	string cnGraphEndpoint = "https://microsoftgraph.chinacloudapi.cn";	
 }
 
 private {
@@ -38,11 +49,24 @@ private {
 
 	// Default Drive ID
 	string driveId = "";
-
-	// Common URL's
-	string driveUrl = "https://graph.microsoft.com/v1.0/me/drive";
-	string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
-	string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
+	
+	// API Query URL's, based on using defaults, but can be updated by config option 'azure_ad_endpoint'
+	// Authentication
+	string authUrl = globalAuthEndpoint ~ "/common/oauth2/v2.0/authorize";
+	string redirectUrl = globalAuthEndpoint ~ "/common/oauth2/nativeclient";
+	string tokenUrl = globalAuthEndpoint ~ "/common/oauth2/v2.0/token";
+	
+	// Drive Queries
+	string driveUrl = globalGraphEndpoint ~ "/v1.0/me/drive";
+	string driveByIdUrl = globalGraphEndpoint ~ "/v1.0/drives/";
+	
+	// Item Queries
+	string itemByIdUrl = globalGraphEndpoint ~ "/v1.0/me/drive/items/";
+	string itemByPathUrl = globalGraphEndpoint ~ "/v1.0/me/drive/root:/";
+	
+	// Office 365 / SharePoint Queries
+	string siteSearchUrl = globalGraphEndpoint ~ "/v1.0/sites?search";
+	string siteDriveUrl = globalGraphEndpoint ~ "/v1.0/sites/";
 }
 
 class OneDriveException: Exception
@@ -110,7 +134,82 @@ final class OneDriveApi
 			http.verbose = true;
 			.debugResponse = true;
 		}
-
+		
+		// Configure Azure AD endpoints if 'azure_ad_endpoint' is configured
+		string azureConfigValue = cfg.getValueString("azure_ad_endpoint");
+		switch(azureConfigValue) {
+			case "":
+				log.log("Configuring Global Azure AD Endpoints");
+				break;
+			case "USL4":
+				log.log("Configuring Azure AD for US Government Endpoints");
+				// Authentication
+				authUrl = usl4AuthEndpoint ~ "/common/oauth2/v2.0/authorize";
+				redirectUrl = usl4AuthEndpoint ~ "/common/oauth2/nativeclient";
+				tokenUrl = usl4AuthEndpoint ~ "/common/oauth2/v2.0/token";
+				// Drive Queries
+				driveUrl = usl4GraphEndpoint ~ "/v1.0/me/drive";
+				driveByIdUrl = usl4GraphEndpoint ~ "/v1.0/drives/";					
+				// Item Queries
+				itemByIdUrl = usl4GraphEndpoint ~ "/v1.0/me/drive/items/";
+				itemByPathUrl = usl4GraphEndpoint ~ "/v1.0/me/drive/root:/";
+				// Office 365 / SharePoint Queries
+				siteSearchUrl = usl4GraphEndpoint ~ "/v1.0/sites?search";
+				siteDriveUrl = usl4GraphEndpoint ~ "/v1.0/sites/";
+				break;
+			case "USL5":
+				log.log("Configuring Azure AD for US Government Endpoints (DOD)");
+				// Authentication
+				authUrl = usl5AuthEndpoint ~ "/common/oauth2/v2.0/authorize";
+				redirectUrl = usl5AuthEndpoint ~ "/common/oauth2/nativeclient";
+				tokenUrl = usl5AuthEndpoint ~ "/common/oauth2/v2.0/token";
+				// Drive Queries
+				driveUrl = usl5GraphEndpoint ~ "/v1.0/me/drive";
+				driveByIdUrl = usl5GraphEndpoint ~ "/v1.0/drives/";					
+				// Item Queries
+				itemByIdUrl = usl5GraphEndpoint ~ "/v1.0/me/drive/items/";
+				itemByPathUrl = usl5GraphEndpoint ~ "/v1.0/me/drive/root:/";
+				// Office 365 / SharePoint Queries
+				siteSearchUrl = usl5GraphEndpoint ~ "/v1.0/sites?search";
+				siteDriveUrl = usl5GraphEndpoint ~ "/v1.0/sites/";
+				break;
+			case "DE":
+				log.log("Configuring Azure AD Germany");
+				// Authentication
+				authUrl = deAuthEndpoint ~ "/common/oauth2/v2.0/authorize";
+				redirectUrl = deAuthEndpoint ~ "/common/oauth2/nativeclient";
+				tokenUrl = deAuthEndpoint ~ "/common/oauth2/v2.0/token";
+				// Drive Queries
+				driveUrl = deGraphEndpoint ~ "/v1.0/me/drive";
+				driveByIdUrl = deGraphEndpoint ~ "/v1.0/drives/";					
+				// Item Queries
+				itemByIdUrl = deGraphEndpoint ~ "/v1.0/me/drive/items/";
+				itemByPathUrl = deGraphEndpoint ~ "/v1.0/me/drive/root:/";
+				// Office 365 / SharePoint Queries
+				siteSearchUrl = deGraphEndpoint ~ "/v1.0/sites?search";
+				siteDriveUrl = deGraphEndpoint ~ "/v1.0/sites/";
+				break;
+			case "CN":
+				log.log("Configuring AD China operated by 21Vianet");
+				// Authentication
+				authUrl = cnAuthEndpoint ~ "/common/oauth2/v2.0/authorize";
+				redirectUrl = cnAuthEndpoint ~ "/common/oauth2/nativeclient";
+				tokenUrl = cnAuthEndpoint ~ "/common/oauth2/v2.0/token";
+				// Drive Queries
+				driveUrl = cnGraphEndpoint ~ "/v1.0/me/drive";
+				driveByIdUrl = cnGraphEndpoint ~ "/v1.0/drives/";					
+				// Item Queries
+				itemByIdUrl = cnGraphEndpoint ~ "/v1.0/me/drive/items/";
+				itemByPathUrl = cnGraphEndpoint ~ "/v1.0/me/drive/root:/";
+				// Office 365 / SharePoint Queries
+				siteSearchUrl = cnGraphEndpoint ~ "/v1.0/sites?search";
+				siteDriveUrl = cnGraphEndpoint ~ "/v1.0/sites/";
+				break;
+			// Default - all other entries 
+			default:
+				log.log("Unknown Azure AD Endpoint request - using Global Azure AD Endpoints");
+		}
+		
 		// Configure the User Agent string
 		if (cfg.getValueString("user_agent") == "") {
 			// Application User Agent string defaults
