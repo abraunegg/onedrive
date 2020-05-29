@@ -13,10 +13,10 @@ azure_ad_endpoint = "insert valid entry here"
 ```
 
 Valid entries are:
-*   USL4
-*   USL5
-*   DE
-*   CN
+*   USL4 (Microsoft Cloud for US Government)
+*   USL5 (Microsoft Cloud for US Government)
+*   DE (Microsoft Cloud Germany)
+*   CN (Azure and Office 365 operated by 21Vianet in China)
 
 This will configure your client to use the correct Azure AD and Graph endpoints as per [https://docs.microsoft.com/en-us/graph/deployments](https://docs.microsoft.com/en-us/graph/deployments)
 
