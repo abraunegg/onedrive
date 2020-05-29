@@ -8,8 +8,7 @@ import util;
 static import log;
 
 // relevant inotify events
-private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE |
-	IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
+private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
 
 class MonitorException: ErrnoException
 {
@@ -232,7 +231,39 @@ final class Monitor
 			while (i < length) {
 				inotify_event *event = cast(inotify_event*) &buffer[i];
 				string path;
-
+				path = getPath(event);
+				
+				// inotify event debug
+				log.vdebug("inotify event wd: ", event.wd);
+				log.vdebug("inotify event mask: ", event.mask);
+				log.vdebug("inotify event cookie: ", event.cookie);
+				log.vdebug("inotify event len: ", event.len);
+				log.vdebug("inotify event name: ", event.name);
+				if (event.mask & IN_ACCESS) log.vdebug("inotify event flag: IN_ACCESS");
+				if (event.mask & IN_MODIFY) log.vdebug("inotify event flag: IN_MODIFY");
+				if (event.mask & IN_ATTRIB) log.vdebug("inotify event flag: IN_ATTRIB");
+				if (event.mask & IN_CLOSE_WRITE) log.vdebug("inotify event flag: IN_CLOSE_WRITE");
+				if (event.mask & IN_CLOSE_NOWRITE) log.vdebug("inotify event flag: IN_CLOSE_NOWRITE");
+				if (event.mask & IN_MOVED_FROM) log.vdebug("inotify event flag: IN_MOVED_FROM");
+				if (event.mask & IN_MOVED_TO) log.vdebug("inotify event flag: IN_MOVED_TO");
+				if (event.mask & IN_CREATE) log.vdebug("inotify event flag: IN_CREATE");
+				if (event.mask & IN_DELETE) log.vdebug("inotify event flag: IN_DELETE");
+				if (event.mask & IN_DELETE_SELF) log.vdebug("inotify event flag: IN_DELETE_SELF");
+				if (event.mask & IN_MOVE_SELF) log.vdebug("inotify event flag: IN_MOVE_SELF");
+				if (event.mask & IN_UNMOUNT) log.vdebug("inotify event flag: IN_UNMOUNT");
+				if (event.mask & IN_Q_OVERFLOW) log.vdebug("inotify event flag: IN_Q_OVERFLOW");
+				if (event.mask & IN_IGNORED) log.vdebug("inotify event flag: IN_IGNORED");
+				if (event.mask & IN_CLOSE) log.vdebug("inotify event flag: IN_CLOSE");
+				if (event.mask & IN_MOVE) log.vdebug("inotify event flag: IN_MOVE");
+				if (event.mask & IN_ONLYDIR) log.vdebug("inotify event flag: IN_ONLYDIR");
+				if (event.mask & IN_DONT_FOLLOW) log.vdebug("inotify event flag: IN_DONT_FOLLOW");
+				if (event.mask & IN_EXCL_UNLINK) log.vdebug("inotify event flag: IN_EXCL_UNLINK");
+				if (event.mask & IN_MASK_ADD) log.vdebug("inotify event flag: IN_MASK_ADD");
+				if (event.mask & IN_ISDIR) log.vdebug("inotify event flag: IN_ISDIR");
+				if (event.mask & IN_ONESHOT) log.vdebug("inotify event flag: IN_ONESHOT");
+				if (event.mask & IN_ALL_EVENTS) log.vdebug("inotify event flag: IN_ALL_EVENTS");
+				
+				// skip events that need to be ignored
 				if (event.mask & IN_IGNORED) {
 					// forget the directory associated to the watch descriptor
 					wdToDirName.remove(event.wd);
@@ -241,8 +272,7 @@ final class Monitor
 					throw new MonitorException("Inotify overflow, events missing");
 				}
 
-				// skip filtered items
-				path = getPath(event);
+				// skip events that should be excluded based on application configuration
 				if (selectiveSync.isDirNameExcluded(path.strip('.').strip('/'))) {
 					goto skip;
 				}
