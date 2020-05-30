@@ -2855,7 +2855,29 @@ final class SyncEngine
 				}
 				// skip unexisting symbolic links
 				else if (!exists(readLink(path))) {
-					log.log("Skipping item - invalid symbolic link: ", path);
+					// reading the symbolic link failed - is the link a relative symbolic link
+					//   drwxrwxr-x. 2 alex alex 46 May 30 09:16 .
+					//   drwxrwxr-x. 3 alex alex 35 May 30 09:14 ..
+					//   lrwxrwxrwx. 1 alex alex 61 May 30 09:16 absolute.txt -> /home/alex/OneDrivePersonal/link_tests/intercambio/prueba.txt
+					//   lrwxrwxrwx. 1 alex alex 13 May 30 09:16 relative.txt -> ../prueba.txt
+					//
+					// absolute links will be able to be read, but 'relative' links will fail, because they cannot be read based on the current working directory 'sync_dir'
+					string currentSyncDir = getcwd();
+					string fullLinkPath = buildNormalizedPath(absolutePath(path));
+					string fileName = baseName(fullLinkPath);
+					string parentLinkPath = dirName(fullLinkPath);
+					// test if this is a 'relative' symbolic link
+					chdir(parentLinkPath);
+					auto relativeLink = readLink(fileName);
+					auto relativeLinkTest = exists(readLink(fileName));
+					// reset back to our 'sync_dir'
+					chdir(currentSyncDir);
+					// results
+					if (relativeLink.startsWith("../") && relativeLinkTest) {
+						log.log("Skipping item - symbolic link is a 'relative link' to target ('", relativeLink, "') which is not supported: ", path);
+					} else {
+						log.log("Skipping item - invalid symbolic link: ", path);
+					}
 					return;
 				}
 			}
