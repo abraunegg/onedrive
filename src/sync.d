@@ -2874,11 +2874,11 @@ final class SyncEngine
 					chdir(currentSyncDir);
 					// results
 					if (relativeLink.startsWith("../") && relativeLinkTest) {
-						log.log("Skipping item - symbolic link is a 'relative link' to target ('", relativeLink, "') which is not supported: ", path);
+						log.vdebug("Not skipping item - symbolic link is a 'relative link' to target ('", relativeLink, "') which can be supported: ", path);
 					} else {
 						log.log("Skipping item - invalid symbolic link: ", path);
+						return;
 					}
-					return;
 				}
 			}
 			
