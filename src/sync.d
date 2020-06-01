@@ -2873,7 +2873,7 @@ final class SyncEngine
 					// reset back to our 'sync_dir'
 					chdir(currentSyncDir);
 					// results
-					if (relativeLink.startsWith("../") && relativeLinkTest) {
+					if (relativeLinkTest) {
 						log.vdebug("Not skipping item - symbolic link is a 'relative link' to target ('", relativeLink, "') which can be supported: ", path);
 					} else {
 						log.log("Skipping item - invalid symbolic link: ", path);
