@@ -5,9 +5,48 @@ Current national clouds that are supported are:
 *   Microsoft Cloud Germany
 *   Azure and Office 365 operated by 21Vianet in China
 
-To configure your client to utilise one of these national cloud deployments, configure your client in the following fashion:
+In order to sucessfully use these specific Microsoft Azure deployments, the following is required:
+1. Register an application with the Microsoft identity platform using the Azure portal
+2. Configure the new application with the appropriate authentication scopes
+3. Validate that the authentication / redirect URI is correct for your application registration
+4. Configure the onedrive client to use the new application id as provided during application registration
+5. Configure the onedrive client to use the right Microsoft Azure deployment region that your application was registered with
+6. Authenticate the client
 
-Add to your 'onedrive' configuration file (`~/.config/onedrive/config`) the following:
+## Step 1: Register a new application with Microsoft Azure
+1. Log into [Microsoft Azure](https://portal.azure.com/) with your applicable identity.
+2. Select 'Azure Active Directory' as the service you wish to configure
+3. Under 'Manage', select 'App registrations' to register a new application
+4. Click 'New registration'
+5. Type in the appropriate details required as per below
+6. Click 'Register'
+
+## Step 2: Configure application authentication scopes
+Configure the API permissions as per the following:
+
+## Step 3: Validate that the authentication / redirect URI is correct
+Add the appropriate redirect URI for your Azure deployment:
+
+Valid entries are one of:
+*   https://login.microsoftonline.us/common/oauth2/nativeclient
+*   https://login.microsoftonline.de/common/oauth2/nativeclient
+*   https://login.chinacloudapi.cn/common/oauth2/nativeclient
+
+## Step 4: Configure the onedrive client to use new application registration
+Update to your 'onedrive' configuration file (`~/.config/onedrive/config`) the following:
+```text
+application_id = "insert valid entry here"
+```
+
+This will reconfigure the client to use the new application registration you have created.
+
+**Example:**
+```text
+application_id = "22c49a0d-d21c-4792-aed1-8f163c982546"
+```
+
+## Step 5: Confgure the onedrive client to use the specific Microsoft Azure deployment
+Update to your 'onedrive' configuration file (`~/.config/onedrive/config`) the following:
 ```text
 azure_ad_endpoint = "insert valid entry here"
 ```
@@ -23,4 +62,33 @@ This will configure your client to use the correct Azure AD and Graph endpoints 
 **Example:**
 ```text
 azure_ad_endpoint = "USL4"
+```
+
+## Step 6: Authenticate the client
+Run the application without any additional command switches.
+
+You will be asked to open a specific URL by using your web browser where you will have to login into your Microsoft Account and give the application the permission to access your files. After giving permission to the application, you will be redirected to a blank page. Copy the URI of the blank page into the application.
+```text
+[user@hostname ~]$ onedrive 
+
+Authorize this app visiting:
+
+https://.....
+
+Enter the response uri: 
+
+```
+
+**Example:**
+```
+[user@hostname ~]$ onedrive 
+Authorize this app visiting:
+
+https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=22c49a0d-d21c-4792-aed1-8f163c982546&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
+
+Enter the response uri: https://login.microsoftonline.com/common/oauth2/nativeclient?code=<redacted>
+
+Application has been successfully authorised, however no additional command switches were provided.
+
+Please use --help for further assistance in regards to running this application.
 ```
