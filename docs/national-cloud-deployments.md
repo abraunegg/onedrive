@@ -31,6 +31,14 @@ In order to sucessfully use these specific Microsoft Azure deployments, the foll
 ## Step 2: Configure application authentication scopes
 Configure the API permissions as per the following:
 
+| API / Permissions name | Type | Description | Admin consent required |
+|---|---|---|---|
+| Files.ReadWrite | Delegated | Have full access to user files | No |
+| Files.ReadWrite.All  | Delegated | Have full access to all files user can access | No |
+| offline_access   | Delegated | Maintain access to data you have given it access to | No |
+| Sites.Read.All   | Delegated | Read items in all site collections | No |
+| Sites.ReadWrite.All   | Delegated | Edit or delete items in all site collections | No |
+
 ![authentication_scopes](./images/authentication_scopes.jpg)
 
 ## Step 3: Validate that the authentication / redirect URI is correct
