@@ -19,7 +19,10 @@ In order to sucessfully use these specific Microsoft Azure deployments, the foll
 3. Under 'Manage', select 'App registrations' to register a new application
 4. Click 'New registration'
 5. Type in the appropriate details required as per below
-6. Click 'Register'
+
+![application_registration](./images/application_registration.jpg)
+
+6. To save the application registration, click 'Register'
 
 ## Step 2: Configure application authentication scopes
 Configure the API permissions as per the following:
