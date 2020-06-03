@@ -22,9 +22,11 @@ In order to sucessfully use these specific Microsoft Azure deployments, the foll
 
 ![application_registration](./images/application_registration.jpg)
 
-6. To save the application registration, click 'Register' and the following will be displayed:
+6. To save the application registration, click 'Register' and something similar to the following will be displayed:
 
 ![application_registration_done](./images/application_registration_done.jpg)
+
+**Note:** The Application (client) ID UUID as displayed after client registration, is what is required as the 'application_id' for Step 4 below.
 
 ## Step 2: Configure application authentication scopes
 Configure the API permissions as per the following:
@@ -36,10 +38,10 @@ Add the appropriate redirect URI for your Azure deployment:
 
 ![authentication_response_uri](./images/authentication_response_uri.jpg)
 
-Valid entries are one of:
-*   https://login.microsoftonline.us/common/oauth2/nativeclient
-*   https://login.microsoftonline.de/common/oauth2/nativeclient
-*   https://login.chinacloudapi.cn/common/oauth2/nativeclient
+A valid entry for the response URI should be one of:
+*   https://login.microsoftonline.us/common/oauth2/nativeclient (Microsoft Cloud for US Government)
+*   https://login.microsoftonline.de/common/oauth2/nativeclient (Microsoft Cloud Germany)
+*   https://login.chinacloudapi.cn/common/oauth2/nativeclient (Azure and Office 365 operated by 21Vianet in China)
 
 ## Step 4: Configure the onedrive client to use new application registration
 Update to your 'onedrive' configuration file (`~/.config/onedrive/config`) the following:
