@@ -64,7 +64,7 @@ azure_ad_endpoint = "insert valid entry here"
 
 Valid entries are:
 *   USL4 (Microsoft Cloud for US Government)
-*   USL5 (Microsoft Cloud for US Government)
+*   USL5 (Microsoft Cloud for US Government - DOD)
 *   DE (Microsoft Cloud Germany)
 *   CN (Azure and Office 365 operated by 21Vianet in China)
 
