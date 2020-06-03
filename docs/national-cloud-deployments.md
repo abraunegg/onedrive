@@ -18,17 +18,23 @@ In order to sucessfully use these specific Microsoft Azure deployments, the foll
 2. Select 'Azure Active Directory' as the service you wish to configure
 3. Under 'Manage', select 'App registrations' to register a new application
 4. Click 'New registration'
-5. Type in the appropriate details required as per below
+5. Type in the appropriate details required as per below:
 
 ![application_registration](./images/application_registration.jpg)
 
-6. To save the application registration, click 'Register'
+6. To save the application registration, click 'Register' and the following will be displayed:
+
+![application_registration_done](./images/application_registration_done.jpg)
 
 ## Step 2: Configure application authentication scopes
 Configure the API permissions as per the following:
 
+![authentication_scopes](./images/authentication_scopes.jpg)
+
 ## Step 3: Validate that the authentication / redirect URI is correct
 Add the appropriate redirect URI for your Azure deployment:
+
+![authentication_response_uri](./images/authentication_response_uri.jpg)
 
 Valid entries are one of:
 *   https://login.microsoftonline.us/common/oauth2/nativeclient
