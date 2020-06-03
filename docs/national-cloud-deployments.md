@@ -14,7 +14,7 @@ In order to sucessfully use these specific Microsoft Azure deployments, the foll
 6. Authenticate the client
 
 ## Step 1: Register a new application with Microsoft Azure
-1. Log into [Microsoft Azure](https://portal.azure.com/) with your applicable identity.
+1. Log into [Microsoft Azure](https://portal.azure.com/) with your applicable identity
 2. Select 'Azure Active Directory' as the service you wish to configure
 3. Under 'Manage', select 'App registrations' to register a new application
 4. Click 'New registration'
