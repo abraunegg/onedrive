@@ -8,7 +8,7 @@ This project has been packaged for the following Linux distributions:
 *   Debian, available from the package repository as [onedrive](https://packages.debian.org/sid/net/onedrive)
 *   Slackware, available from the slackbuilds.org repository as [onedrive](https://slackbuilds.org/repository/14.2/network/onedrive/)
 *   Solus, available from the package repository as [onedrive](https://dev.getsol.us/search/query/FB7PIf1jG9Z9/#R)
-*   NixOS, available on unstable channel (and stable since 20.03). Use package `onedrive` either by adding it to `configuration.nix` or by using the command `nix-env -iA <channel name>.onedrive`. This does not install a service. There is a (rejected) [PR](https://github.com/NixOS/nixpkgs/pull/77734) which has code which can be used to install a service. See documentation in the same PR.
+*   NixOS, available on unstable channel (and stable since 20.03). Use package `onedrive` either by adding it to `configuration.nix` or by using the command `nix-env -iA <channel name>.onedrive`. This does not install a service. There is a [PR](https://github.com/NixOS/nixpkgs/pull/77734) (which needs work) which has code which can be used to install a service. See documentation in the same PR.
 
 #### Important Note:
 Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If a package is out of date, please contact the package maintainer for resolution.
