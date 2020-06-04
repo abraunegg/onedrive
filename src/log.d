@@ -173,7 +173,7 @@ private void logfileWriteLine(T...)(T args)
 		logFile = File(logFileNameAlternate, "a");
 	} 
 	// Write to the log file
-	logFile.writeln(timeString, " ", args);
+	logFile.writeln(timeString, "\t", args);
 	logFile.close();
 }
 
