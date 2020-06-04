@@ -196,7 +196,7 @@ final class Config
 				log.vlog("No user or system config file found, using application defaults");
 				return true;
 			} else {
-				// 'user' configuration file exists
+				// 'system' configuration file exists
 				// can we load the configuration file without error?
 				if (load(systemConfigFilePath)) {
 					// configuration file loaded without error
