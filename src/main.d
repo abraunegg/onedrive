@@ -865,7 +865,7 @@ int main(string[] args)
 				//   [M] Item moved: random_files/2eVPInOMTFNXzRXeNMEoJch5OR9XpGby -> target/2eVPInOMTFNXzRXeNMEoJch5OR9XpGby
 				//   Moving random_files/2eVPInOMTFNXzRXeNMEoJch5OR9XpGby to target/2eVPInOMTFNXzRXeNMEoJch5OR9XpGby
 				//   Skipping uploading this new file as parent path is not in the database: target/2eVPInOMTFNXzRXeNMEoJch5OR9XpGby
-				// 'target' should be in the DB, it should also exist online, but because of --resync, it does not exist locally
+				// 'target' should be in the DB, it should also exist online, but because of --resync, it does not exist in the database thus parent check fails
 				if ((currTime - lastCheckTime > checkInterval) || (monitorLoopFullCount == 0)) {
 					// monitor sync loop
 					logOutputMessage = "################################################## NEW LOOP ##################################################";
