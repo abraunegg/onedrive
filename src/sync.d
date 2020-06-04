@@ -1169,10 +1169,13 @@ final class SyncEngine
 							// oneDriveFullScanTrigger should be false unless set by actions on OneDrive and only if sync_list or skip_dir is used
 							log.vdebug("performFullItemScan or oneDriveFullScanTrigger = true");
 							// full scan was requested or triggered
-							log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being requested");
-							// unset now the full scan trigger if set
+							// use the right message
 							if (oneDriveFullScanTrigger) {
+								log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being triggered by actions on OneDrive");
+								// unset now the full scan trigger if set
 								unsetOneDriveFullScanTrigger();
+							} else {
+								log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being requested");
 							}
 						} else {
 							// standard message
