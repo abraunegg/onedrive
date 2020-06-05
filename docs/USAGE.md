@@ -238,7 +238,11 @@ Configuration is determined by three layers: the default values, values set in t
 
 Most command line options have a respective configuration file setting.
 
-If you want to change the defaults, you can copy and edit the included config file into your `~/.config/onedrive` directory:
+If you want to change the defaults, you can copy and edit the included config file into your configuration directory. Valid directories for the config file are:
+*   `~/.config/onedrive`
+*   `/etc/onedrive`
+
+**Example:**
 ```text
 mkdir -p ~/.config/onedrive
 cp ./config ~/.config/onedrive/config
