@@ -19,10 +19,12 @@ final class Config
 	public string syncListFilePath = "";
 	public string homePath = "";
 	public string configDirName = "";
+	public string systemConfigDirName = "";
 	public string configFileSyncDir = "";
 	public string configFileSkipFile = "";
 	public string configFileSkipDir = "";
 	private string userConfigFilePath = "";
+	private string systemConfigFilePath = "";
 	// was the application just authorised - paste of response uri
 	public bool applicationAuthorizeResponseUri = false;
 	// hashmap for the values found in the user config file
@@ -122,6 +124,7 @@ final class Config
 		
 		// Determine the correct configuration directory to use
 		string configDirBase;
+		string systemConfigDirBase;
 		if (confdirOption != "") {
 			// A CLI 'confdir' was passed in
 			log.vdebug("configDirName: CLI override to set configDirName to: ", confdirOption);
@@ -141,6 +144,8 @@ final class Config
 				// XDG_CONFIG_HOME does not exist on systems where X11 is not present - ie - headless systems / servers
 				log.vdebug("configDirBase: WARNING - no XDG_CONFIG_HOME environment variable set");
 				configDirBase = homePath ~ "/.config";
+				// Also set up a path to pre-shipped shared configs (which can be overridden by supplying a config file in userspace)
+				systemConfigDirBase = "/etc";
 			}
 	
 			// Output configDirBase calculation
@@ -149,12 +154,15 @@ final class Config
 			log.vdebug("configDirName: Configuring application to use default config path");
 			// configDirBase contains the correct path so we do not need to check for presence of '~'
 			configDirName = configDirBase ~ "/onedrive";
+			// systemConfigDirBase contains the correct path so we do not need to check for presence of '~'
+			systemConfigDirName = systemConfigDirBase ~ "/onedrive";
 		}
 		
 		// Config directory options all determined
-		// configDirName has a trailing /
-		log.vlog("Using Config Dir: ", configDirName);
 		if (!exists(configDirName)) mkdirRecurse(configDirName);
+		// configDirName has a trailing /
+		log.vlog("Using 'user' Config Dir: ", configDirName);
+		log.vlog("Using 'system' Config Dir: ", systemConfigDirName);
 		
 		// Update application set variables based on configDirName
 		refreshTokenFilePath = buildNormalizedPath(configDirName ~ "/refresh_token");
@@ -164,6 +172,7 @@ final class Config
 		uploadStateFilePath = buildNormalizedPath(configDirName ~ "/resume_upload");
 		userConfigFilePath = buildNormalizedPath(configDirName ~ "/config");
 		syncListFilePath = buildNormalizedPath(configDirName ~ "/sync_list");
+		systemConfigFilePath = buildNormalizedPath(systemConfigDirName ~ "/config");
 		
 		// Debug Output for application set variables based on configDirName
 		log.vdebug("refreshTokenFilePath = ", refreshTokenFilePath);
@@ -173,17 +182,34 @@ final class Config
 		log.vdebug("uploadStateFilePath = ", uploadStateFilePath);
 		log.vdebug("userConfigFilePath = ", userConfigFilePath);
 		log.vdebug("syncListFilePath = ", syncListFilePath);
+		log.vdebug("systemConfigFilePath = ", systemConfigFilePath);
 	}
 
 	bool initialize()
 	{
 		// Initialise the application
 		if (!exists(userConfigFilePath)) {
-			// configuration file does not exist
-			log.vlog("No config file found, using application defaults");
-			return true;
+			// 'user' configuration file does not exist
+			// Is there a system configuration file?
+			if (!exists(systemConfigFilePath)) {
+				// 'system' configuration file does not exist
+				log.vlog("No user or system config file found, using application defaults");
+				return true;
+			} else {
+				// 'system' configuration file exists
+				// can we load the configuration file without error?
+				if (load(systemConfigFilePath)) {
+					// configuration file loaded without error
+					log.log("System configuration file successfully loaded");
+					return true;
+				} else {
+					// there was a problem loading the configuration file
+					log.log("System configuration file has errors - please check your configuration");
+					return false;
+				}
+			}
 		} else {
-			// configuration file exists
+			// 'user' configuration file exists
 			// can we load the configuration file without error?
 			if (load(userConfigFilePath)) {
 				// configuration file loaded without error
