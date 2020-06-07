@@ -2275,11 +2275,6 @@ final class SyncEngine
 		log.vlog("Uploading new items of ", path);
 		// Filesystem walk to find new files not uploaded
 		uploadNewItems(path);
-		// clean up idsToDelete only if --dry-run is set
-		if (dryRun) {
-			idsToDelete.length = 0;
-			assumeSafeAppend(idsToDelete);
-		}
 	}
 	
 	private void uploadDifferences(const ref Item item)
