@@ -407,7 +407,18 @@ final class OneDriveApi
 		}
 		return get(url);
 	}
-
+	
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_list_children
+	JSONValue listChildren(const(char)[] driveId, const(char)[] id)
+	{
+		checkAccessTokenExpired();
+		const(char)[] url;
+		// configure URL to query
+		url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/children";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		return get(url);
+	}
+	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
 	void downloadById(const(char)[] driveId, const(char)[] id, string saveToPath, long fileSize)
 	{

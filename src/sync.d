@@ -715,6 +715,7 @@ final class SyncEngine
 		string syncFolderChildPath;
 		string deltaLink;
 		string deltaLinkAvailable;
+		bool nationalCloudChildrenScan = false;
 		
 		// Query the name of this folder id
 		try {
@@ -925,207 +926,220 @@ final class SyncEngine
 			}
 			// what path id are we going to query?
 			log.vdebug("path idToQuery = ", idToQuery);
-			
-			// query for changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
-			try {
-				// Fetch the changes relative to the path id we want to query
-				// changes with or without deltaLink
-				changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
-				if (changes.type() == JSONType.object) {
-					log.vdebug("Query 'changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)' performed successfully");
-				}
-			} catch (OneDriveException e) {
-				// OneDrive threw an error
-				log.vdebug("------------------------------------------------------------------");
-				log.vdebug("Query Error: changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)");
-				log.vdebug("driveId: ", driveId);
-				log.vdebug("idToQuery: ", idToQuery);
-				log.vdebug("deltaLink: ", deltaLink);
-				
-				// HTTP request returned status code 404 (Not Found)
-				if (e.httpStatusCode == 404) {
-					// Stop application
-					log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
-					log.log("The item id to query was not found on OneDrive");
-					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
-					return;
-				}
-				
-				// HTTP request returned status code 410 (The requested resource is no longer available at the server)
-				if (e.httpStatusCode == 410) {
-					log.vdebug("Delta link expired for 'onedrive.viewChangesById(driveId, idToQuery, deltaLink)', setting 'deltaLink = null'");
-					deltaLink = null;
-					continue;
-				}
-				
-				// HTTP request returned status code 429 (Too Many Requests)
-				if (e.httpStatusCode == 429) {
-					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-					handleOneDriveThrottleRequest();
-					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query changes from OneDrive using deltaLink");
-				}
-				
-				// HTTP request returned status code 500 (Internal Server Error)
-				if (e.httpStatusCode == 500) {
-					// display what the error is
-					displayOneDriveErrorMessage(e.msg);
-					return;
-				}
-				
-				// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
-				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
-					// If an error is returned when querying 'changes' and we recall the original function, we go into a never ending loop where the sync never ends
-					// re-try the specific changes queries	
-					if (e.httpStatusCode == 504) {
-						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
-						log.vdebug("changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink) previously threw an error - retrying");
-						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-						Thread.sleep(dur!"seconds"(30));
-						log.vdebug("Retrying Query - using original deltaLink after delay");
-					}
-					// re-try original request - retried for 429 and 504
-					try {
-						log.vdebug("Retrying Query: changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)");
-						changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
-						log.vdebug("Query 'changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)' performed successfully on re-try");
-					} catch (OneDriveException e) {
-						// display what the error is
-						log.vdebug("Query Error: changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink) on re-try after delay");
-						if (e.httpStatusCode == 504) {
-							log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
-							log.vdebug("changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink) previously threw an error - retrying with empty deltaLink");
-							try {
-								// try query with empty deltaLink value
-								deltaLink = null;
-								changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
-								log.vdebug("Query 'changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)' performed successfully on re-try");
-							} catch (OneDriveException e) {
-								// Tried 3 times, give up
-								displayOneDriveErrorMessage(e.msg);
-								return;
-							}
-						} else {
-							// error was not a 504 this time
-							displayOneDriveErrorMessage(e.msg);
-							return;
-						}
-					}
-				} else {
-					// Default operation if not 404, 410, 429, 500 or 504 errors
-					// display what the error is
-					displayOneDriveErrorMessage(e.msg);
-					return;
-				}
-			}
-			
-			// query for changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
-			try {
-				// Fetch the changes relative to the path id we want to query
-				// changes based on deltaLink
-				changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
-				if (changesAvailable.type() == JSONType.object) {
-					log.vdebug("Query 'changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)' performed successfully");
-				}
-			} catch (OneDriveException e) {
-				// OneDrive threw an error
-				log.vdebug("------------------------------------------------------------------");
-				log.vdebug("Query Error: changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)");
-				log.vdebug("driveId: ", driveId);
-				log.vdebug("idToQuery: ", idToQuery);
-				log.vdebug("deltaLink: ", deltaLink);
-				
-				// HTTP request returned status code 404 (Not Found)
-				if (e.httpStatusCode == 404) {
-					// Stop application
-					log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
-					log.log("The item id to query was not found on OneDrive");
-					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
-					return;
-				}
-				
-				// HTTP request returned status code 410 (The requested resource is no longer available at the server)
-				if (e.httpStatusCode == 410) {
-					log.vdebug("Delta link expired for 'onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)', setting 'deltaLinkAvailable = null'");
-					deltaLinkAvailable = null;
-					continue;
-				}
-				
-				// HTTP request returned status code 429 (Too Many Requests)
-				if (e.httpStatusCode == 429) {
-					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-					handleOneDriveThrottleRequest();
-					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query changes from OneDrive using deltaLink");
-				}
-				
-				// HTTP request returned status code 500 (Internal Server Error)
-				if (e.httpStatusCode == 500) {
-					// display what the error is
-					displayOneDriveErrorMessage(e.msg);
-					return;
-				}
-				
-				// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
-				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
-					// If an error is returned when querying 'changes' and we recall the original function, we go into a never ending loop where the sync never ends
-					// re-try the specific changes queries	
-					if (e.httpStatusCode == 504) {
-						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
-						log.vdebug("changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying");
-						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-						Thread.sleep(dur!"seconds"(30));
-						log.vdebug("Retrying Query - using original deltaLink after delay");
-					}
-					// re-try original request - retried for 429 and 504
-					try {
-						log.vdebug("Retrying Query: changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)");
-						changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
-						log.vdebug("Query 'changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
-					} catch (OneDriveException e) {
-						// display what the error is
-						log.vdebug("Query Error: changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable) on re-try after delay");
-						if (e.httpStatusCode == 504) {
-							log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
-							log.vdebug("changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying with empty deltaLinkAvailable");
-							try {
-								// try query with empty deltaLinkAvailable value
-								deltaLinkAvailable = null;
-								changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
-								log.vdebug("Query 'changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
-							} catch (OneDriveException e) {
-								// Tried 3 times, give up
-								displayOneDriveErrorMessage(e.msg);
-								return;
-							}
-						} else {
-							// error was not a 504 this time
-							displayOneDriveErrorMessage(e.msg);
-							return;
-						}
-					}
-				} else {
-					// Default operation if not 404, 410, 429, 500 or 504 errors
-					// display what the error is
-					displayOneDriveErrorMessage(e.msg);
-					return;
-				}
-			}
-			
-			// is changesAvailable a valid JSON response
 			long deltaChanges = 0;
-			if (changesAvailable.type() == JSONType.object) {
-				// are there any delta changes?
-				if (("value" in changesAvailable) != null) {
-					deltaChanges = count(changesAvailable["value"].array);
-					log.vdebug("changesAvailable query reports that there are " , deltaChanges , " changes that need processing on OneDrive");
+			
+			// What query do we use?
+			// National Cloud Deployments (US and DE) do not support /delta as a query
+			// https://docs.microsoft.com/en-us/graph/deployments#supported-features
+			string azureConfigValue = cfg.getValueString("azure_ad_endpoint");
+			if ((azureConfigValue == "")||(azureConfigValue == "USL5")||(azureConfigValue == "DE")) {
+				// have to query /children rather than /delta
+				nationalCloudChildrenScan = true;
+				// we have to 'build' our own JSON response that looks like /delta
+				changes = generateDeltaResponse(driveId, idToQuery);
+				
+			} else {
+			
+				// query for changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
+				try {
+					// Fetch the changes relative to the path id we want to query
+					// changes with or without deltaLink
+					changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
+					if (changes.type() == JSONType.object) {
+						log.vdebug("Query 'changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)' performed successfully");
+					}
+				} catch (OneDriveException e) {
+					// OneDrive threw an error
+					log.vdebug("------------------------------------------------------------------");
+					log.vdebug("Query Error: changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)");
+					log.vdebug("driveId: ", driveId);
+					log.vdebug("idToQuery: ", idToQuery);
+					log.vdebug("deltaLink: ", deltaLink);
+					
+					// HTTP request returned status code 404 (Not Found)
+					if (e.httpStatusCode == 404) {
+						// Stop application
+						log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
+						log.log("The item id to query was not found on OneDrive");
+						log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
+						return;
+					}
+					
+					// HTTP request returned status code 410 (The requested resource is no longer available at the server)
+					if (e.httpStatusCode == 410) {
+						log.vdebug("Delta link expired for 'onedrive.viewChangesById(driveId, idToQuery, deltaLink)', setting 'deltaLink = null'");
+						deltaLink = null;
+						continue;
+					}
+					
+					// HTTP request returned status code 429 (Too Many Requests)
+					if (e.httpStatusCode == 429) {
+						// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+						handleOneDriveThrottleRequest();
+						log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query changes from OneDrive using deltaLink");
+					}
+					
+					// HTTP request returned status code 500 (Internal Server Error)
+					if (e.httpStatusCode == 500) {
+						// display what the error is
+						displayOneDriveErrorMessage(e.msg);
+						return;
+					}
+					
+					// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
+					if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
+						// If an error is returned when querying 'changes' and we recall the original function, we go into a never ending loop where the sync never ends
+						// re-try the specific changes queries	
+						if (e.httpStatusCode == 504) {
+							log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
+							log.vdebug("changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink) previously threw an error - retrying");
+							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+							Thread.sleep(dur!"seconds"(30));
+							log.vdebug("Retrying Query - using original deltaLink after delay");
+						}
+						// re-try original request - retried for 429 and 504
+						try {
+							log.vdebug("Retrying Query: changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)");
+							changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
+							log.vdebug("Query 'changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)' performed successfully on re-try");
+						} catch (OneDriveException e) {
+							// display what the error is
+							log.vdebug("Query Error: changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink) on re-try after delay");
+							if (e.httpStatusCode == 504) {
+								log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
+								log.vdebug("changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink) previously threw an error - retrying with empty deltaLink");
+								try {
+									// try query with empty deltaLink value
+									deltaLink = null;
+									changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
+									log.vdebug("Query 'changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)' performed successfully on re-try");
+								} catch (OneDriveException e) {
+									// Tried 3 times, give up
+									displayOneDriveErrorMessage(e.msg);
+									return;
+								}
+							} else {
+								// error was not a 504 this time
+								displayOneDriveErrorMessage(e.msg);
+								return;
+							}
+						}
+					} else {
+						// Default operation if not 404, 410, 429, 500 or 504 errors
+						// display what the error is
+						displayOneDriveErrorMessage(e.msg);
+						return;
+					}
+				}
+				
+				// query for changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
+				try {
+					// Fetch the changes relative to the path id we want to query
+					// changes based on deltaLink
+					changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
+					if (changesAvailable.type() == JSONType.object) {
+						log.vdebug("Query 'changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)' performed successfully");
+					}
+				} catch (OneDriveException e) {
+					// OneDrive threw an error
+					log.vdebug("------------------------------------------------------------------");
+					log.vdebug("Query Error: changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)");
+					log.vdebug("driveId: ", driveId);
+					log.vdebug("idToQuery: ", idToQuery);
+					log.vdebug("deltaLink: ", deltaLink);
+					
+					// HTTP request returned status code 404 (Not Found)
+					if (e.httpStatusCode == 404) {
+						// Stop application
+						log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
+						log.log("The item id to query was not found on OneDrive");
+						log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
+						return;
+					}
+					
+					// HTTP request returned status code 410 (The requested resource is no longer available at the server)
+					if (e.httpStatusCode == 410) {
+						log.vdebug("Delta link expired for 'onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)', setting 'deltaLinkAvailable = null'");
+						deltaLinkAvailable = null;
+						continue;
+					}
+					
+					// HTTP request returned status code 429 (Too Many Requests)
+					if (e.httpStatusCode == 429) {
+						// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+						handleOneDriveThrottleRequest();
+						log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query changes from OneDrive using deltaLink");
+					}
+					
+					// HTTP request returned status code 500 (Internal Server Error)
+					if (e.httpStatusCode == 500) {
+						// display what the error is
+						displayOneDriveErrorMessage(e.msg);
+						return;
+					}
+					
+					// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
+					if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
+						// If an error is returned when querying 'changes' and we recall the original function, we go into a never ending loop where the sync never ends
+						// re-try the specific changes queries	
+						if (e.httpStatusCode == 504) {
+							log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
+							log.vdebug("changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying");
+							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+							Thread.sleep(dur!"seconds"(30));
+							log.vdebug("Retrying Query - using original deltaLink after delay");
+						}
+						// re-try original request - retried for 429 and 504
+						try {
+							log.vdebug("Retrying Query: changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)");
+							changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
+							log.vdebug("Query 'changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
+						} catch (OneDriveException e) {
+							// display what the error is
+							log.vdebug("Query Error: changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable) on re-try after delay");
+							if (e.httpStatusCode == 504) {
+								log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
+								log.vdebug("changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying with empty deltaLinkAvailable");
+								try {
+									// try query with empty deltaLinkAvailable value
+									deltaLinkAvailable = null;
+									changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
+									log.vdebug("Query 'changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
+								} catch (OneDriveException e) {
+									// Tried 3 times, give up
+									displayOneDriveErrorMessage(e.msg);
+									return;
+								}
+							} else {
+								// error was not a 504 this time
+								displayOneDriveErrorMessage(e.msg);
+								return;
+							}
+						}
+					} else {
+						// Default operation if not 404, 410, 429, 500 or 504 errors
+						// display what the error is
+						displayOneDriveErrorMessage(e.msg);
+						return;
+					}
+				}
+				
+				// is changesAvailable a valid JSON response
+				if (changesAvailable.type() == JSONType.object) {
+					// are there any delta changes?
+					if (("value" in changesAvailable) != null) {
+						deltaChanges = count(changesAvailable["value"].array);
+						log.vdebug("changesAvailable query reports that there are " , deltaChanges , " changes that need processing on OneDrive");
+					}
 				}
 			}
 			
 			// is changes a valid JSON response
 			if (changes.type() == JSONType.object) {
 				// Are there any changes to process?
-				if ((("value" in changes) != null) && ((deltaChanges > 0) || (oneDriveFullScanTrigger))) {
+				if ((("value" in changes) != null) && ((deltaChanges > 0) || (oneDriveFullScanTrigger) ||(nationalCloudChildrenScan))) {
 					auto nrChanges = count(changes["value"].array);
 					auto changeCount = 0;
 					
@@ -4652,5 +4666,84 @@ final class SyncEngine
 		
 		// Reset retry-after value to zero as we have used this value now and it may be changed in the future to a different value
 		onedrive.resetRetryAfterValue();
+	}
+	
+	// Generage a /delta compatible response when using National Azure AD deployments that do not support /delta queries
+	// see: https://docs.microsoft.com/en-us/graph/deployments#supported-features
+	JSONValue generateDeltaResponse(const(char)[] driveId, const(char)[] idToQuery) {
+		// JSON value which will be responded with
+		JSONValue deltaResponse;
+		
+		// initial data
+		JSONValue rootData;
+		JSONValue topLevelChildren;
+		JSONValue[] childrenData;
+		
+		// query root data
+		rootData = onedrive.getDefaultRoot();
+		// add root to array
+		childrenData ~= rootData;
+		
+		// query top level children
+		topLevelChildren = onedrive.listChildren(driveId, idToQuery);
+		// process top level children
+		foreach (child; topLevelChildren["value"].array) {
+			// add this child to the array of objects
+			childrenData ~= child;
+			// is this child a folder?
+			if (isItemFolder(child)){
+				// We have to query this folders children if childCount > 0
+				if (child["folder"]["childCount"].integer > 0){
+					// This child folder has children
+					string childDriveToQuery = child["parentReference"]["driveId"].str;
+					string childIdToQuery = child["id"].str;
+					JSONValue[] grandChildrenData = queryForChildren(childDriveToQuery, childIdToQuery);
+					foreach (grandChild; grandChildrenData.array) {
+						// add the grandchild to the array
+						childrenData ~= grandChild;
+					}
+				}
+			}
+		}
+		
+		// craft response from all returned elements
+		deltaResponse = [
+						"@odata.context": JSONValue("https://graph.microsoft.com/v1.0/$metadata#Collection(driveItem)"),
+						"value": JSONValue(childrenData.array)
+						];
+		
+		// return response
+		return deltaResponse;
+	}
+	
+	// query child for children
+	JSONValue[] queryForChildren(const(char)[] driveId, const(char)[] idToQuery) {
+		
+		JSONValue thisLevelChildren;
+		JSONValue[] thisLevelChildrenData;
+	
+		thisLevelChildren = onedrive.listChildren(driveId, idToQuery);
+		
+		// process this level children
+		foreach (child; thisLevelChildren["value"].array) {
+			// add this child to the array of objects
+			thisLevelChildrenData ~= child;
+			// is this child a folder?
+			if (isItemFolder(child)){
+				// We have to query this folders children if childCount > 0
+				if (child["folder"]["childCount"].integer > 0){
+					// This child folder has children
+					string childDriveToQuery = child["parentReference"]["driveId"].str;
+					string childIdToQuery = child["id"].str;
+					JSONValue[] grandChildrenData = queryForChildren(childDriveToQuery, childIdToQuery);
+					foreach (grandChild; grandChildrenData.array) {
+						// add the grandchild to the array
+						thisLevelChildrenData ~= grandChild;
+					}
+				}
+			}
+		}
+		// return response
+		return thisLevelChildrenData;
 	}
 }
