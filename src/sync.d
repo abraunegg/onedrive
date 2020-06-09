@@ -4833,7 +4833,7 @@ final class SyncEngine
 			}
 			
 			// process top level children
-			log.vlog("Adding ", count(topLevelChildren["value"].array), " OneDrive items for processing");
+			log.vlog("Adding ", count(topLevelChildren["value"].array), " OneDrive items for processing from OneDrive root");
 			foreach (child; topLevelChildren["value"].array) {
 				// add this child to the array of objects
 				childrenData ~= child;
@@ -4842,9 +4842,11 @@ final class SyncEngine
 					// We have to query this folders children if childCount > 0
 					if (child["folder"]["childCount"].integer > 0){
 						// This child folder has children
-						string childDriveToQuery = child["parentReference"]["driveId"].str;
 						string childIdToQuery = child["id"].str;
-						JSONValue[] grandChildrenData = queryForChildren(childDriveToQuery, childIdToQuery);
+						string childDriveToQuery = child["parentReference"]["driveId"].str;
+						auto childParentPath = child["parentReference"]["path"].str.split(":");
+						string folderPathToScan = childParentPath[1] ~ "/" ~ child["name"].str;
+						JSONValue[] grandChildrenData = queryForChildren(childDriveToQuery, childIdToQuery, folderPathToScan);
 						foreach (grandChild; grandChildrenData.array) {
 							// add the grandchild to the array
 							childrenData ~= grandChild;
@@ -4852,15 +4854,14 @@ final class SyncEngine
 					}
 				}
 			}
-			// is there a nextLink identifier to process?
+			// If a collection exceeds the default page size (200 items), the @odata.nextLink property is returned in the response 
+			// to indicate more items are available and provide the request URL for the next page of items.
 			if ("@odata.nextLink" in topLevelChildren) {
 				// Update nextLink to next changeSet bundle
 				log.vdebug("Setting nextLink to (@odata.nextLink): ", nextLink);
 				nextLink = topLevelChildren["@odata.nextLink"].str;
-			}
-			else break;
+			} else break;
 		}
-		
 		
 		// craft response from all returned elements
 		deltaResponse = [
@@ -4873,7 +4874,7 @@ final class SyncEngine
 	}
 	
 	// query child for children
-	JSONValue[] queryForChildren(const(char)[] driveId, const(char)[] idToQuery) {
+	JSONValue[] queryForChildren(const(char)[] driveId, const(char)[] idToQuery, const(char)[] childParentPath) {
 		// function variables
 		JSONValue thisLevelChildren;
 		JSONValue[] thisLevelChildrenData;
@@ -4941,7 +4942,9 @@ final class SyncEngine
 			}
 			
 			// process this level children
-			log.vlog("Adding ", count(thisLevelChildren["value"].array), " OneDrive items for processing");
+			if (!childParentPath.empty) {
+				log.vlog("Adding ", count(thisLevelChildren["value"].array), " OneDrive items for processing from ", childParentPath);
+			}
 			foreach (child; thisLevelChildren["value"].array) {
 				// add this child to the array of objects
 				thisLevelChildrenData ~= child;
@@ -4950,9 +4953,11 @@ final class SyncEngine
 					// We have to query this folders children if childCount > 0
 					if (child["folder"]["childCount"].integer > 0){
 						// This child folder has children
-						string childDriveToQuery = child["parentReference"]["driveId"].str;
 						string childIdToQuery = child["id"].str;
-						JSONValue[] grandChildrenData = queryForChildren(childDriveToQuery, childIdToQuery);
+						string childDriveToQuery = child["parentReference"]["driveId"].str;
+						auto grandchildParentPath = child["parentReference"]["path"].str.split(":");
+						string folderPathToScan = grandchildParentPath[1] ~ "/" ~ child["name"].str;
+						JSONValue[] grandChildrenData = queryForChildren(childDriveToQuery, childIdToQuery, folderPathToScan);
 						foreach (grandChild; grandChildrenData.array) {
 							// add the grandchild to the array
 							thisLevelChildrenData ~= grandChild;
@@ -4960,13 +4965,13 @@ final class SyncEngine
 					}
 				}
 			}
-			// is there a nextLink identifier to process?
+			// If a collection exceeds the default page size (200 items), the @odata.nextLink property is returned in the response 
+			// to indicate more items are available and provide the request URL for the next page of items.
 			if ("@odata.nextLink" in thisLevelChildren) {
 				// Update nextLink to next changeSet bundle
 				log.vdebug("Setting nextLink to (@odata.nextLink): ", nextLink);
 				nextLink = thisLevelChildren["@odata.nextLink"].str;
-			}
-			else break;
+			} else break;
 		}
 		
 		// return response
