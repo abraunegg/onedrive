@@ -4747,31 +4747,20 @@ final class SyncEngine
 			rootData = onedrive.getDefaultRoot();
 		} catch (OneDriveException e) {
 			log.vdebug("oneDriveRootDetails = onedrive.getDefaultRoot() generated a OneDriveException");
-			if (e.httpStatusCode == 400) {
-				// OneDrive responded with 400 error: Bad Request
-				displayOneDriveErrorMessage(e.msg);
-				// Check this
-				if (cfg.getValueString("drive_id").length) {
-					log.error("\nERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
-				}
-				// Must exit here
-				exit(-1);
-			}
-			if (e.httpStatusCode == 401) {
-				// HTTP request returned status code 401 (Unauthorized)
-				displayOneDriveErrorMessage(e.msg);
-				log.error("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
-				// Must exit here
-				exit(-1);
-			}
-			if (e.httpStatusCode == 429) {
+			// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
+			if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
 				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-				handleOneDriveThrottleRequest();
+				if (e.httpStatusCode == 429) {
+					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - retrying applicable request");
+					handleOneDriveThrottleRequest();
+				}
+				if (e.httpStatusCode == 504) {
+					log.vdebug("Retrying original request that generated the HTTP 504 (Gateway Timeout) - retrying applicable request");
+					Thread.sleep(dur!"seconds"(30));
+				}
 				// Retry original request by calling function again to avoid replicating any further error handling
-				log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling onedrive.getDefaultRoot()");
 				rootData = onedrive.getDefaultRoot();
-			}
-			if (e.httpStatusCode >= 500) {
+			} else {
 				// There was a HTTP 5xx Server Side Error
 				displayOneDriveErrorMessage(e.msg);
 				// Must exit here
