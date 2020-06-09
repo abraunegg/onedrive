@@ -4841,6 +4841,7 @@ final class SyncEngine
 		}
 		
 		// process top level children
+		log.vlog("Adding ", count(topLevelChildren["value"].array), " OneDrive items for processing");
 		foreach (child; topLevelChildren["value"].array) {
 			// add this child to the array of objects
 			childrenData ~= child;
@@ -4936,6 +4937,7 @@ final class SyncEngine
 		}
 		
 		// process this level children
+		log.vlog("Adding ", count(thisLevelChildren["value"].array), " OneDrive items for processing");
 		foreach (child; thisLevelChildren["value"].array) {
 			// add this child to the array of objects
 			thisLevelChildrenData ~= child;
