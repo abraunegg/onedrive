@@ -4741,6 +4741,7 @@ final class SyncEngine
 		JSONValue rootData;
 		JSONValue topLevelChildren;
 		JSONValue[] childrenData;
+		string nextLink;
 		
 		// Get Default Root
 		try {
@@ -4770,85 +4771,96 @@ final class SyncEngine
 		// add root JSON data to array
 		childrenData ~= rootData;
 		
-		// query top level children
-		try {
-			topLevelChildren = onedrive.listChildren(driveId, idToQuery);
-		} catch (OneDriveException e) {
-			// OneDrive threw an error
-			log.vdebug("------------------------------------------------------------------");
-			log.vdebug("Query Error: topLevelChildren = onedrive.listChildren(driveId, idToQuery)");
-			log.vdebug("driveId: ", driveId);
-			log.vdebug("idToQuery: ", idToQuery);
-			
-			// HTTP request returned status code 404 (Not Found)
-			if (e.httpStatusCode == 404) {
-				// Stop application
-				log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
-				log.log("The item id to query was not found on OneDrive");
-				log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
-			}
-			
-			// HTTP request returned status code 429 (Too Many Requests)
-			if (e.httpStatusCode == 429) {
-				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-				handleOneDriveThrottleRequest();
-				log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query OneDrive drive children");
-			}
-			
-			// HTTP request returned status code 500 (Internal Server Error)
-			if (e.httpStatusCode == 500) {
-				// display what the error is
-				displayOneDriveErrorMessage(e.msg);
-			}
-			
-			// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
-			if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
-				// re-try the specific changes queries	
-				if (e.httpStatusCode == 504) {
-					log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query OneDrive drive children - retrying applicable request");
-					log.vdebug("topLevelChildren = onedrive.listChildren(driveId, idToQuery) previously threw an error - retrying");
-					// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-					log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-					Thread.sleep(dur!"seconds"(30));
+		for (;;) {
+			// query top level children
+			try {
+				topLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink);
+			} catch (OneDriveException e) {
+				// OneDrive threw an error
+				log.vdebug("------------------------------------------------------------------");
+				log.vdebug("Query Error: topLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink)");
+				log.vdebug("driveId: ", driveId);
+				log.vdebug("idToQuery: ", idToQuery);
+				log.vdebug("nextLink: ", nextLink);
+				
+				// HTTP request returned status code 404 (Not Found)
+				if (e.httpStatusCode == 404) {
+					// Stop application
+					log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
+					log.log("The item id to query was not found on OneDrive");
+					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
 				}
-				// re-try original request - retried for 429 and 504
-				try {
-					log.vdebug("Retrying Query: topLevelChildren = onedrive.listChildren(driveId, idToQuery)");
-					topLevelChildren = onedrive.listChildren(driveId, idToQuery);
-					log.vdebug("Query 'topLevelChildren = onedrive.listChildren(driveId, idToQuery)' performed successfully on re-try");
-				} catch (OneDriveException e) {
+				
+				// HTTP request returned status code 429 (Too Many Requests)
+				if (e.httpStatusCode == 429) {
+					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+					handleOneDriveThrottleRequest();
+					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query OneDrive drive children");
+				}
+				
+				// HTTP request returned status code 500 (Internal Server Error)
+				if (e.httpStatusCode == 500) {
 					// display what the error is
-					log.vdebug("Query Error: topLevelChildren = onedrive.listChildren(driveId, idToQuery) on re-try after delay");
-					// error was not a 504 this time
 					displayOneDriveErrorMessage(e.msg);
 				}
-			} else {
-				// Default operation if not 404, 410, 429, 500 or 504 errors
-				// display what the error is
-				displayOneDriveErrorMessage(e.msg);
+				
+				// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
+				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
+					// re-try the specific changes queries	
+					if (e.httpStatusCode == 504) {
+						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query OneDrive drive children - retrying applicable request");
+						log.vdebug("topLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink) previously threw an error - retrying");
+						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+						Thread.sleep(dur!"seconds"(30));
+					}
+					// re-try original request - retried for 429 and 504
+					try {
+						log.vdebug("Retrying Query: topLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink)");
+						topLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink);
+						log.vdebug("Query 'topLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink)' performed successfully on re-try");
+					} catch (OneDriveException e) {
+						// display what the error is
+						log.vdebug("Query Error: topLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink) on re-try after delay");
+						// error was not a 504 this time
+						displayOneDriveErrorMessage(e.msg);
+					}
+				} else {
+					// Default operation if not 404, 410, 429, 500 or 504 errors
+					// display what the error is
+					displayOneDriveErrorMessage(e.msg);
+				}
 			}
-		}
-		
-		// process top level children
-		log.vlog("Adding ", count(topLevelChildren["value"].array), " OneDrive items for processing");
-		foreach (child; topLevelChildren["value"].array) {
-			// add this child to the array of objects
-			childrenData ~= child;
-			// is this child a folder?
-			if (isItemFolder(child)){
-				// We have to query this folders children if childCount > 0
-				if (child["folder"]["childCount"].integer > 0){
-					// This child folder has children
-					string childDriveToQuery = child["parentReference"]["driveId"].str;
-					string childIdToQuery = child["id"].str;
-					JSONValue[] grandChildrenData = queryForChildren(childDriveToQuery, childIdToQuery);
-					foreach (grandChild; grandChildrenData.array) {
-						// add the grandchild to the array
-						childrenData ~= grandChild;
+			
+			// process top level children
+			log.vlog("Adding ", count(topLevelChildren["value"].array), " OneDrive items for processing");
+			foreach (child; topLevelChildren["value"].array) {
+				// add this child to the array of objects
+				childrenData ~= child;
+				// is this child a folder?
+				if (isItemFolder(child)){
+					// We have to query this folders children if childCount > 0
+					if (child["folder"]["childCount"].integer > 0){
+						// This child folder has children
+						string childDriveToQuery = child["parentReference"]["driveId"].str;
+						string childIdToQuery = child["id"].str;
+						JSONValue[] grandChildrenData = queryForChildren(childDriveToQuery, childIdToQuery);
+						foreach (grandChild; grandChildrenData.array) {
+							// add the grandchild to the array
+							childrenData ~= grandChild;
+						}
 					}
 				}
 			}
+			// is there a nextLink identifier to process?
+			if ("@odata.nextLink" in topLevelChildren) {
+				// Update nextLink to next changeSet bundle
+				log.vdebug("Setting nextLink to (@odata.nextLink): ", nextLink);
+				nextLink = topLevelChildren["@odata.nextLink"].str;
+			}
+			else break;
 		}
+		
 		
 		// craft response from all returned elements
 		deltaResponse = [
@@ -4865,86 +4877,98 @@ final class SyncEngine
 		// function variables
 		JSONValue thisLevelChildren;
 		JSONValue[] thisLevelChildrenData;
+		string nextLink;
 
-		// query children
-		try {
-			thisLevelChildren = onedrive.listChildren(driveId, idToQuery);
-		} catch (OneDriveException e) {
-			// OneDrive threw an error
-			log.vdebug("------------------------------------------------------------------");
-			log.vdebug("Query Error: thisLevelChildren = onedrive.listChildren(driveId, idToQuery)");
-			log.vdebug("driveId: ", driveId);
-			log.vdebug("idToQuery: ", idToQuery);
-			
-			// HTTP request returned status code 404 (Not Found)
-			if (e.httpStatusCode == 404) {
-				// Stop application
-				log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
-				log.log("The item id to query was not found on OneDrive");
-				log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
-			}
-			
-			// HTTP request returned status code 429 (Too Many Requests)
-			if (e.httpStatusCode == 429) {
-				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-				handleOneDriveThrottleRequest();
-				log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query OneDrive drive children");
-			}
-			
-			// HTTP request returned status code 500 (Internal Server Error)
-			if (e.httpStatusCode == 500) {
-				// display what the error is
-				displayOneDriveErrorMessage(e.msg);
-			}
-			
-			// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
-			if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
-				// re-try the specific changes queries	
-				if (e.httpStatusCode == 504) {
-					log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query OneDrive drive children - retrying applicable request");
-					log.vdebug("thisLevelChildren = onedrive.listChildren(driveId, idToQuery) previously threw an error - retrying");
-					// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-					log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-					Thread.sleep(dur!"seconds"(30));
+		for (;;) {
+			// query children
+			try {
+				thisLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink);
+			} catch (OneDriveException e) {
+				// OneDrive threw an error
+				log.vdebug("------------------------------------------------------------------");
+				log.vdebug("Query Error: thisLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink)");
+				log.vdebug("driveId: ", driveId);
+				log.vdebug("idToQuery: ", idToQuery);
+				log.vdebug("nextLink: ", nextLink);
+				
+				// HTTP request returned status code 404 (Not Found)
+				if (e.httpStatusCode == 404) {
+					// Stop application
+					log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
+					log.log("The item id to query was not found on OneDrive");
+					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
 				}
-				// re-try original request - retried for 429 and 504
-				try {
-					log.vdebug("Retrying Query: thisLevelChildren = onedrive.listChildren(driveId, idToQuery)");
-					thisLevelChildren = onedrive.listChildren(driveId, idToQuery);
-					log.vdebug("Query 'thisLevelChildren = onedrive.listChildren(driveId, idToQuery)' performed successfully on re-try");
-				} catch (OneDriveException e) {
+				
+				// HTTP request returned status code 429 (Too Many Requests)
+				if (e.httpStatusCode == 429) {
+					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+					handleOneDriveThrottleRequest();
+					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query OneDrive drive children");
+				}
+				
+				// HTTP request returned status code 500 (Internal Server Error)
+				if (e.httpStatusCode == 500) {
 					// display what the error is
-					log.vdebug("Query Error: thisLevelChildren = onedrive.listChildren(driveId, idToQuery) on re-try after delay");
-					// error was not a 504 this time
 					displayOneDriveErrorMessage(e.msg);
 				}
-			} else {
-				// Default operation if not 404, 410, 429, 500 or 504 errors
-				// display what the error is
-				displayOneDriveErrorMessage(e.msg);
+				
+				// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
+				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
+					// re-try the specific changes queries	
+					if (e.httpStatusCode == 504) {
+						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query OneDrive drive children - retrying applicable request");
+						log.vdebug("thisLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink) previously threw an error - retrying");
+						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+						Thread.sleep(dur!"seconds"(30));
+					}
+					// re-try original request - retried for 429 and 504
+					try {
+						log.vdebug("Retrying Query: thisLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink)");
+						thisLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink);
+						log.vdebug("Query 'thisLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink)' performed successfully on re-try");
+					} catch (OneDriveException e) {
+						// display what the error is
+						log.vdebug("Query Error: thisLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink) on re-try after delay");
+						// error was not a 504 this time
+						displayOneDriveErrorMessage(e.msg);
+					}
+				} else {
+					// Default operation if not 404, 410, 429, 500 or 504 errors
+					// display what the error is
+					displayOneDriveErrorMessage(e.msg);
+				}
 			}
-		}
-		
-		// process this level children
-		log.vlog("Adding ", count(thisLevelChildren["value"].array), " OneDrive items for processing");
-		foreach (child; thisLevelChildren["value"].array) {
-			// add this child to the array of objects
-			thisLevelChildrenData ~= child;
-			// is this child a folder?
-			if (isItemFolder(child)){
-				// We have to query this folders children if childCount > 0
-				if (child["folder"]["childCount"].integer > 0){
-					// This child folder has children
-					string childDriveToQuery = child["parentReference"]["driveId"].str;
-					string childIdToQuery = child["id"].str;
-					JSONValue[] grandChildrenData = queryForChildren(childDriveToQuery, childIdToQuery);
-					foreach (grandChild; grandChildrenData.array) {
-						// add the grandchild to the array
-						thisLevelChildrenData ~= grandChild;
+			
+			// process this level children
+			log.vlog("Adding ", count(thisLevelChildren["value"].array), " OneDrive items for processing");
+			foreach (child; thisLevelChildren["value"].array) {
+				// add this child to the array of objects
+				thisLevelChildrenData ~= child;
+				// is this child a folder?
+				if (isItemFolder(child)){
+					// We have to query this folders children if childCount > 0
+					if (child["folder"]["childCount"].integer > 0){
+						// This child folder has children
+						string childDriveToQuery = child["parentReference"]["driveId"].str;
+						string childIdToQuery = child["id"].str;
+						JSONValue[] grandChildrenData = queryForChildren(childDriveToQuery, childIdToQuery);
+						foreach (grandChild; grandChildrenData.array) {
+							// add the grandchild to the array
+							thisLevelChildrenData ~= grandChild;
+						}
 					}
 				}
 			}
+			// is there a nextLink identifier to process?
+			if ("@odata.nextLink" in thisLevelChildren) {
+				// Update nextLink to next changeSet bundle
+				log.vdebug("Setting nextLink to (@odata.nextLink): ", nextLink);
+				nextLink = thisLevelChildren["@odata.nextLink"].str;
+			}
+			else break;
 		}
+		
 		// return response
 		return thisLevelChildrenData;
 	}

@@ -409,13 +409,17 @@ final class OneDriveApi
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_list_children
-	JSONValue listChildren(const(char)[] driveId, const(char)[] id)
+	JSONValue listChildren(const(char)[] driveId, const(char)[] id, const(char)[] nextLink)
 	{
 		checkAccessTokenExpired();
 		const(char)[] url;
 		// configure URL to query
-		url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/children";
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		if (nextLink.empty) {
+			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/children";
+			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		} else {
+			url = nextLink;
+		}
 		return get(url);
 	}
 	
