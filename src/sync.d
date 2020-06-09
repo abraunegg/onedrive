@@ -932,7 +932,7 @@ final class SyncEngine
 			// National Cloud Deployments (US and DE) do not support /delta as a query
 			// https://docs.microsoft.com/en-us/graph/deployments#supported-features
 			string azureConfigValue = cfg.getValueString("azure_ad_endpoint");
-			if ((azureConfigValue == "")||(azureConfigValue == "USL5")||(azureConfigValue == "DE")) {
+			if ((azureConfigValue == "USL4")||(azureConfigValue == "USL5")||(azureConfigValue == "DE")) {
 				// have to query /children rather than /delta
 				nationalCloudChildrenScan = true;
 				// we have to 'build' our own JSON response that looks like /delta
