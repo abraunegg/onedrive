@@ -26,12 +26,13 @@ struct Item {
 	string   quickXorHash;
 	string   remoteDriveId;
 	string   remoteId;
+	string   syncStatus;
 }
 
 final class ItemDatabase
 {
 	// increment this for every change in the db schema
-	immutable int itemDatabaseVersion = 9;
+	immutable int itemDatabaseVersion = 10;
 
 	Database db;
 	string insertItemStmt;
@@ -83,12 +84,12 @@ final class ItemDatabase
 		db.exec("PRAGMA auto_vacuum = FULL");
 		
 		insertItemStmt = "
-			INSERT OR REPLACE INTO item (driveId, id, name, type, eTag, cTag, mtime, parentId, crc32Hash, sha1Hash, quickXorHash, remoteDriveId, remoteId)
-			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+			INSERT OR REPLACE INTO item (driveId, id, name, type, eTag, cTag, mtime, parentId, crc32Hash, sha1Hash, quickXorHash, remoteDriveId, remoteId, syncStatus)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
 		";
 		updateItemStmt = "
 			UPDATE item
-			SET name = ?3, type = ?4, eTag = ?5, cTag = ?6, mtime = ?7, parentId = ?8, crc32Hash = ?9, sha1Hash = ?10, quickXorHash = ?11, remoteDriveId = ?12, remoteId = ?13
+			SET name = ?3, type = ?4, eTag = ?5, cTag = ?6, mtime = ?7, parentId = ?8, crc32Hash = ?9, sha1Hash = ?10, quickXorHash = ?11, remoteDriveId = ?12, remoteId = ?13, syncStatus = ?14
 			WHERE driveId = ?1 AND id = ?2
 		";
 		selectItemByIdStmt = "
@@ -117,6 +118,7 @@ final class ItemDatabase
 				remoteDriveId    TEXT,
 				remoteId         TEXT,
 				deltaLink        TEXT,
+				syncStatus       TEXT,
 				PRIMARY KEY (driveId, id),
 				FOREIGN KEY (driveId, parentId)
 				REFERENCES item (driveId, id)
@@ -300,13 +302,14 @@ final class ItemDatabase
 			bind(11, quickXorHash);
 			bind(12, remoteDriveId);
 			bind(13, remoteId);
+			bind(14, syncStatus);
 		}
 	}
 
 	private Item buildItem(Statement.Result result)
 	{
 		assert(!result.empty, "The result must not be empty");
-		assert(result.front.length == 14, "The result must have 14 columns");
+		assert(result.front.length == 15, "The result must have 15 columns");
 		Item item = {
 			driveId: result.front[0].dup,
 			id: result.front[1].dup,
@@ -319,7 +322,8 @@ final class ItemDatabase
 			sha1Hash: result.front[9].dup,
 			quickXorHash: result.front[10].dup,
 			remoteDriveId: result.front[11].dup,
-			remoteId: result.front[12].dup
+			remoteId: result.front[12].dup,
+			syncStatus: result.front[14].dup
 		};
 		switch (result.front[3]) {
 			case "file":    item.type = ItemType.file;    break;
@@ -416,5 +420,29 @@ final class ItemDatabase
 		stmt.bind(2, id);
 		stmt.bind(3, deltaLink);
 		stmt.exec();
+	}
+	
+	// National Cloud Deployments (US and DE) do not support /delta as a query
+	// We need to track in the database that this item is in sync
+	// As we query /children to get all children from OneDrive, update anything in the database 
+	// to be flagged as not-in-sync, thus, we can use that flag to determing what was previously
+	// in-sync, but now deleted on OneDrive
+	void downgradeSyncStatusFlag()
+	{
+		db.exec("UPDATE item SET syncStatus = 'N'");
+	}
+	
+	// National Cloud Deployments (US and DE) do not support /delta as a query
+	// Select items that have a out-of-sync flag set
+	Item[] selectOutOfSyncItems()
+	{
+		Item[] items;
+		auto stmt = db.prepare("SELECT * FROM item WHERE syncStatus = 'N'");
+		auto res = stmt.exec();
+		while (!res.empty) {
+			items ~= buildItem(res);
+			res.step();
+		}
+		return items;
 	}
 }

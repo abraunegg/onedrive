@@ -171,6 +171,13 @@ private Item makeItem(const ref JSONValue driveItem)
 		item.remoteDriveId = driveItem["remoteItem"]["parentReference"]["driveId"].str;
 		item.remoteId = driveItem["remoteItem"]["id"].str;
 	}
+	
+	// National Cloud Deployments (US and DE) do not support /delta as a query
+	// Thus we need to track in the database that this item is in sync
+	// As we are making an item, set the syncStatus to Y
+	// ONLY when using a National Cloud Deployment, all the existing DB entries will get set to N
+	// so when processing /children, it can be identified what the 'deleted' difference is
+	item.syncStatus = "Y";
 
 	return item;
 }
@@ -241,6 +248,8 @@ final class SyncEngine
 	// is bypass_data_preservation set via config file
 	// Local data loss MAY occur in this scenario
 	private bool bypassDataPreservation = false;
+	// is National Cloud Deployments configured
+	private bool nationalCloudDeployment = true;
 
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
@@ -490,6 +499,13 @@ final class SyncEngine
 	{
 		bypassDataPreservation = true;
 		log.vdebug("Setting bypassDataPreservation = true");
+	}
+	
+	// set nationalCloudDeployment to true
+	void setNationalCloudDeployment()
+	{
+		nationalCloudDeployment = true;
+		log.vdebug("Setting nationalCloudDeployment = true");
 	}
 	
 	// download all new changes from OneDrive
@@ -931,11 +947,12 @@ final class SyncEngine
 			// What query do we use?
 			// National Cloud Deployments (US and DE) do not support /delta as a query
 			// https://docs.microsoft.com/en-us/graph/deployments#supported-features
-			string azureConfigValue = cfg.getValueString("azure_ad_endpoint");
-			// are we running against a National Cloud Deployments that does not support /delta
-			if ((azureConfigValue == "USL4")||(azureConfigValue == "USL5")||(azureConfigValue == "DE")) {
+			// Are we running against a National Cloud Deployments that does not support /delta
+			if (nationalCloudDeployment) {
 				// have to query /children rather than /delta
 				nationalCloudChildrenScan = true;
+				// Before we get any data, flag any object in the database as out of sync
+				itemdb.downgradeSyncStatusFlag();
 				try {
 					// we have to 'build' our own JSON response that looks like /delta
 					changes = generateDeltaResponse(driveId, idToQuery);
@@ -1104,6 +1121,11 @@ final class SyncEngine
 					changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable);
 					if (changesAvailable.type() == JSONType.object) {
 						log.vdebug("Query 'changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)' performed successfully");
+						// are there any delta changes?
+						if (("value" in changesAvailable) != null) {
+							deltaChanges = count(changesAvailable["value"].array);
+							log.vdebug("changesAvailable query reports that there are " , deltaChanges , " changes that need processing on OneDrive");
+						}
 					}
 				} catch (OneDriveException e) {
 					// OneDrive threw an error
@@ -1187,15 +1209,6 @@ final class SyncEngine
 						// display what the error is
 						displayOneDriveErrorMessage(e.msg);
 						return;
-					}
-				}
-				
-				// is changesAvailable a valid JSON response
-				if (changesAvailable.type() == JSONType.object) {
-					// are there any delta changes?
-					if (("value" in changesAvailable) != null) {
-						deltaChanges = count(changesAvailable["value"].array);
-						log.vdebug("changesAvailable query reports that there are " , deltaChanges , " changes that need processing on OneDrive");
 					}
 				}
 			}
@@ -2317,6 +2330,27 @@ final class SyncEngine
 	// scan the given directory for differences and new items
 	void scanForDifferences(const(string) path)
 	{
+		// Are we configured to use a National Cloud Deployment
+		// Any entry in the DB than is flagged as out-of-sync needs to be cleaned up locally first before we scan the entire DB
+		// Normally, this is done at the end of processing all /delta queries, but National Cloud Deployments (US and DE) do not support /delta as a query
+		if (nationalCloudDeployment) {
+			// Select items that have a out-of-sync flag set
+			Item[] outOfSyncItems = itemdb.selectOutOfSyncItems();
+			foreach (item; outOfSyncItems) {
+				if (!dryRun) {
+					// clean up idsToDelete
+					idsToDelete.length = 0;
+					assumeSafeAppend(idsToDelete);
+					// flag to delete local file as it now is no longer in sync with OneDrive
+					log.vdebug("Flagging to delete local item as it now is no longer in sync with OneDrive");
+					log.vdebug("item: ", item);
+					idsToDelete ~= [item.driveId, item.id];	
+					// delete items in idsToDelete
+					if (idsToDelete.length > 0) deleteItems();
+				}
+			}
+		}
+		
 		// scan for changes in the path provided
 		log.vlog("Uploading differences of ", path);
 		Item item;
@@ -4769,6 +4803,7 @@ final class SyncEngine
 			}
 		}
 		// add root JSON data to array
+		log.vlog("Adding OneDrive root details for processing");
 		childrenData ~= rootData;
 		
 		for (;;) {
