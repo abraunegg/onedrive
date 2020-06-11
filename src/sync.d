@@ -2372,6 +2372,27 @@ final class SyncEngine
 	// scan the given directory for differences only - for use with --monitor
 	void scanForDifferencesDatabaseScan(const(string) path)
 	{
+		// Are we configured to use a National Cloud Deployment
+		// Any entry in the DB than is flagged as out-of-sync needs to be cleaned up locally first before we scan the entire DB
+		// Normally, this is done at the end of processing all /delta queries, but National Cloud Deployments (US and DE) do not support /delta as a query
+		if (nationalCloudDeployment) {
+			// Select items that have a out-of-sync flag set
+			Item[] outOfSyncItems = itemdb.selectOutOfSyncItems();
+			foreach (item; outOfSyncItems) {
+				if (!dryRun) {
+					// clean up idsToDelete
+					idsToDelete.length = 0;
+					assumeSafeAppend(idsToDelete);
+					// flag to delete local file as it now is no longer in sync with OneDrive
+					log.vdebug("Flagging to delete local item as it now is no longer in sync with OneDrive");
+					log.vdebug("item: ", item);
+					idsToDelete ~= [item.driveId, item.id];	
+					// delete items in idsToDelete
+					if (idsToDelete.length > 0) deleteItems();
+				}
+			}
+		}
+		
 		// scan for changes in the path provided
 		log.vlog("Uploading differences of ", path);
 		Item item;
