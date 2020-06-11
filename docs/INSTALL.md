@@ -130,7 +130,7 @@ sudo update-alternatives --install "/usr/bin/ld" "ld" "/usr/bin/ld.gold" 20
 sudo update-alternatives --install "/usr/bin/ld" "ld" "/usr/bin/ld.bfd" 10
 ```
 
-### Dependencies: Ubuntu 18.x, Ubuntu 19.x / Debian 9, Debian 10 - x86_64
+### Dependencies: Ubuntu 18.x, Ubuntu 19.x, Ubuntu 20.x / Debian 9, Debian 10 - x86_64
 ```text
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
