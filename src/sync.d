@@ -249,7 +249,7 @@ final class SyncEngine
 	// Local data loss MAY occur in this scenario
 	private bool bypassDataPreservation = false;
 	// is National Cloud Deployments configured
-	private bool nationalCloudDeployment = true;
+	private bool nationalCloudDeployment = false;
 
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
