@@ -2243,19 +2243,40 @@ final class SyncEngine
 		log.vlog("Uploading differences of ", path);
 		Item item;
 		if (itemdb.selectByPath(path, defaultDriveId, item)) {
+			// Database scan of every item in DB, does it still exist on disk in the location the DB thinks it is
 			uploadDifferences(item);
 		}
 		
 		log.vlog("Uploading new items of ", path);
+		// Filesystem walk to find new files not uploaded
 		uploadNewItems(path);
-		
 		// clean up idsToDelete only if --dry-run is set
 		if (dryRun) {
 			idsToDelete.length = 0;
 			assumeSafeAppend(idsToDelete);
 		}
 	}
-
+	
+	// scan the given directory for differences only - for use with --monitor
+	void scanForDifferencesDatabaseScan(const(string) path)
+	{
+		// scan for changes in the path provided
+		log.vlog("Uploading differences of ", path);
+		Item item;
+		if (itemdb.selectByPath(path, defaultDriveId, item)) {
+			// Database scan of every item in DB, does it still exist on disk in the location the DB thinks it is
+			uploadDifferences(item);
+		}
+	}
+	
+	// scan the given directory for new items - for use with --monitor
+	void scanForDifferencesFilesystemScan(const(string) path)
+	{
+		log.vlog("Uploading new items of ", path);
+		// Filesystem walk to find new files not uploaded
+		uploadNewItems(path);
+	}
+	
 	private void uploadDifferences(const ref Item item)
 	{
 		// see if this item.id we were supposed to have deleted
@@ -2342,12 +2363,19 @@ final class SyncEngine
 			// Directory does not exist locally
 			// If we are in a --dry-run situation - this directory may never have existed as we never downloaded it
 			if (!dryRun) {
-				log.vlog("The directory has been deleted locally");
-				if (noRemoteDelete) {
-					// do not process remote directory delete
-					log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+				// Not --dry-run situation
+				if (!cfg.getValueBool("monitor")) {
+					// Not in --monitor mode
+					log.vlog("The directory has been deleted locally");
+					if (noRemoteDelete) {
+						// do not process remote directory delete
+						log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+					} else {
+						uploadDeleteItem(item, path);
+					}	
 				} else {
-					uploadDeleteItem(item, path);
+					// Appropriate message as we are in --monitor mode
+					log.vlog("The directory appears to have been deleted locally .. but we are running in --monitor mode. This may have been 'moved' rather than 'deleted'");
 				}
 			} else {
 				// we are in a --dry-run situation, directory appears to have deleted locally - this directory may never have existed as we never downloaded it ..
@@ -2750,12 +2778,17 @@ final class SyncEngine
 			// If we are in a --dry-run situation - this file may never have existed as we never downloaded it
 			if (!dryRun) {
 				// Not --dry-run situation
-				log.vlog("The file has been deleted locally");
-				if (noRemoteDelete) {
-					// do not process remote file delete
-					log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
+				if (!cfg.getValueBool("monitor")) {
+					log.vlog("The file has been deleted locally");
+					if (noRemoteDelete) {
+						// do not process remote file delete
+						log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
+					} else {
+						uploadDeleteItem(item, path);
+					}
 				} else {
-					uploadDeleteItem(item, path);
+					// Appropriate message as we are in --monitor mode
+					log.vlog("The file appears to have been deleted locally .. but we are running in --monitor mode. This may have been 'moved' rather than 'deleted'");
 				}
 			} else {
 				// We are in a --dry-run situation, file appears to have deleted locally - this file may never have existed as we never downloaded it ..
