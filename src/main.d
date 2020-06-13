@@ -36,6 +36,7 @@ int main(string[] args)
 	string previousBusinessSharedFoldersHash;
 	string businessSharedFoldersHashFile;
 	bool configOptionsDifferent = false;
+	bool businessSharedFoldersDifferent = false;
 	bool syncListConfigured = false;
 	bool syncListDifferent = false;
 	bool syncDirDifferent = false;
@@ -773,18 +774,16 @@ int main(string[] args)
 	// Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?	
 	if (cfg.getValueString("get_o365_drive_id") != "") {
 		sync.querySiteCollectionForDriveID(cfg.getValueString("get_o365_drive_id"));
-		// Exit, no sync
-		oneDrive.http.shutdown();
-		destroy(itemDb);
+		// Exit application 
+		// Use exit scopes to shutdown API
 		return EXIT_SUCCESS;
 	}
 	
 	// Are we obtaining the URL path for a synced file?
 	if (cfg.getValueString("get_file_link") != "") {
 		sync.queryOneDriveForFileURL(cfg.getValueString("get_file_link"), syncDir);
-		// Exit, no sync
-		oneDrive.http.shutdown();
-		destroy(itemDb);
+		// Exit application 
+		// Use exit scopes to shutdown API
 		return EXIT_SUCCESS;
 	}
 	
@@ -797,9 +796,8 @@ int main(string[] args)
 		} else {
 			log.error("ERROR: Unsupported account type for listing OneDrive Business Shared Folders");
 		}
-		// Exit, no sync
-		oneDrive.http.shutdown();
-		destroy(itemDb);
+		// Exit application 
+		// Use exit scopes to shutdown API
 		return EXIT_SUCCESS;
 	}
 	
