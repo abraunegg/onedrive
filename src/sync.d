@@ -97,13 +97,11 @@ private bool hasSha1Hash(const ref JSONValue item)
 	return ("sha1Hash" in item["file"]["hashes"]) != null;
 }
 
-private bool isDotFile(string path)
+private bool isDotFile(const(string) path)
 {
 	// always allow the root
 	if (path == ".") return false;
-	
-	path = buildNormalizedPath(path);
-	auto paths = pathSplitter(path);
+	auto paths = pathSplitter(buildNormalizedPath(path));
 	foreach(base; paths) {
 		if (startsWith(base, ".")){
 			return true;
@@ -177,7 +175,7 @@ private Item makeItem(const ref JSONValue driveItem)
 	return item;
 }
 
-private bool testFileHash(string path, const ref Item item)
+private bool testFileHash(const(string) path, const ref Item item)
 {
 	if (item.crc32Hash) {
 		if (item.crc32Hash == computeCrc32(path)) return true;
@@ -240,9 +238,12 @@ final class SyncEngine
 	private bool syncListConfigured = false;
 	// sync_list new folder added, trigger delta scan override
 	private bool oneDriveFullScanTrigger = false;
-	// array of all OneDrive driveId's
+	// is bypass_data_preservation set via config file
+	// Local data loss MAY occur in this scenario
+	private bool bypassDataPreservation = false;
+	// array of all OneDrive driveId's for use with OneDrive Business Folders
 	private string[] driveIDsArray;
-
+	
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
 		assert(onedrive && itemdb && selectiveSync);
@@ -370,8 +371,20 @@ final class SyncEngine
 			
 			// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
 			if (remainingFreeSpace <= 0) {
-				// quota details not available
-				log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+				// free space is <= 0  .. why ?
+				if ("remaining" in oneDriveDetails["quota"]){
+					// json response contained a 'remaining' value
+					log.error("ERROR: OneDrive account currently has zero space available. Please free up some space online.");
+				} else {
+					// json response was missing a 'remaining' value
+					if (accountType == "personal"){
+						log.error("ERROR: OneDrive quota information is missing. Potentially your OneDrive account currently has zero space available. Please free up some space online.");
+					} else {
+						// quota details not available
+						log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+					}				
+				}
+				// flag to not perform quota checks
 				log.error("ERROR: Flagging to disable upload space checks - this MAY have undesirable results if a file cannot be uploaded due to out of space.");
 				quotaAvailable = false;
 			}
@@ -481,6 +494,13 @@ final class SyncEngine
 	{
 		syncListConfigured = true;
 		log.vdebug("Setting syncListConfigured = true");
+	}
+	
+	// set bypassDataPreservation to true
+	void setBypassDataPreservation()
+	{
+		bypassDataPreservation = true;
+		log.vdebug("Setting bypassDataPreservation = true");
 	}
 	
 	// download all new changes from OneDrive
@@ -611,7 +631,7 @@ final class SyncEngine
 	}
 
 	// download all new changes from a specified folder on OneDrive
-	void applyDifferencesSingleDirectory(string path)
+	void applyDifferencesSingleDirectory(const(string) path)
 	{
 		// Ensure we check the 'right' location for this directory on OneDrive
 		// It could come from the following places:
@@ -749,7 +769,7 @@ final class SyncEngine
 	}
 	
 	// create a directory on OneDrive without syncing
-	auto createDirectoryNoSync(string path)
+	auto createDirectoryNoSync(const(string) path)
 	{
 		// Attempt to create the requested path within OneDrive without performing a sync
 		log.vlog("Attempting to create the requested path within OneDrive");
@@ -759,7 +779,7 @@ final class SyncEngine
 	}
 	
 	// delete a directory on OneDrive without syncing
-	auto deleteDirectoryNoSync(string path)
+	auto deleteDirectoryNoSync(const(string) path)
 	{
 		// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
 		const(char)[] rootId = defaultRootId;
@@ -846,14 +866,18 @@ final class SyncEngine
 	private void applyDifferences(string driveId, const(char)[] id, bool performFullItemScan)
 	{
 		log.vlog("Applying changes of Path ID: " ~ id);
+		// function variables
+		const(char)[] idToQuery;
 		JSONValue changes;
 		JSONValue changesAvailable;
-		
-		// Query the name of this folder id
+		JSONValue idDetails;
 		string syncFolderName;
 		string syncFolderPath;
 		string syncFolderChildPath;
-		JSONValue idDetails = parseJSON("{}");
+		string deltaLink;
+		string deltaLinkAvailable;
+		
+		// Query the name of this folder id
 		try {
 			idDetails = onedrive.getPathDetailsById(driveId, id);
 		} catch (OneDriveException e) {
@@ -1011,8 +1035,7 @@ final class SyncEngine
 		// Control this via performFullItemScan
 		
 		// Get the current delta link
-		string deltaLink = "";
-		string deltaLinkAvailable = itemdb.getDeltaLink(driveId, id);
+		deltaLinkAvailable = itemdb.getDeltaLink(driveId, id);
 		// if sync_list is not configured, syncListConfigured should be false
 		log.vdebug("syncListConfigured = ", syncListConfigured);
 		// oneDriveFullScanTrigger should be false unless set by actions on OneDrive and only if sync_list or skip_dir is used
@@ -1032,16 +1055,18 @@ final class SyncEngine
 		if (!performFullItemScan){
 			// performFullItemScan == false
 			// use delta link
-			deltaLink = deltaLinkAvailable;
 			log.vdebug("performFullItemScan is false, using the deltaLink as per database entry");
 			if (deltaLinkAvailable == ""){
+				deltaLink = "";
 				log.vdebug("deltaLink was requested to be used, but contains no data - resulting API query will be treated as a full scan of OneDrive");
 			} else {
+				deltaLink = deltaLinkAvailable;
 				log.vdebug("deltaLink contains valid data - resulting API query will be treated as a delta scan of OneDrive");
 			}
 		} else {
 			// performFullItemScan == true
 			// do not use delta-link
+			deltaLink = "";
 			log.vdebug("performFullItemScan is true, not using the database deltaLink so that we query all objects on OneDrive to compare against all local objects");
 		}
 		
@@ -1050,7 +1075,6 @@ final class SyncEngine
 			// If we used the 'id' passed in & when using --single-directory with a business account we get:
 			//	'HTTP request returned status code 501 (Not Implemented): view.delta can only be called on the root.'
 			// To view changes correctly, we need to use the correct path id for the request
-			const(char)[] idToQuery;
 			if (driveId == defaultDriveId) {
 				// The drive id matches our users default drive id
 				idToQuery = defaultRootId.dup;
@@ -1060,6 +1084,8 @@ final class SyncEngine
 				// Use the 'id' that was passed in (folderId)
 				idToQuery = id;
 			}
+			// what path id are we going to query?
+			log.vdebug("path idToQuery = ", idToQuery);
 			
 			// query for changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink);
 			try {
@@ -1095,7 +1121,7 @@ final class SyncEngine
 				
 				// HTTP request returned status code 410 (The requested resource is no longer available at the server)
 				if (e.httpStatusCode == 410) {
-					log.vlog("Delta link expired, re-syncing...");
+					log.vdebug("Delta link expired for 'onedrive.viewChangesById(driveId, idToQuery, deltaLink)', setting 'deltaLink = null'");
 					deltaLink = null;
 					continue;
 				}
@@ -1147,15 +1173,16 @@ final class SyncEngine
 							log.vdebug("changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink) previously threw an error - retrying with empty deltaLink");
 							try {
 								// try query with empty deltaLink value
+								deltaLink = null;
 								if ((driveId == defaultDriveId) || (!syncBusinessFolders)) {
 									// Should always be selected unless we are syncing a Business Shared Folder
 									log.vdebug("Retrying Query: changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink) - retrying with empty deltaLink");
-									changes = onedrive.viewChangesByItemId(driveId, idToQuery, "");
+									changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink);
 									log.vdebug("Query 'changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink)' performed successfully on re-try");
 								} else {
 									// Should ONLY be selected if we are syncing a Business Shared Folder
 									log.vdebug("Retrying Query: changes = onedrive.viewChangesByDriveId(driveId, deltaLink) - retrying with empty deltaLink");
-									changes = onedrive.viewChangesByDriveId(driveId, "");
+									changes = onedrive.viewChangesByDriveId(driveId, deltaLink);
 									log.vdebug("Query 'changes = onedrive.viewChangesByDriveId(driveId, deltaLink)' performed successfully on re-try");
 								}
 							} catch (OneDriveException e) {
@@ -1211,8 +1238,8 @@ final class SyncEngine
 				
 				// HTTP request returned status code 410 (The requested resource is no longer available at the server)
 				if (e.httpStatusCode == 410) {
-					log.vlog("Delta link expired, re-syncing...");
-					deltaLink = null;
+					log.vdebug("Delta link expired for 'onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)', setting 'deltaLinkAvailable = null'");
+					deltaLinkAvailable = null;
 					continue;
 				}
 				
@@ -1263,15 +1290,16 @@ final class SyncEngine
 							log.vdebug("changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying with empty deltaLinkAvailable");
 							try {
 								// try query with empty deltaLink value
+								deltaLinkAvailable = null;
 								if ((driveId == defaultDriveId) || (!syncBusinessFolders)) {
 									// Should always be selected unless we are syncing a Business Shared Folder
 									log.vdebug("Retrying Query: changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable) - retrying with empty deltaLink");
-									changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, "");
+									changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable);
 									log.vdebug("Query 'changesAvailable = onedrive.viewChangesById(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
 								} else {
 									// Should ONLY be selected if we are syncing a Business Shared Folder
 									log.vdebug("Retrying Query: changesAvailable = onedrive.viewChangesByDriveId(driveId, deltaLink) - retrying with empty deltaLink");
-									changesAvailable = onedrive.viewChangesByDriveId(driveId, "");
+									changesAvailable = onedrive.viewChangesByDriveId(driveId, deltaLinkAvailable);
 									log.vdebug("Query 'changesAvailable = onedrive.viewChangesByDriveId(driveId, deltaLink)' performed successfully on re-try");
 								}
 							} catch (OneDriveException e) {
@@ -1350,10 +1378,13 @@ final class SyncEngine
 							// oneDriveFullScanTrigger should be false unless set by actions on OneDrive and only if sync_list or skip_dir is used
 							log.vdebug("performFullItemScan or oneDriveFullScanTrigger = true");
 							// full scan was requested or triggered
-							log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being requested");
-							// unset now the full scan trigger if set
+							// use the right message
 							if (oneDriveFullScanTrigger) {
+								log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being triggered by actions on OneDrive");
+								// unset now the full scan trigger if set
 								unsetOneDriveFullScanTrigger();
+							} else {
+								log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being requested");
 							}
 						} else {
 							// standard message
@@ -1582,9 +1613,9 @@ final class SyncEngine
 				} else {
 					log.vdebug("onedrive.viewChangesByDriveId call returned an invalid JSON Object");
 				}
-			}	
+			}
 		}
-
+		
 		// delete items in idsToDelete
 		if (idsToDelete.length > 0) deleteItems();
 		// empty the skipped items
@@ -1720,7 +1751,7 @@ final class SyncEngine
 		}
 
 		// check the item type
-		string path;
+		string path = "";
 		if (!unwanted) {
 			if (isItemFile(driveItem)) {
 				log.vdebug("The item we are syncing is a file");
@@ -1851,12 +1882,22 @@ final class SyncEngine
 							log.vlog("Remote item modified time is newer based on UTC time conversion");
 							auto ext = extension(oldPath);
 							auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
-							log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file: ", oldPath, " -> ", newPath);
-							if (!dryRun) {
-								safeRename(oldPath);
+							
+							// has the user configured to IGNORE local data protection rules?
+							if (bypassDataPreservation) {
+								// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
+								log.vlog("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: ", oldPath);
 							} else {
-								// Expectation here is that there is a new file locally (newPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
-								log.vdebug("DRY-RUN: Skipping local file rename");
+								// local data protection is configured, renaming local file
+								log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent data loss: ", oldPath, " -> ", newPath);
+								
+								// perform the rename action
+								if (!dryRun) {
+									safeRename(oldPath);
+								} else {
+									// Expectation here is that there is a new file locally (newPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
+									log.vdebug("DRY-RUN: Skipping local file rename");
+								}							
 							}
 						}
 					}
@@ -1900,7 +1941,7 @@ final class SyncEngine
 	}
 
 	// download an item that was not synced before
-	private void applyNewItem(Item item, string path)
+	private void applyNewItem(const ref Item item, const(string) path)
 	{
 		if (exists(path)) {
 			// path exists locally
@@ -1912,20 +1953,24 @@ final class SyncEngine
 				// file is not in sync with the database
 				// is the local file technically 'newer' based on UTC timestamp?
 				SysTime localModifiedTime = timeLastModified(path).toUTC();
+				SysTime itemModifiedTime = item.mtime;
+				// HACK: reduce time resolution to seconds before comparing
+				itemModifiedTime.fracSecs = Duration.zero;
 				localModifiedTime.fracSecs = Duration.zero;
-				item.mtime.fracSecs = Duration.zero;
 				
 				// is the local modified time greater than that from OneDrive?
-				if (localModifiedTime > item.mtime) {
+				if (localModifiedTime > itemModifiedTime) {
 					// local file is newer than item on OneDrive based on file modified time
 					// Is this item id in the database?
 					if (itemdb.idInLocalDatabase(item.driveId, item.id)){
+						// item id is in the database
 						// no local rename
 						// no download needed
 						log.vlog("Local item modified time is newer based on UTC time conversion - keeping local item as this exists in the local database");
 						log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer than OneDrive item and present in the sqlite database");
 						return;
 					} else {
+						// item id is not in the database .. maybe a --resync ?
 						// Should this 'download' be skipped?
 						// Do we need to check for .nosync? Only if --check-for-nosync was passed in
 						if (cfg.getValueBool("check_nosync")) {
@@ -1943,19 +1988,54 @@ final class SyncEngine
 						}
 						// file exists locally but is not in the sqlite database - maybe a failed download?
 						log.vlog("Local item does not exist in local database - replacing with file from OneDrive - failed download?");
+						
+						// was --resync issued?
+						if (cfg.getValueBool("resync")) {
+							// in a --resync scenario we have zero way of knowing IF the local file is meant to be the right file
+							// we have passed the following checks:
+							// 1. file exists locally
+							// 2. local modified time > remote modified time
+							// 3. id is not in the database
+							// 4. --resync was issued
+							auto ext = extension(path);
+							auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
+							// has the user configured to IGNORE local data protection rules?
+							if (bypassDataPreservation) {
+								// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
+								log.vlog("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: ", path);
+							} else {
+								// local data protection is configured, renaming local file
+								log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent data loss due to --resync: ", path, " -> ", newPath);
+								// perform the rename action of the local file
+								if (!dryRun) {
+									safeRename(path);
+								} else {
+									// Expectation here is that there is a new file locally (newPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
+									log.vdebug("DRY-RUN: Skipping local file rename");
+								}
+							}
+						}
 					}
 				} else {
 					// remote file is newer than local item
 					log.vlog("Remote item modified time is newer based on UTC time conversion");
 					auto ext = extension(path);
 					auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
-					log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file: ", path, " -> ", newPath);
-					if (!dryRun) {
-						// rename the local file to prevent data loss incase the local file is actually needed
-						safeRename(path);
+					
+					// has the user configured to IGNORE local data protection rules?
+					if (bypassDataPreservation) {
+						// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
+						log.vlog("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: ", path);
 					} else {
-						// Expectation here is that there is a new file locally (newPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
-						log.vdebug("DRY-RUN: Skipping local file rename");
+						// local data protection is configured, renaming local file
+						log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent data loss: ", path, " -> ", newPath);
+						// perform the rename action of the local file
+						if (!dryRun) {
+							safeRename(path);
+						} else {
+							// Expectation here is that there is a new file locally (newPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
+							log.vdebug("DRY-RUN: Skipping local file rename");
+						}							
 					}
 				}
 			}
@@ -2067,7 +2147,7 @@ final class SyncEngine
 	}
 
 	// downloads a File resource
-	private void downloadFileItem(Item item, string path)
+	private void downloadFileItem(const ref Item item, const(string) path)
 	{
 		assert(item.type == ItemType.file);
 		write("Downloading file ", path, " ... ");
@@ -2267,20 +2347,21 @@ final class SyncEngine
 	}
 
 	// returns true if the given item corresponds to the local one
-	private bool isItemSynced(Item item, string path)
+	private bool isItemSynced(const ref Item item, const(string) path)
 	{
 		if (!exists(path)) return false;
 		final switch (item.type) {
 		case ItemType.file:
 			if (isFile(path)) {
 				SysTime localModifiedTime = timeLastModified(path).toUTC();
+				SysTime itemModifiedTime = item.mtime;
 				// HACK: reduce time resolution to seconds before comparing
-				item.mtime.fracSecs = Duration.zero;
+				itemModifiedTime.fracSecs = Duration.zero;
 				localModifiedTime.fracSecs = Duration.zero;
-				if (localModifiedTime == item.mtime) {
+				if (localModifiedTime == itemModifiedTime) {
 					return true;
 				} else {
-					log.vlog("The local item has a different modified time ", localModifiedTime, " remote is ", item.mtime);
+					log.vlog("The local item has a different modified time ", localModifiedTime, " remote is ", itemModifiedTime);
 				}
 				if (testFileHash(path, item)) {
 					return true;
@@ -2308,7 +2389,7 @@ final class SyncEngine
 		foreach_reverse (i; idsToDelete) {
 			Item item;
 			if (!itemdb.selectById(i[0], i[1], item)) continue; // check if the item is in the db
-			string path = itemdb.computePath(i[0], i[1]);
+			const(string) path = itemdb.computePath(i[0], i[1]);
 			log.log("Trying to delete item ", path);
 			if (!dryRun) {
 				// Actually process the database entry removal
@@ -2365,13 +2446,13 @@ final class SyncEngine
 	}
 	
 	// scan the given directory for differences and new items
-	void scanForDifferences(string path)
+	void scanForDifferences(const(string) path)
 	{
 		// To improve logging output, what is the 'logical path' we are scanning for file & folder differences?
 		string logPath;
 		if (path == ".") {
 			// get the configured sync_dir
-			logPath = expandTilde(cfg.getValueString("sync_dir"));
+			logPath = buildNormalizedPath(cfg.getValueString("sync_dir"));
 		} else {
 			// use what was passed in
 			logPath = path;
@@ -2396,8 +2477,28 @@ final class SyncEngine
 			assumeSafeAppend(idsToDelete);
 		}
 	}
-
-	private void uploadDifferences(Item item)
+	
+	// scan the given directory for differences only - for use with --monitor
+	void scanForDifferencesDatabaseScan(const(string) path)
+	{
+		// scan for changes in the path provided
+		log.vlog("Uploading differences of ", path);
+		Item item;
+		if (itemdb.selectByPath(path, defaultDriveId, item)) {
+			// Database scan of every item in DB, does it still exist on disk in the location the DB thinks it is
+			uploadDifferences(item);
+		}
+	}
+	
+	// scan the given directory for new items - for use with --monitor
+	void scanForDifferencesFilesystemScan(const(string) path)
+	{
+		log.vlog("Uploading new items of ", path);
+		// Filesystem walk to find new files not uploaded
+		uploadNewItems(path);
+	}
+	
+	private void uploadDifferences(const ref Item item)
 	{
 		// see if this item.id we were supposed to have deleted
 		// match early and return
@@ -2464,7 +2565,7 @@ final class SyncEngine
 		}
 	}
 
-	private void uploadDirDifferences(Item item, string path)
+	private void uploadDirDifferences(const ref Item item, const(string) path)
 	{
 		assert(item.type == ItemType.dir);
 		if (exists(path)) {
@@ -2483,17 +2584,25 @@ final class SyncEngine
 			// Directory does not exist locally
 			// If we are in a --dry-run situation - this directory may never have existed as we never downloaded it
 			if (!dryRun) {
-				log.vlog("The directory has been deleted locally");
-				if (noRemoteDelete) {
-					// do not process remote directory delete
-					log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+				// Not --dry-run situation
+				if (!cfg.getValueBool("monitor")) {
+					// Not in --monitor mode
+					log.vlog("The directory has been deleted locally");
+					if (noRemoteDelete) {
+						// do not process remote directory delete
+						log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+					} else {
+						uploadDeleteItem(item, path);
+					}	
 				} else {
-					uploadDeleteItem(item, path);
+					// Appropriate message as we are in --monitor mode
+					log.vlog("The directory appears to have been deleted locally .. but we are running in --monitor mode. This may have been 'moved' rather than 'deleted'");
 				}
 			} else {
 				// we are in a --dry-run situation, directory appears to have deleted locally - this directory may never have existed as we never downloaded it ..
 				// Check if path does not exist in database
-				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+				Item databaseItem;
+				if (!itemdb.selectByPath(path, defaultDriveId, databaseItem)) {
 					// Path not found in database
 					log.vlog("The directory has been deleted locally");
 					if (noRemoteDelete) {
@@ -2520,7 +2629,7 @@ final class SyncEngine
 		}
 	}
 
-	private void uploadRemoteDirDifferences(Item item, string path)
+	private void uploadRemoteDirDifferences(const ref Item item, const(string) path)
 	{
 		assert(item.type == ItemType.remote);
 		if (exists(path)) {
@@ -2553,7 +2662,8 @@ final class SyncEngine
 			} else {
 				// we are in a --dry-run situation, directory appears to have deleted locally - this directory may never have existed as we never downloaded it ..
 				// Check if path does not exist in database
-				if (!itemdb.selectByPathWithRemote(path, defaultDriveId, item)) {
+				Item databaseItem;
+				if (!itemdb.selectByPathWithRemote(path, defaultDriveId, databaseItem)) {
 					// Path not found in database
 					log.vlog("The directory has been deleted locally");
 					if (noRemoteDelete) {
@@ -2581,7 +2691,7 @@ final class SyncEngine
 	}
 
 	// upload local file system differences to OneDrive
-	private void uploadFileDifferences(Item item, string path)
+	private void uploadFileDifferences(const ref Item item, const(string) path)
 	{
 		// Reset upload failure - OneDrive or filesystem issue (reading data)
 		uploadFailed = false;
@@ -2590,11 +2700,12 @@ final class SyncEngine
 		if (exists(path)) {
 			if (isFile(path)) {
 				SysTime localModifiedTime = timeLastModified(path).toUTC();
+				SysTime itemModifiedTime = item.mtime;
 				// HACK: reduce time resolution to seconds before comparing
-				item.mtime.fracSecs = Duration.zero;
+				itemModifiedTime.fracSecs = Duration.zero;
 				localModifiedTime.fracSecs = Duration.zero;
 				
-				if (localModifiedTime != item.mtime) {
+				if (localModifiedTime != itemModifiedTime) {
 					log.vlog("The file last modified time has changed");					
 					string eTag = item.eTag;
 					if (!testFileHash(path, item)) {
@@ -2888,17 +2999,23 @@ final class SyncEngine
 			// If we are in a --dry-run situation - this file may never have existed as we never downloaded it
 			if (!dryRun) {
 				// Not --dry-run situation
-				log.vlog("The file has been deleted locally");
-				if (noRemoteDelete) {
-					// do not process remote file delete
-					log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
+				if (!cfg.getValueBool("monitor")) {
+					log.vlog("The file has been deleted locally");
+					if (noRemoteDelete) {
+						// do not process remote file delete
+						log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
+					} else {
+						uploadDeleteItem(item, path);
+					}
 				} else {
-					uploadDeleteItem(item, path);
+					// Appropriate message as we are in --monitor mode
+					log.vlog("The file appears to have been deleted locally .. but we are running in --monitor mode. This may have been 'moved' rather than 'deleted'");
 				}
 			} else {
 				// We are in a --dry-run situation, file appears to have deleted locally - this file may never have existed as we never downloaded it ..
 				// Check if path does not exist in database
-				if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+				Item databaseItem;
+				if (!itemdb.selectByPath(path, defaultDriveId, databaseItem)) {
 					// file not found in database
 					log.vlog("The file has been deleted locally");
 					if (noRemoteDelete) {
@@ -2931,24 +3048,27 @@ final class SyncEngine
 	}
 
 	// upload new items to OneDrive
-	private void uploadNewItems(string path)
+	private void uploadNewItems(const(string) path)
 	{
+		import std.range : walkLength;
+		import std.uni : byGrapheme;
 		//	https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
 		//  If the path is greater than allowed characters, then one drive will return a '400 - Bad Request' 
 		//  Need to ensure that the URI is encoded before the check is made
 		//  400 Character Limit for OneDrive Business / Office 365
 		//  430 Character Limit for OneDrive Personal
-		auto maxPathLength = 0;
-		import std.range : walkLength;
-		import std.uni : byGrapheme;
-		if (accountType == "business"){
-			// Business Account
-			maxPathLength = 400;
-		} else {
+		long maxPathLength = 0;
+		long pathWalkLength = path.byGrapheme.walkLength;
+		
+		// Configure maxPathLength based on account type
+		if (accountType == "personal"){
 			// Personal Account
 			maxPathLength = 430;
+		} else {
+			// Business Account / Office365
+			maxPathLength = 400;
 		}
-		
+				
 		// A short lived file that has disappeared will cause an error - is the path valid?
 		if (!exists(path)) {
 			log.log("Skipping item - has disappeared: ", path);
@@ -2964,8 +3084,8 @@ final class SyncEngine
 			return;
 		}
 		
-		if(path.byGrapheme.walkLength < maxPathLength){
-			// path is less than maxPathLength
+		if(pathWalkLength < maxPathLength){
+			// path length is less than maxPathLength
 			
 			// skip dot files if configured
 			if (cfg.getValueBool("skip_dotfiles")) {
@@ -2992,8 +3112,30 @@ final class SyncEngine
 				}
 				// skip unexisting symbolic links
 				else if (!exists(readLink(path))) {
-					log.log("Skipping item - invalid symbolic link: ", path);
-					return;
+					// reading the symbolic link failed - is the link a relative symbolic link
+					//   drwxrwxr-x. 2 alex alex 46 May 30 09:16 .
+					//   drwxrwxr-x. 3 alex alex 35 May 30 09:14 ..
+					//   lrwxrwxrwx. 1 alex alex 61 May 30 09:16 absolute.txt -> /home/alex/OneDrivePersonal/link_tests/intercambio/prueba.txt
+					//   lrwxrwxrwx. 1 alex alex 13 May 30 09:16 relative.txt -> ../prueba.txt
+					//
+					// absolute links will be able to be read, but 'relative' links will fail, because they cannot be read based on the current working directory 'sync_dir'
+					string currentSyncDir = getcwd();
+					string fullLinkPath = buildNormalizedPath(absolutePath(path));
+					string fileName = baseName(fullLinkPath);
+					string parentLinkPath = dirName(fullLinkPath);
+					// test if this is a 'relative' symbolic link
+					chdir(parentLinkPath);
+					auto relativeLink = readLink(fileName);
+					auto relativeLinkTest = exists(readLink(fileName));
+					// reset back to our 'sync_dir'
+					chdir(currentSyncDir);
+					// results
+					if (relativeLinkTest) {
+						log.vdebug("Not skipping item - symbolic link is a 'relative link' to target ('", relativeLink, "') which can be supported: ", path);
+					} else {
+						log.log("Skipping item - invalid symbolic link: ", path);
+						return;
+					}
 				}
 			}
 			
@@ -3069,6 +3211,7 @@ final class SyncEngine
 			// This item passed all the unwanted checks
 			// We want to upload this new item
 			if (isDir(path)) {
+				
 				Item item;
 				bool pathFoundInDB = false;
 				foreach (driveId; driveIDsArray) {
@@ -3095,7 +3238,8 @@ final class SyncEngine
 				try {
 					auto entries = dirEntries(path, SpanMode.shallow, false);
 					foreach (DirEntry entry; entries) {
-						uploadNewItems(entry.name);
+						string thisPath = entry.name;
+						uploadNewItems(thisPath);
 					}
 				} catch (FileException e) {
 					// display the error message
@@ -3105,7 +3249,7 @@ final class SyncEngine
 			} else {
 				bool fileFoundInDB = false;
 				// This item is a file
-				auto fileSize = getSize(path);
+				long fileSize = getSize(path);
 				// Can we upload this file - is there enough free space? - https://github.com/skilion/onedrive/issues/73
 				// However if the OneDrive account does not provide the quota details, we have no idea how much free space is available
 				if ((!quotaAvailable) || ((remainingFreeSpace - fileSize) > 0)){
@@ -3247,11 +3391,17 @@ final class SyncEngine
 						// Perform the database lookup - is the parent in the database?
 						if (!itemdb.selectByPath(dirName(path), parent.driveId, parent)) {
 							// parent is not in the database
-							log.vdebug("Parent path is not in the database - need to add it");
+							log.vdebug("Parent path is not in the database - need to add it: ", dirName(path));
 							uploadCreateDir(dirName(path));
 						}
-						// still enforce check of parent path. if the above was triggered, the below will generate a sync retry and will now be sucessful
-						enforce(itemdb.selectByPath(dirName(path), parent.driveId, parent), "The parent item id is not in the database");
+						
+						// Is the parent a 'folder' from another user? ie - is this a 'shared folder' that has been shared with us?
+						if (defaultDriveId == parent.driveId){
+							// enforce check of parent path. if the above was triggered, the below will generate a sync retry and will now be sucessful
+							enforce(itemdb.selectByPath(dirName(path), parent.driveId, parent), "The parent item id is not in the database");
+						} else {
+							log.vdebug("Parent drive ID is not our drive ID - parent most likely a shared folder");
+						}
 						
 						JSONValue driveItem = [
 								"name": JSONValue(baseName(path)),
@@ -3340,23 +3490,23 @@ final class SyncEngine
 				} else {
 					// They are the "same" name wise but different in case sensitivity
 					log.error("ERROR: Current directory has a 'case-insensitive match' to an existing directory on OneDrive");
-					log.error("ERROR: To resolve, rename this local directory: ", absolutePath(path));
+					log.error("ERROR: To resolve, rename this local directory: ", buildNormalizedPath(absolutePath(path)));
 					log.error("ERROR: Remote OneDrive directory: ", response["name"].str);
-					log.log("Skipping: ", absolutePath(path));
+					log.log("Skipping: ", buildNormalizedPath(absolutePath(path)));
 					return;
 				}
 			} else {
 				// response is not valid JSON, an error was returned from OneDrive
 				log.error("ERROR: There was an error performing this operation on OneDrive");
 				log.error("ERROR: Increase logging verbosity to assist determining why.");
-				log.log("Skipping: ", absolutePath(path));
+				log.log("Skipping: ", buildNormalizedPath(absolutePath(path)));
 				return;
 			}
 		}
 	}
 	
 	// upload a new file to OneDrive
-	private void uploadNewFile(string path)
+	private void uploadNewFile(const(string) path)
 	{
 		// Reset upload failure - OneDrive or filesystem issue (reading data)
 		uploadFailed = false;
@@ -4059,8 +4209,8 @@ final class SyncEngine
 						} else {
 							// The files are the "same" name wise but different in case sensitivity
 							log.error("ERROR: A local file has the same name as another local file.");
-							log.error("ERROR: To resolve, rename this local file: ", absolutePath(path));
-							log.log("Skipping uploading this new file: ", absolutePath(path));
+							log.error("ERROR: To resolve, rename this local file: ", buildNormalizedPath(absolutePath(path)));
+							log.log("Skipping uploading this new file: ", buildNormalizedPath(absolutePath(path)));
 						}
 					} else {
 						// fileDetailsFromOneDrive is not valid JSON, an error was returned from OneDrive
@@ -4084,7 +4234,7 @@ final class SyncEngine
 	}
 
 	// delete an item on OneDrive
-	private void uploadDeleteItem(Item item, string path)
+	private void uploadDeleteItem(Item item, const(string) path)
 	{
 		log.log("Deleting item from OneDrive: ", path);
 		bool flagAsBigDelete = false;
@@ -4183,9 +4333,11 @@ final class SyncEngine
 	// update the item's last modified time
 	private void uploadLastModifiedTime(const(char)[] driveId, const(char)[] id, const(char)[] eTag, SysTime mtime)
 	{
+		string itemModifiedTime;
+		itemModifiedTime = mtime.toISOExtString();
 		JSONValue data = [
 			"fileSystemInfo": JSONValue([
-				"lastModifiedDateTime": mtime.toISOExtString()
+				"lastModifiedDateTime": itemModifiedTime
 			])
 		];
 		
@@ -4263,6 +4415,41 @@ final class SyncEngine
 	void uploadMoveItem(string from, string to)
 	{
 		log.log("Moving ", from, " to ", to);
+		
+		// 'to' file validation .. is the 'to' file valid for upload?
+		if (isSymlink(to)) {
+			// if config says so we skip all symlinked items
+			if (cfg.getValueBool("skip_symlinks")) {
+				log.vlog("Skipping item - skip symbolic links configured: ", to);
+				return;
+
+			}
+			// skip unexisting symbolic links
+			else if (!exists(readLink(to))) {
+				log.log("Skipping item - invalid symbolic link: ", to);
+				return;
+			}
+		}
+		
+		// Restriction and limitations about windows naming files
+		if (!isValidName(to)) {
+			log.log("Skipping item - invalid name (Microsoft Naming Convention): ", to);
+			return;
+		}
+		
+		// Check for bad whitespace items
+		if (!containsBadWhiteSpace(to)) {
+			log.log("Skipping item - invalid name (Contains an invalid whitespace item): ", to);
+			return;
+		}
+		
+		// Check for HTML ASCII Codes as part of file name
+		if (!containsASCIIHTMLCodes(to)) {
+			log.log("Skipping item - invalid name (Contains HTML ASCII Code): ", to);
+			return;
+		}
+		
+		// 'to' file has passed file validation
 		Item fromItem, toItem, parentItem;
 		if (!itemdb.selectByPath(from, defaultDriveId, fromItem)) {
 			if (cfg.getValueBool("skip_dotfiles") && isDotFile(to)){	
@@ -4346,7 +4533,7 @@ final class SyncEngine
 	}
 
 	// delete an item by it's path
-	void deleteByPath(string path)
+	void deleteByPath(const(string) path)
 	{
 		Item item;
 		if (!itemdb.selectByPath(path, defaultDriveId, item)) {
@@ -4517,7 +4704,7 @@ final class SyncEngine
 	}
 	
 	// Query the OneDrive 'drive' to determine if we are 'in sync' or if there are pending changes
-	void queryDriveForChanges(string path) {
+	void queryDriveForChanges(const(string) path) {
 		
 		// Function variables
 		int validChanges = 0;
@@ -4690,7 +4877,7 @@ final class SyncEngine
 	}
 	
 	// Create a fake OneDrive response suitable for use with saveItem
-	JSONValue createFakeResponse(string path) {
+	JSONValue createFakeResponse(const(string) path) {
 		import std.digest.sha;
 		// Generate a simulated JSON response which can be used
 		// At a minimum we need:

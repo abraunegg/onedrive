@@ -74,7 +74,7 @@ Config option 'skip_dir'               =
 Config option 'skip_file'              = ~*|.~*|*.tmp
 Config option 'skip_dotfiles'          = false
 Config option 'skip_symlinks'          = false
-Config option 'monitor_interval'       = 45
+Config option 'monitor_interval'       = 300
 Config option 'min_notify_changes'     = 5
 Config option 'log_dir'                = /var/log/onedrive/
 Config option 'classify_as_big_delete' = 1000
@@ -238,7 +238,11 @@ Configuration is determined by three layers: the default values, values set in t
 
 Most command line options have a respective configuration file setting.
 
-If you want to change the defaults, you can copy and edit the included config file into your `~/.config/onedrive` directory:
+If you want to change the defaults, you can copy and edit the included config file into your configuration directory. Valid directories for the config file are:
+*   `~/.config/onedrive`
+*   `/etc/onedrive`
+
+**Example:**
 ```text
 mkdir -p ~/.config/onedrive
 cp ./config ~/.config/onedrive/config
@@ -259,7 +263,7 @@ The default configuration file is listed below:
 #
 # sync_dir = "~/OneDrive"
 # skip_file = "~*|.~*|*.tmp"
-# monitor_interval = "45"
+# monitor_interval = "300"
 # skip_dir = ""
 # log_dir = "/var/log/onedrive/"
 # drive_id = ""
@@ -288,6 +292,7 @@ The default configuration file is listed below:
 # skip_dir_strict_match = "false"
 # application_id = ""
 # resync = "false"
+# bypass_data_preservation = "false"
 ```
 
 
@@ -302,7 +307,7 @@ Example:
 #
 sync_dir="~/MyDirToSync"
 # skip_file = "~*|.~*|*.tmp"
-# monitor_interval = "45"
+# monitor_interval = "300"
 # skip_dir = ""
 # log_dir = "/var/log/onedrive/"
 ```
@@ -321,7 +326,7 @@ Example:
 #
 # sync_dir = "~/OneDrive"
 # skip_file = "~*|.~*|*.tmp"
-# monitor_interval = "45"
+# monitor_interval = "300"
 skip_dir = "Desktop|Documents/IISExpress|Documents/SQL Server Management Studio|Documents/Visual Studio*|Documents/WindowsPowerShell"
 # log_dir = "/var/log/onedrive/"
 ```
@@ -339,7 +344,7 @@ Example:
 #
 # sync_dir = "~/OneDrive"
 skip_file = "~*|Documents/OneNote*|Documents/config.xlaunch|myfile.ext"
-# monitor_interval = "45"
+# monitor_interval = "300"
 # skip_dir = ""
 # log_dir = "/var/log/onedrive/"
 ```
@@ -366,7 +371,7 @@ Example:
 # debug_https = "false"
 skip_dotfiles = "true"
 # dry_run = "false"
-# monitor_interval = "45"
+# monitor_interval = "300"
 ```
 Setting this to `"true"` will skip all .files and .folders while syncing.
 
@@ -386,17 +391,17 @@ Example:
 ```text
 # skip_dotfiles = "false"
 # dry_run = "false"
-monitor_interval = "300"
+monitor_interval = "600"
 # min_notify_changes = "5"
 # monitor_log_frequency = "5"
 ```
-The monitor interval is defined as the wait time 'between' sync's when running in monitor mode. By default without configuration, the monitor_interval is set to 45 seconds. Setting this value to 300 will run the sync process every 5 minutes.
+The monitor interval is defined as the wait time 'between' sync's when running in monitor mode. By default without configuration, the monitor_interval is set to 300 seconds. Setting this value to 600 will run the sync process every 10 minutes.
 
 #### min_notify_changes
 Example:
 ```text
 # dry_run = "false"
-# monitor_interval = "45"
+# monitor_interval = "300"
 min_notify_changes = "50"
 # monitor_log_frequency = "5"
 # monitor_fullscan_frequency = "10"

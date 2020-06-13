@@ -1,67 +1,73 @@
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
-import std.file, std.string, std.regex, std.stdio, std.process, std.algorithm.searching, std.getopt, std.conv;
+import std.file, std.string, std.regex, std.stdio, std.process, std.algorithm.searching, std.getopt, std.conv, std.path;
 import std.algorithm.sorting: sort;
 import selective;
 static import log;
 
 final class Config
 {
-	public string refreshTokenFilePath;
-	public string deltaLinkFilePath;
-	public string databaseFilePath;
-	public string databaseFilePathDryRun;
-	public string uploadStateFilePath;
-	public string syncListFilePath;
-	public string homePath;
-	public string configDirName;
+	// application defaults
 	public string defaultSyncDir = "~/OneDrive";
 	public string defaultSkipFile = "~*|.~*|*.tmp";
 	public string defaultSkipDir = "";
-	public string configFileSyncDir;
-	public string configFileSkipFile;
-	public string configFileSkipDir;
+	// application set items
+	public string refreshTokenFilePath = "";
+	public string deltaLinkFilePath = "";
+	public string databaseFilePath = "";
+	public string databaseFilePathDryRun = "";
+	public string uploadStateFilePath = "";
+	public string syncListFilePath = "";
+	public string homePath = "";
+	public string configDirName = "";
+	public string systemConfigDirName = "";
+	public string configFileSyncDir = "";
+	public string configFileSkipFile = "";
+	public string configFileSkipDir = "";
+	public string businessSharedFolderFilePath = "";
+	private string userConfigFilePath = "";
+	private string systemConfigFilePath = "";
 	// was the application just authorised - paste of response uri
 	public bool applicationAuthorizeResponseUri = false;
-		
-	private string userConfigFilePath;
 	// hashmap for the values found in the user config file
 	// ARGGGG D is stupid and cannot make hashmap initializations!!!
 	// private string[string] foobar = [ "aa": "bb" ] does NOT work!!!
 	private string[string] stringValues;
 	private bool[string] boolValues;
 	private long[string] longValues;
-	public string businessSharedFolderFilePath;
-
+	// Compile time regex - this does not change
+	public auto configRegex = ctRegex!(`^(\w+)\s*=\s*"(.*)"\s*$`);
+	
 	this(string confdirOption)
 	{
 		// default configuration - entries in config file ~/.config/onedrive/config
 		// an entry here means it can be set via the config file if there is a coresponding read and set in update_from_args()
-		stringValues["sync_dir"]         = defaultSyncDir;
-		stringValues["skip_file"]        = defaultSkipFile;
-		stringValues["skip_dir"]         = defaultSkipDir;
-		stringValues["log_dir"]          = "/var/log/onedrive/";
-		stringValues["drive_id"]         = "";
-		stringValues["user_agent"]       = "";
-		boolValues["upload_only"]        = false;
-		boolValues["check_nomount"]      = false;
-		boolValues["check_nosync"]       = false;
-		boolValues["download_only"]      = false;
+		stringValues["sync_dir"] = defaultSyncDir;
+		stringValues["skip_file"] = defaultSkipFile;
+		stringValues["skip_dir"] = defaultSkipDir;
+		stringValues["log_dir"] = "/var/log/onedrive/";
+		stringValues["drive_id"] = "";
+		stringValues["user_agent"] = "";
+		boolValues["upload_only"] = false;
+		boolValues["check_nomount"] = false;
+		boolValues["check_nosync"] = false;
+		boolValues["download_only"] = false;
 		boolValues["disable_notifications"] = false;
 		boolValues["disable_upload_validation"] = false;
-		boolValues["enable_logging"]     = false;
-		boolValues["force_http_11"]      = false;
-		boolValues["force_http_2"]       = false;
-		boolValues["local_first"]        = false;
-		boolValues["no_remote_delete"]   = false;
-		boolValues["skip_symlinks"]      = false;
-		boolValues["debug_https"]        = false;
-		boolValues["skip_dotfiles"]      = false;
-		boolValues["dry_run"]            = false;
-		boolValues["sync_root_files"]	 = false;
-		longValues["verbose"]            = log.verbose; // might be initialized by the first getopt call!
-		longValues["monitor_interval"]   = 45,
-		longValues["skip_size"]          = 0,
-		longValues["min_notify_changes"]  = 5;
+		boolValues["enable_logging"] = false;
+		boolValues["force_http_11"] = false;
+		boolValues["force_http_2"] = false;
+		boolValues["local_first"] = false;
+		boolValues["no_remote_delete"] = false;
+		boolValues["skip_symlinks"] = false;
+		boolValues["debug_https"] = false;
+		boolValues["skip_dotfiles"] = false;
+		boolValues["dry_run"] = false;
+		boolValues["sync_root_files"] = false;
+		longValues["verbose"] = log.verbose; // might be initialized by the first getopt call!
+		// The amount of time (seconds) between monitor sync loops
+		longValues["monitor_interval"] = 300;
+		longValues["skip_size"] = 0;
+		longValues["min_notify_changes"] = 5;
 		longValues["monitor_log_frequency"] = 5;
 		// Number of n sync runs before performing a full local scan of sync_dir
 		// By default 10 which means every ~7.5 minutes a full disk scan of sync_dir will occur
@@ -74,9 +80,25 @@ final class Config
 		boolValues["skip_dir_strict_match"] = false;
 		// Allow for a custom Client ID / Application ID to be used to replace the inbuilt default
 		// This is a config file option ONLY
-		stringValues["application_id"]       = "";
+		stringValues["application_id"] = "";
 		// allow for resync to be set via config file
-		boolValues["resync"]              = false;
+		boolValues["resync"] = false;
+		// Ignore data safety checks and overwrite local data rather than preserve & rename
+		// This is a config file option ONLY
+		boolValues["bypass_data_preservation"] = false;
+		
+		// DEVELOPER OPTIONS 
+		// display_memory = true | false
+		//  - It may be desirable to display the memory usage of the application to assist with diagnosing memory issues with the application
+		//  - This is especially beneficial when debugging or performing memory tests with Valgrind
+		boolValues["display_memory"] = false;
+		// monitor_max_loop = long value
+		//  - It may be desirable to, when running in monitor mode, force monitor mode to 'quit' after X number of loops
+		//  - This is especially beneficial when debugging or performing memory tests with Valgrind
+		longValues["monitor_max_loop"] = 0;
+		// display_sync_options = true | false
+		// - It may be desirable to see what options are being passed in to performSync() without enabling the full verbose debug logging
+		boolValues["display_sync_options"] = false;
 
 		// Determine the users home directory. 
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
@@ -104,6 +126,7 @@ final class Config
 		
 		// Determine the correct configuration directory to use
 		string configDirBase;
+		string systemConfigDirBase;
 		if (confdirOption != "") {
 			// A CLI 'confdir' was passed in
 			log.vdebug("configDirName: CLI override to set configDirName to: ", confdirOption);
@@ -123,6 +146,8 @@ final class Config
 				// XDG_CONFIG_HOME does not exist on systems where X11 is not present - ie - headless systems / servers
 				log.vdebug("configDirBase: WARNING - no XDG_CONFIG_HOME environment variable set");
 				configDirBase = homePath ~ "/.config";
+				// Also set up a path to pre-shipped shared configs (which can be overridden by supplying a config file in userspace)
+				systemConfigDirBase = "/etc";
 			}
 	
 			// Output configDirBase calculation
@@ -131,35 +156,75 @@ final class Config
 			log.vdebug("configDirName: Configuring application to use default config path");
 			// configDirBase contains the correct path so we do not need to check for presence of '~'
 			configDirName = configDirBase ~ "/onedrive";
+			// systemConfigDirBase contains the correct path so we do not need to check for presence of '~'
+			systemConfigDirName = systemConfigDirBase ~ "/onedrive";
 		}
-	
-		log.vlog("Using Config Dir: ", configDirName);
-		if (!exists(configDirName)) mkdirRecurse(configDirName);
-
-		refreshTokenFilePath = configDirName ~ "/refresh_token";
-		deltaLinkFilePath = configDirName ~ "/delta_link";
-		databaseFilePath = configDirName ~ "/items.sqlite3";
-		databaseFilePathDryRun = configDirName ~ "/items-dryrun.sqlite3";
-		uploadStateFilePath = configDirName ~ "/resume_upload";
-		userConfigFilePath = configDirName ~ "/config";
-		syncListFilePath = configDirName ~ "/sync_list";
-		businessSharedFolderFilePath = configDirName ~ "/business_shared_folders";
 		
+		// Config directory options all determined
+		if (!exists(configDirName)) mkdirRecurse(configDirName);
+		// configDirName has a trailing /
+		log.vlog("Using 'user' Config Dir: ", configDirName);
+		log.vlog("Using 'system' Config Dir: ", systemConfigDirName);
+		
+		// Update application set variables based on configDirName
+		refreshTokenFilePath = buildNormalizedPath(configDirName ~ "/refresh_token");
+		deltaLinkFilePath = buildNormalizedPath(configDirName ~ "/delta_link");
+		databaseFilePath = buildNormalizedPath(configDirName ~ "/items.sqlite3");
+		databaseFilePathDryRun = buildNormalizedPath(configDirName ~ "/items-dryrun.sqlite3");
+		uploadStateFilePath = buildNormalizedPath(configDirName ~ "/resume_upload");
+		userConfigFilePath = buildNormalizedPath(configDirName ~ "/config");
+		syncListFilePath = buildNormalizedPath(configDirName ~ "/sync_list");
+		systemConfigFilePath = buildNormalizedPath(systemConfigDirName ~ "/config");
+		businessSharedFolderFilePath = buildNormalizedPath(configDirName ~ "/business_shared_folders");
+		
+		// Debug Output for application set variables based on configDirName
+		log.vdebug("refreshTokenFilePath = ", refreshTokenFilePath);
+		log.vdebug("deltaLinkFilePath = ", deltaLinkFilePath);
+		log.vdebug("databaseFilePath = ", databaseFilePath);
+		log.vdebug("databaseFilePathDryRun = ", databaseFilePathDryRun);
+		log.vdebug("uploadStateFilePath = ", uploadStateFilePath);
+		log.vdebug("userConfigFilePath = ", userConfigFilePath);
+		log.vdebug("syncListFilePath = ", syncListFilePath);
+		log.vdebug("systemConfigFilePath = ", systemConfigFilePath);
+		log.vdebug("businessSharedFolderFilePath = ", businessSharedFolderFilePath);
 	}
 
 	bool initialize()
 	{
-		if (!load(userConfigFilePath)) {
-			// What was the reason for failure?
-			if (!exists(userConfigFilePath)) {
-				log.vlog("No config file found, using application defaults");
+		// Initialise the application
+		if (!exists(userConfigFilePath)) {
+			// 'user' configuration file does not exist
+			// Is there a system configuration file?
+			if (!exists(systemConfigFilePath)) {
+				// 'system' configuration file does not exist
+				log.vlog("No user or system config file found, using application defaults");
 				return true;
 			} else {
+				// 'system' configuration file exists
+				// can we load the configuration file without error?
+				if (load(systemConfigFilePath)) {
+					// configuration file loaded without error
+					log.log("System configuration file successfully loaded");
+					return true;
+				} else {
+					// there was a problem loading the configuration file
+					log.log("System configuration file has errors - please check your configuration");
+					return false;
+				}
+			}
+		} else {
+			// 'user' configuration file exists
+			// can we load the configuration file without error?
+			if (load(userConfigFilePath)) {
+				// configuration file loaded without error
+				log.log("Configuration file successfully loaded");
+				return true;
+			} else {
+				// there was a problem loading the configuration file
 				log.log("Configuration file has errors - please check your configuration");
 				return false;
 			}
 		}
-		return true;
 	}
 
 	void update_from_args(string[] args)
@@ -408,15 +473,38 @@ final class Config
 		longValues[key] = value;
 	}
 
+	// load a configuration file
 	private bool load(string filename)
 	{
-		scope(failure) return false;
+		// configure function variables
 		auto file = File(filename, "r");
-		auto r = regex(`^(\w+)\s*=\s*"(.*)"\s*$`);
-		foreach (line; file.byLine()) {
-			line = stripLeft(line);
-			if (line.length == 0 || line[0] == ';' || line[0] == '#') continue;
-			auto c = line.matchFirst(r);
+		string lineBuffer;
+		
+		// configure scopes
+		// - failure
+		scope(failure) {
+			// close file if open
+			if (file.isOpen()){
+				// close open file
+				file.close();
+			}
+			return false;
+		}
+		// - exit
+		scope(exit) {
+			// close file if open
+			if (file.isOpen()){
+				// close open file
+				file.close();
+			}
+		}
+	
+		// read file line by line
+		auto range = file.byLine();
+		foreach (line; range) {
+			lineBuffer = stripLeft(line).to!string;
+			if (lineBuffer.length == 0 || lineBuffer[0] == ';' || lineBuffer[0] == '#') continue;
+			auto c = lineBuffer.matchFirst(configRegex);
 			if (!c.empty) {
 				c.popFront(); // skip the whole match
 				string key = c.front.dup;
@@ -449,14 +537,13 @@ final class Config
 					}
 				}
 			} else {
-				log.log("Malformed config line: ", line);
+				log.log("Malformed config line: ", lineBuffer);
 				return false;
 			}
 		}
 		return true;
 	}
 }
-
 
 void outputLongHelp(Option[] opt)
 {
