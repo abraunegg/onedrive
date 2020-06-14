@@ -3948,15 +3948,8 @@ final class SyncEngine
 		bool flagAsBigDelete = false;
 		
 		// query the database - how many objects will this remove?
-		long itemsToDelete = 0;
-		auto children = itemdb.selectChildren(item.driveId, item.id);
-		itemsToDelete = count(children);
-		foreach (Item child; children) {
-			if (child.type != ItemType.file) {
-				// recursively count the children of this child
-				itemsToDelete = itemsToDelete + countChildren(child.driveId, child.id);
-			}
-		}
+		auto children = getChildren(item.driveId, item.id);
+		long itemsToDelete = 1 + count(children);
 		
 		// Are we running in monitor mode? A local delete of a file will issue a inotify event, which will trigger the local & remote data immediately
 		if (!cfg.getValueBool("monitor")) {
@@ -4000,11 +3993,16 @@ final class SyncEngine
 						JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
 						if (errorMessage["error"]["message"].str == "Request was cancelled by event received. If attempting to delete a non-empty folder, it's possible that it's on hold") {
 							// Issue #338 - Unable to delete OneDrive content when OneDrive Business Retention Policy is enabled
-							// TODO: We have to recursively delete all files & folders from this path to delete
-							// WARN: 
-							log.error("\nERROR: Unable to delete the requested remote path from OneDrive: ", path);
-							log.error("ERROR: This error is due to OneDrive Business Retention Policy being applied");
-							log.error("WORKAROUND: Manually delete all files and folders from the above path as per Business Retention Policy\n");
+							try {
+								foreach_reverse (Item child; children) {
+									onedrive.deleteById(child.driveId, child.id, child.eTag);
+								}
+								onedrive.deleteById(item.driveId, item.id, item.eTag);
+							} catch (OneDriveException e) {
+								// display what the error is
+								displayOneDriveErrorMessage(e.msg);
+								return;
+							}
 						}
 					} else {
 						// Not a 403 response & OneDrive Business Account / O365 Shared Folder / Library
@@ -4023,19 +4021,17 @@ final class SyncEngine
 			}
 		}
 	}
-	
-	private long countChildren(string driveId, string id){
-		// count children
-		long childrenCount = 0;
-		auto children = itemdb.selectChildren(driveId, id);
-		childrenCount = count(children);
-		foreach (Item child; children) {	
+
+	private Item[] getChildren(string driveId, string id){
+		Item[] children;
+		children ~= itemdb.selectChildren(driveId, id);
+		foreach (Item child; children) {
 			if (child.type != ItemType.file) {
-				// recursively count the children of this child
-				childrenCount = childrenCount + countChildren(child.driveId, child.id);
+				// recursively get the children of this child
+				children ~= getChildren(child.driveId, child.id);
 			}
 		}
-		return childrenCount;
+		return children;
 	}
 
 	// update the item's last modified time
