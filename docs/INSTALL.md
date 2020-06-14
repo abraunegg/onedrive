@@ -15,7 +15,7 @@ This project has been packaged for the following Linux distributions:
 Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If a package is out of date, please contact the package maintainer for resolution.
 
 #### Important information for Ubuntu users:
-Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) packages available for Ubuntu, do not install 'onedrive' these packages. These packages are out of date and should not be used. If you wish to use a package, use the listed PPA above.
+Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) packages available for Ubuntu, do not install 'onedrive' from these packages. These packages are out of date and should not be used. If you wish to use a package, use the PPA listed above.
 
 ## Build Requirements
 *   Build environment must have at least 1GB of memory & 1GB swap space
