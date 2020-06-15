@@ -3996,6 +3996,8 @@ final class SyncEngine
 							try {
 								foreach_reverse (Item child; children) {
 									onedrive.deleteById(child.driveId, child.id, child.eTag);
+									// delete the child reference in the local database
+									itemdb.deleteById(child.driveId, child.id);
 								}
 								onedrive.deleteById(item.driveId, item.id, item.eTag);
 							} catch (OneDriveException e) {
