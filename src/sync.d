@@ -3949,7 +3949,7 @@ final class SyncEngine
 		
 		// query the database - how many objects will this remove?
 		auto children = getChildren(item.driveId, item.id);
-		long itemsToDelete = 1 + count(children);
+		long itemsToDelete = count(children);
 		
 		// Are we running in monitor mode? A local delete of a file will issue a inotify event, which will trigger the local & remote data immediately
 		if (!cfg.getValueBool("monitor")) {
