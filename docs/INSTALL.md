@@ -3,18 +3,20 @@
 ## Linux Packages
 This project has been packaged for the following Linux distributions:
 
-*   Fedora, available via package repositories as [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)
 *   Arch Linux, available from AUR as [onedrive-abraunegg](https://aur.archlinux.org/packages/onedrive-abraunegg/)
 *   Debian, available from the package repository as [onedrive](https://packages.debian.org/sid/net/onedrive)
+*   Fedora, available via package repositories as [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)
+*   NixOS, available on unstable channel (and stable since 20.03). Use package `onedrive` either by adding it to `configuration.nix` or by using the command `nix-env -iA <channel name>.onedrive`. This does not install a service. There is a [PR](https://github.com/NixOS/nixpkgs/pull/77734) (which needs work) which has code which can be used to install a service. See documentation in the same PR.
 *   Slackware, available from the slackbuilds.org repository as [onedrive](https://slackbuilds.org/repository/14.2/network/onedrive/)
 *   Solus, available from the package repository as [onedrive](https://dev.getsol.us/search/query/FB7PIf1jG9Z9/#R)
-*   NixOS, available on unstable channel (and stable since 20.03). Use package `onedrive` either by adding it to `configuration.nix` or by using the command `nix-env -iA <channel name>.onedrive`. This does not install a service. There is a [PR](https://github.com/NixOS/nixpkgs/pull/77734) (which needs work) which has code which can be used to install a service. See documentation in the same PR.
+*   Ubuntu, available as a package from the following PPA [onedrive](https://launchpad.net/~yann1ck/+archive/ubuntu/onedrive)
+*   openSUSE, available for Tumbleweed. Just install using: `zypper in onedrive`
 
 #### Important Note:
 Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If a package is out of date, please contact the package maintainer for resolution.
 
 #### Important information for Ubuntu users:
-Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) packages available for Ubuntu, **DO NOT INSTALL 'onedrive' FROM THE AVAILABLE UBUNTU PACKAGES**. The packages are out of date and should not be used. Compile from source for all Ubuntu platforms. If you are passionate about changing this, consider publishing the up-to-date release on a PPA. Instructions [here](https://itsfoss.com/ppa-guide/) (or become the Ubuntu package manager for onedrive!)
+Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) packages available for Ubuntu, do not install 'onedrive' from these packages. These packages are out of date and should not be used. If you wish to use a package, use the PPA listed above.
 
 ## Build Requirements
 *   Build environment must have at least 1GB of memory & 1GB swap space
