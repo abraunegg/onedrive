@@ -231,8 +231,6 @@ final class Monitor
 			while (i < length) {
 				inotify_event *event = cast(inotify_event*) &buffer[i];
 				string path;
-				path = getPath(event);
-				
 				// inotify event debug
 				log.vdebug("inotify event wd: ", event.wd);
 				log.vdebug("inotify event mask: ", event.mask);
@@ -272,6 +270,9 @@ final class Monitor
 					throw new MonitorException("Inotify overflow, events missing");
 				}
 
+				// if the event is not to be ignored, obtain path
+				path = getPath(event);
+				
 				// skip events that should be excluded based on application configuration
 				if (selectiveSync.isDirNameExcluded(path.strip('.').strip('/'))) {
 					goto skip;

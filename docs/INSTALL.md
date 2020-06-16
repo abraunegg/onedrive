@@ -10,6 +10,7 @@ This project has been packaged for the following Linux distributions:
 *   Slackware, available from the slackbuilds.org repository as [onedrive](https://slackbuilds.org/repository/14.2/network/onedrive/)
 *   Solus, available from the package repository as [onedrive](https://dev.getsol.us/search/query/FB7PIf1jG9Z9/#R)
 *   Ubuntu, available as a package from the following PPA [onedrive](https://launchpad.net/~yann1ck/+archive/ubuntu/onedrive)
+*   openSUSE, available for Tumbleweed. Just install using: `zypper in onedrive`
 
 #### Important Note:
 Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If a package is out of date, please contact the package maintainer for resolution.
