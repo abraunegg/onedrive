@@ -15,15 +15,26 @@ private bool simulateNoRefreshTokenFile = false;
 private ulong retryAfterValue = 0;
 
 private immutable {
-	// Personal & Business Queries
-	string authUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
-	string redirectUrl = "https://login.microsoftonline.com/common/oauth2/nativeclient";
-	string tokenUrl = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
-	string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
+	// Azure Active Directory & Graph Explorer Endpoints
+	// Global & Defaults
+	string globalAuthEndpoint = "https://login.microsoftonline.com";
+	string globalGraphEndpoint = "https://graph.microsoft.com";
 	
-	// Office 365 / SharePoint Queries
-	string siteSearchUrl = "https://graph.microsoft.com/v1.0/sites?search";
-	string siteDriveUrl = "https://graph.microsoft.com/v1.0/sites/";
+	// US Government L4
+	string usl4AuthEndpoint = "https://login.microsoftonline.us";
+	string usl4GraphEndpoint = "https://graph.microsoft.us";
+	
+	// US Government L5
+	string usl5AuthEndpoint = "https://login.microsoftonline.us";
+	string usl5GraphEndpoint = "https://dod-graph.microsoft.us";
+	
+	// Germany
+	string deAuthEndpoint = "https://login.microsoftonline.de";
+	string deGraphEndpoint = "https://graph.microsoft.de";
+	
+	// China
+	string cnAuthEndpoint = "https://login.chinacloudapi.cn";
+	string cnGraphEndpoint = "https://microsoftgraph.chinacloudapi.cn";	
 }
 
 private {
@@ -38,12 +49,27 @@ private {
 
 	// Default Drive ID
 	string driveId = "";
-
-	// Common URL's
-	string driveUrl = "https://graph.microsoft.com/v1.0/me/drive";
-	string itemByIdUrl = "https://graph.microsoft.com/v1.0/me/drive/items/";
-	string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
-	string sharedWithMe = "https://graph.microsoft.com/v1.0/me/drive/sharedWithMe";
+	
+	// API Query URL's, based on using defaults, but can be updated by config option 'azure_ad_endpoint'
+	// Authentication
+	string authUrl = globalAuthEndpoint ~ "/common/oauth2/v2.0/authorize";
+	string redirectUrl = globalAuthEndpoint ~ "/common/oauth2/nativeclient";
+	string tokenUrl = globalAuthEndpoint ~ "/common/oauth2/v2.0/token";
+	
+	// Drive Queries
+	string driveUrl = globalGraphEndpoint ~ "/v1.0/me/drive";
+	string driveByIdUrl = globalGraphEndpoint ~ "/v1.0/drives/";
+	
+	// What is 'shared with me' Query
+	string sharedWithMe = globalGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+	
+	// Item Queries
+	string itemByIdUrl = globalGraphEndpoint ~ "/v1.0/me/drive/items/";
+	string itemByPathUrl = globalGraphEndpoint ~ "/v1.0/me/drive/root:/";
+	
+	// Office 365 / SharePoint Queries
+	string siteSearchUrl = globalGraphEndpoint ~ "/v1.0/sites?search";
+	string siteDriveUrl = globalGraphEndpoint ~ "/v1.0/sites/";
 }
 
 class OneDriveException: Exception
@@ -111,7 +137,90 @@ final class OneDriveApi
 			http.verbose = true;
 			.debugResponse = true;
 		}
-
+		
+		// Configure Azure AD endpoints if 'azure_ad_endpoint' is configured
+		string azureConfigValue = cfg.getValueString("azure_ad_endpoint");
+		switch(azureConfigValue) {
+			case "":
+				log.log("Configuring Global Azure AD Endpoints");
+				break;
+			case "USL4":
+				log.log("Configuring Azure AD for US Government Endpoints");
+				// Authentication
+				authUrl = usl4AuthEndpoint ~ "/common/oauth2/v2.0/authorize";
+				redirectUrl = usl4AuthEndpoint ~ "/common/oauth2/nativeclient";
+				tokenUrl = usl4AuthEndpoint ~ "/common/oauth2/v2.0/token";
+				// Drive Queries
+				driveUrl = usl4GraphEndpoint ~ "/v1.0/me/drive";
+				driveByIdUrl = usl4GraphEndpoint ~ "/v1.0/drives/";					
+				// Item Queries
+				itemByIdUrl = usl4GraphEndpoint ~ "/v1.0/me/drive/items/";
+				itemByPathUrl = usl4GraphEndpoint ~ "/v1.0/me/drive/root:/";
+				// Office 365 / SharePoint Queries
+				siteSearchUrl = usl4GraphEndpoint ~ "/v1.0/sites?search";
+				siteDriveUrl = usl4GraphEndpoint ~ "/v1.0/sites/";
+				// Shared With Me
+				sharedWithMe = usl4GraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				break;
+			case "USL5":
+				log.log("Configuring Azure AD for US Government Endpoints (DOD)");
+				// Authentication
+				authUrl = usl5AuthEndpoint ~ "/common/oauth2/v2.0/authorize";
+				redirectUrl = usl5AuthEndpoint ~ "/common/oauth2/nativeclient";
+				tokenUrl = usl5AuthEndpoint ~ "/common/oauth2/v2.0/token";
+				// Drive Queries
+				driveUrl = usl5GraphEndpoint ~ "/v1.0/me/drive";
+				driveByIdUrl = usl5GraphEndpoint ~ "/v1.0/drives/";					
+				// Item Queries
+				itemByIdUrl = usl5GraphEndpoint ~ "/v1.0/me/drive/items/";
+				itemByPathUrl = usl5GraphEndpoint ~ "/v1.0/me/drive/root:/";
+				// Office 365 / SharePoint Queries
+				siteSearchUrl = usl5GraphEndpoint ~ "/v1.0/sites?search";
+				siteDriveUrl = usl5GraphEndpoint ~ "/v1.0/sites/";
+				// Shared With Me
+				sharedWithMe = usl5GraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				break;
+			case "DE":
+				log.log("Configuring Azure AD Germany");
+				// Authentication
+				authUrl = deAuthEndpoint ~ "/common/oauth2/v2.0/authorize";
+				redirectUrl = deAuthEndpoint ~ "/common/oauth2/nativeclient";
+				tokenUrl = deAuthEndpoint ~ "/common/oauth2/v2.0/token";
+				// Drive Queries
+				driveUrl = deGraphEndpoint ~ "/v1.0/me/drive";
+				driveByIdUrl = deGraphEndpoint ~ "/v1.0/drives/";					
+				// Item Queries
+				itemByIdUrl = deGraphEndpoint ~ "/v1.0/me/drive/items/";
+				itemByPathUrl = deGraphEndpoint ~ "/v1.0/me/drive/root:/";
+				// Office 365 / SharePoint Queries
+				siteSearchUrl = deGraphEndpoint ~ "/v1.0/sites?search";
+				siteDriveUrl = deGraphEndpoint ~ "/v1.0/sites/";
+				// Shared With Me
+				sharedWithMe = deGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				break;
+			case "CN":
+				log.log("Configuring AD China operated by 21Vianet");
+				// Authentication
+				authUrl = cnAuthEndpoint ~ "/common/oauth2/v2.0/authorize";
+				redirectUrl = cnAuthEndpoint ~ "/common/oauth2/nativeclient";
+				tokenUrl = cnAuthEndpoint ~ "/common/oauth2/v2.0/token";
+				// Drive Queries
+				driveUrl = cnGraphEndpoint ~ "/v1.0/me/drive";
+				driveByIdUrl = cnGraphEndpoint ~ "/v1.0/drives/";					
+				// Item Queries
+				itemByIdUrl = cnGraphEndpoint ~ "/v1.0/me/drive/items/";
+				itemByPathUrl = cnGraphEndpoint ~ "/v1.0/me/drive/root:/";
+				// Office 365 / SharePoint Queries
+				siteSearchUrl = cnGraphEndpoint ~ "/v1.0/sites?search";
+				siteDriveUrl = cnGraphEndpoint ~ "/v1.0/sites/";
+				// Shared With Me
+				sharedWithMe = cnGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				break;
+			// Default - all other entries 
+			default:
+				log.log("Unknown Azure AD Endpoint request - using Global Azure AD Endpoints");
+		}
+		
 		// Configure the User Agent string
 		if (cfg.getValueString("user_agent") == "") {
 			// Application User Agent string defaults
@@ -295,7 +404,7 @@ final class OneDriveApi
 		return get(url);
 	}
 
-	// https://docs.microsoft.com/en-us/graph/api/drive-sharedwithme?view=graph-rest-1.0
+	// https://docs.microsoft.com/en-us/graph/api/drive-sharedwithme
 	JSONValue getSharedWithMe()
 	{
 		checkAccessTokenExpired();
@@ -317,7 +426,7 @@ final class OneDriveApi
 		return get(url);
 	}
 	
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta?view=odsp-graph-online
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
 	JSONValue viewChangesByDriveId(const(char)[] driveId, const(char)[] deltaLink)
 	{
 		checkAccessTokenExpired();
@@ -329,6 +438,20 @@ final class OneDriveApi
 		return get(url);
 	}
 	
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_list_children
+	JSONValue listChildren(const(char)[] driveId, const(char)[] id, const(char)[] nextLink)
+	{
+		checkAccessTokenExpired();
+		const(char)[] url;
+		// configure URL to query
+		if (nextLink.empty) {
+			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/children";
+			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		} else {
+			url = nextLink;
+		}
+		return get(url);
+	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
 	void downloadById(const(char)[] driveId, const(char)[] id, string saveToPath, long fileSize)
@@ -396,7 +519,6 @@ final class OneDriveApi
 	{
 		checkAccessTokenExpired();
 		const(char)[] url;
-		//		string itemByPathUrl = "https://graph.microsoft.com/v1.0/me/drive/root:/";
 		if ((path == ".")||(path == "/")) url = driveUrl ~ "/root/";
 		else url = itemByPathUrl ~ encodeComponent(path) ~ ":/";
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
@@ -409,7 +531,6 @@ final class OneDriveApi
 	{
 		checkAccessTokenExpired();
 		const(char)[] url;
-		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		return get(url);
@@ -434,7 +555,6 @@ final class OneDriveApi
 	{
 		checkAccessTokenExpired();
 		const(char)[] url;
-		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
 		url ~= "?select=size,malware,file,webUrl";
 		return get(url);

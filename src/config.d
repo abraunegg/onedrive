@@ -86,6 +86,22 @@ final class Config
 		// Ignore data safety checks and overwrite local data rather than preserve & rename
 		// This is a config file option ONLY
 		boolValues["bypass_data_preservation"] = false;
+		// Support National Azure AD endpoints as per https://docs.microsoft.com/en-us/graph/deployments
+		// By default, if empty, use standard Azure AD URL's
+		// Will support the following options:
+		// - USL4
+		//     AD Endpoint:    https://login.microsoftonline.us
+		//     Graph Endpoint: https://graph.microsoft.us
+		// - USL5
+		//     AD Endpoint:    https://login.microsoftonline.us
+		//     Graph Endpoint: https://dod-graph.microsoft.us
+		// - DE
+		//     AD Endpoint:    https://portal.microsoftazure.de
+		//     Graph Endpoint: 	https://graph.microsoft.de
+		// - CN
+		//     AD Endpoint:    https://login.chinacloudapi.cn
+		//     Graph Endpoint: 	https://microsoftgraph.chinacloudapi.cn
+		stringValues["azure_ad_endpoint"] = "";
 		
 		// DEVELOPER OPTIONS 
 		// display_memory = true | false
@@ -525,6 +541,30 @@ final class Config
 						if (key == "sync_dir") configFileSyncDir = c.front.dup;
 						if (key == "skip_file") configFileSkipFile = c.front.dup;
 						if (key == "skip_dir") configFileSkipDir = c.front.dup;
+						// Azure AD Configuration
+						if (key == "azure_ad_endpoint") {
+							string azureConfigValue = c.front.dup;
+							switch(azureConfigValue) {
+								case "":
+									log.log("Using config option for Global Azure AD Endpoints");
+									break;
+								case "USL4":
+									log.log("Using config option for Azure AD for US Government Endpoints");
+									break;
+								case "USL5":
+									log.log("Using config option for Azure AD for US Government Endpoints (DOD)");
+									break;
+								case "DE":
+									log.log("Using config option for Azure AD Germany");
+									break;
+								case "CN":
+									log.log("Using config option for Azure AD China operated by 21Vianet");
+									break;
+								// Default - all other entries 
+								default:
+									log.log("Unknown Azure AD Endpoint - using Global Azure AD Endpoints");
+							}
+						}
 					} else {
 						auto ppp = key in longValues;
 						if (ppp) {

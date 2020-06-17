@@ -741,6 +741,15 @@ int main(string[] args)
 		sync.setBypassDataPreservation();
 	}
 	
+	// Are we configured to use a National Cloud Deployment
+	if (cfg.getValueString("azure_ad_endpoint") != "") {
+		// value is configured, is it a valid value?
+		if ((cfg.getValueString("azure_ad_endpoint") == "USL4") || (cfg.getValueString("azure_ad_endpoint") == "USL5") || (cfg.getValueString("azure_ad_endpoint") == "DE") || (cfg.getValueString("azure_ad_endpoint") == "CN")) {
+			// valid entries to flag we are using a National Cloud Deployment
+			sync.setNationalCloudDeployment();
+		}
+	}
+	
 	// Do we need to validate the syncDir to check for the presence of a '.nosync' file
 	if (cfg.getValueBool("check_nomount")) {
 		// we were asked to check the mounts
