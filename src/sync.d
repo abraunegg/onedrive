@@ -2539,8 +2539,8 @@ final class SyncEngine
 		// Normally, this is done at the end of processing all /delta queries, but National Cloud Deployments (US and DE) do not support /delta as a query
 		if ((nationalCloudDeployment) || (syncBusinessFolders)) {
 			// Select items that have a out-of-sync flag set
-			foreach (driveId; driveIDsArray) {
-				// For each OneDrive driveID we know about
+			foreach (driveId; uniq(driveIDsArray)) {
+				// For each unique OneDrive driveID we know about
 				Item[] outOfSyncItems = itemdb.selectOutOfSyncItems(driveId);
 				foreach (item; outOfSyncItems) {
 					if (!dryRun) {
@@ -2561,8 +2561,8 @@ final class SyncEngine
 		// scan for changes in the path provided
 		log.vlog("Uploading differences of ", logPath);
 		Item item;
-		// For each OneDrive driveID we know about
-		foreach (driveId; driveIDsArray) {
+		// For each unique OneDrive driveID we know about
+		foreach (driveId; uniq(driveIDsArray)) {
 			log.vdebug("Processing DB entries for this driveId: ", driveId);
 			// Database scan of every item in DB for the given driveId based on the root parent for that drive
 			if ((syncBusinessFolders) && (driveId != defaultDriveId)) {
@@ -2607,8 +2607,8 @@ final class SyncEngine
 		// Normally, this is done at the end of processing all /delta queries, but National Cloud Deployments (US and DE) do not support /delta as a query
 		if ((nationalCloudDeployment) || (syncBusinessFolders)) {
 			// Select items that have a out-of-sync flag set
-			foreach (driveId; driveIDsArray) {
-				// For each OneDrive driveID we know about
+			foreach (driveId; uniq(driveIDsArray)) {
+				// For each unique OneDrive driveID we know about
 				Item[] outOfSyncItems = itemdb.selectOutOfSyncItems(driveId);
 				foreach (item; outOfSyncItems) {
 					if (!dryRun) {
@@ -2629,8 +2629,8 @@ final class SyncEngine
 		// scan for changes in the path provided
 		log.vlog("Uploading differences of ", logPath);
 		Item item;
-		// For each OneDrive driveID we know about
-		foreach (driveId; driveIDsArray) {
+		// For each unique OneDrive driveID we know about
+		foreach (driveId; uniq(driveIDsArray)) {
 			log.vdebug("Processing DB entries for this driveId: ", driveId);
 			// Database scan of every item in DB for the given driveId based on the root parent for that drive
 			if ((syncBusinessFolders) && (driveId != defaultDriveId)) {
