@@ -5435,7 +5435,8 @@ final class SyncEngine
 	}
 	
 	// OneDrive Business Shared Folder support
-	void listOneDriveBusinessSharedFolders(){
+	void listOneDriveBusinessSharedFolders()
+	{
 		// List OneDrive Business Shared Folders
 		log.log("\nListing available OneDrive Business Shared Folders:");
 		// Query the GET /me/drive/sharedWithMe API

@@ -106,3 +106,16 @@ Syncing OneDrive Business Shared Folder: TestSharedFolder
 Applying changes of Path ID: 01DBFNO5VLLTCOGVRW6ZBYFBKAXHJI5IGF
 ```
 **Note:** Whenever you modify the `business_shared_folders` file you must perform a `--resync` of your database to clean up stale entries due to changes in your configuration.
+
+## Enable / Disable syncing of OneDrive Business Shared Folders
+Performing a sync of the configured OneDrive Business Shared Folders can be enabled / disabled via adding the following to your configuration file.
+
+### Enable syncing of OneDrive Business Shared Folders
+```text
+sync_business_shared_folders = "true"
+```
+
+### Disable syncing of OneDrive Business Shared Folders
+```text
+sync_business_shared_folders = "false"
+```

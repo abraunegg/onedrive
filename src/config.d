@@ -102,6 +102,8 @@ final class Config
 		//     AD Endpoint:    https://login.chinacloudapi.cn
 		//     Graph Endpoint: 	https://microsoftgraph.chinacloudapi.cn
 		stringValues["azure_ad_endpoint"] = "";
+		// Allow enable / disable of the syncing of OneDrive Business Shared Folders via configuration file
+		boolValues["sync_business_shared_folders"] = false;
 		
 		// DEVELOPER OPTIONS 
 		// display_memory = true | false
@@ -264,8 +266,7 @@ final class Config
 		boolValues["remove_source_files"] = false;
 		boolValues["skip_dir_strict_match"] = false;
 		boolValues["list_business_shared_folders"] = false;
-		boolValues["sync_business_shared_folders"] = false;
-
+		
 		// Application Startup option validation
 		try {
 			string tmpStr;
