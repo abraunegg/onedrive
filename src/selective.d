@@ -17,11 +17,15 @@ final class SelectiveSync
 	void load(string filepath)
 	{
 		if (exists(filepath)) {
-			paths = File(filepath)
-				.byLine()
-				.map!(a => buildNormalizedPath(a))
-				.filter!(a => a.length > 0)
-				.array;
+			// open file as read only
+			auto file = File(filepath, "r");
+			auto range = file.byLine();
+			foreach (line; range) {
+				// Skip comments in file
+				if (line.length == 0 || line[0] == ';' || line[0] == '#') continue;
+				paths ~= buildNormalizedPath(line);
+			}
+			file.close();
 		}
 	}
 	
