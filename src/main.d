@@ -493,7 +493,7 @@ int main(string[] args)
 		// Is sync_list configured?
 		if (exists(userSyncList)){
 			writeln("Config option 'sync_root_files'        = ", cfg.getValueBool("sync_root_files"));
-			writeln("Selective sync configured              = true");
+			writeln("Selective sync 'sync_list' configured  = true");
 			writeln("sync_list contents:");
 			// Output the sync_list contents
 			auto syncListFile = File(userSyncList);
@@ -504,12 +504,12 @@ int main(string[] args)
 			}
 		} else {
 			writeln("Config option 'sync_root_files'        = ", cfg.getValueBool("sync_root_files"));
-			writeln("Selective sync configured              = false");
+			writeln("Selective sync 'sync_list' configured  = false");
 		}
 		
 		// Is business_shared_folders configured
 		if (exists(businessSharedFolderFile)){
-			writeln("Selective Business Shared Folders configured = true");
+			writeln("Business Shared Folders configured     = true");
 			writeln("business_shared_folders contents:");
 			// Output the business_shared_folders contents
 			auto businessSharedFolderFileList = File(businessSharedFolderFile);
@@ -519,7 +519,7 @@ int main(string[] args)
 				writeln(line);
 			}
 		} else {
-			writeln("Selective Business Shared Folders configured = false");
+			writeln("Business Shared Folders configured     = false");
 		}
 		
 		// Exit

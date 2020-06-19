@@ -403,6 +403,15 @@ final class OneDriveApi
 		url = driveUrl ~ "/root";
 		return get(url);
 	}
+	
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
+	JSONValue getDriveIdRoot(const(char)[] driveId)
+	{
+		checkAccessTokenExpired();
+		const(char)[] url;
+		url = driveByIdUrl ~ driveId ~ "/root";
+		return get(url);
+	}
 
 	// https://docs.microsoft.com/en-us/graph/api/drive-sharedwithme
 	JSONValue getSharedWithMe()
