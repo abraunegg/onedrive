@@ -3381,7 +3381,7 @@ final class SyncEngine
 			if (isDir(path)) {
 				Item item;
 				bool pathFoundInDB = false;
-				foreach (driveId; driveIDsArray) {
+				foreach (driveId; uniq(driveIDsArray)) {
 					if (itemdb.selectByPath(path, driveId, item)) {
 						pathFoundInDB = true; 
 					}
@@ -3424,7 +3424,7 @@ final class SyncEngine
 						log.vlog("Ignoring OneDrive account quota details to upload file - this may fail if not enough space on OneDrive ..");
 					}
 					Item item;
-					foreach (driveId; driveIDsArray) {
+					foreach (driveId; uniq(driveIDsArray)) {
 						if (itemdb.selectByPath(path, driveId, item)) {
 							fileFoundInDB = true; 
 						}
@@ -3487,7 +3487,7 @@ final class SyncEngine
 				parent.driveId = defaultDriveId;  // Should give something like 12345abcde1234a1
 			} else {
 				// Query the database using each of the driveId's we are using
-				foreach (driveId; driveIDsArray) {
+				foreach (driveId; uniq(driveIDsArray)) {
 					// Query the database for this parent path using each driveId
 					Item dbResponse;
 					if(itemdb.selectByPathWithRemote(parentPath, driveId, dbResponse)){
@@ -3691,7 +3691,7 @@ final class SyncEngine
 			parentPathFoundInDB = true;
 		} else {
 			// Query the database using each of the driveId's we are using
-			foreach (driveId; driveIDsArray) {
+			foreach (driveId; uniq(driveIDsArray)) {
 				// Query the database for this parent path using each driveId
 				Item dbResponse;
 				if(itemdb.selectByPathWithRemote(parentPath, driveId, dbResponse)){
