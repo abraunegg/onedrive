@@ -443,11 +443,7 @@ int main(string[] args)
 		writeln("Config path                            = ", cfg.configDirName);
 		
 		// Does a config file exist or are we using application defaults
-		if (exists(configFilePath)){
-			writeln("Config file found in config path       = true");
-		} else {
-			writeln("Config file found in config path       = false");
-		}
+		writeln("Config file found in config path       = ", exists(configFilePath));
 		
 		// Config Options
 		writeln("Config option 'check_nosync'           = ", cfg.getValueBool("check_nosync"));
