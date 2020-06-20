@@ -146,6 +146,10 @@ In some cases it may be desirable to 'upload only' to OneDrive. To do this use t
 ```text
 onedrive --synchronize --upload-only
 ```
+**Note:** If a file or folder is present on OneDrive, that does not exist locally, it will be removed. If the data on OneDrive should be kept, the following should be used:
+```text
+onedrive --synchronize --upload-only --no-remote-delete
+```
 
 ### Increasing logging level
 When running a sync it may be desirable to see additional information as to the progress and operation of the client. To do this, use the following command:
@@ -680,7 +684,7 @@ Options:
   --display-sync-status
       Display the sync status of the client - no sync will be performed.
   --download-only
-      Only download remote changes
+      Replicate the OneDrive online state locally, by only downloading changes from OneDrive. Do not upload local changes to OneDrive.
   --dry-run
       Perform a trial sync with no changes made
   --enable-logging
@@ -746,7 +750,7 @@ Options:
   --synchronize
       Perform a synchronization
   --upload-only
-      Only upload to OneDrive, do not sync changes from OneDrive locally
+      Replicate the locally configured sync_dir state to OneDrive, by only uploading local changes to OneDrive. Do not download changes from OneDrive.
   --user-agent ARG
       Specify a User Agent string to the http client
   --verbose -v+

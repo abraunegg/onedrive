@@ -69,7 +69,7 @@ Display what options the client will use as currently configured \- no sync will
 Display the sync status of the client \- no sync will be performed.
 .TP
 \fB\-\-download\-only\fP
-Only download remote changes
+Replicate the OneDrive online state locally, by only downloading changes from OneDrive. Do not upload local changes to OneDrive.
 .br
 Configuration file key: \fBdownload_only\fP (default: \fBfalse\fP)
 .TP
@@ -192,7 +192,7 @@ Configuration file key: \fBsync_dir\fP (default: \fB~/OneDrive\fP)
 Perform a synchronization
 .TP
 \fB\-\-upload\-only\fP
-Only upload to OneDrive, do not sync changes from OneDrive locally
+Replicate the locally configured sync_dir state to OneDrive, by only uploading local changes to OneDrive. Do not download changes from OneDrive.
 .br
 Configuration file key: \fBupload_only\fP (default: \fBfalse\fP)
 .TP

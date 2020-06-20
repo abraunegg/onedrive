@@ -14,7 +14,8 @@ final class SelectiveSync
 	private Regex!char dirmask;
 	private bool skipDirStrictMatch = false;
 	private bool skipDotfiles = false;
-	
+
+	// load sync_list file
 	void load(string filepath)
 	{
 		if (exists(filepath)) {
@@ -37,6 +38,7 @@ final class SelectiveSync
 		skipDirStrictMatch = true;
 	}
 
+	// load business_shared_folders file
 	void loadSharedFolders(string filepath)
 	{
 		if (exists(filepath)) {
@@ -148,6 +150,7 @@ final class SelectiveSync
 		return false;
 	}
 	
+	// is business shared folder matched
 	bool isSharedFolderMatched(string name)
 	{
 		// if there are no shared folder always return false
@@ -160,6 +163,7 @@ final class SelectiveSync
 		}
 	}
 	
+	// is business shared folder included
 	bool isPathIncluded(string path, string[] allowedPaths)
 	{
 		// always allow the root
