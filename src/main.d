@@ -23,6 +23,10 @@ int main(string[] args)
 	
 	// main function variables
 	string confdirOption;
+	string configFilePath;
+	string syncListFilePath;
+	string databaseFilePath;
+	string businessSharedFolderFilePath;
 	string currentConfigHash;
 	string currentSyncListHash;
 	string previousConfigHash;
@@ -141,6 +145,12 @@ int main(string[] args)
 	// update configuration from command line args
 	cfg.update_from_args(args);
 	
+	// Initialise normalised file paths
+	configFilePath = buildNormalizedPath(cfg.configDirName ~ "/config");
+	syncListFilePath = buildNormalizedPath(cfg.configDirName ~ "/sync_list");
+	databaseFilePath = buildNormalizedPath(cfg.configDirName ~ "/items.db");
+	businessSharedFolderFilePath = buildNormalizedPath(cfg.configDirName ~ "/business_shared_folders");
+	
 	// Has any of our configuration that would require a --resync been changed?
 	// 1. sync_list file modification
 	// 2. config file modification - but only if sync_dir, skip_dir, skip_file or drive_id was modified
@@ -151,25 +161,25 @@ int main(string[] args)
 	businessSharedFoldersHashFile = buildNormalizedPath(cfg.configDirName ~ "/.business_shared_folders.hash");
 	
 	// Does a config file exist with a valid hash file
-	if ((exists(buildNormalizedPath(cfg.configDirName ~ "/config"))) && (!exists(configHashFile))) {
+	if ((exists(configFilePath)) && (!exists(configHashFile))) {
 		// Hash of config file needs to be created
-		std.file.write(configHashFile, computeQuickXorHash(buildNormalizedPath(cfg.configDirName ~ "/config")));
+		std.file.write(configHashFile, computeQuickXorHash(configFilePath));
 	}
 	
 	// Does a sync_list file exist with a valid hash file
-	if ((exists(buildNormalizedPath(cfg.configDirName ~ "/sync_list"))) && (!exists(syncListHashFile))) {
+	if ((exists(syncListFilePath)) && (!exists(syncListHashFile))) {
 		// Hash of sync_list file needs to be created
-		std.file.write(syncListHashFile, computeQuickXorHash(buildNormalizedPath(cfg.configDirName ~ "/sync_list")));
+		std.file.write(syncListHashFile, computeQuickXorHash(syncListFilePath));
 	}
 	
 	// check if business_shared_folders & business_shared_folders hash exists
-	if ((exists(buildNormalizedPath(cfg.configDirName ~ "/business_shared_folders"))) && (!exists(businessSharedFoldersHashFile))) {
+	if ((exists(businessSharedFolderFilePath)) && (!exists(businessSharedFoldersHashFile))) {
 		// Hash of business_shared_folders file needs to be created
-		std.file.write(businessSharedFoldersHashFile, computeQuickXorHash(buildNormalizedPath(cfg.configDirName ~ "/business_shared_folders")));
+		std.file.write(businessSharedFoldersHashFile, computeQuickXorHash(businessSharedFolderFilePath));
 	}
 	
 	// If hash files exist, but config files do not ... remove the hash, but only if --resync was issued as now the application will use 'defaults' which 'may' be different
-	if ((!exists(buildNormalizedPath(cfg.configDirName ~ "/config"))) && (exists(configHashFile))) {
+	if ((!exists(configFilePath)) && (exists(configHashFile))) {
 		// if --resync safe remove config.hash and config.backup
 		if (cfg.getValueBool("resync")) {
 			safeRemove(configHashFile);
@@ -178,7 +188,7 @@ int main(string[] args)
 	}
 	
 	// If sync_list hash file exists, but sync_list file does not ... remove the hash, but only if --resync was issued as now the application will use 'defaults' which 'may' be different
-	if ((!exists(buildNormalizedPath(cfg.configDirName ~ "/sync_list"))) && (exists(syncListHashFile))) {
+	if ((!exists(syncListFilePath)) && (exists(syncListHashFile))) {
 		// if --resync safe remove sync_list.hash
 		if (cfg.getValueBool("resync")) safeRemove(syncListHashFile);
 	}
@@ -189,9 +199,9 @@ int main(string[] args)
 	}
 	
 	// Read config hashes if they exist
-	if (exists(buildNormalizedPath(cfg.configDirName ~ "/config"))) currentConfigHash = computeQuickXorHash(buildNormalizedPath(cfg.configDirName ~ "/config"));
-	if (exists(buildNormalizedPath(cfg.configDirName ~ "/sync_list"))) currentSyncListHash = computeQuickXorHash(buildNormalizedPath(cfg.configDirName ~ "/sync_list"));
-	if (exists(buildNormalizedPath(cfg.configDirName ~ "/business_shared_folders"))) currentBusinessSharedFoldersHash = computeQuickXorHash(buildNormalizedPath(cfg.configDirName ~ "/business_shared_folders"));
+	if (exists(configFilePath)) currentConfigHash = computeQuickXorHash(configFilePath);
+	if (exists(syncListFilePath)) currentSyncListHash = computeQuickXorHash(syncListFilePath);
+	if (exists(businessSharedFolderFilePath)) currentBusinessSharedFoldersHash = computeQuickXorHash(businessSharedFolderFilePath);
 	if (exists(configHashFile)) previousConfigHash = readText(configHashFile);
 	if (exists(syncListHashFile)) previousSyncListHash = readText(syncListHashFile);
 	if (exists(businessSharedFoldersHashFile)) previousBusinessSharedFoldersHash = readText(businessSharedFoldersHashFile);
@@ -279,26 +289,26 @@ int main(string[] args)
 					// we are not in a dry-run scenario
 					// update config hash
 					log.vdebug("updating config hash as it is out of date");
-					std.file.write(configHashFile, computeQuickXorHash(cfg.configDirName ~ "/config"));
+					std.file.write(configHashFile, computeQuickXorHash(configFilePath));
 					// create backup copy of current config file
 					log.vdebug("making backup of config file as it is out of date");
-					std.file.copy(cfg.configDirName ~ "/config", configBackupFile);
+					std.file.copy(configFilePath, configBackupFile);
 				}
 			}
 		}
 	}
 	
 	// Is there a backup of the config file if the config file exists?
-	if ((exists(buildNormalizedPath(cfg.configDirName ~ "/config"))) && (!exists(configBackupFile))) {
+	if ((exists(configFilePath)) && (!exists(configBackupFile))) {
 		// create backup copy of current config file
-		std.file.copy(buildNormalizedPath(cfg.configDirName ~ "/config"), configBackupFile);
+		std.file.copy(configFilePath, configBackupFile);
 	}
 	
 	// config file set options can be changed via CLI input, specifically these will impact sync and --resync will be needed:
 	//  --syncdir ARG
 	//  --skip-file ARG
 	//  --skip-dir ARG
-	if (exists(buildNormalizedPath(cfg.configDirName ~ "/config"))) {
+	if (exists(configFilePath)) {
 		// config file exists
 		// was the sync_dir updated by CLI?
 		if (cfg.configFileSyncDir != "") {
@@ -344,23 +354,23 @@ int main(string[] args)
 				// --resync issued, update hashes of config files if they exist
 				if (!cfg.getValueBool("dry_run")) {
 					// not doing a dry run, update hash files if config & sync_list exist
-					if (exists(buildNormalizedPath(cfg.configDirName ~ "/config"))) {
+					if (exists(configFilePath)) {
 						// update hash
 						log.vdebug("updating config hash as --resync issued");
-						std.file.write(configHashFile, computeQuickXorHash(buildNormalizedPath(cfg.configDirName ~ "/config")));
+						std.file.write(configHashFile, computeQuickXorHash(configFilePath));
 						// create backup copy of current config file
 						log.vdebug("making backup of config file as --resync issued");
-						std.file.copy(buildNormalizedPath(cfg.configDirName ~ "/config"), configBackupFile);
+						std.file.copy(configFilePath, configBackupFile);
 					}
-					if (exists(buildNormalizedPath(cfg.configDirName ~ "/sync_list"))) {
+					if (exists(syncListFilePath)) {
 						// update sync_list hash
 						log.vdebug("updating sync_list hash as --resync issued");
-						std.file.write(syncListHashFile, computeQuickXorHash(buildNormalizedPath(cfg.configDirName ~ "/sync_list")));
+						std.file.write(syncListHashFile, computeQuickXorHash(syncListFilePath));
 					}
-					if (exists(buildNormalizedPath(cfg.configDirName ~ "/business_shared_folders"))) {
+					if (exists(businessSharedFolderFilePath)) {
 						// update business_shared_folders hash
 						log.vdebug("updating business_shared_folders hash as --resync issued");
-						std.file.write(businessSharedFoldersHashFile, computeQuickXorHash(buildNormalizedPath(cfg.configDirName ~ "/business_shared_folders")));
+						std.file.write(businessSharedFoldersHashFile, computeQuickXorHash(businessSharedFolderFilePath));
 					}
 				}
 			}
@@ -431,9 +441,9 @@ int main(string[] args)
 	log.setNotifications(cfg.getValueBool("monitor") && !cfg.getValueBool("disable_notifications"));
 	
 	// Application upgrades - skilion version etc
-	if (exists(buildNormalizedPath(cfg.configDirName ~ "/items.db"))) {
+	if (exists(databaseFilePath)) {
 		if (!cfg.getValueBool("dry_run")) {
-			safeRemove(buildNormalizedPath(cfg.configDirName ~ "/items.db"));
+			safeRemove(databaseFilePath);
 		}
 		log.logAndNotify("Database schema changed, resync needed");
 		cfg.setValueBool("resync", true);
@@ -458,20 +468,12 @@ int main(string[] args)
 	
 	// Display current application configuration, no application initialisation
 	if (cfg.getValueBool("display_config")){
-		string userConfigFilePath = buildNormalizedPath(cfg.configDirName ~ "/config");
-		string userSyncList = buildNormalizedPath(cfg.configDirName ~ "/sync_list");
-		string businessSharedFolderFile = buildNormalizedPath(cfg.configDirName ~ "/business_shared_folders");
-		
 		// Display application version
 		writeln("onedrive version                       = ", strip(import("version")));
 		// Display all of the pertinent configuration options
 		writeln("Config path                            = ", cfg.configDirName);
 		// Does a config file exist or are we using application defaults
-		if (exists(userConfigFilePath)){
-			writeln("Config file found in config path       = true");
-		} else {
-			writeln("Config file found in config path       = false");
-		}
+		writeln("Config file found in config path       = ", exists(configFilePath));
 		
 		// Config Options
 		writeln("Config option 'check_nosync'           = ", cfg.getValueBool("check_nosync"));
@@ -491,12 +493,12 @@ int main(string[] args)
 		}
 		
 		// Is sync_list configured?
-		if (exists(userSyncList)){
+		if (exists(syncListFilePath)){
 			writeln("Config option 'sync_root_files'        = ", cfg.getValueBool("sync_root_files"));
 			writeln("Selective sync 'sync_list' configured  = true");
 			writeln("sync_list contents:");
 			// Output the sync_list contents
-			auto syncListFile = File(userSyncList);
+			auto syncListFile = File(syncListFilePath);
 			auto range = syncListFile.byLine();
 			foreach (line; range)
 			{
@@ -508,11 +510,11 @@ int main(string[] args)
 		}
 		
 		// Is business_shared_folders configured
-		if (exists(businessSharedFolderFile)){
+		if (exists(businessSharedFolderFilePath)){
 			writeln("Business Shared Folders configured     = true");
 			writeln("business_shared_folders contents:");
 			// Output the business_shared_folders contents
-			auto businessSharedFolderFileList = File(businessSharedFolderFile);
+			auto businessSharedFolderFileList = File(businessSharedFolderFilePath);
 			auto range = businessSharedFolderFileList.byLine();
 			foreach (line; range)
 			{
@@ -625,11 +627,11 @@ int main(string[] args)
 	auto selectiveSync = new SelectiveSync();
 	
 	// load sync_list if it exists
-	if (exists(cfg.syncListFilePath)){
+	if (exists(syncListFilePath)){
 		log.vdebug("Loading user configured sync_list file ...");
 		syncListConfigured = true;
 		// list what will be synced
-		auto syncListFile = File(cfg.syncListFilePath);
+		auto syncListFile = File(syncListFilePath);
 		auto range = syncListFile.byLine();
 		foreach (line; range)
 		{
@@ -641,20 +643,20 @@ int main(string[] args)
 			syncListFile.close();
 		}
 	}
-	selectiveSync.load(cfg.syncListFilePath);
+	selectiveSync.load(syncListFilePath);
 	
 	// load business_shared_folders if it exists
-	if (exists(cfg.businessSharedFolderFilePath)){
+	if (exists(businessSharedFolderFilePath)){
 		log.vdebug("Loading user configured business_shared_folders file ...");
 		// list what will be synced
-		auto businessSharedFolderFile = File(cfg.businessSharedFolderFilePath);
-		auto range = businessSharedFolderFile.byLine();
+		auto businessSharedFolderFileList = File(businessSharedFolderFilePath);
+		auto range = businessSharedFolderFileList.byLine();
 		foreach (line; range)
 		{
 			log.vdebug("business_shared_folders: ", line);
 		}
 	}
-	selectiveSync.loadSharedFolders(cfg.businessSharedFolderFilePath);
+	selectiveSync.loadSharedFolders(businessSharedFolderFilePath);
 	
 	// Configure skip_dir, skip_file, skip-dir-strict-match & skip_dotfiles from config entries
 	// Handle skip_dir configuration in config file
