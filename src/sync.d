@@ -374,9 +374,12 @@ final class SyncEngine
 			defaultDriveId = oneDriveDetails["id"].str;
 			defaultRootId = oneDriveRootDetails["id"].str;
 			remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
-			
 			// Make sure that defaultDriveId is in our driveIDs array to use when checking if item is in database
-			driveIDsArray ~= defaultDriveId;
+			// Keep the driveIDsArray with unique entries only
+			if (!canFind(driveIDsArray, defaultDriveId)) {
+				// Add this drive id to the array to search with
+				driveIDsArray ~= defaultDriveId;
+			}
 			
 			// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
 			if (remainingFreeSpace <= 0) {
@@ -630,8 +633,13 @@ final class SyncEngine
 						
 						// Do the actual sync
 						applyDifferences(businessSharedFolder.remoteDriveId, businessSharedFolder.remoteId, performFullItemScan);
-						// add drive id to the array to search for, for the next entry
-						driveIDsArray ~= searchResult["remoteItem"]["parentReference"]["driveId"].str;
+						// add this parent drive id to the array to search for, ready for next use
+						string newDriveID = searchResult["remoteItem"]["parentReference"]["driveId"].str;
+						// Keep the driveIDsArray with unique entries only
+						if (!canFind(driveIDsArray, newDriveID)) {
+							// Add this drive id to the array to search with
+							driveIDsArray ~= newDriveID;
+						}
 					} else {
 						// Shared Folder Name Conflict ...
 						log.log("WARNING: Skipping shared folder due to existing name conflict: ", sharedFolderName);
@@ -688,8 +696,11 @@ final class SyncEngine
 							// Path we want to sync is on a OneDrive Business Shared Folder
 							// Set the correct driveId
 							driveId = searchResult["remoteItem"]["parentReference"]["driveId"].str;
-							// Add this drive id to the array to search with
-							driveIDsArray ~= driveId;
+							// Keep the driveIDsArray with unique entries only
+							if (!canFind(driveIDsArray, driveId)) {
+								// Add this drive id to the array to search with
+								driveIDsArray ~= driveId;
+							}
 						} 
 					} 
 				}
@@ -2541,7 +2552,7 @@ final class SyncEngine
 		// Normally, this is done at the end of processing all /delta queries, but National Cloud Deployments (US and DE) do not support /delta as a query
 		if ((nationalCloudDeployment) || (syncBusinessFolders)) {
 			// Select items that have a out-of-sync flag set
-			foreach (driveId; uniq(driveIDsArray)) {
+			foreach (driveId; driveIDsArray) {
 				// For each unique OneDrive driveID we know about
 				Item[] outOfSyncItems = itemdb.selectOutOfSyncItems(driveId);
 				foreach (item; outOfSyncItems) {
@@ -2564,7 +2575,7 @@ final class SyncEngine
 		log.vlog("Uploading differences of ", logPath);
 		Item item;
 		// For each unique OneDrive driveID we know about
-		foreach (driveId; uniq(driveIDsArray)) {
+		foreach (driveId; driveIDsArray) {
 			log.vdebug("Processing DB entries for this driveId: ", driveId);
 			// Database scan of every item in DB for the given driveId based on the root parent for that drive
 			if ((syncBusinessFolders) && (driveId != defaultDriveId)) {
@@ -2609,7 +2620,7 @@ final class SyncEngine
 		// Normally, this is done at the end of processing all /delta queries, but National Cloud Deployments (US and DE) do not support /delta as a query
 		if ((nationalCloudDeployment) || (syncBusinessFolders)) {
 			// Select items that have a out-of-sync flag set
-			foreach (driveId; uniq(driveIDsArray)) {
+			foreach (driveId; driveIDsArray) {
 				// For each unique OneDrive driveID we know about
 				Item[] outOfSyncItems = itemdb.selectOutOfSyncItems(driveId);
 				foreach (item; outOfSyncItems) {
@@ -2632,7 +2643,7 @@ final class SyncEngine
 		log.vlog("Uploading differences of ", logPath);
 		Item item;
 		// For each unique OneDrive driveID we know about
-		foreach (driveId; uniq(driveIDsArray)) {
+		foreach (driveId; driveIDsArray) {
 			log.vdebug("Processing DB entries for this driveId: ", driveId);
 			// Database scan of every item in DB for the given driveId based on the root parent for that drive
 			if ((syncBusinessFolders) && (driveId != defaultDriveId)) {
@@ -3383,7 +3394,7 @@ final class SyncEngine
 			if (isDir(path)) {
 				Item item;
 				bool pathFoundInDB = false;
-				foreach (driveId; uniq(driveIDsArray)) {
+				foreach (driveId; driveIDsArray) {
 					if (itemdb.selectByPath(path, driveId, item)) {
 						pathFoundInDB = true; 
 					}
@@ -3426,7 +3437,7 @@ final class SyncEngine
 						log.vlog("Ignoring OneDrive account quota details to upload file - this may fail if not enough space on OneDrive ..");
 					}
 					Item item;
-					foreach (driveId; uniq(driveIDsArray)) {
+					foreach (driveId; driveIDsArray) {
 						if (itemdb.selectByPath(path, driveId, item)) {
 							fileFoundInDB = true; 
 						}
@@ -3489,7 +3500,7 @@ final class SyncEngine
 				parent.driveId = defaultDriveId;  // Should give something like 12345abcde1234a1
 			} else {
 				// Query the database using each of the driveId's we are using
-				foreach (driveId; uniq(driveIDsArray)) {
+				foreach (driveId; driveIDsArray) {
 					// Query the database for this parent path using each driveId
 					Item dbResponse;
 					if(itemdb.selectByPathWithRemote(parentPath, driveId, dbResponse)){
@@ -3693,7 +3704,7 @@ final class SyncEngine
 			parentPathFoundInDB = true;
 		} else {
 			// Query the database using each of the driveId's we are using
-			foreach (driveId; uniq(driveIDsArray)) {
+			foreach (driveId; driveIDsArray) {
 				// Query the database for this parent path using each driveId
 				Item dbResponse;
 				if(itemdb.selectByPathWithRemote(parentPath, driveId, dbResponse)){
