@@ -520,13 +520,15 @@ final class SyncEngine
 	}
 	
 	// return the OneDrive Account Type
-	auto getAccountType(){
+	auto getAccountType()
+	{
 		// return account type in use
 		return accountType;
 	}
 	
 	// download all new changes from OneDrive
-	void applyDifferences(bool performFullItemScan) {
+	void applyDifferences(bool performFullItemScan)
+	{
 		// Set defaults for the root folder
 		// Use the global's as initialised via init() rather than performing unnecessary additional HTTPS calls
 		string driveId = defaultDriveId;
@@ -5155,7 +5157,8 @@ final class SyncEngine
 	
 	// Generage a /delta compatible response when using National Azure AD deployments that do not support /delta queries
 	// see: https://docs.microsoft.com/en-us/graph/deployments#supported-features
-	JSONValue generateDeltaResponse(const(char)[] driveId, const(char)[] idToQuery) {
+	JSONValue generateDeltaResponse(const(char)[] driveId, const(char)[] idToQuery)
+	{
 		// JSON value which will be responded with
 		JSONValue deltaResponse;
 		// initial data
@@ -5330,7 +5333,8 @@ final class SyncEngine
 	}
 	
 	// query child for children
-	JSONValue[] queryForChildren(const(char)[] driveId, const(char)[] idToQuery, const(char)[] childParentPath) {
+	JSONValue[] queryForChildren(const(char)[] driveId, const(char)[] idToQuery, const(char)[] childParentPath)
+	{
 		// function variables
 		JSONValue thisLevelChildren;
 		JSONValue[] thisLevelChildrenData;
