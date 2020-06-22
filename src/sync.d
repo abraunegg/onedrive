@@ -5316,7 +5316,8 @@ final class SyncEngine
 						string childDriveToQuery = child["parentReference"]["driveId"].str;
 						auto childParentPath = child["parentReference"]["path"].str.split(":");
 						string folderPathToScan = childParentPath[1] ~ "/" ~ child["name"].str;
-						JSONValue[] grandChildrenData = queryForChildren(childDriveToQuery, childIdToQuery, folderPathToScan);
+						string pathForLogging = "/" ~ driveData["name"].str ~ "/" ~ child["name"].str;
+						JSONValue[] grandChildrenData = queryForChildren(childDriveToQuery, childIdToQuery, folderPathToScan, pathForLogging);
 						foreach (grandChild; grandChildrenData.array) {
 							// add the grandchild to the array
 							childrenData ~= grandChild;
@@ -5344,7 +5345,7 @@ final class SyncEngine
 	}
 	
 	// query child for children
-	JSONValue[] queryForChildren(const(char)[] driveId, const(char)[] idToQuery, const(char)[] childParentPath)
+	JSONValue[] queryForChildren(const(char)[] driveId, const(char)[] idToQuery, const(char)[] childParentPath, string pathForLogging)
 	{
 		// function variables
 		JSONValue thisLevelChildren;
@@ -5414,7 +5415,12 @@ final class SyncEngine
 			
 			// process this level children
 			if (!childParentPath.empty) {
-				log.vlog("Adding ", count(thisLevelChildren["value"].array), " OneDrive items for processing from ", childParentPath);
+				// We dont use childParentPath to log, as this poses an information leak risk.
+				// The full parent path of the child, as per the JSON might be:
+				//   /Level 1/Level 2/Level 3/Child Shared Folder/some folder/another folder
+				// But 'Child Shared Folder' is what is shared, thus '/Level 1/Level 2/Level 3/' is a potential information leak if logged.
+				// Plus, the application output now shows accuratly what is being shared - so that is a good thing.
+				log.vlog("Adding ", count(thisLevelChildren["value"].array), " OneDrive items for processing from ", pathForLogging);
 			}
 			foreach (child; thisLevelChildren["value"].array) {
 				// add this child to the array of objects
@@ -5428,7 +5434,8 @@ final class SyncEngine
 						string childDriveToQuery = child["parentReference"]["driveId"].str;
 						auto grandchildParentPath = child["parentReference"]["path"].str.split(":");
 						string folderPathToScan = grandchildParentPath[1] ~ "/" ~ child["name"].str;
-						JSONValue[] grandChildrenData = queryForChildren(childDriveToQuery, childIdToQuery, folderPathToScan);
+						string newLoggingPath = pathForLogging ~ "/" ~ child["name"].str;
+						JSONValue[] grandChildrenData = queryForChildren(childDriveToQuery, childIdToQuery, folderPathToScan, newLoggingPath);
 						foreach (grandChild; grandChildrenData.array) {
 							// add the grandchild to the array
 							thisLevelChildrenData ~= grandChild;
