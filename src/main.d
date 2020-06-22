@@ -193,7 +193,7 @@ int main(string[] args)
 		if (cfg.getValueBool("resync")) safeRemove(syncListHashFile);
 	}
 	
-	if ((!exists(cfg.configDirName ~ "/business_shared_folders")) && (exists(businessSharedFoldersHashFile))) {
+	if ((!exists(businessSharedFolderFilePath)) && (exists(businessSharedFoldersHashFile))) {
 		// if --resync safe remove business_shared_folders.hash
 		if (cfg.getValueBool("resync")) safeRemove(businessSharedFoldersHashFile);
 	}
@@ -782,7 +782,7 @@ int main(string[] args)
 		sync.renameDirectoryNoSync(cfg.getValueString("source_directory"), cfg.getValueString("destination_directory"));
 	}
 	
-	// Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?	
+	// Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
 	if (cfg.getValueString("get_o365_drive_id") != "") {
 		sync.querySiteCollectionForDriveID(cfg.getValueString("get_o365_drive_id"));
 		// Exit application 
