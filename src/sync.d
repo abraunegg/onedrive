@@ -543,8 +543,11 @@ final class SyncEngine
 		Item[] items = itemdb.selectRemoteItems();
 		foreach (item; items) {
 			log.vdebug("------------------------------------------------------------------");
-			log.vlog("Syncing OneDrive Shared Folder: ", item.name);
-			applyDifferences(item.remoteDriveId, item.remoteId, performFullItemScan);
+			if (!cfg.getValueBool("monitor")) {
+				log.log("Syncing this OneDrive Personal Shared Folder: ", item.name);
+			} else {
+				log.vlog("Syncing this OneDrive Personal Shared Folder: ", item.name);
+			}
 		}
 		
 		// Check OneDrive Business Shared Folders, if configured to do so
@@ -619,7 +622,11 @@ final class SyncEngine
 					
 					if ( ((!itemInDatabase) || (!itemLocalDirExists)) || (((databaseItem.driveId == searchResult["remoteItem"]["parentReference"]["driveId"].str) && (databaseItem.id == searchResult["remoteItem"]["id"].str)) && (!itemPathIsLocal)) ) {
 						// This shared folder does not exist in the database
-						log.vlog("Syncing this OneDrive Business Shared Folder: ", sharedFolderName);
+						if (!cfg.getValueBool("monitor")) {
+							log.log("Syncing this OneDrive Business Shared Folder: ", sharedFolderName);
+						} else {
+							log.vlog("Syncing this OneDrive Business Shared Folder: ", sharedFolderName);
+						}
 						Item businessSharedFolder = makeItem(searchResult);
 						
 						// Log who shared this to assist with sync data correlation
@@ -2572,7 +2579,7 @@ final class SyncEngine
 		}
 		
 		// scan for changes in the path provided
-		log.vlog("Uploading differences of ", logPath);
+		log.log("Uploading differences of ", logPath);
 		Item item;
 		// For each unique OneDrive driveID we know about
 		foreach (driveId; driveIDsArray) {
@@ -2592,7 +2599,7 @@ final class SyncEngine
 			}
 		}
 
-		log.vlog("Uploading new items of ", logPath);
+		log.log("Uploading new items of ", logPath);
 		// Filesystem walk to find new files not uploaded
 		uploadNewItems(path);
 		// clean up idsToDelete only if --dry-run is set
@@ -5472,6 +5479,7 @@ final class SyncEngine
 			write("\nNo OneDrive Business Shared Folders were returned\n");
 		} else {
 			// shared folders were returned
+			log.vdebug("onedrive.getSharedWithMe API Response: ", graphQuery);
 			foreach (searchResult; graphQuery["value"].array) {
 				// Debug response output
 				log.vdebug("shared folder entry: ", searchResult);
