@@ -39,83 +39,140 @@ Shared By:       Firstname Lastname (user@domain)
 1.  Create a new file called 'business_shared_folders' in your config directory
 2.  On each new line, list the OneDrive Business Shared Folder you wish to sync
 ```text
-[alex@centos7full onedrive]$ cat business_shared_folders 
-TestSharedFolder
-ThisDoesNotExist
-SomeRubbishFolder
-AnotherSharedFolder
+[alex@centos7full onedrive]$ cat ~/.config/onedrive/business_shared_folders
+# comment
+Child Shared Folder
+# Another comment
+Top Level to Share
 [alex@centos7full onedrive]$ 
 ```
 3.  Validate your configuration with `onedrive --display-config`:
 ```text
-onedrive version                    = v2.3.3-1-gc8e47a4
-Config path                         = /home/alex/.config/onedrive
-Config file found in config path    = true
-Config option 'check_nosync'        = false
-Config option 'sync_dir'            = /home/alex/OneDrive
-Config option 'skip_dir'            = 
-Config option 'skip_file'           = ~*|.~*|*.tmp
-Config option 'skip_dotfiles'       = false
-Config option 'skip_symlinks'       = false
-Config option 'monitor_interval'    = 45
-Config option 'min_notify_changes'  = 5
-Config option 'log_dir'             = /var/log/onedrive/
-Selective sync configured           = false
-Selective Business Shared Folders configured = true
+Configuration file successfully loaded
+onedrive version                       = v2.4.3
+Config path                            = /home/alex/.config/onedrive-business/
+Config file found in config path       = true
+Config option 'check_nosync'           = false
+Config option 'sync_dir'               = /home/alex/OneDriveBusiness
+Config option 'skip_dir'               = 
+Config option 'skip_file'              = ~*|.~*|*.tmp
+Config option 'skip_dotfiles'          = false
+Config option 'skip_symlinks'          = false
+Config option 'monitor_interval'       = 300
+Config option 'min_notify_changes'     = 5
+Config option 'log_dir'                = /var/log/onedrive/
+Config option 'classify_as_big_delete' = 1000
+Config option 'sync_root_files'        = false
+Selective sync 'sync_list' configured  = false
+Business Shared Folders configured     = true
 business_shared_folders contents:
-TestSharedFolder
-ThisDoesNotExist
-SomeRubbishFolder
+# comment
+Child Shared Folder
+# Another comment
+Top Level to Share
 ```
 
 ## Performing a sync of OneDrive Business Shared Folders
-Perform a sync using the following command: `onedrive --synchronize --sync-shared-folders`:
+Perform a standalone sync using the following command: `onedrive --synchronize --sync-shared-folders --verbose`:
 ```text
-onedrive --confdir '~/.config/onedrive --synchronize --verbose --sync-shared-folders
-Using Config Dir: /home/alex/.config/onedrive
+onedrive --synchronize --sync-shared-folders --verbose
+Using 'user' Config Dir: /home/alex/.config/onedrive-business/
+Using 'system' Config Dir: 
+Configuration file successfully loaded
 Initializing the OneDrive API ...
+Configuring Global Azure AD Endpoints
 Opening the item database ...
-All operations will be performed in: /home/alex/OneDrive
-Initializing the Synchronization Engine ...
+All operations will be performed in: /home/alex/OneDriveBusiness
+Application version: v2.4.3
 Account Type: business
-Default Drive ID: <redacted>
-Default Root ID: 01WOGXO2N6Y2GOVW7725BZO354PWSELRRZ
-Remaining Free Space: 1099329560663
+Default Drive ID: b!bO8V7s9SSk6r7mWHpIjURotN33W1W2tEv3OXV_oFIdQimEdOHR-1So7CqeT1MfHA
+Default Root ID: 01WIXGO5V6Y2GOVW7725BZO354PWSELRRZ
+Remaining Free Space: 1098316220277
 Fetching details for OneDrive Root
 OneDrive Root exists in the database
+Initializing the Synchronization Engine ...
 Syncing changes from OneDrive ...
-Applying changes of Path ID: 01WOGXO2N6Y2GOVW7725BZO354PWSELRRZ
-Syncing OneDrive Business Shared Folder: SomeRubbishFolder
-Applying changes of Path ID: 01DBFNO5QIQCS5F3EUOVAKDH7TL7ROL6BM
-Syncing OneDrive Business Shared Folder: TestSharedFolder
-Applying changes of Path ID: 01DBFNO5VLLTCOGVRW6ZBYFBKAXHJI5IGF
-Uploading differences of /home/alex/OneDrive
+Applying changes of Path ID: 01WIXGO5V6Y2GOVW7725BZO354PWSELRRZ
+Number of items from OneDrive to process: 0
+Attempting to sync OneDrive Business Shared Folders
+Syncing this OneDrive Business Shared Folder: Child Shared Folder
+OneDrive Business Shared Folder - Shared By:  test user
+Applying changes of Path ID: 01JRXHEZMREEB3EJVHNVHKNN454Q7DFXPR
+Adding OneDrive root details for processing
+Adding OneDrive folder details for processing
+Adding 4 OneDrive items for processing from OneDrive folder
+Adding 2 OneDrive items for processing from /Child Shared Folder/Cisco VDI Whitepaper
+Adding 2 OneDrive items for processing from /Child Shared Folder/SMPP_Shared
+Processing 11 OneDrive items to ensure consistent local state
+Syncing this OneDrive Business Shared Folder: Top Level to Share
+OneDrive Business Shared Folder - Shared By:  test user (testuser@mynasau3.onmicrosoft.com)
+Applying changes of Path ID: 01JRXHEZLRMXHKBYZNOBF3TQOPBXS3VZMA
+Adding OneDrive root details for processing
+Adding OneDrive folder details for processing
+Adding 4 OneDrive items for processing from OneDrive folder
+Adding 3 OneDrive items for processing from /Top Level to Share/10-Files
+Adding 2 OneDrive items for processing from /Top Level to Share/10-Files/Cisco VDI Whitepaper
+Adding 2 OneDrive items for processing from /Top Level to Share/10-Files/Images
+Adding 8 OneDrive items for processing from /Top Level to Share/10-Files/Images/JPG
+Adding 8 OneDrive items for processing from /Top Level to Share/10-Files/Images/PNG
+Adding 2 OneDrive items for processing from /Top Level to Share/10-Files/SMPP
+Processing 31 OneDrive items to ensure consistent local state
+Uploading differences of ~/OneDriveBusiness
 Processing root
 The directory has not changed
-Processing Cygwin.zip
-The file has not changed
-Processing local_dir
+Processing SMPP_Local
 The directory has not changed
-Processing asdf.txt
+Processing SMPP-IF-SPEC_v3_3-24858.pdf
 The file has not changed
-Uploading new items of /home/alex/OneDrive
-Applying changes of Path ID: 01WOGXO2N6Y2GOVW7725BZO354PWSELRRZ
-Syncing OneDrive Business Shared Folder: SomeRubbishFolder
-Applying changes of Path ID: 01DBFNO5QIQCS5F3EUOVAKDH7TL7ROL6BM
-Syncing OneDrive Business Shared Folder: TestSharedFolder
-Applying changes of Path ID: 01DBFNO5VLLTCOGVRW6ZBYFBKAXHJI5IGF
+Processing SMPP_v3_4_Issue1_2-24857.pdf
+The file has not changed
+Processing new_local_file.txt
+The file has not changed
+Processing root
+The directory has not changed
+...
+The directory has not changed
+Processing week02-03-Combinational_Logic-v1.pptx
+The file has not changed
+Uploading new items of ~/OneDriveBusiness
+Applying changes of Path ID: 01WIXGO5V6Y2GOVW7725BZO354PWSELRRZ
+Number of items from OneDrive to process: 0
+Attempting to sync OneDrive Business Shared Folders
+Syncing this OneDrive Business Shared Folder: Child Shared Folder
+OneDrive Business Shared Folder - Shared By:  test user
+Applying changes of Path ID: 01JRXHEZMREEB3EJVHNVHKNN454Q7DFXPR
+Adding OneDrive root details for processing
+Adding OneDrive folder details for processing
+Adding 4 OneDrive items for processing from OneDrive folder
+Adding 2 OneDrive items for processing from /Child Shared Folder/Cisco VDI Whitepaper
+Adding 2 OneDrive items for processing from /Child Shared Folder/SMPP_Shared
+Processing 11 OneDrive items to ensure consistent local state
+Syncing this OneDrive Business Shared Folder: Top Level to Share
+OneDrive Business Shared Folder - Shared By:  test user (testuser@mynasau3.onmicrosoft.com)
+Applying changes of Path ID: 01JRXHEZLRMXHKBYZNOBF3TQOPBXS3VZMA
+Adding OneDrive root details for processing
+Adding OneDrive folder details for processing
+Adding 4 OneDrive items for processing from OneDrive folder
+Adding 3 OneDrive items for processing from /Top Level to Share/10-Files
+Adding 2 OneDrive items for processing from /Top Level to Share/10-Files/Cisco VDI Whitepaper
+Adding 2 OneDrive items for processing from /Top Level to Share/10-Files/Images
+Adding 8 OneDrive items for processing from /Top Level to Share/10-Files/Images/JPG
+Adding 8 OneDrive items for processing from /Top Level to Share/10-Files/Images/PNG
+Adding 2 OneDrive items for processing from /Top Level to Share/10-Files/SMPP
+Processing 31 OneDrive items to ensure consistent local state
 ```
+
 **Note:** Whenever you modify the `business_shared_folders` file you must perform a `--resync` of your database to clean up stale entries due to changes in your configuration.
 
 ## Enable / Disable syncing of OneDrive Business Shared Folders
 Performing a sync of the configured OneDrive Business Shared Folders can be enabled / disabled via adding the following to your configuration file.
 
-### Enable syncing of OneDrive Business Shared Folders
+### Enable syncing of OneDrive Business Shared Folders via config file
 ```text
 sync_business_shared_folders = "true"
 ```
 
-### Disable syncing of OneDrive Business Shared Folders
+### Disable syncing of OneDrive Business Shared Folders via config file
 ```text
 sync_business_shared_folders = "false"
 ```
@@ -127,4 +184,4 @@ Shared folders that match this scenario, when you view 'Shared' via OneDrive onl
 
 ![shared_with_me](./images/shared_with_me.jpg)
 
-This is being tracked by issue tracker: [#466](https://github.com/abraunegg/onedrive/issues/966)
+This issue is being tracked by: [#466](https://github.com/abraunegg/onedrive/issues/966)
