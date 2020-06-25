@@ -584,7 +584,7 @@ onedrive --monitor --verbose --confdir="~/.config/onedriveWork" &
 
 ### Automatic syncing of both OneDrive accounts
 
-In order to automatically start syncing your OneDrive accounts, you will need to create a service file for each account. From the `/usr/lib/systemd/user` folder:
+In order to automatically start syncing your OneDrive accounts, you will need to create a service file for each account. From the `/usr/lib/systemd/system` folder:
 ```text
 cp onedrive.service onedrive-work.service
 ```
