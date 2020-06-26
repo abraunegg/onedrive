@@ -184,4 +184,4 @@ Shared folders that match this scenario, when you view 'Shared' via OneDrive onl
 
 ![shared_with_me](./images/shared_with_me.jpg)
 
-This issue is being tracked by: [#466](https://github.com/abraunegg/onedrive/issues/966)
+This issue is being tracked by: [#966](https://github.com/abraunegg/onedrive/issues/966)
