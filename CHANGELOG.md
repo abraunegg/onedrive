@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Added support for loading system configs if there's no user config
 *   Added Ubuntu installation details to include installing the client from a PPA
 *   Added openSUSE installation details to include installing the client from a package
-*   Added support comments in sync_list file
+*   Added support for comments in sync_list file
 *   Implement recursive deletion when Retention Policy is enabled on OneDrive Business Accounts
 *   Implement support for National cloud deployments
 *   Implement OneDrive Business Shared Folders Support
