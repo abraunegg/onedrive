@@ -156,7 +156,7 @@ docker container run -e ONEDRIVE_RESYNC=1 -e ONEDRIVE_VERBOSE=1 -v onedrive_conf
 There are 2 ways to validate this requirement:
 *   Modify the file `/etc/dphys-swapfile` and edit the `CONF_SWAPSIZE`, for example: `CONF_SWAPSIZE=2024`. A reboot is required to make this change effective.
 *   Dynamically allocate a swapfile for building:
-```
+```bash
 cd /var 
 sudo fallocate -l 1.5G swapfile
 sudo chmod 600 swapfile
