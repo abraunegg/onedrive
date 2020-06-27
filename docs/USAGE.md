@@ -297,6 +297,8 @@ The default configuration file is listed below:
 # application_id = ""
 # resync = "false"
 # bypass_data_preservation = "false"
+# azure_ad_endpoint = ""
+# sync_business_shared_folders = "false"
 ```
 
 
@@ -457,7 +459,7 @@ check_nosync = "true"
 Folders shared with you can be synced by adding them to your OneDrive. To do that open your Onedrive, go to the Shared files list, right click on the folder you want to sync and then click on "Add to my OneDrive".
 
 ### Shared folders (OneDrive Business or Office 365)
-Currently not supported.
+Refer to [./BusinessSharedFolders.md](BusinessSharedFolders.md) for configuration assistance.
 
 ### SharePoint / Office 365 Shared Libraries
 Refer to [./Office365.md](Office365.md) for configuration assistance.
@@ -666,8 +668,8 @@ Options:
 
   --auth-files ARG
       Perform authorization via two files passed in as ARG in the format `authUrl:responseUrl`
-	  The authorization URL is written to the `authUrl`, then onedrive waits for the file `responseUrl`
-	  to be present, and reads the response from that file.
+      The authorization URL is written to the `authUrl`, then onedrive waits for the file `responseUrl`
+      to be present, and reads the response from that file.
   --check-for-nomount
       Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
   --check-for-nosync
@@ -708,6 +710,8 @@ Options:
       Display the file link of a synced file
   --help -h
       This help information.
+  --list-shared-folders
+      List OneDrive Business Shared Folders
   --local-first
       Synchronize from the local directory source first, before downloading changes from OneDrive.
   --log-dir ARG
@@ -752,6 +756,8 @@ Options:
       Source directory to rename or move on OneDrive - no sync will be performed.
   --sync-root-files
       Sync all files in sync_dir root when using sync_list.
+  --sync-shared-folders
+      Sync OneDrive Business Shared Folders
   --syncdir ARG
       Specify the local directory used for synchronization to OneDrive
   --synchronize
