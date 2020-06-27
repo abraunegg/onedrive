@@ -182,6 +182,6 @@ Shared folders, shared with you from people outside of your 'organisation' are u
 
 Shared folders that match this scenario, when you view 'Shared' via OneDrive online, will have a 'world' symbol as per below:
 
-![shared_with_me](./images/shared_with_me.jpg)
+![shared_with_me](./images/shared_with_me.JPG)
 
 This issue is being tracked by: [#966](https://github.com/abraunegg/onedrive/issues/966)
