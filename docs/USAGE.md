@@ -418,11 +418,16 @@ To enable selective sync create a file named `sync_list` in `~/.config/onedrive`
 Each line of the file represents a relative path from your `sync_dir`. All files and directories not matching any line of the file will be skipped during all operations.
 Here is an example of `sync_list`:
 ```text
+# sync_list supports comments
+# Exclude my Backup folder
 Backup
+# Exclude this single document
 Documents/latest_report.docx
-Work/ProjectX
+# Exclude all Work/Project directories
+Work/Project*
 notes.txt
-Blender
+# Exclude /Blender in the ~OneDrive root but not if elsewhere
+/Blender
 Cinema Soc
 Codes
 Textbooks
