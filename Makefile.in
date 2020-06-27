@@ -54,7 +54,7 @@ endif
 system_unit_files = contrib/systemd/onedrive@.service
 user_unit_files = contrib/systemd/onedrive.service
 
-DOCFILES = README.md config LICENSE CHANGELOG.md docs/Docker.md docs/INSTALL.md docs/Office365.md docs/USAGE.md
+DOCFILES = README.md config LICENSE CHANGELOG.md docs/Docker.md docs/INSTALL.md docs/Office365.md docs/USAGE.md docs/BusinessSharedFolders.md
 
 ifneq ("$(wildcard /etc/redhat-release)","")
 RHEL = $(shell cat /etc/redhat-release | grep -E "(Red Hat Enterprise Linux Server|CentOS)" | wc -l)

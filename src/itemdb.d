@@ -2,6 +2,8 @@ import std.datetime;
 import std.exception;
 import std.path;
 import std.string;
+import std.stdio;
+import std.algorithm.searching;
 import core.stdc.stdlib;
 import sqlite;
 static import log;
@@ -368,9 +370,14 @@ final class ItemDatabase
 					if (r2.empty) {
 						// root reached
 						assert(path.length >= 4);
-						// remove "root"
-						if (path.length >= 5) path = path[5 .. $];
-						else path = path[4 .. $];
+						// remove "root/" from path string if it exists
+						if (path.length >= 5) {
+							if (canFind(path, "root/")){
+								path = path[5 .. $];
+							}
+						} else {
+							path = path[4 .. $];
+						}
 						// special case of computing the path of the root itself
 						if (path.length == 0) path = ".";
 						break;
@@ -427,17 +434,39 @@ final class ItemDatabase
 	// As we query /children to get all children from OneDrive, update anything in the database 
 	// to be flagged as not-in-sync, thus, we can use that flag to determing what was previously
 	// in-sync, but now deleted on OneDrive
-	void downgradeSyncStatusFlag()
+	void downgradeSyncStatusFlag(const(char)[] driveId, const(char)[] id)
 	{
-		db.exec("UPDATE item SET syncStatus = 'N'");
+		assert(driveId);
+		auto stmt = db.prepare("UPDATE item SET syncStatus = 'N' WHERE driveId = ?1 AND id = ?2");
+		stmt.bind(1, driveId);
+		stmt.bind(2, id);
+		stmt.exec();
 	}
 	
 	// National Cloud Deployments (US and DE) do not support /delta as a query
 	// Select items that have a out-of-sync flag set
-	Item[] selectOutOfSyncItems()
+	Item[] selectOutOfSyncItems(const(char)[] driveId)
 	{
+		assert(driveId);
 		Item[] items;
-		auto stmt = db.prepare("SELECT * FROM item WHERE syncStatus = 'N'");
+		auto stmt = db.prepare("SELECT * FROM item WHERE syncStatus = 'N' AND driveId = ?1");
+		stmt.bind(1, driveId);
+		auto res = stmt.exec();
+		while (!res.empty) {
+			items ~= buildItem(res);
+			res.step();
+		}
+		return items;
+	}
+	
+	// OneDrive Business Folders are stored in the database potentially without a root | parentRoot link
+	// Select items associated with the provided driveId
+	Item[] selectByDriveId(const(char)[] driveId)
+	{
+		assert(driveId);
+		Item[] items;
+		auto stmt = db.prepare("SELECT * FROM item WHERE driveId = ?1 AND parentId IS NULL");
+		stmt.bind(1, driveId);
 		auto res = stmt.exec();
 		while (!res.empty) {
 			items ~= buildItem(res);

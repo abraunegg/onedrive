@@ -60,6 +60,9 @@ private {
 	string driveUrl = globalGraphEndpoint ~ "/v1.0/me/drive";
 	string driveByIdUrl = globalGraphEndpoint ~ "/v1.0/drives/";
 	
+	// What is 'shared with me' Query
+	string sharedWithMe = globalGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+	
 	// Item Queries
 	string itemByIdUrl = globalGraphEndpoint ~ "/v1.0/me/drive/items/";
 	string itemByPathUrl = globalGraphEndpoint ~ "/v1.0/me/drive/root:/";
@@ -156,6 +159,8 @@ final class OneDriveApi
 				// Office 365 / SharePoint Queries
 				siteSearchUrl = usl4GraphEndpoint ~ "/v1.0/sites?search";
 				siteDriveUrl = usl4GraphEndpoint ~ "/v1.0/sites/";
+				// Shared With Me
+				sharedWithMe = usl4GraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
 				break;
 			case "USL5":
 				log.log("Configuring Azure AD for US Government Endpoints (DOD)");
@@ -172,6 +177,8 @@ final class OneDriveApi
 				// Office 365 / SharePoint Queries
 				siteSearchUrl = usl5GraphEndpoint ~ "/v1.0/sites?search";
 				siteDriveUrl = usl5GraphEndpoint ~ "/v1.0/sites/";
+				// Shared With Me
+				sharedWithMe = usl5GraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
 				break;
 			case "DE":
 				log.log("Configuring Azure AD Germany");
@@ -188,6 +195,8 @@ final class OneDriveApi
 				// Office 365 / SharePoint Queries
 				siteSearchUrl = deGraphEndpoint ~ "/v1.0/sites?search";
 				siteDriveUrl = deGraphEndpoint ~ "/v1.0/sites/";
+				// Shared With Me
+				sharedWithMe = deGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
 				break;
 			case "CN":
 				log.log("Configuring AD China operated by 21Vianet");
@@ -204,6 +213,8 @@ final class OneDriveApi
 				// Office 365 / SharePoint Queries
 				siteSearchUrl = cnGraphEndpoint ~ "/v1.0/sites?search";
 				siteDriveUrl = cnGraphEndpoint ~ "/v1.0/sites/";
+				// Shared With Me
+				sharedWithMe = cnGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
 				break;
 			// Default - all other entries 
 			default:
@@ -392,9 +403,25 @@ final class OneDriveApi
 		url = driveUrl ~ "/root";
 		return get(url);
 	}
+	
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
+	JSONValue getDriveIdRoot(const(char)[] driveId)
+	{
+		checkAccessTokenExpired();
+		const(char)[] url;
+		url = driveByIdUrl ~ driveId ~ "/root";
+		return get(url);
+	}
 
+	// https://docs.microsoft.com/en-us/graph/api/drive-sharedwithme
+	JSONValue getSharedWithMe()
+	{
+		checkAccessTokenExpired();
+		return get(sharedWithMe);
+	}
+	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
-	JSONValue viewChangesById(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink)
+	JSONValue viewChangesByItemId(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink)
 	{
 		checkAccessTokenExpired();
 		const(char)[] url;
@@ -404,6 +431,18 @@ final class OneDriveApi
 			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		} else {
 			url = deltaLink;
+		}
+		return get(url);
+	}
+	
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
+	JSONValue viewChangesByDriveId(const(char)[] driveId, const(char)[] deltaLink)
+	{
+		checkAccessTokenExpired();
+		const(char)[] url = deltaLink;
+		if (url == null) {
+			url = driveByIdUrl ~ driveId ~ "/root/delta";
+			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		}
 		return get(url);
 	}
@@ -422,7 +461,7 @@ final class OneDriveApi
 		}
 		return get(url);
 	}
-	
+
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
 	void downloadById(const(char)[] driveId, const(char)[] id, string saveToPath, long fileSize)
 	{
@@ -505,6 +544,19 @@ final class OneDriveApi
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		return get(url);
 	}
+	
+	// Return the requested details of the specified path on the specified drive id
+	JSONValue getPathDetailsByDriveId(const(char)[] driveId, const(string) path)
+	{
+		checkAccessTokenExpired();
+		const(char)[] url;
+		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
+		// Required format: /drives/{drive-id}/root:/{item-path}
+		url = driveByIdUrl ~ driveId ~ "/root:/" ~ encodeComponent(path);
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		return get(url);
+	}
+		
 	
 	// Return the requested details of the specified id
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
