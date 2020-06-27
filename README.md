@@ -38,7 +38,7 @@ See [docs/USAGE.md](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE
 See [docs/Docker.md](https://github.com/abraunegg/onedrive/blob/master/docs/Docker.md)
 
 ## OneDrive Business Shared Folders
-See [docs/BusinessSharedFolders.md](https://github.com/abraunegg/onedrive/blob/master/docs/docs/BusinessSharedFolders.md)
+See [docs/BusinessSharedFolders.md](https://github.com/abraunegg/onedrive/blob/master/docs/BusinessSharedFolders.md)
 
 ## SharePoint / Office 365 Shared Libraries (Business or Education)
 See [docs/Office365.md](https://github.com/abraunegg/onedrive/blob/master/docs/Office365.md)
