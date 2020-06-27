@@ -417,7 +417,10 @@ final class OneDriveApi
 	JSONValue getSharedWithMe()
 	{
 		checkAccessTokenExpired();
-		return get(sharedWithMe);
+		const(char)[] url;
+		url = sharedWithMe;
+		url ~= "?allowexternal=true";
+		return get(url);
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
