@@ -168,7 +168,6 @@ sudo nano /etc/fstab
 # check it has been assigned
 swapon -s
 free -h
-
 ```
 
 ### Building the Docker image
