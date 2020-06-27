@@ -9,11 +9,13 @@ import util;
 final class SelectiveSync
 {
 	private string[] paths;
+	private string[] businessSharedFoldersList;
 	private Regex!char mask;
 	private Regex!char dirmask;
 	private bool skipDirStrictMatch = false;
 	private bool skipDotfiles = false;
 
+	// load sync_list file
 	void load(string filepath)
 	{
 		if (exists(filepath)) {
@@ -36,6 +38,22 @@ final class SelectiveSync
 		skipDirStrictMatch = true;
 	}
 
+	// load business_shared_folders file
+	void loadSharedFolders(string filepath)
+	{
+		if (exists(filepath)) {
+			// open file as read only
+			auto file = File(filepath, "r");
+			auto range = file.byLine();
+			foreach (line; range) {
+				// Skip comments in file
+				if (line.length == 0 || line[0] == ';' || line[0] == '#') continue;
+				businessSharedFoldersList ~= buildNormalizedPath(line);
+			}
+			file.close();
+		}
+	}
+	
 	void setFileMask(const(char)[] mask)
 	{
 		this.mask = wild2regex(mask);
@@ -131,6 +149,42 @@ final class SelectiveSync
 		}
 		return false;
 	}
+	
+	// is business shared folder matched
+	bool isSharedFolderMatched(string name)
+	{
+		// if there are no shared folder always return false
+		if (businessSharedFoldersList.empty) return false;
+		
+		if (!name.matchFirst(businessSharedFoldersList).empty) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+	
+	// is business shared folder included
+	bool isPathIncluded(string path, string[] allowedPaths)
+	{
+		// always allow the root
+		if (path == ".") return true;
+		// if there are no allowed paths always return true
+		if (allowedPaths.empty) return true;
+
+		path = buildNormalizedPath(path);
+		foreach (allowed; allowedPaths) {
+			auto comm = commonPrefix(path, allowed);
+			if (comm.length == path.length) {
+				// the given path is contained in an allowed path
+				return true;
+			}
+			if (comm.length == allowed.length && path[comm.length] == '/') {
+				// the given path is a subitem of an allowed path
+				return true;
+			}
+		}
+		return false;
+	}
 }
 
 // test if the given path is not included in the allowed paths
@@ -175,6 +229,7 @@ private bool isPathMatched(string path, Regex!char mask) {
 	return false;
 }
 
+// unit tests
 unittest
 {
 	assert(isPathExcluded("Documents2", ["Documents"]));

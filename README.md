@@ -17,8 +17,8 @@ This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) cl
 *   File upload / download validation to ensure data integrity
 *   Resumable uploads
 *   Support OneDrive for Business (part of Office 365)
-*   Shared folders (OneDrive Personal)
-*   SharePoint / Office 365 Shared Libraries
+*   Shared Folder support for OneDrive Personal and OneDrive Business accounts
+*   SharePoint / Office365 Shared Libraries
 *   Desktop notifications via libnotify
 *   Dry-run capability to test configuration changes
 *   Prevent major OneDrive accidental data deletion after configuration change
@@ -36,6 +36,9 @@ See [docs/USAGE.md](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE
 
 ## Docker support
 See [docs/Docker.md](https://github.com/abraunegg/onedrive/blob/master/docs/Docker.md)
+
+## OneDrive Business Shared Folders
+See [docs/BusinessSharedFolders.md](https://github.com/abraunegg/onedrive/blob/master/docs/BusinessSharedFolders.md)
 
 ## SharePoint / Office 365 Shared Libraries (Business or Education)
 See [docs/Office365.md](https://github.com/abraunegg/onedrive/blob/master/docs/Office365.md)

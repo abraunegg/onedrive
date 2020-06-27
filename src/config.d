@@ -23,6 +23,7 @@ final class Config
 	public string configFileSyncDir = "";
 	public string configFileSkipFile = "";
 	public string configFileSkipDir = "";
+	public string businessSharedFolderFilePath = "";
 	private string userConfigFilePath = "";
 	private string systemConfigFilePath = "";
 	// was the application just authorised - paste of response uri
@@ -33,8 +34,9 @@ final class Config
 	private string[string] stringValues;
 	private bool[string] boolValues;
 	private long[string] longValues;
+	// Compile time regex - this does not change
 	public auto configRegex = ctRegex!(`^(\w+)\s*=\s*"(.*)"\s*$`);
-
+	
 	this(string confdirOption)
 	{
 		// default configuration - entries in config file ~/.config/onedrive/config
@@ -100,6 +102,8 @@ final class Config
 		//     AD Endpoint:    https://login.chinacloudapi.cn
 		//     Graph Endpoint: 	https://microsoftgraph.chinacloudapi.cn
 		stringValues["azure_ad_endpoint"] = "";
+		// Allow enable / disable of the syncing of OneDrive Business Shared Folders via configuration file
+		boolValues["sync_business_shared_folders"] = false;
 		
 		// DEVELOPER OPTIONS 
 		// display_memory = true | false
@@ -189,6 +193,7 @@ final class Config
 		userConfigFilePath = buildNormalizedPath(configDirName ~ "/config");
 		syncListFilePath = buildNormalizedPath(configDirName ~ "/sync_list");
 		systemConfigFilePath = buildNormalizedPath(systemConfigDirName ~ "/config");
+		businessSharedFolderFilePath = buildNormalizedPath(configDirName ~ "/business_shared_folders");
 		
 		// Debug Output for application set variables based on configDirName
 		log.vdebug("refreshTokenFilePath = ", refreshTokenFilePath);
@@ -199,6 +204,7 @@ final class Config
 		log.vdebug("userConfigFilePath = ", userConfigFilePath);
 		log.vdebug("syncListFilePath = ", syncListFilePath);
 		log.vdebug("systemConfigFilePath = ", systemConfigFilePath);
+		log.vdebug("businessSharedFolderFilePath = ", businessSharedFolderFilePath);
 	}
 
 	bool initialize()
@@ -259,13 +265,16 @@ final class Config
 		boolValues["force"]               = false;
 		boolValues["remove_source_files"] = false;
 		boolValues["skip_dir_strict_match"] = false;
-
+		boolValues["list_business_shared_folders"] = false;
+		
 		// Application Startup option validation
 		try {
 			string tmpStr;
 			bool tmpBol;
 			long tmpVerb;
+			// duplicated from main.d to get full help output!
 			auto opt = getopt(
+				
 				args,
 				std.getopt.config.bundling,
 				std.getopt.config.caseSensitive,
@@ -404,7 +413,6 @@ final class Config
 				"user-agent",
 					"Specify a User Agent string to the http client",
 					&stringValues["user_agent"],
-				// duplicated from main.d to get full help output!
 				"confdir",
 					"Set the directory used to store the configuration files",
 					&tmpStr,
@@ -413,7 +421,13 @@ final class Config
 					&tmpVerb,
 				"version",
 					"Print the version and exit",
-					&tmpBol
+					&tmpBol,
+				"list-shared-folders",
+					"List OneDrive Business Shared Folders",
+					&boolValues["list_business_shared_folders"],
+				"sync-shared-folders",
+					"Sync OneDrive Business Shared Folders",
+					&boolValues["sync_business_shared_folders"]
 			);
 			if (opt.helpWanted) {
 				outputLongHelp(opt.options);
