@@ -748,7 +748,7 @@ Options:
       Skip dot files and folders from syncing
   --skip-file ARG
       Skip any files that match this pattern from syncing
-  --skip-size
+  --skip-size ARG
       Skip new files larger than this size (in MB)
   --skip-symlinks
       Skip syncing of symlinks
