@@ -2,6 +2,29 @@
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
+## 2.4.3 - 2020-06-29
+### Fixed
+*   Check if symbolic link is relative to location path
+*   When using output logfile, fix inconsistent output spacing
+*   Perform initial sync at startup in monitor mode
+*   Handle a 'race' condition to process inotify events generated whilst performing DB or filesystem walk
+*   Fix segfault when moving folder outside the sync directory when using --monitor on Arch Linux
+
+### Added
+*   Added additional inotify event debugging
+*   Added support for loading system configs if there's no user config
+*   Added Ubuntu installation details to include installing the client from a PPA
+*   Added openSUSE installation details to include installing the client from a package
+*   Added support for comments in sync_list file
+*   Implement recursive deletion when Retention Policy is enabled on OneDrive Business Accounts
+*   Implement support for National cloud deployments
+*   Implement OneDrive Business Shared Folders Support
+
+### Updated
+*   Updated documentation files (various)
+*   Updated log output messaging when a full scan has been set or triggered
+*   Updated buildNormalizedPath complexity to simplify code
+*   Updated to only process OneDrive Personal Shared Folders only if account type is 'personal'
 
 ## 2.4.2 - 2020-05-27
 ### Fixed
