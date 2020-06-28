@@ -44,13 +44,13 @@ Set the directory used to store the configuration files
 \fB\-\-create\-directory\fP ARG
 Create a directory on OneDrive \- no sync will be performed.
 .TP
-\fB\-\-destination\-directory\fP ARG
-Destination directory for renamed or move on OneDrive \- no sync will be performed.
-.TP
 \fB\-\-debug\-https\fP
 Debug OneDrive HTTPS communication.
 .br
 Configuration file key: \fBdebug_https\fP (default: \fBfalse\fP)
+.TP
+\fB\-\-destination\-directory\fP ARG
+Destination directory for renamed or move on OneDrive \- no sync will be performed.
 .TP
 \fB\-\-disable\-notifications\fP
 Do not use desktop notifications in monitor mode
@@ -83,6 +83,9 @@ Enable client activity to a separate log file
 .br
 Configuration file key: \fBenable_logging\fP (default: \fBfalse\fP)
 .TP
+\fB\-\-force\fP
+Force the deletion of data when a 'big delete' is detected
+.TP
 \fB\-\-force\-http\-1.1\fP
 Force the use of HTTP 1.1 for all operations (DEPRECIATED)
 .br
@@ -98,6 +101,9 @@ Query and return the Office 365 Drive ID for a given Office 365 SharePoint Share
 .TP
 \fB\-\-get\-file\-link\fP ARG
 Display the file link of a synced file
+.TP
+\fB\-\-list\-shared\-folders\fP 
+List OneDrive Business Shared Folders
 .TP
 \fB\-\-local\-first\fP
 Synchronize from the local directory source first, before downloading changes from OneDrive.
@@ -125,12 +131,17 @@ Keep monitoring for local and remote changes
 The number of seconds by which each sync operation is undertaken when
 idle under monitor mode
 .br
-Configuration file key: \fBmonitor_interval\fP (default: \fB45\fP)
+Configuration file key: \fBmonitor_interval\fP (default: \fB300\fP)
 .TP
 \fB\-\-monitor\-fullscan-frequency\fP ARG
 Number of sync runs before performing a full local scan of the synced directory
 .br
 Configuration file key: \fBmonitor_fullscan_frequency\fP (default: \fB10\fP)
+.TP
+\fB\-\-monitor\-log\-frequency\fP ARG
+Frequency of logging in monitor mode
+.br
+Configuration file key: \fBmonitor_log_frequency\fP (default: \fB5\fP)
 .TP
 \fB\-\-no\-remote\-delete\fP
 Do not delete local file 'deletes' from OneDrive when using \fB\-\-upload\-only\fR
@@ -172,6 +183,9 @@ Skip any files that match this pattern from syncing
 .br
 Configuration file key: \fBskip_file\fP (default: \fB~*|.~*|*.tmp\fP)
 .TP
+\fB\-\-skip\-size\fP ARG
+Skip new files larger than this size (in MB)
+.TP
 \fB\-\-skip\-symlinks\fP
 Skip syncing of symlinks
 .br
@@ -182,6 +196,12 @@ Source directory to rename or move on OneDrive \- no sync will be performed.
 .TP
 \fB\-\-sync\-root\-files\fP
 Sync all files in sync_dir root when using sync_list.
+
+.TP
+\fB\-\-sync\-shared\-folders\fP
+Sync OneDrive Business Shared Folders
+.br
+Configuration file key: \fBsync_business_shared_folders\fP (default: \fBfalse\fP)
 .TP
 \fB\-\-syncdir\fP ARG
 Set the directory used to sync the files that are synced

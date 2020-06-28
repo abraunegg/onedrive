@@ -150,6 +150,27 @@ docker container run -e ONEDRIVE_RESYNC=1 -e ONEDRIVE_VERBOSE=1 -v onedrive_conf
 ```
 
 ## Build instructions
+### Build Environment Requirements
+*   Build environment must have at least 1GB of memory & 2GB swap space
+
+There are 2 ways to validate this requirement:
+*   Modify the file `/etc/dphys-swapfile` and edit the `CONF_SWAPSIZE`, for example: `CONF_SWAPSIZE=2024`. A reboot is required to make this change effective.
+*   Dynamically allocate a swapfile for building:
+```bash
+cd /var 
+sudo fallocate -l 1.5G swapfile
+sudo chmod 600 swapfile
+sudo mkswap swapfile
+sudo swapon swapfile
+# make swap permanent
+sudo nano /etc/fstab
+# add "/swapfile swap swap defaults 0 0" at the end of file
+# check it has been assigned
+swapon -s
+free -h
+```
+
+### Building the Docker image
 You can also build your own image instead of pulling the one from dockerhub:
 ```bash
 git clone https://github.com/abraunegg/onedrive
