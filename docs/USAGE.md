@@ -512,27 +512,29 @@ To change what 'user' the client runs under (by default root), manually edit the
 systemctl --user enable onedrive
 systemctl --user start onedrive
 ```
+**Note:** `systemctl --user` directive is not applicable for Red Hat Enterprise Linux (RHEL) or CentOS Linux platforms - see below.
+
+**Note:** This will run the 'onedrive' process with a UID/GID of '0', thus, any files or folders that are created will be owned by 'root'
 
 To see the logs run:
 ```text
-journalctl --user-unit onedrive -f
+journalctl --user-unit=onedrive -f
 ```
 
 ### OneDrive service running as root user via systemd (Red Hat Enterprise Linux, CentOS Linux)
-
 ```text
 systemctl enable onedrive
 systemctl start onedrive
 ```
+**Note:** This will run the 'onedrive' process with a UID/GID of '0', thus, any files or folders that are created will be owned by 'root'
 
 To see the logs run:
 ```text
-journalctl onedrive -f
+journalctl --unit=onedrive -f
 ```
 
-### OneDrive service running as a non-root user via systemd (without notifications or GUI) 
-
-In some cases it is desirable to run the OneDrive client as a service, but not running as the 'root' user. In this case, follow the directions below to configure the service for a non-root user.
+### OneDrive service running as a non-root user via systemd (All Linux Distributions)
+In some cases it is desirable to run the OneDrive client as a service, but not running as the 'root' user. In this case, follow the directions below to configure the service for your normal user login.
 
 1.  As the user, who will be running the service, run the application in standalone mode, authorize the application for use & validate that the synchronization is working as expected:
 ```text
@@ -548,8 +550,12 @@ systemctl start onedrive@<username>.service
 systemctl status onedrive@<username>.service
 ```
 
-### OneDrive service running as a non-root user via systemd (with notifications enabled) (Arch, Ubuntu, Debian, OpenSuSE, Fedora)
+To see the logs run:
+```text
+journalctl --unit=onedrive@<username> -f
+```
 
+### OneDrive service running as a non-root user via systemd (with notifications enabled) (Arch, Ubuntu, Debian, OpenSuSE, Fedora)
 In some cases you may wish to receive GUI notifications when using the client when logged in as a non-root user. In this case, follow the directions below:
 
 1. Login via graphical UI as user you wish to enable the service for
@@ -566,10 +572,10 @@ systemctl --user start onedrive
 
 To see the logs run:
 ```text
-journalctl --user-unit onedrive -f
+journalctl --user-unit=onedrive -f
 ```
 
-**Note:** `systemctl --user` is not applicable for Red Hat Enterprise Linux (RHEL) or CentOS Linux platforms
+**Note:** `systemctl --user` directive is not applicable for Red Hat Enterprise Linux (RHEL) or CentOS Linux platforms
 
 ## Additional Configuration
 ### Using multiple OneDrive accounts
