@@ -539,14 +539,18 @@ final class SyncEngine
 		applyDifferences(driveId, rootId, performFullItemScan);
 
 		// Check OneDrive Personal Shared Folders
-		// https://github.com/OneDrive/onedrive-api-docs/issues/764
-		Item[] items = itemdb.selectRemoteItems();
-		foreach (item; items) {
-			log.vdebug("------------------------------------------------------------------");
-			if (!cfg.getValueBool("monitor")) {
-				log.log("Syncing this OneDrive Personal Shared Folder: ", item.name);
-			} else {
-				log.vlog("Syncing this OneDrive Personal Shared Folder: ", item.name);
+		if (accountType == "personal"){
+			// https://github.com/OneDrive/onedrive-api-docs/issues/764
+			Item[] items = itemdb.selectRemoteItems();
+			foreach (item; items) {
+				log.vdebug("------------------------------------------------------------------");
+				if (!cfg.getValueBool("monitor")) {
+					log.log("Syncing this OneDrive Personal Shared Folder: ", item.name);
+				} else {
+					log.vlog("Syncing this OneDrive Personal Shared Folder: ", item.name);
+				}
+				// Check OneDrive Personal Folders
+				applyDifferences(item.remoteDriveId, item.remoteId, performFullItemScan);
 			}
 		}
 		
