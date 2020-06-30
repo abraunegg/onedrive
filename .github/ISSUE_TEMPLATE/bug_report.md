@@ -13,7 +13,8 @@ A clear and concise description of what the bug is.
 *   OS: Output of `uname -a` & provide your OS & version (CentOS 6.x, Ubuntu 18.x etc)
 *   Are you using a headless system (no gui) or with a gui installed?
 *   OneDrive Account Type
-*   DMD or LDC compiler version `dmd --version` or `ldmd2 --version`
+*   Did you build from source or install from a package?
+*   If you installed from source, what is your DMD or LDC compiler version: `dmd --version` or `ldmd2 --version`
 *   Application configuration: Output of `onedrive --display-config`
 *   Curl Version: Output of `curl --version`
 
