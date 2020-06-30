@@ -63,6 +63,9 @@ private {
 	// What is 'shared with me' Query
 	string sharedWithMe = globalGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
 	
+	// What are my 'tenant' details
+	string sharepointTenantId = globalGraphEndpoint ~ "/v1.0/organization";
+	
 	// Item Queries
 	string itemByIdUrl = globalGraphEndpoint ~ "/v1.0/me/drive/items/";
 	string itemByPathUrl = globalGraphEndpoint ~ "/v1.0/me/drive/root:/";
@@ -161,6 +164,7 @@ final class OneDriveApi
 				siteDriveUrl = usl4GraphEndpoint ~ "/v1.0/sites/";
 				// Shared With Me
 				sharedWithMe = usl4GraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				sharepointTenantId = usl4GraphEndpoint ~ "/v1.0/organization"; 
 				break;
 			case "USL5":
 				log.log("Configuring Azure AD for US Government Endpoints (DOD)");
@@ -179,6 +183,7 @@ final class OneDriveApi
 				siteDriveUrl = usl5GraphEndpoint ~ "/v1.0/sites/";
 				// Shared With Me
 				sharedWithMe = usl5GraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				sharepointTenantId = usl5GraphEndpoint ~ "/v1.0/organization";
 				break;
 			case "DE":
 				log.log("Configuring Azure AD Germany");
@@ -197,6 +202,7 @@ final class OneDriveApi
 				siteDriveUrl = deGraphEndpoint ~ "/v1.0/sites/";
 				// Shared With Me
 				sharedWithMe = deGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				sharepointTenantId = deGraphEndpoint ~ "/v1.0/organization";
 				break;
 			case "CN":
 				log.log("Configuring AD China operated by 21Vianet");
@@ -215,6 +221,7 @@ final class OneDriveApi
 				siteDriveUrl = cnGraphEndpoint ~ "/v1.0/sites/";
 				// Shared With Me
 				sharedWithMe = cnGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				sharepointTenantId = cnGraphEndpoint ~ "/v1.0/organization";
 				break;
 			// Default - all other entries 
 			default:
@@ -327,7 +334,7 @@ final class OneDriveApi
 	{
 		import std.stdio, std.regex;
 		char[] response;
-		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.Read.All%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=" ~ redirectUrl;
+		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=User.Read%20Files.ReadWrite%20Files.ReadWrite.all%20Sites.Read.All%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=" ~ redirectUrl;
 		string authFilesString = cfg.getValueString("auth_files");
 		if (authFilesString == "") {
 			log.log("Authorize this app visiting:\n");
@@ -413,6 +420,15 @@ final class OneDriveApi
 		return get(url);
 	}
 
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/site_get
+	JSONValue getTenantID()
+	{
+		checkAccessTokenExpired();
+		const(char)[] url;
+		url = sharepointTenantId;
+		return get(url);
+	}
+	
 	// https://docs.microsoft.com/en-us/graph/api/drive-sharedwithme
 	JSONValue getSharedWithMe()
 	{

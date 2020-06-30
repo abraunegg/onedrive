@@ -5477,6 +5477,14 @@ final class SyncEngine
 	{
 		// List OneDrive Business Shared Folders
 		log.log("\nListing available OneDrive Business Shared Folders:");
+		
+		// Get My Tenent Details
+		string myTenantID;
+		JSONValue tenantDetailsResponse = onedrive.getTenantID();
+		foreach (searchResult; tenantDetailsResponse["value"].array) {
+			myTenantID = searchResult["id"].str;
+		}
+		
 		// Query the GET /me/drive/sharedWithMe API
 		JSONValue graphQuery = onedrive.getSharedWithMe();
 		if (graphQuery.type() == JSONType.object) {
@@ -5507,19 +5515,28 @@ final class SyncEngine
 					}
 					// Output query result
 					log.log("---------------------------------------");
-					log.log("Shared Folder:   ", sharedFolderName);
+					// Default output
+					log.log("Shared Folder:         ", sharedFolderName);
 					if ((sharedByName != "") && (sharedByEmail != "")) {
-						log.log("Shared By:       ", sharedByName, " (", sharedByEmail, ")");
+						log.log("Shared By:             ", sharedByName, " (", sharedByEmail, ")");
 					} else {
 						if (sharedByName != "") {
-							log.log("Shared By:       ", sharedByName);
+							log.log("Shared By:             ", sharedByName);
 						}
 					}
-					log.vlog("Item Id:         ", searchResult["remoteItem"]["id"].str);
-					log.vlog("Parent Drive Id: ", searchResult["remoteItem"]["parentReference"]["driveId"].str);
-					if ("id" in searchResult["remoteItem"]["parentReference"]) {
-						log.vlog("Parent Item Id:  ", searchResult["remoteItem"]["parentReference"]["id"].str);
+					if (searchResult["remoteItem"]["sharepointIds"]["tenantId"].str == myTenantID) {
+						log.log("External Organisation: no");
+					} else {
+						log.log("External Organisation: yes");
 					}
+					
+					// Extra verbose output
+					log.vlog("Item Id:               ", searchResult["remoteItem"]["id"].str);
+					log.vlog("Parent Drive Id:       ", searchResult["remoteItem"]["parentReference"]["driveId"].str);
+					if ("id" in searchResult["remoteItem"]["parentReference"]) {
+						log.vlog("Parent Item Id:        ", searchResult["remoteItem"]["parentReference"]["id"].str);
+					}
+					log.vlog("Tenant ID:             ", searchResult["remoteItem"]["sharepointIds"]["tenantId"].str);
 				}
 			}
 			write("\n");
