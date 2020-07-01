@@ -82,7 +82,29 @@ docker rm -f onedrive
 ```
 ## Advanced Setup
 
-### 5. Edit the config
+### 5. Docker-compose
+
+Also supports docker-compose schemas > 3. 
+In the following example it is assumed you have a `onedriveDir` environment variable and a `onedrive_conf` volume. 
+However, you can also use bind mounts for the configuration folder, e.g. `export ONEDRIVE_CONF="${HOME}/OneDriveConfig"`.  
+
+```
+version: "3"
+services:
+    onedrive:
+        image: driveone/onedrive
+        restart: unless-stopped
+        environment:
+            - ONEDRIVE_UID=${PUID}
+            - ONEDRIVE_GID=${PGID}
+        volumes: 
+            - onedrive_conf:/onedrive/conf
+            - ${onedriveDir}:/onedrive/data
+```
+
+Note that you still have to perform step 3: First Run. 
+
+### 6. Edit the config
 
 Onedrive should run in default configuration, however you can change your configuration by placing a custom config file in the `onedrive_conf` docker volume. First download the default config from [here](https://raw.githubusercontent.com/abraunegg/onedrive/master/config)  
 Then put it into your onedrive_conf volume path, which can be found with:  
@@ -95,7 +117,7 @@ Or you can map your own config folder to the config volume. Make sure to copy al
 
 The detailed document for the config can be found here: [additional-configuration](https://github.com/abraunegg/onedrive#additional-configuration)
 
-### 6. Sync multiple accounts
+### 7. Sync multiple accounts
 
 There are many ways to do this, the easiest is probably to
 1. Create a second docker config volume (replace `Work` with your desired name):  `docker volume create onedrive_conf_Work`
