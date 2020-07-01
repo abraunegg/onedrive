@@ -34,11 +34,12 @@ The second docker volume is for your data folder and is created in the next step
 
 ### 3. First run
 
-Onedrive needs to be authorized with your Microsoft account. This is achieved by running docker in interactive mode. Run the docker image with the two commands below and **make sure to change `onedriveDir` to the onedrive data directory on your filesystem (e.g. `"/home/abraunegg/OneDrive"`)**
+Onedrive needs to be authorized with your Microsoft account. This is achieved by running docker in interactive mode. Run the docker image with the two commands below and **make sure to change `onedriveDir` to the onedrive data directory on your filesystem (e.g. `"/home/abraunegg/OneDrive"`)**.
+Additionally, the user and groupid should be added to remove any potential user conflicts.
 
 ```bash
 onedriveDir="${HOME}/OneDrive"
-docker run -it --restart unless-stopped --name onedrive -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive
+docker run -it --name onedrive -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" -e "ONEDRIVE_UID:PID" -e "ONEDRIVE_GID:GID" driveone/onedrive
 ```
 
 -   You will be asked to open a specific link using your web browser 
