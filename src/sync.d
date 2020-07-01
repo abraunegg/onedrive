@@ -556,11 +556,24 @@ final class SyncEngine
 		
 		// Check OneDrive Business Shared Folders, if configured to do so
 		if (syncBusinessFolders){
+			// Get My Tenent Details
+			string myTenantID;
+			JSONValue tenantDetailsResponse = onedrive.getTenantID();
+			if (tenantDetailsResponse.type() == JSONType.object) {
+				foreach (searchResult; tenantDetailsResponse["value"].array) {
+					myTenantID = searchResult["id"].str;
+				}
+			} else {
+				// Log that an invalid JSON object was returned
+				log.error("ERROR: onedrive.getTenantID call returned an invalid JSON Object");
+			}
+		
 			// query OneDrive Business Shared Folders shared with me
 			log.vlog("Attempting to sync OneDrive Business Shared Folders");
 			JSONValue graphQuery = onedrive.getSharedWithMe();
 			if (graphQuery.type() == JSONType.object) {
 				string sharedFolderName;
+				bool isExternalTenant = false;
 				foreach (searchResult; graphQuery["value"].array) {
 					sharedFolderName = searchResult["name"].str;
 					// Compare this to values in business_shared_folders
@@ -570,6 +583,7 @@ final class SyncEngine
 						bool itemInDatabase = false;
 						bool itemLocalDirExists = false;
 						bool itemPathIsLocal = false;
+						isExternalTenant = false;
 						
 						// "what if" there are 2 or more folders shared with me have the "same" name?
 						// The folder name will be the same, but driveId will be different
@@ -577,11 +591,19 @@ final class SyncEngine
 						log.vdebug("Shared Folder Name: ", sharedFolderName);
 						log.vdebug("Parent Drive Id:    ", searchResult["remoteItem"]["parentReference"]["driveId"].str);
 						log.vdebug("Shared Item Id:     ", searchResult["remoteItem"]["id"].str);
-						Item databaseItem;
 						
-						// for each driveid in the existing driveIDsArray 
+						// Is this OneDrive Shared Folder on an external tenant?
+						if (searchResult["remoteItem"]["sharepointIds"]["tenantId"].str != myTenantID) {
+							isExternalTenant = true;
+							log.vdebug("This shared folder is shared from an external organisation as the tenant is different");
+							// Have to configure the access to this tenant, which requires separate tokenUrl for that tenant
+							onedrive.setExternalTenant(searchResult["remoteItem"]["sharepointIds"]["tenantId"].str);
+						}
+						
+						// for each driveid in the existing driveIDsArray
+						Item databaseItem;						
 						foreach (searchDriveId; driveIDsArray) {
-							log.vdebug("searching database for: ", searchDriveId, " ", sharedFolderName);
+							log.vdebug("Searching database for: ", searchDriveId, ", ", sharedFolderName);
 							if (itemdb.selectByPath(sharedFolderName, searchDriveId, databaseItem)) {
 								log.vdebug("Found shared folder name in database");
 								itemInDatabase = true;
@@ -666,7 +688,11 @@ final class SyncEngine
 									log.vlog("WARNING: Conflict Shared By:          ", sharedByName);
 								}
 							}
-						}	
+						}
+					}
+					if (isExternalTenant) {
+						// clear external tenant
+						onedrive.clearExternalTenant();
 					}
 				}
 			} else {
@@ -5481,8 +5507,13 @@ final class SyncEngine
 		// Get My Tenent Details
 		string myTenantID;
 		JSONValue tenantDetailsResponse = onedrive.getTenantID();
-		foreach (searchResult; tenantDetailsResponse["value"].array) {
-			myTenantID = searchResult["id"].str;
+		if (tenantDetailsResponse.type() == JSONType.object) {
+			foreach (searchResult; tenantDetailsResponse["value"].array) {
+				myTenantID = searchResult["id"].str;
+			}
+		} else {
+			// Log that an invalid JSON object was returned
+			log.error("ERROR: onedrive.getTenantID call returned an invalid JSON Object");
 		}
 		
 		// Query the GET /me/drive/sharedWithMe API

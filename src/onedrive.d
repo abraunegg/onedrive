@@ -105,8 +105,16 @@ final class OneDriveApi
 	private SysTime accessTokenExpiration;
 	private HTTP http;
 
-	// if true, every new access token is printed
+	// If true, every new access token is printed
 	bool printAccessToken;
+	
+	// OneDrive Business External Shared Folder tenant handling
+	bool externalTenant = false;
+	string externalTenantID = "";
+	string externalTokenUrl = "";
+	string externalRefreshToken = "";
+	string externalAccessToken = "";
+	SysTime externalAccessTokenExpiration;
 
 	this(Config cfg)
 	{
@@ -393,6 +401,50 @@ final class OneDriveApi
 		.retryAfterValue = 0;
 	}
 
+	void setExternalTenant(string externalTenantValue)
+	{
+		// Flag that we are using an external tenant
+		externalTenant = true;
+		externalTenantID = externalTenantValue;
+		
+		// Configure externalTokenUrl for this external tenant
+		string azureConfigValue = cfg.getValueString("azure_ad_endpoint");
+		switch(azureConfigValue) {
+			case "":
+				externalTokenUrl = globalAuthEndpoint ~ "/" ~ externalTenantID ~ "/oauth2/v2.0/token";
+				break;
+			case "USL4":
+				externalTokenUrl = usl4AuthEndpoint ~ "/" ~ externalTenantID ~ "/oauth2/v2.0/token";
+				break;
+			case "USL5":
+				externalTokenUrl = usl5AuthEndpoint ~ "/" ~ externalTenantID ~ "/oauth2/v2.0/token";
+				break;
+			case "DE":
+				externalTokenUrl = deAuthEndpoint ~ "/" ~ externalTenantID ~ "/oauth2/v2.0/token";
+				break;
+			case "CN":
+				externalTokenUrl = cnAuthEndpoint ~ "/" ~ externalTenantID ~ "/oauth2/v2.0/token";
+				tokenUrl = cnAuthEndpoint ~ "/common/oauth2/v2.0/token";
+				break;
+			// Default - all other entries 
+			default:
+				externalTokenUrl = globalAuthEndpoint ~ "/" ~ externalTenantID ~ "/oauth2/v2.0/token";
+		}
+		
+		// Get new token and configure this for use
+		newToken();	
+	}
+
+	void clearExternalTenant()
+	{
+		// Clear any external tenant that was set
+		externalTenant = false;
+		externalTenantID = "";
+		externalTokenUrl = "";
+		externalRefreshToken = "";
+		externalAccessToken = "";
+	}
+
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_get
 	JSONValue getDefaultDrive()
 	{
@@ -576,8 +628,7 @@ final class OneDriveApi
 		return get(url);
 	}
 		
-	
-	// Return the requested details of the specified id
+	// Return the requested details of the specified file id
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
 	JSONValue getFileDetails(const(char)[] driveId, const(char)[] id)
 	{
@@ -690,30 +741,49 @@ final class OneDriveApi
 	private void acquireToken(const(char)[] postData)
 	{
 		JSONValue response;
-		
 		try {
-			response = post(tokenUrl, postData);
+			if (!externalTenant) {
+				// use normal token url
+				response = post(tokenUrl, postData);
+			} else {
+				// use external tenant token url
+				response = post(externalTokenUrl, postData);
+			}
 		} catch (OneDriveException e) {
 			// an error was generated
 			displayOneDriveErrorMessage(e.msg);
 		}
 		
 		if (response.type() == JSONType.object) {
-			if ("access_token" in response){
-				accessToken = "bearer " ~ response["access_token"].str();
-				refreshToken = response["refresh_token"].str();
-				accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
-				if (!.dryRun) {
-					std.file.write(cfg.refreshTokenFilePath, refreshToken);
+			// what sort of tenant token are we processing?
+			if (!externalTenant) {
+				// Normal tenant / token processing
+				if ("access_token" in response){
+					accessToken = "bearer " ~ response["access_token"].str();
+					refreshToken = response["refresh_token"].str();
+					accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
+					if (!.dryRun) {
+						std.file.write(cfg.refreshTokenFilePath, refreshToken);
+					}
+					if (printAccessToken) writeln("New access token: ", accessToken);
+				} else {
+					log.error("\nInvalid authentication response from OneDrive. Please check the response uri\n");
+					// re-authorize
+					authorize();
 				}
-				if (printAccessToken) writeln("New access token: ", accessToken);
 			} else {
-				log.error("\nInvalid authentication response from OneDrive. Please check the response uri\n");
-				// re-authorize
-				authorize();
+				// External tenant token handling
+				if ("access_token" in response){
+					externalAccessToken = "bearer " ~ response["access_token"].str();
+					externalRefreshToken = response["refresh_token"].str();
+					externalAccessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
+					if (printAccessToken) writeln("New external access token: ", externalAccessToken);
+				} else {
+					log.error("\nInvalid authentication response from OneDrive. Please check the response uri\n");
+				}
 			}
 		} else {
-			log.vdebug("Invalid JSON response from OneDrive unable to initialize application");
+			log.vdebug("Invalid JSON response from OneDrive unable to aquire token to initialize application");
 		}
 	}
 
@@ -732,7 +802,20 @@ final class OneDriveApi
 
 	private void addAccessTokenHeader()
 	{
-		http.addRequestHeader("Authorization", accessToken);
+		// Which access token header must we add?
+		if (!externalTenant) {
+			// Add the default client accessToken
+			http.addRequestHeader("Authorization", accessToken);
+		} else {
+			// Add the external tenant accessToken
+			if (externalAccessToken.empty) {
+				// if this is still empty, we are probably in the process of getting an updated external access token
+				// use our original one for the moment until this is set
+				http.addRequestHeader("Authorization", accessToken);
+			} else {
+				http.addRequestHeader("Authorization", externalAccessToken);
+			}
+		}
 	}
 
 	private JSONValue get(const(char)[] url, bool skipToken = false)
