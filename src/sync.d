@@ -1726,6 +1726,9 @@ final class SyncEngine
 		// Reset the downloadFailed flag for this item
 		downloadFailed = false;
 		
+		// Path we will be using 
+		string path = "";
+		
 		if(isItemDeleted(driveItem)){
 			// Change is to delete an item
 			log.vdebug("Remote deleted item");
@@ -1805,6 +1808,18 @@ final class SyncEngine
 						simplePathToCheck = driveItem["name"].str;
 					}
 					
+					// If 'simplePathToCheck' or 'complexPathToCheck'  is of the following format:  root:/folder
+					// then isDirNameExcluded matching will not work
+					// Clean up 'root:' if present
+					if (startsWith(simplePathToCheck, "root:")){
+						log.vdebug("Updating simplePathToCheck to remove 'root:'");
+						simplePathToCheck = strip(simplePathToCheck, "root:");
+					}
+					if (startsWith(complexPathToCheck, "root:")){
+						log.vdebug("Updating complexPathToCheck to remove 'root:'");
+						complexPathToCheck = strip(complexPathToCheck, "root:");
+					}
+					
 					// OK .. what checks are we doing?
 					if ((simplePathToCheck != "") && (complexPathToCheck == "")) {
 						// just a simple check
@@ -1834,15 +1849,31 @@ final class SyncEngine
 		if (!unwanted) {
 			// Is the item a file and not a deleted item?
 			if ((isItemFile(driveItem)) && (!isItemDeleted(driveItem))) {
-				log.vdebug("skip_file item to check: ", item.name);
-				unwanted = selectiveSync.isFileNameExcluded(item.name);
+				// skip_file can contain 4 types of entries:
+				// - wildcard - *.txt
+				// - text + wildcard - name*.txt
+				// - full path + combination of any above two - /path/name*.txt
+				// - full path to file - /path/to/file.txt
+				
+				// need to compute the full path for this file
+				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
+				
+				// The path that needs to be checked needs to include the '/'
+				// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
+				if (!startsWith(path, "/")){
+					// Add '/' to the path
+					path = '/' ~ path;
+				}
+				
+				log.vdebug("skip_file item to check: ", path);
+				unwanted = selectiveSync.isFileNameExcluded(path);
 				log.vdebug("Result: ", unwanted);
 				if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
 			}
 		}
 
 		// check the item type
-		string path = "";
+		
 		if (!unwanted) {
 			if (isItemFile(driveItem)) {
 				log.vdebug("The item we are syncing is a file");
@@ -1853,7 +1884,9 @@ final class SyncEngine
 				assert(isItemFolder(driveItem["remoteItem"]), "The remote item is not a folder");
 			} else {
 				// Why was this unwanted?
-				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
+				if (path.empty) {
+					path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
+				}
 				// Microsoft OneNote container objects present as neither folder or file but has file size
 				if ((!isItemFile(driveItem)) && (!isItemFolder(driveItem)) && (hasFileSize(driveItem))) {
 					// Log that this was skipped as this was a Microsoft OneNote item and unsupported
@@ -2145,8 +2178,40 @@ final class SyncEngine
 				}
 			}
 		} else {
-			// path does not exist locally - this will be a new file download or folder creation
-			// Should this 'download' be skipped?
+			// Path does not exist locally - this will be a new file download or folder creation
+			
+			// Should this 'download' be skipped due to 'skip_dir' directive
+			if (cfg.getValueString("skip_dir") != "") {
+				string pathToCheck;
+				// does the path start with '/'?
+				if (!startsWith(path, "/")){
+					// path does not start with '/', but we need to check skip_dir entries with and without '/'
+					// so always make sure we are checking a path with '/'
+					// If this is a file, we need to check the parent path
+					if (item.type == ItemType.file) {
+						// use parent path and add '/'
+						pathToCheck = '/' ~ dirName(path);
+					} else {
+						// use path and add '/'
+						pathToCheck = '/' ~ path;
+					}
+				}
+				
+				// perform the check
+				if (selectiveSync.isDirNameExcluded(pathToCheck)) {
+					// this path should be skipped
+					if (item.type == ItemType.file) {
+						log.vlog("Skipping item - file path is excluded by skip_dir config: ", path);
+					} else {
+						log.vlog("Skipping item - excluded by skip_dir config: ", path);
+					}
+					// flag that this download failed, otherwise the 'item' is added to the database - then, as not present on the local disk, would get deleted from OneDrive
+					downloadFailed = true;
+					return;
+				}
+			}
+			
+			// Should this 'download' be skipped due to nosync directive?
 			// Do we need to check for .nosync? Only if --check-for-nosync was passed in
 			if (cfg.getValueBool("check_nosync")) {
 				// need the parent path for this object
@@ -2171,7 +2236,7 @@ final class SyncEngine
 			break;
 		case ItemType.dir:
 		case ItemType.remote:
-			log.log("Creating local directory: ", path);
+			log.log("Creating local directory: ", "./" ~ path);
 			
 			// Issue #658 handling - is sync_list in use?
 			if (syncListConfigured) {
@@ -2711,14 +2776,18 @@ final class SyncEngine
 		bool unwanted = false;
 		string path;
 		
-		// Is the path excluded?
-		unwanted = selectiveSync.isDirNameExcluded(item.name);
-		
-		// If the path is not excluded, is the filename excluded?
-		if (!unwanted) {
+		// Is this item excluded by user configuration of skip_dir or skip_file?
+		// Is this item a directory or 'remote' type? A 'remote' type is a folder DB tie so should be compared as directory for exclusion
+		if ((item.type == ItemType.dir)||(item.type == ItemType.remote)) {
+			// Is the path excluded?
+			unwanted = selectiveSync.isDirNameExcluded(item.name);
+		}
+		// Is this item a file?
+		if (item.type == ItemType.file) {
+			// Is the filename excluded?
 			unwanted = selectiveSync.isFileNameExcluded(item.name);
 		}
-
+		
 		// If path or filename does not exclude, is this excluded due to use of selective sync?
 		if (!unwanted) {
 			path = itemdb.computePath(item.driveId, item.id);
@@ -3360,7 +3429,9 @@ final class SyncEngine
 					log.vdebug("Checking local path: ", path);
 					// Only check path if config is != ""
 					if (cfg.getValueString("skip_dir") != "") {
-						if (selectiveSync.isDirNameExcluded(path.strip('.').strip('/'))) {
+						// The path that needs to be checked needs to include the '/'
+						// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
+						if (selectiveSync.isDirNameExcluded(path.strip('.'))) {
 							log.vlog("Skipping item - excluded by skip_dir config: ", path);
 							return;
 						}
@@ -3372,6 +3443,7 @@ final class SyncEngine
 					// is added again after this sync
 					if ((exists(cfg.businessSharedFolderFilePath)) && (!syncBusinessFolders)){
 						// business_shared_folders file exists, but we are not using / syncing them
+						// The file contents can only contain 'folder' names, so we need to strip './' from any path we are checking
 						if(selectiveSync.isSharedFolderMatched(strip(path,"./"))){
 							// path detected as a 'new item' is matched as a path in business_shared_folders
 							log.vlog("Skipping item - excluded as included in business_shared_folders config: ", path);
@@ -3382,7 +3454,9 @@ final class SyncEngine
 				}
 				if (isFile(path)) {
 					log.vdebug("Checking file: ", path);
-					if (selectiveSync.isFileNameExcluded(path.strip('.').strip('/'))) {
+					// The path that needs to be checked needs to include the '/'
+					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
+					if (selectiveSync.isFileNameExcluded(path.strip('.'))) {
 						log.vlog("Skipping item - excluded by skip_file config: ", path);
 						return;
 					}

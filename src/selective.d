@@ -5,6 +5,7 @@ import std.path;
 import std.regex;
 import std.stdio;
 import util;
+import log;
 
 final class SelectiveSync
 {
@@ -83,6 +84,7 @@ final class SelectiveSync
 		// Does the directory name match skip_dir config entry?
 		// Returns true if the name matches a skip_dir config entry
 		// Returns false if no match
+		log.vdebug("skip_dir evaluation for: ", name);
 		
 		// Try full path match first
 		if (!name.matchFirst(dirmask).empty) {
@@ -91,8 +93,8 @@ final class SelectiveSync
 			// Do we check the base name as well?
 			if (!skipDirStrictMatch) {
 				// check just the basename in the path
-				string filename = baseName(name);
-				if(!filename.matchFirst(dirmask).empty) {
+				string parent = baseName(name);
+				if(!parent.matchFirst(dirmask).empty) {
 					return true;
 				}
 			}
@@ -107,6 +109,7 @@ final class SelectiveSync
 		// Does the file name match skip_file config entry?
 		// Returns true if the name matches a skip_file config entry
 		// Returns false if no match
+		log.vdebug("skip_file evaluation for: ", name);
 	
 		// Try full path match first
 		if (!name.matchFirst(mask).empty) {
