@@ -84,19 +84,27 @@ final class Monitor
 			return;
 		}
 
-		// skip monitoring any filtered items
+		// Skip the monitoring of any user filtered items
 		if (dirname != ".") {
-			// is the directory name a match to a skip_dir entry?
-			if (selectiveSync.isDirNameExcluded(dirname.strip('.').strip('/'))) {
-				// dont add a watch for this item
-				log.vdebug("Skipping monitoring due to skip_dir match: ", dirname);
-				return;
+			// Is the directory name a match to a skip_dir entry?
+			// The path that needs to be checked needs to include the '/'
+			// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
+			if (isDir(dirname)) {
+				if (selectiveSync.isDirNameExcluded(dirname.strip('.'))) {
+					// dont add a watch for this item
+					log.vdebug("Skipping monitoring due to skip_dir match: ", dirname);
+					return;
+				}
 			}
-			// is the filename a match to a skip_file entry?
-			if (selectiveSync.isFileNameExcluded(baseName(dirname))) {
-				// dont add a watch for this item
-				log.vdebug("Skipping monitoring due to skip_file match: ", dirname);
-				return;
+			if (isFile(dirname)) {
+				// Is the filename a match to a skip_file entry?
+				// The path that needs to be checked needs to include the '/'
+				// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
+				if (selectiveSync.isFileNameExcluded(dirname.strip('.'))) {
+					// dont add a watch for this item
+					log.vdebug("Skipping monitoring due to skip_file match: ", dirname);
+					return;
+				}
 			}
 			// is the path exluded by sync_list?
 			if (selectiveSync.isPathExcludedViaSyncList(buildNormalizedPath(dirname))) {
@@ -272,13 +280,20 @@ final class Monitor
 
 				// if the event is not to be ignored, obtain path
 				path = getPath(event);
-				
 				// skip events that should be excluded based on application configuration
-				if (selectiveSync.isDirNameExcluded(path.strip('.').strip('/'))) {
-					goto skip;
+				if (isDir(path)) {
+					// The path that needs to be checked needs to include the '/'
+					// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
+					if (selectiveSync.isDirNameExcluded(path.strip('.'))) {
+						goto skip;
+					}
 				}
-				if (selectiveSync.isFileNameExcluded(path.strip('.').strip('/'))) {
-					goto skip;
+				if (isFile(path)) {
+					// The path that needs to be checked needs to include the '/'
+					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
+					if (selectiveSync.isFileNameExcluded(path.strip('.'))) {
+						goto skip;
+					}
 				}
 				if (selectiveSync.isPathExcludedViaSyncList(path)) {
 					goto skip;
