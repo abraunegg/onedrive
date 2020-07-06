@@ -3350,9 +3350,8 @@ final class SyncEngine
 			return;
 		}
 		
+		// Is the path length is less than maxPathLength
 		if(pathWalkLength < maxPathLength){
-			// path length is less than maxPathLength
-			
 			// skip dot files if configured
 			if (cfg.getValueBool("skip_dotfiles")) {
 				if (isDotFile(path)) {
@@ -3369,6 +3368,7 @@ final class SyncEngine
 				}
 			}
 			
+			// Is the path a symbolic link
 			if (isSymlink(path)) {
 				// if config says so we skip all symlinked items
 				if (cfg.getValueBool("skip_symlinks")) {
@@ -3452,6 +3452,7 @@ final class SyncEngine
 						}
 					}
 				}
+				
 				if (isFile(path)) {
 					log.vdebug("Checking file: ", path);
 					// The path that needs to be checked needs to include the '/'
@@ -3461,6 +3462,7 @@ final class SyncEngine
 						return;
 					}
 				}
+				
 				if (selectiveSync.isPathExcludedViaSyncList(path)) {
 					if ((isFile(path)) && (cfg.getValueBool("sync_root_files")) && (rootName(path.strip('.').strip('/')) == "")) {
 						log.vdebug("Not skipping path due to sync_root_files inclusion: ", path);
@@ -3517,55 +3519,64 @@ final class SyncEngine
 					return;
 				}
 			} else {
-				bool fileFoundInDB = false;
-				// This item is a file
-				long fileSize = getSize(path);
-				// Can we upload this file - is there enough free space? - https://github.com/skilion/onedrive/issues/73
-				// However if the OneDrive account does not provide the quota details, we have no idea how much free space is available
-				if ((!quotaAvailable) || ((remainingFreeSpace - fileSize) > 0)){
-					if (!quotaAvailable) {
-						log.vlog("Ignoring OneDrive account quota details to upload file - this may fail if not enough space on OneDrive ..");
-					}
-					Item item;
-					foreach (driveId; driveIDsArray) {
-						if (itemdb.selectByPath(path, driveId, item)) {
-							fileFoundInDB = true; 
+				// path is not a directory, is it a valid file?
+				// pipes - whilst technically valid files, are not valid for this client
+				//  prw-rw-r--.  1 user user    0 Jul  7 05:55 my_pipe
+				if (isFile(path)) {
+					// Path is a valid file
+					bool fileFoundInDB = false;
+					// This item is a file
+					long fileSize = getSize(path);
+					// Can we upload this file - is there enough free space? - https://github.com/skilion/onedrive/issues/73
+					// However if the OneDrive account does not provide the quota details, we have no idea how much free space is available
+					if ((!quotaAvailable) || ((remainingFreeSpace - fileSize) > 0)){
+						if (!quotaAvailable) {
+							log.vlog("Ignoring OneDrive account quota details to upload file - this may fail if not enough space on OneDrive ..");
 						}
-					}
-					
-					// Was the file found in the database?
-					if (!fileFoundInDB) {
-						// File not found in database when searching all drive id's, upload as new file
-						uploadNewFile(path);
+						Item item;
+						foreach (driveId; driveIDsArray) {
+							if (itemdb.selectByPath(path, driveId, item)) {
+								fileFoundInDB = true; 
+							}
+						}
 						
-						// did the upload fail?
-						if (!uploadFailed) {
-							// upload did not fail
-							// Issue #763 - Delete local files after sync handling
-							// are we in an --upload-only scenario?
-							if (uploadOnly) {
-								// are we in a delete local file after upload?
-								if (localDeleteAfterUpload) {
-									// Log that we are deleting a local item
-									log.log("Removing local file as --upload-only & --remove-source-files configured");
-									// are we in a --dry-run scenario?
-									if (!dryRun) {
-										// No --dry-run ... process local file delete
-										log.vdebug("Removing local file: ", path);
-										safeRemove(path);
+						// Was the file found in the database?
+						if (!fileFoundInDB) {
+							// File not found in database when searching all drive id's, upload as new file
+							uploadNewFile(path);
+							
+							// did the upload fail?
+							if (!uploadFailed) {
+								// upload did not fail
+								// Issue #763 - Delete local files after sync handling
+								// are we in an --upload-only scenario?
+								if (uploadOnly) {
+									// are we in a delete local file after upload?
+									if (localDeleteAfterUpload) {
+										// Log that we are deleting a local item
+										log.log("Removing local file as --upload-only & --remove-source-files configured");
+										// are we in a --dry-run scenario?
+										if (!dryRun) {
+											// No --dry-run ... process local file delete
+											log.vdebug("Removing local file: ", path);
+											safeRemove(path);
+										}
 									}
 								}
+								
+								// how much space is left on OneDrive after upload?
+								remainingFreeSpace = (remainingFreeSpace - fileSize);
+								log.vlog("Remaining free space on OneDrive: ", remainingFreeSpace);
 							}
-							
-							// how much space is left on OneDrive after upload?
-							remainingFreeSpace = (remainingFreeSpace - fileSize);
-							log.vlog("Remaining free space on OneDrive: ", remainingFreeSpace);
 						}
+					} else {
+						// Not enough free space
+						log.log("Skipping item '", path, "' due to insufficient free space available on OneDrive");
 					}
 				} else {
-					// Not enough free space
-					log.log("Skipping item '", path, "' due to insufficient free space available on OneDrive");
- 				}
+					// path is not a valid file
+					log.log("Skipping item '", path, "' as it is not a valid file");
+				}
 			}
 		} else {
 			// This path was skipped - why?
