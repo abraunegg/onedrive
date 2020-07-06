@@ -2236,7 +2236,7 @@ final class SyncEngine
 			break;
 		case ItemType.dir:
 		case ItemType.remote:
-			log.log("Creating local directory: ", "./" ~ path);
+			log.log("Creating local directory: ", path);
 			
 			// Issue #658 handling - is sync_list in use?
 			if (syncListConfigured) {
