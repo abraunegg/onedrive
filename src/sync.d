@@ -3819,14 +3819,9 @@ final class SyncEngine
 		// If performing a dry-run or parent path is found in the database
 		if ((dryRun) || (parentPathFoundInDB)) {
 			// Maximum file size upload
-			//	https://support.microsoft.com/en-au/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
-			//	1. OneDrive Business say's 15GB
-			//	2. Another article updated April 2018 says 20GB:
-			//		https://answers.microsoft.com/en-us/onedrive/forum/odoptions-oddesktop-sdwin10/personal-onedrive-file-upload-size-max/a3621fc9-b766-4a99-99f8-bcc01ccb025f
-			
-			// Use smaller size for now
-			auto maxUploadFileSize = 16106127360; // 15GB
-			//auto maxUploadFileSize = 21474836480; // 20GB
+			//  https://support.microsoft.com/en-us/office/invalid-file-names-and-file-types-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa?ui=en-us&rs=en-us&ad=us
+			//	July 2020, maximum file size for all accounts is 100GB
+			auto maxUploadFileSize = 107374182400; // 100GB
 			auto thisFileSize = getSize(path);
 			// To avoid a 409 Conflict error - does the file actually exist on OneDrive already?
 			JSONValue fileDetailsFromOneDrive;
