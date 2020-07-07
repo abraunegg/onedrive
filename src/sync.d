@@ -3354,9 +3354,8 @@ final class SyncEngine
 			return;
 		}
 		
+		// Is the path length is less than maxPathLength
 		if(pathWalkLength < maxPathLength){
-			// path length is less than maxPathLength
-			
 			// skip dot files if configured
 			if (cfg.getValueBool("skip_dotfiles")) {
 				if (isDotFile(path)) {
@@ -3373,6 +3372,7 @@ final class SyncEngine
 				}
 			}
 			
+			// Is the path a symbolic link
 			if (isSymlink(path)) {
 				// if config says so we skip all symlinked items
 				if (cfg.getValueBool("skip_symlinks")) {
@@ -3456,6 +3456,7 @@ final class SyncEngine
 						}
 					}
 				}
+				
 				if (isFile(path)) {
 					log.vdebug("Checking file: ", path);
 					// The path that needs to be checked needs to include the '/'
@@ -3465,6 +3466,7 @@ final class SyncEngine
 						return;
 					}
 				}
+				
 				if (selectiveSync.isPathExcludedViaSyncList(path)) {
 					if ((isFile(path)) && (cfg.getValueBool("sync_root_files")) && (rootName(path.strip('.').strip('/')) == "")) {
 						log.vdebug("Not skipping path due to sync_root_files inclusion: ", path);
@@ -3521,55 +3523,64 @@ final class SyncEngine
 					return;
 				}
 			} else {
-				bool fileFoundInDB = false;
-				// This item is a file
-				long fileSize = getSize(path);
-				// Can we upload this file - is there enough free space? - https://github.com/skilion/onedrive/issues/73
-				// However if the OneDrive account does not provide the quota details, we have no idea how much free space is available
-				if ((!quotaAvailable) || ((remainingFreeSpace - fileSize) > 0)){
-					if (!quotaAvailable) {
-						log.vlog("Ignoring OneDrive account quota details to upload file - this may fail if not enough space on OneDrive ..");
-					}
-					Item item;
-					foreach (driveId; driveIDsArray) {
-						if (itemdb.selectByPath(path, driveId, item)) {
-							fileFoundInDB = true; 
+				// path is not a directory, is it a valid file?
+				// pipes - whilst technically valid files, are not valid for this client
+				//  prw-rw-r--.  1 user user    0 Jul  7 05:55 my_pipe
+				if (isFile(path)) {
+					// Path is a valid file
+					bool fileFoundInDB = false;
+					// This item is a file
+					long fileSize = getSize(path);
+					// Can we upload this file - is there enough free space? - https://github.com/skilion/onedrive/issues/73
+					// However if the OneDrive account does not provide the quota details, we have no idea how much free space is available
+					if ((!quotaAvailable) || ((remainingFreeSpace - fileSize) > 0)){
+						if (!quotaAvailable) {
+							log.vlog("Ignoring OneDrive account quota details to upload file - this may fail if not enough space on OneDrive ..");
 						}
-					}
-					
-					// Was the file found in the database?
-					if (!fileFoundInDB) {
-						// File not found in database when searching all drive id's, upload as new file
-						uploadNewFile(path);
+						Item item;
+						foreach (driveId; driveIDsArray) {
+							if (itemdb.selectByPath(path, driveId, item)) {
+								fileFoundInDB = true; 
+							}
+						}
 						
-						// did the upload fail?
-						if (!uploadFailed) {
-							// upload did not fail
-							// Issue #763 - Delete local files after sync handling
-							// are we in an --upload-only scenario?
-							if (uploadOnly) {
-								// are we in a delete local file after upload?
-								if (localDeleteAfterUpload) {
-									// Log that we are deleting a local item
-									log.log("Removing local file as --upload-only & --remove-source-files configured");
-									// are we in a --dry-run scenario?
-									if (!dryRun) {
-										// No --dry-run ... process local file delete
-										log.vdebug("Removing local file: ", path);
-										safeRemove(path);
+						// Was the file found in the database?
+						if (!fileFoundInDB) {
+							// File not found in database when searching all drive id's, upload as new file
+							uploadNewFile(path);
+							
+							// did the upload fail?
+							if (!uploadFailed) {
+								// upload did not fail
+								// Issue #763 - Delete local files after sync handling
+								// are we in an --upload-only scenario?
+								if (uploadOnly) {
+									// are we in a delete local file after upload?
+									if (localDeleteAfterUpload) {
+										// Log that we are deleting a local item
+										log.log("Removing local file as --upload-only & --remove-source-files configured");
+										// are we in a --dry-run scenario?
+										if (!dryRun) {
+											// No --dry-run ... process local file delete
+											log.vdebug("Removing local file: ", path);
+											safeRemove(path);
+										}
 									}
 								}
+								
+								// how much space is left on OneDrive after upload?
+								remainingFreeSpace = (remainingFreeSpace - fileSize);
+								log.vlog("Remaining free space on OneDrive: ", remainingFreeSpace);
 							}
-							
-							// how much space is left on OneDrive after upload?
-							remainingFreeSpace = (remainingFreeSpace - fileSize);
-							log.vlog("Remaining free space on OneDrive: ", remainingFreeSpace);
 						}
+					} else {
+						// Not enough free space
+						log.log("Skipping item '", path, "' due to insufficient free space available on OneDrive");
 					}
 				} else {
-					// Not enough free space
-					log.log("Skipping item '", path, "' due to insufficient free space available on OneDrive");
- 				}
+					// path is not a valid file
+					log.log("Skipping item - item is not a valid file: ", path);
+				}
 			}
 		} else {
 			// This path was skipped - why?
@@ -3812,14 +3823,9 @@ final class SyncEngine
 		// If performing a dry-run or parent path is found in the database
 		if ((dryRun) || (parentPathFoundInDB)) {
 			// Maximum file size upload
-			//	https://support.microsoft.com/en-au/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
-			//	1. OneDrive Business say's 15GB
-			//	2. Another article updated April 2018 says 20GB:
-			//		https://answers.microsoft.com/en-us/onedrive/forum/odoptions-oddesktop-sdwin10/personal-onedrive-file-upload-size-max/a3621fc9-b766-4a99-99f8-bcc01ccb025f
-			
-			// Use smaller size for now
-			auto maxUploadFileSize = 16106127360; // 15GB
-			//auto maxUploadFileSize = 21474836480; // 20GB
+			//  https://support.microsoft.com/en-us/office/invalid-file-names-and-file-types-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa?ui=en-us&rs=en-us&ad=us
+			//	July 2020, maximum file size for all accounts is 100GB
+			auto maxUploadFileSize = 107374182400; // 100GB
 			auto thisFileSize = getSize(path);
 			// To avoid a 409 Conflict error - does the file actually exist on OneDrive already?
 			JSONValue fileDetailsFromOneDrive;
