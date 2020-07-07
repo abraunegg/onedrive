@@ -3575,7 +3575,7 @@ final class SyncEngine
 					}
 				} else {
 					// path is not a valid file
-					log.log("Skipping item '", path, "' as it is not a valid file");
+					log.log("Skipping item - item is not a valid file: ", path);
 				}
 			}
 		} else {
