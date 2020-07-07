@@ -2772,10 +2772,14 @@ final class SyncEngine
 			}
 		}
 		
-		log.vlog("Processing ", item.name);
 		bool unwanted = false;
 		string path;
 		
+		// Compute this item path early as we we use this path often
+		path = itemdb.computePath(item.driveId, item.id);
+		log.vlog("Processing ", buildNormalizedPath(path));
+		
+		// What type of DB item are we processing
 		// Is this item excluded by user configuration of skip_dir or skip_file?
 		// Is this item a directory or 'remote' type? A 'remote' type is a folder DB tie so should be compared as directory for exclusion
 		if ((item.type == ItemType.dir)||(item.type == ItemType.remote)) {
@@ -2790,7 +2794,7 @@ final class SyncEngine
 		
 		// If path or filename does not exclude, is this excluded due to use of selective sync?
 		if (!unwanted) {
-			path = itemdb.computePath(item.driveId, item.id);
+			// Is the path excluded via sync_list?
 			unwanted = selectiveSync.isPathExcludedViaSyncList(path);
 		}
 
