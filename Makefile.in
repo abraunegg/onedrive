@@ -28,6 +28,7 @@ notify_LIBS = @notify_LIBS@
 COMPLETIONS = @COMPLETIONS@
 BASH_COMPLETION_DIR = @BASH_COMPLETION_DIR@
 ZSH_COMPLETION_DIR = @ZSH_COMPLETION_DIR@
+FISH_COMPLETION_DIR = @FISH_COMPLETION_DIR@
 DEBUG = @DEBUG@
 
 DC = @DC@
@@ -127,6 +128,7 @@ endif
 ifeq ($(COMPLETIONS),yes)
 	$(INSTALL) -D -m 644 contrib/completions/complete.zsh $(DESTDIR)$(ZSH_COMPLETION_DIR)/_onedrive
 	$(INSTALL) -D -m 644 contrib/completions/complete.bash $(DESTDIR)$(BASH_COMPLETION_DIR)/onedrive
+	$(INSTALL) -D -m 644 contrib/completions/complete.fish $(DESTDIR)$(FISH_COMPLETION_DIR)/onedrive.fish
 endif
 
 
@@ -151,6 +153,7 @@ endif
 ifeq ($(COMPLETIONS),yes)
 	rm -f $(DESTDIR)$(ZSH_COMPLETION_DIR)/_onedrive
 	rm -f $(DESTDIR)$(BASH_COMPLETION_DIR)/onedrive
+	rm -f $(DESTDIR)$(FISH_COMPLETION_DIR)/onedrive.fish
 endif
 
 
