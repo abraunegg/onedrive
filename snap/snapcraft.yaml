@@ -1,0 +1,42 @@
+name: onedrive # you probably want to 'snapcraft register <name>'
+base: core20 # the base snap is the execution environment for this snap
+version: '0.1' # just for humans, typically '1.2+git' or '1.3.2'
+summary: Single-line elevator pitch for your amazing snap # 79 char long summary
+description: |
+  This is my-snap's description. You have a paragraph or two to tell the
+  most important story about your snap. Keep it under 100 words though,
+  we live in tweetspace and your description wants to look good in the snap
+  store.
+
+grade: devel
+confinement: classic
+
+parts:
+  onedrive:
+    source: .
+    plugin: autotools
+    build-packages:
+      - build-essential
+      - libcurl4-openssl-dev
+      - libsqlite3-dev
+      - pkg-config
+      - git
+      - curl
+      - libnotify-dev
+    build-snaps:
+      - dmd
+      - dub
+    stage-packages:
+      - libgcc-s1
+      - libglib2.0-0
+      - libnotify4
+      - libphobos2-ldc-shared90
+      - libsqlite3-0
+      - init-system-helpers
+      - curl
+    organize:
+      usr/local/bin/onedrive: bin/
+
+apps:
+  onedrive:
+    command: bin/onedrive
