@@ -1,13 +1,11 @@
-name: onedrive # you probably want to 'snapcraft register <name>'
-base: core20 # the base snap is the execution environment for this snap
-version: '0.1' # just for humans, typically '1.2+git' or '1.3.2'
-summary: Single-line elevator pitch for your amazing snap # 79 char long summary
+name: onedrive
+base: core20
+version: '2.4.3-snap1'
+summary: Folder synchronization with OneDrive
 description: |
-  This is my-snap's description. You have a paragraph or two to tell the
-  most important story about your snap. Keep it under 100 words though,
-  we live in tweetspace and your description wants to look good in the snap
-  store.
-
+  OneDrive is the cloud storage system of Microsoft. This package provides
+  the command line client specializing in synchronizing with OneDrive cloud
+  storage.
 grade: devel
 confinement: classic
 
