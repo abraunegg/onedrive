@@ -1617,52 +1617,50 @@ final class SyncEngine
 							} else {
 								// No item ID match or folder sync match
 								log.vdebug("Change does not match any criteria to apply");
+								
 								// Before discarding change - does this ID still exist on OneDrive - as in IS this 
 								// potentially a --single-directory sync and the user 'moved' the file out of the 'sync-dir' to another OneDrive folder
 								// This is a corner edge case - https://github.com/skilion/onedrive/issues/341
-								JSONValue oneDriveMovedNotDeleted;
-								try {
-									oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item["id"].str);
-								} catch (OneDriveException e) {
-									log.vdebug("oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item['id'].str); generated a OneDriveException");
-									if (e.httpStatusCode == 404) {
-										// No .. that ID is GONE
-										log.vlog("Remote change discarded - item cannot be found");
-										return;
-									}
-									
-									if (e.httpStatusCode == 429) {
-										// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-										handleOneDriveThrottleRequest();
-										// Retry request after delay
-										log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item['id'].str);");
-										try {
-											oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item["id"].str);
-										} catch (OneDriveException e) {
-											// A further error was generated
-											// Rather than retry original function, retry the actual call and replicate error handling
-											if (e.httpStatusCode == 404) {
-												// No .. that ID is GONE
-												log.vlog("Remote change discarded - item cannot be found");
-												return;
-											} else {
-												// not a 404
-												displayOneDriveErrorMessage(e.msg);
-												return;
-											}
-										}
-									} else {
-										// not a 404 or a 429
-										displayOneDriveErrorMessage(e.msg);
-										return;
-									}
-								}
-								// Yes .. ID is still on OneDrive but elsewhere .... #341 edge case handling
+
 								// What is the original local path for this ID in the database? Does it match 'syncFolderChildPath'
 								if (itemdb.idInLocalDatabase(driveId, item["id"].str)){
 									// item is in the database
 									string originalLocalPath = itemdb.computePath(driveId, item["id"].str);
 									if (canFind(originalLocalPath, syncFolderChildPath)){
+										JSONValue oneDriveMovedNotDeleted;
+										try {
+											oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item["id"].str);
+										} catch (OneDriveException e) {
+											log.vdebug("oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item['id'].str); generated a OneDriveException");
+											if (e.httpStatusCode == 404) {
+												// No .. that ID is GONE
+												log.vlog("Remote change discarded - item cannot be found");
+											}
+											if (e.httpStatusCode == 429) {
+												// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+												handleOneDriveThrottleRequest();
+												// Retry request after delay
+												log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item['id'].str);");
+												try {
+													oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item["id"].str);
+												} catch (OneDriveException e) {
+													// A further error was generated
+													// Rather than retry original function, retry the actual call and replicate error handling
+													if (e.httpStatusCode == 404) {
+														// No .. that ID is GONE
+														log.vlog("Remote change discarded - item cannot be found");
+													} else {
+														// not a 404
+														displayOneDriveErrorMessage(e.msg);
+													}
+												}
+											} else {
+												// not a 404 or a 429
+												displayOneDriveErrorMessage(e.msg);
+											}
+										}
+
+										// Yes .. ID is still on OneDrive but elsewhere .... #341 edge case handling
 										// This 'change' relates to an item that WAS in 'syncFolderChildPath' but is now 
 										// stored elsewhere on OneDrive - outside the path we are syncing from
 										// Remove this item locally as it's local path is now obsolete
@@ -1670,7 +1668,7 @@ final class SyncEngine
 									} else {
 										// out of scope for some other reason
 										if (singleDirectoryScope){
-											log.vlog("Remote change discarded - not in --single-directory sync scope");
+											log.vlog("Remote change discarded - not in --single-directory sync scope (in DB)");
 										} else {
 											log.vlog("Remote change discarded - not in sync scope");
 										}
@@ -1680,7 +1678,7 @@ final class SyncEngine
 									// item is not in the database
 									if (singleDirectoryScope){
 										// We are syncing a single directory, so this is the reason why it is out of scope
-										log.vlog("Remote change discarded - not in --single-directory sync scope");
+										log.vlog("Remote change discarded - not in --single-directory sync scope (not in DB)");
 										log.vdebug("Remote change discarded: ", item);
 									} else {
 										// Not a single directory sync

@@ -590,6 +590,7 @@ LIBOBJS
 DEBUG
 ZSH_COMPLETION_DIR
 BASH_COMPLETION_DIR
+FISH_COMPLETION_DIR
 bashcompdir
 COMPLETIONS
 NOTIFICATIONS
@@ -660,6 +661,7 @@ enable_notifications
 enable_completions
 with_bash_completion_dir
 with_zsh_completion_dir
+with_fish_completion_dir
 enable_debug
 '
       ac_precious_vars='build_alias
@@ -1289,7 +1291,7 @@ Optional Features:
   --disable-version-check Disable checks of compiler version during configure
                           time
   --enable-notifications  Enable desktop notifications via libnotify
-  --enable-completions    Install shell completions for bash and zsh
+  --enable-completions    Install shell completions for bash, zsh, and fish
   --enable-debug          Pass debug option to the compiler
 
 Optional Packages:
@@ -1303,6 +1305,8 @@ Optional Packages:
                           Directory for bash completion files
   --with-zsh-completion-dir=DIR
                           Directory for zsh completion files
+  --with-fish-completion-dir=DIR
+  			  Directory for fish completion files
 
 Some influential environment variables:
   DC          D compiler executable
@@ -2577,6 +2581,22 @@ fi
 
 fi
   ZSH_COMPLETION_DIR=$with_zsh_completion_dir
+
+
+
+# Check whether --with-fish-completion-dir was given.
+if test "${with_fish_completion_dir+set}" = set; then :
+  withval=$with_fish_completion_dir;
+else
+  with_fish_completion_dir=auto
+fi
+
+  if test "x$with_fish_completion_dir" = "xyes" -o "x$with_fish_completion_dir" = "xauto"; then :
+
+      with_fish_completion_dir="/usr/share/fish/completions"
+
+fi
+  FISH_COMPLETION_DIR=$with_fish_completion_dir
 
 
 fi
