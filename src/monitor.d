@@ -239,6 +239,7 @@ final class Monitor
 			while (i < length) {
 				inotify_event *event = cast(inotify_event*) &buffer[i];
 				string path;
+				string evalPath;
 				// inotify event debug
 				log.vdebug("inotify event wd: ", event.wd);
 				log.vdebug("inotify event mask: ", event.mask);
@@ -280,26 +281,38 @@ final class Monitor
 
 				// if the event is not to be ignored, obtain path
 				path = getPath(event);
-				// skip events that should be excluded based on application configuration
-				if (isDir(path)) {
-					// The path that needs to be checked needs to include the '/'
+				// configure the skip_dir & skip skip_file comparison item
+				evalPath = path.strip('.');
+				
+				// Skip events that should be excluded based on application configuration
+				// We cant use isDir or isFile as this information is missing from the inotify event itself
+				// Thus this causes a segfault when attempting to query this - https://github.com/abraunegg/onedrive/issues/995
+				
+				// Based on the 'type' of event & object type (directory or file) check that path against the 'right' user exclusions
+				// Directory events should only be compared against skip_dir and file events should only be compared against skip_file
+				if (event.mask & IN_ISDIR) {
+					// The event in question contains IN_ISDIR event mask, thus highly likely this is an event on a directory
 					// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
-					if (selectiveSync.isDirNameExcluded(path.strip('.'))) {
+					if (selectiveSync.isDirNameExcluded(evalPath)) {
+						// The path to evaluate matches a path that the user has configured to skip
 						goto skip;
 					}
-				}
-				if (isFile(path)) {
-					// The path that needs to be checked needs to include the '/'
+				} else {
+					// The event in question missing the IN_ISDIR event mask, thus highly likely this is an event on a file
 					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
-					if (selectiveSync.isFileNameExcluded(path.strip('.'))) {
+					if (selectiveSync.isFileNameExcluded(evalPath)) {
+						// The path to evaluate matches a file that the user has configured to skip
 						goto skip;
 					}
 				}
+				
+				// is the path, excluded via sync_list
 				if (selectiveSync.isPathExcludedViaSyncList(path)) {
+					// The path to evaluate matches a directory or file that the user has configured not to include in the sync
 					goto skip;
 				}
 				
-				// handle events
+				// handle the inotify events
 				if (event.mask & IN_MOVED_FROM) {
 					log.vdebug("event IN_MOVED_FROM: ", path);
 					cookieToPath[event.cookie] = path;
