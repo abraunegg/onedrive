@@ -13,6 +13,9 @@ parts:
   onedrive:
     source: .
     plugin: autotools
+    autotools-configure-parameters: 
+      - --enable-notifications
+      - --enable-completions
     build-packages:
       - build-essential
       - libcurl4-openssl-dev
@@ -38,3 +41,8 @@ parts:
 apps:
   onedrive:
     command: bin/onedrive
+  # service:
+  #   command: bin/onedrive --monitor --confdir=$HOME/.config/onedrive
+  #   daemon: simple
+  #   restart-delay: 3s
+  #   restart-condition: on-failure
