@@ -1609,9 +1609,7 @@ final class SyncEngine
 											if (e.httpStatusCode == 404) {
 												// No .. that ID is GONE
 												log.vlog("Remote change discarded - item cannot be found");
-												return;
 											}
-											
 											if (e.httpStatusCode == 429) {
 												// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 												handleOneDriveThrottleRequest();
@@ -1625,17 +1623,14 @@ final class SyncEngine
 													if (e.httpStatusCode == 404) {
 														// No .. that ID is GONE
 														log.vlog("Remote change discarded - item cannot be found");
-														return;
 													} else {
 														// not a 404
 														displayOneDriveErrorMessage(e.msg);
-														return;
 													}
 												}
 											} else {
 												// not a 404 or a 429
 												displayOneDriveErrorMessage(e.msg);
-												return;
 											}
 										}
 
