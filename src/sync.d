@@ -550,18 +550,18 @@ final class SyncEngine
 					if (selectiveSync.isDirNameExcluded(item.name)) {
 						// This directory name is excluded
 						log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
-					} else {
-						// Directory name is not excluded
-						log.vdebug("------------------------------------------------------------------");
-						if (!cfg.getValueBool("monitor")) {
-							log.log("Syncing this OneDrive Personal Shared Folder: ", item.name);
-						} else {
-							log.vlog("Syncing this OneDrive Personal Shared Folder: ", item.name);
-						}
-						// Check OneDrive Personal Folders
-						applyDifferences(item.remoteDriveId, item.remoteId, performFullItemScan);					
+						continue;
 					}
 				}
+				// Directory name is not excluded or skip_dir is not populated
+				log.vdebug("------------------------------------------------------------------");
+				if (!cfg.getValueBool("monitor")) {
+					log.log("Syncing this OneDrive Personal Shared Folder: ", item.name);
+				} else {
+					log.vlog("Syncing this OneDrive Personal Shared Folder: ", item.name);
+				}
+				// Check OneDrive Personal Folders
+				applyDifferences(item.remoteDriveId, item.remoteId, performFullItemScan);				
 			}
 		}
 		
