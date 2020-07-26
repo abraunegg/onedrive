@@ -561,7 +561,7 @@ final class SyncEngine
 					log.vlog("Syncing this OneDrive Personal Shared Folder: ", item.name);
 				}
 				// Check OneDrive Personal Folders
-				applyDifferences(item.remoteDriveId, item.remoteId, performFullItemScan);				
+				applyDifferences(item.remoteDriveId, item.remoteId, performFullItemScan);
 			}
 		}
 		
