@@ -11,7 +11,7 @@ This container offers simple monitoring-mode service for 'Free Client for OneDri
 ### 1. Pull the image
 
 ```bash
-docker pull driveone/onedrive
+docker pull driveone/onedrive:latest
 ```
 
 **NOTE:** SELinux context needs to be configured or disabled for Docker, to be able to write to OneDrive host directory.
@@ -39,7 +39,7 @@ Additionally, the user id and group id should be added to remove any potential u
 
 ```bash
 onedriveDir="${HOME}/OneDrive"
-docker run -it --name onedrive -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" -e "ONEDRIVE_UID:${ONEDRIVE_UID}" -e "ONEDRIVE_GID:${ONEDRIVE_GID}" driveone/onedrive
+docker run -it --name onedrive -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" -e "ONEDRIVE_UID:${ONEDRIVE_UID}" -e "ONEDRIVE_GID:${ONEDRIVE_GID}" driveone/onedrive:latest
 ```
 
 -   You will be asked to open a specific link using your web browser 
@@ -92,7 +92,7 @@ However, you can also use bind mounts for the configuration folder, e.g. `export
 version: "3"
 services:
     onedrive:
-        image: driveone/onedrive
+        image: driveone/onedrive:latest
         restart: unless-stopped
         environment:
             - ONEDRIVE_UID=${PUID}
@@ -124,7 +124,7 @@ There are many ways to do this, the easiest is probably to
 2. And start a second docker monitor container (again replace `Work` with your desired name):
 ```
 onedriveDirWork="/home/abraunegg/OneDriveWork"
-docker run -it --restart unless-stopped --name onedrive_Work -v onedrive_conf_Work:/onedrive/conf -v "${onedriveDirWork}:/onedrive/data" driveone/onedrive
+docker run -it --restart unless-stopped --name onedrive_Work -v onedrive_conf_Work:/onedrive/conf -v "${onedriveDirWork}:/onedrive/data" driveone/onedrive:latest
 ```
 
 ## Run or update with one script
@@ -136,10 +136,10 @@ If you are experienced with docker and onedrive, you can use the following scrip
 onedriveDir="${HOME}/OneDrive"
 
 firstRun='-d'
-docker pull driveone/onedrive
+docker pull driveone/onedrive:latest
 docker inspect onedrive_conf > /dev/null || { docker volume create onedrive_conf; firstRun='-it'; }
 docker inspect onedrive > /dev/null && docker rm -f onedrive
-docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive
+docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive:latest
 ```
 
 
@@ -157,19 +157,19 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 ### Usage Examples
 **Verbose Output:**
 ```bash
-docker container run -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive
+docker container run -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive:latest
 ```
 **Debug Output:**
 ```bash
-docker container run -e ONEDRIVE_DEBUG=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive
+docker container run -e ONEDRIVE_DEBUG=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive:latest
 ```
 **Perform a --resync:**
 ```bash
-docker container run -e ONEDRIVE_RESYNC=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive
+docker container run -e ONEDRIVE_RESYNC=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive:latest
 ```
 **Perform a --resync and --verbose:**
 ```bash
-docker container run -e ONEDRIVE_RESYNC=1 -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive
+docker container run -e ONEDRIVE_RESYNC=1 -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive:latest
 ```
 
 ## Build instructions
