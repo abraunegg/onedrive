@@ -543,6 +543,17 @@ final class SyncEngine
 			// https://github.com/OneDrive/onedrive-api-docs/issues/764
 			Item[] items = itemdb.selectRemoteItems();
 			foreach (item; items) {
+				// Only check path if config is != ""
+				if (cfg.getValueString("skip_dir") != "") {
+					// The path that needs to be checked needs to include the '/'
+					// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
+					if (selectiveSync.isDirNameExcluded(item.name)) {
+						// This directory name is excluded
+						log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
+						continue;
+					}
+				}
+				// Directory name is not excluded or skip_dir is not populated
 				log.vdebug("------------------------------------------------------------------");
 				if (!cfg.getValueBool("monitor")) {
 					log.log("Syncing this OneDrive Personal Shared Folder: ", item.name);
@@ -1838,7 +1849,7 @@ final class SyncEngine
 					}
 					
 					log.vdebug("Result: ", unwanted);
-					if (unwanted) log.vlog("Skipping item - excluded by skip_dir config match: ", matchDisplay);
+					if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", matchDisplay);
 				}
 			}
 		}
