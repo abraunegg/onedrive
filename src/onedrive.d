@@ -633,10 +633,10 @@ final class OneDriveApi
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/site_search?view=odsp-graph-online
-	JSONValue o365SiteSearch(string o365SharedLibraryName){
+	JSONValue o365SiteSearch(){
 		checkAccessTokenExpired();
 		const(char)[] url;
-		url = siteSearchUrl ~ "=" ~ o365SharedLibraryName;
+		url = siteSearchUrl ~ "=*";
 		return get(url);
 	}
 		

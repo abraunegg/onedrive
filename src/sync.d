@@ -4896,7 +4896,7 @@ final class SyncEngine
 		log.log("Office 365 Library Name Query: ", o365SharedLibraryName);
 		
 		try {
-			siteQuery = onedrive.o365SiteSearch(encodeComponent(o365SharedLibraryName));
+			siteQuery = onedrive.o365SiteSearch();
 		} catch (OneDriveException e) {
 			log.error("ERROR: Query of OneDrive for Office 365 Library Name failed");
 			if (e.httpStatusCode == 403) {
@@ -4913,6 +4913,8 @@ final class SyncEngine
 		// is siteQuery a valid JSON object & contain data we can use?
 		if ((siteQuery.type() == JSONType.object) && ("value" in siteQuery)) {
 			// valid JSON object
+			log.vdebug("O365 Query Response: ", siteQuery);
+			
 			foreach (searchResult; siteQuery["value"].array) {
 				// Need an 'exclusive' match here with o365SharedLibraryName as entered
 				log.vdebug("Found O365 Site: ", searchResult);
@@ -4951,7 +4953,13 @@ final class SyncEngine
 			}
 			
 			if(!found) {
-				log.error("ERROR: This site could not be found. Please check it's name and your permissions to access the site.");
+				log.error("ERROR: The requested SharePoint site could not be found. Please check it's name and your permissions to access the site.");
+				// List all sites returned to assist user
+				log.log("\nThe following SharePoint site names were returned:");
+				foreach (searchResult; siteQuery["value"].array) {
+					// list the display name that we use to match against the user query
+					log.log(" * ", searchResult["displayName"].str); 
+				}
 			}
 		} else {
 			// not a valid JSON object
