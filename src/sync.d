@@ -560,8 +560,13 @@ final class SyncEngine
 				} else {
 					log.vlog("Syncing this OneDrive Personal Shared Folder: ", item.name);
 				}
-				// Check OneDrive Personal Folders
+				// Check this OneDrive Personal Shared Folders
 				applyDifferences(item.remoteDriveId, item.remoteId, performFullItemScan);
+				// Keep the driveIDsArray with unique entries only
+				if (!canFind(driveIDsArray, item.remoteDriveId)) {
+					// Add this OneDrive Personal Shared Folder driveId array
+					driveIDsArray ~= item.remoteDriveId;
+				}
 			}
 		}
 		
@@ -2942,7 +2947,7 @@ final class SyncEngine
 				// we are in a --dry-run situation, directory appears to have deleted locally - this directory may never have existed as we never downloaded it ..
 				// Check if path does not exist in database
 				Item databaseItem;
-				if (!itemdb.selectByPathWithRemote(path, defaultDriveId, databaseItem)) {
+				if (!itemdb.selectByPathWithoutRemote(path, defaultDriveId, databaseItem)) {
 					// Path not found in database
 					log.vlog("The directory has been deleted locally");
 					if (noRemoteDelete) {
@@ -3617,7 +3622,7 @@ final class SyncEngine
 				foreach (driveId; driveIDsArray) {
 					// Query the database for this parent path using each driveId
 					Item dbResponse;
-					if(itemdb.selectByPathWithRemote(parentPath, driveId, dbResponse)){
+					if(itemdb.selectByPathWithoutRemote(parentPath, driveId, dbResponse)){
 						// parent path was found in the database
 						parent = dbResponse;
 					}
@@ -3821,7 +3826,7 @@ final class SyncEngine
 			foreach (driveId; driveIDsArray) {
 				// Query the database for this parent path using each driveId
 				Item dbResponse;
-				if(itemdb.selectByPathWithRemote(parentPath, driveId, dbResponse)){
+				if(itemdb.selectByPath(parentPath, driveId, dbResponse)){
 					// parent path was found in the database
 					parent = dbResponse;
 					parentPathFoundInDB = true;
@@ -4753,7 +4758,7 @@ final class SyncEngine
 		}
 		if (fromItem.parentId == null) {
 			// the item is a remote folder, need to do the operation on the parent
-			enforce(itemdb.selectByPathWithRemote(from, defaultDriveId, fromItem));
+			enforce(itemdb.selectByPathWithoutRemote(from, defaultDriveId, fromItem));
 		}
 		if (itemdb.selectByPath(to, defaultDriveId, toItem)) {
 			// the destination has been overwritten
@@ -4832,7 +4837,7 @@ final class SyncEngine
 		}
 		if (item.parentId == null) {
 			// the item is a remote folder, need to do the operation on the parent
-			enforce(itemdb.selectByPathWithRemote(path, defaultDriveId, item));
+			enforce(itemdb.selectByPathWithoutRemote(path, defaultDriveId, item));
 		}
 		try {
 			if (noRemoteDelete) {
