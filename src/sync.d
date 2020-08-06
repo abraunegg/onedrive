@@ -3826,7 +3826,7 @@ final class SyncEngine
 			foreach (driveId; driveIDsArray) {
 				// Query the database for this parent path using each driveId
 				Item dbResponse;
-				if(itemdb.selectByPathWithoutRemote(parentPath, driveId, dbResponse)){
+				if(itemdb.selectByPath(parentPath, driveId, dbResponse)){
 					// parent path was found in the database
 					parent = dbResponse;
 					parentPathFoundInDB = true;
