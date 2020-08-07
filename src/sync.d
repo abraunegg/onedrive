@@ -982,10 +982,6 @@ final class SyncEngine
 					if (currentDriveQuota["quota"]["remaining"].integer <= 0) {
 						// value returned is 0 or less than 0
 						log.vlog("OneDrive quota information is set at zero, as this is not our drive id, ignoring");
-					} else {
-						// value is positive ... use it .. API might get fixed someday
-						remainingFreeSpace = currentDriveQuota["quota"]["remaining"].integer;
-						log.vlog("Updated Remaining Free Space: ", remainingFreeSpace);
 					}
 				}
 			} else {
