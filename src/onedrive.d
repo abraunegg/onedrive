@@ -420,6 +420,16 @@ final class OneDriveApi
 		return get(sharedWithMe);
 	}
 	
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_get
+	JSONValue getDriveQuota(const(char)[] driveId)
+	{
+		checkAccessTokenExpired();
+		const(char)[] url;
+		url = driveByIdUrl ~ driveId ~ "/";
+		url ~= "?select=quota";
+		return get(url);
+	}
+	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
 	JSONValue viewChangesByItemId(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink)
 	{

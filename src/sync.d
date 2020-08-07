@@ -396,9 +396,6 @@ final class SyncEngine
 						log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
 					}				
 				}
-				// flag to not perform quota checks
-				log.error("ERROR: Flagging to disable upload space checks - this MAY have undesirable results if a file cannot be uploaded due to out of space.");
-				quotaAvailable = false;
 			}
 			
 			// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
@@ -936,6 +933,7 @@ final class SyncEngine
 		JSONValue changes;
 		JSONValue changesAvailable;
 		JSONValue idDetails;
+		JSONValue currentDriveQuota;
 		string syncFolderName;
 		string syncFolderPath;
 		string syncFolderChildPath;
@@ -943,7 +941,62 @@ final class SyncEngine
 		string deltaLinkAvailable;
 		bool nationalCloudChildrenScan = false;
 		
-		// Query the name of this folder id
+		// Update the quota details for this driveId, as this could have changed since we started the application - the user could have added / deleted data online, or purchased additional storage
+		// Quota details are ONLY available for the main default driveId, as the OneDrive API does not provide quota details for shared folders
+		try {
+			currentDriveQuota = onedrive.getDriveQuota(driveId);
+		} catch (OneDriveException e) {
+			log.vdebug("currentDriveQuota = onedrive.getDriveQuota(driveId) generated a OneDriveException");
+			if (e.httpStatusCode == 429) {
+				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+				handleOneDriveThrottleRequest();
+				// Retry original request by calling function again to avoid replicating any further error handling
+				log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling applyDifferences(driveId, id, performFullItemScan);");
+				applyDifferences(driveId, id, performFullItemScan);
+				// return back to original call
+				return;
+			}
+			if (e.httpStatusCode >= 500) {
+				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+				return;
+			}
+		}
+		
+		// validate that currentDriveQuota is a JSON value
+		if (currentDriveQuota.type() == JSONType.object) {
+			// Response from API contains valid data
+			// If 'personal' accounts, if driveId == defaultDriveId, then we will have data
+			// If 'personal' accounts, if driveId != defaultDriveId, then we will not have quota data
+			// If 'business' accounts, if driveId == defaultDriveId, then we will have data
+			// If 'business' accounts, if driveId != defaultDriveId, then we will have data, but it will be 0 values
+			if ("quota" in currentDriveQuota){
+				if (driveId == defaultDriveId) {
+					// we have updated quota details for our drive 
+					if ("remaining" in currentDriveQuota["quota"]){
+						// we have valid quota details returned for the drive id
+						remainingFreeSpace = currentDriveQuota["quota"]["remaining"].integer;
+						log.vlog("Updated Remaining Free Space: ", remainingFreeSpace);
+					}
+				} else {
+					// quota details returned, but for a drive id that is not ours
+					if (currentDriveQuota["quota"]["remaining"].integer <= 0) {
+						// value returned is 0 or less than 0
+						log.vlog("OneDrive quota information is set at zero, as this is not our drive id, ignoring");
+					}
+				}
+			} else {
+				// No quota details returned
+				if (driveId == defaultDriveId) {
+					// no quota details returned for current drive id
+					log.error("ERROR: OneDrive quota information is missing. Potentially your OneDrive account currently has zero space available. Please free up some space online.");
+				} else {
+					// quota details not available
+					log.vdebug("OneDrive quota information is being restricted as this is not our drive id.");
+				}
+			}
+		}
+		
+		// Query OneDrive API for the name of this folder id
 		try {
 			idDetails = onedrive.getPathDetailsById(driveId, id);
 		} catch (OneDriveException e) {
@@ -2998,12 +3051,14 @@ final class SyncEngine
 						JSONValue response;
 						
 						if (!dryRun) {
+							// Get the file size
+							long thisFileSize = getSize(path);
 							// Are we using OneDrive Personal or OneDrive Business?
 							// To solve 'Multiple versions of file shown on website after single upload' (https://github.com/abraunegg/onedrive/issues/2)
 							// check what 'account type' this is as this issue only affects OneDrive Business so we need some extra logic here
 							if (accountType == "personal"){
 								// Original file upload logic
-								if (getSize(path) <= thresholdFileSize) {
+								if (thisFileSize <= thresholdFileSize) {
 									try {
 										response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
 									} catch (OneDriveException e) {
@@ -3107,10 +3162,9 @@ final class SyncEngine
 								// OneDrive Business Account
 								// We need to always use a session to upload, but handle the changed file correctly
 								if (accountType == "business"){
-									
 									try {
 										// is this a zero-byte file?
-										if (getSize(path) == 0) {
+										if (thisFileSize == 0) {
 											// the file we are trying to upload as a session is a zero byte file - we cant use a session to upload or replace the file 
 											// as OneDrive technically does not support zero byte files
 											writeln("skipped.");
@@ -3166,10 +3220,11 @@ final class SyncEngine
 									// Is the response a valid JSON object - validation checking done in saveItem
 									saveItem(response);
 								}
+								
 								// OneDrive documentLibrary
 								if (accountType == "documentLibrary"){
 									// is this a zero-byte file?
-									if (getSize(path) == 0) {
+									if (thisFileSize == 0) {
 										// the file we are trying to upload as a session is a zero byte file - we cant use a session to upload or replace the file 
 										// as OneDrive technically does not support zero byte files
 										writeln("skipped.");
@@ -3239,7 +3294,8 @@ final class SyncEngine
 									}
 								}
 							}
-							log.fileOnly("Uploading modified file ", path, " ... done.");
+							
+							// Update etag with ctag from response
 							if ("cTag" in response) {
 								// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded via simple upload
 								eTag = response["cTag"].str;
@@ -3252,6 +3308,16 @@ final class SyncEngine
 									// no tag available - set to nothing
 									eTag = "";
 								}
+							}
+							
+							// log that the modified file was uploaded successfully
+							log.fileOnly("Uploading modified file ", path, " ... done.");
+							
+							// update free space tracking if this is our drive id
+							if (item.driveId == defaultDriveId) {
+								// how much space is left on OneDrive after upload?
+								remainingFreeSpace = (remainingFreeSpace - thisFileSize);
+								log.vlog("Remaining free space on OneDrive: ", remainingFreeSpace);
 							}
 						} else {
 							// we are --dry-run - simulate the file upload
@@ -3499,7 +3565,6 @@ final class SyncEngine
 				}
 			}
 
-			// This item passed all the unwanted checks
 			// We want to upload this new item
 			if (isDir(path)) {
 				Item item;
@@ -3543,53 +3608,38 @@ final class SyncEngine
 				if (isFile(path)) {
 					// Path is a valid file
 					bool fileFoundInDB = false;
-					// This item is a file
-					long fileSize = getSize(path);
-					// Can we upload this file - is there enough free space? - https://github.com/skilion/onedrive/issues/73
-					// However if the OneDrive account does not provide the quota details, we have no idea how much free space is available
-					if ((!quotaAvailable) || ((remainingFreeSpace - fileSize) > 0)){
-						if (!quotaAvailable) {
-							log.vlog("Ignoring OneDrive account quota details to upload file - this may fail if not enough space on OneDrive ..");
+					Item item;
+					
+					// Search the database for this file
+					foreach (driveId; driveIDsArray) {
+						if (itemdb.selectByPath(path, driveId, item)) {
+							fileFoundInDB = true; 
 						}
-						Item item;
-						foreach (driveId; driveIDsArray) {
-							if (itemdb.selectByPath(path, driveId, item)) {
-								fileFoundInDB = true; 
-							}
-						}
-						
-						// Was the file found in the database?
-						if (!fileFoundInDB) {
-							// File not found in database when searching all drive id's, upload as new file
-							uploadNewFile(path);
-							
-							// did the upload fail?
-							if (!uploadFailed) {
-								// upload did not fail
-								// Issue #763 - Delete local files after sync handling
-								// are we in an --upload-only scenario?
-								if (uploadOnly) {
-									// are we in a delete local file after upload?
-									if (localDeleteAfterUpload) {
-										// Log that we are deleting a local item
-										log.log("Removing local file as --upload-only & --remove-source-files configured");
-										// are we in a --dry-run scenario?
-										if (!dryRun) {
-											// No --dry-run ... process local file delete
-											log.vdebug("Removing local file: ", path);
-											safeRemove(path);
-										}
+					}
+					
+					// Was the file found in the database?
+					if (!fileFoundInDB) {
+						// File not found in database when searching all drive id's, upload as new file
+						uploadNewFile(path);
+						// Did the upload fail?
+						if (!uploadFailed) {
+							// Upload did not fail
+							// Issue #763 - Delete local files after sync handling
+							// are we in an --upload-only scenario?
+							if (uploadOnly) {
+								// are we in a delete local file after upload?
+								if (localDeleteAfterUpload) {
+									// Log that we are deleting a local item
+									log.log("Removing local file as --upload-only & --remove-source-files configured");
+									// are we in a --dry-run scenario?
+									if (!dryRun) {
+										// No --dry-run ... process local file delete
+										log.vdebug("Removing local file: ", path);
+										safeRemove(path);
 									}
 								}
-								
-								// how much space is left on OneDrive after upload?
-								remainingFreeSpace = (remainingFreeSpace - fileSize);
-								log.vlog("Remaining free space on OneDrive: ", remainingFreeSpace);
 							}
 						}
-					} else {
-						// Not enough free space
-						log.log("Skipping item '", path, "' due to insufficient free space available on OneDrive");
 					}
 				} else {
 					// path is not a valid file
@@ -3606,8 +3656,10 @@ final class SyncEngine
 	private void uploadCreateDir(const(string) path)
 	{
 		log.vlog("OneDrive Client requested to create remote path: ", path);
+		
 		JSONValue onedrivePathDetails;
 		Item parent;
+		
 		// Was the path entered the root path?
 		if (path != "."){
 			// What parent path to use?
@@ -3809,7 +3861,6 @@ final class SyncEngine
 	{
 		// Reset upload failure - OneDrive or filesystem issue (reading data)
 		uploadFailed = false;
-	
 		Item parent;
 		bool parentPathFoundInDB = false;
 		// Check the database for the parent path
@@ -3833,21 +3884,42 @@ final class SyncEngine
 				}
 			}
 		}
-				
-		// If performing a dry-run or parent path is found in the database
-		if ((dryRun) || (parentPathFoundInDB)) {
+		
+		// Get the file size
+		long thisFileSize = getSize(path);
+		// Can we upload this file - is there enough free space? - https://github.com/skilion/onedrive/issues/73
+		// We can only use 'remainingFreeSpace' if we are uploading to our driveId ... if this is a shared folder, we have no visibility of space available, as quota details are not provided by the OneDrive API
+		if (parent.driveId == defaultDriveId) {
+			// the file will be uploaded to my driveId
+			// we can track drive space allocation to determine if it is possible to upload the file
+			if ((remainingFreeSpace - thisFileSize) < 0) {
+				// no space to upload file, based on tracking of quota values
+				quotaAvailable = false;
+			} else {
+				// there is free space to upload file, based on tracking of quota values
+				quotaAvailable = true;
+			}
+		} else {
+			// the file will be uploaded to a shared folder
+			// we can't track if there is enough free space to upload the file
+			log.vdebug("File upload destination is a shared folder - the upload may fail if not enough space on OneDrive ..");
+			// set quotaAvailable as true, even though we have zero way to validate that this is correct or not
+			quotaAvailable = true;
+		}
+		
+		// If performing a dry-run or parentPath is found in the database & there is quota available to upload file
+		if ((dryRun) || (parentPathFoundInDB && quotaAvailable)) {
 			// Maximum file size upload
 			//  https://support.microsoft.com/en-us/office/invalid-file-names-and-file-types-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa?ui=en-us&rs=en-us&ad=us
 			//	July 2020, maximum file size for all accounts is 100GB
 			auto maxUploadFileSize = 107374182400; // 100GB
-			auto thisFileSize = getSize(path);
-			// To avoid a 409 Conflict error - does the file actually exist on OneDrive already?
-			JSONValue fileDetailsFromOneDrive;
 			
 			// Can we read the file - as a permissions issue or file corruption will cause a failure
 			// https://github.com/abraunegg/onedrive/issues/113
 			if (readLocalFile(path)){
-				// able to read the file
+				// we are able to read the file
+				// To avoid a 409 Conflict error - does the file actually exist on OneDrive already?
+				JSONValue fileDetailsFromOneDrive;
 				if (thisFileSize <= maxUploadFileSize){
 					// Resolves: https://github.com/skilion/onedrive/issues/121, https://github.com/skilion/onedrive/issues/294, https://github.com/skilion/onedrive/issues/329
 					// Does this 'file' already exist on OneDrive?
@@ -4119,24 +4191,32 @@ final class SyncEngine
 													cTag = "";
 												}
 											}
-											
+											// check if the path exists locally before we try to set the file times
 											if (exists(path)) {
 												SysTime mtime = timeLastModified(path).toUTC();
+												// update the file modified time on OneDrive and save item details to database
 												uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
 											} else {
 												// will be removed in different event!
 												log.log("File disappeared after upload: ", path);
 											}
-											return;
 										} else {
 											// OneDrive Business Account - always use a session to upload
 											// The session includes a Request Body element containing lastModifiedDateTime
 											// which negates the need for a modify event against OneDrive
 											// Is the response a valid JSON object - validation checking done in saveItem
 											saveItem(response);
-											return;
 										}
 									}
+									
+									// update free space tracking if this is our drive id
+									if (parent.driveId == defaultDriveId) {				
+										// how much space is left on OneDrive after upload?
+										remainingFreeSpace = (remainingFreeSpace - thisFileSize);
+										log.vlog("Remaining free space on OneDrive: ", remainingFreeSpace);
+									}
+									// File uploaded successfully, space details updated if required
+									return;
 								} else {
 									// response is not valid JSON, an error was returned from OneDrive
 									log.fileOnly("Uploading new file ", path, " ... error");
@@ -4180,6 +4260,7 @@ final class SyncEngine
 					
 					// fileDetailsFromOneDrive has to be a valid object
 					if (fileDetailsFromOneDrive.type() == JSONType.object){
+						// fileDetailsFromOneDrive = onedrive.getPathDetails(path) returned a valid JSON, meaning the file exists on OneDrive
 						// Check that 'name' is in the JSON response (validates data) and that 'name' == the path we are looking for
 						if (("name" in fileDetailsFromOneDrive) && (fileDetailsFromOneDrive["name"].str == baseName(path))) {
 							// OneDrive 'name' matches local path name
@@ -4472,7 +4553,17 @@ final class SyncEngine
 												log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
 												log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
 											}
-										}
+										}									
+									}
+									
+									// Log action to log file
+									log.fileOnly("Uploading modified file ", path, " ... done.");
+									
+									// update free space tracking if this is our drive id
+									if (parent.driveId == defaultDriveId) {				
+										// how much space is left on OneDrive after upload?
+										remainingFreeSpace = (remainingFreeSpace - thisFileSize);
+										log.vlog("Remaining free space on OneDrive: ", remainingFreeSpace);
 									}
 								} else {
 									// we are --dry-run - simulate the file upload
@@ -4484,9 +4575,6 @@ final class SyncEngine
 									saveItem(response);
 									return;
 								}
-								
-								// Log action to log file
-								log.fileOnly("Uploading modified file ", path, " ... done.");
 							} else {
 								// Save the details of the file that we got from OneDrive
 								// --dry-run safe
@@ -4521,9 +4609,19 @@ final class SyncEngine
 				}
 			}
 		} else {
-			log.log("Skipping uploading this new file as parent path is not in the database: ", path);
-			uploadFailed = true;
-			return;
+			// Upload of the new file did not occur .. why?
+			if (!parentPathFoundInDB) {
+				// Parent path was not found
+				log.log("Skipping uploading this new file as parent path is not in the database: ", path);
+				uploadFailed = true;
+				return;
+			}
+			if (!quotaAvailable) {
+				// Not enough free space
+				log.log("Skipping item '", path, "' due to insufficient free space available on OneDrive");
+				uploadFailed = true;
+				return;
+			}
 		}
 	}
 
