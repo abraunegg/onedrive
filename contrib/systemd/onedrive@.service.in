@@ -5,6 +5,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
+ExecStartPre=@prefix@/bin/onedrive --synchronize --confdir=/home/%i/.config/onedrive
 ExecStart=@prefix@/bin/onedrive --monitor --confdir=/home/%i/.config/onedrive
 User=%i
 Group=users
