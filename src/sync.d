@@ -1298,7 +1298,6 @@ final class SyncEngine
 				}
 			} else {
 				log.vdebug("Using /delta call to query drive for items");
-			
 				// query for changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink);
 				try {
 					// Fetch the changes relative to the path id we want to query
@@ -1554,7 +1553,8 @@ final class SyncEngine
 
 					foreach (item; changes["value"].array) {
 						bool isRoot = false;
-						string thisItemPath;
+						string thisItemParentPath;
+						string thisItemFullPath;
 						changeCount++;
 						
 						// Change as reported by OneDrive
@@ -1594,31 +1594,46 @@ final class SyncEngine
 							log.vdebug("Handling change as 'root item', has no parent reference or is a deleted item");
 							applyDifference(item, driveId, isRoot);
 						} else {
-							// What is this item's path?
+							// What is this item's parent path?
 							if (hasParentReferencePath(item)) {
-								thisItemPath = item["parentReference"]["path"].str;
+								thisItemParentPath = item["parentReference"]["path"].str;
+								thisItemFullPath = thisItemParentPath ~ "/" ~ item["name"].str;
 							} else {
-								thisItemPath = "";
+								thisItemParentPath = "";
 							}
 							
-							// Business Shared Folders special case handling
+							// Special case handling flags
+							bool singleDirectorySpecialCase = false;
 							bool sharedFoldersSpecialCase = false;
 							
 							// Debug output of change evaluation items
 							log.vdebug("'parentReference id'                                 = ", item["parentReference"]["id"].str);
-							log.vdebug("syncFolderName                                       = ", syncFolderName);
-							log.vdebug("syncFolderPath                                       = ", syncFolderPath);
-							log.vdebug("syncFolderChildPath                                  = ", syncFolderChildPath);
+							log.vdebug("search criteria: syncFolderName                      = ", syncFolderName);
+							log.vdebug("search criteria: syncFolderPath                      = ", syncFolderPath);
+							log.vdebug("search criteria: syncFolderChildPath                 = ", syncFolderChildPath);
 							log.vdebug("thisItemId                                           = ", item["id"].str);
-							log.vdebug("thisItemPath                                         = ", thisItemPath);
+							log.vdebug("thisItemParentPath                                   = ", thisItemParentPath);
+							log.vdebug("thisItemFullPath                                     = ", thisItemFullPath);
 							log.vdebug("'item id' matches search 'id'                        = ", (item["id"].str == id));
 							log.vdebug("'parentReference id' matches search 'id'             = ", (item["parentReference"]["id"].str == id));
-							log.vdebug("'thisItemPath' contains 'syncFolderChildPath'        = ", (canFind(thisItemPath, syncFolderChildPath)) );
-							log.vdebug("'thisItemPath' contains search 'id'                  = ", (canFind(thisItemPath, id)) );
+							log.vdebug("'thisItemParentPath' contains 'syncFolderChildPath'  = ", (canFind(thisItemParentPath, syncFolderChildPath)));
+							log.vdebug("'thisItemParentPath' contains search 'id'            = ", (canFind(thisItemParentPath, id)));
 							
-							// Special case handling
+							// Special case handling - --single-directory
+							// If we are in a --single-directory sync scenario, and, the DB does not contain any parent details, or --single-directory is used with --resync
+							// all changes will be discarded as 'Remote change discarded - not in --single-directory sync scope (not in DB)' even though, some of the changes
+							// are actually valid and required as they are part of the parental path
+							if (singleDirectoryScope){
+								// What is the full path for this item from OneDrive
+								log.vdebug("'syncFolderChildPath' contains 'thisItemFullPath'    = ", (canFind(syncFolderChildPath, thisItemFullPath)));
+								if (canFind(syncFolderChildPath, thisItemFullPath)) {
+									singleDirectorySpecialCase = true;
+								}
+							}
+							
+							// Special case handling - Shared Business Folders
 							// - IF we are syncing shared folders, and the shared folder is not the 'top level' folder being shared out
-							// canFind(thisItemPath, syncFolderChildPath) will never match:
+							// canFind(thisItemParentPath, syncFolderChildPath) will never match:
 							//		Syncing this OneDrive Business Shared Folder: MyFolderName
 							//		OneDrive Business Shared By:                  Firstname Lastname (email@address)
 							//		Applying changes of Path ID:    pathId
@@ -1628,16 +1643,16 @@ final class SyncEngine
 							//		...
 							//		[DEBUG] 'item id' matches search 'id'                        = false
 							//		[DEBUG] 'parentReference id' matches search 'id'             = false
-							//		[DEBUG] 'thisItemPath' contains 'syncFolderChildPath'        = false
-							//		[DEBUG] 'thisItemPath' contains search 'id'                  = false
+							//		[DEBUG] 'thisItemParentPath' contains 'syncFolderChildPath'  = false
+							//		[DEBUG] 'thisItemParentPath' contains search 'id'            = false
 							//		[DEBUG] Change does not match any criteria to apply
 							//		Remote change discarded - not in business shared folders sync scope
 							
-							if ((!canFind(thisItemPath, syncFolderChildPath)) && (syncBusinessFolders)) {
+							if ((!canFind(thisItemParentPath, syncFolderChildPath)) && (syncBusinessFolders)) {
 								// Syncing Shared Business folders & we dont have a path match
 								// is this a reverse path match?
-								log.vdebug("'thisItemPath' contains 'syncFolderName'             = ", (canFind(thisItemPath, syncFolderName)) );
-								if (canFind(thisItemPath, syncFolderName)) {
+								log.vdebug("'thisItemParentPath' contains 'syncFolderName'       = ", (canFind(thisItemParentPath, syncFolderName)));
+								if (canFind(thisItemParentPath, syncFolderName)) {
 									sharedFoldersSpecialCase = true;
 								}
 							}
@@ -1647,13 +1662,14 @@ final class SyncEngine
 							// 2. 'parentReference id' matches 'id'
 							// 3. 'item path' contains 'syncFolderChildPath'
 							// 4. 'item path' contains 'id'
-							
-							if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemPath, syncFolderChildPath)) || (canFind(thisItemPath, id)) || (sharedFoldersSpecialCase) ){
+							// 5. Special Case was triggered
+							if ( (item["id"].str == id) || (item["parentReference"]["id"].str == id) || (canFind(thisItemParentPath, syncFolderChildPath)) || (canFind(thisItemParentPath, id)) || (singleDirectorySpecialCase) || (sharedFoldersSpecialCase) ){
 								// This is a change we want to apply
-								if (!sharedFoldersSpecialCase) {
+								if ((!singleDirectorySpecialCase) && (!sharedFoldersSpecialCase)) {
 									log.vdebug("Change matches search criteria to apply");
 								} else {
-									log.vdebug("Change matches search criteria to apply - special case criteria - reverse path matching used");
+									if (singleDirectorySpecialCase) log.vdebug("Change matches search criteria to apply - special case criteria - reverse path matching used (--single-directory)");
+									if (sharedFoldersSpecialCase) log.vdebug("Change matches search criteria to apply - special case criteria - reverse path matching used (Shared Business Folders)");
 								}
 								// Apply OneDrive change
 								applyDifference(item, driveId, isRoot);
@@ -5118,7 +5134,7 @@ final class SyncEngine
 		string folderId;
 		string deltaLink;
 		string thisItemId;
-		string thisItemPath;
+		string thisItemParentPath;
 		string syncFolderName;
 		string syncFolderPath;
 		string syncFolderChildPath;
@@ -5229,24 +5245,24 @@ final class SyncEngine
 					// Is this change valid for the 'path' we are checking?
 					if (hasParentReferencePath(item)) {
 						thisItemId = item["parentReference"]["id"].str;
-						thisItemPath = item["parentReference"]["path"].str;
+						thisItemParentPath = item["parentReference"]["path"].str;
 					} else {
 						thisItemId = item["id"].str;
 						// Is the defaultDriveId == driveId
 						if (driveId == defaultDriveId){
 							// 'root' items will not have ["parentReference"]["path"]
 							if (isItemRoot(item)){
-								thisItemPath = "";
+								thisItemParentPath = "";
 							} else {
-								thisItemPath = item["parentReference"]["path"].str;
+								thisItemParentPath = item["parentReference"]["path"].str;
 							}
 						} else {
 							// A remote drive item will not have ["parentReference"]["path"]
-							thisItemPath = "";
+							thisItemParentPath = "";
 						}
 					}
 					
-					if ( (thisItemId == folderId) || (canFind(thisItemPath, syncFolderChildPath)) || (canFind(thisItemPath, folderId)) ){
+					if ( (thisItemId == folderId) || (canFind(thisItemParentPath, syncFolderChildPath)) || (canFind(thisItemParentPath, folderId)) ){
 						// This is a change we want count
 						validChanges++;
 						if ((isItemFile(item)) && (hasFileSize(item))) {
