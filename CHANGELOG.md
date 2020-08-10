@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Update Docker build files and align version of compiler across all Docker builds
 *   Update Docker documentation
 *   Update NixOS build information
+*   Update the 'Processing XXXX' output to display the full path
 *   Update logging output when a sync starts and completes when using --monitor
 *   Update Office 365 / SharePoint site search query and response if query return zero match
 
