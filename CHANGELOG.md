@@ -2,6 +2,10 @@
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
+## 2.4.5 - 2020-08-13
+### Fixed
+*   Fixed fish auto completions installation destination
+
 ## 2.4.4 - 2020-08-11
 ### Fixed
 *   Fix 'skip_dir' & 'skip_file' pattern matching to ensure correct matching is performed
