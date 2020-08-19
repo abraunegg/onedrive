@@ -3940,6 +3940,9 @@ final class SyncEngine
 					// there is free space to upload file, based on tracking of quota values
 					quotaAvailable = true;
 				}
+			} else {
+				// set quotaAvailable as true, even though we have zero way to validate that this is correct or not
+				quotaAvailable = true;
 			}
 		} else {
 			// the file will be uploaded to a shared folder
