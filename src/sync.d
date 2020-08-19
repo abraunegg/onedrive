@@ -392,6 +392,7 @@ final class SyncEngine
 					if (accountType == "personal"){
 						// zero space available
 						log.error("ERROR: OneDrive account currently has zero space available. Please free up some space online.");
+						quotaAvailable = false;
 					} else {
 						// zero space availableis being reported, maybe being restricted?
 						log.error("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
@@ -419,8 +420,8 @@ final class SyncEngine
 				// Display the actual value
 				log.vlog("Remaining Free Space: ", remainingFreeSpace);
 			} else {
-				// zero or non-zero value
-				if (accountType == "personal"){
+				// zero or non-zero value or restricted
+				if (!quotaRestricted){
 					log.vlog("Remaining Free Space: 0");
 				} else {
 					log.vlog("Remaining Free Space: Not Available");
@@ -993,11 +994,25 @@ final class SyncEngine
 			// If 'business' accounts, if driveId != defaultDriveId, then we will have data, but it will be 0 values
 			if ("quota" in currentDriveQuota){
 				if (driveId == defaultDriveId) {
-					// we have updated quota details for our drive 
+					// We potentially have updated quota remaining details available
+					// However in some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
 					if ("remaining" in currentDriveQuota["quota"]){
-						// we have valid quota details returned for the drive id
+						// We have valid quota details returned for the drive id
 						remainingFreeSpace = currentDriveQuota["quota"]["remaining"].integer;
-						log.vlog("Updated Remaining Free Space: ", remainingFreeSpace);
+						if (remainingFreeSpace <= 0) {
+							if (accountType == "personal"){
+								// zero space available
+								log.error("ERROR: OneDrive account currently has zero space available. Please free up some space online.");
+								quotaAvailable = false;
+							} else {
+								// zero space availableis being reported, maybe being restricted?
+								log.error("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+								quotaRestricted = true;
+							}
+						} else {
+							// Display the updated value
+							log.vlog("Updated Remaining Free Space: ", remainingFreeSpace);
+						}
 					}
 				} else {
 					// quota details returned, but for a drive id that is not ours
