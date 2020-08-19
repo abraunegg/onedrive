@@ -846,10 +846,10 @@ int main(string[] args)
 				if (cfg.getValueString("single_directory") != "") {
 					// Does the directory we want to sync actually exist?
 					if (!exists(cfg.getValueString("single_directory"))) {
-						// the requested directory does not exist .. 
-						log.logAndNotify("ERROR: The requested local directory does not exist. Please check ~/OneDrive/ for requested path");
-						// Use exit scopes to shutdown API
-						return EXIT_FAILURE;
+						// The requested path to use with --single-directory does not exist locally within the configured 'sync_dir'
+						log.logAndNotify("WARNING: The requested path for --single-directory does not exist locally. Creating requested path within ", syncDir);
+						// Make the required path locally
+						mkdirRecurse(cfg.getValueString("single_directory"));
 					}
 				}
 				// perform a --synchronize sync
