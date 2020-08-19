@@ -394,7 +394,7 @@ final class SyncEngine
 						log.error("ERROR: OneDrive account currently has zero space available. Please free up some space online.");
 						quotaAvailable = false;
 					} else {
-						// zero space availableis being reported, maybe being restricted?
+						// zero space available is being reported, maybe being restricted?
 						log.error("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
 						quotaRestricted = true;
 					}
@@ -1005,7 +1005,7 @@ final class SyncEngine
 								log.error("ERROR: OneDrive account currently has zero space available. Please free up some space online.");
 								quotaAvailable = false;
 							} else {
-								// zero space availableis being reported, maybe being restricted?
+								// zero space available is being reported, maybe being restricted?
 								log.error("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
 								quotaRestricted = true;
 							}
