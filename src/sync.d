@@ -237,6 +237,8 @@ final class SyncEngine
 	private bool dryRun = false;
 	// quota details available
 	private bool quotaAvailable = true;
+	// quota details restricted
+	private bool quotaRestricted = false;
 	// sync business shared folders flag
 	private bool syncBusinessFolders = false;
 	// single directory scope flag
@@ -374,6 +376,7 @@ final class SyncEngine
 			defaultDriveId = oneDriveDetails["id"].str;
 			defaultRootId = oneDriveRootDetails["id"].str;
 			remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+			
 			// Make sure that defaultDriveId is in our driveIDs array to use when checking if item is in database
 			// Keep the driveIDsArray with unique entries only
 			if (!canFind(driveIDsArray, defaultDriveId)) {
@@ -386,7 +389,15 @@ final class SyncEngine
 				// free space is <= 0  .. why ?
 				if ("remaining" in oneDriveDetails["quota"]){
 					// json response contained a 'remaining' value
-					log.error("ERROR: OneDrive account currently has zero space available. Please free up some space online.");
+					if (accountType == "personal"){
+						// zero space available
+						log.error("ERROR: OneDrive account currently has zero space available. Please free up some space online.");
+						quotaAvailable = false;
+					} else {
+						// zero space available is being reported, maybe being restricted?
+						log.error("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+						quotaRestricted = true;
+					}
 				} else {
 					// json response was missing a 'remaining' value
 					if (accountType == "personal"){
@@ -403,7 +414,19 @@ final class SyncEngine
 			log.vlog("Account Type: ", accountType);
 			log.vlog("Default Drive ID: ", defaultDriveId);
 			log.vlog("Default Root ID: ", defaultRootId);
-			log.vlog("Remaining Free Space: ", remainingFreeSpace);
+			
+			// What do we display here
+			if (remainingFreeSpace > 0) {
+				// Display the actual value
+				log.vlog("Remaining Free Space: ", remainingFreeSpace);
+			} else {
+				// zero or non-zero value or restricted
+				if (!quotaRestricted){
+					log.vlog("Remaining Free Space: 0");
+				} else {
+					log.vlog("Remaining Free Space: Not Available");
+				}
+			}
 		
 			// If account type is documentLibrary - then most likely this is a SharePoint repository
 			// and files 'may' be modified after upload. See: https://github.com/abraunegg/onedrive/issues/205
@@ -971,11 +994,25 @@ final class SyncEngine
 			// If 'business' accounts, if driveId != defaultDriveId, then we will have data, but it will be 0 values
 			if ("quota" in currentDriveQuota){
 				if (driveId == defaultDriveId) {
-					// we have updated quota details for our drive 
+					// We potentially have updated quota remaining details available
+					// However in some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
 					if ("remaining" in currentDriveQuota["quota"]){
-						// we have valid quota details returned for the drive id
+						// We have valid quota details returned for the drive id
 						remainingFreeSpace = currentDriveQuota["quota"]["remaining"].integer;
-						log.vlog("Updated Remaining Free Space: ", remainingFreeSpace);
+						if (remainingFreeSpace <= 0) {
+							if (accountType == "personal"){
+								// zero space available
+								log.error("ERROR: OneDrive account currently has zero space available. Please free up some space online.");
+								quotaAvailable = false;
+							} else {
+								// zero space available is being reported, maybe being restricted?
+								log.error("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+								quotaRestricted = true;
+							}
+						} else {
+							// Display the updated value
+							log.vlog("Updated Remaining Free Space: ", remainingFreeSpace);
+						}
 					}
 				} else {
 					// quota details returned, but for a drive id that is not ours
@@ -3907,12 +3944,19 @@ final class SyncEngine
 		// We can only use 'remainingFreeSpace' if we are uploading to our driveId ... if this is a shared folder, we have no visibility of space available, as quota details are not provided by the OneDrive API
 		if (parent.driveId == defaultDriveId) {
 			// the file will be uploaded to my driveId
-			// we can track drive space allocation to determine if it is possible to upload the file
-			if ((remainingFreeSpace - thisFileSize) < 0) {
-				// no space to upload file, based on tracking of quota values
-				quotaAvailable = false;
+			log.vdebug("File upload destination is users default driveId ..");
+			// are quota details being restricted?
+			if (!quotaRestricted) {
+				// quota is not being restricted - we can track drive space allocation to determine if it is possible to upload the file
+				if ((remainingFreeSpace - thisFileSize) < 0) {
+					// no space to upload file, based on tracking of quota values
+					quotaAvailable = false;
+				} else {
+					// there is free space to upload file, based on tracking of quota values
+					quotaAvailable = true;
+				}
 			} else {
-				// there is free space to upload file, based on tracking of quota values
+				// set quotaAvailable as true, even though we have zero way to validate that this is correct or not
 				quotaAvailable = true;
 			}
 		} else {
