@@ -26,6 +26,7 @@ Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive
 
 **Note:** DMD version >= 2.083.1 or LDC version >= 1.12.0 is required to compile this application
 
+## Distribution Package Dependencies
 ### Dependencies: Ubuntu 16.x - i386 / i686 (less than 1GB Memory) 
 **Important:** Build environment must have at least 512 of memory & 1GB swap space
 
@@ -292,6 +293,7 @@ as far as possible automatically, but can be overridden by passing
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
 #### ARMHF Architecture
+**Note:** Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon -s`
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
@@ -301,6 +303,7 @@ sudo make install
 ```
 
 #### ARM64 Architecture
+**Note:** Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon -s`
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
