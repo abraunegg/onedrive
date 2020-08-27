@@ -421,15 +421,16 @@ Each line of the file represents a relative path from your `sync_dir`. All files
 Here is an example of `sync_list`:
 ```text
 # sync_list supports comments
-# Exclude my Backup folder
+# Include my Backup folder
 Backup
-# Exclude this single document
+# Include this single document
 Documents/latest_report.docx
-# Exclude all Work/Project directories
+# Include all Work/Project directories
 Work/Project*
 notes.txt
-# Exclude /Blender in the ~OneDrive root but not if elsewhere
+# Include /Blender in the ~OneDrive root but not if elsewhere
 /Blender
+# Include these names if they match any file or folder
 Cinema Soc
 Codes
 Textbooks
