@@ -4694,6 +4694,7 @@ final class SyncEngine
 		// query the database - how many objects will this remove?
 		auto children = getChildren(item.driveId, item.id);
 		long itemsToDelete = count(children);
+		log.vdebug("Number of items to delete: ", itemsToDelete);
 		
 		// Are we running in monitor mode? A local delete of a file will issue a inotify event, which will trigger the local & remote data immediately
 		if (!cfg.getValueBool("monitor")) {
@@ -4725,6 +4726,11 @@ final class SyncEngine
 			
 			//	do the delete
 			try {
+				// what item are we trying to delete?
+				log.vdebug("Delete item from drive: ", item.driveId);
+				log.vdebug("Delete this item id: ", item.id);
+				log.vdebug("Delete item etag as we know it: ", item.eTag);
+				// perform the delete via the API
 				onedrive.deleteById(item.driveId, item.id, item.eTag);
 			} catch (OneDriveException e) {
 				if (e.httpStatusCode == 404) {
