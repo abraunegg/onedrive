@@ -4737,6 +4737,27 @@ final class SyncEngine
 					// item.id, item.eTag could not be found on driveId
 					log.vlog("OneDrive reported: The resource could not be found.");
 				} else {
+					// Not a 404 response .. is this a 401 response due to some sort of OneDrive Business security policy?
+					if ((e.httpStatusCode == 401) && (accountType != "personal")) {
+						auto errorArray = splitLines(e.msg);
+						JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+						if (errorMessage["error"]["message"].str == "Access denied. You do not have permission to perform this action or access this resource.") {
+							// Issue #1041 - Unable to delete OneDrive content when OneDrive Business Retention Policy is enabled
+							try {
+								foreach_reverse (Item child; children) {
+									onedrive.deleteById(child.driveId, child.id, child.eTag);
+									// delete the child reference in the local database
+									itemdb.deleteById(child.driveId, child.id);
+								}
+								onedrive.deleteById(item.driveId, item.id, item.eTag);
+							} catch (OneDriveException e) {
+								// display what the error is
+								displayOneDriveErrorMessage(e.msg);
+								return;
+							}
+						}
+					}
+				
 					// Not a 404 response .. is this a 403 response due to OneDrive Business Retention Policy being enabled?
 					if ((e.httpStatusCode == 403) && (accountType != "personal")) {
 						auto errorArray = splitLines(e.msg);
