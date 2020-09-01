@@ -974,8 +974,8 @@ final class OneDriveApi
 			}
 		} catch (CurlException e) {
 			// Parse and display error message received from OneDrive
+			log.vdebug("onedrive.perform() Generated a OneDrive CurlException");
 			log.error("ERROR: OneDrive returned an error with the following message:");
-			
 			auto errorArray = splitLines(e.msg);
 			string errorMessage = errorArray[0];
 						

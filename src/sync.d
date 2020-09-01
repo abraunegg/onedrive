@@ -4694,6 +4694,7 @@ final class SyncEngine
 		// query the database - how many objects will this remove?
 		auto children = getChildren(item.driveId, item.id);
 		long itemsToDelete = count(children);
+		log.vdebug("Number of items to delete: ", itemsToDelete);
 		
 		// Are we running in monitor mode? A local delete of a file will issue a inotify event, which will trigger the local & remote data immediately
 		if (!cfg.getValueBool("monitor")) {
@@ -4725,33 +4726,73 @@ final class SyncEngine
 			
 			//	do the delete
 			try {
+				// what item are we trying to delete?
+				log.vdebug("Attempting to delete item from drive: ", item.driveId);
+				log.vdebug("Attempting to delete this item id: ", item.id);
+				// perform the delete via the API
 				onedrive.deleteById(item.driveId, item.id, item.eTag);
 			} catch (OneDriveException e) {
 				if (e.httpStatusCode == 404) {
 					// item.id, item.eTag could not be found on driveId
 					log.vlog("OneDrive reported: The resource could not be found.");
 				} else {
+					// Not a 404 response .. is this a 401 response due to some sort of OneDrive Business security policy?
+					if ((e.httpStatusCode == 401) && (accountType != "personal")) {
+						log.vdebug("onedrive.deleteById generated a 401 error response when attempting to delete object by item id");
+						auto errorArray = splitLines(e.msg);
+						JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
+						if (errorMessage["error"]["message"].str == "Access denied. You do not have permission to perform this action or access this resource.") {
+							// Issue #1041 - Unable to delete OneDrive content when permissions prevent deletion
+							try {
+								log.vdebug("Attemtping a reverse delete of all child objects from OneDrive");
+								foreach_reverse (Item child; children) {
+									log.vdebug("Delete child item from drive: ", child.driveId);
+									log.vdebug("Delete this child item id: ", child.id);
+									onedrive.deleteById(child.driveId, child.id, child.eTag);
+									// delete the child reference in the local database
+									itemdb.deleteById(child.driveId, child.id);
+								}
+								log.vdebug("Delete parent item from drive: ", item.driveId);
+								log.vdebug("Delete this parent item id: ", item.id);
+								onedrive.deleteById(item.driveId, item.id, item.eTag);
+							} catch (OneDriveException e) {
+								// display what the error is
+								log.vdebug("A further error was generated when attempting a reverse delete of objects from OneDrive");
+								displayOneDriveErrorMessage(e.msg);
+								return;
+							}
+						}
+					}
+				
 					// Not a 404 response .. is this a 403 response due to OneDrive Business Retention Policy being enabled?
 					if ((e.httpStatusCode == 403) && (accountType != "personal")) {
+						log.vdebug("onedrive.deleteById generated a 403 error response when attempting to delete object by item id");
 						auto errorArray = splitLines(e.msg);
 						JSONValue errorMessage = parseJSON(replace(e.msg, errorArray[0], ""));
 						if (errorMessage["error"]["message"].str == "Request was cancelled by event received. If attempting to delete a non-empty folder, it's possible that it's on hold") {
 							// Issue #338 - Unable to delete OneDrive content when OneDrive Business Retention Policy is enabled
 							try {
+								log.vdebug("Attemtping a reverse delete of all child objects from OneDrive");
 								foreach_reverse (Item child; children) {
+									log.vdebug("Delete child item from drive: ", child.driveId);
+									log.vdebug("Delete this child item id: ", child.id);
 									onedrive.deleteById(child.driveId, child.id, child.eTag);
 									// delete the child reference in the local database
 									itemdb.deleteById(child.driveId, child.id);
 								}
+								log.vdebug("Delete parent item from drive: ", item.driveId);
+								log.vdebug("Delete this parent item id: ", item.id);
 								onedrive.deleteById(item.driveId, item.id, item.eTag);
 							} catch (OneDriveException e) {
 								// display what the error is
+								log.vdebug("A further error was generated when attempting a reverse delete of objects from OneDrive");
 								displayOneDriveErrorMessage(e.msg);
 								return;
 							}
 						}
 					} else {
 						// Not a 403 response & OneDrive Business Account / O365 Shared Folder / Library
+						log.vdebug("onedrive.deleteById generated an error response when attempting to delete object by item id");
 						// display what the error is
 						displayOneDriveErrorMessage(e.msg);
 						return;
