@@ -16,15 +16,25 @@ This project has been packaged for the following Linux distributions:
 Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If a package is out of date, please contact the package maintainer for resolution.
 
 #### Important information for Ubuntu users:
-Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) packages available for Ubuntu, do not install 'onedrive' from these packages via `apt install onedrive`. These packages are out-of-date and should not be used. If you wish to use a package, it is highly recommended that you utilise the PPA listed above or build from source using the instructions below for Ubuntu and those derived from Ubuntu.
+Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) packages available for Ubuntu, do not install 'onedrive' from these packages via `apt install onedrive`. These packages are out-of-date and should not be used. If you wish to use a package, it is highly recommended that you utilise the PPA listed above or build from source using the instructions below for Ubuntu and those distributions (such as Lubuntu) which are derived from Ubuntu.
 
 ## Build Requirements
 *   Build environment must have at least 1GB of memory & 1GB swap space
 *   [libcurl](http://curl.haxx.se/libcurl/)
 *   [SQLite 3](https://www.sqlite.org/) >= 3.7.15
-*   [Digital Mars D Compiler (DMD)](http://dlang.org/download.html)
+*   [Digital Mars D Compiler (DMD)](http://dlang.org/download.html) or [LDC – the LLVM-based D Compiler](https://github.com/ldc-developers/ldc)
 
 **Note:** DMD version >= 2.083.1 or LDC version >= 1.12.0 is required to compile this application
+
+### Example for installing DMD Compiler
+```text
+curl -fsS https://dlang.org/install.sh | bash -s dmd
+```
+
+### Example for installing LDC Compiler
+```text
+curl -fsS https://dlang.org/install.sh | bash -s ldc
+```
 
 ## Distribution Package Dependencies
 ### Dependencies: Ubuntu 16.x - i386 / i686 (less than 1GB Memory) 
