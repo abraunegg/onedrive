@@ -7,7 +7,7 @@
 
 A free Microsoft OneDrive Client which supports OneDrive Personal, OneDrive for Business, OneDrive for Office365 and Sharepoint.
 
-This powerful and highly configurable client can run on all major Linux distributions, as a Docker container and on FreeBSD. It supports one-way and two-way sync capabilities and securely connects to Microsoft OneDrive services.
+This powerful and highly configurable client can run on all major Linux distributions, FreeBSD, or as a Docker container. It supports one-way and two-way sync capabilities and securely connects to Microsoft OneDrive services.
 
 This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) client which was abandoned in 2018.
 
@@ -25,26 +25,10 @@ This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) cl
 *   Support for National cloud deployments (Microsoft Cloud for US Government, Microsoft Cloud Germany, Azure and Office 365 operated by 21Vianet in China)
 
 ## What's missing
-*   While local changes are uploaded right away, remote changes are delayed until next sync when using --monitor
-*   No GUI
-
-## Building and Installation
-See [docs/INSTALL.md](https://github.com/abraunegg/onedrive/blob/master/docs/INSTALL.md)
-
-## Configuration and Usage
-See [docs/USAGE.md](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md)
-
-## Docker support
-See [docs/Docker.md](https://github.com/abraunegg/onedrive/blob/master/docs/Docker.md)
-
-## OneDrive Business Shared Folders
-See [docs/BusinessSharedFolders.md](https://github.com/abraunegg/onedrive/blob/master/docs/BusinessSharedFolders.md)
-
-## SharePoint / Office 365 Shared Libraries (Business or Education)
-See [docs/Office365.md](https://github.com/abraunegg/onedrive/blob/master/docs/Office365.md)
-
-## National Cloud support
-See [docs/national-cloud-deployments.md](https://github.com/abraunegg/onedrive/blob/master/docs/national-cloud-deployments.md)
+*   While local changes are uploaded right away, remote changes are delayed until next automated sync cycle when using --monitor
+*   Ability to encrypt/decrpyt files on-the-fly when uploading/downloading files from OneDrive
+*   Support for Windows 'On-Demand' functionality so file is only downloaded when accessed locally
+*   A GUI for configuration management
 
 ## Reporting issues
 If you encounter any bugs you can report them here on Github. Before filing an issue be sure to:
@@ -56,3 +40,22 @@ If you encounter any bugs you can report them here on Github. Before filing an i
 
 ## Known issues
 See [docs/known-issues.md](https://github.com/abraunegg/onedrive/blob/master/docs/known-issues.md)
+
+## Documentation and Configuration Assistance
+### Building and Installation
+See [docs/INSTALL.md](https://github.com/abraunegg/onedrive/blob/master/docs/INSTALL.md)
+
+### Configuration and Usage
+See [docs/USAGE.md](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md)
+
+### Configure OneDrive Business Shared Folders
+See [docs/BusinessSharedFolders.md](https://github.com/abraunegg/onedrive/blob/master/docs/BusinessSharedFolders.md)
+
+### Configure SharePoint / Office 365 Shared Libraries (Business or Education)
+See [docs/Office365.md](https://github.com/abraunegg/onedrive/blob/master/docs/Office365.md)
+
+### Configure National Cloud support
+See [docs/national-cloud-deployments.md](https://github.com/abraunegg/onedrive/blob/master/docs/national-cloud-deployments.md)
+
+### Docker support
+See [docs/Docker.md](https://github.com/abraunegg/onedrive/blob/master/docs/Docker.md)

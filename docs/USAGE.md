@@ -421,15 +421,16 @@ Each line of the file represents a relative path from your `sync_dir`. All files
 Here is an example of `sync_list`:
 ```text
 # sync_list supports comments
-# Exclude my Backup folder
+# Include my Backup folder
 Backup
-# Exclude this single document
+# Include this single document
 Documents/latest_report.docx
-# Exclude all Work/Project directories
+# Include all Work/Project directories
 Work/Project*
 notes.txt
-# Exclude /Blender in the ~OneDrive root but not if elsewhere
+# Include /Blender in the ~OneDrive root but not if elsewhere
 /Blender
+# Include these names if they match any file or folder
 Cinema Soc
 Codes
 Textbooks
@@ -594,6 +595,8 @@ onedrive --monitor --verbose --confdir="~/.config/onedriveWork" &
 *   `--synchronize` does a one-time sync
 *   `--monitor` keeps the application running and monitoring for changes both local and remote
 *   `&` puts the application in background and leaves the terminal interactive
+
+**Important:** For each configuration, change the 'sync_dir' to a new value, unique for each specific configuration. Leaving this at the default of `sync_dir = "~/OneDrive"` will cause all data from both accounts to be synced to the same folder, then to each other.
 
 ### Automatic syncing of both OneDrive accounts
 In order to automatically start syncing your OneDrive accounts, you will need to create a service file for each account. From the applicable 'user systemd folder':
