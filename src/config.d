@@ -595,7 +595,9 @@ void outputLongHelp(Option[] opt)
 	auto argsNeedingOptions = [
 		"--confdir",
 		"--create-directory",
+		"--create-share-link",
 		"--destination-directory",
+		"--get-file-link",
 		"--get-O365-drive-id",
 		"--log-dir",
 		"--min-notify-changes",
