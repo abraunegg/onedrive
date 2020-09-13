@@ -249,6 +249,7 @@ final class Config
 	{
 		// Add additional options that are NOT configurable via config file
 		stringValues["create_directory"]  = "";
+		stringValues["create_share_link"] = "";
 		stringValues["destination_directory"] = "";
 		stringValues["get_file_link"]     = "";
 		stringValues["get_o365_drive_id"] = "";
@@ -293,6 +294,9 @@ final class Config
 				"create-directory",
 					"Create a directory on OneDrive - no sync will be performed.",
 					&stringValues["create_directory"],
+				"create-share-link",
+					"Create a shareable link for an existing file on OneDrive",
+					&stringValues["create_share_link"],
 				"debug-https", 
 					"Debug OneDrive HTTPS communication.", 
 					&boolValues["debug_https"],
