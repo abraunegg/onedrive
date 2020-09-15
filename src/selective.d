@@ -4,6 +4,7 @@ import std.file;
 import std.path;
 import std.regex;
 import std.stdio;
+import std.string;
 import util;
 import log;
 
@@ -196,12 +197,13 @@ final class SelectiveSync
 // if there are no allowed paths always return false
 private bool isPathExcluded(string path, string[] allowedPaths)
 {
+	string wildcard = "*";
 	// always allow the root
 	if (path == ".") return false;
 	// if there are no allowed paths always return false
 	if (allowedPaths.empty) return false;
-
 	path = buildNormalizedPath(path);
+	
 	foreach (allowed; allowedPaths) {
 		auto comm = commonPrefix(path, allowed);
 		// What are we comparing against?
@@ -218,15 +220,19 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 			log.vdebug("Evaluation against 'sync_list' result - parental path match");
 			return false;
 		}
-		// is the allowed path terminated by a wildcard? (*)
-		if (allowed.endsWith("*")) {
-			// remove the wildcard
-			string wildcardAllowed = allowed.strip('*');
-			// check path
-			if (canFind(path, wildcardAllowed)) {
-				// the given path is a subitem of an allowed path
-				log.vdebug("Evaluation against 'sync_list' result - wildcard path match");
-				return false;
+		
+		// does the allowed path contain a wildcard? (*)
+		if (canFind(allowed, wildcard)) {
+			// allowed path contains a wildcard
+			// manually escape '/'
+			string escapedAllowed = replace(allowed, "/", "\\/");
+			// manually escape '*'
+			escapedAllowed = replace(escapedAllowed, "*", ".*");
+			auto allowedMask = regex(escapedAllowed);
+			if (matchAll(path, allowedMask)) {
+				// regex wildcard evaluation matches
+				log.vdebug("Evaluation against 'sync_list' result - wildcard pattern match");
+				return false;		
 			}
 		}
 	}
