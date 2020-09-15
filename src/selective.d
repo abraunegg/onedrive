@@ -128,6 +128,8 @@ final class SelectiveSync
 	// Match against sync_list only
 	bool isPathExcludedViaSyncList(string path)
 	{
+		// Debug output that we are performing a 'sync_list' inclusion / exclusion test
+		log.vdebug("sync_list evaluation for: ", path);
 		return .isPathExcluded(path, paths);
 	}
 	
@@ -202,15 +204,33 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 	path = buildNormalizedPath(path);
 	foreach (allowed; allowedPaths) {
 		auto comm = commonPrefix(path, allowed);
+		// What are we comparing against?
+		log.vdebug("Evaluation against 'sync_list' entry: ", allowed);
+		// is path is an exact match
 		if (comm.length == path.length) {
 			// the given path is contained in an allowed path
+			log.vdebug("Evaluation against 'sync_list' result - direct match");
 			return false;
 		}
+		// is path is a subitem
 		if (comm.length == allowed.length && path[comm.length] == '/') {
 			// the given path is a subitem of an allowed path
+			log.vdebug("Evaluation against 'sync_list' result - parental path match");
 			return false;
 		}
+		// is the allowed path terminated by a wildcard? (*)
+		if (allowed.endsWith("*")) {
+			// remove the wildcard
+			string wildcardAllowed = allowed.strip('*');
+			// check path
+			if (canFind(path, wildcardAllowed)) {
+				// the given path is a subitem of an allowed path
+				log.vdebug("Evaluation against 'sync_list' result - wildcard path match");
+				return false;
+			}
+		}
 	}
+	log.vdebug("Evaluation against 'sync_list' result - NO MATCH");
 	return true;
 }
 
