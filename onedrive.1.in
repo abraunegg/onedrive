@@ -44,6 +44,9 @@ Set the directory used to store the configuration files
 \fB\-\-create\-directory\fP ARG
 Create a directory on OneDrive \- no sync will be performed.
 .TP
+\fB\-\-create\-share\-link\fP ARG
+Create a shareable link for an existing file on OneDrive
+.TP
 \fB\-\-debug\-https\fP
 Debug OneDrive HTTPS communication.
 .br

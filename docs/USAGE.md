@@ -596,6 +596,8 @@ onedrive --monitor --verbose --confdir="~/.config/onedriveWork" &
 *   `--monitor` keeps the application running and monitoring for changes both local and remote
 *   `&` puts the application in background and leaves the terminal interactive
 
+**Important:** For each configuration, change the 'sync_dir' to a new value, unique for each specific configuration. Leaving this at the default of `sync_dir = "~/OneDrive"` will cause all data from both accounts to be synced to the same folder, then to each other.
+
 ### Automatic syncing of both OneDrive accounts
 In order to automatically start syncing your OneDrive accounts, you will need to create a service file for each account. From the applicable 'user systemd folder':
 *   RHEL / CentOS: `/usr/lib/systemd/system`
@@ -687,6 +689,8 @@ Options:
       Set the directory used to store the configuration files
   --create-directory ARG
       Create a directory on OneDrive - no sync will be performed.
+  --create-share-link ARG
+      Create a shareable link for an existing file on OneDrive
   --debug-https
       Debug OneDrive HTTPS communication.
   --destination-directory ARG

@@ -5173,6 +5173,83 @@ final class SyncEngine
 		}
 	}
 	
+	// Create an anonymous read-only shareable link for an existing file on OneDrive
+	void createShareableLinkForFile(string filePath)
+	{
+		JSONValue onedrivePathDetails;
+		JSONValue createShareableLinkResponse;
+		string driveId;
+		string itemId;
+		string fileShareLink;
+		
+		// Get the path details from OneDrive
+		try {
+			onedrivePathDetails = onedrive.getPathDetails(filePath); // Returns a JSON String for the OneDrive Path
+		} catch (OneDriveException e) {
+			log.vdebug("onedrivePathDetails = onedrive.getPathDetails(filePath); generated a OneDriveException");
+			if (e.httpStatusCode == 404) {
+				// Requested path could not be found
+				log.error("ERROR: The requested path to query was not found on OneDrive");
+				return;
+			}
+			
+			if (e.httpStatusCode == 429) {
+				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+				handleOneDriveThrottleRequest();
+				// Retry original request by calling function again to avoid replicating any further error handling
+				log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling queryDriveForChanges(path);");
+				createShareableLinkForFile(filePath);
+				// return back to original call
+				return;
+			}
+			
+			if (e.httpStatusCode == 504) {
+				// HTTP request returned status code 504 (Gateway Timeout)
+				log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying request");
+				// Retry original request by calling function again to avoid replicating any further error handling
+				createShareableLinkForFile(filePath);
+				// return back to original call
+				return;
+			} else {
+				// display what the error is
+				displayOneDriveErrorMessage(e.msg);
+				return;
+			}
+		} 
+		
+		// Was a valid JSON response received?
+		if (onedrivePathDetails.type() == JSONType.object) {
+			// valid JSON response for the file was received
+			// Configure the required variables
+			driveId = onedrivePathDetails["parentReference"]["driveId"].str;
+			itemId = onedrivePathDetails["id"].str;
+			
+			// configure the access scope
+			JSONValue accessScope = [
+				"type": "view",
+				"scope": "anonymous"
+			];
+			
+			// Create the shareable file link
+			createShareableLinkResponse = onedrive.createShareableLink(driveId, itemId, accessScope);
+			if ((createShareableLinkResponse.type() == JSONType.object) && ("link" in createShareableLinkResponse)) {
+				// Extract the file share link from the JSON response
+				fileShareLink = createShareableLinkResponse["link"]["webUrl"].str;
+				writeln("File Shareable Link: ", fileShareLink);
+			} else {
+				// not a valid JSON object
+				log.error("ERROR: There was an error performing this operation on OneDrive");
+				log.error("ERROR: Increase logging verbosity to assist determining why.");
+				return;
+			}
+		} else {
+			// not a valid JSON object
+			log.error("ERROR: There was an error performing this operation on OneDrive");
+			log.error("ERROR: Increase logging verbosity to assist determining why.");
+			return;
+		} 
+	}
+	
 	// Query OneDrive for a URL path of a file
 	void queryOneDriveForFileURL(string localFilePath, string syncDir)
 	{
