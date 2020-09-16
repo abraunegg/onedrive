@@ -425,6 +425,8 @@ Here is an example of `sync_list`:
 Backup
 # Include this single document
 Documents/latest_report.docx
+# Include all PDF documents
+Documents/*.pdf
 # Include all Work/Project directories
 Work/Project*
 notes.txt
