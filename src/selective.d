@@ -237,13 +237,13 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 				offset = 0;
 		}
 		
-		// Test the provided path against the allowed path
-		auto comm = commonPrefix(path, allowedPath[offset..$]);
-		
 		// What are we comparing against?
 		log.vdebug("Evaluation against 'sync_list' entry: ", allowedPath);
 		
-		// is path is an exact match
+		// Generate the common prefix from the path vs the allowed path
+		auto comm = commonPrefix(path, allowedPath[offset..$]);
+		
+		// is path is an exact match of the allowed path
 		if (comm.length == path.length) {
 			// the given path is contained in an allowed path
 			if (!exclude) {
@@ -257,7 +257,7 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 			}
 		}
 		
-		// is path is a subitem
+		// is path is a subitem of the allowed path
 		if (comm.length == allowedPath[offset..$].length) {
 			// the given path is a subitem of an allowed path
 			if (!exclude) {
