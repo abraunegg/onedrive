@@ -4,6 +4,7 @@ import std.file;
 import std.path;
 import std.regex;
 import std.stdio;
+import std.string;
 import util;
 import log;
 
@@ -128,6 +129,8 @@ final class SelectiveSync
 	// Match against sync_list only
 	bool isPathExcludedViaSyncList(string path)
 	{
+		// Debug output that we are performing a 'sync_list' inclusion / exclusion test
+		log.vdebug("sync_list evaluation for: ", path);
 		return .isPathExcluded(path, paths);
 	}
 	
@@ -194,23 +197,46 @@ final class SelectiveSync
 // if there are no allowed paths always return false
 private bool isPathExcluded(string path, string[] allowedPaths)
 {
+	string wildcard = "*";
 	// always allow the root
 	if (path == ".") return false;
 	// if there are no allowed paths always return false
 	if (allowedPaths.empty) return false;
-
 	path = buildNormalizedPath(path);
+	
 	foreach (allowed; allowedPaths) {
 		auto comm = commonPrefix(path, allowed);
+		// What are we comparing against?
+		log.vdebug("Evaluation against 'sync_list' entry: ", allowed);
+		// is path is an exact match
 		if (comm.length == path.length) {
 			// the given path is contained in an allowed path
+			log.vdebug("Evaluation against 'sync_list' result - direct match");
 			return false;
 		}
+		// is path is a subitem
 		if (comm.length == allowed.length && path[comm.length] == '/') {
 			// the given path is a subitem of an allowed path
+			log.vdebug("Evaluation against 'sync_list' result - parental path match");
 			return false;
 		}
+		
+		// does the allowed path contain a wildcard? (*)
+		if (canFind(allowed, wildcard)) {
+			// allowed path contains a wildcard
+			// manually escape '/'
+			string escapedAllowed = replace(allowed, "/", "\\/");
+			// manually escape '*'
+			escapedAllowed = replace(escapedAllowed, "*", ".*");
+			auto allowedMask = regex(escapedAllowed);
+			if (matchAll(path, allowedMask)) {
+				// regex wildcard evaluation matches
+				log.vdebug("Evaluation against 'sync_list' result - wildcard pattern match");
+				return false;		
+			}
+		}
 	}
+	log.vdebug("Evaluation against 'sync_list' result - NO MATCH");
 	return true;
 }
 
