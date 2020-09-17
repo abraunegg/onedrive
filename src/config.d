@@ -545,7 +545,18 @@ final class Config
 						//  --skip-dir ARG
 						if (key == "sync_dir") configFileSyncDir = c.front.dup;
 						if (key == "skip_file") configFileSkipFile = c.front.dup;
-						if (key == "skip_dir") configFileSkipDir = c.front.dup;
+						if (key == "skip_dir") {
+							// Handle multiple entries of skip_dir
+							if (configFileSkipDir.empty) {
+								// currently no entry exists
+								configFileSkipDir = c.front.dup;
+							} else {
+								// add to existing entry
+								configFileSkipDir = configFileSkipDir ~ "|" ~ to!string(c.front.dup);
+								setValueString("skip_dir", configFileSkipDir);
+							}
+						}
+						
 						// Azure AD Configuration
 						if (key == "azure_ad_endpoint") {
 							string azureConfigValue = c.front.dup;

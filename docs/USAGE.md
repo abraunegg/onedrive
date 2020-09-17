@@ -340,6 +340,17 @@ Patterns are case insensitive. `*` and `?` [wildcards characters](https://techne
 
 **Important:** Entries under `skip_dir` are relative to your `sync_dir` path.
 
+**Note:** The `skip_dir` can be specified multiple times, for example:
+```text
+skip_dir = "SomeDir|OtherDir|ThisDir|ThatDir"
+skip_dir = "/Path/To/A/Directory"
+skip_dir = "/Another/Path/To/Different/Directory"
+```
+This will be interpreted the same as:
+```text
+skip_dir = "SomeDir|OtherDir|ThisDir|ThatDir|/Path/To/A/Directory|/Another/Path/To/Different/Directory"
+```
+
 **Note:** After changing `skip_dir`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
 #### skip_file
