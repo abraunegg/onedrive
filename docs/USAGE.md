@@ -340,6 +340,17 @@ Patterns are case insensitive. `*` and `?` [wildcards characters](https://techne
 
 **Important:** Entries under `skip_dir` are relative to your `sync_dir` path.
 
+**Note:** The `skip_dir` can be specified multiple times, for example:
+```text
+skip_dir = "SomeDir|OtherDir|ThisDir|ThatDir"
+skip_dir = "/Path/To/A/Directory"
+skip_dir = "/Another/Path/To/Different/Directory"
+```
+This will be interpreted the same as:
+```text
+skip_dir = "SomeDir|OtherDir|ThisDir|ThatDir|/Path/To/A/Directory|/Another/Path/To/Different/Directory"
+```
+
 **Note:** After changing `skip_dir`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
 #### skip_file
@@ -367,6 +378,17 @@ By default, the following files will be skipped:
 *   Files that end in .tmp
 
 **Important:** Do not use a skip_file entry of `.*` as this will prevent correct searching of local changes to process.
+
+**Note:** The `skip_file` can be specified multiple times, for example:
+```text
+skip_file = "~*|.~*|*.tmp|*.swp"
+skip_file = "*.blah"
+skip_file = "never_sync.file"
+```
+This will be interpreted the same as:
+```text
+skip_file = "~*|.~*|*.tmp|*.swp|*.blah|never_sync.file"
+```
 
 **Note:** after changing `skip_file`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
