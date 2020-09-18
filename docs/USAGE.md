@@ -442,6 +442,11 @@ Codes
 Textbooks
 Year 2
 ```
+The following are supported for pattern matching and exclusion rules:
+*   Use the `*` to wildcard select any characters to match for the item to be included
+*   Use either `!` or `-` characters at the start of the line to exclude an otherwise included item
+
+
 **Note:** after changing the sync_list, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
 ### How to 'skip' directories from syncing?
