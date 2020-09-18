@@ -130,7 +130,6 @@ final class SelectiveSync
 	bool isPathExcludedViaSyncList(string path)
 	{
 		// Debug output that we are performing a 'sync_list' inclusion / exclusion test
-		log.vdebug("sync_list evaluation for: ", path);
 		return .isPathExcluded(path, paths);
 	}
 	
@@ -197,47 +196,104 @@ final class SelectiveSync
 // if there are no allowed paths always return false
 private bool isPathExcluded(string path, string[] allowedPaths)
 {
+	// function variables
+	bool exclude = false;
+	bool finalResult = true; // will get updated to false, if pattern matched to sync_list entry
+	int offset;
 	string wildcard = "*";
+	
 	// always allow the root
 	if (path == ".") return false;
 	// if there are no allowed paths always return false
 	if (allowedPaths.empty) return false;
 	path = buildNormalizedPath(path);
+	log.vdebug("Evaluation against 'sync_list' for: ", path);
 	
-	foreach (allowed; allowedPaths) {
-		auto comm = commonPrefix(path, allowed);
+	// unless path is an exact match, entire sync_list entries need to be processed to ensure
+	// negative matches are also correctly detected
+	foreach (allowedPath; allowedPaths) {
+		// is this an inclusion path or finer grained exclusion?
+		switch (allowedPath[0]) {
+			case '-':
+				// allowed path starts with '-', this user wants to exclude this path
+				exclude = true;
+				offset = 1;
+				break;
+			case '!':
+				// allowed path starts with '!', this user wants to exclude this path
+				exclude = true;
+				offset = 1;
+				break;
+			case '/':
+				// allowed path starts with '/', this user wants to include this path
+				// but a '/' at the start causes matching issues, so use the offset for comparison
+				exclude = false;
+				offset = 1;
+				break;	
+				
+			default:
+				// no negative pattern, default is to not exclude
+				exclude = false;
+				offset = 0;
+		}
+		
 		// What are we comparing against?
-		log.vdebug("Evaluation against 'sync_list' entry: ", allowed);
-		// is path is an exact match
+		log.vdebug("Evaluation against 'sync_list' entry: ", allowedPath);
+		
+		// Generate the common prefix from the path vs the allowed path
+		auto comm = commonPrefix(path, allowedPath[offset..$]);
+		
+		// is path is an exact match of the allowed path
 		if (comm.length == path.length) {
 			// the given path is contained in an allowed path
-			log.vdebug("Evaluation against 'sync_list' result - direct match");
-			return false;
+			if (!exclude) {
+				log.vdebug("Evaluation against 'sync_list' result: direct match");
+				finalResult = false;
+				// direct match, break and go sync
+				break;
+			} else {
+				log.vdebug("Evaluation against 'sync_list' result: direct match but to be excluded");
+				finalResult = true;
+			}
 		}
-		// is path is a subitem
-		if (comm.length == allowed.length && path[comm.length] == '/') {
+		
+		// is path is a subitem of the allowed path
+		if (comm.length == allowedPath[offset..$].length) {
 			// the given path is a subitem of an allowed path
-			log.vdebug("Evaluation against 'sync_list' result - parental path match");
-			return false;
+			if (!exclude) {
+				log.vdebug("Evaluation against 'sync_list' result: parental path match");
+				finalResult = false;
+			} else {
+				log.vdebug("Evaluation against 'sync_list' result: parental path match but to be excluded");
+				finalResult = true;
+			}
 		}
 		
 		// does the allowed path contain a wildcard? (*)
-		if (canFind(allowed, wildcard)) {
+		if (canFind(allowedPath[offset..$], wildcard)) {
 			// allowed path contains a wildcard
-			// manually escape '/'
-			string escapedAllowed = replace(allowed, "/", "\\/");
-			// manually escape '*'
-			escapedAllowed = replace(escapedAllowed, "*", ".*");
-			auto allowedMask = regex(escapedAllowed);
+			// manually replace '*' for '.*' to be compatible with regex
+			string regexCompatiblePath = replace(allowedPath[offset..$], "*", ".*");
+			auto allowedMask = regex(regexCompatiblePath);
 			if (matchAll(path, allowedMask)) {
 				// regex wildcard evaluation matches
-				log.vdebug("Evaluation against 'sync_list' result - wildcard pattern match");
-				return false;		
+				if (!exclude) {
+					log.vdebug("Evaluation against 'sync_list' result: wildcard pattern match");
+					finalResult = false;
+				} else {
+					log.vdebug("Evaluation against 'sync_list' result: wildcard pattern match but to be excluded");
+					finalResult = true;
+				}
 			}
 		}
 	}
-	log.vdebug("Evaluation against 'sync_list' result - NO MATCH");
-	return true;
+	// results
+	if (finalResult) {
+		log.vdebug("Evaluation against 'sync_list' final result: EXCLUDED");
+	} else {
+		log.vdebug("Evaluation against 'sync_list' final result: included for sync");
+	}
+	return finalResult;
 }
 
 // test if the given path is matched by the regex expression.

@@ -423,10 +423,14 @@ Here is an example of `sync_list`:
 # sync_list supports comments
 # Include my Backup folder
 Backup
-# Include this single document
-Documents/latest_report.docx
+# Include Documents folder
+Documents/
+# Exclude temp folders under Documents
+!Documents/temp*
 # Include all PDF documents
 Documents/*.pdf
+# Include this single document
+Documents/latest_report.docx
 # Include all Work/Project directories
 Work/Project*
 notes.txt
