@@ -195,7 +195,6 @@ bool isValidName(string path)
 	matched = m.empty;
 	
 	// Additional explicit validation checks
-	if (itemName == "Icon") {matched = false;}
 	if (itemName == ".lock") {matched = false;}
 	if (itemName == "desktop.ini") {matched = false;}
 	// _vti_ cannot appear anywhere in a file or folder name

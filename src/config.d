@@ -249,6 +249,7 @@ final class Config
 	{
 		// Add additional options that are NOT configurable via config file
 		stringValues["create_directory"]  = "";
+		stringValues["create_share_link"] = "";
 		stringValues["destination_directory"] = "";
 		stringValues["get_file_link"]     = "";
 		stringValues["get_o365_drive_id"] = "";
@@ -293,6 +294,9 @@ final class Config
 				"create-directory",
 					"Create a directory on OneDrive - no sync will be performed.",
 					&stringValues["create_directory"],
+				"create-share-link",
+					"Create a shareable link for an existing file on OneDrive",
+					&stringValues["create_share_link"],
 				"debug-https", 
 					"Debug OneDrive HTTPS communication.", 
 					&boolValues["debug_https"],
@@ -540,8 +544,29 @@ final class Config
 						//  --skip-file ARG
 						//  --skip-dir ARG
 						if (key == "sync_dir") configFileSyncDir = c.front.dup;
-						if (key == "skip_file") configFileSkipFile = c.front.dup;
-						if (key == "skip_dir") configFileSkipDir = c.front.dup;
+						if (key == "skip_file") {
+							// Handle multiple entries of skip_file
+							if (configFileSkipFile.empty) {
+								// currently no entry exists
+								configFileSkipFile = c.front.dup;
+							} else {
+								// add to existing entry
+								configFileSkipFile = configFileSkipFile ~ "|" ~ to!string(c.front.dup);
+								setValueString("skip_file", configFileSkipFile);
+							}
+						}
+						if (key == "skip_dir") {
+							// Handle multiple entries of skip_dir
+							if (configFileSkipDir.empty) {
+								// currently no entry exists
+								configFileSkipDir = c.front.dup;
+							} else {
+								// add to existing entry
+								configFileSkipDir = configFileSkipDir ~ "|" ~ to!string(c.front.dup);
+								setValueString("skip_dir", configFileSkipDir);
+							}
+						}
+						
 						// Azure AD Configuration
 						if (key == "azure_ad_endpoint") {
 							string azureConfigValue = c.front.dup;
@@ -591,7 +616,9 @@ void outputLongHelp(Option[] opt)
 	auto argsNeedingOptions = [
 		"--confdir",
 		"--create-directory",
+		"--create-share-link",
 		"--destination-directory",
+		"--get-file-link",
 		"--get-O365-drive-id",
 		"--log-dir",
 		"--min-notify-changes",

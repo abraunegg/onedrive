@@ -4,7 +4,9 @@ import std.file;
 import std.path;
 import std.regex;
 import std.stdio;
+import std.string;
 import util;
+import log;
 
 final class SelectiveSync
 {
@@ -83,6 +85,7 @@ final class SelectiveSync
 		// Does the directory name match skip_dir config entry?
 		// Returns true if the name matches a skip_dir config entry
 		// Returns false if no match
+		log.vdebug("skip_dir evaluation for: ", name);
 		
 		// Try full path match first
 		if (!name.matchFirst(dirmask).empty) {
@@ -91,8 +94,8 @@ final class SelectiveSync
 			// Do we check the base name as well?
 			if (!skipDirStrictMatch) {
 				// check just the basename in the path
-				string filename = baseName(name);
-				if(!filename.matchFirst(dirmask).empty) {
+				string parent = baseName(name);
+				if(!parent.matchFirst(dirmask).empty) {
 					return true;
 				}
 			}
@@ -107,6 +110,7 @@ final class SelectiveSync
 		// Does the file name match skip_file config entry?
 		// Returns true if the name matches a skip_file config entry
 		// Returns false if no match
+		log.vdebug("skip_file evaluation for: ", name);
 	
 		// Try full path match first
 		if (!name.matchFirst(mask).empty) {
@@ -125,6 +129,7 @@ final class SelectiveSync
 	// Match against sync_list only
 	bool isPathExcludedViaSyncList(string path)
 	{
+		// Debug output that we are performing a 'sync_list' inclusion / exclusion test
 		return .isPathExcluded(path, paths);
 	}
 	
@@ -191,24 +196,104 @@ final class SelectiveSync
 // if there are no allowed paths always return false
 private bool isPathExcluded(string path, string[] allowedPaths)
 {
+	// function variables
+	bool exclude = false;
+	bool finalResult = true; // will get updated to false, if pattern matched to sync_list entry
+	int offset;
+	string wildcard = "*";
+	
 	// always allow the root
 	if (path == ".") return false;
 	// if there are no allowed paths always return false
 	if (allowedPaths.empty) return false;
-
 	path = buildNormalizedPath(path);
-	foreach (allowed; allowedPaths) {
-		auto comm = commonPrefix(path, allowed);
+	log.vdebug("Evaluation against 'sync_list' for: ", path);
+	
+	// unless path is an exact match, entire sync_list entries need to be processed to ensure
+	// negative matches are also correctly detected
+	foreach (allowedPath; allowedPaths) {
+		// is this an inclusion path or finer grained exclusion?
+		switch (allowedPath[0]) {
+			case '-':
+				// allowed path starts with '-', this user wants to exclude this path
+				exclude = true;
+				offset = 1;
+				break;
+			case '!':
+				// allowed path starts with '!', this user wants to exclude this path
+				exclude = true;
+				offset = 1;
+				break;
+			case '/':
+				// allowed path starts with '/', this user wants to include this path
+				// but a '/' at the start causes matching issues, so use the offset for comparison
+				exclude = false;
+				offset = 1;
+				break;	
+				
+			default:
+				// no negative pattern, default is to not exclude
+				exclude = false;
+				offset = 0;
+		}
+		
+		// What are we comparing against?
+		log.vdebug("Evaluation against 'sync_list' entry: ", allowedPath);
+		
+		// Generate the common prefix from the path vs the allowed path
+		auto comm = commonPrefix(path, allowedPath[offset..$]);
+		
+		// is path is an exact match of the allowed path
 		if (comm.length == path.length) {
 			// the given path is contained in an allowed path
-			return false;
+			if (!exclude) {
+				log.vdebug("Evaluation against 'sync_list' result: direct match");
+				finalResult = false;
+				// direct match, break and go sync
+				break;
+			} else {
+				log.vdebug("Evaluation against 'sync_list' result: direct match but to be excluded");
+				finalResult = true;
+			}
 		}
-		if (comm.length == allowed.length && path[comm.length] == '/') {
+		
+		// is path is a subitem of the allowed path
+		if (comm.length == allowedPath[offset..$].length) {
 			// the given path is a subitem of an allowed path
-			return false;
+			if (!exclude) {
+				log.vdebug("Evaluation against 'sync_list' result: parental path match");
+				finalResult = false;
+			} else {
+				log.vdebug("Evaluation against 'sync_list' result: parental path match but to be excluded");
+				finalResult = true;
+			}
+		}
+		
+		// does the allowed path contain a wildcard? (*)
+		if (canFind(allowedPath[offset..$], wildcard)) {
+			// allowed path contains a wildcard
+			// manually replace '*' for '.*' to be compatible with regex
+			string regexCompatiblePath = replace(allowedPath[offset..$], "*", ".*");
+			auto allowedMask = regex(regexCompatiblePath);
+			if (matchAll(path, allowedMask)) {
+				// regex wildcard evaluation matches
+				if (!exclude) {
+					log.vdebug("Evaluation against 'sync_list' result: wildcard pattern match");
+					finalResult = false;
+				} else {
+					log.vdebug("Evaluation against 'sync_list' result: wildcard pattern match but to be excluded");
+					finalResult = true;
+				}
+			}
 		}
 	}
-	return true;
+	// results
+	if (finalResult) {
+		log.vdebug("Evaluation against 'sync_list' final result: EXCLUDED");
+	} else {
+		log.vdebug("Evaluation against 'sync_list' final result: included for sync");
+	}
+	return finalResult;
 }
 
 // test if the given path is matched by the regex expression.

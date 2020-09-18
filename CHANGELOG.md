@@ -2,6 +2,35 @@
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
+## 2.4.5 - 2020-08-13
+### Fixed
+*   Fixed fish auto completions installation destination
+
+## 2.4.4 - 2020-08-11
+### Fixed
+*   Fix 'skip_dir' & 'skip_file' pattern matching to ensure correct matching is performed
+*   Fix 'skip_dir' & 'skip_file' so that each directive is only used against directories or files as requried in --monitor
+*   Fix client hand when attempting to sync a Unix pipe file
+*   Fix --single-directory & 'sync_list' performance 
+*   Fix erroneous 'return' statements which could prematurely end processing all changes returned from OneDrive
+*   Fix segfault when attempting to perform a comparison on an inotify event when determining if event path is directory or file
+*   Fix handling of Shared Folders to ensure these are checked against 'skip_dir' entries
+*   Fix 'Skipping uploading this new file as parent path is not in the database' when uploading to a Personal Shared Folder
+*   Fix how available free space is tracked when uploading files to OneDrive and Shared Folders
+*   Fix --single-directory handling of parent path matching if path is being seen for first time
+
+### Added
+*   Added Fish auto completions
+
+### Updated
+*   Increase maximum individual file size to 100GB due to Microsoft file limit increase
+*   Update Docker build files and align version of compiler across all Docker builds
+*   Update Docker documentation
+*   Update NixOS build information
+*   Update the 'Processing XXXX' output to display the full path
+*   Update logging output when a sync starts and completes when using --monitor
+*   Update Office 365 / SharePoint site search query and response if query return zero match
+
 ## 2.4.3 - 2020-06-29
 ### Fixed
 *   Check if symbolic link is relative to location path

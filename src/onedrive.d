@@ -491,6 +491,16 @@ final class OneDriveApi
 		return get(url);
 	}
 	
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_get
+	JSONValue getDriveQuota(const(char)[] driveId)
+	{
+		checkAccessTokenExpired();
+		const(char)[] url;
+		url = driveByIdUrl ~ driveId ~ "/";
+		url ~= "?select=quota";
+		return get(url);
+	}
+	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
 	JSONValue viewChangesByItemId(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink)
 	{
@@ -628,7 +638,7 @@ final class OneDriveApi
 		return get(url);
 	}
 		
-	// Return the requested details of the specified file id
+	// Return the requested details of the specified item id
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
 	JSONValue getFileDetails(const(char)[] driveId, const(char)[] id)
 	{
@@ -637,6 +647,17 @@ final class OneDriveApi
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
 		url ~= "?select=size,malware,file,webUrl";
 		return get(url);
+	}
+	
+	// Create an anonymous read-only shareable link for an existing file on OneDrive
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createlink
+	JSONValue createShareableLink(const(char)[] driveId, const(char)[] id, JSONValue accessScope)
+	{
+		checkAccessTokenExpired();
+		const(char)[] url;
+		url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/createLink";
+		http.addRequestHeader("Content-Type", "application/json");		
+		return post(url, accessScope.toString());
 	}
 	
 	// https://dev.onedrive.com/items/move.htm
@@ -703,10 +724,10 @@ final class OneDriveApi
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/site_search?view=odsp-graph-online
-	JSONValue o365SiteSearch(string o365SharedLibraryName){
+	JSONValue o365SiteSearch(){
 		checkAccessTokenExpired();
 		const(char)[] url;
-		url = siteSearchUrl ~ "=" ~ o365SharedLibraryName;
+		url = siteSearchUrl ~ "=*";
 		return get(url);
 	}
 		
@@ -1063,8 +1084,8 @@ final class OneDriveApi
 			}
 		} catch (CurlException e) {
 			// Parse and display error message received from OneDrive
+			log.vdebug("onedrive.perform() Generated a OneDrive CurlException");
 			log.error("ERROR: OneDrive returned an error with the following message:");
-			
 			auto errorArray = splitLines(e.msg);
 			string errorMessage = errorArray[0];
 						
