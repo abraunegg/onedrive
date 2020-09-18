@@ -544,7 +544,17 @@ final class Config
 						//  --skip-file ARG
 						//  --skip-dir ARG
 						if (key == "sync_dir") configFileSyncDir = c.front.dup;
-						if (key == "skip_file") configFileSkipFile = c.front.dup;
+						if (key == "skip_file") {
+							// Handle multiple entries of skip_file
+							if (configFileSkipFile.empty) {
+								// currently no entry exists
+								configFileSkipFile = c.front.dup;
+							} else {
+								// add to existing entry
+								configFileSkipFile = configFileSkipFile ~ "|" ~ to!string(c.front.dup);
+								setValueString("skip_file", configFileSkipFile);
+							}
+						}
 						if (key == "skip_dir") {
 							// Handle multiple entries of skip_dir
 							if (configFileSkipDir.empty) {

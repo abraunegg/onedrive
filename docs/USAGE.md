@@ -379,6 +379,17 @@ By default, the following files will be skipped:
 
 **Important:** Do not use a skip_file entry of `.*` as this will prevent correct searching of local changes to process.
 
+**Note:** The `skip_file` can be specified multiple times, for example:
+```text
+skip_file = "~*|.~*|*.tmp|*.swp"
+skip_file = "*.blah"
+skip_file = "never_sync.file"
+```
+This will be interpreted the same as:
+```text
+skip_file = "~*|.~*|*.tmp|*.swp|*.blah|never_sync.file"
+```
+
 **Note:** after changing `skip_file`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
 #### skip_dotfiles
