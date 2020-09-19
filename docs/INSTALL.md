@@ -15,8 +15,15 @@ This project has been packaged for the following Linux distributions:
 #### Important Note:
 Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If a package is out of date, please contact the package maintainer for resolution.
 
-#### Important information for Ubuntu users:
-Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) packages available for Ubuntu, do not install 'onedrive' from these packages via `apt install onedrive`. These packages are out-of-date and should not be used. If you wish to use a package, it is highly recommended that you utilise the PPA listed above or build from source using the instructions below for Ubuntu and those distributions (such as Lubuntu) which are derived from Ubuntu.
+#### Important information for all Ubuntu and Ubuntu based distribution users:
+This information is specifically for the following platforms and distributions:
+*   Ubuntu
+*   Lubuntu
+*   POP OS
+*   Peppermint OS
+Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) packages available for Ubuntu, do not install 'onedrive' from these packages via `apt install onedrive`. These packages are out-of-date and should not be used. If you wish to use a package, it is highly recommended that you utilise the Ubuntu PPA listed above. If the Ubuntu PPA does not support your distribution or version, your only option is to compile from source using the relevant Ubuntu instructions below.
+
+If you wish to change this situation so that you can just use 'apt install onedrive', consider becoming the Ubuntu package maintainer and contribute back to the community.
 
 ## Build Requirements
 *   Build environment must have at least 1GB of memory & 1GB swap space
@@ -97,7 +104,12 @@ Second, install the DMD compiler as per below:
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 
-### Dependencies: Ubuntu 18.x / Lubuntu 18.x / Debian 9 - i386 / i686 
+### Dependencies: Ubuntu 18.x / Lubuntu 18.x / Debian 9 - i386 / i686
+These dependencies are also applicable for all Ubuntu based distributions such as:
+*   Lubuntu
+*   POP OS
+*   Peppermint OS
+
 **Important:** The DMD compiler cannot be used in its default configuration on Ubuntu 18.x / Lubuntu 18.x / Debian 9 i386 / i686 architectures due to an issue in the Ubuntu / Debian linking process. See [https://issues.dlang.org/show_bug.cgi?id=19116](https://issues.dlang.org/show_bug.cgi?id=19116) for further details.
 
 **Note:** Ubuntu 18.x validated with the DMD compiler on the following Ubuntu i386 / i686 platform:
@@ -144,6 +156,10 @@ sudo update-alternatives --install "/usr/bin/ld" "ld" "/usr/bin/ld.bfd" 10
 ```
 
 ### Dependencies: Ubuntu 18.x, Ubuntu 19.x, Ubuntu 20.x / Debian 9, Debian 10 - x86_64
+These dependencies are also applicable for all Ubuntu based distributions such as:
+*   Lubuntu
+*   POP OS
+*   Peppermint OS
 ```text
 sudo apt install build-essential
 sudo apt install libcurl4-openssl-dev
