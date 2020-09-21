@@ -19,6 +19,7 @@ Distribution packages may be of an older release when compared to the latest rel
 This information is specifically for the following platforms and distributions:
 *   Ubuntu
 *   Lubuntu
+*   Linux Mint
 *   POP OS
 *   Peppermint OS
 
@@ -108,6 +109,7 @@ curl -fsS https://dlang.org/install.sh | bash -s dmd
 ### Dependencies: Ubuntu 18.x / Lubuntu 18.x / Debian 9 - i386 / i686
 These dependencies are also applicable for all Ubuntu based distributions such as:
 *   Lubuntu
+*   Linux Mint
 *   POP OS
 *   Peppermint OS
 
@@ -159,6 +161,7 @@ sudo update-alternatives --install "/usr/bin/ld" "ld" "/usr/bin/ld.bfd" 10
 ### Dependencies: Ubuntu 18.x, Ubuntu 19.x, Ubuntu 20.x / Debian 9, Debian 10 - x86_64
 These dependencies are also applicable for all Ubuntu based distributions such as:
 *   Lubuntu
+*   Linux Mint
 *   POP OS
 *   Peppermint OS
 ```text
