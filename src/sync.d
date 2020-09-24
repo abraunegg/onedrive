@@ -3412,7 +3412,15 @@ final class SyncEngine
 					}
 				} else {
 					// Appropriate message as we are in --monitor mode
-					log.vlog("The file appears to have been deleted locally .. but we are running in --monitor mode. This may have been 'moved' rather than 'deleted'");
+					log.vlog("The file appears to have been deleted locally .. but we are running in --monitor mode. This may have been 'moved' on the local filesystem rather than being 'deleted'");
+					log.vdebug("Most likely cause - 'inotify' event was missing for whatever action was taken locally or action taken when application was stopped");
+					// A moved file will be uploaded as 'new', delete the old file and reference
+					if (noRemoteDelete) {
+						// do not process remote file delete
+						log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
+					} else {
+						uploadDeleteItem(item, path);
+					}
 				}
 			} else {
 				// We are in a --dry-run situation, file appears to have deleted locally - this file may never have existed as we never downloaded it ..
