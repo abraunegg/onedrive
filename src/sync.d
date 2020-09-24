@@ -305,7 +305,7 @@ final class SyncEngine
 			if (e.httpStatusCode == 401) {
 				// HTTP request returned status code 401 (Unauthorized)
 				displayOneDriveErrorMessage(e.msg);
-				log.error("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
+				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
 				// Must exit here
 				exit(-1);
 			}
@@ -344,7 +344,7 @@ final class SyncEngine
 			if (e.httpStatusCode == 401) {
 				// HTTP request returned status code 401 (Unauthorized)
 				displayOneDriveErrorMessage(e.msg);
-				log.error("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
+				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
 				// Must exit here
 				exit(-1);
 			}
