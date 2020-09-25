@@ -949,7 +949,8 @@ final class OneDriveApi
 		} else {
 			http.onSend = buf => 0;
 		}
-		return perform();
+		auto response = perform();
+		return response;
 	}
 
 	private JSONValue perform()
