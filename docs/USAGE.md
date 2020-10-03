@@ -324,7 +324,7 @@ The issue here is around how the client stores the sync_dir path in the database
 
 **Note:** After changing `sync_dir`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
-**Important Note:** If your `sync_dir` is pointing to a network mount point (a network share via NFS, Windows Network Share, Samba Network Share) these types of network mount points do not support 'inotify', thus tracking real-time changes vi inotify of local files is not possible. Local filesystem changes will be replicated between the local filesystem and OneDrive based on the `monitor_interval` value. This is not something (inotify support for NFS, Samba) that this client can fix.
+**Important Note:** If your `sync_dir` is pointing to a network mount point (a network share via NFS, Windows Network Share, Samba Network Share) these types of network mount points do not support 'inotify', thus tracking real-time changes via inotify of local files is not possible. Local filesystem changes will be replicated between the local filesystem and OneDrive based on the `monitor_interval` value. This is not something (inotify support for NFS, Samba) that this client can fix.
 
 #### skip_dir
 Example: 
