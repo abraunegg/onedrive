@@ -2,6 +2,26 @@
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
+## 2.4.6 - 2020-10-04
+### Fixed
+*   Fix flagging of remaining free space when value is being restricted
+*   Fix --single-directory path handling when path does not exist locally
+*   Fix checking for 'Icon' path as no longer listed by Microsoft as an invalid file or folder name
+*   Fix removing child items on OneDrive when parent item responds with access denied
+*   Fix to handle deletion events for files when inotify events are missing
+*   Fix uninitialised value error as reported by valgrind
+*   Fix to handle deletion events for directories when inotify events are missing
+
+### Added
+*   Implement Feature: Create shareable link
+*   Implement Feature: Support wildcard within sync_list entries
+*   Implement Feature: Support negative patterns in sync_list for fine grained exclusions
+*   Implement Feature: Multiple skip_dir & skip_file configuration rules
+*   Add GUI notification to advise users when the client needs to be reauthenticated
+
+### Updated
+*   Updated documentation (readme.md, install.md, usage.md, bug_report.md)
+
 ## 2.4.5 - 2020-08-13
 ### Fixed
 *   Fixed fish auto completions installation destination
