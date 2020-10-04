@@ -5,7 +5,7 @@
 [![Docker Build](https://img.shields.io/docker/cloud/automated/driveone/onedrive)](https://hub.docker.com/r/driveone/onedrive)
 [![Docker Pulls](https://img.shields.io/docker/pulls/driveone/onedrive)](https://hub.docker.com/r/driveone/onedrive)
 
-A free Microsoft OneDrive Client which supports OneDrive Personal, OneDrive for Business, OneDrive for Office365 and Sharepoint.
+A free Microsoft OneDrive Client which supports OneDrive Personal, OneDrive for Business, OneDrive for Office365 and SharePoint.
 
 This powerful and highly configurable client can run on all major Linux distributions, FreeBSD, or as a Docker container. It supports one-way and two-way sync capabilities and securely connects to Microsoft OneDrive services.
 
@@ -26,7 +26,7 @@ This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) cl
 
 ## What's missing
 *   While local changes are uploaded right away, remote changes are delayed until next automated sync cycle when using --monitor
-*   Ability to encrypt/decrpyt files on-the-fly when uploading/downloading files from OneDrive
+*   Ability to encrypt/decrypt files on-the-fly when uploading/downloading files from OneDrive
 *   Support for Windows 'On-Demand' functionality so file is only downloaded when accessed locally
 *   A GUI for configuration management
 
