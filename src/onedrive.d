@@ -140,7 +140,7 @@ final class OneDriveApi
 		
 		// Configure tenant id value, if 'azure_tenant_id' is configured,
 		// otherwise use the "common" multiplexer
-                string tenantId = "common";
+		string tenantId = "common";
 		if (cfg.getValueString("azure_tenant_id") != "") {
 			// Use the value entered by the user
 			tenantId = cfg.getValueString("azure_tenant_id");
