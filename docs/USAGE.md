@@ -298,6 +298,7 @@ The default configuration file is listed below:
 # resync = "false"
 # bypass_data_preservation = "false"
 # azure_ad_endpoint = ""
+# azure_tenant_id = "common"
 # sync_business_shared_folders = "false"
 ```
 
