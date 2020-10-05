@@ -94,10 +94,15 @@ azure_tenant_id = "insert valid entry here"
 ```
 
 This will configure your client to use the specified tenant id in its Azure AD and Graph endpoint URIs, instead of "common".
+The tenant id may be the GUID Directory ID (formatted "00000000-0000-0000-0000-000000000000"), or the fully qualified tenant name (e.g. "example.onmicrosoft.us").
+The GUID Directory ID may be located in the Azure administation page as per [https://docs.microsoft.com/en-us/onedrive/find-your-office-365-tenant-id](https://docs.microsoft.com/en-us/onedrive/find-your-office-365-tenant-id). Note that you may need to go to your national-deployment-specific administration page, rather than following the links within that document.
+The tenant name may be obtained by following the PowerShell instructions on [https://docs.microsoft.com/en-us/onedrive/find-your-office-365-tenant-id](https://docs.microsoft.com/en-us/onedrive/find-your-office-365-tenant-id); it is shown as the "TenantDomain" upon completion of the "Connect-AzureAD" command.
 
 **Example:**
 ```text
-azure_ad_endpoint = "example.onmicrosoft.us"
+azure_tenant_id = "example.onmicrosoft.us"
+# or
+azure_tenant_id = "0c4be462-a1ab-499b-99e0-da08ce52a2cc"
 ```
 
 ## Step 6: Authenticate the client
