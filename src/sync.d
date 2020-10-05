@@ -952,7 +952,7 @@ final class SyncEngine
 	{
 		log.vlog("Applying changes of Path ID: " ~ id);
 		// function variables
-		const(char)[] idToQuery;
+		char[] idToQuery;
 		JSONValue changes;
 		JSONValue changesAvailable;
 		JSONValue idDetails;
@@ -1234,18 +1234,20 @@ final class SyncEngine
 			if (driveId == defaultDriveId) {
 				// The drive id matches our users default drive id
 				idToQuery = defaultRootId.dup;
+				log.vdebug("Configuring 'idToQuery' as defaultRootId duplicate");
 			} else {
 				// The drive id does not match our users default drive id
 				// Potentially the 'path id' we are requesting the details of is a Shared Folder (remote item)
 				// Use the 'id' that was passed in (folderId)
-				idToQuery = id;
+				idToQuery = id.dup;
+				log.vdebug("Configuring 'idToQuery' as 'id' duplicate");
 			}
 			// what path id are we going to query?
-			log.vdebug("path idToQuery = ", idToQuery);
+			log.vdebug("Path object to query configured as 'idToQuery' = ", idToQuery);
 			long deltaChanges = 0;
 			
 			// What query do we use?
-			// Some National Cloud Deployments (US and DE) do not support /delta as a query
+			// National Cloud Deployments (US and DE) do not support /delta as a query
 			// https://docs.microsoft.com/en-us/graph/deployments#supported-features
 			// Are we running against a National Cloud Deployments that does not support /delta
 			if ((nationalCloudDeployment) || ((driveId!= defaultDriveId) && (syncBusinessFolders))) {
