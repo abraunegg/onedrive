@@ -102,6 +102,8 @@ final class Config
 		//     AD Endpoint:    https://login.chinacloudapi.cn
 		//     Graph Endpoint: 	https://microsoftgraph.chinacloudapi.cn
 		stringValues["azure_ad_endpoint"] = "";
+                // Support single-tenant applications that are not able to use the "common" multiplexer
+		stringValues["azure_tenant_id"] = "common";
 		// Allow enable / disable of the syncing of OneDrive Business Shared Folders via configuration file
 		boolValues["sync_business_shared_folders"] = false;
 		

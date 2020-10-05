@@ -1245,7 +1245,7 @@ final class SyncEngine
 			long deltaChanges = 0;
 			
 			// What query do we use?
-			// National Cloud Deployments (US and DE) do not support /delta as a query
+			// Some National Cloud Deployments (US and DE) do not support /delta as a query
 			// https://docs.microsoft.com/en-us/graph/deployments#supported-features
 			// Are we running against a National Cloud Deployments that does not support /delta
 			if ((nationalCloudDeployment) || ((driveId!= defaultDriveId) && (syncBusinessFolders))) {
