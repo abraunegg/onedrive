@@ -316,10 +316,10 @@ By passing `--enable-debug` to the `configure` call, `onedrive` gets built with 
 information, useful (for example) to get `perf`-issued figures.
 
 By passing `--enable-completions` to the `configure` call, shell completion functions are
-installed for `bash` and `zsh`. The installation directories are determined
+installed for `bash`, `zsh` and `fish`. The installation directories are determined
 as far as possible automatically, but can be overridden by passing
-`--with-bash-completion-dir=<DIR>` and 
-`--with-zsh-completion-dir=<DIR>` to `configure`.
+`--with-bash-completion-dir=<DIR>`, `--with-zsh-completion-dir=<DIR>`, and
+`--with-fish-completion-dir=<DIR>` to `configure`.
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
 #### ARMHF Architecture

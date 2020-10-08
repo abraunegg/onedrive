@@ -51,6 +51,11 @@ A valid entry for the response URI should be one of:
 *   https://login.microsoftonline.de/common/oauth2/nativeclient (Microsoft Cloud Germany)
 *   https://login.chinacloudapi.cn/common/oauth2/nativeclient (Azure and Office 365 operated by 21Vianet in China)
 
+For a single-tenant application, it may be necessary to use your specific tenant id instead of "common":
+*   https://login.microsoftonline.us/example.onmicrosoft.us/oauth2/nativeclient (Microsoft Cloud for US Government)
+*   https://login.microsoftonline.de/example.onmicrosoft.de/oauth2/nativeclient (Microsoft Cloud Germany)
+*   https://login.chinacloudapi.cn/example.onmicrosoft.cn/oauth2/nativeclient (Azure and Office 365 operated by 21Vianet in China)
+
 ## Step 4: Configure the onedrive client to use new application registration
 Update to your 'onedrive' configuration file (`~/.config/onedrive/config`) the following:
 ```text
@@ -64,7 +69,7 @@ This will reconfigure the client to use the new application registration you hav
 application_id = "22c49a0d-d21c-4792-aed1-8f163c982546"
 ```
 
-## Step 5: Confgure the onedrive client to use the specific Microsoft Azure deployment
+## Step 5: Configure the onedrive client to use the specific Microsoft Azure deployment
 Update to your 'onedrive' configuration file (`~/.config/onedrive/config`) the following:
 ```text
 azure_ad_endpoint = "insert valid entry here"
@@ -81,6 +86,23 @@ This will configure your client to use the correct Azure AD and Graph endpoints 
 **Example:**
 ```text
 azure_ad_endpoint = "USL4"
+```
+
+If the Microsoft Azure deployment does not support multi-tenant applications, update to your 'onedrive' configuration file (`~/.config/onedrive/config`) the following:
+```text
+azure_tenant_id = "insert valid entry here"
+```
+
+This will configure your client to use the specified tenant id in its Azure AD and Graph endpoint URIs, instead of "common".
+The tenant id may be the GUID Directory ID (formatted "00000000-0000-0000-0000-000000000000"), or the fully qualified tenant name (e.g. "example.onmicrosoft.us").
+The GUID Directory ID may be located in the Azure administation page as per [https://docs.microsoft.com/en-us/onedrive/find-your-office-365-tenant-id](https://docs.microsoft.com/en-us/onedrive/find-your-office-365-tenant-id). Note that you may need to go to your national-deployment-specific administration page, rather than following the links within that document.
+The tenant name may be obtained by following the PowerShell instructions on [https://docs.microsoft.com/en-us/onedrive/find-your-office-365-tenant-id](https://docs.microsoft.com/en-us/onedrive/find-your-office-365-tenant-id); it is shown as the "TenantDomain" upon completion of the "Connect-AzureAD" command.
+
+**Example:**
+```text
+azure_tenant_id = "example.onmicrosoft.us"
+# or
+azure_tenant_id = "0c4be462-a1ab-499b-99e0-da08ce52a2cc"
 ```
 
 ## Step 6: Authenticate the client

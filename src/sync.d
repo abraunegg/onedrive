@@ -978,7 +978,7 @@ final class SyncEngine
 	{
 		log.vlog("Applying changes of Path ID: " ~ id);
 		// function variables
-		const(char)[] idToQuery;
+		char[] idToQuery;
 		JSONValue changes;
 		JSONValue changesAvailable;
 		JSONValue idDetails;
@@ -1260,14 +1260,16 @@ final class SyncEngine
 			if (driveId == defaultDriveId) {
 				// The drive id matches our users default drive id
 				idToQuery = defaultRootId.dup;
+				log.vdebug("Configuring 'idToQuery' as defaultRootId duplicate");
 			} else {
 				// The drive id does not match our users default drive id
 				// Potentially the 'path id' we are requesting the details of is a Shared Folder (remote item)
 				// Use the 'id' that was passed in (folderId)
-				idToQuery = id;
+				idToQuery = id.dup;
+				log.vdebug("Configuring 'idToQuery' as 'id' duplicate");
 			}
 			// what path id are we going to query?
-			log.vdebug("path idToQuery = ", idToQuery);
+			log.vdebug("Path object to query configured as 'idToQuery' = ", idToQuery);
 			long deltaChanges = 0;
 			
 			// What query do we use?
@@ -1277,7 +1279,7 @@ final class SyncEngine
 			if ((nationalCloudDeployment) || ((driveId!= defaultDriveId) && (syncBusinessFolders))) {
 				// Have to query /children rather than /delta
 				nationalCloudChildrenScan = true;
-				log.vdebug("Using /children call to query drive for items");
+				log.vdebug("Using /children call to query drive for items to populate 'changes' and 'changesAvailable'");
 				// In OneDrive Business Shared Folder scenario, if ALL items are downgraded, then this leads to local file deletion
 				// Downgrade ONLY files associated with this driveId and idToQuery
 				log.vdebug("Downgrading all children for this driveId (" ~ driveId ~ ") and idToQuery (" ~ idToQuery ~ ") to an out-of-sync state");
@@ -1360,10 +1362,14 @@ final class SyncEngine
 					}
 				}
 			} else {
-				log.vdebug("Using /delta call to query drive for items");
+				log.vdebug("Using /delta call to query drive for items to populate 'changes' and 'changesAvailable'");
 				// query for changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink);
 				try {
 					// Fetch the changes relative to the path id we want to query
+					log.vdebug("Attempting query 'changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink)'");
+					log.vdebug("driveId: ", driveId);
+					log.vdebug("idToQuery: ", idToQuery);
+					log.vdebug("deltaLink: ", deltaLink);
 					// changes with or without deltaLink
 					changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink);
 					if (changes.type() == JSONType.object) {
@@ -1373,9 +1379,6 @@ final class SyncEngine
 					// OneDrive threw an error
 					log.vdebug("------------------------------------------------------------------");
 					log.vdebug("Query Error: changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink)");
-					log.vdebug("driveId: ", driveId);
-					log.vdebug("idToQuery: ", idToQuery);
-					log.vdebug("deltaLink: ", deltaLink);
 					
 					// HTTP request returned status code 404 (Not Found)
 					if (e.httpStatusCode == 404) {
@@ -1457,6 +1460,10 @@ final class SyncEngine
 				// query for changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable);
 				try {
 					// Fetch the changes relative to the path id we want to query
+					log.vdebug("Attempting query 'changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable)'");
+					log.vdebug("driveId: ", driveId);
+					log.vdebug("idToQuery: ", idToQuery);
+					log.vdebug("deltaLinkAvailable: ", deltaLinkAvailable);
 					// changes based on deltaLink
 					changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable);
 					if (changesAvailable.type() == JSONType.object) {
@@ -1471,9 +1478,6 @@ final class SyncEngine
 					// OneDrive threw an error
 					log.vdebug("------------------------------------------------------------------");
 					log.vdebug("Query Error: changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable)");
-					log.vdebug("driveId: ", driveId);
-					log.vdebug("idToQuery: ", idToQuery);
-					log.vdebug("deltaLinkAvailable: ", deltaLinkAvailable);
 					
 					// HTTP request returned status code 404 (Not Found)
 					if (e.httpStatusCode == 404) {
