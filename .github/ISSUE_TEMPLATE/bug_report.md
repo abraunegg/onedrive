@@ -18,7 +18,7 @@ A clear and concise description of what the bug is.
 *   OneDrive Application Configuration: Output of `onedrive --display-config`
 *   Provide the version of curl you are using: Output of `curl --version`
 *   Is your configured 'sync_dir' a local directory or a network mount point?
-*   Provide all the mountpoints in your system: Output of: `mount`
+*   If *not* local, provide all the mountpoints in your system: Output of: `mount`
 
 **Note:** Please generate a full debug log whilst reproducing the issue as per [https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support](https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support) and email to support@mynas.com.au
 
