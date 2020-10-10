@@ -474,6 +474,19 @@ The following are supported for pattern matching and exclusion rules:
 
 **Note:** after changing the sync_list, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
+### Configuring the client for 'single tenant application' use
+In some instances when using OneDrive Business Accounts, depending on the Azure organisational configuration, it will be necessary to configure the client as a 'single tenant application'. 
+To configure this, after creating the application on your Azure tenant, update the 'config' file with the tenant name (not the GUID) and the newly created Application ID, then this will be used for the authentication process.
+```text
+# skip_dir_strict_match = "false"
+application_id = "your.application.id.guid"
+# resync = "false"
+# bypass_data_preservation = "false"
+# azure_ad_endpoint = "xxxxxx"
+azure_tenant_id = "your.azure.tenant.name"
+# sync_business_shared_folders = "false"
+```
+
 ### How to 'skip' directories from syncing?
 There are several mechanisms available to 'skip' a directory from the sync process:
 *   Utilise 'skip_dir'
