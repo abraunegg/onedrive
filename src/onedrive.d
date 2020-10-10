@@ -151,6 +151,10 @@ final class OneDriveApi
 		switch(azureConfigValue) {
 			case "":
 				log.log("Configuring Global Azure AD Endpoints");
+				// Authentication
+				authUrl = globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
+				redirectUrl = globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				tokenUrl = globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				break;
 			case "USL4":
 				log.log("Configuring Azure AD for US Government Endpoints");
