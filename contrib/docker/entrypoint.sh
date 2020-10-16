@@ -40,6 +40,12 @@ if [ "${ONEDRIVE_DEBUG:=0}" == "1" ]; then
    ARGS=(--verbose --verbose ${ARGS[@]})
 fi
 
+# Tell client to perform HTTPS debug output, based on an environment variable
+if [ "${ONEDRIVE_DEBUG_HTTPS:=0}" == "1" ]; then
+   echo "# We are performing HTTPS debug output"
+   ARGS=(--debug-https ${ARGS[@]})
+fi
+
 # Tell client to perform a resync based on environment variable
 if [ "${ONEDRIVE_RESYNC:=0}" == "1" ]; then
    echo "# We are performing a --resync"

@@ -152,6 +152,7 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 | <B>ONEDRIVE_GID</B> | GroupID (GID) to run as | 1000 |
 | <B>ONEDRIVE_VERBOSE</B> | Controls "--verbose" switch on onedrive sync. Default is 0 | 1 |
 | <B>ONEDRIVE_DEBUG</B> | Controls "--verbose --verbose" switch on onedrive sync. Default is 0 | 1 |
+| <B>ONEDRIVE_DEBUG_HTTPS</B> | Controls "--debug-https" switch on onedrive sync. Default is 0 | 1 |
 | <B>ONEDRIVE_RESYNC</B> | Controls "--resync" switch on onedrive sync. Default is 0 | 1 |
 
 ### Usage Examples
