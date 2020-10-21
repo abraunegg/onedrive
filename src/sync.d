@@ -2124,13 +2124,16 @@ final class SyncEngine
 			// Is the item in the local database
 			if (itemdb.idInLocalDatabase(item.driveId, item.id)){
 				oldPath = itemdb.computePath(item.driveId, item.id);
-				if (!isItemSynced(oldItem, oldPath)) {
+				// Query DB for existing local item in specified path
+				string itemSource = "database";
+				if (!isItemSynced(oldItem, oldPath, itemSource)) {
 					if (exists(oldPath)) {
 						// Is the local file technically 'newer' based on UTC timestamp?
 						SysTime localModifiedTime = timeLastModified(oldPath).toUTC();
 						localModifiedTime.fracSecs = Duration.zero;
 						item.mtime.fracSecs = Duration.zero;
 						
+						// Compare file on disk modified time with modified time provided by OneDrive API
 						if (localModifiedTime > item.mtime) {
 							// local file is newer than item on OneDrive
 							// no local rename
@@ -2141,7 +2144,10 @@ final class SyncEngine
 							return;
 						} else {
 							// remote file is newer than local item
-							log.vlog("Remote item modified time is newer based on UTC time conversion");
+							log.vlog("Remote item modified time is newer based on UTC time conversion"); // correct message, remote item is newer
+							log.vdebug("localModifiedTime (local file): ", localModifiedTime);
+							log.vdebug("item.mtime (OneDrive item):     ", item.mtime);
+							
 							auto ext = extension(oldPath);
 							auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
 							
@@ -2207,7 +2213,9 @@ final class SyncEngine
 	{
 		if (exists(path)) {
 			// path exists locally
-			if (isItemSynced(item, path)) {
+			// Query DB for new remote item in specified path
+			string itemSource = "remote";
+			if (isItemSynced(item, path, itemSource)) {
 				// file details from OneDrive and local file details in database are in-sync
 				log.vdebug("The item to sync is already present on the local file system and is in-sync with the local database");
 				return;
@@ -2217,8 +2225,8 @@ final class SyncEngine
 				SysTime localModifiedTime = timeLastModified(path).toUTC();
 				SysTime itemModifiedTime = item.mtime;
 				// HACK: reduce time resolution to seconds before comparing
-				itemModifiedTime.fracSecs = Duration.zero;
 				localModifiedTime.fracSecs = Duration.zero;
+				itemModifiedTime.fracSecs = Duration.zero;
 				
 				// is the local modified time greater than that from OneDrive?
 				if (localModifiedTime > itemModifiedTime) {
@@ -2280,7 +2288,10 @@ final class SyncEngine
 					}
 				} else {
 					// remote file is newer than local item
-					log.vlog("Remote item modified time is newer based on UTC time conversion");
+					log.vlog("Remote item modified time is newer based on UTC time conversion"); // correct message, remote item is newer
+					log.vdebug("localModifiedTime (local file):   ", localModifiedTime);
+					log.vdebug("itemModifiedTime (OneDrive item): ", itemModifiedTime);
+					
 					auto ext = extension(path);
 					auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
 					
@@ -2405,7 +2416,9 @@ final class SyncEngine
 				if (exists(newPath)) {
 					Item localNewItem;
 					if (itemdb.selectByPath(newPath, defaultDriveId, localNewItem)) {
-						if (isItemSynced(localNewItem, newPath)) {
+						// Query DB for new local item in specified path
+						string itemSource = "database";
+						if (isItemSynced(localNewItem, newPath, itemSource)) {
 							log.vlog("Destination is in sync and will be overwritten");
 						} else {
 							// TODO: force remote sync by deleting local item
@@ -2641,7 +2654,7 @@ final class SyncEngine
 	}
 
 	// returns true if the given item corresponds to the local one
-	private bool isItemSynced(const ref Item item, const(string) path)
+	private bool isItemSynced(const ref Item item, const(string) path, string itemSource)
 	{
 		if (!exists(path)) return false;
 		final switch (item.type) {
@@ -2650,17 +2663,17 @@ final class SyncEngine
 				SysTime localModifiedTime = timeLastModified(path).toUTC();
 				SysTime itemModifiedTime = item.mtime;
 				// HACK: reduce time resolution to seconds before comparing
-				itemModifiedTime.fracSecs = Duration.zero;
 				localModifiedTime.fracSecs = Duration.zero;
+				itemModifiedTime.fracSecs = Duration.zero;
 				if (localModifiedTime == itemModifiedTime) {
 					return true;
 				} else {
-					log.vlog("The local item has a different modified time ", localModifiedTime, " remote is ", itemModifiedTime);
+					log.vlog("The local item has a different modified time ", localModifiedTime, " when compared to ", itemSource, " modified time ", itemModifiedTime);
 				}
 				if (testFileHash(path, item)) {
 					return true;
 				} else {
-					log.vlog("The local item has a different hash");
+					log.vlog("The local item has a different hash when compared to ", itemSource, " item hash");
 				}
 			} else {
 				log.vlog("The local item is a directory but should be a file");
