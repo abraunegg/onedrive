@@ -598,111 +598,134 @@ final class SyncEngine
 			if (graphQuery.type() == JSONType.object) {
 				string sharedFolderName;
 				foreach (searchResult; graphQuery["value"].array) {
-					sharedFolderName = searchResult["name"].str;
-					// Compare this to values in business_shared_folders
-					if(selectiveSync.isSharedFolderMatched(sharedFolderName)){
-						// Folder name matches what we are looking for
-						// Flags for matching
-						bool itemInDatabase = false;
-						bool itemLocalDirExists = false;
-						bool itemPathIsLocal = false;
-						
-						// "what if" there are 2 or more folders shared with me have the "same" name?
-						// The folder name will be the same, but driveId will be different
-						// This will then cause these 'shared folders' to cross populate data, which may not be desirable
-						log.vdebug("Shared Folder Name: ", sharedFolderName);
-						log.vdebug("Parent Drive Id:    ", searchResult["remoteItem"]["parentReference"]["driveId"].str);
-						log.vdebug("Shared Item Id:     ", searchResult["remoteItem"]["id"].str);
-						Item databaseItem;
-						
-						// for each driveid in the existing driveIDsArray 
-						foreach (searchDriveId; driveIDsArray) {
-							log.vdebug("searching database for: ", searchDriveId, " ", sharedFolderName);
-							if (itemdb.selectByPath(sharedFolderName, searchDriveId, databaseItem)) {
-								log.vdebug("Found shared folder name in database");
-								itemInDatabase = true;
-								log.vdebug("databaseItem: ", databaseItem);
-								// Does the databaseItem.driveId == defaultDriveId?
-								if (databaseItem.driveId == defaultDriveId) {
-									itemPathIsLocal = true;
-								}
-							} else {	
-								log.vdebug("Shared folder name not found in database");
-								// "what if" there is 'already' a local folder with this name
-								// Check if in the database
-								// If NOT in the database, but resides on disk, this could be a new local folder created after last sync but before this one
-								// However we sync 'shared folders' before checking for local changes
-								string localpath = expandTilde(cfg.getValueString("sync_dir")) ~ "/" ~ sharedFolderName;
-								if (exists(localpath)) {
-									// local path exists
-									log.vdebug("Found shared folder name in local OneDrive sync_dir");
-									itemLocalDirExists = true;
-								}
-							}
+					// Configure additional logging items for this array element
+					string sharedByName;
+					string sharedByEmail;
+					// Extra details for verbose logging
+					if ("sharedBy" in searchResult["remoteItem"]["shared"]) {
+						if ("displayName" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
+							sharedByName = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["displayName"].str;
 						}
-						
-						// Shared Folder Evaluation Debugging
-						log.vdebug("item in database:                         ", itemInDatabase);
-						log.vdebug("path exists on disk:                      ", itemLocalDirExists);
-						log.vdebug("database drive id matches defaultDriveId: ", itemPathIsLocal);
-						log.vdebug("database data matches search data:        ", ((databaseItem.driveId == searchResult["remoteItem"]["parentReference"]["driveId"].str) && (databaseItem.id == searchResult["remoteItem"]["id"].str)));
-						
-						// Additional logging
-						string sharedByName;
-						string sharedByEmail;
-						
-						// Extra details for verbose logging
-						if ("sharedBy" in searchResult["remoteItem"]["shared"]) {
-							if ("displayName" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
-								sharedByName = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["displayName"].str;
-							}
-							if ("email" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
-								sharedByEmail = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["email"].str;
-							}
+						if ("email" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
+							sharedByEmail = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["email"].str;
 						}
-						
-						if ( ((!itemInDatabase) || (!itemLocalDirExists)) || (((databaseItem.driveId == searchResult["remoteItem"]["parentReference"]["driveId"].str) && (databaseItem.id == searchResult["remoteItem"]["id"].str)) && (!itemPathIsLocal)) ) {
-							// This shared folder does not exist in the database
-							if (!cfg.getValueBool("monitor")) {
-								log.log("Syncing this OneDrive Business Shared Folder: ", sharedFolderName);
+					}
+				
+					// is the shared item with us a 'folder' ?
+					if (isItemFolder(searchResult)) {
+						// item returned is a shared folder, not a shared file
+						sharedFolderName = searchResult["name"].str;
+						// Compare this to values in business_shared_folders
+						if(selectiveSync.isSharedFolderMatched(sharedFolderName)){
+							// Folder name matches what we are looking for
+							// Flags for matching
+							bool itemInDatabase = false;
+							bool itemLocalDirExists = false;
+							bool itemPathIsLocal = false;
+							
+							// "what if" there are 2 or more folders shared with me have the "same" name?
+							// The folder name will be the same, but driveId will be different
+							// This will then cause these 'shared folders' to cross populate data, which may not be desirable
+							log.vdebug("Shared Folder Name: ", sharedFolderName);
+							log.vdebug("Parent Drive Id:    ", searchResult["remoteItem"]["parentReference"]["driveId"].str);
+							log.vdebug("Shared Item Id:     ", searchResult["remoteItem"]["id"].str);
+							Item databaseItem;
+							
+							// for each driveid in the existing driveIDsArray 
+							foreach (searchDriveId; driveIDsArray) {
+								log.vdebug("searching database for: ", searchDriveId, " ", sharedFolderName);
+								if (itemdb.selectByPath(sharedFolderName, searchDriveId, databaseItem)) {
+									log.vdebug("Found shared folder name in database");
+									itemInDatabase = true;
+									log.vdebug("databaseItem: ", databaseItem);
+									// Does the databaseItem.driveId == defaultDriveId?
+									if (databaseItem.driveId == defaultDriveId) {
+										itemPathIsLocal = true;
+									}
+								} else {	
+									log.vdebug("Shared folder name not found in database");
+									// "what if" there is 'already' a local folder with this name
+									// Check if in the database
+									// If NOT in the database, but resides on disk, this could be a new local folder created after last sync but before this one
+									// However we sync 'shared folders' before checking for local changes
+									string localpath = expandTilde(cfg.getValueString("sync_dir")) ~ "/" ~ sharedFolderName;
+									if (exists(localpath)) {
+										// local path exists
+										log.vdebug("Found shared folder name in local OneDrive sync_dir");
+										itemLocalDirExists = true;
+									}
+								}
+							}
+							
+							// Shared Folder Evaluation Debugging
+							log.vdebug("item in database:                         ", itemInDatabase);
+							log.vdebug("path exists on disk:                      ", itemLocalDirExists);
+							log.vdebug("database drive id matches defaultDriveId: ", itemPathIsLocal);
+							log.vdebug("database data matches search data:        ", ((databaseItem.driveId == searchResult["remoteItem"]["parentReference"]["driveId"].str) && (databaseItem.id == searchResult["remoteItem"]["id"].str)));
+							
+							if ( ((!itemInDatabase) || (!itemLocalDirExists)) || (((databaseItem.driveId == searchResult["remoteItem"]["parentReference"]["driveId"].str) && (databaseItem.id == searchResult["remoteItem"]["id"].str)) && (!itemPathIsLocal)) ) {
+								// This shared folder does not exist in the database
+								if (!cfg.getValueBool("monitor")) {
+									log.log("Syncing this OneDrive Business Shared Folder: ", sharedFolderName);
+								} else {
+									log.vlog("Syncing this OneDrive Business Shared Folder: ", sharedFolderName);
+								}
+								Item businessSharedFolder = makeItem(searchResult);
+								
+								// Log who shared this to assist with sync data correlation
+								if ((sharedByName != "") && (sharedByEmail != "")) {	
+									log.vlog("OneDrive Business Shared Folder - Shared By:  ", sharedByName, " (", sharedByEmail, ")");
+								} else {
+									if (sharedByName != "") {
+										log.vlog("OneDrive Business Shared Folder - Shared By:  ", sharedByName);
+									}
+								}
+								
+								// Do the actual sync
+								applyDifferences(businessSharedFolder.remoteDriveId, businessSharedFolder.remoteId, performFullItemScan);
+								// add this parent drive id to the array to search for, ready for next use
+								string newDriveID = searchResult["remoteItem"]["parentReference"]["driveId"].str;
+								// Keep the driveIDsArray with unique entries only
+								if (!canFind(driveIDsArray, newDriveID)) {
+									// Add this drive id to the array to search with
+									driveIDsArray ~= newDriveID;
+								}
 							} else {
-								log.vlog("Syncing this OneDrive Business Shared Folder: ", sharedFolderName);
-							}
-							Item businessSharedFolder = makeItem(searchResult);
+								// Shared Folder Name Conflict ...
+								log.log("WARNING: Skipping shared folder due to existing name conflict: ", sharedFolderName);
+								log.log("WARNING: Skipping changes of Path ID: ", searchResult["remoteItem"]["id"].str);
+								log.log("WARNING: To sync this shared folder, this shared folder needs to be renamed");
+								
+								// Log who shared this to assist with conflict resolution
+								if ((sharedByName != "") && (sharedByEmail != "")) {	
+									log.vlog("WARNING: Conflict Shared By:          ", sharedByName, " (", sharedByEmail, ")");
+								} else {
+									if (sharedByName != "") {
+										log.vlog("WARNING: Conflict Shared By:          ", sharedByName);
+									}
+								}
+							}	
+						}
+					} else {
+						// not a folder, is this a file?
+						if (isItemFile(searchResult)) {
+							// shared item is a file
+							string sharedFileName = searchResult["name"].str;
+							// log that this is not supported
+							log.log("WARNING: Not syncing this OneDrive Business Shared File: ", sharedFileName);
 							
 							// Log who shared this to assist with sync data correlation
 							if ((sharedByName != "") && (sharedByEmail != "")) {	
-								log.vlog("OneDrive Business Shared Folder - Shared By:  ", sharedByName, " (", sharedByEmail, ")");
+								log.vlog("OneDrive Business Shared File - Shared By:  ", sharedByName, " (", sharedByEmail, ")");
 							} else {
 								if (sharedByName != "") {
-									log.vlog("OneDrive Business Shared Folder - Shared By:  ", sharedByName);
+									log.vlog("OneDrive Business Shared File - Shared By:  ", sharedByName);
 								}
-							}
-							
-							// Do the actual sync
-							applyDifferences(businessSharedFolder.remoteDriveId, businessSharedFolder.remoteId, performFullItemScan);
-							// add this parent drive id to the array to search for, ready for next use
-							string newDriveID = searchResult["remoteItem"]["parentReference"]["driveId"].str;
-							// Keep the driveIDsArray with unique entries only
-							if (!canFind(driveIDsArray, newDriveID)) {
-								// Add this drive id to the array to search with
-								driveIDsArray ~= newDriveID;
 							}
 						} else {
-							// Shared Folder Name Conflict ...
-							log.log("WARNING: Skipping shared folder due to existing name conflict: ", sharedFolderName);
-							log.log("WARNING: Skipping changes of Path ID: ", searchResult["remoteItem"]["id"].str);
-							log.log("WARNING: To sync this shared folder, this shared folder needs to be renamed");
-							
-							// Log who shared this to assist with conflict resolution
-							if ((sharedByName != "") && (sharedByEmail != "")) {	
-								log.vlog("WARNING: Conflict Shared By:          ", sharedByName, " (", sharedByEmail, ")");
-							} else {
-								if (sharedByName != "") {
-									log.vlog("WARNING: Conflict Shared By:          ", sharedByName);
-								}
-							}
-						}	
+							// something else entirely
+							log.log("WARNING: Not syncing this OneDrive Business Shared item: ", searchResult["name"].str);
+						}
 					}
 				}
 			} else {
