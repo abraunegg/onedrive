@@ -712,7 +712,7 @@ final class SyncEngine
 							// shared item is a file
 							string sharedFileName = searchResult["name"].str;
 							// log that this is not supported
-							log.log("WARNING: Not syncing this OneDrive Business Shared File: ", sharedFileName);
+							log.vlog("WARNING: Not syncing this OneDrive Business Shared File: ", sharedFileName);
 							
 							// Log who shared this to assist with sync data correlation
 							if ((sharedByName != "") && (sharedByEmail != "")) {	
