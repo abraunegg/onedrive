@@ -106,9 +106,11 @@ onedrive: $(SOURCES)
 
 install: all
 	$(INSTALL) -D onedrive $(DESTDIR)$(bindir)/onedrive
+	if [ ! -d "$(DESTDIR)$(mandir)/man1" ] ; then mkdir -p $(DESTDIR)$(mandir)/man1 ; fi
 	$(INSTALL) -D onedrive.1 $(DESTDIR)$(mandir)/man1/onedrive.1
+	if [ ! -d "$(DESTDIR)$(sysconfdir)/logrotate.d" ] ; then mkdir -p $(DESTDIR)$(sysconfdir)/logrotate.d ; fi
 	$(INSTALL) -D -m 644 contrib/logrotate/onedrive.logrotate $(DESTDIR)$(sysconfdir)/logrotate.d/onedrive
-	mkdir -p $(DESTDIR)$(docdir)
+	if [ ! -d "$(DESTDIR)$(docdir)" ] ; then mkdir -p $(DESTDIR)$(docdir) ; fi
 	$(INSTALL) -D -m 644 $(DOCFILES) $(DESTDIR)$(docdir)
 ifeq ($(HAVE_SYSTEMD),yes)
 	$(INSTALL) -d -m 0755 $(DESTDIR)$(systemduserunitdir) $(DESTDIR)$(systemdsystemunitdir)
