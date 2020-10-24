@@ -105,12 +105,15 @@ onedrive: $(SOURCES)
 	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) -L-ldl $(SOURCES) -of$@
 
 install: all
+	# non GNU install or checkinstall seems to ignore the -D option
+	# make sure we generated the directories beforehand.
+	$(INSTALL) -d $(DESTDIR)$(bindir) \
+		$(DESTDIR)$(mandir)/man1 \
+		$(DESTDIR)$(sysconfdir)/logrotate.d \
+		$(DESTDIR)$(docdir)
 	$(INSTALL) -D onedrive $(DESTDIR)$(bindir)/onedrive
-	if [ ! -d "$(DESTDIR)$(mandir)/man1" ] ; then mkdir -p $(DESTDIR)$(mandir)/man1 ; fi
 	$(INSTALL) -D onedrive.1 $(DESTDIR)$(mandir)/man1/onedrive.1
-	if [ ! -d "$(DESTDIR)$(sysconfdir)/logrotate.d" ] ; then mkdir -p $(DESTDIR)$(sysconfdir)/logrotate.d ; fi
 	$(INSTALL) -D -m 644 contrib/logrotate/onedrive.logrotate $(DESTDIR)$(sysconfdir)/logrotate.d/onedrive
-	if [ ! -d "$(DESTDIR)$(docdir)" ] ; then mkdir -p $(DESTDIR)$(docdir) ; fi
 	$(INSTALL) -D -m 644 $(DOCFILES) $(DESTDIR)$(docdir)
 ifeq ($(HAVE_SYSTEMD),yes)
 	$(INSTALL) -d -m 0755 $(DESTDIR)$(systemduserunitdir) $(DESTDIR)$(systemdsystemunitdir)
@@ -123,11 +126,13 @@ else
 endif
 else
 ifeq ($(RHEL_VERSION),6)
+	$(INSTALL) -d $(DESTDIR)/etc/init.d
 	install -D contrib/init.d/onedrive.init $(DESTDIR)/etc/init.d/onedrive
 	install -D contrib/init.d/onedrive_service.sh $(DESTDIR)$(bindir)/onedrive_service.sh
 endif	
 endif
 ifeq ($(COMPLETIONS),yes)
+	$(INSTALL) -d $(DESTDIR)$(ZSH_COMPLETION_DIR) $(DESTDIR)$(BASH_COMPLETION_DIR) $(DESTDIR)$(FISH_COMPLETION_DIR)
 	$(INSTALL) -D -m 644 contrib/completions/complete.zsh $(DESTDIR)$(ZSH_COMPLETION_DIR)/_onedrive
 	$(INSTALL) -D -m 644 contrib/completions/complete.bash $(DESTDIR)$(BASH_COMPLETION_DIR)/onedrive
 	$(INSTALL) -D -m 644 contrib/completions/complete.fish $(DESTDIR)$(FISH_COMPLETION_DIR)/onedrive.fish
