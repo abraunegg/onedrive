@@ -612,11 +612,14 @@ int main(string[] args)
 	// - The ~/OneDrive parent folder or 'sync_dir' configured item
 	// - Any new folder created under ~/OneDrive or 'sync_dir'
 	// - Any new file created under ~/OneDrive or 'sync_dir'
-	log.vdebug("Configuring default new file|folder permissions as: ", cfg.getValueLong("sync_dir_permissions"));
 	// valid permissions are 000 -> 777 - anything else is invalid
-	if (cfg.getValueLong("sync_dir_permissions") > 777) {
-		log.error("ERROR: Invalid 'User|Group|Other' permissions set withing config file. Please check.");
+	if ((cfg.getValueLong("sync_dir_permissions") > 777) || (cfg.getValueLong("sync_file_permissions")) {
+		log.error("ERROR: Invalid 'User|Group|Other' permissions set within config file. Please check.");
 		return EXIT_FAILURE;
+	} else {
+		// debug log output what permissions are being set to
+		log.vdebug("Configuring default new folder permissions as: ", cfg.getValueLong("sync_dir_permissions"));
+		log.vdebug("Configuring default new file permissions as: ", cfg.getValueLong("sync_file_permissions"));
 	}
 	
 	// configure the sync direcory based on syncDir config option

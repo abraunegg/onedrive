@@ -112,7 +112,7 @@ final class Config
 		boolValues["sync_business_shared_folders"] = false;
 		// Configure the default folder permission attributes for newly created folders
 		longValues["sync_dir_permissions"] = defaultDirectoryPermissionMode;
-		// Configure the default folder permission attributes for newly created folders
+		// Configure the default file permission attributes for newly created file
 		longValues["sync_file_permissions"] = defaultFilePermissionMode;
 		
 		// DEVELOPER OPTIONS 
