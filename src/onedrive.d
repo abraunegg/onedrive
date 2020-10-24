@@ -495,7 +495,11 @@ final class OneDriveApi
 		scope(failure) {
 			if (exists(saveToPath)) remove(saveToPath);
 		}
-		mkdirRecurse(dirName(saveToPath));
+		// Create the directory
+		string newPath = dirName(saveToPath);
+		mkdirRecurse(newPath);
+		// Configure the applicable permissions for the folder
+		newPath.setAttributes(cfg.returnRequiredDirectoryPermisions());
 		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content?AVOverride=1";
 		download(url, saveToPath, fileSize);
 	}
@@ -807,6 +811,8 @@ final class OneDriveApi
 				// close open file
 				file.close();
 			}
+			// Configure the applicable permissions for the file
+			filename.setAttributes(cfg.returnRequiredFilePermisions());
 		}
 		
 		http.method = HTTP.Method.get;

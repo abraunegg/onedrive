@@ -36,11 +36,15 @@ final class Config
 	private long[string] longValues;
 	// Compile time regex - this does not change
 	public auto configRegex = ctRegex!(`^(\w+)\s*=\s*"(.*)"\s*$`);
+	// Default directory permission mode
+	public long defaultDirectoryPermissionMode = 755;
+	// Default file permission mode
+	public long defaultFilePermissionMode = 644;
 	
 	this(string confdirOption)
 	{
 		// default configuration - entries in config file ~/.config/onedrive/config
-		// an entry here means it can be set via the config file if there is a coresponding read and set in update_from_args()
+		// an entry here means it can be set via the config file if there is a coresponding entry, read from config and set via update_from_args()
 		stringValues["sync_dir"] = defaultSyncDir;
 		stringValues["skip_file"] = defaultSkipFile;
 		stringValues["skip_dir"] = defaultSkipDir;
@@ -106,6 +110,10 @@ final class Config
 		stringValues["azure_tenant_id"] = "common";
 		// Allow enable / disable of the syncing of OneDrive Business Shared Folders via configuration file
 		boolValues["sync_business_shared_folders"] = false;
+		// Configure the default folder permission attributes for newly created folders
+		longValues["sync_dir_permissions"] = defaultDirectoryPermissionMode;
+		// Configure the default folder permission attributes for newly created folders
+		longValues["sync_file_permissions"] = defaultFilePermissionMode;
 		
 		// DEVELOPER OPTIONS 
 		// display_memory = true | false
@@ -181,7 +189,13 @@ final class Config
 		}
 		
 		// Config directory options all determined
-		if (!exists(configDirName)) mkdirRecurse(configDirName);
+		if (!exists(configDirName)) {
+			// create the directory
+			mkdirRecurse(configDirName);
+			// Configure the applicable permissions for the folder
+			configDirName.setAttributes(returnRequiredDirectoryPermisions());
+		}
+		
 		// configDirName has a trailing /
 		log.vlog("Using 'user' Config Dir: ", configDirName);
 		log.vlog("Using 'system' Config Dir: ", systemConfigDirName);
@@ -610,6 +624,40 @@ final class Config
 			}
 		}
 		return true;
+	}
+	
+	int returnRequiredDirectoryPermisions() {
+		// return the directory permission mode required
+		// - return octal!defaultDirectoryPermissionMode; ... cant be used .. which is odd 
+		// Error: variable defaultDirectoryPermissionMode cannot be read at compile time
+		if (getValueLong("sync_dir_permissions") != defaultDirectoryPermissionMode) {
+			// return user configured permissions as octal
+			string valueToConvert = to!string(getValueLong("sync_dir_permissions"));
+			auto convertedValue = parse!long(valueToConvert, 8);
+			return to!int(convertedValue);
+		} else {
+			// return default as octal
+			string valueToConvert = to!string(defaultDirectoryPermissionMode);
+			auto convertedValue = parse!long(valueToConvert, 8);
+			return to!int(convertedValue);
+		}
+	}
+	
+	int returnRequiredFilePermisions() {
+		// return the file permission mode required
+		// - return octal!defaultFilePermissionMode; ... cant be used .. which is odd 
+		// Error: variable defaultFilePermissionMode cannot be read at compile time
+		if (getValueLong("sync_file_permissions") != defaultFilePermissionMode) {
+			// return user configured permissions as octal
+			string valueToConvert = to!string(getValueLong("sync_file_permissions"));
+			auto convertedValue = parse!long(valueToConvert, 8);
+			return to!int(convertedValue);
+		} else {
+			// return default as octal
+			string valueToConvert = to!string(defaultFilePermissionMode);
+			auto convertedValue = parse!long(valueToConvert, 8);
+			return to!int(convertedValue);
+		}
 	}
 }
 
