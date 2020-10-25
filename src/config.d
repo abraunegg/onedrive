@@ -37,9 +37,11 @@ final class Config
 	// Compile time regex - this does not change
 	public auto configRegex = ctRegex!(`^(\w+)\s*=\s*"(.*)"\s*$`);
 	// Default directory permission mode
-	public long defaultDirectoryPermissionMode = 755;
+	public long defaultDirectoryPermissionMode = 700;
+	public int configuredDirectoryPermissionMode;
 	// Default file permission mode
-	public long defaultFilePermissionMode = 644;
+	public long defaultFilePermissionMode = 600;
+	public int configuredFilePermissionMode;
 	
 	this(string confdirOption)
 	{
@@ -626,38 +628,48 @@ final class Config
 		return true;
 	}
 	
-	int returnRequiredDirectoryPermisions() {
+	void configureRequiredDirectoryPermisions() {
 		// return the directory permission mode required
 		// - return octal!defaultDirectoryPermissionMode; ... cant be used .. which is odd 
 		// Error: variable defaultDirectoryPermissionMode cannot be read at compile time
 		if (getValueLong("sync_dir_permissions") != defaultDirectoryPermissionMode) {
-			// return user configured permissions as octal
+			// return user configured permissions as octal integer
 			string valueToConvert = to!string(getValueLong("sync_dir_permissions"));
 			auto convertedValue = parse!long(valueToConvert, 8);
-			return to!int(convertedValue);
+			configuredDirectoryPermissionMode = to!int(convertedValue);
 		} else {
-			// return default as octal
+			// return default as octal integer
 			string valueToConvert = to!string(defaultDirectoryPermissionMode);
 			auto convertedValue = parse!long(valueToConvert, 8);
-			return to!int(convertedValue);
+			configuredDirectoryPermissionMode = to!int(convertedValue);
 		}
 	}
 	
-	int returnRequiredFilePermisions() {
+	void configureRequiredFilePermisions() {
 		// return the file permission mode required
 		// - return octal!defaultFilePermissionMode; ... cant be used .. which is odd 
 		// Error: variable defaultFilePermissionMode cannot be read at compile time
 		if (getValueLong("sync_file_permissions") != defaultFilePermissionMode) {
-			// return user configured permissions as octal
+			// return user configured permissions as octal integer
 			string valueToConvert = to!string(getValueLong("sync_file_permissions"));
 			auto convertedValue = parse!long(valueToConvert, 8);
-			return to!int(convertedValue);
+			configuredFilePermissionMode = to!int(convertedValue);
 		} else {
-			// return default as octal
+			// return default as octal integer
 			string valueToConvert = to!string(defaultFilePermissionMode);
 			auto convertedValue = parse!long(valueToConvert, 8);
-			return to!int(convertedValue);
+			configuredFilePermissionMode = to!int(convertedValue);
 		}
+	}
+	
+	int returnRequiredDirectoryPermisions() {
+		// read the configuredDirectoryPermissionMode and return
+		return configuredDirectoryPermissionMode;
+	}
+	
+	int returnRequiredFilePermisions() {
+		// read the configuredFilePermissionMode and return
+		return configuredFilePermissionMode;
 	}
 }
 

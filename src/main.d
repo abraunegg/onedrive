@@ -619,7 +619,9 @@ int main(string[] args)
 	} else {
 		// debug log output what permissions are being set to
 		log.vdebug("Configuring default new folder permissions as: ", cfg.getValueLong("sync_dir_permissions"));
+		cfg.configureRequiredDirectoryPermisions();
 		log.vdebug("Configuring default new file permissions as: ", cfg.getValueLong("sync_file_permissions"));
+		cfg.configureRequiredFilePermisions();
 	}
 	
 	// configure the sync direcory based on syncDir config option
