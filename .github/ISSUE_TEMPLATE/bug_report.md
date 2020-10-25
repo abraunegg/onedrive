@@ -20,6 +20,7 @@ A clear and concise description of what the bug is.
 *   Provide the version of curl you are using: Output of `curl --version`
 *   Is your configured 'sync_dir' a local directory or a network mount point?
 *   If *not* local, provide all the mountpoints in your system: Output of: `mount`
+*   What partition format type does your configured 'sync_dir' reside on? Output of: `lsblk -f` 
 *   Explain your entire configuration setup - is the OneDrive folder shared with any other system, shared with any other platform at the same time, is the OneDrive account you use shared across multiple systems / platforms / Operating Systems and in use at the same time
 
 **Note:** Please generate a full debug log whilst reproducing the issue as per [https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support](https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support) and email to support@mynas.com.au
