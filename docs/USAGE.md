@@ -347,7 +347,7 @@ sync_file_permissions = "600"
 
 ```
 
-**Important:** Special permission bits (setuid, setgid, sticky bit) is not supported. Valid permission values are from `000` to `777` only.
+**Important:** Special permission bits (setuid, setgid, sticky bit) are not supported. Valid permission values are from `000` to `777` only.
 
 #### skip_dir
 Example: 
