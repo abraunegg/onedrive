@@ -54,7 +54,7 @@ fi
 
 # Tell client to sync in download-only mode based on environment variable
 if [ "${ONEDRIVE_DOWNLOADONLY:=0}" == "1" ]; then
-   echo "# We are performing a --download-only"
+   echo "# We are synchronizing in download-only mode"
    ARGS=(--download-only ${ARGS[@]})
 fi
 
