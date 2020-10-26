@@ -613,7 +613,7 @@ int main(string[] args)
 	// - Any new folder created under ~/OneDrive or 'sync_dir'
 	// - Any new file created under ~/OneDrive or 'sync_dir'
 	// valid permissions are 000 -> 777 - anything else is invalid
-	if ((cfg.getValueLong("sync_dir_permissions") > 777) || (cfg.getValueLong("sync_file_permissions") > 777)) {
+	if ((cfg.getValueLong("sync_dir_permissions") < 0) || (cfg.getValueLong("sync_file_permissions") < 0) || (cfg.getValueLong("sync_dir_permissions") > 777) || (cfg.getValueLong("sync_file_permissions") > 777)) {
 		log.error("ERROR: Invalid 'User|Group|Other' permissions set within config file. Please check.");
 		return EXIT_FAILURE;
 	} else {
