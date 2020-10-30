@@ -52,6 +52,12 @@ if [ "${ONEDRIVE_RESYNC:=0}" == "1" ]; then
    ARGS=(--resync ${ARGS[@]})
 fi
 
+# Tell client to sync in download-only mode based on environment variable
+if [ "${ONEDRIVE_DOWNLOADONLY:=0}" == "1" ]; then
+   echo "# We are synchronizing in download-only mode"
+   ARGS=(--download-only ${ARGS[@]})
+fi
+
 if [ ${#} -gt 0 ]; then
   ARGS=("${@}")
 fi

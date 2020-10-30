@@ -607,6 +607,23 @@ int main(string[] args)
 		itemDb = new ItemDatabase(cfg.databaseFilePathDryRun);
 	}
 	
+	// What are the permission that have been set for the application?
+	// These are relevant for:
+	// - The ~/OneDrive parent folder or 'sync_dir' configured item
+	// - Any new folder created under ~/OneDrive or 'sync_dir'
+	// - Any new file created under ~/OneDrive or 'sync_dir'
+	// valid permissions are 000 -> 777 - anything else is invalid
+	if ((cfg.getValueLong("sync_dir_permissions") < 0) || (cfg.getValueLong("sync_file_permissions") < 0) || (cfg.getValueLong("sync_dir_permissions") > 777) || (cfg.getValueLong("sync_file_permissions") > 777)) {
+		log.error("ERROR: Invalid 'User|Group|Other' permissions set within config file. Please check.");
+		return EXIT_FAILURE;
+	} else {
+		// debug log output what permissions are being set to
+		log.vdebug("Configuring default new folder permissions as: ", cfg.getValueLong("sync_dir_permissions"));
+		cfg.configureRequiredDirectoryPermisions();
+		log.vdebug("Configuring default new file permissions as: ", cfg.getValueLong("sync_file_permissions"));
+		cfg.configureRequiredFilePermisions();
+	}
+	
 	// configure the sync direcory based on syncDir config option
 	log.vlog("All operations will be performed in: ", syncDir);
 	if (!exists(syncDir)) {
@@ -614,6 +631,8 @@ int main(string[] args)
 		try {
 			// Attempt to create the sync dir we have been configured with
 			mkdirRecurse(syncDir);
+			// Configure the applicable permissions for the folder
+			syncDir.setAttributes(cfg.returnRequiredDirectoryPermisions());
 		} catch (std.file.FileException e) {
 			// Creating the sync directory failed
 			log.error("ERROR: Unable to create local OneDrive syncDir - ", e.msg);
@@ -621,6 +640,8 @@ int main(string[] args)
 			return EXIT_FAILURE;
 		}
 	}
+	
+	// Change the working directory to the 'sync_dir' configured item
 	chdir(syncDir);
 	
 	// Configure selective sync by parsing and getting a regex for skip_file config component
@@ -858,8 +879,11 @@ int main(string[] args)
 					if (!exists(cfg.getValueString("single_directory"))) {
 						// The requested path to use with --single-directory does not exist locally within the configured 'sync_dir'
 						log.logAndNotify("WARNING: The requested path for --single-directory does not exist locally. Creating requested path within ", syncDir);
-						// Make the required path locally
-						mkdirRecurse(cfg.getValueString("single_directory"));
+						// Make the required --single-directory path locally
+						string singleDirectoryPath = cfg.getValueString("single_directory");
+						mkdirRecurse(singleDirectoryPath);
+						// Configure the applicable permissions for the folder
+						singleDirectoryPath.setAttributes(cfg.returnRequiredDirectoryPermisions());
 					}
 				}
 				// perform a --synchronize sync

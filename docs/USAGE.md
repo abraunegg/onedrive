@@ -300,6 +300,8 @@ The default configuration file is listed below:
 # azure_ad_endpoint = ""
 # azure_tenant_id = "common"
 # sync_business_shared_folders = "false"
+# sync_dir_permissions = "700"
+# sync_file_permissions = "600"
 ```
 
 
@@ -326,6 +328,26 @@ The issue here is around how the client stores the sync_dir path in the database
 **Note:** After changing `sync_dir`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
 **Important Note:** If your `sync_dir` is pointing to a network mount point (a network share via NFS, Windows Network Share, Samba Network Share) these types of network mount points do not support 'inotify', thus tracking real-time changes via inotify of local files is not possible. Local filesystem changes will be replicated between the local filesystem and OneDrive based on the `monitor_interval` value. This is not something (inotify support for NFS, Samba) that this client can fix.
+
+#### sync_dir directory and file permissions
+The following are directory and file default permissions for any new directory or file that is created:
+*   Directories: 700 - This provides the following permissions: `drwx------`
+*   Files: 600 - This provides the following permissions: `-rw-------`
+
+To change the default permissions, update the following 2 configuration options with the required permissions. Utilise [Unix Permissions Calculator](http://permissions-calculator.org/) to assist in determining the required permissions.
+
+```text
+# When changing a config option below, remove the '#' from the start of the line
+# For explanations of all config options below see docs/USAGE.md or the man page.
+#
+...
+# sync_business_shared_folders = "false"
+sync_dir_permissions = "700"
+sync_file_permissions = "600"
+
+```
+
+**Important:** Special permission bits (setuid, setgid, sticky bit) are not supported. Valid permission values are from `000` to `777` only.
 
 #### skip_dir
 Example: 

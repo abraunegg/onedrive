@@ -40,3 +40,5 @@
 # azure_ad_endpoint = ""
 # azure_tenant_id = "common"
 # sync_business_shared_folders = "false"
+# sync_dir_permissions = "700"
+# sync_file_permissions = "600"
