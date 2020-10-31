@@ -380,11 +380,22 @@ int main(string[] args)
 	// dry-run notification and database setup
 	if (cfg.getValueBool("dry_run")) {
 		log.log("DRY-RUN Configured. Output below shows what 'would' have occurred.");
+		string dryRunShmFile = cfg.databaseFilePathDryRun ~ "-shm";
+		string dryRunWalFile = cfg.databaseFilePathDryRun ~ "-wal";
 		// If the dry run database exists, clean this up
 		if (exists(cfg.databaseFilePathDryRun)) {
 			// remove the existing file
 			log.vdebug("Removing items-dryrun.sqlite3 as it still exists for some reason");
 			safeRemove(cfg.databaseFilePathDryRun);	
+		}
+		// silent cleanup of shm and wal files if they exist
+		if (exists(dryRunShmFile)) {
+			// remove items-dryrun.sqlite3-shm
+			safeRemove(dryRunShmFile);	
+		}
+		if (exists(dryRunWalFile)) {
+			// remove items-dryrun.sqlite3-wal
+			safeRemove(dryRunWalFile);	
 		}
 		
 		// Make a copy of the original items.sqlite3 for use as the dry run copy if it exists
@@ -1124,10 +1135,22 @@ int main(string[] args)
 
 	// --dry-run temp database cleanup
 	if (cfg.getValueBool("dry_run")) {
+		string dryRunShmFile = cfg.databaseFilePathDryRun ~ "-shm";
+		string dryRunWalFile = cfg.databaseFilePathDryRun ~ "-wal";
 		if (exists(cfg.databaseFilePathDryRun)) {
 			// remove the file
 			log.vdebug("Removing items-dryrun.sqlite3 as dry run operations complete");
+			// remove items-dryrun.sqlite3
 			safeRemove(cfg.databaseFilePathDryRun);	
+		}
+		// silent cleanup of shm and wal files if they exist
+		if (exists(dryRunShmFile)) {
+			// remove items-dryrun.sqlite3-shm
+			safeRemove(dryRunShmFile);	
+		}
+		if (exists(dryRunWalFile)) {
+			// remove items-dryrun.sqlite3-wal
+			safeRemove(dryRunWalFile);	
 		}
 	}
 	
