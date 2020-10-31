@@ -5920,34 +5920,38 @@ final class SyncEngine
 					string sharedFolderName;
 					string sharedByName;
 					string sharedByEmail;
-					
-					// Debug response output
-					log.vdebug("shared folder entry: ", searchResult);
-					sharedFolderName = searchResult["name"].str;
-					
-					if ("sharedBy" in searchResult["remoteItem"]["shared"]) {
-						// we have shared by details we can use
-						if ("displayName" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
-							sharedByName = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["displayName"].str;
+					// is the shared item with us a 'folder' ?
+					// we only handle folders, not files or other items
+					if (isItemFolder(searchResult)) {
+						// Debug response output
+						log.vdebug("shared folder entry: ", searchResult);
+						sharedFolderName = searchResult["name"].str;
+						
+						// configure who this was shared by
+						if ("sharedBy" in searchResult["remoteItem"]["shared"]) {
+							// we have shared by details we can use
+							if ("displayName" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
+								sharedByName = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["displayName"].str;
+							}
+							if ("email" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
+								sharedByEmail = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["email"].str;
+							}
 						}
-						if ("email" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
-							sharedByEmail = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["email"].str;
+						// Output query result
+						log.log("---------------------------------------");
+						log.log("Shared Folder:   ", sharedFolderName);
+						if ((sharedByName != "") && (sharedByEmail != "")) {
+							log.log("Shared By:       ", sharedByName, " (", sharedByEmail, ")");
+						} else {
+							if (sharedByName != "") {
+								log.log("Shared By:       ", sharedByName);
+							}
 						}
-					}
-					// Output query result
-					log.log("---------------------------------------");
-					log.log("Shared Folder:   ", sharedFolderName);
-					if ((sharedByName != "") && (sharedByEmail != "")) {
-						log.log("Shared By:       ", sharedByName, " (", sharedByEmail, ")");
-					} else {
-						if (sharedByName != "") {
-							log.log("Shared By:       ", sharedByName);
+						log.vlog("Item Id:         ", searchResult["remoteItem"]["id"].str);
+						log.vlog("Parent Drive Id: ", searchResult["remoteItem"]["parentReference"]["driveId"].str);
+						if ("id" in searchResult["remoteItem"]["parentReference"]) {
+							log.vlog("Parent Item Id:  ", searchResult["remoteItem"]["parentReference"]["id"].str);
 						}
-					}
-					log.vlog("Item Id:         ", searchResult["remoteItem"]["id"].str);
-					log.vlog("Parent Drive Id: ", searchResult["remoteItem"]["parentReference"]["driveId"].str);
-					if ("id" in searchResult["remoteItem"]["parentReference"]) {
-						log.vlog("Parent Item Id:  ", searchResult["remoteItem"]["parentReference"]["id"].str);
 					}
 				}
 			}
