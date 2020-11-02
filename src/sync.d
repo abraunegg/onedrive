@@ -2816,7 +2816,7 @@ final class SyncEngine
 		}
 		
 		// scan for changes in the path provided
-		log.vlog("Uploading differences of ", logPath);
+		log.log("Uploading differences of ", logPath);
 		Item item;
 		// For each unique OneDrive driveID we know about
 		foreach (driveId; driveIDsArray) {
