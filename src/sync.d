@@ -4158,7 +4158,8 @@ final class SyncEngine
 						// test if the local path exists on OneDrive
 						fileDetailsFromOneDrive = onedrive.getPathDetailsByDriveId(parent.driveId, path);
 					} catch (OneDriveException e) {
-						log.vdebug("fileDetailsFromOneDrive = onedrive.getPathDetails(path); generated a OneDriveException");
+						// A 404 is the expected response if the file was not present
+						log.vdebug("fileDetailsFromOneDrive = onedrive.getPathDetailsByDriveId(parent.driveId, path); generated a OneDriveException");
 						if (e.httpStatusCode == 401) {
 							// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error'
 							log.vlog("Skipping item - OneDrive returned a 'HTTP 401 - Unauthorized' when attempting to query if file exists");
@@ -5644,7 +5645,30 @@ final class SyncEngine
 		// 6. name
 		// 7. parent reference
 		
+		string fakeDriveId = defaultDriveId;
+		string fakeRootId = defaultRootId;
 		SysTime mtime = timeLastModified(path).toUTC();
+		
+		// If the account type is Business, and if Shared Business Folders are being used
+		// Need to update the 'fakeDriveId' & 'fakeRootId' with elements from the database
+		// Otherwise some calls to validate objects fail as the actual driveId being used is invalid
+		if (accountType == "business") {
+			string parentPath = dirName(path);
+			Item databaseItem;
+			
+			if (parentPath != ".") {
+				// Not a 'root' parent
+				// For each driveid in the existing driveIDsArray 
+				foreach (searchDriveId; driveIDsArray) {
+					log.vdebug("FakeResponse: searching database for: ", searchDriveId, " ", parentPath);
+					if (itemdb.selectByPath(parentPath, searchDriveId, databaseItem)) {
+						log.vdebug("FakeResponse: Found Database Item: ", databaseItem);
+						fakeDriveId = databaseItem.driveId;
+						fakeRootId = databaseItem.id;
+					}
+				}
+			}
+		}
 		
 		// real id / eTag / cTag are different format for personal / business account
 		auto sha1 = new SHA1Digest();
@@ -5664,9 +5688,9 @@ final class SyncEngine
 														]),
 							"name": JSONValue(baseName(path)),
 							"parentReference": JSONValue([
-														"driveId": JSONValue(defaultDriveId),
+														"driveId": JSONValue(fakeDriveId),
 														"driveType": JSONValue(accountType),
-														"id": JSONValue(defaultRootId)
+														"id": JSONValue(fakeRootId)
 														]),
 							"folder": JSONValue("")
 							];
@@ -5685,9 +5709,9 @@ final class SyncEngine
 														]),
 							"name": JSONValue(baseName(path)),
 							"parentReference": JSONValue([
-														"driveId": JSONValue(defaultDriveId),
+														"driveId": JSONValue(fakeDriveId),
 														"driveType": JSONValue(accountType),
-														"id": JSONValue(defaultRootId)
+														"id": JSONValue(fakeRootId)
 														]),
 							"file": JSONValue([
 												"hashes":JSONValue([
