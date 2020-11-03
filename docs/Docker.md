@@ -115,7 +115,7 @@ docker volume inspect onedrive_conf
 
 Or you can map your own config folder to the config volume. Make sure to copy all files from the docker volume into your mapped folder first.
 
-The detailed document for the config can be found here: [additional-configuration](https://github.com/abraunegg/onedrive#additional-configuration)
+The detailed document for the config can be found here: [Configuration](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#configuration)
 
 ### 7. Sync multiple accounts
 

@@ -2946,9 +2946,18 @@ final class SyncEngine
 		// Is this item excluded by user configuration of skip_dir or skip_file?
 		// Is this item a directory or 'remote' type? A 'remote' type is a folder DB tie so should be compared as directory for exclusion
 		if ((item.type == ItemType.dir)||(item.type == ItemType.remote)) {
+			// Do we need to check for .nosync? Only if --check-for-nosync was passed in
+			if (cfg.getValueBool("check_nosync")) {
+				if (exists(path ~ "/.nosync")) {
+					log.vlog("Skipping item - .nosync found & --check-for-nosync enabled: ", path);
+					return;
+				}
+			}
+			
 			// Is the path excluded?
 			unwanted = selectiveSync.isDirNameExcluded(item.name);
 		}
+		
 		// Is this item a file?
 		if (item.type == ItemType.file) {
 			// Is the filename excluded?
