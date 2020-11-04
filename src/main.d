@@ -380,11 +380,22 @@ int main(string[] args)
 	// dry-run notification and database setup
 	if (cfg.getValueBool("dry_run")) {
 		log.log("DRY-RUN Configured. Output below shows what 'would' have occurred.");
+		string dryRunShmFile = cfg.databaseFilePathDryRun ~ "-shm";
+		string dryRunWalFile = cfg.databaseFilePathDryRun ~ "-wal";
 		// If the dry run database exists, clean this up
 		if (exists(cfg.databaseFilePathDryRun)) {
 			// remove the existing file
 			log.vdebug("Removing items-dryrun.sqlite3 as it still exists for some reason");
 			safeRemove(cfg.databaseFilePathDryRun);	
+		}
+		// silent cleanup of shm and wal files if they exist
+		if (exists(dryRunShmFile)) {
+			// remove items-dryrun.sqlite3-shm
+			safeRemove(dryRunShmFile);	
+		}
+		if (exists(dryRunWalFile)) {
+			// remove items-dryrun.sqlite3-wal
+			safeRemove(dryRunWalFile);	
 		}
 		
 		// Make a copy of the original items.sqlite3 for use as the dry run copy if it exists
@@ -607,6 +618,23 @@ int main(string[] args)
 		itemDb = new ItemDatabase(cfg.databaseFilePathDryRun);
 	}
 	
+	// What are the permission that have been set for the application?
+	// These are relevant for:
+	// - The ~/OneDrive parent folder or 'sync_dir' configured item
+	// - Any new folder created under ~/OneDrive or 'sync_dir'
+	// - Any new file created under ~/OneDrive or 'sync_dir'
+	// valid permissions are 000 -> 777 - anything else is invalid
+	if ((cfg.getValueLong("sync_dir_permissions") < 0) || (cfg.getValueLong("sync_file_permissions") < 0) || (cfg.getValueLong("sync_dir_permissions") > 777) || (cfg.getValueLong("sync_file_permissions") > 777)) {
+		log.error("ERROR: Invalid 'User|Group|Other' permissions set within config file. Please check.");
+		return EXIT_FAILURE;
+	} else {
+		// debug log output what permissions are being set to
+		log.vdebug("Configuring default new folder permissions as: ", cfg.getValueLong("sync_dir_permissions"));
+		cfg.configureRequiredDirectoryPermisions();
+		log.vdebug("Configuring default new file permissions as: ", cfg.getValueLong("sync_file_permissions"));
+		cfg.configureRequiredFilePermisions();
+	}
+	
 	// configure the sync direcory based on syncDir config option
 	log.vlog("All operations will be performed in: ", syncDir);
 	if (!exists(syncDir)) {
@@ -614,6 +642,8 @@ int main(string[] args)
 		try {
 			// Attempt to create the sync dir we have been configured with
 			mkdirRecurse(syncDir);
+			// Configure the applicable permissions for the folder
+			syncDir.setAttributes(cfg.returnRequiredDirectoryPermisions());
 		} catch (std.file.FileException e) {
 			// Creating the sync directory failed
 			log.error("ERROR: Unable to create local OneDrive syncDir - ", e.msg);
@@ -621,6 +651,8 @@ int main(string[] args)
 			return EXIT_FAILURE;
 		}
 	}
+	
+	// Change the working directory to the 'sync_dir' configured item
 	chdir(syncDir);
 	
 	// Configure selective sync by parsing and getting a regex for skip_file config component
@@ -858,8 +890,11 @@ int main(string[] args)
 					if (!exists(cfg.getValueString("single_directory"))) {
 						// The requested path to use with --single-directory does not exist locally within the configured 'sync_dir'
 						log.logAndNotify("WARNING: The requested path for --single-directory does not exist locally. Creating requested path within ", syncDir);
-						// Make the required path locally
-						mkdirRecurse(cfg.getValueString("single_directory"));
+						// Make the required --single-directory path locally
+						string singleDirectoryPath = cfg.getValueString("single_directory");
+						mkdirRecurse(singleDirectoryPath);
+						// Configure the applicable permissions for the folder
+						singleDirectoryPath.setAttributes(cfg.returnRequiredDirectoryPermisions());
 					}
 				}
 				// perform a --synchronize sync
@@ -1100,10 +1135,22 @@ int main(string[] args)
 
 	// --dry-run temp database cleanup
 	if (cfg.getValueBool("dry_run")) {
+		string dryRunShmFile = cfg.databaseFilePathDryRun ~ "-shm";
+		string dryRunWalFile = cfg.databaseFilePathDryRun ~ "-wal";
 		if (exists(cfg.databaseFilePathDryRun)) {
 			// remove the file
 			log.vdebug("Removing items-dryrun.sqlite3 as dry run operations complete");
+			// remove items-dryrun.sqlite3
 			safeRemove(cfg.databaseFilePathDryRun);	
+		}
+		// silent cleanup of shm and wal files if they exist
+		if (exists(dryRunShmFile)) {
+			// remove items-dryrun.sqlite3-shm
+			safeRemove(dryRunShmFile);	
+		}
+		if (exists(dryRunWalFile)) {
+			// remove items-dryrun.sqlite3-wal
+			safeRemove(dryRunWalFile);	
 		}
 	}
 	
