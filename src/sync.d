@@ -2791,6 +2791,16 @@ final class SyncEngine
 			logPath = path;
 		}
 		
+		// If we are using --upload-only & --sync-shared-folders there is a possability that a 'new' local folder might 
+		// be misinterpreted that it needs to be uploaded to the users default OneDrive DriveID rather than the requested / configured
+		// Shared Business Folder. In --resync scenarios, the DB information that tells that this Business Shared Folder does not exist, 
+		// and in a --upload-only scenario will never exist, so the correct lookups are unable to be performed.
+		if ((exists(cfg.businessSharedFolderFilePath)) && (syncBusinessFolders) && (cfg.getValueBool("upload_only"))){
+			// business_shared_folders file exists, --sync-shared-folders is enabled, --upload-only is enabled
+			log.vdebug("OneDrive Business --upload-only & --sync-shared-folders edge case triggered");
+			handleUploadOnlyBusinessSharedFoldersEdgeCase();
+		}
+		
 		// Are we configured to use a National Cloud Deployment
 		// Any entry in the DB than is flagged as out-of-sync needs to be cleaned up locally first before we scan the entire DB
 		// Normally, this is done at the end of processing all /delta queries, but National Cloud Deployments (US and DE) do not support /delta as a query
@@ -2859,6 +2869,16 @@ final class SyncEngine
 			logPath = path;
 		}
 		
+		// If we are using --upload-only & --sync-shared-folders there is a possability that a 'new' local folder might 
+		// be misinterpreted that it needs to be uploaded to the users default OneDrive DriveID rather than the requested / configured
+		// Shared Business Folder. In --resync scenarios, the DB information that tells that this Business Shared Folder does not exist, 
+		// and in a --upload-only scenario will never exist, so the correct lookups are unable to be performed.
+		if ((exists(cfg.businessSharedFolderFilePath)) && (syncBusinessFolders) && (cfg.getValueBool("upload_only"))){
+			// business_shared_folders file exists, --sync-shared-folders is enabled, --upload-only is enabled
+			log.vdebug("OneDrive Business --upload-only & --sync-shared-folders edge case triggered");
+			handleUploadOnlyBusinessSharedFoldersEdgeCase();
+		}
+		
 		// Are we configured to use a National Cloud Deployment
 		// Any entry in the DB than is flagged as out-of-sync needs to be cleaned up locally first before we scan the entire DB
 		// Normally, this is done at the end of processing all /delta queries, but National Cloud Deployments (US and DE) do not support /delta as a query
@@ -2900,6 +2920,87 @@ final class SyncEngine
 				if (itemdb.selectByPath(path, driveId, item)) {
 					// Does it still exist on disk in the location the DB thinks it is
 					uploadDifferences(item);
+				}
+			}
+		}
+	}
+	
+	void handleUploadOnlyBusinessSharedFoldersEdgeCase() {
+		// read in the business_shared_folders file contents
+		string[] businessSharedFoldersList;
+		// open file as read only
+		auto file = File(cfg.businessSharedFolderFilePath, "r");
+		auto range = file.byLine();
+		foreach (line; range) {
+			// Skip comments in file
+			if (line.length == 0 || line[0] == ';' || line[0] == '#') continue;
+			businessSharedFoldersList ~= buildNormalizedPath(line);
+		}
+		file.close();
+		
+		// Query the GET /me/drive/sharedWithMe API
+		JSONValue graphQuery = onedrive.getSharedWithMe();
+		if (graphQuery.type() == JSONType.object) {
+			if (count(graphQuery["value"].array) != 0) {
+				// Shared items returned
+				log.vdebug("onedrive.getSharedWithMe API Response: ", graphQuery);
+				foreach (searchResult; graphQuery["value"].array) {
+					// loop variables
+					string sharedFolderName;
+					string remoteParentDriveId;
+					string remoteParentItemId;
+					Item remoteItemRoot; 
+					Item remoteItem; 
+					
+					// is the shared item with us a 'folder' ?
+					// we only handle folders, not files or other items
+					if (isItemFolder(searchResult)) {
+						// Debug response output
+						log.vdebug("shared folder entry: ", searchResult);
+						sharedFolderName = searchResult["name"].str;
+						remoteParentDriveId = searchResult["remoteItem"]["parentReference"]["driveId"].str;
+						remoteParentItemId = searchResult["remoteItem"]["parentReference"]["id"].str;
+						
+						if (canFind(businessSharedFoldersList, sharedFolderName)) {
+							// Shared Folder matches what is in the shared folder list
+							log.vdebug("shared folder name matches business_shared_folders list item: ", sharedFolderName);
+							// Actions:
+							//  1. Add this remote item to the DB so that it can be queried
+							//  2. Add remoteParentDriveId to driveIDsArray so we have a record of it
+							
+							// Make JSON item DB compatible
+							remoteItem = makeItem(searchResult);
+							// Fix up entries, as we are manipulating the data
+							remoteItem.driveId = remoteParentDriveId;
+							remoteItem.eTag = "";
+							remoteItem.cTag = "";
+							remoteItem.parentId = defaultRootId;
+							remoteItem.remoteDriveId = "";
+							remoteItem.remoteId = "";
+							
+							// Build the remote root DB item
+							remoteItemRoot.driveId = remoteParentDriveId;
+							remoteItemRoot.id = defaultRootId;
+							remoteItemRoot.name = "root";
+							remoteItemRoot.type = ItemType.dir;
+							remoteItemRoot.mtime = remoteItem.mtime;
+							remoteItemRoot.syncStatus = "Y";
+							
+							// Add root remote item to the local database
+							log.vdebug("Adding remote folder root to database: ", remoteItemRoot);
+							itemdb.upsert(remoteItemRoot);
+							
+							// Add shared folder item to the local database
+							log.vdebug("Adding remote folder to database: ", remoteItem);
+							itemdb.upsert(remoteItem);
+							
+							// Keep the driveIDsArray with unique entries only
+							if (!canFind(driveIDsArray, remoteParentDriveId)) {
+								// Add this drive id to the array to search with
+								driveIDsArray ~= remoteParentDriveId;
+							}
+						}
+					}
 				}
 			}
 		}
@@ -3934,13 +4035,36 @@ final class SyncEngine
 					} else {
 						// parent is in database
 						log.vlog("The parent for this path is in the local database - adding requested path (", path ,") to database");
-						
 						// are we in a --dry-run scenario?
 						if (!dryRun) {
 							// get the live data
-							auto res = onedrive.getPathDetails(path);
+							JSONValue pathDetails;
+							try {
+								pathDetails = onedrive.getPathDetailsByDriveId(parent.driveId, path);
+							} catch (OneDriveException e) {
+								log.vdebug("pathDetails = onedrive.getPathDetailsByDriveId(parent.driveId, path) generated a OneDriveException");
+								if (e.httpStatusCode == 404) {
+									// The directory was not found 
+									log.error("ERROR: The requested single directory to sync was not found on OneDrive");
+									return;
+								}
+								
+								if (e.httpStatusCode == 429) {
+									// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+									handleOneDriveThrottleRequest();
+									// Retry original request by calling function again to avoid replicating any further error handling
+									log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling onedrive.getPathDetailsByDriveId(parent.driveId, path);");
+									pathDetails = onedrive.getPathDetailsByDriveId(parent.driveId, path);
+								}
+											
+								if (e.httpStatusCode >= 500) {
+									// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+									return;
+								}
+							}
+							
 							// Is the response a valid JSON object - validation checking done in saveItem
-							saveItem(res);
+							saveItem(pathDetails);
 						} else {
 							// need to fake this data
 							auto fakeResponse = createFakeResponse(path);
@@ -4041,9 +4165,10 @@ final class SyncEngine
 					// Does this 'file' already exist on OneDrive?
 					try {
 						// test if the local path exists on OneDrive
-						fileDetailsFromOneDrive = onedrive.getPathDetails(path);
+						fileDetailsFromOneDrive = onedrive.getPathDetailsByDriveId(parent.driveId, path);
 					} catch (OneDriveException e) {
-						log.vdebug("fileDetailsFromOneDrive = onedrive.getPathDetails(path); generated a OneDriveException");
+						// A 404 is the expected response if the file was not present
+						log.vdebug("fileDetailsFromOneDrive = onedrive.getPathDetailsByDriveId(parent.driveId, path); generated a OneDriveException");
 						if (e.httpStatusCode == 401) {
 							// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error'
 							log.vlog("Skipping item - OneDrive returned a 'HTTP 401 - Unauthorized' when attempting to query if file exists");
@@ -5529,7 +5654,30 @@ final class SyncEngine
 		// 6. name
 		// 7. parent reference
 		
+		string fakeDriveId = defaultDriveId;
+		string fakeRootId = defaultRootId;
 		SysTime mtime = timeLastModified(path).toUTC();
+		
+		// If the account type is Business, and if Shared Business Folders are being used
+		// Need to update the 'fakeDriveId' & 'fakeRootId' with elements from the database
+		// Otherwise some calls to validate objects fail as the actual driveId being used is invalid
+		if (accountType == "business") {
+			string parentPath = dirName(path);
+			Item databaseItem;
+			
+			if (parentPath != ".") {
+				// Not a 'root' parent
+				// For each driveid in the existing driveIDsArray 
+				foreach (searchDriveId; driveIDsArray) {
+					log.vdebug("FakeResponse: searching database for: ", searchDriveId, " ", parentPath);
+					if (itemdb.selectByPath(parentPath, searchDriveId, databaseItem)) {
+						log.vdebug("FakeResponse: Found Database Item: ", databaseItem);
+						fakeDriveId = databaseItem.driveId;
+						fakeRootId = databaseItem.id;
+					}
+				}
+			}
+		}
 		
 		// real id / eTag / cTag are different format for personal / business account
 		auto sha1 = new SHA1Digest();
@@ -5549,9 +5697,9 @@ final class SyncEngine
 														]),
 							"name": JSONValue(baseName(path)),
 							"parentReference": JSONValue([
-														"driveId": JSONValue(defaultDriveId),
+														"driveId": JSONValue(fakeDriveId),
 														"driveType": JSONValue(accountType),
-														"id": JSONValue(defaultRootId)
+														"id": JSONValue(fakeRootId)
 														]),
 							"folder": JSONValue("")
 							];
@@ -5570,9 +5718,9 @@ final class SyncEngine
 														]),
 							"name": JSONValue(baseName(path)),
 							"parentReference": JSONValue([
-														"driveId": JSONValue(defaultDriveId),
+														"driveId": JSONValue(fakeDriveId),
 														"driveType": JSONValue(accountType),
-														"id": JSONValue(defaultRootId)
+														"id": JSONValue(fakeRootId)
 														]),
 							"file": JSONValue([
 												"hashes":JSONValue([
