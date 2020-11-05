@@ -62,10 +62,16 @@ int main(string[] args)
 		if (onedriveInitialised) {
 			oneDrive.shutdown();
 		}
-		// Make sure the .wal file is incorporated into the main db before we exit
-		destroy(itemDb);
+		// was itemDb initialised?
+		if (itemDb !is null) {
+			// Make sure the .wal file is incorporated into the main db before we exit
+			itemDb.performVacuum();
+			destroy(itemDb);
+		}
 		// free API instance
-		oneDrive = null;
+		if (oneDrive !is null) {
+			destroy(oneDrive);
+		}
 		// Perform Garbage Cleanup
 		GC.collect();
 		// Display memory details
@@ -83,10 +89,16 @@ int main(string[] args)
 		if (onedriveInitialised) {
 			oneDrive.shutdown();
 		}
-		// Make sure the .wal file is incorporated into the main db before we exit
-		destroy(itemDb);
+		// was itemDb initialised?
+		if (itemDb !is null) {
+			// Make sure the .wal file is incorporated into the main db before we exit
+			itemDb.performVacuum();
+			destroy(itemDb);
+		}
 		// free API instance
-		oneDrive = null;
+		if (oneDrive !is null) {
+			destroy(oneDrive);
+		}
 		// Perform Garbage Cleanup
 		GC.collect();
 		// Display memory details
@@ -901,6 +913,10 @@ int main(string[] args)
 				// fullScanRequired = false, for final true-up
 				// but if we have sync_list configured, use syncListConfigured which = true
 				performSync(sync, cfg.getValueString("single_directory"), cfg.getValueBool("download_only"), cfg.getValueBool("local_first"), cfg.getValueBool("upload_only"), LOG_NORMAL, false, syncListConfigured, displaySyncOptions, cfg.getValueBool("monitor"), m);
+				
+				// Write WAL and SHM data to file for this sync
+				log.vdebug("Merge contents of WAL and SHM files into main database file");
+				itemDb.performVacuum();
 			}
 		}
 			
@@ -1112,8 +1128,15 @@ int main(string[] args)
 					if (displayMemoryUsage) {
 						log.displayMemoryUsagePostGC();
 					}
+					
+					// Write WAL and SHM data to file for this loop
+					log.vdebug("Merge contents of WAL and SHM files into main database file");
+					itemDb.performVacuum();
+					
 					// monitor loop complete
 					logOutputMessage = "################################################ LOOP COMPLETE ###############################################";
+					
+					// Handle display options
 					if (displaySyncOptions) {
 						log.log(logOutputMessage);
 					} else {
@@ -1419,8 +1442,12 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 	try {
 		assumeNoGC ( () {
 			log.log("Got termination signal, shutting down db connection");
-			// make sure the .wal file is incorporated into the main db
-			destroy(itemDb);
+			// was itemDb initialised?
+			if (itemDb !is null) {
+				// Make sure the .wal file is incorporated into the main db before we exit
+				itemDb.performVacuum();
+				destroy(itemDb);
+			}
 			// Use exit scopes to shutdown OneDrive API
 		})();
 	} catch(Exception e) {}
