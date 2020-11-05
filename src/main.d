@@ -62,9 +62,12 @@ int main(string[] args)
 		if (onedriveInitialised) {
 			oneDrive.shutdown();
 		}
-		// Make sure the .wal file is incorporated into the main db before we exit
-		itemDb.performVacuum();
-		destroy(itemDb);
+		// was itemDb initialised?
+		if (itemDb !is null) {
+			// Make sure the .wal file is incorporated into the main db before we exit
+			itemDb.performVacuum();
+			destroy(itemDb);
+		}
 		// free API instance
 		oneDrive = null;
 		// Perform Garbage Cleanup
@@ -84,9 +87,12 @@ int main(string[] args)
 		if (onedriveInitialised) {
 			oneDrive.shutdown();
 		}
-		// Make sure the .wal file is incorporated into the main db before we exit
-		itemDb.performVacuum();
-		destroy(itemDb);
+		// was itemDb initialised?
+		if (itemDb !is null) {
+			// Make sure the .wal file is incorporated into the main db before we exit
+			itemDb.performVacuum();
+			destroy(itemDb);
+		}
 		// free API instance
 		oneDrive = null;
 		// Perform Garbage Cleanup
@@ -1432,9 +1438,12 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 	try {
 		assumeNoGC ( () {
 			log.log("Got termination signal, shutting down db connection");
-			// make sure the .wal file is incorporated into the main db
-			itemDb.performVacuum();
-			destroy(itemDb);
+			// was itemDb initialised?
+			if (itemDb !is null) {
+				// Make sure the .wal file is incorporated into the main db before we exit
+				itemDb.performVacuum();
+				destroy(itemDb);
+			}
 			// Use exit scopes to shutdown OneDrive API
 		})();
 	} catch(Exception e) {}
