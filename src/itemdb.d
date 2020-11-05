@@ -474,4 +474,11 @@ final class ItemDatabase
 		}
 		return items;
 	}
+	
+	// Perform a vacuum on the database, commit WAL / SHM to file
+	void performVacuum()
+	{
+		auto stmt = db.prepare("VACUUM;");
+		stmt.exec();
+	}
 }
