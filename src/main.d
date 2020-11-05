@@ -69,7 +69,9 @@ int main(string[] args)
 			destroy(itemDb);
 		}
 		// free API instance
-		oneDrive = null;
+		if (oneDrive !is null) {
+			destroy(oneDrive);
+		}
 		// Perform Garbage Cleanup
 		GC.collect();
 		// Display memory details
@@ -94,7 +96,9 @@ int main(string[] args)
 			destroy(itemDb);
 		}
 		// free API instance
-		oneDrive = null;
+		if (oneDrive !is null) {
+			destroy(oneDrive);
+		}
 		// Perform Garbage Cleanup
 		GC.collect();
 		// Display memory details
