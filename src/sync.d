@@ -2168,6 +2168,7 @@ final class SyncEngine
 						// Compare file on disk modified time with modified time provided by OneDrive API
 						if (localModifiedTime >= item.mtime) {
 							// local file is newer or has the same time than the item on OneDrive
+							log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer or equal to item modified time from OneDrive");
 							// no local rename
 							// no download needed
 							if (localModifiedTime == item.mtime) {
@@ -2175,7 +2176,6 @@ final class SyncEngine
 							} else {
 								log.vlog("Local item modified time is newer than OneDrive item modified time based on UTC time conversion - keeping local item");
 							}
-							log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer than OneDrive item");
 							skippedItems ~= item.id;
 							return;
 						} else {
