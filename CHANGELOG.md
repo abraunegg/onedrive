@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Fix logging output for modification comparison source data
 *   Fix Business Shared Folder handling to process only Shared Folders, not individually shared files
 *   Fix cleanup dryrun shm and wal files if they exist
+*   Fix --list-shared-folders to only show folders
 *   Fix to check for the presence of .nosync when processing DB entries
 *   Fix skip_dir matching when using --resync
 *   Fix uploading data to shared business folders when using --upload-only
@@ -16,10 +17,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Fix to correctly set config directory permissions at first start
 
 ### Added
-*   Implement Feature: Allow config to specify a tenant id for non-multi-tenant applications
-*   Implement Feature: Adding support for authentication with single tenant custom applications
 *   Added environment variable to allow easy HTTPS debug in docker
 *   Added environment variable to allow download-only mode in Docker
+*   Implement Feature: Allow config to specify a tenant id for non-multi-tenant applications
+*   Implement Feature: Adding support for authentication with single tenant custom applications
 *   Implement Feature: Configure specific File and Folder Permissions
 
 ### Updated
