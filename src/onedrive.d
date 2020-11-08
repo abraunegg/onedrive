@@ -725,7 +725,13 @@ final class OneDriveApi
 				refreshToken = response["refresh_token"].str();
 				accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
 				if (!.dryRun) {
-					std.file.write(cfg.refreshTokenFilePath, refreshToken);
+					try {
+						// try and update the refresh_token file
+						std.file.write(cfg.refreshTokenFilePath, refreshToken);
+					} catch (FileException e) {
+						// display the error message
+						displayFileSystemErrorMessage(e.msg);
+					}
 				}
 				if (printAccessToken) writeln("New access token: ", accessToken);
 			} else {
@@ -1309,6 +1315,14 @@ final class OneDriveApi
 		if (errorMessage.type() == JSONType.object) {
 			log.error("  Error Reason:  ", errorMessage["error_description"].str);
 		}
+	}
+	
+	// Parse and display error message received from the local file system
+	private void displayFileSystemErrorMessage(string message) 
+	{
+		log.error("ERROR: The local file system returned an error with the following message:");
+		auto errorArray = splitLines(message);
+		log.error("  Error Message: ", errorArray[0]);
 	}
 }
 
