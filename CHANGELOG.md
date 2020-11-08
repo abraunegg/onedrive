@@ -2,6 +2,30 @@
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
+## 2.4.7 - 2020-11-09
+### Fixed
+*   Fix debugging output for /delta changes available queries
+*   Fix logging output for modification comparison source data
+*   Fix Business Shared Folder handling to process only Shared Folders, not individually shared files
+*   Fix cleanup dryrun shm and wal files if they exist
+*   Fix --list-shared-folders to only show folders
+*   Fix to check for the presence of .nosync when processing DB entries
+*   Fix skip_dir matching when using --resync
+*   Fix uploading data to shared business folders when using --upload-only
+*   Fix to merge contents of SQLite WAL file into main database file on sync completion
+*   Fix to check if localModifiedTime is >= than item.mtime to avoid re-upload for equal modified time
+*   Fix to correctly set config directory permissions at first start
+
+### Added
+*   Added environment variable to allow easy HTTPS debug in docker
+*   Added environment variable to allow download-only mode in Docker
+*   Implement Feature: Allow config to specify a tenant id for non-multi-tenant applications
+*   Implement Feature: Adding support for authentication with single tenant custom applications
+*   Implement Feature: Configure specific File and Folder Permissions
+
+### Updated
+*   Updated documentation (readme.md, install.md, usage.md, bug_report.md)
+
 ## 2.4.6 - 2020-10-04
 ### Fixed
 *   Fix flagging of remaining free space when value is being restricted
