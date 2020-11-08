@@ -664,11 +664,20 @@ final class Config
 	
 	int returnRequiredDirectoryPermisions() {
 		// read the configuredDirectoryPermissionMode and return
+		if (configuredDirectoryPermissionMode == 0) {
+			// the configured value is zero, this means that directories would get
+			// values of d---------
+			configureRequiredDirectoryPermisions();
+		}
 		return configuredDirectoryPermissionMode;
 	}
 	
 	int returnRequiredFilePermisions() {
 		// read the configuredFilePermissionMode and return
+		if (configuredFilePermissionMode == 0) {
+			// the configured value is zero
+			configureRequiredFilePermisions();
+		}
 		return configuredFilePermissionMode;
 	}
 }

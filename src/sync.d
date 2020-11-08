@@ -130,10 +130,14 @@ private Item makeItem(const ref JSONValue driveItem)
 		// Resolve 'Key not found: fileSystemInfo' when then item is a remote item
 		// https://github.com/abraunegg/onedrive/issues/11
 		if (isItemRemote(driveItem)) {
+			// remoteItem is a OneDrive object that exists on a 'different' OneDrive drive id, when compared to account default
 			item.mtime = SysTime.fromISOExtString(driveItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
 		} else {
+			// item exists on account default drive id
 			item.mtime = SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
 		}
+		// debug output of what the OneDrive item modified time is
+		log.vdebug("lastModifiedDateTime (OneDrive item): ", item.mtime);
 	}
 		
 	if (isItemFile(driveItem)) {
@@ -2146,6 +2150,7 @@ final class SyncEngine
 		if (cached && item.eTag != oldItem.eTag) {
 			// Is the item in the local database
 			if (itemdb.idInLocalDatabase(item.driveId, item.id)){
+				log.vdebug("OneDrive item ID is present in local database");
 				oldPath = itemdb.computePath(item.driveId, item.id);
 				// Query DB for existing local item in specified path
 				string itemSource = "database";
@@ -2156,21 +2161,26 @@ final class SyncEngine
 						localModifiedTime.fracSecs = Duration.zero;
 						item.mtime.fracSecs = Duration.zero;
 						
+						// debug the output of time comparison
+						log.vdebug("localModifiedTime (local file): ", localModifiedTime);
+						log.vdebug("item.mtime (OneDrive item):     ", item.mtime);
+						
 						// Compare file on disk modified time with modified time provided by OneDrive API
-						if (localModifiedTime > item.mtime) {
-							// local file is newer than item on OneDrive
+						if (localModifiedTime >= item.mtime) {
+							// local file is newer or has the same time than the item on OneDrive
+							log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer or equal to item modified time from OneDrive");
 							// no local rename
 							// no download needed
-							log.vlog("Local item modified time is newer based on UTC time conversion - keeping local item");
-							log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer than OneDrive item");
+							if (localModifiedTime == item.mtime) {
+								log.vlog("Local item modified time is equal to OneDrive item modified time based on UTC time conversion - keeping local item");
+							} else {
+								log.vlog("Local item modified time is newer than OneDrive item modified time based on UTC time conversion - keeping local item");
+							}
 							skippedItems ~= item.id;
 							return;
 						} else {
 							// remote file is newer than local item
 							log.vlog("Remote item modified time is newer based on UTC time conversion"); // correct message, remote item is newer
-							log.vdebug("localModifiedTime (local file): ", localModifiedTime);
-							log.vdebug("item.mtime (OneDrive item):     ", item.mtime);
-							
 							auto ext = extension(oldPath);
 							auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
 							
