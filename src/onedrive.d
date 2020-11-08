@@ -728,6 +728,7 @@ final class OneDriveApi
 					try {
 						// try and update the refresh_token file
 						std.file.write(cfg.refreshTokenFilePath, refreshToken);
+						cfg.refreshTokenFilePath.setAttributes(cfg.returnRequiredFilePermisions());
 					} catch (FileException e) {
 						// display the error message
 						displayFileSystemErrorMessage(e.msg);
