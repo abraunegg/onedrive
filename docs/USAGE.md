@@ -509,6 +509,20 @@ azure_tenant_id = "your.azure.tenant.name"
 # sync_business_shared_folders = "false"
 ```
 
+### Configuring the client to use older 'skilion' application identifier
+In some instances it may be desirable to utilise the older 'skilion' application identifier to avoid authorising a new application ID within Microsoft Azure environments.
+To configure this, update the 'config' file with the old Application ID, then this will be used for the authentication process.
+```text
+# skip_dir_strict_match = "false"
+application_id = "22c49a0d-d21c-4792-aed1-8f163c982546"
+# resync = "false"
+# bypass_data_preservation = "false"
+```
+**Note:** The application will now use the older 'skilion' client identifier, however this may increase your chances of getting a OneDrive 429 error.
+
+**Note:** After changing the 'application_id' you will need to restart any 'onedrive' process you have running, and potentially issue a `--logout` to re-auth the client with this updated application ID.
+
+
 ### How to 'skip' directories from syncing?
 There are several mechanisms available to 'skip' a directory from the sync process:
 *   Utilise 'skip_dir'
