@@ -509,6 +509,9 @@ int main(string[] args)
 		writeln("Config option 'min_notify_changes'     = ", cfg.getValueLong("min_notify_changes"));
 		writeln("Config option 'log_dir'                = ", cfg.getValueString("log_dir"));
 		writeln("Config option 'classify_as_big_delete' = ", cfg.getValueLong("classify_as_big_delete"));
+		writeln("Config option 'upload_only'            = ", cfg.getValueBool("upload_only"));
+		writeln("Config option 'no_remote_delete'       = ", cfg.getValueBool("no_remote_delete"));
+		writeln("Config option 'remove_source_files'    = ", cfg.getValueBool("remove_source_files"));
 		
 		// Is config option drive_id configured?
 		if (cfg.getValueString("drive_id") != ""){
@@ -765,14 +768,18 @@ int main(string[] args)
 	// Do we need to configure specific --upload-only options?
 	if (cfg.getValueBool("upload_only")) {
 		// --upload-only was passed in or configured
+		log.log("Configuring uploadOnly flag to TRUE as --upload-only passed in or configured");
+		sync.setUploadOnly();
 		// was --no-remote-delete passed in or configured
 		if (cfg.getValueBool("no_remote_delete")) {
 			// Configure the noRemoteDelete flag
+			log.log("Configuring noRemoteDelete flag to TRUE as --no-remote-delete passed in or configured");
 			sync.setNoRemoteDelete();
 		}
 		// was --remove-source-files passed in or configured
 		if (cfg.getValueBool("remove_source_files")) {
 			// Configure the localDeleteAfterUpload flag
+			log.log("Configuring localDeleteAfterUpload flag to TRUE as --remove-source-files passed in or configured");
 			sync.setLocalDeleteAfterUpload();
 		}
 	}
