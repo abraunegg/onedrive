@@ -2025,7 +2025,7 @@ final class SyncEngine
 				} else {
 					// parent id is not in the database
 					unwanted = true;
-					log.vlog("Skipping item - parent not present in local database");
+					log.vlog("Skipping file - parent path not present in local database");
 				}
 			}
 		}
