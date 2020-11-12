@@ -803,14 +803,7 @@ final class OneDriveApi
 	{
 		// Threshold for displaying download bar
 		long thresholdFileSize = 4 * 2^^20; // 4 MiB
-		
-		try {
-			// open file as write in binary mode
-			auto file = File(filename, "wb");
-		} catch (FileException e) {
-			// display the error message
-			displayFileSystemErrorMessage(e.msg);
-		}
+		auto file = File(filename, "wb");
 		
 		// function scopes
 		scope(exit) {
