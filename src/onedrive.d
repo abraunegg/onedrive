@@ -506,7 +506,13 @@ final class OneDriveApi
 		
 		// Create the directory
 		string newPath = dirName(saveToPath);
-		mkdirRecurse(newPath);
+		try {
+			mkdirRecurse(newPath);
+		} catch (FileException e) {
+			// display the error message
+			displayFileSystemErrorMessage(e.msg);
+		}
+		
 		// Configure the applicable permissions for the folder
 		newPath.setAttributes(cfg.returnRequiredDirectoryPermisions());
 		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content?AVOverride=1";

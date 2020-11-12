@@ -2423,10 +2423,15 @@ final class SyncEngine
 			}
 			
 			if (!dryRun) {
-				// Create the new directory
-				mkdirRecurse(path);
-				// Configure the applicable permissions for the folder
-				path.setAttributes(cfg.returnRequiredDirectoryPermisions());
+				try {
+					// Create the new directory
+					mkdirRecurse(path);
+					// Configure the applicable permissions for the folder
+					path.setAttributes(cfg.returnRequiredDirectoryPermisions());
+				} catch (FileException e) {
+					// display the error message
+					displayFileSystemErrorMessage(e.msg);
+				}
 			} else {
 				// we dont create the directory, but we need to track that we 'faked it'
 				idsFaked ~= [item.driveId, item.id];
