@@ -501,7 +501,13 @@ final class OneDriveApi
 		// Configure the applicable permissions for the folder
 		newPath.setAttributes(cfg.returnRequiredDirectoryPermisions());
 		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content?AVOverride=1";
+		// Download file
 		download(url, saveToPath, fileSize);
+		// Does path exist?
+		if (exists(saveToPath)) {
+			// File was downloaded sucessfully - configure the applicable permissions for the file
+			saveToPath.setAttributes(cfg.returnRequiredFilePermisions());
+		}
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
@@ -797,8 +803,14 @@ final class OneDriveApi
 	{
 		// Threshold for displaying download bar
 		long thresholdFileSize = 4 * 2^^20; // 4 MiB
-		// open file as write in binary mode
-		auto file = File(filename, "wb");
+		
+		try {
+			// open file as write in binary mode
+			auto file = File(filename, "wb");
+		} catch (FileException e) {
+			// display the error message
+			displayFileSystemErrorMessage(e.msg);
+		}
 		
 		// function scopes
 		scope(exit) {
@@ -818,8 +830,6 @@ final class OneDriveApi
 				// close open file
 				file.close();
 			}
-			// Configure the applicable permissions for the file
-			filename.setAttributes(cfg.returnRequiredFilePermisions());
 		}
 		
 		http.method = HTTP.Method.get;
