@@ -2431,6 +2431,9 @@ final class SyncEngine
 				} catch (FileException e) {
 					// display the error message
 					displayFileSystemErrorMessage(e.msg);
+					// flag that this download failed, otherwise the 'item' is added to the database - then, as not present on the local disk, would get deleted from OneDrive
+					downloadFailed = true;
+					return;
 				}
 			} else {
 				// we dont create the directory, but we need to track that we 'faked it'
