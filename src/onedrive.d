@@ -493,8 +493,17 @@ final class OneDriveApi
 	{
 		checkAccessTokenExpired();
 		scope(failure) {
-			if (exists(saveToPath)) remove(saveToPath);
+			if (exists(saveToPath)) {
+				// try and remove the file, catch error
+				try {
+					remove(saveToPath);
+				} catch (FileException e) {
+					// display the error message
+					displayFileSystemErrorMessage(e.msg);
+				} 
+			}	
 		}
+		
 		// Create the directory
 		string newPath = dirName(saveToPath);
 		mkdirRecurse(newPath);
@@ -803,6 +812,7 @@ final class OneDriveApi
 	{
 		// Threshold for displaying download bar
 		long thresholdFileSize = 4 * 2^^20; // 4 MiB
+		// open file as write in binary mode
 		auto file = File(filename, "wb");
 		
 		// function scopes

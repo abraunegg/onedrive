@@ -2565,7 +2565,6 @@ final class SyncEngine
 				log.vdebug("onedrive.downloadById(item.driveId, item.id, path, fileSize); generated a OneDriveException");
 				// 408 = Request Time Out 
 				// 429 = Too Many Requests - need to delay
-				
 				if (e.httpStatusCode == 408) {
 					// 408 error handling - request time out
 					// https://github.com/abraunegg/onedrive/issues/694
@@ -2637,6 +2636,12 @@ final class SyncEngine
 						}
 					}
 				}
+			} catch (FileException e) {
+				// There was a file system error
+				// display the error message
+				displayFileSystemErrorMessage(e.msg);							
+				downloadFailed = true;
+				return;
 			} catch (std.exception.ErrnoException e) {
 				// There was a file system error
 				// display the error message
