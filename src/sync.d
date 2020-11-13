@@ -2006,25 +2006,31 @@ final class SyncEngine
 				// - full path + combination of any above two - /path/name*.txt
 				// - full path to file - /path/to/file.txt
 				
-				// need to compute the full path for this file
-				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
-				
-				// The path that needs to be checked needs to include the '/'
-				// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
-				if (!startsWith(path, "/")){
-					// Add '/' to the path
-					path = '/' ~ path;
+				// is the parent id in the database?
+				if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
+					// need to compute the full path for this file
+					path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
+					
+					// The path that needs to be checked needs to include the '/'
+					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
+					if (!startsWith(path, "/")){
+						// Add '/' to the path
+						path = '/' ~ path;
+					}
+					
+					log.vdebug("skip_file item to check: ", path);
+					unwanted = selectiveSync.isFileNameExcluded(path);
+					log.vdebug("Result: ", unwanted);
+					if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
+				} else {
+					// parent id is not in the database
+					unwanted = true;
+					log.vlog("Skipping file - parent path not present in local database");
 				}
-				
-				log.vdebug("skip_file item to check: ", path);
-				unwanted = selectiveSync.isFileNameExcluded(path);
-				log.vdebug("Result: ", unwanted);
-				if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
 			}
 		}
 
 		// check the item type
-		
 		if (!unwanted) {
 			if (isItemFile(driveItem)) {
 				log.vdebug("The item we are syncing is a file");
@@ -2238,6 +2244,14 @@ final class SyncEngine
 			}
 			// What was the item that was saved
 			log.vdebug("item details: ", item);
+		}  else {
+			// flag was tripped, which was it
+			if (downloadFailed) {
+				log.vdebug("Download or creation of local directory failed");
+			}
+			if (malwareDetected) {
+				log.vdebug("OneDrive reported that file contained malware");
+			}
 		}
 	}
 
@@ -2423,10 +2437,18 @@ final class SyncEngine
 			}
 			
 			if (!dryRun) {
-				// Create the new directory
-				mkdirRecurse(path);
-				// Configure the applicable permissions for the folder
-				path.setAttributes(cfg.returnRequiredDirectoryPermisions());
+				try {
+					// Create the new directory
+					mkdirRecurse(path);
+					// Configure the applicable permissions for the folder
+					path.setAttributes(cfg.returnRequiredDirectoryPermisions());
+				} catch (FileException e) {
+					// display the error message
+					displayFileSystemErrorMessage(e.msg);
+					// flag that this failed
+					downloadFailed = true;
+					return;
+				}
 			} else {
 				// we dont create the directory, but we need to track that we 'faked it'
 				idsFaked ~= [item.driveId, item.id];
@@ -2565,7 +2587,6 @@ final class SyncEngine
 				log.vdebug("onedrive.downloadById(item.driveId, item.id, path, fileSize); generated a OneDriveException");
 				// 408 = Request Time Out 
 				// 429 = Too Many Requests - need to delay
-				
 				if (e.httpStatusCode == 408) {
 					// 408 error handling - request time out
 					// https://github.com/abraunegg/onedrive/issues/694
@@ -2637,6 +2658,12 @@ final class SyncEngine
 						}
 					}
 				}
+			} catch (FileException e) {
+				// There was a file system error
+				// display the error message
+				displayFileSystemErrorMessage(e.msg);							
+				downloadFailed = true;
+				return;
 			} catch (std.exception.ErrnoException e) {
 				// There was a file system error
 				// display the error message

@@ -493,15 +493,36 @@ final class OneDriveApi
 	{
 		checkAccessTokenExpired();
 		scope(failure) {
-			if (exists(saveToPath)) remove(saveToPath);
+			if (exists(saveToPath)) {
+				// try and remove the file, catch error
+				try {
+					remove(saveToPath);
+				} catch (FileException e) {
+					// display the error message
+					displayFileSystemErrorMessage(e.msg);
+				} 
+			}	
 		}
+		
 		// Create the directory
 		string newPath = dirName(saveToPath);
-		mkdirRecurse(newPath);
+		try {
+			mkdirRecurse(newPath);
+		} catch (FileException e) {
+			// display the error message
+			displayFileSystemErrorMessage(e.msg);
+		}
+		
 		// Configure the applicable permissions for the folder
 		newPath.setAttributes(cfg.returnRequiredDirectoryPermisions());
 		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content?AVOverride=1";
+		// Download file
 		download(url, saveToPath, fileSize);
+		// Does path exist?
+		if (exists(saveToPath)) {
+			// File was downloaded sucessfully - configure the applicable permissions for the file
+			saveToPath.setAttributes(cfg.returnRequiredFilePermisions());
+		}
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
@@ -818,8 +839,6 @@ final class OneDriveApi
 				// close open file
 				file.close();
 			}
-			// Configure the applicable permissions for the file
-			filename.setAttributes(cfg.returnRequiredFilePermisions());
 		}
 		
 		http.method = HTTP.Method.get;
