@@ -282,8 +282,6 @@ final class Config
 		boolValues["monitor"]             = false;
 		boolValues["synchronize"]         = false;
 		boolValues["force"]               = false;
-		boolValues["remove_source_files"] = false;
-		boolValues["skip_dir_strict_match"] = false;
 		boolValues["list_business_shared_folders"] = false;
 		
 		// Application Startup option validation
