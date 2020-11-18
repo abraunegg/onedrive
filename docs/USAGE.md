@@ -645,7 +645,7 @@ journalctl --unit=onedrive@<username> -f
 In some cases you may wish to receive GUI notifications when using the client when logged in as a non-root user. In this case, follow the directions below:
 
 1. Login via graphical UI as user you wish to enable the service for
-2. Disable any `onedive@` service files for your username - eg:
+2. Disable any `onedrive@` service files for your username - eg:
 ```text
 sudo systemctl stop onedrive@alex.service
 sudo systemctl disable onedrive@alex.service
