@@ -504,23 +504,30 @@ final class OneDriveApi
 			}	
 		}
 		
-		// Create the directory
+		// Create the required local directory
 		string newPath = dirName(saveToPath);
-		try {
-			mkdirRecurse(newPath);
-		} catch (FileException e) {
-			// display the error message
-			displayFileSystemErrorMessage(e.msg);
+		
+		// Does the path exist locally?
+		if (!exists(newPath)) {
+			try {
+				log.vdebug("Requested path does not exist, creating directory structure: ", newPath);
+				mkdirRecurse(newPath);
+				// Configure the applicable permissions for the folder
+				log.vdebug("Setting directory permissions for: ", newPath);
+				newPath.setAttributes(cfg.returnRequiredDirectoryPermisions());
+			} catch (FileException e) {
+				// display the error message
+				displayFileSystemErrorMessage(e.msg);
+			}
 		}
 		
-		// Configure the applicable permissions for the folder
-		newPath.setAttributes(cfg.returnRequiredDirectoryPermisions());
 		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content?AVOverride=1";
 		// Download file
 		download(url, saveToPath, fileSize);
 		// Does path exist?
 		if (exists(saveToPath)) {
 			// File was downloaded sucessfully - configure the applicable permissions for the file
+			log.vdebug("Setting file permissions for: ", saveToPath);
 			saveToPath.setAttributes(cfg.returnRequiredFilePermisions());
 		}
 	}
@@ -749,6 +756,7 @@ final class OneDriveApi
 					try {
 						// try and update the refresh_token file
 						std.file.write(cfg.refreshTokenFilePath, refreshToken);
+						log.vdebug("Setting file permissions for: ", cfg.refreshTokenFilePath);
 						cfg.refreshTokenFilePath.setAttributes(cfg.returnRequiredFilePermisions());
 					} catch (FileException e) {
 						// display the error message
