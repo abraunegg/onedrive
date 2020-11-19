@@ -769,18 +769,18 @@ int main(string[] args)
 	// Do we need to configure specific --upload-only options?
 	if (cfg.getValueBool("upload_only")) {
 		// --upload-only was passed in or configured
-		log.log("Configuring uploadOnly flag to TRUE as --upload-only passed in or configured");
+		log.vdebug("Configuring uploadOnly flag to TRUE as --upload-only passed in or configured");
 		sync.setUploadOnly();
 		// was --no-remote-delete passed in or configured
 		if (cfg.getValueBool("no_remote_delete")) {
 			// Configure the noRemoteDelete flag
-			log.log("Configuring noRemoteDelete flag to TRUE as --no-remote-delete passed in or configured");
+			log.vdebug("Configuring noRemoteDelete flag to TRUE as --no-remote-delete passed in or configured");
 			sync.setNoRemoteDelete();
 		}
 		// was --remove-source-files passed in or configured
 		if (cfg.getValueBool("remove_source_files")) {
 			// Configure the localDeleteAfterUpload flag
-			log.log("Configuring localDeleteAfterUpload flag to TRUE as --remove-source-files passed in or configured");
+			log.vdebug("Configuring localDeleteAfterUpload flag to TRUE as --remove-source-files passed in or configured");
 			sync.setLocalDeleteAfterUpload();
 		}
 	}
