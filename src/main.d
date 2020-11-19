@@ -658,6 +658,7 @@ int main(string[] args)
 			// Attempt to create the sync dir we have been configured with
 			mkdirRecurse(syncDir);
 			// Configure the applicable permissions for the folder
+			log.vdebug("Setting directory permissions for: ", syncDir);
 			syncDir.setAttributes(cfg.returnRequiredDirectoryPermisions());
 		} catch (std.file.FileException e) {
 			// Creating the sync directory failed
@@ -913,6 +914,7 @@ int main(string[] args)
 						string singleDirectoryPath = cfg.getValueString("single_directory");
 						mkdirRecurse(singleDirectoryPath);
 						// Configure the applicable permissions for the folder
+						log.vdebug("Setting directory permissions for: ", singleDirectoryPath);
 						singleDirectoryPath.setAttributes(cfg.returnRequiredDirectoryPermisions());
 					}
 				}

@@ -2438,10 +2438,15 @@ final class SyncEngine
 			
 			if (!dryRun) {
 				try {
-					// Create the new directory
-					mkdirRecurse(path);
-					// Configure the applicable permissions for the folder
-					path.setAttributes(cfg.returnRequiredDirectoryPermisions());
+					// Does the path exist locally?
+					if (!exists(path)) {
+						// Create the new directory
+						log.vdebug("Requested path does not exist, creating directory structure: ", path);
+						mkdirRecurse(path);
+						// Configure the applicable permissions for the folder
+						log.vdebug("Setting directory permissions for: ", path);
+						path.setAttributes(cfg.returnRequiredDirectoryPermisions());
+					}
 				} catch (FileException e) {
 					// display the error message
 					displayFileSystemErrorMessage(e.msg);
