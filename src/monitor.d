@@ -132,17 +132,29 @@ final class Monitor
 		}
 		
 		// passed all potential exclusions
+		// add inotify watch for this path / directory / file
+		log.vdebug("Calling add() for this dirname: ", dirname);
 		add(dirname);
-		try {
-			auto pathList = dirEntries(dirname, SpanMode.shallow, false);
-			foreach(DirEntry entry; pathList) {
-				if (entry.isDir) {
-					addRecursive(entry.name);
+		
+		// if this is a directory, recursivly add this path
+		if (isDir(dirname)) {
+			// try and get all the directory entities for this path
+			try {
+				auto pathList = dirEntries(dirname, SpanMode.shallow, false);
+				foreach(DirEntry entry; pathList) {
+					if (entry.isDir) {
+						log.vdebug("Calling addRecursive() for this directory: ", entry.name);
+						addRecursive(entry.name);
+					}
 				}
+			// catch any error which is generated
+			} catch (std.file.FileException e) {
+				log.vdebug("ERROR: ", e.msg);
+				return;
+			} catch (Exception e) {
+				log.vdebug("ERROR: ", e.msg);
+				return;
 			}
-		} catch (std.file.FileException e) {
-			log.vdebug("ERROR: ", e.msg);
-			return;
 		}
 	}
 
@@ -173,6 +185,7 @@ final class Monitor
 		
 		// Add path to inotify watch - required regardless if a '.folder' or 'folder'
 		wdToDirName[wd] = buildNormalizedPath(pathname) ~ "/";
+		log.vdebug("inotify_add_watch successfully added for: ", pathname);
 		
 		// Do we log that we are monitoring this directory?
 		if (isDir(pathname)) {
