@@ -2507,8 +2507,12 @@ final class SyncEngine
 			// handle changed time
 			if (newItem.type == ItemType.file && oldItem.mtime != newItem.mtime) {
 				try {
+					log.vdebug("Calling setTimes() for this file: ", newPath);
 					setTimes(newPath, newItem.mtime, newItem.mtime);
 				} catch (FileException e) {
+					// display the error message
+					displayFileSystemErrorMessage(e.msg);
+				} catch (Exception e) {
 					// display the error message
 					displayFileSystemErrorMessage(e.msg);
 				}
@@ -2687,8 +2691,12 @@ final class SyncEngine
 					// downloaded matches either size or hash
 					log.vdebug("Downloaded file matches reported size and or reported file hash");
 					try {
+						log.vdebug("Calling setTimes() for this file: ", path);
 						setTimes(path, item.mtime, item.mtime);
 					} catch (FileException e) {
+						// display the error message
+						displayFileSystemErrorMessage(e.msg);
+					} catch (Exception e) {
 						// display the error message
 						displayFileSystemErrorMessage(e.msg);
 					}
