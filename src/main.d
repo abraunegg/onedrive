@@ -600,10 +600,17 @@ int main(string[] args)
 		// was the application just authorised?
 		if (cfg.applicationAuthorizeResponseUri) {
 			// Application was just authorised
-			log.log("\nApplication has been successfully authorised, however no additional command switches were provided.\n");
-			log.log("Please use --help for further assistance in regards to running this application.\n");
-			// Use exit scopes to shutdown API
-			return EXIT_SUCCESS;
+			if (exists(cfg.refreshTokenFilePath)) {
+				// OneDrive refresh token exists
+				log.log("\nApplication has been successfully authorised, however no additional command switches were provided.\n");
+				log.log("Please use --help for further assistance in regards to running this application.\n");
+				// Use exit scopes to shutdown API
+				return EXIT_SUCCESS;
+			} else {
+				// we just authorised, but refresh_token does not exist .. probably an auth error
+				log.log("\nApplication has not been successfully authorised. Please check your URI response entry and try again.\n");
+				return EXIT_FAILURE;
+			}
 		} else {
 			// Application was not just authorised
 			log.log("\n--synchronize or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use --help for further assistance.\n");
