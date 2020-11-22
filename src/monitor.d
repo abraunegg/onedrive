@@ -1,7 +1,8 @@
 import core.sys.linux.sys.inotify;
 import core.stdc.errno;
 import core.sys.posix.poll, core.sys.posix.unistd;
-import std.exception, std.file, std.path, std.regex, std.stdio, std.string, std.algorithm.mutation;
+import std.exception, std.file, std.path, std.regex, std.stdio, std.string, std.algorithm;
+import core.stdc.stdlib;
 import config;
 import selective;
 import util;
@@ -149,11 +150,25 @@ final class Monitor
 				}
 			// catch any error which is generated
 			} catch (std.file.FileException e) {
-				log.vdebug("ERROR: ", e.msg);
+				// Standard filesystem error
+				displayFileSystemErrorMessage(e.msg);
 				return;
 			} catch (Exception e) {
-				log.vdebug("ERROR: ", e.msg);
-				return;
+				// Issue #1154 handling
+				// Need to check for: Failed to stat file in error message
+				if (canFind(e.msg, "Failed to stat file")) {
+					// File system access issue
+					log.error("ERROR: The local file system returned an error with the following message:");
+					log.error("  Error Message: ", e.msg);
+					log.error("ACCESS ERROR: Please check your UID and GID access to this file, as the permissions on this file is preventing this application to read it");
+					log.error("\nFATAL: Exiting application to avoid deleting data due to local file system access issues\n");
+					// Must exit here
+					exit(-1);
+				} else {
+					// some other error
+					displayFileSystemErrorMessage(e.msg);
+					return;
+				}
 			}
 		}
 	}
@@ -372,5 +387,13 @@ final class Monitor
 				cookieToPath.remove(cookie);
 			}
 		}
+	}
+	
+	// Parse and display error message received from the local file system
+	private void displayFileSystemErrorMessage(string message) 
+	{
+		log.error("ERROR: The local file system returned an error with the following message:");
+		auto errorArray = splitLines(message);
+		log.error("  Error Message: ", errorArray[0]);
 	}
 }

@@ -2512,9 +2512,6 @@ final class SyncEngine
 				} catch (FileException e) {
 					// display the error message
 					displayFileSystemErrorMessage(e.msg);
-				} catch (Exception e) {
-					// display the error message
-					displayFileSystemErrorMessage(e.msg);
 				}
 			}
 		} 
@@ -2694,9 +2691,6 @@ final class SyncEngine
 						log.vdebug("Calling setTimes() for this file: ", path);
 						setTimes(path, item.mtime, item.mtime);
 					} catch (FileException e) {
-						// display the error message
-						displayFileSystemErrorMessage(e.msg);
-					} catch (Exception e) {
 						// display the error message
 						displayFileSystemErrorMessage(e.msg);
 					}
