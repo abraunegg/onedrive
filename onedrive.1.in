@@ -339,4 +339,4 @@ for a user via the \fBonedrive@<username>\fP service.
 
 Further examples and documentation is available in
 \f[C]README.md\f[]
-\f[C]README.Office365.md\f[]
+\f[C]docs/Office365.md\f[]
