@@ -1,7 +1,7 @@
 # Advanced Configuration of the OneDrive Free Client
 This document covers the following scenarios:
 *   Configuring the client to use mutlitple OneDrive accounts / configurations
-*   Configuring the client for use in multi-boot (Windows / Linux) situations
+*   Configuring the client for use in dual-boot (Windows / Linux) situations
 
 ## Configuring the client to use mutlitple OneDrive accounts / configurations
 Essentially, each OneDrive account or SharePoint Shared Library which you require to be synced needs to have it's own and unique configuration, local sync directory and service files. To do this, the following steps are needed:
@@ -26,8 +26,8 @@ wget -O ~/.config/my-new-config/config https://raw.githubusercontent.com/abraune
 ```
 
 ### Update the default configuration file
-3.  The following config options *must* be updated to ensure that individual account data is not cross populated with other OneDrive accounts or other configurations
-  * sync_dir
+3.  The following config options *must* be updated to ensure that individual account data is not cross populated with other OneDrive accounts or other configurations:
+* sync_dir
 
 Other options that may require to be updated, depending on the OneDrive account that is being configured:
 *   drive_id
@@ -84,16 +84,13 @@ onedrive --confdir="~/.config/my-new-config" --monitor --verbose
 *   `--synchronize` does a one-time sync
 *   `--monitor` keeps the application running and monitoring for changes both local and remote
 
-
-
-
 ### Automatic syncing of new OneDrive configuration
-In order to automatically start syncing your OneDrive accounts, you will need to create a service file for each account. From the applicable 'user systemd folder':
+7. In order to automatically start syncing your OneDrive accounts, you will need to create a service file for each account. From the applicable 'user systemd folder':
 *   RHEL / CentOS: `/usr/lib/systemd/system`
 *   Others: `/usr/lib/systemd/user`
 
 ```text
-cp onedrive.service onedrive-work.service
+cp onedrive.service onedrive-my-new-config.service
 ```
 And edit the line beginning with `ExecStart` so that the confdir mirrors the one you used above:
 ```text
@@ -101,13 +98,10 @@ ExecStart=/usr/local/bin/onedrive --monitor --confdir="/path/to/config/dir"
 ```
 Then you can safely run these commands:
 ```text
-systemctl --user enable onedrive-work
-systemctl --user start onedrive-work
+systemctl --user enable onedrive-my-new-config
+systemctl --user start onedrive-my-new-config
 ```
-Repeat these steps for each OneDrive account that you wish to use.
-
-
-
+Repeat these steps for each OneDrive new account that you wish to use.
 
 ## Configuring the client for use in dual-boot (Windows / Linux) situations
 When dual booting Windows and Linux, depending on the Windows OneDrive account configuration, the 'Files On-Demand' option may be enabled when running OneDrive within your Windows environment.
