@@ -665,42 +665,7 @@ journalctl --user-unit=onedrive -f
 
 ## Additional Configuration
 ### Using multiple OneDrive accounts
-You can run multiple instances of the application by specifying a different config directory in order to handle multiple OneDrive accounts. For example, if you have a work and a personal account, you can run the onedrive command using the --confdir parameter. Here is an example:
-
-```text
-onedrive --synchronize --verbose --confdir="~/.config/onedrivePersonal" &
-onedrive --synchronize --verbose --confdir="~/.config/onedriveWork" &
-```
-or 
-```text
-onedrive --monitor --verbose --confdir="~/.config/onedrivePersonal" &
-onedrive --monitor --verbose --confdir="~/.config/onedriveWork" &
-```
-
-*   `--synchronize` does a one-time sync
-*   `--monitor` keeps the application running and monitoring for changes both local and remote
-*   `&` puts the application in background and leaves the terminal interactive
-
-**Important:** For each configuration, change the 'sync_dir' to a new value, unique for each specific configuration. Leaving this at the default of `sync_dir = "~/OneDrive"` will cause all data from both accounts to be synced to the same folder, then to each other.
-
-### Automatic syncing of both OneDrive accounts
-In order to automatically start syncing your OneDrive accounts, you will need to create a service file for each account. From the applicable 'user systemd folder':
-*   RHEL / CentOS: `/usr/lib/systemd/system`
-*   Others: `/usr/lib/systemd/user`
-
-```text
-cp onedrive.service onedrive-work.service
-```
-And edit the line beginning with `ExecStart` so that the confdir mirrors the one you used above:
-```text
-ExecStart=/usr/local/bin/onedrive --monitor --confdir="/path/to/config/dir"
-```
-Then you can safely run these commands:
-```text
-systemctl --user enable onedrive-work
-systemctl --user start onedrive-work
-```
-Repeat these steps for each OneDrive account that you wish to use.
+Refer to [./advanced-usage.md](advanced-usage.md) for configuration assistance.
 
 ### Access OneDrive service through a proxy
 If you have a requirement to run the client through a proxy, there are a couple of ways to achieve this:
@@ -739,7 +704,6 @@ sudo restorecon -R -v /path/to/onedriveSyncFolder
 ```
 
 ## All available commands
-
 Output of `onedrive --help`
 ```text
 OneDrive - a client for OneDrive Cloud Services

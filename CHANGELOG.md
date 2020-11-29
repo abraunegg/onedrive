@@ -1,7 +1,20 @@
 # Changelog
-
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
+
+## 2.4.8 - 2020-11-29
+### Fixed
+*   Fix to use config set option for 'remove_source_files' and 'skip_dir_strict_match' rather than ignore if set
+*   Fix download failure and crash due to incorrect local filesystem permissions when using mounted external devices
+*   Fix to not change permissions on pre-existing local directories
+*   Fix logging output when authentication authorisation fails to not say authorisation was successful
+*   Fix to check application_id before setting redirect URL when using specific Azure endpoints
+*   Fix application crash in --monitor mode due to 'Failed to stat file' when setgid is used on a directory
+
+### Updated
+*   Updated --verbose logging output for config options when set
+*   Updated documentation ()
+
 ## 2.4.7 - 2020-11-09
 ### Fixed
 *   Fix debugging output for /delta changes available queries
