@@ -112,7 +112,7 @@ To fix the problem of windows turning all files (that should be kept offline) in
 
 To find this setting, open the onedrive pop-up window from the taskbar, click "Help & Settings" > "Settings". This opens a new window. Go to the tab "Settings" and look for the section "Files On-Demand".
 
-After unchecking the option `Save space and download files as you use them` and clicking "OK", and the Windows OneDrive client should restart itself and start actually downloading your files so they will truely be available on your disk offline. These files then will be fully accessible under Linux and the Linux OneDrive client.
+After unchecking the option and clicking "OK", the Windows OneDrive client should restart itself and start actually downloading your files so they will truely be available on your disk when offline. These files will then be fully accessible under Linux and the Linux OneDrive client.
 
 | OneDrive Personal | Onedrive Business<br>SharePoint |
 |---|---|
