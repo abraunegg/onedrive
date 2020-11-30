@@ -241,13 +241,23 @@ State caching
 
 Real-Time file monitoring with Inotify
 
+File upload / download validation to ensure data integrity
+
 Resumable uploads
 
 Support OneDrive for Business (part of Office 365)
 
-Shared folders (OneDrive Personal)
+Shared Folder support for OneDrive Personal and OneDrive Business accounts
 
-SharePoint / Office 365 Group Drives (refer to README.Office365.md to configure)
+SharePoint / Office365 Shared Libraries
+
+Desktop notifications via libnotify
+
+Dry-run capability to test configuration changes
+
+Prevent major OneDrive accidental data deletion after configuration change
+
+Support for National cloud deployments (Microsoft Cloud for US Government, Microsoft Cloud Germany, Azure and Office 365 operated by 21Vianet in China)
 
 
 .SH CONFIGURATION
@@ -339,4 +349,8 @@ for a user via the \fBonedrive@<username>\fP service.
 
 Further examples and documentation is available in
 \f[C]README.md\f[]
+\f[C]docs/USAGE.md\f[]
+\f[C]docs/advanced-usage.md\f[]
+\f[C]docs/BusinessSharedFolders.md\f[]
 \f[C]docs/Office365.md\f[]
+\f[C]docs/national-cloud-deployments.md\f[]

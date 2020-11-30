@@ -2,7 +2,8 @@
 Syncing OneDrive Business Shared Folders requires additional configuration for your 'onedrive' client:
 1.  List available shared folders to determine which folder you wish to sync & to validate that you have access to that folder
 2.  Create a new file called 'business_shared_folders' in your config directory which contains a list of the shared folders you wish to sync
-3.  Perform a sync
+3.  Test the configuration using '--dry-run'
+4.  Sync the OneDrive Business Shared folders as required
 
 ## Listing available OneDrive Business Shared Folders
 List the available OneDrive Business Shared folders with the following command:
