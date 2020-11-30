@@ -9,11 +9,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Fix to not change permissions on pre-existing local directories
 *   Fix logging output when authentication authorisation fails to not say authorisation was successful
 *   Fix to check application_id before setting redirect URL when using specific Azure endpoints
-*   Fix application crash in --monitor mode due to 'Failed to stat file' when setgid is used on a directory
+*   Fix application crash in --monitor mode due to 'Failed to stat file' when setgid is used on a directory and data cannot be read
+
+### Added
+*   Added advanced-usage.md to document advaced client usage such as multi account configurations and Windows dual-boot
 
 ### Updated
 *   Updated --verbose logging output for config options when set
-*   Updated documentation ()
+*   Updated documentation (man page, USAGE.md, Office365.md, BusinessSharedFolders.md)
 
 ## 2.4.7 - 2020-11-09
 ### Fixed
