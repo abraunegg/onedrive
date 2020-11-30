@@ -8,25 +8,25 @@ Essentially, each OneDrive account or SharePoint Shared Library which you requir
 1.  Create a unique configuration folder for each onedrive client configuration that you need
 2.  Copy to this folder a copy of the default configuration file
 3.  Update the default configuration file as required, changing the required minimum config options and any additional options as needed to support your multi-account configuration
-4.  Authenticate the client
+4.  Authenticate the client using the new configuration directory
 5.  Test the configuration using '--display-config' and '--dry-run'
 6.  Sync the OneDrive account data as required using `--synchronize` or `--monitor`
 7.  Configure a unique systemd service file for this account configuration
 
-### Create a unique configuration folder for each onedrive client configuration that you need
-1.  Make the configuration folder as required for this new configuration, for example:
+### 1. Create a unique configuration folder for each onedrive client configuration that you need
+Make the configuration folder as required for this new configuration, for example:
 ```text
 mkdir ~/.config/my-new-config
 ```
 
-### Copy to this folder a copy of the default configuration file
-2.  Copy to this folder a copy of the default configuration file by downloading this file from GitHub and saving this file in the directory created above:
+### 2. Copy to this folder a copy of the default configuration file
+Copy to this folder a copy of the default configuration file by downloading this file from GitHub and saving this file in the directory created above:
 ```text
-wget -O ~/.config/my-new-config/config https://raw.githubusercontent.com/abraunegg/onedrive/master/config
+wget https://raw.githubusercontent.com/abraunegg/onedrive/master/config -O ~/.config/my-new-config/config
 ```
 
-### Update the default configuration file
-3.  The following config options *must* be updated to ensure that individual account data is not cross populated with other OneDrive accounts or other configurations:
+### 3. Update the default configuration file
+The following config options *must* be updated to ensure that individual account data is not cross populated with other OneDrive accounts or other configurations:
 * sync_dir
 
 Other options that may require to be updated, depending on the OneDrive account that is being configured:
@@ -38,8 +38,8 @@ Other options that may require to be updated, depending on the OneDrive account 
 *   Creation of a 'sync_list' file if required
 *   Creation of a 'business_shared_folders' file if required
 
-### Authenticate the client
-4.  Authenticate the client using the specific configuration file:
+### 4. Authenticate the client
+Authenticate the client using the specific configuration file:
 ```text
 onedrive --confdir="~/.config/my-new-config"
 ```
@@ -56,8 +56,8 @@ Enter the response uri:
 
 ```
 
-### Display and Test the configuration
-5.  Test the configuration using '--display-config' and '--dry-run'. By doing so, this allows you to test any configuration that you have currently made, enabling you to fix this configuration before using the configuration.
+### 5. Display and Test the configuration
+Test the configuration using '--display-config' and '--dry-run'. By doing so, this allows you to test any configuration that you have currently made, enabling you to fix this configuration before using the configuration.
 
 #### Display the configuration
 ```text
@@ -71,8 +71,8 @@ onedrive --confdir="~/.config/my-new-config" --synchronize --verbose --dry-run
 
 If both of these operate as per your expectation, the configuration of this client setup is complete and validated. If not, amend your configuration as required.
 
-### Sync the OneDrive account data as required
-6.  Sync the data for the new account configuration as required:
+### 6. Sync the OneDrive account data as required
+Sync the data for the new account configuration as required:
 ```text
 onedrive --confdir="~/.config/my-new-config" --synchronize --verbose
 ```
@@ -84,23 +84,43 @@ onedrive --confdir="~/.config/my-new-config" --monitor --verbose
 *   `--synchronize` does a one-time sync
 *   `--monitor` keeps the application running and monitoring for changes both local and remote
 
-### Automatic syncing of new OneDrive configuration
-7. In order to automatically start syncing your OneDrive accounts, you will need to create a service file for each account. From the applicable 'user systemd folder':
+### 7. Automatic syncing of new OneDrive configuration
+In order to automatically start syncing your OneDrive accounts, you will need to create a service file for each account. From the applicable 'systemd folder' where the applicable systemd service file exists:
 *   RHEL / CentOS: `/usr/lib/systemd/system`
-*   Others: `/usr/lib/systemd/user`
+*   Others: `/usr/lib/systemd/user` and `/lib/systemd/system`
 
+**Note:** The `onedrive.service` runs the service as the 'root' user, whereas the `onedrive@.service` runs the service as your user account.
+
+Copy the required service file to a new name:
 ```text
 cp onedrive.service onedrive-my-new-config.service
 ```
-And edit the line beginning with `ExecStart` so that the confdir mirrors the one you used above:
+or 
 ```text
-ExecStart=/usr/local/bin/onedrive --monitor --confdir="/path/to/config/dir"
+cp onedrive@.service onedrive-my-new-config@.service
 ```
+
+Edit the line beginning with `ExecStart` so that the confdir mirrors the one you used above:
+```text
+ExecStart=/usr/local/bin/onedrive --monitor --confdir="/full/path/to/config/dir"
+```
+
+Example:
+```text
+ExecStart=/usr/local/bin/onedrive --monitor --confdir="/home/myusername/.config/my-new-config"
+```
+
 Then you can safely run these commands:
 ```text
 systemctl --user enable onedrive-my-new-config
 systemctl --user start onedrive-my-new-config
 ```
+or
+```text
+systemctl --user enable onedrive-my-new-config@myusername.service
+systemctl --user start onedrive-my-new-config@myusername.service
+```
+
 Repeat these steps for each OneDrive new account that you wish to use.
 
 ## Configuring the client for use in dual-boot (Windows / Linux) situations

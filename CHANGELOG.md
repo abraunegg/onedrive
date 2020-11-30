@@ -2,7 +2,7 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## 2.4.8 - 2020-11-29
+## 2.4.8 - 2020-11-30
 ### Fixed
 *   Fix to use config set option for 'remove_source_files' and 'skip_dir_strict_match' rather than ignore if set
 *   Fix download failure and crash due to incorrect local filesystem permissions when using mounted external devices
