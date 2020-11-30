@@ -509,6 +509,20 @@ azure_tenant_id = "your.azure.tenant.name"
 # sync_business_shared_folders = "false"
 ```
 
+### Configuring the client to use older 'skilion' application identifier
+In some instances it may be desirable to utilise the older 'skilion' application identifier to avoid authorising a new application ID within Microsoft Azure environments.
+To configure this, update the 'config' file with the old Application ID, then this will be used for the authentication process.
+```text
+# skip_dir_strict_match = "false"
+application_id = "22c49a0d-d21c-4792-aed1-8f163c982546"
+# resync = "false"
+# bypass_data_preservation = "false"
+```
+**Note:** The application will now use the older 'skilion' client identifier, however this may increase your chances of getting a OneDrive 429 error.
+
+**Note:** After changing the 'application_id' you will need to restart any 'onedrive' process you have running, and potentially issue a `--logout` to re-auth the client with this updated application ID.
+
+
 ### How to 'skip' directories from syncing?
 There are several mechanisms available to 'skip' a directory from the sync process:
 *   Utilise 'skip_dir'
@@ -631,7 +645,7 @@ journalctl --unit=onedrive@<username> -f
 In some cases you may wish to receive GUI notifications when using the client when logged in as a non-root user. In this case, follow the directions below:
 
 1. Login via graphical UI as user you wish to enable the service for
-2. Disable any `onedive@` service files for your username - eg:
+2. Disable any `onedrive@` service files for your username - eg:
 ```text
 sudo systemctl stop onedrive@alex.service
 sudo systemctl disable onedrive@alex.service
@@ -651,42 +665,7 @@ journalctl --user-unit=onedrive -f
 
 ## Additional Configuration
 ### Using multiple OneDrive accounts
-You can run multiple instances of the application by specifying a different config directory in order to handle multiple OneDrive accounts. For example, if you have a work and a personal account, you can run the onedrive command using the --confdir parameter. Here is an example:
-
-```text
-onedrive --synchronize --verbose --confdir="~/.config/onedrivePersonal" &
-onedrive --synchronize --verbose --confdir="~/.config/onedriveWork" &
-```
-or 
-```text
-onedrive --monitor --verbose --confdir="~/.config/onedrivePersonal" &
-onedrive --monitor --verbose --confdir="~/.config/onedriveWork" &
-```
-
-*   `--synchronize` does a one-time sync
-*   `--monitor` keeps the application running and monitoring for changes both local and remote
-*   `&` puts the application in background and leaves the terminal interactive
-
-**Important:** For each configuration, change the 'sync_dir' to a new value, unique for each specific configuration. Leaving this at the default of `sync_dir = "~/OneDrive"` will cause all data from both accounts to be synced to the same folder, then to each other.
-
-### Automatic syncing of both OneDrive accounts
-In order to automatically start syncing your OneDrive accounts, you will need to create a service file for each account. From the applicable 'user systemd folder':
-*   RHEL / CentOS: `/usr/lib/systemd/system`
-*   Others: `/usr/lib/systemd/user`
-
-```text
-cp onedrive.service onedrive-work.service
-```
-And edit the line beginning with `ExecStart` so that the confdir mirrors the one you used above:
-```text
-ExecStart=/usr/local/bin/onedrive --monitor --confdir="/path/to/config/dir"
-```
-Then you can safely run these commands:
-```text
-systemctl --user enable onedrive-work
-systemctl --user start onedrive-work
-```
-Repeat these steps for each OneDrive account that you wish to use.
+Refer to [./advanced-usage.md](advanced-usage.md) for configuration assistance.
 
 ### Access OneDrive service through a proxy
 If you have a requirement to run the client through a proxy, there are a couple of ways to achieve this:
@@ -725,7 +704,6 @@ sudo restorecon -R -v /path/to/onedriveSyncFolder
 ```
 
 ## All available commands
-
 Output of `onedrive --help`
 ```text
 OneDrive - a client for OneDrive Cloud Services

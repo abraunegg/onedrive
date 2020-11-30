@@ -509,6 +509,9 @@ int main(string[] args)
 		writeln("Config option 'min_notify_changes'     = ", cfg.getValueLong("min_notify_changes"));
 		writeln("Config option 'log_dir'                = ", cfg.getValueString("log_dir"));
 		writeln("Config option 'classify_as_big_delete' = ", cfg.getValueLong("classify_as_big_delete"));
+		writeln("Config option 'upload_only'            = ", cfg.getValueBool("upload_only"));
+		writeln("Config option 'no_remote_delete'       = ", cfg.getValueBool("no_remote_delete"));
+		writeln("Config option 'remove_source_files'    = ", cfg.getValueBool("remove_source_files"));
 		
 		// Is config option drive_id configured?
 		if (cfg.getValueString("drive_id") != ""){
@@ -597,10 +600,17 @@ int main(string[] args)
 		// was the application just authorised?
 		if (cfg.applicationAuthorizeResponseUri) {
 			// Application was just authorised
-			log.log("\nApplication has been successfully authorised, however no additional command switches were provided.\n");
-			log.log("Please use --help for further assistance in regards to running this application.\n");
-			// Use exit scopes to shutdown API
-			return EXIT_SUCCESS;
+			if (exists(cfg.refreshTokenFilePath)) {
+				// OneDrive refresh token exists
+				log.log("\nApplication has been successfully authorised, however no additional command switches were provided.\n");
+				log.log("Please use --help for further assistance in regards to running this application.\n");
+				// Use exit scopes to shutdown API
+				return EXIT_SUCCESS;
+			} else {
+				// we just authorised, but refresh_token does not exist .. probably an auth error
+				log.log("\nApplication has not been successfully authorised. Please check your URI response entry and try again.\n");
+				return EXIT_FAILURE;
+			}
 		} else {
 			// Application was not just authorised
 			log.log("\n--synchronize or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use --help for further assistance.\n");
@@ -655,6 +665,7 @@ int main(string[] args)
 			// Attempt to create the sync dir we have been configured with
 			mkdirRecurse(syncDir);
 			// Configure the applicable permissions for the folder
+			log.vdebug("Setting directory permissions for: ", syncDir);
 			syncDir.setAttributes(cfg.returnRequiredDirectoryPermisions());
 		} catch (std.file.FileException e) {
 			// Creating the sync directory failed
@@ -765,14 +776,18 @@ int main(string[] args)
 	// Do we need to configure specific --upload-only options?
 	if (cfg.getValueBool("upload_only")) {
 		// --upload-only was passed in or configured
+		log.vdebug("Configuring uploadOnly flag to TRUE as --upload-only passed in or configured");
+		sync.setUploadOnly();
 		// was --no-remote-delete passed in or configured
 		if (cfg.getValueBool("no_remote_delete")) {
 			// Configure the noRemoteDelete flag
+			log.vdebug("Configuring noRemoteDelete flag to TRUE as --no-remote-delete passed in or configured");
 			sync.setNoRemoteDelete();
 		}
 		// was --remove-source-files passed in or configured
 		if (cfg.getValueBool("remove_source_files")) {
 			// Configure the localDeleteAfterUpload flag
+			log.vdebug("Configuring localDeleteAfterUpload flag to TRUE as --remove-source-files passed in or configured");
 			sync.setLocalDeleteAfterUpload();
 		}
 	}
@@ -906,6 +921,7 @@ int main(string[] args)
 						string singleDirectoryPath = cfg.getValueString("single_directory");
 						mkdirRecurse(singleDirectoryPath);
 						// Configure the applicable permissions for the folder
+						log.vdebug("Setting directory permissions for: ", singleDirectoryPath);
 						singleDirectoryPath.setAttributes(cfg.returnRequiredDirectoryPermisions());
 					}
 				}

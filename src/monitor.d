@@ -1,7 +1,8 @@
 import core.sys.linux.sys.inotify;
 import core.stdc.errno;
 import core.sys.posix.poll, core.sys.posix.unistd;
-import std.exception, std.file, std.path, std.regex, std.stdio, std.string, std.algorithm.mutation;
+import std.exception, std.file, std.path, std.regex, std.stdio, std.string, std.algorithm;
+import core.stdc.stdlib;
 import config;
 import selective;
 import util;
@@ -132,17 +133,43 @@ final class Monitor
 		}
 		
 		// passed all potential exclusions
+		// add inotify watch for this path / directory / file
+		log.vdebug("Calling add() for this dirname: ", dirname);
 		add(dirname);
-		try {
-			auto pathList = dirEntries(dirname, SpanMode.shallow, false);
-			foreach(DirEntry entry; pathList) {
-				if (entry.isDir) {
-					addRecursive(entry.name);
+		
+		// if this is a directory, recursivly add this path
+		if (isDir(dirname)) {
+			// try and get all the directory entities for this path
+			try {
+				auto pathList = dirEntries(dirname, SpanMode.shallow, false);
+				foreach(DirEntry entry; pathList) {
+					if (entry.isDir) {
+						log.vdebug("Calling addRecursive() for this directory: ", entry.name);
+						addRecursive(entry.name);
+					}
+				}
+			// catch any error which is generated
+			} catch (std.file.FileException e) {
+				// Standard filesystem error
+				displayFileSystemErrorMessage(e.msg);
+				return;
+			} catch (Exception e) {
+				// Issue #1154 handling
+				// Need to check for: Failed to stat file in error message
+				if (canFind(e.msg, "Failed to stat file")) {
+					// File system access issue
+					log.error("ERROR: The local file system returned an error with the following message:");
+					log.error("  Error Message: ", e.msg);
+					log.error("ACCESS ERROR: Please check your UID and GID access to this file, as the permissions on this file is preventing this application to read it");
+					log.error("\nFATAL: Exiting application to avoid deleting data due to local file system access issues\n");
+					// Must exit here
+					exit(-1);
+				} else {
+					// some other error
+					displayFileSystemErrorMessage(e.msg);
+					return;
 				}
 			}
-		} catch (std.file.FileException e) {
-			log.vdebug("ERROR: ", e.msg);
-			return;
 		}
 	}
 
@@ -173,6 +200,7 @@ final class Monitor
 		
 		// Add path to inotify watch - required regardless if a '.folder' or 'folder'
 		wdToDirName[wd] = buildNormalizedPath(pathname) ~ "/";
+		log.vdebug("inotify_add_watch successfully added for: ", pathname);
 		
 		// Do we log that we are monitoring this directory?
 		if (isDir(pathname)) {
@@ -359,5 +387,13 @@ final class Monitor
 				cookieToPath.remove(cookie);
 			}
 		}
+	}
+	
+	// Parse and display error message received from the local file system
+	private void displayFileSystemErrorMessage(string message) 
+	{
+		log.error("ERROR: The local file system returned an error with the following message:");
+		auto errorArray = splitLines(message);
+		log.error("  Error Message: ", errorArray[0]);
 	}
 }
