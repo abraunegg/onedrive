@@ -115,7 +115,7 @@ docker volume inspect onedrive_conf
 
 Or you can map your own config folder to the config volume. Make sure to copy all files from the docker volume into your mapped folder first.
 
-The detailed document for the config can be found here: [additional-configuration](https://github.com/abraunegg/onedrive#additional-configuration)
+The detailed document for the config can be found here: [Configuration](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#configuration)
 
 ### 7. Sync multiple accounts
 
@@ -152,7 +152,9 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 | <B>ONEDRIVE_GID</B> | GroupID (GID) to run as | 1000 |
 | <B>ONEDRIVE_VERBOSE</B> | Controls "--verbose" switch on onedrive sync. Default is 0 | 1 |
 | <B>ONEDRIVE_DEBUG</B> | Controls "--verbose --verbose" switch on onedrive sync. Default is 0 | 1 |
+| <B>ONEDRIVE_DEBUG_HTTPS</B> | Controls "--debug-https" switch on onedrive sync. Default is 0 | 1 |
 | <B>ONEDRIVE_RESYNC</B> | Controls "--resync" switch on onedrive sync. Default is 0 | 1 |
+| <B>ONEDRIVE_DOWNLOADONLY</B> | Controls "--download-only" switch on onedrive sync. Default is 0 | 1 |
 
 ### Usage Examples
 **Verbose Output:**

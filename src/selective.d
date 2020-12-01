@@ -89,15 +89,30 @@ final class SelectiveSync
 		
 		// Try full path match first
 		if (!name.matchFirst(dirmask).empty) {
+			log.vdebug("'!name.matchFirst(dirmask).empty' returned true = matched");
 			return true;
 		} else {
 			// Do we check the base name as well?
 			if (!skipDirStrictMatch) {
-				// check just the basename in the path
-				string parent = baseName(name);
-				if(!parent.matchFirst(dirmask).empty) {
-					return true;
+				log.vdebug("No Strict Matching Enforced");
+				
+				// Test the entire path working backwards from child
+				string path = buildNormalizedPath(name);
+				string checkPath;
+				auto paths = pathSplitter(path);
+				
+				foreach_reverse(directory; paths) {
+					if (directory != "/") {
+						// This will add a leading '/' but that needs to be stripped to check
+						checkPath = "/" ~ directory ~ checkPath;
+						if(!checkPath.strip('/').matchFirst(dirmask).empty) {
+							log.vdebug("'!checkPath.matchFirst(dirmask).empty' returned true = matched");
+							return true;
+						}
+					}
 				}
+			} else {
+				log.vdebug("Strict Matching Enforced - No Match");
 			}
 		}
 		// no match

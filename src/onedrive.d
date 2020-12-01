@@ -15,6 +15,9 @@ private bool simulateNoRefreshTokenFile = false;
 private ulong retryAfterValue = 0;
 
 private immutable {
+	// Client ID / Application ID (abraunegg)
+	string clientIdDefault = "d50ca740-c83f-4d1b-b616-12c519384f0c";
+
 	// Azure Active Directory & Graph Explorer Endpoints
 	// Global & Defaults
 	string globalAuthEndpoint = "https://login.microsoftonline.com";
@@ -38,8 +41,8 @@ private immutable {
 }
 
 private {
-	// Client ID / Application ID (abraunegg)
-	string clientId = "d50ca740-c83f-4d1b-b616-12c519384f0c";
+	// Client ID / Application ID
+	string clientId = clientIdDefault;
 
 	// Default User Agent configuration
 	string isvTag = "ISV";
@@ -149,6 +152,14 @@ final class OneDriveApi
 			.debugResponse = true;
 		}
 		
+		// Update clientId if application_id is set in config file
+		if (cfg.getValueString("application_id") != "") {
+			// an application_id is set in config file
+			log.vdebug("Setting custom application_id to: " , cfg.getValueString("application_id"));
+			clientId = cfg.getValueString("application_id");
+			companyName = "custom_application";
+		}
+		
 		// Configure tenant id value, if 'azure_tenant_id' is configured,
 		// otherwise use the "common" multiplexer
 		string tenantId = "common";
@@ -156,19 +167,35 @@ final class OneDriveApi
 			// Use the value entered by the user
 			tenantId = cfg.getValueString("azure_tenant_id");
 		}
-
+		
 		// Configure Azure AD endpoints if 'azure_ad_endpoint' is configured
 		string azureConfigValue = cfg.getValueString("azure_ad_endpoint");
 		switch(azureConfigValue) {
 			case "":
-				log.log("Configuring Global Azure AD Endpoints");
+				if (tenantId == "common") {
+					log.log("Configuring Global Azure AD Endpoints");
+				} else {
+					log.log("Configuring Global Azure AD Endpoints - Single Tenant Application");
+				}
+				// Authentication
+				authUrl = globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
+				redirectUrl = globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				tokenUrl = globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				break;
 			case "USL4":
 				log.log("Configuring Azure AD for US Government Endpoints");
 				// Authentication
 				authUrl = usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
-				redirectUrl = usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				tokenUrl = usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
+				if (clientId == clientIdDefault) {
+					// application_id == default
+					log.vdebug("USL4 AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint");
+					redirectUrl = globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				} else {
+					// custom application_id
+					redirectUrl = usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				}
+				
 				// Drive Queries
 				driveUrl = usl4GraphEndpoint ~ "/v1.0/me/drive";
 				driveByIdUrl = usl4GraphEndpoint ~ "/v1.0/drives/";					
@@ -186,8 +213,16 @@ final class OneDriveApi
 				log.log("Configuring Azure AD for US Government Endpoints (DOD)");
 				// Authentication
 				authUrl = usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
-				redirectUrl = usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				tokenUrl = usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
+				if (clientId == clientIdDefault) {
+					// application_id == default
+					log.vdebug("USL5 AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint");
+					redirectUrl = globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				} else {
+					// custom application_id
+					redirectUrl = usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				}
+				
 				// Drive Queries
 				driveUrl = usl5GraphEndpoint ~ "/v1.0/me/drive";
 				driveByIdUrl = usl5GraphEndpoint ~ "/v1.0/drives/";					
@@ -205,8 +240,16 @@ final class OneDriveApi
 				log.log("Configuring Azure AD Germany");
 				// Authentication
 				authUrl = deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
-				redirectUrl = deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				tokenUrl = deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
+				if (clientId == clientIdDefault) {
+					// application_id == default
+					log.vdebug("DE AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint");
+					redirectUrl = globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				} else {
+					// custom application_id
+					redirectUrl = deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				}
+				
 				// Drive Queries
 				driveUrl = deGraphEndpoint ~ "/v1.0/me/drive";
 				driveByIdUrl = deGraphEndpoint ~ "/v1.0/drives/";					
@@ -224,8 +267,16 @@ final class OneDriveApi
 				log.log("Configuring AD China operated by 21Vianet");
 				// Authentication
 				authUrl = cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
-				redirectUrl = cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				tokenUrl = cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
+				if (clientId == clientIdDefault) {
+					// application_id == default
+					log.vdebug("CN AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint");
+					redirectUrl = globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				} else {
+					// custom application_id
+					redirectUrl = cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				}
+				
 				// Drive Queries
 				driveUrl = cnGraphEndpoint ~ "/v1.0/me/drive";
 				driveByIdUrl = cnGraphEndpoint ~ "/v1.0/drives/";					
@@ -296,13 +347,6 @@ final class OneDriveApi
 
 	bool init()
 	{
-		// Update clientId if application_id is set in config file
-		if (cfg.getValueString("application_id") != "") {
-			// an application_id is set in config file
-			clientId = cfg.getValueString("application_id");
-			companyName = "custom_application";
-		}
-		
 		// detail what we are using for applicaion identification
 		log.vdebug("clientId    = ", clientId);
 		log.vdebug("companyName = ", companyName);
@@ -556,11 +600,43 @@ final class OneDriveApi
 	{
 		checkAccessTokenExpired();
 		scope(failure) {
-			if (exists(saveToPath)) remove(saveToPath);
+			if (exists(saveToPath)) {
+				// try and remove the file, catch error
+				try {
+					remove(saveToPath);
+				} catch (FileException e) {
+					// display the error message
+					displayFileSystemErrorMessage(e.msg);
+				} 
+			}	
 		}
-		mkdirRecurse(dirName(saveToPath));
+		
+		// Create the required local directory
+		string newPath = dirName(saveToPath);
+		
+		// Does the path exist locally?
+		if (!exists(newPath)) {
+			try {
+				log.vdebug("Requested path does not exist, creating directory structure: ", newPath);
+				mkdirRecurse(newPath);
+				// Configure the applicable permissions for the folder
+				log.vdebug("Setting directory permissions for: ", newPath);
+				newPath.setAttributes(cfg.returnRequiredDirectoryPermisions());
+			} catch (FileException e) {
+				// display the error message
+				displayFileSystemErrorMessage(e.msg);
+			}
+		}
+		
 		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content?AVOverride=1";
+		// Download file
 		download(url, saveToPath, fileSize);
+		// Does path exist?
+		if (exists(saveToPath)) {
+			// File was downloaded sucessfully - configure the applicable permissions for the file
+			log.vdebug("Setting file permissions for: ", saveToPath);
+			saveToPath.setAttributes(cfg.returnRequiredFilePermisions());
+		}
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
@@ -792,7 +868,16 @@ final class OneDriveApi
 					refreshToken = response["refresh_token"].str();
 					accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
 					if (!.dryRun) {
-						std.file.write(cfg.refreshTokenFilePath, refreshToken);
+						try {
+							// try and update the refresh_token file
+							log.vdebug("Updating refresh_token file with new token from OneDrive");
+							std.file.write(cfg.refreshTokenFilePath, refreshToken);
+							log.vdebug("Setting file permissions for: ", cfg.refreshTokenFilePath);
+							cfg.refreshTokenFilePath.setAttributes(cfg.returnRequiredFilePermisions());
+						} catch (FileException e) {
+							// display the error message
+							displayFileSystemErrorMessage(e.msg);
+						}
 					}
 					if (printAccessToken) writeln("New access token: ", accessToken);
 				} else {
@@ -803,7 +888,9 @@ final class OneDriveApi
 			} else {
 				// External tenant token handling
 				if ("access_token" in response){
+					log.vdebug("Updating access token with new token received from External OneDrive 3rd Party");
 					externalAccessToken = "bearer " ~ response["access_token"].str();
+					log.vdebug("Updating refresh_token with new token received from External OneDrive 3rd Party");
 					externalRefreshToken = response["refresh_token"].str();
 					externalAccessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
 					if (printAccessToken) writeln("New external access token: ", externalAccessToken);
@@ -1398,6 +1485,14 @@ final class OneDriveApi
 		if (errorMessage.type() == JSONType.object) {
 			log.error("  Error Reason:  ", errorMessage["error_description"].str);
 		}
+	}
+	
+	// Parse and display error message received from the local file system
+	private void displayFileSystemErrorMessage(string message) 
+	{
+		log.error("ERROR: The local file system returned an error with the following message:");
+		auto errorArray = splitLines(message);
+		log.error("  Error Message: ", errorArray[0]);
 	}
 }
 

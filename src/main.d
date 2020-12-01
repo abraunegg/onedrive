@@ -62,10 +62,16 @@ int main(string[] args)
 		if (onedriveInitialised) {
 			oneDrive.shutdown();
 		}
-		// Make sure the .wal file is incorporated into the main db before we exit
-		destroy(itemDb);
+		// was itemDb initialised?
+		if (itemDb !is null) {
+			// Make sure the .wal file is incorporated into the main db before we exit
+			itemDb.performVacuum();
+			destroy(itemDb);
+		}
 		// free API instance
-		oneDrive = null;
+		if (oneDrive !is null) {
+			destroy(oneDrive);
+		}
 		// Perform Garbage Cleanup
 		GC.collect();
 		// Display memory details
@@ -83,10 +89,16 @@ int main(string[] args)
 		if (onedriveInitialised) {
 			oneDrive.shutdown();
 		}
-		// Make sure the .wal file is incorporated into the main db before we exit
-		destroy(itemDb);
+		// was itemDb initialised?
+		if (itemDb !is null) {
+			// Make sure the .wal file is incorporated into the main db before we exit
+			itemDb.performVacuum();
+			destroy(itemDb);
+		}
 		// free API instance
-		oneDrive = null;
+		if (oneDrive !is null) {
+			destroy(oneDrive);
+		}
 		// Perform Garbage Cleanup
 		GC.collect();
 		// Display memory details
@@ -380,11 +392,22 @@ int main(string[] args)
 	// dry-run notification and database setup
 	if (cfg.getValueBool("dry_run")) {
 		log.log("DRY-RUN Configured. Output below shows what 'would' have occurred.");
+		string dryRunShmFile = cfg.databaseFilePathDryRun ~ "-shm";
+		string dryRunWalFile = cfg.databaseFilePathDryRun ~ "-wal";
 		// If the dry run database exists, clean this up
 		if (exists(cfg.databaseFilePathDryRun)) {
 			// remove the existing file
 			log.vdebug("Removing items-dryrun.sqlite3 as it still exists for some reason");
 			safeRemove(cfg.databaseFilePathDryRun);	
+		}
+		// silent cleanup of shm and wal files if they exist
+		if (exists(dryRunShmFile)) {
+			// remove items-dryrun.sqlite3-shm
+			safeRemove(dryRunShmFile);	
+		}
+		if (exists(dryRunWalFile)) {
+			// remove items-dryrun.sqlite3-wal
+			safeRemove(dryRunWalFile);	
 		}
 		
 		// Make a copy of the original items.sqlite3 for use as the dry run copy if it exists
@@ -486,6 +509,9 @@ int main(string[] args)
 		writeln("Config option 'min_notify_changes'     = ", cfg.getValueLong("min_notify_changes"));
 		writeln("Config option 'log_dir'                = ", cfg.getValueString("log_dir"));
 		writeln("Config option 'classify_as_big_delete' = ", cfg.getValueLong("classify_as_big_delete"));
+		writeln("Config option 'upload_only'            = ", cfg.getValueBool("upload_only"));
+		writeln("Config option 'no_remote_delete'       = ", cfg.getValueBool("no_remote_delete"));
+		writeln("Config option 'remove_source_files'    = ", cfg.getValueBool("remove_source_files"));
 		
 		// Is config option drive_id configured?
 		if (cfg.getValueString("drive_id") != ""){
@@ -574,10 +600,17 @@ int main(string[] args)
 		// was the application just authorised?
 		if (cfg.applicationAuthorizeResponseUri) {
 			// Application was just authorised
-			log.log("\nApplication has been successfully authorised, however no additional command switches were provided.\n");
-			log.log("Please use --help for further assistance in regards to running this application.\n");
-			// Use exit scopes to shutdown API
-			return EXIT_SUCCESS;
+			if (exists(cfg.refreshTokenFilePath)) {
+				// OneDrive refresh token exists
+				log.log("\nApplication has been successfully authorised, however no additional command switches were provided.\n");
+				log.log("Please use --help for further assistance in regards to running this application.\n");
+				// Use exit scopes to shutdown API
+				return EXIT_SUCCESS;
+			} else {
+				// we just authorised, but refresh_token does not exist .. probably an auth error
+				log.log("\nApplication has not been successfully authorised. Please check your URI response entry and try again.\n");
+				return EXIT_FAILURE;
+			}
 		} else {
 			// Application was not just authorised
 			log.log("\n--synchronize or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use --help for further assistance.\n");
@@ -607,6 +640,23 @@ int main(string[] args)
 		itemDb = new ItemDatabase(cfg.databaseFilePathDryRun);
 	}
 	
+	// What are the permission that have been set for the application?
+	// These are relevant for:
+	// - The ~/OneDrive parent folder or 'sync_dir' configured item
+	// - Any new folder created under ~/OneDrive or 'sync_dir'
+	// - Any new file created under ~/OneDrive or 'sync_dir'
+	// valid permissions are 000 -> 777 - anything else is invalid
+	if ((cfg.getValueLong("sync_dir_permissions") < 0) || (cfg.getValueLong("sync_file_permissions") < 0) || (cfg.getValueLong("sync_dir_permissions") > 777) || (cfg.getValueLong("sync_file_permissions") > 777)) {
+		log.error("ERROR: Invalid 'User|Group|Other' permissions set within config file. Please check.");
+		return EXIT_FAILURE;
+	} else {
+		// debug log output what permissions are being set to
+		log.vdebug("Configuring default new folder permissions as: ", cfg.getValueLong("sync_dir_permissions"));
+		cfg.configureRequiredDirectoryPermisions();
+		log.vdebug("Configuring default new file permissions as: ", cfg.getValueLong("sync_file_permissions"));
+		cfg.configureRequiredFilePermisions();
+	}
+	
 	// configure the sync direcory based on syncDir config option
 	log.vlog("All operations will be performed in: ", syncDir);
 	if (!exists(syncDir)) {
@@ -614,6 +664,9 @@ int main(string[] args)
 		try {
 			// Attempt to create the sync dir we have been configured with
 			mkdirRecurse(syncDir);
+			// Configure the applicable permissions for the folder
+			log.vdebug("Setting directory permissions for: ", syncDir);
+			syncDir.setAttributes(cfg.returnRequiredDirectoryPermisions());
 		} catch (std.file.FileException e) {
 			// Creating the sync directory failed
 			log.error("ERROR: Unable to create local OneDrive syncDir - ", e.msg);
@@ -621,6 +674,8 @@ int main(string[] args)
 			return EXIT_FAILURE;
 		}
 	}
+	
+	// Change the working directory to the 'sync_dir' configured item
 	chdir(syncDir);
 	
 	// Configure selective sync by parsing and getting a regex for skip_file config component
@@ -721,14 +776,18 @@ int main(string[] args)
 	// Do we need to configure specific --upload-only options?
 	if (cfg.getValueBool("upload_only")) {
 		// --upload-only was passed in or configured
+		log.vdebug("Configuring uploadOnly flag to TRUE as --upload-only passed in or configured");
+		sync.setUploadOnly();
 		// was --no-remote-delete passed in or configured
 		if (cfg.getValueBool("no_remote_delete")) {
 			// Configure the noRemoteDelete flag
+			log.vdebug("Configuring noRemoteDelete flag to TRUE as --no-remote-delete passed in or configured");
 			sync.setNoRemoteDelete();
 		}
 		// was --remove-source-files passed in or configured
 		if (cfg.getValueBool("remove_source_files")) {
 			// Configure the localDeleteAfterUpload flag
+			log.vdebug("Configuring localDeleteAfterUpload flag to TRUE as --remove-source-files passed in or configured");
 			sync.setLocalDeleteAfterUpload();
 		}
 	}
@@ -858,14 +917,22 @@ int main(string[] args)
 					if (!exists(cfg.getValueString("single_directory"))) {
 						// The requested path to use with --single-directory does not exist locally within the configured 'sync_dir'
 						log.logAndNotify("WARNING: The requested path for --single-directory does not exist locally. Creating requested path within ", syncDir);
-						// Make the required path locally
-						mkdirRecurse(cfg.getValueString("single_directory"));
+						// Make the required --single-directory path locally
+						string singleDirectoryPath = cfg.getValueString("single_directory");
+						mkdirRecurse(singleDirectoryPath);
+						// Configure the applicable permissions for the folder
+						log.vdebug("Setting directory permissions for: ", singleDirectoryPath);
+						singleDirectoryPath.setAttributes(cfg.returnRequiredDirectoryPermisions());
 					}
 				}
 				// perform a --synchronize sync
 				// fullScanRequired = false, for final true-up
 				// but if we have sync_list configured, use syncListConfigured which = true
 				performSync(sync, cfg.getValueString("single_directory"), cfg.getValueBool("download_only"), cfg.getValueBool("local_first"), cfg.getValueBool("upload_only"), LOG_NORMAL, false, syncListConfigured, displaySyncOptions, cfg.getValueBool("monitor"), m);
+				
+				// Write WAL and SHM data to file for this sync
+				log.vdebug("Merge contents of WAL and SHM files into main database file");
+				itemDb.performVacuum();
 			}
 		}
 			
@@ -1077,8 +1144,15 @@ int main(string[] args)
 					if (displayMemoryUsage) {
 						log.displayMemoryUsagePostGC();
 					}
+					
+					// Write WAL and SHM data to file for this loop
+					log.vdebug("Merge contents of WAL and SHM files into main database file");
+					itemDb.performVacuum();
+					
 					// monitor loop complete
 					logOutputMessage = "################################################ LOOP COMPLETE ###############################################";
+					
+					// Handle display options
 					if (displaySyncOptions) {
 						log.log(logOutputMessage);
 					} else {
@@ -1100,10 +1174,22 @@ int main(string[] args)
 
 	// --dry-run temp database cleanup
 	if (cfg.getValueBool("dry_run")) {
+		string dryRunShmFile = cfg.databaseFilePathDryRun ~ "-shm";
+		string dryRunWalFile = cfg.databaseFilePathDryRun ~ "-wal";
 		if (exists(cfg.databaseFilePathDryRun)) {
 			// remove the file
 			log.vdebug("Removing items-dryrun.sqlite3 as dry run operations complete");
+			// remove items-dryrun.sqlite3
 			safeRemove(cfg.databaseFilePathDryRun);	
+		}
+		// silent cleanup of shm and wal files if they exist
+		if (exists(dryRunShmFile)) {
+			// remove items-dryrun.sqlite3-shm
+			safeRemove(dryRunShmFile);	
+		}
+		if (exists(dryRunWalFile)) {
+			// remove items-dryrun.sqlite3-wal
+			safeRemove(dryRunWalFile);	
 		}
 	}
 	
@@ -1372,8 +1458,12 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 	try {
 		assumeNoGC ( () {
 			log.log("Got termination signal, shutting down db connection");
-			// make sure the .wal file is incorporated into the main db
-			destroy(itemDb);
+			// was itemDb initialised?
+			if (itemDb !is null) {
+				// Make sure the .wal file is incorporated into the main db before we exit
+				itemDb.performVacuum();
+				destroy(itemDb);
+			}
 			// Use exit scopes to shutdown OneDrive API
 		})();
 	} catch(Exception e) {}
