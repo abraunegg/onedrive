@@ -177,12 +177,3 @@ sync_business_shared_folders = "true"
 ```text
 sync_business_shared_folders = "false"
 ```
-
-## Known Issues
-Shared folders, shared with you from people outside of your 'organisation' are unable to be synced. This is due to the Microsoft Graph API not presenting these folders.
-
-Shared folders that match this scenario, when you view 'Shared' via OneDrive online, will have a 'world' symbol as per below:
-
-![shared_with_me](./images/shared_with_me.JPG)
-
-This issue is being tracked by: [#966](https://github.com/abraunegg/onedrive/issues/966)
