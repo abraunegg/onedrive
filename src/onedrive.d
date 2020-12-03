@@ -8,6 +8,7 @@ import core.thread, std.conv, std.math;
 import std.algorithm.searching;
 import progress;
 import config;
+import util;
 static import log;
 shared bool debugResponse = false;
 private bool dryRun = false;
@@ -1364,29 +1365,6 @@ final class OneDriveApi
 				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
 			}
 		}
-	}
-	
-	// Parse and display error message received from OneDrive
-	private void displayOneDriveErrorMessage(string message) {
-		log.error("\nERROR: OneDrive returned an error with the following message:");
-		auto errorArray = splitLines(message);
-		log.error("  Error Message: ", errorArray[0]);
-		// Strip cause from error to leave a JSON
-		JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
-		// extra debug
-		log.vdebug("Raw Error Data: ", message);
-		log.vdebug("JSON Message: ", errorMessage);
-		if (errorMessage.type() == JSONType.object) {
-			log.error("  Error Reason:  ", errorMessage["error_description"].str);
-		}
-	}
-	
-	// Parse and display error message received from the local file system
-	private void displayFileSystemErrorMessage(string message) 
-	{
-		log.error("ERROR: The local file system returned an error with the following message:");
-		auto errorArray = splitLines(message);
-		log.error("  Error Message: ", errorArray[0]);
 	}
 }
 

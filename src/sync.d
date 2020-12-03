@@ -5101,34 +5101,6 @@ final class SyncEngine
 		}
 	}
 
-	// Parse and display error message received from OneDrive
-	private void displayOneDriveErrorMessage(string message)
-	{
-		log.error("\nERROR: OneDrive returned an error with the following message:");
-		auto errorArray = splitLines(message);
-		log.error("  Error Message: ", errorArray[0]);
-		// extract 'message' as the reason
-		JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
-		string errorReason = errorMessage["error"]["message"].str;
-		// display reason
-		if (errorReason.startsWith("<!DOCTYPE")) {
-			// a HTML Error Reason was given
-			log.error("  Error Reason:  A HTML Error response was provided. Use debug logging (--verbose --verbose) to view.");
-			log.vdebug(errorReason);
-		} else {
-			// a non HTML Error Reason was given
-			log.error("  Error Reason:  ", errorReason);
-		}
-	}
-	
-	// Parse and display error message received from the local file system
-	private void displayFileSystemErrorMessage(string message) 
-	{
-		log.error("ERROR: The local file system returned an error with the following message:");
-		auto errorArray = splitLines(message);
-		log.error("  Error Message: ", errorArray[0]);
-	}
-	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_move
 	// This function is only called in monitor mode when an move event is coming from
 	// inotify and we try to move the item.

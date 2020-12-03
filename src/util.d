@@ -11,6 +11,7 @@ import std.stdio;
 import std.string;
 import std.algorithm;
 import std.uri;
+import std.json;
 import qxor;
 static import log;
 
@@ -247,6 +248,36 @@ bool containsASCIIHTMLCodes(string path)
 	return m.empty;
 }
 
+// Parse and display error message received from OneDrive
+void displayOneDriveErrorMessage(string message)
+{
+	log.error("\nERROR: OneDrive returned an error with the following message:");
+	auto errorArray = splitLines(message);
+	log.error("  Error Message: ", errorArray[0]);
+	// extract 'message' as the reason
+	JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
+	string errorReason = errorMessage["error"]["message"].str;
+	// display reason
+	if (errorReason.startsWith("<!DOCTYPE")) {
+		// a HTML Error Reason was given
+		log.error("  Error Reason:  A HTML Error response was provided. Use debug logging (--verbose --verbose) to view.");
+		log.vdebug(errorReason);
+	} else {
+		// a non HTML Error Reason was given
+		log.error("  Error Reason:  ", errorReason);
+	}
+}
+
+// Parse and display error message received from the local file system
+void displayFileSystemErrorMessage(string message) 
+{
+	log.error("ERROR: The local file system returned an error with the following message:");
+	auto errorArray = splitLines(message);
+	log.error("  Error Message: ", errorArray[0]);
+}
+
+
+// Unit Tests
 unittest
 {
 	assert(multiGlobMatch(".hidden", ".*"));

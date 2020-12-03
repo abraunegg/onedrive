@@ -268,16 +268,7 @@ struct UploadSession
 		}
 	}
 	
-	// Parse and display error message received from OneDrive
-	private void displayOneDriveErrorMessage(string message) {
-		log.error("ERROR: OneDrive returned an error with the following message:");
-		auto errorArray = splitLines(message);
-		log.error("  Error Message: ", errorArray[0]);
-		// extract 'message' as the reason
-		JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
-		log.error("  Error Reason:  ", errorMessage["error"]["message"].str);	
-	}
-
+	// save session details to temp file
 	private void save()
 	{
 		std.file.write(sessionFilePath, session.toString());
