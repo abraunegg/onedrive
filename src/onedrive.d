@@ -1130,6 +1130,7 @@ final class OneDriveApi
 			} else {
 				// Some other error was returned
 				log.error("  Error Message: ", errorMessage);
+				log.error("  Calling Function: ", getFunctionName!({}));
 			}
 			// return an empty JSON for handling
 			return json;
