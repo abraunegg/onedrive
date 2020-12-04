@@ -403,7 +403,7 @@ final class OneDriveApi
 				response = cast(char[]) read(responseUrl);
 			} catch (OneDriveException e) {
 				// exception generated
-				displayOneDriveErrorMessage(e.msg);
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				return false;
 			}	
 			
@@ -536,7 +536,7 @@ final class OneDriveApi
 					remove(saveToPath);
 				} catch (FileException e) {
 					// display the error message
-					displayFileSystemErrorMessage(e.msg);
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				} 
 			}	
 		}
@@ -554,7 +554,7 @@ final class OneDriveApi
 				newPath.setAttributes(cfg.returnRequiredDirectoryPermisions());
 			} catch (FileException e) {
 				// display the error message
-				displayFileSystemErrorMessage(e.msg);
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 			}
 		}
 		
@@ -781,7 +781,7 @@ final class OneDriveApi
 			response = post(tokenUrl, postData);
 		} catch (OneDriveException e) {
 			// an error was generated
-			displayOneDriveErrorMessage(e.msg);
+			displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 		}
 		
 		if (response.type() == JSONType.object) {
@@ -797,7 +797,7 @@ final class OneDriveApi
 						cfg.refreshTokenFilePath.setAttributes(cfg.returnRequiredFilePermisions());
 					} catch (FileException e) {
 						// display the error message
-						displayFileSystemErrorMessage(e.msg);
+						displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 					}
 				}
 				if (printAccessToken) writeln("New access token: ", accessToken);
@@ -940,7 +940,7 @@ final class OneDriveApi
 				writeln();
 				// Reset onProgress to not display anything for next download done using exit scope
 			} catch (CurlException e) {
-				displayOneDriveErrorMessage(e.msg);
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 			}
 			// free progress bar memory
 			p = null;
@@ -950,7 +950,7 @@ final class OneDriveApi
 				// try and catch any curl error
 				http.perform();
 			} catch (CurlException e) {
-				displayOneDriveErrorMessage(e.msg);
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 			}
 		}
 		

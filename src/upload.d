@@ -211,7 +211,7 @@ struct UploadSession
 						// insert a new line as well, so that the below error is inserted on the console in the right location
 						log.vlog("\nFragment upload failed - received an exception response from OneDrive");
 						// display what the error is
-						displayOneDriveErrorMessage(e.msg);
+						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 						// retry fragment upload in case error is transient
 						log.vlog("Retrying fragment upload");
 					}
@@ -228,7 +228,7 @@ struct UploadSession
 						// OneDrive threw another error on retry
 						log.vlog("Retry to upload fragment failed");
 						// display what the error is
-						displayOneDriveErrorMessage(e.msg);
+						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 						// set response to null as the fragment upload was in error twice
 						response = null;
 					}

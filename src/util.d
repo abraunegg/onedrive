@@ -12,6 +12,7 @@ import std.string;
 import std.algorithm;
 import std.uri;
 import std.json;
+import std.traits;
 import qxor;
 static import log;
 
@@ -249,33 +250,65 @@ bool containsASCIIHTMLCodes(string path)
 }
 
 // Parse and display error message received from OneDrive
-void displayOneDriveErrorMessage(string message)
+void displayOneDriveErrorMessage(string message, string callingFunction)
 {
 	log.error("\nERROR: OneDrive returned an error with the following message:");
 	auto errorArray = splitLines(message);
 	log.error("  Error Message: ", errorArray[0]);
-	// extract 'message' as the reason
+	// Extract 'message' as the reason
 	JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
-	string errorReason = errorMessage["error"]["message"].str;
-	// display reason
-	if (errorReason.startsWith("<!DOCTYPE")) {
-		// a HTML Error Reason was given
-		log.error("  Error Reason:  A HTML Error response was provided. Use debug logging (--verbose --verbose) to view.");
-		log.vdebug(errorReason);
-	} else {
-		// a non HTML Error Reason was given
-		log.error("  Error Reason:  ", errorReason);
+	// extra debug
+	log.vdebug("Raw Error Data: ", message);
+	log.vdebug("JSON Message: ", errorMessage);
+	
+	// What is the reason for the error
+	if (errorMessage.type() == JSONType.object) {
+		// configure the error reason
+		string errorReason;
+		try {
+			// Use error_description as reason
+			errorReason = errorMessage["error_description"].str;
+		} catch (JSONException e) {
+			// we dont want to do anything here
+		}
+		
+		try {
+			// Use ["error"]["message"] as reason
+			errorReason = errorMessage["error"]["message"].str;	
+		} catch (JSONException e) {
+			// we dont want to do anything here
+		}
+		
+		// Display the error reason
+		if (errorReason.startsWith("<!DOCTYPE")) {
+			// a HTML Error Reason was given
+			log.error("  Error Reason:  A HTML Error response was provided. Use debug logging (--verbose --verbose) to view this error");
+			log.vdebug(errorReason);
+		} else {
+			// a non HTML Error Reason was given
+			log.error("  Error Reason:  ", errorReason);
+		}
 	}
+	
+	// Where in the code was this error generated
+	log.error("  Calling Function: ", callingFunction);
 }
 
 // Parse and display error message received from the local file system
-void displayFileSystemErrorMessage(string message) 
+void displayFileSystemErrorMessage(string message, string callingFunction) 
 {
 	log.error("ERROR: The local file system returned an error with the following message:");
 	auto errorArray = splitLines(message);
-	log.error("  Error Message: ", errorArray[0]);
+	// What was the error message
+	log.error("  Error Message:    ", errorArray[0]);
+	// Where in the code was this error generated
+	log.error("  Calling Function: ", callingFunction);
 }
 
+// Get the function name that is being called to assist with identifying where an error is being generated
+string getFunctionName(alias func)() {
+    return __traits(identifier, __traits(parent, func)) ~ "()";
+}
 
 // Unit Tests
 unittest

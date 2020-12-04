@@ -151,7 +151,7 @@ final class Monitor
 			// catch any error which is generated
 			} catch (std.file.FileException e) {
 				// Standard filesystem error
-				displayFileSystemErrorMessage(e.msg);
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				return;
 			} catch (Exception e) {
 				// Issue #1154 handling
@@ -166,7 +166,7 @@ final class Monitor
 					exit(-1);
 				} else {
 					// some other error
-					displayFileSystemErrorMessage(e.msg);
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 					return;
 				}
 			}
