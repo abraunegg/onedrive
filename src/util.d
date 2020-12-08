@@ -252,7 +252,7 @@ bool containsASCIIHTMLCodes(string path)
 // Parse and display error message received from OneDrive
 void displayOneDriveErrorMessage(string message, string callingFunction)
 {
-	log.error("\nERROR: OneDrive returned an error with the following message:");
+	log.error("\nERROR: Microsoft OneDrive API returned an error with the following message:");
 	auto errorArray = splitLines(message);
 	log.error("  Error Message:    ", errorArray[0]);
 	// Extract 'message' as the reason
@@ -311,8 +311,8 @@ void displayOneDriveErrorMessage(string message, string callingFunction)
 		}
 		
 		// Display the date and request id if available
-		if (requestDate != "") log.error("  Error Date:       ", requestDate);
-		if (requestId != "")   log.error("  Error Request ID: ", requestId);
+		if (requestDate != "") log.error("  Error Timestamp:  ", requestDate);
+		if (requestId != "")   log.error("  API Request ID:   ", requestId);
 	}
 	
 	// Where in the code was this error generated
@@ -332,7 +332,7 @@ void displayFileSystemErrorMessage(string message, string callingFunction)
 
 // Get the function name that is being called to assist with identifying where an error is being generated
 string getFunctionName(alias func)() {
-    return __traits(identifier, __traits(parent, func)) ~ "()";
+    return __traits(identifier, __traits(parent, func)) ~ "()\n";
 }
 
 // Unit Tests

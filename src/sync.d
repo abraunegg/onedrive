@@ -1368,13 +1368,14 @@ final class SyncEngine
 				try {
 					// Fetch the changes relative to the path id we want to query
 					log.vdebug("Attempting query 'changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink)'");
-					log.vdebug("driveId: ", driveId);
-					log.vdebug("idToQuery: ", idToQuery);
-					log.vdebug("deltaLink: ", deltaLink);
+					log.vdebug("driveId:            ", driveId);
+					log.vdebug("idToQuery:          ", idToQuery);
+					log.vdebug("Previous deltaLink: ", deltaLink);
 					// changes with or without deltaLink
 					changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink);
 					if (changes.type() == JSONType.object) {
 						log.vdebug("Query 'changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink)' performed successfully");
+						log.vdebug("OneDrive API /delta response: ", changes);
 					}
 				} catch (OneDriveException e) {
 					// OneDrive threw an error
@@ -5587,9 +5588,9 @@ final class SyncEngine
 				// OneDrive threw an error
 				log.vdebug("Error query: changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)");
 				log.vdebug("OneDrive threw an error when querying for these changes:");
-				log.vdebug("driveId: ", driveId);
-				log.vdebug("idToQuery: ", idToQuery);
-				log.vdebug("deltaLink: ", deltaLink);
+				log.vdebug("driveId:            ", driveId);
+				log.vdebug("idToQuery:          ", idToQuery);
+				log.vdebug("Previous deltaLink: ", deltaLink);
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				return;				
 			}
