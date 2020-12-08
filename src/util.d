@@ -254,7 +254,7 @@ void displayOneDriveErrorMessage(string message, string callingFunction)
 {
 	log.error("\nERROR: OneDrive returned an error with the following message:");
 	auto errorArray = splitLines(message);
-	log.error("  Error Message: ", errorArray[0]);
+	log.error("  Error Message:    ", errorArray[0]);
 	// Extract 'message' as the reason
 	JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
 	// extra debug
@@ -265,6 +265,10 @@ void displayOneDriveErrorMessage(string message, string callingFunction)
 	if (errorMessage.type() == JSONType.object) {
 		// configure the error reason
 		string errorReason;
+		string requestDate;
+		string requestId;
+		
+		// set the reason for the error
 		try {
 			// Use error_description as reason
 			errorReason = errorMessage["error_description"].str;
@@ -272,6 +276,7 @@ void displayOneDriveErrorMessage(string message, string callingFunction)
 			// we dont want to do anything here
 		}
 		
+		// set the reason for the error
 		try {
 			// Use ["error"]["message"] as reason
 			errorReason = errorMessage["error"]["message"].str;	
@@ -286,8 +291,28 @@ void displayOneDriveErrorMessage(string message, string callingFunction)
 			log.vdebug(errorReason);
 		} else {
 			// a non HTML Error Reason was given
-			log.error("  Error Reason:  ", errorReason);
+			log.error("  Error Reason:     ", errorReason);
 		}
+		
+		// Get the date of request if available
+		try {
+			// Use ["error"]["innerError"]["date"] as date
+			requestDate = errorMessage["error"]["innerError"]["date"].str;	
+		} catch (JSONException e) {
+			// we dont want to do anything here
+		}
+		
+		// Get the request-id if available
+		try {
+			// Use ["error"]["innerError"]["request-id"] as request-id
+			requestId = errorMessage["error"]["innerError"]["request-id"].str;	
+		} catch (JSONException e) {
+			// we dont want to do anything here
+		}
+		
+		// Display the date and request id if available
+		if (requestDate != "") log.error("  Error Date:       ", requestDate);
+		if (requestId != "")   log.error("  Error Request ID: ", requestId);
 	}
 	
 	// Where in the code was this error generated
