@@ -1453,6 +1453,12 @@ final class SyncEngine
 						}
 					} else {
 						// Default operation if not 404, 410, 429, 500 or 504 errors
+						// Issue #1174 handling where stored deltaLink is invalid
+						if ((e.httpStatusCode == 400) && (deltaLink != "")) {
+							// Set deltaLink to an empty entry so invalid URL is not reused
+							string emptyDeltaLink = "";
+							itemdb.setDeltaLink(driveId, idToQuery, emptyDeltaLink);
+						}
 						// display what the error is
 						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 						return;
