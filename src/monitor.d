@@ -151,7 +151,7 @@ final class Monitor
 			// catch any error which is generated
 			} catch (std.file.FileException e) {
 				// Standard filesystem error
-				displayFileSystemErrorMessage(e.msg);
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				return;
 			} catch (Exception e) {
 				// Issue #1154 handling
@@ -166,7 +166,7 @@ final class Monitor
 					exit(-1);
 				} else {
 					// some other error
-					displayFileSystemErrorMessage(e.msg);
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 					return;
 				}
 			}
@@ -387,13 +387,5 @@ final class Monitor
 				cookieToPath.remove(cookie);
 			}
 		}
-	}
-	
-	// Parse and display error message received from the local file system
-	private void displayFileSystemErrorMessage(string message) 
-	{
-		log.error("ERROR: The local file system returned an error with the following message:");
-		auto errorArray = splitLines(message);
-		log.error("  Error Message: ", errorArray[0]);
 	}
 }
