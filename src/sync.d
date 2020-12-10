@@ -2738,20 +2738,34 @@ final class SyncEngine
 		final switch (item.type) {
 		case ItemType.file:
 			if (isFile(path)) {
-				SysTime localModifiedTime = timeLastModified(path).toUTC();
-				SysTime itemModifiedTime = item.mtime;
-				// HACK: reduce time resolution to seconds before comparing
-				localModifiedTime.fracSecs = Duration.zero;
-				itemModifiedTime.fracSecs = Duration.zero;
-				if (localModifiedTime == itemModifiedTime) {
-					return true;
-				} else {
-					log.vlog("The local item has a different modified time ", localModifiedTime, " when compared to ", itemSource, " modified time ", itemModifiedTime);
+				// can we actually read the local file?
+				bool fileReadable = false;
+				try {
+					auto file = File(path, "rb");
+					fileReadable = true;
+				} catch (Exception e) {
+					// display the error message
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					return false;
 				}
-				if (testFileHash(path, item)) {
-					return true;
-				} else {
-					log.vlog("The local item has a different hash when compared to ", itemSource, " item hash");
+			
+				if (fileReadable) {
+					// local file is readable
+					SysTime localModifiedTime = timeLastModified(path).toUTC();
+					SysTime itemModifiedTime = item.mtime;
+					// HACK: reduce time resolution to seconds before comparing
+					localModifiedTime.fracSecs = Duration.zero;
+					itemModifiedTime.fracSecs = Duration.zero;
+					if (localModifiedTime == itemModifiedTime) {
+						return true;
+					} else {
+						log.vlog("The local item has a different modified time ", localModifiedTime, " when compared to ", itemSource, " modified time ", itemModifiedTime);
+					}
+					if (testFileHash(path, item)) {
+						return true;
+					} else {
+						log.vlog("The local item has a different hash when compared to ", itemSource, " item hash");
+					}	
 				}
 			} else {
 				log.vlog("The local item is a directory but should be a file");
@@ -3319,7 +3333,7 @@ final class SyncEngine
 						log.vlog("The file last modified time has changed");					
 						string eTag = item.eTag;
 						
-						// perform file hash tests
+						// perform file hash tests - has the content of the file changed?
 						if (!testFileHash(path, item)) {
 							log.vlog("The file content has changed");
 							write("Uploading modified file ", path, " ... ");
