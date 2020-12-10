@@ -2739,17 +2739,7 @@ final class SyncEngine
 		case ItemType.file:
 			if (isFile(path)) {
 				// can we actually read the local file?
-				bool fileReadable = false;
-				try {
-					auto file = File(path, "rb");
-					fileReadable = true;
-				} catch (Exception e) {
-					// display the error message
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-					return false;
-				}
-			
-				if (fileReadable) {
+				if (readLocalFile(path)){
 					// local file is readable
 					SysTime localModifiedTime = timeLastModified(path).toUTC();
 					SysTime itemModifiedTime = item.mtime;
@@ -2766,6 +2756,9 @@ final class SyncEngine
 					} else {
 						log.vlog("The local item has a different hash when compared to ", itemSource, " item hash");
 					}	
+				} else {
+					// Unable to read local file
+					return false;
 				}
 			} else {
 				log.vlog("The local item is a directory but should be a file");
@@ -3311,17 +3304,7 @@ final class SyncEngine
 		if (exists(path)) {
 			if (isFile(path)) {
 				// can we actually read the local file?
-				bool fileReadable = false;
-				try {
-					auto file = File(path, "rb");
-					fileReadable = true;
-				} catch (Exception e) {
-					// display the error message
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-					uploadFailed = true;
-				}
-				
-				if (fileReadable) {
+				if (readLocalFile(path)){
 					// file is readable
 					SysTime localModifiedTime = timeLastModified(path).toUTC();
 					SysTime itemModifiedTime = item.mtime;
@@ -3629,7 +3612,8 @@ final class SyncEngine
 						log.vlog("The file has not changed");
 					}
 				} else {
-					log.vlog("The file is not readable - skipped");
+					//The file is not readable - skipped
+					uploadFailed = true;	
 				}
 			} else {
 				log.vlog("The item was a file but now is a directory");
