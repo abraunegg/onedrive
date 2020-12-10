@@ -65,7 +65,7 @@ private {
 	string driveByIdUrl = globalGraphEndpoint ~ "/v1.0/drives/";
 	
 	// What is 'shared with me' Query
-	string sharedWithMe = globalGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+	string sharedWithMeUrl = globalGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
 	
 	// Item Queries
 	string itemByIdUrl = globalGraphEndpoint ~ "/v1.0/me/drive/items/";
@@ -196,7 +196,7 @@ final class OneDriveApi
 				siteSearchUrl = usl4GraphEndpoint ~ "/v1.0/sites?search";
 				siteDriveUrl = usl4GraphEndpoint ~ "/v1.0/sites/";
 				// Shared With Me
-				sharedWithMe = usl4GraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				sharedWithMeUrl = usl4GraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
 				break;
 			case "USL5":
 				log.log("Configuring Azure AD for US Government Endpoints (DOD)");
@@ -222,7 +222,7 @@ final class OneDriveApi
 				siteSearchUrl = usl5GraphEndpoint ~ "/v1.0/sites?search";
 				siteDriveUrl = usl5GraphEndpoint ~ "/v1.0/sites/";
 				// Shared With Me
-				sharedWithMe = usl5GraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				sharedWithMeUrl = usl5GraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
 				break;
 			case "DE":
 				log.log("Configuring Azure AD Germany");
@@ -248,7 +248,7 @@ final class OneDriveApi
 				siteSearchUrl = deGraphEndpoint ~ "/v1.0/sites?search";
 				siteDriveUrl = deGraphEndpoint ~ "/v1.0/sites/";
 				// Shared With Me
-				sharedWithMe = deGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				sharedWithMeUrl = deGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
 				break;
 			case "CN":
 				log.log("Configuring AD China operated by 21Vianet");
@@ -274,12 +274,33 @@ final class OneDriveApi
 				siteSearchUrl = cnGraphEndpoint ~ "/v1.0/sites?search";
 				siteDriveUrl = cnGraphEndpoint ~ "/v1.0/sites/";
 				// Shared With Me
-				sharedWithMe = cnGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				sharedWithMeUrl = cnGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
 				break;
 			// Default - all other entries 
 			default:
 				log.log("Unknown Azure AD Endpoint request - using Global Azure AD Endpoints");
 		}
+		
+		// Debug output of configured URL's
+		// Authentication
+		log.vdebug("Configured authUrl:          ", authUrl);
+		log.vdebug("Configured redirectUrl:      ", redirectUrl);
+		log.vdebug("Configured tokenUrl:         ", tokenUrl);
+		
+		// Drive Queries
+		log.vdebug("Configured driveUrl:         ", driveUrl);
+		log.vdebug("Configured driveByIdUrl:     ", driveByIdUrl);
+		
+		// Shared With Me
+		log.vdebug("Configured sharedWithMeUrl:  ", sharedWithMeUrl);
+		
+		// Item Queries
+		log.vdebug("Configured itemByIdUrl:      ", itemByIdUrl);
+		log.vdebug("Configured itemByPathUrl:    ", itemByPathUrl);
+		
+		// SharePoint Queries
+		log.vdebug("Configured siteSearchUrl:    ", siteSearchUrl);
+		log.vdebug("Configured siteDriveUrl:     ", siteDriveUrl);
 		
 		// Configure the User Agent string
 		if (cfg.getValueString("user_agent") == "") {
@@ -470,7 +491,7 @@ final class OneDriveApi
 	JSONValue getSharedWithMe()
 	{
 		checkAccessTokenExpired();
-		return get(sharedWithMe);
+		return get(sharedWithMeUrl);
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_get
