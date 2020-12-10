@@ -2758,6 +2758,7 @@ final class SyncEngine
 					}	
 				} else {
 					// Unable to read local file
+					log.log("Unable to determine the sync state of this file as it cannot be read (file permissions or file corruption): ", path);
 					return false;
 				}
 			} else {
@@ -3613,6 +3614,7 @@ final class SyncEngine
 					}
 				} else {
 					//The file is not readable - skipped
+					log.log("Skipping processing this file as it cannot be read (file permissions or file corruption): ", path);
 					uploadFailed = true;	
 				}
 			} else {
@@ -4916,6 +4918,9 @@ final class SyncEngine
 					uploadFailed = true;
 					return;
 				}
+			} else {
+				// unable to read local file
+				log.log("Skipping uploading this file as it cannot be read (file permissions or file corruption): ", path);
 			}
 		} else {
 			// Upload of the new file did not occur .. why?
