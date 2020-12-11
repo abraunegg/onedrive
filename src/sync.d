@@ -297,7 +297,7 @@ final class SyncEngine
 			log.vdebug("oneDriveDetails	= onedrive.getDefaultDrive() generated a OneDriveException");
 			if (e.httpStatusCode == 400) {
 				// OneDrive responded with 400 error: Bad Request
-				displayOneDriveErrorMessage(e.msg);
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				
 				// Check this
 				if (cfg.getValueString("drive_id").length) {
@@ -308,7 +308,7 @@ final class SyncEngine
 			}
 			if (e.httpStatusCode == 401) {
 				// HTTP request returned status code 401 (Unauthorized)
-				displayOneDriveErrorMessage(e.msg);
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
 				// Must exit here
 				exit(-1);
@@ -324,7 +324,7 @@ final class SyncEngine
 			}
 			if (e.httpStatusCode >= 500) {
 				// There was a HTTP 5xx Server Side Error
-				displayOneDriveErrorMessage(e.msg);
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				// Must exit here
 				exit(-1);
 			}
@@ -337,7 +337,7 @@ final class SyncEngine
 			log.vdebug("oneDriveRootDetails = onedrive.getDefaultRoot() generated a OneDriveException");
 			if (e.httpStatusCode == 400) {
 				// OneDrive responded with 400 error: Bad Request
-				displayOneDriveErrorMessage(e.msg);
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				// Check this
 				if (cfg.getValueString("drive_id").length) {
 					log.error("\nERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
@@ -347,7 +347,7 @@ final class SyncEngine
 			}
 			if (e.httpStatusCode == 401) {
 				// HTTP request returned status code 401 (Unauthorized)
-				displayOneDriveErrorMessage(e.msg);
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
 				// Must exit here
 				exit(-1);
@@ -363,7 +363,7 @@ final class SyncEngine
 			}
 			if (e.httpStatusCode >= 500) {
 				// There was a HTTP 5xx Server Side Error
-				displayOneDriveErrorMessage(e.msg);
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				// Must exit here
 				exit(-1);
 			}
@@ -1355,7 +1355,7 @@ final class SyncEngine
 					// HTTP request returned status code 500 (Internal Server Error)
 					if (e.httpStatusCode == 500) {
 						// display what the error is
-						displayOneDriveErrorMessage(e.msg);
+						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 						return;
 					}
 					
@@ -1380,13 +1380,13 @@ final class SyncEngine
 							// display what the error is
 							log.vdebug("Query Error: changes = generateDeltaResponse(driveId, idToQuery) on re-try after delay");
 							// error was not a 504 this time
-							displayOneDriveErrorMessage(e.msg);
+							displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 							return;
 						}
 					} else {
 						// Default operation if not 404, 410, 429, 500 or 504 errors
 						// display what the error is
-						displayOneDriveErrorMessage(e.msg);
+						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 						return;
 					}
 				}
@@ -1396,13 +1396,14 @@ final class SyncEngine
 				try {
 					// Fetch the changes relative to the path id we want to query
 					log.vdebug("Attempting query 'changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink)'");
-					log.vdebug("driveId: ", driveId);
-					log.vdebug("idToQuery: ", idToQuery);
-					log.vdebug("deltaLink: ", deltaLink);
+					log.vdebug("driveId:            ", driveId);
+					log.vdebug("idToQuery:          ", idToQuery);
+					log.vdebug("Previous deltaLink: ", deltaLink);
 					// changes with or without deltaLink
 					changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink);
 					if (changes.type() == JSONType.object) {
 						log.vdebug("Query 'changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink)' performed successfully");
+						log.vdebug("OneDrive API /delta response: ", changes);
 					}
 				} catch (OneDriveException e) {
 					// OneDrive threw an error
@@ -1435,7 +1436,7 @@ final class SyncEngine
 					// HTTP request returned status code 500 (Internal Server Error)
 					if (e.httpStatusCode == 500) {
 						// display what the error is
-						displayOneDriveErrorMessage(e.msg);
+						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 						return;
 					}
 					
@@ -1469,19 +1470,25 @@ final class SyncEngine
 									log.vdebug("Query 'changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink)' performed successfully on re-try");
 								} catch (OneDriveException e) {
 									// Tried 3 times, give up
-									displayOneDriveErrorMessage(e.msg);
+									displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 									return;
 								}
 							} else {
 								// error was not a 504 this time
-								displayOneDriveErrorMessage(e.msg);
+								displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 								return;
 							}
 						}
 					} else {
 						// Default operation if not 404, 410, 429, 500 or 504 errors
+						// Issue #1174 handling where stored deltaLink is invalid
+						if ((e.httpStatusCode == 400) && (deltaLink != "")) {
+							// Set deltaLink to an empty entry so invalid URL is not reused
+							string emptyDeltaLink = "";
+							itemdb.setDeltaLink(driveId, idToQuery, emptyDeltaLink);
+						}
 						// display what the error is
-						displayOneDriveErrorMessage(e.msg);
+						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 						return;
 					}
 				}
@@ -1534,7 +1541,7 @@ final class SyncEngine
 					// HTTP request returned status code 500 (Internal Server Error)
 					if (e.httpStatusCode == 500) {
 						// display what the error is
-						displayOneDriveErrorMessage(e.msg);
+						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 						return;
 					}
 					
@@ -1568,19 +1575,19 @@ final class SyncEngine
 									log.vdebug("Query 'changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
 								} catch (OneDriveException e) {
 									// Tried 3 times, give up
-									displayOneDriveErrorMessage(e.msg);
+									displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 									return;
 								}
 							} else {
 								// error was not a 504 this time
-								displayOneDriveErrorMessage(e.msg);
+								displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 								return;
 							}
 						}
 					} else {
 						// Default operation if not 404, 410, 429, 500 or 504 errors
 						// display what the error is
-						displayOneDriveErrorMessage(e.msg);
+						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 						return;
 					}
 				}
@@ -1806,12 +1813,12 @@ final class SyncEngine
 														log.vlog("Remote change discarded - item cannot be found");
 													} else {
 														// not a 404
-														displayOneDriveErrorMessage(e.msg);
+														displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 													}
 												}
 											} else {
 												// not a 404 or a 429
-												displayOneDriveErrorMessage(e.msg);
+												displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 											}
 										}
 
@@ -2477,7 +2484,7 @@ final class SyncEngine
 					}
 				} catch (FileException e) {
 					// display the error message
-					displayFileSystemErrorMessage(e.msg);
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 					// flag that this failed
 					downloadFailed = true;
 					return;
@@ -2539,7 +2546,7 @@ final class SyncEngine
 					setTimes(newPath, newItem.mtime, newItem.mtime);
 				} catch (FileException e) {
 					// display the error message
-					displayFileSystemErrorMessage(e.msg);
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				}
 			}
 		} 
@@ -2652,7 +2659,7 @@ final class SyncEngine
 									retryAttempts++;
 								}
 							} else {
-								displayOneDriveErrorMessage(e.msg);
+								displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 							}
 						}
 					}
@@ -2687,7 +2694,7 @@ final class SyncEngine
 									retryAttempts++;
 								}
 							} else {
-								displayOneDriveErrorMessage(e.msg);
+								displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 							}
 						}
 					}
@@ -2695,13 +2702,13 @@ final class SyncEngine
 			} catch (FileException e) {
 				// There was a file system error
 				// display the error message
-				displayFileSystemErrorMessage(e.msg);							
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				downloadFailed = true;
 				return;
 			} catch (std.exception.ErrnoException e) {
 				// There was a file system error
 				// display the error message
-				displayFileSystemErrorMessage(e.msg);							
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				downloadFailed = true;
 				return;
 			}
@@ -2720,7 +2727,7 @@ final class SyncEngine
 						setTimes(path, item.mtime, item.mtime);
 					} catch (FileException e) {
 						// display the error message
-						displayFileSystemErrorMessage(e.msg);
+						displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 					}
 				} else {
 					// size error?
@@ -2836,7 +2843,7 @@ final class SyncEngine
 							rmdirRecurse(path);
 						} catch (FileException e) {
 							// display the error message
-							displayFileSystemErrorMessage(e.msg);
+							displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 						}
 					}
 				}
@@ -3387,14 +3394,14 @@ final class SyncEngine
 										} else {
 											// display what the error is
 											writeln("skipped.");
-											displayOneDriveErrorMessage(e.msg);
+											displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 											uploadFailed = true;
 											return;
 										}
 									} catch (FileException e) {
 										// display the error message
 										writeln("skipped.");
-										displayFileSystemErrorMessage(e.msg);
+										displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 										uploadFailed = true;
 										return;
 									}
@@ -3424,14 +3431,14 @@ final class SyncEngine
 										} else {
 											// display what the error is
 											writeln("skipped.");
-											displayOneDriveErrorMessage(e.msg);
+											displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 											uploadFailed = true;
 											return;
 										}
 									} catch (FileException e) {
 										// display the error message
 										writeln("skipped.");
-										displayFileSystemErrorMessage(e.msg);
+										displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 										uploadFailed = true;
 										return;
 									}
@@ -3482,14 +3489,14 @@ final class SyncEngine
 										} else {
 											// display what the error is
 											writeln("skipped.");
-											displayOneDriveErrorMessage(e.msg);
+											displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 											uploadFailed = true;
 											return;
 										}
 									} catch (FileException e) {
 										// display the error message
 										writeln("skipped.");
-										displayFileSystemErrorMessage(e.msg);
+										displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 										uploadFailed = true;
 										return;
 									}
@@ -3544,14 +3551,14 @@ final class SyncEngine
 												} else {
 													// display what the error is
 													writeln("skipped.");
-													displayOneDriveErrorMessage(e.msg);
+													displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
 												writeln("skipped.");
-												displayFileSystemErrorMessage(e.msg);
+												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
 											}
@@ -3880,7 +3887,7 @@ final class SyncEngine
 					}
 				} catch (FileException e) {
 					// display the error message
-					displayFileSystemErrorMessage(e.msg);
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 					return;
 				}
 			} else {
@@ -4055,7 +4062,7 @@ final class SyncEngine
 							} else {
 								// some other error from OneDrive was returned - display what it is
 								log.error("OneDrive generated an error when creating this path: ", path);
-								displayOneDriveErrorMessage(e.msg);
+								displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 								return;
 							}
 						}
@@ -4291,14 +4298,14 @@ final class SyncEngine
 										} else {
 											// display what the error is
 											writeln("skipped.");
-											displayOneDriveErrorMessage(e.msg);
+											displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 											uploadFailed = true;
 											return;
 										}
 									} catch (FileException e) {
 										// display the error message
 										writeln("skipped.");
-										displayFileSystemErrorMessage(e.msg);
+										displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 										uploadFailed = true;
 										return;
 									}
@@ -4348,7 +4355,7 @@ final class SyncEngine
 														} else {
 															// display what the error is
 															writeln("skipped.");
-															displayOneDriveErrorMessage(e.msg);
+															displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 															uploadFailed = true;
 															return;
 														}
@@ -4356,14 +4363,14 @@ final class SyncEngine
 												} else {
 													// display what the error is
 													writeln("skipped.");
-													displayOneDriveErrorMessage(e.msg);
+													displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
 												writeln("skipped.");
-												displayFileSystemErrorMessage(e.msg);
+												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
 											}
@@ -4398,14 +4405,14 @@ final class SyncEngine
 												} else {
 													// display what the error is
 													writeln("skipped.");
-													displayOneDriveErrorMessage(e.msg);
+													displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
 												writeln("skipped.");
-												displayFileSystemErrorMessage(e.msg);
+												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
 											}
@@ -4441,14 +4448,14 @@ final class SyncEngine
 											} else {
 												// display what the error is
 												writeln("skipped.");
-												displayOneDriveErrorMessage(e.msg);
+												displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
 											}
 										} catch (FileException e) {
 											// display the error message
 											writeln("skipped.");
-											displayFileSystemErrorMessage(e.msg);
+											displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 											uploadFailed = true;
 											return;
 										}
@@ -4636,7 +4643,7 @@ final class SyncEngine
 															// error uploading file
 															// display what the error is
 															writeln("skipped.");
-															displayOneDriveErrorMessage(e.msg);
+															displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 															uploadFailed = true;
 															return;
 														}
@@ -4644,14 +4651,14 @@ final class SyncEngine
 												} else {
 													// display what the error is
 													writeln("skipped.");
-													displayOneDriveErrorMessage(e.msg);
+													displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
 												writeln("skipped.");
-												displayFileSystemErrorMessage(e.msg);
+												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
 											}
@@ -4690,14 +4697,14 @@ final class SyncEngine
 													// error uploading file
 													// display what the error is
 													writeln("skipped.");
-													displayOneDriveErrorMessage(e.msg);
+													displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
 												writeln("skipped.");
-												displayFileSystemErrorMessage(e.msg);
+												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
 											}
@@ -4772,14 +4779,14 @@ final class SyncEngine
 													// error uploading file
 													// display what the error is
 													writeln("skipped.");
-													displayOneDriveErrorMessage(e.msg);
+													displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
 												writeln("skipped.");
-												displayFileSystemErrorMessage(e.msg);
+												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
 											}
@@ -4809,14 +4816,14 @@ final class SyncEngine
 													} else {
 														// display what the error is
 														writeln("skipped.");
-														displayOneDriveErrorMessage(e.msg);
+														displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 														uploadFailed = true;
 														return;
 													}
 												} catch (FileException e) {
 													// display the error message
 													writeln("skipped.");
-													displayFileSystemErrorMessage(e.msg);
+													displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
 												}
@@ -4838,14 +4845,14 @@ final class SyncEngine
 													} else {
 														// display what the error is
 														writeln("skipped.");
-														displayOneDriveErrorMessage(e.msg);
+														displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 														uploadFailed = true;
 														return;
 													}
 												} catch (FileException e) {
 													// display the error message
 													writeln("skipped.");
-													displayFileSystemErrorMessage(e.msg);
+													displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
 												}
@@ -5011,7 +5018,7 @@ final class SyncEngine
 							} catch (OneDriveException e) {
 								// display what the error is
 								log.vdebug("A further error was generated when attempting a reverse delete of objects from OneDrive");
-								displayOneDriveErrorMessage(e.msg);
+								displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 								return;
 							}
 						}
@@ -5039,7 +5046,7 @@ final class SyncEngine
 							} catch (OneDriveException e) {
 								// display what the error is
 								log.vdebug("A further error was generated when attempting a reverse delete of objects from OneDrive");
-								displayOneDriveErrorMessage(e.msg);
+								displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 								return;
 							}
 						}
@@ -5047,7 +5054,7 @@ final class SyncEngine
 						// Not a 403 response & OneDrive Business Account / O365 Shared Folder / Library
 						log.vdebug("onedrive.deleteById generated an error response when attempting to delete object by item id");
 						// display what the error is
-						displayOneDriveErrorMessage(e.msg);
+						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 						return;
 					}
 				}
@@ -5129,34 +5136,6 @@ final class SyncEngine
 		}
 	}
 
-	// Parse and display error message received from OneDrive
-	private void displayOneDriveErrorMessage(string message)
-	{
-		log.error("\nERROR: OneDrive returned an error with the following message:");
-		auto errorArray = splitLines(message);
-		log.error("  Error Message: ", errorArray[0]);
-		// extract 'message' as the reason
-		JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
-		string errorReason = errorMessage["error"]["message"].str;
-		// display reason
-		if (errorReason.startsWith("<!DOCTYPE")) {
-			// a HTML Error Reason was given
-			log.error("  Error Reason:  A HTML Error response was provided. Use debug logging (--verbose --verbose) to view.");
-			log.vdebug(errorReason);
-		} else {
-			// a non HTML Error Reason was given
-			log.error("  Error Reason:  ", errorReason);
-		}
-	}
-	
-	// Parse and display error message received from the local file system
-	private void displayFileSystemErrorMessage(string message) 
-	{
-		log.error("ERROR: The local file system returned an error with the following message:");
-		auto errorArray = splitLines(message);
-		log.error("  Error Message: ", errorArray[0]);
-	}
-	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_move
 	// This function is only called in monitor mode when an move event is coming from
 	// inotify and we try to move the item.
@@ -5303,7 +5282,7 @@ final class SyncEngine
 				log.log(e.msg);
 			} else {
 				// display what the error is
-				displayOneDriveErrorMessage(e.msg);
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 			}
 		}
 	}
@@ -5362,7 +5341,7 @@ final class SyncEngine
 				return;
 			} else {
 				// display what the error is
-				displayOneDriveErrorMessage(e.msg);
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				return;
 			}
 		}
@@ -5386,7 +5365,7 @@ final class SyncEngine
 					} catch (OneDriveException e) {
 						log.error("ERROR: Query of OneDrive for Office Site ID failed");
 						// display what the error is
-						displayOneDriveErrorMessage(e.msg);
+						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 						return;
 					}
 					
@@ -5465,7 +5444,7 @@ final class SyncEngine
 				return;
 			} else {
 				// display what the error is
-				displayOneDriveErrorMessage(e.msg);
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				return;
 			}
 		} 
@@ -5520,7 +5499,7 @@ final class SyncEngine
 					fileDetails = onedrive.getFileDetails(item.driveId, item.id);
 				} catch (OneDriveException e) {
 					// display what the error is
-					displayOneDriveErrorMessage(e.msg);
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					return;
 				}
 
@@ -5586,7 +5565,7 @@ final class SyncEngine
 				return;
 			} else {
 				// display what the error is
-				displayOneDriveErrorMessage(e.msg);
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				return;
 			}
 		} 
@@ -5643,10 +5622,10 @@ final class SyncEngine
 				// OneDrive threw an error
 				log.vdebug("Error query: changes = onedrive.viewChangesById(driveId, idToQuery, deltaLink)");
 				log.vdebug("OneDrive threw an error when querying for these changes:");
-				log.vdebug("driveId: ", driveId);
-				log.vdebug("idToQuery: ", idToQuery);
-				log.vdebug("deltaLink: ", deltaLink);
-				displayOneDriveErrorMessage(e.msg);
+				log.vdebug("driveId:            ", driveId);
+				log.vdebug("idToQuery:          ", idToQuery);
+				log.vdebug("Previous deltaLink: ", deltaLink);
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				return;				
 			}
 		}
@@ -5873,7 +5852,7 @@ final class SyncEngine
 				driveData = onedrive.getPathDetailsById(driveId, idToQuery);
 			} else {
 				// There was a HTTP 5xx Server Side Error
-				displayOneDriveErrorMessage(e.msg);
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				// Must exit here
 				exit(-1);
 			}
@@ -5901,7 +5880,7 @@ final class SyncEngine
 					
 				} else {
 					// There was a HTTP 5xx Server Side Error
-					displayOneDriveErrorMessage(e.msg);
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					// Must exit here
 					exit(-1);
 				}
@@ -5945,7 +5924,7 @@ final class SyncEngine
 				// HTTP request returned status code 500 (Internal Server Error)
 				if (e.httpStatusCode == 500) {
 					// display what the error is
-					displayOneDriveErrorMessage(e.msg);
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				}
 				
 				// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
@@ -5967,12 +5946,12 @@ final class SyncEngine
 						// display what the error is
 						log.vdebug("Query Error: topLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink) on re-try after delay");
 						// error was not a 504 this time
-						displayOneDriveErrorMessage(e.msg);
+						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					}
 				} else {
 					// Default operation if not 404, 410, 429, 500 or 504 errors
 					// display what the error is
-					displayOneDriveErrorMessage(e.msg);
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				}
 			}
 			
@@ -6056,7 +6035,7 @@ final class SyncEngine
 				// HTTP request returned status code 500 (Internal Server Error)
 				if (e.httpStatusCode == 500) {
 					// display what the error is
-					displayOneDriveErrorMessage(e.msg);
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				}
 				
 				// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
@@ -6078,12 +6057,12 @@ final class SyncEngine
 						// display what the error is
 						log.vdebug("Query Error: thisLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink) on re-try after delay");
 						// error was not a 504 this time
-						displayOneDriveErrorMessage(e.msg);
+						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					}
 				} else {
 					// Default operation if not 404, 410, 429, 500 or 504 errors
 					// display what the error is
-					displayOneDriveErrorMessage(e.msg);
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				}
 			}
 			

@@ -11,6 +11,8 @@ import std.stdio;
 import std.string;
 import std.algorithm;
 import std.uri;
+import std.json;
+import std.traits;
 import qxor;
 static import log;
 
@@ -247,6 +249,93 @@ bool containsASCIIHTMLCodes(string path)
 	return m.empty;
 }
 
+// Parse and display error message received from OneDrive
+void displayOneDriveErrorMessage(string message, string callingFunction)
+{
+	log.error("\nERROR: Microsoft OneDrive API returned an error with the following message:");
+	auto errorArray = splitLines(message);
+	log.error("  Error Message:    ", errorArray[0]);
+	// Extract 'message' as the reason
+	JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
+	// extra debug
+	log.vdebug("Raw Error Data: ", message);
+	log.vdebug("JSON Message: ", errorMessage);
+	
+	// What is the reason for the error
+	if (errorMessage.type() == JSONType.object) {
+		// configure the error reason
+		string errorReason;
+		string requestDate;
+		string requestId;
+		
+		// set the reason for the error
+		try {
+			// Use error_description as reason
+			errorReason = errorMessage["error_description"].str;
+		} catch (JSONException e) {
+			// we dont want to do anything here
+		}
+		
+		// set the reason for the error
+		try {
+			// Use ["error"]["message"] as reason
+			errorReason = errorMessage["error"]["message"].str;	
+		} catch (JSONException e) {
+			// we dont want to do anything here
+		}
+		
+		// Display the error reason
+		if (errorReason.startsWith("<!DOCTYPE")) {
+			// a HTML Error Reason was given
+			log.error("  Error Reason:  A HTML Error response was provided. Use debug logging (--verbose --verbose) to view this error");
+			log.vdebug(errorReason);
+		} else {
+			// a non HTML Error Reason was given
+			log.error("  Error Reason:     ", errorReason);
+		}
+		
+		// Get the date of request if available
+		try {
+			// Use ["error"]["innerError"]["date"] as date
+			requestDate = errorMessage["error"]["innerError"]["date"].str;	
+		} catch (JSONException e) {
+			// we dont want to do anything here
+		}
+		
+		// Get the request-id if available
+		try {
+			// Use ["error"]["innerError"]["request-id"] as request-id
+			requestId = errorMessage["error"]["innerError"]["request-id"].str;	
+		} catch (JSONException e) {
+			// we dont want to do anything here
+		}
+		
+		// Display the date and request id if available
+		if (requestDate != "") log.error("  Error Timestamp:  ", requestDate);
+		if (requestId != "")   log.error("  API Request ID:   ", requestId);
+	}
+	
+	// Where in the code was this error generated
+	log.error("  Calling Function: ", callingFunction);
+}
+
+// Parse and display error message received from the local file system
+void displayFileSystemErrorMessage(string message, string callingFunction) 
+{
+	log.error("ERROR: The local file system returned an error with the following message:");
+	auto errorArray = splitLines(message);
+	// What was the error message
+	log.error("  Error Message:    ", errorArray[0]);
+	// Where in the code was this error generated
+	log.error("  Calling Function: ", callingFunction);
+}
+
+// Get the function name that is being called to assist with identifying where an error is being generated
+string getFunctionName(alias func)() {
+    return __traits(identifier, __traits(parent, func)) ~ "()\n";
+}
+
+// Unit Tests
 unittest
 {
 	assert(multiGlobMatch(".hidden", ".*"));

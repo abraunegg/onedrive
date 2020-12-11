@@ -8,6 +8,7 @@ import core.thread, std.conv, std.math;
 import std.algorithm.searching;
 import progress;
 import config;
+import util;
 static import log;
 shared bool debugResponse = false;
 private bool dryRun = false;
@@ -64,7 +65,7 @@ private {
 	string driveByIdUrl = globalGraphEndpoint ~ "/v1.0/drives/";
 	
 	// What is 'shared with me' Query
-	string sharedWithMe = globalGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+	string sharedWithMeUrl = globalGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
 	
 	// What are my 'tenant' details
 	string sharepointTenantId = globalGraphEndpoint ~ "/v1.0/organization";
@@ -206,8 +207,8 @@ final class OneDriveApi
 				siteSearchUrl = usl4GraphEndpoint ~ "/v1.0/sites?search";
 				siteDriveUrl = usl4GraphEndpoint ~ "/v1.0/sites/";
 				// Shared With Me
-				sharedWithMe = usl4GraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
-				sharepointTenantId = usl4GraphEndpoint ~ "/v1.0/organization"; 
+				sharedWithMeUrl = usl4GraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				sharepointTenantId = usl4GraphEndpoint ~ "/v1.0/organization";
 				break;
 			case "USL5":
 				log.log("Configuring Azure AD for US Government Endpoints (DOD)");
@@ -233,7 +234,7 @@ final class OneDriveApi
 				siteSearchUrl = usl5GraphEndpoint ~ "/v1.0/sites?search";
 				siteDriveUrl = usl5GraphEndpoint ~ "/v1.0/sites/";
 				// Shared With Me
-				sharedWithMe = usl5GraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				sharedWithMeUrl = usl5GraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
 				sharepointTenantId = usl5GraphEndpoint ~ "/v1.0/organization";
 				break;
 			case "DE":
@@ -260,7 +261,7 @@ final class OneDriveApi
 				siteSearchUrl = deGraphEndpoint ~ "/v1.0/sites?search";
 				siteDriveUrl = deGraphEndpoint ~ "/v1.0/sites/";
 				// Shared With Me
-				sharedWithMe = deGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				sharedWithMeUrl = deGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
 				sharepointTenantId = deGraphEndpoint ~ "/v1.0/organization";
 				break;
 			case "CN":
@@ -287,13 +288,35 @@ final class OneDriveApi
 				siteSearchUrl = cnGraphEndpoint ~ "/v1.0/sites?search";
 				siteDriveUrl = cnGraphEndpoint ~ "/v1.0/sites/";
 				// Shared With Me
-				sharedWithMe = cnGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				sharedWithMeUrl = cnGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
 				sharepointTenantId = cnGraphEndpoint ~ "/v1.0/organization";
 				break;
 			// Default - all other entries 
 			default:
 				log.log("Unknown Azure AD Endpoint request - using Global Azure AD Endpoints");
 		}
+		
+		// Debug output of configured URL's
+		// Authentication
+		log.vdebug("Configured authUrl:             ", authUrl);
+		log.vdebug("Configured redirectUrl:         ", redirectUrl);
+		log.vdebug("Configured tokenUrl:            ", tokenUrl);
+		
+		// Drive Queries
+		log.vdebug("Configured driveUrl:            ", driveUrl);
+		log.vdebug("Configured driveByIdUrl:        ", driveByIdUrl);
+		
+		// Shared With Me
+		log.vdebug("Configured sharedWithMeUrl:     ", sharedWithMeUrl);
+		log.vdebug("Configured sharepointTenantId:  ", sharepointTenantId);
+		
+		// Item Queries
+		log.vdebug("Configured itemByIdUrl:         ", itemByIdUrl);
+		log.vdebug("Configured itemByPathUrl:       ", itemByPathUrl);
+		
+		// SharePoint Queries
+		log.vdebug("Configured siteSearchUrl:       ", siteSearchUrl);
+		log.vdebug("Configured siteDriveUrl:        ", siteDriveUrl);
 		
 		// Configure the User Agent string
 		if (cfg.getValueString("user_agent") == "") {
@@ -417,7 +440,7 @@ final class OneDriveApi
 				response = cast(char[]) read(responseUrl);
 			} catch (OneDriveException e) {
 				// exception generated
-				displayOneDriveErrorMessage(e.msg);
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				return false;
 			}	
 			
@@ -538,7 +561,7 @@ final class OneDriveApi
 	{
 		checkAccessTokenExpired();
 		const(char)[] url;
-		url = sharedWithMe;
+		url = sharedWithMeUrl;
 		url ~= "?allowexternal=true";
 		return get(url);
 	}
@@ -606,7 +629,7 @@ final class OneDriveApi
 					remove(saveToPath);
 				} catch (FileException e) {
 					// display the error message
-					displayFileSystemErrorMessage(e.msg);
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				} 
 			}	
 		}
@@ -624,7 +647,7 @@ final class OneDriveApi
 				newPath.setAttributes(cfg.returnRequiredDirectoryPermisions());
 			} catch (FileException e) {
 				// display the error message
-				displayFileSystemErrorMessage(e.msg);
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 			}
 		}
 		
@@ -856,7 +879,7 @@ final class OneDriveApi
 			}
 		} catch (OneDriveException e) {
 			// an error was generated
-			displayOneDriveErrorMessage(e.msg);
+			displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 		}
 		
 		if (response.type() == JSONType.object) {
@@ -876,7 +899,7 @@ final class OneDriveApi
 							cfg.refreshTokenFilePath.setAttributes(cfg.returnRequiredFilePermisions());
 						} catch (FileException e) {
 							// display the error message
-							displayFileSystemErrorMessage(e.msg);
+							displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 						}
 					}
 					if (printAccessToken) writeln("New access token: ", accessToken);
@@ -1045,7 +1068,7 @@ final class OneDriveApi
 				writeln();
 				// Reset onProgress to not display anything for next download done using exit scope
 			} catch (CurlException e) {
-				displayOneDriveErrorMessage(e.msg);
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 			}
 			// free progress bar memory
 			p = null;
@@ -1055,7 +1078,7 @@ final class OneDriveApi
 				// try and catch any curl error
 				http.perform();
 			} catch (CurlException e) {
-				displayOneDriveErrorMessage(e.msg);
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 			}
 		}
 		
@@ -1187,10 +1210,11 @@ final class OneDriveApi
 			log.error("ERROR: OneDrive returned an error with the following message:");
 			auto errorArray = splitLines(e.msg);
 			string errorMessage = errorArray[0];
+			string defaultTimeoutErrorMessage = "  Error Message: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?";
 						
-			if (canFind(errorMessage, "Couldn't connect to server on handle") || canFind(errorMessage, "Couldn't resolve host name on handle")) {
+			if (canFind(errorMessage, "Couldn't connect to server on handle") || canFind(errorMessage, "Couldn't resolve host name on handle") || canFind(errorMessage, "Timeout was reached on handle")) {
 				// This is a curl timeout
-				log.error("  Error Message: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
+				log.error(defaultTimeoutErrorMessage);
 				// or 408 request timeout
 				// https://github.com/abraunegg/onedrive/issues/694
 				// Back off & retry with incremental delay
@@ -1216,8 +1240,8 @@ final class OneDriveApi
 						log.log("Internet connectivity to Microsoft OneDrive service has been restored");
 						retrySuccess = true;
 					} catch (CurlException e) {
-						if (canFind(e.msg, "Couldn't connect to server on handle") || canFind(e.msg, "Couldn't resolve host name on handle")) {
-							log.error("  Error Message: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
+						if (canFind(e.msg, "Couldn't connect to server on handle") || canFind(e.msg, "Couldn't resolve host name on handle") || canFind(errorMessage, "Timeout was reached on handle")) {
+							log.error(defaultTimeoutErrorMessage);
 							// Increment & loop around
 							retryAttempts++;
 						}
@@ -1235,6 +1259,7 @@ final class OneDriveApi
 			} else {
 				// Some other error was returned
 				log.error("  Error Message: ", errorMessage);
+				log.error("  Calling Function: ", getFunctionName!({}));
 			}
 			// return an empty JSON for handling
 			return json;
@@ -1470,29 +1495,6 @@ final class OneDriveApi
 				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
 			}
 		}
-	}
-	
-	// Parse and display error message received from OneDrive
-	private void displayOneDriveErrorMessage(string message) {
-		log.error("\nERROR: OneDrive returned an error with the following message:");
-		auto errorArray = splitLines(message);
-		log.error("  Error Message: ", errorArray[0]);
-		// Strip cause from error to leave a JSON
-		JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
-		// extra debug
-		log.vdebug("Raw Error Data: ", message);
-		log.vdebug("JSON Message: ", errorMessage);
-		if (errorMessage.type() == JSONType.object) {
-			log.error("  Error Reason:  ", errorMessage["error_description"].str);
-		}
-	}
-	
-	// Parse and display error message received from the local file system
-	private void displayFileSystemErrorMessage(string message) 
-	{
-		log.error("ERROR: The local file system returned an error with the following message:");
-		auto errorArray = splitLines(message);
-		log.error("  Error Message: ", errorArray[0]);
 	}
 }
 
