@@ -188,6 +188,7 @@ private Item makeItem(const ref JSONValue driveItem)
 
 private bool testFileHash(const(string) path, const ref Item item)
 {
+	// Try and compute the file hash
 	if (item.crc32Hash) {
 		if (item.crc32Hash == computeCrc32(path)) return true;
 	} else if (item.sha1Hash) {
@@ -2765,20 +2766,28 @@ final class SyncEngine
 		final switch (item.type) {
 		case ItemType.file:
 			if (isFile(path)) {
-				SysTime localModifiedTime = timeLastModified(path).toUTC();
-				SysTime itemModifiedTime = item.mtime;
-				// HACK: reduce time resolution to seconds before comparing
-				localModifiedTime.fracSecs = Duration.zero;
-				itemModifiedTime.fracSecs = Duration.zero;
-				if (localModifiedTime == itemModifiedTime) {
-					return true;
+				// can we actually read the local file?
+				if (readLocalFile(path)){
+					// local file is readable
+					SysTime localModifiedTime = timeLastModified(path).toUTC();
+					SysTime itemModifiedTime = item.mtime;
+					// HACK: reduce time resolution to seconds before comparing
+					localModifiedTime.fracSecs = Duration.zero;
+					itemModifiedTime.fracSecs = Duration.zero;
+					if (localModifiedTime == itemModifiedTime) {
+						return true;
+					} else {
+						log.vlog("The local item has a different modified time ", localModifiedTime, " when compared to ", itemSource, " modified time ", itemModifiedTime);
+					}
+					if (testFileHash(path, item)) {
+						return true;
+					} else {
+						log.vlog("The local item has a different hash when compared to ", itemSource, " item hash");
+					}	
 				} else {
-					log.vlog("The local item has a different modified time ", localModifiedTime, " when compared to ", itemSource, " modified time ", itemModifiedTime);
-				}
-				if (testFileHash(path, item)) {
-					return true;
-				} else {
-					log.vlog("The local item has a different hash when compared to ", itemSource, " item hash");
+					// Unable to read local file
+					log.log("Unable to determine the sync state of this file as it cannot be read (file permissions or file corruption): ", path);
+					return false;
 				}
 			} else {
 				log.vlog("The local item is a directory but should be a file");
@@ -3323,133 +3332,198 @@ final class SyncEngine
 		assert(item.type == ItemType.file);
 		if (exists(path)) {
 			if (isFile(path)) {
-				SysTime localModifiedTime = timeLastModified(path).toUTC();
-				SysTime itemModifiedTime = item.mtime;
-				// HACK: reduce time resolution to seconds before comparing
-				itemModifiedTime.fracSecs = Duration.zero;
-				localModifiedTime.fracSecs = Duration.zero;
-				
-				if (localModifiedTime != itemModifiedTime) {
-					log.vlog("The file last modified time has changed");					
-					string eTag = item.eTag;
-					if (!testFileHash(path, item)) {
-						log.vlog("The file content has changed");
-						write("Uploading modified file ", path, " ... ");
-						JSONValue response;
+				// can we actually read the local file?
+				if (readLocalFile(path)){
+					// file is readable
+					SysTime localModifiedTime = timeLastModified(path).toUTC();
+					SysTime itemModifiedTime = item.mtime;
+					// HACK: reduce time resolution to seconds before comparing
+					itemModifiedTime.fracSecs = Duration.zero;
+					localModifiedTime.fracSecs = Duration.zero;
+					
+					if (localModifiedTime != itemModifiedTime) {
+						log.vlog("The file last modified time has changed");					
+						string eTag = item.eTag;
 						
-						if (!dryRun) {
-							// Get the file size
-							long thisFileSize = getSize(path);
-							// Are we using OneDrive Personal or OneDrive Business?
-							// To solve 'Multiple versions of file shown on website after single upload' (https://github.com/abraunegg/onedrive/issues/2)
-							// check what 'account type' this is as this issue only affects OneDrive Business so we need some extra logic here
-							if (accountType == "personal"){
-								// Original file upload logic
-								if (thisFileSize <= thresholdFileSize) {
-									try {
-										response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
-									} catch (OneDriveException e) {
-										if (e.httpStatusCode == 401) {
-											// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+						// perform file hash tests - has the content of the file changed?
+						if (!testFileHash(path, item)) {
+							log.vlog("The file content has changed");
+							write("Uploading modified file ", path, " ... ");
+							JSONValue response;
+							
+							if (!dryRun) {
+								// Get the file size
+								long thisFileSize = getSize(path);
+								// Are we using OneDrive Personal or OneDrive Business?
+								// To solve 'Multiple versions of file shown on website after single upload' (https://github.com/abraunegg/onedrive/issues/2)
+								// check what 'account type' this is as this issue only affects OneDrive Business so we need some extra logic here
+								if (accountType == "personal"){
+									// Original file upload logic
+									if (thisFileSize <= thresholdFileSize) {
+										try {
+											response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
+										} catch (OneDriveException e) {
+											if (e.httpStatusCode == 401) {
+												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+												writeln("skipped.");
+												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+												uploadFailed = true;
+												return;
+											}
+											if (e.httpStatusCode == 404) {
+												// HTTP request returned status code 404 - the eTag provided does not exist
+												// Delete record from the local database - file will be uploaded as a new file
+												writeln("skipped.");
+												log.vlog("OneDrive returned a 'HTTP 404 - eTag Issue' - gracefully handling error");
+												itemdb.deleteById(item.driveId, item.id);
+												uploadFailed = true;
+												return;
+											}
+											// Resolve https://github.com/abraunegg/onedrive/issues/36
+											if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
+												// The file is currently checked out or locked for editing by another user
+												// We cant upload this file at this time
+												writeln("skipped.");
+												log.fileOnly("Uploading modified file ", path, " ... skipped.");
+												write("", path, " is currently checked out or locked for editing by another user.");
+												log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+												uploadFailed = true;
+												return;
+											}
+											if (e.httpStatusCode == 412) {
+												// HTTP request returned status code 412 - ETag does not match current item's value
+												// Delete record from the local database - file will be uploaded as a new file
+												writeln("skipped.");
+												log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
+												log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
+												itemdb.deleteById(item.driveId, item.id);
+												uploadFailed = true;
+												return;
+											}
+											if (e.httpStatusCode == 504) {
+												// HTTP request returned status code 504 (Gateway Timeout)
+												log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request as a session");
+												// Try upload as a session
+												response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+											} else {
+												// display what the error is
+												writeln("skipped.");
+												displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+												uploadFailed = true;
+												return;
+											}
+										} catch (FileException e) {
+											// display the error message
 											writeln("skipped.");
-											log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+											displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 											uploadFailed = true;
 											return;
 										}
-										if (e.httpStatusCode == 404) {
-											// HTTP request returned status code 404 - the eTag provided does not exist
-											// Delete record from the local database - file will be uploaded as a new file
-											writeln("skipped.");
-											log.vlog("OneDrive returned a 'HTTP 404 - eTag Issue' - gracefully handling error");
-											itemdb.deleteById(item.driveId, item.id);
-											uploadFailed = true;
-											return;
-										}
-										// Resolve https://github.com/abraunegg/onedrive/issues/36
-										if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
-											// The file is currently checked out or locked for editing by another user
-											// We cant upload this file at this time
-											writeln("skipped.");
-											log.fileOnly("Uploading modified file ", path, " ... skipped.");
-											write("", path, " is currently checked out or locked for editing by another user.");
-											log.fileOnly(path, " is currently checked out or locked for editing by another user.");
-											uploadFailed = true;
-											return;
-										}
-										if (e.httpStatusCode == 412) {
-											// HTTP request returned status code 412 - ETag does not match current item's value
-											// Delete record from the local database - file will be uploaded as a new file
-											writeln("skipped.");
-											log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
-											log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
-											itemdb.deleteById(item.driveId, item.id);
-											uploadFailed = true;
-											return;
-										}
-										if (e.httpStatusCode == 504) {
-											// HTTP request returned status code 504 (Gateway Timeout)
-											log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request as a session");
-											// Try upload as a session
+										// upload done without error
+										writeln("done.");
+									} else {
+										writeln("");
+										try {
 											response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
-										} else {
-											// display what the error is
+										} catch (OneDriveException e) {
+											if (e.httpStatusCode == 401) {
+												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+												writeln("skipped.");
+												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+												uploadFailed = true;
+												return;
+											}
+											if (e.httpStatusCode == 412) {
+												// HTTP request returned status code 412 - ETag does not match current item's value
+												// Delete record from the local database - file will be uploaded as a new file
+												writeln("skipped.");
+												log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
+												log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
+												itemdb.deleteById(item.driveId, item.id);
+												uploadFailed = true;
+												return;
+											} else {
+												// display what the error is
+												writeln("skipped.");
+												displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+												uploadFailed = true;
+												return;
+											}
+										} catch (FileException e) {
+											// display the error message
 											writeln("skipped.");
-											displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+											displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 											uploadFailed = true;
 											return;
 										}
-									} catch (FileException e) {
-										// display the error message
-										writeln("skipped.");
-										displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-										uploadFailed = true;
-										return;
+										// upload done without error
+										writeln("done.");
 									}
-									// upload done without error
-									writeln("done.");
 								} else {
-									writeln("");
-									try {
-										response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
-									} catch (OneDriveException e) {
-										if (e.httpStatusCode == 401) {
-											// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+									// OneDrive Business Account
+									// We need to always use a session to upload, but handle the changed file correctly
+									if (accountType == "business"){
+										try {
+											// is this a zero-byte file?
+											if (thisFileSize == 0) {
+												// the file we are trying to upload as a session is a zero byte file - we cant use a session to upload or replace the file 
+												// as OneDrive technically does not support zero byte files
+												writeln("skipped.");
+												log.fileOnly("Uploading modified file ", path, " ... skipped.");
+												log.vlog("Skip Reason: Microsoft OneDrive does not support 'zero-byte' files as a modified upload. Will upload as new file.");
+												// delete file on OneDrive
+												onedrive.deleteById(item.driveId, item.id, item.eTag);
+												// delete file from local database
+												itemdb.deleteById(item.driveId, item.id);
+												return;
+											} else {
+												// For logging consistency
+												writeln("");
+												// normal session upload
+												response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+											}
+										} catch (OneDriveException e) {
+											if (e.httpStatusCode == 401) {
+												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+												writeln("skipped.");
+												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+												uploadFailed = true;
+												return;
+											}
+											// Resolve https://github.com/abraunegg/onedrive/issues/36
+											if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
+												// The file is currently checked out or locked for editing by another user
+												// We cant upload this file at this time
+												writeln("skipped.");
+												log.fileOnly("Uploading modified file ", path, " ... skipped.");
+												writeln("", path, " is currently checked out or locked for editing by another user.");
+												log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+												uploadFailed = true;
+												return;
+											} else {
+												// display what the error is
+												writeln("skipped.");
+												displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+												uploadFailed = true;
+												return;
+											}
+										} catch (FileException e) {
+											// display the error message
 											writeln("skipped.");
-											log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+											displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 											uploadFailed = true;
 											return;
 										}
-										if (e.httpStatusCode == 412) {
-											// HTTP request returned status code 412 - ETag does not match current item's value
-											// Delete record from the local database - file will be uploaded as a new file
-											writeln("skipped.");
-											log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
-											log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
-											itemdb.deleteById(item.driveId, item.id);
-											uploadFailed = true;
-											return;
-										} else {
-											// display what the error is
-											writeln("skipped.");
-											displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-											uploadFailed = true;
-											return;
-										}
-									} catch (FileException e) {
-										// display the error message
-										writeln("skipped.");
-										displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-										uploadFailed = true;
-										return;
+										// upload done without error
+										writeln("done.");
+										
+										// As the session.upload includes the last modified time, save the response
+										// Is the response a valid JSON object - validation checking done in saveItem
+										saveItem(response);
 									}
-									// upload done without error
-									writeln("done.");
-								}
-							} else {
-								// OneDrive Business Account
-								// We need to always use a session to upload, but handle the changed file correctly
-								if (accountType == "business"){
-									try {
+									
+									// OneDrive documentLibrary
+									if (accountType == "documentLibrary"){
 										// is this a zero-byte file?
 										if (thisFileSize == 0) {
 											// the file we are trying to upload as a session is a zero byte file - we cant use a session to upload or replace the file 
@@ -3463,168 +3537,113 @@ final class SyncEngine
 											itemdb.deleteById(item.driveId, item.id);
 											return;
 										} else {
-											// For logging consistency
-											writeln("");
-											// normal session upload
-											response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
-										}
-									} catch (OneDriveException e) {
-										if (e.httpStatusCode == 401) {
-											// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-											writeln("skipped.");
-											log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
-											uploadFailed = true;
-											return;
-										}
-										// Resolve https://github.com/abraunegg/onedrive/issues/36
-										if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
-											// The file is currently checked out or locked for editing by another user
-											// We cant upload this file at this time
-											writeln("skipped.");
-											log.fileOnly("Uploading modified file ", path, " ... skipped.");
-											writeln("", path, " is currently checked out or locked for editing by another user.");
-											log.fileOnly(path, " is currently checked out or locked for editing by another user.");
-											uploadFailed = true;
-											return;
-										} else {
-											// display what the error is
-											writeln("skipped.");
-											displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-											uploadFailed = true;
-											return;
-										}
-									} catch (FileException e) {
-										// display the error message
-										writeln("skipped.");
-										displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-										uploadFailed = true;
-										return;
-									}
-									// upload done without error
-									writeln("done.");
-									
-									// As the session.upload includes the last modified time, save the response
-									// Is the response a valid JSON object - validation checking done in saveItem
-									saveItem(response);
-								}
-								
-								// OneDrive documentLibrary
-								if (accountType == "documentLibrary"){
-									// is this a zero-byte file?
-									if (thisFileSize == 0) {
-										// the file we are trying to upload as a session is a zero byte file - we cant use a session to upload or replace the file 
-										// as OneDrive technically does not support zero byte files
-										writeln("skipped.");
-										log.fileOnly("Uploading modified file ", path, " ... skipped.");
-										log.vlog("Skip Reason: Microsoft OneDrive does not support 'zero-byte' files as a modified upload. Will upload as new file.");
-										// delete file on OneDrive
-										onedrive.deleteById(item.driveId, item.id, item.eTag);
-										// delete file from local database
-										itemdb.deleteById(item.driveId, item.id);
-										return;
-									} else {
-										// Handle certain file types differently
-										if ((extension(path) == ".txt") || (extension(path) == ".csv")) {
-											// .txt and .csv are unaffected by https://github.com/OneDrive/onedrive-api-docs/issues/935 
-											// For logging consistency
-											writeln("");
-											try {
-												response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
-											} catch (OneDriveException e) {
-												if (e.httpStatusCode == 401) {
-													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+											// Handle certain file types differently
+											if ((extension(path) == ".txt") || (extension(path) == ".csv")) {
+												// .txt and .csv are unaffected by https://github.com/OneDrive/onedrive-api-docs/issues/935 
+												// For logging consistency
+												writeln("");
+												try {
+													response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+												} catch (OneDriveException e) {
+													if (e.httpStatusCode == 401) {
+														// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+														writeln("skipped.");
+														log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+														uploadFailed = true;
+														return;
+													}										
+													// Resolve https://github.com/abraunegg/onedrive/issues/36
+													if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
+														// The file is currently checked out or locked for editing by another user
+														// We cant upload this file at this time
+														writeln("skipped.");
+														log.fileOnly("Uploading modified file ", path, " ... skipped.");
+														writeln("", path, " is currently checked out or locked for editing by another user.");
+														log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+														uploadFailed = true;
+														return;
+													} else {
+														// display what the error is
+														writeln("skipped.");
+														displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+														uploadFailed = true;
+														return;
+													}
+												} catch (FileException e) {
+													// display the error message
 													writeln("skipped.");
-													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
-													uploadFailed = true;
-													return;
-												}										
-												// Resolve https://github.com/abraunegg/onedrive/issues/36
-												if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
-													// The file is currently checked out or locked for editing by another user
-													// We cant upload this file at this time
-													writeln("skipped.");
-													log.fileOnly("Uploading modified file ", path, " ... skipped.");
-													writeln("", path, " is currently checked out or locked for editing by another user.");
-													log.fileOnly(path, " is currently checked out or locked for editing by another user.");
-													uploadFailed = true;
-													return;
-												} else {
-													// display what the error is
-													writeln("skipped.");
-													displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+													displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
 												}
-											} catch (FileException e) {
-												// display the error message
+												// upload done without error
+												writeln("done.");
+												// As the session.upload includes the last modified time, save the response
+												// Is the response a valid JSON object - validation checking done in saveItem
+												saveItem(response);
+											} else {									
+												// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+												// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
 												writeln("skipped.");
-												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-												uploadFailed = true;
+												log.fileOnly("Uploading modified file ", path, " ... skipped.");
+												log.vlog("Skip Reason: Microsoft Sharepoint 'enrichment' after upload issue");
+												log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+												// Delete record from the local database - file will be uploaded as a new file
+												itemdb.deleteById(item.driveId, item.id);
 												return;
 											}
-											// upload done without error
-											writeln("done.");
-											// As the session.upload includes the last modified time, save the response
-											// Is the response a valid JSON object - validation checking done in saveItem
-											saveItem(response);
-										} else {									
-											// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
-											// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
-											writeln("skipped.");
-											log.fileOnly("Uploading modified file ", path, " ... skipped.");
-											log.vlog("Skip Reason: Microsoft Sharepoint 'enrichment' after upload issue");
-											log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
-											// Delete record from the local database - file will be uploaded as a new file
-											itemdb.deleteById(item.driveId, item.id);
-											return;
 										}
 									}
 								}
-							}
-							
-							// Update etag with ctag from response
-							if ("cTag" in response) {
-								// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded via simple upload
-								eTag = response["cTag"].str;
-							} else {
-								// Is there an eTag in the response?
-								if ("eTag" in response) {
-									// use the eTag from the response as there was no cTag
-									eTag = response["eTag"].str;
+								
+								// Update etag with ctag from response
+								if ("cTag" in response) {
+									// use the cTag instead of the eTag because OneDrive may update the metadata of files AFTER they have been uploaded via simple upload
+									eTag = response["cTag"].str;
 								} else {
-									// no tag available - set to nothing
-									eTag = "";
+									// Is there an eTag in the response?
+									if ("eTag" in response) {
+										// use the eTag from the response as there was no cTag
+										eTag = response["eTag"].str;
+									} else {
+										// no tag available - set to nothing
+										eTag = "";
+									}
 								}
+								
+								// log that the modified file was uploaded successfully
+								log.fileOnly("Uploading modified file ", path, " ... done.");
+								
+								// update free space tracking if this is our drive id
+								if (item.driveId == defaultDriveId) {
+									// how much space is left on OneDrive after upload?
+									remainingFreeSpace = (remainingFreeSpace - thisFileSize);
+									log.vlog("Remaining free space on OneDrive: ", remainingFreeSpace);
+								}
+							} else {
+								// we are --dry-run - simulate the file upload
+								writeln("done.");
+								response = createFakeResponse(path);
+								// Log action to log file
+								log.fileOnly("Uploading modified file ", path, " ... done.");
+								// Is the response a valid JSON object - validation checking done in saveItem
+								saveItem(response);
+								return;
 							}
-							
-							// log that the modified file was uploaded successfully
-							log.fileOnly("Uploading modified file ", path, " ... done.");
-							
-							// update free space tracking if this is our drive id
-							if (item.driveId == defaultDriveId) {
-								// how much space is left on OneDrive after upload?
-								remainingFreeSpace = (remainingFreeSpace - thisFileSize);
-								log.vlog("Remaining free space on OneDrive: ", remainingFreeSpace);
+						}
+						if (accountType == "personal"){
+							// If Personal, call to update the modified time as stored on OneDrive
+							if (!dryRun) {
+								uploadLastModifiedTime(item.driveId, item.id, eTag, localModifiedTime.toUTC());
 							}
-						} else {
-							// we are --dry-run - simulate the file upload
-							writeln("done.");
-							response = createFakeResponse(path);
-							// Log action to log file
-							log.fileOnly("Uploading modified file ", path, " ... done.");
-							// Is the response a valid JSON object - validation checking done in saveItem
-							saveItem(response);
-							return;
 						}
-					}
-					if (accountType == "personal"){
-						// If Personal, call to update the modified time as stored on OneDrive
-						if (!dryRun) {
-							uploadLastModifiedTime(item.driveId, item.id, eTag, localModifiedTime.toUTC());
-						}
+					} else {
+						log.vlog("The file has not changed");
 					}
 				} else {
-					log.vlog("The file has not changed");
+					//The file is not readable - skipped
+					log.log("Skipping processing this file as it cannot be read (file permissions or file corruption): ", path);
+					uploadFailed = true;	
 				}
 			} else {
 				log.vlog("The item was a file but now is a directory");
@@ -4927,6 +4946,9 @@ final class SyncEngine
 					uploadFailed = true;
 					return;
 				}
+			} else {
+				// unable to read local file
+				log.log("Skipping uploading this file as it cannot be read (file permissions or file corruption): ", path);
 			}
 		} else {
 			// Upload of the new file did not occur .. why?

@@ -153,7 +153,7 @@ bool readLocalFile(string path)
 		read(path,1);
 	} catch (std.file.FileException e) {
 		// unable to read the new local file
-		log.log("Skipping uploading this file as it cannot be read (file permissions or file corruption): ", path);
+		displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 		return false;
 	}
 	return true;
@@ -322,7 +322,7 @@ void displayOneDriveErrorMessage(string message, string callingFunction)
 // Parse and display error message received from the local file system
 void displayFileSystemErrorMessage(string message, string callingFunction) 
 {
-	log.error("ERROR: The local file system returned an error with the following message:");
+	log.error("\nERROR: The local file system returned an error with the following message:");
 	auto errorArray = splitLines(message);
 	// What was the error message
 	log.error("  Error Message:    ", errorArray[0]);
