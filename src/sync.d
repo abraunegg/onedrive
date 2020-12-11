@@ -6139,7 +6139,17 @@ final class SyncEngine
 		
 		// Get My Tenent Details
 		string myTenantID;
-		JSONValue tenantDetailsResponse = onedrive.getTenantID();
+		JSONValue tenantDetailsResponse;
+		
+		try {
+			tenantDetailsResponse = onedrive.getTenantID();
+		} catch (OneDriveException e) {
+			// display what the error is
+			displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+			log.error("\nERROR: Authorisation scopes potentially invalid, use --logout to authorize the client again.\n");
+			return;
+		}
+		
 		if (tenantDetailsResponse.type() == JSONType.object) {
 			foreach (searchResult; tenantDetailsResponse["value"].array) {
 				myTenantID = searchResult["id"].str;
