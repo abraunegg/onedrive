@@ -130,14 +130,30 @@ bool testNetwork()
 	// Use low level HTTP struct
 	auto http = HTTP();
 	http.url = "https://login.microsoftonline.com";
+	// DNS lookup timeout
 	http.dnsTimeout = (dur!"seconds"(5));
+	// Timeout for connecting
+	http.connectTimeout = (dur!"seconds"(5));
+	// HTTP connection test method
 	http.method = HTTP.Method.head;
 	// Attempt to contact the Microsoft Online Service
-	try {	
+	try {
+		log.vdebug("Attempting to contact online service");
 		http.perform();
+		log.vdebug("Shutting down HTTP engine as sucessfully reached OneDrive Online Service");
 		http.shutdown();
 		return true;
-	} catch (SocketException) {
+	} catch (SocketException e) {
+		// Socket issue
+		log.vdebug("HTTP Socket Issue");
+		log.error("Cannot connect to Microsoft OneDrive Service - Socket Issue");
+		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+		return false;
+	} catch (CurlException e) {
+		// No network connection to OneDrive Service
+		log.vdebug("No Network Connection");
+		log.error("Cannot connect to Microsoft OneDrive Service - Network Connection Issue");
+		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 		return false;
 	}
 }
