@@ -58,6 +58,13 @@ if [ "${ONEDRIVE_DOWNLOADONLY:=0}" == "1" ]; then
    ARGS=(--download-only ${ARGS[@]})
 fi
 
+# Tell client to logout based on environment variable
+if [ "${ONEDRIVE_LOGOUT:=0}" == "1" ]; then
+   echo "# We are logging out to perform a reauthentication"
+   ARGS=(--logout ${ARGS[@]})
+fi
+
+
 if [ ${#} -gt 0 ]; then
   ARGS=("${@}")
 fi
