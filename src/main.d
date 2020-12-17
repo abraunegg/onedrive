@@ -559,24 +559,73 @@ int main(string[] args)
 		log.log("NOTE: The use of --force-http-1.1 is depreciated");
 	}
 	
-	// Test if OneDrive service can be reached
+	// Test if OneDrive service can be reached, exit if it cant be reached
 	log.vdebug("Testing network to ensure network connectivity to Microsoft OneDrive Service");
-	try {
-		online = testNetwork();
-	} catch (CurlException e) {
-		// No network connection to OneDrive Service
-		log.error("Cannot connect to Microsoft OneDrive Service");
-		log.error("Reason: ", e.msg);
+	online = testNetwork();
+	if (!online) {
+	// Cant initialise the API as we are not online
 		if (!cfg.getValueBool("monitor")) {
+			// Running as --synchronize
+			log.error("Unable to reach Microsoft OneDrive API service, unable to initialize application\n");
 			return EXIT_FAILURE;
+		} else {
+			// Running as --monitor
+			log.error("Unable to reach Microsoft OneDrive API service at this point in time, re-trying network tests\n");
+			
+			// re-try network connection to OneDrive
+			// https://github.com/abraunegg/onedrive/issues/1184
+			// Back off & retry with incremental delay
+			int retryCount = 10000;
+			int retryAttempts = 1;
+			int backoffInterval = 1;
+			int maxBackoffInterval = 3600;
+			
+			bool retrySuccess = false;
+			while (!retrySuccess){
+				// retry to access OneDrive API
+				backoffInterval++;
+				int thisBackOffInterval = retryAttempts*backoffInterval;
+				log.vdebug("  Retry Attempt:      ", retryAttempts);				
+				if (thisBackOffInterval <= maxBackoffInterval) {
+					log.vdebug("  Retry In (seconds): ", thisBackOffInterval);
+					Thread.sleep(dur!"seconds"(thisBackOffInterval));
+				} else {
+					log.vdebug("  Retry In (seconds): ", maxBackoffInterval);
+					Thread.sleep(dur!"seconds"(maxBackoffInterval));
+				}
+				// perform the re-rty
+				online = testNetwork();
+				if (online) {
+					// We are now online
+					log.log("Internet connectivity to Microsoft OneDrive service has been restored");
+					retrySuccess = true;
+				} else {
+					// We are still offline
+					if (retryAttempts == retryCount) {
+						// we have attempted to re-connect X number of times
+						// false set this to true to break out of while loop
+						retrySuccess = true;
+					}	
+				}
+				// Increment & loop around
+				retryAttempts++;
+			}
+			if (!online) {
+				// Not online after 1.2 years of trying
+				log.error("ERROR: Was unable to reconnect to the Microsoft OneDrive service after 10000 attempts lasting over 1.2 years!");
+				return EXIT_FAILURE;
+			}
 		}
 	}
 	
 	// Initialize OneDrive, check for authorization
-	log.vlog("Initializing the OneDrive API ...");
-	oneDrive = new OneDriveApi(cfg);
-	onedriveInitialised = oneDrive.init();
-	oneDrive.printAccessToken = cfg.getValueBool("print_token");
+	if (online) {
+		// we can only initialise if we are online
+		log.vlog("Initializing the OneDrive API ...");
+		oneDrive = new OneDriveApi(cfg);
+		onedriveInitialised = oneDrive.init();
+		oneDrive.printAccessToken = cfg.getValueBool("print_token");
+	}
 	
 	if (!onedriveInitialised) {
 		log.error("Could not initialize the OneDrive API");
