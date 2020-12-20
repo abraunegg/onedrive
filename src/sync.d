@@ -3706,6 +3706,7 @@ final class SyncEngine
 		}
 		
 		// Calculate the path length by walking the path, catch any UTF-8 character errors
+		// https://github.com/abraunegg/onedrive/issues/487
 		// https://github.com/abraunegg/onedrive/issues/1192
 		try {
 			pathWalkLength = path.byGrapheme.walkLength;
