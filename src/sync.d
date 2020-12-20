@@ -3683,10 +3683,10 @@ final class SyncEngine
 		import std.range : walkLength;
 		import std.uni : byGrapheme;
 		// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
-		//   If the path is greater than allowed characters, then one drive will return a '400 - Bad Request' 
-		//   Need to ensure that the URI is encoded before the check is made
-		//   400 Character Limit for OneDrive Business / Office 365
-		//   430 Character Limit for OneDrive Personal
+		// If the path is greater than allowed characters, then one drive will return a '400 - Bad Request'
+		// Need to ensure that the URI is encoded before the check is made:
+		// - 400 Character Limit for OneDrive Business / Office 365
+		// - 430 Character Limit for OneDrive Personal
 		long maxPathLength = 0;
 		long pathWalkLength = 0;
 		
