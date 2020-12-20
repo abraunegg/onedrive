@@ -175,6 +175,11 @@ docker container run -e ONEDRIVE_RESYNC=1 -v onedrive_conf:/onedrive/conf -v "${
 docker container run -e ONEDRIVE_RESYNC=1 -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive:latest
 ```
 
+**Perform a --logout and re-authenticate:**
+```bash
+docker container run -e ONEDRIVE_LOGOUT=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive:latest
+```
+
 ## Build instructions
 ### Build Environment Requirements
 *   Build environment must have at least 1GB of memory & 2GB swap space
