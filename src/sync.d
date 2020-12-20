@@ -3699,6 +3699,12 @@ final class SyncEngine
 			maxPathLength = 400;
 		}
 		
+		// A short lived file that has disappeared will cause an error - is the path valid?
+		if (!exists(path)) {
+			log.log("Skipping item - path has disappeared: ", path);
+			return;
+		}
+		
 		// Calculate the path length by walking the path, catch any UTF-8 character errors
 		// https://github.com/abraunegg/onedrive/issues/1192
 		try {
@@ -3716,12 +3722,6 @@ final class SyncEngine
 		if(!isValid(path)) {
 			// Path is not valid according to https://dlang.org/phobos/std_encoding.html
 			log.vlog("Skipping item - invalid character encoding sequence: ", path);
-			return;
-		}
-		
-		// A short lived file that has disappeared will cause an error - is the path valid?
-		if (!exists(path)) {
-			log.log("Skipping item - path has disappeared: ", path);
 			return;
 		}
 		
