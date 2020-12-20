@@ -3682,13 +3682,13 @@ final class SyncEngine
 	{
 		import std.range : walkLength;
 		import std.uni : byGrapheme;
-		//	https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
-		//  If the path is greater than allowed characters, then one drive will return a '400 - Bad Request' 
-		//  Need to ensure that the URI is encoded before the check is made
-		//  400 Character Limit for OneDrive Business / Office 365
-		//  430 Character Limit for OneDrive Personal
+		// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
+		// If the path is greater than allowed characters, then one drive will return a '400 - Bad Request'
+		// Need to ensure that the URI is encoded before the check is made:
+		// - 400 Character Limit for OneDrive Business / Office 365
+		// - 430 Character Limit for OneDrive Personal
 		long maxPathLength = 0;
-		long pathWalkLength = path.byGrapheme.walkLength;
+		long pathWalkLength = 0;
 		
 		// Configure maxPathLength based on account type
 		if (accountType == "personal"){
@@ -3698,19 +3698,31 @@ final class SyncEngine
 			// Business Account / Office365
 			maxPathLength = 400;
 		}
-				
+		
 		// A short lived file that has disappeared will cause an error - is the path valid?
 		if (!exists(path)) {
-			log.log("Skipping item - has disappeared: ", path);
+			log.log("Skipping item - path has disappeared: ", path);
 			return;
 		}
 		
-		// Invalid UTF-8 sequence check
+		// Calculate the path length by walking the path, catch any UTF-8 character errors
+		// https://github.com/abraunegg/onedrive/issues/487
+		// https://github.com/abraunegg/onedrive/issues/1192
+		try {
+			pathWalkLength = path.byGrapheme.walkLength;
+		} catch (std.utf.UTFException e) {
+			// path contains characters which generate a UTF exception
+			log.vlog("Skipping item - invalid UTF sequence: ", path);
+			log.vdebug("  Error Reason:", e.msg);
+			return;
+		}
+		
+		// check the std.encoding of the path
 		// https://github.com/skilion/onedrive/issues/57
 		// https://github.com/abraunegg/onedrive/issues/487
 		if(!isValid(path)) {
 			// Path is not valid according to https://dlang.org/phobos/std_encoding.html
-			log.vlog("Skipping item - invalid character sequences: ", path);
+			log.vlog("Skipping item - invalid character encoding sequence: ", path);
 			return;
 		}
 		
