@@ -5360,37 +5360,47 @@ final class SyncEngine
 			foreach (searchResult; siteQuery["value"].array) {
 				// Need an 'exclusive' match here with o365SharedLibraryName as entered
 				log.vdebug("Found O365 Site: ", searchResult);
-				if (o365SharedLibraryName == searchResult["displayName"].str){
-					// 'displayName' matches search request
-					site_id = searchResult["id"].str;
-					webUrl = searchResult["webUrl"].str;
-					JSONValue siteDriveQuery;
-					
-					try {
-						siteDriveQuery = onedrive.o365SiteDrives(site_id);
-					} catch (OneDriveException e) {
-						log.error("ERROR: Query of OneDrive for Office Site ID failed");
-						// display what the error is
-						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-						return;
-					}
-					
-					// is siteDriveQuery a valid JSON object & contain data we can use?
-					if ((siteDriveQuery.type() == JSONType.object) && ("value" in siteDriveQuery)) {
-						// valid JSON object
-						foreach (driveResult; siteDriveQuery["value"].array) {
-							// Display results
-							found = true;
-							writeln("SiteName: ", searchResult["displayName"].str);
-							writeln("drive_id: ", driveResult["id"].str);
-							writeln("URL:      ", webUrl);
+				
+				// 'displayName', 'id' and 'webUrl' have to be present in the search result record
+				if (("displayName" in searchResult) && ("id" in searchResult) && ("webUrl" in searchResult)) {
+					if (o365SharedLibraryName == searchResult["displayName"].str){
+						// 'displayName' matches search request
+						site_id = searchResult["id"].str;
+						webUrl = searchResult["webUrl"].str;
+						JSONValue siteDriveQuery;
+						
+						try {
+							siteDriveQuery = onedrive.o365SiteDrives(site_id);
+						} catch (OneDriveException e) {
+							log.error("ERROR: Query of OneDrive for Office Site ID failed");
+							// display what the error is
+							displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+							return;
 						}
-					} else {
-						// not a valid JSON object
-						log.error("ERROR: There was an error performing this operation on OneDrive");
-						log.error("ERROR: Increase logging verbosity to assist determining why.");
-						return;
+						
+						// is siteDriveQuery a valid JSON object & contain data we can use?
+						if ((siteDriveQuery.type() == JSONType.object) && ("value" in siteDriveQuery)) {
+							// valid JSON object
+							foreach (driveResult; siteDriveQuery["value"].array) {
+								// Display results
+								found = true;
+								writeln("SiteName: ", searchResult["displayName"].str);
+								writeln("drive_id: ", driveResult["id"].str);
+								writeln("URL:      ", webUrl);
+							}
+						} else {
+							// not a valid JSON object
+							log.error("ERROR: There was an error performing this operation on OneDrive");
+							log.error("ERROR: Increase logging verbosity to assist determining why.");
+							return;
+						}
 					}
+				} else {
+					// 'displayName' not present in JSON results
+					log.error("ERROR: The results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator.");
+					log.error("ERROR: Your site security settings is preventing the following details from being accessed: 'displayName', 'id' and 'webUrl'");
+					log.error("ERROR: To debug this further, please use --verbose --verbose to provide insight as to what details are actually returned.");
+					return;
 				}
 			}
 			
