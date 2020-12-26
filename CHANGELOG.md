@@ -2,6 +2,23 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.4.9 - 2020-12-27
+### Fixed
+*   Fix to handle case where API provided deltaLink generates a further API error
+*   Fix application crash when unable to read a local file due to local file permissions
+*   Fix application crash when calculating the path length due to invalid UTF characters in local path
+*   Fix Docker build on Alpine due missing symbols due to using the edge version of ldc and ldc-runtime
+*   Fix application crash with --get-O365-drive-id when API response is restricted
+
+### Added
+*   Add debug log output of the configured URL's which will be used throughout the application to remove any ambiguity as to using incorrect URL's when making API calls
+*   Improve application startup when using --monitor when there is no network connection to the OneDrive API and only initialise application once OneDrive API is reachable
+*   Add Docker environment variable to allow --logout for re-authentication
+
+### Updated
+*   Remove duplicate code for error output functions and enhance error logging output
+*   Updated documentation
+
 ## 2.4.8 - 2020-11-30
 ### Fixed
 *   Fix to use config set option for 'remove_source_files' and 'skip_dir_strict_match' rather than ignore if set
