@@ -3682,13 +3682,13 @@ final class SyncEngine
 	{
 		import std.range : walkLength;
 		import std.uni : byGrapheme;
-		//	https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
-		//  If the path is greater than allowed characters, then one drive will return a '400 - Bad Request' 
-		//  Need to ensure that the URI is encoded before the check is made
-		//  400 Character Limit for OneDrive Business / Office 365
-		//  430 Character Limit for OneDrive Personal
+		// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
+		// If the path is greater than allowed characters, then one drive will return a '400 - Bad Request'
+		// Need to ensure that the URI is encoded before the check is made:
+		// - 400 Character Limit for OneDrive Business / Office 365
+		// - 430 Character Limit for OneDrive Personal
 		long maxPathLength = 0;
-		long pathWalkLength = path.byGrapheme.walkLength;
+		long pathWalkLength = 0;
 		
 		// Configure maxPathLength based on account type
 		if (accountType == "personal"){
@@ -3698,19 +3698,31 @@ final class SyncEngine
 			// Business Account / Office365
 			maxPathLength = 400;
 		}
-				
+		
 		// A short lived file that has disappeared will cause an error - is the path valid?
 		if (!exists(path)) {
-			log.log("Skipping item - has disappeared: ", path);
+			log.log("Skipping item - path has disappeared: ", path);
 			return;
 		}
 		
-		// Invalid UTF-8 sequence check
+		// Calculate the path length by walking the path, catch any UTF-8 character errors
+		// https://github.com/abraunegg/onedrive/issues/487
+		// https://github.com/abraunegg/onedrive/issues/1192
+		try {
+			pathWalkLength = path.byGrapheme.walkLength;
+		} catch (std.utf.UTFException e) {
+			// path contains characters which generate a UTF exception
+			log.vlog("Skipping item - invalid UTF sequence: ", path);
+			log.vdebug("  Error Reason:", e.msg);
+			return;
+		}
+		
+		// check the std.encoding of the path
 		// https://github.com/skilion/onedrive/issues/57
 		// https://github.com/abraunegg/onedrive/issues/487
 		if(!isValid(path)) {
 			// Path is not valid according to https://dlang.org/phobos/std_encoding.html
-			log.vlog("Skipping item - invalid character sequences: ", path);
+			log.vlog("Skipping item - invalid character encoding sequence: ", path);
 			return;
 		}
 		
@@ -5348,37 +5360,47 @@ final class SyncEngine
 			foreach (searchResult; siteQuery["value"].array) {
 				// Need an 'exclusive' match here with o365SharedLibraryName as entered
 				log.vdebug("Found O365 Site: ", searchResult);
-				if (o365SharedLibraryName == searchResult["displayName"].str){
-					// 'displayName' matches search request
-					site_id = searchResult["id"].str;
-					webUrl = searchResult["webUrl"].str;
-					JSONValue siteDriveQuery;
-					
-					try {
-						siteDriveQuery = onedrive.o365SiteDrives(site_id);
-					} catch (OneDriveException e) {
-						log.error("ERROR: Query of OneDrive for Office Site ID failed");
-						// display what the error is
-						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-						return;
-					}
-					
-					// is siteDriveQuery a valid JSON object & contain data we can use?
-					if ((siteDriveQuery.type() == JSONType.object) && ("value" in siteDriveQuery)) {
-						// valid JSON object
-						foreach (driveResult; siteDriveQuery["value"].array) {
-							// Display results
-							found = true;
-							writeln("SiteName: ", searchResult["displayName"].str);
-							writeln("drive_id: ", driveResult["id"].str);
-							writeln("URL:      ", webUrl);
+				
+				// 'displayName', 'id' and 'webUrl' have to be present in the search result record
+				if (("displayName" in searchResult) && ("id" in searchResult) && ("webUrl" in searchResult)) {
+					if (o365SharedLibraryName == searchResult["displayName"].str){
+						// 'displayName' matches search request
+						site_id = searchResult["id"].str;
+						webUrl = searchResult["webUrl"].str;
+						JSONValue siteDriveQuery;
+						
+						try {
+							siteDriveQuery = onedrive.o365SiteDrives(site_id);
+						} catch (OneDriveException e) {
+							log.error("ERROR: Query of OneDrive for Office Site ID failed");
+							// display what the error is
+							displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+							return;
 						}
-					} else {
-						// not a valid JSON object
-						log.error("ERROR: There was an error performing this operation on OneDrive");
-						log.error("ERROR: Increase logging verbosity to assist determining why.");
-						return;
+						
+						// is siteDriveQuery a valid JSON object & contain data we can use?
+						if ((siteDriveQuery.type() == JSONType.object) && ("value" in siteDriveQuery)) {
+							// valid JSON object
+							foreach (driveResult; siteDriveQuery["value"].array) {
+								// Display results
+								found = true;
+								writeln("SiteName: ", searchResult["displayName"].str);
+								writeln("drive_id: ", driveResult["id"].str);
+								writeln("URL:      ", webUrl);
+							}
+						} else {
+							// not a valid JSON object
+							log.error("ERROR: There was an error performing this operation on OneDrive");
+							log.error("ERROR: Increase logging verbosity to assist determining why.");
+							return;
+						}
 					}
+				} else {
+					// 'displayName' not present in JSON results
+					log.error("ERROR: The results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator.");
+					log.error("ERROR: Your site security settings is preventing the following details from being accessed: 'displayName', 'id' and 'webUrl'");
+					log.error("ERROR: To debug this further, please use --verbose --verbose to provide insight as to what details are actually returned.");
+					return;
 				}
 			}
 			
