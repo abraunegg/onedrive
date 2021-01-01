@@ -4478,10 +4478,10 @@ final class SyncEngine
 									// upload finished
 									auto uploadFinishTime = Clock.currTime();
 									auto uploadDuration = uploadFinishTime - uploadStartTime;
-									log.vlog("File Size: ", thisFileSize, " Bytes");
-									log.vlog("Upload Duration: ", (uploadDuration.total!"msecs"/1e3), " Seconds");
+									log.vdebug("File Size: ", thisFileSize, " Bytes");
+									log.vdebug("Upload Duration: ", (uploadDuration.total!"msecs"/1e3), " Seconds");
 									auto uploadSpeed = (thisFileSize / (uploadDuration.total!"msecs"/1e3)/ 1024 / 1024);
-									log.vlog("Upload Speed: ", uploadSpeed, " Mbps (approx)");
+									log.vdebug("Upload Speed: ", uploadSpeed, " Mbps (approx)");
 									
 									// Log upload action to log file
 									log.fileOnly("Uploading new file ", path, " ... done.");
