@@ -116,6 +116,8 @@ final class Config
 		longValues["sync_dir_permissions"] = defaultDirectoryPermissionMode;
 		// Configure the default file permission attributes for newly created file
 		longValues["sync_file_permissions"] = defaultFilePermissionMode;
+		// Configure download / upload rate limits
+		longValues["rate_limit"] = 0;
 		
 		// DEVELOPER OPTIONS 
 		// display_memory = true | false

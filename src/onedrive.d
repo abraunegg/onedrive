@@ -119,7 +119,7 @@ final class OneDriveApi
 		// Timeout for connecting
 		http.connectTimeout = (dur!"seconds"(10));
 		// with the following settings we force
-		// - if there is no data flow for 5min, abort
+		// - if there is no data flow for 10min, abort
 		// - if the download time for one item exceeds 1h, abort
 		//
 		// timeout for activity on connection
@@ -128,7 +128,7 @@ final class OneDriveApi
 		//   It contains the time in number seconds that the
 		//   transfer speed should be below the CURLOPT_LOW_SPEED_LIMIT
 		//   for the library to consider it too slow and abort.
-		http.dataTimeout = (dur!"seconds"(300));
+		http.dataTimeout = (dur!"seconds"(600));
 		// maximum time an operation is allowed to take
 		// This includes dns resolution, connecting, data transfer, etc.
 		http.operationTimeout = (dur!"seconds"(3600));
@@ -329,6 +329,27 @@ final class OneDriveApi
 			http.handle.set(CurlOption.http_version,2);
 		}
 		
+		// Configure upload / download rate limits if configured
+		long userRateLimit = cfg.getValueLong("rate_limit");
+		// 131072 = 128 KB/s - minimum for basic application operations to prevent timeouts
+		// A 0 value means rate is unlimited, and is the curl default
+		
+		if (userRateLimit > 0) {
+			// User configured rate limit
+			writeln("User Configured Rate Limit: ", userRateLimit);
+			
+			// If user provided rate limit is < 131072, flag that this is too low, setting to the minimum of 131072
+			if (userRateLimit < 131072) {
+				// user provided limit too low
+				log.log("WARNING: User configured rate limit too low for normal application processing and preventing application timeouts. Overriding to default minimum of 131072 (128KB/s)");
+				userRateLimit = 131072;
+			}
+			
+			// set rate limit
+			http.handle.set(CurlOption.max_send_speed_large,userRateLimit); 
+			http.handle.set(CurlOption.max_recv_speed_large,userRateLimit);
+		}
+		
 		// Do we set the dryRun handlers?
 		if (cfg.getValueBool("dry_run")) {
 			.dryRun = true;
@@ -337,7 +358,7 @@ final class OneDriveApi
 			}
 		}
 	}
-
+	
 	// Shutdown OneDrive HTTP construct
 	void shutdown()
 	{
