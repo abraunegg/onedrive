@@ -545,7 +545,7 @@ check_nosync = "true"
 ### How to 'rate limit' the application to control bandwidth consumed for upload & download operations
 To minimise the Internet bandwidth for upload and download operations, you can configure the 'rate_limit' option within the config file.
 
-Valid values for this are as follows:
+Example valid values for this are as follows:
 * 131072 	= 128 KB/s - minimum for basic application operations to prevent timeouts
 * 262144 	= 256 KB/s
 * 524288	= 512 KB/s
@@ -560,6 +560,8 @@ Example:
 # sync_file_permissions = "600"
 rate_limit = "131072"
 ```
+
+**Note:** A number greater than '131072' is a valid value, with '104857600' being tested as an upper limit.
 
 ### Shared folders (OneDrive Personal)
 Folders shared with you can be synced by adding them to your OneDrive. To do that open your Onedrive, go to the Shared files list, right click on the folder you want to sync and then click on "Add to my OneDrive".
