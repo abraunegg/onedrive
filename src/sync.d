@@ -4264,8 +4264,13 @@ final class SyncEngine
 								log.vlog("Skipping item - excluded by skip_size config: ", path, " (", thisFileSize/2^^20," MB)");
 								return;
 							}
+							
+							// start of upload file
 							write("Uploading new file ", path, " ... ");
 							JSONValue response;
+							
+							// Calculate upload speed
+							auto uploadStartTime = Clock.currTime();
 							
 							if (!dryRun) {
 								// Resolve https://github.com/abraunegg/onedrive/issues/37
@@ -4469,7 +4474,16 @@ final class SyncEngine
 								if (response.type() == JSONType.object){
 									// upload done without error
 									writeln("done.");
-									// Log action to log file
+									
+									// upload finished
+									auto uploadFinishTime = Clock.currTime();
+									auto uploadDuration = uploadFinishTime - uploadStartTime;
+									log.vdebug("File Size: ", thisFileSize, " Bytes");
+									log.vdebug("Upload Duration: ", (uploadDuration.total!"msecs"/1e3), " Seconds");
+									auto uploadSpeed = (thisFileSize / (uploadDuration.total!"msecs"/1e3)/ 1024 / 1024);
+									log.vdebug("Upload Speed: ", uploadSpeed, " Mbps (approx)");
+									
+									// Log upload action to log file
 									log.fileOnly("Uploading new file ", path, " ... done.");
 									// The file was uploaded, or a 4xx / 5xx error was generated
 									if ("size" in response){
@@ -5685,7 +5699,7 @@ final class SyncEngine
 					writeln("Selected directory is out of sync with OneDrive");
 					if (downloadSize > 0){
 						downloadSize = downloadSize / 1000;
-						writeln("Approximate data to transfer: ", downloadSize, " KB");
+						writeln("Approximate data to download from OneDrive: ", downloadSize, " KB");
 					}
 				} else {
 					writeln("No pending remote changes - selected directory is in sync");
@@ -5699,7 +5713,7 @@ final class SyncEngine
 				}
 				if (downloadSize > 0){
 					downloadSize = downloadSize / 1000;
-					writeln("Approximate data to transfer: ", downloadSize, " KB");
+					writeln("Approximate data to download from OneDrive: ", downloadSize, " KB");
 				}
 			}
 		} else {
