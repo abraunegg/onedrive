@@ -3100,7 +3100,17 @@ final class SyncEngine
 		string path;
 		
 		// Compute this item path early as we we use this path often
-		path = itemdb.computePath(item.driveId, item.id);
+		log.vdebug("Attempting to calculate local filesystem path for ", item.driveId, " and ", item.id);
+		try {
+			path = itemdb.computePath(item.driveId, item.id);
+		} catch (core.exception.AssertError) {
+			// broken tree in the database, we cant compute the path for this item id, exit
+			log.error("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
+			// Must exit here to preserve data
+			exit(-1);
+		}
+		
+		// item.id was in the database associated with the item.driveId specified
 		log.vlog("Processing ", buildNormalizedPath(path));
 		
 		// What type of DB item are we processing
