@@ -1760,7 +1760,17 @@ final class SyncEngine
 								// What is the original local path for this ID in the database? Does it match 'syncFolderChildPath'
 								if (itemdb.idInLocalDatabase(driveId, item["id"].str)){
 									// item is in the database
-									string originalLocalPath = itemdb.computePath(driveId, item["id"].str);
+									string originalLocalPath;
+									log.vdebug("Attempting to calculate local filesystem path for ", driveId, " and ", item["id"].str);
+									try {
+										originalLocalPath = itemdb.computePath(driveId, item["id"].str);
+									} catch (core.exception.AssertError) {
+										// broken tree in the database, we cant compute the path for this item id, exit
+										log.error("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
+										// Must exit here to preserve data
+										exit(-1);
+									}
+									
 									if (canFind(originalLocalPath, syncFolderChildPath)){
 										JSONValue oneDriveMovedNotDeleted;
 										try {
@@ -1957,7 +1967,17 @@ final class SyncEngine
 						log.vdebug("skip_dir path to check (simple):  ", simplePathToCheck);
 						// complex path
 						if (itemdb.idInLocalDatabase(parentDriveId, parentItem)){
-							complexPathToCheck = itemdb.computePath(parentDriveId, parentItem) ~ "/" ~ driveItem["name"].str;
+							// build up complexPathToCheck
+							log.vdebug("Attempting to calculate local filesystem path for ", parentDriveId, " and ", parentItem);
+							try {
+								complexPathToCheck = itemdb.computePath(parentDriveId, parentItem);
+							} catch (core.exception.AssertError) {
+								// broken tree in the database, we cant compute the path for this item id, exit
+								log.error("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
+								// Must exit here to preserve data
+								exit(-1);
+							}
+							complexPathToCheck = complexPathToCheck ~ "/" ~ driveItem["name"].str;
 							complexPathToCheck = buildNormalizedPath(complexPathToCheck);
 						} else {
 							log.vdebug("Parent details not in database - unable to compute complex path to check");
@@ -2016,8 +2036,19 @@ final class SyncEngine
 				
 				// is the parent id in the database?
 				if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
-					// need to compute the full path for this file
-					path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
+					// Compute this item path
+					log.vdebug("Attempting to calculate local filesystem path for ", item.driveId, " and ", item.parentId);
+					try {
+						path = itemdb.computePath(item.driveId, item.parentId);
+					} catch (core.exception.AssertError) {
+						// broken tree in the database, we cant compute the path for this item id, exit
+						log.error("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
+						// Must exit here to preserve data
+						exit(-1);
+					}
+					
+					// need the full path for this file
+					path = path ~ "/" ~ item.name;
 					
 					// The path that needs to be checked needs to include the '/'
 					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
@@ -2050,7 +2081,18 @@ final class SyncEngine
 			} else {
 				// Why was this unwanted?
 				if (path.empty) {
-					path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
+					// Compute this item path 
+					log.vdebug("Attempting to calculate local filesystem path for ", item.driveId, " and ", item.parentId);
+					try {
+						path = itemdb.computePath(item.driveId, item.parentId);
+					} catch (core.exception.AssertError) {
+						// broken tree in the database, we cant compute the path for this item id, exit
+						log.error("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
+						// Must exit here to preserve data
+						exit(-1);
+					}
+					// need the full path for this file
+					path = path ~ "/" ~ item.name;
 				}
 				// Microsoft OneNote container objects present as neither folder or file but has file size
 				if ((!isItemFile(driveItem)) && (!isItemFolder(driveItem)) && (hasFileSize(driveItem))) {
@@ -2070,7 +2112,17 @@ final class SyncEngine
 			// Is the item parent in the local database?
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
 				// compute the item path to see if the path is excluded
-				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
+				log.vdebug("Attempting to calculate local filesystem path for ", item.driveId, " and ", item.parentId);
+				try {
+					path = itemdb.computePath(item.driveId, item.parentId);
+				} catch (core.exception.AssertError) {
+					// broken tree in the database, we cant compute the path for this item id, exit
+					log.error("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
+					// Must exit here to preserve data
+					exit(-1);
+				}
+				// need the full path for this file
+				path = path ~ "/" ~ item.name;
 				path = buildNormalizedPath(path);
 				if (selectiveSync.isPathExcludedViaSyncList(path)) {
 					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
@@ -2165,7 +2217,16 @@ final class SyncEngine
 			// Is the item in the local database
 			if (itemdb.idInLocalDatabase(item.driveId, item.id)){
 				log.vdebug("OneDrive item ID is present in local database");
-				oldPath = itemdb.computePath(item.driveId, item.id);
+				// Compute this item path
+				log.vdebug("Attempting to calculate local filesystem path for ", item.driveId, " and ", item.id);
+				try {
+					oldPath = itemdb.computePath(item.driveId, item.id);
+				} catch (core.exception.AssertError) {
+					// broken tree in the database, we cant compute the path for this item id, exit
+					log.error("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
+					// Must exit here to preserve data
+					exit(-1);
+				}
 				// Query DB for existing local item in specified path
 				string itemSource = "database";
 				if (!isItemSynced(oldItem, oldPath, itemSource)) {
@@ -2781,8 +2842,19 @@ final class SyncEngine
 	{
 		foreach_reverse (i; idsToDelete) {
 			Item item;
+			string path;
 			if (!itemdb.selectById(i[0], i[1], item)) continue; // check if the item is in the db
-			const(string) path = itemdb.computePath(i[0], i[1]);
+			// Compute this item path
+			log.vdebug("Attempting to calculate local filesystem path for ", i[0], " and ", i[1]);
+			try {
+				path = itemdb.computePath(i[0], i[1]);
+			} catch (core.exception.AssertError) {
+				// broken tree in the database, we cant compute the path for this item id, exit
+				log.error("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
+				// Must exit here to preserve data
+				exit(-1);
+			}
+			
 			log.log("Trying to delete item ", path);
 			if (!dryRun) {
 				// Actually process the database entry removal
