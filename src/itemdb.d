@@ -388,6 +388,9 @@ final class ItemDatabase
 					}
 				} else {
 					// broken tree
+					log.vdebug("The following generated a broken tree query:");
+					log.vdebug("Drive ID: ", driveId);
+					log.vdebug("Item ID: ", id);
 					assert(0);
 				}
 			}
