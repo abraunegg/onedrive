@@ -4243,7 +4243,8 @@ final class SyncEngine
 			// Maximum file size upload
 			//  https://support.microsoft.com/en-us/office/invalid-file-names-and-file-types-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa?ui=en-us&rs=en-us&ad=us
 			//	July 2020, maximum file size for all accounts is 100GB
-			auto maxUploadFileSize = 107374182400; // 100GB
+			//  January 2021, maximum file size for all accounts is 250GB
+			auto maxUploadFileSize = 268435456000; // 250GB
 			
 			// Can we read the file - as a permissions issue or file corruption will cause a failure
 			// https://github.com/abraunegg/onedrive/issues/113
