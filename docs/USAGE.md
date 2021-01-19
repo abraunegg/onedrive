@@ -570,7 +570,7 @@ Folders shared with you can be synced by adding them to your OneDrive. To do tha
 Refer to [./BusinessSharedFolders.md](BusinessSharedFolders.md) for configuration assistance.
 
 ### SharePoint / Office 365 Shared Libraries
-Refer to [./Office365.md](Office365.md) for configuration assistance.
+Refer to [./SharePoint-Shared-Libraries.md](SharePoint-Shared-Libraries.md) for configuration assistance.
 
 ## Running 'onedrive' in 'monitor' mode
 Monitor mode (`--monitor`) allows the onedrive process to continually monitor your local file system for changes to files.
