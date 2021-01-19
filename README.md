@@ -52,7 +52,7 @@ See [docs/USAGE.md](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE
 See [docs/BusinessSharedFolders.md](https://github.com/abraunegg/onedrive/blob/master/docs/BusinessSharedFolders.md)
 
 ### Configure SharePoint / Office 365 Shared Libraries (Business or Education)
-See [docs/Office365.md](https://github.com/abraunegg/onedrive/blob/master/docs/Office365.md)
+See [docs/SharePoint-Shared-Libraries.md](https://github.com/abraunegg/onedrive/blob/master/docs/SharePoint-Shared-Libraries.md)
 
 ### Configure National Cloud support
 See [docs/national-cloud-deployments.md](https://github.com/abraunegg/onedrive/blob/master/docs/national-cloud-deployments.md)

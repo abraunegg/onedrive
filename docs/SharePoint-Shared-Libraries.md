@@ -2,9 +2,10 @@
 Syncing a OneDrive SharePoint library requires additional configuration for your 'onedrive' client:
 1.  Login to OneDrive and under 'Shared Libraries' obtain the shared library name
 2.  Query that shared library name using the client to obtain the required configuration details
-3.  Configure the client's config file with the required 'drive_id'
-4.  Test the configuration using '--dry-run'
-5.  Sync the SharePoint Library as required
+3.  Create a unique local folder which will be the SharePoint Library 'root'
+4.  Configure the client's config file with the required 'drive_id'
+5.  Test the configuration using '--dry-run'
+6.  Sync the SharePoint Library as required
 
 ## Listing available OneDrive SharePoint Libraries
 1.  Login to the OneDrive web interface and determine which shared library you wish to configure the client for:
@@ -15,7 +16,7 @@ Syncing a OneDrive SharePoint library requires additional configuration for your
 ```text
 onedrive --get-O365-drive-id '<your library name>'
 ```
-3.  This will return the following:
+This will return something similar to the following:
 ```text
 Configuration file successfully loaded
 Configuring Global Azure AD Endpoints
@@ -26,7 +27,19 @@ drive_id: b!6H_y8B...xU5
 URL:      <your site URL>
 ```
 
-## Configure the client's config file with the required 'drive_id'
+## Configure the client's config file with the required 'drive_id' & 'sync_dir' options
+3.  Create a new local folder to store the SharePoint Library data in
+```text
+mkdir ~/SharePoint_My_Library_Name
+```
+
+**Note:** Do not use spaces in the directory name, use '_' as a replacement
+
+Update your 'onedrive' configuration file (`~/.config/onedrive/config`) with the following:
+```text
+sync_dir = "~/SharePoint_My_Library_Name"
+```
+
 4.  Once you have obtained the 'drive_id' above, add to your 'onedrive' configuration file (`~/.config/onedrive/config`) the following:
 ```text
 drive_id = "insert the drive_id value from above here"
