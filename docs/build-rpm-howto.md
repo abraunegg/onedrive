@@ -115,7 +115,7 @@ Executing(%install): /bin/sh -e /var/tmp/rpm-tmp.VP7LUb
 /usr/bin/install -c -D onedrive.1 /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el6.x86_64/usr/share/man/man1/onedrive.1
 /usr/bin/install -c -D -m 644 contrib/logrotate/onedrive.logrotate /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el6.x86_64/etc/logrotate.d/onedrive
 mkdir -p /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el6.x86_64/usr/share/doc/onedrive
-/usr/bin/install -c -D -m 644 README.md config LICENSE CHANGELOG.md docs/Docker.md docs/INSTALL.md docs/Office365.md docs/USAGE.md /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el6.x86_64/usr/share/doc/onedrive
+/usr/bin/install -c -D -m 644 README.md config LICENSE CHANGELOG.md docs/Docker.md docs/INSTALL.md docs/SharePoint-Shared-Libraries.md docs/USAGE.md /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el6.x86_64/usr/share/doc/onedrive
 install -D contrib/init.d/onedrive.init /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el6.x86_64/etc/init.d/onedrive
 install -D contrib/init.d/onedrive_service.sh /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el6.x86_64/usr/bin/onedrive_service.sh
 + /usr/lib/rpm/check-buildroot
@@ -287,7 +287,7 @@ Executing(%install): /bin/sh -e /var/tmp/rpm-tmp.Ffintx
 /usr/bin/install -c -D onedrive.1 /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el7.x86_64/usr/share/man/man1/onedrive.1
 /usr/bin/install -c -D -m 644 contrib/logrotate/onedrive.logrotate /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el7.x86_64/etc/logrotate.d/onedrive
 mkdir -p /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el7.x86_64/usr/share/doc/onedrive
-/usr/bin/install -c -D -m 644 README.md config LICENSE CHANGELOG.md docs/Docker.md docs/INSTALL.md docs/Office365.md docs/USAGE.md /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el7.x86_64/usr/share/doc/onedrive
+/usr/bin/install -c -D -m 644 README.md config LICENSE CHANGELOG.md docs/Docker.md docs/INSTALL.md docs/SharePoint-Shared-Libraries.md docs/USAGE.md /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el7.x86_64/usr/share/doc/onedrive
 /usr/bin/install -c -d -m 0755 /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el7.x86_64/usr/lib/systemd/user /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el7.x86_64/usr/lib/systemd/system
 /usr/bin/install -c -m 0644 contrib/systemd/onedrive@.service /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el7.x86_64/usr/lib/systemd/system
 /usr/bin/install -c -m 0644 contrib/systemd/onedrive.service /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el7.x86_64/usr/lib/systemd/system
@@ -457,7 +457,7 @@ Executing(%install): /bin/sh -e /var/tmp/rpm-tmp.u9F8Hd
 /usr/bin/install -p -D onedrive.1 /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el8.x86_64/usr/share/man/man1/onedrive.1
 /usr/bin/install -p -D -m 644 contrib/logrotate/onedrive.logrotate /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el8.x86_64/etc/logrotate.d/onedrive
 mkdir -p /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el8.x86_64/usr/share/doc/onedrive
-/usr/bin/install -p -D -m 644 README.md config LICENSE CHANGELOG.md docs/Docker.md docs/INSTALL.md docs/Office365.md docs/USAGE.md /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el8.x86_64/usr/share/doc/onedrive
+/usr/bin/install -p -D -m 644 README.md config LICENSE CHANGELOG.md docs/Docker.md docs/INSTALL.md docs/SharePoint-Shared-Libraries.md docs/USAGE.md /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el8.x86_64/usr/share/doc/onedrive
 /usr/bin/install -p -d -m 0755 /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el8.x86_64/usr/lib/systemd/user /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el8.x86_64/usr/lib/systemd/system
 /usr/bin/install -p -m 0644 contrib/systemd/onedrive@.service /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el8.x86_64/usr/lib/systemd/system
 /usr/bin/install -p -m 0644 contrib/systemd/onedrive.service /home/alex/rpmbuild/BUILDROOT/onedrive-2.4.0-1.el8.x86_64/usr/lib/systemd/system
