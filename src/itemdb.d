@@ -484,4 +484,18 @@ final class ItemDatabase
 		auto stmt = db.prepare("VACUUM;");
 		stmt.exec();
 	}
+	
+	// Select distinct driveId items from database
+	string[] selectDistinctDriveIds()
+	{
+		string[] driveIdArray;
+		auto stmt = db.prepare("SELECT DISTINCT driveId FROM item;");
+		auto res = stmt.exec();
+		if (res.empty) return driveIdArray;
+		while (!res.empty) {
+			driveIdArray ~= res.front[0].dup;
+			res.step();
+		}
+		return driveIdArray;
+	}
 }

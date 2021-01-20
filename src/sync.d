@@ -5529,25 +5529,31 @@ final class SyncEngine
 		if (exists(localFilePath)) {
 			// File exists locally, does it exist in the database
 			// Path needs to be relative to sync_dir path
-			string relativePath = relativePath(localFilePath, syncDir);
 			Item item;
-			if (itemdb.selectByPath(relativePath, defaultDriveId, item)) {
-				// File is in the local database cache
-				JSONValue fileDetails;
-		
-				try {
-					fileDetails = onedrive.getFileDetails(item.driveId, item.id);
-				} catch (OneDriveException e) {
-					// display what the error is
-					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-					return;
-				}
+			string[] distinctDriveIds = itemdb.selectDistinctDriveIds();
+			string relativePath = relativePath(localFilePath, syncDir);
+			bool fileInDB = false;
+			foreach (searchDriveId; distinctDriveIds) {
+				if (itemdb.selectByPath(relativePath, searchDriveId, item)) {
+					// File is in the local database cache
+					fileInDB = true;
+					JSONValue fileDetails;
+					try {
+						fileDetails = onedrive.getFileDetails(item.driveId, item.id);
+					} catch (OneDriveException e) {
+						// display what the error is
+						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+						return;
+					}
 
-				if ((fileDetails.type() == JSONType.object) && ("webUrl" in fileDetails)) {
-					// Valid JSON object
-					writeln(fileDetails["webUrl"].str);
+					if ((fileDetails.type() == JSONType.object) && ("webUrl" in fileDetails)) {
+						// Valid JSON object
+						writeln(fileDetails["webUrl"].str);
+					}
 				}
-			} else {
+			}
+			// was file found?
+			if (!fileInDB) {
 				// File has not been synced with OneDrive
 				log.error("File has not been synced with OneDrive: ", localFilePath);
 			}
