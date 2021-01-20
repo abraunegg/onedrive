@@ -771,11 +771,12 @@ final class SyncEngine
 						// Folder matches a user configured sync entry
 						string[] allowedPath;
 						allowedPath ~= sharedFolderName;
-						// But is this shared folder what we are looking for?
+						// But is this shared folder what we are looking for as part of --single-directory?
 						if (selectiveSync.isPathIncluded(path,allowedPath)) {
 							// Path we want to sync is on a OneDrive Business Shared Folder
 							// Set the correct driveId
 							driveId = searchResult["remoteItem"]["parentReference"]["driveId"].str;
+							log.vdebug("Updated the driveId to a new value: ", driveId);
 							// Keep the driveIDsArray with unique entries only
 							if (!canFind(driveIDsArray, driveId)) {
 								// Add this drive id to the array to search with
@@ -841,7 +842,8 @@ final class SyncEngine
 				// use the item id as folderId
 				folderId = onedrivePathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
 				// Apply any differences found on OneDrive for this path (download data)
-				applyDifferences(defaultDriveId, folderId, false);
+				// Use driveId rather than defaultDriveId as this will be updated if path was matched to another parent driveId
+				applyDifferences(driveId, folderId, false);
 			}
 		} else {
 			// Log that an invalid JSON object was returned
