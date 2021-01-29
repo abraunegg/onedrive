@@ -1,4 +1,52 @@
 # Configuration and Usage of the OneDrive Free Client
+## Table of Contents
+- [Using the client](#using-the-client)
+  * [Upgrading from 'skilion' client](#upgrading-from-skilion-client)
+  * [Local File and Folder Naming Conventions](#local-file-and-folder-naming-conventions)
+  * [curl compatibility](#curl-compatibility)
+  * [Authorize the application with your OneDrive Account](#authorize-the-application-with-your-onedrive-account)
+  * [Show your configuration](#show-your-configuration)
+  * [Testing your configuration](#testing-your-configuration)
+  * [Performing a sync](#performing-a-sync)
+  * [Performing a selective directory sync](#performing-a-selective-directory-sync)
+  * [Performing a 'one-way' download sync](#performing-a-one-way-download-sync)
+  * [Performing a 'one-way' upload sync](#performing-a-one-way-upload-sync)
+  * [Increasing logging level](#increasing-logging-level)
+  * [Client Activity Log](#client-activity-log)
+  * [Notifications](#notifications)
+  * [Handling a OneDrive account password change](#handling-a-onedrive-account-password-change)
+- [Configuration](#configuration)
+  * [The default configuration] (#the-default-configuration)
+  * ['config' file configuration examples](#config-file-configuration-examples)
+    + [sync_dir](#sync_dir)
+    + [sync_dir directory and file permissions](#sync_dir-directory-and-file-permissions)
+    + [skip_dir](#skip_dir)
+    + [skip_file](#skip_file)
+    + [skip_dotfiles](#skip_dotfiles)
+    + [skip_symlinks](#skip_symlinks)
+    + [monitor_interval](#monitor_interval)
+    + [min_notify_changes](#min_notify_changes)
+    + [Selective sync via 'sync_list' file](#selective-sync-via-sync_list-file)
+  * [Configuring the client for 'single tenant application' use](#configuring-the-client-for-single-tenant-application-use)
+  * [Configuring the client to use older 'skilion' application identifier](#configuring-the-client-to-use-older-skilion-application-identifier)
+  * [How to 'skip' directories from syncing?](#how-to-skip-directories-from-syncing)
+  * [How to 'rate limit' the application to control bandwidth consumed for upload & download operations](#how-to-rate-limit-the-application-to-control-bandwidth-consumed-for-upload--download-operations)
+  * [Shared folders (OneDrive Personal)](#shared-folders-onedrive-personal)
+  * [Shared folders (OneDrive Business or Office 365)](#shared-folders-onedrive-business-or-office-365)
+  * [SharePoint / Office 365 Shared Libraries](#sharepoint--office-365-shared-libraries)
+- [Running 'onedrive' in 'monitor' mode](#running-onedrive-in-monitor-mode)
+- [Running 'onedrive' as a system service](#running-onedrive-as-a-system-service)
+  * [OneDrive service running as root user via init.d](#onedrive-service-running-as-root-user-via-initd)
+  * [OneDrive service running as root user via systemd (Arch, Ubuntu, Debian, OpenSuSE, Fedora)](#onedrive-service-running-as-root-user-via-systemd-arch-ubuntu-debian-opensuse-fedora)
+  * [OneDrive service running as root user via systemd (Red Hat Enterprise Linux, CentOS Linux)](#onedrive-service-running-as-root-user-via-systemd-red-hat-enterprise-linux-centos-linux)
+  * [OneDrive service running as a non-root user via systemd (All Linux Distributions)](#onedrive-service-running-as-a-non-root-user-via-systemd-all-linux-distributions)
+  * [OneDrive service running as a non-root user via systemd (with notifications enabled) (Arch, Ubuntu, Debian, OpenSuSE, Fedora)](#onedrive-service-running-as-a-non-root-user-via-systemd-with-notifications-enabled-arch-ubuntu-debian-opensuse-fedora)
+- [Additional Configuration](#additional-configuration)
+  * [Using multiple OneDrive accounts](#using-multiple-onedrive-accounts)
+  * [Access OneDrive service through a proxy](#access-onedrive-service-through-a-proxy)
+  * [Setup selinux for a sync folder outside of the home folder](#setup-selinux-for-a-sync-folder-outside-of-the-home-folder)
+- [All available commands](#all-available-commands)
+
 
 ## Using the client
 
@@ -256,7 +304,7 @@ This file does not get created by default, and should only be created if you wan
 
 See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/config) file for the full list of options, and [All available commands](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#all-available-commands) for all possible keys and there default values.
 
-The default configuration file is listed below:
+### The default configuration file is listed below:
 ```text
 # Configuration for OneDrive Linux Client
 # This file contains the list of supported configuration fields
