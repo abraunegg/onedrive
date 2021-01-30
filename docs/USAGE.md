@@ -467,7 +467,7 @@ skip_file = "~*|.~*|*.tmp|*.swp|*.blah|never_sync.file"
 **Note:** after changing `skip_file`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
 #### skip_dotfiles
-Example: 
+Example:
 ```text
 # skip_symlinks = "false"
 # debug_https = "false"
