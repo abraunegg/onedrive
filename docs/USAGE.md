@@ -16,7 +16,7 @@
   * [Notifications](#notifications)
   * [Handling a OneDrive account password change](#handling-a-onedrive-account-password-change)
 - [Configuration](#configuration)
-  * [The default configuration] (#the-default-configuration)
+  * [The default configuration](#the-default-configuration-file-is-listed-below)
   * ['config' file configuration examples](#config-file-configuration-examples)
     + [sync_dir](#sync_dir)
     + [sync_dir directory and file permissions](#sync_dir-directory-and-file-permissions)
