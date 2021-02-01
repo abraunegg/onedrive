@@ -4831,6 +4831,9 @@ final class SyncEngine
 											//     HTTP request returned status code 413 (Request Entity Too Large)
 											// We also cant use a session to upload the file, we have to use simpleUploadReplace
 											
+											// Calculate existing hash for this file
+											string existingFileHash = computeQuickXorHash(path);
+											
 											if (getSize(path) <= thresholdFileSize) {
 												// Upload file via simpleUploadReplace as below threshold size
 												try {
@@ -4889,18 +4892,31 @@ final class SyncEngine
 											writeln(" done.");
 											// Is the response a valid JSON object - validation checking done in saveItem
 											saveItem(response);
+											
 											// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
 											// So - now the 'local' and 'remote' file is technically DIFFERENT ... thanks Microsoft .. NO way to disable this stupidity
-											if(!uploadOnly){
-												// Download the Microsoft 'modified' file so 'local' is now in sync
-												log.vlog("Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync");
-												log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
-												auto fileSize = response["size"].integer;
-												onedrive.downloadById(response["parentReference"]["driveId"].str, response["id"].str, path, fileSize);
-											} else {
-												// we are not downloading a file, warn that file differences will exist
-												log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
-												log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+											string uploadNewFileHash;
+											if (hasQuickXorHash(response)) {
+											// use the response json hash detail to compare
+												uploadNewFileHash = response["file"]["hashes"]["quickXorHash"].str;
+											}
+											
+											if (existingFileHash != uploadNewFileHash) {
+												// file was modified by Microsoft post upload to SharePoint site
+												log.vdebug("Existing Local File Hash: ", existingFileHash);
+												log.vdebug("New Remote File Hash:     ", uploadNewFileHash);
+												
+												if(!uploadOnly){
+													// Download the Microsoft 'modified' file so 'local' is now in sync
+													log.vlog("Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync");
+													log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+													auto fileSize = response["size"].integer;
+													onedrive.downloadById(response["parentReference"]["driveId"].str, response["id"].str, path, fileSize);
+												} else {
+													// we are not downloading a file, warn that file differences will exist
+													log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
+													log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+												}
 											}
 										}									
 									}
