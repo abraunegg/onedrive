@@ -30,6 +30,9 @@ This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) cl
 *   Support for Windows 'On-Demand' functionality so file is only downloaded when accessed locally
 *   A GUI for configuration management
 
+## Frequently Asked Questions
+Refer to [Frequently Asked Questions](https://github.com/abraunegg/onedrive/wiki/Frequently-Asked-Questions)
+
 ## Reporting issues
 If you encounter any bugs you can report them here on Github. Before filing an issue be sure to:
 
@@ -39,23 +42,23 @@ If you encounter any bugs you can report them here on Github. Before filing an i
 4.  Upload the debug log to [pastebin](https://pastebin.com/) or archive and email to support@mynas.com.au
 
 ## Known issues
-See [docs/known-issues.md](https://github.com/abraunegg/onedrive/blob/master/docs/known-issues.md)
+Refer to [docs/known-issues.md](https://github.com/abraunegg/onedrive/blob/master/docs/known-issues.md)
 
 ## Documentation and Configuration Assistance
 ### Building and Installation
-See [docs/INSTALL.md](https://github.com/abraunegg/onedrive/blob/master/docs/INSTALL.md)
+Refer to [docs/INSTALL.md](https://github.com/abraunegg/onedrive/blob/master/docs/INSTALL.md)
 
 ### Configuration and Usage
-See [docs/USAGE.md](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md)
+Refer to [docs/USAGE.md](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md)
 
 ### Configure OneDrive Business Shared Folders
-See [docs/BusinessSharedFolders.md](https://github.com/abraunegg/onedrive/blob/master/docs/BusinessSharedFolders.md)
+Refer to [docs/BusinessSharedFolders.md](https://github.com/abraunegg/onedrive/blob/master/docs/BusinessSharedFolders.md)
 
 ### Configure SharePoint / Office 365 Shared Libraries (Business or Education)
-See [docs/SharePoint-Shared-Libraries.md](https://github.com/abraunegg/onedrive/blob/master/docs/SharePoint-Shared-Libraries.md)
+Refer to [docs/SharePoint-Shared-Libraries.md](https://github.com/abraunegg/onedrive/blob/master/docs/SharePoint-Shared-Libraries.md)
 
 ### Configure National Cloud support
-See [docs/national-cloud-deployments.md](https://github.com/abraunegg/onedrive/blob/master/docs/national-cloud-deployments.md)
+Refer to [docs/national-cloud-deployments.md](https://github.com/abraunegg/onedrive/blob/master/docs/national-cloud-deployments.md)
 
 ### Docker support
-See [docs/Docker.md](https://github.com/abraunegg/onedrive/blob/master/docs/Docker.md)
+Refer to [docs/Docker.md](https://github.com/abraunegg/onedrive/blob/master/docs/Docker.md)
