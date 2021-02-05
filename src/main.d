@@ -466,15 +466,15 @@ int main(string[] args)
 			if (!shellEnvSet) {
 				// No shell or user set, so expandTilde() will fail - usually headless system running under init.d / systemd or potentially Docker
 				log.vdebug("log_dir: A '~' was found in log_dir, using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set");
-				logDir = buildNormalizedPath(cfg.homePath ~ strip(cfg.getValueString("log_dir"), "~"));
+				logDir = cfg.homePath ~ strip(cfg.getValueString("log_dir"), "~");
 			} else {
 				// A shell and user is set, expand any ~ as this will be expanded correctly if present
 				log.vdebug("log_dir: A '~' was found in log_dir, using SHELL or USER environment variable to expand '~'");
-				logDir = buildNormalizedPath(expandTilde(cfg.getValueString("log_dir")));
+				logDir = expandTilde(cfg.getValueString("log_dir"));
 			}
 		} else {
 			// '~' not found in log_dir entry, use as is
-			logDir = buildNormalizedPath(cfg.getValueString("log_dir"));
+			logDir = cfg.getValueString("log_dir");
 		}
 		// update log_dir with normalised path, with '~' expanded correctly
 		cfg.setValueString("log_dir", logDir);
