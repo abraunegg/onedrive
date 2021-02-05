@@ -425,13 +425,14 @@ int main(string[] args)
 	}
 	
 	// sync_dir environment handling to handle ~ expansion properly
+	bool shellEnvSet = false;
 	if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
 		log.vdebug("sync_dir: No SHELL or USER environment variable configuration detected");
 		// No shell or user set, so expandTilde() will fail - usually headless system running under init.d / systemd or potentially Docker
 		// Does the 'currently configured' sync_dir include a ~
 		if (canFind(cfg.getValueString("sync_dir"), "~")) {
-			// A ~ was found
-			log.vdebug("sync_dir: A '~' was found in sync_dir, using the calculated 'homePath' to replace '~'");
+			// A ~ was found in sync_dir
+			log.vdebug("sync_dir: A '~' was found in sync_dir, using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set");
 			syncDir = cfg.homePath ~ strip(cfg.getValueString("sync_dir"), "~");
 		} else {
 			// No ~ found in sync_dir, use as is
@@ -440,6 +441,7 @@ int main(string[] args)
 		}
 	} else {
 		// A shell and user is set, expand any ~ as this will be expanded correctly if present
+		shellEnvSet = true;
 		log.vdebug("sync_dir: Getting syncDir from config value sync_dir");
 		if (canFind(cfg.getValueString("sync_dir"), "~")) {
 			log.vdebug("sync_dir: A '~' was found in configured sync_dir, automatically expanding as SHELL and USER environment variable is set");
@@ -452,10 +454,35 @@ int main(string[] args)
 	// vdebug syncDir as set and calculated
 	log.vdebug("syncDir: ", syncDir);
 	
-	// Configure logging if enabled
+	
+	// Configure the logging directory if different from application default
+	// log_dir environment handling to handle ~ expansion properly
+	string logDir = cfg.getValueString("log_dir");
+	if (logDir != cfg.defaultLogFileDir) {
+		// user modified log_dir entry
+		// if 'log_dir' contains a '~' this needs to be expanded correctly
+		if (canFind(cfg.getValueString("log_dir"), "~")) {
+			// ~ needs to be expanded correctly
+			if (!shellEnvSet) {
+				// No shell or user set, so expandTilde() will fail - usually headless system running under init.d / systemd or potentially Docker
+				log.vdebug("log_dir: A '~' was found in log_dir, using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set");
+				logDir = buildNormalizedPath(cfg.homePath ~ strip(cfg.getValueString("log_dir"), "~"));
+			} else {
+				// A shell and user is set, expand any ~ as this will be expanded correctly if present
+				log.vdebug("log_dir: A '~' was found in log_dir, using SHELL or USER environment variable to expand '~'");
+				logDir = buildNormalizedPath(expandTilde(cfg.getValueString("log_dir")));
+			}
+		} else {
+			// '~' not found in log_dir entry, use as is
+			logDir = buildNormalizedPath(cfg.getValueString("log_dir"));
+		}
+		// update log_dir with normalised path, with '~' expanded correctly
+		cfg.setValueString("log_dir", logDir);
+	}
+	
+	// Configure logging only if enabled
 	if (cfg.getValueBool("enable_logging")){
-		// Read in a user defined log directory or use the default
-		string logDir = cfg.getValueString("log_dir");
+		// Initialise using the configured logging directory
 		log.vlog("Using logfile dir: ", logDir);
 		log.init(logDir);
 	}
