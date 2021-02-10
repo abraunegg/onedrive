@@ -2973,11 +2973,7 @@ final class SyncEngine
 		}
 		
 		// scan for changes in the path provided
-		if (isDir(logPath)) {
-			// if this path is a directory, output this message.
-			// if a file, potentially leads to confusion as to what the client is actually doing
-			log.vlog("Uploading differences of ", logPath);
-		}
+		log.vlog("Uploading differences of ", logPath);
 		Item item;
 		// For each unique OneDrive driveID we know about
 		foreach (driveId; driveIDsArray) {
@@ -2987,13 +2983,11 @@ final class SyncEngine
 				// There could be multiple shared folders all from this same driveId
 				foreach(dbItem; itemdb.selectByDriveId(driveId)) {
 					// Does it still exist on disk in the location the DB thinks it is
-					log.vdebug("Calling uploadDifferences(dbItem) as item is present in local cache DB");
 					uploadDifferences(dbItem);
 				}
 			} else {
 				if (itemdb.selectByPath(path, driveId, item)) {
 					// Does it still exist on disk in the location the DB thinks it is
-					log.vdebug("Calling uploadDifferences(item) as item is present in local cache DB");
 					uploadDifferences(item);
 				}
 			}
@@ -3094,13 +3088,7 @@ final class SyncEngine
 			logPath = path;
 		}
 		
-		// scan for changes in the path provided
-		if (isDir(logPath)) {
-			// if this path is a directory, output this message.
-			// if a file, potentially leads to confusion as to what the client is actually doing
-			log.vlog("Uploading new items of ", logPath);
-		}
-		
+		log.vlog("Uploading new items of ", logPath);
 		// Filesystem walk to find new files not uploaded
 		uploadNewItems(path);
 	}
@@ -3323,9 +3311,6 @@ final class SyncEngine
 	{
 		// Reset upload failure - OneDrive or filesystem issue (reading data)
 		uploadFailed = false;
-		
-		// uploadFileDifferences is called when processing DB entries to compare against actual files on disk
-		string itemSource = "database";
 	
 		assert(item.type == ItemType.file);
 		if (exists(path)) {
@@ -3340,14 +3325,12 @@ final class SyncEngine
 					localModifiedTime.fracSecs = Duration.zero;
 					
 					if (localModifiedTime != itemModifiedTime) {
-						log.vlog("The file last modified time has changed");
-						log.vdebug("The local item has a different modified time ", localModifiedTime, " when compared to ", itemSource, " modified time ", itemModifiedTime);
+						log.vlog("The file last modified time has changed");					
 						string eTag = item.eTag;
 						
 						// perform file hash tests - has the content of the file changed?
 						if (!testFileHash(path, item)) {
 							log.vlog("The file content has changed");
-							log.vdebug("The local item has a different hash when compared to ", itemSource, " item hash");
 							write("Uploading modified file ", path, " ... ");
 							JSONValue response;
 							
