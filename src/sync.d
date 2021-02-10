@@ -3099,9 +3099,10 @@ final class SyncEngine
 			// if this path is a directory, output this message.
 			// if a file, potentially leads to confusion as to what the client is actually doing
 			log.vlog("Uploading new items of ", logPath);
-			// Filesystem walk to find new files not uploaded - only valid for directories
-			uploadNewItems(path);
 		}
+		
+		// Filesystem walk to find new files not uploaded
+		uploadNewItems(path);
 	}
 	
 	private void uploadDifferences(const ref Item item)
