@@ -542,8 +542,13 @@ The following are supported for pattern matching and exclusion rules:
 *   Use the `*` to wildcard select any characters to match for the item to be included
 *   Use either `!` or `-` characters at the start of the line to exclude an otherwise included item
 
+**Note:** After changing the sync_list, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
-**Note:** after changing the sync_list, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
+**Note:** In some circumstances, it may be required to sync all the individual files within the 'sync_dir', but due to frequent name change / addition / deletion of these files, it is not desirable to constantly change the 'sync_list' file to include / exclude these files and force a resync. To assist with this, enable the following in your configuration file:
+```text
+sync_root_files = "true"
+```
+This will tell the application to sync any file that it finds in your 'sync_dir' root by default.
 
 ### Configuring the client for 'single tenant application' use
 In some instances when using OneDrive Business Accounts, depending on the Azure organisational configuration, it will be necessary to configure the client as a 'single tenant application'. 
