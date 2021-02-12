@@ -453,8 +453,6 @@ int main(string[] args)
 	
 	// vdebug syncDir as set and calculated
 	log.vdebug("syncDir: ", syncDir);
-	// As we use the cfg value of sync_dir elsewhere, and if it includes a ~ it is now correctly expanded, update the configuration with new expanded value
-	cfg.setValueString("sync_dir", syncDir);
 	
 	// Configure the logging directory if different from application default
 	// log_dir environment handling to handle ~ expansion properly
