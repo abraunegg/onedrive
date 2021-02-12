@@ -230,17 +230,31 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 		// is this an inclusion path or finer grained exclusion?
 		switch (allowedPath[0]) {
 			case '-':
-				// allowed path starts with '-', this user wants to exclude this path
+				// sync_list path starts with '-', this user wants to exclude this path
 				exclude = true;
-				offset = 1;
+				// If the sync_list entry starts with '-/' offset needs to be 2, else 1
+				if (startsWith(allowedPath, "-/")){
+					// Offset needs to be 2
+					offset = 2;
+				} else {
+					// Offset needs to be 1
+					offset = 1;
+				}
 				break;
 			case '!':
-				// allowed path starts with '!', this user wants to exclude this path
+				// sync_list path starts with '!', this user wants to exclude this path
 				exclude = true;
-				offset = 1;
+				// If the sync_list entry starts with '!/' offset needs to be 2, else 1
+				if (startsWith(allowedPath, "!/")){
+					// Offset needs to be 2
+					offset = 2;
+				} else {
+					// Offset needs to be 1
+					offset = 1;
+				}
 				break;
 			case '/':
-				// allowed path starts with '/', this user wants to include this path
+				// sync_list path starts with '/', this user wants to include this path
 				// but a '/' at the start causes matching issues, so use the offset for comparison
 				exclude = false;
 				offset = 1;
@@ -279,7 +293,7 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 				log.vdebug("Evaluation against 'sync_list' result: parental path match");
 				finalResult = false;
 			} else {
-				log.vdebug("Evaluation against 'sync_list' result: parental path match but to be excluded");
+				log.vdebug("Evaluation against 'sync_list' result: parental path match but must be excluded");
 				finalResult = true;
 			}
 		}
