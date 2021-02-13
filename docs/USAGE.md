@@ -517,12 +517,18 @@ Each line of the file represents a relative path from your `sync_dir`. All files
 Here is an example of `sync_list`:
 ```text
 # sync_list supports comments
+# 
+# The ordering of entries is highly recommended - exclusions before inclusions
+#
+# Exclude temp folders under Documents
+!Documents/temp*
+# Exclude my secret data
+!/Secret_data/*
+#
 # Include my Backup folder
 Backup
 # Include Documents folder
 Documents/
-# Exclude temp folders under Documents
-!Documents/temp*
 # Include all PDF documents
 Documents/*.pdf
 # Include this single document
@@ -541,6 +547,21 @@ Year 2
 The following are supported for pattern matching and exclusion rules:
 *   Use the `*` to wildcard select any characters to match for the item to be included
 *   Use either `!` or `-` characters at the start of the line to exclude an otherwise included item
+
+To simplify 'exclusions' and 'inclusions', the following is also possible:
+```text
+# sync_list supports comments
+# 
+# The ordering of entries is highly recommended - exclusions before inclusions
+#
+# Exclude temp folders under Documents
+!Documents/temp*
+# Exclude my secret data
+!/Secret_data/*
+#
+# Include everything else
+/*
+```
 
 **Note:** After changing the sync_list, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
