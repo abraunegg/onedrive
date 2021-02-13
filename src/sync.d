@@ -2973,7 +2973,7 @@ final class SyncEngine
 		}
 		
 		// scan for changes in the path provided
-		if (isDir(logPath)) {
+		if (isDir(path)) {
 			// if this path is a directory, output this message.
 			// if a file, potentially leads to confusion as to what the client is actually doing
 			log.vlog("Uploading differences of ", logPath);
@@ -3095,7 +3095,7 @@ final class SyncEngine
 		}
 		
 		// scan for changes in the path provided
-		if (isDir(logPath)) {
+		if (isDir(path)) {
 			// if this path is a directory, output this message.
 			// if a file, potentially leads to confusion as to what the client is actually doing
 			log.vlog("Uploading new items of ", logPath);
