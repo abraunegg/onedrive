@@ -228,7 +228,7 @@ sudo dnf install libnotify-devel
 
 ### Dependencies: Arch Linux & Manjaro Linux
 ```text
-sudo pacman -S pkg-config curl sqlite ldc
+sudo pacman -S make pkg-config curl sqlite ldc
 ```
 For notifications the following is also necessary:
 ```text
