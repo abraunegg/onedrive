@@ -30,7 +30,7 @@ Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive
 
 If you wish to change this situation so that you can just use 'apt install onedrive', consider becoming the Ubuntu package maintainer and contribute back to the community.
 
-## Building from Source Requirements
+## Building from Source High Level Requirements
 *   Build environment must have at least 1GB of memory & 1GB swap space
 *   [libcurl](http://curl.haxx.se/libcurl/)
 *   [SQLite 3](https://www.sqlite.org/) >= 3.7.15
@@ -287,6 +287,12 @@ sudo zypper install libnotify-devel
 ```
 
 ## Compilation & Installation
+### High Level Steps
+1.  Install the platfrom dependancies for your Linux OS
+2.  Activate your DMD or LDC compiler
+3.  Clone the GitHub repository, run configure and make, then install
+4.  Deactivate your DMD or LDC compiler
+
 ### Building using DMD Reference Compiler
 Before cloning and compiling, if you have installed DMD via curl for your OS, you will need to activate DMD as per example below:
 ```text
