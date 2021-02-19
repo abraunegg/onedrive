@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Support sync_list matching full path root wildcard with exclusions to simplify sync_list configuration
 
 ### Updated
+*   Rename Office365.md --> SharePoint-Shared-Libraries.md which better describes this document
 *   Updated Dockerfile config for arm64
 *   Updated documentation (various)
 
