@@ -242,8 +242,8 @@ sudo apt-get install libcurl4-openssl-dev
 sudo apt-get install libsqlite3-dev
 sudo apt-get install libxml2
 sudo apt-get install pkg-config
-wget https://github.com/ldc-developers/ldc/releases/download/v1.16.0/ldc2-1.16.0-linux-armhf.tar.xz
-tar -xvf ldc2-1.16.0-linux-armhf.tar.xz
+wget https://github.com/ldc-developers/ldc/releases/download/v1.17.0/ldc2-1.17.0-linux-armhf.tar.xz
+tar -xvf ldc2-1.17.0-linux-armhf.tar.xz
 ```
 For notifications the following is also necessary:
 ```text
@@ -256,8 +256,8 @@ sudo apt-get install libcurl4-openssl-dev
 sudo apt-get install libsqlite3-dev
 sudo apt-get install libxml2
 sudo apt-get install pkg-config
-wget https://github.com/ldc-developers/ldc/releases/download/v1.16.0/ldc2-1.16.0-linux-aarch64.tar.xz
-tar -xvf ldc2-1.16.0-linux-aarch64.tar.xz
+wget https://github.com/ldc-developers/ldc/releases/download/v1.17.0/ldc2-1.17.0-linux-aarch64.tar.xz
+tar -xvf ldc2-1.17.0-linux-aarch64.tar.xz
 ```
 For notifications the following is also necessary:
 ```text
@@ -337,7 +337,7 @@ as far as possible automatically, but can be overridden by passing
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-./configure DC=~/ldc2-1.16.0-linux-armhf/bin/ldmd2
+./configure DC=~/ldc2-1.17.0-linux-armhf/bin/ldmd2
 make clean; make
 sudo make install
 ```
@@ -347,7 +347,7 @@ sudo make install
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-./configure DC=~/ldc2-1.16.0-linux-aarch64/bin/ldmd2
+./configure DC=~/ldc2-1.17.0-linux-aarch64/bin/ldmd2
 make clean; make
 sudo make install
 ```
