@@ -21,8 +21,11 @@ GUEST_DEPENDENCIES=(build-essential libcurl4-openssl-dev libsqlite3-dev libgnutl
 # LDC Version
 # Different versions due to https://github.com/ldc-developers/ldc/issues/3027
 # LDC v1.16.0 re-introduces ARMHF and ARM64 version - https://github.com/ldc-developers/ldc/releases/tag/v1.16.0
-LDC_VERSION_ARMHF=1.16.0
-LDC_VERSION_ARM64=1.16.0
+# Use v1.17.0 for ARMHF and ARM64 platforms due to 'Compiler version insufficient error' on some Raspberry Pi platforms
+# https://github.com/ldc-developers/ldc/releases/tag/v1.17.0
+# https://www.raspberrypi.org/forums/viewtopic.php?t=74818#p1820528
+LDC_VERSION_ARMHF=1.17.0
+LDC_VERSION_ARM64=1.17.0
 
 function setup_arm32_chroot {
 	# Update apt repository details
