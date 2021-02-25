@@ -49,7 +49,7 @@ If you encounter any bugs you can report them here on Github. Before filing an i
 Refer to [docs/known-issues.md](https://github.com/abraunegg/onedrive/blob/master/docs/known-issues.md)
 
 ## Documentation and Configuration Assistance
-### Building and Installation
+### Installing from Distribution Packages or Building the OneDrive Client for Linux from source
 Refer to [docs/INSTALL.md](https://github.com/abraunegg/onedrive/blob/master/docs/INSTALL.md)
 
 ### Configuration and Usage
