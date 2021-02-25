@@ -296,6 +296,8 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 			if (!exclude) {
 				log.vdebug("Evaluation against 'sync_list' result: parental path match");
 				finalResult = false;
+				// parental path matches, break and go sync
+				break;
 			} else {
 				log.vdebug("Evaluation against 'sync_list' result: parental path match but must be excluded");
 				finalResult = true;
