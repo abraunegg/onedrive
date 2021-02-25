@@ -1,6 +1,6 @@
-# Installing or Building from source the OneDrive Client for Linux
+# Installing from Distribution Packages or Building the OneDrive Client for Linux from source
 
-## Install from Distribution Packages
+## Installing from Distribution Packages
 This project has been packaged for the following Linux distributions:
 
 | Distribution                    | Package Name & Package Link                                                  | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 | Extra Details                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -26,7 +26,7 @@ This information is specifically for the following platforms and distributions:
 *   POP OS
 *   Peppermint OS
 
-Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) packages available for Ubuntu, do not install 'onedrive' from these packages via `apt install onedrive`. These packages are out-of-date and should not be used. If you wish to use a package, it is highly recommended that you utilise the Ubuntu PPA listed above. If the Ubuntu PPA does not support your distribution or version, your only option is to compile from source using the relevant Ubuntu instructions below.
+Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) packages available for Ubuntu, do not install 'onedrive' from these packages via `apt install onedrive` without using the above PPA. The default Ubuntu Universe packages are out-of-date and should not be used. If you wish to use a package, it is highly recommended that you utilise the Ubuntu PPA listed above. If the Ubuntu PPA does not support your distribution or version, your only option is to compile from source using the relevant Ubuntu instructions below.
 
 If you wish to change this situation so that you can just use 'apt install onedrive', consider becoming the Ubuntu package maintainer and contribute back to the community.
 
