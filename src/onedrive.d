@@ -980,7 +980,7 @@ final class OneDriveApi
 				// try and catch any curl error
 				http.perform();
 				// Check the HTTP Response headers - needed for correct 429 handling
-				checkHTTPResponseHeaders();
+				// check will be performed in checkHttpCode()
 				writeln();
 				// Reset onProgress to not display anything for next download done using exit scope
 			} catch (CurlException e) {
@@ -994,13 +994,13 @@ final class OneDriveApi
 				// try and catch any curl error
 				http.perform();
 				// Check the HTTP Response headers - needed for correct 429 handling
-				checkHTTPResponseHeaders();
+				// check will be performed in checkHttpCode()
 			} catch (CurlException e) {
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 			}
 		}
 		
-		// Check the HTTP response code
+		// Check the HTTP response code, which, if a 429, will also check response headers
 		checkHttpCode();
 	}
 
@@ -1033,6 +1033,7 @@ final class OneDriveApi
 		http.url = url;
 		addAccessTokenHeader();
 		auto response = perform(postData);
+		// Check the HTTP response code, which, if a 429, will also check response headers
 		checkHttpCode();
 		return response;
 	}
@@ -1315,9 +1316,12 @@ final class OneDriveApi
 			//  429 - Too Many Requests
 			case 429:
 				// Too many requests in a certain time window
+				// Check the HTTP Response headers - needed for correct 429 handling
+				checkHTTPResponseHeaders();
 				// https://docs.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
 				log.vlog("OneDrive returned a 'HTTP 429 - Too Many Requests' - gracefully handling error");
 				throw new OneDriveException(http.statusLine.code, http.statusLine.reason);
+				
 			
 			// Server side (OneDrive) Errors
 			//  500 - Internal Server Error
