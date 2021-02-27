@@ -979,6 +979,8 @@ final class OneDriveApi
 			try {
 				// try and catch any curl error
 				http.perform();
+				// Check the HTTP Response headers - needed for correct 429 handling
+				checkHTTPResponseHeaders();
 				writeln();
 				// Reset onProgress to not display anything for next download done using exit scope
 			} catch (CurlException e) {
@@ -991,6 +993,8 @@ final class OneDriveApi
 			try {
 				// try and catch any curl error
 				http.perform();
+				// Check the HTTP Response headers - needed for correct 429 handling
+				checkHTTPResponseHeaders();
 			} catch (CurlException e) {
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 			}
@@ -1105,19 +1109,8 @@ final class OneDriveApi
 		
 		try {
 			http.perform();
-			// Get the HTTP Response headers - needed for correct 429 handling
-			auto responseHeaders = http.responseHeaders();
-			// HTTP Server Response Headers Debugging if --https-debug is being used
-			if (.debugResponse){
-				log.vdebug("onedrive.perform() => HTTP Response Headers: ", responseHeaders);
-			}
-			// is retry-after in the response headers
-			if ("retry-after" in http.responseHeaders) {
-				// Set the retry-after value
-				log.vdebug("onedrive.perform() => Received a 'Retry-After' Header Response with the following value: ", http.responseHeaders["retry-after"]);
-				log.vdebug("onedrive.perform() => Setting retryAfterValue to: ", http.responseHeaders["retry-after"]);
-				.retryAfterValue = to!ulong(http.responseHeaders["retry-after"]);
-			}
+			// Check the HTTP Response headers - needed for correct 429 handling
+			checkHTTPResponseHeaders();
 		} catch (CurlException e) {
 			// Parse and display error message received from OneDrive
 			log.vdebug("onedrive.perform() Generated a OneDrive CurlException");
@@ -1150,6 +1143,8 @@ final class OneDriveApi
 					}
 					try {
 						http.perform();
+						// Check the HTTP Response headers - needed for correct 429 handling
+						checkHTTPResponseHeaders();
 						// no error from http.perform() on re-try
 						log.log("Internet connectivity to Microsoft OneDrive service has been restored");
 						retrySuccess = true;
@@ -1186,6 +1181,23 @@ final class OneDriveApi
 			log.vdebug("JSON Exception caught when performing HTTP operations - use --debug-https to diagnose further");
 		}
 		return json;
+	}
+	
+	private void checkHTTPResponseHeaders()
+	{
+		// Get the HTTP Response headers - needed for correct 429 handling
+		auto responseHeaders = http.responseHeaders();
+		if (.debugResponse){
+			log.vdebug("http.perform() => HTTP Response Headers: ", responseHeaders);
+		}
+		
+		// is retry-after in the response headers
+		if ("retry-after" in http.responseHeaders) {
+			// Set the retry-after value
+			log.vdebug("http.perform() => Received a 'Retry-After' Header Response with the following value: ", http.responseHeaders["retry-after"]);
+			log.vdebug("http.perform() => Setting retryAfterValue to: ", http.responseHeaders["retry-after"]);
+			.retryAfterValue = to!ulong(http.responseHeaders["retry-after"]);
+		}
 	}
 
 	private void checkHttpCode()
