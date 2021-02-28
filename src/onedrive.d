@@ -1322,7 +1322,6 @@ final class OneDriveApi
 				log.vlog("OneDrive returned a 'HTTP 429 - Too Many Requests' - gracefully handling error");
 				throw new OneDriveException(http.statusLine.code, http.statusLine.reason);
 				
-			
 			// Server side (OneDrive) Errors
 			//  500 - Internal Server Error
 			// 	502 - Bad Gateway
