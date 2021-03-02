@@ -223,7 +223,9 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 	// if there are no allowed paths always return false
 	if (allowedPaths.empty) return false;
 	path = buildNormalizedPath(path);
-	log.vdebug("Evaluation against 'sync_list' for: ", path);
+	log.vdebug("Evaluation against 'sync_list' for this path: ", path);
+	log.vdebug("[S]exclude        = ", exclude);
+	log.vdebug("[S]excludeMatched = ", excludeMatched);
 	
 	// unless path is an exact match, entire sync_list entries need to be processed to ensure
 	// negative matches are also correctly detected
@@ -294,6 +296,8 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 			if (!exclude) {
 				log.vdebug("Evaluation against 'sync_list' result: parental path match");
 				finalResult = false;
+				// parental path matches, break and go sync
+				break;
 			} else {
 				log.vdebug("Evaluation against 'sync_list' result: parental path match but must be excluded");
 				finalResult = true;
@@ -317,10 +321,15 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 				} else {
 					log.vdebug("Evaluation against 'sync_list' result: wildcard pattern matched but must be excluded");
 					finalResult = true;
+					excludeMatched = true;
 				}
 			}
 		}
 	}
+	// Interim results
+	log.vdebug("[F]exclude        = ", exclude);
+	log.vdebug("[F]excludeMatched = ", excludeMatched);
+	
 	// results
 	if (finalResult) {
 		log.vdebug("Evaluation against 'sync_list' final result: EXCLUDED");
