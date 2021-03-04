@@ -275,7 +275,7 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 		// Generate the common prefix from the path vs the allowed path
 		auto comm = commonPrefix(path, allowedPath[offset..$]);
 		
-		// is path is an exact match of the allowed path
+		// Is path is an exact match of the allowed path?
 		if (comm.length == path.length) {
 			// the given path is contained in an allowed path
 			if (!exclude) {
@@ -290,22 +290,28 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 			}
 		}
 		
-		// is path is a subitem of the allowed path
+		// Is path is a subitem/sub-folder of the allowed path?
 		if (comm.length == allowedPath[offset..$].length) {
-			// the given path is a subitem of an allowed path
-			if (!exclude) {
-				log.vdebug("Evaluation against 'sync_list' result: parental path match");
-				finalResult = false;
-				// parental path matches, break and go sync
-				break;
-			} else {
-				log.vdebug("Evaluation against 'sync_list' result: parental path match but must be excluded");
-				finalResult = true;
-				excludeMatched = true;
+			// The given path is potentially a subitem of an allowed path
+			// We want to capture sub-folders / files of allowed paths here, but not explicitly match other items
+			// if there is no wildcard
+			auto subItemPathCheck = allowedPath[offset..$] ~ "/";
+			if (canFind(path, subItemPathCheck)) {
+				// The 'path' includes the allowed path, and is 'most likely' a sub-path item
+				if (!exclude) {
+					log.vdebug("Evaluation against 'sync_list' result: parental path match");
+					finalResult = false;
+					// parental path matches, break and go sync
+					break;
+				} else {
+					log.vdebug("Evaluation against 'sync_list' result: parental path match but must be excluded");
+					finalResult = true;
+					excludeMatched = true;
+				}
 			}
 		}
 		
-		// does the allowed path contain a wildcard? (*)
+		// Does the allowed path contain a wildcard? (*)
 		if (canFind(allowedPath[offset..$], wildcard)) {
 			// allowed path contains a wildcard
 			// manually replace '*' for '.*' to be compatible with regex
