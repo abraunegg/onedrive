@@ -771,11 +771,12 @@ final class SyncEngine
 						// Folder matches a user configured sync entry
 						string[] allowedPath;
 						allowedPath ~= sharedFolderName;
-						// But is this shared folder what we are looking for?
+						// But is this shared folder what we are looking for as part of --single-directory?
 						if (selectiveSync.isPathIncluded(path,allowedPath)) {
 							// Path we want to sync is on a OneDrive Business Shared Folder
 							// Set the correct driveId
 							driveId = searchResult["remoteItem"]["parentReference"]["driveId"].str;
+							log.vdebug("Updated the driveId to a new value: ", driveId);
 							// Keep the driveIDsArray with unique entries only
 							if (!canFind(driveIDsArray, driveId)) {
 								// Add this drive id to the array to search with
@@ -841,7 +842,8 @@ final class SyncEngine
 				// use the item id as folderId
 				folderId = onedrivePathDetails["id"].str; // Should give something like 12345ABCDE1234A1!101
 				// Apply any differences found on OneDrive for this path (download data)
-				applyDifferences(defaultDriveId, folderId, false);
+				// Use driveId rather than defaultDriveId as this will be updated if path was matched to another parent driveId
+				applyDifferences(driveId, folderId, false);
 			}
 		} else {
 			// Log that an invalid JSON object was returned
@@ -1760,7 +1762,8 @@ final class SyncEngine
 								// What is the original local path for this ID in the database? Does it match 'syncFolderChildPath'
 								if (itemdb.idInLocalDatabase(driveId, item["id"].str)){
 									// item is in the database
-									string originalLocalPath = itemdb.computePath(driveId, item["id"].str);
+									string originalLocalPath = computeItemPath(driveId, item["id"].str);
+									
 									if (canFind(originalLocalPath, syncFolderChildPath)){
 										JSONValue oneDriveMovedNotDeleted;
 										try {
@@ -1957,7 +1960,8 @@ final class SyncEngine
 						log.vdebug("skip_dir path to check (simple):  ", simplePathToCheck);
 						// complex path
 						if (itemdb.idInLocalDatabase(parentDriveId, parentItem)){
-							complexPathToCheck = itemdb.computePath(parentDriveId, parentItem) ~ "/" ~ driveItem["name"].str;
+							// build up complexPathToCheck
+							complexPathToCheck = computeItemPath(parentDriveId, parentItem) ~ "/" ~ driveItem["name"].str;
 							complexPathToCheck = buildNormalizedPath(complexPathToCheck);
 						} else {
 							log.vdebug("Parent details not in database - unable to compute complex path to check");
@@ -2016,8 +2020,8 @@ final class SyncEngine
 				
 				// is the parent id in the database?
 				if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
-					// need to compute the full path for this file
-					path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
+					// Compute this item path & need the full path for this file
+					path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
 					
 					// The path that needs to be checked needs to include the '/'
 					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
@@ -2050,7 +2054,8 @@ final class SyncEngine
 			} else {
 				// Why was this unwanted?
 				if (path.empty) {
-					path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
+					// Compute this item path & need the full path for this file
+					path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
 				}
 				// Microsoft OneNote container objects present as neither folder or file but has file size
 				if ((!isItemFile(driveItem)) && (!isItemFolder(driveItem)) && (hasFileSize(driveItem))) {
@@ -2069,8 +2074,8 @@ final class SyncEngine
 		if (!unwanted) {
 			// Is the item parent in the local database?
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
-				// compute the item path to see if the path is excluded
-				path = itemdb.computePath(item.driveId, item.parentId) ~ "/" ~ item.name;
+				// compute the item path to see if the path is excluded & need the full path for this file
+				path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
 				path = buildNormalizedPath(path);
 				if (selectiveSync.isPathExcludedViaSyncList(path)) {
 					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
@@ -2165,7 +2170,8 @@ final class SyncEngine
 			// Is the item in the local database
 			if (itemdb.idInLocalDatabase(item.driveId, item.id)){
 				log.vdebug("OneDrive item ID is present in local database");
-				oldPath = itemdb.computePath(item.driveId, item.id);
+				// Compute this item path
+				oldPath = computeItemPath(item.driveId, item.id);
 				// Query DB for existing local item in specified path
 				string itemSource = "database";
 				if (!isItemSynced(oldItem, oldPath, itemSource)) {
@@ -2781,8 +2787,11 @@ final class SyncEngine
 	{
 		foreach_reverse (i; idsToDelete) {
 			Item item;
+			string path;
 			if (!itemdb.selectById(i[0], i[1], item)) continue; // check if the item is in the db
-			const(string) path = itemdb.computePath(i[0], i[1]);
+			// Compute this item path
+			path = computeItemPath(i[0], i[1]);
+			// Try to delete item object
 			log.log("Trying to delete item ", path);
 			if (!dryRun) {
 				// Actually process the database entry removal
@@ -2964,7 +2973,11 @@ final class SyncEngine
 		}
 		
 		// scan for changes in the path provided
-		log.vlog("Uploading differences of ", logPath);
+		if (isDir(path)) {
+			// if this path is a directory, output this message.
+			// if a file, potentially leads to confusion as to what the client is actually doing
+			log.vlog("Uploading differences of ", logPath);
+		}
 		Item item;
 		// For each unique OneDrive driveID we know about
 		foreach (driveId; driveIDsArray) {
@@ -2974,11 +2987,13 @@ final class SyncEngine
 				// There could be multiple shared folders all from this same driveId
 				foreach(dbItem; itemdb.selectByDriveId(driveId)) {
 					// Does it still exist on disk in the location the DB thinks it is
+					log.vdebug("Calling uploadDifferences(dbItem) as item is present in local cache DB");
 					uploadDifferences(dbItem);
 				}
 			} else {
 				if (itemdb.selectByPath(path, driveId, item)) {
 					// Does it still exist on disk in the location the DB thinks it is
+					log.vdebug("Calling uploadDifferences(item) as item is present in local cache DB");
 					uploadDifferences(item);
 				}
 			}
@@ -3079,7 +3094,13 @@ final class SyncEngine
 			logPath = path;
 		}
 		
-		log.vlog("Uploading new items of ", logPath);
+		// scan for changes in the path provided
+		if (isDir(path)) {
+			// if this path is a directory, output this message.
+			// if a file, potentially leads to confusion as to what the client is actually doing
+			log.vlog("Uploading new items of ", logPath);
+		}
+		
 		// Filesystem walk to find new files not uploaded
 		uploadNewItems(path);
 	}
@@ -3100,7 +3121,9 @@ final class SyncEngine
 		string path;
 		
 		// Compute this item path early as we we use this path often
-		path = itemdb.computePath(item.driveId, item.id);
+		path = computeItemPath(item.driveId, item.id);
+		
+		// item.id was in the database associated with the item.driveId specified
 		log.vlog("Processing ", buildNormalizedPath(path));
 		
 		// What type of DB item are we processing
@@ -3300,6 +3323,9 @@ final class SyncEngine
 	{
 		// Reset upload failure - OneDrive or filesystem issue (reading data)
 		uploadFailed = false;
+		
+		// uploadFileDifferences is called when processing DB entries to compare against actual files on disk
+		string itemSource = "database";
 	
 		assert(item.type == ItemType.file);
 		if (exists(path)) {
@@ -3314,12 +3340,14 @@ final class SyncEngine
 					localModifiedTime.fracSecs = Duration.zero;
 					
 					if (localModifiedTime != itemModifiedTime) {
-						log.vlog("The file last modified time has changed");					
+						log.vlog("The file last modified time has changed");
+						log.vdebug("The local item has a different modified time ", localModifiedTime, " when compared to ", itemSource, " modified time ", itemModifiedTime);
 						string eTag = item.eTag;
 						
 						// perform file hash tests - has the content of the file changed?
 						if (!testFileHash(path, item)) {
 							log.vlog("The file content has changed");
+							log.vdebug("The local item has a different hash when compared to ", itemSource, " item hash");
 							write("Uploading modified file ", path, " ... ");
 							JSONValue response;
 							
@@ -4234,7 +4262,8 @@ final class SyncEngine
 			// Maximum file size upload
 			//  https://support.microsoft.com/en-us/office/invalid-file-names-and-file-types-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa?ui=en-us&rs=en-us&ad=us
 			//	July 2020, maximum file size for all accounts is 100GB
-			auto maxUploadFileSize = 107374182400; // 100GB
+			//  January 2021, maximum file size for all accounts is 250GB
+			auto maxUploadFileSize = 268435456000; // 250GB
 			
 			// Can we read the file - as a permissions issue or file corruption will cause a failure
 			// https://github.com/abraunegg/onedrive/issues/113
@@ -4264,8 +4293,13 @@ final class SyncEngine
 								log.vlog("Skipping item - excluded by skip_size config: ", path, " (", thisFileSize/2^^20," MB)");
 								return;
 							}
+							
+							// start of upload file
 							write("Uploading new file ", path, " ... ");
 							JSONValue response;
+							
+							// Calculate upload speed
+							auto uploadStartTime = Clock.currTime();
 							
 							if (!dryRun) {
 								// Resolve https://github.com/abraunegg/onedrive/issues/37
@@ -4469,7 +4503,16 @@ final class SyncEngine
 								if (response.type() == JSONType.object){
 									// upload done without error
 									writeln("done.");
-									// Log action to log file
+									
+									// upload finished
+									auto uploadFinishTime = Clock.currTime();
+									auto uploadDuration = uploadFinishTime - uploadStartTime;
+									log.vdebug("File Size: ", thisFileSize, " Bytes");
+									log.vdebug("Upload Duration: ", (uploadDuration.total!"msecs"/1e3), " Seconds");
+									auto uploadSpeed = (thisFileSize / (uploadDuration.total!"msecs"/1e3)/ 1024 / 1024);
+									log.vdebug("Upload Speed: ", uploadSpeed, " Mbps (approx)");
+									
+									// Log upload action to log file
 									log.fileOnly("Uploading new file ", path, " ... done.");
 									// The file was uploaded, or a 4xx / 5xx error was generated
 									if ("size" in response){
@@ -4805,6 +4848,9 @@ final class SyncEngine
 											//     HTTP request returned status code 413 (Request Entity Too Large)
 											// We also cant use a session to upload the file, we have to use simpleUploadReplace
 											
+											// Calculate existing hash for this file
+											string existingFileHash = computeQuickXorHash(path);
+											
 											if (getSize(path) <= thresholdFileSize) {
 												// Upload file via simpleUploadReplace as below threshold size
 												try {
@@ -4863,18 +4909,31 @@ final class SyncEngine
 											writeln(" done.");
 											// Is the response a valid JSON object - validation checking done in saveItem
 											saveItem(response);
+											
 											// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
 											// So - now the 'local' and 'remote' file is technically DIFFERENT ... thanks Microsoft .. NO way to disable this stupidity
-											if(!uploadOnly){
-												// Download the Microsoft 'modified' file so 'local' is now in sync
-												log.vlog("Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync");
-												log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
-												auto fileSize = response["size"].integer;
-												onedrive.downloadById(response["parentReference"]["driveId"].str, response["id"].str, path, fileSize);
-											} else {
-												// we are not downloading a file, warn that file differences will exist
-												log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
-												log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+											string uploadNewFileHash;
+											if (hasQuickXorHash(response)) {
+											// use the response json hash detail to compare
+												uploadNewFileHash = response["file"]["hashes"]["quickXorHash"].str;
+											}
+											
+											if (existingFileHash != uploadNewFileHash) {
+												// file was modified by Microsoft post upload to SharePoint site
+												log.vdebug("Existing Local File Hash: ", existingFileHash);
+												log.vdebug("New Remote File Hash:     ", uploadNewFileHash);
+												
+												if(!uploadOnly){
+													// Download the Microsoft 'modified' file so 'local' is now in sync
+													log.vlog("Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync");
+													log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+													auto fileSize = response["size"].integer;
+													onedrive.downloadById(response["parentReference"]["driveId"].str, response["id"].str, path, fileSize);
+												} else {
+													// we are not downloading a file, warn that file differences will exist
+													log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
+													log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+												}
 											}
 										}									
 									}
@@ -5505,25 +5564,31 @@ final class SyncEngine
 		if (exists(localFilePath)) {
 			// File exists locally, does it exist in the database
 			// Path needs to be relative to sync_dir path
-			string relativePath = relativePath(localFilePath, syncDir);
 			Item item;
-			if (itemdb.selectByPath(relativePath, defaultDriveId, item)) {
-				// File is in the local database cache
-				JSONValue fileDetails;
-		
-				try {
-					fileDetails = onedrive.getFileDetails(item.driveId, item.id);
-				} catch (OneDriveException e) {
-					// display what the error is
-					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-					return;
-				}
+			string[] distinctDriveIds = itemdb.selectDistinctDriveIds();
+			string relativePath = relativePath(localFilePath, syncDir);
+			bool fileInDB = false;
+			foreach (searchDriveId; distinctDriveIds) {
+				if (itemdb.selectByPath(relativePath, searchDriveId, item)) {
+					// File is in the local database cache
+					fileInDB = true;
+					JSONValue fileDetails;
+					try {
+						fileDetails = onedrive.getFileDetails(item.driveId, item.id);
+					} catch (OneDriveException e) {
+						// display what the error is
+						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+						return;
+					}
 
-				if ((fileDetails.type() == JSONType.object) && ("webUrl" in fileDetails)) {
-					// Valid JSON object
-					writeln(fileDetails["webUrl"].str);
+					if ((fileDetails.type() == JSONType.object) && ("webUrl" in fileDetails)) {
+						// Valid JSON object
+						writeln(fileDetails["webUrl"].str);
+					}
 				}
-			} else {
+			}
+			// was file found?
+			if (!fileInDB) {
 				// File has not been synced with OneDrive
 				log.error("File has not been synced with OneDrive: ", localFilePath);
 			}
@@ -5685,7 +5750,7 @@ final class SyncEngine
 					writeln("Selected directory is out of sync with OneDrive");
 					if (downloadSize > 0){
 						downloadSize = downloadSize / 1000;
-						writeln("Approximate data to transfer: ", downloadSize, " KB");
+						writeln("Approximate data to download from OneDrive: ", downloadSize, " KB");
 					}
 				} else {
 					writeln("No pending remote changes - selected directory is in sync");
@@ -5699,7 +5764,7 @@ final class SyncEngine
 				}
 				if (downloadSize > 0){
 					downloadSize = downloadSize / 1000;
-					writeln("Approximate data to transfer: ", downloadSize, " KB");
+					writeln("Approximate data to download from OneDrive: ", downloadSize, " KB");
 				}
 			}
 		} else {
@@ -6184,5 +6249,23 @@ final class SyncEngine
 			// Log that an invalid JSON object was returned
 			log.error("ERROR: onedrive.getSharedWithMe call returned an invalid JSON Object");
 		}
+	}
+	
+	// Query itemdb.computePath() and catch potential assert when DB consistency issue occurs
+	string computeItemPath(string thisDriveId, string thisItemId)
+	{
+		string calculatedPath;
+		log.vdebug("Attempting to calculate local filesystem path for ", thisDriveId, " and ", thisItemId);
+		try {
+			calculatedPath = itemdb.computePath(thisDriveId, thisItemId);
+		} catch (core.exception.AssertError) {
+			// broken tree in the database, we cant compute the path for this item id, exit
+			log.error("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
+			// Must exit here to preserve data
+			exit(-1);
+		}
+		
+		// return calculated path as string
+		return calculatedPath;
 	}
 }

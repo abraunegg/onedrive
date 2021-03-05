@@ -10,6 +10,7 @@ final class Config
 	public string defaultSyncDir = "~/OneDrive";
 	public string defaultSkipFile = "~*|.~*|*.tmp";
 	public string defaultSkipDir = "";
+	public string defaultLogFileDir = "/var/log/onedrive/";
 	// application set items
 	public string refreshTokenFilePath = "";
 	public string deltaLinkFilePath = "";
@@ -50,7 +51,7 @@ final class Config
 		stringValues["sync_dir"] = defaultSyncDir;
 		stringValues["skip_file"] = defaultSkipFile;
 		stringValues["skip_dir"] = defaultSkipDir;
-		stringValues["log_dir"] = "/var/log/onedrive/";
+		stringValues["log_dir"] = defaultLogFileDir;
 		stringValues["drive_id"] = "";
 		stringValues["user_agent"] = "";
 		boolValues["upload_only"] = false;
@@ -116,6 +117,8 @@ final class Config
 		longValues["sync_dir_permissions"] = defaultDirectoryPermissionMode;
 		// Configure the default file permission attributes for newly created file
 		longValues["sync_file_permissions"] = defaultFilePermissionMode;
+		// Configure download / upload rate limits
+		longValues["rate_limit"] = 0;
 		
 		// DEVELOPER OPTIONS 
 		// display_memory = true | false

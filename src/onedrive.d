@@ -119,7 +119,7 @@ final class OneDriveApi
 		// Timeout for connecting
 		http.connectTimeout = (dur!"seconds"(10));
 		// with the following settings we force
-		// - if there is no data flow for 5min, abort
+		// - if there is no data flow for 10min, abort
 		// - if the download time for one item exceeds 1h, abort
 		//
 		// timeout for activity on connection
@@ -128,7 +128,7 @@ final class OneDriveApi
 		//   It contains the time in number seconds that the
 		//   transfer speed should be below the CURLOPT_LOW_SPEED_LIMIT
 		//   for the library to consider it too slow and abort.
-		http.dataTimeout = (dur!"seconds"(300));
+		http.dataTimeout = (dur!"seconds"(600));
 		// maximum time an operation is allowed to take
 		// This includes dns resolution, connecting, data transfer, etc.
 		http.operationTimeout = (dur!"seconds"(3600));
@@ -329,6 +329,27 @@ final class OneDriveApi
 			http.handle.set(CurlOption.http_version,2);
 		}
 		
+		// Configure upload / download rate limits if configured
+		long userRateLimit = cfg.getValueLong("rate_limit");
+		// 131072 = 128 KB/s - minimum for basic application operations to prevent timeouts
+		// A 0 value means rate is unlimited, and is the curl default
+		
+		if (userRateLimit > 0) {
+			// User configured rate limit
+			writeln("User Configured Rate Limit: ", userRateLimit);
+			
+			// If user provided rate limit is < 131072, flag that this is too low, setting to the minimum of 131072
+			if (userRateLimit < 131072) {
+				// user provided limit too low
+				log.log("WARNING: User configured rate limit too low for normal application processing and preventing application timeouts. Overriding to default minimum of 131072 (128KB/s)");
+				userRateLimit = 131072;
+			}
+			
+			// set rate limit
+			http.handle.set(CurlOption.max_send_speed_large,userRateLimit); 
+			http.handle.set(CurlOption.max_recv_speed_large,userRateLimit);
+		}
+		
 		// Do we set the dryRun handlers?
 		if (cfg.getValueBool("dry_run")) {
 			.dryRun = true;
@@ -337,7 +358,7 @@ final class OneDriveApi
 			}
 		}
 	}
-
+	
 	// Shutdown OneDrive HTTP construct
 	void shutdown()
 	{
@@ -958,6 +979,8 @@ final class OneDriveApi
 			try {
 				// try and catch any curl error
 				http.perform();
+				// Check the HTTP Response headers - needed for correct 429 handling
+				// check will be performed in checkHttpCode()
 				writeln();
 				// Reset onProgress to not display anything for next download done using exit scope
 			} catch (CurlException e) {
@@ -970,12 +993,14 @@ final class OneDriveApi
 			try {
 				// try and catch any curl error
 				http.perform();
+				// Check the HTTP Response headers - needed for correct 429 handling
+				// check will be performed in checkHttpCode()
 			} catch (CurlException e) {
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 			}
 		}
 		
-		// Check the HTTP response code
+		// Check the HTTP response code, which, if a 429, will also check response headers
 		checkHttpCode();
 	}
 
@@ -1008,6 +1033,7 @@ final class OneDriveApi
 		http.url = url;
 		addAccessTokenHeader();
 		auto response = perform(postData);
+		// Check the HTTP response code, which, if a 429, will also check response headers
 		checkHttpCode();
 		return response;
 	}
@@ -1084,19 +1110,8 @@ final class OneDriveApi
 		
 		try {
 			http.perform();
-			// Get the HTTP Response headers - needed for correct 429 handling
-			auto responseHeaders = http.responseHeaders();
-			// HTTP Server Response Headers Debugging if --https-debug is being used
-			if (.debugResponse){
-				log.vdebug("onedrive.perform() => HTTP Response Headers: ", responseHeaders);
-			}
-			// is retry-after in the response headers
-			if ("retry-after" in http.responseHeaders) {
-				// Set the retry-after value
-				log.vdebug("onedrive.perform() => Received a 'Retry-After' Header Response with the following value: ", http.responseHeaders["retry-after"]);
-				log.vdebug("onedrive.perform() => Setting retryAfterValue to: ", http.responseHeaders["retry-after"]);
-				.retryAfterValue = to!ulong(http.responseHeaders["retry-after"]);
-			}
+			// Check the HTTP Response headers - needed for correct 429 handling
+			checkHTTPResponseHeaders();
 		} catch (CurlException e) {
 			// Parse and display error message received from OneDrive
 			log.vdebug("onedrive.perform() Generated a OneDrive CurlException");
@@ -1129,6 +1144,8 @@ final class OneDriveApi
 					}
 					try {
 						http.perform();
+						// Check the HTTP Response headers - needed for correct 429 handling
+						checkHTTPResponseHeaders();
 						// no error from http.perform() on re-try
 						log.log("Internet connectivity to Microsoft OneDrive service has been restored");
 						retrySuccess = true;
@@ -1165,6 +1182,23 @@ final class OneDriveApi
 			log.vdebug("JSON Exception caught when performing HTTP operations - use --debug-https to diagnose further");
 		}
 		return json;
+	}
+	
+	private void checkHTTPResponseHeaders()
+	{
+		// Get the HTTP Response headers - needed for correct 429 handling
+		auto responseHeaders = http.responseHeaders();
+		if (.debugResponse){
+			log.vdebug("http.perform() => HTTP Response Headers: ", responseHeaders);
+		}
+		
+		// is retry-after in the response headers
+		if ("retry-after" in http.responseHeaders) {
+			// Set the retry-after value
+			log.vdebug("http.perform() => Received a 'Retry-After' Header Response with the following value: ", http.responseHeaders["retry-after"]);
+			log.vdebug("http.perform() => Setting retryAfterValue to: ", http.responseHeaders["retry-after"]);
+			.retryAfterValue = to!ulong(http.responseHeaders["retry-after"]);
+		}
 	}
 
 	private void checkHttpCode()
@@ -1282,10 +1316,12 @@ final class OneDriveApi
 			//  429 - Too Many Requests
 			case 429:
 				// Too many requests in a certain time window
+				// Check the HTTP Response headers - needed for correct 429 handling
+				checkHTTPResponseHeaders();
 				// https://docs.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
 				log.vlog("OneDrive returned a 'HTTP 429 - Too Many Requests' - gracefully handling error");
 				throw new OneDriveException(http.statusLine.code, http.statusLine.reason);
-			
+				
 			// Server side (OneDrive) Errors
 			//  500 - Internal Server Error
 			// 	502 - Bad Gateway
