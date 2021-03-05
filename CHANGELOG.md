@@ -2,6 +2,28 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.4.10 - 2021-2-19
+### Fixed
+*   Catch database assertion when item path cannot be calculated
+*   Fix alpine Docker build so it uses the same golang alpine version
+*   Search all distinct drive id's rather than just default drive id for --get-file-link
+*   Use correct driveId value to query for changes when using --single-directory
+*   Improve upload handling of files for SharePoint sites and detecting when SharePoint modifies the file post upload
+*   Correctly handle '~' when present in 'log_dir' configuration option
+*   Fix logging output when handing downloaded new files
+*   Fix to use correct path offset for sync_list exclusion matching 
+
+### Added
+*   Add upload speed metrics when files are uploaded and clarify that 'data to transfer' is what is needed to be downloaded from OneDrive
+*   Add new config option to rate limit connection to OneDrive
+*   Support new file maximum upload size of 250GB
+*   Support sync_list matching full path root wildcard with exclusions to simplify sync_list configuration
+
+### Updated
+*   Rename Office365.md --> SharePoint-Shared-Libraries.md which better describes this document
+*   Updated Dockerfile config for arm64
+*   Updated documentation (various)
+
 ## 2.4.9 - 2020-12-27
 ### Fixed
 *   Fix to handle case where API provided deltaLink generates a further API error

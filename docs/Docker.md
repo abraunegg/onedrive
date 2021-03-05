@@ -202,7 +202,7 @@ free -h
 ```
 
 ### Building the Docker image
-You can also build your own image instead of pulling the one from dockerhub:
+You can also build your own image instead of pulling the one from [hub.docker.com](https://hub.docker.com/r/driveone/onedrive):
 ```bash
 git clone https://github.com/abraunegg/onedrive
 cd onedrive
@@ -214,11 +214,18 @@ Dockerfile-stretch or Dockerfile-alpine.  These [multi-stage builder
 pattern](https://docs.docker.com/develop/develop-images/multistage-build/)
 Dockerfiles require Docker version at least 17.05.
 
+#### How to build a Docker image based on Debian Stretch
+
 ``` bash
 docker build . -t local-ondrive-stretch -f contrib/docker/Dockerfile-stretch
 ```
-or
+#### How to build a Docker image based on Alpine Linux
 
 ``` bash
 docker build . -t local-ondrive-alpine -f contrib/docker/Dockerfile-alpine
+```
+#### How to build a Docker image for ARMHF (Raspberry Pi)
+
+``` bash
+docker build . -t local-onedrive-rpi -f contrib/docker/Dockerfile-rpi
 ```
