@@ -1,56 +1,89 @@
-# onedrive docker image
+# Run the OneDrive Client for Linux under Docker
+This client can be run as a Docker container, with 3 available options for you to choose from:
+1.  Container based on CentOS 7 - Docker Tag: latest
+2.  Container based on Debian Stretch - Docker Tag: stretch
+3.  Container based on Alpine Linux - Docker Tag: alpine
 
-Thats right folks onedrive is now dockerized ;)
+These containers offer a simple monitoring-mode service for the OneDrive Client for Linux.
 
-This container offers simple monitoring-mode service for 'Free Client for OneDrive on Linux'.
+The instructions below have been validated on:
+*   Red Hat Enterprise Linux 8.x 
+*   Ubuntu Server 20.04
+
+The instructions below will utilise the 'latest' tag, however this can be substituted for 'stretch' or 'alpine' if desired.
+
 
 ## Basic Setup
+### 0. Install docker using your distribution platform's instructions
+1.  Ensure that SELinux has been disabled on your system. A reboot may be required to ensure that this is correctly disabled.
+2.  Install Docker as per requried for your platform
+3.  Obtain your normal, non-root user UID and GID by using the `id` command
+4.  As your normal, non-root user, ensure that you can run `docker run hello-world` *without* using `sudo`
 
-### 0. Install docker under your own platform's instructions
+Once the above 4 steps are complete and you can successfully run `docker run hello-world` without sudo, only then proceed to 'Pulling and Running the Docker Image'
 
+## Pulling and Running the Docker Image
 ### 1. Pull the image
-
 ```bash
 docker pull driveone/onedrive:latest
 ```
 
-**NOTE:** SELinux context needs to be configured or disabled for Docker, to be able to write to OneDrive host directory.
+**NOTE:** SELinux context needs to be configured or disabled for Docker to be able to write to OneDrive host directory.
 
 ### 2. Prepare config volume
+The Docker container requries 2 Docker volumes:
+*    Config Volume
+*    Data Volume
 
-Onedrive needs two volumes. One of them is the config volume. Create it with:
-
+Create the config volume with the following command:
 ```bash
 docker volume create onedrive_conf
 ```
 
 This will create a docker volume labeled `onedrive_conf`, where all configuration of your onedrive account will be stored. You can add a custom config file and other things later.
 
-The second docker volume is for your data folder and is created in the next step. It needs the path to a folder on your filesystem that you want to keep in sync with OneDrive. Keep in mind that:
+The second docker volume is for your data folder and is created in the next step. This volume needs to be a path to a directory on your local filesystem, and this is where your data will be stored from OneDrive. Keep in mind that:
 
--   The owner of your specified folder must not be root
+*   The owner of this specified folder must not be root
+*   The owner of this specified folder must have permissions for its parent directory
 
--   The owner of your specified folder must have permissions for its parent directory
-
-### 3. First run
-
-Onedrive needs to be authorized with your Microsoft account. This is achieved by running docker in interactive mode. Run the docker image with the two commands below and **make sure to change `onedriveDir` to the onedrive data directory on your filesystem (e.g. `"/home/abraunegg/OneDrive"`)**.
-Additionally, the user id and group id should be added to remove any potential user conflicts, denoted by the environment variables `${ONEDRIVE_UID}` and `${ONEDRIVE_GID}`. 
-
+**NOTE:** Issues occur when this target folder is a mounted folder of an external system (NAS, SMB mount, USB Drive etc) as the 'mount' itself is owed by 'root'. If this is your use case, you *must* ensure your normal user can mount your desired target without having the target mounted by 'root'. If you do not fix this, your Docker container will fail to start with the following error message:
 ```bash
-onedriveDir="${HOME}/OneDrive"
-docker run -it --name onedrive -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" -e "ONEDRIVE_UID:${ONEDRIVE_UID}" -e "ONEDRIVE_GID:${ONEDRIVE_GID}" driveone/onedrive:latest
+ROOT level privileges prohibited!
 ```
 
--   You will be asked to open a specific link using your web browser 
--   Login to your Microsoft Account and give the application the permission 
--   After giving the permission, you will be redirected to a blank page.  
--   Copy the URI of the blank page into the application.
+### 3. First run
+The 'onedrive' client within the Docker container needs to be authorized with your Microsoft account. This is achieved by initially running docker in interactive mode. 
 
-The onedrive monitor is configured to start with your host system. If your onedrive is working as expected, you can detach from the container with Ctrl+p, Ctrl+q.
+Run the docker image with the commands below and make sure to change `ONEDRIVE_DATA_DIR` to the actual onedrive data directory on your filesystem that you wish to use (e.g. `"/home/abraunegg/OneDrive"`)**.
+```bash
+export ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
+mkdir -p ${ONEDRIVE_DATA_DIR}
+docker run -it --name onedrive -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" -e "ONEDRIVE_UID:${ONEDRIVE_UID}" -e "ONEDRIVE_GID:${ONEDRIVE_GID}" driveone/onedrive:latest
+```
+**NOTE:** It is also highly advisable for you to replace `${ONEDRIVE_UID}` and `${ONEDRIVE_GID}` with your actual UID and GID as specified by your `id` command output to avoid any any potential user or group conflicts.
 
-### 4. Status, stop, and restart
+**Important:** The 'target' folder of `ONEDRIVE_DATA_DIR` must exist before running the Docker container, otherwise, Docker will create the target folder, and the folder will be given 'root' permissions, which then causes the Docker container to fail upon startup with the following error message:
+```bash
+ROOT level privileges prohibited!
+```
 
+**Example:**
+```
+docker run -it --name onedrive -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" -e "ONEDRIVE_UID:1000" -e "ONEDRIVE_GID:1000" driveone/onedrive:latest
+```
+
+When the Docker container successfully starts:
+*   You will be asked to open a specific link using your web browser 
+*   Login to your Microsoft Account and give the application the permission 
+*   After giving the permission, you will be redirected to a blank page
+*   Copy the URI of the blank page into the application prompt to authorise the application
+
+Once the 'onedrive' application is authorised, the client will automatically start monitoring your `ONEDRIVE_DATA_DIR` for data changes to be uploaded to OneDrive. Files stored on OneDrive will be downloaded to this location.
+
+If the client is working as expected, you can detach from the container with Ctrl+p, Ctrl+q.
+
+### 4. Docker Container Status, stop, and restart
 Check if the monitor service is running
 
 ```bash
@@ -75,7 +108,7 @@ Resume monitor
 docker start onedrive
 ```
 
-Remove onedrive monitor
+Remove onedrive Docker container
 
 ```bash
 docker rm -f onedrive
@@ -85,7 +118,7 @@ docker rm -f onedrive
 ### 5. Docker-compose
 
 Also supports docker-compose schemas > 3. 
-In the following example it is assumed you have a `onedriveDir` environment variable and a `onedrive_conf` volume. 
+In the following example it is assumed you have a `ONEDRIVE_DATA_DIR` environment variable and a `onedrive_conf` volume. 
 However, you can also use bind mounts for the configuration folder, e.g. `export ONEDRIVE_CONF="${HOME}/OneDriveConfig"`.  
 
 ```
@@ -99,14 +132,14 @@ services:
             - ONEDRIVE_GID=${PGID}
         volumes: 
             - onedrive_conf:/onedrive/conf
-            - ${onedriveDir}:/onedrive/data
+            - ${ONEDRIVE_DATA_DIR}:/onedrive/data
 ```
 
 Note that you still have to perform step 3: First Run. 
 
 ### 6. Edit the config
 
-Onedrive should run in default configuration, however you can change your configuration by placing a custom config file in the `onedrive_conf` docker volume. First download the default config from [here](https://raw.githubusercontent.com/abraunegg/onedrive/master/config)  
+The 'onedrive' client should run in default configuration, however you can change this default configuration by placing a custom config file in the `onedrive_conf` docker volume. First download the default config from [here](https://raw.githubusercontent.com/abraunegg/onedrive/master/config)  
 Then put it into your onedrive_conf volume path, which can be found with:  
 
 ```bash
@@ -123,8 +156,9 @@ There are many ways to do this, the easiest is probably to
 1. Create a second docker config volume (replace `Work` with your desired name):  `docker volume create onedrive_conf_Work`
 2. And start a second docker monitor container (again replace `Work` with your desired name):
 ```
-onedriveDirWork="/home/abraunegg/OneDriveWork"
-docker run -it --restart unless-stopped --name onedrive_Work -v onedrive_conf_Work:/onedrive/conf -v "${onedriveDirWork}:/onedrive/data" driveone/onedrive:latest
+export ONEDRIVE_DATA_DIR_WORK="/home/abraunegg/OneDriveWork"
+mkdir -p ${ONEDRIVE_DATA_DIR_WORK}
+docker run -it --restart unless-stopped --name onedrive_Work -v onedrive_conf_Work:/onedrive/conf -v "${ONEDRIVE_DATA_DIR_WORK}:/onedrive/data" driveone/onedrive:latest
 ```
 
 ## Run or update with one script
@@ -132,14 +166,14 @@ docker run -it --restart unless-stopped --name onedrive_Work -v onedrive_conf_Wo
 If you are experienced with docker and onedrive, you can use the following script:
 
 ```bash
-# Update onedriveDir with correct existing OneDrive directory path
-onedriveDir="${HOME}/OneDrive"
+# Update ONEDRIVE_DATA_DIR with correct existing OneDrive directory path
+ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
 
 firstRun='-d'
 docker pull driveone/onedrive:latest
 docker inspect onedrive_conf > /dev/null || { docker volume create onedrive_conf; firstRun='-it'; }
 docker inspect onedrive > /dev/null && docker rm -f onedrive
-docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive:latest
+docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:latest
 ```
 
 
@@ -160,24 +194,24 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 ### Usage Examples
 **Verbose Output:**
 ```bash
-docker container run -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive:latest
+docker container run -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:latest
 ```
 **Debug Output:**
 ```bash
-docker container run -e ONEDRIVE_DEBUG=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive:latest
+docker container run -e ONEDRIVE_DEBUG=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:latest
 ```
 **Perform a --resync:**
 ```bash
-docker container run -e ONEDRIVE_RESYNC=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive:latest
+docker container run -e ONEDRIVE_RESYNC=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:latest
 ```
 **Perform a --resync and --verbose:**
 ```bash
-docker container run -e ONEDRIVE_RESYNC=1 -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive:latest
+docker container run -e ONEDRIVE_RESYNC=1 -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:latest
 ```
 
 **Perform a --logout and re-authenticate:**
 ```bash
-docker container run -e ONEDRIVE_LOGOUT=1 -v onedrive_conf:/onedrive/conf -v "${onedriveDir}:/onedrive/data" driveone/onedrive:latest
+docker container run -e ONEDRIVE_LOGOUT=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:latest
 ```
 
 ## Build instructions
