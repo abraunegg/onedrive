@@ -61,7 +61,7 @@ Test the configuration using '--display-config' and '--dry-run'. By doing so, th
 
 #### Display the configuration
 ```text
-onedrive --confdir="~/.config/my-new-config --display-config"
+onedrive --confdir="~/.config/my-new-config" --display-config
 ```
 
 #### Test the configuration by performing a dry-run
