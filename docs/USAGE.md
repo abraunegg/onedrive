@@ -326,7 +326,6 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # disable_notifications = "false"
 # disable_upload_validation = "false"
 # enable_logging = "false"
-# force_http_11 = "false"
 # force_http_2 = "false"
 # local_first = "false"
 # no_remote_delete = "false"
