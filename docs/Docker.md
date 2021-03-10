@@ -249,17 +249,29 @@ pattern](https://docs.docker.com/develop/develop-images/multistage-build/)
 Dockerfiles require Docker version at least 17.05.
 
 #### How to build a Docker image based on Debian Stretch
-
 ``` bash
 docker build . -t local-ondrive-stretch -f contrib/docker/Dockerfile-stretch
 ```
-#### How to build a Docker image based on Alpine Linux
 
+#### How to build a Docker image based on Alpine Linux
 ``` bash
 docker build . -t local-ondrive-alpine -f contrib/docker/Dockerfile-alpine
 ```
-#### How to build a Docker image for ARMHF (Raspberry Pi)
 
+#### How to build a Docker image for ARMHF (Raspberry Pi)
+Compatible with:
+*    Raspberry Pi
+*    Raspberry Pi 2
+*    Raspberry Pi Zero
+*    Raspberry Pi 3
 ``` bash
-docker build . -t local-onedrive-rpi -f contrib/docker/Dockerfile-rpi
+docker build . -t local-onedrive-rpi -f contrib/docker/Dockerfile-armhf
 ```
+
+#### How to build a Docker image for AARCH64 (Raspberry Pi)
+Compatible with:
+*    Raspberry Pi 4
+``` bash
+docker build . -t local-onedrive-rpi -f contrib/docker/Dockerfile-aarch64
+```
+
