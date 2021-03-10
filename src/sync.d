@@ -5487,27 +5487,24 @@ final class SyncEngine
 							}
 						}
 					} else {
-						// If we have not found the site we are searching for, display an error .. this could be the reason why we cant find it
-						if(!found) {
-							// 'displayName', 'id' or ''webUrl' not present in JSON results for a specific site
-							string siteNameAvailable = "Not Available";
-							bool displayNameAvailable = false;
-							bool idAvailable = false;
-							bool webUrlAvailable = false;
-							if ("name" in searchResult) siteNameAvailable = searchResult["name"].str;
-							if ("displayName" in searchResult) displayNameAvailable = true;
-							if ("id" in searchResult) idAvailable = true;
-							if ("webUrl" in searchResult) webUrlAvailable = true;
-							
-							// Display error details for this site data
-							log.error("\nERROR: SharePoint Site details not provided for : ", siteNameAvailable);
-							log.error("ERROR: The SharePoint Site results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator.");
-							log.error("ERROR: Your site security settings is preventing the following details from being accessed: 'displayName', 'id' and 'webUrl'");
-							log.vlog(" - 'displayName' available = ", displayNameAvailable);
-							log.vlog(" - 'id' available          = ", idAvailable);
-							log.vlog(" - 'webUrl' available      = ", webUrlAvailable);
-							log.error("ERROR: To debug this further, please use --verbose --verbose to provide insight as to what details are actually returned.");
-						}
+						// 'displayName', 'id' or ''webUrl' not present in JSON results for a specific site
+						string siteNameAvailable = "Not Available";
+						bool displayNameAvailable = false;
+						bool idAvailable = false;
+						bool webUrlAvailable = false;
+						if ("name" in searchResult) siteNameAvailable = searchResult["name"].str;
+						if ("displayName" in searchResult) displayNameAvailable = true;
+						if ("id" in searchResult) idAvailable = true;
+						if ("webUrl" in searchResult) webUrlAvailable = true;
+						
+						// Display error details for this site data
+						log.error("\nERROR: SharePoint Site details not provided for : ", siteNameAvailable);
+						log.error("ERROR: The SharePoint Site results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator.");
+						log.error("ERROR: Your site security settings is preventing the following details from being accessed: 'displayName', 'id' and 'webUrl'");
+						log.vlog(" - 'displayName' available = ", displayNameAvailable);
+						log.vlog(" - 'id' available          = ", idAvailable);
+						log.vlog(" - 'webUrl' available      = ", webUrlAvailable);
+						log.error("ERROR: To debug this further, please use --verbose --verbose to provide insight as to what details are actually returned.");
 					}
 				}
 				
