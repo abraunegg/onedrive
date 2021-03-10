@@ -5504,7 +5504,7 @@ final class SyncEngine
 						log.vlog(" - 'displayName' available = ", displayNameAvailable);
 						log.vlog(" - 'id' available          = ", idAvailable);
 						log.vlog(" - 'webUrl' available      = ", webUrlAvailable);
-						log.error("ERROR: To debug this further, please use --verbose --verbose to provide insight as to what details are actually returned.");
+						log.error("ERROR: To debug this further, please increase verbosity (--verbose or --verbose --verbose) to provide further insight as to what details are actually being returned.");
 					}
 				}
 				
