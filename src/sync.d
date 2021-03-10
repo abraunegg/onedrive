@@ -5488,7 +5488,7 @@ final class SyncEngine
 						}
 					} else {
 						// 'displayName', 'id' or ''webUrl' not present in JSON results for a specific site
-						string siteNameAvailable = "Not Available";
+						string siteNameAvailable = "Site 'name' was restricted by OneDrive API permissions";
 						bool displayNameAvailable = false;
 						bool idAvailable = false;
 						bool webUrlAvailable = false;
@@ -5498,7 +5498,7 @@ final class SyncEngine
 						if ("webUrl" in searchResult) webUrlAvailable = true;
 						
 						// Display error details for this site data
-						log.error("\nERROR: SharePoint Site details not provided for : ", siteNameAvailable);
+						log.error("\nERROR: SharePoint Site details not provided for: ", siteNameAvailable);
 						log.error("ERROR: The SharePoint Site results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator.");
 						log.error("ERROR: Your site security settings is preventing the following details from being accessed: 'displayName', 'id' and 'webUrl'");
 						log.vlog(" - 'displayName' available = ", displayNameAvailable);
