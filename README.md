@@ -33,7 +33,10 @@ This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) cl
 ## Frequently Asked Questions
 Refer to [Frequently Asked Questions](https://github.com/abraunegg/onedrive/wiki/Frequently-Asked-Questions)
 
-## Reporting issues
+## Have a question?
+If you have a question or need something clarified, please raise a new disscussion post [here](https://github.com/abraunegg/onedrive/discussions)
+
+## Reporting an Issue or Bug
 If you encounter any bugs you can report them here on Github. Before filing an issue be sure to:
 
 1.  Check the version of the application you are using `onedrive --version` and ensure that you are running either the latest [release](https://github.com/abraunegg/onedrive/releases) or built from master.
