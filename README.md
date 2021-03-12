@@ -33,7 +33,7 @@ This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) cl
 ## Frequently Asked Questions
 Refer to [Frequently Asked Questions](https://github.com/abraunegg/onedrive/wiki/Frequently-Asked-Questions)
 
-## Have a question?
+## Have a question
 If you have a question or need something clarified, please raise a new disscussion post [here](https://github.com/abraunegg/onedrive/discussions)
 
 ## Reporting an Issue or Bug
