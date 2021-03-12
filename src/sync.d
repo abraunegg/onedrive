@@ -5392,91 +5392,156 @@ final class SyncEngine
 		string drive_id;
 		string webUrl;
 		bool found = false;
-		JSONValue siteQuery; 
+		JSONValue siteQuery;
+		string nextLink;
+		string[] siteSearchResults;
 		
 		log.log("Office 365 Library Name Query: ", o365SharedLibraryName);
 		
-		try {
-			siteQuery = onedrive.o365SiteSearch();
-		} catch (OneDriveException e) {
-			log.error("ERROR: Query of OneDrive for Office 365 Library Name failed");
-			if (e.httpStatusCode == 403) {
-				// Forbidden - most likely authentication scope needs to be updated
-				log.error("ERROR: Authentication scope needs to be updated. Use --logout and re-authenticate client.");
-				return;
-			} else {
-				// display what the error is
-				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-				return;
-			}
-		}
-		
-		// is siteQuery a valid JSON object & contain data we can use?
-		if ((siteQuery.type() == JSONType.object) && ("value" in siteQuery)) {
-			// valid JSON object
-			log.vdebug("O365 Query Response: ", siteQuery);
-			
-			foreach (searchResult; siteQuery["value"].array) {
-				// Need an 'exclusive' match here with o365SharedLibraryName as entered
-				log.vdebug("Found O365 Site: ", searchResult);
-				
-				// 'displayName', 'id' and 'webUrl' have to be present in the search result record
-				if (("displayName" in searchResult) && ("id" in searchResult) && ("webUrl" in searchResult)) {
-					if (o365SharedLibraryName == searchResult["displayName"].str){
-						// 'displayName' matches search request
-						site_id = searchResult["id"].str;
-						webUrl = searchResult["webUrl"].str;
-						JSONValue siteDriveQuery;
-						
-						try {
-							siteDriveQuery = onedrive.o365SiteDrives(site_id);
-						} catch (OneDriveException e) {
-							log.error("ERROR: Query of OneDrive for Office Site ID failed");
-							// display what the error is
-							displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-							return;
-						}
-						
-						// is siteDriveQuery a valid JSON object & contain data we can use?
-						if ((siteDriveQuery.type() == JSONType.object) && ("value" in siteDriveQuery)) {
-							// valid JSON object
-							foreach (driveResult; siteDriveQuery["value"].array) {
-								// Display results
-								found = true;
-								writeln("SiteName: ", searchResult["displayName"].str);
-								writeln("drive_id: ", driveResult["id"].str);
-								writeln("URL:      ", webUrl);
-							}
-						} else {
-							// not a valid JSON object
-							log.error("ERROR: There was an error performing this operation on OneDrive");
-							log.error("ERROR: Increase logging verbosity to assist determining why.");
-							return;
-						}
+		for (;;) {
+			try {
+				siteQuery = onedrive.o365SiteSearch(nextLink);
+			} catch (OneDriveException e) {
+				log.error("ERROR: Query of OneDrive for Office 365 Library Name failed");
+				if (e.httpStatusCode == 403) {
+					// Forbidden - most likely authentication scope needs to be updated
+					log.error("ERROR: Authentication scope needs to be updated. Use --logout and re-authenticate client.");
+					return;
+				}
+				// HTTP request returned status code 429 (Too Many Requests)
+				if (e.httpStatusCode == 429) {
+					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+					handleOneDriveThrottleRequest();
+					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query OneDrive drive children");
+				}
+				// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
+				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
+					// re-try the specific changes queries	
+					if (e.httpStatusCode == 504) {
+						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query Sharepoint Sites - retrying applicable request");
+						log.vdebug("siteQuery = onedrive.o365SiteSearch(nextLink) previously threw an error - retrying");
+						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+						Thread.sleep(dur!"seconds"(30));
+					}
+					// re-try original request - retried for 429 and 504
+					try {
+						log.vdebug("Retrying Query: siteQuery = onedrive.o365SiteSearch(nextLink)");
+						siteQuery = onedrive.o365SiteSearch(nextLink);
+						log.vdebug("Query 'siteQuery = onedrive.o365SiteSearch(nextLink)' performed successfully on re-try");
+					} catch (OneDriveException e) {
+						// display what the error is
+						log.vdebug("Query Error: siteQuery = onedrive.o365SiteSearch(nextLink) on re-try after delay");
+						// error was not a 504 this time
+						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+						return;
 					}
 				} else {
-					// 'displayName' not present in JSON results
-					log.error("ERROR: The results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator.");
-					log.error("ERROR: Your site security settings is preventing the following details from being accessed: 'displayName', 'id' and 'webUrl'");
-					log.error("ERROR: To debug this further, please use --verbose --verbose to provide insight as to what details are actually returned.");
+					// display what the error is
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					return;
 				}
 			}
 			
-			if(!found) {
-				log.error("ERROR: The requested SharePoint site could not be found. Please check it's name and your permissions to access the site.");
-				// List all sites returned to assist user
-				log.log("\nThe following SharePoint site names were returned:");
+			// is siteQuery a valid JSON object & contain data we can use?
+			if ((siteQuery.type() == JSONType.object) && ("value" in siteQuery)) {
+				// valid JSON object
+				log.vdebug("O365 Query Response: ", siteQuery);
+				
 				foreach (searchResult; siteQuery["value"].array) {
-					// list the display name that we use to match against the user query
-					log.log(" * ", searchResult["displayName"].str); 
+					// Need an 'exclusive' match here with o365SharedLibraryName as entered
+					log.vdebug("Found O365 Site: ", searchResult);
+					
+					// 'displayName', 'id' and 'webUrl' have to be present in the search result record
+					if (("displayName" in searchResult) && ("id" in searchResult) && ("webUrl" in searchResult)) {
+						if (o365SharedLibraryName == searchResult["displayName"].str){
+							// 'displayName' matches search request
+							site_id = searchResult["id"].str;
+							webUrl = searchResult["webUrl"].str;
+							JSONValue siteDriveQuery;
+							
+							try {
+								siteDriveQuery = onedrive.o365SiteDrives(site_id);
+							} catch (OneDriveException e) {
+								log.error("ERROR: Query of OneDrive for Office Site ID failed");
+								// display what the error is
+								displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+								return;
+							}
+							
+							// is siteDriveQuery a valid JSON object & contain data we can use?
+							if ((siteDriveQuery.type() == JSONType.object) && ("value" in siteDriveQuery)) {
+								// valid JSON object
+								foreach (driveResult; siteDriveQuery["value"].array) {
+									// Display results
+									found = true;
+									writeln("SiteName: ", searchResult["displayName"].str);
+									writeln("drive_id: ", driveResult["id"].str);
+									writeln("URL:      ", webUrl);
+								}
+							} else {
+								// not a valid JSON object
+								log.error("ERROR: There was an error performing this operation on OneDrive");
+								log.error("ERROR: Increase logging verbosity to assist determining why.");
+								return;
+							}
+						}
+					} else {
+						// 'displayName', 'id' or ''webUrl' not present in JSON results for a specific site
+						string siteNameAvailable = "Site 'name' was restricted by OneDrive API permissions";
+						bool displayNameAvailable = false;
+						bool idAvailable = false;
+						bool webUrlAvailable = false;
+						if ("name" in searchResult) siteNameAvailable = searchResult["name"].str;
+						if ("displayName" in searchResult) displayNameAvailable = true;
+						if ("id" in searchResult) idAvailable = true;
+						if ("webUrl" in searchResult) webUrlAvailable = true;
+						
+						// Display error details for this site data
+						log.error("\nERROR: SharePoint Site details not provided for: ", siteNameAvailable);
+						log.error("ERROR: The SharePoint Site results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator.");
+						log.error("ERROR: Your site security settings is preventing the following details from being accessed: 'displayName', 'id' and 'webUrl'");
+						log.vlog(" - Is 'displayName' available = ", displayNameAvailable);
+						log.vlog(" - Is 'id' available          = ", idAvailable);
+						log.vlog(" - Is 'webUrl' available      = ", webUrlAvailable);
+						log.error("ERROR: To debug this further, please increase verbosity (--verbose or --verbose --verbose) to provide further insight as to what details are actually being returned.");
+					}
 				}
+				
+				if(!found) {
+					// The SharePoint site we are searching for was not found in this bundle set
+					// Add to siteSearchResults so we can display what we did find
+					string siteSearchResultsEntry;
+					foreach (searchResult; siteQuery["value"].array) {
+						siteSearchResultsEntry = " * " ~ searchResult["displayName"].str;
+						siteSearchResults ~= siteSearchResultsEntry;
+					}
+				}
+			} else {
+				// not a valid JSON object
+				log.error("ERROR: There was an error performing this operation on OneDrive");
+				log.error("ERROR: Increase logging verbosity to assist determining why.");
+				return;
 			}
-		} else {
-			// not a valid JSON object
-			log.error("ERROR: There was an error performing this operation on OneDrive");
-			log.error("ERROR: Increase logging verbosity to assist determining why.");
-			return;
+			
+			// If a collection exceeds the default page size (200 items), the @odata.nextLink property is returned in the response 
+			// to indicate more items are available and provide the request URL for the next page of items.
+			if ("@odata.nextLink" in siteQuery) {
+				// Update nextLink to next set of SharePoint library names
+				nextLink = siteQuery["@odata.nextLink"].str;
+				log.vdebug("Setting nextLink to (@odata.nextLink): ", nextLink);
+			} else break;
+		}
+		
+		// Was the intended target found?
+		if(!found) {
+			log.error("\nERROR: The requested SharePoint site could not be found. Please check it's name and your permissions to access the site.");
+			// List all sites returned to assist user
+			log.log("\nThe following SharePoint site names were returned:");
+			foreach (searchResultEntry; siteSearchResults) {
+				// list the display name that we use to match against the user query
+				log.log(searchResultEntry);
+			}
 		}
 	}
 	
@@ -6181,8 +6246,8 @@ final class SyncEngine
 			// to indicate more items are available and provide the request URL for the next page of items.
 			if ("@odata.nextLink" in thisLevelChildren) {
 				// Update nextLink to next changeSet bundle
-				log.vdebug("Setting nextLink to (@odata.nextLink): ", nextLink);
 				nextLink = thisLevelChildren["@odata.nextLink"].str;
+				log.vdebug("Setting nextLink to (@odata.nextLink): ", nextLink);
 			} else break;
 		}
 		
