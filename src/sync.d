@@ -5501,9 +5501,9 @@ final class SyncEngine
 						log.error("\nERROR: SharePoint Site details not provided for: ", siteNameAvailable);
 						log.error("ERROR: The SharePoint Site results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator.");
 						log.error("ERROR: Your site security settings is preventing the following details from being accessed: 'displayName', 'id' and 'webUrl'");
-						log.vlog(" - 'displayName' available = ", displayNameAvailable);
-						log.vlog(" - 'id' available          = ", idAvailable);
-						log.vlog(" - 'webUrl' available      = ", webUrlAvailable);
+						log.vlog(" - Is 'displayName' available = ", displayNameAvailable);
+						log.vlog(" - Is 'id' available          = ", idAvailable);
+						log.vlog(" - Is 'webUrl' available      = ", webUrlAvailable);
 						log.error("ERROR: To debug this further, please increase verbosity (--verbose or --verbose --verbose) to provide further insight as to what details are actually being returned.");
 					}
 				}
