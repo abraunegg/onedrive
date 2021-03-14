@@ -116,7 +116,6 @@ docker rm -f onedrive
 ## Advanced Setup
 
 ### 5. Docker-compose
-
 Also supports docker-compose schemas > 3. 
 In the following example it is assumed you have a `ONEDRIVE_DATA_DIR` environment variable and a `onedrive_conf` volume. 
 However, you can also use bind mounts for the configuration folder, e.g. `export ONEDRIVE_CONF="${HOME}/OneDriveConfig"`.  
@@ -138,7 +137,6 @@ services:
 Note that you still have to perform step 3: First Run. 
 
 ### 6. Edit the config
-
 The 'onedrive' client should run in default configuration, however you can change this default configuration by placing a custom config file in the `onedrive_conf` docker volume. First download the default config from [here](https://raw.githubusercontent.com/abraunegg/onedrive/master/config)  
 Then put it into your onedrive_conf volume path, which can be found with:  
 
@@ -151,7 +149,6 @@ Or you can map your own config folder to the config volume. Make sure to copy al
 The detailed document for the config can be found here: [Configuration](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#configuration)
 
 ### 7. Sync multiple accounts
-
 There are many ways to do this, the easiest is probably to
 1. Create a second docker config volume (replace `Work` with your desired name):  `docker volume create onedrive_conf_Work`
 2. And start a second docker monitor container (again replace `Work` with your desired name):
@@ -162,7 +159,6 @@ docker run -it --restart unless-stopped --name onedrive_Work -v onedrive_conf_Wo
 ```
 
 ## Run or update with one script
-
 If you are experienced with docker and onedrive, you can use the following script:
 
 ```bash
@@ -178,8 +174,6 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 
 
 ## Environment Variables
-
-
 | Variable | Purpose | Sample Value  |
 | ---------------- | --------------------------------------------------- |:-------------:|
 | <B>ONEDRIVE_UID</B> | UserID (UID) to run as  | 1000 |
@@ -219,7 +213,7 @@ docker container run -e ONEDRIVE_LOGOUT=1 -v onedrive_conf:/onedrive/conf -v "${
 *   Build environment must have at least 1GB of memory & 2GB swap space
 
 There are 2 ways to validate this requirement:
-*   Modify the file `/etc/dphys-swapfile` and edit the `CONF_SWAPSIZE`, for example: `CONF_SWAPSIZE=2024`. A reboot is required to make this change effective.
+*   Modify the file `/etc/dphys-swapfile` and edit the `CONF_SWAPSIZE`, for example: `CONF_SWAPSIZE=2048`. A reboot is required to make this change effective.
 *   Dynamically allocate a swapfile for building:
 ```bash
 cd /var 
@@ -235,7 +229,7 @@ swapon -s
 free -h
 ```
 
-### Building the Docker image
+### Building a custom Docker image
 You can also build your own image instead of pulling the one from [hub.docker.com](https://hub.docker.com/r/driveone/onedrive):
 ```bash
 git clone https://github.com/abraunegg/onedrive
@@ -248,18 +242,32 @@ Dockerfile-stretch or Dockerfile-alpine.  These [multi-stage builder
 pattern](https://docs.docker.com/develop/develop-images/multistage-build/)
 Dockerfiles require Docker version at least 17.05.
 
-#### How to build a Docker image based on Debian Stretch
-
+#### How to build and run a custom Docker image based on Debian Stretch
 ``` bash
 docker build . -t local-ondrive-stretch -f contrib/docker/Dockerfile-stretch
+docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" local-ondrive-stretch:latest
 ```
-#### How to build a Docker image based on Alpine Linux
 
+#### How to build and run a custom Docker image based on Alpine Linux
 ``` bash
 docker build . -t local-ondrive-alpine -f contrib/docker/Dockerfile-alpine
+docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" local-ondrive-alpine:latest
 ```
-#### How to build a Docker image for ARMHF (Raspberry Pi)
 
+#### How to build and run a custom Docker image for ARMHF (Raspberry Pi)
+Compatible with:
+*    Raspberry Pi
+*    Raspberry Pi 2
+*    Raspberry Pi Zero
+*    Raspberry Pi 3
+*    Raspberry Pi 4
 ``` bash
 docker build . -t local-onedrive-rpi -f contrib/docker/Dockerfile-rpi
+docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" local-ondrive-rpi:latest
+```
+
+#### How to build and run a custom Docker image for AARCH64 Platforms
+``` bash
+docker build . -t local-onedrive-aarch64 -f contrib/docker/Dockerfile-aarch64
+docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" local-onedrive-aarch64:latest
 ```
