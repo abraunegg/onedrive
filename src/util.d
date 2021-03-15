@@ -205,7 +205,7 @@ bool isValidName(string path)
 			// Leading whitespace and trailing whitespace/dot
 			`^\s.*|^.*[\s\.]$|` ~
 			// Invalid characters
-			`.*[<>:"\|\?*/\\].*|` ~
+			`.*[<>:"\|\?*/\\%].*|` ~
 			// Reserved device name and trailing .~
 			`(?:^CON|^PRN|^AUX|^NUL|^COM[0-9]|^LPT[0-9])(?:[.].+)?$`
 		);
