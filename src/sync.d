@@ -5390,7 +5390,6 @@ final class SyncEngine
 		
 		string site_id;
 		string drive_id;
-		string webUrl;
 		bool found = false;
 		JSONValue siteQuery;
 		string nextLink;
@@ -5452,12 +5451,11 @@ final class SyncEngine
 					// Need an 'exclusive' match here with o365SharedLibraryName as entered
 					log.vdebug("Found O365 Site: ", searchResult);
 					
-					// 'displayName', 'id' and 'webUrl' have to be present in the search result record
-					if (("displayName" in searchResult) && ("id" in searchResult) && ("webUrl" in searchResult)) {
+					// 'displayName' and 'id' have to be present in the search result record in order to query the site
+					if (("displayName" in searchResult) && ("id" in searchResult)) {
 						if (o365SharedLibraryName == searchResult["displayName"].str){
 							// 'displayName' matches search request
 							site_id = searchResult["id"].str;
-							webUrl = searchResult["webUrl"].str;
 							JSONValue siteDriveQuery;
 							
 							try {
@@ -5474,11 +5472,16 @@ final class SyncEngine
 								// valid JSON object
 								foreach (driveResult; siteDriveQuery["value"].array) {
 									// Display results
+									writeln("-----------------------------------------------");
+									log.vdebug("Site Details: ", driveResult);
 									found = true;
-									writeln("SiteName: ", searchResult["displayName"].str);
-									writeln("drive_id: ", driveResult["id"].str);
-									writeln("URL:      ", webUrl);
+									writeln("Site Name:    ", searchResult["displayName"].str);
+									writeln("Library Name: ", driveResult["name"].str);
+									writeln("drive_id:     ", driveResult["id"].str);
+									writeln("Library URL:  ", driveResult["webUrl"].str);
 								}
+								// closeout
+								writeln("-----------------------------------------------");
 							} else {
 								// not a valid JSON object
 								log.error("ERROR: There was an error performing this operation on OneDrive");
@@ -5491,19 +5494,16 @@ final class SyncEngine
 						string siteNameAvailable = "Site 'name' was restricted by OneDrive API permissions";
 						bool displayNameAvailable = false;
 						bool idAvailable = false;
-						bool webUrlAvailable = false;
 						if ("name" in searchResult) siteNameAvailable = searchResult["name"].str;
 						if ("displayName" in searchResult) displayNameAvailable = true;
 						if ("id" in searchResult) idAvailable = true;
-						if ("webUrl" in searchResult) webUrlAvailable = true;
 						
 						// Display error details for this site data
 						log.error("\nERROR: SharePoint Site details not provided for: ", siteNameAvailable);
 						log.error("ERROR: The SharePoint Site results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator.");
-						log.error("ERROR: Your site security settings is preventing the following details from being accessed: 'displayName', 'id' and 'webUrl'");
+						log.error("ERROR: Your site security settings is preventing the following details from being accessed: 'displayName' or 'id'");
 						log.vlog(" - Is 'displayName' available = ", displayNameAvailable);
 						log.vlog(" - Is 'id' available          = ", idAvailable);
-						log.vlog(" - Is 'webUrl' available      = ", webUrlAvailable);
 						log.error("ERROR: To debug this further, please increase verbosity (--verbose or --verbose --verbose) to provide further insight as to what details are actually being returned.");
 					}
 				}
