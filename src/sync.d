@@ -639,9 +639,12 @@ final class SyncEngine
 							// for each driveid in the existing driveIDsArray 
 							foreach (searchDriveId; driveIDsArray) {
 								log.vdebug("searching database for: ", searchDriveId, " ", sharedFolderName);
-								if (itemdb.selectByPath(sharedFolderName, searchDriveId, databaseItem)) {
+								if (itemdb.idInLocalDatabase(searchDriveId, searchResult["remoteItem"]["id"].str)){
+									// Shared folder is present
 									log.vdebug("Found shared folder name in database");
 									itemInDatabase = true;
+									// Query the DB for the details of this item
+									itemdb.selectByPath(sharedFolderName, searchDriveId, databaseItem);
 									log.vdebug("databaseItem: ", databaseItem);
 									// Does the databaseItem.driveId == defaultDriveId?
 									if (databaseItem.driveId == defaultDriveId) {
