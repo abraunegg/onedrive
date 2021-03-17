@@ -639,9 +639,12 @@ final class SyncEngine
 							// for each driveid in the existing driveIDsArray 
 							foreach (searchDriveId; driveIDsArray) {
 								log.vdebug("searching database for: ", searchDriveId, " ", sharedFolderName);
-								if (itemdb.selectByPath(sharedFolderName, searchDriveId, databaseItem)) {
+								if (itemdb.idInLocalDatabase(searchDriveId, searchResult["remoteItem"]["id"].str)){
+									// Shared folder is present
 									log.vdebug("Found shared folder name in database");
 									itemInDatabase = true;
+									// Query the DB for the details of this item
+									itemdb.selectByPath(sharedFolderName, searchDriveId, databaseItem);
 									log.vdebug("databaseItem: ", databaseItem);
 									// Does the databaseItem.driveId == defaultDriveId?
 									if (databaseItem.driveId == defaultDriveId) {
@@ -3477,10 +3480,82 @@ final class SyncEngine
 												itemdb.deleteById(item.driveId, item.id);
 												return;
 											} else {
-												// For logging consistency
-												writeln("");
-												// normal session upload
-												response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+												
+												if ((!syncBusinessFolders) || (item.driveId == defaultDriveId)) {
+													// If we are not syncing Shared Business Folders, or this change is going to the 'users' default drive, handle normally
+													// For logging consistency
+													writeln("");
+													// Perform a normal session upload
+													response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+												} else {
+													// If we are uploading to a shared business folder, there are a couple of corner cases here:
+													// 1. Shared Folder is a 'users' folder
+													// 2. Shared Folder is a 'SharePoint Library' folder, meaning we get hit by this stupidity: https://github.com/OneDrive/onedrive-api-docs/issues/935 
+													
+													// #####################################################
+													
+													// Handle certain file types differently
+													if ((extension(path) == ".txt") || (extension(path) == ".csv")) {
+														// .txt and .csv are unaffected by https://github.com/OneDrive/onedrive-api-docs/issues/935 
+														// For logging consistency
+														writeln("");
+														try {
+															response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+														} catch (OneDriveException e) {
+															if (e.httpStatusCode == 401) {
+																// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+																writeln("skipped.");
+																log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+																uploadFailed = true;
+																return;
+															}										
+															// Resolve https://github.com/abraunegg/onedrive/issues/36
+															if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
+																// The file is currently checked out or locked for editing by another user
+																// We cant upload this file at this time
+																writeln("skipped.");
+																log.fileOnly("Uploading modified file ", path, " ... skipped.");
+																writeln("", path, " is currently checked out or locked for editing by another user.");
+																log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+																uploadFailed = true;
+																return;
+															} else {
+																// display what the error is
+																writeln("skipped.");
+																displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+																uploadFailed = true;
+																return;
+															}
+														} catch (FileException e) {
+															// display the error message
+															writeln("skipped.");
+															displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+															uploadFailed = true;
+															return;
+														}
+														// upload done without error
+														writeln("done.");
+														// As the session.upload includes the last modified time, save the response
+														// Is the response a valid JSON object - validation checking done in saveItem
+														saveItem(response);
+													} else {
+														// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+														// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
+														writeln("skipped.");
+														log.fileOnly("Uploading modified file ", path, " ... skipped.");
+														log.vlog("Skip Reason: Microsoft Sharepoint 'enrichment' after upload issue");
+														log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+														// Delete record from the local database - file will be uploaded as a new file
+														itemdb.deleteById(item.driveId, item.id);
+														return;
+													}
+													
+													
+													
+													
+													
+													// #####################################################
+												}
 											}
 										} catch (OneDriveException e) {
 											if (e.httpStatusCode == 401) {
@@ -3581,7 +3656,7 @@ final class SyncEngine
 												// As the session.upload includes the last modified time, save the response
 												// Is the response a valid JSON object - validation checking done in saveItem
 												saveItem(response);
-											} else {									
+											} else {
 												// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
 												// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
 												writeln("skipped.");
@@ -3703,6 +3778,12 @@ final class SyncEngine
 				}
 			}
 		}
+	}
+	
+	private void handleSharePointMetadataAdditionBug(const ref Item item, const(string) path)
+	{
+		// Explicit function for handling https://github.com/OneDrive/onedrive-api-docs/issues/935
+	
 	}
 
 	// upload new items to OneDrive
@@ -4792,53 +4873,163 @@ final class SyncEngine
 									} else {
 										// OneDrive Business account modified file upload handling
 										if (accountType == "business"){
-											// OneDrive Business Account - always use a session to upload
-											writeln("");
-											try {
-												response = session.upload(path, parent.driveId, parent.id, baseName(path), fileDetailsFromOneDrive["eTag"].str);
-											} catch (OneDriveException e) {
-												log.vdebug("response = session.upload(path, parent.driveId, parent.id, baseName(path), fileDetailsFromOneDrive['eTag'].str); generated a OneDriveException");
-												if (e.httpStatusCode == 401) {
-													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+											// OneDrive Business Account
+											if ((!syncBusinessFolders) || (parent.driveId == defaultDriveId)) {
+												// If we are not syncing Shared Business Folders, or this change is going to the 'users' default drive, handle normally
+												// For logging consistency
+												writeln("");
+												try {
+													response = session.upload(path, parent.driveId, parent.id, baseName(path), fileDetailsFromOneDrive["eTag"].str);
+												} catch (OneDriveException e) {
+													log.vdebug("response = session.upload(path, parent.driveId, parent.id, baseName(path), fileDetailsFromOneDrive['eTag'].str); generated a OneDriveException");
+													if (e.httpStatusCode == 401) {
+														// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+														writeln("skipped.");
+														log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+														uploadFailed = true;
+														return;
+													}
+													if (e.httpStatusCode == 429) {
+														// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+														handleOneDriveThrottleRequest();
+														// Retry original request by calling function again to avoid replicating any further error handling
+														log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling uploadNewFile(path);");
+														uploadNewFile(path);
+														// return back to original call
+														return;
+													} 
+													if (e.httpStatusCode == 504) {
+														// HTTP request returned status code 504 (Gateway Timeout)
+														log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
+														// Retry original request by calling function again to avoid replicating any further error handling
+														uploadNewFile(path);
+														// return back to original call
+														return;
+													} else {
+														// error uploading file
+														// display what the error is
+														writeln("skipped.");
+														displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+														uploadFailed = true;
+														return;
+													}
+												} catch (FileException e) {
+													// display the error message
 													writeln("skipped.");
-													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
 												}
-												if (e.httpStatusCode == 429) {
-													// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-													handleOneDriveThrottleRequest();
-													// Retry original request by calling function again to avoid replicating any further error handling
-													log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling uploadNewFile(path);");
-													uploadNewFile(path);
-													// return back to original call
-													return;
-												} 
-												if (e.httpStatusCode == 504) {
-													// HTTP request returned status code 504 (Gateway Timeout)
-													log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
-													// Retry original request by calling function again to avoid replicating any further error handling
-													uploadNewFile(path);
-													// return back to original call
-													return;
+												// upload complete
+												writeln("done.");
+												saveItem(response);
+											} else {
+												// If we are uploading to a shared business folder, there are a couple of corner cases here:
+												// 1. Shared Folder is a 'users' folder
+												// 2. Shared Folder is a 'SharePoint Library' folder, meaning we get hit by this stupidity: https://github.com/OneDrive/onedrive-api-docs/issues/935 
+												
+												// #####################################################
+												
+												// Depending on the file size, this will depend on how best to handle the modified local file
+												// as if too large, the following error will be generated by OneDrive:
+												//     HTTP request returned status code 413 (Request Entity Too Large)
+												// We also cant use a session to upload the file, we have to use simpleUploadReplace
+												
+												// Calculate existing hash for this file
+												string existingFileHash = computeQuickXorHash(path);
+												
+												if (getSize(path) <= thresholdFileSize) {
+													// Upload file via simpleUploadReplace as below threshold size
+													try {
+														response = onedrive.simpleUploadReplace(path, fileDetailsFromOneDrive["parentReference"]["driveId"].str, fileDetailsFromOneDrive["id"].str, fileDetailsFromOneDrive["eTag"].str);
+													} catch (OneDriveException e) {
+														if (e.httpStatusCode == 401) {
+															// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+															writeln("skipped.");
+															log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+															uploadFailed = true;
+															return;
+														} else {
+															// display what the error is
+															writeln("skipped.");
+															displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+															uploadFailed = true;
+															return;
+														}
+													} catch (FileException e) {
+														// display the error message
+														writeln("skipped.");
+														displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+														uploadFailed = true;
+														return;
+													}
 												} else {
-													// error uploading file
-													// display what the error is
-													writeln("skipped.");
-													displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-													uploadFailed = true;
-													return;
+													// Have to upload via a session, however we have to delete the file first otherwise this will generate a 404 error post session upload
+													// Remove the existing file
+													onedrive.deleteById(fileDetailsFromOneDrive["parentReference"]["driveId"].str, fileDetailsFromOneDrive["id"].str, fileDetailsFromOneDrive["eTag"].str);	
+													// Upload as a session, as a new file
+													writeln("");
+													try {
+														response = session.upload(path, parent.driveId, parent.id, baseName(path));
+													} catch (OneDriveException e) {
+														if (e.httpStatusCode == 401) {
+															// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+															writeln("skipped.");
+															log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+															uploadFailed = true;
+															return;
+														} else {
+															// display what the error is
+															writeln("skipped.");
+															displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+															uploadFailed = true;
+															return;
+														}
+													} catch (FileException e) {
+														// display the error message
+														writeln("skipped.");
+														displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+														uploadFailed = true;
+														return;
+													}
 												}
-											} catch (FileException e) {
-												// display the error message
-												writeln("skipped.");
-												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-												uploadFailed = true;
-												return;
+												writeln("done.");
+												// Is the response a valid JSON object - validation checking done in saveItem
+												saveItem(response);
+												
+												// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+												// So - now the 'local' and 'remote' file is technically DIFFERENT ... thanks Microsoft .. NO way to disable this stupidity
+												string uploadNewFileHash;
+												if (hasQuickXorHash(response)) {
+												// use the response json hash detail to compare
+													uploadNewFileHash = response["file"]["hashes"]["quickXorHash"].str;
+												}
+												
+												if (existingFileHash != uploadNewFileHash) {
+													// file was modified by Microsoft post upload to SharePoint site
+													log.vdebug("Existing Local File Hash: ", existingFileHash);
+													log.vdebug("New Remote File Hash:     ", uploadNewFileHash);
+													
+													if(!uploadOnly){
+														// Download the Microsoft 'modified' file so 'local' is now in sync
+														log.vlog("Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync");
+														log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+														auto fileSize = response["size"].integer;
+														onedrive.downloadById(response["parentReference"]["driveId"].str, response["id"].str, path, fileSize);
+													} else {
+														// we are not downloading a file, warn that file differences will exist
+														log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
+														log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+													}
+												}
+												
+												
+												
+												
+												
+												// #####################################################
+											
 											}
-											// upload complete
-											writeln("done.");
-											saveItem(response);
 										}
 										
 										// OneDrive SharePoint account modified file upload handling
@@ -4906,7 +5097,7 @@ final class SyncEngine
 													return;
 												}
 											}
-											writeln(" done.");
+											writeln("done.");
 											// Is the response a valid JSON object - validation checking done in saveItem
 											saveItem(response);
 											
