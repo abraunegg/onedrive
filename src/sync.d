@@ -4561,9 +4561,20 @@ final class SyncEngine
 										// This has been seen with PNG / JPG files mainly, which then contributes to generating a 412 error when we attempt to update the metadata
 										// Validate here that the file uploaded, at least in size, matches in the response to what the size is on disk
 										if (thisFileSize != uploadFileSize){
-											if(disableUploadValidation){
-												// Print a warning message
+											// Upload size did not match local size
+											// There are 2 scenarios where this happens:
+											// 1. Failed Transfer
+											// 2. Upload file is going to a SharePoint Site, where Microsoft enriches the file with additional metadata with no way to disable
+											// For this client:
+											// - If a SharePoint Library, disableUploadValidation gets flagged as True
+											// - If we are syncing a business shared folder, this folder could reside on a Users Path (there should be no upload issue) or SharePoint (upload issue)
+											if ((disableUploadValidation)|| (syncBusinessFolders && (parent.driveId != defaultDriveId))){
+												// Print a warning message - should only be triggered if:
+												// - disableUploadValidation gets flagged (documentLibrary account type)
+												// - syncBusinessFolders is being used & parent.driveId != defaultDriveId
 												log.log("WARNING: Uploaded file size does not match local file - skipping upload validation");
+												log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
+												log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
 											} else {
 												// OK .. the uploaded file does not match and we did not disable this validation
 												log.log("Uploaded file size does not match local file - upload failure - retrying");
@@ -5074,7 +5085,7 @@ final class SyncEngine
 			if(!uploadOnly){
 				// Download the Microsoft 'modified' file so 'local' is now in sync
 				log.vlog("Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync");
-				log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details - handleSharePointMetadataAdditionBugReplaceFile");
+				log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
 				auto fileSize = response["size"].integer;
 				onedrive.downloadById(response["parentReference"]["driveId"].str, response["id"].str, path, fileSize);
 			} else {
