@@ -933,7 +933,18 @@ final class SyncEngine
 		}
 		
 		Item item;
-		if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+		
+		// Need to check all driveid's we know about, not just the defaultDriveId
+		bool itemInDB = false;
+		foreach (searchDriveId; driveIDsArray) {
+			if (itemdb.selectByPath(path, searchDriveId, item)) {
+				// item was found in the DB
+				itemInDB = true;
+				break;
+			}
+		}
+		// Was the item found in the DB
+		if (!itemInDB) {
 			// this is odd .. this directory is not in the local database - just go delete it
 			log.vlog("The requested directory to delete was not found in the local database - pushing delete request direct to OneDrive");
 			uploadDeleteItem(item, path);
