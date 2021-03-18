@@ -933,7 +933,6 @@ final class SyncEngine
 		}
 		
 		Item item;
-		
 		// Need to check all driveid's we know about, not just the defaultDriveId
 		bool itemInDB = false;
 		foreach (searchDriveId; driveIDsArray) {
