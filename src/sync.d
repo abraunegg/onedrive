@@ -3525,11 +3525,11 @@ final class SyncEngine
 											uploadFailed = true;
 											return;
 										}
+										// Did the upload fail?
 										if (!uploadFailed){
 											// upload done without error or failure
 											writeln("done.");
 											// As the session.upload includes the last modified time, save the response
-											writeln("Calling saveItem(response) line 3598");
 											// Is the response a valid JSON object - validation checking done in saveItem
 											saveItem(response);
 										} else {
@@ -3553,59 +3553,19 @@ final class SyncEngine
 											itemdb.deleteById(item.driveId, item.id);
 											return;
 										} else {
-											// Handle certain file types differently
-											if ((extension(path) == ".txt") || (extension(path) == ".csv")) {
-												// .txt and .csv are unaffected by https://github.com/OneDrive/onedrive-api-docs/issues/935 
-												// For logging consistency
-												writeln("");
-												try {
-													response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
-												} catch (OneDriveException e) {
-													if (e.httpStatusCode == 401) {
-														// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-														writeln("skipped.");
-														log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
-														uploadFailed = true;
-														return;
-													}										
-													// Resolve https://github.com/abraunegg/onedrive/issues/36
-													if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
-														// The file is currently checked out or locked for editing by another user
-														// We cant upload this file at this time
-														writeln("skipped.");
-														log.fileOnly("Uploading modified file ", path, " ... skipped.");
-														writeln("", path, " is currently checked out or locked for editing by another user.");
-														log.fileOnly(path, " is currently checked out or locked for editing by another user.");
-														uploadFailed = true;
-														return;
-													} else {
-														// display what the error is
-														writeln("skipped.");
-														displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-														uploadFailed = true;
-														return;
-													}
-												} catch (FileException e) {
-													// display the error message
-													writeln("skipped.");
-													displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-													uploadFailed = true;
-													return;
-												}
-												// upload done without error
+											// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+											// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
+											response = handleSharePointMetadataAdditionBug(item, path);
+											
+											// Did the upload fail?
+											if (!uploadFailed){
+												// upload done without error or failure
 												writeln("done.");
 												// As the session.upload includes the last modified time, save the response
 												// Is the response a valid JSON object - validation checking done in saveItem
 												saveItem(response);
 											} else {
-												// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
-												// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
-												writeln("skipped.");
-												log.fileOnly("Uploading modified file ", path, " ... skipped.");
-												log.vlog("Skip Reason: Microsoft Sharepoint 'enrichment' after upload issue");
-												log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
-												// Delete record from the local database - file will be uploaded as a new file
-												itemdb.deleteById(item.driveId, item.id);
+												// uploadFailed, return
 												return;
 											}
 										}
