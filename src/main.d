@@ -1043,7 +1043,7 @@ int main(string[] args)
 					log.vlog("Offline, cannot delete item!");
 				} catch(SyncException e) {
 					if (e.msg == "The item to delete is not in the local database") {
-						log.vlog("Item cannot be deleted from OneDrive because not found in the local database");
+						log.vlog("Item cannot be deleted from OneDrive because it was not found in the local database");
 					} else {
 						log.logAndNotify("Cannot delete remote item: ", e.msg);
 					}
