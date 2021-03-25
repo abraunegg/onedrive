@@ -697,6 +697,18 @@ systemctl --user start onedrive
 
 **Note:** This will run the 'onedrive' process with a UID/GID of '0', thus, any files or folders that are created will be owned by 'root'
 
+**Note:** It is a 'systemd' requirement that the XDG environment variables exist for correct enablement and operation of systemd services. If you receive this error when enabling the systemd service:
+```
+Failed to connect to bus: No such file or directory
+```
+The most likely cause is that the XDG environment variables are missing. To fix this, you must add the following to `.bashrc` or any other file which is run on user login:
+```
+export XDG_RUNTIME_DIR="/run/user/$UID"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+```
+
+To make this change effective, you must logout of all user accounts where this change has been made.
+
 To see the logs run:
 ```text
 journalctl --user-unit=onedrive -f
