@@ -352,7 +352,7 @@ as far as possible automatically, but can be overridden by passing
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-./configure DC=~/ldc2-1.17.0-linux-armhf/bin/ldmd
+./configure DC=~/ldc2-1.17.0-linux-armhf/bin/ldmd2
 make clean; make
 sudo make install
 ```
