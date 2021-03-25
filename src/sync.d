@@ -2908,7 +2908,12 @@ final class SyncEngine
 		}
 		
 		// scan for changes in the path provided
-		log.log("Uploading differences of ", logPath);
+		if (isDir(path)) {
+			// if this path is a directory, output this message.
+			// if a file, potentially leads to confusion as to what the client is actually doing
+			log.log("Uploading differences of ", logPath);
+		}
+		
 		Item item;
 		// For each unique OneDrive driveID we know about
 		foreach (driveId; driveIDsArray) {
@@ -2928,7 +2933,13 @@ final class SyncEngine
 			}
 		}
 
-		log.log("Uploading new items of ", logPath);
+		// scan for changes in the path provided
+		if (isDir(path)) {
+			// if this path is a directory, output this message.
+			// if a file, potentially leads to confusion as to what the client is actually doing
+			log.log("Uploading new items of ", logPath);
+		}
+		
 		// Filesystem walk to find new files not uploaded
 		uploadNewItems(path);
 		// clean up idsToDelete only if --dry-run is set
