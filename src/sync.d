@@ -2523,7 +2523,14 @@ final class SyncEngine
 						safeRename(newPath);
 					}
 				}
-				rename(oldPath, newPath);
+				// try and rename path, catch exception
+				try {
+					log.vdebug("Calling rename(oldPath, newPath)");
+					rename(oldPath, newPath);
+				} catch (FileException e) {
+					// display the error message
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				}
 			}
 			// handle changed content and mtime
 			// HACK: use mtime+hash instead of cTag because of https://github.com/OneDrive/onedrive-api-docs/issues/765
