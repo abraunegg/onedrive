@@ -764,7 +764,8 @@ final class OneDriveApi
 		http.url = uploadUrl;
 		http.addRequestHeader("Content-Range", contentRange);
 		http.onSend = data => file.rawRead(data).length;
-		http.contentLength = offsetSize;
+		// convert offsetSize to ulong
+		http.contentLength = to!ulong(offsetSize);
 		auto response = perform();
 		// TODO: retry on 5xx errors
 		checkHttpCode(response);
