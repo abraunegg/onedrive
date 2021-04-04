@@ -4011,18 +4011,15 @@ final class SyncEngine
 						if (!uploadFailed) {
 							// Upload did not fail
 							// Issue #763 - Delete local files after sync handling
-							// are we in an --upload-only scenario?
-							if (uploadOnly) {
-								// are we in a delete local file after upload?
-								if (localDeleteAfterUpload) {
-									// Log that we are deleting a local item
-									log.log("Removing local file as --upload-only & --remove-source-files configured");
-									// are we in a --dry-run scenario?
-									if (!dryRun) {
-										// No --dry-run ... process local file delete
-										log.vdebug("Removing local file: ", path);
-										safeRemove(path);
-									}
+							// are we in an --upload-only & --remove-source-files scenario?
+							if ((uploadOnly) && (localDeleteAfterUpload)) {
+								// Log that we are deleting a local item
+								log.log("Removing local file as --upload-only & --remove-source-files configured");
+								// are we in a --dry-run scenario?
+								if (!dryRun) {
+									// No --dry-run ... process local file delete
+									log.vdebug("Removing local file: ", path);
+									safeRemove(path);
 								}
 							}
 						}
@@ -5301,11 +5298,18 @@ final class SyncEngine
 		if (jsonItem.type() == JSONType.object){
 			// Check if the response JSON has an 'id', otherwise makeItem() fails with 'Key not found: id'
 			if (hasId(jsonItem)) {
-				// Takes a JSON input and formats to an item which can be used by the database
-				Item item = makeItem(jsonItem);
-				// Add to the local database
-				log.vdebug("Adding to database: ", item);
-				itemdb.upsert(item);
+				// Are we in a --upload-only & --remove-source-files scenario?
+				// We do not want to add the item to the database in this situation as there is no local reference to the file post file deletion
+				if ((uploadOnly) && (localDeleteAfterUpload)) {
+					// Log that we are deleting a local item
+					log.vdebug("Skipping adding to database as --upload-only & --remove-source-files configured");
+				} else {
+					// Takes a JSON input and formats to an item which can be used by the database
+					Item item = makeItem(jsonItem);
+					// Add to the local database
+					log.vdebug("Adding to database: ", item);
+					itemdb.upsert(item);
+				}
 			} else {
 				// log error
 				log.error("ERROR: OneDrive response missing required 'id' element");
