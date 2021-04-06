@@ -5,6 +5,7 @@ This project has been packaged for the following Linux distributions:
 
 | Distribution                    | Package Name & Package Link                                                  | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 | Extra Details                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 |---------------------------------|------------------------------------------------------------------------------|:----:|:------:|:-----:|:-------:|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Alpine Linux                    | [onedrive](https://pkgs.alpinelinux.org/packages?name=onedrive&branch=edge)  |<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|    
 | Arch Linux<br><br>Manjaro Linux | [onedrive-abraunegg](https://aur.archlinux.org/packages/onedrive-abraunegg/) |<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>| Install via: `pamac build onedrive-abraunegg` from the Arch Linux User Repository (AUR)<br><br>**Note:** If asked regarding a provider for 'd-runtime' and 'd-compiler', select 'liblphobos' and 'ldc'<br><br>**Note:** System must have at least 1GB of memory & 1GB swap space
 | Debian                          | [onedrive](https://packages.debian.org/search?keywords=onedrive)                     |<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | Fedora                          | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)  |<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -236,28 +237,42 @@ sudo pacman -S libnotify
 ```
 
 ### Dependencies: Raspbian (ARMHF)
+Validated using:
+*   `Linux raspberrypi 5.4.79-v7+ #1373 SMP Mon Nov 23 13:22:33 GMT 2020 armv7l GNU/Linux` (2020-12-02-raspios-buster-armhf) using Raspberry Pi 2 Model B
+*   `Linux raspberrypi 5.4.83-v8+ #1379 SMP PREEMPT Mon Dec 14 13:15:14 GMT 2020 aarch64` (2021-01-11-raspios-buster-armhf) using Raspberry Pi 3 Model B+
+
 **Note:** Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon`.
+
 ```text
-sudo apt-get install libcurl4-openssl-dev
-sudo apt-get install libsqlite3-dev
-sudo apt-get install libxml2
-sudo apt-get install pkg-config
-wget https://github.com/ldc-developers/ldc/releases/download/v1.16.0/ldc2-1.16.0-linux-armhf.tar.xz
-tar -xvf ldc2-1.16.0-linux-armhf.tar.xz
+sudo apt install build-essential
+sudo apt install libcurl4-openssl-dev
+sudo apt install libsqlite3-dev
+sudo apt install pkg-config
+sudo apt install git
+sudo apt install curl
+wget https://github.com/ldc-developers/ldc/releases/download/v1.17.0/ldc2-1.17.0-linux-armhf.tar.xz
+tar -xvf ldc2-1.17.0-linux-armhf.tar.xz
 ```
 For notifications the following is also necessary:
 ```text
 sudo apt install libnotify-dev
 ```
 
-### Dependencies: Debian (ARM64)
+### Dependencies: Ubuntu 20.x / Debian 10 (ARM64)
+Validated using:
+*   `Ubuntu 20.04.2 LTS (GNU/Linux 5.4.0-1028-raspi aarch64)` (ubuntu-20.04.2-preinstalled-server-arm64+raspi) using Raspberry Pi 3 Model B+
+
+**Note:** Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon`.
+
 ```text
-sudo apt-get install libcurl4-openssl-dev
-sudo apt-get install libsqlite3-dev
-sudo apt-get install libxml2
-sudo apt-get install pkg-config
-wget https://github.com/ldc-developers/ldc/releases/download/v1.16.0/ldc2-1.16.0-linux-aarch64.tar.xz
-tar -xvf ldc2-1.16.0-linux-aarch64.tar.xz
+sudo apt install build-essential
+sudo apt install libcurl4-openssl-dev
+sudo apt install libsqlite3-dev
+sudo apt install pkg-config
+sudo apt install git
+sudo apt install curl
+wget https://github.com/ldc-developers/ldc/releases/download/v1.25.1/ldc2-1.25.1-linux-aarch64.tar.xz
+tar -xvf ldc2-1.25.1-linux-aarch64.tar.xz
 ```
 For notifications the following is also necessary:
 ```text
@@ -337,7 +352,7 @@ as far as possible automatically, but can be overridden by passing
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-./configure DC=~/ldc2-1.16.0-linux-armhf/bin/ldmd2
+./configure DC=~/ldc2-1.17.0-linux-armhf/bin/ldmd2
 make clean; make
 sudo make install
 ```
@@ -347,7 +362,7 @@ sudo make install
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-./configure DC=~/ldc2-1.16.0-linux-aarch64/bin/ldmd2
+./configure DC=~/ldc2-1.25.1-linux-aarch64/bin/ldmd2
 make clean; make
 sudo make install
 ```

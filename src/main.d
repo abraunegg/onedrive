@@ -580,11 +580,6 @@ int main(string[] args)
 		return EXIT_SUCCESS;
 	}
 	
-	// If the user is still using --force-http-1.1 advise its no longer required
-	if (cfg.getValueBool("force_http_11")) {
-		log.log("NOTE: The use of --force-http-1.1 is depreciated");
-	}
-	
 	// Test if OneDrive service can be reached, exit if it cant be reached
 	log.vdebug("Testing network to ensure network connectivity to Microsoft OneDrive Service");
 	online = testNetwork();
@@ -1048,7 +1043,7 @@ int main(string[] args)
 					log.vlog("Offline, cannot delete item!");
 				} catch(SyncException e) {
 					if (e.msg == "The item to delete is not in the local database") {
-						log.vlog("Item cannot be deleted from OneDrive because not found in the local database");
+						log.vlog("Item cannot be deleted from OneDrive because it was not found in the local database");
 					} else {
 						log.logAndNotify("Cannot delete remote item: ", e.msg);
 					}

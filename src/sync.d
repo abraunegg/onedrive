@@ -661,9 +661,12 @@ final class SyncEngine
 							Item databaseItem;
 							foreach (searchDriveId; driveIDsArray) {
 								log.vdebug("searching database for: ", searchDriveId, " ", sharedFolderName);
-								if (itemdb.selectByPath(sharedFolderName, searchDriveId, databaseItem)) {
+								if (itemdb.idInLocalDatabase(searchDriveId, searchResult["remoteItem"]["id"].str)){
+									// Shared folder is present
 									log.vdebug("Found shared folder name in database");
 									itemInDatabase = true;
+									// Query the DB for the details of this item
+									itemdb.selectByPath(sharedFolderName, searchDriveId, databaseItem);
 									log.vdebug("databaseItem: ", databaseItem);
 									// Does the databaseItem.driveId == defaultDriveId?
 									if (databaseItem.driveId == defaultDriveId) {
@@ -958,7 +961,17 @@ final class SyncEngine
 		}
 		
 		Item item;
-		if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+		// Need to check all driveid's we know about, not just the defaultDriveId
+		bool itemInDB = false;
+		foreach (searchDriveId; driveIDsArray) {
+			if (itemdb.selectByPath(path, searchDriveId, item)) {
+				// item was found in the DB
+				itemInDB = true;
+				break;
+			}
+		}
+		// Was the item found in the DB
+		if (!itemInDB) {
 			// this is odd .. this directory is not in the local database - just go delete it
 			log.vlog("The requested directory to delete was not found in the local database - pushing delete request direct to OneDrive");
 			uploadDeleteItem(item, path);
@@ -2538,7 +2551,14 @@ final class SyncEngine
 						safeRename(newPath);
 					}
 				}
-				rename(oldPath, newPath);
+				// try and rename path, catch exception
+				try {
+					log.vdebug("Calling rename(oldPath, newPath)");
+					rename(oldPath, newPath);
+				} catch (FileException e) {
+					// display the error message
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				}
 			}
 			// handle changed content and mtime
 			// HACK: use mtime+hash instead of cTag because of https://github.com/OneDrive/onedrive-api-docs/issues/765
@@ -2923,7 +2943,12 @@ final class SyncEngine
 		}
 		
 		// scan for changes in the path provided
-		log.log("Uploading differences of ", logPath);
+		if (isDir(path)) {
+			// if this path is a directory, output this message.
+			// if a file, potentially leads to confusion as to what the client is actually doing
+			log.log("Uploading differences of ", logPath);
+		}
+		
 		Item item;
 		// For each unique OneDrive driveID we know about
 		foreach (driveId; driveIDsArray) {
@@ -2943,7 +2968,13 @@ final class SyncEngine
 			}
 		}
 
-		log.log("Uploading new items of ", logPath);
+		// scan for changes in the path provided
+		if (isDir(path)) {
+			// if this path is a directory, output this message.
+			// if a file, potentially leads to confusion as to what the client is actually doing
+			log.log("Uploading new items of ", logPath);
+		}
+		
 		// Filesystem walk to find new files not uploaded
 		uploadNewItems(path);
 		// clean up idsToDelete only if --dry-run is set
@@ -3505,10 +3536,18 @@ final class SyncEngine
 												itemdb.deleteById(item.driveId, item.id);
 												return;
 											} else {
-												// For logging consistency
-												writeln("");
-												// normal session upload
-												response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+												if ((!syncBusinessFolders) || (item.driveId == defaultDriveId)) {
+													// For logging consistency
+													writeln("");
+													// If we are not syncing Shared Business Folders, or this change is going to the 'users' default drive, handle normally
+													// Perform a normal session upload
+													response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+												} else {
+													// If we are uploading to a shared business folder, there are a couple of corner cases here:
+													// 1. Shared Folder is a 'users' folder
+													// 2. Shared Folder is a 'SharePoint Library' folder, meaning we get hit by this stupidity: https://github.com/OneDrive/onedrive-api-docs/issues/935 
+													response = handleSharePointMetadataAdditionBug(item, path);
+												}
 											}
 										} catch (OneDriveException e) {
 											if (e.httpStatusCode == 401) {
@@ -3542,12 +3581,17 @@ final class SyncEngine
 											uploadFailed = true;
 											return;
 										}
-										// upload done without error
-										writeln("done.");
-										
-										// As the session.upload includes the last modified time, save the response
-										// Is the response a valid JSON object - validation checking done in saveItem
-										saveItem(response);
+										// Did the upload fail?
+										if (!uploadFailed){
+											// upload done without error or failure
+											writeln("done.");
+											// As the session.upload includes the last modified time, save the response
+											// Is the response a valid JSON object - validation checking done in saveItem
+											saveItem(response);
+										} else {
+											// uploadFailed, return
+											return;
+										}
 									}
 									
 									// OneDrive documentLibrary
@@ -3565,59 +3609,19 @@ final class SyncEngine
 											itemdb.deleteById(item.driveId, item.id);
 											return;
 										} else {
-											// Handle certain file types differently
-											if ((extension(path) == ".txt") || (extension(path) == ".csv")) {
-												// .txt and .csv are unaffected by https://github.com/OneDrive/onedrive-api-docs/issues/935 
-												// For logging consistency
-												writeln("");
-												try {
-													response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
-												} catch (OneDriveException e) {
-													if (e.httpStatusCode == 401) {
-														// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-														writeln("skipped.");
-														log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
-														uploadFailed = true;
-														return;
-													}										
-													// Resolve https://github.com/abraunegg/onedrive/issues/36
-													if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
-														// The file is currently checked out or locked for editing by another user
-														// We cant upload this file at this time
-														writeln("skipped.");
-														log.fileOnly("Uploading modified file ", path, " ... skipped.");
-														writeln("", path, " is currently checked out or locked for editing by another user.");
-														log.fileOnly(path, " is currently checked out or locked for editing by another user.");
-														uploadFailed = true;
-														return;
-													} else {
-														// display what the error is
-														writeln("skipped.");
-														displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-														uploadFailed = true;
-														return;
-													}
-												} catch (FileException e) {
-													// display the error message
-													writeln("skipped.");
-													displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-													uploadFailed = true;
-													return;
-												}
-												// upload done without error
+											// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+											// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
+											response = handleSharePointMetadataAdditionBug(item, path);
+											
+											// Did the upload fail?
+											if (!uploadFailed){
+												// upload done without error or failure
 												writeln("done.");
 												// As the session.upload includes the last modified time, save the response
 												// Is the response a valid JSON object - validation checking done in saveItem
 												saveItem(response);
-											} else {									
-												// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
-												// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
-												writeln("skipped.");
-												log.fileOnly("Uploading modified file ", path, " ... skipped.");
-												log.vlog("Skip Reason: Microsoft Sharepoint 'enrichment' after upload issue");
-												log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
-												// Delete record from the local database - file will be uploaded as a new file
-												itemdb.deleteById(item.driveId, item.id);
+											} else {
+												// uploadFailed, return
 												return;
 											}
 										}
@@ -3731,6 +3735,68 @@ final class SyncEngine
 				}
 			}
 		}
+	}
+	
+	private JSONValue handleSharePointMetadataAdditionBug(const ref Item item, const(string) path)
+	{
+		// Explicit function for handling https://github.com/OneDrive/onedrive-api-docs/issues/935
+		JSONValue response;
+		// Handle certain file types differently
+		if ((extension(path) == ".txt") || (extension(path) == ".csv")) {
+			// .txt and .csv are unaffected by https://github.com/OneDrive/onedrive-api-docs/issues/935 
+			// For logging consistency
+			writeln("");
+			try {
+				response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+			} catch (OneDriveException e) {
+				if (e.httpStatusCode == 401) {
+					// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+					writeln("skipped.");
+					log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+					uploadFailed = true;
+					return response;
+				}										
+				// Resolve https://github.com/abraunegg/onedrive/issues/36
+				if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
+					// The file is currently checked out or locked for editing by another user
+					// We cant upload this file at this time
+					writeln("skipped.");
+					log.fileOnly("Uploading modified file ", path, " ... skipped.");
+					writeln("", path, " is currently checked out or locked for editing by another user.");
+					log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+					uploadFailed = true;
+					return response;
+				} else {
+					// display what the error is
+					writeln("skipped.");
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+					uploadFailed = true;
+					return response;
+				}
+			} catch (FileException e) {
+				// display the error message
+				writeln("skipped.");
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				uploadFailed = true;
+				return response;
+			}
+			// upload done without error
+			writeln("done.");
+		} else {
+			// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+			// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
+			writeln("skipped.");
+			log.fileOnly("Uploading modified file ", path, " ... skipped.");
+			log.vlog("Skip Reason: Microsoft Sharepoint 'enrichment' after upload issue");
+			log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+			// Delete record from the local database - file will be uploaded as a new file
+			itemdb.deleteById(item.driveId, item.id);
+			uploadFailed = true;
+			return response;
+		}
+		
+		// return a JSON response so that it can be used and saved
+		return response;
 	}
 
 	// upload new items to OneDrive
@@ -3973,18 +4039,15 @@ final class SyncEngine
 						if (!uploadFailed) {
 							// Upload did not fail
 							// Issue #763 - Delete local files after sync handling
-							// are we in an --upload-only scenario?
-							if (uploadOnly) {
-								// are we in a delete local file after upload?
-								if (localDeleteAfterUpload) {
-									// Log that we are deleting a local item
-									log.log("Removing local file as --upload-only & --remove-source-files configured");
-									// are we in a --dry-run scenario?
-									if (!dryRun) {
-										// No --dry-run ... process local file delete
-										log.vdebug("Removing local file: ", path);
-										safeRemove(path);
-									}
+							// are we in an --upload-only & --remove-source-files scenario?
+							if ((uploadOnly) && (localDeleteAfterUpload)) {
+								// Log that we are deleting a local item
+								log.log("Removing local file as --upload-only & --remove-source-files configured");
+								// are we in a --dry-run scenario?
+								if (!dryRun) {
+									// No --dry-run ... process local file delete
+									log.vdebug("Removing local file: ", path);
+									safeRemove(path);
 								}
 							}
 						}
@@ -4551,9 +4614,20 @@ final class SyncEngine
 										// This has been seen with PNG / JPG files mainly, which then contributes to generating a 412 error when we attempt to update the metadata
 										// Validate here that the file uploaded, at least in size, matches in the response to what the size is on disk
 										if (thisFileSize != uploadFileSize){
-											if(disableUploadValidation){
-												// Print a warning message
+											// Upload size did not match local size
+											// There are 2 scenarios where this happens:
+											// 1. Failed Transfer
+											// 2. Upload file is going to a SharePoint Site, where Microsoft enriches the file with additional metadata with no way to disable
+											// For this client:
+											// - If a SharePoint Library, disableUploadValidation gets flagged as True
+											// - If we are syncing a business shared folder, this folder could reside on a Users Path (there should be no upload issue) or SharePoint (upload issue)
+											if ((disableUploadValidation)|| (syncBusinessFolders && (parent.driveId != defaultDriveId))){
+												// Print a warning message - should only be triggered if:
+												// - disableUploadValidation gets flagged (documentLibrary account type)
+												// - syncBusinessFolders is being used & parent.driveId != defaultDriveId
 												log.log("WARNING: Uploaded file size does not match local file - skipping upload validation");
+												log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
+												log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
 											} else {
 												// OK .. the uploaded file does not match and we did not disable this validation
 												log.log("Uploaded file size does not match local file - upload failure - retrying");
@@ -4820,53 +4894,71 @@ final class SyncEngine
 									} else {
 										// OneDrive Business account modified file upload handling
 										if (accountType == "business"){
-											// OneDrive Business Account - always use a session to upload
-											writeln("");
-											try {
-												response = session.upload(path, parent.driveId, parent.id, baseName(path), fileDetailsFromOneDrive["eTag"].str);
-											} catch (OneDriveException e) {
-												log.vdebug("response = session.upload(path, parent.driveId, parent.id, baseName(path), fileDetailsFromOneDrive['eTag'].str); generated a OneDriveException");
-												if (e.httpStatusCode == 401) {
-													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+											// OneDrive Business Account
+											if ((!syncBusinessFolders) || (parent.driveId == defaultDriveId)) {
+												// If we are not syncing Shared Business Folders, or this change is going to the 'users' default drive, handle normally
+												// For logging consistency
+												writeln("");
+												try {
+													response = session.upload(path, parent.driveId, parent.id, baseName(path), fileDetailsFromOneDrive["eTag"].str);
+												} catch (OneDriveException e) {
+													log.vdebug("response = session.upload(path, parent.driveId, parent.id, baseName(path), fileDetailsFromOneDrive['eTag'].str); generated a OneDriveException");
+													if (e.httpStatusCode == 401) {
+														// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+														writeln("skipped.");
+														log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+														uploadFailed = true;
+														return;
+													}
+													if (e.httpStatusCode == 429) {
+														// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+														handleOneDriveThrottleRequest();
+														// Retry original request by calling function again to avoid replicating any further error handling
+														log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling uploadNewFile(path);");
+														uploadNewFile(path);
+														// return back to original call
+														return;
+													} 
+													if (e.httpStatusCode == 504) {
+														// HTTP request returned status code 504 (Gateway Timeout)
+														log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
+														// Retry original request by calling function again to avoid replicating any further error handling
+														uploadNewFile(path);
+														// return back to original call
+														return;
+													} else {
+														// error uploading file
+														// display what the error is
+														writeln("skipped.");
+														displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+														uploadFailed = true;
+														return;
+													}
+												} catch (FileException e) {
+													// display the error message
 													writeln("skipped.");
-													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
 												}
-												if (e.httpStatusCode == 429) {
-													// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-													handleOneDriveThrottleRequest();
-													// Retry original request by calling function again to avoid replicating any further error handling
-													log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling uploadNewFile(path);");
-													uploadNewFile(path);
-													// return back to original call
-													return;
-												} 
-												if (e.httpStatusCode == 504) {
-													// HTTP request returned status code 504 (Gateway Timeout)
-													log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
-													// Retry original request by calling function again to avoid replicating any further error handling
-													uploadNewFile(path);
-													// return back to original call
-													return;
+												// upload complete
+												writeln("done.");
+												saveItem(response);
+											} else {
+												// If we are uploading to a shared business folder, there are a couple of corner cases here:
+												// 1. Shared Folder is a 'users' folder
+												// 2. Shared Folder is a 'SharePoint Library' folder, meaning we get hit by this stupidity: https://github.com/OneDrive/onedrive-api-docs/issues/935 
+												
+												// Need try{} & catch (OneDriveException e) { & catch (FileException e) { handler for this query
+												response = handleSharePointMetadataAdditionBugReplaceFile(fileDetailsFromOneDrive, parent, path);
+												if (!uploadFailed){
+													// Is the response a valid JSON object - validation checking done in saveItem
+													saveItem(response);
 												} else {
-													// error uploading file
-													// display what the error is
-													writeln("skipped.");
-													displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-													uploadFailed = true;
+													// uploadFailed, return
 													return;
 												}
-											} catch (FileException e) {
-												// display the error message
-												writeln("skipped.");
-												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-												uploadFailed = true;
-												return;
 											}
-											// upload complete
-											writeln("done.");
-											saveItem(response);
 										}
 										
 										// OneDrive SharePoint account modified file upload handling
@@ -4875,93 +4967,15 @@ final class SyncEngine
 											// as if too large, the following error will be generated by OneDrive:
 											//     HTTP request returned status code 413 (Request Entity Too Large)
 											// We also cant use a session to upload the file, we have to use simpleUploadReplace
-											
-											// Calculate existing hash for this file
-											string existingFileHash = computeQuickXorHash(path);
-											
-											if (getSize(path) <= thresholdFileSize) {
-												// Upload file via simpleUploadReplace as below threshold size
-												try {
-													response = onedrive.simpleUploadReplace(path, fileDetailsFromOneDrive["parentReference"]["driveId"].str, fileDetailsFromOneDrive["id"].str, fileDetailsFromOneDrive["eTag"].str);
-												} catch (OneDriveException e) {
-													if (e.httpStatusCode == 401) {
-														// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-														writeln("skipped.");
-														log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
-														uploadFailed = true;
-														return;
-													} else {
-														// display what the error is
-														writeln("skipped.");
-														displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-														uploadFailed = true;
-														return;
-													}
-												} catch (FileException e) {
-													// display the error message
-													writeln("skipped.");
-													displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-													uploadFailed = true;
-													return;
-												}
+																						
+											// Need try{} & catch (OneDriveException e) { & catch (FileException e) { handler for this query
+											response = handleSharePointMetadataAdditionBugReplaceFile(fileDetailsFromOneDrive, parent, path);
+											if (!uploadFailed){
+												// Is the response a valid JSON object - validation checking done in saveItem
+												saveItem(response);
 											} else {
-												// Have to upload via a session, however we have to delete the file first otherwise this will generate a 404 error post session upload
-												// Remove the existing file
-												onedrive.deleteById(fileDetailsFromOneDrive["parentReference"]["driveId"].str, fileDetailsFromOneDrive["id"].str, fileDetailsFromOneDrive["eTag"].str);	
-												// Upload as a session, as a new file
-												writeln("");
-												try {
-													response = session.upload(path, parent.driveId, parent.id, baseName(path));
-												} catch (OneDriveException e) {
-													if (e.httpStatusCode == 401) {
-														// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-														writeln("skipped.");
-														log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
-														uploadFailed = true;
-														return;
-													} else {
-														// display what the error is
-														writeln("skipped.");
-														displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-														uploadFailed = true;
-														return;
-													}
-												} catch (FileException e) {
-													// display the error message
-													writeln("skipped.");
-													displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-													uploadFailed = true;
-													return;
-												}
-											}
-											writeln(" done.");
-											// Is the response a valid JSON object - validation checking done in saveItem
-											saveItem(response);
-											
-											// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
-											// So - now the 'local' and 'remote' file is technically DIFFERENT ... thanks Microsoft .. NO way to disable this stupidity
-											string uploadNewFileHash;
-											if (hasQuickXorHash(response)) {
-											// use the response json hash detail to compare
-												uploadNewFileHash = response["file"]["hashes"]["quickXorHash"].str;
-											}
-											
-											if (existingFileHash != uploadNewFileHash) {
-												// file was modified by Microsoft post upload to SharePoint site
-												log.vdebug("Existing Local File Hash: ", existingFileHash);
-												log.vdebug("New Remote File Hash:     ", uploadNewFileHash);
-												
-												if(!uploadOnly){
-													// Download the Microsoft 'modified' file so 'local' is now in sync
-													log.vlog("Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync");
-													log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
-													auto fileSize = response["size"].integer;
-													onedrive.downloadById(response["parentReference"]["driveId"].str, response["id"].str, path, fileSize);
-												} else {
-													// we are not downloading a file, warn that file differences will exist
-													log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
-													log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
-												}
+												// uploadFailed, return
+												return;
 											}
 										}									
 									}
@@ -5036,6 +5050,106 @@ final class SyncEngine
 				return;
 			}
 		}
+	}
+
+	private JSONValue handleSharePointMetadataAdditionBugReplaceFile(JSONValue fileDetailsFromOneDrive, const ref Item parent, const(string) path)
+	{
+		// Explicit function for handling https://github.com/OneDrive/onedrive-api-docs/issues/935
+		// Replace existing file
+		JSONValue response;
+		
+		// Depending on the file size, this will depend on how best to handle the modified local file
+		// as if too large, the following error will be generated by OneDrive:
+		//     HTTP request returned status code 413 (Request Entity Too Large)
+		// We also cant use a session to upload the file, we have to use simpleUploadReplace
+		
+		// Calculate existing hash for this file
+		string existingFileHash = computeQuickXorHash(path);
+		
+		if (getSize(path) <= thresholdFileSize) {
+			// Upload file via simpleUploadReplace as below threshold size
+			try {
+				response = onedrive.simpleUploadReplace(path, fileDetailsFromOneDrive["parentReference"]["driveId"].str, fileDetailsFromOneDrive["id"].str, fileDetailsFromOneDrive["eTag"].str);
+			} catch (OneDriveException e) {
+				if (e.httpStatusCode == 401) {
+					// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+					writeln("skipped.");
+					log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+					uploadFailed = true;
+					return response;
+				} else {
+					// display what the error is
+					writeln("skipped.");
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+					uploadFailed = true;
+					return response;
+				}
+			} catch (FileException e) {
+				// display the error message
+				writeln("skipped.");
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				uploadFailed = true;
+				return response;
+			}
+		} else {
+			// Have to upload via a session, however we have to delete the file first otherwise this will generate a 404 error post session upload
+			// Remove the existing file
+			onedrive.deleteById(fileDetailsFromOneDrive["parentReference"]["driveId"].str, fileDetailsFromOneDrive["id"].str, fileDetailsFromOneDrive["eTag"].str);	
+			// Upload as a session, as a new file
+			writeln("");
+			try {
+				response = session.upload(path, parent.driveId, parent.id, baseName(path));
+			} catch (OneDriveException e) {
+				if (e.httpStatusCode == 401) {
+					// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
+					writeln("skipped.");
+					log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+					uploadFailed = true;
+					return response;
+				} else {
+					// display what the error is
+					writeln("skipped.");
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+					uploadFailed = true;
+					return response;
+				}
+			} catch (FileException e) {
+				// display the error message
+				writeln("skipped.");
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				uploadFailed = true;
+				return response;
+			}
+		}
+		writeln("done.");
+		// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
+		// So - now the 'local' and 'remote' file is technically DIFFERENT ... thanks Microsoft .. NO way to disable this stupidity
+		string uploadNewFileHash;
+		if (hasQuickXorHash(response)) {
+		// use the response json hash detail to compare
+			uploadNewFileHash = response["file"]["hashes"]["quickXorHash"].str;
+		}
+		
+		if (existingFileHash != uploadNewFileHash) {
+			// file was modified by Microsoft post upload to SharePoint site
+			log.vdebug("Existing Local File Hash: ", existingFileHash);
+			log.vdebug("New Remote File Hash:     ", uploadNewFileHash);
+			
+			if(!uploadOnly){
+				// Download the Microsoft 'modified' file so 'local' is now in sync
+				log.vlog("Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync");
+				log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+				auto fileSize = response["size"].integer;
+				onedrive.downloadById(response["parentReference"]["driveId"].str, response["id"].str, path, fileSize);
+			} else {
+				// we are not downloading a file, warn that file differences will exist
+				log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
+				log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+			}
+		}
+		
+		// return a JSON response so that it can be used and saved
+		return response;
 	}
 
 	// delete an item on OneDrive
@@ -5212,11 +5326,18 @@ final class SyncEngine
 		if (jsonItem.type() == JSONType.object){
 			// Check if the response JSON has an 'id', otherwise makeItem() fails with 'Key not found: id'
 			if (hasId(jsonItem)) {
-				// Takes a JSON input and formats to an item which can be used by the database
-				Item item = makeItem(jsonItem);
-				// Add to the local database
-				log.vdebug("Adding to database: ", item);
-				itemdb.upsert(item);
+				// Are we in a --upload-only & --remove-source-files scenario?
+				// We do not want to add the item to the database in this situation as there is no local reference to the file post file deletion
+				if ((uploadOnly) && (localDeleteAfterUpload)) {
+					// Log that we are deleting a local item
+					log.vdebug("Skipping adding to database as --upload-only & --remove-source-files configured");
+				} else {
+					// Takes a JSON input and formats to an item which can be used by the database
+					Item item = makeItem(jsonItem);
+					// Add to the local database
+					log.vdebug("Adding to database: ", item);
+					itemdb.upsert(item);
+				}
 			} else {
 				// log error
 				log.error("ERROR: OneDrive response missing required 'id' element");
@@ -5356,9 +5477,19 @@ final class SyncEngine
 	void deleteByPath(const(string) path)
 	{
 		Item item;
-		if (!itemdb.selectByPath(path, defaultDriveId, item)) {
+		// Need to check all driveid's we know about, not just the defaultDriveId
+		bool itemInDB = false;
+		foreach (searchDriveId; driveIDsArray) {
+			if (itemdb.selectByPath(path, searchDriveId, item)) {
+				// item was found in the DB
+				itemInDB = true;
+				break;
+			}
+		}
+		if (!itemInDB) {
 			throw new SyncException("The item to delete is not in the local database");
 		}
+		
 		if (item.parentId == null) {
 			// the item is a remote folder, need to do the operation on the parent
 			enforce(itemdb.selectByPathWithoutRemote(path, defaultDriveId, item));
@@ -5418,93 +5549,158 @@ final class SyncEngine
 		
 		string site_id;
 		string drive_id;
-		string webUrl;
 		bool found = false;
-		JSONValue siteQuery; 
+		JSONValue siteQuery;
+		string nextLink;
+		string[] siteSearchResults;
 		
 		log.log("Office 365 Library Name Query: ", o365SharedLibraryName);
 		
-		try {
-			siteQuery = onedrive.o365SiteSearch();
-		} catch (OneDriveException e) {
-			log.error("ERROR: Query of OneDrive for Office 365 Library Name failed");
-			if (e.httpStatusCode == 403) {
-				// Forbidden - most likely authentication scope needs to be updated
-				log.error("ERROR: Authentication scope needs to be updated. Use --logout and re-authenticate client.");
-				return;
-			} else {
-				// display what the error is
-				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-				return;
-			}
-		}
-		
-		// is siteQuery a valid JSON object & contain data we can use?
-		if ((siteQuery.type() == JSONType.object) && ("value" in siteQuery)) {
-			// valid JSON object
-			log.vdebug("O365 Query Response: ", siteQuery);
-			
-			foreach (searchResult; siteQuery["value"].array) {
-				// Need an 'exclusive' match here with o365SharedLibraryName as entered
-				log.vdebug("Found O365 Site: ", searchResult);
-				
-				// 'displayName', 'id' and 'webUrl' have to be present in the search result record
-				if (("displayName" in searchResult) && ("id" in searchResult) && ("webUrl" in searchResult)) {
-					if (o365SharedLibraryName == searchResult["displayName"].str){
-						// 'displayName' matches search request
-						site_id = searchResult["id"].str;
-						webUrl = searchResult["webUrl"].str;
-						JSONValue siteDriveQuery;
-						
-						try {
-							siteDriveQuery = onedrive.o365SiteDrives(site_id);
-						} catch (OneDriveException e) {
-							log.error("ERROR: Query of OneDrive for Office Site ID failed");
-							// display what the error is
-							displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-							return;
-						}
-						
-						// is siteDriveQuery a valid JSON object & contain data we can use?
-						if ((siteDriveQuery.type() == JSONType.object) && ("value" in siteDriveQuery)) {
-							// valid JSON object
-							foreach (driveResult; siteDriveQuery["value"].array) {
-								// Display results
-								found = true;
-								writeln("SiteName: ", searchResult["displayName"].str);
-								writeln("drive_id: ", driveResult["id"].str);
-								writeln("URL:      ", webUrl);
-							}
-						} else {
-							// not a valid JSON object
-							log.error("ERROR: There was an error performing this operation on OneDrive");
-							log.error("ERROR: Increase logging verbosity to assist determining why.");
-							return;
-						}
+		for (;;) {
+			try {
+				siteQuery = onedrive.o365SiteSearch(nextLink);
+			} catch (OneDriveException e) {
+				log.error("ERROR: Query of OneDrive for Office 365 Library Name failed");
+				if (e.httpStatusCode == 403) {
+					// Forbidden - most likely authentication scope needs to be updated
+					log.error("ERROR: Authentication scope needs to be updated. Use --logout and re-authenticate client.");
+					return;
+				}
+				// HTTP request returned status code 429 (Too Many Requests)
+				if (e.httpStatusCode == 429) {
+					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+					handleOneDriveThrottleRequest();
+					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query OneDrive drive children");
+				}
+				// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
+				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
+					// re-try the specific changes queries	
+					if (e.httpStatusCode == 504) {
+						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query Sharepoint Sites - retrying applicable request");
+						log.vdebug("siteQuery = onedrive.o365SiteSearch(nextLink) previously threw an error - retrying");
+						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+						Thread.sleep(dur!"seconds"(30));
+					}
+					// re-try original request - retried for 429 and 504
+					try {
+						log.vdebug("Retrying Query: siteQuery = onedrive.o365SiteSearch(nextLink)");
+						siteQuery = onedrive.o365SiteSearch(nextLink);
+						log.vdebug("Query 'siteQuery = onedrive.o365SiteSearch(nextLink)' performed successfully on re-try");
+					} catch (OneDriveException e) {
+						// display what the error is
+						log.vdebug("Query Error: siteQuery = onedrive.o365SiteSearch(nextLink) on re-try after delay");
+						// error was not a 504 this time
+						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+						return;
 					}
 				} else {
-					// 'displayName' not present in JSON results
-					log.error("ERROR: The results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator.");
-					log.error("ERROR: Your site security settings is preventing the following details from being accessed: 'displayName', 'id' and 'webUrl'");
-					log.error("ERROR: To debug this further, please use --verbose --verbose to provide insight as to what details are actually returned.");
+					// display what the error is
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					return;
 				}
 			}
 			
-			if(!found) {
-				log.error("ERROR: The requested SharePoint site could not be found. Please check it's name and your permissions to access the site.");
-				// List all sites returned to assist user
-				log.log("\nThe following SharePoint site names were returned:");
+			// is siteQuery a valid JSON object & contain data we can use?
+			if ((siteQuery.type() == JSONType.object) && ("value" in siteQuery)) {
+				// valid JSON object
+				log.vdebug("O365 Query Response: ", siteQuery);
+				
 				foreach (searchResult; siteQuery["value"].array) {
-					// list the display name that we use to match against the user query
-					log.log(" * ", searchResult["displayName"].str); 
+					// Need an 'exclusive' match here with o365SharedLibraryName as entered
+					log.vdebug("Found O365 Site: ", searchResult);
+					
+					// 'displayName' and 'id' have to be present in the search result record in order to query the site
+					if (("displayName" in searchResult) && ("id" in searchResult)) {
+						if (o365SharedLibraryName == searchResult["displayName"].str){
+							// 'displayName' matches search request
+							site_id = searchResult["id"].str;
+							JSONValue siteDriveQuery;
+							
+							try {
+								siteDriveQuery = onedrive.o365SiteDrives(site_id);
+							} catch (OneDriveException e) {
+								log.error("ERROR: Query of OneDrive for Office Site ID failed");
+								// display what the error is
+								displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+								return;
+							}
+							
+							// is siteDriveQuery a valid JSON object & contain data we can use?
+							if ((siteDriveQuery.type() == JSONType.object) && ("value" in siteDriveQuery)) {
+								// valid JSON object
+								foreach (driveResult; siteDriveQuery["value"].array) {
+									// Display results
+									writeln("-----------------------------------------------");
+									log.vdebug("Site Details: ", driveResult);
+									found = true;
+									writeln("Site Name:    ", searchResult["displayName"].str);
+									writeln("Library Name: ", driveResult["name"].str);
+									writeln("drive_id:     ", driveResult["id"].str);
+									writeln("Library URL:  ", driveResult["webUrl"].str);
+								}
+								// closeout
+								writeln("-----------------------------------------------");
+							} else {
+								// not a valid JSON object
+								log.error("ERROR: There was an error performing this operation on OneDrive");
+								log.error("ERROR: Increase logging verbosity to assist determining why.");
+								return;
+							}
+						}
+					} else {
+						// 'displayName', 'id' or ''webUrl' not present in JSON results for a specific site
+						string siteNameAvailable = "Site 'name' was restricted by OneDrive API permissions";
+						bool displayNameAvailable = false;
+						bool idAvailable = false;
+						if ("name" in searchResult) siteNameAvailable = searchResult["name"].str;
+						if ("displayName" in searchResult) displayNameAvailable = true;
+						if ("id" in searchResult) idAvailable = true;
+						
+						// Display error details for this site data
+						log.error("\nERROR: SharePoint Site details not provided for: ", siteNameAvailable);
+						log.error("ERROR: The SharePoint Site results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator.");
+						log.error("ERROR: Your site security settings is preventing the following details from being accessed: 'displayName' or 'id'");
+						log.vlog(" - Is 'displayName' available = ", displayNameAvailable);
+						log.vlog(" - Is 'id' available          = ", idAvailable);
+						log.error("ERROR: To debug this further, please increase verbosity (--verbose or --verbose --verbose) to provide further insight as to what details are actually being returned.");
+					}
 				}
+				
+				if(!found) {
+					// The SharePoint site we are searching for was not found in this bundle set
+					// Add to siteSearchResults so we can display what we did find
+					string siteSearchResultsEntry;
+					foreach (searchResult; siteQuery["value"].array) {
+						siteSearchResultsEntry = " * " ~ searchResult["displayName"].str;
+						siteSearchResults ~= siteSearchResultsEntry;
+					}
+				}
+			} else {
+				// not a valid JSON object
+				log.error("ERROR: There was an error performing this operation on OneDrive");
+				log.error("ERROR: Increase logging verbosity to assist determining why.");
+				return;
 			}
-		} else {
-			// not a valid JSON object
-			log.error("ERROR: There was an error performing this operation on OneDrive");
-			log.error("ERROR: Increase logging verbosity to assist determining why.");
-			return;
+			
+			// If a collection exceeds the default page size (200 items), the @odata.nextLink property is returned in the response 
+			// to indicate more items are available and provide the request URL for the next page of items.
+			if ("@odata.nextLink" in siteQuery) {
+				// Update nextLink to next set of SharePoint library names
+				nextLink = siteQuery["@odata.nextLink"].str;
+				log.vdebug("Setting nextLink to (@odata.nextLink): ", nextLink);
+			} else break;
+		}
+		
+		// Was the intended target found?
+		if(!found) {
+			log.error("\nERROR: The requested SharePoint site could not be found. Please check it's name and your permissions to access the site.");
+			// List all sites returned to assist user
+			log.log("\nThe following SharePoint site names were returned:");
+			foreach (searchResultEntry; siteSearchResults) {
+				// list the display name that we use to match against the user query
+				log.log(searchResultEntry);
+			}
 		}
 	}
 	
@@ -6209,8 +6405,8 @@ final class SyncEngine
 			// to indicate more items are available and provide the request URL for the next page of items.
 			if ("@odata.nextLink" in thisLevelChildren) {
 				// Update nextLink to next changeSet bundle
-				log.vdebug("Setting nextLink to (@odata.nextLink): ", nextLink);
 				nextLink = thisLevelChildren["@odata.nextLink"].str;
+				log.vdebug("Setting nextLink to (@odata.nextLink): ", nextLink);
 			} else break;
 		}
 		

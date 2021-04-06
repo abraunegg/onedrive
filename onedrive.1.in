@@ -89,11 +89,6 @@ Configuration file key: \fBenable_logging\fP (default: \fBfalse\fP)
 \fB\-\-force\fP
 Force the deletion of data when a 'big delete' is detected
 .TP
-\fB\-\-force\-http\-1.1\fP
-Force the use of HTTP 1.1 for all operations (DEPRECIATED)
-.br
-Configuration file key: \fBforce_http_11\fP (default: \fBfalse\fP)
-.TP
 \fB\-\-force\-http\-2\fP
 Force the use of HTTP/2 for all operations where applicable
 .br

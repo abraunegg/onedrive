@@ -326,7 +326,6 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # disable_notifications = "false"
 # disable_upload_validation = "false"
 # enable_logging = "false"
-# force_http_11 = "false"
 # force_http_2 = "false"
 # local_first = "false"
 # no_remote_delete = "false"
@@ -698,9 +697,33 @@ systemctl --user start onedrive
 
 **Note:** This will run the 'onedrive' process with a UID/GID of '0', thus, any files or folders that are created will be owned by 'root'
 
-To see the logs run:
+To see the systemd application logs run:
 ```text
 journalctl --user-unit=onedrive -f
+```
+
+**Note:** It is a 'systemd' requirement that the XDG environment variables exist for correct enablement and operation of systemd services. If you receive this error when enabling the systemd service:
+```
+Failed to connect to bus: No such file or directory
+```
+The most likely cause is that the XDG environment variables are missing. To fix this, you must add the following to `.bashrc` or any other file which is run on user login:
+```
+export XDG_RUNTIME_DIR="/run/user/$UID"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+```
+
+To make this change effective, you must logout of all user accounts where this change has been made.
+
+**Note:** On some systems (for example - Raspbian / Ubuntu / Debian on Raspberry Pi) the above XDG fix may not be reliable after system reboots. The potential alternative to start the client via systemd as root, is to perform the following:
+1.  Create a symbolic link from `/home/root/.config/onedrive` pointing to `/root/.config/onedrive/`
+2.  Create a systemd service using the '@' service file: `systemctl enable onedrive@root.service`
+3.  Start the root@service: `systemctl start onedrive@root.service`
+
+This will ensure that the service will correctly restart on system reboot.
+
+To see the systemd application logs run:
+```text
+journalctl --unit=onedrive@<username> -f
 ```
 
 ### OneDrive service running as root user via systemd (Red Hat Enterprise Linux, CentOS Linux)
@@ -710,7 +733,7 @@ systemctl start onedrive
 ```
 **Note:** This will run the 'onedrive' process with a UID/GID of '0', thus, any files or folders that are created will be owned by 'root'
 
-To see the logs run:
+To see the systemd application logs run:
 ```text
 journalctl --unit=onedrive -f
 ```
@@ -732,7 +755,7 @@ systemctl start onedrive@<username>.service
 systemctl status onedrive@<username>.service
 ```
 
-To see the logs run:
+To see the systemd application logs run:
 ```text
 journalctl --unit=onedrive@<username> -f
 ```
@@ -752,7 +775,7 @@ systemctl --user enable onedrive
 systemctl --user start onedrive
 ```
 
-To see the logs run:
+To see the systemd application logs run:
 ```text
 journalctl --user-unit=onedrive -f
 ```

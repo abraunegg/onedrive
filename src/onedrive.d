@@ -852,10 +852,15 @@ final class OneDriveApi
 	}
 
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/site_search?view=odsp-graph-online
-	JSONValue o365SiteSearch(){
+	JSONValue o365SiteSearch(const(char)[] nextLink){
 		checkAccessTokenExpired();
 		const(char)[] url;
-		url = siteSearchUrl ~ "=*";
+		// configure URL to query
+		if (nextLink.empty) {
+			url = siteSearchUrl ~ "=*";
+		} else {
+			url = nextLink;
+		}
 		return get(url);
 	}
 		
