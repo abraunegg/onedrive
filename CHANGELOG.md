@@ -2,6 +2,30 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.4.11 - 2021-4-07
+### Fixed
+*   Fix support for '/*' regardless of location within sync_list file
+*   Fix 429 response handling correctly check for 'retry-after' response header and use set value
+*   Fix 'sync_list' path handling for sub item matching, so that items in parent are not implicitly matched when there is no wildcard present
+*   Fix --get-O365-drive-id to use 'nextLink' value if present when searching for specific SharePoint site names
+*   Fix OneDrive Business Shared Folder existing name conflict check
+*   Fix incorrect error message 'Item cannot be deleted from OneDrive because it was not found in the local database' when item is actually present
+*   Fix application crash when unable to rename folder structure due to unhandled file-system issue
+*   Fix uploading documents to Shared Business Folders when the shared folder exists on a SharePoint site due to Microsoft Sharepoint 'enrichment' of files
+*   Fix that a file record is kept in database when using --no-remote-delete & --remove-source-files
+
+### Added
+*   Added support in --get-O365-drive-id to provide the 'drive_id' for multiple 'document libraries' within a single Shared Library Site
+
+### Removed
+*   Removed the depreciated config option 'force_http_11' which was flagged as depreciated by PR #549 in v2.3.6 (June 2019)
+
+### Updated
+*   Updated error output of --get-O365-drive-id to provide more details why an error occurred if a SharePoint site lacks the details we need to perform the match
+*   Updated Docker build files for Raspberry Pi to dedicated armhf & aarch64 Dockerfiles
+*   Updated logging output when in --monitor mode, avoid outputting misleading logging when the new or modified item is a file, not a directory
+*   Updated documentation (various)
+
 ## 2.4.10 - 2021-2-19
 ### Fixed
 *   Catch database assertion when item path cannot be calculated
