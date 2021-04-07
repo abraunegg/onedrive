@@ -277,16 +277,21 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 		
 		// Is path is an exact match of the allowed path?
 		if (comm.length == path.length) {
-			// the given path is contained in an allowed path
-			if (!exclude) {
-				log.vdebug("Evaluation against 'sync_list' result: direct match");
-				finalResult = false;
-				// direct match, break and go sync
-				break;
-			} else {
-				log.vdebug("Evaluation against 'sync_list' result: direct match but to be excluded");
-				finalResult = true;
-				// do not set excludeMatched = true here, otherwise parental path also gets excluded
+			// we have a potential exact match
+			// strip any potential '/*' from the allowed path, to avoid a potential lesser common match
+			string strippedAllowedPath = strip(allowedPath[offset..$], "/*");
+			if (path == strippedAllowedPath) {
+				// we have an exact match	
+				if (!exclude) {
+					log.vdebug("Evaluation against 'sync_list' result: direct match");
+					finalResult = false;
+					// direct match, break and go sync
+					break;
+				} else {
+					log.vdebug("Evaluation against 'sync_list' result: direct match but to be excluded");
+					finalResult = true;
+					// do not set excludeMatched = true here, otherwise parental path also gets excluded
+				}	
 			}
 		}
 		
