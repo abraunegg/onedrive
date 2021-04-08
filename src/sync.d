@@ -3425,7 +3425,7 @@ final class SyncEngine
 												// HTTP request returned status code 412 - ETag does not match current item's value
 												// Delete record from the local database - file will be uploaded as a new file
 												writeln("skipped.");
-												log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
+												log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue (Personal Account)");
 												log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 												itemdb.deleteById(item.driveId, item.id);
 												uploadFailed = true;
@@ -3468,7 +3468,7 @@ final class SyncEngine
 												// HTTP request returned status code 412 - ETag does not match current item's value
 												// Delete record from the local database - file will be uploaded as a new file
 												writeln("skipped.");
-												log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
+												log.vdebug("Session Upload Replace Failed - OneDrive eTag / cTag match issue (Personal Account)");
 												log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 												itemdb.deleteById(item.driveId, item.id);
 												uploadFailed = true;
@@ -3537,6 +3537,16 @@ final class SyncEngine
 												log.fileOnly("Uploading modified file ", path, " ... skipped.");
 												writeln("", path, " is currently checked out or locked for editing by another user.");
 												log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+												uploadFailed = true;
+												return;
+											} 
+											if (e.httpStatusCode == 412) {
+												// HTTP request returned status code 412 - ETag does not match current item's value
+												// Delete record from the local database - file will be uploaded as a new file
+												writeln("skipped.");
+												log.vdebug("Session Upload Replace Failed - OneDrive eTag / cTag match issue (Business Account)");
+												log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
+												itemdb.deleteById(item.driveId, item.id);
 												uploadFailed = true;
 												return;
 											} else {
@@ -3727,7 +3737,7 @@ final class SyncEngine
 					log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 					uploadFailed = true;
 					return response;
-				}										
+				}
 				// Resolve https://github.com/abraunegg/onedrive/issues/36
 				if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
 					// The file is currently checked out or locked for editing by another user
@@ -3736,6 +3746,16 @@ final class SyncEngine
 					log.fileOnly("Uploading modified file ", path, " ... skipped.");
 					writeln("", path, " is currently checked out or locked for editing by another user.");
 					log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+					uploadFailed = true;
+					return response;
+				} 
+				if (e.httpStatusCode == 412) {
+					// HTTP request returned status code 412 - ETag does not match current item's value
+					// Delete record from the local database - file will be uploaded as a new file
+					writeln("skipped.");
+					log.vdebug("Session Upload Replace Failed - OneDrive eTag / cTag match issue (Sharepoint Library)");
+					log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
+					itemdb.deleteById(item.driveId, item.id);
 					uploadFailed = true;
 					return response;
 				} else {
