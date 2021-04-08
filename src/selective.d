@@ -277,16 +277,45 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 		
 		// Is path is an exact match of the allowed path?
 		if (comm.length == path.length) {
-			// the given path is contained in an allowed path
-			if (!exclude) {
-				log.vdebug("Evaluation against 'sync_list' result: direct match");
-				finalResult = false;
-				// direct match, break and go sync
-				break;
+			// we have a potential exact match
+			// strip any potential '/*' from the allowed path, to avoid a potential lesser common match
+			string strippedAllowedPath = strip(allowedPath[offset..$], "/*");
+			
+			if (path == strippedAllowedPath) {
+				// we have an exact path match
+				log.vdebug("exact path match");
+				if (!exclude) {
+					log.vdebug("Evaluation against 'sync_list' result: direct match");
+					finalResult = false;
+					// direct match, break and go sync
+					break;
+				} else {
+					log.vdebug("Evaluation against 'sync_list' result: direct match but to be excluded");
+					finalResult = true;
+					// do not set excludeMatched = true here, otherwise parental path also gets excluded
+				}	
 			} else {
-				log.vdebug("Evaluation against 'sync_list' result: direct match but to be excluded");
-				finalResult = true;
-				// do not set excludeMatched = true here, otherwise parental path also gets excluded
+				// no exact path match, but something common does match
+				log.vdebug("something 'common' matches the input path");
+				auto splitAllowedPaths = pathSplitter(strippedAllowedPath);
+				string pathToEvaluate = "";
+				foreach(base; splitAllowedPaths) {
+					pathToEvaluate ~= base;
+					if (path == pathToEvaluate) {
+						// The input path matches what we want to evaluate against as a direct match
+						if (!exclude) {
+							log.vdebug("Evaluation against 'sync_list' result: direct match for parental path item");
+							finalResult = false;
+							// direct match, break and go sync
+							break;
+						} else {
+							log.vdebug("Evaluation against 'sync_list' result: direct match for parental path item but to be excluded");
+							finalResult = true;
+							// do not set excludeMatched = true here, otherwise parental path also gets excluded
+						}					
+					}
+					pathToEvaluate ~= dirSeparator;
+				}
 			}
 		}
 		
