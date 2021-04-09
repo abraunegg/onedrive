@@ -293,8 +293,30 @@ sudo emerge x11-libs/libnotify
 
 ### Dependencies: OpenSuSE Leap 15.0
 ```text
-sudo zypper addrepo --check --refresh --name "D" http://download.opensuse.org/repositories/devel:/languages:/D/openSUSE_Leap_15.0/devel:languages:D.repo
-sudo zypper install git libcurl-devel sqlite3-devel D:dmd D:libphobos2-0_81 D:phobos-devel D:phobos-devel-static
+sudo zypper addrepo https://download.opensuse.org/repositories/devel:languages:D/openSUSE_Leap_15.0/devel:languages:D.repo
+sudo zypper refresh
+sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static
+```
+For notifications the following is also necessary:
+```text
+sudo zypper install libnotify-devel
+```
+
+### Dependencies: OpenSuSE Leap 15.1
+```text
+sudo zypper addrepo https://download.opensuse.org/repositories/devel:languages:D/openSUSE_Leap_15.1/devel:languages:D.repo
+sudo zypper refresh
+sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static
+```
+For notifications the following is also necessary:
+```text
+sudo zypper install libnotify-devel
+```
+
+### Dependencies: OpenSuSE Leap 15.2
+```text
+sudo zypper refresh
+sudo zypper install gcc git libcurl-devel sqlite3-devel dmd phobos-devel phobos-devel-static
 ```
 For notifications the following is also necessary:
 ```text
