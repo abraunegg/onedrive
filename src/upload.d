@@ -268,7 +268,7 @@ struct UploadSession
 		}
 	}
 	
-	string getSessionFilePath() {
+	string getUploadSessionLocalFilePath() {
 		// return the session file path
 		string localPath = "";
 		if ("localPath" in session){

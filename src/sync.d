@@ -445,11 +445,12 @@ final class SyncEngine
 			// Check if there is an interrupted upload session
 			if (session.restore()) {
 				log.log("Continuing the upload session ...");
-				string sessionFilePath = session.getSessionFilePath();
+				string uploadSessionLocalFilePath = session.getUploadSessionLocalFilePath();
 				auto item = session.upload();
 				
-				if (!uploadFailed) {
-					// Upload did not fail
+				// is 'item' a valid JSON response and not null
+				if (item.type() == JSONType.object) {
+					// Upload did not fail, JSON response contains data
 					// Are we in an --upload-only & --remove-source-files scenario?
 					// Use actual config values as we are doing an upload session recovery
 					if ((cfg.getValueBool("upload_only")) && (cfg.getValueBool("remove_source_files"))) {
@@ -458,12 +459,12 @@ final class SyncEngine
 						// are we in a --dry-run scenario?
 						if (!dryRun) {
 							// No --dry-run ... process local file delete
-							if (!sessionFilePath.empty) {
+							if (!uploadSessionLocalFilePath.empty) {
 								// only perform the delete if we have a valid file path
-								if (exists(sessionFilePath)) {
+								if (exists(uploadSessionLocalFilePath)) {
 									// file exists
-									log.vdebug("Removing local file: ", sessionFilePath);
-									safeRemove(sessionFilePath);
+									log.vdebug("Removing local file: ", uploadSessionLocalFilePath);
+									safeRemove(uploadSessionLocalFilePath);
 								}
 							}
 						}
@@ -473,6 +474,9 @@ final class SyncEngine
 						// save the item
 						saveItem(item);
 					}
+				} else {
+					// JSON response was not valid, upload failed
+					log.error("ERROR: File failed to upload. Increase logging verbosity to determine why.");
 				}
 			}
 			initDone = true;
