@@ -445,9 +445,40 @@ final class SyncEngine
 			// Check if there is an interrupted upload session
 			if (session.restore()) {
 				log.log("Continuing the upload session ...");
+				string uploadSessionLocalFilePath = session.getUploadSessionLocalFilePath();
 				auto item = session.upload();
-				saveItem(item);
-			}		
+				
+				// is 'item' a valid JSON response and not null
+				if (item.type() == JSONType.object) {
+					// Upload did not fail, JSON response contains data
+					// Are we in an --upload-only & --remove-source-files scenario?
+					// Use actual config values as we are doing an upload session recovery
+					if ((cfg.getValueBool("upload_only")) && (cfg.getValueBool("remove_source_files"))) {
+						// Log that we are deleting a local item
+						log.log("Removing local file as --upload-only & --remove-source-files configured");
+						// are we in a --dry-run scenario?
+						if (!dryRun) {
+							// No --dry-run ... process local file delete
+							if (!uploadSessionLocalFilePath.empty) {
+								// only perform the delete if we have a valid file path
+								if (exists(uploadSessionLocalFilePath)) {
+									// file exists
+									log.vdebug("Removing local file: ", uploadSessionLocalFilePath);
+									safeRemove(uploadSessionLocalFilePath);
+								}
+							}
+						}
+						// as file is removed, we have nothing to add to the local database
+						log.vdebug("Skipping adding to database as --upload-only & --remove-source-files configured");
+					} else {
+						// save the item
+						saveItem(item);
+					}
+				} else {
+					// JSON response was not valid, upload failed
+					log.error("ERROR: File failed to upload. Increase logging verbosity to determine why.");
+				}
+			}
 			initDone = true;
 		} else {
 			// init failure
@@ -5321,7 +5352,7 @@ final class SyncEngine
 				// Are we in a --upload-only & --remove-source-files scenario?
 				// We do not want to add the item to the database in this situation as there is no local reference to the file post file deletion
 				if ((uploadOnly) && (localDeleteAfterUpload)) {
-					// Log that we are deleting a local item
+					// Log that we skipping adding item to the local DB and the reason why
 					log.vdebug("Skipping adding to database as --upload-only & --remove-source-files configured");
 				} else {
 					// Takes a JSON input and formats to an item which can be used by the database

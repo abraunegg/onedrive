@@ -268,6 +268,15 @@ struct UploadSession
 		}
 	}
 	
+	string getUploadSessionLocalFilePath() {
+		// return the session file path
+		string localPath = "";
+		if ("localPath" in session){
+			localPath = session["localPath"].str;
+		}
+		return localPath;
+	}
+	
 	// save session details to temp file
 	private void save()
 	{
