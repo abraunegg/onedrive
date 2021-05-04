@@ -5351,7 +5351,8 @@ final class SyncEngine
 			if (hasId(jsonItem)) {
 				// Are we in a --upload-only & --remove-source-files scenario?
 				// We do not want to add the item to the database in this situation as there is no local reference to the file post file deletion
-				if ((uploadOnly) && (localDeleteAfterUpload)) {
+				// If the item is a directory, we need to add this to the DB, if this is a file, we dont add this, the parent path is not in DB, thus any new files in this directory are not added
+				if ((uploadOnly) && (localDeleteAfterUpload) && (isItemFile(jsonItem))) {
 					// Log that we skipping adding item to the local DB and the reason why
 					log.vdebug("Skipping adding to database as --upload-only & --remove-source-files configured");
 				} else {
