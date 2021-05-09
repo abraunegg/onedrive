@@ -5696,8 +5696,21 @@ final class SyncEngine
 					// Add to siteSearchResults so we can display what we did find
 					string siteSearchResultsEntry;
 					foreach (searchResult; siteQuery["value"].array) {
-						siteSearchResultsEntry = " * " ~ searchResult["displayName"].str;
-						siteSearchResults ~= siteSearchResultsEntry;
+						// We can only add the displayName if it is available
+						if ("displayName" in searchResult) {
+							// Use the displayName
+							siteSearchResultsEntry = " * " ~ searchResult["displayName"].str;
+							siteSearchResults ~= siteSearchResultsEntry;
+						} else {
+							// Add, but indicate displayName unavailable, use id
+							if ("id" in searchResult) {
+								siteSearchResultsEntry = " * " ~ "Unknown displayName (Data not provided by API), Site ID: " ~ searchResult["id"].str;
+								siteSearchResults ~= siteSearchResultsEntry;
+							} else {
+								// displayName and id unavailable, display in debug log the entry
+								log.vdebug("Bad SharePoint Data for site: ", searchResult);
+							}
+						}
 					}
 				}
 			} else {
