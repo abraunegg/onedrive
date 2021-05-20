@@ -1,7 +1,15 @@
 # Installing from Distribution Packages or Building the OneDrive Client for Linux from source
 
 ## Installing from Distribution Packages
-This project has been packaged for the following Linux distributions:
+This project has been packaged for the following Linux distributions as per below. The current client release is: [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases)
+
+#### Important Note:
+Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If a package is out of date, please contact the package maintainer for resolution.
+
+
+<img src="https://img.shields.io/aur/version/onedrive-abraunegg" width="94" height="20"/>
+
+
 
 | Distribution                    | Package Name & Package Link                                                  | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 | Version |Extra Details                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 |---------------------------------|------------------------------------------------------------------------------|:----:|:------:|:-----:|:-------:|:-------:|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -15,9 +23,6 @@ This project has been packaged for the following Linux distributions:
 | Slackware                       | [onedrive](https://slackbuilds.org/repository/14.2/network/onedrive/)        |<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>| N/A | |
 | Solus                           | [onedrive](https://dev.getsol.us/search/query/FB7PIf1jG9Z9/#R)               |<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>| N/A | |
 | Ubuntu                          | [onedrive](https://launchpad.net/~yann1ck/+archive/ubuntu/onedrive)          |<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>| [![UBUNTU](https://img.shields.io/ubuntu/v/onedrive)](https://launchpad.net/~yann1ck/+archive/ubuntu/onedrive) | Install via the Ubuntu PPA Archive:<br><br>`sudo add-apt-repository ppa:yann1ck/onedrive`<br>`sudo apt-get update`<br>`sudo apt install onedrive`|
-
-#### Important Note:
-Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If a package is out of date, please contact the package maintainer for resolution.
 
 #### Important information for all Ubuntu and Ubuntu based distribution users:
 This information is specifically for the following platforms and distributions:
