@@ -17,9 +17,14 @@ Distribution packages may be of an older release when compared to the latest rel
 | Gentoo                          | [onedrive](https://gpo.zugaina.org/net-misc/onedrive)                        | No API Available |<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>| |
 | NixOS                           | [onedrive](https://search.nixos.org/packages?channel=20.09&from=0&size=50&sort=relevance&query=onedrive)|<a href="https://search.nixos.org/packages?channel=20.09&from=0&size=50&sort=relevance&query=onedrive"><img src="https://repology.org/badge/version-for-repo/nix_unstable/onedrive.svg?header=" alt="nixpkgs unstable package" width="46" height="20"></a>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>| Use package `onedrive` either by adding it to `configuration.nix` or by using the command `nix-env -iA <channel name>.onedrive`. This does not install a service. To install a service, use unstable channel (will stabilize in 20.09) and add `services.onedrive.enable=true` in `configuration.nix`. You can also add a custom package using the `services.onedrive.package` option (recommended since package lags upstream). Enabling the service installs a default package too (based on the channel). You can also add multiple onedrive accounts trivially, see [documentation](https://github.com/NixOS/nixpkgs/pull/77734#issuecomment-575874225). |
 | openSUSE                        | [onedrive](https://software.opensuse.org/package/onedrive)                   |<a href="https://software.opensuse.org/package/onedrive"><img src="https://repology.org/badge/version-for-repo/opensuse_tumbleweed/onedrive.svg?header=" alt="openSUSE Tumbleweed package" width="46" height="20"></a>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>| |
+| Raspbian                        | [onedrive](https://archive.raspbian.org/raspbian/pool/main/o/onedrive/)      |<a href="https://archive.raspbian.org/raspbian/pool/main/o/onedrive/"><img src="https://repology.org/badge/version-for-repo/raspbian_stable/onedrive.svg?header=" alt="Raspbian Stable package" width="46" height="20"></a>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>| |
 | Slackware                       | [onedrive](https://slackbuilds.org/repository/14.2/network/onedrive/)        |<a href="https://slackbuilds.org/repository/14.2/network/onedrive/"><img src="https://repology.org/badge/version-for-repo/slackbuilds/onedrive.svg?header=" alt="SlackBuilds package" width="46" height="20"></a>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>| |
 | Solus                           | [onedrive](https://dev.getsol.us/search/query/FB7PIf1jG9Z9/#R)               |<a href="https://dev.getsol.us/search/query/FB7PIf1jG9Z9/#R"><img src="https://repology.org/badge/version-for-repo/solus/onedrive.svg?header=" alt="Solus package" width="46" height="20"></a>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>| |
-| Ubuntu PPA                      | [onedrive](https://launchpad.net/~yann1ck/+archive/ubuntu/onedrive)          | No API Available |<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>| Install via the Ubuntu PPA Archive:<br><br>`sudo add-apt-repository ppa:yann1ck/onedrive`<br>`sudo apt-get update`<br>`sudo apt install onedrive`|
+| Ubuntu 18.04                    | [onedrive](https://packages.ubuntu.com/bionic/onedrive)                      |<a href="https://packages.ubuntu.com/bionic/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_18_04/onedrive.svg?header=" alt="Ubuntu 18.04 package" width="88" height="20"></a>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>| |
+| Ubuntu 20.04                    | [onedrive](https://packages.ubuntu.com/focal/onedrive)                       |<a href="https://packages.ubuntu.com/focal/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_20_04/onedrive.svg?header=" alt="Ubuntu 20.04 package" width="46" height="20"></a>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>| |
+| Ubuntu 20.10                    | [onedrive](https://packages.ubuntu.com/groovy/onedrive)                      |<a href="https://packages.ubuntu.com/groovy/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_20_10/onedrive.svg?header=" alt="Ubuntu 20.10 package" width="46" height="20"></a>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>| |
+| Ubuntu 21.04                    | [onedrive](https://packages.ubuntu.com/hirsute/onedrive)                     |<a href="https://packages.ubuntu.com/hirsute/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_21_04/onedrive.svg?header=" alt="Ubuntu 21.04 package" width="46" height="20"></a>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>| |
+| Ubuntu PPA                      | [onedrive](https://launchpad.net/~yann1ck/+archive/ubuntu/onedrive)          |<a href="https://launchpad.net/~yann1ck/+archive/ubuntu/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_testing/onedrive.svg?header=" alt="Ubuntu PPA package" width="46" height="20"></a> |<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>| Install via the Ubuntu PPA Archive:<br><br>`sudo add-apt-repository ppa:yann1ck/onedrive`<br>`sudo apt-get update`<br>`sudo apt install onedrive`|
 
 #### Important information for all Ubuntu and Ubuntu based distribution users:
 This information is specifically for the following platforms and distributions:
@@ -53,65 +58,8 @@ curl -fsS https://dlang.org/install.sh | bash -s ldc
 ```
 
 ## Distribution Package Dependencies
-### Dependencies: Ubuntu 16.x - i386 / i686 (less than 1GB Memory) 
-**Important:** Build environment must have at least 512 of memory & 1GB swap space
-
-**Important:** Only use this method if you have <1GB of physical memory.
-
-**Note:** Peppermint 7 validated with the DMD compiler on the following i386 / i686 platform:
-```text
-DISTRIB_ID=Peppermint
-DISTRIB_RELEASE=7
-DISTRIB_CODENAME=xenial
-DISTRIB_DESCRIPTION="Peppermint 7 Seven"
-```
-
-First install development dependencies as per below:
-```text
-sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev
-sudo apt install libsqlite3-dev
-sudo apt install pkg-config
-sudo apt install git
-sudo apt install curl
-```
-For notifications the following is also necessary:
-```text
-sudo apt install libnotify-dev
-```
-Second, install the DMD compiler as per below:
-```text
-sudo wget http://master.dl.sourceforge.net/project/d-apt/files/d-apt.list -O /etc/apt/sources.list.d/d-apt.list
-sudo apt-get update && sudo apt-get -y --allow-unauthenticated install --reinstall d-apt-keyring
-sudo apt-get update && sudo apt-get install dmd-compiler dub
-```
-
-### Dependencies: Ubuntu 16.x - i386 / i686 / x86_64 (1GB Memory or more)
-**Note:** Ubuntu 16.x validated with the DMD compiler on the following Ubuntu i386 / i686 platform:
-```text
-DISTRIB_ID=Ubuntu
-DISTRIB_RELEASE=16.04
-DISTRIB_CODENAME=xenial
-DISTRIB_DESCRIPTION="Ubuntu 16.04.6 LTS"
-```
-
-First install development dependencies as per below:
-```text
-sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev
-sudo apt install libsqlite3-dev
-sudo apt install pkg-config
-sudo apt install git
-sudo apt install curl
-```
-For notifications the following is also necessary:
-```text
-sudo apt install libnotify-dev
-```
-Second, install the DMD compiler as per below:
-```text
-curl -fsS https://dlang.org/install.sh | bash -s dmd
-```
+### Dependencies: Ubuntu 16.x
+Ubuntu Linux 16.04 LTS reached the end of its five-year LTS window on April 30th 2021 and is no longer supported.
 
 ### Dependencies: Ubuntu 18.x / Lubuntu 18.x / Debian 9 - i386 / i686
 These dependencies are also applicable for all Ubuntu based distributions such as:
