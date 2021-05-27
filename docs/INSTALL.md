@@ -33,8 +33,9 @@ Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive
 
 If you wish to change this situation so that you can just use 'apt install onedrive', consider becoming the Ubuntu package maintainer and contribute back to the community.
 
-## Building from Source High Level Requirements
+## Building from Source - High Level Requirements
 *   Build environment must have at least 1GB of memory & 1GB swap space
+*   Install the required distribution package dependencies
 *   [libcurl](http://curl.haxx.se/libcurl/)
 *   [SQLite 3](https://www.sqlite.org/) >= 3.7.15
 *   [Digital Mars D Compiler (DMD)](http://dlang.org/download.html) or [LDC – the LLVM-based D Compiler](https://github.com/ldc-developers/ldc)
