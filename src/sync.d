@@ -445,9 +445,40 @@ final class SyncEngine
 			// Check if there is an interrupted upload session
 			if (session.restore()) {
 				log.log("Continuing the upload session ...");
+				string uploadSessionLocalFilePath = session.getUploadSessionLocalFilePath();
 				auto item = session.upload();
-				saveItem(item);
-			}		
+				
+				// is 'item' a valid JSON response and not null
+				if (item.type() == JSONType.object) {
+					// Upload did not fail, JSON response contains data
+					// Are we in an --upload-only & --remove-source-files scenario?
+					// Use actual config values as we are doing an upload session recovery
+					if ((cfg.getValueBool("upload_only")) && (cfg.getValueBool("remove_source_files"))) {
+						// Log that we are deleting a local item
+						log.log("Removing local file as --upload-only & --remove-source-files configured");
+						// are we in a --dry-run scenario?
+						if (!dryRun) {
+							// No --dry-run ... process local file delete
+							if (!uploadSessionLocalFilePath.empty) {
+								// only perform the delete if we have a valid file path
+								if (exists(uploadSessionLocalFilePath)) {
+									// file exists
+									log.vdebug("Removing local file: ", uploadSessionLocalFilePath);
+									safeRemove(uploadSessionLocalFilePath);
+								}
+							}
+						}
+						// as file is removed, we have nothing to add to the local database
+						log.vdebug("Skipping adding to database as --upload-only & --remove-source-files configured");
+					} else {
+						// save the item
+						saveItem(item);
+					}
+				} else {
+					// JSON response was not valid, upload failed
+					log.error("ERROR: File failed to upload. Increase logging verbosity to determine why.");
+				}
+			}
 			initDone = true;
 		} else {
 			// init failure
@@ -3453,7 +3484,7 @@ final class SyncEngine
 												// HTTP request returned status code 412 - ETag does not match current item's value
 												// Delete record from the local database - file will be uploaded as a new file
 												writeln("skipped.");
-												log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
+												log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue (Personal Account)");
 												log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 												itemdb.deleteById(item.driveId, item.id);
 												uploadFailed = true;
@@ -3496,7 +3527,7 @@ final class SyncEngine
 												// HTTP request returned status code 412 - ETag does not match current item's value
 												// Delete record from the local database - file will be uploaded as a new file
 												writeln("skipped.");
-												log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue");
+												log.vdebug("Session Upload Replace Failed - OneDrive eTag / cTag match issue (Personal Account)");
 												log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 												itemdb.deleteById(item.driveId, item.id);
 												uploadFailed = true;
@@ -3565,6 +3596,16 @@ final class SyncEngine
 												log.fileOnly("Uploading modified file ", path, " ... skipped.");
 												writeln("", path, " is currently checked out or locked for editing by another user.");
 												log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+												uploadFailed = true;
+												return;
+											} 
+											if (e.httpStatusCode == 412) {
+												// HTTP request returned status code 412 - ETag does not match current item's value
+												// Delete record from the local database - file will be uploaded as a new file
+												writeln("skipped.");
+												log.vdebug("Session Upload Replace Failed - OneDrive eTag / cTag match issue (Business Account)");
+												log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
+												itemdb.deleteById(item.driveId, item.id);
 												uploadFailed = true;
 												return;
 											} else {
@@ -3755,7 +3796,7 @@ final class SyncEngine
 					log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 					uploadFailed = true;
 					return response;
-				}										
+				}
 				// Resolve https://github.com/abraunegg/onedrive/issues/36
 				if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
 					// The file is currently checked out or locked for editing by another user
@@ -3764,6 +3805,16 @@ final class SyncEngine
 					log.fileOnly("Uploading modified file ", path, " ... skipped.");
 					writeln("", path, " is currently checked out or locked for editing by another user.");
 					log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+					uploadFailed = true;
+					return response;
+				} 
+				if (e.httpStatusCode == 412) {
+					// HTTP request returned status code 412 - ETag does not match current item's value
+					// Delete record from the local database - file will be uploaded as a new file
+					writeln("skipped.");
+					log.vdebug("Session Upload Replace Failed - OneDrive eTag / cTag match issue (Sharepoint Library)");
+					log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
+					itemdb.deleteById(item.driveId, item.id);
 					uploadFailed = true;
 					return response;
 				} else {
@@ -5328,8 +5379,9 @@ final class SyncEngine
 			if (hasId(jsonItem)) {
 				// Are we in a --upload-only & --remove-source-files scenario?
 				// We do not want to add the item to the database in this situation as there is no local reference to the file post file deletion
-				if ((uploadOnly) && (localDeleteAfterUpload)) {
-					// Log that we are deleting a local item
+				// If the item is a directory, we need to add this to the DB, if this is a file, we dont add this, the parent path is not in DB, thus any new files in this directory are not added
+				if ((uploadOnly) && (localDeleteAfterUpload) && (isItemFile(jsonItem))) {
+					// Log that we skipping adding item to the local DB and the reason why
 					log.vdebug("Skipping adding to database as --upload-only & --remove-source-files configured");
 				} else {
 					// Takes a JSON input and formats to an item which can be used by the database
@@ -5672,8 +5724,21 @@ final class SyncEngine
 					// Add to siteSearchResults so we can display what we did find
 					string siteSearchResultsEntry;
 					foreach (searchResult; siteQuery["value"].array) {
-						siteSearchResultsEntry = " * " ~ searchResult["displayName"].str;
-						siteSearchResults ~= siteSearchResultsEntry;
+						// We can only add the displayName if it is available
+						if ("displayName" in searchResult) {
+							// Use the displayName
+							siteSearchResultsEntry = " * " ~ searchResult["displayName"].str;
+							siteSearchResults ~= siteSearchResultsEntry;
+						} else {
+							// Add, but indicate displayName unavailable, use id
+							if ("id" in searchResult) {
+								siteSearchResultsEntry = " * " ~ "Unknown displayName (Data not provided by API), Site ID: " ~ searchResult["id"].str;
+								siteSearchResults ~= siteSearchResultsEntry;
+							} else {
+								// displayName and id unavailable, display in debug log the entry
+								log.vdebug("Bad SharePoint Data for site: ", searchResult);
+							}
+						}
 					}
 				}
 			} else {

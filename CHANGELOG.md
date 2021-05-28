@@ -2,6 +2,18 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.4.12 - 2021-5-28
+### Fixed
+*   Fix an unhandled Error 412 when uploading modified files to OneDrive Business Accounts
+*   Fix 'sync_list' handling of inclusions when name is included in another folders name
+*   Fix that options --upload-only & --remove-source-files are ignored on an upload session restore
+*   Fix to add file check when adding item to database if using --upload-only --remove-source-files
+*   Fix application crash when SharePoint displayName is being withheld
+
+### Updated
+*   Updated Lock Bot to use GitHub Actions
+*   Updated documentation (various)
+
 ## 2.4.11 - 2021-4-07
 ### Fixed
 *   Fix support for '/*' regardless of location within sync_list file
