@@ -135,7 +135,7 @@ sudo apt install libnotify-dev
 ```
 
 ### Dependencies: CentOS 6.x / RHEL 6.x
-CentOS 6.x and RHEL 6.x reached End of Linfe status on November 30th 2020 and is no longer supported.
+CentOS 6.x and RHEL 6.x reached End of Life status on November 30th 2020 and is no longer supported.
 
 ### Dependencies: Fedora < Version 18 / CentOS 7.x / RHEL 7.x
 ```text
