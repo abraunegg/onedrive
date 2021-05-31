@@ -79,7 +79,7 @@ SOURCES = \
 	src/upload.d \
 	src/util.d \
 	src/progress.d \
-        src/translations.d
+	src/translations.d
 
 ifeq ($(NOTIFICATIONS),yes)
 SOURCES += src/notifications/notify.d src/notifications/dnotify.d
