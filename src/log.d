@@ -154,6 +154,7 @@ void notify(T...)(T args)
 
 private void logfileWriteLine(T...)(T args)
 {
+	static import std.exception;
 	// Write to log file
 	string logFileName = .logFilePath ~ .username ~ ".onedrive.log";
 	auto currentTime = Clock.currTime();

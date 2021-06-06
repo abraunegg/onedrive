@@ -2585,6 +2585,7 @@ final class SyncEngine
 	// downloads a File resource
 	private void downloadFileItem(const ref Item item, const(string) path)
 	{
+		static import std.exception;
 		assert(item.type == ItemType.file);
 		write("Downloading file ", path, " ... ");
 		JSONValue fileDetails;
@@ -3825,6 +3826,7 @@ final class SyncEngine
 	// upload new items to OneDrive
 	private void uploadNewItems(const(string) path)
 	{
+		static import std.utf;
 		import std.range : walkLength;
 		import std.uni : byGrapheme;
 		// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
@@ -6515,6 +6517,7 @@ final class SyncEngine
 	// Query itemdb.computePath() and catch potential assert when DB consistency issue occurs
 	string computeItemPath(string thisDriveId, string thisItemId)
 	{
+		static import core.exception;
 		string calculatedPath;
 		log.vdebug("Attempting to calculate local filesystem path for ", thisDriveId, " and ", thisItemId);
 		try {
