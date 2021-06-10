@@ -205,7 +205,7 @@ docker container run -e ONEDRIVE_RESYNC=1 -e ONEDRIVE_VERBOSE=1 -v onedrive_conf
 
 **Perform a --logout and re-authenticate:**
 ```bash
-docker container run -e ONEDRIVE_LOGOUT=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:latest
+docker container run -it -e ONEDRIVE_LOGOUT=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:latest
 ```
 
 ## Build instructions
