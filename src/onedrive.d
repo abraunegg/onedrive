@@ -128,7 +128,7 @@ final class OneDriveApi
 		//   It contains the time in number seconds that the
 		//   transfer speed should be below the CURLOPT_LOW_SPEED_LIMIT
 		//   for the library to consider it too slow and abort.
-		http.dataTimeout = (dur!"seconds"(600));
+		http.dataTimeout = (dur!"seconds"(1800));
 		// maximum time an operation is allowed to take
 		// This includes dns resolution, connecting, data transfer, etc.
 		http.operationTimeout = (dur!"seconds"(3600));
