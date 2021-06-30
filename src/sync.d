@@ -4394,14 +4394,24 @@ final class SyncEngine
 						// test if the local path exists on OneDrive
 						fileDetailsFromOneDrive = onedrive.getPathDetailsByDriveId(parent.driveId, path);
 					} catch (OneDriveException e) {
-						// A 404 is the expected response if the file was not present
+						// log that we generated an exception
 						log.vdebug("fileDetailsFromOneDrive = onedrive.getPathDetailsByDriveId(parent.driveId, path); generated a OneDriveException");
-						if (e.httpStatusCode == 401) {
-							// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error'
-							log.vlog("Skipping item - OneDrive returned a 'HTTP 401 - Unauthorized' when attempting to query if file exists");
+						// OneDrive returned a 'HTTP/1.1 400 Bad Request'
+						// If the 'path', when encoded, cannot be interpreted by the OneDrive API, the API will generate a 400 error
+						if (e.httpStatusCode == 400) {
+							log.log("Skipping uploading this new file: ", buildNormalizedPath(absolutePath(path)));
+							log.vlog("Skipping item - OneDrive returned a 'HTTP 400 - Bad Request' when attempting to query if file exists");
+							log.error("ERROR: To resolve, rename this local file: ", buildNormalizedPath(absolutePath(path)));
+							uploadFailed = true;
 							return;
 						}
-					
+						// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error'
+						if (e.httpStatusCode == 401) {
+							log.vlog("Skipping item - OneDrive returned a 'HTTP 401 - Unauthorized' when attempting to query if file exists");
+							uploadFailed = true;
+							return;
+						}
+						// A 404 is the expected response if the file was not present
 						if (e.httpStatusCode == 404) {
 							// The file was not found on OneDrive, need to upload it		
 							// Check if file should be skipped based on skip_size config
@@ -4727,7 +4737,7 @@ final class SyncEngine
 								return;
 							}
 						}
-
+						// OneDrive returned a '429 - Too Many Requests' 
 						if (e.httpStatusCode == 429) {
 							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 							handleOneDriveThrottleRequest();
@@ -4737,9 +4747,8 @@ final class SyncEngine
 							// return back to original call
 							return;
 						}
-					
+						// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
 						if (e.httpStatusCode >= 500) {
-							// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
 							uploadFailed = true;
 							return;
 						}
