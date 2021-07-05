@@ -131,7 +131,16 @@ private Item makeItem(const ref JSONValue driveItem)
 		// https://github.com/abraunegg/onedrive/issues/11
 		if (isItemRemote(driveItem)) {
 			// remoteItem is a OneDrive object that exists on a 'different' OneDrive drive id, when compared to account default
-			item.mtime = SysTime.fromISOExtString(driveItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
+			// Normally, the 'remoteItem' field will contain 'fileSystemInfo' however, if the user uses the 'Add Shortcut ..' option in OneDrive WebUI
+			// to create a 'link', this object, whilst remote, does not have 'fileSystemInfo' in the expected place, this leading to a application crash
+			// See: https://github.com/abraunegg/onedrive/issues/1533
+			if ("fileSystemInfo" in driveItem["remoteItem"]) {
+				// 'fileSystemInfo' is in 'remoteItem' which will be the majority of cases
+				item.mtime = SysTime.fromISOExtString(driveItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
+			} else {
+				// is a remote item, but 'fileSystemInfo' is missing from 'remoteItem'
+				item.mtime = SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+			}
 		} else {
 			// item exists on account default drive id
 			item.mtime = SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
@@ -3105,8 +3114,7 @@ final class SyncEngine
 		Item item;
 		// For each unique OneDrive driveID we know about
 		foreach (driveId; driveIDsArray) {
-			// log.vdebug
-			log.log("Processing DB entries for this driveId: ", driveId);
+			log.vdebug("Processing DB entries for this driveId: ", driveId);
 			// Database scan of every item in DB for the given driveId based on the root parent for that drive
 			if ((syncBusinessFolders) && (driveId != defaultDriveId)) {
 				// There could be multiple shared folders all from this same driveId - are we doing a single directory sync?
