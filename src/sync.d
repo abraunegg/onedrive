@@ -132,7 +132,7 @@ private Item makeItem(const ref JSONValue driveItem)
 		if (isItemRemote(driveItem)) {
 			// remoteItem is a OneDrive object that exists on a 'different' OneDrive drive id, when compared to account default
 			// Normally, the 'remoteItem' field will contain 'fileSystemInfo' however, if the user uses the 'Add Shortcut ..' option in OneDrive WebUI
-			// to create a 'link', this object, whilst remote, does not have 'fileSystemInfo' in the expected place, this leading to a application crash
+			// to create a 'link', this object, whilst remote, does not have 'fileSystemInfo' in the expected place, thus leading to a application crash
 			// See: https://github.com/abraunegg/onedrive/issues/1533
 			if ("fileSystemInfo" in driveItem["remoteItem"]) {
 				// 'fileSystemInfo' is in 'remoteItem' which will be the majority of cases
