@@ -375,6 +375,7 @@ final class OneDriveApi
 
 	bool init()
 	{
+		static import std.utf;
 		// detail what we are using for applicaion identification
 		log.vdebug("clientId    = ", clientId);
 		log.vdebug("companyName = ", companyName);
@@ -400,6 +401,11 @@ final class OneDriveApi
 					log.error("Cannot authorize with Microsoft OneDrive Service");
 					return false;
 				}
+			} catch (std.utf.UTFException e) {
+				// path contains characters which generate a UTF exception
+				log.error("Cannot read refreshToken from: ", cfg.refreshTokenFilePath);
+				log.error("  Error Reason:", e.msg);
+				return false;
 			}
 			return true;
 		} else {
@@ -409,6 +415,11 @@ final class OneDriveApi
 					refreshToken = readText(cfg.refreshTokenFilePath);
 				} catch (FileException e) {
 					return authorize();
+				} catch (std.utf.UTFException e) {
+					// path contains characters which generate a UTF exception
+					log.error("Cannot read refreshToken from: ", cfg.refreshTokenFilePath);
+					log.error("  Error Reason:", e.msg);
+					return false;
 				}
 				return true;
 			} else {
