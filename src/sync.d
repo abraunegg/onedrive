@@ -5285,7 +5285,7 @@ final class SyncEngine
 				flagAsBigDelete = true;
 				if (!cfg.getValueBool("force")) {
 					log.error("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on OneDrive");
-					log.error("ERROR: To delete delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
+					log.error("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
 					// Must exit here to preserve data on OneDrive
 					exit(-1);
 				}
