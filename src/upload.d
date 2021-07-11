@@ -173,6 +173,7 @@ struct UploadSession
 			Progress p = new Progress(iteration);
 			p.title = "Uploading";
 			long fragmentCount = 0;
+			long fragSize = 0;
 			
 			// Initialise the download bar at 0%
 			p.next();
@@ -181,7 +182,23 @@ struct UploadSession
 				fragmentCount++;
 				log.vdebugNewLine("Fragment: ", fragmentCount, " of ", iteration);
 				p.next();
-				long fragSize = fragmentSize < fileSize - offset ? fragmentSize : fileSize - offset;
+				log.vdebugNewLine("fragmentSize: ", fragmentSize, "offset: ", offset, " fileSize: ", fileSize );
+				fragSize = fragmentSize < fileSize - offset ? fragmentSize : fileSize - offset;
+				log.vdebugNewLine("Using fragSize: ", fragSize);
+				
+				// fragSize must not be a negative value
+				if (fragSize < 0) {
+					// Session upload will fail
+					// not a JSON object - fragment upload failed
+					log.vlog("File upload session failed - invalid calculation of fragment size");
+					if (exists(sessionFilePath)) {
+						remove(sessionFilePath);
+					}
+					// set response to null as error
+					response = null;
+					return response;
+				}
+				
 				// If the resume upload fails, we need to check for a return code here
 				try {
 					response = onedrive.uploadFragment(
