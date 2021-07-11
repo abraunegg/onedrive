@@ -182,7 +182,7 @@ struct UploadSession
 				fragmentCount++;
 				log.vdebugNewLine("Fragment: ", fragmentCount, " of ", iteration);
 				p.next();
-				log.vdebugNewLine("fragmentSize: ", fragmentSize, "offset: ", offset, " fragSize: ", fragSize, " fileSize: ", fileSize );
+				log.vdebugNewLine("fragmentSize: ", fragmentSize, "offset: ", offset, " fileSize: ", fileSize );
 				fragSize = fragmentSize < fileSize - offset ? fragmentSize : fileSize - offset;
 				log.vdebugNewLine("Using fragSize: ", fragSize);
 				
