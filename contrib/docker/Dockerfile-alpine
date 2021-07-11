@@ -1,5 +1,5 @@
 # -*-Dockerfile-*-
-FROM alpine
+FROM alpine:3.13
 RUN apk add \
     alpine-sdk gnupg xz curl-dev sqlite-dev binutils-gold \
     autoconf automake ldc go
