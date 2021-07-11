@@ -660,6 +660,8 @@ final class SyncEngine
 					if (isItemFolder(searchResult)) {
 						// item returned is a shared folder, not a shared file
 						sharedFolderName = searchResult["name"].str;
+						// Output Shared Folder Name early
+						log.vdebug("Shared Folder Name: ", sharedFolderName);
 						// Compare this to values in business_shared_folders
 						if(selectiveSync.isSharedFolderMatched(sharedFolderName)){
 							// Folder name matches what we are looking for
@@ -671,7 +673,7 @@ final class SyncEngine
 							// "what if" there are 2 or more folders shared with me have the "same" name?
 							// The folder name will be the same, but driveId will be different
 							// This will then cause these 'shared folders' to cross populate data, which may not be desirable
-							log.vdebug("Shared Folder Name: ", sharedFolderName);
+							log.vdebug("Shared Folder Name: MATCHED to any entry in 'business_shared_folders'");
 							log.vdebug("Parent Drive Id:    ", searchResult["remoteItem"]["parentReference"]["driveId"].str);
 							log.vdebug("Shared Item Id:     ", searchResult["remoteItem"]["id"].str);
 							Item databaseItem;
@@ -753,6 +755,8 @@ final class SyncEngine
 									}
 								}
 							}	
+						} else {
+							log.vdebug("Shared Folder Name: NO MATCH to any entry in 'business_shared_folders'");
 						}
 					} else {
 						// not a folder, is this a file?
@@ -807,8 +811,24 @@ final class SyncEngine
 			JSONValue graphQuery = onedrive.getSharedWithMe();
 			if (graphQuery.type() == JSONType.object) {
 				// valid response from OneDrive
+				string sharedFolderName;
 				foreach (searchResult; graphQuery["value"].array) {
-					string sharedFolderName = searchResult["name"].str;
+					// set sharedFolderName
+					sharedFolderName = searchResult["name"].str;
+					// Configure additional logging items for this array element
+					string sharedByName;
+					string sharedByEmail;
+					
+					// Extra details for verbose logging
+					if ("sharedBy" in searchResult["remoteItem"]["shared"]) {
+						if ("displayName" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
+							sharedByName = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["displayName"].str;
+						}
+						if ("email" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
+							sharedByEmail = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["email"].str;
+						}
+					}
+				
 					// Compare this to values in business_shared_folders
 					if(selectiveSync.isSharedFolderMatched(sharedFolderName)){
 						// Matched sharedFolderName to item in business_shared_folders
@@ -832,6 +852,15 @@ final class SyncEngine
 							if (!canFind(driveIDsArray, driveId)) {
 								// Add this drive id to the array to search with
 								driveIDsArray ~= driveId;
+							}
+							
+							// Log who shared this to assist with sync data correlation
+							if ((sharedByName != "") && (sharedByEmail != "")) {	
+								log.vlog("OneDrive Business Shared Folder - Shared By:  ", sharedByName, " (", sharedByEmail, ")");
+							} else {
+								if (sharedByName != "") {
+									log.vlog("OneDrive Business Shared Folder - Shared By:  ", sharedByName);
+								}
 							}
 						}
 					}
