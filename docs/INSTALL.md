@@ -135,7 +135,7 @@ sudo apt install libnotify-dev
 ```
 
 ### Dependencies: CentOS 6.x / RHEL 6.x
-CentOS 6.x and RHEL 6.x reached End of Linfe status on November 30th 2020 and is no longer supported.
+CentOS 6.x and RHEL 6.x reached End of Life status on November 30th 2020 and is no longer supported.
 
 ### Dependencies: Fedora < Version 18 / CentOS 7.x / RHEL 7.x
 ```text
@@ -259,7 +259,7 @@ sudo zypper install libnotify-devel
 
 ## Compilation & Installation
 ### High Level Steps
-1.  Install the platfrom dependancies for your Linux OS
+1.  Install the platform dependancies for your Linux OS
 2.  Activate your DMD or LDC compiler
 3.  Clone the GitHub repository, run configure and make, then install
 4.  Deactivate your DMD or LDC compiler
