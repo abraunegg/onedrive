@@ -12,7 +12,7 @@ RUN cd /usr/src/onedrive/ && \
     make && \
     make install
 
-FROM alpine
+FROM alpine:3.13
 ENTRYPOINT ["/entrypoint.sh"]
 RUN apk add --no-cache \
     bash libcurl libgcc shadow sqlite-libs ldc-runtime && \
