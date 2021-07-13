@@ -179,6 +179,14 @@ final class SelectiveSync
 		if (!name.matchFirst(businessSharedFoldersList).empty) {
 			return true;
 		} else {
+			// try a direct comparison just in case
+			foreach (userFolder; businessSharedFoldersList) {
+				if (userFolder == name) {
+					// direct match
+					log.vdebug("'matchFirst' failed to match, however direct comparison was matched: ", name);
+					return true;
+				}
+			}
 			return false;
 		}
 	}
