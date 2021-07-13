@@ -2,6 +2,22 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.4.13 - 2021-7-14
+### Fixed
+*   Support DMD 2.097.0 as compiler
+*   Fix to handle OneDrive API Bad Request response when querying if file exists
+*   Fix application crash and incorrect handling of --single-directory when syncing a OneDrive Business Shared Folder due to using 'Add Shortcut to My Files'
+*   Fix application crash due to invalid UTF-8 sequence in the pathname for the application configuration
+*   Fix error message when deleting a large number of files
+*   Fix Docker build process to source GOSU keys from updated GPG key location
+*   Fix application crash due to a conversion overflow when calculating file offset for session uploads
+*   Fix Docker Alpine build failing due to filesystem permissions issue due to Docker build system and Alpine Linux 3.14 incompatibility
+*   Fix that Business Shared Folders with parentheses are ignored
+
+### Updated
+*   Updated Lock Bot to run daily
+*   Updated documentation (various)
+
 ## 2.4.12 - 2021-5-28
 ### Fixed
 *   Fix an unhandled Error 412 when uploading modified files to OneDrive Business Accounts
