@@ -134,7 +134,16 @@ private Item makeItem(const ref JSONValue driveItem)
 		// https://github.com/abraunegg/onedrive/issues/11
 		if (isItemRemote(driveItem)) {
 			// remoteItem is a OneDrive object that exists on a 'different' OneDrive drive id, when compared to account default
-			item.mtime = SysTime.fromISOExtString(driveItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
+			// Normally, the 'remoteItem' field will contain 'fileSystemInfo' however, if the user uses the 'Add Shortcut ..' option in OneDrive WebUI
+			// to create a 'link', this object, whilst remote, does not have 'fileSystemInfo' in the expected place, thus leading to a application crash
+			// See: https://github.com/abraunegg/onedrive/issues/1533
+			if ("fileSystemInfo" in driveItem["remoteItem"]) {
+				// 'fileSystemInfo' is in 'remoteItem' which will be the majority of cases
+				item.mtime = SysTime.fromISOExtString(driveItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
+			} else {
+				// is a remote item, but 'fileSystemInfo' is missing from 'remoteItem'
+				item.mtime = SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+			}
 		} else {
 			// item exists on account default drive id
 			item.mtime = SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
@@ -678,6 +687,8 @@ final class SyncEngine
 					if (isItemFolder(searchResult)) {
 						// item returned is a shared folder, not a shared file
 						sharedFolderName = searchResult["name"].str;
+						// Output Shared Folder Name early
+						log.vdebug("Shared Folder Name: ", sharedFolderName);
 						// Compare this to values in business_shared_folders
 						if(selectiveSync.isSharedFolderMatched(sharedFolderName)){
 							// Folder name matches what we are looking for
@@ -689,7 +700,7 @@ final class SyncEngine
 							// "what if" there are 2 or more folders shared with me have the "same" name?
 							// The folder name will be the same, but driveId will be different
 							// This will then cause these 'shared folders' to cross populate data, which may not be desirable
-							log.vdebug("Shared Folder Name: ", sharedFolderName);
+							log.vdebug("Shared Folder Name: MATCHED to any entry in 'business_shared_folders'");
 							log.vdebug("Parent Drive Id:    ", searchResult["remoteItem"]["parentReference"]["driveId"].str);
 							log.vdebug("Shared Item Id:     ", searchResult["remoteItem"]["id"].str);
 							Item databaseItem;
@@ -777,6 +788,8 @@ final class SyncEngine
 									}
 								}
 							}	
+						} else {
+							log.vdebug("Shared Folder Name: NO MATCH to any entry in 'business_shared_folders'");
 						}
 					} else {
 						// not a folder, is this a file?
@@ -825,6 +838,7 @@ final class SyncEngine
 		string driveId = defaultDriveId;
 		string rootId = defaultRootId;
 		string folderId;
+		string itemId;
 		JSONValue onedrivePathDetails;
 		
 		// Check OneDrive Business Shared Folders, if configured to do so
@@ -833,29 +847,61 @@ final class SyncEngine
 			log.vlog(provideLanguageTranslation(languageIdentifier,95));
 			// query OneDrive Business Shared Folders shared with me
 			JSONValue graphQuery = onedrive.getSharedWithMe();
-			
 			if (graphQuery.type() == JSONType.object) {
 				// valid response from OneDrive
+				string sharedFolderName;
 				foreach (searchResult; graphQuery["value"].array) {
-					string sharedFolderName = searchResult["name"].str;
+					// set sharedFolderName
+					sharedFolderName = searchResult["name"].str;
+					// Configure additional logging items for this array element
+					string sharedByName;
+					string sharedByEmail;
+					
+					// Extra details for verbose logging
+					if ("sharedBy" in searchResult["remoteItem"]["shared"]) {
+						if ("displayName" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
+							sharedByName = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["displayName"].str;
+						}
+						if ("email" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
+							sharedByEmail = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["email"].str;
+						}
+					}
+				
 					// Compare this to values in business_shared_folders
 					if(selectiveSync.isSharedFolderMatched(sharedFolderName)){
-						// Folder matches a user configured sync entry
-						string[] allowedPath;
-						allowedPath ~= sharedFolderName;
+						// Matched sharedFolderName to item in business_shared_folders
+						log.vdebug("Matched sharedFolderName in business_shared_folders: ", sharedFolderName);
 						// But is this shared folder what we are looking for as part of --single-directory?
-						if (selectiveSync.isPathIncluded(path,allowedPath)) {
+						// User could be using 'directory' or 'directory/directory1/directory2/directory3/'
+						// Can we find 'sharedFolderName' in the given 'path'
+						if (canFind(path, sharedFolderName)) {
+							// Found 'sharedFolderName' in the given 'path'
+							log.vdebug("Matched 'sharedFolderName' in the given 'path'");
+							// What was the matched folder JSON
+							log.vdebug("Matched sharedFolderName in business_shared_folders JSON: ", searchResult);
 							// Path we want to sync is on a OneDrive Business Shared Folder
 							// Set the correct driveId
 							driveId = searchResult["remoteItem"]["parentReference"]["driveId"].str;
+							// Set this items id
+							itemId = searchResult["remoteItem"]["id"].str;
 							log.vdebug("Updated the driveId to a new value: ", driveId);
+							log.vdebug("Updated the itemId to a new value: ", itemId);
 							// Keep the driveIDsArray with unique entries only
 							if (!canFind(driveIDsArray, driveId)) {
 								// Add this drive id to the array to search with
 								driveIDsArray ~= driveId;
 							}
-						} 
-					} 
+							
+							// Log who shared this to assist with sync data correlation
+							if ((sharedByName != "") && (sharedByEmail != "")) {	
+								log.vlog("OneDrive Business Shared Folder - Shared By:  ", sharedByName, " (", sharedByEmail, ")");
+							} else {
+								if (sharedByName != "") {
+									log.vlog("OneDrive Business Shared Folder - Shared By:  ", sharedByName);
+								}
+							}
+						}
+					}
 				}
 			} else {
 				// Log that an invalid JSON object was returned
@@ -868,14 +914,56 @@ final class SyncEngine
 		// "Getting path details from OneDrive ..."
 		log.vlog(provideLanguageTranslation(languageIdentifier,106));
 		try {
-			onedrivePathDetails = onedrive.getPathDetailsByDriveId(driveId, path);
+			// Need to use different calls here - one call for majority, another if this is a OneDrive Business Shared Folder
+			if (!syncBusinessFolders){
+				// Not a OneDrive Business Shared Folder
+				log.vdebug("Calling onedrive.getPathDetailsByDriveId(driveId, path) with: ", driveId, ", ", path);
+				onedrivePathDetails = onedrive.getPathDetailsByDriveId(driveId, path);
+			} else {
+				// OneDrive Business Shared Folder - Use another API call using the folders correct driveId and itemId
+				log.vdebug("Calling onedrive.getPathDetailsByDriveIdAndItemId(driveId, itemId) with: ", driveId, ", ", itemId);
+				onedrivePathDetails = onedrive.getPathDetailsByDriveIdAndItemId(driveId, itemId);
+			}
 		} catch (OneDriveException e) {
 			log.vdebug("onedrivePathDetails = onedrive.getPathDetails(path) generated a OneDriveException");
 			if (e.httpStatusCode == 404) {
-				// The directory was not found 
-				// "ERROR: The requested single directory to sync was not found on OneDrive"
-				log.error(provideLanguageTranslation(languageIdentifier,107));
-				return;
+				// The directory was not found
+				if (syncBusinessFolders){
+					// 404 was returned when trying to use a specific driveId and itemId .. which 'should' work .... but didnt
+					// Try the query with the path as a backup failsafe
+					log.vdebug("Calling onedrive.getPathDetailsByDriveId(driveId, path) as backup with: ", driveId, ", ", path);
+					try {
+						// try calling using the path
+						onedrivePathDetails = onedrive.getPathDetailsByDriveId(driveId, path);
+					} catch (OneDriveException e) {	
+						// query of driveid & path failed generating a 404
+						if (e.httpStatusCode == 404) {
+							// ERROR: The requested single directory to sync was not found on OneDrive - Check folder permissions and sharing status with folder owner
+							log.error(provideLanguageTranslation(languageIdentifier,181));
+							return;
+						}
+						// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+						if (e.httpStatusCode == 429) {
+							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+							handleOneDriveThrottleRequest();
+							// Retry original request by calling function again to avoid replicating any further error handling
+							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling applyDifferencesSingleDirectory(path);");
+							applyDifferencesSingleDirectory(path);
+							// return back to original call
+							return;
+						}
+						// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+						if (e.httpStatusCode >= 500) {
+							// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
+							return;
+						}
+					}
+				} else {
+					// Not a OneDrive Business Shared folder operation
+					// "ERROR: The requested single directory to sync was not found on OneDrive"
+					log.error(provideLanguageTranslation(languageIdentifier,107));
+					return;
+				}
 			}
 			if (e.httpStatusCode == 429) {
 				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
@@ -2685,6 +2773,7 @@ final class SyncEngine
 	// downloads a File resource
 	private void downloadFileItem(const ref Item item, const(string) path)
 	{
+		static import std.exception;
 		assert(item.type == ItemType.file);
 		// "Downloading file ", path, " ... "
 		write(provideLanguageTranslation(languageIdentifier,164), path, " ... ");
@@ -3072,14 +3161,26 @@ final class SyncEngine
 			log.vdebug("Processing DB entries for this driveId: ", driveId);
 			// Database scan of every item in DB for the given driveId based on the root parent for that drive
 			if ((syncBusinessFolders) && (driveId != defaultDriveId)) {
-				// There could be multiple shared folders all from this same driveId
-				foreach(dbItem; itemdb.selectByDriveId(driveId)) {
-					// Does it still exist on disk in the location the DB thinks it is
-					uploadDifferences(dbItem);
+				// There could be multiple shared folders all from this same driveId - are we doing a single directory sync?
+				if (cfg.getValueString("single_directory") != ""){
+					// Limit the local filesystem check to just the requested directory	
+					if (itemdb.selectByPath(path, driveId, item)) {
+						// Does it still exist on disk in the location the DB thinks it is
+						log.vdebug("Calling uploadDifferences(dbItem) as item is present in local cache DB");
+						uploadDifferences(item);
+					}
+				} else {
+					// check everything associated with each driveId we know about
+					foreach(dbItem; itemdb.selectByDriveId(driveId)) {
+						// Does it still exist on disk in the location the DB thinks it is
+						log.vdebug("Calling uploadDifferences(dbItem) as item is present in local cache DB");
+						uploadDifferences(dbItem);
+					}
 				}
 			} else {
 				if (itemdb.selectByPath(path, driveId, item)) {
 					// Does it still exist on disk in the location the DB thinks it is
+					log.vdebug("Calling uploadDifferences(dbItem) as item is present in local cache DB");
 					uploadDifferences(item);
 				}
 			}
@@ -3160,16 +3261,26 @@ final class SyncEngine
 			log.vdebug("Processing DB entries for this driveId: ", driveId);
 			// Database scan of every item in DB for the given driveId based on the root parent for that drive
 			if ((syncBusinessFolders) && (driveId != defaultDriveId)) {
-				// There could be multiple shared folders all from this same driveId
-				foreach(dbItem; itemdb.selectByDriveId(driveId)) {
-					// Does it still exist on disk in the location the DB thinks it is
-					log.vdebug("Calling uploadDifferences(dbItem) as item is present in local cache DB");
-					uploadDifferences(dbItem);
+				// There could be multiple shared folders all from this same driveId - are we doing a single directory sync?
+				if (cfg.getValueString("single_directory") != ""){
+					// Limit the local filesystem check to just the requested directory	
+					if (itemdb.selectByPath(path, driveId, item)) {
+						// Does it still exist on disk in the location the DB thinks it is
+						log.vdebug("Calling uploadDifferences(dbItem) as item is present in local cache DB");
+						uploadDifferences(item);
+					}
+				} else {
+					// check everything associated with each driveId we know about
+					foreach(dbItem; itemdb.selectByDriveId(driveId)) {
+						// Does it still exist on disk in the location the DB thinks it is
+						log.vdebug("Calling uploadDifferences(dbItem) as item is present in local cache DB");
+						uploadDifferences(dbItem);
+					}
 				}
 			} else {
 				if (itemdb.selectByPath(path, driveId, item)) {
 					// Does it still exist on disk in the location the DB thinks it is
-					log.vdebug("Calling uploadDifferences(item) as item is present in local cache DB");
+					log.vdebug("Calling uploadDifferences(dbItem) as item is present in local cache DB");
 					uploadDifferences(item);
 				}
 			}
@@ -3939,6 +4050,7 @@ final class SyncEngine
 	// upload new items to OneDrive
 	private void uploadNewItems(const(string) path)
 	{
+		static import std.utf;
 		import std.range : walkLength;
 		import std.uni : byGrapheme;
 		// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
@@ -4506,14 +4618,24 @@ final class SyncEngine
 						// test if the local path exists on OneDrive
 						fileDetailsFromOneDrive = onedrive.getPathDetailsByDriveId(parent.driveId, path);
 					} catch (OneDriveException e) {
-						// A 404 is the expected response if the file was not present
+						// log that we generated an exception
 						log.vdebug("fileDetailsFromOneDrive = onedrive.getPathDetailsByDriveId(parent.driveId, path); generated a OneDriveException");
-						if (e.httpStatusCode == 401) {
-							// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error'
-							log.vlog("Skipping item - OneDrive returned a 'HTTP 401 - Unauthorized' when attempting to query if file exists");
+						// OneDrive returned a 'HTTP/1.1 400 Bad Request'
+						// If the 'path', when encoded, cannot be interpreted by the OneDrive API, the API will generate a 400 error
+						if (e.httpStatusCode == 400) {
+							log.log("Skipping uploading this new file: ", buildNormalizedPath(absolutePath(path)));
+							log.vlog("Skipping item - OneDrive returned a 'HTTP 400 - Bad Request' when attempting to query if file exists");
+							log.error("ERROR: To resolve, rename this local file: ", buildNormalizedPath(absolutePath(path)));
+							uploadFailed = true;
 							return;
 						}
-					
+						// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error'
+						if (e.httpStatusCode == 401) {
+							log.vlog("Skipping item - OneDrive returned a 'HTTP 401 - Unauthorized' when attempting to query if file exists");
+							uploadFailed = true;
+							return;
+						}
+						// A 404 is the expected response if the file was not present
 						if (e.httpStatusCode == 404) {
 							// The file was not found on OneDrive, need to upload it		
 							// Check if file should be skipped based on skip_size config
@@ -4839,7 +4961,7 @@ final class SyncEngine
 								return;
 							}
 						}
-
+						// OneDrive returned a '429 - Too Many Requests' 
 						if (e.httpStatusCode == 429) {
 							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 							handleOneDriveThrottleRequest();
@@ -4849,9 +4971,8 @@ final class SyncEngine
 							// return back to original call
 							return;
 						}
-					
+						// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
 						if (e.httpStatusCode >= 500) {
-							// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
 							uploadFailed = true;
 							return;
 						}
@@ -5308,7 +5429,7 @@ final class SyncEngine
 				flagAsBigDelete = true;
 				if (!cfg.getValueBool("force")) {
 					log.error("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on OneDrive");
-					log.error("ERROR: To delete delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
+					log.error("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
 					// Must exit here to preserve data on OneDrive
 					exit(-1);
 				}
@@ -5470,6 +5591,8 @@ final class SyncEngine
 					// Log that we skipping adding item to the local DB and the reason why
 					log.vdebug("Skipping adding to database as --upload-only & --remove-source-files configured");
 				} else {
+					// What is the JSON item we are trying to create a DB record with?
+					log.vdebug("Createing DB item from this JSON: ", jsonItem);
 					// Takes a JSON input and formats to an item which can be used by the database
 					Item item = makeItem(jsonItem);
 					// Add to the local database
@@ -6629,6 +6752,7 @@ final class SyncEngine
 	// Query itemdb.computePath() and catch potential assert when DB consistency issue occurs
 	string computeItemPath(string thisDriveId, string thisItemId)
 	{
+		static import core.exception;
 		string calculatedPath;
 		log.vdebug("Attempting to calculate local filesystem path for ", thisDriveId, " and ", thisItemId);
 		try {

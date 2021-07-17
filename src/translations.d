@@ -330,6 +330,7 @@ void initialise_EN_AU(){
 		JSONValue([ "178": "The local item is a directory but should be a file" ]),
 		JSONValue([ "179": "The local item is a file but should be a directory" ]),
 		JSONValue([ "180": "Trying to delete item " ]),
+		JSONValue([ "181": "ERROR: The requested single directory to sync was not found on OneDrive - Check folder permissions and sharing status with folder owner" ]),
 	]);
 	
 	// Load the message into the array

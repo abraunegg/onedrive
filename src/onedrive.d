@@ -375,6 +375,7 @@ final class OneDriveApi
 
 	bool init()
 	{
+		static import std.utf;
 		// detail what we are using for applicaion identification
 		log.vdebug("clientId    = ", clientId);
 		log.vdebug("companyName = ", companyName);
@@ -400,6 +401,11 @@ final class OneDriveApi
 					log.error("Cannot authorize with Microsoft OneDrive Service");
 					return false;
 				}
+			} catch (std.utf.UTFException e) {
+				// path contains characters which generate a UTF exception
+				log.error("Cannot read refreshToken from: ", cfg.refreshTokenFilePath);
+				log.error("  Error Reason:", e.msg);
+				return false;
 			}
 			return true;
 		} else {
@@ -409,6 +415,11 @@ final class OneDriveApi
 					refreshToken = readText(cfg.refreshTokenFilePath);
 				} catch (FileException e) {
 					return authorize();
+				} catch (std.utf.UTFException e) {
+					// path contains characters which generate a UTF exception
+					log.error("Cannot read refreshToken from: ", cfg.refreshTokenFilePath);
+					log.error("  Error Reason:", e.msg);
+					return false;
 				}
 				return true;
 			} else {
@@ -682,7 +693,8 @@ final class OneDriveApi
 		return get(url);
 	}
 	
-	// Return the requested details of the specified path on the specified drive id
+	// Return the requested details of the specified path on the specified drive id and path
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get?view=odsp-graph-online
 	JSONValue getPathDetailsByDriveId(const(char)[] driveId, const(string) path)
 	{
 		checkAccessTokenExpired();
@@ -690,6 +702,19 @@ final class OneDriveApi
 		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
 		// Required format: /drives/{drive-id}/root:/{item-path}
 		url = driveByIdUrl ~ driveId ~ "/root:/" ~ encodeComponent(path);
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		return get(url);
+	}
+	
+	// Return the requested details of the specified path on the specified drive id and item id
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get?view=odsp-graph-online
+	JSONValue getPathDetailsByDriveIdAndItemId(const(char)[] driveId, const(char)[] itemId)
+	{
+		checkAccessTokenExpired();
+		const(char)[] url;
+		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
+		// Required format: /drives/{drive-id}/items/{item-id}
+		url = driveByIdUrl ~ driveId ~ "/items/" ~ itemId;
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		return get(url);
 	}
@@ -744,6 +769,7 @@ final class OneDriveApi
 		auto file = File(filepath, "rb");
 		file.seek(offset);
 		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
+		log.vdebugNewLine("contentRange: ", contentRange);
 		
 		// function scopes
 		scope(exit) {
@@ -764,7 +790,8 @@ final class OneDriveApi
 		http.url = uploadUrl;
 		http.addRequestHeader("Content-Range", contentRange);
 		http.onSend = data => file.rawRead(data).length;
-		http.contentLength = offsetSize;
+		// convert offsetSize to ulong
+		http.contentLength = to!ulong(offsetSize);
 		auto response = perform();
 		// TODO: retry on 5xx errors
 		checkHttpCode(response);
