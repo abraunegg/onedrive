@@ -116,6 +116,7 @@ string[] loadTranslationFromJSON(string translationFile, JSONValue languageList,
 
 // Provide the application message based on the index as provided
 string getResponseFromIndex_EN_AU(int requiredResponseIndex) {
+	static import core.exception;
 	string requiredResponse;
 	// get response from message array
 	try {
@@ -131,6 +132,7 @@ string getResponseFromIndex_EN_AU(int requiredResponseIndex) {
 
 // Provide the application message based on the index as provided
 string getResponseFromIndex(int requiredResponseIndex) {
+	static import core.exception;
 	string requiredResponse;
 	// get response from message array
 	try {
