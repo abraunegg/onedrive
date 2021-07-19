@@ -4369,7 +4369,7 @@ final class SyncEngine
 						// add the parent into the database
 						uploadCreateDir(parentPath);
 						// save this child item into the database
-						log.vlog("The parent for this path is in the local database - adding requested path (", path ,") to database");
+						log.vlog("The parent for this path has been added to the local database - adding requested path (", path ,") to database");
 						if (!dryRun) {
 							// save the live data
 							saveItem(response);
@@ -4512,12 +4512,13 @@ final class SyncEngine
 					// Does this 'file' already exist on OneDrive?
 					try {
 						// test if the local path exists on OneDrive
-						// in a --dry-run scenario parent.driveId will be invalid, leading to a 'HTTP 400 - Bad Request'
-						if (!dryRun) {
-							// not a dry run scenario
+						// if parent.driveId is invalid, then API call will generate a 'HTTP 400 - Bad Request' - make sure we at least have a valid parent.driveId
+						if (!parent.driveId.empty) {
+							// use configured value for parent.driveId
 							fileDetailsFromOneDrive = onedrive.getPathDetailsByDriveId(parent.driveId, path);
 						} else {
-							// --dry-run in use, switch to using defaultDriveId
+							// switch to using defaultDriveId
+							log.vdebug("parent.driveId is empty - using defaultDriveId for API call");
 							fileDetailsFromOneDrive = onedrive.getPathDetailsByDriveId(defaultDriveId, path);
 						}
 					} catch (OneDriveException e) {
@@ -6191,23 +6192,20 @@ final class SyncEngine
 		string fakeRootId = defaultRootId;
 		SysTime mtime = timeLastModified(path).toUTC();
 		
-		// If the account type is Business, and if Shared Business Folders are being used
-		// Need to update the 'fakeDriveId' & 'fakeRootId' with elements from the database
-		// Otherwise some calls to validate objects fail as the actual driveId being used is invalid
-		if (accountType == "business") {
-			string parentPath = dirName(path);
-			Item databaseItem;
-			
-			if (parentPath != ".") {
-				// Not a 'root' parent
-				// For each driveid in the existing driveIDsArray 
-				foreach (searchDriveId; driveIDsArray) {
-					log.vdebug("FakeResponse: searching database for: ", searchDriveId, " ", parentPath);
-					if (itemdb.selectByPath(parentPath, searchDriveId, databaseItem)) {
-						log.vdebug("FakeResponse: Found Database Item: ", databaseItem);
-						fakeDriveId = databaseItem.driveId;
-						fakeRootId = databaseItem.id;
-					}
+		// Need to update the 'fakeDriveId' & 'fakeRootId' with elements from the --dry-run database
+		// Otherwise some calls to validate objects will fail as the actual driveId being used is invalid
+		string parentPath = dirName(path);
+		Item databaseItem;
+		
+		if (parentPath != ".") {
+			// Not a 'root' parent
+			// For each driveid in the existing driveIDsArray 
+			foreach (searchDriveId; driveIDsArray) {
+				log.vdebug("FakeResponse: searching database for: ", searchDriveId, " ", parentPath);
+				if (itemdb.selectByPath(parentPath, searchDriveId, databaseItem)) {
+					log.vdebug("FakeResponse: Found Database Item: ", databaseItem);
+					fakeDriveId = databaseItem.driveId;
+					fakeRootId = databaseItem.id;
 				}
 			}
 		}
