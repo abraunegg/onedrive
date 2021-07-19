@@ -3064,7 +3064,8 @@ final class SyncEngine
 					if (pathItem.id == item.id) {
 						needsRemoval = true;
 					} else {
-						log.log("Skipped due to id difference!");
+						// Skipped due to id difference!
+						log.log(provideLanguageTranslation(languageIdentifier,182));
 					}
 				} else {
 					// item has disappeared completely
@@ -3072,7 +3073,8 @@ final class SyncEngine
 				}
 			}
 			if (needsRemoval) {
-				log.log("Deleting item ", path);
+				// "Deleting item "
+				log.log(provideLanguageTranslation(languageIdentifier,183), path);
 				if (!dryRun) {
 					if (isFile(path)) {
 						remove(path);
@@ -3152,7 +3154,8 @@ final class SyncEngine
 		if (isDir(path)) {
 			// if this path is a directory, output this message.
 			// if a file, potentially leads to confusion as to what the client is actually doing
-			log.log("Uploading differences of ", logPath);
+			// "Uploading differences of "
+			log.log(provideLanguageTranslation(languageIdentifier,184), logPath);
 		}
 		
 		Item item;
@@ -3190,7 +3193,8 @@ final class SyncEngine
 		if (isDir(path)) {
 			// if this path is a directory, output this message.
 			// if a file, potentially leads to confusion as to what the client is actually doing
-			log.log("Uploading new items of ", logPath);
+			// "Uploading new items of "
+			log.log(provideLanguageTranslation(languageIdentifier,185), logPath);
 		}
 		
 		// Filesystem walk to find new files not uploaded
@@ -3253,7 +3257,8 @@ final class SyncEngine
 		if (isDir(path)) {
 			// if this path is a directory, output this message.
 			// if a file, potentially leads to confusion as to what the client is actually doing
-			log.vlog("Uploading differences of ", logPath);
+			// "Uploading differences of "
+			log.vlog(provideLanguageTranslation(languageIdentifier,184), logPath);
 		}
 		Item item;
 		// For each unique OneDrive driveID we know about
@@ -3385,7 +3390,8 @@ final class SyncEngine
 		if (isDir(path)) {
 			// if this path is a directory, output this message.
 			// if a file, potentially leads to confusion as to what the client is actually doing
-			log.vlog("Uploading new items of ", logPath);
+			// "Uploading new items of "
+			log.vlog(provideLanguageTranslation(languageIdentifier,185), logPath);
 		}
 		
 		// Filesystem walk to find new files not uploaded
@@ -3411,7 +3417,8 @@ final class SyncEngine
 		path = computeItemPath(item.driveId, item.id);
 		
 		// item.id was in the database associated with the item.driveId specified
-		log.vlog("Processing ", buildNormalizedPath(path));
+		// "Processing "
+		log.vlog(provideLanguageTranslation(languageIdentifier,125), buildNormalizedPath(path));
 		
 		// What type of DB item are we processing
 		// Is this item excluded by user configuration of skip_dir or skip_file?
@@ -3420,7 +3427,8 @@ final class SyncEngine
 			// Do we need to check for .nosync? Only if --check-for-nosync was passed in
 			if (cfg.getValueBool("check_nosync")) {
 				if (exists(path ~ "/.nosync")) {
-					log.vlog("Skipping item - .nosync found & --check-for-nosync enabled: ", path);
+					// "Skipping item - .nosync found & --check-for-nosync enabled: "
+					log.vlog(provideLanguageTranslation(languageIdentifier,186), path);
 					return;
 				}
 			}
@@ -3443,25 +3451,29 @@ final class SyncEngine
 
 		// skip unwanted items
 		if (unwanted) {
-			//log.vlog("Filtered out");
+			// debug log output that this item is skipped
+			log.vdebug("Skipping item - filtered out due to application configuration: ", path);
 			return;
 		}
 		
 		// Restriction and limitations about windows naming files
 		if (!isValidName(path)) {
-			log.log("Skipping item - invalid name (Microsoft Naming Convention): ", path);
+			// "Skipping item - invalid name (Microsoft Naming Convention): "
+			log.log(provideLanguageTranslation(languageIdentifier,187), path);
 			return;
 		}
 		
 		// Check for bad whitespace items
 		if (!containsBadWhiteSpace(path)) {
-			log.log("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
+			// "Skipping item - invalid name (Contains an invalid whitespace item): "
+			log.log(provideLanguageTranslation(languageIdentifier,188), path);
 			return;
 		}
 		
 		// Check for HTML ASCII Codes as part of file name
 		if (!containsASCIIHTMLCodes(path)) {
-			log.log("Skipping item - invalid name (Contains HTML ASCII Code): ", path);
+			// "Skipping item - invalid name (Contains HTML ASCII Code): "
+			log.log(provideLanguageTranslation(languageIdentifier,189), path);
 			return;
 		}
 		
@@ -3483,11 +3495,13 @@ final class SyncEngine
 		assert(item.type == ItemType.dir);
 		if (exists(path)) {
 			if (!isDir(path)) {
-				log.vlog("The item was a directory but now it is a file");
+				// "The item was a directory but now it is a file"
+				log.vlog(provideLanguageTranslation(languageIdentifier,190));
 				uploadDeleteItem(item, path);
 				uploadNewFile(path);
 			} else {
-				log.vlog("The directory has not changed");
+				// "The directory has not changed"
+				log.vlog(provideLanguageTranslation(languageIdentifier,191));
 				// loop through the children
 				foreach (Item child; itemdb.selectChildren(item.driveId, item.id)) {
 					uploadDifferences(child);
@@ -3500,16 +3514,19 @@ final class SyncEngine
 				// Not --dry-run situation
 				if (!cfg.getValueBool("monitor")) {
 					// Not in --monitor mode
-					log.vlog("The directory has been deleted locally");
+					// "The directory has been deleted locally"
+					log.vlog(provideLanguageTranslation(languageIdentifier,192));
 				} else {
 					// Appropriate message as we are in --monitor mode
-					log.vlog("The directory appears to have been deleted locally .. but we are running in --monitor mode. This may have been 'moved' on the local filesystem rather than being 'deleted'");
+					// "The directory appears to have been deleted locally .. but we are running in --monitor mode. This may have been 'moved' on the local filesystem rather than being 'deleted'"
+					log.vlog(provideLanguageTranslation(languageIdentifier,193));
 					log.vdebug("Most likely cause - 'inotify' event was missing for whatever action was taken locally or action taken when application was stopped");
 				}
 				// A moved file will be uploaded as 'new', delete the old file and reference
 				if (noRemoteDelete) {
 					// do not process remote directory delete
-					log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+					// "Skipping remote directory delete as --upload-only & --no-remote-delete configured"
+					log.vlog(provideLanguageTranslation(languageIdentifier,194));
 				} else {
 					uploadDeleteItem(item, path);
 				}
@@ -3519,10 +3536,12 @@ final class SyncEngine
 				Item databaseItem;
 				if (!itemdb.selectByPath(path, defaultDriveId, databaseItem)) {
 					// Path not found in database
-					log.vlog("The directory has been deleted locally");
+					// "The directory has been deleted locally"
+					log.vlog(provideLanguageTranslation(languageIdentifier,192));
 					if (noRemoteDelete) {
 						// do not process remote directory delete
-						log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+						// "Skipping remote directory delete as --upload-only & --no-remote-delete configured"
+						log.vlog(provideLanguageTranslation(languageIdentifier,194));
 					} else {
 						uploadDeleteItem(item, path);
 					}
@@ -3532,12 +3551,14 @@ final class SyncEngine
 					foreach (i; idsFaked) {
 						if (i[1] == item.id) {
 							log.vdebug("Matched faked dir which is 'supposed' to exist but not created due to --dry-run use");
-							log.vlog("The directory has not changed");
+							// "The directory has not changed"
+							log.vlog(provideLanguageTranslation(languageIdentifier,191));
 							return;
 						}
 					}
 					// item.id did not match a 'faked' download new directory creation
-					log.vlog("The directory has been deleted locally");
+					// "The directory has been deleted locally"
+					log.vlog(provideLanguageTranslation(languageIdentifier,192));
 					uploadDeleteItem(item, path);
 				}
 			}
@@ -3549,11 +3570,13 @@ final class SyncEngine
 		assert(item.type == ItemType.remote);
 		if (exists(path)) {
 			if (!isDir(path)) {
-				log.vlog("The item was a directory but now it is a file");
+				// "The item was a directory but now it is a file"
+				log.vlog(provideLanguageTranslation(languageIdentifier,190));
 				uploadDeleteItem(item, path);
 				uploadNewFile(path);
 			} else {
-				log.vlog("The directory has not changed");
+				// "The directory has not changed"
+				log.vlog(provideLanguageTranslation(languageIdentifier,191));
 				// continue through the linked folder
 				assert(item.remoteDriveId && item.remoteId);
 				Item remoteItem;
@@ -3567,10 +3590,12 @@ final class SyncEngine
 			// are we in a dry-run scenario
 			if (!dryRun) {
 				// no dry-run
-				log.vlog("The directory has been deleted locally");
+				// "The directory has been deleted locally"
+				log.vlog(provideLanguageTranslation(languageIdentifier,192));
 				if (noRemoteDelete) {
 					// do not process remote directory delete
-					log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+					// "Skipping remote directory delete as --upload-only & --no-remote-delete configured"
+					log.vlog(provideLanguageTranslation(languageIdentifier,194));
 				} else {
 					uploadDeleteItem(item, path);
 				}
@@ -3580,10 +3605,12 @@ final class SyncEngine
 				Item databaseItem;
 				if (!itemdb.selectByPathWithoutRemote(path, defaultDriveId, databaseItem)) {
 					// Path not found in database
-					log.vlog("The directory has been deleted locally");
+					// "The directory has been deleted locally"
+					log.vlog(provideLanguageTranslation(languageIdentifier,192));
 					if (noRemoteDelete) {
 						// do not process remote directory delete
-						log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+						// "Skipping remote directory delete as --upload-only & --no-remote-delete configured"
+						log.vlog(provideLanguageTranslation(languageIdentifier,194));
 					} else {
 						uploadDeleteItem(item, path);
 					}
@@ -3593,12 +3620,14 @@ final class SyncEngine
 					foreach (i; idsFaked) {
 						if (i[1] == item.id) {
 							log.vdebug("Matched faked dir which is 'supposed' to exist but not created due to --dry-run use");
-							log.vlog("The directory has not changed");
+							// "The directory has not changed"
+							log.vlog(provideLanguageTranslation(languageIdentifier,191));
 							return;
 						}
 					}
 					// item.id did not match a 'faked' download new directory creation
-					log.vlog("The directory has been deleted locally");
+					// "The directory has been deleted locally"
+					log.vlog(provideLanguageTranslation(languageIdentifier,192));
 					uploadDeleteItem(item, path);
 				}
 			}
@@ -3627,15 +3656,18 @@ final class SyncEngine
 					localModifiedTime.fracSecs = Duration.zero;
 					
 					if (localModifiedTime != itemModifiedTime) {
-						log.vlog("The file last modified time has changed");
+						// "The file last modified time has changed"
+						log.vlog(provideLanguageTranslation(languageIdentifier,195));
 						log.vdebug("The local item has a different modified time ", localModifiedTime, " when compared to ", itemSource, " modified time ", itemModifiedTime);
 						string eTag = item.eTag;
 						
 						// perform file hash tests - has the content of the file changed?
 						if (!testFileHash(path, item)) {
-							log.vlog("The file content has changed");
+							// "The file content has changed"
+							log.vlog(provideLanguageTranslation(languageIdentifier,196));
 							log.vdebug("The local item has a different hash when compared to ", itemSource, " item hash");
-							write("Uploading modified file ", path, " ... ");
+							// "Uploading modified file " , " ... "
+							write(provideLanguageTranslation(languageIdentifier,197), path, " ... ");
 							JSONValue response;
 							
 							if (!dryRun) {
@@ -3650,9 +3682,12 @@ final class SyncEngine
 										try {
 											response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
 										} catch (OneDriveException e) {
+											// caught an error, write out we are skipping this item
+											// "skipped."
+											writeln(provideLanguageTranslation(languageIdentifier,198));
+											// error handling based on API response code
 											if (e.httpStatusCode == 401) {
 												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-												writeln("skipped.");
 												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 												uploadFailed = true;
 												return;
@@ -3660,7 +3695,6 @@ final class SyncEngine
 											if (e.httpStatusCode == 404) {
 												// HTTP request returned status code 404 - the eTag provided does not exist
 												// Delete record from the local database - file will be uploaded as a new file
-												writeln("skipped.");
 												log.vlog("OneDrive returned a 'HTTP 404 - eTag Issue' - gracefully handling error");
 												itemdb.deleteById(item.driveId, item.id);
 												uploadFailed = true;
@@ -3670,19 +3704,18 @@ final class SyncEngine
 											if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
 												// The file is currently checked out or locked for editing by another user
 												// We cant upload this file at this time
-												writeln("skipped.");
-												log.fileOnly("Uploading modified file ", path, " ... skipped.");
-												write("", path, " is currently checked out or locked for editing by another user.");
-												log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+												// "Uploading modified file ", path, " ... skipped."
+												log.fileOnly(provideLanguageTranslation(languageIdentifier,197), path, " ... ", provideLanguageTranslation(languageIdentifier,198));
+												// "<file_path> is currently checked out or locked for editing by another user."
+												log.log("", path, provideLanguageTranslation(languageIdentifier,199));
 												uploadFailed = true;
 												return;
 											}
 											if (e.httpStatusCode == 412) {
 												// HTTP request returned status code 412 - ETag does not match current item's value
 												// Delete record from the local database - file will be uploaded as a new file
-												writeln("skipped.");
-												log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue (Personal Account)");
 												log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
+												log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue (Personal Account)");
 												itemdb.deleteById(item.driveId, item.id);
 												uploadFailed = true;
 												return;
@@ -3694,28 +3727,31 @@ final class SyncEngine
 												response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
 											} else {
 												// display what the error is
-												writeln("skipped.");
 												displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
 											}
 										} catch (FileException e) {
-											// display the error message
-											writeln("skipped.");
+											// caught an error, write out we are skipping this item
+											// "skipped."
+											writeln(provideLanguageTranslation(languageIdentifier,198));
 											displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 											uploadFailed = true;
 											return;
 										}
 										// upload done without error
-										writeln("done.");
+										// "done."
+										writeln(provideLanguageTranslation(languageIdentifier,170));
 									} else {
 										writeln("");
 										try {
 											response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
 										} catch (OneDriveException e) {
+											// caught an error, write out we are skipping this item
+											// "skipped."
+											writeln(provideLanguageTranslation(languageIdentifier,198));
 											if (e.httpStatusCode == 401) {
 												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-												writeln("skipped.");
 												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 												uploadFailed = true;
 												return;
@@ -3723,28 +3759,29 @@ final class SyncEngine
 											if (e.httpStatusCode == 412) {
 												// HTTP request returned status code 412 - ETag does not match current item's value
 												// Delete record from the local database - file will be uploaded as a new file
-												writeln("skipped.");
-												log.vdebug("Session Upload Replace Failed - OneDrive eTag / cTag match issue (Personal Account)");
 												log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
+												log.vdebug("Session Upload Replace Failed - OneDrive eTag / cTag match issue (Personal Account)");
 												itemdb.deleteById(item.driveId, item.id);
 												uploadFailed = true;
 												return;
 											} else {
 												// display what the error is
-												writeln("skipped.");
 												displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
 											}
 										} catch (FileException e) {
+											// caught an error, write out we are skipping this item
+											// "skipped."
+											writeln(provideLanguageTranslation(languageIdentifier,198));
 											// display the error message
-											writeln("skipped.");
 											displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 											uploadFailed = true;
 											return;
 										}
 										// upload done without error
-										writeln("done.");
+										// "done."
+										writeln(provideLanguageTranslation(languageIdentifier,170));
 									}
 								} else {
 									// OneDrive Business Account
@@ -3755,9 +3792,12 @@ final class SyncEngine
 											if (thisFileSize == 0) {
 												// the file we are trying to upload as a session is a zero byte file - we cant use a session to upload or replace the file 
 												// as OneDrive technically does not support zero byte files
-												writeln("skipped.");
-												log.fileOnly("Uploading modified file ", path, " ... skipped.");
-												log.vlog("Skip Reason: Microsoft OneDrive does not support 'zero-byte' files as a modified upload. Will upload as new file.");
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
+												// "Uploading modified file ", path, " ... skipped."
+												log.fileOnly(provideLanguageTranslation(languageIdentifier,197), path, " ... ", provideLanguageTranslation(languageIdentifier,198));
+												// "Skip Reason: Microsoft OneDrive does not support 'zero-byte' files as a modified upload. Will upload as new file."
+												log.vlog(provideLanguageTranslation(languageIdentifier,200));
 												// delete file on OneDrive
 												onedrive.deleteById(item.driveId, item.id, item.eTag);
 												// delete file from local database
@@ -3778,9 +3818,11 @@ final class SyncEngine
 												}
 											}
 										} catch (OneDriveException e) {
+											// caught an error, write out we are skipping this item
+											// "skipped."
+											writeln(provideLanguageTranslation(languageIdentifier,198));
 											if (e.httpStatusCode == 401) {
 												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-												writeln("skipped.");
 												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 												uploadFailed = true;
 												return;
@@ -3789,32 +3831,32 @@ final class SyncEngine
 											if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
 												// The file is currently checked out or locked for editing by another user
 												// We cant upload this file at this time
-												writeln("skipped.");
-												log.fileOnly("Uploading modified file ", path, " ... skipped.");
-												writeln("", path, " is currently checked out or locked for editing by another user.");
-												log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+												// "Uploading modified file ", path, " ... skipped."
+												log.fileOnly(provideLanguageTranslation(languageIdentifier,197), path, " ... ", provideLanguageTranslation(languageIdentifier,198));
+												// "<file_path> is currently checked out or locked for editing by another user."
+												log.log("", path, provideLanguageTranslation(languageIdentifier,199));
 												uploadFailed = true;
 												return;
 											} 
 											if (e.httpStatusCode == 412) {
 												// HTTP request returned status code 412 - ETag does not match current item's value
 												// Delete record from the local database - file will be uploaded as a new file
-												writeln("skipped.");
-												log.vdebug("Session Upload Replace Failed - OneDrive eTag / cTag match issue (Business Account)");
 												log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
+												log.vdebug("Session Upload Replace Failed - OneDrive eTag / cTag match issue (Business Account)");
 												itemdb.deleteById(item.driveId, item.id);
 												uploadFailed = true;
 												return;
 											} else {
 												// display what the error is
-												writeln("skipped.");
 												displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
 											}
 										} catch (FileException e) {
+											// caught an error, write out we are skipping this item
+											// "skipped."
+											writeln(provideLanguageTranslation(languageIdentifier,198));
 											// display the error message
-											writeln("skipped.");
 											displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 											uploadFailed = true;
 											return;
@@ -3822,7 +3864,8 @@ final class SyncEngine
 										// Did the upload fail?
 										if (!uploadFailed){
 											// upload done without error or failure
-											writeln("done.");
+											// "done."
+											writeln(provideLanguageTranslation(languageIdentifier,170));
 											// As the session.upload includes the last modified time, save the response
 											// Is the response a valid JSON object - validation checking done in saveItem
 											saveItem(response);
@@ -3838,9 +3881,12 @@ final class SyncEngine
 										if (thisFileSize == 0) {
 											// the file we are trying to upload as a session is a zero byte file - we cant use a session to upload or replace the file 
 											// as OneDrive technically does not support zero byte files
-											writeln("skipped.");
-											log.fileOnly("Uploading modified file ", path, " ... skipped.");
-											log.vlog("Skip Reason: Microsoft OneDrive does not support 'zero-byte' files as a modified upload. Will upload as new file.");
+											// "skipped."
+											writeln(provideLanguageTranslation(languageIdentifier,198));
+											// "Uploading modified file ", path, " ... skipped."
+											log.fileOnly(provideLanguageTranslation(languageIdentifier,197), path, " ... ", provideLanguageTranslation(languageIdentifier,198));
+											// "Skip Reason: Microsoft OneDrive does not support 'zero-byte' files as a modified upload. Will upload as new file."
+											log.vlog(provideLanguageTranslation(languageIdentifier,200));
 											// delete file on OneDrive
 											onedrive.deleteById(item.driveId, item.id, item.eTag);
 											// delete file from local database
@@ -3854,7 +3900,8 @@ final class SyncEngine
 											// Did the upload fail?
 											if (!uploadFailed){
 												// upload done without error or failure
-												writeln("done.");
+												// "done."
+												writeln(provideLanguageTranslation(languageIdentifier,170));
 												// As the session.upload includes the last modified time, save the response
 												// Is the response a valid JSON object - validation checking done in saveItem
 												saveItem(response);
@@ -3882,20 +3929,24 @@ final class SyncEngine
 								}
 								
 								// log that the modified file was uploaded successfully
-								log.fileOnly("Uploading modified file ", path, " ... done.");
+								// "Uploading modified file ", path, " ... done."
+								log.fileOnly(provideLanguageTranslation(languageIdentifier,197), path, " ... ", provideLanguageTranslation(languageIdentifier,170));
 								
 								// update free space tracking if this is our drive id
 								if (item.driveId == defaultDriveId) {
 									// how much space is left on OneDrive after upload?
 									remainingFreeSpace = (remainingFreeSpace - thisFileSize);
-									log.vlog("Remaining free space on OneDrive: ", remainingFreeSpace);
+									// "Remaining free space on OneDrive: ", remainingFreeSpace
+									log.vlog(provideLanguageTranslation(languageIdentifier,201), remainingFreeSpace);
 								}
 							} else {
 								// we are --dry-run - simulate the file upload
-								writeln("done.");
+								// "done."
+								writeln(provideLanguageTranslation(languageIdentifier,170));
 								response = createFakeResponse(path);
 								// Log action to log file
-								log.fileOnly("Uploading modified file ", path, " ... done.");
+								// "Uploading modified file ", path, " ... done."
+								log.fileOnly(provideLanguageTranslation(languageIdentifier,197), path, " ... ", provideLanguageTranslation(languageIdentifier,170));
 								// Is the response a valid JSON object - validation checking done in saveItem
 								saveItem(response);
 								return;

@@ -333,6 +333,27 @@ void initialise_EN_AU(){
 		JSONValue([ "179": "The local item is a file but should be a directory" ]),
 		JSONValue([ "180": "Trying to delete item " ]),
 		JSONValue([ "181": "ERROR: The requested single directory to sync was not found on OneDrive - Check folder permissions and sharing status with folder owner" ]),
+		JSONValue([ "182": "Skipped due to id difference!" ]),
+		JSONValue([ "183": "Deleting item " ]),
+		JSONValue([ "184": "Uploading differences of " ]),
+		JSONValue([ "185": "Uploading new items of " ]),
+		JSONValue([ "186": "Skipping item - .nosync found & --check-for-nosync enabled: " ]),
+		JSONValue([ "187": "Skipping item - invalid name (Microsoft Naming Convention): " ]),
+		JSONValue([ "188": "Skipping item - invalid name (Contains an invalid whitespace item): " ]),
+		JSONValue([ "189": "Skipping item - invalid name (Contains HTML ASCII Code): " ]),
+		JSONValue([ "190": "The item was a directory but now it is a file" ]),
+		JSONValue([ "191": "The directory has not changed" ]),
+		JSONValue([ "192": "The directory has been deleted locally" ]),
+		JSONValue([ "193": "The directory appears to have been deleted locally .. but we are running in --monitor mode. This may have been 'moved' on the local filesystem rather than being 'deleted'" ]),
+		JSONValue([ "194": "Skipping remote directory delete as --upload-only & --no-remote-delete configured" ]),
+		JSONValue([ "195": "The file last modified time has changed" ]),
+		JSONValue([ "196": "The file content has changed" ]),
+		JSONValue([ "197": "Uploading modified file " ]),
+		JSONValue([ "198": "skipped." ]),
+		JSONValue([ "199": " is currently checked out or locked for editing by another user." ]),
+		JSONValue([ "200": "Skip Reason: Microsoft OneDrive does not support 'zero-byte' files as a modified upload. Will upload as new file." ]),
+		JSONValue([ "201": "Remaining free space on OneDrive: " ]),
+		
 	]);
 	
 	// Load the message into the array
