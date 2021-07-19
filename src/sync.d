@@ -4366,7 +4366,18 @@ final class SyncEngine
 						// parent for 'path' is NOT in the database
 						log.vlog("The parent for this path is not in the local database - need to add parent to local database");
 						parentPath = dirName(path);
+						// add the parent into the database
 						uploadCreateDir(parentPath);
+						// save this child item into the database
+						log.vlog("The parent for this path is in the local database - adding requested path (", path ,") to database");
+						if (!dryRun) {
+							// save the live data
+							saveItem(response);
+						} else {
+							// need to fake this data
+							auto fakeResponse = createFakeResponse(path);
+							saveItem(fakeResponse);
+						}
 					} else {
 						// parent is in database
 						log.vlog("The parent for this path is in the local database - adding requested path (", path ,") to database");
@@ -4501,7 +4512,14 @@ final class SyncEngine
 					// Does this 'file' already exist on OneDrive?
 					try {
 						// test if the local path exists on OneDrive
-						fileDetailsFromOneDrive = onedrive.getPathDetailsByDriveId(parent.driveId, path);
+						// in a --dry-run scenario parent.driveId will be invalid, leading to a 'HTTP 400 - Bad Request'
+						if (!dryRun) {
+							// not a dry run scenario
+							fileDetailsFromOneDrive = onedrive.getPathDetailsByDriveId(parent.driveId, path);
+						} else {
+							// --dry-run in use, switch to using defaultDriveId
+							fileDetailsFromOneDrive = onedrive.getPathDetailsByDriveId(defaultDriveId, path);
+						}
 					} catch (OneDriveException e) {
 						// log that we generated an exception
 						log.vdebug("fileDetailsFromOneDrive = onedrive.getPathDetailsByDriveId(parent.driveId, path); generated a OneDriveException");
@@ -5477,7 +5495,7 @@ final class SyncEngine
 					log.vdebug("Skipping adding to database as --upload-only & --remove-source-files configured");
 				} else {
 					// What is the JSON item we are trying to create a DB record with?
-					log.vdebug("Createing DB item from this JSON: ", jsonItem);
+					log.vdebug("Creating DB item from this JSON: ", jsonItem);
 					// Takes a JSON input and formats to an item which can be used by the database
 					Item item = makeItem(jsonItem);
 					// Add to the local database
