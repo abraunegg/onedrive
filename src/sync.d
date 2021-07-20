@@ -145,8 +145,6 @@ private Item makeItem(const ref JSONValue driveItem)
 			// item exists on account default drive id
 			item.mtime = SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
 		}
-		// debug output of what the OneDrive item modified time is
-		log.vdebug("lastModifiedDateTime (OneDrive item): ", item.mtime);
 	}
 		
 	if (isItemFile(driveItem)) {
