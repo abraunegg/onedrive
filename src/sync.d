@@ -148,8 +148,6 @@ private Item makeItem(const ref JSONValue driveItem)
 			// item exists on account default drive id
 			item.mtime = SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
 		}
-		// debug output of what the OneDrive item modified time is
-		log.vdebug("lastModifiedDateTime (OneDrive item): ", item.mtime);
 	}
 		
 	if (isItemFile(driveItem)) {
@@ -4532,7 +4530,18 @@ final class SyncEngine
 						// parent for 'path' is NOT in the database
 						log.vlog("The parent for this path is not in the local database - need to add parent to local database");
 						parentPath = dirName(path);
+						// add the parent into the database
 						uploadCreateDir(parentPath);
+						// save this child item into the database
+						log.vlog("The parent for this path has been added to the local database - adding requested path (", path ,") to database");
+						if (!dryRun) {
+							// save the live data
+							saveItem(response);
+						} else {
+							// need to fake this data
+							auto fakeResponse = createFakeResponse(path);
+							saveItem(fakeResponse);
+						}
 					} else {
 						// parent is in database
 						log.vlog("The parent for this path is in the local database - adding requested path (", path ,") to database");
@@ -4667,7 +4676,15 @@ final class SyncEngine
 					// Does this 'file' already exist on OneDrive?
 					try {
 						// test if the local path exists on OneDrive
-						fileDetailsFromOneDrive = onedrive.getPathDetailsByDriveId(parent.driveId, path);
+						// if parent.driveId is invalid, then API call will generate a 'HTTP 400 - Bad Request' - make sure we at least have a valid parent.driveId
+						if (!parent.driveId.empty) {
+							// use configured value for parent.driveId
+							fileDetailsFromOneDrive = onedrive.getPathDetailsByDriveId(parent.driveId, path);
+						} else {
+							// switch to using defaultDriveId
+							log.vdebug("parent.driveId is empty - using defaultDriveId for API call");
+							fileDetailsFromOneDrive = onedrive.getPathDetailsByDriveId(defaultDriveId, path);
+						}
 					} catch (OneDriveException e) {
 						// log that we generated an exception
 						log.vdebug("fileDetailsFromOneDrive = onedrive.getPathDetailsByDriveId(parent.driveId, path); generated a OneDriveException");
@@ -5643,7 +5660,7 @@ final class SyncEngine
 					log.vdebug("Skipping adding to database as --upload-only & --remove-source-files configured");
 				} else {
 					// What is the JSON item we are trying to create a DB record with?
-					log.vdebug("Createing DB item from this JSON: ", jsonItem);
+					log.vdebug("Creating DB item from this JSON: ", jsonItem);
 					// Takes a JSON input and formats to an item which can be used by the database
 					Item item = makeItem(jsonItem);
 					// Add to the local database
@@ -6339,23 +6356,20 @@ final class SyncEngine
 		string fakeRootId = defaultRootId;
 		SysTime mtime = timeLastModified(path).toUTC();
 		
-		// If the account type is Business, and if Shared Business Folders are being used
-		// Need to update the 'fakeDriveId' & 'fakeRootId' with elements from the database
-		// Otherwise some calls to validate objects fail as the actual driveId being used is invalid
-		if (accountType == "business") {
-			string parentPath = dirName(path);
-			Item databaseItem;
-			
-			if (parentPath != ".") {
-				// Not a 'root' parent
-				// For each driveid in the existing driveIDsArray 
-				foreach (searchDriveId; driveIDsArray) {
-					log.vdebug("FakeResponse: searching database for: ", searchDriveId, " ", parentPath);
-					if (itemdb.selectByPath(parentPath, searchDriveId, databaseItem)) {
-						log.vdebug("FakeResponse: Found Database Item: ", databaseItem);
-						fakeDriveId = databaseItem.driveId;
-						fakeRootId = databaseItem.id;
-					}
+		// Need to update the 'fakeDriveId' & 'fakeRootId' with elements from the --dry-run database
+		// Otherwise some calls to validate objects will fail as the actual driveId being used is invalid
+		string parentPath = dirName(path);
+		Item databaseItem;
+		
+		if (parentPath != ".") {
+			// Not a 'root' parent
+			// For each driveid in the existing driveIDsArray 
+			foreach (searchDriveId; driveIDsArray) {
+				log.vdebug("FakeResponse: searching database for: ", searchDriveId, " ", parentPath);
+				if (itemdb.selectByPath(parentPath, searchDriveId, databaseItem)) {
+					log.vdebug("FakeResponse: Found Database Item: ", databaseItem);
+					fakeDriveId = databaseItem.driveId;
+					fakeRootId = databaseItem.id;
 				}
 			}
 		}

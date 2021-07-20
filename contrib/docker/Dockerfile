@@ -2,7 +2,7 @@ FROM centos:7
 ENV GOSU_VERSION=1.11
 
 RUN yum install -y make git gcc libcurl-devel sqlite-devel pkg-config && \
-    yum install -y http://downloads.dlang.org/releases/2.x/2.092.1/dmd-2.092.1-0.fedora.x86_64.rpm && \
+    yum install -y http://downloads.dlang.org/releases/2.x/2.097.0/dmd-2.097.0-0.fedora.x86_64.rpm && \
 	rm -rf /var/cache/yum/ && \
     # gosu installation
     gpg --keyserver hkps://keys.openpgp.org --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
