@@ -4575,6 +4575,35 @@ final class SyncEngine
 							
 							// Is the response a valid JSON object - validation checking done in saveItem
 							saveItem(pathDetails);
+							
+							// OneDrive Personal Shared Folder edgecase handling
+							// In a --resync --upload-only --single-directory 'dir' scenario, and where the root 'dir' for --single-directory is a 'shared folder' 
+							// we will not have the 'tie' DB entry created because of --upload-only because we do not download the folder structure from OneDrive
+							if (accountType == "personal"){
+								// are we in a --resync --upload-only --single-directory scenario ?
+								if ((cfg.getValueBool("resync")) && (cfg.getValueBool("upload_only")) && (singleDirectoryScope)) {
+									// Create a temp item
+									// Takes a JSON input and formats to an item which can be used by the database
+									Item tempItem = makeItem(pathDetails);
+									// New DB Tie item due to edge case
+									Item tieDBItem;
+									// Set the name
+									tieDBItem.name = tempItem.name;
+									// Set the correct item type
+									tieDBItem.type = ItemType.dir;
+									//parent.type = ItemType.remote;
+									if ((tempItem.type == ItemType.remote) && (!tempItem.remoteDriveId.empty)) {
+										// set the right elements
+										tieDBItem.driveId = tempItem.remoteDriveId;
+										tieDBItem.id = tempItem.remoteId;
+									}
+									// Set the correct mtime
+									tieDBItem.mtime = tempItem.mtime;
+									// Add tie DB record to the local database
+									log.vdebug("Adding tie DB record to database: ", tieDBItem);
+									itemdb.upsert(tieDBItem);
+								}
+							}
 						} else {
 							// need to fake this data
 							auto fakeResponse = createFakeResponse(path);
@@ -5666,6 +5695,15 @@ final class SyncEngine
 					// Add to the local database
 					log.vdebug("Adding to database: ", item);
 					itemdb.upsert(item);
+					
+					// If we have a remote drive ID, add this to our list of known drive id's
+					if (!item.remoteDriveId.empty) {
+						// Keep the driveIDsArray with unique entries only
+						if (!canFind(driveIDsArray, item.remoteDriveId)) {
+							// Add this drive id to the array to search with
+							driveIDsArray ~= item.remoteDriveId;
+						}
+					}
 				}
 			} else {
 				// log error
