@@ -23,10 +23,24 @@ The packages support the following platform architectures:
 
 
 ### Dependencies: Ubuntu 20.04
+The packages support the following platform architectures:
+| &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
+|:----:|:------:|:-----:|:-------:|
+<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>| |
+
+
 
 
 ### Dependencies: Ubuntu 20.10
+The packages support the following platform architectures:
+| &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
+|:----:|:------:|:-----:|:-------:|
+<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>| |
 
 
 
 ### Dependencies: Ubuntu 21.04
+The packages support the following platform architectures:
+| &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
+|:----:|:------:|:-----:|:-------:|
+<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>| |
