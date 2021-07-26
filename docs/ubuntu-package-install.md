@@ -14,7 +14,7 @@ Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive
 
 ## Distribution Package Install Instructions
 
-### Debian 10
+### Distribution: Debian 10
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
@@ -36,7 +36,7 @@ deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-on
 #### Step 4: Install 'onedrive'
 1.  Run: `apt install onedrive`
 
-### Ubuntu 20.04
+### Distribution: Ubuntu 20.04
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
@@ -58,7 +58,7 @@ deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-on
 #### Step 4: Install 'onedrive'
 1.  Run: `apt install onedrive`
 
-### Ubuntu 20.10
+### Distribution: Ubuntu 20.10
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
@@ -80,7 +80,7 @@ deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-on
 #### Step 4: Install 'onedrive'
 1.  Run: `apt install onedrive`
 
-### Ubuntu 21.04
+### Distribution: Ubuntu 21.04
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
