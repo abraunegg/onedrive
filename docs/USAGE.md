@@ -41,6 +41,7 @@
   * [OneDrive service running as root user via systemd (Red Hat Enterprise Linux, CentOS Linux)](#onedrive-service-running-as-root-user-via-systemd-red-hat-enterprise-linux-centos-linux)
   * [OneDrive service running as a non-root user via systemd (All Linux Distributions)](#onedrive-service-running-as-a-non-root-user-via-systemd-all-linux-distributions)
   * [OneDrive service running as a non-root user via systemd (with notifications enabled) (Arch, Ubuntu, Debian, OpenSuSE, Fedora)](#onedrive-service-running-as-a-non-root-user-via-systemd-with-notifications-enabled-arch-ubuntu-debian-opensuse-fedora)
+  * [OneDrive service running as a non-root user via runit (antiX, Devuan, Artix, Void)](#onedrive-service-running-as-a-non-root-user-via-runit-antix-devuan-artix-void)
 - [Additional Configuration](#additional-configuration)
   * [Using multiple OneDrive accounts](#using-multiple-onedrive-accounts)
   * [Access OneDrive service through a proxy](#access-onedrive-service-through-a-proxy)
@@ -671,9 +672,10 @@ sudo sysctl fs.inotify.max_user_watches=<new_value>
 To make these changes permanent, refer to your OS reference documentation.
 
 ## Running 'onedrive' as a system service
-There are two ways that onedrive can be used as a service
+There are a few ways to use onedrive as a service
 *   via init.d
 *   via systemd
+*   via runit
 
 **Note:** If using the service files, you may need to increase the `fs.inotify.max_user_watches` value on your system to handle the number of files in the directory you are monitoring as the initial value may be too low.
 
@@ -781,6 +783,74 @@ journalctl --user-unit=onedrive -f
 ```
 
 **Note:** `systemctl --user` directive is not applicable for Red Hat Enterprise Linux (RHEL) or CentOS Linux platforms
+
+### OneDrive service running as a non-root user via runit (antiX, Devuan, Artix, Void)
+
+1. Create the following folder if not present already `/etc/sv/runsvdir-<username>`
+
+  - where `<username>` is the `USER` targeted for the service
+  - _e.g_ `# mkdir /etc/sv/runsvdir-nolan`
+
+2. Create a file called `run` under the previously created folder with
+   executable permissions
+
+   - `# touch /etc/sv/runsvdir-<username>/run`
+   - `# chmod 0755 /etc/sv/runsvdir-<username>/run`
+
+3. Edit the `run` file with the following contents (priviledges needed)
+
+  ```sh
+  #!/bin/sh
+  export USER="<username>"
+  export HOME="/home/<username>"
+
+  groups="$(id -Gn "${USER}" | tr ' ' ':')"
+  svdir="${HOME}/service"
+
+  exec chpst -u "${USER}:${groups}" runsvdir "${svdir}"
+  ```
+
+  - do not forget to correct the `<username>` according to the `USER` set on
+    step #1
+
+4. Enable the previously created folder as a service
+
+  - `# ln -fs /etc/sv/runsvdir-<username> /var/service/`
+
+5. Create a subfolder on the `USER`'s `HOME` directory to store the services
+   (or symlinks)
+
+   - `$ mkdir ~/service`
+
+6. Create a subfolder for OneDrive specifically
+
+  - `$ mkdir ~/service/onedrive/`
+
+7. Create a file called `run` under the previously created folder with
+   executable permissions
+
+   - `$ touch ~/service/onedrive/run`
+   - `$ chmod 0755 ~/service/onedrive/run`
+
+8. Append the following contents to the `run` file
+
+  ```sh
+  #!/usr/bin/env sh
+  exec /usr/bin/onedrive --monitor
+  ```
+
+  - in some scenario the path for the `onedrive` binary might differ, you can
+    obtain it regardless by running `$ command -v onedrive`
+
+9. Reboot to apply changes
+
+10. Check status of user-defined services
+
+  - `$ sv status ~/service/*`
+
+You may refer to Void's documentation regarding
+[Per-User Services](https://docs.voidlinux.org/config/services/user-services.html)
+for extra details.
 
 ## Additional Configuration
 ### Using multiple OneDrive accounts
