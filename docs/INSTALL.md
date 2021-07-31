@@ -1,6 +1,6 @@
-# Installing from Distribution Packages or Building the OneDrive Client for Linux from source
+# Installing or Upgrading using Distribution Packages or Building the OneDrive Client for Linux from source
 
-## Installing from Distribution Packages
+## Installing or Upgrading using Distribution Packages
 This project has been packaged for the following Linux distributions as per below. The current client release is: [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases)
 
 Only the current release version or greater is supported.
@@ -17,7 +17,7 @@ Distribution packages may be of an older release when compared to the latest rel
 | Gentoo                          | [onedrive](https://gpo.zugaina.org/net-misc/onedrive)                        | No API Available |<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>| |
 | NixOS                           | [onedrive](https://search.nixos.org/packages?channel=20.09&from=0&size=50&sort=relevance&query=onedrive)|<a href="https://search.nixos.org/packages?channel=20.09&from=0&size=50&sort=relevance&query=onedrive"><img src="https://repology.org/badge/version-for-repo/nix_unstable/onedrive.svg?header=" alt="nixpkgs unstable package" width="46" height="20"></a>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>| Use package `onedrive` either by adding it to `configuration.nix` or by using the command `nix-env -iA <channel name>.onedrive`. This does not install a service. To install a service, use unstable channel (will stabilize in 20.09) and add `services.onedrive.enable=true` in `configuration.nix`. You can also add a custom package using the `services.onedrive.package` option (recommended since package lags upstream). Enabling the service installs a default package too (based on the channel). You can also add multiple onedrive accounts trivially, see [documentation](https://github.com/NixOS/nixpkgs/pull/77734#issuecomment-575874225). |
 | OpenSuSE                        | [onedrive](https://software.opensuse.org/package/onedrive)                   |<a href="https://software.opensuse.org/package/onedrive"><img src="https://repology.org/badge/version-for-repo/opensuse_tumbleweed/onedrive.svg?header=" alt="openSUSE Tumbleweed package" width="46" height="20"></a>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>| |
-| OpenSuSE Build Service          | [onedrive](https://build.opensuse.org/project/show/home:npreining:debian-ubuntu-onedrive) | No API Available |<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>| Package Build Service for Debian and Ubuntu | 
+| OpenSuSE Build Service          | [onedrive](https://build.opensuse.org/package/show/home:npreining:debian-ubuntu-onedrive/onedrive) | No API Available |<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>| Package Build Service for Debian and Ubuntu | 
 | Raspbian                        | [onedrive](https://archive.raspbian.org/raspbian/pool/main/o/onedrive/)      |<a href="https://archive.raspbian.org/raspbian/pool/main/o/onedrive/"><img src="https://repology.org/badge/version-for-repo/raspbian_stable/onedrive.svg?header=" alt="Raspbian Stable package" width="46" height="20"></a>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>| |
 | Slackware                       | [onedrive](https://slackbuilds.org/repository/14.2/network/onedrive/)        |<a href="https://slackbuilds.org/repository/14.2/network/onedrive/"><img src="https://repology.org/badge/version-for-repo/slackbuilds/onedrive.svg?header=" alt="SlackBuilds package" width="46" height="20"></a>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>| |
 | Solus                           | [onedrive](https://dev.getsol.us/search/query/FB7PIf1jG9Z9/#R)               |<a href="https://dev.getsol.us/search/query/FB7PIf1jG9Z9/#R"><img src="https://repology.org/badge/version-for-repo/solus/onedrive.svg?header=" alt="Solus package" width="46" height="20"></a>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>| |
@@ -323,15 +323,28 @@ make clean; make
 sudo make install
 ```
 
-## Uninstall
+## Uninstalling the client
+From within your GitHub repository clone, perform the following to remove the 'onedrive' binary:
 ```text
 sudo make uninstall
-# delete the application state
+```
+
+If you are not upgrading your client, to remove your application state and configuration, perform the following additional step:
+```
 rm -rf ~/.config/onedrive
 ```
-If you are using the `--confdir option`, substitute `~/.config/onedrive` above for that directory.
+**Note:** If you are using the `--confdir option`, substitute `~/.config/onedrive` above for that directory.
 
 If you want to just delete the application key, but keep the items database:
 ```text
 rm -f ~/.config/onedrive/refresh_token
 ```
+
+## Upgrading the client
+If you have installed the client from a distribution package, the client will be updated when the distribution package is updated by the package maintainer and will be updated to the new application version when you perform your package update.
+
+If you have built the client from source, to upgrade your client, you must first uninstall your existing 'onedrive' binary (see above), then re-install the client by re-cloning, re-compiling and re-installing the client again to install the new version.
+
+To confirm you have the new version installed, use `onedrive --version` to determine the version that is now installed.
+
+
