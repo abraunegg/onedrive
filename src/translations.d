@@ -409,7 +409,9 @@ void initialise_EN_AU(){
 		JSONValue([ "255": "Skipping uploading this file as it cannot be read (file permissions or file corruption): " ]),
 		JSONValue([ "256": "Skipping uploading this new file as parent path is not in the database: " ]),
 		JSONValue([ "257": "' due to insufficient free space available on OneDrive" ]),
-		
+		JSONValue([ "258": "Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync" ]),
+		JSONValue([ "259": "See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details" ]),
+		JSONValue([ "260": "WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy" ]),
 		
 		
 	]);

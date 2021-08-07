@@ -5661,7 +5661,8 @@ final class SyncEngine
 				return response;
 			}
 		}
-		writeln("done.");
+		// "done."
+		writeln(provideLanguageTranslation(languageIdentifier,170));
 		// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
 		// So - now the 'local' and 'remote' file is technically DIFFERENT ... thanks Microsoft .. NO way to disable this stupidity
 		string uploadNewFileHash;
@@ -5677,14 +5678,18 @@ final class SyncEngine
 			
 			if(!uploadOnly){
 				// Download the Microsoft 'modified' file so 'local' is now in sync
-				log.vlog("Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync");
-				log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+				// "Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync"
+				log.vlog(provideLanguageTranslation(languageIdentifier,258));
+				// "See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details"
+				log.vlog(provideLanguageTranslation(languageIdentifier,259));
 				auto fileSize = response["size"].integer;
 				onedrive.downloadById(response["parentReference"]["driveId"].str, response["id"].str, path, fileSize);
 			} else {
 				// we are not downloading a file, warn that file differences will exist
-				log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
-				log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+				// "WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy"
+				log.vlog(provideLanguageTranslation(languageIdentifier,260));
+				// "See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details"
+				log.vlog(provideLanguageTranslation(languageIdentifier,259));
 			}
 		}
 		
