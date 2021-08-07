@@ -750,10 +750,11 @@ final class SyncEngine
 								
 								// Log who shared this to assist with sync data correlation
 								if ((sharedByName != "") && (sharedByEmail != "")) {
-									// "OneDrive Business Shared Folder - Shared By:  "
+									// "OneDrive Business Shared Folder - Shared By:  ", sharedByName, " (", sharedByEmail, ")"
 									log.vlog(provideLanguageTranslation(languageIdentifier,97), sharedByName, " (", sharedByEmail, ")");
 								} else {
 									if (sharedByName != "") {
+										// "OneDrive Business Shared Folder - Shared By:  "
 										log.vlog(provideLanguageTranslation(languageIdentifier,97), sharedByName);
 									}
 								}
@@ -892,10 +893,12 @@ final class SyncEngine
 							
 							// Log who shared this to assist with sync data correlation
 							if ((sharedByName != "") && (sharedByEmail != "")) {	
-								log.vlog("OneDrive Business Shared Folder - Shared By:  ", sharedByName, " (", sharedByEmail, ")");
+								// "OneDrive Business Shared Folder - Shared By:  ", sharedByName, " (", sharedByEmail, ")"
+								log.vlog(provideLanguageTranslation(languageIdentifier,97), sharedByName, " (", sharedByEmail, ")");
 							} else {
 								if (sharedByName != "") {
-									log.vlog("OneDrive Business Shared Folder - Shared By:  ", sharedByName);
+									// "OneDrive Business Shared Folder - Shared By:  "
+									log.vlog(provideLanguageTranslation(languageIdentifier,97), sharedByName);
 								}
 							}
 						}
@@ -5066,7 +5069,8 @@ final class SyncEngine
 								// response from OneDrive has to be a valid JSON object
 								if (response.type() == JSONType.object){
 									// upload done without error
-									writeln("done.");
+									// "done."
+									writeln(provideLanguageTranslation(languageIdentifier,170));
 									
 									// upload finished
 									auto uploadFinishTime = Clock.currTime();
@@ -5077,7 +5081,8 @@ final class SyncEngine
 									log.vdebug("Upload Speed: ", uploadSpeed, " Mbps (approx)");
 									
 									// Log upload action to log file
-									log.fileOnly("Uploading new file ", path, " ... done.");
+									// "Uploading new file ", path, " ... done"
+									log.fileOnly(provideLanguageTranslation(languageIdentifier,242), path, provideLanguageTranslation(languageIdentifier,171));
 									// The file was uploaded, or a 4xx / 5xx error was generated
 									if ("size" in response){
 										// The response JSON contains size, high likelihood valid response returned 
@@ -5098,12 +5103,16 @@ final class SyncEngine
 												// Print a warning message - should only be triggered if:
 												// - disableUploadValidation gets flagged (documentLibrary account type)
 												// - syncBusinessFolders is being used & parent.driveId != defaultDriveId
-												log.log("WARNING: Uploaded file size does not match local file - skipping upload validation");
-												log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
-												log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+												// "WARNING: Uploaded file size does not match local file - skipping upload validation"
+												log.log(provideLanguageTranslation(languageIdentifier,243));
+												// "WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy"
+												log.vlog(provideLanguageTranslation(languageIdentifier,244));
+												// "See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details"
+												log.vlog(provideLanguageTranslation(languageIdentifier,209));
 											} else {
 												// OK .. the uploaded file does not match and we did not disable this validation
-												log.log("Uploaded file size does not match local file - upload failure - retrying");
+												// "Uploaded file size does not match local file - upload failure - retrying"
+												log.log(provideLanguageTranslation(languageIdentifier,245));
 												// Delete uploaded bad file
 												onedrive.deleteById(response["parentReference"]["driveId"].str, response["id"].str, response["eTag"].str);
 												// Re-upload
@@ -5139,7 +5148,8 @@ final class SyncEngine
 												uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
 											} else {
 												// will be removed in different event!
-												log.log("File disappeared after upload: ", path);
+												// "File disappeared after upload: "
+												log.log(provideLanguageTranslation(languageIdentifier,246), path);
 											}
 										} else {
 											// OneDrive Business Account - always use a session to upload
@@ -5154,22 +5164,26 @@ final class SyncEngine
 									if (parent.driveId == defaultDriveId) {				
 										// how much space is left on OneDrive after upload?
 										remainingFreeSpace = (remainingFreeSpace - thisFileSize);
-										log.vlog("Remaining free space on OneDrive: ", remainingFreeSpace);
+										// "Remaining free space on OneDrive: "
+										log.vlog(provideLanguageTranslation(languageIdentifier,201), remainingFreeSpace);
 									}
 									// File uploaded successfully, space details updated if required
 									return;
 								} else {
 									// response is not valid JSON, an error was returned from OneDrive
-									log.fileOnly("Uploading new file ", path, " ... error");
+									// "Uploading new file ", path, " ... error"
+									log.fileOnly(provideLanguageTranslation(languageIdentifier,242), path, provideLanguageTranslation(languageIdentifier,247));
 									uploadFailed = true;
 									return;
 								}
 							} else {
 								// we are --dry-run - simulate the file upload
-								writeln("done.");
+								// "done."
+								writeln(provideLanguageTranslation(languageIdentifier,170));
 								response = createFakeResponse(path);
 								// Log action to log file
-								log.fileOnly("Uploading new file ", path, " ... done.");
+								// "Uploading new file ", path, " ... done."
+								log.fileOnly(provideLanguageTranslation(languageIdentifier,242), path, provideLanguageTranslation(languageIdentifier,171));
 								// Is the response a valid JSON object - validation checking done in saveItem
 								saveItem(response);
 								return;
@@ -5204,7 +5218,8 @@ final class SyncEngine
 						// Check that 'name' is in the JSON response (validates data) and that 'name' == the path we are looking for
 						if (("name" in fileDetailsFromOneDrive) && (fileDetailsFromOneDrive["name"].str == baseName(path))) {
 							// OneDrive 'name' matches local path name
-							log.vlog("Requested file to upload exists on OneDrive - local database is out of sync for this file: ", path);
+							// "Requested file to upload exists on OneDrive - local database is out of sync for this file:"
+							log.vlog(provideLanguageTranslation(languageIdentifier,248), path);
 							
 							// Is the local file newer than the uploaded file?
 							SysTime localFileModifiedTime = timeLastModified(path).toUTC();
@@ -5213,8 +5228,10 @@ final class SyncEngine
 							
 							if (localFileModifiedTime > remoteFileModifiedTime){
 								// local file is newer
-								log.vlog("Requested file to upload is newer than existing file on OneDrive");
-								write("Uploading modified file ", path, " ... ");
+								// "Requested file to upload is newer than existing file on OneDrive"
+								log.vlog(provideLanguageTranslation(languageIdentifier,249));
+								// "Uploading modified file "
+								write(provideLanguageTranslation(languageIdentifier,197), path, " ... ");
 								JSONValue response;
 								
 								if (!dryRun) {
@@ -5223,7 +5240,8 @@ final class SyncEngine
 										if (thisFileSize <= thresholdFileSize) {
 											try {
 												response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-												writeln("done.");
+												// "done."
+												writeln(provideLanguageTranslation(languageIdentifier,170));
 											} catch (OneDriveException e) {
 												log.vdebug("response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path)); generated a OneDriveException");
 												if (e.httpStatusCode == 401) {
@@ -5252,7 +5270,8 @@ final class SyncEngine
 													// Try upload as a session
 													try {
 														response = session.upload(path, parent.driveId, parent.id, baseName(path));
-														writeln("done.");
+														// "done."
+														writeln(provideLanguageTranslation(languageIdentifier,170));
 													} catch (OneDriveException e) {
 														if (e.httpStatusCode == 429) {
 															// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
@@ -5295,7 +5314,8 @@ final class SyncEngine
 											writeln("");
 											try {
 												response = session.upload(path, parent.driveId, parent.id, baseName(path));
-												writeln("done.");
+												// "done."
+												writeln(provideLanguageTranslation(languageIdentifier,170));
 											} catch (OneDriveException e) {
 												log.vdebug("response = session.upload(path, parent.driveId, parent.id, baseName(path)); generated a OneDriveException");
 												if (e.httpStatusCode == 401) {
@@ -5370,7 +5390,8 @@ final class SyncEngine
 												uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
 											} else {
 												// will be removed in different event!
-												log.log("File disappeared after upload: ", path);
+												// "File disappeared after upload: "
+												log.log(provideLanguageTranslation(languageIdentifier,246), path);
 											}
 										} else {
 											// Log that an invalid JSON object was returned
@@ -5434,7 +5455,8 @@ final class SyncEngine
 													return;
 												}
 												// upload complete
-												writeln("done.");
+												// "done."
+												writeln(provideLanguageTranslation(languageIdentifier,170));
 												saveItem(response);
 											} else {
 												// If we are uploading to a shared business folder, there are a couple of corner cases here:
@@ -5473,20 +5495,24 @@ final class SyncEngine
 									}
 									
 									// Log action to log file
-									log.fileOnly("Uploading modified file ", path, " ... done.");
+									// "Uploading modified file ", path, " ... done."
+									log.fileOnly(provideLanguageTranslation(languageIdentifier,197), path, provideLanguageTranslation(languageIdentifier,171));
 									
 									// update free space tracking if this is our drive id
 									if (parent.driveId == defaultDriveId) {				
 										// how much space is left on OneDrive after upload?
 										remainingFreeSpace = (remainingFreeSpace - thisFileSize);
-										log.vlog("Remaining free space on OneDrive: ", remainingFreeSpace);
+										// "Remaining free space on OneDrive: "
+										log.vlog(provideLanguageTranslation(languageIdentifier,201), remainingFreeSpace);
 									}
 								} else {
 									// we are --dry-run - simulate the file upload
-									writeln("done.");
+									// "done."
+									writeln(provideLanguageTranslation(languageIdentifier,170));
 									response = createFakeResponse(path);
 									// Log action to log file
-									log.fileOnly("Uploading modified file ", path, " ... done.");
+									// "Uploading modified file ", path, " ... done."
+									log.fileOnly(provideLanguageTranslation(languageIdentifier,197), path, provideLanguageTranslation(languageIdentifier,171));
 									// Is the response a valid JSON object - validation checking done in saveItem
 									saveItem(response);
 									return;
@@ -5494,7 +5520,8 @@ final class SyncEngine
 							} else {
 								// Save the details of the file that we got from OneDrive
 								// --dry-run safe
-								log.vlog("Updating the local database with details for this file: ", path);
+								// "Updating the local database with details for this file: ", path
+								log.vlog(provideLanguageTranslation(languageIdentifier,250), path);
 								if (!dryRun) {
 									// use the live data
 									saveItem(fileDetailsFromOneDrive);
@@ -5506,38 +5533,47 @@ final class SyncEngine
 							}
 						} else {
 							// The files are the "same" name wise but different in case sensitivity
-							log.error("ERROR: A local file has the same name as another local file.");
-							log.error("ERROR: To resolve, rename this local file: ", buildNormalizedPath(absolutePath(path)));
-							log.log("Skipping uploading this new file: ", buildNormalizedPath(absolutePath(path)));
+							// "ERROR: A local file has the same name as another local file."
+							log.error(provideLanguageTranslation(languageIdentifier,251));
+							// "ERROR: To resolve, rename this local file: "
+							log.error(provideLanguageTranslation(languageIdentifier,240), buildNormalizedPath(absolutePath(path)));
+							// "Skipping uploading this new file: "
+							log.log(provideLanguageTranslation(languageIdentifier,239), buildNormalizedPath(absolutePath(path)));
 						}
 					} else {
 						// fileDetailsFromOneDrive is not valid JSON, an error was returned from OneDrive
-						log.error("ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object");
-						log.error("ERROR: Increase logging verbosity to assist determining why.");
+						// "ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object"
+						log.error(provideLanguageTranslation(languageIdentifier,252));
+						// "ERROR: Increase logging verbosity to assist determining why."
+						log.error(provideLanguageTranslation(languageIdentifier,253));
 						uploadFailed = true;
 						return;
 					}
 				} else {
 					// Skip file - too large
-					log.log("Skipping uploading this new file as it exceeds the maximum size allowed by OneDrive: ", path);
+					// "Skipping uploading this new file as it exceeds the maximum size allowed by OneDrive: "
+					log.log(provideLanguageTranslation(languageIdentifier,254), path);
 					uploadFailed = true;
 					return;
 				}
 			} else {
 				// unable to read local file
-				log.log("Skipping uploading this file as it cannot be read (file permissions or file corruption): ", path);
+				// "Skipping uploading this file as it cannot be read (file permissions or file corruption): "
+				log.log(provideLanguageTranslation(languageIdentifier,255), path);
 			}
 		} else {
 			// Upload of the new file did not occur .. why?
 			if (!parentPathFoundInDB) {
 				// Parent path was not found
-				log.log("Skipping uploading this new file as parent path is not in the database: ", path);
+				// "Skipping uploading this new file as parent path is not in the database: ", path
+				log.log(provideLanguageTranslation(languageIdentifier,256), path);
 				uploadFailed = true;
 				return;
 			}
 			if (!quotaAvailable) {
 				// Not enough free space
-				log.log("Skipping item '", path, "' due to insufficient free space available on OneDrive");
+				// "Skipping item '", path, "' due to insufficient free space available on OneDrive"
+				log.log(provideLanguageTranslation(languageIdentifier,220), path, provideLanguageTranslation(languageIdentifier,257));
 				uploadFailed = true;
 				return;
 			}

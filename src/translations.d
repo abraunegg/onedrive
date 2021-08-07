@@ -394,6 +394,21 @@ void initialise_EN_AU(){
 		JSONValue([ "240": "ERROR: To resolve, rename this local file: " ]),
 		JSONValue([ "241": "Skipping item - excluded by skip_size config: " ]),
 		JSONValue([ "242": "Uploading new file " ]),
+		JSONValue([ "243": "WARNING: Uploaded file size does not match local file - skipping upload validation" ]),
+		JSONValue([ "244": "WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy" ]),
+		JSONValue([ "245": "Uploaded file size does not match local file - upload failure - retrying" ]),
+		JSONValue([ "246": "File disappeared after upload: " ]),
+		JSONValue([ "247": " ... error" ]),
+		JSONValue([ "248": "Requested file to upload exists on OneDrive - local database is out of sync for this file: " ]),
+		JSONValue([ "249": "Requested file to upload is newer than existing file on OneDrive" ]),
+		JSONValue([ "250": "Updating the local database with details for this file: " ]),
+		JSONValue([ "251": "ERROR: A local file has the same name as another local file." ]),
+		JSONValue([ "252": "ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object" ]),
+		JSONValue([ "253": "ERROR: Increase logging verbosity to assist determining why." ]),
+		JSONValue([ "254": "Skipping uploading this new file as it exceeds the maximum size allowed by OneDrive: " ]),
+		JSONValue([ "255": "Skipping uploading this file as it cannot be read (file permissions or file corruption): " ]),
+		JSONValue([ "256": "Skipping uploading this new file as parent path is not in the database: " ]),
+		JSONValue([ "257": "' due to insufficient free space available on OneDrive" ]),
 		
 		
 		
