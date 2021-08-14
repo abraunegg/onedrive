@@ -5700,7 +5700,8 @@ final class SyncEngine
 	// delete an item on OneDrive
 	private void uploadDeleteItem(Item item, const(string) path)
 	{
-		log.log("Deleting item from OneDrive: ", path);
+		\\ "Deleting item from OneDrive:"
+		log.log(provideLanguageTranslation(languageIdentifier,261), path);
 		bool flagAsBigDelete = false;
 		
 		// query the database - how many objects will this remove?
@@ -5715,8 +5716,10 @@ final class SyncEngine
 				// A big delete detected
 				flagAsBigDelete = true;
 				if (!cfg.getValueBool("force")) {
-					log.error("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on OneDrive");
-					log.error("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
+					// "ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on OneDrive"
+					log.error(provideLanguageTranslation(languageIdentifier,262));
+					// "ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value"
+					log.error(provideLanguageTranslation(languageIdentifier,263));
 					// Must exit here to preserve data on OneDrive
 					exit(-1);
 				}
@@ -5746,7 +5749,8 @@ final class SyncEngine
 			} catch (OneDriveException e) {
 				if (e.httpStatusCode == 404) {
 					// item.id, item.eTag could not be found on driveId
-					log.vlog("OneDrive reported: The resource could not be found.");
+					// "OneDrive reported: The resource to delete could not be found."
+					log.vlog(provideLanguageTranslation(languageIdentifier,264));
 				} else {
 					// Not a 404 response .. is this a 401 response due to some sort of OneDrive Business security policy?
 					if ((e.httpStatusCode == 401) && (accountType != "personal")) {
@@ -5897,13 +5901,17 @@ final class SyncEngine
 				}
 			} else {
 				// log error
-				log.error("ERROR: OneDrive response missing required 'id' element");
-				log.error("ERROR: ", jsonItem);
+				// "ERROR: OneDrive response missing required 'id' element"
+				log.error(provideLanguageTranslation(languageIdentifier,265));
+				// "ERROR: jsonItem
+				log.error(provideLanguageTranslation(languageIdentifier,61), jsonItem);
 			}
 		} else {
 			// log error
-			log.error("ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object");
-			log.error("ERROR: Increase logging verbosity to assist determining why.");
+			// "ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object"
+			log.error(provideLanguageTranslation(languageIdentifier,266));
+			// "ERROR: Increase logging verbosity to assist determining why."
+			log.error(provideLanguageTranslation(languageIdentifier,238));
 		}
 	}
 
@@ -5912,46 +5920,53 @@ final class SyncEngine
 	// inotify and we try to move the item.
 	void uploadMoveItem(string from, string to)
 	{
-		log.log("Moving ", from, " to ", to);
+		// "Moving ", from, " to ", to
+		log.log(provideLanguageTranslation(languageIdentifier,267), from, provideLanguageTranslation(languageIdentifier,268), to);
 		
 		// 'to' file validation .. is the 'to' file valid for upload?
 		if (isSymlink(to)) {
 			// if config says so we skip all symlinked items
 			if (cfg.getValueBool("skip_symlinks")) {
-				log.vlog("Skipping item - skip symbolic links configured: ", to);
+				// "Skipping item - skip symbolic links configured: ", to
+				log.vlog(provideLanguageTranslation(languageIdentifier,213), to);
 				return;
 
 			}
 			// skip unexisting symbolic links
 			else if (!exists(readLink(to))) {
-				log.log("Skipping item - invalid symbolic link: ", to);
+				// "Skipping item - invalid symbolic link: ", to
+				log.log(provideLanguageTranslation(languageIdentifier,214), to);
 				return;
 			}
 		}
 		
 		// Restriction and limitations about windows naming files
 		if (!isValidName(to)) {
-			log.log("Skipping item - invalid name (Microsoft Naming Convention): ", to);
+			// "Skipping item - invalid name (Microsoft Naming Convention): ", to
+			log.log(provideLanguageTranslation(languageIdentifier,187), to);
 			return;
 		}
 		
 		// Check for bad whitespace items
 		if (!containsBadWhiteSpace(to)) {
-			log.log("Skipping item - invalid name (Contains an invalid whitespace item): ", to);
+			// "Skipping item - invalid name (Contains an invalid whitespace item): ", to
+			log.log(provideLanguageTranslation(languageIdentifier,188), to);
 			return;
 		}
 		
 		// Check for HTML ASCII Codes as part of file name
 		if (!containsASCIIHTMLCodes(to)) {
-			log.log("Skipping item - invalid name (Contains HTML ASCII Code): ", to);
+			// "Skipping item - invalid name (Contains HTML ASCII Code): ", to
+			log.log(provideLanguageTranslation(languageIdentifier,189), to);
 			return;
 		}
 		
 		// 'to' file has passed file validation
 		Item fromItem, toItem, parentItem;
 		if (!itemdb.selectByPath(from, defaultDriveId, fromItem)) {
-			if (cfg.getValueBool("skip_dotfiles") && isDotFile(to)){	
-				log.log("Skipping upload due to skip_dotfile = true");
+			if (cfg.getValueBool("skip_dotfiles") && isDotFile(to)){
+				// "Skipping upload due to skip_dotfile = true"
+				log.log(provideLanguageTranslation(languageIdentifier,269));
 				return;
 			} else {
 				uploadNewFile(to);
@@ -5975,17 +5990,20 @@ final class SyncEngine
 					// target location is a .folder
 					log.vdebug("Target location is excluded from sync due to skip_dotfiles = true");
 					// item will have been moved locally, but as this is now to a location that is not synced, needs to be removed from OneDrive
-					log.log("Item has been moved to a location that is excluded from sync operations. Removing item from OneDrive");
+					// "Item has been moved to a location that is excluded from sync operations. Removing item from OneDrive"
+					log.log(provideLanguageTranslation(languageIdentifier,270));
 					uploadDeleteItem(fromItem, from);
 					return;
 				}
 			}
 			
 			// some other error
-			throw new SyncException("Can't move an item to an unsynced directory");
+			// "Can't move an item to an unsynced directory"
+			throw new SyncException(provideLanguageTranslation(languageIdentifier,271));
 		}
 		if (cfg.getValueBool("skip_dotfiles") && isDotFile(to)){
-			log.log("Removing item from OneDrive due to skip_dotfiles = true");
+			// "Removing item from OneDrive due to skip_dotfiles = true"
+			log.log(provideLanguageTranslation(languageIdentifier,272));
 			uploadDeleteItem(fromItem, from);
 			return;
 		}
@@ -5995,7 +6013,8 @@ final class SyncEngine
 			uploadNewFile(to);
 		} else {
 			if (!exists(to)) {
-				log.vlog("uploadMoveItem target has disappeared: ", to);
+				// Skipping item - path has disappeared:
+				log.vlog(provideLanguageTranslation(languageIdentifier,210), to);
 				return;
 			}
 			SysTime mtime = timeLastModified(to).toUTC();

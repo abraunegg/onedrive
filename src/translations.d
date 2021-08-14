@@ -412,6 +412,18 @@ void initialise_EN_AU(){
 		JSONValue([ "258": "Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync" ]),
 		JSONValue([ "259": "See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details" ]),
 		JSONValue([ "260": "WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy" ]),
+		JSONValue([ "261": "Deleting item from OneDrive: " ]),
+		JSONValue([ "262": "ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on OneDrive" ]),
+		JSONValue([ "263": "ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value" ]),
+		JSONValue([ "264": "OneDrive reported: The resource to delete could not be found." ]),
+		JSONValue([ "265": "ERROR: OneDrive response missing required 'id' element" ]),
+		JSONValue([ "266": "ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object" ]),
+		JSONValue([ "267": "Moving " ]),
+		JSONValue([ "268": " to " ]),
+		JSONValue([ "269": "Skipping upload due to skip_dotfile = true" ]),
+		JSONValue([ "270": "Item has been moved to a location that is excluded from sync operations. Removing item from OneDrive" ]),
+		JSONValue([ "271": "Can't move an item to an unsynced directory" ]),
+		JSONValue([ "272": "Removing item from OneDrive due to skip_dotfiles = true" ]),
 		
 		
 	]);
