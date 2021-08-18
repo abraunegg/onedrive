@@ -1,12 +1,11 @@
 # Installing or Upgrading using Distribution Packages or Building the OneDrive Client for Linux from source
 
 ## Installing or Upgrading using Distribution Packages
-This project has been packaged for the following Linux distributions as per below. The current client release is: [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases)
-
-Only the current release version or greater is supported.
+This project has been packaged for the following Linux distributions as per below. The current client release is: [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases). Earlier versions are not supported.
 
 #### Important Note:
-Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If a package is out of date, please contact the package maintainer for resolution.
+Distribution packages may be of an older release compared to the latest release [available](https://github.com/abraunegg/onedrive/releases). If a package is out of date, please contact the package maintainer for resolution.
+
 
 | Distribution                    | Package Name & Package Link                                                  | &nbsp;&nbsp;PKG_Version&nbsp;&nbsp; | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 | Extra Details                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 |---------------------------------|------------------------------------------------------------------------------|:---------------:|:----:|:------:|:-----:|:-------:|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -35,9 +34,9 @@ This information is specifically for the following platforms and distributions:
 *   POP OS
 *   Peppermint OS
 
-Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) packages available for Ubuntu, do not install 'onedrive' from these packages via `apt install onedrive`. The default Ubuntu Universe packages are out-of-date and are not supported and should not be used. If you wish to use a package, it is highly recommended that you utilise the [OpenSuSE Build Service](https://build.opensuse.org/project/show/home:npreining:debian-ubuntu-onedrive) to install packages for these platforms. If the OpenSuSE Build Service does not cater for your version, your only option is to build from source.
+Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) packages available for Ubuntu, do not install 'onedrive' from these packages via `apt install onedrive`. The default Ubuntu Universe packages are out-of-date, and, thanks to frequent changes from the vendor Microsoft, most likely do not work. If you wish to use a package, it is highly recommended that you utilise the [OpenSuSE Build Service](https://build.opensuse.org/project/show/home:npreining:debian-ubuntu-onedrive) to install packages for these platforms. If the OpenSuSE Build Service does not cater for your version, your only option is to build from the source code.
 
-If you wish to change this situation so that you can just use 'apt install onedrive', consider becoming the Ubuntu package maintainer and contribute back to the community.
+Consider becoming the Ubuntu package maintainer if you wish to change this situation and return 'apt install onedrive' to work.
 
 ## Building from Source - High Level Requirements
 *   Build environment must have at least 1GB of memory & 1GB swap space
@@ -341,10 +340,10 @@ rm -f ~/.config/onedrive/refresh_token
 ```
 
 ## Upgrading the client
-If you have installed the client from a distribution package, the client will be updated when the distribution package is updated by the package maintainer and will be updated to the new application version when you perform your package update.
+
+If you have installed the client from a distribution package, the package maintainer will, hopefully, update the package so you can upgrade with it.
 
 If you have built the client from source, to upgrade your client, you must first uninstall your existing 'onedrive' binary (see above), then re-install the client by re-cloning, re-compiling and re-installing the client again to install the new version.
 
-To confirm you have the new version installed, use `onedrive --version` to determine the version that is now installed.
-
+To confirm you have the new version installed, use `onedrive --version` to determine the version installed.
 
