@@ -18,7 +18,7 @@ Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
-|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>| |
+|✔|✔|✔|✔| |
 
 #### Step 1: Update /etc/apt/sources.list
 Add the following to the end of your `/etc/apt/sources.list` file:
@@ -40,7 +40,7 @@ deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-on
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
-<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>| |
+❌|✔|✔|✔| |
 
 #### Step 1: Update /etc/apt/sources.list
 Add the following to the end of your `/etc/apt/sources.list` file:
@@ -62,7 +62,7 @@ deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-on
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
-<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>| |
+❌|✔|✔|✔| |
 
 #### Step 1: Update /etc/apt/sources.list
 Add the following to the end of your `/etc/apt/sources.list` file:
@@ -84,7 +84,7 @@ deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-on
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
-<img src="./images/cross.gif" alt="not_supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>|<img src="./images/tick.gif" alt="supported" width="39" height="39"/>| |
+❌|✔|✔|✔| |
 
 #### Step 1: Update /etc/apt/sources.list
 Add the following to the end of your `/etc/apt/sources.list` file:
