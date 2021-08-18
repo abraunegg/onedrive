@@ -120,12 +120,7 @@ These dependencies are also applicable for all Ubuntu based distributions such a
 *   POP OS
 *   Peppermint OS
 ```text
-sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev
-sudo apt install libsqlite3-dev
-sudo apt install pkg-config
-sudo apt install git
-sudo apt install curl
+sudo apt install build-essential libcurl4-openssl-dev libsqlite3-dev pkg-config git curl
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For notifications the following is also necessary:
