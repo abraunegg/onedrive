@@ -36,6 +36,9 @@ deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-on
 #### Step 4: Install 'onedrive'
 1.  Run: `apt install onedrive`
 
+#### Step 5: Read 'Known Issues' with these packages
+1.  Read and understand the known issues with these packages below, taking any action that is needed.
+
 ### Distribution: Ubuntu 20.04
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
@@ -57,6 +60,9 @@ deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-on
 
 #### Step 4: Install 'onedrive'
 1.  Run: `apt install onedrive`
+
+#### Step 5: Read 'Known Issues' with these packages
+1.  Read and understand the known issues with these packages below, taking any action that is needed.
 
 ### Distribution: Ubuntu 20.10
 The packages support the following platform architectures:
@@ -80,6 +86,9 @@ deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-on
 #### Step 4: Install 'onedrive'
 1.  Run: `apt install onedrive`
 
+#### Step 5: Read 'Known Issues' with these packages
+1.  Read and understand the known issues with these packages below, taking any action that is needed.
+
 ### Distribution: Ubuntu 21.04
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
@@ -102,7 +111,12 @@ deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-on
 #### Step 4: Install 'onedrive'
 1.  Run: `apt install onedrive`
 
+#### Step 5: Read 'Known Issues' with these packages
+1.  Read and understand the known issues with these packages below, taking any action that is needed.
+
 ## Known Issues with Installing from the above packages
+
+### 1. The 'onedrive' client will automatically startup post 'authentication' without any further actions.
 The 'onedrive' client will automatically startup post 'authentication' without any further actions. In some circumstances this may be highly undesirable.
 
 This is because, when the package is installed, the following symbolic link is created:
@@ -111,4 +125,19 @@ Created symlink /etc/systemd/user/default.target.wants/onedrive.service → /usr
 ```
 
 This issue is being tracked by: [#1274](https://github.com/abraunegg/onedrive/issues/1274)
+
+If you do not wish the client to automatically start without your explicit configuration, you must remove this symbolic link. It is highly advisable that you remove this symbolic link as this could lead to multiple copies of the client running, leading to sync conflics and operational issues.
+
+### 2. On Ubuntu 20.04 the client will segfault | core-dump when exiting
+When the client is being run in `--monitor` mode manually, or when using the systemd service, the client will segfault on exit.
+
+This issue is caused by the way the Ubuntu packages are built, because of using the Ubuntu LDC package `ldc-1:1.20.1-1` which is the root cause. Refer to: https://bugs.launchpad.net/ubuntu/+source/ldc/+bug/1895969
+
+**Additional references:**
+*  https://github.com/abraunegg/onedrive/issues/1053
+*  https://github.com/abraunegg/onedrive/issues/1609
+
+**Resolution Options:**
+*  Upgrade to Ubuntu 20.10 or Ubuntu 21.x
+*  Uninstall the package and build client from source
 
