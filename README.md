@@ -14,6 +14,7 @@ This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) cl
 ## Features
 *   State caching
 *   Real-Time file monitoring with Inotify
+*   Real-Time syncing of remote updates
 *   File upload / download validation to ensure data integrity
 *   Resumable uploads
 *   Support OneDrive for Business (part of Office 365)
@@ -27,7 +28,6 @@ This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) cl
 *   Supports rate limiting of traffic
 
 ## What's missing
-*   While local changes are uploaded right away, remote changes are delayed until next automated sync cycle when using --monitor
 *   Ability to encrypt/decrypt files on-the-fly when uploading/downloading files from OneDrive
 *   Support for Windows 'On-Demand' functionality so file is only downloaded when accessed locally
 *   A GUI for configuration management
