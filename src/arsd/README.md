@@ -1,0 +1,1 @@
+cgi.d is a copy from [adamdruppe/arsd](https://github.com/adamdruppe/arsd) to provide a simple web server implementation. The last copy was done @ a870179988b8881b04126856105f0fad2cc0018d.
