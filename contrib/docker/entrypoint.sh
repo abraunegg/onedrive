@@ -72,7 +72,7 @@ fi
 
 # Tell client to utilize provided auth reponse based on environment variable
 if [ -n "${ONEDRIVE_AUTHRESPONSE}" ]; then
-   echo "# We are using auth files to perform authentication"
+   echo "# We are providing the auth response directly to perform authentication"
    ARGS=(--auth-response \"${ONEDRIVE_AUTHRESPONSE}\" ${ARGS[@]})
 fi
 
