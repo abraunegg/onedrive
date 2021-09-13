@@ -301,7 +301,7 @@ final class Config
 				"auth-files",
 					"Perform authentication not via interactive dialog but via files read/writes to these files.",
 					&stringValues["auth_files"],
-				"auth_response",
+				"auth-response",
 					"Perform authentication not via interactive dialog but via providing the reponse url directly.",
 					&stringValues["auth_response"],
 				"check-for-nomount",

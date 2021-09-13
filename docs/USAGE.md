@@ -917,6 +917,8 @@ Options:
       Perform authorization via two files passed in as ARG in the format `authUrl:responseUrl`
       The authorization URL is written to the `authUrl`, then onedrive waits for the file `responseUrl`
       to be present, and reads the response from that file.
+  --auth-response ARG
+      Perform authentication not via interactive dialog but via providing the reponse url directly.
   --check-for-nomount
       Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
   --check-for-nosync
