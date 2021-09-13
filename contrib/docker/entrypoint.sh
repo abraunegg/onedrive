@@ -64,6 +64,11 @@ if [ "${ONEDRIVE_LOGOUT:=0}" == "1" ]; then
    ARGS=(--logout ${ARGS[@]})
 fi
 
+# Tell client to utilize auth files at the provided locations based on environment variable
+if [ -n "${ONEDRIVE_AUTHFILES}" ]; then
+   echo "# We are using auth files to perform authentication"
+   ARGS=(--auth-files ${ONEDRIVE_AUTHFILES} ${ARGS[@]})
+fi
 
 if [ ${#} -gt 0 ]; then
   ARGS=("${@}")
