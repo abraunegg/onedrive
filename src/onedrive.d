@@ -437,7 +437,7 @@ final class OneDriveApi
 		string authFilesString = cfg.getValueString("auth_files");
 		string authResponseString = cfg.getValueString("auth_response");
 		if (authResponseString != "") {
-			response = authResponseString;
+			response = cast(char[]) authResponseString;
 		} else if (authFilesString != "") {
 			string[] authFiles = authFilesString.split(":");
 			string authUrl = authFiles[0];
