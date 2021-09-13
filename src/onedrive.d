@@ -435,12 +435,10 @@ final class OneDriveApi
 		char[] response;
 		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.Read.All%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=" ~ redirectUrl;
 		string authFilesString = cfg.getValueString("auth_files");
-		if (authFilesString == "") {
-			log.log("Authorize this app visiting:\n");
-			write(url, "\n\n", "Enter the response uri: ");
-			readln(response);
-			cfg.applicationAuthorizeResponseUri = true;
-		} else {
+		string authResponseString = cfg.getValueString("auth_response");
+		if (authResponseString != "") {
+			response = authResponseString;
+		} else if (authFilesString != "") {
 			string[] authFiles = authFilesString.split(":");
 			string authUrl = authFiles[0];
 			string responseUrl = authFiles[1];
@@ -468,6 +466,11 @@ final class OneDriveApi
 				log.error("Cannot remove files ", authUrl, " ", responseUrl);
 				return false;
 			}
+		} else {
+			log.log("Authorize this app visiting:\n");
+			write(url, "\n\n", "Enter the response uri: ");
+			readln(response);
+			cfg.applicationAuthorizeResponseUri = true;
 		}
 		// match the authorization code
 		auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
