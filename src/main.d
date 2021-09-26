@@ -1116,28 +1116,31 @@ int main(string[] args)
 					}
 				}
 
-				// Create a subscription on the first run, or renew the subscription
-				// on subsequent runs when it is about to expire
-				if (webhookEnabled) {
-					oneDrive.createOrRenewSubscription();
-				}
-
-				// Empirical evidence shows that Microsoft often sends multiple
-				// notifications for one single change, so we need a loop to exhaust
-				// all signals that were queued up by the webhook. The notifications
-				// do not contain any actual changes, and we will always rely do the
-				// delta endpoint to sync to latest. Therefore, only one sync run is
-				// good enough to catch up for multiple notifications.
+				// Check for notifications pushed from Microsoft to the webhook
 				bool notificationReceived = false;
-				for (int signalCount = 0;; signalCount++) {
-					const auto signalExists = receiveTimeout(dur!"seconds"(-1), (ulong _) => {});
-					if (signalExists) {
-						notificationReceived = true;
-					} else {
-						if (notificationReceived) {
-							log.log("Received ", signalCount," refresh signals from the webhook");
+				if (webhookEnabled) {
+					// Create a subscription on the first run, or renew the subscription
+					// on subsequent runs when it is about to expire.
+					oneDrive.createOrRenewSubscription();
+
+					// Process incoming notifications if any.
+
+					// Empirical evidence shows that Microsoft often sends multiple
+					// notifications for one single change, so we need a loop to exhaust
+					// all signals that were queued up by the webhook. The notifications
+					// do not contain any actual changes, and we will always rely do the
+					// delta endpoint to sync to latest. Therefore, only one sync run is
+					// good enough to catch up for multiple notifications.
+					for (int signalCount = 0;; signalCount++) {
+						const auto signalExists = receiveTimeout(dur!"seconds"(-1), (ulong _) => {});
+						if (signalExists) {
+							notificationReceived = true;
+						} else {
+							if (notificationReceived) {
+								log.log("Received ", signalCount," refresh signals from the webhook");
+							}
+							break;
 						}
-						break;
 					}
 				}
 
