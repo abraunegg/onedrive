@@ -131,16 +131,15 @@ This issue is being tracked by: [#1274](https://github.com/abraunegg/onedrive/is
 Do not rely on this symbolic link for your systemd configuration to automatically start your onedrive client - refer to [Running 'onedrive' as a system service](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#running-onedrive-as-a-system-service) on how to configure this correctly.
 
 
-### 2. On Ubuntu 20.04 the client will segfault | core-dump when exiting
+### 2. The client will segfault | core-dump when exiting
 When the client is being run in `--monitor` mode manually, or when using the systemd service, the client will segfault on exit.
 
-This issue is caused by the way the Ubuntu packages are built, because of using the Ubuntu LDC package `ldc-1:1.20.1-1` which is the root cause. Refer to: https://bugs.launchpad.net/ubuntu/+source/ldc/+bug/1895969
+This issue is caused by the way the Ubuntu 'onedrive' packages are built using the Ubuntu LDC package & compiler options which is the root cause for this issue. Refer to: https://bugs.launchpad.net/ubuntu/+source/ldc/+bug/1895969
 
 **Additional references:**
 *  https://github.com/abraunegg/onedrive/issues/1053
 *  https://github.com/abraunegg/onedrive/issues/1609
 
 **Resolution Options:**
-*  Upgrade to Ubuntu 20.10 or Ubuntu 21.x
 *  Uninstall the package and build client from source
 
