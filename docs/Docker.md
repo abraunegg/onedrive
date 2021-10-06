@@ -59,7 +59,11 @@ Run the docker image with the commands below and make sure to change `ONEDRIVE_D
 ```bash
 export ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
 mkdir -p ${ONEDRIVE_DATA_DIR}
-docker run -it --name onedrive -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" -e "ONEDRIVE_UID:${ONEDRIVE_UID}" -e "ONEDRIVE_GID:${ONEDRIVE_GID}" driveone/onedrive:latest
+docker run -it --name onedrive -v onedrive_conf:/onedrive/conf \
+    -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" \
+    -e "ONEDRIVE_UID:${ONEDRIVE_UID}" \
+    -e "ONEDRIVE_GID:${ONEDRIVE_GID}" \
+    driveone/onedrive:latest
 ```
 **NOTE:** It is also highly advisable for you to replace `${ONEDRIVE_UID}` and `${ONEDRIVE_GID}` with your actual UID and GID as specified by your `id` command output to avoid any any potential user or group conflicts.
 
@@ -70,7 +74,12 @@ ROOT level privileges prohibited!
 
 **Example:**
 ```
-docker run -it --name onedrive -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" -e "ONEDRIVE_UID:1000" -e "ONEDRIVE_GID:1000" driveone/onedrive:latest
+export ONEDRIVE_UID=`id -u`
+export ONEDRIVE_GID=`id -g`
+docker run -it --name onedrive -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" \
+    -e "ONEDRIVE_UID:${ONEDRIVE_UID}" \
+    -e "ONEDRIVE_GID:${ONEDRIVE_GID}" \
+    driveone/onedrive:latest
 ```
 
 When the Docker container successfully starts:
