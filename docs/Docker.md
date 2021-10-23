@@ -61,8 +61,8 @@ export ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
 mkdir -p ${ONEDRIVE_DATA_DIR}
 docker run -it --name onedrive -v onedrive_conf:/onedrive/conf \
     -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" \
-    -e "ONEDRIVE_UID:${ONEDRIVE_UID}" \
-    -e "ONEDRIVE_GID:${ONEDRIVE_GID}" \
+    -e "ONEDRIVE_UID=${ONEDRIVE_UID}" \
+    -e "ONEDRIVE_GID=${ONEDRIVE_GID}" \
     driveone/onedrive:latest
 ```
 **Important:** The 'target' folder of `ONEDRIVE_DATA_DIR` must exist before running the Docker container, otherwise, Docker will create the target folder, and the folder will be given 'root' permissions, which then causes the Docker container to fail upon startup with the following error message:
@@ -77,9 +77,10 @@ export ONEDRIVE_UID=`id -u`
 export ONEDRIVE_GID=`id -g`
 export ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
 mkdir -p ${ONEDRIVE_DATA_DIR}
-docker run -it --name onedrive -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" \
-    -e "ONEDRIVE_UID:${ONEDRIVE_UID}" \
-    -e "ONEDRIVE_GID:${ONEDRIVE_GID}" \
+docker run -it --name onedrive -v onedrive_conf:/onedrive/conf \
+    -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" \
+    -e "ONEDRIVE_UID=${ONEDRIVE_UID}" \
+    -e "ONEDRIVE_GID=${ONEDRIVE_GID}" \
     driveone/onedrive:latest
 ```
 
