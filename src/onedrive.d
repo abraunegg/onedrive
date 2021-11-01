@@ -433,7 +433,7 @@ final class OneDriveApi
 	{
 		import std.stdio, std.regex;
 		char[] response;
-		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.Read.All%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=" ~ redirectUrl;
+		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.Read.All%20Sites.ReadWrite.All%20offline_access&response_type=code&prompt=login&redirect_uri=" ~ redirectUrl;
 		string authFilesString = cfg.getValueString("auth_files");
 		if (authFilesString == "") {
 			log.log("Authorize this app visiting:\n");

@@ -61,24 +61,26 @@ export ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
 mkdir -p ${ONEDRIVE_DATA_DIR}
 docker run -it --name onedrive -v onedrive_conf:/onedrive/conf \
     -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" \
-    -e "ONEDRIVE_UID:${ONEDRIVE_UID}" \
-    -e "ONEDRIVE_GID:${ONEDRIVE_GID}" \
+    -e "ONEDRIVE_UID=${ONEDRIVE_UID}" \
+    -e "ONEDRIVE_GID=${ONEDRIVE_GID}" \
     driveone/onedrive:latest
 ```
-**NOTE:** It is also highly advisable for you to replace `${ONEDRIVE_UID}` and `${ONEDRIVE_GID}` with your actual UID and GID as specified by your `id` command output to avoid any any potential user or group conflicts.
-
 **Important:** The 'target' folder of `ONEDRIVE_DATA_DIR` must exist before running the Docker container, otherwise, Docker will create the target folder, and the folder will be given 'root' permissions, which then causes the Docker container to fail upon startup with the following error message:
 ```bash
 ROOT level privileges prohibited!
 ```
+**NOTE:** It is also highly advisable for you to replace `${ONEDRIVE_UID}` and `${ONEDRIVE_GID}` with your actual UID and GID as specified by your `id` command output to avoid any any potential user or group conflicts.
 
 **Example:**
-```
+```bash
 export ONEDRIVE_UID=`id -u`
 export ONEDRIVE_GID=`id -g`
-docker run -it --name onedrive -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" \
-    -e "ONEDRIVE_UID:${ONEDRIVE_UID}" \
-    -e "ONEDRIVE_GID:${ONEDRIVE_GID}" \
+export ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
+mkdir -p ${ONEDRIVE_DATA_DIR}
+docker run -it --name onedrive -v onedrive_conf:/onedrive/conf \
+    -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" \
+    -e "ONEDRIVE_UID=${ONEDRIVE_UID}" \
+    -e "ONEDRIVE_GID=${ONEDRIVE_GID}" \
     driveone/onedrive:latest
 ```
 
