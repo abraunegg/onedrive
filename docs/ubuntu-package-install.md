@@ -117,7 +117,7 @@ deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-on
 ## Known Issues with Installing from the above packages
 
 ### 1. The 'onedrive' client will automatically startup post 'authentication' without any further actions.
-The 'onedrive' client will automatically startup post 'authentication' without any further actions. In some circumstances this may be highly undesirable.
+The 'onedrive' client will automatically startup post 'authentication' without any further actions. In some circumstances this may be highly undesirable and can also lead to data loss.
 
 This is because, when the package is installed, the following symbolic link is created:
 ```text
@@ -126,18 +126,20 @@ Created symlink /etc/systemd/user/default.target.wants/onedrive.service → /usr
 
 This issue is being tracked by: [#1274](https://github.com/abraunegg/onedrive/issues/1274)
 
-If you do not wish the client to automatically start without your explicit configuration, you must remove this symbolic link. It is highly advisable that you remove this symbolic link as this could lead to multiple copies of the client running, leading to sync conflics and operational issues.
+**Important:** It is highly advisable that you remove this symbolic link before you configure or authenticate your client. If you do not remove this symbolic link before you configure or authenticate your client this could lead to multiple copies of the client running, leading to sync conflics and operational issues which may include data loss (data deleted locally & on OneDrive).
 
-### 2. On Ubuntu 20.04 the client will segfault | core-dump when exiting
+Do not rely on this symbolic link for your systemd configuration to automatically start your onedrive client - refer to [Running 'onedrive' as a system service](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#running-onedrive-as-a-system-service) on how to configure this correctly.
+
+
+### 2. The client will segfault | core-dump when exiting
 When the client is being run in `--monitor` mode manually, or when using the systemd service, the client will segfault on exit.
 
-This issue is caused by the way the Ubuntu packages are built, because of using the Ubuntu LDC package `ldc-1:1.20.1-1` which is the root cause. Refer to: https://bugs.launchpad.net/ubuntu/+source/ldc/+bug/1895969
+This issue is caused by the way the Ubuntu 'onedrive' packages are built using the Ubuntu LDC package & compiler options which is the root cause for this issue. Refer to: https://bugs.launchpad.net/ubuntu/+source/ldc/+bug/1895969
 
 **Additional references:**
 *  https://github.com/abraunegg/onedrive/issues/1053
 *  https://github.com/abraunegg/onedrive/issues/1609
 
 **Resolution Options:**
-*  Upgrade to Ubuntu 20.10 or Ubuntu 21.x
 *  Uninstall the package and build client from source
 

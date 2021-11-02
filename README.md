@@ -23,6 +23,8 @@ This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) cl
 *   Dry-run capability to test configuration changes
 *   Prevent major OneDrive accidental data deletion after configuration change
 *   Support for National cloud deployments (Microsoft Cloud for US Government, Microsoft Cloud Germany, Azure and Office 365 operated by 21Vianet in China)
+*   Supports single & multi-tenanted applications
+*   Supports rate limiting of traffic
 
 ## What's missing
 *   While local changes are uploaded right away, remote changes are delayed until next automated sync cycle when using --monitor

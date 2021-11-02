@@ -43,7 +43,7 @@
   * [OneDrive service running as a non-root user via systemd (with notifications enabled) (Arch, Ubuntu, Debian, OpenSuSE, Fedora)](#onedrive-service-running-as-a-non-root-user-via-systemd-with-notifications-enabled-arch-ubuntu-debian-opensuse-fedora)
   * [OneDrive service running as a non-root user via runit (antiX, Devuan, Artix, Void)](#onedrive-service-running-as-a-non-root-user-via-runit-antix-devuan-artix-void)
 - [Additional Configuration](#additional-configuration)
-  * [Using multiple OneDrive accounts](#using-multiple-onedrive-accounts)
+  * [Advanced Configuration of the OneDrive Free Client](#advanced-configuration-of-the-onedrive-free-client)
   * [Access OneDrive service through a proxy](#access-onedrive-service-through-a-proxy)
   * [Setup selinux for a sync folder outside of the home folder](#setup-selinux-for-a-sync-folder-outside-of-the-home-folder)
 - [All available commands](#all-available-commands)
@@ -853,7 +853,11 @@ You may refer to Void's documentation regarding
 for extra details.
 
 ## Additional Configuration
-### Using multiple OneDrive accounts
+### Advanced Configuration of the OneDrive Free Client
+*   Configuring the client to use mulitple OneDrive accounts / configurations
+*   Configuring the client for use in dual-boot (Windows / Linux) situations
+*   Configuring the client for use when 'sync_dir' is a mounted directory
+ 
 Refer to [./advanced-usage.md](advanced-usage.md) for configuration assistance.
 
 ### Access OneDrive service through a proxy
