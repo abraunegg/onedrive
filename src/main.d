@@ -518,22 +518,26 @@ int main(string[] args)
 		log.logAndNotify(provideLanguageTranslation(languageIdentifier,18));
 		cfg.setValueBool("resync", true);
 	}
+
+	// Handle --logout as separate item, do not 'resync' on a --logout / reauth
+	if (cfg.getValueBool("logout")) {
+		// log action
+		log.vdebug("--logout requested");
+		if (!cfg.getValueBool("dry_run")) {
+			safeRemove(cfg.refreshTokenFilePath);
+		}
+	}
 	
-	// Handle --resync and --logout to remove local files
-	if (cfg.getValueBool("resync") || cfg.getValueBool("logout")) {
-		if (cfg.getValueBool("resync")) log.vdebug("--resync requested");
+	// Handle --resync to remove local files
+	if (cfg.getValueBool("resync")) {
+		// log action
+		log.vdebug("--resync requested");
 		// "Deleting the saved status ..."
 		log.vlog(provideLanguageTranslation(languageIdentifier,19));
 		if (!cfg.getValueBool("dry_run")) {
 			safeRemove(cfg.databaseFilePath);
 			safeRemove(cfg.deltaLinkFilePath);
 			safeRemove(cfg.uploadStateFilePath);
-		}
-		if (cfg.getValueBool("logout")) {
-			log.vdebug("--logout requested");
-			if (!cfg.getValueBool("dry_run")) {
-				safeRemove(cfg.refreshTokenFilePath);
-			}
 		}
 	}
 	

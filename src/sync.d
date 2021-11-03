@@ -4707,10 +4707,7 @@ final class SyncEngine
 				}
 			} else {
 				// response is not valid JSON, an error was returned from OneDrive
-				// "ERROR: There was an error performing this operation on OneDrive"
-				log.error(provideLanguageTranslation(languageIdentifier,237));
-				// "ERROR: Increase logging verbosity to assist determining why."
-				log.error(provideLanguageTranslation(languageIdentifier,238));
+				displayInvalidJSONObjectLogMessage();
 				//"Skipping: ", buildNormalizedPath(absolutePath(path))
 				log.log(provideLanguageTranslation(languageIdentifier,236), buildNormalizedPath(absolutePath(path)));
 				return;
@@ -5700,7 +5697,7 @@ final class SyncEngine
 	// delete an item on OneDrive
 	private void uploadDeleteItem(Item item, const(string) path)
 	{
-		\\ "Deleting item from OneDrive:"
+		// "Deleting item from OneDrive:"
 		log.log(provideLanguageTranslation(languageIdentifier,261), path);
 		bool flagAsBigDelete = false;
 		
@@ -6063,7 +6060,8 @@ final class SyncEngine
 			}
 		}
 		if (!itemInDB) {
-			throw new SyncException("The item to delete is not in the local database");
+			// "Item cannot be deleted from OneDrive because it was not found in the local database"
+			throw new SyncException(provideLanguageTranslation(languageIdentifier,56));
 		}
 		
 		if (item.parentId == null) {
@@ -6073,13 +6071,24 @@ final class SyncEngine
 		try {
 			if (noRemoteDelete) {
 				// do not process remote delete
-				log.vlog("Skipping remote delete as --upload-only & --no-remote-delete configured");
+				if (isDir(path)) {
+					// directory - needs directory message
+					// "Skipping remote directory delete as --upload-only & --no-remote-delete configured"
+					log.vlog(provideLanguageTranslation(languageIdentifier,194));
+				} else {
+					// file - needs file message
+					// "Skipping remote file delete as --upload-only & --no-remote-delete configured"
+					log.vlog(provideLanguageTranslation(languageIdentifier,207));
+				}
 			} else {
 				uploadDeleteItem(item, path);
 			}
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 404) {
-				log.log(e.msg);
+				// item to delete cannot be found
+				log.log(provideLanguageTranslation(languageIdentifier,264));
+				// debug output of actual error from OneDrive API
+				log.vdebug(e.msg);
 			} else {
 				// display what the error is
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
@@ -6090,7 +6099,8 @@ final class SyncEngine
 	// move a OneDrive folder from one name to another
 	void moveByPath(const(string) source, const(string) destination)
 	{
-		log.vlog("Moving remote folder: ", source, " -> ", destination);
+		// "Moving remote folder: ", source, " -> ", destination
+		log.vlog(provideLanguageTranslation(languageIdentifier,273), source, " -> ", destination);
 		
 		// Source and Destination are relative to ~/OneDrive
 		string sourcePath = source;
@@ -6129,17 +6139,19 @@ final class SyncEngine
 		JSONValue siteQuery;
 		string nextLink;
 		string[] siteSearchResults;
-		
-		log.log("Office 365 Library Name Query: ", o365SharedLibraryName);
+		// "Office 365 Library Name Query: ", o365SharedLibraryName
+		log.log(provideLanguageTranslation(languageIdentifier,274), o365SharedLibraryName);
 		
 		for (;;) {
 			try {
 				siteQuery = onedrive.o365SiteSearch(nextLink);
 			} catch (OneDriveException e) {
-				log.error("ERROR: Query of OneDrive for Office 365 Library Name failed");
+				// "ERROR: Query of OneDrive for Office 365 Library Name failed"
+				log.error(provideLanguageTranslation(languageIdentifier,275));
 				if (e.httpStatusCode == 403) {
 					// Forbidden - most likely authentication scope needs to be updated
-					log.error("ERROR: Authentication scope needs to be updated. Use --logout and re-authenticate client.");
+					// "ERROR: Authentication scope needs to be updated. Use --logout and re-authenticate client."
+					log.error(provideLanguageTranslation(languageIdentifier,276));
 					return;
 				}
 				// HTTP request returned status code 429 (Too Many Requests)
@@ -6196,7 +6208,8 @@ final class SyncEngine
 							try {
 								siteDriveQuery = onedrive.o365SiteDrives(site_id);
 							} catch (OneDriveException e) {
-								log.error("ERROR: Query of OneDrive for Office Site ID failed");
+								// "ERROR: Query of OneDrive for Office Site ID failed"
+								log.error(provideLanguageTranslation(languageIdentifier,277));
 								// display what the error is
 								displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 								return;
@@ -6210,6 +6223,7 @@ final class SyncEngine
 									writeln("-----------------------------------------------");
 									log.vdebug("Site Details: ", driveResult);
 									found = true;
+									// No language translation for these
 									writeln("Site Name:    ", searchResult["displayName"].str);
 									writeln("Library Name: ", driveResult["name"].str);
 									writeln("drive_id:     ", driveResult["id"].str);
@@ -6218,15 +6232,15 @@ final class SyncEngine
 								// closeout
 								writeln("-----------------------------------------------");
 							} else {
-								// not a valid JSON object
-								log.error("ERROR: There was an error performing this operation on OneDrive");
-								log.error("ERROR: Increase logging verbosity to assist determining why.");
+								// response is not valid JSON, an error was returned from OneDrive
+								displayInvalidJSONObjectLogMessage();
 								return;
 							}
 						}
 					} else {
 						// 'displayName', 'id' or ''webUrl' not present in JSON results for a specific site
-						string siteNameAvailable = "Site 'name' was restricted by OneDrive API permissions";
+						// "Site 'name' was restricted by OneDrive API permissions"
+						string siteNameAvailable = provideLanguageTranslation(languageIdentifier,278);
 						bool displayNameAvailable = false;
 						bool idAvailable = false;
 						if ("name" in searchResult) siteNameAvailable = searchResult["name"].str;
@@ -6234,12 +6248,18 @@ final class SyncEngine
 						if ("id" in searchResult) idAvailable = true;
 						
 						// Display error details for this site data
-						log.error("\nERROR: SharePoint Site details not provided for: ", siteNameAvailable);
-						log.error("ERROR: The SharePoint Site results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator.");
-						log.error("ERROR: Your site security settings is preventing the following details from being accessed: 'displayName' or 'id'");
-						log.vlog(" - Is 'displayName' available = ", displayNameAvailable);
-						log.vlog(" - Is 'id' available          = ", idAvailable);
-						log.error("ERROR: To debug this further, please increase verbosity (--verbose or --verbose --verbose) to provide further insight as to what details are actually being returned.");
+						// "\nERROR: SharePoint Site details not provided for: "
+						log.error(provideLanguageTranslation(languageIdentifier,279), siteNameAvailable);
+						// "ERROR: The SharePoint Site results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator."
+						log.error(provideLanguageTranslation(languageIdentifier,280));
+						// "ERROR: Your site security settings is preventing the following details from being accessed: 'displayName' or 'id'"
+						log.error(provideLanguageTranslation(languageIdentifier,281));
+						// " - Is 'displayName' available = "
+						log.vlog(provideLanguageTranslation(languageIdentifier,282), displayNameAvailable);
+						// " - Is 'id' available          = "
+						log.vlog(provideLanguageTranslation(languageIdentifier,283), idAvailable);
+						// "ERROR: To debug this further, please increase verbosity (--verbose or --verbose --verbose) to provide further insight as to what details are actually being returned."
+						log.error(provideLanguageTranslation(languageIdentifier,284));
 					}
 				}
 				
@@ -6256,7 +6276,8 @@ final class SyncEngine
 						} else {
 							// Add, but indicate displayName unavailable, use id
 							if ("id" in searchResult) {
-								siteSearchResultsEntry = " * " ~ "Unknown displayName (Data not provided by API), Site ID: " ~ searchResult["id"].str;
+								// " * " ~ "Unknown displayName (Data not provided by API), Site ID: " ~ searchResult["id"].str;
+								siteSearchResultsEntry = " * " ~ provideLanguageTranslation(languageIdentifier,285) ~ searchResult["id"].str;
 								siteSearchResults ~= siteSearchResultsEntry;
 							} else {
 								// displayName and id unavailable, display in debug log the entry
@@ -6266,9 +6287,8 @@ final class SyncEngine
 					}
 				}
 			} else {
-				// not a valid JSON object
-				log.error("ERROR: There was an error performing this operation on OneDrive");
-				log.error("ERROR: Increase logging verbosity to assist determining why.");
+				// response is not valid JSON, an error was returned from OneDrive
+				displayInvalidJSONObjectLogMessage();
 				return;
 			}
 			
@@ -6283,9 +6303,11 @@ final class SyncEngine
 		
 		// Was the intended target found?
 		if(!found) {
-			log.error("\nERROR: The requested SharePoint site could not be found. Please check it's name and your permissions to access the site.");
+			// "\nERROR: The requested SharePoint site could not be found. Please check it's name and your permissions to access the site."
+			log.error(provideLanguageTranslation(languageIdentifier,286));
 			// List all sites returned to assist user
-			log.log("\nThe following SharePoint site names were returned:");
+			// "\nThe following SharePoint site names were returned:"
+			log.log(provideLanguageTranslation(languageIdentifier,287));
 			foreach (searchResultEntry; siteSearchResults) {
 				// list the display name that we use to match against the user query
 				log.log(searchResultEntry);
@@ -6309,7 +6331,8 @@ final class SyncEngine
 			log.vdebug("onedrivePathDetails = onedrive.getPathDetails(filePath); generated a OneDriveException");
 			if (e.httpStatusCode == 404) {
 				// Requested path could not be found
-				log.error("ERROR: The requested path to query was not found on OneDrive");
+				// "ERROR: The requested path to query was not found on OneDrive"
+				log.error(provideLanguageTranslation(languageIdentifier,288));
 				return;
 			}
 			
@@ -6355,19 +6378,27 @@ final class SyncEngine
 			if ((createShareableLinkResponse.type() == JSONType.object) && ("link" in createShareableLinkResponse)) {
 				// Extract the file share link from the JSON response
 				fileShareLink = createShareableLinkResponse["link"]["webUrl"].str;
-				writeln("File Shareable Link: ", fileShareLink);
+				// "File Shareable Link: ", fileShareLink
+				writeln(provideLanguageTranslation(languageIdentifier,289), fileShareLink);
 			} else {
-				// not a valid JSON object
-				log.error("ERROR: There was an error performing this operation on OneDrive");
-				log.error("ERROR: Increase logging verbosity to assist determining why.");
+				// response is not valid JSON, an error was returned from OneDrive
+				displayInvalidJSONObjectLogMessage();
 				return;
 			}
 		} else {
-			// not a valid JSON object
-			log.error("ERROR: There was an error performing this operation on OneDrive");
-			log.error("ERROR: Increase logging verbosity to assist determining why.");
+			// response is not valid JSON, an error was returned from OneDrive
+			displayInvalidJSONObjectLogMessage();
 			return;
 		} 
+	}
+	
+	// Error message to display when OneDrive generates an error performing an operation, generating an invalid JSON object
+	void displayInvalidJSONObjectLogMessage()
+	{
+		// "ERROR: There was an error performing this operation on OneDrive"
+		log.error(provideLanguageTranslation(languageIdentifier,237));
+		// "ERROR: Increase logging verbosity to assist determining why."
+		log.error(provideLanguageTranslation(languageIdentifier,238));
 	}
 	
 	// Query OneDrive for a URL path of a file
@@ -6403,11 +6434,13 @@ final class SyncEngine
 			// was file found?
 			if (!fileInDB) {
 				// File has not been synced with OneDrive
-				log.error("File has not been synced with OneDrive: ", localFilePath);
+				// "File has not been synced with OneDrive: ", localFilePath
+				log.error(provideLanguageTranslation(languageIdentifier,290), localFilePath);
 			}
 		} else {
 			// File does not exist locally
-			log.error("File not found on local system: ", localFilePath);
+			// "File not found on local filesystem: ", localFilePath
+			log.error(provideLanguageTranslation(languageIdentifier,291), localFilePath);
 		}
 	}
 	
@@ -6436,7 +6469,8 @@ final class SyncEngine
 			log.vdebug("onedrivePathDetails = onedrive.getPathDetails(path); generated a OneDriveException");
 			if (e.httpStatusCode == 404) {
 				// Requested path could not be found
-				log.error("ERROR: The requested path to query was not found on OneDrive");
+				// "ERROR: The requested path to query was not found on OneDrive"
+				log.error(provideLanguageTranslation(languageIdentifier,288));
 				return;
 			}
 			
@@ -6560,16 +6594,20 @@ final class SyncEngine
 				}
 				// Are there any valid changes?
 				if (validChanges != 0){
-					writeln("Selected directory is out of sync with OneDrive");
+					// "Selected directory is out of sync with OneDrive"
+					writeln(provideLanguageTranslation(languageIdentifier,292));
 					if (downloadSize > 0){
 						downloadSize = downloadSize / 1000;
-						writeln("Approximate data to download from OneDrive: ", downloadSize, " KB");
+						// "Approximate data to download from OneDrive: ", downloadSize, " KB"
+						writeln(provideLanguageTranslation(languageIdentifier,293), downloadSize, " KB");
 					}
 				} else {
-					writeln("No pending remote changes - selected directory is in sync");
+					// "No pending remote changes - selected directory is in sync"
+					writeln(provideLanguageTranslation(languageIdentifier,294));
 				}
 			} else {
-				writeln("Local directory is out of sync with OneDrive");
+				// "Local directory is out of sync with OneDrive"
+				writeln(provideLanguageTranslation(languageIdentifier,295));
 				foreach (item; changes["value"].array) {
 					if ((isItemFile(item)) && (hasFileSize(item))) {
 						downloadSize = downloadSize + item["size"].integer;
@@ -6577,11 +6615,13 @@ final class SyncEngine
 				}
 				if (downloadSize > 0){
 					downloadSize = downloadSize / 1000;
-					writeln("Approximate data to download from OneDrive: ", downloadSize, " KB");
+					// "Approximate data to download from OneDrive: ", downloadSize, " KB"
+					writeln(provideLanguageTranslation(languageIdentifier,293), downloadSize, " KB");
 				}
 			}
 		} else {
-			writeln("No pending remote changes - in sync");
+			// "No pending remote changes - in sync"
+			writeln(provideLanguageTranslation(languageIdentifier,296));
 		}
 	}
 	
@@ -6677,6 +6717,7 @@ final class SyncEngine
 		return fakeResponse;
 	}
 	
+	// Handle OneDrive sending a 429 response to retry-after
 	void handleOneDriveThrottleRequest()
 	{
 		// If OneDrive sends a status code 429 then this function will be used to process the Retry-After response header which contains the value by which we need to wait
@@ -6702,8 +6743,10 @@ final class SyncEngine
 		}
 		
 		// Sleep thread as per request
-		log.log("Thread sleeping due to 'HTTP request returned status code 429' - The request has been throttled");
-		log.log("Sleeping for ", delayBeforeRetry, " seconds");
+		// "Thread sleeping due to 'HTTP request returned status code 429' - The request has been throttled"
+		log.log(provideLanguageTranslation(languageIdentifier,297));
+		// "Sleeping for ", delayBeforeRetry, " seconds"
+		log.log(provideLanguageTranslation(languageIdentifier,298), delayBeforeRetry, provideLanguageTranslation(languageIdentifier,299));
 		Thread.sleep(dur!"seconds"(delayBeforeRetry));
 		
 		// Reset retry-after value to zero as we have used this value now and it may be changed in the future to a different value
@@ -6777,12 +6820,14 @@ final class SyncEngine
 				}
 			}
 			// Add driveData JSON data to array
-			log.vlog("Adding OneDrive root details for processing");
+			// "Adding OneDrive root details for processing"
+			log.vlog(provideLanguageTranslation(languageIdentifier,300));
 			childrenData ~= rootData;
 		}
 		
 		// Add driveData JSON data to array
-		log.vlog("Adding OneDrive folder details for processing");
+		// "Adding OneDrive folder details for processing"
+		log.vlog(provideLanguageTranslation(languageIdentifier,301));
 		childrenData ~= driveData;
 		
 		for (;;) {
