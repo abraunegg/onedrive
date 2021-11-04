@@ -1527,7 +1527,7 @@ final class SyncEngine
 						// If an error is returned when querying 'changes' and we recall the original function, we go into a never ending loop where the sync never ends
 						// re-try the specific changes queries	
 						if (e.httpStatusCode == 504) {
-							// "OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query the OneDrive API - retrying applicable request"
+							// OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query the OneDrive API - retrying applicable request
 							log.log(provideLanguageTranslation(languageIdentifier,124));
 							log.vdebug("changes = generateDeltaResponse(driveId, idToQuery) previously threw an error - retrying");
 							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
@@ -1608,7 +1608,7 @@ final class SyncEngine
 						// If an error is returned when querying 'changes' and we recall the original function, we go into a never ending loop where the sync never ends
 						// re-try the specific changes queries	
 						if (e.httpStatusCode == 504) {
-							// "OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query the OneDrive API - retrying applicable request"
+							// OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query the OneDrive API - retrying applicable request
 							log.log(provideLanguageTranslation(languageIdentifier,124));
 							log.vdebug("changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink) previously threw an error - retrying");
 							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
@@ -1625,7 +1625,7 @@ final class SyncEngine
 							// display what the error is
 							log.vdebug("Query Error: changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink) on re-try after delay");
 							if (e.httpStatusCode == 504) {
-								// "OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query the OneDrive API - retrying applicable request"
+								// OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query the OneDrive API - retrying applicable request
 								log.log(provideLanguageTranslation(languageIdentifier,124));
 								log.vdebug("changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink) previously threw an error - retrying with empty deltaLink");
 								try {
@@ -1714,7 +1714,7 @@ final class SyncEngine
 						// If an error is returned when querying 'changes' and we recall the original function, we go into a never ending loop where the sync never ends
 						// re-try the specific changes queries	
 						if (e.httpStatusCode == 504) {
-							// "OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query the OneDrive API - retrying applicable request"
+							// OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query the OneDrive API - retrying applicable request
 							log.log(provideLanguageTranslation(languageIdentifier,124));
 							log.vdebug("changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying");
 							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
@@ -1731,7 +1731,7 @@ final class SyncEngine
 							// display what the error is
 							log.vdebug("Query Error: changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) on re-try after delay");
 							if (e.httpStatusCode == 504) {
-								// "OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query the OneDrive API - retrying applicable request"
+								// OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query the OneDrive API - retrying applicable request
 								log.log(provideLanguageTranslation(languageIdentifier,124));
 								log.vdebug("changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying with empty deltaLinkAvailable");
 								try {
@@ -3689,7 +3689,7 @@ final class SyncEngine
 												// "skipped."
 												writeln(provideLanguageTranslation(languageIdentifier,198));
 												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+												log.vlog(provideLanguageTranslation(languageIdentifier,312));
 												uploadFailed = true;
 												return;
 											}
@@ -3697,9 +3697,10 @@ final class SyncEngine
 												// caught an error, write out we are skipping this item
 												// "skipped."
 												writeln(provideLanguageTranslation(languageIdentifier,198));
-												// HTTP request returned status code 404 - the eTag provided does not exist
+												// HTTP request returned status code 404 - the eTag provided does not exist on OneDrive
 												// Delete record from the local database - file will be uploaded as a new file
-												log.vlog("OneDrive returned a 'HTTP 404 - eTag Issue' - gracefully handling error");
+												// "OneDrive returned a 'HTTP 404 - item eTag does not exist' - gracefully handling error"
+												log.vlog(provideLanguageTranslation(languageIdentifier,314));
 												itemdb.deleteById(item.driveId, item.id);
 												uploadFailed = true;
 												return;
@@ -3724,7 +3725,8 @@ final class SyncEngine
 												writeln(provideLanguageTranslation(languageIdentifier,198));
 												// HTTP request returned status code 412 - ETag does not match current item's value
 												// Delete record from the local database - file will be uploaded as a new file
-												log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
+												// "OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file."
+												log.vlog(provideLanguageTranslation(languageIdentifier,316));
 												log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue (Personal Account)");
 												itemdb.deleteById(item.driveId, item.id);
 												uploadFailed = true;
@@ -3732,9 +3734,9 @@ final class SyncEngine
 											}
 											if (e.httpStatusCode == 504) {
 												// HTTP request returned status code 504 (Gateway Timeout)
-												log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request as a session");
-												// Try upload as a session
-												response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+												log.log(provideLanguageTranslation(languageIdentifier,124));
+												// Retry original action
+												response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
 											} else {
 												// caught an error, write out we are skipping this item
 												// "skipped."
@@ -3765,7 +3767,7 @@ final class SyncEngine
 												// "skipped."
 												writeln(provideLanguageTranslation(languageIdentifier,198));
 												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+												log.vlog(provideLanguageTranslation(languageIdentifier,312));
 												uploadFailed = true;
 												return;
 											}
@@ -3775,7 +3777,8 @@ final class SyncEngine
 												writeln(provideLanguageTranslation(languageIdentifier,198));
 												// HTTP request returned status code 412 - ETag does not match current item's value
 												// Delete record from the local database - file will be uploaded as a new file
-												log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
+												// "OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file."
+												log.vlog(provideLanguageTranslation(languageIdentifier,316));
 												log.vdebug("Session Upload Replace Failed - OneDrive eTag / cTag match issue (Personal Account)");
 												itemdb.deleteById(item.driveId, item.id);
 												uploadFailed = true;
@@ -3842,7 +3845,7 @@ final class SyncEngine
 												// "skipped."
 												writeln(provideLanguageTranslation(languageIdentifier,198));
 												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+												log.vlog(provideLanguageTranslation(languageIdentifier,312));
 												uploadFailed = true;
 												return;
 											}
@@ -3866,7 +3869,8 @@ final class SyncEngine
 												writeln(provideLanguageTranslation(languageIdentifier,198));
 												// HTTP request returned status code 412 - ETag does not match current item's value
 												// Delete record from the local database - file will be uploaded as a new file
-												log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
+												// "OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file."
+												log.vlog(provideLanguageTranslation(languageIdentifier,316));
 												log.vdebug("Session Upload Replace Failed - OneDrive eTag / cTag match issue (Business Account)");
 												itemdb.deleteById(item.driveId, item.id);
 												uploadFailed = true;
@@ -4081,7 +4085,7 @@ final class SyncEngine
 					// "skipped."
 					writeln(provideLanguageTranslation(languageIdentifier,198));
 					// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-					log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+					log.vlog(provideLanguageTranslation(languageIdentifier,312));
 					uploadFailed = true;
 					return response;
 				}
@@ -4105,7 +4109,8 @@ final class SyncEngine
 					writeln(provideLanguageTranslation(languageIdentifier,198));
 					// HTTP request returned status code 412 - ETag does not match current item's value
 					// Delete record from the local database - file will be uploaded as a new file
-					log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
+					// "OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file."
+					log.vlog(provideLanguageTranslation(languageIdentifier,316));
 					log.vdebug("Session Upload Replace Failed - OneDrive eTag / cTag match issue (Sharepoint Library)");
 					itemdb.deleteById(item.driveId, item.id);
 					uploadFailed = true;
@@ -4809,7 +4814,8 @@ final class SyncEngine
 						if (e.httpStatusCode == 400) {
 							// "Skipping uploading this new file: ", buildNormalizedPath(absolutePath(path))
 							log.log(provideLanguageTranslation(languageIdentifier,239), buildNormalizedPath(absolutePath(path)));
-							log.vlog("Skipping item - OneDrive returned a 'HTTP 400 - Bad Request' when attempting to query if file exists");
+							// "Skipping item - OneDrive returned a 'HTTP 400 - Bad Request' when attempting to query if file exists"
+							log.vlog(provideLanguageTranslation(languageIdentifier,319));
 							// "ERROR: To resolve, rename this local file: ", buildNormalizedPath(absolutePath(path))
 							log.error(provideLanguageTranslation(languageIdentifier,240), buildNormalizedPath(absolutePath(path)));
 							uploadFailed = true;
@@ -4817,7 +4823,8 @@ final class SyncEngine
 						}
 						// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error'
 						if (e.httpStatusCode == 401) {
-							log.vlog("Skipping item - OneDrive returned a 'HTTP 401 - Unauthorized' when attempting to query if file exists");
+							// "Skipping item - OneDrive returned a 'HTTP 401 - Unauthorized' when attempting to query if file exists"
+							log.vlog(provideLanguageTranslation(languageIdentifier,313));
 							uploadFailed = true;
 							return;
 						}
@@ -4853,7 +4860,7 @@ final class SyncEngine
 											// "skipped."
 											writeln(provideLanguageTranslation(languageIdentifier,198));
 											// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-											log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+											log.vlog(provideLanguageTranslation(languageIdentifier,312));
 											uploadFailed = true;
 											return;
 										}
@@ -4867,7 +4874,7 @@ final class SyncEngine
 										}
 										if (e.httpStatusCode == 504) {
 											// HTTP request returned status code 504 (Gateway Timeout)
-											log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
+											log.log(provideLanguageTranslation(languageIdentifier,124));
 											// Retry original request by calling function again to avoid replicating any further error handling
 											uploadNewFile(path);
 											// return back to original call
@@ -4907,7 +4914,7 @@ final class SyncEngine
 													// "skipped."
 													writeln(provideLanguageTranslation(languageIdentifier,198));
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													log.vlog(provideLanguageTranslation(languageIdentifier,312));
 													uploadFailed = true;
 													return;
 												}
@@ -4923,7 +4930,7 @@ final class SyncEngine
 												
 												if (e.httpStatusCode == 504) {
 													// HTTP request returned status code 504 (Gateway Timeout)
-													log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request as a session");
+													log.log(provideLanguageTranslation(languageIdentifier,124));
 													// Try upload as a session
 													try {
 														response = session.upload(path, parent.driveId, parent.id, baseName(path));
@@ -4974,7 +4981,7 @@ final class SyncEngine
 													// caught an error, write out we are skipping this item
 													// "skipped."
 													writeln(provideLanguageTranslation(languageIdentifier,198));
-													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													log.vlog(provideLanguageTranslation(languageIdentifier,312));
 													uploadFailed = true;
 													return;
 												}	
@@ -4988,7 +4995,7 @@ final class SyncEngine
 												} 
 												if (e.httpStatusCode == 504) {
 													// HTTP request returned status code 504 (Gateway Timeout)
-													log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
+													log.log(provideLanguageTranslation(languageIdentifier,124));
 													// Retry original request by calling function again to avoid replicating any further error handling
 													uploadNewFile(path);
 													// return back to original call
@@ -5023,7 +5030,7 @@ final class SyncEngine
 												// caught an error, write out we are skipping this item
 												// "skipped."
 												writeln(provideLanguageTranslation(languageIdentifier,198));
-												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+												log.vlog(provideLanguageTranslation(languageIdentifier,312));
 												uploadFailed = true;
 												return;
 											}	
@@ -5037,7 +5044,7 @@ final class SyncEngine
 											}
 											if (e.httpStatusCode == 504) {
 												// HTTP request returned status code 504 (Gateway Timeout)
-												log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
+												log.log(provideLanguageTranslation(languageIdentifier,124));
 												// Retry original request by calling function again to avoid replicating any further error handling
 												uploadNewFile(path);
 												// return back to original call
@@ -5246,7 +5253,7 @@ final class SyncEngine
 													// caught an error, write out we are skipping this item
 													// "skipped."
 													writeln(provideLanguageTranslation(languageIdentifier,198));
-													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													log.vlog(provideLanguageTranslation(languageIdentifier,312));
 													uploadFailed = true;
 													return;
 												}
@@ -5263,7 +5270,7 @@ final class SyncEngine
 												
 												if (e.httpStatusCode == 504) {
 													// HTTP request returned status code 504 (Gateway Timeout)
-													log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request as a session");
+													log.log(provideLanguageTranslation(languageIdentifier,124));
 													// Try upload as a session
 													try {
 														response = session.upload(path, parent.driveId, parent.id, baseName(path));
@@ -5320,7 +5327,7 @@ final class SyncEngine
 													// caught an error, write out we are skipping this item
 													// "skipped."
 													writeln(provideLanguageTranslation(languageIdentifier,198));
-													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													log.vlog(provideLanguageTranslation(languageIdentifier,312));
 													uploadFailed = true;
 													return;
 												}
@@ -5335,7 +5342,7 @@ final class SyncEngine
 												} 
 												if (e.httpStatusCode == 504) {
 													// HTTP request returned status code 504 (Gateway Timeout)
-													log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
+													log.log(provideLanguageTranslation(languageIdentifier,124));
 													// Retry original request by calling function again to avoid replicating any further error handling
 													uploadNewFile(path);
 													// return back to original call
@@ -5412,7 +5419,7 @@ final class SyncEngine
 														// caught an error, write out we are skipping this item
 														// "skipped."
 														writeln(provideLanguageTranslation(languageIdentifier,198));
-														log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+														log.vlog(provideLanguageTranslation(languageIdentifier,312));
 														uploadFailed = true;
 														return;
 													}
@@ -5427,7 +5434,7 @@ final class SyncEngine
 													} 
 													if (e.httpStatusCode == 504) {
 														// HTTP request returned status code 504 (Gateway Timeout)
-														log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
+														log.log(provideLanguageTranslation(languageIdentifier,124));
 														// Retry original request by calling function again to avoid replicating any further error handling
 														uploadNewFile(path);
 														// return back to original call
@@ -5601,7 +5608,7 @@ final class SyncEngine
 					// caught an error, write out we are skipping this item
 					// "skipped."
 					writeln(provideLanguageTranslation(languageIdentifier,198));
-					log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+					log.vlog(provideLanguageTranslation(languageIdentifier,312));
 					uploadFailed = true;
 					return response;
 				} else {
@@ -5636,7 +5643,7 @@ final class SyncEngine
 					// caught an error, write out we are skipping this item
 					// "skipped."
 					writeln(provideLanguageTranslation(languageIdentifier,198));
-					log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+					log.vlog(provideLanguageTranslation(languageIdentifier,312));
 					uploadFailed = true;
 					return response;
 				} else {
@@ -5855,7 +5862,8 @@ final class SyncEngine
 				// OneDrive threw a 412 error, most likely: ETag does not match current item's value
 				// Retry without eTag
 				log.vdebug("File Metadata Update Failed - OneDrive eTag / cTag match issue");
-				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting file time stamp update - gracefully handling error");
+				// "OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting file time stamp update - gracefully handling error"
+				log.vlog(provideLanguageTranslation(languageIdentifier,317));
 				string nullTag = null;
 				response = onedrive.updateById(driveId, id, data, nullTag);
 			}
@@ -6034,7 +6042,8 @@ final class SyncEngine
 					// OneDrive threw a 412 error, most likely: ETag does not match current item's value
 					// Retry without eTag
 					log.vdebug("File Move Failed - OneDrive eTag / cTag match issue");
-					log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting to move the file - gracefully handling error");
+					// "OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting to move the file - gracefully handling error"
+					log.vlog(provideLanguageTranslation(languageIdentifier,318));
 					string nullTag = null;
 					// move the file but without the eTag
 					response = onedrive.updateById(fromItem.driveId, fromItem.id, diff, nullTag);
@@ -6164,7 +6173,7 @@ final class SyncEngine
 				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
 					// re-try the specific changes queries	
 					if (e.httpStatusCode == 504) {
-						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query Sharepoint Sites - retrying applicable request");
+						log.log(provideLanguageTranslation(languageIdentifier,124));
 						log.vdebug("siteQuery = onedrive.o365SiteSearch(nextLink) previously threw an error - retrying");
 						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
 						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
@@ -6348,7 +6357,7 @@ final class SyncEngine
 			
 			if (e.httpStatusCode == 504) {
 				// HTTP request returned status code 504 (Gateway Timeout)
-				log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying request");
+				log.log(provideLanguageTranslation(languageIdentifier,124));
 				// Retry original request by calling function again to avoid replicating any further error handling
 				createShareableLinkForFile(filePath);
 				// return back to original call
@@ -6486,7 +6495,7 @@ final class SyncEngine
 			
 			if (e.httpStatusCode == 504) {
 				// HTTP request returned status code 504 (Gateway Timeout)
-				log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying request");
+				log.log(provideLanguageTranslation(languageIdentifier,124));
 				// Retry original request by calling function again to avoid replicating any further error handling
 				queryDriveForChanges(path);
 				// return back to original call
@@ -6845,9 +6854,12 @@ final class SyncEngine
 				// HTTP request returned status code 404 (Not Found)
 				if (e.httpStatusCode == 404) {
 					// Stop application
-					log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
-					log.log("The item id to query was not found on OneDrive");
-					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
+					// "OneDrive returned a 'HTTP 404 - Item not found' - gracefully handling error"
+					log.log(provideLanguageTranslation(languageIdentifier,315));
+					// "ERROR: The requested item to query was not found on OneDrive"
+					log.log(provideLanguageTranslation(languageIdentifier,302));
+					// "\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n"
+					log.log(provideLanguageTranslation(languageIdentifier,303), cfg.databaseFilePath, provideLanguageTranslation(languageIdentifier,304));
 				}
 				
 				// HTTP request returned status code 429 (Too Many Requests)
@@ -6867,7 +6879,7 @@ final class SyncEngine
 				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
 					// re-try the specific changes queries	
 					if (e.httpStatusCode == 504) {
-						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query OneDrive drive children - retrying applicable request");
+						log.log(provideLanguageTranslation(languageIdentifier,124));
 						log.vdebug("topLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink) previously threw an error - retrying");
 						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
 						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
@@ -6892,7 +6904,8 @@ final class SyncEngine
 			}
 			
 			// process top level children
-			log.vlog("Adding ", count(topLevelChildren["value"].array), " OneDrive items for processing from OneDrive folder");
+			// "Adding ", count(topLevelChildren["value"].array), " OneDrive items for processing from OneDrive folder"
+			log.vlog(provideLanguageTranslation(languageIdentifier,305), count(topLevelChildren["value"].array), provideLanguageTranslation(languageIdentifier,306));
 			foreach (child; topLevelChildren["value"].array) {
 				// add this child to the array of objects
 				childrenData ~= child;
@@ -6956,9 +6969,12 @@ final class SyncEngine
 				// HTTP request returned status code 404 (Not Found)
 				if (e.httpStatusCode == 404) {
 					// Stop application
-					log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
-					log.log("The item id to query was not found on OneDrive");
-					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
+					// "OneDrive returned a 'HTTP 404 - Item not found' - gracefully handling error"
+					log.log(provideLanguageTranslation(languageIdentifier,315));
+					// "ERROR: The requested item to query was not found on OneDrive"
+					log.log(provideLanguageTranslation(languageIdentifier,302));
+					// "\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n"
+					log.log(provideLanguageTranslation(languageIdentifier,303), cfg.databaseFilePath, provideLanguageTranslation(languageIdentifier,304));
 				}
 				
 				// HTTP request returned status code 429 (Too Many Requests)
@@ -6978,7 +6994,7 @@ final class SyncEngine
 				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
 					// re-try the specific changes queries	
 					if (e.httpStatusCode == 504) {
-						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query OneDrive drive children - retrying applicable request");
+						log.log(provideLanguageTranslation(languageIdentifier,124));
 						log.vdebug("thisLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink) previously threw an error - retrying");
 						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
 						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
@@ -7009,7 +7025,8 @@ final class SyncEngine
 				//   /Level 1/Level 2/Level 3/Child Shared Folder/some folder/another folder
 				// But 'Child Shared Folder' is what is shared, thus '/Level 1/Level 2/Level 3/' is a potential information leak if logged.
 				// Plus, the application output now shows accuratly what is being shared - so that is a good thing.
-				log.vlog("Adding ", count(thisLevelChildren["value"].array), " OneDrive items for processing from ", pathForLogging);
+				// "Adding ", count(thisLevelChildren["value"].array), " OneDrive items for processing from ", pathForLogging
+				log.vlog(provideLanguageTranslation(languageIdentifier,305), count(thisLevelChildren["value"].array), provideLanguageTranslation(languageIdentifier,307), pathForLogging);
 			}
 			foreach (child; thisLevelChildren["value"].array) {
 				// add this child to the array of objects
@@ -7049,13 +7066,15 @@ final class SyncEngine
 	void listOneDriveBusinessSharedFolders()
 	{
 		// List OneDrive Business Shared Folders
-		log.log("\nListing available OneDrive Business Shared Folders:");
+		// "\nListing available OneDrive Business Shared Folders:"
+		log.log(provideLanguageTranslation(languageIdentifier,308));
 		// Query the GET /me/drive/sharedWithMe API
 		JSONValue graphQuery = onedrive.getSharedWithMe();
 		if (graphQuery.type() == JSONType.object) {
 			if (count(graphQuery["value"].array) == 0) {
 				// no shared folders returned
-				write("\nNo OneDrive Business Shared Folders were returned\n");
+				// "\nNo OneDrive Business Shared Folders were returned\n"
+				log.log(provideLanguageTranslation(languageIdentifier,309));
 			} else {
 				// shared folders were returned
 				log.vdebug("onedrive.getSharedWithMe API Response: ", graphQuery);
@@ -7099,10 +7118,11 @@ final class SyncEngine
 					}
 				}
 			}
-			write("\n");
+			writeln("");
 		} else {
 			// Log that an invalid JSON object was returned
-			log.error("ERROR: onedrive.getSharedWithMe call returned an invalid JSON Object");
+			// "ERROR: onedrive.getSharedWithMe call returned an invalid JSON Object"
+			log.error(provideLanguageTranslation(languageIdentifier,310));
 		}
 	}
 	
@@ -7116,7 +7136,8 @@ final class SyncEngine
 			calculatedPath = itemdb.computePath(thisDriveId, thisItemId);
 		} catch (core.exception.AssertError) {
 			// broken tree in the database, we cant compute the path for this item id, exit
-			log.error("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
+			// "ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database."
+			log.error(provideLanguageTranslation(languageIdentifier,311));
 			// Must exit here to preserve data
 			exit(-1);
 		}
