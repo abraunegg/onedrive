@@ -482,6 +482,10 @@ void initialise_EN_AU(){
 		JSONValue([ "328": "ERROR: inotify_add_watch failed: " ]),
 		JSONValue([ "329": "Monitoring this directory for local changes: " ]),
 		JSONValue([ "330": "Removed this directory from being monitored for local changes: " ]),
+		JSONValue([ "331": "\nAn internal database error occurred: " ]),
+		JSONValue([ "332": "The item database is incompatible, re-creating database table structures" ]),
+		JSONValue([ "330": "Removed this directory from being monitored for local changes: " ]),
+		
 		
 		
 	]);
