@@ -114,12 +114,16 @@ int main(string[] args)
 	string helpMessage = "Please use 'onedrive --help' for further assistance in regards to running this application";
 	try {
 		bool printVersion = false;
+		bool exportTranslations = false;
 		auto opt = getopt(
 			args,
 			std.getopt.config.passThrough,
 			std.getopt.config.bundling,
 			std.getopt.config.caseSensitive,
 			"confdir", "Set the directory used to store the configuration files", &confdirOption,
+			
+			"export-translations", "Export existing default application messages in JSON format", &exportTranslations,
+			
 			"verbose|v+", "Print more details, useful for debugging (repeat for extra debugging)", &log.verbose,
 			"version", "Print the version and exit", &printVersion
 		);
@@ -132,6 +136,17 @@ int main(string[] args)
 			writeln("onedrive ", strip(import("version")));
 			return EXIT_SUCCESS;
 		}
+		
+		// If we are dumping the existing default application messages in JSON format, do so, then exit
+		if (exportTranslations){
+			// EN only message
+			writeln("Exporting existing application messages in JSON format");
+			// Export application default messages
+			exportDefaultMessages();
+			// exit
+			return EXIT_SUCCESS;
+		}
+		
 	} catch (GetOptException e) {
 		// option errors
 		log.error(e.msg);
@@ -154,7 +169,7 @@ int main(string[] args)
 		// Error message already printed
 		return EXIT_FAILURE;
 	}
-	
+
 	// --verbose --verbose used .. override any language setting to force EN-AU
 	if (cfg.getValueLong("verbose") >= 2) {
 		log.vdebug("Force application language to EN-AU due to debug operation");
@@ -162,7 +177,9 @@ int main(string[] args)
 	}
 	// Use the configured application language
 	languageIdentifier = cfg.getValueString("language_identifier");
-	log.vlog("Application Language set to: ", languageIdentifier);
+	// Set the language identifier for wider use
+	setConfigLanguageIdentifier(languageIdentifier);
+	log.log("Application Language set to: ", languageIdentifier);
 	
 	// set memory display
 	displayMemoryUsage = cfg.getValueBool("display_memory");

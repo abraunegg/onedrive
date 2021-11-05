@@ -10,12 +10,31 @@ ulong defaultMessageCount = 0;
 string[] languageResponsesDefault;
 string[] languageResponsesTranslations;
 string defaultBadLookupResponse = "ERROR: BAD LOOKUP INDEX FOR LANGUAGE TRANSLATION";
+JSONValue languageListDefault;
+string configLanguageIdentifier;
 
 // Initialise default message lookup using EN-AU
 void initialize() {
 	// Initialise default messages
-	initialise_EN_AU();
+	initialise_defaults();
 	defaultMessageCount = count(languageResponsesDefault);
+}
+
+void exportDefaultMessages() {
+	// Initialise default messages
+	initialise_defaults();
+	// Print JSON Array
+	writeln(languageListDefault);
+}
+
+void setConfigLanguageIdentifier(string languageIdentifier) {
+	// set the local variable
+	configLanguageIdentifier = languageIdentifier;
+}
+
+string getConfigLanguageIdentifier() {
+	// return the current set language identifier as per config or set by user
+	return configLanguageIdentifier;
 }
 
 // Load user configured translation files from a file
@@ -148,10 +167,12 @@ string getResponseFromIndex(int requiredResponseIndex) {
 }
 
 // Load EN-AU application messages
-void initialise_EN_AU(){
+void initialise_defaults(){
 	// The below JSON array contains all the default application messages
-	JSONValue languageList = [ "language": "EN-AU"];
-	languageList.object["list"] = JSONValue([
+	// Default Language Type
+	languageListDefault = [ "language": "EN-AU"];
+	// Application Messages
+	languageListDefault.object["list"] = JSONValue([
 		JSONValue([ "1": "No user or system config file found, using application defaults" ]),
 		JSONValue([ "2": "System configuration file successfully loaded" ]),
 		JSONValue([ "3": "System configuration file has errors - please check your configuration" ]),
@@ -484,7 +505,6 @@ void initialise_EN_AU(){
 		JSONValue([ "330": "Removed this directory from being monitored for local changes: " ]),
 		JSONValue([ "331": "\nAn internal database error occurred: " ]),
 		JSONValue([ "332": "The item database is incompatible, re-creating database table structures" ]),
-		JSONValue([ "330": "Removed this directory from being monitored for local changes: " ]),
 		
 		
 		
@@ -492,7 +512,7 @@ void initialise_EN_AU(){
 	
 	// Load the message into the array
 	ulong thisMessageID = 0;
-	foreach (translationItem; languageList["list"].array) {
+	foreach (translationItem; languageListDefault["list"].array) {
 		thisMessageID++;
 		string responseString = translationItem[to!string(thisMessageID)].str;
 		languageResponsesDefault ~= responseString;

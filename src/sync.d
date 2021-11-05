@@ -296,7 +296,9 @@ final class SyncEngine
 		JSONValue oneDriveRootDetails;
 		
 		// Update language identifier as used with this class
-		languageIdentifier = cfg.getValueString("language_identifier");
+		languageIdentifier = getConfigLanguageIdentifier();
+		
+		writeln("sync.d languageIdentifier: ", languageIdentifier);
 
 		if (initDone) {
 			return;

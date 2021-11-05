@@ -6,6 +6,7 @@ import core.stdc.stdlib;
 import config;
 import selective;
 import util;
+import translations;
 static import log;
 
 // relevant inotify events
@@ -21,6 +22,7 @@ class MonitorException: ErrnoException
 
 final class Monitor
 {
+	// verbosity flag
 	bool verbose;
 	// inotify file descriptor
 	private int fd;
@@ -34,6 +36,7 @@ final class Monitor
 	bool skip_symlinks;
 	// check for .nosync if enabled
 	bool check_nosync;
+	string languageIdentifier;
 	
 	private SelectiveSync selectiveSync;
 
@@ -53,6 +56,9 @@ final class Monitor
 		this.verbose = verbose;
 		this.skip_symlinks = skip_symlinks;
 		this.check_nosync = check_nosync;
+		this.languageIdentifier = getConfigLanguageIdentifier();
+		
+		writeln("monitor.d languageIdentifier: ", languageIdentifier);
 		
 		assert(onDirCreated && onFileChanged && onDelete && onMove);
 		fd = inotify_init();

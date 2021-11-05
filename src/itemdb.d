@@ -6,6 +6,7 @@ import std.stdio;
 import std.algorithm.searching;
 import core.stdc.stdlib;
 import sqlite;
+import translations;
 static import log;
 
 enum ItemType {
@@ -42,16 +43,21 @@ final class ItemDatabase
 	string selectItemByIdStmt;
 	string selectItemByParentIdStmt;
 	string deleteItemByIdStmt;
-
+	string languageIdentifier;
+	
 	this(const(char)[] filename)
 	{
+		languageIdentifier = getConfigLanguageIdentifier();
+		
+		writeln("itemdb.d languageIdentifier: ", languageIdentifier);
+		
 		db = Database(filename);
 		int dbVersion;
+		
 		try {
 			dbVersion = db.getVersion();
 		} catch (SqliteException e) {
 			// An error was generated - what was the error?
-			// "\nAn internal database error occurred: " ~ e.msg ~ "\n"
 			log.error(provideLanguageTranslation(languageIdentifier,331) ~ e.msg ~ "\n");
 			exit(-1);
 		}

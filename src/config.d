@@ -134,7 +134,7 @@ final class Config
 		// display_sync_options = true | false
 		// - It may be desirable to see what options are being passed in to performSync() without enabling the full verbose debug logging
 		boolValues["display_sync_options"] = false;
-
+		
 		// Determine the users home directory. 
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
 		// Check for HOME environment variable
@@ -304,7 +304,7 @@ final class Config
 		boolValues["synchronize"]         = false;
 		boolValues["force"]               = false;
 		boolValues["list_business_shared_folders"] = false;
-		
+				
 		// Application Startup option validation
 		try {
 			string tmpStr;
@@ -465,7 +465,11 @@ final class Config
 					&boolValues["list_business_shared_folders"],
 				"sync-shared-folders",
 					"Sync OneDrive Business Shared Folders",
-					&boolValues["sync_business_shared_folders"]
+					&boolValues["sync_business_shared_folders"],
+				"export-translations",
+					"Export existing default application messages in JSON format",
+					&tmpBol
+					
 			);
 			if (opt.helpWanted) {
 				outputLongHelp(opt.options);
