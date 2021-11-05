@@ -471,7 +471,17 @@ void initialise_EN_AU(){
 		JSONValue([ "317": "OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting file time stamp update - gracefully handling error" ]),
 		JSONValue([ "318": "OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting to move the file - gracefully handling error" ]),
 		JSONValue([ "319": "Skipping item - OneDrive returned a 'HTTP 400 - Bad Request' when attempting to query if file exists" ]),
-		
+		JSONValue([ "320": "Skipping watching path - .nosync found & --check-for-nosync enabled: " ]),
+		JSONValue([ "321": "ERROR: The local file system returned an error with the following message:" ]),
+		JSONValue([ "322": "  Error Message: " ]),
+		JSONValue([ "323": "ACCESS ERROR: Please check your UID and GID access to this file, as the permissions on this file is preventing this application to read it" ]),
+		JSONValue([ "324": "\nFATAL: Exiting application to avoid deleting data due to local file system access issues\n" ]),
+		JSONValue([ "325": "The user limit on the total number of inotify watches has been reached.\nTo see the current max number of watches run:" ]),
+		JSONValue([ "326": "To change the current max number of watches to 524288 run:" ]),
+		JSONValue([ "327": "WARNING: inotify_add_watch failed - permission denied: " ]),
+		JSONValue([ "328": "ERROR: inotify_add_watch failed: " ]),
+		JSONValue([ "329": "Monitoring this directory for local changes: " ]),
+		JSONValue([ "330": "Removed this directory from being monitored for local changes: " ]),
 		
 		
 	]);
