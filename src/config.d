@@ -132,6 +132,10 @@ final class Config
 		// - It may be desirable to see what options are being passed in to performSync() without enabling the full verbose debug logging
 		boolValues["display_sync_options"] = false;
 
+		// maximum time an operation is allowed to take
+		// This includes dns resolution, connecting, data transfer, etc.
+		longValues["operation_timeout"] = 3600;
+
 		// Determine the users home directory. 
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
 		// Check for HOME environment variable
