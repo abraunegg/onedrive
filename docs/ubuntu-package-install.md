@@ -39,6 +39,32 @@ deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-on
 #### Step 5: Read 'Known Issues' with these packages
 1.  Read and understand the known issues with these packages below, taking any action that is needed.
 
+### Distribution: Debian 11
+The packages support the following platform architectures:
+| &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
+|:----:|:------:|:-----:|:-------:|
+|✔|✔|✔|✔| |
+
+#### Step 1: Update /etc/apt/sources.list
+Add the following to the end of your `/etc/apt/sources.list` file:
+```text
+deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_11/ ./
+```
+
+#### Step 2: Download and add the release key
+1.  Download the 'Release.key' file: `wget https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_11/Release.key`
+2.  Add the 'Release.key' file to your apt key repository: `apt-key add ./Release.key`
+
+#### Step 3: Update your apt package cache
+1.  Run: `apt-get update`
+
+#### Step 4: Install 'onedrive'
+1.  Run: `apt install onedrive`
+
+#### Step 5: Read 'Known Issues' with these packages
+1.  Read and understand the known issues with these packages below, taking any action that is needed.
+
+
 ### Distribution: Ubuntu 20.04
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
