@@ -26,6 +26,7 @@
     + [skip_symlinks](#skip_symlinks)
     + [monitor_interval](#monitor_interval)
     + [min_notify_changes](#min_notify_changes)
+    + [operation_timeout](#operation_timeout)
     + [Selective sync via 'sync_list' file](#selective-sync-via-sync_list-file)
   * [Configuring the client for 'single tenant application' use](#configuring-the-client-for-single-tenant-application-use)
   * [Configuring the client to use older 'skilion' application identifier](#configuring-the-client-to-use-older-skilion-application-identifier)
@@ -351,6 +352,7 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # sync_dir_permissions = "700"
 # sync_file_permissions = "600"
 # rate_limit = "131072"
+# operation_timeout = "3600"
 ```
 
 
@@ -509,6 +511,15 @@ min_notify_changes = "50"
 # monitor_fullscan_frequency = "10"
 ```
 This option defines the minimum number of pending incoming changes necessary to trigger a desktop notification. This allows controlling the frequency of notifications.
+
+#### operation_timeout
+Example:
+```text
+# sync_file_permissions = "600"
+# rate_limit = "131072"
+operation_timeout = "3600"
+```
+Operation Timeout is the maximum amount of time (seconds) a file operation is allowed to take. This includes DNS resolution, connecting, data transfer, etc.
 
 #### Selective sync via 'sync_list' file
 Selective sync allows you to sync only specific files and directories.

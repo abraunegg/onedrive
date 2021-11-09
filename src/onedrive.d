@@ -131,7 +131,7 @@ final class OneDriveApi
 		http.dataTimeout = (dur!"seconds"(600));
 		// maximum time an operation is allowed to take
 		// This includes dns resolution, connecting, data transfer, etc.
-		http.operationTimeout = (dur!"seconds"(3600));
+		http.operationTimeout = (dur!"seconds"(cfg.getValueLong("operation_timeout")));
 		
 		// Specify how many redirects should be allowed
 		http.maxRedirects(5);
