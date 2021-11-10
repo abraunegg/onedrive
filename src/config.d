@@ -59,6 +59,7 @@ final class Config
 		boolValues["check_nosync"] = false;
 		boolValues["download_only"] = false;
 		boolValues["disable_notifications"] = false;
+		boolValues["disable_download_validation"] = false;
 		boolValues["disable_upload_validation"] = false;
 		boolValues["enable_logging"] = false;
 		boolValues["force_http_2"] = false;
@@ -118,6 +119,9 @@ final class Config
 		longValues["sync_file_permissions"] = defaultFilePermissionMode;
 		// Configure download / upload rate limits
 		longValues["rate_limit"] = 0;
+		// maximum time an operation is allowed to take
+		// This includes dns resolution, connecting, data transfer, etc.
+		longValues["operation_timeout"] = 3600;
 		
 		// DEVELOPER OPTIONS 
 		// display_memory = true | false
@@ -131,11 +135,7 @@ final class Config
 		// display_sync_options = true | false
 		// - It may be desirable to see what options are being passed in to performSync() without enabling the full verbose debug logging
 		boolValues["display_sync_options"] = false;
-
-		// maximum time an operation is allowed to take
-		// This includes dns resolution, connecting, data transfer, etc.
-		longValues["operation_timeout"] = 3600;
-
+		
 		// Determine the users home directory. 
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
 		// Check for HOME environment variable
@@ -328,6 +328,9 @@ final class Config
 				"disable-notifications",
 					"Do not use desktop notifications in monitor mode.",
 					&boolValues["disable_notifications"],
+				"disable-download-validation",
+					"Disable download validation when downloading from OneDrive",
+					&boolValues["disable_download_validation"],
 				"disable-upload-validation",
 					"Disable upload validation when uploading to OneDrive",
 					&boolValues["disable_upload_validation"],
