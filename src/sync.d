@@ -561,7 +561,7 @@ final class SyncEngine
 	void setDisableDownloadValidation()
 	{
 		disableDownloadValidation = true;
-		log.vdebug("documentLibrary account type - flagging to disable download validation checks due to Microsoft SharePoint");
+		log.vdebug("Flagging to disable download validation checks due to user request");
 	}
 	
 	// Issue #658 Handling
