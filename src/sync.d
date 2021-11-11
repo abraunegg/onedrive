@@ -2880,7 +2880,20 @@ final class SyncEngine
 							log.vdebug("Actual file hash:           ", OneDriveFileHash);
 							log.vdebug("OneDrive API reported hash: ", quickXorHash);
 							log.error("ERROR: File download hash mis-match. Increase logging verbosity to determine why.");
-						}	
+						}
+						// add some workaround messaging
+						if (accountType == "documentLibrary"){
+							// It has been seen where SharePoint / OneDrive API reports one size via the JSON 
+							// but the content length and file size written to disk is totally different - example:
+							// From JSON:         "size": 17133
+							// From HTTPS Server: < Content-Length: 19340
+							// with no logical reason for the difference, except for a 302 redirect before file download
+							log.error("INFO: It is most likely that a SharePoint OneDrive API issue is the root cause. Add --disable-download-validation to work around this issue but downloaded data integrity cannot be guaranteed.");
+						} else {
+							// other account types
+							log.error("INFO: Potentially add --disable-download-validation to work around this issue but downloaded data integrity cannot be guaranteed.");
+						}
+						
 						// we do not want this local file to remain on the local file system
 						safeRemove(path);	
 						downloadFailed = true;
