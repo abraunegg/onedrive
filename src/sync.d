@@ -637,7 +637,32 @@ final class SyncEngine
 		if (syncBusinessFolders){
 			// query OneDrive Business Shared Folders shared with me
 			log.vlog("Attempting to sync OneDrive Business Shared Folders");
-			JSONValue graphQuery = onedrive.getSharedWithMe();
+			JSONValue graphQuery;
+			try {
+				graphQuery = onedrive.getSharedWithMe();
+			} catch (OneDriveException e) {
+				if (e.httpStatusCode == 401) {
+					// HTTP request returned status code 401 (Unauthorized)
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+					log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
+					// Must exit here
+					exit(-1);
+				}
+				if (e.httpStatusCode == 429) {
+					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+					handleOneDriveThrottleRequest();
+					// Retry original request by calling function again to avoid replicating any further error handling
+					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - graphQuery = onedrive.getSharedWithMe();");
+					graphQuery = onedrive.getSharedWithMe();
+				}
+				if (e.httpStatusCode >= 500) {
+					// There was a HTTP 5xx Server Side Error
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+					// Must exit here
+					exit(-1);
+				}
+			}
+			
 			if (graphQuery.type() == JSONType.object) {
 				string sharedFolderName;
 				foreach (searchResult; graphQuery["value"].array) {
@@ -806,7 +831,32 @@ final class SyncEngine
 		if (syncBusinessFolders){
 			log.vlog("Attempting to sync OneDrive Business Shared Folders");
 			// query OneDrive Business Shared Folders shared with me
-			JSONValue graphQuery = onedrive.getSharedWithMe();
+			JSONValue graphQuery;
+			try {
+				graphQuery = onedrive.getSharedWithMe();
+			} catch (OneDriveException e) {
+				if (e.httpStatusCode == 401) {
+					// HTTP request returned status code 401 (Unauthorized)
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+					log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
+					// Must exit here
+					exit(-1);
+				}
+				if (e.httpStatusCode == 429) {
+					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+					handleOneDriveThrottleRequest();
+					// Retry original request by calling function again to avoid replicating any further error handling
+					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - graphQuery = onedrive.getSharedWithMe();");
+					graphQuery = onedrive.getSharedWithMe();
+				}
+				if (e.httpStatusCode >= 500) {
+					// There was a HTTP 5xx Server Side Error
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+					// Must exit here
+					exit(-1);
+				}
+			}
+			
 			if (graphQuery.type() == JSONType.object) {
 				// valid response from OneDrive
 				string sharedFolderName;
@@ -6631,7 +6681,32 @@ final class SyncEngine
 		// List OneDrive Business Shared Folders
 		log.log("\nListing available OneDrive Business Shared Folders:");
 		// Query the GET /me/drive/sharedWithMe API
-		JSONValue graphQuery = onedrive.getSharedWithMe();
+		JSONValue graphQuery;
+		try {
+			graphQuery = onedrive.getSharedWithMe();
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 401) {
+				// HTTP request returned status code 401 (Unauthorized)
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
+				// Must exit here
+				exit(-1);
+			}
+			if (e.httpStatusCode == 429) {
+				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+				handleOneDriveThrottleRequest();
+				// Retry original request by calling function again to avoid replicating any further error handling
+				log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - graphQuery = onedrive.getSharedWithMe();");
+				graphQuery = onedrive.getSharedWithMe();
+			}
+			if (e.httpStatusCode >= 500) {
+				// There was a HTTP 5xx Server Side Error
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+				// Must exit here
+				exit(-1);
+			}
+		}
+		
 		if (graphQuery.type() == JSONType.object) {
 			if (count(graphQuery["value"].array) == 0) {
 				// no shared folders returned
