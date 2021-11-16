@@ -498,20 +498,25 @@ int main(string[] args)
 		cfg.setValueBool("resync", true);
 	}
 	
-	// Handle --resync and --logout to remove local files
-	if (cfg.getValueBool("resync") || cfg.getValueBool("logout")) {
+	// Handle --logout as separate item, do not 'resync' on a --logout / reauth
+	if (cfg.getValueBool("logout")) {
+		log.vdebug("--logout requested");
+		log.log("Deleting the saved authentication status ...");
+		if (!cfg.getValueBool("dry_run")) {
+			safeRemove(cfg.refreshTokenFilePath);
+		}
+		// Exit
+		return EXIT_SUCCESS;
+	}
+	
+	// Handle --resync to remove local files
+	if (cfg.getValueBool("resync")) {
 		if (cfg.getValueBool("resync")) log.vdebug("--resync requested");
-		log.vlog("Deleting the saved status ...");
+		log.log("Deleting the saved application sync status ...");
 		if (!cfg.getValueBool("dry_run")) {
 			safeRemove(cfg.databaseFilePath);
 			safeRemove(cfg.deltaLinkFilePath);
 			safeRemove(cfg.uploadStateFilePath);
-		}
-		if (cfg.getValueBool("logout")) {
-			log.vdebug("--logout requested");
-			if (!cfg.getValueBool("dry_run")) {
-				safeRemove(cfg.refreshTokenFilePath);
-			}
 		}
 	}
 	
