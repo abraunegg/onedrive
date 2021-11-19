@@ -868,6 +868,7 @@ for extra details.
 *   Configuring the client to use mulitple OneDrive accounts / configurations
 *   Configuring the client for use in dual-boot (Windows / Linux) situations
 *   Configuring the client for use when 'sync_dir' is a mounted directory
+*   Upload data from the local ~/OneDrive folder to a specific location on OneDrive
  
 Refer to [./advanced-usage.md](advanced-usage.md) for configuration assistance.
 
