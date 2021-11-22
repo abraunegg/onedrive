@@ -390,7 +390,15 @@ final class SyncEngine
 			accountType = oneDriveDetails["driveType"].str;
 			defaultDriveId = oneDriveDetails["id"].str;
 			defaultRootId = oneDriveRootDetails["id"].str;
-			remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+			
+			// get the remaining size from OneDrive API
+			if ("remaining" in oneDriveDetails["quota"]){
+				// use the value provided
+				remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+			} else {
+				// set at zero
+				remainingFreeSpace = 0;
+			}
 			
 			// Make sure that defaultDriveId is in our driveIDs array to use when checking if item is in database
 			// Keep the driveIDsArray with unique entries only
@@ -1241,9 +1249,12 @@ final class SyncEngine
 					}
 				} else {
 					// quota details returned, but for a drive id that is not ours
-					if (currentDriveQuota["quota"]["remaining"].integer <= 0) {
-						// value returned is 0 or less than 0
-						log.vlog("OneDrive quota information is set at zero, as this is not our drive id, ignoring");
+					if ("remaining" in currentDriveQuota["quota"]){
+						// remaining is in the quota JSON response					
+						if (currentDriveQuota["quota"]["remaining"].integer <= 0) {
+							// value returned is 0 or less than 0
+							log.vlog("OneDrive quota information is set at zero, as this is not our drive id, ignoring");
+						}
 					}
 				}
 			} else {
