@@ -289,6 +289,7 @@ final class Config
 		stringValues["single_directory"]  = "";
 		stringValues["source_directory"]  = "";
 		stringValues["auth_files"]        = "";
+		stringValues["auth_response"]     = "";
 		boolValues["display_config"]      = false;
 		boolValues["display_sync_status"] = false;
 		boolValues["print_token"]         = false;
@@ -312,6 +313,9 @@ final class Config
 				"auth-files",
 					"Perform authentication not via interactive dialog but via files read/writes to these files.",
 					&stringValues["auth_files"],
+				"auth-response",
+					"Perform authentication not via interactive dialog but via providing the reponse url directly.",
+					&stringValues["auth_response"],
 				"check-for-nomount",
 					"Check for the presence of .nosync in the syncdir root. If found, do not perform sync.",
 					&boolValues["check_nomount"],
