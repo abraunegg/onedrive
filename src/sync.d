@@ -1233,7 +1233,7 @@ final class SyncEngine
 					}
 				} else {
 					// quota details returned, but for a drive id that is not ours
-					if ("remaining" in oneDriveDetails["quota"]){
+					if ("remaining" in currentDriveQuota["quota"]){
 						// remaining is in the quota JSON response					
 						if (currentDriveQuota["quota"]["remaining"].integer <= 0) {
 							// value returned is 0 or less than 0
