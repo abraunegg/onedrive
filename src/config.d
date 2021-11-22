@@ -43,7 +43,7 @@ final class Config
 	// Default file permission mode
 	public long defaultFilePermissionMode = 600;
 	public int configuredFilePermissionMode;
-	
+
 	this(string confdirOption)
 	{
 		// default configuration - entries in config file ~/.config/onedrive/config
@@ -121,9 +121,17 @@ final class Config
 		longValues["rate_limit"] = 0;
 		// maximum time an operation is allowed to take
 		// This includes dns resolution, connecting, data transfer, etc.
-		longValues["operation_timeout"] = 3600;
-		
-		// DEVELOPER OPTIONS 
+		longValues["operation_timeout"] = 3600;		
+
+		// Webhook options
+		boolValues["webhook_enabled"] = false;
+		stringValues["webhook_public_url"] = "";
+		stringValues["webhook_listening_host"] = "";
+		longValues["webhook_listening_port"] = 8888;
+		longValues["webhook_expiration_interval"] = 3600 * 24;
+		longValues["webhook_renewal_interval"] = 3600 * 12;
+
+		// DEVELOPER OPTIONS
 		// display_memory = true | false
 		//  - It may be desirable to display the memory usage of the application to assist with diagnosing memory issues with the application
 		//  - This is especially beneficial when debugging or performing memory tests with Valgrind
@@ -135,8 +143,8 @@ final class Config
 		// display_sync_options = true | false
 		// - It may be desirable to see what options are being passed in to performSync() without enabling the full verbose debug logging
 		boolValues["display_sync_options"] = false;
-		
-		// Determine the users home directory. 
+
+		// Determine the users home directory.
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
 		// Check for HOME environment variable
 		if (environment.get("HOME") != ""){
@@ -156,10 +164,10 @@ final class Config
 				homePath = "~";
 			}
 		}
-	
+
 		// Output homePath calculation
 		log.vdebug("homePath: ", homePath);
-		
+
 		// Determine the correct configuration directory to use
 		string configDirBase;
 		string systemConfigDirBase;
@@ -185,7 +193,7 @@ final class Config
 				// Also set up a path to pre-shipped shared configs (which can be overridden by supplying a config file in userspace)
 				systemConfigDirBase = "/etc";
 			}
-	
+
 			// Output configDirBase calculation
 			log.vdebug("configDirBase: ", configDirBase);
 			// Set the default application configuration directory
@@ -195,7 +203,7 @@ final class Config
 			// systemConfigDirBase contains the correct path so we do not need to check for presence of '~'
 			systemConfigDirName = systemConfigDirBase ~ "/onedrive";
 		}
-		
+
 		// Config directory options all determined
 		if (!exists(configDirName)) {
 			// create the directory
@@ -203,11 +211,11 @@ final class Config
 			// Configure the applicable permissions for the folder
 			configDirName.setAttributes(returnRequiredDirectoryPermisions());
 		}
-		
+
 		// configDirName has a trailing /
 		log.vlog("Using 'user' Config Dir: ", configDirName);
 		log.vlog("Using 'system' Config Dir: ", systemConfigDirName);
-		
+
 		// Update application set variables based on configDirName
 		refreshTokenFilePath = buildNormalizedPath(configDirName ~ "/refresh_token");
 		deltaLinkFilePath = buildNormalizedPath(configDirName ~ "/delta_link");
@@ -218,7 +226,7 @@ final class Config
 		syncListFilePath = buildNormalizedPath(configDirName ~ "/sync_list");
 		systemConfigFilePath = buildNormalizedPath(systemConfigDirName ~ "/config");
 		businessSharedFolderFilePath = buildNormalizedPath(configDirName ~ "/business_shared_folders");
-		
+
 		// Debug Output for application set variables based on configDirName
 		log.vdebug("refreshTokenFilePath = ", refreshTokenFilePath);
 		log.vdebug("deltaLinkFilePath = ", deltaLinkFilePath);
@@ -281,6 +289,7 @@ final class Config
 		stringValues["single_directory"]  = "";
 		stringValues["source_directory"]  = "";
 		stringValues["auth_files"]        = "";
+		stringValues["auth_response"]     = "";
 		boolValues["display_config"]      = false;
 		boolValues["display_sync_status"] = false;
 		boolValues["print_token"]         = false;
@@ -289,7 +298,7 @@ final class Config
 		boolValues["synchronize"]         = false;
 		boolValues["force"]               = false;
 		boolValues["list_business_shared_folders"] = false;
-		
+
 		// Application Startup option validation
 		try {
 			string tmpStr;
@@ -297,15 +306,18 @@ final class Config
 			long tmpVerb;
 			// duplicated from main.d to get full help output!
 			auto opt = getopt(
-				
+
 				args,
 				std.getopt.config.bundling,
 				std.getopt.config.caseSensitive,
 				"auth-files",
 					"Perform authentication not via interactive dialog but via files read/writes to these files.",
 					&stringValues["auth_files"],
+				"auth-response",
+					"Perform authentication not via interactive dialog but via providing the reponse url directly.",
+					&stringValues["auth_response"],
 				"check-for-nomount",
-					"Check for the presence of .nosync in the syncdir root. If found, do not perform sync.", 
+					"Check for the presence of .nosync in the syncdir root. If found, do not perform sync.",
 					&boolValues["check_nomount"],
 				"check-for-nosync",
 					"Check for the presence of .nosync in each directory. If found, skip directory from sync.",
@@ -319,8 +331,8 @@ final class Config
 				"create-share-link",
 					"Create a shareable link for an existing file on OneDrive",
 					&stringValues["create_share_link"],
-				"debug-https", 
-					"Debug OneDrive HTTPS communication.", 
+				"debug-https",
+					"Debug OneDrive HTTPS communication.",
 					&boolValues["debug_https"],
 				"destination-directory",
 					"Destination directory for renamed or move on OneDrive - no sync will be performed.",
@@ -522,7 +534,7 @@ final class Config
 		// configure function variables
 		auto file = File(filename, "r");
 		string lineBuffer;
-		
+
 		// configure scopes
 		// - failure
 		scope(failure) {
@@ -541,7 +553,7 @@ final class Config
 				file.close();
 			}
 		}
-	
+
 		// read file line by line
 		auto range = file.byLine();
 		foreach (line; range) {
@@ -588,7 +600,7 @@ final class Config
 								setValueString("skip_dir", configFileSkipDir);
 							}
 						}
-						
+
 						// Azure AD Configuration
 						if (key == "azure_ad_endpoint") {
 							string azureConfigValue = c.front.dup;
@@ -608,7 +620,7 @@ final class Config
 								case "CN":
 									log.log("Using config option for Azure AD China operated by 21Vianet");
 									break;
-								// Default - all other entries 
+								// Default - all other entries
 								default:
 									log.log("Unknown Azure AD Endpoint - using Global Azure AD Endpoints");
 							}
@@ -631,10 +643,10 @@ final class Config
 		}
 		return true;
 	}
-	
+
 	void configureRequiredDirectoryPermisions() {
 		// return the directory permission mode required
-		// - return octal!defaultDirectoryPermissionMode; ... cant be used .. which is odd 
+		// - return octal!defaultDirectoryPermissionMode; ... cant be used .. which is odd
 		// Error: variable defaultDirectoryPermissionMode cannot be read at compile time
 		if (getValueLong("sync_dir_permissions") != defaultDirectoryPermissionMode) {
 			// return user configured permissions as octal integer
@@ -648,10 +660,10 @@ final class Config
 			configuredDirectoryPermissionMode = to!int(convertedValue);
 		}
 	}
-	
+
 	void configureRequiredFilePermisions() {
 		// return the file permission mode required
-		// - return octal!defaultFilePermissionMode; ... cant be used .. which is odd 
+		// - return octal!defaultFilePermissionMode; ... cant be used .. which is odd
 		// Error: variable defaultFilePermissionMode cannot be read at compile time
 		if (getValueLong("sync_file_permissions") != defaultFilePermissionMode) {
 			// return user configured permissions as octal integer
@@ -665,7 +677,7 @@ final class Config
 			configuredFilePermissionMode = to!int(convertedValue);
 		}
 	}
-	
+
 	int returnRequiredDirectoryPermisions() {
 		// read the configuredDirectoryPermissionMode and return
 		if (configuredDirectoryPermissionMode == 0) {
@@ -675,7 +687,7 @@ final class Config
 		}
 		return configuredDirectoryPermissionMode;
 	}
-	
+
 	int returnRequiredFilePermisions() {
 		// read the configuredFilePermissionMode and return
 		if (configuredFilePermissionMode == 0) {
