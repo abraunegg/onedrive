@@ -27,6 +27,9 @@ private bool uploadOnly = false;
 // Do we configure to disable the upload validation routine
 private bool disableUploadValidation = false;
 
+// Do we configure to disable the download validation routine
+private bool disableDownloadValidation = false;
+
 private bool isItemFolder(const ref JSONValue item)
 {
 	return ("folder" in item) != null;
@@ -451,6 +454,7 @@ final class SyncEngine
 			// If account type is documentLibrary - then most likely this is a SharePoint repository
 			// and files 'may' be modified after upload. See: https://github.com/abraunegg/onedrive/issues/205
 			if(accountType == "documentLibrary") {
+				// set this flag for SharePoint regardless of --disable-upload-validation being used
 				setDisableUploadValidation();
 			}
 		
@@ -554,6 +558,18 @@ final class SyncEngine
 	{
 		disableUploadValidation = true;
 		log.vdebug("documentLibrary account type - flagging to disable upload validation checks due to Microsoft SharePoint file modification enrichments");
+	}
+	
+	// Configure disableDownloadValidation if function is called
+	// By default, disableDownloadValidation = false;
+	// Meaning we will always validate our downloads
+	// However, when downloading files from SharePoint, the OneDrive API will not advise the correct file size 
+	// which means that the application thinks the file download has failed as the size is different / hash is different
+	// See: https://github.com/abraunegg/onedrive/discussions/1667
+	void setDisableDownloadValidation()
+	{
+		disableDownloadValidation = true;
+		log.vdebug("Flagging to disable download validation checks due to user request");
 	}
 	
 	// Issue #658 Handling
@@ -2891,36 +2907,62 @@ final class SyncEngine
 			}
 			// file has to have downloaded in order to set the times / data for the file
 			if (exists(path)) {
-				// A 'file' was downloaded - does what we downloaded = reported fileSize or if there is some sort of funky local disk compression going on
-				// does the file hash OneDrive reports match what we have locally?
-				string quickXorHash = computeQuickXorHash(path);
-				string sha1Hash = computeSha1Hash(path);
+				// When downloading some files from SharePoint, the OneDrive API reports one file size, but the SharePoint HTTP Server sends a totally different byte count
+				// for the same file
+				// we have implemented --disable-download-validation to disable these checks
 				
-				if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash) || (OneDriveFileHash == sha1Hash)) {
-					// downloaded matches either size or hash
-					log.vdebug("Downloaded file matches reported size and or reported file hash");
-					try {
-						log.vdebug("Calling setTimes() for this file: ", path);
-						setTimes(path, item.mtime, item.mtime);
-					} catch (FileException e) {
-						// display the error message
-						displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				if (!disableDownloadValidation) {
+					// A 'file' was downloaded - does what we downloaded = reported fileSize or if there is some sort of funky local disk compression going on
+					// does the file hash OneDrive reports match what we have locally?
+					string quickXorHash = computeQuickXorHash(path);
+					string sha1Hash = computeSha1Hash(path);
+					
+					if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash) || (OneDriveFileHash == sha1Hash)) {
+						// downloaded matches either size or hash
+						log.vdebug("Downloaded file matches reported size and or reported file hash");
+						try {
+							log.vdebug("Calling setTimes() for this file: ", path);
+							setTimes(path, item.mtime, item.mtime);
+						} catch (FileException e) {
+							// display the error message
+							displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+						}
+					} else {
+						// size error?
+						if (getSize(path) != fileSize) {
+							// downloaded file size does not match
+							log.vdebug("File size on disk:          ", getSize(path));
+							log.vdebug("OneDrive API reported size: ", fileSize);
+							log.error("ERROR: File download size mis-match. Increase logging verbosity to determine why.");
+						}
+						// hash error?
+						if ((OneDriveFileHash != quickXorHash) || (OneDriveFileHash != sha1Hash))  {
+							// downloaded file hash does not match
+							log.vdebug("Actual file hash:           ", OneDriveFileHash);
+							log.vdebug("OneDrive API reported hash: ", quickXorHash);
+							log.error("ERROR: File download hash mis-match. Increase logging verbosity to determine why.");
+						}
+						// add some workaround messaging
+						if (accountType == "documentLibrary"){
+							// It has been seen where SharePoint / OneDrive API reports one size via the JSON 
+							// but the content length and file size written to disk is totally different - example:
+							// From JSON:         "size": 17133
+							// From HTTPS Server: < Content-Length: 19340
+							// with no logical reason for the difference, except for a 302 redirect before file download
+							log.error("INFO: It is most likely that a SharePoint OneDrive API issue is the root cause. Add --disable-download-validation to work around this issue but downloaded data integrity cannot be guaranteed.");
+						} else {
+							// other account types
+							log.error("INFO: Potentially add --disable-download-validation to work around this issue but downloaded data integrity cannot be guaranteed.");
+						}
+						
+						// we do not want this local file to remain on the local file system
+						safeRemove(path);	
+						downloadFailed = true;
+						return;
 					}
 				} else {
-					// size error?
-					if (getSize(path) != fileSize) {
-						// downloaded file size does not match
-						log.error("ERROR: File download size mis-match. Increase logging verbosity to determine why.");
-					}
-					// hash error?
-					if ((OneDriveFileHash != quickXorHash) || (OneDriveFileHash != sha1Hash))  {
-						// downloaded file hash does not match
-						log.error("ERROR: File download hash mis-match. Increase logging verbosity to determine why.");
-					}	
-					// we do not want this local file to remain on the local file system
-					safeRemove(path);	
-					downloadFailed = true;
-					return;
+					// download checks have been disabled
+					log.vdebug("Downloaded file validation disabled due to --disable-download-validation ");
 				}
 			} else {
 				log.error("ERROR: File failed to download. Increase logging verbosity to determine why.");

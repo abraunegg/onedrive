@@ -870,6 +870,9 @@ int main(string[] args)
 
 	// Do we configure to disable the upload validation routine
 	if (cfg.getValueBool("disable_upload_validation")) sync.setDisableUploadValidation();
+	
+	// Do we configure to disable the download validation routine
+	if (cfg.getValueBool("disable_download_validation")) sync.setDisableDownloadValidation();	
 
 	// Has the user enabled to bypass data preservation of renaming local files when there is a conflict?
 	if (cfg.getValueBool("bypass_data_preservation")) {
