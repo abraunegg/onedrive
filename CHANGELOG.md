@@ -2,6 +2,29 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.4.14 - 2021-11-24
+### Fixed
+*   Support DMD 2.097.0 as compiler for Docker Builds
+*   Fix getPathDetailsByDriveId query when using --dry-run and a nested path with --single-directory
+*   Fix edge case when syncing OneDrive Personal Shared Folders
+*   Catch unhandled API response errors when querying OneDrive Business Shared Folders
+*   Catch unhandled API response errors when listing OneDrive Business Shared Folders
+*   Fix error 'Key not found: remaining' with Business Shared Folders (OneDrive API change)
+*   Fix overwriting local files with older versions from OneDrive when items.sqlite3 does not exist and --resync is not used
+
+### Added
+*   Added operation_timeout as a new configuration to assist in cases where operations take longer that 1h to complete
+*   Add Real-Time syncing of remote updates via webhooks
+*   Add --auth-response option and expose through entrypoint.sh for Docker
+*   Add --disable-download-validation
+
+### Changed
+*   Always prompt for credentials for authentication rather than re-using cached browser details
+*   Do not re-auth on --logout
+
+### Updated
+*   Updated documentation (various)
+
 ## 2.4.13 - 2021-7-14
 ### Fixed
 *   Support DMD 2.097.0 as compiler

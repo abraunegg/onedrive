@@ -1014,6 +1014,8 @@ Options:
       Debug OneDrive HTTPS communication.
   --destination-directory ARG
       Destination directory for renamed or move on OneDrive - no sync will be performed.
+  --disable-download-validation
+      Disable download validation when downloading from OneDrive
   --disable-notifications
       Do not use desktop notifications in monitor mode.
   --disable-upload-validation
@@ -1030,8 +1032,6 @@ Options:
       Enable client activity to a separate log file
   --force
       Force the deletion of data when a 'big delete' is detected
-  --force-http-1.1
-      Force the use of HTTP/1.1 for all operations (DEPRECIATED)
   --force-http-2
       Force the use of HTTP/2 for all operations where applicable
   --get-O365-drive-id ARG
