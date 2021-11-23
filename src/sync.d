@@ -2526,32 +2526,31 @@ final class SyncEngine
 						// file exists locally but is not in the sqlite database - maybe a failed download?
 						log.vlog("Local item does not exist in local database - replacing with file from OneDrive - failed download?");
 						
-						// was --resync issued?
-						if (cfg.getValueBool("resync")) {
-							// in a --resync scenario we have zero way of knowing IF the local file is meant to be the right file
-							// we have passed the following checks:
-							// 1. file exists locally
-							// 2. local modified time > remote modified time
-							// 3. id is not in the database
-							// 4. --resync was issued
-							auto ext = extension(path);
-							auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
-							// has the user configured to IGNORE local data protection rules?
-							if (bypassDataPreservation) {
-								// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
-								log.vlog("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: ", path);
+						
+						// in a --resync scenario or if items.sqlite3 was deleted before startup we have zero way of knowing IF the local file is meant to be the right file
+						// we have passed the following checks:
+						// 1. file exists locally
+						// 2. local modified time > remote modified time
+						// 3. id is not in the database
+						
+						auto ext = extension(path);
+						auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
+						// has the user configured to IGNORE local data protection rules?
+						if (bypassDataPreservation) {
+							// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
+							log.vlog("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: ", path);
+						} else {
+							// local data protection is configured, renaming local file
+							log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: ", path, " -> ", newPath);
+							// perform the rename action of the local file
+							if (!dryRun) {
+								safeRename(path);
 							} else {
-								// local data protection is configured, renaming local file
-								log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent data loss due to --resync: ", path, " -> ", newPath);
-								// perform the rename action of the local file
-								if (!dryRun) {
-									safeRename(path);
-								} else {
-									// Expectation here is that there is a new file locally (newPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
-									log.vdebug("DRY-RUN: Skipping local file rename");
-								}
+								// Expectation here is that there is a new file locally (newPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
+								log.vdebug("DRY-RUN: Skipping local file rename");
 							}
 						}
+						
 					}
 				} else {
 					// remote file is newer than local item
