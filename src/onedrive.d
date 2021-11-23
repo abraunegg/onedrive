@@ -105,28 +105,68 @@ class OneDriveException: Exception
 	}
 }
 
-shared class OneDriveWebhook {
+class OneDriveWebhook {
+	// We need OneDriveWebhook.serve to be a static function, otherwise we would hit the member function
+	// "requires a dual-context, which is deprecated" warning. The root cause is described here:
+	//   - https://issues.dlang.org/show_bug.cgi?id=5710
+	//   - https://forum.dlang.org/post/fkyppfxzegenniyzztos@forum.dlang.org
+	// The problem is deemed a bug and should be fixed in the compilers eventually. The singleton stuff
+	// could be undone when it is fixed.
+	//
+	// Following the singleton pattern described here: https://wiki.dlang.org/Low-Lock_Singleton_Pattern
+	// Cache instantiation flag in thread-local bool
+	// Thread local
+	private static bool instantiated_;
+
+	// Thread global
+	private __gshared OneDriveWebhook instance_;
+
 	private string host;
 	private ushort port;
-	private uint count;
+	private Tid parentTid;
+	private shared uint count;
 
-	this(string host, ushort port) {
+	static OneDriveWebhook getOrCreate(string host, ushort port, Tid parentTid) {
+		if (!instantiated_) {
+			synchronized(OneDriveWebhook.classinfo) {
+				if (!instance_) {
+						instance_ = new OneDriveWebhook(host, port, parentTid);
+				}
+
+				instantiated_ = true;
+			}
+		}
+
+		return instance_;
+	}
+
+	private this(string host, ushort port, Tid parentTid) {
 		this.host = host;
 		this.port = port;
+		this.parentTid = parentTid;
 		this.count = 0;
 	}
 
 	// The static serve() is necessary because spawn() does not like instance methods
-	static serve(shared OneDriveWebhook webhook, Tid parentTid) {
-		webhook.serve(parentTid);
+	static serve() {
+		// we won't create the singleton instance if it hasn't been created already
+		// such case is a bug which should crash the program and gets fixed
+		instance_.serveImpl();
 	}
 
-	private void serve(Tid parentTid) {
+	// The static handle() is necessary to work around the dual-context warning mentioned above
+	private static void handle(Cgi cgi) {
+		// we won't create the singleton instance if it hasn't been created already
+		// such case is a bug which should crash the program and gets fixed
+		instance_.handleImpl(cgi);
+	}
+
+	private void serveImpl() {
 		auto server = new RequestServer(host, port);
-		server.serveEmbeddedHttp!(cgi => handle(cgi, parentTid))();
+		server.serveEmbeddedHttp!handle();
 	}
 
-	private void handle(Cgi cgi, Tid parentTid) {
+	private void handleImpl(Cgi cgi) {
 		if (.debugResponse) {
 			log.log("Webhook request: ", cgi.requestMethod, " ", cgi.requestUri);
 			if (!cgi.postBody.empty) {
@@ -159,7 +199,7 @@ final class OneDriveApi
 	private string refreshToken, accessToken, subscriptionId;
 	private SysTime accessTokenExpiration;
 	private HTTP http;
-	private shared OneDriveWebhook webhook;
+	private OneDriveWebhook webhook;
 	private SysTime subscriptionExpiration;
 	private Duration subscriptionExpirationInterval, subscriptionRenewalInterval;
 	private string notificationUrl;
@@ -910,11 +950,12 @@ final class OneDriveApi
 
 		// Kick off the webhook server first
 		if (webhook is null) {
-			webhook = new shared OneDriveWebhook(
+			webhook = OneDriveWebhook.getOrCreate(
 				cfg.getValueString("webhook_listening_host"),
-				to!ushort(cfg.getValueLong("webhook_listening_port"))
+				to!ushort(cfg.getValueLong("webhook_listening_port")),
+				thisTid
 			);
-			spawn(&OneDriveWebhook.serve, webhook, thisTid);
+			spawn(&OneDriveWebhook.serve);
 		}
 
 		if (!hasValidSubscription()) {
