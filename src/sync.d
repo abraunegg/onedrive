@@ -425,9 +425,11 @@ final class SyncEngine
 					// json response was missing a 'remaining' value
 					if (accountType == "personal"){
 						log.error("ERROR: OneDrive quota information is missing. Potentially your OneDrive account currently has zero space available. Please free up some space online.");
+						quotaAvailable = false;
 					} else {
 						// quota details not available
 						log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+						quotaRestricted = true;
 					}				
 				}
 			}
