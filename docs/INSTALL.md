@@ -46,7 +46,7 @@ If you wish to change this situation so that you can just use 'apt install onedr
 *   [SQLite 3](https://www.sqlite.org/) >= 3.7.15
 *   [Digital Mars D Compiler (DMD)](http://dlang.org/download.html) or [LDC – the LLVM-based D Compiler](https://github.com/ldc-developers/ldc)
 
-**Note:** DMD version >= 2.083.1 or LDC version >= 1.12.0 is required to compile this application
+**Note:** DMD version >= 2.087.0 or LDC version >= 1.17.0 is required to compile this application
 
 ### Example for installing DMD Compiler
 ```text
