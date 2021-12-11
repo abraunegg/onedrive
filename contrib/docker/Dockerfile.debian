@@ -18,7 +18,7 @@ RUN ARCH="$(dpkg --print-architecture)" \
       armhf|arm) \
         BINARY_URL="https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-linux-armhf.tar.xz"; \
         ;; \
-      amd64|i386:x86-64) \
+      amd64|x86-64) \
         BINARY_URL="https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-linux-x86_64.tar.xz"; \
         ;; \
       *) \
