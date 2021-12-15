@@ -78,7 +78,8 @@ SOURCES = \
 	src/sync.d \
 	src/upload.d \
 	src/util.d \
-	src/progress.d
+	src/progress.d \
+	src/arsd/cgi.d
 
 ifeq ($(NOTIFICATIONS),yes)
 SOURCES += src/notifications/notify.d src/notifications/dnotify.d
@@ -123,7 +124,7 @@ else
 ifeq ($(RHEL_VERSION),6)
 	install -D contrib/init.d/onedrive.init $(DESTDIR)/etc/init.d/onedrive
 	install -D contrib/init.d/onedrive_service.sh $(DESTDIR)$(bindir)/onedrive_service.sh
-endif	
+endif
 endif
 ifeq ($(COMPLETIONS),yes)
 	$(INSTALL) -D -m 644 contrib/completions/complete.zsh $(DESTDIR)$(ZSH_COMPLETION_DIR)/_onedrive

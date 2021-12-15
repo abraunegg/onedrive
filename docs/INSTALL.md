@@ -46,7 +46,7 @@ If you wish to change this situation so that you can just use 'apt install onedr
 *   [SQLite 3](https://www.sqlite.org/) >= 3.7.15
 *   [Digital Mars D Compiler (DMD)](http://dlang.org/download.html) or [LDC – the LLVM-based D Compiler](https://github.com/ldc-developers/ldc)
 
-**Note:** DMD version >= 2.083.1 or LDC version >= 1.12.0 is required to compile this application
+**Note:** DMD version >= 2.087.0 or LDC version >= 1.17.0 is required to compile this application
 
 ### Example for installing DMD Compiler
 ```text
@@ -267,13 +267,13 @@ sudo zypper install libnotify-devel
 ### Building using DMD Reference Compiler
 Before cloning and compiling, if you have installed DMD via curl for your OS, you will need to activate DMD as per example below:
 ```text
-Run `source ~/dlang/dmd-2.081.1/activate` in your shell to use dmd-2.081.1.
+Run `source ~/dlang/dmd-2.087.0/activate` in your shell to use dmd-2.087.0.
 This will setup PATH, LIBRARY_PATH, LD_LIBRARY_PATH, DMD, DC, and PS1.
 Run `deactivate` later on to restore your environment.
 ```
 Without performing this step, the compilation process will fail.
 
-**Note:** Depending on your DMD version, substitute `2.081.1` above with your DMD version that is installed.
+**Note:** Depending on your DMD version, substitute `2.087.0` above with your DMD version that is installed.
 
 ```text
 git clone https://github.com/abraunegg/onedrive.git
