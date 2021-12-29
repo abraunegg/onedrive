@@ -8,3 +8,6 @@ config.log
 config.status
 autom4te.cache/
 contrib/pacman/PKGBUILD
+contrib/systemd/onedrive.service
+contrib/systemd/onedrive@.service
+contrib/spec/onedrive.spec
