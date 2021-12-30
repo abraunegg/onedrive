@@ -4515,11 +4515,16 @@ final class SyncEngine
 							saveItem(pathDetails);
 							
 							// OneDrive Personal Shared Folder edgecase handling
-							// In a --resync --upload-only --single-directory 'dir' scenario, and where the root 'dir' for --single-directory is a 'shared folder' 
-							// we will not have the 'tie' DB entry created because of --upload-only because we do not download the folder structure from OneDrive
+							// In a:
+							// 		--resync --upload-only --single-directory 'dir' scenario, and where the root 'dir' for --single-directory is a 'shared folder'
+							// OR
+							// 		--resync --upload-only scenario, and where the root 'dir' to upload is a 'shared folder'
+							//
+							// We will not have the 'tie' DB entry created because of --upload-only because we do not download the folder structure from OneDrive
+							// to know what the remoteDriveId actually is
 							if (accountType == "personal"){
-								// are we in a --resync --upload-only --single-directory scenario ?
-								if ((cfg.getValueBool("resync")) && (cfg.getValueBool("upload_only")) && (singleDirectoryScope)) {
+								// are we in a --resync --upload-only scenario ?
+								if ((cfg.getValueBool("resync")) && (cfg.getValueBool("upload_only"))) {
 									// Create a temp item
 									// Takes a JSON input and formats to an item which can be used by the database
 									Item tempItem = makeItem(pathDetails);
@@ -4534,12 +4539,12 @@ final class SyncEngine
 										// set the right elements
 										tieDBItem.driveId = tempItem.remoteDriveId;
 										tieDBItem.id = tempItem.remoteId;
-									}
-									// Set the correct mtime
-									tieDBItem.mtime = tempItem.mtime;
-									// Add tie DB record to the local database
-									log.vdebug("Adding tie DB record to database: ", tieDBItem);
-									itemdb.upsert(tieDBItem);
+										// Set the correct mtime
+										tieDBItem.mtime = tempItem.mtime;
+										// Add tie DB record to the local database
+										log.vdebug("Adding tie DB record to database: ", tieDBItem);
+										itemdb.upsert(tieDBItem);
+									}				
 								}
 							}
 						} else {
