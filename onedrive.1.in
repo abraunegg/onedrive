@@ -146,6 +146,11 @@ Do not delete local file 'deletes' from OneDrive when using \fB\-\-upload\-only\
 .br
 Configuration file key: \fBno_remote_delete\fP (default: \fBfalse\fP)
 .TP
+\fB\-\-operation\-timeout\fP ARG
+Set the maximum amount of time (seconds) a file operation is allowed to take. This includes DNS resolution, connecting, data transfer, etc.
+.br
+Configuration file key: \fBoperation_timeout\fP (default: \fB3600\fP)
+.TP
 \fB\-\-print\-token\fP
 Print the access token, useful for debugging
 .TP
