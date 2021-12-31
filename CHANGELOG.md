@@ -2,6 +2,22 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.4.15 - 2021-12-31
+### Fixed
+*   Fix unable to upload to OneDrive Business Shared Folders due to OneDrive API restricting quota information
+*   Update fixing edge case with OneDrive Personal Shared Folders and --resync --upload-only
+
+### Added
+*   Add SystemD hardening
+*   Add --operation-timeout argument
+
+### Changed
+*   Updated minimum compiler versions to dmd-2.087.0 and ldc-1.17.0
+
+### Updated
+*   Updated Dockerfile-alpine to use Apline 3.14
+*   Updated documentation (various)
+
 ## 2.4.14 - 2021-11-24
 ### Fixed
 *   Support DMD 2.097.0 as compiler for Docker Builds
