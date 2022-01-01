@@ -223,12 +223,25 @@ The requested client activity log will instead be located in the users home dire
 
 On many systems this can be achieved by
 ```text
-mkdir /var/log/onedrive
-chown root.users /var/log/onedrive
-chmod 0775 /var/log/onedrive
+sudo mkdir /var/log/onedrive
+sudo chown root.users /var/log/onedrive
+sudo chmod 0775 /var/log/onedrive
 ```
 
 All log files will be in the format of `%username%.onedrive.log`, where `%username%` represents the user who ran the client.
+
+Additionally, you need to ensure that your user account is part of the 'users' group:
+```
+cat /etc/group | grep users
+```
+
+If your user is not part of this group, then you need to add your user to this group:
+```
+sudo usermod -a -G users <your-user-name>
+```
+
+You then need to 'logout' of all sessions / SSH sessions to login again to have the new group access applied.
+
 
 **Note:**
 To use a different log directory rather than the default above, add the following as a configuration option to `~/.config/onedrive/config`:
