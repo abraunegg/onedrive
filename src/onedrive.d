@@ -455,6 +455,17 @@ final class OneDriveApi
 			http.handle.set(CurlOption.max_recv_speed_large,userRateLimit);
 		}
 
+		// Explicitly set libcurl options
+		//   https://curl.se/libcurl/c/CURLOPT_NOSIGNAL.html
+		//   Ensure that nosignal is set to 0 - Setting CURLOPT_NOSIGNAL to 0 makes libcurl ask the system to ignore SIGPIPE signals
+		http.handle.set(CurlOption.nosignal,0);
+		//   https://curl.se/libcurl/c/CURLOPT_TCP_NODELAY.html
+		//   Ensure that TCP_NODELAY is set to 0 to ensure that TCP NAGLE is enabled
+		http.handle.set(CurlOption.tcp_nodelay,0);
+		//   https://curl.se/libcurl/c/CURLOPT_FORBID_REUSE.html
+		//   Ensure that we ARE reusing connections - setting to 0 ensures that we are reusing connections
+		http.handle.set(CurlOption.forbid_reuse,0);
+		
 		// Do we set the dryRun handlers?
 		if (cfg.getValueBool("dry_run")) {
 			.dryRun = true;
