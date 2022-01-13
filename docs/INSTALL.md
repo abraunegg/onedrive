@@ -36,9 +36,9 @@ This information is specifically for the following platforms and distributions:
 *   POP OS
 *   Peppermint OS
 
-Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) packages available for Ubuntu, do not install 'onedrive' from these packages via `apt install onedrive`. The default Ubuntu Universe packages are out-of-date and are not supported and should not be used. If you wish to use a package, it is highly recommended that you utilise the [OpenSuSE Build Service](https://build.opensuse.org/project/show/home:npreining:debian-ubuntu-onedrive) to install packages for these platforms. If the OpenSuSE Build Service does not cater for your version, your only option is to build from source.
+Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) Universe packages available for Ubuntu, do not install 'onedrive' from these Universe packages. The default Universe packages are out-of-date and are not supported and should not be used. If you wish to use a package, it is highly recommended that you utilise the [OpenSuSE Build Service](https://build.opensuse.org/project/show/home:npreining:debian-ubuntu-onedrive) to install packages for these platforms. If the OpenSuSE Build Service does not cater for your version, your only option is to build from source.
 
-If you wish to change this situation so that you can just use 'apt install onedrive', consider becoming the Ubuntu package maintainer and contribute back to the community.
+If you wish to change this situation so that you can just use the Universe packages via 'apt install onedrive', consider becoming the Ubuntu package maintainer and contribute back to your community.
 
 ## Building from Source - High Level Requirements
 *   Build environment must have at least 1GB of memory & 1GB swap space
