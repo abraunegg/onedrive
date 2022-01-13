@@ -38,7 +38,7 @@ lsb_release -a
 ### Step 3: Pick the correct instructions to use
 If required, review the table below based on your 'lsb_release' information to pick the appropriate instructions to use:
 
-| Release & Codenmae | Instructions to use |
+| Release & Codename | Instructions to use |
 |--------------------|---------------------|
 | 18.x / bionic            | You must build from source or upgrade your Operating System Ubuntu 20.x      |
 | Linux Mint 19.x / tina   | You must build from source or upgrade your Operating System Linux Mint 20.x  |
