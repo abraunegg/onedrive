@@ -10,7 +10,39 @@ This information is specifically for the following platforms and distributions:
 *   POP OS
 *   Peppermint OS
 
-Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) Universe packages available for Ubuntu, do not install 'onedrive' from these packages via `apt install onedrive`. The default Ubuntu Universe packages are out-of-date and are not supported and should not be used.
+Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) Universe packages available for Ubuntu, do not install 'onedrive' from these Universe packages. The default Ubuntu Universe packages are out-of-date and are not supported and should not be used.
+
+## Determine which instructions to use
+Ubuntu and its clones are based on various different releases, thus, you must use the correct instructions below, otherwise you may run into package dependancy issues and will be unable to install the client.
+
+### Step 1: Ensure your systen is up-to-date
+Use a script, simalar to the following to ensure your system is updated correctly. Run this script as 'root':
+```text
+#!/bin/bash
+rm -rf /var/lib/dpkg/lock-frontend
+rm -rf /var/lib/dpkg/lock
+apt-get update
+apt-get upgrade -y
+apt-get dist-upgrade -y
+apt-get autoremove -y
+apt-get autoclean -y
+```
+Reboot your system after running this process before continuing with Step 2.
+
+### Step 2: Determine what your OS is based on
+Determine what your OS is based on. To do this, run the following command:
+```text
+lsb_release -a
+```
+
+### Step 3: Pick the correct instructions to use
+If required, review the table below based on your 'lsb_release' information to pick the appropriate instructions to use:
+
+| Release & Codename | Instructions to use |
+|--------------------|---------------------|
+| 18.x / bionic            | You must build from source or upgrade your Operating System Ubuntu 20.x      |
+| Linux Mint 19.x / tina   | You must build from source or upgrade your Operating System Linux Mint 20.x  |
+| Linux Mint 20.x / ulyana | Use Ubuntu 20.04 instructions below  |
 
 ## Distribution Package Install Instructions
 
@@ -20,15 +52,17 @@ The packages support the following platform architectures:
 |:----:|:------:|:-----:|:-------:|
 |✔|✔|✔|✔| |
 
-#### Step 1: Update /etc/apt/sources.list
-Add the following to the end of your `/etc/apt/sources.list` file:
+#### Step 1: Add the OpenSuSE Build Service repository
+Add the OpenSuSE Build Service repository using the following command:
 ```text
-deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_10/ ./
+echo 'deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_10/ ./' | sudo tee /etc/apt/sources.list.d/onedrive.list
 ```
 
-#### Step 2: Download and add the release key
-1.  Download the 'Release.key' file: `wget https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_10/Release.key`
-2.  Add the 'Release.key' file to your apt key repository: `apt-key add ./Release.key`
+#### Step 2: Add the OpenSuSE Build Service repository release key
+Add the OpenSuSE Build Service repository release key using the following command:
+```text
+wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_10/Release.key | sudo apt-key add -
+```
 
 #### Step 3: Update your apt package cache
 1.  Run: `apt-get update`
@@ -45,15 +79,17 @@ The packages support the following platform architectures:
 |:----:|:------:|:-----:|:-------:|
 |✔|✔|✔|✔| |
 
-#### Step 1: Update /etc/apt/sources.list
-Add the following to the end of your `/etc/apt/sources.list` file:
+#### Step 1: Add the OpenSuSE Build Service repository
+Add the OpenSuSE Build Service repository using the following command:
 ```text
-deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_11/ ./
+echo 'deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_11/ ./' | sudo tee /etc/apt/sources.list.d/onedrive.list
 ```
 
-#### Step 2: Download and add the release key
-1.  Download the 'Release.key' file: `wget https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_11/Release.key`
-2.  Add the 'Release.key' file to your apt key repository: `apt-key add ./Release.key`
+#### Step 2: Add the OpenSuSE Build Service repository release key
+Add the OpenSuSE Build Service repository release key using the following command:
+```text
+wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_11/Release.key | sudo apt-key add -
+```
 
 #### Step 3: Update your apt package cache
 1.  Run: `apt-get update`
@@ -63,7 +99,6 @@ deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-on
 
 #### Step 5: Read 'Known Issues' with these packages
 1.  Read and understand the known issues with these packages below, taking any action that is needed.
-
 
 ### Distribution: Ubuntu 20.04
 The packages support the following platform architectures:
@@ -71,40 +106,17 @@ The packages support the following platform architectures:
 |:----:|:------:|:-----:|:-------:|
 ❌|✔|✔|✔| |
 
-#### Step 1: Update /etc/apt/sources.list
-Add the following to the end of your `/etc/apt/sources.list` file:
+#### Step 1: Add the OpenSuSE Build Service repository
+Add the OpenSuSE Build Service repository using the following command:
 ```text
-deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_20.04/ ./
+echo 'deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_20.04/ ./' | sudo tee /etc/apt/sources.list.d/onedrive.list
 ```
 
-#### Step 2: Download and add the release key
-1.  Download the 'Release.key' file: `wget https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_20.04/Release.key`
-2.  Add the 'Release.key' file to your apt key repository: `apt-key add ./Release.key`
-
-#### Step 3: Update your apt package cache
-1.  Run: `apt-get update`
-
-#### Step 4: Install 'onedrive'
-1.  Run: `apt install onedrive`
-
-#### Step 5: Read 'Known Issues' with these packages
-1.  Read and understand the known issues with these packages below, taking any action that is needed.
-
-### Distribution: Ubuntu 20.10
-The packages support the following platform architectures:
-| &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
-|:----:|:------:|:-----:|:-------:|
-❌|✔|✔|✔| |
-
-#### Step 1: Update /etc/apt/sources.list
-Add the following to the end of your `/etc/apt/sources.list` file:
+#### Step 2: Add the OpenSuSE Build Service repository release key
+Add the OpenSuSE Build Service repository release key using the following command:
 ```text
-deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_20.10/ ./
+wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_20.04/Release.key | sudo apt-key add -
 ```
-
-#### Step 2: Download and add the release key
-1.  Download the 'Release.key' file: `wget https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_20.10/Release.key`
-2.  Add the 'Release.key' file to your apt key repository: `apt-key add ./Release.key`
 
 #### Step 3: Update your apt package cache
 1.  Run: `apt-get update`
@@ -121,15 +133,17 @@ The packages support the following platform architectures:
 |:----:|:------:|:-----:|:-------:|
 ❌|✔|✔|✔| |
 
-#### Step 1: Update /etc/apt/sources.list
-Add the following to the end of your `/etc/apt/sources.list` file:
+#### Step 1: Add the OpenSuSE Build Service repository
+Add the OpenSuSE Build Service repository using the following command:
 ```text
-deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_21.04/ ./
+echo 'deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_21.04/ ./' | sudo tee /etc/apt/sources.list.d/onedrive.list
 ```
 
-#### Step 2: Download and add the release key
-1.  Download the 'Release.key' file: `wget https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_21.04/Release.key`
-2.  Add the 'Release.key' file to your apt key repository: `apt-key add ./Release.key`
+#### Step 2: Add the OpenSuSE Build Service repository release key
+Add the OpenSuSE Build Service repository release key using the following command:
+```text
+wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_21.04/Release.key | sudo apt-key add -
+```
 
 #### Step 3: Update your apt package cache
 1.  Run: `apt-get update`
@@ -146,15 +160,17 @@ The packages support the following platform architectures:
 |:----:|:------:|:-----:|:-------:|
 ❌|✔|✔|✔| |
 
-#### Step 1: Update /etc/apt/sources.list
-Add the following to the end of your `/etc/apt/sources.list` file:
+#### Step 1: Add the OpenSuSE Build Service repository
+Add the OpenSuSE Build Service repository using the following command:
 ```text
-deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_21.10/ ./
+echo 'deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_21.10/ ./' | sudo tee /etc/apt/sources.list.d/onedrive.list
 ```
 
-#### Step 2: Download and add the release key
-1.  Download the 'Release.key' file: `wget https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_21.10/Release.key`
-2.  Add the 'Release.key' file to your apt key repository: `apt-key add ./Release.key`
+#### Step 2: Add the OpenSuSE Build Service repository release key
+Add the OpenSuSE Build Service repository release key using the following command:
+```text
+wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_21.10/Release.key | sudo apt-key add -
+```
 
 #### Step 3: Update your apt package cache
 1.  Run: `apt-get update`
@@ -180,7 +196,6 @@ This issue is being tracked by: [#1274](https://github.com/abraunegg/onedrive/is
 **Important:** It is highly advisable that you remove this symbolic link before you configure or authenticate your client. If you do not remove this symbolic link before you configure or authenticate your client this could lead to multiple copies of the client running, leading to sync conflics and operational issues which may include data loss (data deleted locally & on OneDrive).
 
 Do not rely on this symbolic link for your systemd configuration to automatically start your onedrive client - refer to [Running 'onedrive' as a system service](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#running-onedrive-as-a-system-service) on how to configure this correctly.
-
 
 ### 2. The client will segfault | core-dump when exiting
 When the client is being run in `--monitor` mode manually, or when using the systemd service, the client will segfault on exit.
