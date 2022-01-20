@@ -1,11 +1,11 @@
 # Advanced Configuration of the OneDrive Free Client
 This document covers the following scenarios:
-*   Configuring the client to use mulitple OneDrive accounts / configurations
+*   Configuring the client to use multiple OneDrive accounts / configurations
 *   Configuring the client for use in dual-boot (Windows / Linux) situations
 *   Configuring the client for use when 'sync_dir' is a mounted directory
 *   Upload data from the local ~/OneDrive folder to a specific location on OneDrive
 
-## Configuring the client to use mulitple OneDrive accounts / configurations
+## Configuring the client to use multiple OneDrive accounts / configurations
 Essentially, each OneDrive account or SharePoint Shared Library which you require to be synced needs to have its own and unique configuration, local sync directory and service files. To do this, the following steps are needed:
 1.  Create a unique configuration folder for each onedrive client configuration that you need
 2.  Copy to this folder a copy of the default configuration file
