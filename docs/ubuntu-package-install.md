@@ -16,7 +16,7 @@ Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive
 Ubuntu and its clones are based on various different releases, thus, you must use the correct instructions below, otherwise you may run into package dependancy issues and will be unable to install the client.
 
 ### Step 1: Ensure your systen is up-to-date
-Use a script, simalar to the following to ensure your system is updated correctly. Run this script as 'root':
+Use a script, simalar to the following to ensure your system is updated correctly:
 ```text
 #!/bin/bash
 rm -rf /var/lib/dpkg/lock-frontend
@@ -27,7 +27,71 @@ apt-get dist-upgrade -y
 apt-get autoremove -y
 apt-get autoclean -y
 ```
+
+Run this script as 'root' by using `su -` to elevate to 'root'. Example below:
+```text
+Welcome to Ubuntu 20.04.1 LTS (GNU/Linux 5.4.0-48-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/advantage
+
+425 updates can be installed immediately.
+208 of these updates are security updates.
+To see these additional updates run: apt list --upgradable
+
+Your Hardware Enablement Stack (HWE) is supported until April 2025.
+Last login: Thu Jan 20 14:21:48 2022 from my.ip.address
+alex@ubuntu-20-LTS:~$ su -
+Password: 
+root@ubuntu-20-LTS:~# ls -la
+total 28
+drwx------  3 root root 4096 Oct 10  2020 .
+drwxr-xr-x 20 root root 4096 Oct 10  2020 ..
+-rw-------  1 root root  175 Jan 20 14:23 .bash_history
+-rw-r--r--  1 root root 3106 Dec  6  2019 .bashrc
+drwx------  2 root root 4096 Apr 23  2020 .cache
+-rw-r--r--  1 root root  161 Dec  6  2019 .profile
+-rwxr-xr-x  1 root root  174 Oct 10  2020 update-os.sh
+root@ubuntu-20-LTS:~# cat update-os.sh 
+#!/bin/bash
+rm -rf /var/lib/dpkg/lock-frontend
+rm -rf /var/lib/dpkg/lock
+apt-get update
+apt-get upgrade -y
+apt-get dist-upgrade -y
+apt-get autoremove -y
+apt-get autoclean -y
+root@ubuntu-20-LTS:~# ./update-os.sh 
+Hit:1 http://au.archive.ubuntu.com/ubuntu focal InRelease
+Hit:2 http://au.archive.ubuntu.com/ubuntu focal-updates InRelease
+Hit:3 http://au.archive.ubuntu.com/ubuntu focal-backports InRelease
+Hit:4 http://security.ubuntu.com/ubuntu focal-security InRelease
+Reading package lists... 96%
+...
+Sourcing file `/etc/default/grub'
+Sourcing file `/etc/default/grub.d/init-select.cfg'
+Generating grub configuration file ...
+Found linux image: /boot/vmlinuz-5.13.0-27-generic
+Found initrd image: /boot/initrd.img-5.13.0-27-generic
+Found linux image: /boot/vmlinuz-5.4.0-48-generic
+Found initrd image: /boot/initrd.img-5.4.0-48-generic
+Found memtest86+ image: /boot/memtest86+.elf
+Found memtest86+ image: /boot/memtest86+.bin
+done
+Removing linux-modules-5.4.0-26-generic (5.4.0-26.30) ...
+Processing triggers for libc-bin (2.31-0ubuntu9.2) ...
+Reading package lists... Done
+Building dependency tree       
+Reading state information... Done
+root@ubuntu-20-LTS:~#
+```
+
 Reboot your system after running this process before continuing with Step 2.
+```text
+reboot
+```
+
 
 ### Step 2: Determine what your OS is based on
 Determine what your OS is based on. To do this, run the following command:
@@ -65,10 +129,10 @@ wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ub
 ```
 
 #### Step 3: Update your apt package cache
-1.  Run: `apt-get update`
+1.  Run: `sudo apt-get update`
 
 #### Step 4: Install 'onedrive'
-1.  Run: `apt install onedrive`
+1.  Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
 1.  Read and understand the known issues with these packages below, taking any action that is needed.
@@ -92,10 +156,10 @@ wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ub
 ```
 
 #### Step 3: Update your apt package cache
-1.  Run: `apt-get update`
+1.  Run: `sudo apt-get update`
 
 #### Step 4: Install 'onedrive'
-1.  Run: `apt install onedrive`
+1.  Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
 1.  Read and understand the known issues with these packages below, taking any action that is needed.
@@ -119,10 +183,10 @@ wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ub
 ```
 
 #### Step 3: Update your apt package cache
-1.  Run: `apt-get update`
+1.  Run: `sudo apt-get update`
 
 #### Step 4: Install 'onedrive'
-1.  Run: `apt install onedrive`
+1.  Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
 1.  Read and understand the known issues with these packages below, taking any action that is needed.
@@ -146,10 +210,10 @@ wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ub
 ```
 
 #### Step 3: Update your apt package cache
-1.  Run: `apt-get update`
+1.  Run: `sudo apt-get update`
 
 #### Step 4: Install 'onedrive'
-1.  Run: `apt install onedrive`
+1.  Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
 1.  Read and understand the known issues with these packages below, taking any action that is needed.
