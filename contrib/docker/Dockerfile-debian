@@ -1,10 +1,12 @@
 # -*-Dockerfile-*-
 
-ARG DEBIAN_VERSION=buster
-ARG LDC_VERSION=1.17.0
+ARG DEBIAN_VERSION=bullseye
+ARG LDC_VERSION_MAIN=1.28.1
+ARG LDC_VERSION_ARMHF=1.17.0
 
 FROM debian:${DEBIAN_VERSION} AS builder-onedrive
-ARG LDC_VERSION
+ARG LDC_VERSION_MAIN
+ARG LDC_VERSION_ARMHF
 
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential curl ca-certificates libcurl4-openssl-dev libsqlite3-dev libxml2-dev pkg-config \
@@ -13,13 +15,13 @@ RUN apt-get update \
 RUN ARCH="$(dpkg --print-architecture)" \
  && case "${ARCH}" in \
       aarch64|arm64) \
-        BINARY_URL="https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-linux-aarch64.tar.xz"; \
+        BINARY_URL="https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION_MAIN}/ldc2-${LDC_VERSION_MAIN}-linux-aarch64.tar.xz"; \
         ;; \
       armhf|arm) \
-        BINARY_URL="https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-linux-armhf.tar.xz"; \
+        BINARY_URL="https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION_ARMHF}/ldc2-${LDC_VERSION_ARMHF}-linux-armhf.tar.xz"; \
         ;; \
       amd64|x86-64) \
-        BINARY_URL="https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-linux-x86_64.tar.xz"; \
+        BINARY_URL="https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION_MAIN}/ldc2-${LDC_VERSION_MAIN}-linux-x86_64.tar.xz"; \
         ;; \
       *) \
         echo "Unsupported arch: ${ARCH}"; \
