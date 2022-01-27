@@ -90,6 +90,8 @@ final class Config
 		stringValues["application_id"] = "";
 		// allow for resync to be set via config file
 		boolValues["resync"] = false;
+		// resync now needs to be acknowledged based on the 'risk' of using it
+		boolValues["resync_auth"] = false;
 		// Ignore data safety checks and overwrite local data rather than preserve & rename
 		// This is a config file option ONLY
 		boolValues["bypass_data_preservation"] = false;
@@ -213,8 +215,8 @@ final class Config
 		}
 
 		// configDirName has a trailing /
-		log.vlog("Using 'user' Config Dir: ", configDirName);
-		log.vlog("Using 'system' Config Dir: ", systemConfigDirName);
+		if (!configDirName.empty) log.vlog("Using 'user' Config Dir: ", configDirName);
+		if (!systemConfigDirName.empty) log.vlog("Using 'system' Config Dir: ", systemConfigDirName);
 
 		// Update application set variables based on configDirName
 		refreshTokenFilePath = buildNormalizedPath(configDirName ~ "/refresh_token");
@@ -409,6 +411,9 @@ final class Config
 				"resync",
 					"Forget the last saved state, perform a full sync",
 					&boolValues["resync"],
+				"resync-auth",
+					"Approve the use of performing a --resync action",
+					&boolValues["resync_auth"],
 				"remove-directory",
 					"Remove a directory on OneDrive - no sync will be performed.",
 					&stringValues["remove_directory"],
