@@ -120,6 +120,7 @@ int main(string[] args)
 			"verbose|v+", "Print more details, useful for debugging (repeat for extra debugging)", &log.verbose,
 			"version", "Print the version and exit", &printVersion
 		);
+		
 		// print help and exit
 		if (opt.helpWanted) {
 			args ~= "--help";
@@ -148,6 +149,10 @@ int main(string[] args)
 		// Error message already printed
 		return EXIT_FAILURE;
 	}
+	
+	// How was this application started - what options were passed in
+	log.vdebug("passed in options: ", args);
+	log.vdebug("note --confdir and --verbose not listed in args");
 
 	// set memory display
 	displayMemoryUsage = cfg.getValueBool("display_memory");
@@ -157,6 +162,47 @@ int main(string[] args)
 
 	// update configuration from command line args
 	cfg.update_from_args(args);
+
+	// --resync should be a 'last resort item' .. the user needs to 'accept' to proceed 
+	if (cfg.getValueBool("resync")) {
+		// what is the risk acceptance?
+		bool resyncRiskAcceptance = false;
+	
+		if (!cfg.getValueBool("resync_auth")) {
+			// need to prompt user
+			char response;
+			// warning message
+			writeln("\nThe use of --resync will remove your local 'onedrive' client state, thus no record will exist regarding your current 'sync status'");
+			writeln("This has the potential to overwrite local versions of files with potentially older versions downloaded from OneDrive which can lead to data loss");
+			writeln("If in-doubt, backup your local data first before proceeding with --resync");
+			write("\nAre you sure you wish to proceed with --resync? [Y/N] ");
+			
+			try {
+				// Attempt to read user response
+				readf(" %c\n", &response);
+			} catch (std.format.FormatException e) {
+				// Caught an error
+				return EXIT_FAILURE;
+			}
+			
+			// Evaluate user repsonse
+			if ((to!string(response) == "y") || (to!string(response) == "Y")) {
+				// User has accepted --resync risk to proceed
+				resyncRiskAcceptance = true;
+				// Are you sure you wish .. does not use writeln();
+				write("\n");
+			}
+		} else {
+			// resync_auth is true
+			resyncRiskAcceptance = true;
+		}
+		
+		// Action based on response
+		if (!resyncRiskAcceptance){
+			// --resync risk not accepted
+			return EXIT_FAILURE;
+		}
+	}
 
 	// Initialise normalised file paths
 	configFilePath = buildNormalizedPath(cfg.configDirName ~ "/config");

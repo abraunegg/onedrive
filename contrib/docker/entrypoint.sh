@@ -53,8 +53,8 @@ fi
 # Tell client to perform a resync based on environment variable
 if [ "${ONEDRIVE_RESYNC:=0}" == "1" ]; then
    echo "# We are performing a --resync"
-   echo "# Adding --resync"
-   ARGS=(--resync ${ARGS[@]})
+   echo "# Adding --resync --resync-auth"
+   ARGS=(--resync --resync-auth ${ARGS[@]})
 fi
 
 # Tell client to sync in download-only mode based on environment variable

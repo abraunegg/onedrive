@@ -27,7 +27,8 @@
     + [monitor_interval](#monitor_interval)
     + [min_notify_changes](#min_notify_changes)
     + [operation_timeout](#operation_timeout)
-    + [Selective sync via 'sync_list' file](#selective-sync-via-sync_list-file)
+  * [Performing a --resync](#performing-a---resync)
+  * [Selective sync via 'sync_list' file](#selective-sync-via-sync_list-file)
   * [Configuring the client for 'single tenant application' use](#configuring-the-client-for-single-tenant-application-use)
   * [Configuring the client to use older 'skilion' application identifier](#configuring-the-client-to-use-older-skilion-application-identifier)
   * [How to 'skip' directories from syncing?](#how-to-skip-directories-from-syncing)
@@ -362,6 +363,7 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # skip_dir_strict_match = "false"
 # application_id = ""
 # resync = "false"
+# resync_auth = "false"
 # bypass_data_preservation = "false"
 # azure_ad_endpoint = ""
 # azure_tenant_id = "common"
@@ -377,7 +379,6 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # webhook_expiration_interval = "86400"
 # webhook_renewal_interval = "43200"
 ```
-
 
 ### 'config' file configuration examples:
 The below are 'config' file examples to assist with configuration of the 'config' file:
@@ -544,7 +545,33 @@ operation_timeout = "3600"
 ```
 Operation Timeout is the maximum amount of time (seconds) a file operation is allowed to take. This includes DNS resolution, connecting, data transfer, etc.
 
-#### Selective sync via 'sync_list' file
+### Performing a --resync
+If you modify any of the following configuration items, you will be required to perform a `--resync` to ensure your client is syncing your data with the updated configuration:
+*   sync_dir
+*   skip_dir
+*   skip_file
+*   drive_id
+*   Modifying sync_list
+*   Modifying business_shared_folders
+
+Additionally, you may choose to perform a `--resync` if you feel that this action needs to be taken to ensure your data is in sync. If you are using this switch simply because you dont know the sync status, you can query the actual sync status using `--display-sync-status`.
+
+When using `--resync`, the following warning and advice will be presented:
+```text
+The use of --resync will remove your local 'onedrive' client state, thus no record will exist regarding your current 'sync status'
+This has the potential to overwrite local versions of files with potentially older versions downloaded from OneDrive which can lead to data loss
+If in-doubt, backup your local data first before proceeding with --resync
+
+Are you sure you wish to proceed with --resync? [Y/N]
+```
+
+To proceed with using `--resync`, you must type 'y' or 'Y' to allow the application to continue.
+
+**Note:** It is highly recommended to only use `--resync` if the application advises you to use it. Do not just blindly set the application to start with `--resync` as the default option.
+
+**Note:** In some automated environments (and it is 100% assumed you *know* what you are doing because of automation), in order to avoid this 'proceed with acknowledgement' requirement, add `--resync-auth` to automatically acknowledge the prompt.
+
+### Selective sync via 'sync_list' file
 Selective sync allows you to sync only specific files and directories.
 To enable selective sync create a file named `sync_list` in `~/.config/onedrive`.
 Each line of the file represents a relative path from your `sync_dir`. All files and directories not matching any line of the file will be skipped during all operations.
@@ -1083,6 +1110,8 @@ Options:
       Remove source file after successful transfer to OneDrive when using --upload-only
   --resync
       Forget the last saved state, perform a full sync
+  --resync-auth
+      Approve the use of performing a --resync action
   --single-directory ARG
       Specify a single local directory within the OneDrive root to sync.
   --skip-dir ARG
