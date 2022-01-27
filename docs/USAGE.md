@@ -27,7 +27,8 @@
     + [monitor_interval](#monitor_interval)
     + [min_notify_changes](#min_notify_changes)
     + [operation_timeout](#operation_timeout)
-    + [Selective sync via 'sync_list' file](#selective-sync-via-sync_list-file)
+  * [Performing a --resync](#performing-a---resync)
+  * [Selective sync via 'sync_list' file](#selective-sync-via-sync_list-file)
   * [Configuring the client for 'single tenant application' use](#configuring-the-client-for-single-tenant-application-use)
   * [Configuring the client to use older 'skilion' application identifier](#configuring-the-client-to-use-older-skilion-application-identifier)
   * [How to 'skip' directories from syncing?](#how-to-skip-directories-from-syncing)
@@ -544,7 +545,7 @@ operation_timeout = "3600"
 ```
 Operation Timeout is the maximum amount of time (seconds) a file operation is allowed to take. This includes DNS resolution, connecting, data transfer, etc.
 
-#### Performing a --resync
+### Performing a --resync
 If you modify any of the following configuration items, you will be required to perform a `--resync` to ensure your client is syncing your data with the updated configuration:
 *   sync_dir
 *   skip_dir
@@ -570,7 +571,7 @@ To proceed with using `--resync`, you must type 'y' or 'Y' to allow the applicat
 
 **Note:** In some automated environments (and it is 100% assumed you *know* what you are doing because of automation), in order to avoid this 'proceed with acknowledgement' requirement, add `--resync-auth` to automatically acknowledge the prompt.
 
-#### Selective sync via 'sync_list' file
+### Selective sync via 'sync_list' file
 Selective sync allows you to sync only specific files and directories.
 To enable selective sync create a file named `sync_list` in `~/.config/onedrive`.
 Each line of the file represents a relative path from your `sync_dir`. All files and directories not matching any line of the file will be skipped during all operations.
