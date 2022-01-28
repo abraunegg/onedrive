@@ -22,6 +22,7 @@ complete -c onedrive -l local-first -d 'Synchronize from the local directory sou
 complete -c onedrive -l logout -d 'Logout the current user.'
 complete -c onedrive -n "not __fish_seen_subcommand_from --synchronize" -a "-m --monitor" -d 'Keep monitoring for local and remote changes.'
 complete -c onedrive -l no-remote-delete -d 'Do not delete local file deletes from OneDrive when using --upload-only.'
+complete -c onedrive -l operation-timeout -d 'Specify the maximum amount of time (in seconds) an operation is allowed to take.'
 complete -c onedrive -l print-token -d 'Print the access token, useful for debugging.'
 complete -c onedrive -l remote-directory -d 'Remove a directory on OneDrive - no sync will be performed.'
 complete -c onedrive -l resync -d 'Forget the last saved state, perform a full sync.'

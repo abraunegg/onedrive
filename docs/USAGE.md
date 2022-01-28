@@ -26,7 +26,9 @@
     + [skip_symlinks](#skip_symlinks)
     + [monitor_interval](#monitor_interval)
     + [min_notify_changes](#min_notify_changes)
-    + [Selective sync via 'sync_list' file](#selective-sync-via-sync_list-file)
+    + [operation_timeout](#operation_timeout)
+  * [Performing a --resync](#performing-a---resync)
+  * [Selective sync via 'sync_list' file](#selective-sync-via-sync_list-file)
   * [Configuring the client for 'single tenant application' use](#configuring-the-client-for-single-tenant-application-use)
   * [Configuring the client to use older 'skilion' application identifier](#configuring-the-client-to-use-older-skilion-application-identifier)
   * [How to 'skip' directories from syncing?](#how-to-skip-directories-from-syncing)
@@ -35,6 +37,10 @@
   * [Shared folders (OneDrive Business or Office 365)](#shared-folders-onedrive-business-or-office-365)
   * [SharePoint / Office 365 Shared Libraries](#sharepoint--office-365-shared-libraries)
 - [Running 'onedrive' in 'monitor' mode](#running-onedrive-in-monitor-mode)
+  * [Use webhook to subscribe to remote updates in 'monitor' mode](#use-webhook-to-subscribe-to-remote-updates-in-monitor-mode)
+  * [More webhook configuration options](#more-webhook-configuration-options)
+    + [webhook_listening_host and webhook_listening_port](#webhook_listening_host-and-webhook_listening_port)
+    + [webhook_expiration_interval and webhook_renewal_interval](#webhook_expiration_interval-and-webhook_renewal_interval)
 - [Running 'onedrive' as a system service](#running-onedrive-as-a-system-service)
   * [OneDrive service running as root user via init.d](#onedrive-service-running-as-root-user-via-initd)
   * [OneDrive service running as root user via systemd (Arch, Ubuntu, Debian, OpenSuSE, Fedora)](#onedrive-service-running-as-root-user-via-systemd-arch-ubuntu-debian-opensuse-fedora)
@@ -83,19 +89,19 @@ After installing the application you must authorize the application with your On
 
 You will be asked to open a specific URL by using your web browser where you will have to login into your Microsoft Account and give the application the permission to access your files. After giving permission to the application, you will be redirected to a blank page. Copy the URI of the blank page into the application.
 ```text
-[user@hostname ~]$ onedrive 
+[user@hostname ~]$ onedrive
 
 Authorize this app visiting:
 
 https://.....
 
-Enter the response uri: 
+Enter the response uri:
 
 ```
 
 **Example:**
 ```
-[user@hostname ~]$ onedrive 
+[user@hostname ~]$ onedrive
 Authorize this app visiting:
 
 https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=22c49a0d-d21c-4792-aed1-8f163c982546&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
@@ -119,7 +125,7 @@ Config path                            = /home/alex/.config/onedrive
 Config file found in config path       = false
 Config option 'check_nosync'           = false
 Config option 'sync_dir'               = /home/alex/OneDrive
-Config option 'skip_dir'               = 
+Config option 'skip_dir'               =
 Config option 'skip_file'              = ~*|.~*|*.tmp
 Config option 'skip_dotfiles'          = false
 Config option 'skip_symlinks'          = false
@@ -187,7 +193,7 @@ Example: If the full path is `~/OneDrive/mydir`, the command would be `onedrive 
 ### Performing a 'one-way' download sync
 In some cases it may be desirable to 'download only' from OneDrive. To do this use the following command:
 ```text
-onedrive --synchronize --download-only 
+onedrive --synchronize --download-only
 ```
 
 ### Performing a 'one-way' upload sync
@@ -218,12 +224,25 @@ The requested client activity log will instead be located in the users home dire
 
 On many systems this can be achieved by
 ```text
-mkdir /var/log/onedrive
-chown root.users /var/log/onedrive
-chmod 0775 /var/log/onedrive
+sudo mkdir /var/log/onedrive
+sudo chown root.users /var/log/onedrive
+sudo chmod 0775 /var/log/onedrive
 ```
 
 All log files will be in the format of `%username%.onedrive.log`, where `%username%` represents the user who ran the client.
+
+Additionally, you need to ensure that your user account is part of the 'users' group:
+```
+cat /etc/group | grep users
+```
+
+If your user is not part of this group, then you need to add your user to this group:
+```
+sudo usermod -a -G users <your-user-name>
+```
+
+You then need to 'logout' of all sessions / SSH sessions to login again to have the new group access applied.
+
 
 **Note:**
 To use a different log directory rather than the default above, add the following as a configuration option to `~/.config/onedrive/config`:
@@ -344,6 +363,7 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # skip_dir_strict_match = "false"
 # application_id = ""
 # resync = "false"
+# resync_auth = "false"
 # bypass_data_preservation = "false"
 # azure_ad_endpoint = ""
 # azure_tenant_id = "common"
@@ -351,8 +371,14 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # sync_dir_permissions = "700"
 # sync_file_permissions = "600"
 # rate_limit = "131072"
+# operation_timeout = "3600"
+# webhook_enabled = "false"
+# webhook_public_url = ""
+# webhook_listening_host = ""
+# webhook_listening_port = "8888"
+# webhook_expiration_interval = "86400"
+# webhook_renewal_interval = "43200"
 ```
-
 
 ### 'config' file configuration examples:
 The below are 'config' file examples to assist with configuration of the 'config' file:
@@ -399,7 +425,7 @@ sync_file_permissions = "600"
 **Important:** Special permission bits (setuid, setgid, sticky bit) are not supported. Valid permission values are from `000` to `777` only.
 
 #### skip_dir
-Example: 
+Example:
 ```text
 # When changing a config option below, remove the '#' from the start of the line
 # For explanations of all config options below see docs/USAGE.md or the man page.
@@ -510,14 +536,49 @@ min_notify_changes = "50"
 ```
 This option defines the minimum number of pending incoming changes necessary to trigger a desktop notification. This allows controlling the frequency of notifications.
 
-#### Selective sync via 'sync_list' file
+#### operation_timeout
+Example:
+```text
+# sync_file_permissions = "600"
+# rate_limit = "131072"
+operation_timeout = "3600"
+```
+Operation Timeout is the maximum amount of time (seconds) a file operation is allowed to take. This includes DNS resolution, connecting, data transfer, etc.
+
+### Performing a --resync
+If you modify any of the following configuration items, you will be required to perform a `--resync` to ensure your client is syncing your data with the updated configuration:
+*   sync_dir
+*   skip_dir
+*   skip_file
+*   drive_id
+*   Modifying sync_list
+*   Modifying business_shared_folders
+
+Additionally, you may choose to perform a `--resync` if you feel that this action needs to be taken to ensure your data is in sync. If you are using this switch simply because you dont know the sync status, you can query the actual sync status using `--display-sync-status`.
+
+When using `--resync`, the following warning and advice will be presented:
+```text
+The use of --resync will remove your local 'onedrive' client state, thus no record will exist regarding your current 'sync status'
+This has the potential to overwrite local versions of files with potentially older versions downloaded from OneDrive which can lead to data loss
+If in-doubt, backup your local data first before proceeding with --resync
+
+Are you sure you wish to proceed with --resync? [Y/N]
+```
+
+To proceed with using `--resync`, you must type 'y' or 'Y' to allow the application to continue.
+
+**Note:** It is highly recommended to only use `--resync` if the application advises you to use it. Do not just blindly set the application to start with `--resync` as the default option.
+
+**Note:** In some automated environments (and it is 100% assumed you *know* what you are doing because of automation), in order to avoid this 'proceed with acknowledgement' requirement, add `--resync-auth` to automatically acknowledge the prompt.
+
+### Selective sync via 'sync_list' file
 Selective sync allows you to sync only specific files and directories.
 To enable selective sync create a file named `sync_list` in `~/.config/onedrive`.
 Each line of the file represents a relative path from your `sync_dir`. All files and directories not matching any line of the file will be skipped during all operations.
 Here is an example of `sync_list`:
 ```text
 # sync_list supports comments
-# 
+#
 # The ordering of entries is highly recommended - exclusions before inclusions
 #
 # Exclude temp folders under Documents
@@ -551,7 +612,7 @@ The following are supported for pattern matching and exclusion rules:
 To simplify 'exclusions' and 'inclusions', the following is also possible:
 ```text
 # sync_list supports comments
-# 
+#
 # The ordering of entries is highly recommended - exclusions before inclusions
 #
 # Exclude temp folders under Documents
@@ -572,7 +633,7 @@ sync_root_files = "true"
 This will tell the application to sync any file that it finds in your 'sync_dir' root by default.
 
 ### Configuring the client for 'single tenant application' use
-In some instances when using OneDrive Business Accounts, depending on the Azure organisational configuration, it will be necessary to configure the client as a 'single tenant application'. 
+In some instances when using OneDrive Business Accounts, depending on the Azure organisational configuration, it will be necessary to configure the client as a 'single tenant application'.
 To configure this, after creating the application on your Azure tenant, update the 'config' file with the tenant name (not the GUID) and the newly created Application ID, then this will be used for the authentication process.
 ```text
 # skip_dir_strict_match = "false"
@@ -670,6 +731,59 @@ sudo sysctl fs.inotify.max_user_watches=<new_value>
 ```
 
 To make these changes permanent, refer to your OS reference documentation.
+
+### Use webhook to subscribe to remote updates in 'monitor' mode
+
+A webhook can be optionally enabled in the monitor mode to allow the onedrive process to subscribe to remote updates. Remote changes can be synced to your local file system as soon as possible, without waiting for the next sync cycle.
+
+To enable this feature, you need to configure the following options in the config file:
+
+```
+webhook_enabled = "true"
+webhook_public_url = "<public-facing url to reach your webhook>"
+```
+
+Setting `webhook_enabled` to `true` enables the webhook in 'monitor' mode. The onedrive process will listen for incoming updates at a configurable endpoint, which defaults to `0.0.0.0:8888`. The `webhook_public_url` must be set to an public-facing url for Microsoft to send updates to your webhook. If your host is directly exposed to the Internet, the `webhook_public_url` can be set to `http://<your_host>:8888/` to match the default endpoint. However, the recommended approach is to configure a reverse proxy like nginx.
+
+For example, below is a nginx config snippet to proxy traffic into the webhook:
+
+```
+http {
+  server {
+    listen 80;
+    location /webhooks/onedrive {
+      proxy_pass http://127.0.0.1:8888;
+    }
+  }
+}
+```
+
+With nginx running, you can configure `webhook_public_url` to `http://<your_host>/webhooks/onedrive`.
+
+### More webhook configuration options
+
+Below options can be optionally configured. The default is usually good enough.
+
+#### webhook_listening_host and webhook_listening_port
+
+Set `webhook_listening_host` and `webhook_listening_port` to change the webhook listening endpoint. If `webhook_listening_host` is left empty, which is the default, the webhook will bind to `0.0.0.0`. The default `webhook_listening_port` is `8888`.
+
+```
+webhook_listening_host = ""
+webhook_listening_port = "8888"
+```
+
+#### webhook_expiration_interval and webhook_renewal_interval
+
+Set `webhook_expiration_interval` and `webhook_renewal_interval` to change the frequency of subscription renewal. By default, the webhook asks Microsoft to keep subscriptions alive for 24 hours, and it renews subscriptions when it is less than 12 hours before their expiration.
+
+```
+# Default expiration interval is 24 hours
+webhook_expiration_interval = "86400"
+
+# Default renewal interval is 12 hours
+webhook_renewal_interval = "43200"
+```
 
 ## Running 'onedrive' as a system service
 There are a few ways to use onedrive as a service
@@ -857,7 +971,8 @@ for extra details.
 *   Configuring the client to use mulitple OneDrive accounts / configurations
 *   Configuring the client for use in dual-boot (Windows / Linux) situations
 *   Configuring the client for use when 'sync_dir' is a mounted directory
- 
+*   Upload data from the local ~/OneDrive folder to a specific location on OneDrive
+
 Refer to [./advanced-usage.md](advanced-usage.md) for configuration assistance.
 
 ### Access OneDrive service through a proxy
@@ -921,6 +1036,8 @@ Options:
       Perform authorization via two files passed in as ARG in the format `authUrl:responseUrl`
       The authorization URL is written to the `authUrl`, then onedrive waits for the file `responseUrl`
       to be present, and reads the response from that file.
+  --auth-response ARG
+      Perform authentication not via interactive dialog but via providing the reponse url directly.
   --check-for-nomount
       Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
   --check-for-nosync
@@ -937,6 +1054,8 @@ Options:
       Debug OneDrive HTTPS communication.
   --destination-directory ARG
       Destination directory for renamed or move on OneDrive - no sync will be performed.
+  --disable-download-validation
+      Disable download validation when downloading from OneDrive
   --disable-notifications
       Do not use desktop notifications in monitor mode.
   --disable-upload-validation
@@ -953,8 +1072,6 @@ Options:
       Enable client activity to a separate log file
   --force
       Force the deletion of data when a 'big delete' is detected
-  --force-http-1.1
-      Force the use of HTTP/1.1 for all operations (DEPRECIATED)
   --force-http-2
       Force the use of HTTP/2 for all operations where applicable
   --get-O365-drive-id ARG
@@ -983,6 +1100,8 @@ Options:
       Frequency of logging in monitor mode
   --no-remote-delete
       Do not delete local file 'deletes' from OneDrive when using --upload-only
+  --operation-timeout
+      Maximum amount of time (in seconds) an operation is allowed to take
   --print-token
       Print the access token, useful for debugging
   --remove-directory ARG
@@ -991,6 +1110,8 @@ Options:
       Remove source file after successful transfer to OneDrive when using --upload-only
   --resync
       Forget the last saved state, perform a full sync
+  --resync-auth
+      Approve the use of performing a --resync action
   --single-directory ARG
       Specify a single local directory within the OneDrive root to sync.
   --skip-dir ARG

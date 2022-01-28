@@ -5,11 +5,13 @@ import config, itemdb, monitor, onedrive, selective, sync, util, translations;
 import std.net.curl: CurlException;
 import core.stdc.signal;
 import std.traits;
+import std.concurrency: receiveTimeout;
 static import log;
 
 OneDriveApi oneDrive;
 ItemDatabase itemDb;
 
+bool onedriveInitialised = false;
 const int EXIT_UNAUTHORIZED = 3;
 enum MONITOR_LOG_SILENT = 2;
 enum MONITOR_LOG_QUIET  = 1;
@@ -22,7 +24,7 @@ int main(string[] args)
 {
 	// Disable buffering on stdout
 	stdout.setvbuf(0, _IONBF);
-	
+
 	// main function variables
 	string confdirOption;
 	string configFilePath;
@@ -50,10 +52,9 @@ int main(string[] args)
 	bool skipDirDifferent = false;
 	bool online = false;
 	bool performSyncOK = false;
-	bool onedriveInitialised = false;
 	bool displayMemoryUsage = false;
 	bool displaySyncOptions = false;
-	
+
 	// Define scopes
 	scope(exit) {
 		// Display memory details
@@ -81,7 +82,7 @@ int main(string[] args)
 			log.displayMemoryUsagePostGC();
 		}
 	}
-	
+
 	scope(failure) {
 		// Display memory details
 		if (displayMemoryUsage) {
@@ -127,6 +128,7 @@ int main(string[] args)
 			"verbose|v+", "Print more details, useful for debugging (repeat for extra debugging)", &log.verbose,
 			"version", "Print the version and exit", &printVersion
 		);
+		
 		// print help and exit
 		if (opt.helpWanted) {
 			args ~= "--help";
@@ -160,7 +162,7 @@ int main(string[] args)
 		log.error(helpMessage);
 		return EXIT_FAILURE;
 	}
-	
+
 	// load configuration file if available
 	auto cfg = new config.Config(confdirOption);
 	// initialise config options
@@ -181,21 +183,66 @@ int main(string[] args)
 	setConfigLanguageIdentifier(languageIdentifier);
 	log.log("Application Language set to: ", languageIdentifier);
 	
+	// How was this application started - what options were passed in
+	log.vdebug("passed in options: ", args);
+	log.vdebug("note --confdir and --verbose not listed in args");
+
 	// set memory display
 	displayMemoryUsage = cfg.getValueBool("display_memory");
-	
+
 	// set display sync options
 	displaySyncOptions =  cfg.getValueBool("display_sync_options");
-	 
+
 	// update configuration from command line args
 	cfg.update_from_args(args);
+
+	// --resync should be a 'last resort item' .. the user needs to 'accept' to proceed 
+	if (cfg.getValueBool("resync")) {
+		// what is the risk acceptance?
+		bool resyncRiskAcceptance = false;
 	
+		if (!cfg.getValueBool("resync_auth")) {
+			// need to prompt user
+			char response;
+			// warning message
+			writeln("\nThe use of --resync will remove your local 'onedrive' client state, thus no record will exist regarding your current 'sync status'");
+			writeln("This has the potential to overwrite local versions of files with potentially older versions downloaded from OneDrive which can lead to data loss");
+			writeln("If in-doubt, backup your local data first before proceeding with --resync");
+			write("\nAre you sure you wish to proceed with --resync? [Y/N] ");
+			
+			try {
+				// Attempt to read user response
+				readf(" %c\n", &response);
+			} catch (std.format.FormatException e) {
+				// Caught an error
+				return EXIT_FAILURE;
+			}
+			
+			// Evaluate user repsonse
+			if ((to!string(response) == "y") || (to!string(response) == "Y")) {
+				// User has accepted --resync risk to proceed
+				resyncRiskAcceptance = true;
+				// Are you sure you wish .. does not use writeln();
+				write("\n");
+			}
+		} else {
+			// resync_auth is true
+			resyncRiskAcceptance = true;
+		}
+		
+		// Action based on response
+		if (!resyncRiskAcceptance){
+			// --resync risk not accepted
+			return EXIT_FAILURE;
+		}
+	}
+
 	// Initialise normalised file paths
 	configFilePath = buildNormalizedPath(cfg.configDirName ~ "/config");
 	syncListFilePath = buildNormalizedPath(cfg.configDirName ~ "/sync_list");
 	databaseFilePath = buildNormalizedPath(cfg.configDirName ~ "/items.db");
 	businessSharedFolderFilePath = buildNormalizedPath(cfg.configDirName ~ "/business_shared_folders");
-	
+
 	// Has any of our configuration that would require a --resync been changed?
 	// 1. sync_list file modification
 	// 2. config file modification - but only if sync_dir, skip_dir, skip_file or drive_id was modified
@@ -204,25 +251,25 @@ int main(string[] args)
 	syncListHashFile = buildNormalizedPath(cfg.configDirName ~ "/.sync_list.hash");
 	configBackupFile = buildNormalizedPath(cfg.configDirName ~ "/.config.backup");
 	businessSharedFoldersHashFile = buildNormalizedPath(cfg.configDirName ~ "/.business_shared_folders.hash");
-	
+
 	// Does a config file exist with a valid hash file
 	if ((exists(configFilePath)) && (!exists(configHashFile))) {
 		// Hash of config file needs to be created
 		std.file.write(configHashFile, computeQuickXorHash(configFilePath));
 	}
-	
+
 	// Does a sync_list file exist with a valid hash file
 	if ((exists(syncListFilePath)) && (!exists(syncListHashFile))) {
 		// Hash of sync_list file needs to be created
 		std.file.write(syncListHashFile, computeQuickXorHash(syncListFilePath));
 	}
-	
+
 	// check if business_shared_folders & business_shared_folders hash exists
 	if ((exists(businessSharedFolderFilePath)) && (!exists(businessSharedFoldersHashFile))) {
 		// Hash of business_shared_folders file needs to be created
 		std.file.write(businessSharedFoldersHashFile, computeQuickXorHash(businessSharedFolderFilePath));
 	}
-	
+
 	// If hash files exist, but config files do not ... remove the hash, but only if --resync was issued as now the application will use 'defaults' which 'may' be different
 	if ((!exists(configFilePath)) && (exists(configHashFile))) {
 		// if --resync safe remove config.hash and config.backup
@@ -231,18 +278,18 @@ int main(string[] args)
 			safeRemove(configBackupFile);
 		}
 	}
-	
+
 	// If sync_list hash file exists, but sync_list file does not ... remove the hash, but only if --resync was issued as now the application will use 'defaults' which 'may' be different
 	if ((!exists(syncListFilePath)) && (exists(syncListHashFile))) {
 		// if --resync safe remove sync_list.hash
 		if (cfg.getValueBool("resync")) safeRemove(syncListHashFile);
 	}
-	
+
 	if ((!exists(businessSharedFolderFilePath)) && (exists(businessSharedFoldersHashFile))) {
 		// if --resync safe remove business_shared_folders.hash
 		if (cfg.getValueBool("resync")) safeRemove(businessSharedFoldersHashFile);
 	}
-	
+
 	// Read config hashes if they exist
 	if (exists(configFilePath)) currentConfigHash = computeQuickXorHash(configFilePath);
 	if (exists(syncListFilePath)) currentSyncListHash = computeQuickXorHash(syncListFilePath);
@@ -250,21 +297,21 @@ int main(string[] args)
 	if (exists(configHashFile)) previousConfigHash = readText(configHashFile);
 	if (exists(syncListHashFile)) previousSyncListHash = readText(syncListHashFile);
 	if (exists(businessSharedFoldersHashFile)) previousBusinessSharedFoldersHash = readText(businessSharedFoldersHashFile);
-	
+
 	// Was sync_list file updated?
 	if (currentSyncListHash != previousSyncListHash) {
 		// Debugging output to assist what changed
 		log.vdebug("sync_list file has been updated, --resync needed");
 		syncListDifferent = true;
 	}
-	
+
 	// Was business_shared_folders updated?
 	if (currentBusinessSharedFoldersHash != previousBusinessSharedFoldersHash) {
 		// Debugging output to assist what changed
 		log.vdebug("business_shared_folders file has been updated, --resync needed");
 		businessSharedFoldersDifferent = true;
 	}
-	
+
 	// Was config file updated between last execution ang this execution?
 	if (currentConfigHash != previousConfigHash) {
 		// config file was updated, however we only want to trigger a --resync requirement if sync_dir, skip_dir, skip_file or drive_id was modified
@@ -300,7 +347,7 @@ int main(string[] args)
 							log.vdebug(key, " was modified since the last time the application was successfully run, --resync needed");
 							configOptionsDifferent = true;
 						}
-						
+
 						if ((key == "skip_file") && (c.front.dup != cfg.getValueString("skip_file"))){
 							log.vdebug(key, " was modified since the last time the application was successfully run, --resync needed");
 							configOptionsDifferent = true;
@@ -325,7 +372,7 @@ int main(string[] args)
 			// no backup to check
 			log.vdebug("WARNING: no backup config file was found, unable to validate if any changes made");
 		}
-		
+
 		// If there was a backup, any modified values we need to worry about would been detected
 		if (!cfg.getValueBool("display_config")) {
 			// we are not testing the configuration
@@ -343,13 +390,13 @@ int main(string[] args)
 			}
 		}
 	}
-	
+
 	// Is there a backup of the config file if the config file exists?
 	if ((exists(configFilePath)) && (!exists(configBackupFile))) {
 		// create backup copy of current config file
 		std.file.copy(configFilePath, configBackupFile);
 	}
-	
+
 	// config file set options can be changed via CLI input, specifically these will impact sync and --resync will be needed:
 	//  --syncdir ARG
 	//  --skip-file ARG
@@ -365,7 +412,7 @@ int main(string[] args)
 				syncDirDifferent = true;
 			}
 		}
-		
+
 		// was the skip_file updated by CLI?
 		if (cfg.configFileSkipFile != "") {
 			// skip_file was set in config file
@@ -374,8 +421,8 @@ int main(string[] args)
 				log.vdebug("skip_file: CLI override of config file option, --resync needed");
 				skipFileDifferent = true;
 			}
-		} 
-		
+		}
+
 		// was the skip_dir updated by CLI?
 		if (cfg.configFileSkipDir != "") {
 			// skip_dir was set in config file
@@ -386,7 +433,7 @@ int main(string[] args)
 			}
 		}
 	}
-	
+
 	// Has anything triggered a --resync requirement?
 	if (configOptionsDifferent || syncListDifferent || syncDirDifferent || skipFileDifferent || skipDirDifferent || businessSharedFoldersDifferent) {
 		// --resync needed, is the user just testing configuration changes?
@@ -423,7 +470,7 @@ int main(string[] args)
 			}
 		}
 	}
-	
+
 	// dry-run notification and database setup
 	if (cfg.getValueBool("dry_run")) {
 		// "DRY-RUN Configured. Output below shows what 'would' have occurred"
@@ -434,18 +481,18 @@ int main(string[] args)
 		if (exists(cfg.databaseFilePathDryRun)) {
 			// remove the existing file
 			log.vdebug("Removing items-dryrun.sqlite3 as it still exists for some reason");
-			safeRemove(cfg.databaseFilePathDryRun);	
+			safeRemove(cfg.databaseFilePathDryRun);
 		}
 		// silent cleanup of shm and wal files if they exist
 		if (exists(dryRunShmFile)) {
 			// remove items-dryrun.sqlite3-shm
-			safeRemove(dryRunShmFile);	
+			safeRemove(dryRunShmFile);
 		}
 		if (exists(dryRunWalFile)) {
 			// remove items-dryrun.sqlite3-wal
-			safeRemove(dryRunWalFile);	
+			safeRemove(dryRunWalFile);
 		}
-		
+
 		// Make a copy of the original items.sqlite3 for use as the dry run copy if it exists
 		if (exists(cfg.databaseFilePath)) {
 			// in a --dry-run --resync scenario, we should not copy the existing database file
@@ -459,7 +506,7 @@ int main(string[] args)
 			}
 		}
 	}
-	
+
 	// sync_dir environment handling to handle ~ expansion properly
 	bool shellEnvSet = false;
 	if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
@@ -486,10 +533,10 @@ int main(string[] args)
 			syncDir = cfg.getValueString("sync_dir");
 		}
 	}
-	
+
 	// vdebug syncDir as set and calculated
 	log.vdebug("syncDir: ", syncDir);
-	
+
 	// Configure the logging directory if different from application default
 	// log_dir environment handling to handle ~ expansion properly
 	string logDir = cfg.getValueString("log_dir");
@@ -514,7 +561,7 @@ int main(string[] args)
 		// update log_dir with normalised path, with '~' expanded correctly
 		cfg.setValueString("log_dir", logDir);
 	}
-	
+
 	// Configure logging only if enabled
 	if (cfg.getValueBool("enable_logging")){
 		// Initialise using the configured logging directory
@@ -525,7 +572,7 @@ int main(string[] args)
 
 	// Configure whether notifications are used
 	log.setNotifications(cfg.getValueBool("monitor") && !cfg.getValueBool("disable_notifications"));
-	
+
 	// Application upgrades - skilion version etc
 	if (exists(databaseFilePath)) {
 		if (!cfg.getValueBool("dry_run")) {
@@ -538,18 +585,19 @@ int main(string[] args)
 
 	// Handle --logout as separate item, do not 'resync' on a --logout / reauth
 	if (cfg.getValueBool("logout")) {
-		// log action
 		log.vdebug("--logout requested");
+		log.log("Deleting the saved authentication status ...");
 		if (!cfg.getValueBool("dry_run")) {
 			safeRemove(cfg.refreshTokenFilePath);
 		}
+		// Exit
+		return EXIT_SUCCESS;
 	}
-	
+
 	// Handle --resync to remove local files
 	if (cfg.getValueBool("resync")) {
-		// log action
 		log.vdebug("--resync requested");
-		// "Deleting the saved status ..."
+		// "Deleting the saved application sync status ..."
 		log.vlog(provideLanguageTranslation(languageIdentifier,19));
 		if (!cfg.getValueBool("dry_run")) {
 			safeRemove(cfg.databaseFilePath);
@@ -557,7 +605,7 @@ int main(string[] args)
 			safeRemove(cfg.uploadStateFilePath);
 		}
 	}
-	
+
 	// Display current application configuration, no application initialisation
 	if (cfg.getValueBool("display_config")){
 		// Display application version
@@ -566,7 +614,7 @@ int main(string[] args)
 		writeln("Config path                            = ", cfg.configDirName);
 		// Does a config file exist or are we using application defaults
 		writeln("Config file found in config path       = ", exists(configFilePath));
-		
+
 		// Config Options
 		writeln("Config option 'language_identifier'    = ", languageIdentifier);
 		writeln("Config option 'check_nosync'           = ", cfg.getValueBool("check_nosync"));
@@ -582,12 +630,12 @@ int main(string[] args)
 		writeln("Config option 'upload_only'            = ", cfg.getValueBool("upload_only"));
 		writeln("Config option 'no_remote_delete'       = ", cfg.getValueBool("no_remote_delete"));
 		writeln("Config option 'remove_source_files'    = ", cfg.getValueBool("remove_source_files"));
-		
+
 		// Is config option drive_id configured?
 		if (cfg.getValueString("drive_id") != ""){
 			writeln("Config option 'drive_id'               = ", cfg.getValueString("drive_id"));
 		}
-		
+
 		// Is sync_list configured?
 		if (exists(syncListFilePath)){
 			writeln("Config option 'sync_root_files'        = ", cfg.getValueBool("sync_root_files"));
@@ -604,7 +652,7 @@ int main(string[] args)
 			writeln("Config option 'sync_root_files'        = ", cfg.getValueBool("sync_root_files"));
 			writeln("Selective sync 'sync_list' configured  = false");
 		}
-		
+
 		// Is business_shared_folders configured
 		if (exists(businessSharedFolderFilePath)){
 			writeln("Business Shared Folders configured     = true");
@@ -619,11 +667,11 @@ int main(string[] args)
 		} else {
 			writeln("Business Shared Folders configured     = false");
 		}
-		
+
 		// Exit
 		return EXIT_SUCCESS;
 	}
-	
+
 	// Test if OneDrive service can be reached, exit if it cant be reached
 	log.vdebug("Testing network to ensure network connectivity to Microsoft OneDrive Service");
 	online = testNetwork();
@@ -636,9 +684,10 @@ int main(string[] args)
 			return EXIT_FAILURE;
 		} else {
 			// Running as --monitor
+
 			// "Unable to reach Microsoft OneDrive API service at this point in time, re-trying network tests"
 			log.error(provideLanguageTranslation(languageIdentifier,21),"\n");
-			
+
 			// re-try network connection to OneDrive
 			// https://github.com/abraunegg/onedrive/issues/1184
 			// Back off & retry with incremental delay
@@ -646,13 +695,13 @@ int main(string[] args)
 			int retryAttempts = 1;
 			int backoffInterval = 1;
 			int maxBackoffInterval = 3600;
-			
+
 			bool retrySuccess = false;
 			while (!retrySuccess){
 				// retry to access OneDrive API
 				backoffInterval++;
 				int thisBackOffInterval = retryAttempts*backoffInterval;
-				log.vdebug("  Retry Attempt:      ", retryAttempts);				
+				log.vdebug("  Retry Attempt:      ", retryAttempts);
 				if (thisBackOffInterval <= maxBackoffInterval) {
 					log.vdebug("  Retry In (seconds): ", thisBackOffInterval);
 					Thread.sleep(dur!"seconds"(thisBackOffInterval));
@@ -673,7 +722,7 @@ int main(string[] args)
 						// we have attempted to re-connect X number of times
 						// false set this to true to break out of while loop
 						retrySuccess = true;
-					}	
+					}
 				}
 				// Increment & loop around
 				retryAttempts++;
@@ -686,7 +735,7 @@ int main(string[] args)
 			}
 		}
 	}
-	
+
 	// Initialize OneDrive, check for authorization
 	if (online) {
 		// we can only initialise if we are online
@@ -696,25 +745,25 @@ int main(string[] args)
 		onedriveInitialised = oneDrive.init();
 		oneDrive.printAccessToken = cfg.getValueBool("print_token");
 	}
-	
+
 	if (!onedriveInitialised) {
 		// "Could not initialise the OneDrive API"
 		log.error(provideLanguageTranslation(languageIdentifier,25));
 		// Use exit scopes to shutdown API
 		return EXIT_UNAUTHORIZED;
 	}
-	
+
 	// if --synchronize or --monitor not passed in, configure the flag to display help & exit
 	if (cfg.getValueBool("synchronize") || cfg.getValueBool("monitor")) {
 		performSyncOK = true;
 	}
-	
+
 	// create-directory, remove-directory, source-directory, destination-directory
 	// these are activities that dont perform a sync, so to not generate an error message for these items either
 	if (((cfg.getValueString("create_directory") != "") || (cfg.getValueString("remove_directory") != "")) || ((cfg.getValueString("source_directory") != "") && (cfg.getValueString("destination_directory") != "")) || (cfg.getValueString("get_file_link") != "") || (cfg.getValueString("create_share_link") != "") || (cfg.getValueString("get_o365_drive_id") != "") || cfg.getValueBool("display_sync_status") || cfg.getValueBool("list_business_shared_folders")) {
 		performSyncOK = true;
 	}
-	
+
 	// Were acceptable sync operations provided? Was --synchronize or --monitor passed in
 	if (!performSyncOK) {
 		// was the application just authorised?
@@ -746,7 +795,7 @@ int main(string[] args)
 			return EXIT_FAILURE;
 		}
 	}
-	
+
 	// if --synchronize && --monitor passed in, exit & display help as these conflict with each other
 	if (cfg.getValueBool("synchronize") && cfg.getValueBool("monitor")) {
 		// "ERROR: --synchronize and --monitor cannot be used together"
@@ -756,7 +805,7 @@ int main(string[] args)
 		// Use exit scopes to shutdown API
 		return EXIT_FAILURE;
 	}
-	
+
 	// Initialize the item database
 	// "Opening the item database ..."
 	log.vlog(provideLanguageTranslation(languageIdentifier,32));
@@ -769,7 +818,7 @@ int main(string[] args)
 		log.vdebug("Using database file: ", asNormalizedPath(cfg.databaseFilePathDryRun));
 		itemDb = new ItemDatabase(cfg.databaseFilePathDryRun);
 	}
-	
+
 	// What are the permission that have been set for the application?
 	// These are relevant for:
 	// - The ~/OneDrive parent folder or 'sync_dir' configured item
@@ -787,7 +836,7 @@ int main(string[] args)
 		log.vdebug("Configuring default new file permissions as: ", cfg.getValueLong("sync_file_permissions"));
 		cfg.configureRequiredFilePermisions();
 	}
-	
+
 	// configure the sync direcory based on syncDir config option
 	// "All operations will be performed in: "
 	log.vlog(provideLanguageTranslation(languageIdentifier,34), syncDir);
@@ -807,13 +856,13 @@ int main(string[] args)
 			return EXIT_FAILURE;
 		}
 	}
-	
+
 	// Change the working directory to the 'sync_dir' configured item
 	chdir(syncDir);
-	
+
 	// Configure selective sync by parsing and getting a regex for skip_file config component
 	auto selectiveSync = new SelectiveSync();
-	
+
 	// load sync_list if it exists
 	if (exists(syncListFilePath)){
 		log.vdebug("Loading user configured sync_list file ...");
@@ -832,7 +881,7 @@ int main(string[] args)
 		}
 	}
 	selectiveSync.load(syncListFilePath);
-	
+
 	// load business_shared_folders if it exists
 	if (exists(businessSharedFolderFilePath)){
 		log.vdebug("Loading user configured business_shared_folders file ...");
@@ -845,27 +894,27 @@ int main(string[] args)
 		}
 	}
 	selectiveSync.loadSharedFolders(businessSharedFolderFilePath);
-	
+
 	// Configure skip_dir, skip_file, skip-dir-strict-match & skip_dotfiles from config entries
 	// Handle skip_dir configuration in config file
 	log.vdebug("Configuring skip_dir ...");
 	log.vdebug("skip_dir: ", cfg.getValueString("skip_dir"));
 	selectiveSync.setDirMask(cfg.getValueString("skip_dir"));
-	
+
 	// Was --skip-dir-strict-match configured?
 	log.vdebug("Configuring skip_dir_strict_match ...");
 	log.vdebug("skip_dir_strict_match: ", cfg.getValueBool("skip_dir_strict_match"));
 	if (cfg.getValueBool("skip_dir_strict_match")) {
 		selectiveSync.setSkipDirStrictMatch();
 	}
-	
+
 	// Was --skip-dot-files configured?
 	log.vdebug("Configuring skip_dotfiles ...");
 	log.vdebug("skip_dotfiles: ", cfg.getValueBool("skip_dotfiles"));
 	if (cfg.getValueBool("skip_dotfiles")) {
 		selectiveSync.setSkipDotfiles();
 	}
-	
+
 	// Handle skip_file configuration in config file
 	log.vdebug("Configuring skip_file ...");
 	// Validate skip_file to ensure that this does not contain an invalid configuration
@@ -881,7 +930,7 @@ int main(string[] args)
 	// All skip_file entries are valid
 	log.vdebug("skip_file: ", cfg.getValueString("skip_file"));
 	selectiveSync.setFileMask(cfg.getValueString("skip_file"));
-	
+
 	// Initialize the sync engine
 	auto sync = new SyncEngine(cfg, oneDrive, itemDb, selectiveSync);
 	try {
@@ -908,7 +957,7 @@ int main(string[] args)
 	if (syncListConfigured) {
 		sync.setSyncListConfigured();
 	}
-	
+
 	// Do we need to configure specific --upload-only options?
 	if (cfg.getValueBool("upload_only")) {
 		// --upload-only was passed in or configured
@@ -927,10 +976,13 @@ int main(string[] args)
 			sync.setLocalDeleteAfterUpload();
 		}
 	}
-			
+
 	// Do we configure to disable the upload validation routine
 	if (cfg.getValueBool("disable_upload_validation")) sync.setDisableUploadValidation();
-	
+
+	// Do we configure to disable the download validation routine
+	if (cfg.getValueBool("disable_download_validation")) sync.setDisableDownloadValidation();
+
 	// Has the user enabled to bypass data preservation of renaming local files when there is a conflict?
 	if (cfg.getValueBool("bypass_data_preservation")) {
 		// "WARNING: Application has been configured to bypass local data preservation in the event of file conflict"
@@ -939,7 +991,7 @@ int main(string[] args)
 		log.log(provideLanguageTranslation(languageIdentifier,40));
 		sync.setBypassDataPreservation();
 	}
-	
+
 	// Are we configured to use a National Cloud Deployment
 	if (cfg.getValueString("azure_ad_endpoint") != "") {
 		// value is configured, is it a valid value?
@@ -948,7 +1000,7 @@ int main(string[] args)
 			sync.setNationalCloudDeployment();
 		}
 	}
-	
+
 	// Do we need to validate the syncDir to check for the presence of a '.nosync' file
 	if (cfg.getValueBool("check_nomount")) {
 		// we were asked to check the mounts
@@ -959,53 +1011,53 @@ int main(string[] args)
 			return EXIT_FAILURE;
 		}
 	}
-	
+
 	// Do we need to create or remove a directory?
 	if ((cfg.getValueString("create_directory") != "") || (cfg.getValueString("remove_directory") != "")) {
-	
+
 		if (cfg.getValueString("create_directory") != "") {
 			// create a directory on OneDrive
 			sync.createDirectoryNoSync(cfg.getValueString("create_directory"));
 		}
-	
+
 		if (cfg.getValueString("remove_directory") != "") {
 			// remove a directory on OneDrive
 			sync.deleteDirectoryNoSync(cfg.getValueString("remove_directory"));
 		}
 	}
-	
+
 	// Are we renaming or moving a directory?
 	if ((cfg.getValueString("source_directory") != "") && (cfg.getValueString("destination_directory") != "")) {
 		// We are renaming or moving a directory
 		sync.renameDirectoryNoSync(cfg.getValueString("source_directory"), cfg.getValueString("destination_directory"));
 	}
-	
+
 	// Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
 	if (cfg.getValueString("get_o365_drive_id") != "") {
 		sync.querySiteCollectionForDriveID(cfg.getValueString("get_o365_drive_id"));
-		// Exit application 
+		// Exit application
 		// Use exit scopes to shutdown API
 		return EXIT_SUCCESS;
 	}
-	
+
 	// Are we createing an anonymous read-only shareable link for an existing file on OneDrive?
 	if (cfg.getValueString("create_share_link") != "") {
 		// Query OneDrive for the file, and if valid, create a shareable link for the file
 		sync.createShareableLinkForFile(cfg.getValueString("create_share_link"));
-		// Exit application 
+		// Exit application
 		// Use exit scopes to shutdown API
 		return EXIT_SUCCESS;
 	}
-	
+
 	// Are we obtaining the URL path for a synced file?
 	if (cfg.getValueString("get_file_link") != "") {
 		// Query OneDrive for the file link
 		sync.queryOneDriveForFileURL(cfg.getValueString("get_file_link"), syncDir);
-		// Exit application 
+		// Exit application
 		// Use exit scopes to shutdown API
 		return EXIT_SUCCESS;
 	}
-	
+
 	// Are we listing OneDrive Business Shared Folders
 	if (cfg.getValueBool("list_business_shared_folders")) {
 		// Is this a business account type?
@@ -1016,11 +1068,11 @@ int main(string[] args)
 			// "ERROR: Unsupported account type for listing OneDrive Business Shared Folders"
 			log.error(provideLanguageTranslation(languageIdentifier,42));
 		}
-		// Exit application 
+		// Exit application
 		// Use exit scopes to shutdown API
 		return EXIT_SUCCESS;
 	}
-	
+
 	// Are we going to sync OneDrive Business Shared Folders
 	if (cfg.getValueBool("sync_business_shared_folders")) {
 		// Is this a business account type?
@@ -1032,7 +1084,7 @@ int main(string[] args)
 			log.error(provideLanguageTranslation(languageIdentifier,43));
 		}
 	}
-	
+
 	// Are we displaying the sync status of the client?
 	if (cfg.getValueBool("display_sync_status")) {
 		string remotePath = "/";
@@ -1043,7 +1095,7 @@ int main(string[] args)
 		}
 		sync.queryDriveForChanges(remotePath);
 	}
-	
+
 	// Are we performing a sync, or monitor operation?
 	if ((cfg.getValueBool("synchronize")) || (cfg.getValueBool("monitor"))) {
 		// Initialise the monitor class, so that we can do more granular inotify handling when performing the actual sync
@@ -1071,19 +1123,19 @@ int main(string[] args)
 				// fullScanRequired = false, for final true-up
 				// but if we have sync_list configured, use syncListConfigured which = true
 				performSync(sync, cfg.getValueString("single_directory"), cfg.getValueBool("download_only"), cfg.getValueBool("local_first"), cfg.getValueBool("upload_only"), LOG_NORMAL, false, syncListConfigured, displaySyncOptions, cfg.getValueBool("monitor"), m);
-				
+
 				// Write WAL and SHM data to file for this sync
 				log.vdebug("Merge contents of WAL and SHM files into main database file");
 				itemDb.performVacuum();
 			}
 		}
-			
+
 		if (cfg.getValueBool("monitor")) {
 			// "Initialising monitor ..."
 			log.logAndNotify(provideLanguageTranslation(languageIdentifier,45));
 			// "OneDrive monitor interval (seconds): "
-			log.log(provideLanguageTranslation(languageIdentifier,46), cfg.getValueLong("monitor_interval"));
-			
+			log.log(provideLanguageTranslation(languageIdentifier,46), cfg.getValueLong("monitor_interval"));			
+
 			m.onDirCreated = delegate(string path) {
 				// Handle .folder creation if skip_dotfiles is enabled
 				if ((cfg.getValueBool("skip_dotfiles")) && (selectiveSync.isDotFile(path))) {
@@ -1189,7 +1241,8 @@ int main(string[] args)
 				// sync list is configured
 				syncListConfiguredFullScanOverride = true;
 			}
-			
+			immutable bool webhookEnabled = cfg.getValueBool("webhook_enabled");
+
 			while (performMonitor) {
 				if (!cfg.getValueBool("download_only")) {
 					try {
@@ -1200,7 +1253,35 @@ int main(string[] args)
 						log.error(provideLanguageTranslation(languageIdentifier,62), e.msg);
 					}
 				}
-				
+
+				// Check for notifications pushed from Microsoft to the webhook
+				bool notificationReceived = false;
+				if (webhookEnabled) {
+					// Create a subscription on the first run, or renew the subscription
+					// on subsequent runs when it is about to expire.
+					oneDrive.createOrRenewSubscription();
+
+					// Process incoming notifications if any.
+
+					// Empirical evidence shows that Microsoft often sends multiple
+					// notifications for one single change, so we need a loop to exhaust
+					// all signals that were queued up by the webhook. The notifications
+					// do not contain any actual changes, and we will always rely do the
+					// delta endpoint to sync to latest. Therefore, only one sync run is
+					// good enough to catch up for multiple notifications.
+					for (int signalCount = 0;; signalCount++) {
+						const auto signalExists = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
+						if (signalExists) {
+							notificationReceived = true;
+						} else {
+							if (notificationReceived) {
+								log.log("Received ", signalCount," refresh signals from the webhook");
+							}
+							break;
+						}
+					}
+				}
+
 				auto currTime = MonoTime.currTime();
 				// has monitor_interval elapsed or are we at application startup / monitor startup?
 				// in a --resync scenario, if we have not 're-populated' the database, valid changes will get skipped:
@@ -1210,7 +1291,7 @@ int main(string[] args)
 				//   Moving random_files/2eVPInOMTFNXzRXeNMEoJch5OR9XpGby to target/2eVPInOMTFNXzRXeNMEoJch5OR9XpGby
 				//   Skipping uploading this new file as parent path is not in the database: target/2eVPInOMTFNXzRXeNMEoJch5OR9XpGby
 				// 'target' should be in the DB, it should also exist online, but because of --resync, it does not exist in the database thus parent check fails
-				if ((currTime - lastCheckTime > checkInterval) || (monitorLoopFullCount == 0)) {
+				if (notificationReceived || (currTime - lastCheckTime > checkInterval) || (monitorLoopFullCount == 0)) {
 					// monitor sync loop
 					logOutputMessage = "################################################## NEW LOOP ##################################################";
 					if (displaySyncOptions) {
@@ -1224,7 +1305,7 @@ int main(string[] args)
 					if (displayMemoryUsage) {
 						log.displayMemoryUsagePreGC();
 					}
-					
+
 					// log monitor output suppression
 					logMonitorCounter += 1;
 					if (logMonitorCounter > logInterval) {
@@ -1246,7 +1327,7 @@ int main(string[] args)
 							fullScanRequired = false;
 						}
 					}
-					
+
 					if (displaySyncOptions) {
 						// sync option handling per sync loop
 						log.log("fullScanCounter =                    ", fullScanCounter);
@@ -1311,14 +1392,14 @@ int main(string[] args)
 					if (displayMemoryUsage) {
 						log.displayMemoryUsagePostGC();
 					}
-					
+
 					// Write WAL and SHM data to file for this loop
 					log.vdebug("Merge contents of WAL and SHM files into main database file");
 					itemDb.performVacuum();
-					
+
 					// monitor loop complete
 					logOutputMessage = "################################################ LOOP COMPLETE ###############################################";
-					
+
 					// Handle display options
 					if (displaySyncOptions) {
 						log.log(logOutputMessage);
@@ -1348,20 +1429,20 @@ int main(string[] args)
 			// remove the file
 			log.vdebug("Removing items-dryrun.sqlite3 as dry run operations complete");
 			// remove items-dryrun.sqlite3
-			safeRemove(cfg.databaseFilePathDryRun);	
+			safeRemove(cfg.databaseFilePathDryRun);
 		}
 		// silent cleanup of shm and wal files if they exist
 		if (exists(dryRunShmFile)) {
 			// remove items-dryrun.sqlite3-shm
-			safeRemove(dryRunShmFile);	
+			safeRemove(dryRunShmFile);
 		}
 		if (exists(dryRunWalFile)) {
 			// remove items-dryrun.sqlite3-wal
-			safeRemove(dryRunWalFile);	
+			safeRemove(dryRunWalFile);
 		}
 	}
-	
-	// Exit application 
+
+	// Exit application
 	// Use exit scopes to shutdown API
 	return EXIT_SUCCESS;
 }
@@ -1393,14 +1474,14 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 	string remotePath = "/";
     string localPath = ".";
 	string logOutputMessage;
-	
+
 	// performSync API scan triggers
 	log.vdebug("performSync API scan triggers");
 	log.vdebug("-----------------------------");
 	log.vdebug("fullScanRequired =                   ", fullScanRequired);
 	log.vdebug("syncListConfiguredFullScanOverride = ", syncListConfiguredFullScanOverride);
 	log.vdebug("-----------------------------");
-	
+
 	// Are we doing a single directory sync?
 	if (singleDirectory != ""){
 		// Need two different path strings here
@@ -1409,12 +1490,12 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 		// Set flag for singleDirectoryScope for change handling
 		sync.setSingleDirectoryScope();
 	}
-	
+
 	// Due to Microsoft Sharepoint 'enrichment' of files, we try to download the Microsoft modified file automatically
 	// Set flag if we are in upload only state to handle this differently
-	// See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details   
+	// See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details
 	if (uploadOnly) sync.setUploadOnly();
-	
+
 	do {
 		try {
 			// starting a sync
@@ -1500,8 +1581,8 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 						// "Syncing changes from OneDrive only - NOT syncing local data changes to OneDrive ..."
 						if (downloadOnly) log.log(provideLanguageTranslation(languageIdentifier,77));
 						sync.applyDifferences(false);
-						
-						// is this a download only request?						
+
+						// is this a download only request?
 						if (!downloadOnly) {
 							// process local changes walking the entire path checking for changes
 							// in monitor mode all local changes are captured via inotify
@@ -1515,7 +1596,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 								log.vdebug(logOutputMessage);
 								log.vdebug(syncCallLogOutput);
 							}
-							
+
 							// What sort of local scan do we want to do?
 							// In --monitor mode, when performing the DB scan, a race condition occurs where by if a file or folder is moved during this process
 							// the inotify event is discarded once performSync() is finished (see m.update(false) above), so these events need to be handled
@@ -1536,20 +1617,20 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 								// handle any inotify events that occured 'whilst' we were scanning the local filesystem
 								m.update(true);
 							}
-							
+
 							// At this point, all OneDrive changes / local changes should be uploaded and in sync
 							// This MAY not be the case when using sync_list, thus a full walk of OneDrive ojects is required
-							
+
 							// --synchronize & no sync_list     : fullScanRequired = false, syncListConfiguredFullScanOverride = false
 							// --synchronize & sync_list in use : fullScanRequired = false, syncListConfiguredFullScanOverride = true
-							
+
 							// --monitor loops around 10 iterations. On the 1st loop, sets fullScanRequired = false, syncListConfiguredFullScanOverride = true if requried
-							
+
 							// --monitor & no sync_list (loop #1)           : fullScanRequired = true, syncListConfiguredFullScanOverride = false
 							// --monitor & no sync_list (loop #2 - #10)     : fullScanRequired = false, syncListConfiguredFullScanOverride = false
 							// --monitor & sync_list in use (loop #1)       : fullScanRequired = true, syncListConfiguredFullScanOverride = true
 							// --monitor & sync_list in use (loop #2 - #10) : fullScanRequired = false, syncListConfiguredFullScanOverride = false
-							
+
 							// Do not perform a full walk of the OneDrive objects
 							if ((!fullScanRequired) && (!syncListConfiguredFullScanOverride)){
 								logOutputMessage = "Final True-Up: Do not perform a full walk of the OneDrive objects - not required";
@@ -1563,7 +1644,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 								}
 								sync.applyDifferences(false);
 							}
-							
+
 							// Perform a full walk of OneDrive objects because sync_list is in use / or trigger was set in --monitor loop
 							if ((!fullScanRequired) && (syncListConfiguredFullScanOverride)){
 								logOutputMessage = "Final True-Up: Perform a full walk of OneDrive objects because sync_list is in use / or trigger was set in --monitor loop";
@@ -1577,7 +1658,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 								}
 								sync.applyDifferences(true);
 							}
-							
+
 							// Perform a full walk of OneDrive objects because a full scan was required
 							if ((fullScanRequired) && (!syncListConfiguredFullScanOverride)){
 								logOutputMessage = "Final True-Up: Perform a full walk of OneDrive objects because a full scan was required";
@@ -1588,10 +1669,10 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 								} else {
 									log.vdebug(logOutputMessage);
 									log.vdebug(syncCallLogOutput);
-								}							
+								}
 								sync.applyDifferences(true);
 							}
-							
+
 							// Perform a full walk of OneDrive objects because a full scan was required and sync_list is in use and trigger was set in --monitor loop
 							if ((fullScanRequired) && (syncListConfiguredFullScanOverride)){
 								logOutputMessage = "Final True-Up: Perform a full walk of OneDrive objects because a full scan was required and sync_list is in use and trigger was set in --monitor loop";
@@ -1609,7 +1690,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 					}
 				}
 			}
-			
+
 			// sync is complete
 			logOutputMessage = "################################################ SYNC COMPLETE ###############################################";
 			if (displaySyncOptions) {
@@ -1617,7 +1698,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 			} else {
 				log.vdebug(logOutputMessage);
 			}
-			
+
 			count = -1;
 		} catch (Exception e) {
 			if (++count == 3) {
@@ -1643,16 +1724,22 @@ auto assumeNoGC(T) (T t) if (isFunctionPointer!T || isDelegate!T)
 extern(C) nothrow @nogc @system void exitHandler(int value) {
 	try {
 		assumeNoGC ( () {
+
 			// Generate log message
 			// " Got termination signal, shutting down DB connection"
 			log.log(provideLanguageTranslation(languageIdentifier,76));
+			// if initialised, shut down the HTTP instance
+			if (onedriveInitialised) {
+				log.vdebug("Shutting down the HTTP instance");
+				oneDrive.shutdown();
+			}
 			// was itemDb initialised?
 			if (itemDb !is null) {
 				// Make sure the .wal file is incorporated into the main db before we exit
+				log.vdebug("Shutting down db connection");
 				itemDb.performVacuum();
 				destroy(itemDb);
 			}
-			// Use exit scopes to shutdown OneDrive API
 		})();
 	} catch(Exception e) {}
 	exit(0);

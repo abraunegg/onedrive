@@ -1,10 +1,11 @@
 # Advanced Configuration of the OneDrive Free Client
 This document covers the following scenarios:
-*   Configuring the client to use mulitple OneDrive accounts / configurations
+*   Configuring the client to use multiple OneDrive accounts / configurations
 *   Configuring the client for use in dual-boot (Windows / Linux) situations
 *   Configuring the client for use when 'sync_dir' is a mounted directory
+*   Upload data from the local ~/OneDrive folder to a specific location on OneDrive
 
-## Configuring the client to use mulitple OneDrive accounts / configurations
+## Configuring the client to use multiple OneDrive accounts / configurations
 Essentially, each OneDrive account or SharePoint Shared Library which you require to be synced needs to have its own and unique configuration, local sync directory and service files. To do this, the following steps are needed:
 1.  Create a unique configuration folder for each onedrive client configuration that you need
 2.  Copy to this folder a copy of the default configuration file
@@ -169,3 +170,26 @@ Next, in your 'config' file, configure the following options: `check_nomount = "
 What this will do is tell the client, if at *any* point you see this file - stop syncing - thus, protecting your online data from being deleted by the mounted device being suddenly unavailable.
 
 After making this sort of change - test with `--dry-run` so you can see the impacts of your mount point being unavailable, and how the client is now reacting. Once you are happy with how the system will react, restart your sync processes.
+
+
+## Upload data from the local ~/OneDrive folder to a specific location on OneDrive
+In some environments, you may not want your local ~/OneDrive folder to be uploaded directly to the root of your OneDrive account online.
+
+Unfortunatly, the OneDrive API lacks any facility to perform a re-direction of data during upload.
+
+The workaround for this is to structure your local filesystem and reconfigure your client to achieve the desired goal.
+
+### High level steps:
+1.   Create a new folder, for example `/opt/OneDrive`
+2.   Configure your application config 'sync_dir' to look at this folder
+3.   Inside `/opt/OneDrive` create the folder you wish to sync the data online to, for example: `/opt/OneDrive/RemoteOnlineDestination`
+4.   Configure the application to only sync `/opt/OneDrive/RemoteDestination` via 'sync_list'
+5.   Symbolically link `~/OneDrive` -> `/opt/OneDrive/RemoteOnlineDestination`
+
+### Outcome:
+*   Your `~/OneDrive` will look / feel as per normal
+*   The data will be stored online under `/RemoteOnlineDestination`
+
+### Testing:
+*   Validate your configuration with `onedrive --display-config`
+*   Test your configuration with `onedrive --dry-run`

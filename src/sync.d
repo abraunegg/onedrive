@@ -30,6 +30,9 @@ private bool uploadOnly = false;
 // Do we configure to disable the upload validation routine
 private bool disableUploadValidation = false;
 
+// Do we configure to disable the download validation routine
+private bool disableDownloadValidation = false;
+
 private bool isItemFolder(const ref JSONValue item)
 {
 	return ("folder" in item) != null;
@@ -400,7 +403,15 @@ final class SyncEngine
 			accountType = oneDriveDetails["driveType"].str;
 			defaultDriveId = oneDriveDetails["id"].str;
 			defaultRootId = oneDriveRootDetails["id"].str;
-			remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+			
+			// get the remaining size from OneDrive API
+			if ("remaining" in oneDriveDetails["quota"]){
+				// use the value provided
+				remainingFreeSpace = oneDriveDetails["quota"]["remaining"].integer;
+			} else {
+				// set at zero
+				remainingFreeSpace = 0;
+			}
 			
 			// Make sure that defaultDriveId is in our driveIDs array to use when checking if item is in database
 			// Keep the driveIDsArray with unique entries only
@@ -430,10 +441,12 @@ final class SyncEngine
 					if (accountType == "personal"){
 						// "ERROR: OneDrive quota information is missing. Potentially your OneDrive account currently has zero space available. Please free up some space online."
 						log.error(provideLanguageTranslation(languageIdentifier,83));
+						quotaAvailable = false;
 					} else {
 						// quota details not available
 						// "ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator."
 						log.error(provideLanguageTranslation(languageIdentifier,84));
+						quotaRestricted = true;
 					}				
 				}
 			}
@@ -465,6 +478,7 @@ final class SyncEngine
 			// If account type is documentLibrary - then most likely this is a SharePoint repository
 			// and files 'may' be modified after upload. See: https://github.com/abraunegg/onedrive/issues/205
 			if(accountType == "documentLibrary") {
+				// set this flag for SharePoint regardless of --disable-upload-validation being used
 				setDisableUploadValidation();
 			}
 		
@@ -574,6 +588,18 @@ final class SyncEngine
 		log.vdebug("documentLibrary account type - flagging to disable upload validation checks due to Microsoft SharePoint file modification enrichments");
 	}
 	
+	// Configure disableDownloadValidation if function is called
+	// By default, disableDownloadValidation = false;
+	// Meaning we will always validate our downloads
+	// However, when downloading files from SharePoint, the OneDrive API will not advise the correct file size 
+	// which means that the application thinks the file download has failed as the size is different / hash is different
+	// See: https://github.com/abraunegg/onedrive/discussions/1667
+	void setDisableDownloadValidation()
+	{
+		disableDownloadValidation = true;
+		log.vdebug("Flagging to disable download validation checks due to user request");
+	}
+	
 	// Issue #658 Handling
 	// If an existing folder is moved into a sync_list valid path (where it previously was out of scope due to sync_list), 
 	// then set this flag to true, so that on the second 'true-up' sync, we force a rescan of the OneDrive path to capture any 'files'
@@ -666,7 +692,33 @@ final class SyncEngine
 			// query OneDrive Business Shared Folders shared with me
 			// "Attempting to sync OneDrive Business Shared Folders"
 			log.vlog(provideLanguageTranslation(languageIdentifier,95));
-			JSONValue graphQuery = onedrive.getSharedWithMe();
+			JSONValue graphQuery;
+			try {
+				graphQuery = onedrive.getSharedWithMe();
+			} catch (OneDriveException e) {
+				if (e.httpStatusCode == 401) {
+					// HTTP request returned status code 401 (Unauthorized)
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+					log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
+					// Must exit here
+					exit(-1);
+				}
+				if (e.httpStatusCode == 429) {
+					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+					handleOneDriveThrottleRequest();
+					// Retry original request by calling function again to avoid replicating any further error handling
+					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - graphQuery = onedrive.getSharedWithMe();");
+					graphQuery = onedrive.getSharedWithMe();
+				}
+				if (e.httpStatusCode >= 500) {
+					// There was a HTTP 5xx Server Side Error
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+					// Must exit here
+					exit(-1);
+				}
+			}
+			
+
 			if (graphQuery.type() == JSONType.object) {
 				string sharedFolderName;
 				foreach (searchResult; graphQuery["value"].array) {
@@ -847,7 +899,32 @@ final class SyncEngine
 			// "Attempting to sync OneDrive Business Shared Folders"
 			log.vlog(provideLanguageTranslation(languageIdentifier,95));
 			// query OneDrive Business Shared Folders shared with me
-			JSONValue graphQuery = onedrive.getSharedWithMe();
+			JSONValue graphQuery;
+			try {
+				graphQuery = onedrive.getSharedWithMe();
+			} catch (OneDriveException e) {
+				if (e.httpStatusCode == 401) {
+					// HTTP request returned status code 401 (Unauthorized)
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+					log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
+					// Must exit here
+					exit(-1);
+				}
+				if (e.httpStatusCode == 429) {
+					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+					handleOneDriveThrottleRequest();
+					// Retry original request by calling function again to avoid replicating any further error handling
+					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - graphQuery = onedrive.getSharedWithMe();");
+					graphQuery = onedrive.getSharedWithMe();
+				}
+				if (e.httpStatusCode >= 500) {
+					// There was a HTTP 5xx Server Side Error
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+					// Must exit here
+					exit(-1);
+				}
+			}
+			
 			if (graphQuery.type() == JSONType.object) {
 				// valid response from OneDrive
 				string sharedFolderName;
@@ -1235,10 +1312,13 @@ final class SyncEngine
 					}
 				} else {
 					// quota details returned, but for a drive id that is not ours
-					if (currentDriveQuota["quota"]["remaining"].integer <= 0) {
-						// value returned is 0 or less than 0
-						// "OneDrive quota information is set at zero, as this is not our drive id, ignoring"
-						log.vlog(provideLanguageTranslation(languageIdentifier,121));
+					if ("remaining" in currentDriveQuota["quota"]){
+						// remaining is in the quota JSON response
+						if (currentDriveQuota["quota"]["remaining"].integer <= 0) {
+							// value returned is 0 or less than 0
+							// "OneDrive quota information is set at zero, as this is not our drive id, ignoring"
+							log.vlog(provideLanguageTranslation(languageIdentifier,121));
+						}
 					}
 				}
 			} else {
@@ -2544,32 +2624,29 @@ final class SyncEngine
 						// "Local item does not exist in local database - replacing with file from OneDrive - failed download?"
 						log.vlog(provideLanguageTranslation(languageIdentifier,155));
 						
-						// was --resync issued?
-						if (cfg.getValueBool("resync")) {
-							// in a --resync scenario we have zero way of knowing IF the local file is meant to be the right file
-							// we have passed the following checks:
-							// 1. file exists locally
-							// 2. local modified time > remote modified time
-							// 3. id is not in the database
-							// 4. --resync was issued
-							auto ext = extension(path);
-							auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
-							// has the user configured to IGNORE local data protection rules?
-							if (bypassDataPreservation) {
-								// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
-								// "WARNING: Local Data Protection has been disabled by your configuration. You may experience data loss on this file: "
-								log.vlog(provideLanguageTranslation(languageIdentifier,149), path);
+						// in a --resync scenario or if items.sqlite3 was deleted before startup we have zero way of knowing IF the local file is meant to be the right file
+						// we have passed the following checks:
+						// 1. file exists locally
+						// 2. local modified time > remote modified time
+						// 3. id is not in the database
+						
+						auto ext = extension(path);
+						auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
+						// has the user configured to IGNORE local data protection rules?
+						if (bypassDataPreservation) {
+							// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
+							// "WARNING: Local Data Protection has been disabled by your configuration. You may experience data loss on this file: "
+							log.vlog(provideLanguageTranslation(languageIdentifier,149), path);
+						} else {
+							// local data protection is configured, renaming local file
+							// "The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent data loss due to --resync: "
+							log.vlog(provideLanguageTranslation(languageIdentifier,156), path, " -> ", newPath);
+							// perform the rename action of the local file
+							if (!dryRun) {
+								safeRename(path);
 							} else {
-								// local data protection is configured, renaming local file
-								// "The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent data loss due to --resync: "
-								log.vlog(provideLanguageTranslation(languageIdentifier,156), path, " -> ", newPath);
-								// perform the rename action of the local file
-								if (!dryRun) {
-									safeRename(path);
-								} else {
-									// Expectation here is that there is a new file locally (newPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
-									log.vdebug("DRY-RUN: Skipping local file rename");
-								}
+								// Expectation here is that there is a new file locally (newPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
+								log.vdebug("DRY-RUN: Skipping local file rename");
 							}
 						}
 					}
@@ -2939,38 +3016,62 @@ final class SyncEngine
 			}
 			// file has to have downloaded in order to set the times / data for the file
 			if (exists(path)) {
-				// A 'file' was downloaded - does what we downloaded = reported fileSize or if there is some sort of funky local disk compression going on
-				// does the file hash OneDrive reports match what we have locally?
-				string quickXorHash = computeQuickXorHash(path);
-				string sha1Hash = computeSha1Hash(path);
+				// When downloading some files from SharePoint, the OneDrive API reports one file size, but the SharePoint HTTP Server sends a totally different byte count
+				// for the same file
+				// we have implemented --disable-download-validation to disable these checks
 				
-				if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash) || (OneDriveFileHash == sha1Hash)) {
-					// downloaded matches either size or hash
-					log.vdebug("Downloaded file matches reported size and or reported file hash");
-					try {
-						log.vdebug("Calling setTimes() for this file: ", path);
-						setTimes(path, item.mtime, item.mtime);
-					} catch (FileException e) {
-						// display the error message
-						displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				if (!disableDownloadValidation) {
+					// A 'file' was downloaded - does what we downloaded = reported fileSize or if there is some sort of funky local disk compression going on
+					// does the file hash OneDrive reports match what we have locally?
+					string quickXorHash = computeQuickXorHash(path);
+					string sha1Hash = computeSha1Hash(path);
+					
+					if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash) || (OneDriveFileHash == sha1Hash)) {
+						// downloaded matches either size or hash
+						log.vdebug("Downloaded file matches reported size and or reported file hash");
+						try {
+							log.vdebug("Calling setTimes() for this file: ", path);
+							setTimes(path, item.mtime, item.mtime);
+						} catch (FileException e) {
+							// display the error message
+							displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+						}
+					} else {
+						// size error?
+						if (getSize(path) != fileSize) {
+							// downloaded file size does not match
+							log.vdebug("File size on disk:          ", getSize(path));
+							log.vdebug("OneDrive API reported size: ", fileSize);
+							log.error("ERROR: File download size mis-match. Increase logging verbosity to determine why.");
+						}
+						// hash error?
+						if ((OneDriveFileHash != quickXorHash) || (OneDriveFileHash != sha1Hash))  {
+							// downloaded file hash does not match
+							log.vdebug("Actual file hash:           ", OneDriveFileHash);
+							log.vdebug("OneDrive API reported hash: ", quickXorHash);
+							log.error("ERROR: File download hash mis-match. Increase logging verbosity to determine why.");
+						}
+						// add some workaround messaging
+						if (accountType == "documentLibrary"){
+							// It has been seen where SharePoint / OneDrive API reports one size via the JSON 
+							// but the content length and file size written to disk is totally different - example:
+							// From JSON:         "size": 17133
+							// From HTTPS Server: < Content-Length: 19340
+							// with no logical reason for the difference, except for a 302 redirect before file download
+							log.error("INFO: It is most likely that a SharePoint OneDrive API issue is the root cause. Add --disable-download-validation to work around this issue but downloaded data integrity cannot be guaranteed.");
+						} else {
+							// other account types
+							log.error("INFO: Potentially add --disable-download-validation to work around this issue but downloaded data integrity cannot be guaranteed.");
+						}
+						
+						// we do not want this local file to remain on the local file system
+						safeRemove(path);	
+						downloadFailed = true;
+						return;
 					}
 				} else {
-					// size error?
-					if (getSize(path) != fileSize) {
-						// downloaded file size does not match
-						// "ERROR: File download size mis-match. Increase logging verbosity to determine why."
-						log.error(provideLanguageTranslation(languageIdentifier,167));
-					}
-					// hash error?
-					if ((OneDriveFileHash != quickXorHash) || (OneDriveFileHash != sha1Hash))  {
-						// downloaded file hash does not match
-						// "ERROR: File download hash mis-match. Increase logging verbosity to determine why."
-						log.error(provideLanguageTranslation(languageIdentifier,168));
-					}	
-					// we do not want this local file to remain on the local file system
-					safeRemove(path);	
-					downloadFailed = true;
-					return;
+					// download checks have been disabled
+					log.vdebug("Downloaded file validation disabled due to --disable-download-validation ");
 				}
 			} else {
 				// "ERROR: File failed to download. Increase logging verbosity to determine why."
@@ -4668,11 +4769,16 @@ final class SyncEngine
 							saveItem(pathDetails);
 							
 							// OneDrive Personal Shared Folder edgecase handling
-							// In a --resync --upload-only --single-directory 'dir' scenario, and where the root 'dir' for --single-directory is a 'shared folder' 
-							// we will not have the 'tie' DB entry created because of --upload-only because we do not download the folder structure from OneDrive
+							// In a:
+							// 		--resync --upload-only --single-directory 'dir' scenario, and where the root 'dir' for --single-directory is a 'shared folder'
+							// OR
+							// 		--resync --upload-only scenario, and where the root 'dir' to upload is a 'shared folder'
+							//
+							// We will not have the 'tie' DB entry created because of --upload-only because we do not download the folder structure from OneDrive
+							// to know what the remoteDriveId actually is
 							if (accountType == "personal"){
-								// are we in a --resync --upload-only --single-directory scenario ?
-								if ((cfg.getValueBool("resync")) && (cfg.getValueBool("upload_only")) && (singleDirectoryScope)) {
+								// are we in a --resync --upload-only scenario ?
+								if ((cfg.getValueBool("resync")) && (cfg.getValueBool("upload_only"))) {
 									// Create a temp item
 									// Takes a JSON input and formats to an item which can be used by the database
 									Item tempItem = makeItem(pathDetails);
@@ -4687,12 +4793,12 @@ final class SyncEngine
 										// set the right elements
 										tieDBItem.driveId = tempItem.remoteDriveId;
 										tieDBItem.id = tempItem.remoteId;
-									}
-									// Set the correct mtime
-									tieDBItem.mtime = tempItem.mtime;
-									// Add tie DB record to the local database
-									log.vdebug("Adding tie DB record to database: ", tieDBItem);
-									itemdb.upsert(tieDBItem);
+										// Set the correct mtime
+										tieDBItem.mtime = tempItem.mtime;
+										// Add tie DB record to the local database
+										log.vdebug("Adding tie DB record to database: ", tieDBItem);
+										itemdb.upsert(tieDBItem);
+									}				
 								}
 							}
 						} else {
@@ -7071,7 +7177,32 @@ final class SyncEngine
 		// "\nListing available OneDrive Business Shared Folders:"
 		log.log(provideLanguageTranslation(languageIdentifier,308));
 		// Query the GET /me/drive/sharedWithMe API
-		JSONValue graphQuery = onedrive.getSharedWithMe();
+		JSONValue graphQuery;
+		try {
+			graphQuery = onedrive.getSharedWithMe();
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 401) {
+				// HTTP request returned status code 401 (Unauthorized)
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
+				// Must exit here
+				exit(-1);
+			}
+			if (e.httpStatusCode == 429) {
+				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+				handleOneDriveThrottleRequest();
+				// Retry original request by calling function again to avoid replicating any further error handling
+				log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - graphQuery = onedrive.getSharedWithMe();");
+				graphQuery = onedrive.getSharedWithMe();
+			}
+			if (e.httpStatusCode >= 500) {
+				// There was a HTTP 5xx Server Side Error
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+				// Must exit here
+				exit(-1);
+			}
+		}
+		
 		if (graphQuery.type() == JSONType.object) {
 			if (count(graphQuery["value"].array) == 0) {
 				// no shared folders returned

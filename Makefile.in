@@ -79,6 +79,7 @@ SOURCES = \
 	src/upload.d \
 	src/util.d \
 	src/progress.d \
+	src/arsd/cgi.d \
 	src/translations.d
 
 ifeq ($(NOTIFICATIONS),yes)
@@ -124,7 +125,7 @@ else
 ifeq ($(RHEL_VERSION),6)
 	install -D contrib/init.d/onedrive.init $(DESTDIR)/etc/init.d/onedrive
 	install -D contrib/init.d/onedrive_service.sh $(DESTDIR)$(bindir)/onedrive_service.sh
-endif	
+endif
 endif
 ifeq ($(COMPLETIONS),yes)
 	$(INSTALL) -D -m 644 contrib/completions/complete.zsh $(DESTDIR)$(ZSH_COMPLETION_DIR)/_onedrive
@@ -156,5 +157,3 @@ ifeq ($(COMPLETIONS),yes)
 	rm -f $(DESTDIR)$(BASH_COMPLETION_DIR)/onedrive
 	rm -f $(DESTDIR)$(FISH_COMPLETION_DIR)/onedrive.fish
 endif
-
-

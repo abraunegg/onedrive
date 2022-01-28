@@ -191,7 +191,7 @@ void initialise_defaults(){
 		JSONValue([ "16": "DRY-RUN Configured. Output below shows what 'would' have occurred" ]),
 		JSONValue([ "17": "Using logfile dir: " ]),
 		JSONValue([ "18": "Database schema changed, resync needed" ]),
-		JSONValue([ "19": "Deleting the saved status ..." ]),
+		JSONValue([ "19": "Deleting the saved application sync status ..." ]),
 		JSONValue([ "20": "ERROR: Unable to reach Microsoft OneDrive API service, unable to initialise application" ]),
 		JSONValue([ "21": "ERROR: Unable to reach Microsoft OneDrive API service at this point in time, re-trying network tests" ]),
 		JSONValue([ "22": "Internet connectivity to Microsoft OneDrive service has been restored" ]),
