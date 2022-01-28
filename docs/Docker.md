@@ -1,7 +1,7 @@
 # Run the OneDrive Client for Linux under Docker
 This client can be run as a Docker container, with 3 available options for you to choose from:
 1.  Container based on Fedora 35 - Docker Tag: latest
-2.  Container based on Debian Buster - Docker Tag: debian
+2.  Container based on Debian 11 - Docker Tag: debian
 3.  Container based on Alpine Linux - Docker Tag: alpine
 
 These containers offer a simple monitoring-mode service for the OneDrive Client for Linux.
@@ -255,7 +255,7 @@ Dockerfile-debian or Dockerfile-alpine.  These [multi-stage builder
 pattern](https://docs.docker.com/develop/develop-images/multistage-build/)
 Dockerfiles require Docker version at least 17.05.
 
-#### How to build and run a custom Docker image based on Debian Buster
+#### How to build and run a custom Docker image based on Debian
 ``` bash
 docker build . -t local-ondrive-debian -f contrib/docker/Dockerfile-debian
 docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" local-ondrive-debian:latest
