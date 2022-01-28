@@ -47,6 +47,8 @@ FROM debian:${DEBIAN_VERSION}-slim
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gosu libcurl4 libsqlite3-0 ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
+ # Fix bug with ssl on armhf: https://serverfault.com/a/1045189
+ && /usr/bin/c_rehash \
  && mkdir -p /onedrive/conf /onedrive/data
 
 COPY --from=builder-onedrive /usr/local/bin/onedrive /usr/local/bin/
