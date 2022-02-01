@@ -24,6 +24,7 @@ class Progress
     size_t getTerminalWidth() {
       size_t column = default_width;
       version (CRuntime_Musl) {
+	  } else version(Android) {
       } else {
 	winsize ws;
 	if(ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) != -1 && ws.ws_col > 0) {
