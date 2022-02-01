@@ -7712,10 +7712,10 @@ void runAddonServer(EIS)(string localListenerName, EIS eis) if(is(EIS : EventIoS
 					// on edge triggering, it is important that we get it all
 					while(true) {
 						version(Android) {
-                            auto size = cast(int) addr.sizeof;
-                        } else {
-                            auto size = cast(uint) addr.sizeof;
-                        }
+							auto size = cast(int) addr.sizeof;
+						} else {
+							auto size = cast(uint) addr.sizeof;
+						}
 						auto ns = accept(sock, cast(sockaddr*) &addr, &size);
 						if(ns == -1) {
 							if(errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -7850,7 +7850,7 @@ ssize_t write_fd(int fd, void *ptr, size_t nbytes, int sendfd) {
 		//msg.msg_accrights = cast(cattr_t) &sendfd;
 		//msg.msg_accrightslen = int.sizeof;
 	} else version(Android) {
-    } else {
+	} else {
 		union ControlUnion {
 			cmsghdr cm;
 			char[CMSG_SPACE(int.sizeof)] control;
@@ -7892,7 +7892,7 @@ ssize_t read_fd(int fd, void *ptr, size_t nbytes, int *recvfd) {
 		//msg.msg_accrights = cast(cattr_t) recvfd;
 		//msg.msg_accrightslen = int.sizeof;
 	} else version(Android) {
-    } else {
+	} else {
 		union ControlUnion {
 			cmsghdr cm;
 			char[CMSG_SPACE(int.sizeof)] control;
@@ -7919,7 +7919,7 @@ ssize_t read_fd(int fd, void *ptr, size_t nbytes, int *recvfd) {
 		//if(msg.msg_accrightslen != int.sizeof)
 			//*recvfd = -1;
 	} else version(Android) {
-    } else {
+	} else {
 		if ( (cmptr = CMSG_FIRSTHDR(&msg)) != null &&
 				cmptr.cmsg_len == CMSG_LEN(int.sizeof)) {
 			if (cmptr.cmsg_level != SOL_SOCKET)
