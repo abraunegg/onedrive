@@ -4,7 +4,7 @@ import std.getopt, std.file, std.path, std.process, std.stdio, std.conv, std.alg
 import config, itemdb, monitor, onedrive, selective, sync, util, translations;
 import std.net.curl: CurlException;
 import core.stdc.signal;
-import std.traits;
+import std.traits, std.format;
 import std.concurrency: receiveTimeout;
 static import log;
 
