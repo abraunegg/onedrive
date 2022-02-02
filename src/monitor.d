@@ -6,6 +6,7 @@ import core.stdc.stdlib;
 import config;
 import selective;
 import util;
+import translations;
 static import log;
 
 // relevant inotify events
@@ -21,6 +22,7 @@ class MonitorException: ErrnoException
 
 final class Monitor
 {
+	// verbosity flag
 	bool verbose;
 	// inotify file descriptor
 	private int fd;
@@ -34,6 +36,7 @@ final class Monitor
 	bool skip_symlinks;
 	// check for .nosync if enabled
 	bool check_nosync;
+	string languageIdentifier;
 	
 	private SelectiveSync selectiveSync;
 
@@ -53,6 +56,9 @@ final class Monitor
 		this.verbose = verbose;
 		this.skip_symlinks = skip_symlinks;
 		this.check_nosync = check_nosync;
+		this.languageIdentifier = getConfigLanguageIdentifier();
+		
+		writeln("monitor.d languageIdentifier: ", languageIdentifier);
 		
 		assert(onDirCreated && onFileChanged && onDelete && onMove);
 		fd = inotify_init();
@@ -81,7 +87,8 @@ final class Monitor
 	{
 		// skip non existing/disappeared items
 		if (!exists(dirname)) {
-			log.vlog("Not adding non-existing/disappeared directory: ", dirname);
+			// "Directory disappeared during upload: "
+			log.vlog(provideLanguageTranslation(languageIdentifier,218), dirname);
 			return;
 		}
 
@@ -127,7 +134,8 @@ final class Monitor
 		// Do we need to check for .nosync? Only if check_nosync is true
 		if (check_nosync) {
 			if (exists(buildNormalizedPath(dirname) ~ "/.nosync")) {
-				log.vlog("Skipping watching path - .nosync found & --check-for-nosync enabled: ", buildNormalizedPath(dirname));
+				// "Skipping watching path - .nosync found & --check-for-nosync enabled: "
+				log.vlog(provideLanguageTranslation(languageIdentifier,320), buildNormalizedPath(dirname));
 				return;
 			}
 		}
@@ -158,10 +166,14 @@ final class Monitor
 				// Need to check for: Failed to stat file in error message
 				if (canFind(e.msg, "Failed to stat file")) {
 					// File system access issue
-					log.error("ERROR: The local file system returned an error with the following message:");
-					log.error("  Error Message: ", e.msg);
-					log.error("ACCESS ERROR: Please check your UID and GID access to this file, as the permissions on this file is preventing this application to read it");
-					log.error("\nFATAL: Exiting application to avoid deleting data due to local file system access issues\n");
+					// "ERROR: The local file system returned an error with the following message:"
+					log.error(provideLanguageTranslation(languageIdentifier,321));
+					// "  Error Message: "
+					log.error(provideLanguageTranslation(languageIdentifier,322), e.msg);
+					// "ACCESS ERROR: Please check your UID and GID access to this file, as the permissions on this file is preventing this application to read it"
+					log.error(provideLanguageTranslation(languageIdentifier,323));
+					// "\nFATAL: Exiting application to avoid deleting data due to local file system access issues\n"
+					log.error(provideLanguageTranslation(languageIdentifier,324));
 					// Must exit here
 					exit(-1);
 				} else {
@@ -178,10 +190,13 @@ final class Monitor
 		int wd = inotify_add_watch(fd, toStringz(pathname), mask);
 		if (wd < 0) {
 			if (errno() == ENOSPC) {
-				log.log("The user limit on the total number of inotify watches has been reached.");
-				log.log("To see the current max number of watches run:");
+				// "The user limit on the total number of inotify watches has been reached.\nTo see the current max number of watches run:"
+				log.log(provideLanguageTranslation(languageIdentifier,325));
+				// This line cannot be translated
 				log.log("sysctl fs.inotify.max_user_watches");
-				log.log("To change the current max number of watches to 524288 run:");
+				// "To change the current max number of watches to 524288 run:"
+				log.log(provideLanguageTranslation(languageIdentifier,326));
+				// This line cannot be translated
 				log.log("sudo sysctl fs.inotify.max_user_watches=524288");
 			}
 			if (errno() == 13) {
@@ -189,12 +204,14 @@ final class Monitor
 					// no misleading output that we could not add a watch due to permission denied
 					return;
 				} else {
-					log.vlog("WARNING: inotify_add_watch failed - permission denied: ", pathname);
+					// "WARNING: inotify_add_watch failed - permission denied: "
+					log.vlog(provideLanguageTranslation(languageIdentifier,327), pathname);
 					return;
 				}
 			}
 			// Flag any other errors
-			log.error("ERROR: inotify_add_watch failed: ", pathname);
+			// "ERROR: inotify_add_watch failed: "
+			log.error(provideLanguageTranslation(languageIdentifier,328), pathname);
 			return;
 		}
 		
@@ -211,7 +228,8 @@ final class Monitor
 				return;
 			}
 			// Log that this is directory is being monitored
-			log.vlog("Monitor directory: ", pathname);
+			// "Monitoring this directory for local changes: "
+			log.vlog(provideLanguageTranslation(languageIdentifier,329), pathname);
 		}
 	}
 
@@ -221,7 +239,8 @@ final class Monitor
 		assert(wd in wdToDirName);
 		int ret = inotify_rm_watch(fd, wd);
 		if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
-		log.vlog("Monitored directory removed: ", wdToDirName[wd]);
+		// "Removed this directory from being monitored for local changes: "
+		log.vlog(provideLanguageTranslation(languageIdentifier,330), wdToDirName[wd]);
 		wdToDirName.remove(wd);
 	}
 
@@ -234,7 +253,8 @@ final class Monitor
 				int ret = inotify_rm_watch(fd, wd);
 				if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
 				wdToDirName.remove(wd);
-				log.vlog("Monitored directory removed: ", dirname);
+				// "Removed this directory from being monitored for local changes: "
+				log.vlog(provideLanguageTranslation(languageIdentifier,330), dirname);
 			}
 		}
 	}

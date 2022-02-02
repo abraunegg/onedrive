@@ -1,0 +1,28 @@
+{
+	"language": "EN-US",
+	"list": [
+	{
+		"1": "No user or system config file found, using application defaults",
+		"2": "System configuration file successfully loaded",
+		"3": "System configuration file has errors - please check your configuration",
+		"4": "Configuration file successfully loaded",
+		"5": "Configuration file has errors - please check your configuration",
+		"6": "Using config option for Global Azure AD Endpoints",
+		"7": "Using config option for Azure AD for US Government Endpoints",
+		"8": "Using config option for Azure AD for US Government Endpoints (DOD)",
+		"9": "Using config option for Azure AD Germany",
+		"10": "Using config option for Azure AD China operated by 21Vianet",
+		"11": "Unknown Azure AD Endpoint - using Global Azure AD Endpoints",
+		"12": "Unknown key in config file: ",
+		"13": "Malformed config line: ",
+		"14": "config file has been updated, checking if --resync needed",
+		"15": "An application configuration change has been detected where a --resync is required",
+		"16": "DRY-RUN Configured. Output below shows what 'would' have occurred",
+		"17": "Using logfile dir: ",
+		"18": "Database schema changed, resync needed",
+		"19": "Deleting the saved status ...",
+		"20": "ERROR: Unable to reach Microsoft OneDrive API service, unable to initialize application"
+		
+		}
+	]
+}

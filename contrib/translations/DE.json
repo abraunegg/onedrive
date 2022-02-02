@@ -1,0 +1,28 @@
+{
+	"language": "DE",
+	"list": [
+	{
+		"1": "Keine Benutzer- oder Systemkonfigurationsdatei gefunden, die Anwendungsstandardwerte verwendet",
+		"2": "Systemkonfigurationsdatei erfolgreich geladen",
+		"3": "Die Systemkonfigurationsdatei weist Fehler auf. Bitte überprüfen Sie Ihre Konfiguration",
+		"4": "Konfigurationsdatei erfolgreich geladen",
+		"5": "Konfigurationsdatei hat Fehler - bitte überprüfen Sie Ihre Konfiguration",
+		"6": "Verwenden der Konfigurationsoption für globale Azure AD-Endpunkte",
+		"7": "Verwenden der Konfigurationsoption für Azure AD für Endpunkte der US-Regierung",
+		"8": "Verwenden der Konfigurationsoption für Azure AD für US Government Endpoints (DOD)",
+		"9": "Verwenden der Konfigurationsoption für Azure AD Germany",
+		"10": "Verwenden der Konfigurationsoption für Azure AD China, das von 21Vianet betrieben wird",
+		"11": "Unbekannter Azure AD-Endpunkt – mit globalen Azure AD-Endpunkten",
+		"12": "Unbekannter Schlüssel in der Konfigurationsdatei: ",
+		"13": "Fehlerhafte Konfigurationszeile: ",
+		"14": "Die Konfigurationsdatei wurde aktualisiert und überprüft, ob --resync erforderlich ist",
+		"15": "Eine Änderung der Anwendungskonfiguration wurde festgestellt, wenn eine --resync erforderlich ist",
+		"16": "DRY-RUN Konfiguriert. Die folgende Ausgabe zeigt, was passiert wäre",
+		"17": "Verwenden des Protokolldateiverzeichnisses: ",
+		"18": "Datenbankschema geändert, Resync erforderlich",
+		"19": "Gespeicherten Status löschen ...",
+		"20": "FEHLER: Microsoft OneDrive-API-Dienst kann nicht erreicht werden, Anwendung kann nicht initialisiert werden"
+		
+		}
+	]
+}

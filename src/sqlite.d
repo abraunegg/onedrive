@@ -54,14 +54,13 @@ struct Database
 
 	void dump_open_statements()
 	{
-		log.log("Dumpint open statements: \n");
+		writeln("Dumping open SQL statements: \n");
 		auto p = sqlite3_next_stmt(pDb, null);
 		while (p != null) {
-			log.log (" - " ~ ifromStringz(sqlite3_sql(p)) ~ "\n");
+			writeln(" - " ~ ifromStringz(sqlite3_sql(p)) ~ "\n");
 			p = sqlite3_next_stmt(pDb, p);
 		}
 	}
-
 
 	void open(const(char)[] filename)
 	{
@@ -69,7 +68,7 @@ struct Database
 		int rc = sqlite3_open(toStringz(filename), &pDb);
 		if (rc == SQLITE_CANTOPEN) {
 			// Database cannot be opened
-			log.error("\nThe database cannot be opened. Please check the permissions of ~/.config/onedrive/items.sqlite3\n");
+			log.error("\nThe database cannot be opened. Please check the permissions of " ~ filename ~ "\n");
 			close();
 			exit(-1);
 		}

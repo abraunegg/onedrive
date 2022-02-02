@@ -1,7 +1,7 @@
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.memory, core.time, core.thread;
 import std.getopt, std.file, std.path, std.process, std.stdio, std.conv, std.algorithm.searching, std.string, std.regex;
-import config, itemdb, monitor, onedrive, selective, sync, util;
+import config, itemdb, monitor, onedrive, selective, sync, util, translations;
 import std.net.curl: CurlException;
 import core.stdc.signal;
 import std.traits, std.format;
@@ -13,10 +13,12 @@ ItemDatabase itemDb;
 
 bool onedriveInitialised = false;
 const int EXIT_UNAUTHORIZED = 3;
-
 enum MONITOR_LOG_SILENT = 2;
 enum MONITOR_LOG_QUIET  = 1;
 enum LOG_NORMAL = 0;
+
+// Language Identifier
+shared string languageIdentifier = "";
 
 int main(string[] args)
 {
@@ -109,14 +111,20 @@ int main(string[] args)
 	}
 
 	// read in application options as passed in
+	// EN only error message
+	string helpMessage = "Please use 'onedrive --help' for further assistance in regards to running this application";
 	try {
 		bool printVersion = false;
+		bool exportTranslations = false;
 		auto opt = getopt(
 			args,
 			std.getopt.config.passThrough,
 			std.getopt.config.bundling,
 			std.getopt.config.caseSensitive,
 			"confdir", "Set the directory used to store the configuration files", &confdirOption,
+			
+			"export-translations", "Export existing default application messages in JSON format", &exportTranslations,
+			
 			"verbose|v+", "Print more details, useful for debugging (repeat for extra debugging)", &log.verbose,
 			"version", "Print the version and exit", &printVersion
 		);
@@ -130,25 +138,50 @@ int main(string[] args)
 			writeln("onedrive ", strip(import("version")));
 			return EXIT_SUCCESS;
 		}
+		
+		// If we are dumping the existing default application messages in JSON format, do so, then exit
+		if (exportTranslations){
+			// EN only message
+			writeln("Exporting existing application messages in JSON format");
+			// Export application default messages
+			exportDefaultMessages();
+			// exit
+			return EXIT_SUCCESS;
+		}
+		
 	} catch (GetOptException e) {
 		// option errors
 		log.error(e.msg);
-		log.error("Try 'onedrive -h' for more information");
+		// Language default for this message
+		log.error(helpMessage);
 		return EXIT_FAILURE;
 	} catch (Exception e) {
 		// generic error
 		log.error(e.msg);
-		log.error("Try 'onedrive -h' for more information");
+		// Language default for this message
+		log.error(helpMessage);
 		return EXIT_FAILURE;
 	}
 
 	// load configuration file if available
 	auto cfg = new config.Config(confdirOption);
+	// initialise config options
 	if (!cfg.initialize()) {
 		// There was an error loading the configuration
 		// Error message already printed
 		return EXIT_FAILURE;
 	}
+
+	// --verbose --verbose used .. override any language setting to force EN-AU
+	if (cfg.getValueLong("verbose") >= 2) {
+		log.vdebug("Force application language to EN-AU due to debug operation");
+		cfg.setValueString("language_identifier", "EN-AU");
+	}
+	// Use the configured application language
+	languageIdentifier = cfg.getValueString("language_identifier");
+	// Set the language identifier for wider use
+	setConfigLanguageIdentifier(languageIdentifier);
+	log.log("Application Language set to: ", languageIdentifier);
 	
 	// How was this application started - what options were passed in
 	log.vdebug("passed in options: ", args);
@@ -282,7 +315,8 @@ int main(string[] args)
 	// Was config file updated between last execution ang this execution?
 	if (currentConfigHash != previousConfigHash) {
 		// config file was updated, however we only want to trigger a --resync requirement if sync_dir, skip_dir, skip_file or drive_id was modified
-		log.log("config file has been updated, checking if --resync needed");
+		// "config file has been updated, checking if --resync needed"
+		log.log(provideLanguageTranslation(languageIdentifier,14));
 		if (exists(configBackupFile)) {
 			// check backup config what has changed for these configuration options if anything
 			// # sync_dir = "~/OneDrive"
@@ -347,10 +381,10 @@ int main(string[] args)
 				if (!cfg.getValueBool("dry_run")) {
 					// we are not in a dry-run scenario
 					// update config hash
-					log.vdebug("updating config hash as it is out of date");
+					log.vdebug("Updating config hash as it is out of date");
 					std.file.write(configHashFile, computeQuickXorHash(configFilePath));
 					// create backup copy of current config file
-					log.vdebug("making backup of config file as it is out of date");
+					log.vdebug("Making backup of config file as it is out of date");
 					std.file.copy(configFilePath, configBackupFile);
 				}
 			}
@@ -407,7 +441,8 @@ int main(string[] args)
 			// not testing configuration changes
 			if (!cfg.getValueBool("resync")) {
 				// --resync not issued, fail fast
-				log.error("An application configuration change has been detected where a --resync is required");
+				// "An application configuration change has been detected where a --resync is required"
+				log.error(provideLanguageTranslation(languageIdentifier,15));
 				return EXIT_FAILURE;
 			} else {
 				// --resync issued, update hashes of config files if they exist
@@ -415,20 +450,20 @@ int main(string[] args)
 					// not doing a dry run, update hash files if config & sync_list exist
 					if (exists(configFilePath)) {
 						// update hash
-						log.vdebug("updating config hash as --resync issued");
+						log.vdebug("Updating config hash as --resync issued");
 						std.file.write(configHashFile, computeQuickXorHash(configFilePath));
 						// create backup copy of current config file
-						log.vdebug("making backup of config file as --resync issued");
+						log.vdebug("Making backup of config file as --resync issued");
 						std.file.copy(configFilePath, configBackupFile);
 					}
 					if (exists(syncListFilePath)) {
 						// update sync_list hash
-						log.vdebug("updating sync_list hash as --resync issued");
+						log.vdebug("Updating sync_list hash as --resync issued");
 						std.file.write(syncListHashFile, computeQuickXorHash(syncListFilePath));
 					}
 					if (exists(businessSharedFolderFilePath)) {
 						// update business_shared_folders hash
-						log.vdebug("updating business_shared_folders hash as --resync issued");
+						log.vdebug("Updating business_shared_folders hash as --resync issued");
 						std.file.write(businessSharedFoldersHashFile, computeQuickXorHash(businessSharedFolderFilePath));
 					}
 				}
@@ -438,7 +473,8 @@ int main(string[] args)
 
 	// dry-run notification and database setup
 	if (cfg.getValueBool("dry_run")) {
-		log.log("DRY-RUN Configured. Output below shows what 'would' have occurred.");
+		// "DRY-RUN Configured. Output below shows what 'would' have occurred"
+		log.log(provideLanguageTranslation(languageIdentifier,16));
 		string dryRunShmFile = cfg.databaseFilePathDryRun ~ "-shm";
 		string dryRunWalFile = cfg.databaseFilePathDryRun ~ "-wal";
 		// If the dry run database exists, clean this up
@@ -529,7 +565,8 @@ int main(string[] args)
 	// Configure logging only if enabled
 	if (cfg.getValueBool("enable_logging")){
 		// Initialise using the configured logging directory
-		log.vlog("Using logfile dir: ", logDir);
+		// "Using logfile dir: "
+		log.vlog(provideLanguageTranslation(languageIdentifier,17), logDir);
 		log.init(logDir);
 	}
 
@@ -541,7 +578,8 @@ int main(string[] args)
 		if (!cfg.getValueBool("dry_run")) {
 			safeRemove(databaseFilePath);
 		}
-		log.logAndNotify("Database schema changed, resync needed");
+		// "Database schema changed, resync needed"
+		log.logAndNotify(provideLanguageTranslation(languageIdentifier,18));
 		cfg.setValueBool("resync", true);
 	}
 
@@ -558,8 +596,9 @@ int main(string[] args)
 
 	// Handle --resync to remove local files
 	if (cfg.getValueBool("resync")) {
-		if (cfg.getValueBool("resync")) log.vdebug("--resync requested");
-		log.log("Deleting the saved application sync status ...");
+		log.vdebug("--resync requested");
+		// "Deleting the saved application sync status ..."
+		log.vlog(provideLanguageTranslation(languageIdentifier,19));
 		if (!cfg.getValueBool("dry_run")) {
 			safeRemove(cfg.databaseFilePath);
 			safeRemove(cfg.deltaLinkFilePath);
@@ -577,6 +616,7 @@ int main(string[] args)
 		writeln("Config file found in config path       = ", exists(configFilePath));
 
 		// Config Options
+		writeln("Config option 'language_identifier'    = ", languageIdentifier);
 		writeln("Config option 'check_nosync'           = ", cfg.getValueBool("check_nosync"));
 		writeln("Config option 'sync_dir'               = ", syncDir);
 		writeln("Config option 'skip_dir'               = ", cfg.getValueString("skip_dir"));
@@ -639,11 +679,14 @@ int main(string[] args)
 	// Cant initialise the API as we are not online
 		if (!cfg.getValueBool("monitor")) {
 			// Running as --synchronize
-			log.error("Unable to reach Microsoft OneDrive API service, unable to initialize application\n");
+			// "Unable to reach Microsoft OneDrive API service, unable to initialise application"
+			log.error(provideLanguageTranslation(languageIdentifier,20),"\n");
 			return EXIT_FAILURE;
 		} else {
 			// Running as --monitor
-			log.error("Unable to reach Microsoft OneDrive API service at this point in time, re-trying network tests\n");
+
+			// "Unable to reach Microsoft OneDrive API service at this point in time, re-trying network tests"
+			log.error(provideLanguageTranslation(languageIdentifier,21),"\n");
 
 			// re-try network connection to OneDrive
 			// https://github.com/abraunegg/onedrive/issues/1184
@@ -670,7 +713,8 @@ int main(string[] args)
 				online = testNetwork();
 				if (online) {
 					// We are now online
-					log.log("Internet connectivity to Microsoft OneDrive service has been restored");
+					// "Internet connectivity to Microsoft OneDrive service has been restored"
+					log.log(provideLanguageTranslation(languageIdentifier,22));
 					retrySuccess = true;
 				} else {
 					// We are still offline
@@ -685,7 +729,8 @@ int main(string[] args)
 			}
 			if (!online) {
 				// Not online after 1.2 years of trying
-				log.error("ERROR: Was unable to reconnect to the Microsoft OneDrive service after 10000 attempts lasting over 1.2 years!");
+				// "ERROR: The OneDrive Linux Client was unable to reconnect to the Microsoft OneDrive service after 10000 attempts lasting over 1.2 years!"
+				log.error(provideLanguageTranslation(languageIdentifier,23));
 				return EXIT_FAILURE;
 			}
 		}
@@ -694,14 +739,16 @@ int main(string[] args)
 	// Initialize OneDrive, check for authorization
 	if (online) {
 		// we can only initialise if we are online
-		log.vlog("Initializing the OneDrive API ...");
+		// "Initialising the OneDrive API ..."
+		log.vlog(provideLanguageTranslation(languageIdentifier,24));
 		oneDrive = new OneDriveApi(cfg);
 		onedriveInitialised = oneDrive.init();
 		oneDrive.printAccessToken = cfg.getValueBool("print_token");
 	}
 
 	if (!onedriveInitialised) {
-		log.error("Could not initialize the OneDrive API");
+		// "Could not initialise the OneDrive API"
+		log.error(provideLanguageTranslation(languageIdentifier,25));
 		// Use exit scopes to shutdown API
 		return EXIT_UNAUTHORIZED;
 	}
@@ -724,19 +771,26 @@ int main(string[] args)
 			// Application was just authorised
 			if (exists(cfg.refreshTokenFilePath)) {
 				// OneDrive refresh token exists
-				log.log("\nApplication has been successfully authorised, however no additional command switches were provided.\n");
-				log.log("Please use --help for further assistance in regards to running this application.\n");
+				// "Application has been successfully authorised, however no additional command switches were provided"
+				log.log("\n", provideLanguageTranslation(languageIdentifier,26),"\n");
+				// "Please use 'onedrive --help' for further assistance in regards to running this application"
+				log.log(provideLanguageTranslation(languageIdentifier,27),"\n");
 				// Use exit scopes to shutdown API
 				return EXIT_SUCCESS;
 			} else {
 				// we just authorised, but refresh_token does not exist .. probably an auth error
-				log.log("\nApplication has not been successfully authorised. Please check your URI response entry and try again.\n");
+				// "Application has not been successfully authorised. Please check your URI response entry and try again"
+				log.log("\n", provideLanguageTranslation(languageIdentifier,28),"\n");
 				return EXIT_FAILURE;
 			}
 		} else {
-			// Application was not just authorised
-			log.log("\n--synchronize or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use --help for further assistance.\n");
-			log.log("No OneDrive sync will be performed without one of these two arguments being present.\n");
+			// Application was not just authorised, attempted to be run without --synchronize or --monitor being present
+			// "ERROR: --synchronize or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line"
+			log.error("\n", provideLanguageTranslation(languageIdentifier,29),"\n");
+			// "No OneDrive sync will be performed without one of these two arguments being present"
+			log.error(provideLanguageTranslation(languageIdentifier,30),"\n");
+			// "Please use 'onedrive --help' for further assistance in regards to running this application"
+			log.error(provideLanguageTranslation(languageIdentifier,27),"\n");
 			// Use exit scopes to shutdown API
 			return EXIT_FAILURE;
 		}
@@ -744,14 +798,17 @@ int main(string[] args)
 
 	// if --synchronize && --monitor passed in, exit & display help as these conflict with each other
 	if (cfg.getValueBool("synchronize") && cfg.getValueBool("monitor")) {
-		writeln("\nERROR: --synchronize and --monitor cannot be used together\n");
-		writeln("Refer to --help to determine which command option you should use.\n");
+		// "ERROR: --synchronize and --monitor cannot be used together"
+		log.error("\n", provideLanguageTranslation(languageIdentifier,31),"\n");
+		// "Please use 'onedrive --help' for further assistance in regards to running this application"
+		log.log(provideLanguageTranslation(languageIdentifier,27),"\n");
 		// Use exit scopes to shutdown API
 		return EXIT_FAILURE;
 	}
 
 	// Initialize the item database
-	log.vlog("Opening the item database ...");
+	// "Opening the item database ..."
+	log.vlog(provideLanguageTranslation(languageIdentifier,32));
 	if (!cfg.getValueBool("dry_run")) {
 		// Load the items.sqlite3 file as the database
 		log.vdebug("Using database file: ", asNormalizedPath(cfg.databaseFilePath));
@@ -769,7 +826,8 @@ int main(string[] args)
 	// - Any new file created under ~/OneDrive or 'sync_dir'
 	// valid permissions are 000 -> 777 - anything else is invalid
 	if ((cfg.getValueLong("sync_dir_permissions") < 0) || (cfg.getValueLong("sync_file_permissions") < 0) || (cfg.getValueLong("sync_dir_permissions") > 777) || (cfg.getValueLong("sync_file_permissions") > 777)) {
-		log.error("ERROR: Invalid 'User|Group|Other' permissions set within config file. Please check.");
+		// "ERROR: Invalid 'User|Group|Other' permissions set within config file. Please check your config file."
+		log.error(provideLanguageTranslation(languageIdentifier,33));
 		return EXIT_FAILURE;
 	} else {
 		// debug log output what permissions are being set to
@@ -780,7 +838,8 @@ int main(string[] args)
 	}
 
 	// configure the sync direcory based on syncDir config option
-	log.vlog("All operations will be performed in: ", syncDir);
+	// "All operations will be performed in: "
+	log.vlog(provideLanguageTranslation(languageIdentifier,34), syncDir);
 	if (!exists(syncDir)) {
 		log.vdebug("syncDir: Configured syncDir is missing. Creating: ", syncDir);
 		try {
@@ -791,7 +850,8 @@ int main(string[] args)
 			syncDir.setAttributes(cfg.returnRequiredDirectoryPermisions());
 		} catch (std.file.FileException e) {
 			// Creating the sync directory failed
-			log.error("ERROR: Unable to create local OneDrive syncDir - ", e.msg);
+			// "ERROR: Unable to create local OneDrive syncDir - "
+			log.error(provideLanguageTranslation(languageIdentifier,35), e.msg);
 			// Use exit scopes to shutdown API
 			return EXIT_FAILURE;
 		}
@@ -862,7 +922,8 @@ int main(string[] args)
 	foreach(entry; cfg.getValueString("skip_file").split("|")){
 		if (entry == ".*") {
 			// invalid entry element detected
-			log.logAndNotify("ERROR: Invalid skip_file entry '.*' detected");
+			// "ERROR: Invalid skip_file entry '.*' detected"
+			log.logAndNotify(provideLanguageTranslation(languageIdentifier,36));
 			return EXIT_FAILURE;
 		}
 	}
@@ -879,12 +940,14 @@ int main(string[] args)
 		} else {
 			if ((cfg.getValueString("get_file_link") == "") && (cfg.getValueString("create_share_link") == "")) {
 				// Print out that we are initializing the engine only if we are not grabbing the file link or creating a shareable link
-				log.logAndNotify("Initializing the Synchronization Engine ...");
+				// "Initialising the Synchronisation Engine ..."
+				log.logAndNotify(provideLanguageTranslation(languageIdentifier,37));
 			}
 		}
 	} catch (CurlException e) {
 		if (!cfg.getValueBool("monitor")) {
-			log.log("\nNo Internet connection.");
+			// "Cannot connect to Microsoft OneDrive Service - Network Connection Issue"
+			log.log("\n", provideLanguageTranslation(languageIdentifier,38));
 			// Use exit scopes to shutdown API
 			return EXIT_FAILURE;
 		}
@@ -922,8 +985,10 @@ int main(string[] args)
 
 	// Has the user enabled to bypass data preservation of renaming local files when there is a conflict?
 	if (cfg.getValueBool("bypass_data_preservation")) {
-		log.log("WARNING: Application has been configured to bypass local data preservation in the event of file conflict.");
-		log.log("WARNING: Local data loss MAY occur in this scenario.");
+		// "WARNING: Application has been configured to bypass local data preservation in the event of file conflict"
+		log.log(provideLanguageTranslation(languageIdentifier,39));
+		// "WARNING: Local data loss MAY occur in this scenario"
+		log.log(provideLanguageTranslation(languageIdentifier,40));
 		sync.setBypassDataPreservation();
 	}
 
@@ -940,7 +1005,8 @@ int main(string[] args)
 	if (cfg.getValueBool("check_nomount")) {
 		// we were asked to check the mounts
 		if (exists(syncDir ~ "/.nosync")) {
-			log.logAndNotify("ERROR: .nosync file found. Aborting synchronization process to safeguard data.");
+			// "ERROR: .nosync file found. Aborting synchronisation process to safeguard data"
+			log.logAndNotify(provideLanguageTranslation(languageIdentifier,41));
 			// Use exit scopes to shutdown API
 			return EXIT_FAILURE;
 		}
@@ -999,7 +1065,8 @@ int main(string[] args)
 			// List OneDrive Business Shared Folders
 			sync.listOneDriveBusinessSharedFolders();
 		} else {
-			log.error("ERROR: Unsupported account type for listing OneDrive Business Shared Folders");
+			// "ERROR: Unsupported account type for listing OneDrive Business Shared Folders"
+			log.error(provideLanguageTranslation(languageIdentifier,42));
 		}
 		// Exit application
 		// Use exit scopes to shutdown API
@@ -1013,7 +1080,8 @@ int main(string[] args)
 			// Configure flag to sync business folders
 			sync.setSyncBusinessFolders();
 		} else {
-			log.error("ERROR: Unsupported account type for syncing OneDrive Business Shared Folders");
+			// "ERROR: Unsupported account type for syncing OneDrive Business Shared Folders"
+			log.error(provideLanguageTranslation(languageIdentifier,43));
 		}
 	}
 
@@ -1041,7 +1109,8 @@ int main(string[] args)
 					// Does the directory we want to sync actually exist?
 					if (!exists(cfg.getValueString("single_directory"))) {
 						// The requested path to use with --single-directory does not exist locally within the configured 'sync_dir'
-						log.logAndNotify("WARNING: The requested path for --single-directory does not exist locally. Creating requested path within ", syncDir);
+						// "WARNING: The requested path for --single-directory does not exist locally. Creating requested path within: "
+						log.logAndNotify(provideLanguageTranslation(languageIdentifier,44), syncDir);
 						// Make the required --single-directory path locally
 						string singleDirectoryPath = cfg.getValueString("single_directory");
 						mkdirRecurse(singleDirectoryPath);
@@ -1062,52 +1131,68 @@ int main(string[] args)
 		}
 
 		if (cfg.getValueBool("monitor")) {
-			log.logAndNotify("Initializing monitor ...");
-			log.log("OneDrive monitor interval (seconds): ", cfg.getValueLong("monitor_interval"));
+			// "Initialising monitor ..."
+			log.logAndNotify(provideLanguageTranslation(languageIdentifier,45));
+			// "OneDrive monitor interval (seconds): "
+			log.log(provideLanguageTranslation(languageIdentifier,46), cfg.getValueLong("monitor_interval"));			
 
 			m.onDirCreated = delegate(string path) {
 				// Handle .folder creation if skip_dotfiles is enabled
 				if ((cfg.getValueBool("skip_dotfiles")) && (selectiveSync.isDotFile(path))) {
-					log.vlog("[M] Skipping watching path - .folder found & --skip-dot-files enabled: ", path);
+					// "[M] Skipping watching path - .folder found & --skip-dot-files enabled: "
+					log.vlog(provideLanguageTranslation(languageIdentifier,47), path);
 				} else {
-					log.vlog("[M] Directory created: ", path);
+					// "[M] Directory created: "
+					log.vlog(provideLanguageTranslation(languageIdentifier,48), path);
 					try {
 						sync.scanForDifferences(path);
 					} catch (CurlException e) {
-						log.vlog("Offline, cannot create remote dir!");
+						// "Offline, cannot create remote directory!"
+						log.vlog(provideLanguageTranslation(languageIdentifier,49));
 					} catch(Exception e) {
-						log.logAndNotify("Cannot create remote directory: ", e.msg);
+						// "Cannot create remote directory: "
+						log.logAndNotify(provideLanguageTranslation(languageIdentifier,50), e.msg);
 					}
 				}
 			};
 			m.onFileChanged = delegate(string path) {
-				log.vlog("[M] File changed: ", path);
+				// "[M] File changed: "
+				log.vlog(provideLanguageTranslation(languageIdentifier,51), path);
 				try {
 					sync.scanForDifferences(path);
 				} catch (CurlException e) {
-					log.vlog("Offline, cannot upload changed item!");
+					// "Offline, cannot upload changed item!"
+					log.vlog(provideLanguageTranslation(languageIdentifier,52));
 				} catch(Exception e) {
-					log.logAndNotify("Cannot upload file changes/creation: ", e.msg);
+					// "Cannot upload file changes/creation: "
+					log.logAndNotify(provideLanguageTranslation(languageIdentifier,53), e.msg);
 				}
 			};
 			m.onDelete = delegate(string path) {
-				log.vlog("[M] Item deleted: ", path);
+				// "[M] Item deleted: "
+				log.vlog(provideLanguageTranslation(languageIdentifier,54), path);
 				try {
 					sync.deleteByPath(path);
 				} catch (CurlException e) {
-					log.vlog("Offline, cannot delete item!");
+					// "Offline, cannot delete item!"
+					log.vlog(provideLanguageTranslation(languageIdentifier,55));
 				} catch(SyncException e) {
+					// this error is thrown from sync.d
 					if (e.msg == "The item to delete is not in the local database") {
-						log.vlog("Item cannot be deleted from OneDrive because it was not found in the local database");
+						// "Item cannot be deleted from OneDrive because it was not found in the local database"
+						log.vlog(provideLanguageTranslation(languageIdentifier,56));
 					} else {
-						log.logAndNotify("Cannot delete remote item: ", e.msg);
+						// "Cannot delete remote item: "
+						log.logAndNotify(provideLanguageTranslation(languageIdentifier,57), e.msg);
 					}
 				} catch(Exception e) {
-					log.logAndNotify("Cannot delete remote item: ", e.msg);
+					// "Cannot delete remote item: "
+					log.logAndNotify(provideLanguageTranslation(languageIdentifier,57), e.msg);
 				}
 			};
 			m.onMove = delegate(string from, string to) {
-				log.vlog("[M] Item moved: ", from, " -> ", to);
+				// "[M] Item moved: "
+				log.vlog(provideLanguageTranslation(languageIdentifier,58), from, " -> ", to);
 				try {
 					// Handle .folder -> folder if skip_dotfiles is enabled
 					if ((cfg.getValueBool("skip_dotfiles")) && (selectiveSync.isDotFile(from))) {
@@ -1117,9 +1202,11 @@ int main(string[] args)
 						sync.uploadMoveItem(from, to);
 					}
 				} catch (CurlException e) {
-					log.vlog("Offline, cannot move item!");
+					// "Offline, cannot move item!"
+					log.vlog(provideLanguageTranslation(languageIdentifier,59));
 				} catch(Exception e) {
-					log.logAndNotify("Cannot move item: ", e.msg);
+					// "Cannot move item: "
+					log.logAndNotify(provideLanguageTranslation(languageIdentifier,60), e.msg);
 				}
 			};
 			signal(SIGINT, &exitHandler);
@@ -1131,7 +1218,8 @@ int main(string[] args)
 					m.init(cfg, cfg.getValueLong("verbose") > 0, cfg.getValueBool("skip_symlinks"), cfg.getValueBool("check_nosync"));
 				} catch (MonitorException e) {
 					// monitor initialisation failed
-					log.error("ERROR: ", e.msg);
+					// "ERROR: " + e.msg
+					log.error(provideLanguageTranslation(languageIdentifier,61), e.msg);
 					exit(-1);
 				}
 			}
@@ -1161,7 +1249,8 @@ int main(string[] args)
 						m.update(online);
 					} catch (MonitorException e) {
 						// Catch any exceptions thrown by inotify / monitor engine
-						log.error("ERROR: The following inotify error was generated: ", e.msg);
+						// "ERROR: The following inotify error was generated: "
+						log.error(provideLanguageTranslation(languageIdentifier,62), e.msg);
 					}
 				}
 
@@ -1260,7 +1349,8 @@ int main(string[] args)
 						}
 						try {
 							// perform a --monitor sync
-							if ((cfg.getValueLong("verbose") > 0) || (logMonitorCounter == logInterval)) log.log("Starting a sync with OneDrive");
+							// "Starting a sync with OneDrive"
+							if ((cfg.getValueLong("verbose") > 0) || (logMonitorCounter == logInterval)) log.log(provideLanguageTranslation(languageIdentifier,63));
 							performSync(sync, cfg.getValueString("single_directory"), cfg.getValueBool("download_only"), cfg.getValueBool("local_first"), cfg.getValueBool("upload_only"), (logMonitorCounter == logInterval ? MONITOR_LOG_QUIET : MONITOR_LOG_SILENT), fullScanRequired, syncListConfiguredFullScanOverride, displaySyncOptions, cfg.getValueBool("monitor"), m);
 							if (!cfg.getValueBool("download_only")) {
 								// discard all events that may have been generated by the sync that have not already been handled
@@ -1268,19 +1358,23 @@ int main(string[] args)
 									m.update(false);
 								} catch (MonitorException e) {
 									// Catch any exceptions thrown by inotify / monitor engine
-									log.error("ERROR: The following inotify error was generated: ", e.msg);
+									// "ERROR: The following inotify error was generated: "
+									log.error(provideLanguageTranslation(languageIdentifier,62), e.msg);
 								}
 							}
-							if ((cfg.getValueLong("verbose") > 0) || (logMonitorCounter == logInterval)) log.log("Sync with OneDrive is complete");
+							// "Sync with OneDrive is complete"
+							if ((cfg.getValueLong("verbose") > 0) || (logMonitorCounter == logInterval)) log.log(provideLanguageTranslation(languageIdentifier,64));
 						} catch (CurlException e) {
 							// we already tried three times in the performSync routine
 							// if we still have problems, then the sync handle might have
 							// gone stale and we need to re-initialize the sync engine
-							log.log("Persistent connection errors, reinitializing connection");
+							// "Persistent connection errors, reinitialising connection"
+							log.log(provideLanguageTranslation(languageIdentifier,65));
 							sync.reset();
 						}
 					} catch (CurlException e) {
-						log.log("Cannot initialize connection to OneDrive");
+						// "Unable to reach Microsoft OneDrive API service, unable to initialise application"
+						log.log(provideLanguageTranslation(languageIdentifier,20));
 					}
 					// performSync complete, set lastCheckTime to current time
 					fullScanRequired = false;
@@ -1317,6 +1411,7 @@ int main(string[] args)
 						// developer set option to limit --monitor loops
 						if (monitorLoopFullCount == (cfg.getValueLong("monitor_max_loop"))) {
 							performMonitor = false;
+							// No internationalisation for this log output - it is a developer set option
 							log.log("Exiting after ", monitorLoopFullCount, " loops due to developer set option");
 						}
 					}
@@ -1359,7 +1454,8 @@ bool initSyncEngine(SyncEngine sync)
 	} catch (OneDriveException e) {
 		if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
 			// Authorization is invalid
-			log.log("\nAuthorization token invalid, use --logout to authorize the client again\n");
+			// "Authorisation token invalid, use --logout to authorise the client again"
+			log.log("\n", provideLanguageTranslation(languageIdentifier,66),"\n");
 			return false;
 		}
 		if (e.httpStatusCode >= 500) {
@@ -1371,6 +1467,7 @@ bool initSyncEngine(SyncEngine sync)
 }
 
 // try to synchronize the folder three times
+// we cant pass cfg into this function ...
 void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, bool localFirst, bool uploadOnly, long logLevel, bool fullScanRequired, bool syncListConfiguredFullScanOverride, bool displaySyncOptions, bool monitorEnabled, Monitor m)
 {
 	int count;
@@ -1410,21 +1507,28 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 			}
 			if (singleDirectory != ""){
 				// we were requested to sync a single directory
-				log.vlog("Syncing changes from this selected path: ", singleDirectory);
+				// "Syncing changes from this selected path: "
+				log.vlog(provideLanguageTranslation(languageIdentifier,67), singleDirectory);
 				if (uploadOnly){
 					// Upload Only of selected single directory
-					if (logLevel < MONITOR_LOG_QUIET) log.log("Syncing changes from selected local path only - NOT syncing data changes from OneDrive ...");
+					// "Syncing changes from selected local path only - NOT syncing data changes from OneDrive ..."
+					if (logLevel < MONITOR_LOG_QUIET) log.log(provideLanguageTranslation(languageIdentifier,68));
 					sync.scanForDifferences(localPath);
 				} else {
 					// No upload only
 					if (localFirst) {
 						// Local First
-						if (logLevel < MONITOR_LOG_QUIET) log.log("Syncing changes from selected local path first before downloading changes from OneDrive ...");
+						// "Syncing changes from selected local path first before downloading changes from OneDrive ..."
+						if (logLevel < MONITOR_LOG_QUIET) log.log(provideLanguageTranslation(languageIdentifier,69));
 						sync.scanForDifferences(localPath);
 						sync.applyDifferencesSingleDirectory(remotePath);
 					} else {
 						// OneDrive First
-						if (logLevel < MONITOR_LOG_QUIET) log.log("Syncing changes from selected OneDrive path ...");
+						// "Syncing changes from selected OneDrive path ..."
+						if (logLevel < MONITOR_LOG_QUIET) log.log(provideLanguageTranslation(languageIdentifier,70));
+						// If we are doing a --download-only sync, indicate that only changes from OneDrive will be downloaded
+						// "Syncing changes from OneDrive only - NOT syncing local data changes to OneDrive ..."
+						if (downloadOnly) log.log(provideLanguageTranslation(languageIdentifier,77));
 						sync.applyDifferencesSingleDirectory(remotePath);
 						// is this a download only request?
 						if (!downloadOnly) {
@@ -1439,14 +1543,16 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 				// no single directory sync
 				if (uploadOnly){
 					// Upload Only of entire sync_dir
-					if (logLevel < MONITOR_LOG_QUIET) log.log("Syncing changes from local path only - NOT syncing data changes from OneDrive ...");
+					// "Syncing changes from local path only - NOT syncing data changes from OneDrive ..."
+					if (logLevel < MONITOR_LOG_QUIET) log.log(provideLanguageTranslation(languageIdentifier,71));
 					sync.scanForDifferences(localPath);
 				} else {
 					// No upload only
 					string syncCallLogOutput;
 					if (localFirst) {
 						// sync local files first before downloading from OneDrive
-						if (logLevel < MONITOR_LOG_QUIET) log.log("Syncing changes from local path first before downloading changes from OneDrive ...");
+						// "Syncing changes from local path first before downloading changes from OneDrive ..."
+						if (logLevel < MONITOR_LOG_QUIET) log.log(provideLanguageTranslation(languageIdentifier,72));
 						sync.scanForDifferences(localPath);
 						// if syncListConfiguredFullScanOverride = true
 						if (syncListConfiguredFullScanOverride) {
@@ -1458,8 +1564,9 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 						}
 					} else {
 						// sync from OneDrive first before uploading files to OneDrive
-						if (logLevel < MONITOR_LOG_SILENT) log.log("Syncing changes from OneDrive ...");
-
+						// "Syncing changes from OneDrive ..."
+						if (logLevel < MONITOR_LOG_SILENT) log.log(provideLanguageTranslation(languageIdentifier,73));
+						
 						// For the initial sync, always use the delta link so that we capture all the right delta changes including adds, moves & deletes
 						logOutputMessage = "Initial Scan: Call OneDrive Delta API for delta changes as compared to last successful sync.";
 						syncCallLogOutput = "Calling sync.applyDifferences(false);";
@@ -1470,6 +1577,9 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 							log.vdebug(logOutputMessage);
 							log.vdebug(syncCallLogOutput);
 						}
+						// If we are doing a --download-only sync, indicate that only changes from OneDrive will be downloaded
+						// "Syncing changes from OneDrive only - NOT syncing local data changes to OneDrive ..."
+						if (downloadOnly) log.log(provideLanguageTranslation(languageIdentifier,77));
 						sync.applyDifferences(false);
 
 						// is this a download only request?
@@ -1592,10 +1702,13 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 			count = -1;
 		} catch (Exception e) {
 			if (++count == 3) {
-				log.log("Giving up on sync after three attempts: ", e.msg);
+				// "Giving up on sync after three attempts: "
+				log.log(provideLanguageTranslation(languageIdentifier,74), e.msg);
 				throw e;
-			} else
-				log.log("Retry sync count: ", count, ": ", e.msg);
+			} else {
+				// "Retry sync count: "
+				log.log(provideLanguageTranslation(languageIdentifier,75), count, ": ", e.msg);
+			}
 		}
 	} while (count != -1);
 }
@@ -1611,16 +1724,19 @@ auto assumeNoGC(T) (T t) if (isFunctionPointer!T || isDelegate!T)
 extern(C) nothrow @nogc @system void exitHandler(int value) {
 	try {
 		assumeNoGC ( () {
-			log.log("Got termination signal, performing clean up");
+
+			// Generate log message
+			// " Got termination signal, shutting down DB connection"
+			log.log(provideLanguageTranslation(languageIdentifier,76));
 			// if initialised, shut down the HTTP instance
 			if (onedriveInitialised) {
-				log.log("Shutting down the HTTP instance");
+				log.vdebug("Shutting down the HTTP instance");
 				oneDrive.shutdown();
 			}
 			// was itemDb initialised?
 			if (itemDb !is null) {
 				// Make sure the .wal file is incorporated into the main db before we exit
-				log.log("Shutting down db connection");
+				log.vdebug("Shutting down db connection");
 				itemDb.performVacuum();
 				destroy(itemDb);
 			}

@@ -2,6 +2,7 @@ import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import std.file, std.string, std.regex, std.stdio, std.process, std.algorithm.searching, std.getopt, std.conv, std.path;
 import std.algorithm.sorting: sort;
 import selective;
+import translations;
 static import log;
 
 final class Config
@@ -124,7 +125,6 @@ final class Config
 		// maximum time an operation is allowed to take
 		// This includes dns resolution, connecting, data transfer, etc.
 		longValues["operation_timeout"] = 3600;		
-
 		// Webhook options
 		boolValues["webhook_enabled"] = false;
 		stringValues["webhook_public_url"] = "";
@@ -132,6 +132,8 @@ final class Config
 		longValues["webhook_listening_port"] = 8888;
 		longValues["webhook_expiration_interval"] = 3600 * 24;
 		longValues["webhook_renewal_interval"] = 3600 * 12;
+		// What language will be used for application output messaging - default EN-AU
+		stringValues["language_identifier"] = "EN-AU";
 
 		// DEVELOPER OPTIONS
 		// display_memory = true | false
@@ -146,7 +148,7 @@ final class Config
 		// - It may be desirable to see what options are being passed in to performSync() without enabling the full verbose debug logging
 		boolValues["display_sync_options"] = false;
 
-		// Determine the users home directory.
+		// Determine the users home directory. 
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
 		// Check for HOME environment variable
 		if (environment.get("HOME") != ""){
@@ -213,8 +215,11 @@ final class Config
 			// Configure the applicable permissions for the folder
 			configDirName.setAttributes(returnRequiredDirectoryPermisions());
 		}
+		
+		// Initialise the default language output as early as possible
+		translations.initialize();
 
-		// configDirName has a trailing /
+		// What has been determined as the 'user' and 'system' config directories?
 		if (!configDirName.empty) log.vlog("Using 'user' Config Dir: ", configDirName);
 		if (!systemConfigDirName.empty) log.vlog("Using 'system' Config Dir: ", systemConfigDirName);
 
@@ -249,18 +254,25 @@ final class Config
 			// Is there a system configuration file?
 			if (!exists(systemConfigFilePath)) {
 				// 'system' configuration file does not exist
-				log.vlog("No user or system config file found, using application defaults");
+				// "No user or system config file found, using application defaults"
+				log.vlog(provideLanguageTranslation(getValueString("language_identifier"),1));
 				return true;
 			} else {
 				// 'system' configuration file exists
 				// can we load the configuration file without error?
 				if (load(systemConfigFilePath)) {
 					// configuration file loaded without error
-					log.log("System configuration file successfully loaded");
+					// Load the User Language File if this was updated from the default
+					if (getValueString("language_identifier") != "EN-AU") {
+						translations.initializeUserConfiguredLanguageTranslations(getValueString("language_identifier"));
+					}
+					// "System configuration file successfully loaded"
+					log.log(provideLanguageTranslation(getValueString("language_identifier"),2));
 					return true;
 				} else {
 					// there was a problem loading the configuration file
-					log.log("System configuration file has errors - please check your configuration");
+					// "System configuration file has errors - please check your configuration"
+					log.log(provideLanguageTranslation(getValueString("language_identifier"),3));
 					return false;
 				}
 			}
@@ -269,11 +281,17 @@ final class Config
 			// can we load the configuration file without error?
 			if (load(userConfigFilePath)) {
 				// configuration file loaded without error
-				log.log("Configuration file successfully loaded");
+				// Load the User Language File if this was updated from the default
+				if (getValueString("language_identifier") != "EN-AU") {
+					translations.initializeUserConfiguredLanguageTranslations(getValueString("language_identifier"));
+				}
+				// "Configuration file successfully loaded"
+				log.log(provideLanguageTranslation(getValueString("language_identifier"),4));
 				return true;
 			} else {
 				// there was a problem loading the configuration file
-				log.log("Configuration file has errors - please check your configuration");
+				// "Configuration file has errors - please check your configuration",
+				log.log(provideLanguageTranslation(getValueString("language_identifier"),5));
 				return false;
 			}
 		}
@@ -473,7 +491,11 @@ final class Config
 					&boolValues["list_business_shared_folders"],
 				"sync-shared-folders",
 					"Sync OneDrive Business Shared Folders",
-					&boolValues["sync_business_shared_folders"]
+					&boolValues["sync_business_shared_folders"],
+				"export-translations",
+					"Export existing default application messages in JSON format",
+					&tmpBol
+					
 			);
 			if (opt.helpWanted) {
 				outputLongHelp(opt.options);
@@ -481,12 +503,14 @@ final class Config
 			}
 		} catch (GetOptException e) {
 			log.error(e.msg);
-			log.error("Try 'onedrive -h' for more information");
+			// "Please use 'onedrive --help' for further assistance in regards to running this application"
+			log.error(provideLanguageTranslation(getValueString("language_identifier"),27));
 			exit(EXIT_FAILURE);
 		} catch (Exception e) {
 			// error
 			log.error(e.msg);
-			log.error("Try 'onedrive -h' for more information");
+			// "Please use 'onedrive --help' for further assistance in regards to running this application"
+			log.error(provideLanguageTranslation(getValueString("language_identifier"),27));
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -614,23 +638,29 @@ final class Config
 							string azureConfigValue = c.front.dup;
 							switch(azureConfigValue) {
 								case "":
-									log.log("Using config option for Global Azure AD Endpoints");
+									// "Using config option for Global Azure AD Endpoints"
+									log.log(provideLanguageTranslation(getValueString("language_identifier"),6));
 									break;
 								case "USL4":
-									log.log("Using config option for Azure AD for US Government Endpoints");
+									// "Using config option for Azure AD for US Government Endpoints"
+									log.log(provideLanguageTranslation(getValueString("language_identifier"),7));
 									break;
 								case "USL5":
-									log.log("Using config option for Azure AD for US Government Endpoints (DOD)");
+									// "Using config option for Azure AD for US Government Endpoints (DOD)"
+									log.log(provideLanguageTranslation(getValueString("language_identifier"),8));
 									break;
 								case "DE":
-									log.log("Using config option for Azure AD Germany");
+									// "Using config option for Azure AD Germany"
+									log.log(provideLanguageTranslation(getValueString("language_identifier"),9));
 									break;
 								case "CN":
-									log.log("Using config option for Azure AD China operated by 21Vianet");
+									// "Using config option for Azure AD China operated by 21Vianet"
+									log.log(provideLanguageTranslation(getValueString("language_identifier"),10));
 									break;
 								// Default - all other entries
 								default:
-									log.log("Unknown Azure AD Endpoint - using Global Azure AD Endpoints");
+									// "Unknown Azure AD Endpoint - using Global Azure AD Endpoints"
+									log.log(provideLanguageTranslation(getValueString("language_identifier"),11));
 							}
 						}
 					} else {
@@ -639,13 +669,15 @@ final class Config
 							c.popFront();
 							setValueLong(key, to!long(c.front.dup));
 						} else {
-							log.log("Unknown key in config file: ", key);
+							// "Unknown key in config file: "
+							log.log(provideLanguageTranslation(getValueString("language_identifier"),12), key);
 							return false;
 						}
 					}
 				}
 			} else {
-				log.log("Malformed config line: ", lineBuffer);
+				// "Malformed config line: "
+				log.log(provideLanguageTranslation(getValueString("language_identifier"),13), lineBuffer);
 				return false;
 			}
 		}

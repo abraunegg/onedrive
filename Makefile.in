@@ -79,7 +79,8 @@ SOURCES = \
 	src/upload.d \
 	src/util.d \
 	src/progress.d \
-	src/arsd/cgi.d
+	src/arsd/cgi.d \
+	src/translations.d
 
 ifeq ($(NOTIFICATIONS),yes)
 SOURCES += src/notifications/notify.d src/notifications/dnotify.d
@@ -156,5 +157,3 @@ ifeq ($(COMPLETIONS),yes)
 	rm -f $(DESTDIR)$(BASH_COMPLETION_DIR)/onedrive
 	rm -f $(DESTDIR)$(FISH_COMPLETION_DIR)/onedrive.fish
 endif
-
-

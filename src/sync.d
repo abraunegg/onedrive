@@ -9,8 +9,11 @@ import std.conv;
 import std.encoding;
 import core.time, core.thread;
 import core.stdc.stdlib;
-import config, itemdb, onedrive, selective, upload, util;
+import config, itemdb, onedrive, selective, upload, util, translations;
 static import log;
+
+// Language Identifier
+private string languageIdentifier = "";
 
 // threshold after which files will be uploaded using an upload session
 private long thresholdFileSize = 4 * 2^^20; // 4 MiB
@@ -177,7 +180,8 @@ private Item makeItem(const ref JSONValue driveItem)
 		} else if ("quickXorHash" in driveItem["file"]["hashes"]) {
 			item.quickXorHash = driveItem["file"]["hashes"]["quickXorHash"].str;
 		} else {
-			log.vlog("The file does not have any hash");
+			// "The file does not have any hash"
+			log.vlog(provideLanguageTranslation(languageIdentifier,78));
 		}
 	}
 
@@ -293,6 +297,11 @@ final class SyncEngine
 		// Set accountType, defaultDriveId, defaultRootId & remainingFreeSpace once and reuse where possible
 		JSONValue oneDriveDetails;
 		JSONValue oneDriveRootDetails;
+		
+		// Update language identifier as used with this class
+		languageIdentifier = getConfigLanguageIdentifier();
+		
+		writeln("sync.d languageIdentifier: ", languageIdentifier);
 
 		if (initDone) {
 			return;
@@ -312,7 +321,8 @@ final class SyncEngine
 				
 				// Check this
 				if (cfg.getValueString("drive_id").length) {
-					log.error("\nERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
+					// "ERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect"
+					log.error("\n", provideLanguageTranslation(languageIdentifier,79),"\n");
 				}
 				// Must exit here
 				exit(-1);
@@ -320,7 +330,8 @@ final class SyncEngine
 			if (e.httpStatusCode == 401) {
 				// HTTP request returned status code 401 (Unauthorized)
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
+				// "ERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client."
+				log.errorAndNotify("\n", provideLanguageTranslation(languageIdentifier,80),"\n");
 				// Must exit here
 				exit(-1);
 			}
@@ -351,7 +362,8 @@ final class SyncEngine
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				// Check this
 				if (cfg.getValueString("drive_id").length) {
-					log.error("\nERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
+					// "ERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect"
+					log.error("\n", provideLanguageTranslation(languageIdentifier,79),"\n");
 				}
 				// Must exit here
 				exit(-1);
@@ -359,7 +371,8 @@ final class SyncEngine
 			if (e.httpStatusCode == 401) {
 				// HTTP request returned status code 401 (Unauthorized)
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
+				// "ERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client."
+				log.errorAndNotify("\n", provideLanguageTranslation(languageIdentifier,80),"\n");
 				// Must exit here
 				exit(-1);
 			}
@@ -414,42 +427,51 @@ final class SyncEngine
 					// json response contained a 'remaining' value
 					if (accountType == "personal"){
 						// zero space available
-						log.error("ERROR: OneDrive account currently has zero space available. Please free up some space online.");
+						// "ERROR: OneDrive account currently has zero space available. Please free up some space online."
+						log.error(provideLanguageTranslation(languageIdentifier,81));
 						quotaAvailable = false;
 					} else {
 						// zero space available is being reported, maybe being restricted?
-						log.error("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+						// "WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator."
+						log.error(provideLanguageTranslation(languageIdentifier,82));
 						quotaRestricted = true;
 					}
 				} else {
 					// json response was missing a 'remaining' value
 					if (accountType == "personal"){
-						log.error("ERROR: OneDrive quota information is missing. Potentially your OneDrive account currently has zero space available. Please free up some space online.");
+						// "ERROR: OneDrive quota information is missing. Potentially your OneDrive account currently has zero space available. Please free up some space online."
+						log.error(provideLanguageTranslation(languageIdentifier,83));
 						quotaAvailable = false;
 					} else {
 						// quota details not available
-						log.error("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+						// "ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator."
+						log.error(provideLanguageTranslation(languageIdentifier,84));
 						quotaRestricted = true;
 					}				
 				}
 			}
 			
 			// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
-			log.vlog("Application version: ", strip(import("version")));
-			log.vlog("Account Type: ", accountType);
-			log.vlog("Default Drive ID: ", defaultDriveId);
-			log.vlog("Default Root ID: ", defaultRootId);
+			// "Application version: "
+			log.vlog(provideLanguageTranslation(languageIdentifier,85), strip(import("version")));
+			// "Account Type: "
+			log.vlog(provideLanguageTranslation(languageIdentifier,86), accountType);
+			// "Default Drive ID: "
+			log.vlog(provideLanguageTranslation(languageIdentifier,87), defaultDriveId);
+			// "Default Root ID: "
+			log.vlog(provideLanguageTranslation(languageIdentifier,88), defaultRootId);
 			
 			// What do we display here
 			if (remainingFreeSpace > 0) {
 				// Display the actual value
-				log.vlog("Remaining Free Space: ", remainingFreeSpace);
+				// "Remaining Free Space: "
+				log.vlog(provideLanguageTranslation(languageIdentifier,89), remainingFreeSpace);
 			} else {
 				// zero or non-zero value or restricted
 				if (!quotaRestricted){
-					log.vlog("Remaining Free Space: 0");
+					log.vlog(provideLanguageTranslation(languageIdentifier,89), "0");
 				} else {
-					log.vlog("Remaining Free Space: Not Available");
+					log.vlog(provideLanguageTranslation(languageIdentifier,89), "Not Available");
 				}
 			}
 		
@@ -465,7 +487,8 @@ final class SyncEngine
 		
 			// Check if there is an interrupted upload session
 			if (session.restore()) {
-				log.log("Continuing the upload session ...");
+				// "Continuing the upload session ..."
+				log.log(provideLanguageTranslation(languageIdentifier,90));
 				string uploadSessionLocalFilePath = session.getUploadSessionLocalFilePath();
 				auto item = session.upload();
 				
@@ -476,7 +499,8 @@ final class SyncEngine
 					// Use actual config values as we are doing an upload session recovery
 					if ((cfg.getValueBool("upload_only")) && (cfg.getValueBool("remove_source_files"))) {
 						// Log that we are deleting a local item
-						log.log("Removing local file as --upload-only & --remove-source-files configured");
+						// "Removing local file as --upload-only & --remove-source-files configured"
+						log.log(provideLanguageTranslation(languageIdentifier,91));
 						// are we in a --dry-run scenario?
 						if (!dryRun) {
 							// No --dry-run ... process local file delete
@@ -497,15 +521,17 @@ final class SyncEngine
 					}
 				} else {
 					// JSON response was not valid, upload failed
-					log.error("ERROR: File failed to upload. Increase logging verbosity to determine why.");
+					// "ERROR: File failed to upload. Increase logging verbosity to determine why."
+					log.error(provideLanguageTranslation(languageIdentifier,92));
 				}
 			}
 			initDone = true;
 		} else {
 			// init failure
 			initDone = false;
-			// log why
-			log.error("ERROR: Unable to query OneDrive to initialize application");
+			// log why we cant initialise
+			// "ERROR: Unable to reach Microsoft OneDrive API service, unable to initialise application"
+			log.error(provideLanguageTranslation(languageIdentifier,20));
 			// Debug OneDrive Account details response
 			log.vdebug("OneDrive Account Details:      ", oneDriveDetails);
 			log.vdebug("OneDrive Account Root Details: ", oneDriveRootDetails);
@@ -638,16 +664,18 @@ final class SyncEngine
 					// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
 					if (selectiveSync.isDirNameExcluded(item.name)) {
 						// This directory name is excluded
-						log.vlog("Skipping item - excluded by skip_dir config: ", item.name);
+						// "Skipping item - excluded by skip_dir config: "
+						log.vlog(provideLanguageTranslation(languageIdentifier,93), item.name);
 						continue;
 					}
 				}
 				// Directory name is not excluded or skip_dir is not populated
 				log.vdebug("------------------------------------------------------------------");
 				if (!cfg.getValueBool("monitor")) {
-					log.log("Syncing this OneDrive Personal Shared Folder: ", item.name);
+					// "Syncing this OneDrive Personal Shared Folder: "
+					log.log(provideLanguageTranslation(languageIdentifier,94), item.name);
 				} else {
-					log.vlog("Syncing this OneDrive Personal Shared Folder: ", item.name);
+					log.vlog(provideLanguageTranslation(languageIdentifier,94), item.name);
 				}
 				// Check this OneDrive Personal Shared Folders
 				applyDifferences(item.remoteDriveId, item.remoteId, performFullItemScan);
@@ -662,7 +690,8 @@ final class SyncEngine
 		// Check OneDrive Business Shared Folders, if configured to do so
 		if (syncBusinessFolders){
 			// query OneDrive Business Shared Folders shared with me
-			log.vlog("Attempting to sync OneDrive Business Shared Folders");
+			// "Attempting to sync OneDrive Business Shared Folders"
+			log.vlog(provideLanguageTranslation(languageIdentifier,95));
 			JSONValue graphQuery;
 			try {
 				graphQuery = onedrive.getSharedWithMe();
@@ -689,6 +718,7 @@ final class SyncEngine
 				}
 			}
 			
+
 			if (graphQuery.type() == JSONType.object) {
 				string sharedFolderName;
 				foreach (searchResult; graphQuery["value"].array) {
@@ -765,18 +795,21 @@ final class SyncEngine
 							if ( ((!itemInDatabase) || (!itemLocalDirExists)) || (((databaseItem.driveId == searchResult["remoteItem"]["parentReference"]["driveId"].str) && (databaseItem.id == searchResult["remoteItem"]["id"].str)) && (!itemPathIsLocal)) ) {
 								// This shared folder does not exist in the database
 								if (!cfg.getValueBool("monitor")) {
-									log.log("Syncing this OneDrive Business Shared Folder: ", sharedFolderName);
+									// "Syncing this OneDrive Business Shared Folder: "
+									log.log(provideLanguageTranslation(languageIdentifier,96), sharedFolderName);
 								} else {
-									log.vlog("Syncing this OneDrive Business Shared Folder: ", sharedFolderName);
+									log.vlog(provideLanguageTranslation(languageIdentifier,96), sharedFolderName);
 								}
 								Item businessSharedFolder = makeItem(searchResult);
 								
 								// Log who shared this to assist with sync data correlation
-								if ((sharedByName != "") && (sharedByEmail != "")) {	
-									log.vlog("OneDrive Business Shared Folder - Shared By:  ", sharedByName, " (", sharedByEmail, ")");
+								if ((sharedByName != "") && (sharedByEmail != "")) {
+									// "OneDrive Business Shared Folder - Shared By:  ", sharedByName, " (", sharedByEmail, ")"
+									log.vlog(provideLanguageTranslation(languageIdentifier,97), sharedByName, " (", sharedByEmail, ")");
 								} else {
 									if (sharedByName != "") {
-										log.vlog("OneDrive Business Shared Folder - Shared By:  ", sharedByName);
+										// "OneDrive Business Shared Folder - Shared By:  "
+										log.vlog(provideLanguageTranslation(languageIdentifier,97), sharedByName);
 									}
 								}
 								
@@ -791,16 +824,20 @@ final class SyncEngine
 								}
 							} else {
 								// Shared Folder Name Conflict ...
-								log.log("WARNING: Skipping shared folder due to existing name conflict: ", sharedFolderName);
-								log.log("WARNING: Skipping changes of Path ID: ", searchResult["remoteItem"]["id"].str);
-								log.log("WARNING: To sync this shared folder, this shared folder needs to be renamed");
+								// "WARNING: Skipping shared folder due to existing name conflict: "
+								log.log(provideLanguageTranslation(languageIdentifier,98), sharedFolderName);
+								// "WARNING: Skipping changes of Path ID: "
+								log.log(provideLanguageTranslation(languageIdentifier,99), searchResult["remoteItem"]["id"].str);
+								// "WARNING: To sync this shared folder, this shared folder needs to be renamed"
+								log.log(provideLanguageTranslation(languageIdentifier,100));
 								
 								// Log who shared this to assist with conflict resolution
-								if ((sharedByName != "") && (sharedByEmail != "")) {	
-									log.vlog("WARNING: Conflict Shared By:          ", sharedByName, " (", sharedByEmail, ")");
+								if ((sharedByName != "") && (sharedByEmail != "")) {
+									// "WARNING: Conflict Shared By:          "
+									log.vlog(provideLanguageTranslation(languageIdentifier,101), sharedByName, " (", sharedByEmail, ")");
 								} else {
 									if (sharedByName != "") {
-										log.vlog("WARNING: Conflict Shared By:          ", sharedByName);
+										log.vlog(provideLanguageTranslation(languageIdentifier,101), sharedByName);
 									}
 								}
 							}	
@@ -813,25 +850,29 @@ final class SyncEngine
 							// shared item is a file
 							string sharedFileName = searchResult["name"].str;
 							// log that this is not supported
-							log.vlog("WARNING: Not syncing this OneDrive Business Shared File: ", sharedFileName);
+							// "WARNING: Not syncing this OneDrive Business Shared File: "
+							log.vlog(provideLanguageTranslation(languageIdentifier,102), sharedFileName);
 							
 							// Log who shared this to assist with sync data correlation
-							if ((sharedByName != "") && (sharedByEmail != "")) {	
-								log.vlog("OneDrive Business Shared File - Shared By:  ", sharedByName, " (", sharedByEmail, ")");
+							if ((sharedByName != "") && (sharedByEmail != "")) {
+								// "OneDrive Business Shared File - Shared By:  "
+								log.vlog(provideLanguageTranslation(languageIdentifier,103), sharedByName, " (", sharedByEmail, ")");
 							} else {
 								if (sharedByName != "") {
-									log.vlog("OneDrive Business Shared File - Shared By:  ", sharedByName);
+									log.vlog(provideLanguageTranslation(languageIdentifier,103), sharedByName);
 								}
 							}
 						} else {
 							// something else entirely
-							log.log("WARNING: Not syncing this OneDrive Business Shared item: ", searchResult["name"].str);
+							// "WARNING: Not syncing this OneDrive Business Shared item: "
+							log.log(provideLanguageTranslation(languageIdentifier,104), searchResult["name"].str);
 						}
 					}
 				}
 			} else {
 				// Log that an invalid JSON object was returned
-				log.error("ERROR: onedrive.getSharedWithMe call returned an invalid JSON Object");
+				// "ERROR: onedrive.getSharedWithMe call returned an invalid JSON Object"
+				log.error(provideLanguageTranslation(languageIdentifier,105));
 			}	
 		}
 	}
@@ -855,7 +896,8 @@ final class SyncEngine
 		
 		// Check OneDrive Business Shared Folders, if configured to do so
 		if (syncBusinessFolders){
-			log.vlog("Attempting to sync OneDrive Business Shared Folders");
+			// "Attempting to sync OneDrive Business Shared Folders"
+			log.vlog(provideLanguageTranslation(languageIdentifier,95));
 			// query OneDrive Business Shared Folders shared with me
 			JSONValue graphQuery;
 			try {
@@ -930,10 +972,12 @@ final class SyncEngine
 							
 							// Log who shared this to assist with sync data correlation
 							if ((sharedByName != "") && (sharedByEmail != "")) {	
-								log.vlog("OneDrive Business Shared Folder - Shared By:  ", sharedByName, " (", sharedByEmail, ")");
+								// "OneDrive Business Shared Folder - Shared By:  ", sharedByName, " (", sharedByEmail, ")"
+								log.vlog(provideLanguageTranslation(languageIdentifier,97), sharedByName, " (", sharedByEmail, ")");
 							} else {
 								if (sharedByName != "") {
-									log.vlog("OneDrive Business Shared Folder - Shared By:  ", sharedByName);
+									// "OneDrive Business Shared Folder - Shared By:  "
+									log.vlog(provideLanguageTranslation(languageIdentifier,97), sharedByName);
 								}
 							}
 						}
@@ -941,12 +985,14 @@ final class SyncEngine
 				}
 			} else {
 				// Log that an invalid JSON object was returned
-				log.error("ERROR: onedrive.getSharedWithMe call returned an invalid JSON Object");
+				// "ERROR: onedrive.getSharedWithMe call returned an invalid JSON Object"
+				log.error(provideLanguageTranslation(languageIdentifier,105));
 			}
 		}
 		
 		// Test if the path we are going to sync from actually exists on OneDrive
-		log.vlog("Getting path details from OneDrive ...");
+		// "Getting path details from OneDrive ..."
+		log.vlog(provideLanguageTranslation(languageIdentifier,106));
 		try {
 			// Need to use different calls here - one call for majority, another if this is a OneDrive Business Shared Folder
 			if (!syncBusinessFolders){
@@ -970,12 +1016,13 @@ final class SyncEngine
 						// try calling using the path
 						onedrivePathDetails = onedrive.getPathDetailsByDriveId(driveId, path);
 					} catch (OneDriveException e) {	
-					
+						// query of driveid & path failed generating a 404
 						if (e.httpStatusCode == 404) {
-							log.error("ERROR: The requested single directory to sync was not found on OneDrive - Check folder permissions and sharing status with folder owner");
+							// ERROR: The requested single directory to sync was not found on OneDrive - Check folder permissions and sharing status with folder owner
+							log.error(provideLanguageTranslation(languageIdentifier,181));
 							return;
 						}
-					
+						// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 						if (e.httpStatusCode == 429) {
 							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 							handleOneDriveThrottleRequest();
@@ -985,7 +1032,7 @@ final class SyncEngine
 							// return back to original call
 							return;
 						}
-						
+						// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
 						if (e.httpStatusCode >= 500) {
 							// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
 							return;
@@ -993,11 +1040,11 @@ final class SyncEngine
 					}
 				} else {
 					// Not a OneDrive Business Shared folder operation
-					log.error("ERROR: The requested single directory to sync was not found on OneDrive");
+					// "ERROR: The requested single directory to sync was not found on OneDrive"
+					log.error(provideLanguageTranslation(languageIdentifier,107));
 					return;
 				}
 			}
-			
 			if (e.httpStatusCode == 429) {
 				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 				handleOneDriveThrottleRequest();
@@ -1007,7 +1054,6 @@ final class SyncEngine
 				// return back to original call
 				return;
 			}
-						
 			if (e.httpStatusCode >= 500) {
 				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
 				return;
@@ -1049,7 +1095,8 @@ final class SyncEngine
 	// make sure the OneDrive root is in our database
 	auto checkDatabaseForOneDriveRoot()
 	{
-		log.vlog("Fetching details for OneDrive Root");
+		// "Fetching details for OneDrive Root"
+		log.vlog(provideLanguageTranslation(languageIdentifier,108));
 		JSONValue rootPathDetails = onedrive.getDefaultRoot(); // Returns a JSON Value
 		
 		// validate object is a JSON value
@@ -1063,15 +1110,19 @@ final class SyncEngine
 			
 			// Query the database
 			if (!itemdb.selectById(driveId, rootId, rootPathItem)) {
-				log.vlog("OneDrive Root does not exist in the database. We need to add it.");	
+				// "OneDrive Root does not exist in the database. We need to add it."
+				log.vlog(provideLanguageTranslation(languageIdentifier,109));	
 				applyDifference(rootPathDetails, driveId, true);
-				log.vlog("Added OneDrive Root to the local database");
+				// "Added OneDrive Root to the local database"
+				log.vlog(provideLanguageTranslation(languageIdentifier,110));
 			} else {
-				log.vlog("OneDrive Root exists in the database");
+				// "OneDrive Root exists in the database"
+				log.vlog(provideLanguageTranslation(languageIdentifier,111));
 			}
 		} else {
 			// Log that an invalid JSON object was returned
-			log.error("ERROR: Unable to query OneDrive for account details");
+			// "ERROR: Unable to query OneDrive for account details"
+			log.error(provideLanguageTranslation(languageIdentifier,112));
 			log.vdebug("onedrive.getDefaultRoot call returned an invalid JSON Object");
 			// Must exit here as we cant configure our required variables
 			exit(-1);
@@ -1082,7 +1133,8 @@ final class SyncEngine
 	auto createDirectoryNoSync(const(string) path)
 	{
 		// Attempt to create the requested path within OneDrive without performing a sync
-		log.vlog("Attempting to create the requested path within OneDrive");
+		// "Attempting to create the requested path within OneDrive"
+		log.vlog(provideLanguageTranslation(languageIdentifier,113));
 		
 		// Handle the remote folder creation and updating of the local database without performing a sync
 		uploadCreateDir(path);
@@ -1095,7 +1147,8 @@ final class SyncEngine
 		const(char)[] rootId = defaultRootId;
 		
 		// Attempt to delete the requested path within OneDrive without performing a sync
-		log.vlog("Attempting to delete the requested path within OneDrive");
+		// "Attempting to delete the requested path within OneDrive"
+		log.vlog(provideLanguageTranslation(languageIdentifier,114));
 		
 		// test if the path we are going to exists on OneDrive
 		try {
@@ -1104,7 +1157,8 @@ final class SyncEngine
 			log.vdebug("onedrive.getPathDetails(path) generated a OneDriveException");
 			if (e.httpStatusCode == 404) {
 				// The directory was not found on OneDrive - no need to delete it
-				log.vlog("The requested directory to delete was not found on OneDrive - skipping removing the remote directory as it doesn't exist");
+				// "The requested directory to delete was not found on OneDrive - skipping removing the remote directory as it doesn't exist"
+				log.vlog(provideLanguageTranslation(languageIdentifier,115));
 				return;
 			}
 			
@@ -1137,12 +1191,14 @@ final class SyncEngine
 		// Was the item found in the DB
 		if (!itemInDB) {
 			// this is odd .. this directory is not in the local database - just go delete it
-			log.vlog("The requested directory to delete was not found in the local database - pushing delete request direct to OneDrive");
+			// "The requested directory to delete was not found in the local database - pushing delete request direct to OneDrive"
+			log.vlog(provideLanguageTranslation(languageIdentifier,116));
 			uploadDeleteItem(item, path);
 		} else {
 			// the folder was in the local database
 			// Handle the deletion and saving any update to the local database
-			log.vlog("The requested directory to delete was found in the local database. Processing the deletion normally");
+			// "The requested directory to delete was found in the local database. Processing the deletion normally"
+			log.vlog(provideLanguageTranslation(languageIdentifier,117));
 			deleteByPath(path);
 		}
 	}
@@ -1156,8 +1212,9 @@ final class SyncEngine
 		} catch (OneDriveException e) {
 			log.vdebug("onedrive.getPathDetails(source); generated a OneDriveException");
 			if (e.httpStatusCode == 404) {
-				// The directory was not found 
-				log.vlog("The requested directory to rename was not found on OneDrive");
+				// The directory was not found
+				// "The requested directory to rename was not found on OneDrive"
+				log.vlog(provideLanguageTranslation(languageIdentifier,118));
 				return;
 			}
 			
@@ -1185,7 +1242,8 @@ final class SyncEngine
 	// id is the root of the drive or a shared folder
 	private void applyDifferences(string driveId, const(char)[] id, bool performFullItemScan)
 	{
-		log.vlog("Applying changes of Path ID: " ~ id);
+		// "Applying changes of Path ID: "
+		log.vlog(provideLanguageTranslation(languageIdentifier,119), id);
 		// function variables
 		char[] idToQuery;
 		JSONValue changes;
@@ -1237,25 +1295,29 @@ final class SyncEngine
 						if (remainingFreeSpace <= 0) {
 							if (accountType == "personal"){
 								// zero space available
-								log.error("ERROR: OneDrive account currently has zero space available. Please free up some space online.");
+								// "ERROR: OneDrive account currently has zero space available. Please free up some space online."
+								log.error(provideLanguageTranslation(languageIdentifier,81));
 								quotaAvailable = false;
 							} else {
 								// zero space available is being reported, maybe being restricted?
-								log.error("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+								// "WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator."
+								log.error(provideLanguageTranslation(languageIdentifier,82));
 								quotaRestricted = true;
 							}
 						} else {
 							// Display the updated value
-							log.vlog("Updated Remaining Free Space: ", remainingFreeSpace);
+							// "Updated Remaining Free Space: "
+							log.vlog(provideLanguageTranslation(languageIdentifier,120));
 						}
 					}
 				} else {
 					// quota details returned, but for a drive id that is not ours
 					if ("remaining" in currentDriveQuota["quota"]){
-						// remaining is in the quota JSON response					
+						// remaining is in the quota JSON response
 						if (currentDriveQuota["quota"]["remaining"].integer <= 0) {
 							// value returned is 0 or less than 0
-							log.vlog("OneDrive quota information is set at zero, as this is not our drive id, ignoring");
+							// "OneDrive quota information is set at zero, as this is not our drive id, ignoring"
+							log.vlog(provideLanguageTranslation(languageIdentifier,121));
 						}
 					}
 				}
@@ -1263,7 +1325,8 @@ final class SyncEngine
 				// No quota details returned
 				if (driveId == defaultDriveId) {
 					// no quota details returned for current drive id
-					log.error("ERROR: OneDrive quota information is missing. Potentially your OneDrive account currently has zero space available. Please free up some space online.");
+					// "ERROR: OneDrive quota information is missing. Potentially your OneDrive account currently has zero space available. Please free up some space online."
+					log.error(provideLanguageTranslation(languageIdentifier,83));
 				} else {
 					// quota details not available
 					log.vdebug("OneDrive quota information is being restricted as this is not our drive id.");
@@ -1278,7 +1341,7 @@ final class SyncEngine
 			log.vdebug("idDetails = onedrive.getPathDetailsById(driveId, id) generated a OneDriveException");
 			if (e.httpStatusCode == 404) {
 				// id was not found - possibly a remote (shared) folder
-				log.vlog("No details returned for given Path ID");
+				log.vlog(provideLanguageTranslation(languageIdentifier,122));
 				return;
 			}
 			
@@ -1521,10 +1584,9 @@ final class SyncEngine
 					
 					// HTTP request returned status code 404 (Not Found)
 					if (e.httpStatusCode == 404) {
-						// Stop application
-						log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
-						log.log("The item id to query was not found on OneDrive");
-						log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
+						// Stop this sync action
+						// "ERROR: A potential local database consistency issue has been caught. Please retry your command with '--resync' to fix any local database consistency issues."
+						log.error(provideLanguageTranslation(languageIdentifier,123));
 						return;
 					}
 					
@@ -1547,7 +1609,8 @@ final class SyncEngine
 						// If an error is returned when querying 'changes' and we recall the original function, we go into a never ending loop where the sync never ends
 						// re-try the specific changes queries	
 						if (e.httpStatusCode == 504) {
-							log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query OneDrive drive items - retrying applicable request");
+							// OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query the OneDrive API - retrying applicable request
+							log.log(provideLanguageTranslation(languageIdentifier,124));
 							log.vdebug("changes = generateDeltaResponse(driveId, idToQuery) previously threw an error - retrying");
 							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
 							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
@@ -1595,10 +1658,9 @@ final class SyncEngine
 					
 					// HTTP request returned status code 404 (Not Found)
 					if (e.httpStatusCode == 404) {
-						// Stop application
-						log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
-						log.log("The item id to query was not found on OneDrive");
-						log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
+						// Stop this sync action
+						// "ERROR: A potential local database consistency issue has been caught. Please retry your command with '--resync' to fix any local database consistency issues."
+						log.error(provideLanguageTranslation(languageIdentifier,123));
 						return;
 					}
 					
@@ -1628,7 +1690,8 @@ final class SyncEngine
 						// If an error is returned when querying 'changes' and we recall the original function, we go into a never ending loop where the sync never ends
 						// re-try the specific changes queries	
 						if (e.httpStatusCode == 504) {
-							log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
+							// OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query the OneDrive API - retrying applicable request
+							log.log(provideLanguageTranslation(languageIdentifier,124));
 							log.vdebug("changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink) previously threw an error - retrying");
 							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
 							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
@@ -1644,7 +1707,8 @@ final class SyncEngine
 							// display what the error is
 							log.vdebug("Query Error: changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink) on re-try after delay");
 							if (e.httpStatusCode == 504) {
-								log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
+								// OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query the OneDrive API - retrying applicable request
+								log.log(provideLanguageTranslation(languageIdentifier,124));
 								log.vdebug("changes = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLink) previously threw an error - retrying with empty deltaLink");
 								try {
 									// try query with empty deltaLink value
@@ -1700,10 +1764,9 @@ final class SyncEngine
 					
 					// HTTP request returned status code 404 (Not Found)
 					if (e.httpStatusCode == 404) {
-						// Stop application
-						log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
-						log.log("The item id to query was not found on OneDrive");
-						log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
+						// Stop this sync action
+						// "ERROR: A potential local database consistency issue has been caught. Please retry your command with '--resync' to fix any local database consistency issues."
+						log.error(provideLanguageTranslation(languageIdentifier,123));
 						return;
 					}
 					
@@ -1733,7 +1796,8 @@ final class SyncEngine
 						// If an error is returned when querying 'changes' and we recall the original function, we go into a never ending loop where the sync never ends
 						// re-try the specific changes queries	
 						if (e.httpStatusCode == 504) {
-							log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
+							// OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query the OneDrive API - retrying applicable request
+							log.log(provideLanguageTranslation(languageIdentifier,124));
 							log.vdebug("changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying");
 							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
 							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
@@ -1749,7 +1813,8 @@ final class SyncEngine
 							// display what the error is
 							log.vdebug("Query Error: changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) on re-try after delay");
 							if (e.httpStatusCode == 504) {
-								log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
+								// OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query the OneDrive API - retrying applicable request
+								log.log(provideLanguageTranslation(languageIdentifier,124));
 								log.vdebug("changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying with empty deltaLinkAvailable");
 								try {
 									// try query with empty deltaLinkAvailable value
@@ -1795,22 +1860,26 @@ final class SyncEngine
 							// sync_list is not being used - lets use the right messaging here
 							if (oneDriveFullScanTrigger) {
 								// full scan was triggered out of cycle
-								log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being triggered by actions on OneDrive");
+								// "Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being triggered by actions on OneDrive"
+								log.vlog(provideLanguageTranslation(languageIdentifier,125), nrChanges, provideLanguageTranslation(languageIdentifier,126));
 								// unset now the full scan trigger if set
 								unsetOneDriveFullScanTrigger();
 							} else {
 								// no sync_list in use, oneDriveFullScanTrigger not set via sync_list or skip_dir 
 								if (performFullItemScan){
 									// performFullItemScan was set
-									log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being requested");
+									// "Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being requested"
+									log.vlog(provideLanguageTranslation(languageIdentifier,125), nrChanges, provideLanguageTranslation(languageIdentifier,127));
 								} else {
 									// default processing message
-									log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state");
+									// "Processing ", nrChanges, " OneDrive items to ensure consistent local state"
+									log.vlog(provideLanguageTranslation(languageIdentifier,125), nrChanges, provideLanguageTranslation(languageIdentifier,128));
 								}
 							}
 						} else {
 							// sync_list is being used - why are we going through the entire OneDrive contents?
-							log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to sync_list being used");
+							// "Processing ", nrChanges, " OneDrive items to ensure consistent local state due to sync_list being used"
+							log.vlog(provideLanguageTranslation(languageIdentifier,125), nrChanges, provideLanguageTranslation(languageIdentifier,129));
 						}
 					} else {
 						// There are valid changes but less than the min_notify_changes configured threshold
@@ -1825,15 +1894,18 @@ final class SyncEngine
 							// full scan was requested or triggered
 							// use the right message
 							if (oneDriveFullScanTrigger) {
-								log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being triggered by actions on OneDrive");
+								// "Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being triggered by actions on OneDrive"
+								log.vlog(provideLanguageTranslation(languageIdentifier,125), nrChanges, provideLanguageTranslation(languageIdentifier,126));
 								// unset now the full scan trigger if set
 								unsetOneDriveFullScanTrigger();
 							} else {
-								log.vlog("Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being requested");
+								// "Processing ", nrChanges, " OneDrive items to ensure consistent local state due to a full scan being requested"
+								log.vlog(provideLanguageTranslation(languageIdentifier,125), nrChanges, provideLanguageTranslation(languageIdentifier,127));
 							}
 						} else {
 							// standard message
-							log.vlog("Number of items from OneDrive to process: ", nrChanges);
+							// "Number of items from OneDrive to process: "
+							log.vlog(provideLanguageTranslation(languageIdentifier,130), nrChanges);
 						}
 					}
 
@@ -1980,7 +2052,8 @@ final class SyncEngine
 											log.vdebug("oneDriveMovedNotDeleted = onedrive.getPathDetailsById(driveId, item['id'].str); generated a OneDriveException");
 											if (e.httpStatusCode == 404) {
 												// No .. that ID is GONE
-												log.vlog("Remote change discarded - item cannot be found");
+												// "Remote change discarded - item cannot be found"
+												log.vlog(provideLanguageTranslation(languageIdentifier,131));
 											}
 											if (e.httpStatusCode == 429) {
 												// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
@@ -1994,7 +2067,8 @@ final class SyncEngine
 													// Rather than retry original function, retry the actual call and replicate error handling
 													if (e.httpStatusCode == 404) {
 														// No .. that ID is GONE
-														log.vlog("Remote change discarded - item cannot be found");
+														// "Remote change discarded - item cannot be found"
+														log.vlog(provideLanguageTranslation(languageIdentifier,131));
 													} else {
 														// not a 404
 														displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
@@ -2014,17 +2088,20 @@ final class SyncEngine
 									} else {
 										// out of scope for some other reason
 										if (singleDirectoryScope){
-											log.vlog("Remote change discarded - not in --single-directory sync scope (in DB)");
+											// "Remote change discarded - not in --single-directory sync scope (in DB)"
+											log.vlog(provideLanguageTranslation(languageIdentifier,132));
 										} else {
-											log.vlog("Remote change discarded - not in sync scope");
+											// "Remote change discarded - not in sync scope"
+											log.vlog(provideLanguageTranslation(languageIdentifier,133));
 										}
-										log.vdebug("Remote change discarded: ", item); 
+										log.vdebug("Remote change discarded: ", item);
 									}
 								} else {
 									// item is not in the database
 									if (singleDirectoryScope){
 										// We are syncing a single directory, so this is the reason why it is out of scope
-										log.vlog("Remote change discarded - not in --single-directory sync scope (not in DB)");
+										// "Remote change discarded - not in --single-directory sync scope (not in DB)"
+										log.vlog(provideLanguageTranslation(languageIdentifier,134));
 										log.vdebug("Remote change discarded: ", item);
 									} else {
 										// Not a single directory sync
@@ -2032,11 +2109,13 @@ final class SyncEngine
 											// if we are syncing shared business folders, a 'change' may be out of scope as we are not syncing that 'folder'
 											// but we are sent all changes from the 'parent root' as we cannot query the 'delta' for this folder
 											// as that is a 501 error - not implemented
-											log.vlog("Remote change discarded - not in business shared folders sync scope");
+											// "Remote change discarded - not in business shared folders sync scope"
+											log.vlog(provideLanguageTranslation(languageIdentifier,135));
 											log.vdebug("Remote change discarded: ", item);
 										} else {
 											// out of scope for some other reason
-											log.vlog("Remote change discarded - not in sync scope");
+											// "Remote change discarded - not in sync scope"
+											log.vlog(provideLanguageTranslation(languageIdentifier,133));
 											log.vdebug("Remote change discarded: ", item);
 										}
 									}
@@ -2211,7 +2290,8 @@ final class SyncEngine
 					}
 					
 					log.vdebug("Result: ", unwanted);
-					if (unwanted) log.vlog("Skipping item - excluded by skip_dir config: ", matchDisplay);
+					// "Skipping item - excluded by skip_dir config: "
+					if (unwanted) log.vlog(provideLanguageTranslation(languageIdentifier,93), matchDisplay);
 				}
 			}
 		}
@@ -2241,11 +2321,11 @@ final class SyncEngine
 					log.vdebug("skip_file item to check: ", path);
 					unwanted = selectiveSync.isFileNameExcluded(path);
 					log.vdebug("Result: ", unwanted);
-					if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
+					if (unwanted) log.vlog(provideLanguageTranslation(languageIdentifier,137), item.name);
 				} else {
 					// parent id is not in the database
 					unwanted = true;
-					log.vlog("Skipping file - parent path not present in local database");
+					log.vlog(provideLanguageTranslation(languageIdentifier,138));
 				}
 			}
 		}
@@ -2268,13 +2348,16 @@ final class SyncEngine
 				// Microsoft OneNote container objects present as neither folder or file but has file size
 				if ((!isItemFile(driveItem)) && (!isItemFolder(driveItem)) && (hasFileSize(driveItem))) {
 					// Log that this was skipped as this was a Microsoft OneNote item and unsupported
-					log.vlog("The Microsoft OneNote Notebook '", path, "' is not supported by this client");
+					// "The Microsoft OneNote Notebook '", path, "' is not supported by this client"
+					log.vlog(provideLanguageTranslation(languageIdentifier,139), path, provideLanguageTranslation(languageIdentifier,140));
 				} else {
-					// Log that this item was skipped as unsupported 
-					log.vlog("The OneDrive item '", path, "' is not supported by this client");
+					// Log that this item was skipped as unsupported
+					// "The OneDrive item '", path, "' is not supported by this client"
+					log.vlog(provideLanguageTranslation(languageIdentifier,141), path, provideLanguageTranslation(languageIdentifier,140));
 				}
 				unwanted = true;
-				log.vdebug("Flagging as unwanted: item type is not supported");
+				// "Flagging as unwanted: item type is not supported"
+				log.vdebug(provideLanguageTranslation(languageIdentifier,142));
 			}
 		}
 
@@ -2295,10 +2378,12 @@ final class SyncEngine
 					} else {
 						// path is unwanted
 						unwanted = true;
-						log.vlog("Skipping item - excluded by sync_list config: ", path);
+						// Skipping item - excluded by sync_list config: "
+						log.vlog(provideLanguageTranslation(languageIdentifier,143), path);
 						// flagging to skip this file now, but does this exist in the DB thus needs to be removed / deleted?
 						if (itemdb.idInLocalDatabase(item.driveId, item.id)){
-							log.vlog("Flagging item for local delete as item exists in database: ", path);
+							// "Flagging item for local delete as item exists in database: "
+							log.vlog(provideLanguageTranslation(languageIdentifier,144), path);
 							// flag to delete
 							idsToDelete ~= [item.driveId, item.id];
 						}
@@ -2340,7 +2425,8 @@ final class SyncEngine
 		// skip downloading dot files if configured
 		if (cfg.getValueBool("skip_dotfiles")) {
 			if (isDotFile(path)) {
-				log.vlog("Skipping item - .file or .folder: ", path);
+				// "Skipping item - .file or .folder: "
+				log.vlog(provideLanguageTranslation(languageIdentifier,145), path);
 				unwanted = true;
 			}
 		}
@@ -2400,25 +2486,30 @@ final class SyncEngine
 							// no local rename
 							// no download needed
 							if (localModifiedTime == item.mtime) {
-								log.vlog("Local item modified time is equal to OneDrive item modified time based on UTC time conversion - keeping local item");
+								// "Local item modified time is equal to OneDrive item modified time based on UTC time conversion - keeping local item"
+								log.vlog(provideLanguageTranslation(languageIdentifier,146));
 							} else {
-								log.vlog("Local item modified time is newer than OneDrive item modified time based on UTC time conversion - keeping local item");
+								// "Local item modified time is newer than OneDrive item modified time based on UTC time conversion - keeping local item"
+								log.vlog(provideLanguageTranslation(languageIdentifier,147));
 							}
 							skippedItems ~= item.id;
 							return;
 						} else {
 							// remote file is newer than local item
-							log.vlog("Remote item modified time is newer based on UTC time conversion"); // correct message, remote item is newer
+							// "Remote item modified time is newer based on UTC time conversion"
+							log.vlog(provideLanguageTranslation(languageIdentifier,148)); // correct message, remote item is newer
 							auto ext = extension(oldPath);
 							auto newPath = path.chomp(ext) ~ "-" ~ deviceName ~ ext;
 							
 							// has the user configured to IGNORE local data protection rules?
 							if (bypassDataPreservation) {
 								// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
-								log.vlog("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: ", oldPath);
+								// "WARNING: Local Data Protection has been disabled by your configuration. You may experience data loss on this file: "
+								log.vlog(provideLanguageTranslation(languageIdentifier,149), oldPath);
 							} else {
 								// local data protection is configured, renaming local file
-								log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent data loss: ", oldPath, " -> ", newPath);
+								// "The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent data loss: "
+								log.vlog(provideLanguageTranslation(languageIdentifier,150), oldPath, " -> ", newPath);
 								
 								// perform the rename action
 								if (!dryRun) {
@@ -2445,7 +2536,8 @@ final class SyncEngine
 			if (isItemFile(driveItem)) {
 				if (cfg.getValueLong("skip_size") != 0) {
 					if (driveItem["size"].integer >= this.newSizeLimit) {
-						log.vlog("Skipping item - excluded by skip_size config: ", item.name, " (", driveItem["size"].integer/2^^20, " MB)");
+						// "Skipping item - excluded by skip_size config: "
+						log.vlog(provideLanguageTranslation(languageIdentifier,151), item.name, " (", driveItem["size"].integer/2^^20, " MB)");
 						return;
 					}
 				}
@@ -2505,7 +2597,8 @@ final class SyncEngine
 						// item id is in the database
 						// no local rename
 						// no download needed
-						log.vlog("Local item modified time is newer based on UTC time conversion - keeping local item as this exists in the local database");
+						// "Local item modified time is newer based on UTC time conversion - keeping local item as this exists in the local database"
+						log.vlog(provideLanguageTranslation(languageIdentifier,152));
 						log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer than OneDrive item and present in the sqlite database");
 						return;
 					} else {
@@ -2516,18 +2609,20 @@ final class SyncEngine
 							// need the parent path for this object
 							string parentPath = dirName(path);		
 							if (exists(parentPath ~ "/.nosync")) {
-								log.vlog("Skipping downloading item - .nosync found in parent folder & --check-for-nosync is enabled: ", path);
+								// "Skipping downloading item - .nosync found in parent folder & --check-for-nosync is enabled: "
+								log.vlog(provideLanguageTranslation(languageIdentifier,153), path);
 								// flag that this download failed, otherwise the 'item' is added to the database - then, as not present on the local disk, would get deleted from OneDrive
 								downloadFailed = true;
 								// clean up this partial file, otherwise every sync we will get theis warning
-								log.vlog("Removing previous partial file download due to .nosync found in parent folder & --check-for-nosync is enabled");
+								// "Removing previous partial file download due to .nosync found in parent folder & --check-for-nosync is enabled"
+								log.vlog(provideLanguageTranslation(languageIdentifier,154));
 								safeRemove(path);
 								return;
 							}
 						}
 						// file exists locally but is not in the sqlite database - maybe a failed download?
-						log.vlog("Local item does not exist in local database - replacing with file from OneDrive - failed download?");
-						
+						// "Local item does not exist in local database - replacing with file from OneDrive - failed download?"
+						log.vlog(provideLanguageTranslation(languageIdentifier,155));
 						
 						// in a --resync scenario or if items.sqlite3 was deleted before startup we have zero way of knowing IF the local file is meant to be the right file
 						// we have passed the following checks:
@@ -2540,10 +2635,12 @@ final class SyncEngine
 						// has the user configured to IGNORE local data protection rules?
 						if (bypassDataPreservation) {
 							// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
-							log.vlog("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: ", path);
+							// "WARNING: Local Data Protection has been disabled by your configuration. You may experience data loss on this file: "
+							log.vlog(provideLanguageTranslation(languageIdentifier,149), path);
 						} else {
 							// local data protection is configured, renaming local file
-							log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: ", path, " -> ", newPath);
+							// "The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent data loss due to --resync: "
+							log.vlog(provideLanguageTranslation(languageIdentifier,156), path, " -> ", newPath);
 							// perform the rename action of the local file
 							if (!dryRun) {
 								safeRename(path);
@@ -2552,11 +2649,11 @@ final class SyncEngine
 								log.vdebug("DRY-RUN: Skipping local file rename");
 							}
 						}
-						
 					}
 				} else {
 					// remote file is newer than local item
-					log.vlog("Remote item modified time is newer based on UTC time conversion"); // correct message, remote item is newer
+					// "Remote item modified time is newer based on UTC time conversion"
+					log.vlog(provideLanguageTranslation(languageIdentifier,157)); // correct message, remote item is newer
 					log.vdebug("localModifiedTime (local file):   ", localModifiedTime);
 					log.vdebug("itemModifiedTime (OneDrive item): ", itemModifiedTime);
 					
@@ -2566,10 +2663,12 @@ final class SyncEngine
 					// has the user configured to IGNORE local data protection rules?
 					if (bypassDataPreservation) {
 						// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
-						log.vlog("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: ", path);
+						// "WARNING: Local Data Protection has been disabled by your configuration. You may experience data loss on this file: "
+						log.vlog(provideLanguageTranslation(languageIdentifier,149), path);
 					} else {
 						// local data protection is configured, renaming local file
-						log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent data loss: ", path, " -> ", newPath);
+						// "The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent data loss: "
+						log.vlog(provideLanguageTranslation(languageIdentifier,150), path, " -> ", newPath);
 						// perform the rename action of the local file
 						if (!dryRun) {
 							safeRename(path);
@@ -2604,9 +2703,11 @@ final class SyncEngine
 				if (selectiveSync.isDirNameExcluded(pathToCheck)) {
 					// this path should be skipped
 					if (item.type == ItemType.file) {
-						log.vlog("Skipping item - file path is excluded by skip_dir config: ", path);
+						// "Skipping item - file path is excluded by skip_dir config: "
+						log.vlog(provideLanguageTranslation(languageIdentifier,136), path);
 					} else {
-						log.vlog("Skipping item - excluded by skip_dir config: ", path);
+						// "Skipping item - excluded by skip_dir config: "
+						log.vlog(provideLanguageTranslation(languageIdentifier,93), path);
 					}
 					// flag that this download failed, otherwise the 'item' is added to the database - then, as not present on the local disk, would get deleted from OneDrive
 					downloadFailed = true;
@@ -2620,7 +2721,8 @@ final class SyncEngine
 				// need the parent path for this object
 				string parentPath = dirName(path);		
 				if (exists(parentPath ~ "/.nosync")) {
-					log.vlog("Skipping downloading item - .nosync found in parent folder & --check-for-nosync is enabled: ", path);
+					// "Skipping downloading item - .nosync found in parent folder & --check-for-nosync is enabled: "
+					log.vlog(provideLanguageTranslation(languageIdentifier,153), path);
 					// flag that this download failed, otherwise the 'item' is added to the database - then, as not present on the local disk, would get deleted from OneDrive
 					downloadFailed = true;
 					return;
@@ -2639,7 +2741,8 @@ final class SyncEngine
 			break;
 		case ItemType.dir:
 		case ItemType.remote:
-			log.log("Creating local directory: ", path);
+			// "Creating local directory: "
+			log.log(provideLanguageTranslation(languageIdentifier,158), path);
 			
 			// Issue #658 handling - is sync_list in use?
 			if (syncListConfigured) {
@@ -2696,24 +2799,26 @@ final class SyncEngine
 		if (oldItem.eTag != newItem.eTag) {
 			// handle changed name/path
 			if (oldPath != newPath) {
-				log.log("Moving ", oldPath, " to ", newPath);
+				// "Moving ", oldPath, " to ", newPath
+				log.log(provideLanguageTranslation(languageIdentifier,159), oldPath, provideLanguageTranslation(languageIdentifier,160), newPath);
 				if (exists(newPath)) {
 					Item localNewItem;
 					if (itemdb.selectByPath(newPath, defaultDriveId, localNewItem)) {
 						// Query DB for new local item in specified path
 						string itemSource = "database";
 						if (isItemSynced(localNewItem, newPath, itemSource)) {
-							log.vlog("Destination is in sync and will be overwritten");
+							// "Destination is in sync and will be overwritten"
+							log.vlog(provideLanguageTranslation(languageIdentifier,161));
 						} else {
-							// TODO: force remote sync by deleting local item
-							log.vlog("The destination is occupied, renaming the conflicting file...");
+							// "The destination is occupied, renaming the conflicting file..."
+							log.vlog(provideLanguageTranslation(languageIdentifier,162));
 							safeRename(newPath);
 						}
 					} else {
 						// to be overwritten item is not already in the itemdb, so it should
 						// be synced. Do a safe rename here, too.
-						// TODO: force remote sync by deleting local item
-						log.vlog("The destination is occupied by new file, renaming the conflicting file...");
+						// "The destination is occupied by new file, renaming the conflicting file..."
+						log.vlog(provideLanguageTranslation(languageIdentifier,163));
 						safeRename(newPath);
 					}
 				}
@@ -2750,13 +2855,15 @@ final class SyncEngine
 	{
 		static import std.exception;
 		assert(item.type == ItemType.file);
-		write("Downloading file ", path, " ... ");
+		// "Downloading file ", path, " ... "
+		write(provideLanguageTranslation(languageIdentifier,164), path, " ... ");
 		JSONValue fileDetails;
 		
 		try {
 			fileDetails = onedrive.getFileDetails(item.driveId, item.id);
 		} catch (OneDriveException e) {
-			log.error("ERROR: Query of OneDrive for file details failed");
+			// "ERROR: Query of OneDrive for file details failed"
+			log.error(provideLanguageTranslation(languageIdentifier,165));
 			if (e.httpStatusCode >= 500) {
 				// OneDrive returned a 'HTTP 5xx Server Side Error' - gracefully handling error - error message already logged
 				downloadFailed = true;
@@ -2768,14 +2875,15 @@ final class SyncEngine
 		if (fileDetails.type() == JSONType.object){
 			if (isMalware(fileDetails)){
 				// OneDrive reports that this file is malware
-				log.error("ERROR: MALWARE DETECTED IN FILE - DOWNLOAD SKIPPED");
+				// "ERROR: MALWARE DETECTED IN FILE - DOWNLOAD SKIPPED"
+				log.error(provideLanguageTranslation(languageIdentifier,166));
 				// set global flag
 				malwareDetected = true;
 				return;
 			}
 		} else {
 			// Issue #550 handling
-			log.error("ERROR: Query of OneDrive for file details failed");
+			log.error(provideLanguageTranslation(languageIdentifier,165));
 			log.vdebug("onedrive.getFileDetails call returned an invalid JSON Object");
 			// We want to return, cant download
 			downloadFailed = true;
@@ -2966,15 +3074,18 @@ final class SyncEngine
 					log.vdebug("Downloaded file validation disabled due to --disable-download-validation ");
 				}
 			} else {
-				log.error("ERROR: File failed to download. Increase logging verbosity to determine why.");
+				// "ERROR: File failed to download. Increase logging verbosity to determine why."
+				log.error(provideLanguageTranslation(languageIdentifier,169));
 				downloadFailed = true;
 				return;
 			}
 		}
 		
 		if (!downloadFailed) {
-			writeln("done.");
-			log.fileOnly("Downloading file ", path, " ... done.");
+			// "done."
+			writeln(provideLanguageTranslation(languageIdentifier,170));
+			// "Downloading file ", path, " ... done."
+			log.fileOnly(provideLanguageTranslation(languageIdentifier,164), path, provideLanguageTranslation(languageIdentifier,171));
 		}
 	}
 
@@ -2996,20 +3107,24 @@ final class SyncEngine
 					if (localModifiedTime == itemModifiedTime) {
 						return true;
 					} else {
-						log.vlog("The local item has a different modified time ", localModifiedTime, " when compared to ", itemSource, " modified time ", itemModifiedTime);
+						// "The local item has a different modified time ", localModifiedTime, " when compared to ", itemSource, " modified time ", itemModifiedTime)
+						log.vlog(provideLanguageTranslation(languageIdentifier,172), localModifiedTime, provideLanguageTranslation(languageIdentifier,173), itemSource, provideLanguageTranslation(languageIdentifier,174), itemModifiedTime);
 					}
 					if (testFileHash(path, item)) {
 						return true;
 					} else {
-						log.vlog("The local item has a different hash when compared to ", itemSource, " item hash");
+						// "The local item has a different hash when compared to ", itemSource, " item hash"
+						log.vlog(provideLanguageTranslation(languageIdentifier,175), itemSource, provideLanguageTranslation(languageIdentifier,176));
 					}	
 				} else {
 					// Unable to read local file
-					log.log("Unable to determine the sync state of this file as it cannot be read (file permissions or file corruption): ", path);
+					// "Unable to determine the sync state of this file as it cannot be read (file permissions or file corruption): "
+					log.log(provideLanguageTranslation(languageIdentifier,177), path);
 					return false;
 				}
 			} else {
-				log.vlog("The local item is a directory but should be a file");
+				// "The local item is a directory but should be a file"
+				log.vlog(provideLanguageTranslation(languageIdentifier,178));
 			}
 			break;
 		case ItemType.dir:
@@ -3017,7 +3132,8 @@ final class SyncEngine
 			if (isDir(path)) {
 				return true;
 			} else {
-				log.vlog("The local item is a file but should be a directory");
+				// "The local item is a file but should be a directory"
+				log.vlog(provideLanguageTranslation(languageIdentifier,179));
 			}
 			break;
 		}
@@ -3033,7 +3149,8 @@ final class SyncEngine
 			// Compute this item path
 			path = computeItemPath(i[0], i[1]);
 			// Try to delete item object
-			log.log("Trying to delete item ", path);
+			// "Trying to delete item "
+			log.log(provideLanguageTranslation(languageIdentifier,180), path);
 			if (!dryRun) {
 				// Actually process the database entry removal
 				itemdb.deleteById(item.driveId, item.id);
@@ -3051,7 +3168,8 @@ final class SyncEngine
 					if (pathItem.id == item.id) {
 						needsRemoval = true;
 					} else {
-						log.log("Skipped due to id difference!");
+						// Skipped due to id difference!
+						log.log(provideLanguageTranslation(languageIdentifier,182));
 					}
 				} else {
 					// item has disappeared completely
@@ -3059,7 +3177,8 @@ final class SyncEngine
 				}
 			}
 			if (needsRemoval) {
-				log.log("Deleting item ", path);
+				// "Deleting item "
+				log.log(provideLanguageTranslation(languageIdentifier,183), path);
 				if (!dryRun) {
 					if (isFile(path)) {
 						remove(path);
@@ -3139,7 +3258,8 @@ final class SyncEngine
 		if (isDir(path)) {
 			// if this path is a directory, output this message.
 			// if a file, potentially leads to confusion as to what the client is actually doing
-			log.log("Uploading differences of ", logPath);
+			// "Uploading differences of "
+			log.log(provideLanguageTranslation(languageIdentifier,184), logPath);
 		}
 		
 		Item item;
@@ -3177,7 +3297,8 @@ final class SyncEngine
 		if (isDir(path)) {
 			// if this path is a directory, output this message.
 			// if a file, potentially leads to confusion as to what the client is actually doing
-			log.log("Uploading new items of ", logPath);
+			// "Uploading new items of "
+			log.log(provideLanguageTranslation(languageIdentifier,185), logPath);
 		}
 		
 		// Filesystem walk to find new files not uploaded
@@ -3240,7 +3361,8 @@ final class SyncEngine
 		if (isDir(path)) {
 			// if this path is a directory, output this message.
 			// if a file, potentially leads to confusion as to what the client is actually doing
-			log.vlog("Uploading differences of ", logPath);
+			// "Uploading differences of "
+			log.vlog(provideLanguageTranslation(languageIdentifier,184), logPath);
 		}
 		Item item;
 		// For each unique OneDrive driveID we know about
@@ -3372,7 +3494,8 @@ final class SyncEngine
 		if (isDir(path)) {
 			// if this path is a directory, output this message.
 			// if a file, potentially leads to confusion as to what the client is actually doing
-			log.vlog("Uploading new items of ", logPath);
+			// "Uploading new items of "
+			log.vlog(provideLanguageTranslation(languageIdentifier,185), logPath);
 		}
 		
 		// Filesystem walk to find new files not uploaded
@@ -3398,7 +3521,8 @@ final class SyncEngine
 		path = computeItemPath(item.driveId, item.id);
 		
 		// item.id was in the database associated with the item.driveId specified
-		log.vlog("Processing ", buildNormalizedPath(path));
+		// "Processing "
+		log.vlog(provideLanguageTranslation(languageIdentifier,125), buildNormalizedPath(path));
 		
 		// What type of DB item are we processing
 		// Is this item excluded by user configuration of skip_dir or skip_file?
@@ -3407,7 +3531,8 @@ final class SyncEngine
 			// Do we need to check for .nosync? Only if --check-for-nosync was passed in
 			if (cfg.getValueBool("check_nosync")) {
 				if (exists(path ~ "/.nosync")) {
-					log.vlog("Skipping item - .nosync found & --check-for-nosync enabled: ", path);
+					// "Skipping item - .nosync found & --check-for-nosync enabled: "
+					log.vlog(provideLanguageTranslation(languageIdentifier,186), path);
 					return;
 				}
 			}
@@ -3430,25 +3555,29 @@ final class SyncEngine
 
 		// skip unwanted items
 		if (unwanted) {
-			//log.vlog("Filtered out");
+			// debug log output that this item is skipped
+			log.vdebug("Skipping item - filtered out due to application configuration: ", path);
 			return;
 		}
 		
 		// Restriction and limitations about windows naming files
 		if (!isValidName(path)) {
-			log.log("Skipping item - invalid name (Microsoft Naming Convention): ", path);
+			// "Skipping item - invalid name (Microsoft Naming Convention): "
+			log.log(provideLanguageTranslation(languageIdentifier,187), path);
 			return;
 		}
 		
 		// Check for bad whitespace items
 		if (!containsBadWhiteSpace(path)) {
-			log.log("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
+			// "Skipping item - invalid name (Contains an invalid whitespace item): "
+			log.log(provideLanguageTranslation(languageIdentifier,188), path);
 			return;
 		}
 		
 		// Check for HTML ASCII Codes as part of file name
 		if (!containsASCIIHTMLCodes(path)) {
-			log.log("Skipping item - invalid name (Contains HTML ASCII Code): ", path);
+			// "Skipping item - invalid name (Contains HTML ASCII Code): "
+			log.log(provideLanguageTranslation(languageIdentifier,189), path);
 			return;
 		}
 		
@@ -3470,11 +3599,13 @@ final class SyncEngine
 		assert(item.type == ItemType.dir);
 		if (exists(path)) {
 			if (!isDir(path)) {
-				log.vlog("The item was a directory but now it is a file");
+				// "The item was a directory but now it is a file"
+				log.vlog(provideLanguageTranslation(languageIdentifier,190));
 				uploadDeleteItem(item, path);
 				uploadNewFile(path);
 			} else {
-				log.vlog("The directory has not changed");
+				// "The directory has not changed"
+				log.vlog(provideLanguageTranslation(languageIdentifier,191));
 				// loop through the children
 				foreach (Item child; itemdb.selectChildren(item.driveId, item.id)) {
 					uploadDifferences(child);
@@ -3487,16 +3618,19 @@ final class SyncEngine
 				// Not --dry-run situation
 				if (!cfg.getValueBool("monitor")) {
 					// Not in --monitor mode
-					log.vlog("The directory has been deleted locally");
+					// "The directory has been deleted locally"
+					log.vlog(provideLanguageTranslation(languageIdentifier,192));
 				} else {
 					// Appropriate message as we are in --monitor mode
-					log.vlog("The directory appears to have been deleted locally .. but we are running in --monitor mode. This may have been 'moved' on the local filesystem rather than being 'deleted'");
+					// "The directory appears to have been deleted locally .. but we are running in --monitor mode. This may have been 'moved' on the local filesystem rather than being 'deleted'"
+					log.vlog(provideLanguageTranslation(languageIdentifier,193));
 					log.vdebug("Most likely cause - 'inotify' event was missing for whatever action was taken locally or action taken when application was stopped");
 				}
 				// A moved file will be uploaded as 'new', delete the old file and reference
 				if (noRemoteDelete) {
 					// do not process remote directory delete
-					log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+					// "Skipping remote directory delete as --upload-only & --no-remote-delete configured"
+					log.vlog(provideLanguageTranslation(languageIdentifier,194));
 				} else {
 					uploadDeleteItem(item, path);
 				}
@@ -3506,10 +3640,12 @@ final class SyncEngine
 				Item databaseItem;
 				if (!itemdb.selectByPath(path, defaultDriveId, databaseItem)) {
 					// Path not found in database
-					log.vlog("The directory has been deleted locally");
+					// "The directory has been deleted locally"
+					log.vlog(provideLanguageTranslation(languageIdentifier,192));
 					if (noRemoteDelete) {
 						// do not process remote directory delete
-						log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+						// "Skipping remote directory delete as --upload-only & --no-remote-delete configured"
+						log.vlog(provideLanguageTranslation(languageIdentifier,194));
 					} else {
 						uploadDeleteItem(item, path);
 					}
@@ -3519,12 +3655,14 @@ final class SyncEngine
 					foreach (i; idsFaked) {
 						if (i[1] == item.id) {
 							log.vdebug("Matched faked dir which is 'supposed' to exist but not created due to --dry-run use");
-							log.vlog("The directory has not changed");
+							// "The directory has not changed"
+							log.vlog(provideLanguageTranslation(languageIdentifier,191));
 							return;
 						}
 					}
 					// item.id did not match a 'faked' download new directory creation
-					log.vlog("The directory has been deleted locally");
+					// "The directory has been deleted locally"
+					log.vlog(provideLanguageTranslation(languageIdentifier,192));
 					uploadDeleteItem(item, path);
 				}
 			}
@@ -3536,11 +3674,13 @@ final class SyncEngine
 		assert(item.type == ItemType.remote);
 		if (exists(path)) {
 			if (!isDir(path)) {
-				log.vlog("The item was a directory but now it is a file");
+				// "The item was a directory but now it is a file"
+				log.vlog(provideLanguageTranslation(languageIdentifier,190));
 				uploadDeleteItem(item, path);
 				uploadNewFile(path);
 			} else {
-				log.vlog("The directory has not changed");
+				// "The directory has not changed"
+				log.vlog(provideLanguageTranslation(languageIdentifier,191));
 				// continue through the linked folder
 				assert(item.remoteDriveId && item.remoteId);
 				Item remoteItem;
@@ -3554,10 +3694,12 @@ final class SyncEngine
 			// are we in a dry-run scenario
 			if (!dryRun) {
 				// no dry-run
-				log.vlog("The directory has been deleted locally");
+				// "The directory has been deleted locally"
+				log.vlog(provideLanguageTranslation(languageIdentifier,192));
 				if (noRemoteDelete) {
 					// do not process remote directory delete
-					log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+					// "Skipping remote directory delete as --upload-only & --no-remote-delete configured"
+					log.vlog(provideLanguageTranslation(languageIdentifier,194));
 				} else {
 					uploadDeleteItem(item, path);
 				}
@@ -3567,10 +3709,12 @@ final class SyncEngine
 				Item databaseItem;
 				if (!itemdb.selectByPathWithoutRemote(path, defaultDriveId, databaseItem)) {
 					// Path not found in database
-					log.vlog("The directory has been deleted locally");
+					// "The directory has been deleted locally"
+					log.vlog(provideLanguageTranslation(languageIdentifier,192));
 					if (noRemoteDelete) {
 						// do not process remote directory delete
-						log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
+						// "Skipping remote directory delete as --upload-only & --no-remote-delete configured"
+						log.vlog(provideLanguageTranslation(languageIdentifier,194));
 					} else {
 						uploadDeleteItem(item, path);
 					}
@@ -3580,12 +3724,14 @@ final class SyncEngine
 					foreach (i; idsFaked) {
 						if (i[1] == item.id) {
 							log.vdebug("Matched faked dir which is 'supposed' to exist but not created due to --dry-run use");
-							log.vlog("The directory has not changed");
+							// "The directory has not changed"
+							log.vlog(provideLanguageTranslation(languageIdentifier,191));
 							return;
 						}
 					}
 					// item.id did not match a 'faked' download new directory creation
-					log.vlog("The directory has been deleted locally");
+					// "The directory has been deleted locally"
+					log.vlog(provideLanguageTranslation(languageIdentifier,192));
 					uploadDeleteItem(item, path);
 				}
 			}
@@ -3614,15 +3760,18 @@ final class SyncEngine
 					localModifiedTime.fracSecs = Duration.zero;
 					
 					if (localModifiedTime != itemModifiedTime) {
-						log.vlog("The file last modified time has changed");
+						// "The file last modified time has changed"
+						log.vlog(provideLanguageTranslation(languageIdentifier,195));
 						log.vdebug("The local item has a different modified time ", localModifiedTime, " when compared to ", itemSource, " modified time ", itemModifiedTime);
 						string eTag = item.eTag;
 						
 						// perform file hash tests - has the content of the file changed?
 						if (!testFileHash(path, item)) {
-							log.vlog("The file content has changed");
+							// "The file content has changed"
+							log.vlog(provideLanguageTranslation(languageIdentifier,196));
 							log.vdebug("The local item has a different hash when compared to ", itemSource, " item hash");
-							write("Uploading modified file ", path, " ... ");
+							// "Uploading modified file " , " ... "
+							write(provideLanguageTranslation(languageIdentifier,197), path, " ... ");
 							JSONValue response;
 							
 							if (!dryRun) {
@@ -3637,101 +3786,127 @@ final class SyncEngine
 										try {
 											response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
 										} catch (OneDriveException e) {
+											// error handling based on API response code
 											if (e.httpStatusCode == 401) {
+												// caught an error, write out we are skipping this item
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
 												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-												writeln("skipped.");
-												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+												log.vlog(provideLanguageTranslation(languageIdentifier,312));
 												uploadFailed = true;
 												return;
 											}
 											if (e.httpStatusCode == 404) {
-												// HTTP request returned status code 404 - the eTag provided does not exist
+												// caught an error, write out we are skipping this item
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
+												// HTTP request returned status code 404 - the eTag provided does not exist on OneDrive
 												// Delete record from the local database - file will be uploaded as a new file
-												writeln("skipped.");
-												log.vlog("OneDrive returned a 'HTTP 404 - eTag Issue' - gracefully handling error");
+												// "OneDrive returned a 'HTTP 404 - item eTag does not exist' - gracefully handling error"
+												log.vlog(provideLanguageTranslation(languageIdentifier,314));
 												itemdb.deleteById(item.driveId, item.id);
 												uploadFailed = true;
 												return;
 											}
 											// Resolve https://github.com/abraunegg/onedrive/issues/36
 											if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
+												// caught an error, write out we are skipping this item
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
 												// The file is currently checked out or locked for editing by another user
 												// We cant upload this file at this time
-												writeln("skipped.");
-												log.fileOnly("Uploading modified file ", path, " ... skipped.");
-												write("", path, " is currently checked out or locked for editing by another user.");
-												log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+												// "Uploading modified file ", path, " ... skipped."
+												log.fileOnly(provideLanguageTranslation(languageIdentifier,197), path, " ... ", provideLanguageTranslation(languageIdentifier,198));
+												// "<file_path> is currently checked out or locked for editing by another user."
+												log.log("", path, provideLanguageTranslation(languageIdentifier,199));
 												uploadFailed = true;
 												return;
 											}
 											if (e.httpStatusCode == 412) {
+												// caught an error, write out we are skipping this item
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
 												// HTTP request returned status code 412 - ETag does not match current item's value
 												// Delete record from the local database - file will be uploaded as a new file
-												writeln("skipped.");
+												// "OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file."
+												log.vlog(provideLanguageTranslation(languageIdentifier,316));
 												log.vdebug("Simple Upload Replace Failed - OneDrive eTag / cTag match issue (Personal Account)");
-												log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 												itemdb.deleteById(item.driveId, item.id);
 												uploadFailed = true;
 												return;
 											}
 											if (e.httpStatusCode == 504) {
 												// HTTP request returned status code 504 (Gateway Timeout)
-												log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request as a session");
-												// Try upload as a session
-												response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
+												log.log(provideLanguageTranslation(languageIdentifier,124));
+												// Retry original action
+												response = onedrive.simpleUploadReplace(path, item.driveId, item.id, item.eTag);
 											} else {
+												// caught an error, write out we are skipping this item
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
 												// display what the error is
-												writeln("skipped.");
 												displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
 											}
 										} catch (FileException e) {
-											// display the error message
-											writeln("skipped.");
+											// caught an error, write out we are skipping this item
+											// "skipped."
+											writeln(provideLanguageTranslation(languageIdentifier,198));
 											displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 											uploadFailed = true;
 											return;
 										}
 										// upload done without error
-										writeln("done.");
+										// "done."
+										writeln(provideLanguageTranslation(languageIdentifier,170));
 									} else {
 										writeln("");
 										try {
 											response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
 										} catch (OneDriveException e) {
 											if (e.httpStatusCode == 401) {
+												// caught an error, write out we are skipping this item
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
 												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-												writeln("skipped.");
-												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+												log.vlog(provideLanguageTranslation(languageIdentifier,312));
 												uploadFailed = true;
 												return;
 											}
 											if (e.httpStatusCode == 412) {
+												// caught an error, write out we are skipping this item
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
 												// HTTP request returned status code 412 - ETag does not match current item's value
 												// Delete record from the local database - file will be uploaded as a new file
-												writeln("skipped.");
+												// "OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file."
+												log.vlog(provideLanguageTranslation(languageIdentifier,316));
 												log.vdebug("Session Upload Replace Failed - OneDrive eTag / cTag match issue (Personal Account)");
-												log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 												itemdb.deleteById(item.driveId, item.id);
 												uploadFailed = true;
 												return;
 											} else {
+												// caught an error, write out we are skipping this item
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
 												// display what the error is
-												writeln("skipped.");
 												displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
 											}
 										} catch (FileException e) {
+											// caught an error, write out we are skipping this item
+											// "skipped."
+											writeln(provideLanguageTranslation(languageIdentifier,198));
 											// display the error message
-											writeln("skipped.");
 											displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 											uploadFailed = true;
 											return;
 										}
 										// upload done without error
-										writeln("done.");
+										// "done."
+										writeln(provideLanguageTranslation(languageIdentifier,170));
 									}
 								} else {
 									// OneDrive Business Account
@@ -3742,9 +3917,12 @@ final class SyncEngine
 											if (thisFileSize == 0) {
 												// the file we are trying to upload as a session is a zero byte file - we cant use a session to upload or replace the file 
 												// as OneDrive technically does not support zero byte files
-												writeln("skipped.");
-												log.fileOnly("Uploading modified file ", path, " ... skipped.");
-												log.vlog("Skip Reason: Microsoft OneDrive does not support 'zero-byte' files as a modified upload. Will upload as new file.");
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
+												// "Uploading modified file ", path, " ... skipped."
+												log.fileOnly(provideLanguageTranslation(languageIdentifier,197), path, " ... ", provideLanguageTranslation(languageIdentifier,198));
+												// "Skip Reason: Microsoft OneDrive does not support 'zero-byte' files as a modified upload. Will upload as new file."
+												log.vlog(provideLanguageTranslation(languageIdentifier,200));
 												// delete file on OneDrive
 												onedrive.deleteById(item.driveId, item.id, item.eTag);
 												// delete file from local database
@@ -3766,42 +3944,54 @@ final class SyncEngine
 											}
 										} catch (OneDriveException e) {
 											if (e.httpStatusCode == 401) {
+												// caught an error, write out we are skipping this item
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
 												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-												writeln("skipped.");
-												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+												log.vlog(provideLanguageTranslation(languageIdentifier,312));
 												uploadFailed = true;
 												return;
 											}
 											// Resolve https://github.com/abraunegg/onedrive/issues/36
 											if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
+												// caught an error, write out we are skipping this item
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
 												// The file is currently checked out or locked for editing by another user
 												// We cant upload this file at this time
-												writeln("skipped.");
-												log.fileOnly("Uploading modified file ", path, " ... skipped.");
-												writeln("", path, " is currently checked out or locked for editing by another user.");
-												log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+												// "Uploading modified file ", path, " ... skipped."
+												log.fileOnly(provideLanguageTranslation(languageIdentifier,197), path, " ... ", provideLanguageTranslation(languageIdentifier,198));
+												// "<file_path> is currently checked out or locked for editing by another user."
+												log.log("", path, provideLanguageTranslation(languageIdentifier,199));
 												uploadFailed = true;
 												return;
 											} 
 											if (e.httpStatusCode == 412) {
+												// caught an error, write out we are skipping this item
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
 												// HTTP request returned status code 412 - ETag does not match current item's value
 												// Delete record from the local database - file will be uploaded as a new file
-												writeln("skipped.");
+												// "OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file."
+												log.vlog(provideLanguageTranslation(languageIdentifier,316));
 												log.vdebug("Session Upload Replace Failed - OneDrive eTag / cTag match issue (Business Account)");
-												log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 												itemdb.deleteById(item.driveId, item.id);
 												uploadFailed = true;
 												return;
 											} else {
+												// caught an error, write out we are skipping this item
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
 												// display what the error is
-												writeln("skipped.");
 												displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
 											}
 										} catch (FileException e) {
+											// caught an error, write out we are skipping this item
+											// "skipped."
+											writeln(provideLanguageTranslation(languageIdentifier,198));
 											// display the error message
-											writeln("skipped.");
 											displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 											uploadFailed = true;
 											return;
@@ -3809,7 +3999,8 @@ final class SyncEngine
 										// Did the upload fail?
 										if (!uploadFailed){
 											// upload done without error or failure
-											writeln("done.");
+											// "done."
+											writeln(provideLanguageTranslation(languageIdentifier,170));
 											// As the session.upload includes the last modified time, save the response
 											// Is the response a valid JSON object - validation checking done in saveItem
 											saveItem(response);
@@ -3825,9 +4016,12 @@ final class SyncEngine
 										if (thisFileSize == 0) {
 											// the file we are trying to upload as a session is a zero byte file - we cant use a session to upload or replace the file 
 											// as OneDrive technically does not support zero byte files
-											writeln("skipped.");
-											log.fileOnly("Uploading modified file ", path, " ... skipped.");
-											log.vlog("Skip Reason: Microsoft OneDrive does not support 'zero-byte' files as a modified upload. Will upload as new file.");
+											// "skipped."
+											writeln(provideLanguageTranslation(languageIdentifier,198));
+											// "Uploading modified file ", path, " ... skipped."
+											log.fileOnly(provideLanguageTranslation(languageIdentifier,197), path, " ... ", provideLanguageTranslation(languageIdentifier,198));
+											// "Skip Reason: Microsoft OneDrive does not support 'zero-byte' files as a modified upload. Will upload as new file."
+											log.vlog(provideLanguageTranslation(languageIdentifier,200));
 											// delete file on OneDrive
 											onedrive.deleteById(item.driveId, item.id, item.eTag);
 											// delete file from local database
@@ -3841,7 +4035,8 @@ final class SyncEngine
 											// Did the upload fail?
 											if (!uploadFailed){
 												// upload done without error or failure
-												writeln("done.");
+												// "done."
+												writeln(provideLanguageTranslation(languageIdentifier,170));
 												// As the session.upload includes the last modified time, save the response
 												// Is the response a valid JSON object - validation checking done in saveItem
 												saveItem(response);
@@ -3869,20 +4064,24 @@ final class SyncEngine
 								}
 								
 								// log that the modified file was uploaded successfully
-								log.fileOnly("Uploading modified file ", path, " ... done.");
+								// "Uploading modified file ", path, " ... done."
+								log.fileOnly(provideLanguageTranslation(languageIdentifier,197), path, " ... ", provideLanguageTranslation(languageIdentifier,170));
 								
 								// update free space tracking if this is our drive id
 								if (item.driveId == defaultDriveId) {
 									// how much space is left on OneDrive after upload?
 									remainingFreeSpace = (remainingFreeSpace - thisFileSize);
-									log.vlog("Remaining free space on OneDrive: ", remainingFreeSpace);
+									// "Remaining free space on OneDrive: ", remainingFreeSpace
+									log.vlog(provideLanguageTranslation(languageIdentifier,201), remainingFreeSpace);
 								}
 							} else {
 								// we are --dry-run - simulate the file upload
-								writeln("done.");
+								// "done."
+								writeln(provideLanguageTranslation(languageIdentifier,170));
 								response = createFakeResponse(path);
 								// Log action to log file
-								log.fileOnly("Uploading modified file ", path, " ... done.");
+								// "Uploading modified file ", path, " ... done."
+								log.fileOnly(provideLanguageTranslation(languageIdentifier,197), path, " ... ", provideLanguageTranslation(languageIdentifier,170));
 								// Is the response a valid JSON object - validation checking done in saveItem
 								saveItem(response);
 								return;
@@ -3895,15 +4094,17 @@ final class SyncEngine
 							}
 						}
 					} else {
-						log.vlog("The file has not changed");
+						// "The file has not changed"
+						log.vlog(provideLanguageTranslation(languageIdentifier,202));
 					}
 				} else {
-					//The file is not readable - skipped
-					log.log("Skipping processing this file as it cannot be read (file permissions or file corruption): ", path);
+					// "Skipping processing this file as it cannot be read (file permissions or file corruption): "
+					log.log(provideLanguageTranslation(languageIdentifier,203), path);
 					uploadFailed = true;	
 				}
 			} else {
-				log.vlog("The item was a file but now is a directory");
+				// "The item was a file but now is a directory"
+				log.vlog(provideLanguageTranslation(languageIdentifier,204));
 				uploadDeleteItem(item, path);
 				uploadCreateDir(path);
 			}
@@ -3913,16 +4114,19 @@ final class SyncEngine
 			if (!dryRun) {
 				// Not --dry-run situation
 				if (!cfg.getValueBool("monitor")) {
-					log.vlog("The file has been deleted locally");
+					// "The file has been deleted locally"
+					log.vlog(provideLanguageTranslation(languageIdentifier,205));
 				} else {
 					// Appropriate message as we are in --monitor mode
-					log.vlog("The file appears to have been deleted locally .. but we are running in --monitor mode. This may have been 'moved' on the local filesystem rather than being 'deleted'");
+					// "The file appears to have been deleted locally .. but we are running in --monitor mode. This may have been 'moved' on the local filesystem rather than being 'deleted'"
+					log.vlog(provideLanguageTranslation(languageIdentifier,206));
 					log.vdebug("Most likely cause - 'inotify' event was missing for whatever action was taken locally or action taken when application was stopped");					
 				}
 				// A moved file will be uploaded as 'new', delete the old file and reference
 				if (noRemoteDelete) {
 					// do not process remote file delete
-					log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
+					// "Skipping remote file delete as --upload-only & --no-remote-delete configured"
+					log.vlog(provideLanguageTranslation(languageIdentifier,207));
 				} else {
 					uploadDeleteItem(item, path);
 				}
@@ -3932,10 +4136,12 @@ final class SyncEngine
 				Item databaseItem;
 				if (!itemdb.selectByPath(path, defaultDriveId, databaseItem)) {
 					// file not found in database
-					log.vlog("The file has been deleted locally");
+					// "The file has been deleted locally"
+					log.vlog(provideLanguageTranslation(languageIdentifier,205));
 					if (noRemoteDelete) {
 						// do not process remote file delete
-						log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
+						// "Skipping remote file delete as --upload-only & --no-remote-delete configured"
+						log.vlog(provideLanguageTranslation(languageIdentifier,207));
 					} else {
 						uploadDeleteItem(item, path);
 					}
@@ -3944,16 +4150,19 @@ final class SyncEngine
 					// Did we 'fake create it' as part of --dry-run ?
 					foreach (i; idsFaked) {
 						if (i[1] == item.id) {
+							// "The file has not changed"
+							log.vlog(provideLanguageTranslation(languageIdentifier,202));
 							log.vdebug("Matched faked file which is 'supposed' to exist but not created due to --dry-run use");
-							log.vlog("The file has not changed");
 							return;
 						}
 					}
 					// item.id did not match a 'faked' download new file creation
-					log.vlog("The file has been deleted locally");
+					// "The file has been deleted locally"
+					log.vlog(provideLanguageTranslation(languageIdentifier,205));
 					if (noRemoteDelete) {
 						// do not process remote file delete
-						log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
+						// "Skipping remote file delete as --upload-only & --no-remote-delete configured"
+						log.vlog(provideLanguageTranslation(languageIdentifier,207));
 					} else {
 						uploadDeleteItem(item, path);
 					}
@@ -3975,55 +4184,71 @@ final class SyncEngine
 				response = session.upload(path, item.driveId, item.parentId, baseName(path), item.eTag);
 			} catch (OneDriveException e) {
 				if (e.httpStatusCode == 401) {
+					// caught an error, write out we are skipping this item
+					// "skipped."
+					writeln(provideLanguageTranslation(languageIdentifier,198));
 					// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-					writeln("skipped.");
-					log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+					log.vlog(provideLanguageTranslation(languageIdentifier,312));
 					uploadFailed = true;
 					return response;
 				}
 				// Resolve https://github.com/abraunegg/onedrive/issues/36
 				if ((e.httpStatusCode == 409) || (e.httpStatusCode == 423)) {
+					// caught an error, write out we are skipping this item
+					// "skipped."
+					writeln(provideLanguageTranslation(languageIdentifier,198));
 					// The file is currently checked out or locked for editing by another user
 					// We cant upload this file at this time
-					writeln("skipped.");
-					log.fileOnly("Uploading modified file ", path, " ... skipped.");
-					writeln("", path, " is currently checked out or locked for editing by another user.");
-					log.fileOnly(path, " is currently checked out or locked for editing by another user.");
+					// "Uploading modified file ", path, " ... skipped."
+					log.fileOnly(provideLanguageTranslation(languageIdentifier,197), path, " ... ", provideLanguageTranslation(languageIdentifier,198));
+					// "<file_path> is currently checked out or locked for editing by another user."
+					log.log("", path, provideLanguageTranslation(languageIdentifier,199));
 					uploadFailed = true;
 					return response;
 				} 
 				if (e.httpStatusCode == 412) {
+					// caught an error, write out we are skipping this item
+					// "skipped."
+					writeln(provideLanguageTranslation(languageIdentifier,198));
 					// HTTP request returned status code 412 - ETag does not match current item's value
 					// Delete record from the local database - file will be uploaded as a new file
-					writeln("skipped.");
+					// "OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file."
+					log.vlog(provideLanguageTranslation(languageIdentifier,316));
 					log.vdebug("Session Upload Replace Failed - OneDrive eTag / cTag match issue (Sharepoint Library)");
-					log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error. Will upload as new file.");
 					itemdb.deleteById(item.driveId, item.id);
 					uploadFailed = true;
 					return response;
 				} else {
+					// caught an error, write out we are skipping this item
+					// "skipped."
+					writeln(provideLanguageTranslation(languageIdentifier,198));
 					// display what the error is
-					writeln("skipped.");
 					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					uploadFailed = true;
 					return response;
 				}
 			} catch (FileException e) {
-				// display the error message
-				writeln("skipped.");
+				// caught an error, write out we are skipping this item
+				// "skipped."
+				writeln(provideLanguageTranslation(languageIdentifier,198));
 				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				uploadFailed = true;
 				return response;
 			}
 			// upload done without error
-			writeln("done.");
+			writeln(provideLanguageTranslation(languageIdentifier,170));
 		} else {
 			// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
 			// This means, as a session upload, on 'completion' the file is 'moved' and generates a 404 ......
-			writeln("skipped.");
-			log.fileOnly("Uploading modified file ", path, " ... skipped.");
-			log.vlog("Skip Reason: Microsoft Sharepoint 'enrichment' after upload issue");
-			log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+			// caught an error, write out we are skipping this item
+			// "skipped."
+			writeln(provideLanguageTranslation(languageIdentifier,198));
+			// "Uploading modified file ", path, " ... skipped."
+			log.fileOnly(provideLanguageTranslation(languageIdentifier,197), path, " ... ", provideLanguageTranslation(languageIdentifier,198));
+			// "Skip Reason: Microsoft Sharepoint 'enrichment' after upload issue"
+			log.vlog(provideLanguageTranslation(languageIdentifier,208));
+			// "See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details"
+			log.vlog(provideLanguageTranslation(languageIdentifier,209));
 			// Delete record from the local database - file will be uploaded as a new file
 			itemdb.deleteById(item.driveId, item.id);
 			uploadFailed = true;
@@ -4059,7 +4284,8 @@ final class SyncEngine
 		
 		// A short lived file that has disappeared will cause an error - is the path valid?
 		if (!exists(path)) {
-			log.log("Skipping item - path has disappeared: ", path);
+			// "Skipping item - path has disappeared: ", path
+			log.log(provideLanguageTranslation(languageIdentifier,210), path);
 			return;
 		}
 		
@@ -4070,7 +4296,8 @@ final class SyncEngine
 			pathWalkLength = path.byGrapheme.walkLength;
 		} catch (std.utf.UTFException e) {
 			// path contains characters which generate a UTF exception
-			log.vlog("Skipping item - invalid UTF sequence: ", path);
+			// "Skipping item - invalid UTF sequence: "
+			log.vlog(provideLanguageTranslation(languageIdentifier,211), path);
 			log.vdebug("  Error Reason:", e.msg);
 			return;
 		}
@@ -4080,7 +4307,8 @@ final class SyncEngine
 		// https://github.com/abraunegg/onedrive/issues/487
 		if(!isValid(path)) {
 			// Path is not valid according to https://dlang.org/phobos/std_encoding.html
-			log.vlog("Skipping item - invalid character encoding sequence: ", path);
+			// "Skipping item - invalid character encoding sequence: "
+			log.vlog(provideLanguageTranslation(languageIdentifier,212), path);
 			return;
 		}
 		
@@ -4089,7 +4317,8 @@ final class SyncEngine
 			// skip dot files if configured
 			if (cfg.getValueBool("skip_dotfiles")) {
 				if (isDotFile(path)) {
-					log.vlog("Skipping item - .file or .folder: ", path);
+					// "Skipping item - .file or .folder: "
+					log.vlog(provideLanguageTranslation(languageIdentifier,145), path);
 					return;
 				}
 			}
@@ -4097,7 +4326,8 @@ final class SyncEngine
 			// Do we need to check for .nosync? Only if --check-for-nosync was passed in
 			if (cfg.getValueBool("check_nosync")) {
 				if (exists(path ~ "/.nosync")) {
-					log.vlog("Skipping item - .nosync found & --check-for-nosync enabled: ", path);
+					// "Skipping item - .nosync found & --check-for-nosync enabled: "
+					log.vlog(provideLanguageTranslation(languageIdentifier,186), path);
 					return;
 				}
 			}
@@ -4106,7 +4336,8 @@ final class SyncEngine
 			if (isSymlink(path)) {
 				// if config says so we skip all symlinked items
 				if (cfg.getValueBool("skip_symlinks")) {
-					log.vlog("Skipping item - skip symbolic links configured: ", path);
+					// "Skipping item - skip symbolic links configured: "
+					log.vlog(provideLanguageTranslation(languageIdentifier,213), path);
 					return;
 
 				}
@@ -4133,7 +4364,8 @@ final class SyncEngine
 					if (relativeLinkTest) {
 						log.vdebug("Not skipping item - symbolic link is a 'relative link' to target ('", relativeLink, "') which can be supported: ", path);
 					} else {
-						log.log("Skipping item - invalid symbolic link: ", path);
+						// "Skipping item - invalid symbolic link: "
+						log.log(provideLanguageTranslation(languageIdentifier,214), path);
 						return;
 					}
 				}
@@ -4141,19 +4373,22 @@ final class SyncEngine
 			
 			// Restriction and limitations about windows naming files
 			if (!isValidName(path)) {
-				log.log("Skipping item - invalid name (Microsoft Naming Convention): ", path);
+				//"Skipping item - invalid name (Microsoft Naming Convention): "
+				log.log(provideLanguageTranslation(languageIdentifier,187), path);
 				return;
 			}
 			
 			// Check for bad whitespace items
 			if (!containsBadWhiteSpace(path)) {
-				log.log("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
+				// "Skipping item - invalid name (Contains an invalid whitespace item): "
+				log.log(provideLanguageTranslation(languageIdentifier,188), path);
 				return;
 			}
 			
 			// Check for HTML ASCII Codes as part of file name
 			if (!containsASCIIHTMLCodes(path)) {
-				log.log("Skipping item - invalid name (Contains HTML ASCII Code): ", path);
+				// "Skipping item - invalid name (Contains HTML ASCII Code): "
+				log.log(provideLanguageTranslation(languageIdentifier,189), path);
 				return;
 			}
 
@@ -4166,7 +4401,8 @@ final class SyncEngine
 						// The path that needs to be checked needs to include the '/'
 						// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
 						if (selectiveSync.isDirNameExcluded(path.strip('.'))) {
-							log.vlog("Skipping item - excluded by skip_dir config: ", path);
+							// "Skipping item - excluded by skip_dir config: "
+							log.vlog(provideLanguageTranslation(languageIdentifier,93), path);
 							return;
 						}
 					}
@@ -4180,8 +4416,10 @@ final class SyncEngine
 						// The file contents can only contain 'folder' names, so we need to strip './' from any path we are checking
 						if(selectiveSync.isSharedFolderMatched(strip(path,"./"))){
 							// path detected as a 'new item' is matched as a path in business_shared_folders
-							log.vlog("Skipping item - excluded as included in business_shared_folders config: ", path);
-							log.vlog("To sync this directory to your OneDrive Account update your business_shared_folders config");
+							// "Skipping item - excluded as included in business_shared_folders config: "
+							log.vlog(provideLanguageTranslation(languageIdentifier,215), path);
+							// "To sync this directory to your OneDrive Account update your business_shared_folders config"
+							log.vlog(provideLanguageTranslation(languageIdentifier,216));
 							return;
 						}
 					}
@@ -4192,23 +4430,27 @@ final class SyncEngine
 					// The path that needs to be checked needs to include the '/'
 					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
 					if (selectiveSync.isFileNameExcluded(path.strip('.'))) {
-						log.vlog("Skipping item - excluded by skip_file config: ", path);
+						// "Skipping item - excluded by skip_file config: "
+						log.vlog(provideLanguageTranslation(languageIdentifier,137), path);
 						return;
 					}
 				}
 				
 				if (selectiveSync.isPathExcludedViaSyncList(path)) {
 					if ((isFile(path)) && (cfg.getValueBool("sync_root_files")) && (rootName(path.strip('.').strip('/')) == "")) {
+						// not skipping this file
 						log.vdebug("Not skipping path due to sync_root_files inclusion: ", path);
 					} else {
 						string userSyncList = cfg.configDirName ~ "/sync_list";
 						if (exists(userSyncList)){
 							// skipped most likely due to inclusion in sync_list
-							log.vlog("Skipping item - excluded by sync_list config: ", path);
+							// "Skipping item - excluded by sync_list config: "
+							log.vlog(provideLanguageTranslation(languageIdentifier,143), path);
 							return;
 						} else {
 							// skipped for some other reason
-							log.vlog("Skipping item - path excluded by user config: ", path);
+							// "Skipping item - path excluded by user config: "
+							log.vlog(provideLanguageTranslation(languageIdentifier,217), path);
 							return;
 						}
 					}
@@ -4235,7 +4477,8 @@ final class SyncEngine
 				// the above operation takes time and the directory might have
 				// disappeared in the meantime
 				if (!exists(path)) {
-					log.vlog("Directory disappeared during upload: ", path);
+					// "Directory disappeared during upload: "
+					log.vlog(provideLanguageTranslation(languageIdentifier,218), path);
 					return;
 				}
 				
@@ -4278,7 +4521,8 @@ final class SyncEngine
 							// are we in an --upload-only & --remove-source-files scenario?
 							if ((uploadOnly) && (localDeleteAfterUpload)) {
 								// Log that we are deleting a local item
-								log.log("Removing local file as --upload-only & --remove-source-files configured");
+								// "Removing local file as --upload-only & --remove-source-files configured"
+								log.log(provideLanguageTranslation(languageIdentifier,91));
 								// are we in a --dry-run scenario?
 								if (!dryRun) {
 									// No --dry-run ... process local file delete
@@ -4290,19 +4534,22 @@ final class SyncEngine
 					}
 				} else {
 					// path is not a valid file
-					log.log("Skipping item - item is not a valid file: ", path);
+					// "Skipping item - item is not a valid file: "
+					log.log(provideLanguageTranslation(languageIdentifier,219), path);
 				}
 			}
 		} else {
 			// This path was skipped - why?
-			log.log("Skipping item '", path, "' due to the full path exceeding ", maxPathLength, " characters (Microsoft OneDrive limitation)");
+			// "Skipping item '", path, "' due to the full path exceeding ", maxPathLength, " characters (Microsoft OneDrive limitation)"
+			log.log(provideLanguageTranslation(languageIdentifier,220), path, provideLanguageTranslation(languageIdentifier,221), maxPathLength, provideLanguageTranslation(languageIdentifier,222));
 		}
 	}
 
 	// create new directory on OneDrive
 	private void uploadCreateDir(const(string) path)
 	{
-		log.vlog("OneDrive Client requested to create remote path: ", path);
+		// "OneDrive Client requested to create remote path: "
+		log.vlog(provideLanguageTranslation(languageIdentifier,223), path);
 		
 		JSONValue onedrivePathDetails;
 		Item parent;
@@ -4383,7 +4630,8 @@ final class SyncEngine
 				log.vdebug("response = onedrive.getPathDetails(path); generated a OneDriveException");
 				if (e.httpStatusCode == 404) {
 					// The directory was not found on the drive id we queried
-					log.vlog("The requested directory to create was not found on OneDrive - creating remote directory: ", path);
+					// "The requested directory to create was not found on OneDrive - creating remote directory: "
+					log.vlog(provideLanguageTranslation(languageIdentifier,224), path);
 
 					if (!dryRun) {
 						// Perform the database lookup - is the parent in the database?
@@ -4415,11 +4663,12 @@ final class SyncEngine
 							if (e.httpStatusCode == 409) {
 								// OneDrive API returned a 404 (above) to say the directory did not exist
 								// but when we attempted to create it, OneDrive responded that it now already exists
-								log.vlog("OneDrive reported that ", path, " already exists .. OneDrive API race condition");
+								log.vdebug("OneDrive reported that ", path, " already exists .. OneDrive API race condition");
 								return;
 							} else {
 								// some other error from OneDrive was returned - display what it is
-								log.error("OneDrive generated an error when creating this path: ", path);
+								// "OneDrive generated an error when creating this path: ", path
+								log.error(provideLanguageTranslation(languageIdentifier,225), path);
 								displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 								return;
 							}
@@ -4432,8 +4681,8 @@ final class SyncEngine
 						auto fakeResponse = createFakeResponse(path);
 						saveItem(fakeResponse);
 					}
-						
-					log.vlog("Successfully created the remote directory ", path, " on OneDrive");
+					// "Successfully created the remote directory ", path, " on OneDrive"
+					log.vlog(provideLanguageTranslation(languageIdentifier,226), path, provideLanguageTranslation(languageIdentifier,227));
 					return;
 				}
 				
@@ -4462,16 +4711,19 @@ final class SyncEngine
 				
 				if (response["name"].str == baseName(path)){
 					// OneDrive 'name' matches local path name
-					log.vlog("The requested directory to create was found on OneDrive - skipping creating the directory: ", path );
+					// "The requested directory to create was found on OneDrive - skipping creating the directory: "
+					log.vlog(provideLanguageTranslation(languageIdentifier,228), path );
 					// Check that this path is in the database
 					if (!itemdb.selectById(parent.driveId, parent.id, parent)){
 						// parent for 'path' is NOT in the database
-						log.vlog("The parent for this path is not in the local database - need to add parent to local database");
+						// "The parent for this path is not in the local database - need to add parent to local database"
+						log.vlog(provideLanguageTranslation(languageIdentifier,229));
 						parentPath = dirName(path);
 						// add the parent into the database
 						uploadCreateDir(parentPath);
 						// save this child item into the database
-						log.vlog("The parent for this path has been added to the local database - adding requested path (", path ,") to database");
+						// "The parent for this path has been added to the local database - adding requested path (", path ,") to database"
+						log.vlog(provideLanguageTranslation(languageIdentifier,230), path ,provideLanguageTranslation(languageIdentifier,231));
 						if (!dryRun) {
 							// save the live data
 							saveItem(response);
@@ -4482,7 +4734,8 @@ final class SyncEngine
 						}
 					} else {
 						// parent is in database
-						log.vlog("The parent for this path is in the local database - adding requested path (", path ,") to database");
+						// "The parent for this path is in the local database - adding requested path (", path ,") to database"
+						log.vlog(provideLanguageTranslation(languageIdentifier,232), path ,provideLanguageTranslation(languageIdentifier,231));
 						// are we in a --dry-run scenario?
 						if (!dryRun) {
 							// get the live data
@@ -4492,8 +4745,9 @@ final class SyncEngine
 							} catch (OneDriveException e) {
 								log.vdebug("pathDetails = onedrive.getPathDetailsByDriveId(parent.driveId, path) generated a OneDriveException");
 								if (e.httpStatusCode == 404) {
-									// The directory was not found 
-									log.error("ERROR: The requested single directory to sync was not found on OneDrive");
+									// The directory was not found
+									// "ERROR: The requested single directory to sync was not found on OneDrive"
+									log.error(provideLanguageTranslation(languageIdentifier,107));
 									return;
 								}
 								
@@ -4555,17 +4809,20 @@ final class SyncEngine
 					}
 				} else {
 					// They are the "same" name wise but different in case sensitivity
-					log.error("ERROR: Current directory has a 'case-insensitive match' to an existing directory on OneDrive");
-					log.error("ERROR: To resolve, rename this local directory: ", buildNormalizedPath(absolutePath(path)));
-					log.error("ERROR: Remote OneDrive directory: ", response["name"].str);
-					log.log("Skipping: ", buildNormalizedPath(absolutePath(path)));
+					// "ERROR: Current directory has a 'case-insensitive match' to an existing directory on OneDrive"
+					log.error(provideLanguageTranslation(languageIdentifier,233));
+					// "ERROR: To resolve, rename this local directory: ", buildNormalizedPath(absolutePath(path))
+					log.error(provideLanguageTranslation(languageIdentifier,234), buildNormalizedPath(absolutePath(path)));
+					// "ERROR: Remote OneDrive directory: ", response["name"].str
+					log.error(provideLanguageTranslation(languageIdentifier,235), response["name"].str);
+					log.log(provideLanguageTranslation(languageIdentifier,236), buildNormalizedPath(absolutePath(path)));
 					return;
 				}
 			} else {
 				// response is not valid JSON, an error was returned from OneDrive
-				log.error("ERROR: There was an error performing this operation on OneDrive");
-				log.error("ERROR: Increase logging verbosity to assist determining why.");
-				log.log("Skipping: ", buildNormalizedPath(absolutePath(path)));
+				displayInvalidJSONObjectLogMessage();
+				//"Skipping: ", buildNormalizedPath(absolutePath(path))
+				log.log(provideLanguageTranslation(languageIdentifier,236), buildNormalizedPath(absolutePath(path)));
 				return;
 			}
 		}
@@ -4663,15 +4920,19 @@ final class SyncEngine
 						// OneDrive returned a 'HTTP/1.1 400 Bad Request'
 						// If the 'path', when encoded, cannot be interpreted by the OneDrive API, the API will generate a 400 error
 						if (e.httpStatusCode == 400) {
-							log.log("Skipping uploading this new file: ", buildNormalizedPath(absolutePath(path)));
-							log.vlog("Skipping item - OneDrive returned a 'HTTP 400 - Bad Request' when attempting to query if file exists");
-							log.error("ERROR: To resolve, rename this local file: ", buildNormalizedPath(absolutePath(path)));
+							// "Skipping uploading this new file: ", buildNormalizedPath(absolutePath(path))
+							log.log(provideLanguageTranslation(languageIdentifier,239), buildNormalizedPath(absolutePath(path)));
+							// "Skipping item - OneDrive returned a 'HTTP 400 - Bad Request' when attempting to query if file exists"
+							log.vlog(provideLanguageTranslation(languageIdentifier,319));
+							// "ERROR: To resolve, rename this local file: ", buildNormalizedPath(absolutePath(path))
+							log.error(provideLanguageTranslation(languageIdentifier,240), buildNormalizedPath(absolutePath(path)));
 							uploadFailed = true;
 							return;
 						}
 						// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error'
 						if (e.httpStatusCode == 401) {
-							log.vlog("Skipping item - OneDrive returned a 'HTTP 401 - Unauthorized' when attempting to query if file exists");
+							// "Skipping item - OneDrive returned a 'HTTP 401 - Unauthorized' when attempting to query if file exists"
+							log.vlog(provideLanguageTranslation(languageIdentifier,313));
 							uploadFailed = true;
 							return;
 						}
@@ -4680,12 +4941,14 @@ final class SyncEngine
 							// The file was not found on OneDrive, need to upload it		
 							// Check if file should be skipped based on skip_size config
 							if (thisFileSize >= this.newSizeLimit) {
-								log.vlog("Skipping item - excluded by skip_size config: ", path, " (", thisFileSize/2^^20," MB)");
+								// "Skipping item - excluded by skip_size config: ", path, " (", thisFileSize/2^^20," MB)"
+								log.vlog(provideLanguageTranslation(languageIdentifier,241), path, " (", thisFileSize/2^^20," MB)");
 								return;
 							}
 							
 							// start of upload file
-							write("Uploading new file ", path, " ... ");
+							// "Uploading new file ", path, " ... "
+							write(provideLanguageTranslation(languageIdentifier,242), path, " ... ");
 							JSONValue response;
 							
 							// Calculate upload speed
@@ -4701,9 +4964,11 @@ final class SyncEngine
 									} catch (OneDriveException e) {
 										// error uploading file
 										if (e.httpStatusCode == 401) {
+											// caught an error, write out we are skipping this item
+											// "skipped."
+											writeln(provideLanguageTranslation(languageIdentifier,198));
 											// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-											writeln("skipped.");
-											log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+											log.vlog(provideLanguageTranslation(languageIdentifier,312));
 											uploadFailed = true;
 											return;
 										}
@@ -4717,21 +4982,25 @@ final class SyncEngine
 										}
 										if (e.httpStatusCode == 504) {
 											// HTTP request returned status code 504 (Gateway Timeout)
-											log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
+											log.log(provideLanguageTranslation(languageIdentifier,124));
 											// Retry original request by calling function again to avoid replicating any further error handling
 											uploadNewFile(path);
 											// return back to original call
 											return;
 										} else {
+											// caught an error, write out we are skipping this item
+											// "skipped."
+											writeln(provideLanguageTranslation(languageIdentifier,198));
 											// display what the error is
-											writeln("skipped.");
 											displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 											uploadFailed = true;
 											return;
 										}
 									} catch (FileException e) {
 										// display the error message
-										writeln("skipped.");
+										// caught an error, write out we are skipping this item
+										// "skipped."
+										writeln(provideLanguageTranslation(languageIdentifier,198));
 										displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 										uploadFailed = true;
 										return;
@@ -4747,10 +5016,13 @@ final class SyncEngine
 											try {
 												response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
 											} catch (OneDriveException e) {
+												// error uploading file
 												if (e.httpStatusCode == 401) {
+													// caught an error, write out we are skipping this item
+													// "skipped."
+													writeln(provideLanguageTranslation(languageIdentifier,198));
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-													writeln("skipped.");
-													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													log.vlog(provideLanguageTranslation(languageIdentifier,312));
 													uploadFailed = true;
 													return;
 												}
@@ -4766,7 +5038,7 @@ final class SyncEngine
 												
 												if (e.httpStatusCode == 504) {
 													// HTTP request returned status code 504 (Gateway Timeout)
-													log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request as a session");
+													log.log(provideLanguageTranslation(languageIdentifier,124));
 													// Try upload as a session
 													try {
 														response = session.upload(path, parent.driveId, parent.id, baseName(path));
@@ -4780,8 +5052,9 @@ final class SyncEngine
 															// return back to original call
 															return;
 														} else {
-															// display what the error is
-															writeln("skipped.");
+															// caught an error, write out we are skipping this item
+															// "skipped."
+															writeln(provideLanguageTranslation(languageIdentifier,198));
 															displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 															uploadFailed = true;
 															return;
@@ -4789,14 +5062,18 @@ final class SyncEngine
 													}
 												} else {
 													// display what the error is
-													writeln("skipped.");
+													// caught an error, write out we are skipping this item
+													// "skipped."
+													writeln(provideLanguageTranslation(languageIdentifier,198));
 													displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
-												writeln("skipped.");
+												// caught an error, write out we are skipping this item
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
 												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
@@ -4809,8 +5086,10 @@ final class SyncEngine
 											} catch (OneDriveException e) {
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-													writeln("skipped.");
-													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													// caught an error, write out we are skipping this item
+													// "skipped."
+													writeln(provideLanguageTranslation(languageIdentifier,198));
+													log.vlog(provideLanguageTranslation(languageIdentifier,312));
 													uploadFailed = true;
 													return;
 												}	
@@ -4824,21 +5103,25 @@ final class SyncEngine
 												} 
 												if (e.httpStatusCode == 504) {
 													// HTTP request returned status code 504 (Gateway Timeout)
-													log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
+													log.log(provideLanguageTranslation(languageIdentifier,124));
 													// Retry original request by calling function again to avoid replicating any further error handling
 													uploadNewFile(path);
 													// return back to original call
 													return;
 												} else {
 													// display what the error is
-													writeln("skipped.");
+													// caught an error, write out we are skipping this item
+													// "skipped."
+													writeln(provideLanguageTranslation(languageIdentifier,198));
 													displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
-												writeln("skipped.");
+												// caught an error, write out we are skipping this item
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
 												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
@@ -4852,8 +5135,10 @@ final class SyncEngine
 										} catch (OneDriveException e) {
 											if (e.httpStatusCode == 401) {
 												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-												writeln("skipped.");
-												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+												// caught an error, write out we are skipping this item
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
+												log.vlog(provideLanguageTranslation(languageIdentifier,312));
 												uploadFailed = true;
 												return;
 											}	
@@ -4867,21 +5152,25 @@ final class SyncEngine
 											}
 											if (e.httpStatusCode == 504) {
 												// HTTP request returned status code 504 (Gateway Timeout)
-												log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
+												log.log(provideLanguageTranslation(languageIdentifier,124));
 												// Retry original request by calling function again to avoid replicating any further error handling
 												uploadNewFile(path);
 												// return back to original call
 												return;
 											} else {
 												// display what the error is
-												writeln("skipped.");
+												// caught an error, write out we are skipping this item
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
 												displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
 											}
 										} catch (FileException e) {
 											// display the error message
-											writeln("skipped.");
+											// caught an error, write out we are skipping this item
+											// "skipped."
+											writeln(provideLanguageTranslation(languageIdentifier,198));
 											displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 											uploadFailed = true;
 											return;
@@ -4892,7 +5181,8 @@ final class SyncEngine
 								// response from OneDrive has to be a valid JSON object
 								if (response.type() == JSONType.object){
 									// upload done without error
-									writeln("done.");
+									// "done."
+									writeln(provideLanguageTranslation(languageIdentifier,170));
 									
 									// upload finished
 									auto uploadFinishTime = Clock.currTime();
@@ -4903,7 +5193,8 @@ final class SyncEngine
 									log.vdebug("Upload Speed: ", uploadSpeed, " Mbps (approx)");
 									
 									// Log upload action to log file
-									log.fileOnly("Uploading new file ", path, " ... done.");
+									// "Uploading new file ", path, " ... done"
+									log.fileOnly(provideLanguageTranslation(languageIdentifier,242), path, provideLanguageTranslation(languageIdentifier,171));
 									// The file was uploaded, or a 4xx / 5xx error was generated
 									if ("size" in response){
 										// The response JSON contains size, high likelihood valid response returned 
@@ -4924,12 +5215,16 @@ final class SyncEngine
 												// Print a warning message - should only be triggered if:
 												// - disableUploadValidation gets flagged (documentLibrary account type)
 												// - syncBusinessFolders is being used & parent.driveId != defaultDriveId
-												log.log("WARNING: Uploaded file size does not match local file - skipping upload validation");
-												log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
-												log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+												// "WARNING: Uploaded file size does not match local file - skipping upload validation"
+												log.log(provideLanguageTranslation(languageIdentifier,243));
+												// "WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy"
+												log.vlog(provideLanguageTranslation(languageIdentifier,244));
+												// "See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details"
+												log.vlog(provideLanguageTranslation(languageIdentifier,209));
 											} else {
 												// OK .. the uploaded file does not match and we did not disable this validation
-												log.log("Uploaded file size does not match local file - upload failure - retrying");
+												// "Uploaded file size does not match local file - upload failure - retrying"
+												log.log(provideLanguageTranslation(languageIdentifier,245));
 												// Delete uploaded bad file
 												onedrive.deleteById(response["parentReference"]["driveId"].str, response["id"].str, response["eTag"].str);
 												// Re-upload
@@ -4965,7 +5260,8 @@ final class SyncEngine
 												uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
 											} else {
 												// will be removed in different event!
-												log.log("File disappeared after upload: ", path);
+												// "File disappeared after upload: "
+												log.log(provideLanguageTranslation(languageIdentifier,246), path);
 											}
 										} else {
 											// OneDrive Business Account - always use a session to upload
@@ -4980,22 +5276,26 @@ final class SyncEngine
 									if (parent.driveId == defaultDriveId) {				
 										// how much space is left on OneDrive after upload?
 										remainingFreeSpace = (remainingFreeSpace - thisFileSize);
-										log.vlog("Remaining free space on OneDrive: ", remainingFreeSpace);
+										// "Remaining free space on OneDrive: "
+										log.vlog(provideLanguageTranslation(languageIdentifier,201), remainingFreeSpace);
 									}
 									// File uploaded successfully, space details updated if required
 									return;
 								} else {
 									// response is not valid JSON, an error was returned from OneDrive
-									log.fileOnly("Uploading new file ", path, " ... error");
+									// "Uploading new file ", path, " ... error"
+									log.fileOnly(provideLanguageTranslation(languageIdentifier,242), path, provideLanguageTranslation(languageIdentifier,247));
 									uploadFailed = true;
 									return;
 								}
 							} else {
 								// we are --dry-run - simulate the file upload
-								writeln("done.");
+								// "done."
+								writeln(provideLanguageTranslation(languageIdentifier,170));
 								response = createFakeResponse(path);
 								// Log action to log file
-								log.fileOnly("Uploading new file ", path, " ... done.");
+								// "Uploading new file ", path, " ... done."
+								log.fileOnly(provideLanguageTranslation(languageIdentifier,242), path, provideLanguageTranslation(languageIdentifier,171));
 								// Is the response a valid JSON object - validation checking done in saveItem
 								saveItem(response);
 								return;
@@ -5030,7 +5330,8 @@ final class SyncEngine
 						// Check that 'name' is in the JSON response (validates data) and that 'name' == the path we are looking for
 						if (("name" in fileDetailsFromOneDrive) && (fileDetailsFromOneDrive["name"].str == baseName(path))) {
 							// OneDrive 'name' matches local path name
-							log.vlog("Requested file to upload exists on OneDrive - local database is out of sync for this file: ", path);
+							// "Requested file to upload exists on OneDrive - local database is out of sync for this file:"
+							log.vlog(provideLanguageTranslation(languageIdentifier,248), path);
 							
 							// Is the local file newer than the uploaded file?
 							SysTime localFileModifiedTime = timeLastModified(path).toUTC();
@@ -5039,8 +5340,10 @@ final class SyncEngine
 							
 							if (localFileModifiedTime > remoteFileModifiedTime){
 								// local file is newer
-								log.vlog("Requested file to upload is newer than existing file on OneDrive");
-								write("Uploading modified file ", path, " ... ");
+								// "Requested file to upload is newer than existing file on OneDrive"
+								log.vlog(provideLanguageTranslation(languageIdentifier,249));
+								// "Uploading modified file "
+								write(provideLanguageTranslation(languageIdentifier,197), path, " ... ");
 								JSONValue response;
 								
 								if (!dryRun) {
@@ -5049,13 +5352,16 @@ final class SyncEngine
 										if (thisFileSize <= thresholdFileSize) {
 											try {
 												response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path));
-												writeln("done.");
+												// "done."
+												writeln(provideLanguageTranslation(languageIdentifier,170));
 											} catch (OneDriveException e) {
 												log.vdebug("response = onedrive.simpleUpload(path, parent.driveId, parent.id, baseName(path)); generated a OneDriveException");
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-													writeln("skipped.");
-													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													// caught an error, write out we are skipping this item
+													// "skipped."
+													writeln(provideLanguageTranslation(languageIdentifier,198));
+													log.vlog(provideLanguageTranslation(languageIdentifier,312));
 													uploadFailed = true;
 													return;
 												}
@@ -5072,11 +5378,12 @@ final class SyncEngine
 												
 												if (e.httpStatusCode == 504) {
 													// HTTP request returned status code 504 (Gateway Timeout)
-													log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request as a session");
+													log.log(provideLanguageTranslation(languageIdentifier,124));
 													// Try upload as a session
 													try {
 														response = session.upload(path, parent.driveId, parent.id, baseName(path));
-														writeln("done.");
+														// "done."
+														writeln(provideLanguageTranslation(languageIdentifier,170));
 													} catch (OneDriveException e) {
 														if (e.httpStatusCode == 429) {
 															// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
@@ -5088,7 +5395,9 @@ final class SyncEngine
 														} else {
 															// error uploading file
 															// display what the error is
-															writeln("skipped.");
+															// caught an error, write out we are skipping this item
+															// "skipped."
+															writeln(provideLanguageTranslation(languageIdentifier,198));
 															displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 															uploadFailed = true;
 															return;
@@ -5096,14 +5405,18 @@ final class SyncEngine
 													}
 												} else {
 													// display what the error is
-													writeln("skipped.");
+													// caught an error, write out we are skipping this item
+													// "skipped."
+													writeln(provideLanguageTranslation(languageIdentifier,198));
 													displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
-												writeln("skipped.");
+												// caught an error, write out we are skipping this item
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
 												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
@@ -5113,13 +5426,16 @@ final class SyncEngine
 											writeln("");
 											try {
 												response = session.upload(path, parent.driveId, parent.id, baseName(path));
-												writeln("done.");
+												// "done."
+												writeln(provideLanguageTranslation(languageIdentifier,170));
 											} catch (OneDriveException e) {
 												log.vdebug("response = session.upload(path, parent.driveId, parent.id, baseName(path)); generated a OneDriveException");
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-													writeln("skipped.");
-													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+													// caught an error, write out we are skipping this item
+													// "skipped."
+													writeln(provideLanguageTranslation(languageIdentifier,198));
+													log.vlog(provideLanguageTranslation(languageIdentifier,312));
 													uploadFailed = true;
 													return;
 												}
@@ -5134,7 +5450,7 @@ final class SyncEngine
 												} 
 												if (e.httpStatusCode == 504) {
 													// HTTP request returned status code 504 (Gateway Timeout)
-													log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
+													log.log(provideLanguageTranslation(languageIdentifier,124));
 													// Retry original request by calling function again to avoid replicating any further error handling
 													uploadNewFile(path);
 													// return back to original call
@@ -5142,14 +5458,18 @@ final class SyncEngine
 												} else {
 													// error uploading file
 													// display what the error is
-													writeln("skipped.");
+													// caught an error, write out we are skipping this item
+													// "skipped."
+													writeln(provideLanguageTranslation(languageIdentifier,198));
 													displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
 												}
 											} catch (FileException e) {
 												// display the error message
-												writeln("skipped.");
+												// caught an error, write out we are skipping this item
+												// "skipped."
+												writeln(provideLanguageTranslation(languageIdentifier,198));
 												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
@@ -5182,7 +5502,8 @@ final class SyncEngine
 												uploadLastModifiedTime(parent.driveId, id, cTag, mtime);
 											} else {
 												// will be removed in different event!
-												log.log("File disappeared after upload: ", path);
+												// "File disappeared after upload: "
+												log.log(provideLanguageTranslation(languageIdentifier,246), path);
 											}
 										} else {
 											// Log that an invalid JSON object was returned
@@ -5203,8 +5524,10 @@ final class SyncEngine
 													log.vdebug("response = session.upload(path, parent.driveId, parent.id, baseName(path), fileDetailsFromOneDrive['eTag'].str); generated a OneDriveException");
 													if (e.httpStatusCode == 401) {
 														// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-														writeln("skipped.");
-														log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+														// caught an error, write out we are skipping this item
+														// "skipped."
+														writeln(provideLanguageTranslation(languageIdentifier,198));
+														log.vlog(provideLanguageTranslation(languageIdentifier,312));
 														uploadFailed = true;
 														return;
 													}
@@ -5219,7 +5542,7 @@ final class SyncEngine
 													} 
 													if (e.httpStatusCode == 504) {
 														// HTTP request returned status code 504 (Gateway Timeout)
-														log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying upload request");
+														log.log(provideLanguageTranslation(languageIdentifier,124));
 														// Retry original request by calling function again to avoid replicating any further error handling
 														uploadNewFile(path);
 														// return back to original call
@@ -5227,20 +5550,25 @@ final class SyncEngine
 													} else {
 														// error uploading file
 														// display what the error is
-														writeln("skipped.");
+														// caught an error, write out we are skipping this item
+														// "skipped."
+														writeln(provideLanguageTranslation(languageIdentifier,198));
 														displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 														uploadFailed = true;
 														return;
 													}
 												} catch (FileException e) {
 													// display the error message
-													writeln("skipped.");
+													// caught an error, write out we are skipping this item
+													// "skipped."
+													writeln(provideLanguageTranslation(languageIdentifier,198));
 													displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
 												}
 												// upload complete
-												writeln("done.");
+												// "done."
+												writeln(provideLanguageTranslation(languageIdentifier,170));
 												saveItem(response);
 											} else {
 												// If we are uploading to a shared business folder, there are a couple of corner cases here:
@@ -5279,20 +5607,24 @@ final class SyncEngine
 									}
 									
 									// Log action to log file
-									log.fileOnly("Uploading modified file ", path, " ... done.");
+									// "Uploading modified file ", path, " ... done."
+									log.fileOnly(provideLanguageTranslation(languageIdentifier,197), path, provideLanguageTranslation(languageIdentifier,171));
 									
 									// update free space tracking if this is our drive id
 									if (parent.driveId == defaultDriveId) {				
 										// how much space is left on OneDrive after upload?
 										remainingFreeSpace = (remainingFreeSpace - thisFileSize);
-										log.vlog("Remaining free space on OneDrive: ", remainingFreeSpace);
+										// "Remaining free space on OneDrive: "
+										log.vlog(provideLanguageTranslation(languageIdentifier,201), remainingFreeSpace);
 									}
 								} else {
 									// we are --dry-run - simulate the file upload
-									writeln("done.");
+									// "done."
+									writeln(provideLanguageTranslation(languageIdentifier,170));
 									response = createFakeResponse(path);
 									// Log action to log file
-									log.fileOnly("Uploading modified file ", path, " ... done.");
+									// "Uploading modified file ", path, " ... done."
+									log.fileOnly(provideLanguageTranslation(languageIdentifier,197), path, provideLanguageTranslation(languageIdentifier,171));
 									// Is the response a valid JSON object - validation checking done in saveItem
 									saveItem(response);
 									return;
@@ -5300,7 +5632,8 @@ final class SyncEngine
 							} else {
 								// Save the details of the file that we got from OneDrive
 								// --dry-run safe
-								log.vlog("Updating the local database with details for this file: ", path);
+								// "Updating the local database with details for this file: ", path
+								log.vlog(provideLanguageTranslation(languageIdentifier,250), path);
 								if (!dryRun) {
 									// use the live data
 									saveItem(fileDetailsFromOneDrive);
@@ -5312,38 +5645,47 @@ final class SyncEngine
 							}
 						} else {
 							// The files are the "same" name wise but different in case sensitivity
-							log.error("ERROR: A local file has the same name as another local file.");
-							log.error("ERROR: To resolve, rename this local file: ", buildNormalizedPath(absolutePath(path)));
-							log.log("Skipping uploading this new file: ", buildNormalizedPath(absolutePath(path)));
+							// "ERROR: A local file has the same name as another local file."
+							log.error(provideLanguageTranslation(languageIdentifier,251));
+							// "ERROR: To resolve, rename this local file: "
+							log.error(provideLanguageTranslation(languageIdentifier,240), buildNormalizedPath(absolutePath(path)));
+							// "Skipping uploading this new file: "
+							log.log(provideLanguageTranslation(languageIdentifier,239), buildNormalizedPath(absolutePath(path)));
 						}
 					} else {
 						// fileDetailsFromOneDrive is not valid JSON, an error was returned from OneDrive
-						log.error("ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object");
-						log.error("ERROR: Increase logging verbosity to assist determining why.");
+						// "ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object"
+						log.error(provideLanguageTranslation(languageIdentifier,252));
+						// "ERROR: Increase logging verbosity to assist determining why."
+						log.error(provideLanguageTranslation(languageIdentifier,253));
 						uploadFailed = true;
 						return;
 					}
 				} else {
 					// Skip file - too large
-					log.log("Skipping uploading this new file as it exceeds the maximum size allowed by OneDrive: ", path);
+					// "Skipping uploading this new file as it exceeds the maximum size allowed by OneDrive: "
+					log.log(provideLanguageTranslation(languageIdentifier,254), path);
 					uploadFailed = true;
 					return;
 				}
 			} else {
 				// unable to read local file
-				log.log("Skipping uploading this file as it cannot be read (file permissions or file corruption): ", path);
+				// "Skipping uploading this file as it cannot be read (file permissions or file corruption): "
+				log.log(provideLanguageTranslation(languageIdentifier,255), path);
 			}
 		} else {
 			// Upload of the new file did not occur .. why?
 			if (!parentPathFoundInDB) {
 				// Parent path was not found
-				log.log("Skipping uploading this new file as parent path is not in the database: ", path);
+				// "Skipping uploading this new file as parent path is not in the database: ", path
+				log.log(provideLanguageTranslation(languageIdentifier,256), path);
 				uploadFailed = true;
 				return;
 			}
 			if (!quotaAvailable) {
 				// Not enough free space
-				log.log("Skipping item '", path, "' due to insufficient free space available on OneDrive");
+				// "Skipping item '", path, "' due to insufficient free space available on OneDrive"
+				log.log(provideLanguageTranslation(languageIdentifier,220), path, provideLanguageTranslation(languageIdentifier,257));
 				uploadFailed = true;
 				return;
 			}
@@ -5371,20 +5713,26 @@ final class SyncEngine
 			} catch (OneDriveException e) {
 				if (e.httpStatusCode == 401) {
 					// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-					writeln("skipped.");
-					log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+					// caught an error, write out we are skipping this item
+					// "skipped."
+					writeln(provideLanguageTranslation(languageIdentifier,198));
+					log.vlog(provideLanguageTranslation(languageIdentifier,312));
 					uploadFailed = true;
 					return response;
 				} else {
 					// display what the error is
-					writeln("skipped.");
+					// caught an error, write out we are skipping this item
+					// "skipped."
+					writeln(provideLanguageTranslation(languageIdentifier,198));
 					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					uploadFailed = true;
 					return response;
 				}
 			} catch (FileException e) {
 				// display the error message
-				writeln("skipped.");
+				// caught an error, write out we are skipping this item
+				// "skipped."
+				writeln(provideLanguageTranslation(languageIdentifier,198));
 				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				uploadFailed = true;
 				return response;
@@ -5400,26 +5748,33 @@ final class SyncEngine
 			} catch (OneDriveException e) {
 				if (e.httpStatusCode == 401) {
 					// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
-					writeln("skipped.");
-					log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
+					// caught an error, write out we are skipping this item
+					// "skipped."
+					writeln(provideLanguageTranslation(languageIdentifier,198));
+					log.vlog(provideLanguageTranslation(languageIdentifier,312));
 					uploadFailed = true;
 					return response;
 				} else {
 					// display what the error is
-					writeln("skipped.");
+					// caught an error, write out we are skipping this item
+					// "skipped."
+					writeln(provideLanguageTranslation(languageIdentifier,198));
 					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					uploadFailed = true;
 					return response;
 				}
 			} catch (FileException e) {
 				// display the error message
-				writeln("skipped.");
+				// caught an error, write out we are skipping this item
+				// "skipped."
+				writeln(provideLanguageTranslation(languageIdentifier,198));
 				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				uploadFailed = true;
 				return response;
 			}
 		}
-		writeln("done.");
+		// "done."
+		writeln(provideLanguageTranslation(languageIdentifier,170));
 		// Due to https://github.com/OneDrive/onedrive-api-docs/issues/935 Microsoft modifies all PDF, MS Office & HTML files with added XML content. It is a 'feature' of SharePoint.
 		// So - now the 'local' and 'remote' file is technically DIFFERENT ... thanks Microsoft .. NO way to disable this stupidity
 		string uploadNewFileHash;
@@ -5435,14 +5790,18 @@ final class SyncEngine
 			
 			if(!uploadOnly){
 				// Download the Microsoft 'modified' file so 'local' is now in sync
-				log.vlog("Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync");
-				log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+				// "Due to Microsoft Sharepoint 'enrichment' of files, downloading 'enriched' file to ensure local file is in-sync"
+				log.vlog(provideLanguageTranslation(languageIdentifier,258));
+				// "See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details"
+				log.vlog(provideLanguageTranslation(languageIdentifier,259));
 				auto fileSize = response["size"].integer;
 				onedrive.downloadById(response["parentReference"]["driveId"].str, response["id"].str, path, fileSize);
 			} else {
 				// we are not downloading a file, warn that file differences will exist
-				log.vlog("WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy");
-				log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+				// "WARNING: Due to Microsoft Sharepoint 'enrichment' of files, this file is now technically different to your local copy"
+				log.vlog(provideLanguageTranslation(languageIdentifier,260));
+				// "See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details"
+				log.vlog(provideLanguageTranslation(languageIdentifier,259));
 			}
 		}
 		
@@ -5453,7 +5812,8 @@ final class SyncEngine
 	// delete an item on OneDrive
 	private void uploadDeleteItem(Item item, const(string) path)
 	{
-		log.log("Deleting item from OneDrive: ", path);
+		// "Deleting item from OneDrive:"
+		log.log(provideLanguageTranslation(languageIdentifier,261), path);
 		bool flagAsBigDelete = false;
 		
 		// query the database - how many objects will this remove?
@@ -5468,8 +5828,10 @@ final class SyncEngine
 				// A big delete detected
 				flagAsBigDelete = true;
 				if (!cfg.getValueBool("force")) {
-					log.error("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on OneDrive");
-					log.error("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
+					// "ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on OneDrive"
+					log.error(provideLanguageTranslation(languageIdentifier,262));
+					// "ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value"
+					log.error(provideLanguageTranslation(languageIdentifier,263));
 					// Must exit here to preserve data on OneDrive
 					exit(-1);
 				}
@@ -5499,7 +5861,8 @@ final class SyncEngine
 			} catch (OneDriveException e) {
 				if (e.httpStatusCode == 404) {
 					// item.id, item.eTag could not be found on driveId
-					log.vlog("OneDrive reported: The resource could not be found.");
+					// "OneDrive reported: The resource to delete could not be found."
+					log.vlog(provideLanguageTranslation(languageIdentifier,264));
 				} else {
 					// Not a 404 response .. is this a 401 response due to some sort of OneDrive Business security policy?
 					if ((e.httpStatusCode == 401) && (accountType != "personal")) {
@@ -5607,7 +5970,8 @@ final class SyncEngine
 				// OneDrive threw a 412 error, most likely: ETag does not match current item's value
 				// Retry without eTag
 				log.vdebug("File Metadata Update Failed - OneDrive eTag / cTag match issue");
-				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting file time stamp update - gracefully handling error");
+				// "OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting file time stamp update - gracefully handling error"
+				log.vlog(provideLanguageTranslation(languageIdentifier,317));
 				string nullTag = null;
 				response = onedrive.updateById(driveId, id, data, nullTag);
 			}
@@ -5650,13 +6014,17 @@ final class SyncEngine
 				}
 			} else {
 				// log error
-				log.error("ERROR: OneDrive response missing required 'id' element");
-				log.error("ERROR: ", jsonItem);
+				// "ERROR: OneDrive response missing required 'id' element"
+				log.error(provideLanguageTranslation(languageIdentifier,265));
+				// "ERROR: jsonItem
+				log.error(provideLanguageTranslation(languageIdentifier,61), jsonItem);
 			}
 		} else {
 			// log error
-			log.error("ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object");
-			log.error("ERROR: Increase logging verbosity to assist determining why.");
+			// "ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object"
+			log.error(provideLanguageTranslation(languageIdentifier,266));
+			// "ERROR: Increase logging verbosity to assist determining why."
+			log.error(provideLanguageTranslation(languageIdentifier,238));
 		}
 	}
 
@@ -5665,46 +6033,53 @@ final class SyncEngine
 	// inotify and we try to move the item.
 	void uploadMoveItem(string from, string to)
 	{
-		log.log("Moving ", from, " to ", to);
+		// "Moving ", from, " to ", to
+		log.log(provideLanguageTranslation(languageIdentifier,267), from, provideLanguageTranslation(languageIdentifier,268), to);
 		
 		// 'to' file validation .. is the 'to' file valid for upload?
 		if (isSymlink(to)) {
 			// if config says so we skip all symlinked items
 			if (cfg.getValueBool("skip_symlinks")) {
-				log.vlog("Skipping item - skip symbolic links configured: ", to);
+				// "Skipping item - skip symbolic links configured: ", to
+				log.vlog(provideLanguageTranslation(languageIdentifier,213), to);
 				return;
 
 			}
 			// skip unexisting symbolic links
 			else if (!exists(readLink(to))) {
-				log.log("Skipping item - invalid symbolic link: ", to);
+				// "Skipping item - invalid symbolic link: ", to
+				log.log(provideLanguageTranslation(languageIdentifier,214), to);
 				return;
 			}
 		}
 		
 		// Restriction and limitations about windows naming files
 		if (!isValidName(to)) {
-			log.log("Skipping item - invalid name (Microsoft Naming Convention): ", to);
+			// "Skipping item - invalid name (Microsoft Naming Convention): ", to
+			log.log(provideLanguageTranslation(languageIdentifier,187), to);
 			return;
 		}
 		
 		// Check for bad whitespace items
 		if (!containsBadWhiteSpace(to)) {
-			log.log("Skipping item - invalid name (Contains an invalid whitespace item): ", to);
+			// "Skipping item - invalid name (Contains an invalid whitespace item): ", to
+			log.log(provideLanguageTranslation(languageIdentifier,188), to);
 			return;
 		}
 		
 		// Check for HTML ASCII Codes as part of file name
 		if (!containsASCIIHTMLCodes(to)) {
-			log.log("Skipping item - invalid name (Contains HTML ASCII Code): ", to);
+			// "Skipping item - invalid name (Contains HTML ASCII Code): ", to
+			log.log(provideLanguageTranslation(languageIdentifier,189), to);
 			return;
 		}
 		
 		// 'to' file has passed file validation
 		Item fromItem, toItem, parentItem;
 		if (!itemdb.selectByPath(from, defaultDriveId, fromItem)) {
-			if (cfg.getValueBool("skip_dotfiles") && isDotFile(to)){	
-				log.log("Skipping upload due to skip_dotfile = true");
+			if (cfg.getValueBool("skip_dotfiles") && isDotFile(to)){
+				// "Skipping upload due to skip_dotfile = true"
+				log.log(provideLanguageTranslation(languageIdentifier,269));
 				return;
 			} else {
 				uploadNewFile(to);
@@ -5728,17 +6103,20 @@ final class SyncEngine
 					// target location is a .folder
 					log.vdebug("Target location is excluded from sync due to skip_dotfiles = true");
 					// item will have been moved locally, but as this is now to a location that is not synced, needs to be removed from OneDrive
-					log.log("Item has been moved to a location that is excluded from sync operations. Removing item from OneDrive");
+					// "Item has been moved to a location that is excluded from sync operations. Removing item from OneDrive"
+					log.log(provideLanguageTranslation(languageIdentifier,270));
 					uploadDeleteItem(fromItem, from);
 					return;
 				}
 			}
 			
 			// some other error
-			throw new SyncException("Can't move an item to an unsynced directory");
+			// "Can't move an item to an unsynced directory"
+			throw new SyncException(provideLanguageTranslation(languageIdentifier,271));
 		}
 		if (cfg.getValueBool("skip_dotfiles") && isDotFile(to)){
-			log.log("Removing item from OneDrive due to skip_dotfiles = true");
+			// "Removing item from OneDrive due to skip_dotfiles = true"
+			log.log(provideLanguageTranslation(languageIdentifier,272));
 			uploadDeleteItem(fromItem, from);
 			return;
 		}
@@ -5748,7 +6126,8 @@ final class SyncEngine
 			uploadNewFile(to);
 		} else {
 			if (!exists(to)) {
-				log.vlog("uploadMoveItem target has disappeared: ", to);
+				// Skipping item - path has disappeared:
+				log.vlog(provideLanguageTranslation(languageIdentifier,210), to);
 				return;
 			}
 			SysTime mtime = timeLastModified(to).toUTC();
@@ -5771,7 +6150,8 @@ final class SyncEngine
 					// OneDrive threw a 412 error, most likely: ETag does not match current item's value
 					// Retry without eTag
 					log.vdebug("File Move Failed - OneDrive eTag / cTag match issue");
-					log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting to move the file - gracefully handling error");
+					// "OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting to move the file - gracefully handling error"
+					log.vlog(provideLanguageTranslation(languageIdentifier,318));
 					string nullTag = null;
 					// move the file but without the eTag
 					response = onedrive.updateById(fromItem.driveId, fromItem.id, diff, nullTag);
@@ -5797,7 +6177,8 @@ final class SyncEngine
 			}
 		}
 		if (!itemInDB) {
-			throw new SyncException("The item to delete is not in the local database");
+			// "Item cannot be deleted from OneDrive because it was not found in the local database"
+			throw new SyncException(provideLanguageTranslation(languageIdentifier,56));
 		}
 		
 		if (item.parentId == null) {
@@ -5807,13 +6188,24 @@ final class SyncEngine
 		try {
 			if (noRemoteDelete) {
 				// do not process remote delete
-				log.vlog("Skipping remote delete as --upload-only & --no-remote-delete configured");
+				if (isDir(path)) {
+					// directory - needs directory message
+					// "Skipping remote directory delete as --upload-only & --no-remote-delete configured"
+					log.vlog(provideLanguageTranslation(languageIdentifier,194));
+				} else {
+					// file - needs file message
+					// "Skipping remote file delete as --upload-only & --no-remote-delete configured"
+					log.vlog(provideLanguageTranslation(languageIdentifier,207));
+				}
 			} else {
 				uploadDeleteItem(item, path);
 			}
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 404) {
-				log.log(e.msg);
+				// item to delete cannot be found
+				log.log(provideLanguageTranslation(languageIdentifier,264));
+				// debug output of actual error from OneDrive API
+				log.vdebug(e.msg);
 			} else {
 				// display what the error is
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
@@ -5824,7 +6216,8 @@ final class SyncEngine
 	// move a OneDrive folder from one name to another
 	void moveByPath(const(string) source, const(string) destination)
 	{
-		log.vlog("Moving remote folder: ", source, " -> ", destination);
+		// "Moving remote folder: ", source, " -> ", destination
+		log.vlog(provideLanguageTranslation(languageIdentifier,273), source, " -> ", destination);
 		
 		// Source and Destination are relative to ~/OneDrive
 		string sourcePath = source;
@@ -5863,17 +6256,19 @@ final class SyncEngine
 		JSONValue siteQuery;
 		string nextLink;
 		string[] siteSearchResults;
-		
-		log.log("Office 365 Library Name Query: ", o365SharedLibraryName);
+		// "Office 365 Library Name Query: ", o365SharedLibraryName
+		log.log(provideLanguageTranslation(languageIdentifier,274), o365SharedLibraryName);
 		
 		for (;;) {
 			try {
 				siteQuery = onedrive.o365SiteSearch(nextLink);
 			} catch (OneDriveException e) {
-				log.error("ERROR: Query of OneDrive for Office 365 Library Name failed");
+				// "ERROR: Query of OneDrive for Office 365 Library Name failed"
+				log.error(provideLanguageTranslation(languageIdentifier,275));
 				if (e.httpStatusCode == 403) {
 					// Forbidden - most likely authentication scope needs to be updated
-					log.error("ERROR: Authentication scope needs to be updated. Use --logout and re-authenticate client.");
+					// "ERROR: Authentication scope needs to be updated. Use --logout and re-authenticate client."
+					log.error(provideLanguageTranslation(languageIdentifier,276));
 					return;
 				}
 				// HTTP request returned status code 429 (Too Many Requests)
@@ -5886,7 +6281,7 @@ final class SyncEngine
 				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
 					// re-try the specific changes queries	
 					if (e.httpStatusCode == 504) {
-						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query Sharepoint Sites - retrying applicable request");
+						log.log(provideLanguageTranslation(languageIdentifier,124));
 						log.vdebug("siteQuery = onedrive.o365SiteSearch(nextLink) previously threw an error - retrying");
 						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
 						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
@@ -5930,7 +6325,8 @@ final class SyncEngine
 							try {
 								siteDriveQuery = onedrive.o365SiteDrives(site_id);
 							} catch (OneDriveException e) {
-								log.error("ERROR: Query of OneDrive for Office Site ID failed");
+								// "ERROR: Query of OneDrive for Office Site ID failed"
+								log.error(provideLanguageTranslation(languageIdentifier,277));
 								// display what the error is
 								displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 								return;
@@ -5944,6 +6340,7 @@ final class SyncEngine
 									writeln("-----------------------------------------------");
 									log.vdebug("Site Details: ", driveResult);
 									found = true;
+									// No language translation for these
 									writeln("Site Name:    ", searchResult["displayName"].str);
 									writeln("Library Name: ", driveResult["name"].str);
 									writeln("drive_id:     ", driveResult["id"].str);
@@ -5952,15 +6349,15 @@ final class SyncEngine
 								// closeout
 								writeln("-----------------------------------------------");
 							} else {
-								// not a valid JSON object
-								log.error("ERROR: There was an error performing this operation on OneDrive");
-								log.error("ERROR: Increase logging verbosity to assist determining why.");
+								// response is not valid JSON, an error was returned from OneDrive
+								displayInvalidJSONObjectLogMessage();
 								return;
 							}
 						}
 					} else {
 						// 'displayName', 'id' or ''webUrl' not present in JSON results for a specific site
-						string siteNameAvailable = "Site 'name' was restricted by OneDrive API permissions";
+						// "Site 'name' was restricted by OneDrive API permissions"
+						string siteNameAvailable = provideLanguageTranslation(languageIdentifier,278);
 						bool displayNameAvailable = false;
 						bool idAvailable = false;
 						if ("name" in searchResult) siteNameAvailable = searchResult["name"].str;
@@ -5968,12 +6365,18 @@ final class SyncEngine
 						if ("id" in searchResult) idAvailable = true;
 						
 						// Display error details for this site data
-						log.error("\nERROR: SharePoint Site details not provided for: ", siteNameAvailable);
-						log.error("ERROR: The SharePoint Site results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator.");
-						log.error("ERROR: Your site security settings is preventing the following details from being accessed: 'displayName' or 'id'");
-						log.vlog(" - Is 'displayName' available = ", displayNameAvailable);
-						log.vlog(" - Is 'id' available          = ", idAvailable);
-						log.error("ERROR: To debug this further, please increase verbosity (--verbose or --verbose --verbose) to provide further insight as to what details are actually being returned.");
+						// "\nERROR: SharePoint Site details not provided for: "
+						log.error(provideLanguageTranslation(languageIdentifier,279), siteNameAvailable);
+						// "ERROR: The SharePoint Site results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator."
+						log.error(provideLanguageTranslation(languageIdentifier,280));
+						// "ERROR: Your site security settings is preventing the following details from being accessed: 'displayName' or 'id'"
+						log.error(provideLanguageTranslation(languageIdentifier,281));
+						// " - Is 'displayName' available = "
+						log.vlog(provideLanguageTranslation(languageIdentifier,282), displayNameAvailable);
+						// " - Is 'id' available          = "
+						log.vlog(provideLanguageTranslation(languageIdentifier,283), idAvailable);
+						// "ERROR: To debug this further, please increase verbosity (--verbose or --verbose --verbose) to provide further insight as to what details are actually being returned."
+						log.error(provideLanguageTranslation(languageIdentifier,284));
 					}
 				}
 				
@@ -5990,7 +6393,8 @@ final class SyncEngine
 						} else {
 							// Add, but indicate displayName unavailable, use id
 							if ("id" in searchResult) {
-								siteSearchResultsEntry = " * " ~ "Unknown displayName (Data not provided by API), Site ID: " ~ searchResult["id"].str;
+								// " * " ~ "Unknown displayName (Data not provided by API), Site ID: " ~ searchResult["id"].str;
+								siteSearchResultsEntry = " * " ~ provideLanguageTranslation(languageIdentifier,285) ~ searchResult["id"].str;
 								siteSearchResults ~= siteSearchResultsEntry;
 							} else {
 								// displayName and id unavailable, display in debug log the entry
@@ -6000,9 +6404,8 @@ final class SyncEngine
 					}
 				}
 			} else {
-				// not a valid JSON object
-				log.error("ERROR: There was an error performing this operation on OneDrive");
-				log.error("ERROR: Increase logging verbosity to assist determining why.");
+				// response is not valid JSON, an error was returned from OneDrive
+				displayInvalidJSONObjectLogMessage();
 				return;
 			}
 			
@@ -6017,9 +6420,11 @@ final class SyncEngine
 		
 		// Was the intended target found?
 		if(!found) {
-			log.error("\nERROR: The requested SharePoint site could not be found. Please check it's name and your permissions to access the site.");
+			// "\nERROR: The requested SharePoint site could not be found. Please check it's name and your permissions to access the site."
+			log.error(provideLanguageTranslation(languageIdentifier,286));
 			// List all sites returned to assist user
-			log.log("\nThe following SharePoint site names were returned:");
+			// "\nThe following SharePoint site names were returned:"
+			log.log(provideLanguageTranslation(languageIdentifier,287));
 			foreach (searchResultEntry; siteSearchResults) {
 				// list the display name that we use to match against the user query
 				log.log(searchResultEntry);
@@ -6043,7 +6448,8 @@ final class SyncEngine
 			log.vdebug("onedrivePathDetails = onedrive.getPathDetails(filePath); generated a OneDriveException");
 			if (e.httpStatusCode == 404) {
 				// Requested path could not be found
-				log.error("ERROR: The requested path to query was not found on OneDrive");
+				// "ERROR: The requested path to query was not found on OneDrive"
+				log.error(provideLanguageTranslation(languageIdentifier,288));
 				return;
 			}
 			
@@ -6059,7 +6465,7 @@ final class SyncEngine
 			
 			if (e.httpStatusCode == 504) {
 				// HTTP request returned status code 504 (Gateway Timeout)
-				log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying request");
+				log.log(provideLanguageTranslation(languageIdentifier,124));
 				// Retry original request by calling function again to avoid replicating any further error handling
 				createShareableLinkForFile(filePath);
 				// return back to original call
@@ -6089,19 +6495,27 @@ final class SyncEngine
 			if ((createShareableLinkResponse.type() == JSONType.object) && ("link" in createShareableLinkResponse)) {
 				// Extract the file share link from the JSON response
 				fileShareLink = createShareableLinkResponse["link"]["webUrl"].str;
-				writeln("File Shareable Link: ", fileShareLink);
+				// "File Shareable Link: ", fileShareLink
+				writeln(provideLanguageTranslation(languageIdentifier,289), fileShareLink);
 			} else {
-				// not a valid JSON object
-				log.error("ERROR: There was an error performing this operation on OneDrive");
-				log.error("ERROR: Increase logging verbosity to assist determining why.");
+				// response is not valid JSON, an error was returned from OneDrive
+				displayInvalidJSONObjectLogMessage();
 				return;
 			}
 		} else {
-			// not a valid JSON object
-			log.error("ERROR: There was an error performing this operation on OneDrive");
-			log.error("ERROR: Increase logging verbosity to assist determining why.");
+			// response is not valid JSON, an error was returned from OneDrive
+			displayInvalidJSONObjectLogMessage();
 			return;
 		} 
+	}
+	
+	// Error message to display when OneDrive generates an error performing an operation, generating an invalid JSON object
+	void displayInvalidJSONObjectLogMessage()
+	{
+		// "ERROR: There was an error performing this operation on OneDrive"
+		log.error(provideLanguageTranslation(languageIdentifier,237));
+		// "ERROR: Increase logging verbosity to assist determining why."
+		log.error(provideLanguageTranslation(languageIdentifier,238));
 	}
 	
 	// Query OneDrive for a URL path of a file
@@ -6137,11 +6551,13 @@ final class SyncEngine
 			// was file found?
 			if (!fileInDB) {
 				// File has not been synced with OneDrive
-				log.error("File has not been synced with OneDrive: ", localFilePath);
+				// "File has not been synced with OneDrive: ", localFilePath
+				log.error(provideLanguageTranslation(languageIdentifier,290), localFilePath);
 			}
 		} else {
 			// File does not exist locally
-			log.error("File not found on local system: ", localFilePath);
+			// "File not found on local filesystem: ", localFilePath
+			log.error(provideLanguageTranslation(languageIdentifier,291), localFilePath);
 		}
 	}
 	
@@ -6170,7 +6586,8 @@ final class SyncEngine
 			log.vdebug("onedrivePathDetails = onedrive.getPathDetails(path); generated a OneDriveException");
 			if (e.httpStatusCode == 404) {
 				// Requested path could not be found
-				log.error("ERROR: The requested path to query was not found on OneDrive");
+				// "ERROR: The requested path to query was not found on OneDrive"
+				log.error(provideLanguageTranslation(languageIdentifier,288));
 				return;
 			}
 			
@@ -6186,7 +6603,7 @@ final class SyncEngine
 			
 			if (e.httpStatusCode == 504) {
 				// HTTP request returned status code 504 (Gateway Timeout)
-				log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying request");
+				log.log(provideLanguageTranslation(languageIdentifier,124));
 				// Retry original request by calling function again to avoid replicating any further error handling
 				queryDriveForChanges(path);
 				// return back to original call
@@ -6294,16 +6711,20 @@ final class SyncEngine
 				}
 				// Are there any valid changes?
 				if (validChanges != 0){
-					writeln("Selected directory is out of sync with OneDrive");
+					// "Selected directory is out of sync with OneDrive"
+					writeln(provideLanguageTranslation(languageIdentifier,292));
 					if (downloadSize > 0){
 						downloadSize = downloadSize / 1000;
-						writeln("Approximate data to download from OneDrive: ", downloadSize, " KB");
+						// "Approximate data to download from OneDrive: ", downloadSize, " KB"
+						writeln(provideLanguageTranslation(languageIdentifier,293), downloadSize, " KB");
 					}
 				} else {
-					writeln("No pending remote changes - selected directory is in sync");
+					// "No pending remote changes - selected directory is in sync"
+					writeln(provideLanguageTranslation(languageIdentifier,294));
 				}
 			} else {
-				writeln("Local directory is out of sync with OneDrive");
+				// "Local directory is out of sync with OneDrive"
+				writeln(provideLanguageTranslation(languageIdentifier,295));
 				foreach (item; changes["value"].array) {
 					if ((isItemFile(item)) && (hasFileSize(item))) {
 						downloadSize = downloadSize + item["size"].integer;
@@ -6311,11 +6732,13 @@ final class SyncEngine
 				}
 				if (downloadSize > 0){
 					downloadSize = downloadSize / 1000;
-					writeln("Approximate data to download from OneDrive: ", downloadSize, " KB");
+					// "Approximate data to download from OneDrive: ", downloadSize, " KB"
+					writeln(provideLanguageTranslation(languageIdentifier,293), downloadSize, " KB");
 				}
 			}
 		} else {
-			writeln("No pending remote changes - in sync");
+			// "No pending remote changes - in sync"
+			writeln(provideLanguageTranslation(languageIdentifier,296));
 		}
 	}
 	
@@ -6411,6 +6834,7 @@ final class SyncEngine
 		return fakeResponse;
 	}
 	
+	// Handle OneDrive sending a 429 response to retry-after
 	void handleOneDriveThrottleRequest()
 	{
 		// If OneDrive sends a status code 429 then this function will be used to process the Retry-After response header which contains the value by which we need to wait
@@ -6436,8 +6860,10 @@ final class SyncEngine
 		}
 		
 		// Sleep thread as per request
-		log.log("Thread sleeping due to 'HTTP request returned status code 429' - The request has been throttled");
-		log.log("Sleeping for ", delayBeforeRetry, " seconds");
+		// "Thread sleeping due to 'HTTP request returned status code 429' - The request has been throttled"
+		log.log(provideLanguageTranslation(languageIdentifier,297));
+		// "Sleeping for ", delayBeforeRetry, " seconds"
+		log.log(provideLanguageTranslation(languageIdentifier,298), delayBeforeRetry, provideLanguageTranslation(languageIdentifier,299));
 		Thread.sleep(dur!"seconds"(delayBeforeRetry));
 		
 		// Reset retry-after value to zero as we have used this value now and it may be changed in the future to a different value
@@ -6511,12 +6937,14 @@ final class SyncEngine
 				}
 			}
 			// Add driveData JSON data to array
-			log.vlog("Adding OneDrive root details for processing");
+			// "Adding OneDrive root details for processing"
+			log.vlog(provideLanguageTranslation(languageIdentifier,300));
 			childrenData ~= rootData;
 		}
 		
 		// Add driveData JSON data to array
-		log.vlog("Adding OneDrive folder details for processing");
+		// "Adding OneDrive folder details for processing"
+		log.vlog(provideLanguageTranslation(languageIdentifier,301));
 		childrenData ~= driveData;
 		
 		for (;;) {
@@ -6534,9 +6962,12 @@ final class SyncEngine
 				// HTTP request returned status code 404 (Not Found)
 				if (e.httpStatusCode == 404) {
 					// Stop application
-					log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
-					log.log("The item id to query was not found on OneDrive");
-					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
+					// "OneDrive returned a 'HTTP 404 - Item not found' - gracefully handling error"
+					log.log(provideLanguageTranslation(languageIdentifier,315));
+					// "ERROR: The requested item to query was not found on OneDrive"
+					log.log(provideLanguageTranslation(languageIdentifier,302));
+					// "\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n"
+					log.log(provideLanguageTranslation(languageIdentifier,303), cfg.databaseFilePath, provideLanguageTranslation(languageIdentifier,304));
 				}
 				
 				// HTTP request returned status code 429 (Too Many Requests)
@@ -6556,7 +6987,7 @@ final class SyncEngine
 				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
 					// re-try the specific changes queries	
 					if (e.httpStatusCode == 504) {
-						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query OneDrive drive children - retrying applicable request");
+						log.log(provideLanguageTranslation(languageIdentifier,124));
 						log.vdebug("topLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink) previously threw an error - retrying");
 						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
 						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
@@ -6581,7 +7012,8 @@ final class SyncEngine
 			}
 			
 			// process top level children
-			log.vlog("Adding ", count(topLevelChildren["value"].array), " OneDrive items for processing from OneDrive folder");
+			// "Adding ", count(topLevelChildren["value"].array), " OneDrive items for processing from OneDrive folder"
+			log.vlog(provideLanguageTranslation(languageIdentifier,305), count(topLevelChildren["value"].array), provideLanguageTranslation(languageIdentifier,306));
 			foreach (child; topLevelChildren["value"].array) {
 				// add this child to the array of objects
 				childrenData ~= child;
@@ -6645,9 +7077,12 @@ final class SyncEngine
 				// HTTP request returned status code 404 (Not Found)
 				if (e.httpStatusCode == 404) {
 					// Stop application
-					log.log("\n\nOneDrive returned a 'HTTP 404 - Item not found'");
-					log.log("The item id to query was not found on OneDrive");
-					log.log("\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n");
+					// "OneDrive returned a 'HTTP 404 - Item not found' - gracefully handling error"
+					log.log(provideLanguageTranslation(languageIdentifier,315));
+					// "ERROR: The requested item to query was not found on OneDrive"
+					log.log(provideLanguageTranslation(languageIdentifier,302));
+					// "\nRemove your '", cfg.databaseFilePath, "' file and try to sync again\n"
+					log.log(provideLanguageTranslation(languageIdentifier,303), cfg.databaseFilePath, provideLanguageTranslation(languageIdentifier,304));
 				}
 				
 				// HTTP request returned status code 429 (Too Many Requests)
@@ -6667,7 +7102,7 @@ final class SyncEngine
 				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
 					// re-try the specific changes queries	
 					if (e.httpStatusCode == 504) {
-						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query OneDrive drive children - retrying applicable request");
+						log.log(provideLanguageTranslation(languageIdentifier,124));
 						log.vdebug("thisLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink) previously threw an error - retrying");
 						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
 						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
@@ -6698,7 +7133,8 @@ final class SyncEngine
 				//   /Level 1/Level 2/Level 3/Child Shared Folder/some folder/another folder
 				// But 'Child Shared Folder' is what is shared, thus '/Level 1/Level 2/Level 3/' is a potential information leak if logged.
 				// Plus, the application output now shows accuratly what is being shared - so that is a good thing.
-				log.vlog("Adding ", count(thisLevelChildren["value"].array), " OneDrive items for processing from ", pathForLogging);
+				// "Adding ", count(thisLevelChildren["value"].array), " OneDrive items for processing from ", pathForLogging
+				log.vlog(provideLanguageTranslation(languageIdentifier,305), count(thisLevelChildren["value"].array), provideLanguageTranslation(languageIdentifier,307), pathForLogging);
 			}
 			foreach (child; thisLevelChildren["value"].array) {
 				// add this child to the array of objects
@@ -6738,7 +7174,8 @@ final class SyncEngine
 	void listOneDriveBusinessSharedFolders()
 	{
 		// List OneDrive Business Shared Folders
-		log.log("\nListing available OneDrive Business Shared Folders:");
+		// "\nListing available OneDrive Business Shared Folders:"
+		log.log(provideLanguageTranslation(languageIdentifier,308));
 		// Query the GET /me/drive/sharedWithMe API
 		JSONValue graphQuery;
 		try {
@@ -6769,7 +7206,8 @@ final class SyncEngine
 		if (graphQuery.type() == JSONType.object) {
 			if (count(graphQuery["value"].array) == 0) {
 				// no shared folders returned
-				write("\nNo OneDrive Business Shared Folders were returned\n");
+				// "\nNo OneDrive Business Shared Folders were returned\n"
+				log.log(provideLanguageTranslation(languageIdentifier,309));
 			} else {
 				// shared folders were returned
 				log.vdebug("onedrive.getSharedWithMe API Response: ", graphQuery);
@@ -6813,10 +7251,11 @@ final class SyncEngine
 					}
 				}
 			}
-			write("\n");
+			writeln("");
 		} else {
 			// Log that an invalid JSON object was returned
-			log.error("ERROR: onedrive.getSharedWithMe call returned an invalid JSON Object");
+			// "ERROR: onedrive.getSharedWithMe call returned an invalid JSON Object"
+			log.error(provideLanguageTranslation(languageIdentifier,310));
 		}
 	}
 	
@@ -6830,7 +7269,8 @@ final class SyncEngine
 			calculatedPath = itemdb.computePath(thisDriveId, thisItemId);
 		} catch (core.exception.AssertError) {
 			// broken tree in the database, we cant compute the path for this item id, exit
-			log.error("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
+			// "ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database."
+			log.error(provideLanguageTranslation(languageIdentifier,311));
 			// Must exit here to preserve data
 			exit(-1);
 		}
