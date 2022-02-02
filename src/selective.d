@@ -373,6 +373,11 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 	log.vdebug("[F]exclude        = ", exclude);
 	log.vdebug("[F]excludeMatched = ", excludeMatched);
 	
+	// If exclude or excludeMatched is true, then finalResult has to be true
+	if ((exclude) || (excludeMatched)) {
+		finalResult = true;
+	}
+	
 	// results
 	if (finalResult) {
 		log.vdebug("Evaluation against 'sync_list' final result: EXCLUDED");
