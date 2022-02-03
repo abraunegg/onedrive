@@ -86,6 +86,7 @@ If your system utilises curl >= 7.62.0 curl defaults to prefer HTTP/2 over HTTP/
 
 ### Authorize the application with your OneDrive Account
 After installing the application you must authorize the application with your OneDrive Account. This is done by running the application without any additional command switches.
+Note that some companies require to explicitly add this app in [Microsoft MyApps portal](https://myapps.microsoft.com/). To add an (approved) app to your apps, click on the ellipsis in the top-right corner and choose "Request new apps". On the next page you can add this app. If its not listed, you should request through your ICTS.
 
 You will be asked to open a specific URL by using your web browser where you will have to login into your Microsoft Account and give the application the permission to access your files. After giving permission to the application, you will be redirected to a blank page. Copy the URI of the blank page into the application.
 ```text
