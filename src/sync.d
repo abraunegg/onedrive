@@ -6685,7 +6685,9 @@ final class SyncEngine
 		// query children
 		try {
 			// attempt API call
+			log.vdebug("Attempting Query: thisLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink)");
 			thisLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink);
+			log.vdebug("Query 'thisLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink)' performed successfully");
 		} catch (OneDriveException e) {
 			// OneDrive threw an error
 			log.vdebug("------------------------------------------------------------------");
@@ -6709,12 +6711,6 @@ final class SyncEngine
 				log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query OneDrive drive children");
 			}
 			
-			// HTTP request returned status code 500 (Internal Server Error)
-			if (e.httpStatusCode == 500) {
-				// display what the error is
-				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-			}
-			
 			// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
 			if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
 				// re-try the specific changes queries	
@@ -6730,7 +6726,7 @@ final class SyncEngine
 				log.vdebug("Retrying Query: thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink)");
 				thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink);	
 			} else {
-				// Default operation if not 404, 410, 429, 500 or 504 errors
+				// Default operation if not 404, 429 or 504 errors
 				// display what the error is
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 			}
