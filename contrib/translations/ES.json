@@ -1,0 +1,28 @@
+{
+	"language": "ES",
+	"list": [
+	{
+		"1": "No se ha encontrado ningún archivo de configuración del usuario o del sistema, utilizando los valores predeterminados de la aplicación",
+		"2": "Archivo de configuración del sistema cargado con éxito",
+		"3": "El archivo de configuración del sistema tiene errores - por favor, compruebe su configuración",
+		"4": "Archivo de configuración cargado con éxito",
+		"5": "El archivo de configuración tiene errores - por favor, compruebe su configuración",
+		"6": "Usando la opción de configuración para los puntos finales globales de Azure AD",
+		"7": "Usando la opción de configuración de Azure AD para los puntos finales del Gobierno de los Estados Unidos",
+		"8": "Usando la opción de configuración de Azure AD para los puntos finales del Gobierno de los Estados Unidos (DOD)",
+		"9": "Usando la opción de configuración para Azure AD Alemania",
+		"10": "Usando la opción de configuración para Azure AD China operado por 21Vianet",
+		"11": "Punto final de Azure AD desconocido: uso de puntos finales de Azure AD globales",
+		"12": "Clave desconocida en el archivo de configuración: ",
+		"13": "Línea de configuración malformada: ",
+		"14": "el archivo de configuración ha sido actualizado, comprobando si --resync es necesario",
+		"15": "Se ha detectado un cambio en la configuración de la aplicación que requiere de --resync",
+		"16": "DRY-RUN configurado. La salida siguiente muestra lo que 'habría' ocurrido",
+		"17": "Usando la dirección del archivo de registro: ",
+		"18": "El esquema de la base de datos ha cambiado, se necesita una resincronización",
+		"19": "Borrando el estado guardado ...",
+		"20": "ERROR: No se puede acceder al servicio API de Microsoft OneDrive, no se puede inicializar la aplicación"
+		
+		}
+	]
+}
