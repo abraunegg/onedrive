@@ -30,7 +30,11 @@ This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) cl
 ## What's missing
 *   Ability to encrypt/decrypt files on-the-fly when uploading/downloading files from OneDrive
 *   Support for Windows 'On-Demand' functionality so file is only downloaded when accessed locally
-*   A GUI for configuration management
+
+## External Enhancements
+*   A GUI for configuration management: [OneDrive Client for Linux GUI](https://github.com/bpozdena/OneDriveGUI)
+*   Colorful log output terminal modification: [OneDrive Client for Linux Colorful log Output](https://github.com/zzzdeb/dotfiles/blob/master/scripts/tools/onedrive_log)
+*   System Tray Icon: [OneDrive Client for Linux System Tray Icon](https://github.com/DanielBorgesOliveira/onedrive_tray)
 
 ## Frequently Asked Questions
 Refer to [Frequently Asked Questions](https://github.com/abraunegg/onedrive/wiki/Frequently-Asked-Questions)
