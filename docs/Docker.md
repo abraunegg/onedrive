@@ -173,13 +173,14 @@ docker run -it --restart unless-stopped --name onedrive_Work -v onedrive_conf_Wo
 If you are experienced with docker and onedrive, you can use the following script:
 
 ```bash
-# Update ONEDRIVE_DATA_DIR with correct existing OneDrive directory path
+# Update ONEDRIVE_DATA_DIR with correct OneDrive directory path
 ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
+mkdir -p ${ONEDRIVE_DATA_DIR} # Create directory if non-existant
 
 firstRun='-d'
 docker pull driveone/onedrive:latest
-docker inspect onedrive_conf > /dev/null || { docker volume create onedrive_conf; firstRun='-it'; }
-docker inspect onedrive > /dev/null && docker rm -f onedrive
+docker inspect onedrive_conf >/dev/null 2>&1 || { docker volume create onedrive_conf; firstRun='-it'; }
+docker inspect onedrive >/dev/null 2>&1 && docker rm -f onedrive
 docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:latest
 ```
 
