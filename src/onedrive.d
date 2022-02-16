@@ -1010,6 +1010,10 @@ final class OneDriveApi
 			response = post(url, request.toString());
 		} catch (OneDriveException e) {
 			displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+			
+			// We need to exit here, user needs to fix issue
+			log.error("ERROR: Unable to initialize subscriptions for updates. Please fix this issue.");
+			exit(-1);
 		}
 
 		// Save important subscription metadata including id and expiration
