@@ -1004,7 +1004,13 @@ final class OneDriveApi
  			"clientState": randomUUID().toString()
 		];
 		http.addRequestHeader("Content-Type", "application/json");
-		JSONValue response = post(url, request.toString());
+		JSONValue response;
+
+		try {
+			response = post(url, request.toString());
+		} catch (OneDriveException e) {
+			displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+		}
 
 		// Save important subscription metadata including id and expiration
 		subscriptionId = response["id"].str;
