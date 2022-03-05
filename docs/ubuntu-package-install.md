@@ -15,7 +15,7 @@ Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive
 ## Determine which instructions to use
 Ubuntu and its clones are based on various different releases, thus, you must use the correct instructions below, otherwise you may run into package dependancy issues and will be unable to install the client.
 
-### Step 1: Ensure your systen is up-to-date
+### Step 1: Ensure your system is up-to-date
 Use a script, similar to the following to ensure your system is updated correctly:
 ```text
 #!/bin/bash
