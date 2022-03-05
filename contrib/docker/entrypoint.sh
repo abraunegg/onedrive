@@ -23,7 +23,7 @@ else
   grep -qv root <( groups "${oduser}" ) || { echo 'ROOT level privileges prohibited!'; exit 1; }
 fi
 
-chown "${oduser}:${odgroup}" /onedrive/ /onedrive/conf
+chown "${oduser}:${odgroup}" /onedrive/data /onedrive/conf
 
 # Default parameters
 ARGS=(--monitor --confdir /onedrive/conf --syncdir /onedrive/data)
