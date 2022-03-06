@@ -636,7 +636,7 @@ int main(string[] args)
 	log.vdebug("Testing network to ensure network connectivity to Microsoft OneDrive Service");
 	online = testNetwork();
 	if (!online) {
-	// Cant initialise the API as we are not online
+		// Cant initialise the API as we are not online
 		if (!cfg.getValueBool("monitor")) {
 			// Running as --synchronize
 			log.error("Unable to reach Microsoft OneDrive API service, unable to initialize application\n");
@@ -689,10 +689,12 @@ int main(string[] args)
 				return EXIT_FAILURE;
 			}
 		}
-	}
-
-	// Initialize OneDrive, check for authorization
-	if (online) {
+	} else {
+		// Check application version and Initialize OneDrive API, check for authorization
+		// Check Application Version
+		log.vlog("Checking Application Version ...");
+		checkApplicationVersion();
+	
 		// we can only initialise if we are online
 		log.vlog("Initializing the OneDrive API ...");
 		oneDrive = new OneDriveApi(cfg);
