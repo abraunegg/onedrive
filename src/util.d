@@ -362,10 +362,8 @@ string getLatestReleaseVersion() {
 	
 	if ("tag_name" in json) {
 		// use the provided tag
-		// "tag_name": "vA.B.CC",
-		latestTag = json["tag_name"].str;
-		// strip 'v'
-		latestTag = strip(latestTag, "v");
+		// "tag_name": "vA.B.CC" and strip 'v'
+		latestTag = strip(json["tag_name"].str, "v");
 	} else {
 		// set to zeros
 		latestTag = "0.0.0";
