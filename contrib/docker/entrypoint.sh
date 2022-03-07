@@ -66,9 +66,16 @@ fi
 
 # Tell client to logout based on environment variable
 if [ "${ONEDRIVE_LOGOUT:=0}" == "1" ]; then
-   echo "# We are logging out to perform a reauthentication"
+   echo "# We are logging out"
    echo "# Adding --logout"
    ARGS=(--logout ${ARGS[@]})
+fi
+
+# Tell client to re-authenticate based on environment variable
+if [ "${ONEDRIVE_REAUTH:=0}" == "1" ]; then
+   echo "# We are logging out to perform a reauthentication"
+   echo "# Adding --reauth"
+   ARGS=(--reauth ${ARGS[@]})
 fi
 
 # Tell client to utilize auth files at the provided locations based on environment variable

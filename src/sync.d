@@ -320,7 +320,7 @@ final class SyncEngine
 			if (e.httpStatusCode == 401) {
 				// HTTP request returned status code 401 (Unauthorized)
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
+				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.\n");
 				// Must exit here
 				exit(-1);
 			}
@@ -359,7 +359,7 @@ final class SyncEngine
 			if (e.httpStatusCode == 401) {
 				// HTTP request returned status code 401 (Unauthorized)
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
+				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.\n");
 				// Must exit here
 				exit(-1);
 			}
@@ -670,7 +670,7 @@ final class SyncEngine
 				if (e.httpStatusCode == 401) {
 					// HTTP request returned status code 401 (Unauthorized)
 					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-					log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
+					log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.\n");
 					// Must exit here
 					exit(-1);
 				}
@@ -864,7 +864,7 @@ final class SyncEngine
 				if (e.httpStatusCode == 401) {
 					// HTTP request returned status code 401 (Unauthorized)
 					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-					log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
+					log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.\n");
 					// Must exit here
 					exit(-1);
 				}
@@ -5873,7 +5873,7 @@ final class SyncEngine
 				log.error("ERROR: Query of OneDrive for Office 365 Library Name failed");
 				if (e.httpStatusCode == 403) {
 					// Forbidden - most likely authentication scope needs to be updated
-					log.error("ERROR: Authentication scope needs to be updated. Use --logout and re-authenticate client.");
+					log.error("ERROR: Authentication scope needs to be updated. Use --reauth and re-authenticate client.");
 					return;
 				}
 				// HTTP request returned status code 429 (Too Many Requests)
@@ -6748,7 +6748,7 @@ final class SyncEngine
 			if (e.httpStatusCode == 401) {
 				// HTTP request returned status code 401 (Unauthorized)
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --logout and re-authorise this client.\n");
+				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.\n");
 				// Must exit here
 				exit(-1);
 			}

@@ -547,7 +547,7 @@ final class OneDriveApi
 				}
 				return true;
 			} else {
-				// --dry-run & --logout
+				// --dry-run & --reauth
 				return authorize();
 			}
 		}
@@ -1115,9 +1115,9 @@ final class OneDriveApi
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
 				// flag error and notify
-				log.errorAndNotify("\nERROR: Refresh token invalid, use --logout to authorize the client again.\n");
+				log.errorAndNotify("\nERROR: Refresh token invalid, use --reauth to authorize the client again.\n");
 				// set error message
-				e.msg ~= "\nRefresh token invalid, use --logout to authorize the client again";
+				e.msg ~= "\nRefresh token invalid, use --reauth to authorize the client again";
 			}
 		}
 	}

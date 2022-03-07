@@ -545,7 +545,7 @@ int main(string[] args)
 		cfg.setValueBool("resync", true);
 	}
 
-	// Handle --logout as separate item, do not 'resync' on a --logout / reauth
+	// Handle --logout as separate item, do not 'resync' on a --logout
 	if (cfg.getValueBool("logout")) {
 		log.vdebug("--logout requested");
 		log.log("Deleting the saved authentication status ...");
@@ -555,10 +555,19 @@ int main(string[] args)
 		// Exit
 		return EXIT_SUCCESS;
 	}
-
+	
+	// Handle --reauth to re-authenticate the client
+	if (cfg.getValueBool("reauth")) {
+		log.vdebug("--reauth requested");
+		log.log("Deleting the saved authentication status ... re-authentication requested");
+		if (!cfg.getValueBool("dry_run")) {
+			safeRemove(cfg.refreshTokenFilePath);
+		}
+	}
+	
 	// Handle --resync to remove local files
 	if (cfg.getValueBool("resync")) {
-		if (cfg.getValueBool("resync")) log.vdebug("--resync requested");
+		log.vdebug("--resync requested");
 		log.log("Deleting the saved application sync status ...");
 		if (!cfg.getValueBool("dry_run")) {
 			safeRemove(cfg.databaseFilePath);
@@ -1374,7 +1383,7 @@ bool initSyncEngine(SyncEngine sync)
 	} catch (OneDriveException e) {
 		if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
 			// Authorization is invalid
-			log.log("\nAuthorization token invalid, use --logout to authorize the client again\n");
+			log.log("\nAuthorization token invalid, use --reauth to authorize the client again\n");
 			return false;
 		}
 		if (e.httpStatusCode >= 500) {
