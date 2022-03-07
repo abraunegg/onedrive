@@ -319,7 +319,7 @@ If you want to change the defaults, you can copy and edit the included config fi
 **Example:**
 ```text
 mkdir -p ~/.config/onedrive
-cp ./config ~/.config/onedrive/config
+wget https://raw.githubusercontent.com/abraunegg/onedrive/master/config -O ~/.config/onedrive/config
 nano ~/.config/onedrive/config
 ```
 This file does not get created by default, and should only be created if you want to change the 'default' operational parameters.
