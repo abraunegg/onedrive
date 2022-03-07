@@ -853,7 +853,7 @@ final class OneDriveApi
 		checkAccessTokenExpired();
 		const(char)[] url;
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		url ~= "?select=size,malware,file,webUrl";
+		url ~= "?select=size,malware,file,webUrl,lastModifiedBy,lastModifiedDateTime";
 		return get(url);
 	}
 

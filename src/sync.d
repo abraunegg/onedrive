@@ -6104,8 +6104,8 @@ final class SyncEngine
 		} 
 	}
 	
-	// Query OneDrive for a URL path of a file
-	void queryOneDriveForFileURL(string localFilePath, string syncDir)
+	// Query OneDrive for file details of a given path
+	void queryOneDriveForFileDetails(string localFilePath, string syncDir, string outputType)
 	{
 		// Query if file is valid locally
 		if (exists(localFilePath)) {
@@ -6127,21 +6127,34 @@ final class SyncEngine
 						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 						return;
 					}
-
-					if ((fileDetails.type() == JSONType.object) && ("webUrl" in fileDetails)) {
-						// Valid JSON object
-						writeln(fileDetails["webUrl"].str);
+					
+					// What sort of response to we generate
+					// --get-file-link response
+					if (outputType == "URL") {
+						if ((fileDetails.type() == JSONType.object) && ("webUrl" in fileDetails)) {
+							// Valid JSON object
+							writeln(fileDetails["webUrl"].str);
+						}
 					}
+					
+					// --modified-by response
+					if (outputType == "ModifiedBy") {
+						if ((fileDetails.type() == JSONType.object) && ("lastModifiedBy" in fileDetails)) {
+							// Valid JSON object
+							writeln("Last modified:    ", fileDetails["lastModifiedDateTime"].str);
+							writeln("Last modified by: ", fileDetails["lastModifiedBy"]["user"]["displayName"].str);
+						}
+					}	
 				}
 			}
-			// was file found?
+			// was path found?
 			if (!fileInDB) {
 				// File has not been synced with OneDrive
-				log.error("File has not been synced with OneDrive: ", localFilePath);
+				log.error("Path has not been synced with OneDrive: ", localFilePath);
 			}
 		} else {
 			// File does not exist locally
-			log.error("File not found on local system: ", localFilePath);
+			log.error("Path not found on local system: ", localFilePath);
 		}
 	}
 	
