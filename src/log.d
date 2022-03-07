@@ -36,7 +36,7 @@ void init(string logDir)
 			// we got an error ..
 			writeln("\nUnable to access ", logFilePath);
 			writeln("Please manually create '",logFilePath, "' and set appropriate permissions to allow write access");
-			writeln("The requested client activity log will instead be located in your users home directory\n");
+			writeln("The requested client activity log will instead be located in your users home directory");
 		}
 	}
 }

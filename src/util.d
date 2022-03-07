@@ -388,7 +388,11 @@ void checkApplicationVersion() {
 		// application version is older than available on GitHub
 		if (applicationVersion < latestVersion) {
 			// application version is obsolete and unsupported
-			log.log("\nWARNING: Your onedrive client is obsolete and unsupported. Please upgrade your client version.\n");
+			writeln();
+			log.logAndNotify("WARNING: Your onedrive client version is obsolete and unsupported. Please upgrade your client version.");
+			log.vlog("Application version: ", applicationVersion);
+			log.vlog("Version available:   ", latestVersion);
+			writeln();
 		}
 	}
 }
