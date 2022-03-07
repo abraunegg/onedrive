@@ -6128,6 +6128,9 @@ final class SyncEngine
 						return;
 					}
 					
+					// debug output of response
+					log.vdebug("API Response: ", fileDetails);
+					
 					// What sort of response to we generate
 					// --get-file-link response
 					if (outputType == "URL") {
@@ -6143,6 +6146,10 @@ final class SyncEngine
 							// Valid JSON object
 							writeln("Last modified:    ", fileDetails["lastModifiedDateTime"].str);
 							writeln("Last modified by: ", fileDetails["lastModifiedBy"]["user"]["displayName"].str);
+							// if 'email' provided, add this to the output
+							if ("email" in fileDetails["lastModifiedBy"]["user"]) {
+								writeln("Email Address:    ", fileDetails["lastModifiedBy"]["user"]["email"].str);
+							}
 						}
 					}	
 				}
