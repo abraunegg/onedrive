@@ -355,19 +355,42 @@ string getFunctionName(alias func)() {
 string getLatestReleaseVersion() {
 	// Import curl just for this function
 	import std.net.curl;
-	auto content = get("https://api.github.com/repos/abraunegg/onedrive/releases/latest");
+	char[] content;
 	JSONValue json;
 	string latestTag;
-	json = content.parseJSON();
 	
-	if ("tag_name" in json) {
-		// use the provided tag
-		// "tag_name": "vA.B.CC" and strip 'v'
-		latestTag = strip(json["tag_name"].str, "v");
+	try {
+		content = get("https://api.github.com/repos/abraunegg/onedrive/releases/latest");
+	} catch (CurlException e) {
+		// curl generated an error - meaning we could not query GitHub
+		log.vdebug("Unable to query GitHub for latest release");
+	}
+	
+	try {
+		json = content.parseJSON();
+	} catch (JSONException e) {
+		// unable to parse the content JSON, set to blank JSON
+		log.vdebug("Unable to parse GitHub JSON response");
+		json = parseJSON("{}");
+	}
+	
+	// json has to be a valid JSON object
+	if (json.type() == JSONType.object){
+		if ("tag_name" in json) {
+			// use the provided tag
+			// "tag_name": "vA.B.CC" and strip 'v'
+			latestTag = strip(json["tag_name"].str, "v");
+		} else {
+			// set to latestTag zeros
+			log.vdebug("'tag_name' unavailable in JSON response. Setting latest GitHub release version to 0.0.0");
+			latestTag = "0.0.0";
+		}
 	} else {
-		// set to zeros
+		// JSONValue is not an object
+		log.vdebug("Invalid JSON Object. Setting latest GitHub release version to 0.0.0");
 		latestTag = "0.0.0";
 	}
+		
 	// return the latest github version
 	return latestTag;
 }
@@ -381,11 +404,7 @@ void checkApplicationVersion() {
 	
 	// display warning if not current
 	if (applicationVersion != latestVersion) {
-		// application version is not the latest version that is available ..
-		if (applicationVersion > latestVersion) {
-			// application version is newer than available release ...
-		}
-		// application version is older than available on GitHub
+		// is application version is older than available on GitHub
 		if (applicationVersion < latestVersion) {
 			// application version is obsolete and unsupported
 			writeln();
