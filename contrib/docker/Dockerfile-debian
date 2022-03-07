@@ -1,7 +1,7 @@
 # -*-Dockerfile-*-
 
-ARG DEBIAN_VERSION=buster
-ARG LDC_VERSION_MAIN=1.17.0
+ARG DEBIAN_VERSION=bullseye
+ARG LDC_VERSION_MAIN=1.28.1
 
 FROM debian:${DEBIAN_VERSION} AS builder-onedrive
 ARG LDC_VERSION_MAIN
@@ -12,8 +12,11 @@ RUN apt-get update \
 
 RUN ARCH="$(dpkg --print-architecture)" \
  && case "${ARCH}" in \
-       armhf|arm) \
+      aarch64|arm64) \
         BINARY_URL="https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION_MAIN}/ldc2-${LDC_VERSION_MAIN}-linux-aarch64.tar.xz"; \
+        ;; \
+      amd64|x86-64) \
+        BINARY_URL="https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION_MAIN}/ldc2-${LDC_VERSION_MAIN}-linux-x86_64.tar.xz"; \
         ;; \
       *) \
         echo "Unsupported arch: ${ARCH}"; \

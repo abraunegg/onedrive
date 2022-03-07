@@ -1,7 +1,7 @@
 # Run the OneDrive Client for Linux under Docker
 This client can be run as a Docker container, with 3 available options for you to choose from:
-1.  Container based on CentOS 7 - Docker Tag: latest
-2.  Container based on Debian Stretch - Docker Tag: stretch
+1.  Container based on Fedora 35 - Docker Tag: latest
+2.  Container based on Debian 11 - Docker Tag: debian
 3.  Container based on Alpine Linux - Docker Tag: alpine
 
 These containers offer a simple monitoring-mode service for the OneDrive Client for Linux.
@@ -10,8 +10,7 @@ The instructions below have been validated on:
 *   Red Hat Enterprise Linux 8.x 
 *   Ubuntu Server 20.04
 
-The instructions below will utilise the 'latest' tag, however this can be substituted for 'stretch' or 'alpine' if desired.
-
+The instructions below will utilise the 'latest' tag, however this can be substituted for 'debian' or 'alpine' if desired.
 
 ## Basic Setup
 ### 0. Install docker using your distribution platform's instructions
@@ -253,14 +252,14 @@ docker build . -t local-onedrive -f contrib/docker/Dockerfile
 ```
 
 There are alternate, smaller images available by building
-Dockerfile-stretch or Dockerfile-alpine.  These [multi-stage builder
+Dockerfile-debian or Dockerfile-alpine.  These [multi-stage builder
 pattern](https://docs.docker.com/develop/develop-images/multistage-build/)
 Dockerfiles require Docker version at least 17.05.
 
-#### How to build and run a custom Docker image based on Debian Stretch
+#### How to build and run a custom Docker image based on Debian
 ``` bash
-docker build . -t local-ondrive-stretch -f contrib/docker/Dockerfile-stretch
-docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" local-ondrive-stretch:latest
+docker build . -t local-ondrive-debian -f contrib/docker/Dockerfile-debian
+docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" local-ondrive-debian:latest
 ```
 
 #### How to build and run a custom Docker image based on Alpine Linux
@@ -283,6 +282,6 @@ docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/o
 
 #### How to build and run a custom Docker image for AARCH64 Platforms
 ``` bash
-docker build . -t local-onedrive-aarch64 -f contrib/docker/Dockerfile-aarch64
+docker build . -t local-onedrive-aarch64 -f contrib/docker/Dockerfile-debian
 docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" local-onedrive-aarch64:latest
 ```
