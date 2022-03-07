@@ -12,7 +12,6 @@ The instructions below have been validated on:
 
 The instructions below will utilise the 'latest' tag, however this can be substituted for 'debian' or 'alpine' if desired.
 
-
 ## Basic Setup
 ### 0. Install docker using your distribution platform's instructions
 1.  Ensure that SELinux has been disabled on your system. A reboot may be required to ensure that this is correctly disabled.
@@ -277,7 +276,7 @@ Compatible with:
 *    Raspberry Pi 3
 *    Raspberry Pi 4
 ``` bash
-docker build . -t local-onedrive-rpi -f contrib/docker/Dockerfile-debian
+docker build . -t local-onedrive-rpi -f contrib/docker/Dockerfile-rpi
 docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" local-ondrive-rpi:latest
 ```
 
