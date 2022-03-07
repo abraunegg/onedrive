@@ -689,8 +689,10 @@ int main(string[] args)
 				return EXIT_FAILURE;
 			}
 		}
-	} else {
-		// Check application version and Initialize OneDrive API, check for authorization
+	}
+	
+	// Check application version and Initialize OneDrive API, check for authorization
+	if (online) {
 		// Check Application Version
 		log.vlog("Checking Application Version ...");
 		checkApplicationVersion();
@@ -1142,9 +1144,12 @@ int main(string[] args)
 			bool performMonitor = true;
 			ulong monitorLoopFullCount = 0;
 			immutable auto checkInterval = dur!"seconds"(cfg.getValueLong("monitor_interval"));
+			immutable auto githubCheckInterval = dur!"seconds"(86400);
 			immutable long logInterval = cfg.getValueLong("monitor_log_frequency");
 			immutable long fullScanFrequency = cfg.getValueLong("monitor_fullscan_frequency");
 			MonoTime lastCheckTime = MonoTime.currTime();
+			MonoTime lastGitHubCheckTime = MonoTime.currTime();
+			
 			long logMonitorCounter = 0;
 			long fullScanCounter = 0;
 			// set fullScanRequired to true so that at application startup we perform a full walk
@@ -1205,6 +1210,14 @@ int main(string[] args)
 				//   Skipping uploading this new file as parent path is not in the database: target/2eVPInOMTFNXzRXeNMEoJch5OR9XpGby
 				// 'target' should be in the DB, it should also exist online, but because of --resync, it does not exist in the database thus parent check fails
 				if (notificationReceived || (currTime - lastCheckTime > checkInterval) || (monitorLoopFullCount == 0)) {
+					// Check Application Version against GitHub once per day
+					if (currTime - lastGitHubCheckTime > githubCheckInterval) {
+						// --monitor GitHub Application Version Check time expired
+						checkApplicationVersion();
+						// update when we have performed this check
+						lastGitHubCheckTime = MonoTime.currTime();
+					}
+					
 					// monitor sync loop
 					logOutputMessage = "################################################## NEW LOOP ##################################################";
 					if (displaySyncOptions) {
