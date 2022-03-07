@@ -296,6 +296,7 @@ final class Config
 		boolValues["display_sync_status"] = false;
 		boolValues["print_token"]         = false;
 		boolValues["logout"]              = false;
+		boolValues["reauth"]              = false;
 		boolValues["monitor"]             = false;
 		boolValues["synchronize"]         = false;
 		boolValues["force"]               = false;
@@ -408,6 +409,9 @@ final class Config
 				"print-token",
 					"Print the access token, useful for debugging",
 					&boolValues["print_token"],
+				"reauth",
+					"Reauthenticate the client with OneDrive",
+					&boolValues["reauth"],
 				"resync",
 					"Forget the last saved state, perform a full sync",
 					&boolValues["resync"],

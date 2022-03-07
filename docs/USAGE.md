@@ -301,7 +301,7 @@ ERROR: OneDrive returned a 'HTTP 401 Unauthorized' - Cannot Initialize Sync Engi
 ```
 To re-authorise the client, follow the steps below:
 1.   If running the client as a service (init.d or systemd), stop the service
-2.   Run the command `onedrive --logout`. This will clean up the previous authorisation, and will prompt you to re-authorise as per initial configuration.
+2.   Run the command `onedrive --reauth`. This will clean up the previous authorisation, and will prompt you to re-authorise the client as per initial configuration.
 3.   Restart the client if running as a service or perform a manual sync
 
 The application will now sync with OneDrive with the new credentials.
@@ -658,7 +658,7 @@ application_id = "22c49a0d-d21c-4792-aed1-8f163c982546"
 ```
 **Note:** The application will now use the older 'skilion' client identifier, however this may increase your chances of getting a OneDrive 429 error.
 
-**Note:** After changing the 'application_id' you will need to restart any 'onedrive' process you have running, and potentially issue a `--logout` to re-auth the client with this updated application ID.
+**Note:** After changing the 'application_id' you will need to restart any 'onedrive' process you have running, and potentially issue a `--reauth` to re-authenticate the client with this updated application ID.
 
 
 ### How to 'skip' directories from syncing?
@@ -1106,6 +1106,8 @@ Options:
       Maximum amount of time (in seconds) an operation is allowed to take
   --print-token
       Print the access token, useful for debugging
+  --reauth
+      Reauthenticate the client with OneDrive
   --remove-directory ARG
       Remove a directory on OneDrive - no sync will be performed.
   --remove-source-files

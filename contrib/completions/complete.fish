@@ -25,6 +25,7 @@ complete -c onedrive -l no-remote-delete -d 'Do not delete local file deletes fr
 complete -c onedrive -l operation-timeout -d 'Specify the maximum amount of time (in seconds) an operation is allowed to take.'
 complete -c onedrive -l print-token -d 'Print the access token, useful for debugging.'
 complete -c onedrive -l remote-directory -d 'Remove a directory on OneDrive - no sync will be performed.'
+complete -c onedrive -l reauth -d 'Reauthenticate the client with OneDrive.'
 complete -c onedrive -l resync -d 'Forget the last saved state, perform a full sync.'
 complete -c onedrive -l single-directory -d 'Specify a single local directory within the OneDrive root to sync.'
 complete -c onedrive -l skip-dot-files -d 'Skip dot files and folders from syncing.'
