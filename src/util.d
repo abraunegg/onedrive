@@ -351,6 +351,52 @@ string getFunctionName(alias func)() {
     return __traits(identifier, __traits(parent, func)) ~ "()\n";
 }
 
+// Get the latest release version from GitHub
+string getLatestReleaseVersion() {
+	// Import curl just for this function
+	import std.net.curl;
+	auto content = get("https://api.github.com/repos/abraunegg/onedrive/releases/latest");
+	JSONValue json;
+	string latestTag;
+	json = content.parseJSON();
+	
+	if ("tag_name" in json) {
+		// use the provided tag
+		// "tag_name": "vA.B.CC" and strip 'v'
+		latestTag = strip(json["tag_name"].str, "v");
+	} else {
+		// set to zeros
+		latestTag = "0.0.0";
+	}
+	// return the latest github version
+	return latestTag;
+}
+
+// Check the application version versus GitHub latestTag
+void checkApplicationVersion() {
+	// calculate if the client is current version or not
+	string latestVersion = strip(getLatestReleaseVersion());
+	auto currentVersionArray = strip(strip(import("version"), "v")).split("-");
+	string applicationVersion = currentVersionArray[0];
+	
+	// display warning if not current
+	if (applicationVersion != latestVersion) {
+		// application version is not the latest version that is available ..
+		if (applicationVersion > latestVersion) {
+			// application version is newer than available release ...
+		}
+		// application version is older than available on GitHub
+		if (applicationVersion < latestVersion) {
+			// application version is obsolete and unsupported
+			writeln();
+			log.logAndNotify("WARNING: Your onedrive client version is obsolete and unsupported. Please upgrade your client version.");
+			log.vlog("Application version: ", applicationVersion);
+			log.vlog("Version available:   ", latestVersion);
+			writeln();
+		}
+	}
+}
+
 // Unit Tests
 unittest
 {
