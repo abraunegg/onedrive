@@ -23,8 +23,6 @@ else
   grep -qv root <( groups "${oduser}" ) || { echo 'ROOT level privileges prohibited!'; exit 1; }
 fi
 
-chown "${oduser}:${odgroup}" /onedrive/data /onedrive/conf
-
 # Default parameters
 ARGS=(--monitor --confdir /onedrive/conf --syncdir /onedrive/data)
 echo "Base Args: ${ARGS}"
@@ -97,4 +95,10 @@ if [ ${#} -gt 0 ]; then
 fi
 
 echo "# Launching onedrive"
-exec gosu "${oduser}" /usr/local/bin/onedrive "${ARGS[@]}"
+# Only switch user if not running as target uid (ie. Docker)
+if [ "$ONEDRIVE_UID" = "$(id -u)" ]; then
+   /usr/local/bin/onedrive "${ARGS[@]}"
+else
+   chown "${oduser}:${odgroup}" /onedrive/data /onedrive/conf
+   exec gosu "${oduser}" /usr/local/bin/onedrive "${ARGS[@]}"
+fi
