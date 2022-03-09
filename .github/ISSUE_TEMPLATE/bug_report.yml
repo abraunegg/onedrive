@@ -24,6 +24,7 @@ body:
     description: |
       * What is your Operating System (`uname -a`)
       * Output of: (`cat /etc/redhat-release`) or (`lsb_release -a`)
+    render: shell
   validations:
     required: true
     
@@ -70,6 +71,7 @@ body:
     label: What is your OneDrive Application Configuration
     description: |
       * What is your Application Configuration (`onedrive --display-config`)?
+    render: shell
   validations:
     required: true
 
@@ -79,6 +81,7 @@ body:
     label: What is your 'curl' version
     description: |
       * What is your output of (`curl --version`)?
+    render: shell
   validations:
     required: true
     
@@ -101,6 +104,7 @@ body:
     label: What are all your system 'mount points'
     description: |
       * What is your output of (`mount`)?
+    render: shell
   validations:
     required: true
     
@@ -110,6 +114,7 @@ body:
     label: What are all your local file system partition types
     description: |
       * What is your output of (`lsblk -f`)?
+    render: shell
   validations:
     required: true
     
@@ -143,6 +148,7 @@ body:
       Run the application in a separate terminal window or SSH session and provide the entire application output including the error & crash.
       
       Please also generate a full debug log whilst reproducing the issue as per [https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support](https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support) and email to support@mynas.com.au
+    render: shell
   validations:
     required: true
     
@@ -159,11 +165,12 @@ body:
     label: Other Log Information or Details
     description: |
       If applicable, add the relevant output from `dmesg` or similar.
+    render: shell
 
 - type: textarea
   id: additionalContext
   attributes:
     label: Additional context
     description: |
-      Add any other relevant context for the problem.
+      Add any other relevant additional context for the problem.
       
