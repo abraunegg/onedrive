@@ -7,8 +7,7 @@ This client can be run as a Podman container, with 3 available options for you t
 These containers offer a simple monitoring-mode service for the OneDrive Client for Linux.
 
 The instructions below have been validated on:
-*   Red Hat Enterprise Linux 8.x 
-*   Ubuntu Server 20.04
+*   Fedora 35
 
 The instructions below will utilise the 'latest' tag, however this can be substituted for 'stretch' or 'alpine' if desired. The below instructions for podman have only been tested as the root user while running the containers themselves as non-root users.
 
