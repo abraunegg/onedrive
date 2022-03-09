@@ -853,7 +853,7 @@ final class OneDriveApi
 		checkAccessTokenExpired();
 		const(char)[] url;
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		url ~= "?select=size,malware,file,webUrl";
+		url ~= "?select=size,malware,file,webUrl,lastModifiedBy,lastModifiedDateTime";
 		return get(url);
 	}
 
@@ -1158,8 +1158,13 @@ final class OneDriveApi
 	{
 		// Threshold for displaying download bar
 		long thresholdFileSize = 4 * 2^^20; // 4 MiB
-		// open file as write in binary mode
-		auto file = File(filename, "wb");
+		
+		// To support marking of partially-downloaded files, 
+		string originalFilename = filename;
+		string downloadFilename = filename ~ ".partial";
+		
+		// open downloadFilename as write in binary mode
+		auto file = File(downloadFilename, "wb");
 
 		// function scopes
 		scope(exit) {
@@ -1252,6 +1257,9 @@ final class OneDriveApi
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 			}
 		}
+
+		// Rename downloaded file
+		rename(downloadFilename, originalFilename);
 
 		// Check the HTTP response code, which, if a 429, will also check response headers
 		checkHttpCode();
