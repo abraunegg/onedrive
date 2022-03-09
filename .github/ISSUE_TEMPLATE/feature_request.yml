@@ -5,8 +5,9 @@ labels: ["Feature Request"]
 body:
 - type: markdown
   attributes:
-    value:
-    
+    value: |
+      Suggest an idea for this project
+      
 - type: textarea
   id: featureDescription
   attributes:
