@@ -22,7 +22,7 @@ body:
   attributes:
     label: Operating System Details
     description: |
-      * What is your Operating System (`uname -a`)?
-      * Output of: (`cat /etc/redhat-release`) or (`lsb_release -a`) 
-   validations:
+      * What is your Operating System (`uname -a`)
+      * Output of: (`cat /etc/redhat-release`) or (`lsb_release -a`)
+  validations:
     required: true
