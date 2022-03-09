@@ -29,7 +29,7 @@ body:
 - type: dropdown
   id: installMethod
   attributes:
-    label: Installation Method
+    label: Client Installation Method
     description: | 
       How did you install the client?
     multiple: false
@@ -37,5 +37,28 @@ body:
       - Fron Source
       - From Distribution Package
       - From 3rd Party Source (PPA, OpenSuSE Build Service etc)
+  validations:
+    required: true
+    
+- type: dropdown
+  id: accountType
+  attributes:
+    label: OneDrive Account Type
+    description: |
+      What is your OneDrive Account Type?
+    multiple: false
+    options:
+      - Personal
+      - Business | Office365
+      - SharePoint
+  validations:
+    required: true
+
+- type: input
+  id: applicationVersion
+  attributes:
+    label: What is your OneDrive Application Version
+    description: |
+      * What is your 'onedrive' client version (`onedrive --version`)?
   validations:
     required: true
