@@ -9,9 +9,9 @@ body:
       Before submitting a bug report, please ensure you are running the latest 'onedrive' client as built from 'master' and compile by using the latest available DMD or LDC compiler. Refer to the the [INSTALL](https://github.com/abraunegg/onedrive/blob/master/docs/INSTALL.md) document on how to build the client for your system.
       
 - type: textarea
-  id: description
+  id: bugDescription
   attributes:
-    label: Describe the bug:
+    label: Describe the bug
     description: |
       Add a clear and concise description of what you think the bug is.
   validations:
@@ -20,7 +20,7 @@ body:
 - type: textarea
   id: system
   attributes:
-    label: Operating System Details:
+    label: Operating System Details
     description: |
       * What is your Operating System (`uname -a`)?
       * Output of: (`cat /etc/redhat-release`) or (`lsb_release -a`) 
@@ -30,7 +30,7 @@ body:
 - type: dropdown
   id: installMethod
   attributes:
-    label: Installation Method:
+    label: Installation Method
     description: | 
       How did you install the client?
     multiple: true
@@ -44,7 +44,7 @@ body:
 - type: dropdown
   id: accountType
   attributes:
-    label: OneDrive Account Type:
+    label: OneDrive Account Type
     description: |
       What is your OneDrive Account Type?
     multiple: true
@@ -58,7 +58,7 @@ body:
 - type: input
   id: applicationVersion
   attributes:
-    label: What is your OneDrive Application Version:
+    label: What is your OneDrive Application Version
     description: |
       * What is your 'onedrive' version (`onedrive --version`)?
   validations:
@@ -67,7 +67,7 @@ body:
 - type: textarea
   id: applicationConfig
   attributes:
-    label: What is your OneDrive Application Configuration:
+    label: What is your OneDrive Application Configuration
     description: |
       * What is your Application Configuration (`onedrive --display-config`)?
    validations:
@@ -76,7 +76,7 @@ body:
 - type: textarea
   id: curlVersion
   attributes:
-    label: What is your 'curl' version:
+    label: What is your 'curl' version
     description: |
       * What is your output of (`curl --version`)?
    validations:
@@ -85,7 +85,7 @@ body:
 - type: dropdown
   id: syncdirLocation
   attributes:
-    label: : Where is your 'sync_dir' located:
+    label: : Where is your 'sync_dir' located
     description: |
       Is your 'sync_dir' a local directory or on a network mount point?
     multiple: true
@@ -98,7 +98,7 @@ body:
 - type: textarea
   id: mountPoints
   attributes:
-    label: What are all your system 'mount points':
+    label: What are all your system 'mount points'
     description: |
       * What is your output of (`mount`)?
    validations:
@@ -107,7 +107,7 @@ body:
 - type: textarea
   id: mountPoints
   attributes:
-    label: What are all your local file system partition types:
+    label: What are all your local file system partition types
     description: |
       * What is your output of (`lsblk -f`)?
    validations:
@@ -116,7 +116,7 @@ body:
 - type: textarea
   id: reproduce
   attributes:
-    label: How do you use 'onedrive':
+    label: How do you use 'onedrive'
     description: |
       Explain your entire configuration setup - is the OneDrive folder shared with any other system, shared with any other platform at the same time, is the OneDrive account you use shared across multiple systems / platforms / Operating Systems and in use at the same time
   validations:
@@ -125,7 +125,7 @@ body:
 - type: textarea
   id: reproduce
   attributes:
-    label: Steps to reproduce the behaviour:
+    label: Steps to reproduce the behaviour
     description: |
       List the steps required to reproduce the issue.
   validations:
