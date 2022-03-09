@@ -5,8 +5,7 @@ body:
 - type: markdown
   attributes:
     value: |
-      **Note:**
-      Before submitting a bug report, please ensure you are running the latest 'onedrive' client as built from 'master' and compile by using the latest available DMD or LDC compiler. Refer to the the [INSTALL](https://github.com/abraunegg/onedrive/blob/master/docs/INSTALL.md) document on how to build the client for your system.
+      **Note:** Before submitting a bug report, please ensure you are running the latest 'onedrive' client as built from 'master' and compile by using the latest available DMD or LDC compiler. Refer to the the [INSTALL](https://github.com/abraunegg/onedrive/blob/master/docs/INSTALL.md) document on how to build the client for your system.
       
 - type: textarea
   id: bugDescription
@@ -24,5 +23,19 @@ body:
     description: |
       * What is your Operating System (`uname -a`)
       * Output of: (`cat /etc/redhat-release`) or (`lsb_release -a`)
+  validations:
+    required: true
+    
+- type: dropdown
+  id: installMethod
+  attributes:
+    label: Installation Method
+    description: | 
+      How did you install the client?
+    multiple: true
+    options:
+      - Fron Source
+      - From Distribution Package
+      - From 3rd Party Source (PPA, OpenSuSE Build Service etc)
   validations:
     required: true
