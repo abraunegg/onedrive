@@ -62,3 +62,34 @@ body:
       * What is your 'onedrive' client version (`onedrive --version`)?
   validations:
     required: true
+    
+- type: textarea
+  id: applicationConfig
+  attributes:
+    label: What is your OneDrive Application Configuration
+    description: |
+      * What is your Application Configuration (`onedrive --display-config`)?
+  validations:
+    required: true
+
+- type: textarea
+  id: curlVersion
+  attributes:
+    label: What is your 'curl' version
+    description: |
+      * What is your output of (`curl --version`)?
+  validations:
+    required: true
+    
+- type: dropdown
+  id: syncdirLocation
+  attributes:
+    label: : Where is your 'sync_dir' located
+    description: |
+      Is your 'sync_dir' a local directory or on a network mount point?
+    multiple: false
+    options:
+      - Local
+      - Network
+  validations:
+    required: true
