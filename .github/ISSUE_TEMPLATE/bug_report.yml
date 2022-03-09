@@ -80,3 +80,16 @@ body:
       * What is your output of (`curl --version`)?
   validations:
     required: true
+    
+- type: dropdown
+  id: syncdirLocation
+  attributes:
+    label: : Where is your 'sync_dir' located
+    description: |
+      Is your 'sync_dir' a local directory or on a network mount point?
+    multiple: false
+    options:
+      - Local
+      - Network
+  validations:
+    required: true
