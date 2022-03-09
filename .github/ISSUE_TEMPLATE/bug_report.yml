@@ -84,12 +84,21 @@ body:
 - type: dropdown
   id: syncdirLocation
   attributes:
-    label: : Where is your 'sync_dir' located
+    label: Where is your 'sync_dir' located
     description: |
       Is your 'sync_dir' a local directory or on a network mount point?
     multiple: false
     options:
       - Local
       - Network
+  validations:
+    required: true
+    
+- type: textarea
+  id: mountPoints
+  attributes:
+    label: What are all your system 'mount points'
+    description: |
+      * What is your output of (`mount`)?
   validations:
     required: true
