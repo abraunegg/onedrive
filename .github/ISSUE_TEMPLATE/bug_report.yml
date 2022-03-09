@@ -32,7 +32,7 @@ body:
     label: Installation Method
     description: | 
       How did you install the client?
-    multiple: true
+    multiple: false
     options:
       - Fron Source
       - From Distribution Package
