@@ -726,7 +726,7 @@ int main(string[] args)
 
 	// create-directory, remove-directory, source-directory, destination-directory
 	// these are activities that dont perform a sync, so to not generate an error message for these items either
-	if (((cfg.getValueString("create_directory") != "") || (cfg.getValueString("remove_directory") != "")) || ((cfg.getValueString("source_directory") != "") && (cfg.getValueString("destination_directory") != "")) || (cfg.getValueString("get_file_link") != "") || (cfg.getValueString("create_share_link") != "") || (cfg.getValueString("get_o365_drive_id") != "") || cfg.getValueBool("display_sync_status") || cfg.getValueBool("list_business_shared_folders")) {
+	if (((cfg.getValueString("create_directory") != "") || (cfg.getValueString("remove_directory") != "")) || ((cfg.getValueString("source_directory") != "") && (cfg.getValueString("destination_directory") != "")) || (cfg.getValueString("get_file_link") != "") || (cfg.getValueString("modified_by") != "") || (cfg.getValueString("create_share_link") != "") || (cfg.getValueString("get_o365_drive_id") != "") || cfg.getValueBool("display_sync_status") || cfg.getValueBool("list_business_shared_folders")) {
 		performSyncOK = true;
 	}
 
@@ -996,10 +996,19 @@ int main(string[] args)
 		return EXIT_SUCCESS;
 	}
 
-	// Are we obtaining the URL path for a synced file?
+	// --get-file-link - Are we obtaining the URL path for a synced file?
 	if (cfg.getValueString("get_file_link") != "") {
 		// Query OneDrive for the file link
-		sync.queryOneDriveForFileURL(cfg.getValueString("get_file_link"), syncDir);
+		sync.queryOneDriveForFileDetails(cfg.getValueString("get_file_link"), syncDir, "URL");
+		// Exit application
+		// Use exit scopes to shutdown API
+		return EXIT_SUCCESS;
+	}
+	
+	// --modified-by - Are we listing the modified-by details of a provided path?
+	if (cfg.getValueString("modified_by") != "") {
+		// Query OneDrive for the file link
+		sync.queryOneDriveForFileDetails(cfg.getValueString("modified_by"), syncDir, "ModifiedBy");
 		// Exit application
 		// Use exit scopes to shutdown API
 		return EXIT_SUCCESS;

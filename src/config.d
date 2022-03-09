@@ -286,6 +286,7 @@ final class Config
 		stringValues["create_share_link"] = "";
 		stringValues["destination_directory"] = "";
 		stringValues["get_file_link"]     = "";
+		stringValues["modified_by"]       = "";
 		stringValues["get_o365_drive_id"] = "";
 		stringValues["remove_directory"]  = "";
 		stringValues["single_directory"]  = "";
@@ -388,6 +389,9 @@ final class Config
 				"min-notify-changes",
 					"Minimum number of pending incoming changes necessary to trigger a desktop notification",
 					&longValues["min_notify_changes"],
+				"modified-by",
+					"Display the last modified by details of a given path",
+					&stringValues["modified_by"],
 				"monitor|m",
 					"Keep monitoring for local and remote changes",
 					&boolValues["monitor"],
@@ -721,6 +725,7 @@ void outputLongHelp(Option[] opt)
 		"--get-O365-drive-id",
 		"--log-dir",
 		"--min-notify-changes",
+		"--modified-by",
 		"--monitor-interval",
 		"--monitor-log-frequency",
 		"--monitor-fullscan-frequency",
