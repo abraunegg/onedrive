@@ -105,7 +105,7 @@ body:
     required: true
 
 - type: textarea
-  id: mountPoints
+  id: partitionTypes
   attributes:
     label: What are all your local file system partition types
     description: |
@@ -114,7 +114,7 @@ body:
     required: true
 
 - type: textarea
-  id: reproduce
+  id: usageDetails
   attributes:
     label: How do you use 'onedrive'
     description: |
@@ -123,36 +123,38 @@ body:
     required: true
 
 - type: textarea
-  id: reproduce
+  id: howToReproduce
   attributes:
     label: Steps to reproduce the behaviour
     description: |
-      List the steps required to reproduce the issue.
+      List all the steps required to reproduce the issue.
+      
+      If issue is replicated by a specific 'file' or 'path' please archive the file and path tree & email to support@mynas.com.au
   validations:
     required: true
 
 - type: textarea
-  id: system
+  id: applicationVerboseLog
   attributes:
-    label: System
+    label: Complete Verbose Log Output
     description: |
-      Copy and paste the results of the raspinfo command in to this section.
-      Alternatively, copy and paste a pastebin link, or add answers to the following questions:
-      * Which OS and version (`cat /etc/rpi-issue`)?
-      * Which firmware version (`vcgencmd version`)?
-      * Which kernel version (`uname -a`)?
+      A clear and full log of the problem when running the application in the following manner (ie, not in monitor mode): (`onedrive --synchronize --verbose <any of your other needed options>`)
+      
+      Run the application in a separate terminal window or SSH session and provide the entire application output including the error & crash.
+      
+      Please also generate a full debug log whilst reproducing the issue as per [https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support](https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support) and email to support@mynas.com.au
   validations:
     required: true
 
 - type: textarea
-  id: logs
+  id: otherLogs
   attributes:
-    label: Logs
+    label: Other Log Information or Details
     description: |
       If applicable, add the relevant output from `dmesg` or similar.
 
 - type: textarea
-  id: additional
+  id: additionalContext
   attributes:
     label: Additional context
     description: |
