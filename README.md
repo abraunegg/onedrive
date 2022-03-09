@@ -75,3 +75,7 @@ Refer to [docs/national-cloud-deployments.md](https://github.com/abraunegg/onedr
 
 ### Docker support
 Refer to [docs/Docker.md](https://github.com/abraunegg/onedrive/blob/master/docs/Docker.md)
+
+### Podman support
+Refer to [docs/Podman.md](https://github.com/abraunegg/onedrive/blob/master/docs/Podman.md)
+

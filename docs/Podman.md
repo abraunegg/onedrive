@@ -1,8 +1,8 @@
 # Run the OneDrive Client for Linux under Podman
 This client can be run as a Podman container, with 3 available options for you to choose from:
-1.  Container based on CentOS 7 - Tag: latest
-2.  Container based on Debian Stretch - Tag: stretch
-3.  Container based on Alpine Linux - Tag: alpine
+1.  Container based on Fedora 35 - Docker Tag: latest
+2.  Container based on Debian 11 - Docker Tag: debian
+3.  Container based on Alpine Linux - Docker Tag: alpine
 
 These containers offer a simple monitoring-mode service for the OneDrive Client for Linux.
 
