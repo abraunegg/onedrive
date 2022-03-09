@@ -1092,6 +1092,8 @@ Options:
       Logout the current user
   --min-notify-changes ARG
       Minimum number of pending incoming changes necessary to trigger a desktop notification
+  --modified-by ARG
+      Display the last modified by details of a given path
   --monitor -m
       Keep monitoring for local and remote changes
   --monitor-fullscan-frequency ARG
