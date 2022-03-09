@@ -62,7 +62,6 @@ body:
     label: What is your OneDrive Application Version
     description: |
       * What is your 'onedrive' client version (`onedrive --version`)?
-    render: shell
   validations:
     required: true
     
