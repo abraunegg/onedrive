@@ -102,3 +102,32 @@ body:
       * What is your output of (`mount`)?
   validations:
     required: true
+    
+- type: textarea
+  id: partitionTypes
+  attributes:
+    label: What are all your local file system partition types
+    description: |
+      * What is your output of (`lsblk -f`)?
+  validations:
+    required: true
+    
+- type: textarea
+  id: usageDetails
+  attributes:
+    label: How do you use 'onedrive'
+    description: |
+      Explain your entire configuration setup - is the OneDrive folder shared with any other system, shared with any other platform at the same time, is the OneDrive account you use shared across multiple systems / platforms / Operating Systems and in use at the same time
+  validations:
+    required: true
+    
+- type: textarea
+  id: howToReproduce
+  attributes:
+    label: Steps to reproduce the behaviour
+    description: |
+      List all the steps required to reproduce the issue.
+      
+      If issue is replicated by a specific 'file' or 'path' please archive the file and path tree & email to support@mynas.com.au
+  validations:
+    required: true
