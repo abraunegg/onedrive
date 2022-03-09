@@ -1,0 +1,169 @@
+name: "Bug Report"
+description: Create a Bug Report to help us fix your issue
+title: "[Bug:] "
+labels: ["Bug"]
+body:
+- type: markdown
+  attributes:
+    value: |
+      **Note:** Before submitting a bug report, please ensure you are running the latest 'onedrive' client as built from 'master' and compile by using the latest available DMD or LDC compiler. Refer to the the [INSTALL](https://github.com/abraunegg/onedrive/blob/master/docs/INSTALL.md) document on how to build the client for your system.
+      
+- type: textarea
+  id: bugDescription
+  attributes:
+    label: Describe the bug
+    description: |
+      Add a clear and concise description of what you think the bug is.
+  validations:
+    required: true
+
+- type: textarea
+  id: operatingSystemDetails
+  attributes:
+    label: Operating System Details
+    description: |
+      * What is your Operating System (`uname -a`)
+      * Output of: (`cat /etc/redhat-release`) or (`lsb_release -a`)
+  validations:
+    required: true
+    
+- type: dropdown
+  id: installMethod
+  attributes:
+    label: Client Installation Method
+    description: | 
+      How did you install the client?
+    multiple: false
+    options:
+      - Fron Source
+      - From Distribution Package
+      - From 3rd Party Source (PPA, OpenSuSE Build Service etc)
+  validations:
+    required: true
+    
+- type: dropdown
+  id: accountType
+  attributes:
+    label: OneDrive Account Type
+    description: |
+      What is your OneDrive Account Type?
+    multiple: false
+    options:
+      - Personal
+      - Business | Office365
+      - SharePoint
+  validations:
+    required: true
+
+- type: input
+  id: applicationVersion
+  attributes:
+    label: What is your OneDrive Application Version
+    description: |
+      * What is your 'onedrive' client version (`onedrive --version`)?
+  validations:
+    required: true
+    
+- type: textarea
+  id: applicationConfig
+  attributes:
+    label: What is your OneDrive Application Configuration
+    description: |
+      * What is your Application Configuration (`onedrive --display-config`)?
+  validations:
+    required: true
+
+- type: textarea
+  id: curlVersion
+  attributes:
+    label: What is your 'curl' version
+    description: |
+      * What is your output of (`curl --version`)?
+  validations:
+    required: true
+    
+- type: dropdown
+  id: syncdirLocation
+  attributes:
+    label: Where is your 'sync_dir' located
+    description: |
+      Is your 'sync_dir' a local directory or on a network mount point?
+    multiple: false
+    options:
+      - Local
+      - Network
+  validations:
+    required: true
+    
+- type: textarea
+  id: mountPoints
+  attributes:
+    label: What are all your system 'mount points'
+    description: |
+      * What is your output of (`mount`)?
+  validations:
+    required: true
+    
+- type: textarea
+  id: partitionTypes
+  attributes:
+    label: What are all your local file system partition types
+    description: |
+      * What is your output of (`lsblk -f`)?
+  validations:
+    required: true
+    
+- type: textarea
+  id: usageDetails
+  attributes:
+    label: How do you use 'onedrive'
+    description: |
+      Explain your entire configuration setup - is the OneDrive folder shared with any other system, shared with any other platform at the same time, is the OneDrive account you use shared across multiple systems / platforms / Operating Systems and in use at the same time
+  validations:
+    required: true
+    
+- type: textarea
+  id: howToReproduce
+  attributes:
+    label: Steps to reproduce the behaviour
+    description: |
+      List all the steps required to reproduce the issue.
+      
+      If issue is replicated by a specific 'file' or 'path' please archive the file and path tree & email to support@mynas.com.au
+  validations:
+    required: true
+    
+- type: textarea
+  id: applicationVerboseLog
+  attributes:
+    label: Complete Verbose Log Output
+    description: |
+      A clear and full log of the problem when running the application in the following manner (ie, not in monitor mode): (`onedrive --synchronize --verbose <any of your other needed options>`)
+      
+      Run the application in a separate terminal window or SSH session and provide the entire application output including the error & crash.
+      
+      Please also generate a full debug log whilst reproducing the issue as per [https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support](https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support) and email to support@mynas.com.au
+  validations:
+    required: true
+    
+- type: textarea
+  id: screenshots
+  attributes:
+    label: Screenshots
+    description: |
+      If applicable, add screenshots to help explain your problem.
+      
+- type: textarea
+  id: otherLogs
+  attributes:
+    label: Other Log Information or Details
+    description: |
+      If applicable, add the relevant output from `dmesg` or similar.
+
+- type: textarea
+  id: additionalContext
+  attributes:
+    label: Additional context
+    description: |
+      Add any other relevant context for the problem.
+      
