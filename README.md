@@ -9,7 +9,7 @@ A free Microsoft OneDrive Client which supports OneDrive Personal, OneDrive for 
 
 This powerful and highly configurable client can run on all major Linux distributions, FreeBSD, or as a Docker container. It supports one-way and two-way sync capabilities and securely connects to Microsoft OneDrive services.
 
-This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) client which was abandoned in 2018.
+This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) client, which the developer has confirmed he has no desire to maintain or support the client ([reference](https://github.com/skilion/onedrive/issues/518#issuecomment-717604726)). This fork has been in active development since mid 2018.
 
 ## Features
 *   State caching
