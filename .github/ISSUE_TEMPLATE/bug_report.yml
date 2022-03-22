@@ -36,7 +36,7 @@ body:
       How did you install the client?
     multiple: false
     options:
-      - Fron Source
+      - From Source
       - From Distribution Package
       - From 3rd Party Source (PPA, OpenSuSE Build Service etc)
   validations:
