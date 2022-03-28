@@ -255,6 +255,11 @@ This is because, when the package is installed, the following symbolic link is c
 Created symlink /etc/systemd/user/default.target.wants/onedrive.service → /usr/lib/systemd/user/onedrive.service.
 ```
 
+To resolve this, so that the client is *not* automatically started, without 'enabling' the client yourself, you need to remove this symbolic link:
+```
+sudo rm /etc/systemd/user/default.target.wants/onedrive.service
+```
+
 This issue is being tracked by: [#1274](https://github.com/abraunegg/onedrive/issues/1274)
 
 **Important:** It is highly advisable that you remove this symbolic link before you configure or authenticate your client. If you do not remove this symbolic link before you configure or authenticate your client this could lead to multiple copies of the client running, leading to sync conflics and operational issues which may include data loss (data deleted locally & on OneDrive).
