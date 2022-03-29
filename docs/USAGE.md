@@ -23,11 +23,11 @@
     + [skip_dir](#skip_dir)
     + [skip_file](#skip_file)
     + [skip_dotfiles](#skip_dotfiles)
-    + [skip_symlinks](#skip_symlinks)
     + [monitor_interval](#monitor_interval)
     + [min_notify_changes](#min_notify_changes)
     + [operation_timeout](#operation_timeout)
   * [Performing a --resync](#performing-a---resync)
+  * [Handling Symbolic Links](#handling-symbolic-links)
   * [Selective sync via 'sync_list' file](#selective-sync-via-sync_list-file)
   * [Configuring the client for 'single tenant application' use](#configuring-the-client-for-single-tenant-application-use)
   * [Configuring the client to use older 'skilion' application identifier](#configuring-the-client-to-use-older-skilion-application-identifier)
@@ -505,17 +505,6 @@ skip_dotfiles = "true"
 ```
 Setting this to `"true"` will skip all .files and .folders while syncing.
 
-#### skip_symlinks
-Example:
-```text
-# local_first = "false"
-# no_remote_delete = "false"
-skip_symlinks = "true"
-# debug_https = "false"
-# skip_dotfiles = "false"
-```
-Setting this to `"true"` will skip all symlinks while syncing.
-
 #### monitor_interval
 Example:
 ```text
@@ -572,6 +561,26 @@ To proceed with using `--resync`, you must type 'y' or 'Y' to allow the applicat
 **Note:** It is highly recommended to only use `--resync` if the application advises you to use it. Do not just blindly set the application to start with `--resync` as the default option.
 
 **Note:** In some automated environments (and it is 100% assumed you *know* what you are doing because of automation), in order to avoid this 'proceed with acknowledgement' requirement, add `--resync-auth` to automatically acknowledge the prompt.
+
+### Handling Symbolic Links
+Microsoft OneDrive has zero concept or understanding of symbolic links, and attempting to upload a symbolic link to Microsoft OneDrive generates a platform API error. All data (files and folders) that are uploaded to OneDrive must be whole files or actual directories.
+
+As such, there are only two methods to support symbolic links with this client:
+1. Follow the Linux symbolic link and upload what ever the link is pointing at to OneDrive. This is the default behaviour.
+2. Skip symbolic links by configuring the application to do so. In skipping, no data, no link, no reference is uploaded to OneDrive.
+
+To skip symbolic links, edit your configuration as per below:
+
+```text
+# local_first = "false"
+# no_remote_delete = "false"
+skip_symlinks = "true"
+# debug_https = "false"
+# skip_dotfiles = "false"
+```
+Setting this to `"true"` will configure the client to skip all symbolic links while syncing.
+
+The default setting is `"false"` which will sync the whole folder structure referenced by the symbolic link, duplicating the contents on OneDrive in the place where the symbolic link is.
 
 ### Selective sync via 'sync_list' file
 Selective sync allows you to sync only specific files and directories.
