@@ -116,16 +116,16 @@ The packages support the following platform architectures:
 |:----:|:------:|:-----:|:-------:|
 |✔|✔|✔|✔| |
 
-#### Step 1: Add the OpenSuSE Build Service repository
-Add the OpenSuSE Build Service repository using the following command:
-```text
-echo 'deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_10/ ./' | sudo tee /etc/apt/sources.list.d/onedrive.list
-```
-
-#### Step 2: Add the OpenSuSE Build Service repository release key
+#### Step 1: Add the OpenSuSE Build Service repository release key
 Add the OpenSuSE Build Service repository release key using the following command:
 ```text
 wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_10/Release.key | sudo apt-key add -
+```
+
+#### Step 2: Add the OpenSuSE Build Service repository
+Add the OpenSuSE Build Service repository using the following command:
+```text
+echo 'deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_10/ ./' | sudo tee /etc/apt/sources.list.d/onedrive.list
 ```
 
 #### Step 3: Update your apt package cache
@@ -143,16 +143,16 @@ The packages support the following platform architectures:
 |:----:|:------:|:-----:|:-------:|
 |✔|✔|✔|✔| |
 
-#### Step 1: Add the OpenSuSE Build Service repository
-Add the OpenSuSE Build Service repository using the following command:
-```text
-echo 'deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_11/ ./' | sudo tee /etc/apt/sources.list.d/onedrive.list
-```
-
-#### Step 2: Add the OpenSuSE Build Service repository release key
+#### Step 1: Add the OpenSuSE Build Service repository release key
 Add the OpenSuSE Build Service repository release key using the following command:
 ```text
-wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_11/Release.key | sudo apt-key add -
+wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_11/Release.key | gpg --dearmor | sudo tee /usr/share/keyrings/obs-onedrive.gpg > /dev/null
+```
+
+#### Step 2: Add the OpenSuSE Build Service repository
+Add the OpenSuSE Build Service repository using the following command:
+```text
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-onedrive.gpg] https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/Debian_11/ ./" | sudo tee /etc/apt/sources.list.d/onedrive.list
 ```
 
 #### Step 3: Update your apt package cache
@@ -170,16 +170,16 @@ The packages support the following platform architectures:
 |:----:|:------:|:-----:|:-------:|
 ❌|✔|✔|✔| |
 
-#### Step 1: Add the OpenSuSE Build Service repository
-Add the OpenSuSE Build Service repository using the following command:
-```text
-echo 'deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_20.04/ ./' | sudo tee /etc/apt/sources.list.d/onedrive.list
-```
-
-#### Step 2: Add the OpenSuSE Build Service repository release key
+#### Step 1: Add the OpenSuSE Build Service repository release key
 Add the OpenSuSE Build Service repository release key using the following command:
 ```text
 wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_20.04/Release.key | sudo apt-key add -
+```
+
+#### Step 2: Add the OpenSuSE Build Service repository
+Add the OpenSuSE Build Service repository using the following command:
+```text
+echo 'deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_20.04/ ./' | sudo tee /etc/apt/sources.list.d/onedrive.list
 ```
 
 #### Step 3: Update your apt package cache
@@ -197,16 +197,16 @@ The packages support the following platform architectures:
 |:----:|:------:|:-----:|:-------:|
 ❌|✔|✔|✔| |
 
-#### Step 1: Add the OpenSuSE Build Service repository
-Add the OpenSuSE Build Service repository using the following command:
-```text
-echo 'deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_21.04/ ./' | sudo tee /etc/apt/sources.list.d/onedrive.list
-```
-
-#### Step 2: Add the OpenSuSE Build Service repository release key
+#### Step 1: Add the OpenSuSE Build Service repository release key
 Add the OpenSuSE Build Service repository release key using the following command:
 ```text
-wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_21.04/Release.key | sudo apt-key add -
+wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_21.04/Release.key | gpg --dearmor | sudo tee /usr/share/keyrings/obs-onedrive.gpg > /dev/null
+```
+
+#### Step 2: Add the OpenSuSE Build Service repository
+Add the OpenSuSE Build Service repository using the following command:
+```text
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-onedrive.gpg] https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_21.04/ ./" | sudo tee /etc/apt/sources.list.d/onedrive.list
 ```
 
 #### Step 3: Update your apt package cache
@@ -224,23 +224,23 @@ The packages support the following platform architectures:
 |:----:|:------:|:-----:|:-------:|
 ❌|✔|✔|✔| |
 
-#### Step 1: Add the OpenSuSE Build Service repository
-Add the OpenSuSE Build Service repository using the following command:
-```text
-echo 'deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_21.10/ ./' | sudo tee /etc/apt/sources.list.d/onedrive.list
-```
-
-#### Step 2: Add the OpenSuSE Build Service repository release key
+#### Step 1: Add the OpenSuSE Build Service repository release key
 Add the OpenSuSE Build Service repository release key using the following command:
 ```text
-wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_21.10/Release.key | sudo apt-key add -
+wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_21.10/Release.key | gpg --dearmor | sudo tee /usr/share/keyrings/obs-onedrive.gpg > /dev/null
+```
+
+#### Step 2: Add the OpenSuSE Build Service repository
+Add the OpenSuSE Build Service repository using the following command:
+```text
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-onedrive.gpg] https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_21.10/ ./" | sudo tee /etc/apt/sources.list.d/onedrive.list
 ```
 
 #### Step 3: Update your apt package cache
-1.  Run: `apt-get update`
+1.  Run: `sudo apt-get update`
 
 #### Step 4: Install 'onedrive'
-1.  Run: `apt install onedrive`
+1.  Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
 1.  Read and understand the known issues with these packages below, taking any action that is needed.
