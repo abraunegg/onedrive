@@ -1390,17 +1390,17 @@ final class OneDriveApi
 				int retryCount = 10000;
 				int retryAttempts = 1;
 				int backoffInterval = 1;
-				int maxBackoffInterval = 3600;
+				int maxBackoffInterval = 300;
 				bool retrySuccess = false;
 				while (!retrySuccess){
 					backoffInterval++;
 					int thisBackOffInterval = retryAttempts*backoffInterval;
-					log.vdebug("  Retry Attempt:      ", retryAttempts);
+					log.vlog("  Retry Attempt:      ", retryAttempts);
 					if (thisBackOffInterval <= maxBackoffInterval) {
-						log.vdebug("  Retry In (seconds): ", thisBackOffInterval);
+						log.vlog("  Retry In (seconds): ", thisBackOffInterval);
 						Thread.sleep(dur!"seconds"(thisBackOffInterval));
 					} else {
-						log.vdebug("  Retry In (seconds): ", maxBackoffInterval);
+						log.vlog("  Retry In (seconds): ", maxBackoffInterval);
 						Thread.sleep(dur!"seconds"(maxBackoffInterval));
 					}
 					try {
