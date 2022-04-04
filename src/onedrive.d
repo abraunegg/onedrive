@@ -12,6 +12,7 @@ import progress;
 import config;
 import util;
 import arsd.cgi;
+import std.datetime;
 static import log;
 shared bool debugResponse = false;
 private bool dryRun = false;
@@ -1395,14 +1396,21 @@ final class OneDriveApi
 				while (!retrySuccess){
 					backoffInterval++;
 					int thisBackOffInterval = retryAttempts*backoffInterval;
-					log.vlog("  Retry Attempt:      ", retryAttempts);
+					
+					// add timestamp of retry
+					auto currentTime = Clock.currTime();
+					currentTime.fracSecs = Duration.zero;
+					auto timeString = currentTime.toString();
+					log.vlog("  Retry Attempt:               ", retryAttempts);
+					log.vlog("  Attempt Timestamp:           ", timeString);
 					if (thisBackOffInterval <= maxBackoffInterval) {
-						log.vlog("  Retry In (seconds): ", thisBackOffInterval);
+						log.vlog("  Next Retry In (seconds):     ", thisBackOffInterval);
 						Thread.sleep(dur!"seconds"(thisBackOffInterval));
 					} else {
-						log.vlog("  Retry In (seconds): ", maxBackoffInterval);
+						log.vlog("  Next Retry In (seconds):     ", maxBackoffInterval);
 						Thread.sleep(dur!"seconds"(maxBackoffInterval));
 					}
+					
 					try {
 						http.perform();
 						// Check the HTTP Response headers - needed for correct 429 handling
