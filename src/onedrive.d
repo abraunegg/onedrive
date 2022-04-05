@@ -1380,37 +1380,19 @@ final class OneDriveApi
 			log.error("ERROR: OneDrive returned an error with the following message:");
 			auto errorArray = splitLines(e.msg);
 			string errorMessage = errorArray[0];
-			string defaultTimeoutErrorMessage = "  Error Message: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?";
-
+			
+			// what is contained in the curl error message?
 			if (canFind(errorMessage, "Couldn't connect to server on handle") || canFind(errorMessage, "Couldn't resolve host name on handle") || canFind(errorMessage, "Timeout was reached on handle")) {
 				// This is a curl timeout
-				log.error(defaultTimeoutErrorMessage);
-				// or 408 request timeout
+				// or is this a 408 request timeout
 				// https://github.com/abraunegg/onedrive/issues/694
 				// Back off & retry with incremental delay
 				int retryCount = 10000;
-				int retryAttempts = 1;
-				int backoffInterval = 1;
-				int maxBackoffInterval = 300;
+				int retryAttempts = 0;
+				int backoffInterval = 0;
+				int maxBackoffInterval = 3600;
 				bool retrySuccess = false;
 				while (!retrySuccess){
-					backoffInterval++;
-					int thisBackOffInterval = retryAttempts*backoffInterval;
-					
-					// add timestamp of retry
-					auto currentTime = Clock.currTime();
-					currentTime.fracSecs = Duration.zero;
-					auto timeString = currentTime.toString();
-					log.vlog("  Retry Attempt:               ", retryAttempts);
-					log.vlog("  Attempt Timestamp:           ", timeString);
-					if (thisBackOffInterval <= maxBackoffInterval) {
-						log.vlog("  Next Retry In (seconds):     ", thisBackOffInterval);
-						Thread.sleep(dur!"seconds"(thisBackOffInterval));
-					} else {
-						log.vlog("  Next Retry In (seconds):     ", maxBackoffInterval);
-						Thread.sleep(dur!"seconds"(maxBackoffInterval));
-					}
-					
 					try {
 						http.perform();
 						// Check the HTTP Response headers - needed for correct 429 handling
@@ -1420,7 +1402,11 @@ final class OneDriveApi
 						retrySuccess = true;
 					} catch (CurlException e) {
 						if (canFind(e.msg, "Couldn't connect to server on handle") || canFind(e.msg, "Couldn't resolve host name on handle") || canFind(errorMessage, "Timeout was reached on handle")) {
-							log.error(defaultTimeoutErrorMessage);
+							// no access to Internet
+							log.error("\nERROR: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
+							// Reason 
+							if (canFind(e.msg, "Couldn't connect to server on handle")) log.vlog("  - Check HTTPS access or Firewall Rules");
+							if (canFind(e.msg, "Couldn't resolve host name on handle")) log.vlog("  - Check DNS access or Firewall Rules");
 							// Increment & loop around
 							retryAttempts++;
 						}
@@ -1430,9 +1416,24 @@ final class OneDriveApi
 							retrySuccess = true;
 						}
 					}
+					// increment backoff interval
+					backoffInterval++;
+					int thisBackOffInterval = retryAttempts*backoffInterval;
+					
+					// display retry information
+					auto currentTime = Clock.currTime();
+					currentTime.fracSecs = Duration.zero;
+					auto timeString = currentTime.toString();
+					log.vlog("  Retry attempt:          ", retryAttempts);
+					log.vlog("  This attempt timestamp: ", timeString);
+					if (thisBackOffInterval > maxBackoffInterval) {
+						thisBackOffInterval = maxBackoffInterval;
+					}
+					log.vlog("  Next retry in approx:   ", thisBackOffInterval, " seconds");
+					Thread.sleep(dur!"seconds"(thisBackOffInterval));
 				}
 				if (retryAttempts >= retryCount) {
-					log.error("  Error Message: Was unable to reconnect to the Microsoft OneDrive service after 10000 attempts lasting over 1.2 years!");
+					log.error("  ERROR: Unable to reconnect to the Microsoft OneDrive service after 10000 attempts lasting over 1.2 years!");
 					throw new OneDriveException(408, "Request Timeout - HTTP 408 or Internet down?");
 				}
 			} else {
