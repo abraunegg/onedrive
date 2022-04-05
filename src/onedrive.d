@@ -1406,7 +1406,7 @@ final class OneDriveApi
 							log.error("\nERROR: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
 							// Reason 
 							if (canFind(e.msg, "Couldn't connect to server on handle")) log.vlog("  - Check HTTPS access or Firewall Rules");
-							if (canFind(e.msg, "Couldn't resolve host name on handle")) log.vlog("  - Check DNS access or Firewall Rules");
+							if (canFind(e.msg, "Couldn't resolve host name on handle")) log.vlog("  - Check DNS resolution or Firewall Rules");
 							// Increment & loop around
 							retryAttempts++;
 						}
@@ -1415,22 +1415,22 @@ final class OneDriveApi
 							// false set this to true to break out of while loop
 							retrySuccess = true;
 						}
+						// increment backoff interval
+						backoffInterval++;
+						int thisBackOffInterval = retryAttempts*backoffInterval;
+						
+						// display retry information
+						auto currentTime = Clock.currTime();
+						currentTime.fracSecs = Duration.zero;
+						auto timeString = currentTime.toString();
+						log.vlog("  Retry attempt:          ", retryAttempts);
+						log.vlog("  This attempt timestamp: ", timeString);
+						if (thisBackOffInterval > maxBackoffInterval) {
+							thisBackOffInterval = maxBackoffInterval;
+						}
+						log.vlog("  Next retry in approx:   ", thisBackOffInterval, " seconds");
+						Thread.sleep(dur!"seconds"(thisBackOffInterval));
 					}
-					// increment backoff interval
-					backoffInterval++;
-					int thisBackOffInterval = retryAttempts*backoffInterval;
-					
-					// display retry information
-					auto currentTime = Clock.currTime();
-					currentTime.fracSecs = Duration.zero;
-					auto timeString = currentTime.toString();
-					log.vlog("  Retry attempt:          ", retryAttempts);
-					log.vlog("  This attempt timestamp: ", timeString);
-					if (thisBackOffInterval > maxBackoffInterval) {
-						thisBackOffInterval = maxBackoffInterval;
-					}
-					log.vlog("  Next retry in approx:   ", thisBackOffInterval, " seconds");
-					Thread.sleep(dur!"seconds"(thisBackOffInterval));
 				}
 				if (retryAttempts >= retryCount) {
 					log.error("  ERROR: Unable to reconnect to the Microsoft OneDrive service after 10000 attempts lasting over 1.2 years!");
