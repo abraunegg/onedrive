@@ -1396,7 +1396,7 @@ final class OneDriveApi
 				
 				while (!retrySuccess){
 					try {
-						currentTime = Clock.currTime();
+						// try the access
 						http.perform();
 						// Check the HTTP Response headers - needed for correct 429 handling
 						checkHTTPResponseHeaders();
@@ -1404,6 +1404,8 @@ final class OneDriveApi
 						log.log("Internet connectivity to Microsoft OneDrive service has been restored");
 						retrySuccess = true;
 					} catch (CurlException e) {
+						// 10 second delay here until the exception is triggered due to http.connectTimeout = (dur!"seconds"(10));
+						currentTime = Clock.currTime();
 						// Increment retry attempts
 						retryAttempts++;
 						if (canFind(e.msg, "Couldn't connect to server on handle") || canFind(e.msg, "Couldn't resolve host name on handle") || canFind(errorMessage, "Timeout was reached on handle")) {
@@ -1427,8 +1429,9 @@ final class OneDriveApi
 							}
 							
 							// detail when the next attempt will be tried
-							auto nextRetry = currentTime + dur!"seconds"(thisBackOffInterval);
-							log.vlog("  Next retry in approx:   ", thisBackOffInterval, " seconds");
+							// factor in the 10 second delay for curl to generate the exception - otherwise the next timestamp appears to be 'out' even though technically correct
+							auto nextRetry = currentTime + dur!"seconds"(thisBackOffInterval) + dur!"seconds"(9);
+							log.vlog("  Next retry in approx:   ", (thisBackOffInterval + 9), " seconds");
 							log.vlog("  Next retry approx:      ", nextRetry);
 							
 							// thread sleep
