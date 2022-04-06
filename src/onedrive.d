@@ -1442,7 +1442,7 @@ final class OneDriveApi
 					}
 				}
 				if (retryAttempts >= retryCount) {
-					log.error("  ERROR: Unable to reconnect to the Microsoft OneDrive service after 10000 attempts lasting over 1.2 years!");
+					log.error("  ERROR: Unable to reconnect to the Microsoft OneDrive service after ", retryCount, " attempts lasting over 1.2 years!");
 					throw new OneDriveException(408, "Request Timeout - HTTP 408 or Internet down?");
 				}
 			} else {
