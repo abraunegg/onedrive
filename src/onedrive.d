@@ -1392,8 +1392,11 @@ final class OneDriveApi
 				int backoffInterval = 0;
 				int maxBackoffInterval = 3600;
 				bool retrySuccess = false;
+				SysTime currentTime;
+				
 				while (!retrySuccess){
 					try {
+						currentTime = Clock.currTime();
 						http.perform();
 						// Check the HTTP Response headers - needed for correct 429 handling
 						checkHTTPResponseHeaders();
@@ -1401,35 +1404,41 @@ final class OneDriveApi
 						log.log("Internet connectivity to Microsoft OneDrive service has been restored");
 						retrySuccess = true;
 					} catch (CurlException e) {
+						// Increment retry attempts
+						retryAttempts++;
 						if (canFind(e.msg, "Couldn't connect to server on handle") || canFind(e.msg, "Couldn't resolve host name on handle") || canFind(errorMessage, "Timeout was reached on handle")) {
 							// no access to Internet
 							log.error("\nERROR: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
-							// Reason 
+							// what is the error reason to assis the user as what to check
 							if (canFind(e.msg, "Couldn't connect to server on handle")) log.vlog("  - Check HTTPS access or Firewall Rules");
 							if (canFind(e.msg, "Couldn't resolve host name on handle")) log.vlog("  - Check DNS resolution or Firewall Rules");
-							// Increment & loop around
-							retryAttempts++;
+							
+							// increment backoff interval
+							backoffInterval++;
+							int thisBackOffInterval = retryAttempts*backoffInterval;
+							
+							// display retry information
+							currentTime.fracSecs = Duration.zero;
+							auto timeString = currentTime.toString();
+							log.vlog("  Retry attempt:          ", retryAttempts);
+							log.vlog("  This attempt timestamp: ", timeString);
+							if (thisBackOffInterval > maxBackoffInterval) {
+								thisBackOffInterval = maxBackoffInterval;
+							}
+							
+							// detail when the next attempt will be tried
+							auto nextRetry = currentTime + dur!"seconds"(thisBackOffInterval);
+							log.vlog("  Next retry in approx:   ", thisBackOffInterval, " seconds");
+							log.vlog("  Next retry approx:      ", nextRetry);
+							
+							// thread sleep
+							Thread.sleep(dur!"seconds"(thisBackOffInterval));
 						}
 						if (retryAttempts == retryCount) {
 							// we have attempted to re-connect X number of times
 							// false set this to true to break out of while loop
 							retrySuccess = true;
 						}
-						// increment backoff interval
-						backoffInterval++;
-						int thisBackOffInterval = retryAttempts*backoffInterval;
-						
-						// display retry information
-						auto currentTime = Clock.currTime();
-						currentTime.fracSecs = Duration.zero;
-						auto timeString = currentTime.toString();
-						log.vlog("  Retry attempt:          ", retryAttempts);
-						log.vlog("  This attempt timestamp: ", timeString);
-						if (thisBackOffInterval > maxBackoffInterval) {
-							thisBackOffInterval = maxBackoffInterval;
-						}
-						log.vlog("  Next retry in approx:   ", thisBackOffInterval, " seconds");
-						Thread.sleep(dur!"seconds"(thisBackOffInterval));
 					}
 				}
 				if (retryAttempts >= retryCount) {
