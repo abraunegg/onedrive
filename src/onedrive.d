@@ -1377,7 +1377,6 @@ final class OneDriveApi
 		} catch (CurlException e) {
 			// Parse and display error message received from OneDrive
 			log.vdebug("onedrive.perform() Generated a OneDrive CurlException");
-			log.error("ERROR: OneDrive returned an error with the following message:");
 			auto errorArray = splitLines(e.msg);
 			string errorMessage = errorArray[0];
 			
@@ -1391,6 +1390,7 @@ final class OneDriveApi
 				int retryAttempts = 0;
 				int backoffInterval = 0;
 				int maxBackoffInterval = 3600;
+				int timestampAlign = 0;
 				bool retrySuccess = false;
 				SysTime currentTime;
 				
@@ -1404,7 +1404,7 @@ final class OneDriveApi
 						log.log("Internet connectivity to Microsoft OneDrive service has been restored");
 						retrySuccess = true;
 					} catch (CurlException e) {
-						// 10 second delay here until the exception is triggered due to http.connectTimeout = (dur!"seconds"(10));
+						// when was the exception generated
 						currentTime = Clock.currTime();
 						// Increment retry attempts
 						retryAttempts++;
@@ -1412,8 +1412,14 @@ final class OneDriveApi
 							// no access to Internet
 							log.error("\nERROR: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
 							// what is the error reason to assis the user as what to check
-							if (canFind(e.msg, "Couldn't connect to server on handle")) log.vlog("  - Check HTTPS access or Firewall Rules");
-							if (canFind(e.msg, "Couldn't resolve host name on handle")) log.vlog("  - Check DNS resolution or Firewall Rules");
+							if (canFind(e.msg, "Couldn't connect to server on handle")) {
+								log.log("  - Check HTTPS access or Firewall Rules");
+								timestampAlign = 9;
+							}	
+							if (canFind(e.msg, "Couldn't resolve host name on handle")) {
+								log.log("  - Check DNS resolution or Firewall Rules");
+								timestampAlign = 0;
+							}
 							
 							// increment backoff interval
 							backoffInterval++;
@@ -1429,9 +1435,9 @@ final class OneDriveApi
 							}
 							
 							// detail when the next attempt will be tried
-							// factor in the 10 second delay for curl to generate the exception - otherwise the next timestamp appears to be 'out' even though technically correct
-							auto nextRetry = currentTime + dur!"seconds"(thisBackOffInterval) + dur!"seconds"(9);
-							log.vlog("  Next retry in approx:   ", (thisBackOffInterval + 9), " seconds");
+							// factor in the delay for curl to generate the exception - otherwise the next timestamp appears to be 'out' even though technically correct
+							auto nextRetry = currentTime + dur!"seconds"(thisBackOffInterval) + dur!"seconds"(timestampAlign);
+							log.vlog("  Next retry in approx:   ", (thisBackOffInterval + timestampAlign), " seconds");
 							log.vlog("  Next retry approx:      ", nextRetry);
 							
 							// thread sleep
@@ -1449,6 +1455,8 @@ final class OneDriveApi
 					throw new OneDriveException(408, "Request Timeout - HTTP 408 or Internet down?");
 				}
 			} else {
+				// Log that an error was returned
+				log.error("ERROR: OneDrive returned an error with the following message:");
 				// Some other error was returned
 				log.error("  Error Message: ", errorMessage);
 				log.error("  Calling Function: ", getFunctionName!({}));
