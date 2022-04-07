@@ -3469,16 +3469,23 @@ final class SyncEngine
 	{
 		assert(item.type == ItemType.dir);
 		if (exists(path)) {
-			if (!isDir(path)) {
-				log.vlog("The item was a directory but now it is a file");
-				uploadDeleteItem(item, path);
-				uploadNewFile(path);
-			} else {
-				log.vlog("The directory has not changed");
-				// loop through the children
-				foreach (Item child; itemdb.selectChildren(item.driveId, item.id)) {
-					uploadDifferences(child);
+			// Fix https://github.com/abraunegg/onedrive/issues/1915
+			try {
+				if (!isDir(path)) {
+					log.vlog("The item was a directory but now it is a file");
+					uploadDeleteItem(item, path);
+					uploadNewFile(path);
+				} else {
+					log.vlog("The directory has not changed");
+					// loop through the children
+					foreach (Item child; itemdb.selectChildren(item.driveId, item.id)) {
+						uploadDifferences(child);
+					}
 				}
+			} catch (FileException e) {
+				// display the error message
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				return;
 			}
 		} else {
 			// Directory does not exist locally
