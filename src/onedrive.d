@@ -213,13 +213,9 @@ final class OneDriveApi
 		this.cfg = cfg;
 		http = HTTP();
 		// Curl Timeout Handling
-		// DNS lookup timeout
-		
-		//http.dnsTimeout = (dur!"seconds"(5));
-		
+		// libcurl dns_cache_timeout timeout
 		http.dnsTimeout = (dur!"seconds"(60));
-				
-		// Timeout for connecting
+		// Timeout for HTTPS connections
 		http.connectTimeout = (dur!"seconds"(10));
 		// with the following settings we force
 		// - if there is no data flow for 10min, abort
@@ -1400,19 +1396,18 @@ final class OneDriveApi
 				
 				while (!retrySuccess){
 					try {
-					
+						// configure libcurl to perform a fresh connection
 						http.handle.set(CurlOption.fresh_connect,1);
-					
 						// try the access
 						http.perform();
 						// Check the HTTP Response headers - needed for correct 429 handling
 						checkHTTPResponseHeaders();
 						// no error from http.perform() on re-try
 						log.log("Internet connectivity to Microsoft OneDrive service has been restored");
-						retrySuccess = true;
-						
+						// unset the fresh connect option as this then creates performance issues if left enabled
 						http.handle.set(CurlOption.fresh_connect,0);
-						
+						// connectivity restored
+						retrySuccess = true;
 					} catch (CurlException e) {
 						// when was the exception generated
 						currentTime = Clock.currTime();
