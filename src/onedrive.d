@@ -1394,9 +1394,15 @@ final class OneDriveApi
 				bool retrySuccess = false;
 				SysTime currentTime;
 				
+				// what caused the initial curl exception?
+				if (canFind(errorMessage, "Couldn't connect to server on handle")) log.vdebug("Unable to connect to server - HTTPS access blocked?");
+				if (canFind(errorMessage, "Couldn't resolve host name on handle")) log.vdebug("Unable to resolve server - DNS access blocked?");
+				if (canFind(errorMessage, "Timeout was reached on handle")) log.vdebug("A timeout was triggered - data too slow, no response ... use --debug-https to diagnose further");
+				
 				while (!retrySuccess){
 					try {
 						// configure libcurl to perform a fresh connection
+						log.vdebug("Configuring libcurl to use a fresh connection for re-try");
 						http.handle.set(CurlOption.fresh_connect,1);
 						// try the access
 						http.perform();
@@ -1405,6 +1411,7 @@ final class OneDriveApi
 						// no error from http.perform() on re-try
 						log.log("Internet connectivity to Microsoft OneDrive service has been restored");
 						// unset the fresh connect option as this then creates performance issues if left enabled
+						log.vdebug("Unsetting libcurl to use a fresh connection as this causes a performance impact if left enabled");
 						http.handle.set(CurlOption.fresh_connect,0);
 						// connectivity restored
 						retrySuccess = true;
