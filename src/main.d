@@ -1090,9 +1090,9 @@ int main(string[] args)
 			m.onDirCreated = delegate(string path) {
 				// Handle .folder creation if skip_dotfiles is enabled
 				if ((cfg.getValueBool("skip_dotfiles")) && (selectiveSync.isDotFile(path))) {
-					log.vlog("[M] Skipping watching path - .folder found & --skip-dot-files enabled: ", path);
+					log.vlog("[M] Skipping watching local path - .folder found & --skip-dot-files enabled: ", path);
 				} else {
-					log.vlog("[M] Directory created: ", path);
+					log.vlog("[M] Local directory created: ", path);
 					try {
 						sync.scanForDifferences(path);
 					} catch (CurlException e) {
@@ -1103,7 +1103,7 @@ int main(string[] args)
 				}
 			};
 			m.onFileChanged = delegate(string path) {
-				log.vlog("[M] File changed: ", path);
+				log.vlog("[M] Local file changed: ", path);
 				try {
 					sync.scanForDifferences(path);
 				} catch (CurlException e) {
@@ -1113,7 +1113,8 @@ int main(string[] args)
 				}
 			};
 			m.onDelete = delegate(string path) {
-				log.vlog("[M] Item deleted: ", path);
+				log.log("Received inotify delete event from operating system .. attempting item deletion as requested");
+				log.vlog("[M] Local item deleted: ", path);
 				try {
 					sync.deleteByPath(path);
 				} catch (CurlException e) {
@@ -1129,7 +1130,7 @@ int main(string[] args)
 				}
 			};
 			m.onMove = delegate(string from, string to) {
-				log.vlog("[M] Item moved: ", from, " -> ", to);
+				log.vlog("[M] Local item moved: ", from, " -> ", to);
 				try {
 					// Handle .folder -> folder if skip_dotfiles is enabled
 					if ((cfg.getValueBool("skip_dotfiles")) && (selectiveSync.isDotFile(from))) {
