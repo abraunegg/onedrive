@@ -2667,6 +2667,12 @@ final class SyncEngine
 						// Configure the applicable permissions for the folder
 						log.vdebug("Setting directory permissions for: ", path);
 						path.setAttributes(cfg.returnRequiredDirectoryPermisions());
+						// Update the time of the folder to match the last modified time as is provided by OneDrive
+						// If there are any files then downloaded into this folder, the last modified time will get 
+						// updated by the local Operating System with the latest timestamp - as this is normal operation
+						// as the directory has been modified
+						log.vdebug("Setting directory lastModifiedDateTime for: ", path , " to ", item.mtime);
+						setTimes(path, item.mtime, item.mtime);
 					}
 				} catch (FileException e) {
 					// display the error message
