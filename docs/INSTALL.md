@@ -115,7 +115,7 @@ sudo update-alternatives --install "/usr/bin/ld" "ld" "/usr/bin/ld.gold" 20
 sudo update-alternatives --install "/usr/bin/ld" "ld" "/usr/bin/ld.bfd" 10
 ```
 
-### Dependencies: Ubuntu 18.x, Ubuntu 19.x, Ubuntu 20.x / Debian 9, Debian 10 - x86_64
+### Dependencies: Ubuntu 18.x -> Ubuntu 22.x / Debian 9 -> Debian 11 - x86_64
 These dependencies are also applicable for all Ubuntu based distributions such as:
 *   Lubuntu
 *   Linux Mint
