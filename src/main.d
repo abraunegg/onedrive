@@ -133,12 +133,12 @@ int main(string[] args)
 	} catch (GetOptException e) {
 		// option errors
 		log.error(e.msg);
-		log.error("Try 'onedrive -h' for more information");
+		log.error("Try 'onedrive --help' for more information");
 		return EXIT_FAILURE;
 	} catch (Exception e) {
 		// generic error
 		log.error(e.msg);
-		log.error("Try 'onedrive -h' for more information");
+		log.error("Try 'onedrive --help' for more information");
 		return EXIT_FAILURE;
 	}
 
@@ -738,7 +738,7 @@ int main(string[] args)
 			if (exists(cfg.refreshTokenFilePath)) {
 				// OneDrive refresh token exists
 				log.log("\nApplication has been successfully authorised, however no additional command switches were provided.\n");
-				log.log("Please use --help for further assistance in regards to running this application.\n");
+				log.log("Please use 'onedrive --help' for further assistance in regards to running this application.\n");
 				// Use exit scopes to shutdown API
 				return EXIT_SUCCESS;
 			} else {
@@ -748,7 +748,7 @@ int main(string[] args)
 			}
 		} else {
 			// Application was not just authorised
-			log.log("\n--synchronize or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use --help for further assistance.\n");
+			log.log("\n--synchronize or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use 'onedrive --help' for further assistance.\n");
 			log.log("No OneDrive sync will be performed without one of these two arguments being present.\n");
 			// Use exit scopes to shutdown API
 			return EXIT_FAILURE;
@@ -758,7 +758,7 @@ int main(string[] args)
 	// if --synchronize && --monitor passed in, exit & display help as these conflict with each other
 	if (cfg.getValueBool("synchronize") && cfg.getValueBool("monitor")) {
 		writeln("\nERROR: --synchronize and --monitor cannot be used together\n");
-		writeln("Refer to --help to determine which command option you should use.\n");
+		writeln("Please use 'onedrive --help' for further assistance in regards to running this application.\n");
 		// Use exit scopes to shutdown API
 		return EXIT_FAILURE;
 	}
