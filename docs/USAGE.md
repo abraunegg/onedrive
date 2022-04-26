@@ -112,7 +112,7 @@ Enter the response uri: https://login.microsoftonline.com/common/oauth2/nativecl
 
 Application has been successfully authorised, however no additional command switches were provided.
 
-Please use --help for further assistance in regards to running this application.
+Please use 'onedrive --help' for further assistance in regards to running this application.
 ```
 
 ### Show your configuration
