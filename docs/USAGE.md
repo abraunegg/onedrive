@@ -24,6 +24,7 @@
     + [skip_file](#skip_file)
     + [skip_dotfiles](#skip_dotfiles)
     + [monitor_interval](#monitor_interval)
+	+ [monitor_fullscan_frequency](#monitor_fullscan_frequency)
     + [min_notify_changes](#min_notify_changes)
     + [operation_timeout](#operation_timeout)
   * [Performing a --resync](#performing-a---resync)
