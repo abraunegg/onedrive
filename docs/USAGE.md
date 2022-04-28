@@ -357,7 +357,7 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # dry_run = "false"
 # min_notify_changes = "5"
 # monitor_log_frequency = "5"
-# monitor_fullscan_frequency = "10"
+# monitor_fullscan_frequency = "12"
 # sync_root_files = "false"
 # classify_as_big_delete = "1000"
 # user_agent = ""
@@ -386,6 +386,8 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 The below are 'config' file examples to assist with configuration of the 'config' file:
 
 #### sync_dir
+Configure your local sync directory location.
+
 Example:
 ```text
 # When changing a config option below, remove the '#' from the start of the line
@@ -427,6 +429,12 @@ sync_file_permissions = "600"
 **Important:** Special permission bits (setuid, setgid, sticky bit) are not supported. Valid permission values are from `000` to `777` only.
 
 #### skip_dir
+This option is used to 'skip' certain directories and supports pattern matching.
+
+Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns.
+
+**Important:** Entries under `skip_dir` are relative to your `sync_dir` path.
+
 Example:
 ```text
 # When changing a config option below, remove the '#' from the start of the line
@@ -438,9 +446,6 @@ Example:
 skip_dir = "Desktop|Documents/IISExpress|Documents/SQL Server Management Studio|Documents/Visual Studio*|Documents/WindowsPowerShell"
 # log_dir = "/var/log/onedrive/"
 ```
-Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns.
-
-**Important:** Entries under `skip_dir` are relative to your `sync_dir` path.
 
 **Note:** The `skip_dir` can be specified multiple times, for example:
 ```text
@@ -456,17 +461,8 @@ skip_dir = "SomeDir|OtherDir|ThisDir|ThatDir|/Path/To/A/Directory|/Another/Path/
 **Note:** After changing `skip_dir`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
 #### skip_file
-Example:
-```text
-# When changing a config option below, remove the '#' from the start of the line
-# For explanations of all config options below see docs/USAGE.md or the man page.
-#
-# sync_dir = "~/OneDrive"
-skip_file = "~*|Documents/OneNote*|Documents/config.xlaunch|myfile.ext"
-# monitor_interval = "300"
-# skip_dir = ""
-# log_dir = "/var/log/onedrive/"
-```
+This option is used to 'skip' certain files and supports pattern matching.
+
 Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns.
 
 Files can be skipped in the following fashion:
@@ -480,6 +476,18 @@ By default, the following files will be skipped:
 *   Files that end in .tmp
 
 **Important:** Do not use a skip_file entry of `.*` as this will prevent correct searching of local changes to process.
+
+Example:
+```text
+# When changing a config option below, remove the '#' from the start of the line
+# For explanations of all config options below see docs/USAGE.md or the man page.
+#
+# sync_dir = "~/OneDrive"
+skip_file = "~*|Documents/OneNote*|Documents/config.xlaunch|myfile.ext"
+# monitor_interval = "300"
+# skip_dir = ""
+# log_dir = "/var/log/onedrive/"
+```
 
 **Note:** The `skip_file` can be specified multiple times, for example:
 ```text
@@ -495,6 +503,8 @@ skip_file = "~*|.~*|*.tmp|*.swp|*.blah|never_sync.file"
 **Note:** after changing `skip_file`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
 #### skip_dotfiles
+Setting this to `"true"` will skip all .files and .folders while syncing.
+
 Example:
 ```text
 # skip_symlinks = "false"
@@ -503,9 +513,12 @@ skip_dotfiles = "true"
 # dry_run = "false"
 # monitor_interval = "300"
 ```
-Setting this to `"true"` will skip all .files and .folders while syncing.
 
 #### monitor_interval
+The monitor interval is defined as the wait time 'between' sync's when running in monitor mode. When this interval expires, the client will check OneDrive for changes online, performing data integrity checks and scanning the local 'sync_dir' for new content.
+
+By default without configuration, 'monitor_interval' is set to 300 seconds. Setting this value to 600 will run the sync process every 10 minutes.
+
 Example:
 ```text
 # skip_dotfiles = "false"
@@ -514,27 +527,46 @@ monitor_interval = "600"
 # min_notify_changes = "5"
 # monitor_log_frequency = "5"
 ```
-The monitor interval is defined as the wait time 'between' sync's when running in monitor mode. By default without configuration, the monitor_interval is set to 300 seconds. Setting this value to 600 will run the sync process every 10 minutes.
+
+#### monitor_fullscan_frequency
+This configuration option controls the number of 'monitor_interval' iterations between when a full scan of your data is performed to ensure data integrity and consistency.
+
+By default without configuration, 'monitor_fullscan_frequency' is set to 12. In this default state, this means that a full scan is performed every 'monitor_interval' x 'monitor_fullscan_frequency' = 3600 seconds. This is only applicable when running in --monitor mode.
+
+Setting this value to 24 means that the full scan of OneDrive and checking the integrity of the data stored locally will occur every 2 hours (assuming 'monitor_interval' is set to 300 seconds):
+
+Example:
+```text
+# min_notify_changes = "5"
+# monitor_log_frequency = "5"
+monitor_fullscan_frequency = "24"
+# sync_root_files = "false"
+# classify_as_big_delete = "1000"
+```
+
+**Note:** When running in --monitor mode, at application start-up, a full scan will be performed to ensure data integrity. This option has zero effect when running the application in --synchronize mode and a full scan will always be performed.
 
 #### min_notify_changes
+This option defines the minimum number of pending incoming changes necessary to trigger a desktop notification. This allows controlling the frequency of notifications.
+
 Example:
 ```text
 # dry_run = "false"
 # monitor_interval = "300"
 min_notify_changes = "50"
 # monitor_log_frequency = "5"
-# monitor_fullscan_frequency = "10"
+# monitor_fullscan_frequency = "12"
 ```
-This option defines the minimum number of pending incoming changes necessary to trigger a desktop notification. This allows controlling the frequency of notifications.
 
 #### operation_timeout
+Operation Timeout is the maximum amount of time (seconds) a file operation is allowed to take. This includes DNS resolution, connecting, data transfer, etc.
+
 Example:
 ```text
 # sync_file_permissions = "600"
 # rate_limit = "131072"
 operation_timeout = "3600"
 ```
-Operation Timeout is the maximum amount of time (seconds) a file operation is allowed to take. This includes DNS resolution, connecting, data transfer, etc.
 
 ### Performing a --resync
 If you modify any of the following configuration items, you will be required to perform a `--resync` to ensure your client is syncing your data with the updated configuration:
