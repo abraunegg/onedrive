@@ -1257,19 +1257,18 @@ int main(string[] args)
 						logMonitorCounter = 1;
 					}
 
-					// do we perform a full scan of sync_dir?
+					// do we perform a full scan of sync_dir and database integrity check?
 					fullScanCounter += 1;
+					// fullScanFrequency = 'monitor_fullscan_frequency' from config
 					if (fullScanCounter > fullScanFrequency){
-						// loop counter has exceeded
+						// 'monitor_fullscan_frequency' counter has exceeded
 						fullScanCounter = 1;
+						// set fullScanRequired = true due to 'monitor_fullscan_frequency' counter has been exceeded
+						fullScanRequired = true;
+						// are we using sync_list?
 						if (syncListConfigured) {
-							// set fullScanRequired = true due to sync_list being used
-							fullScanRequired = true;
 							// sync list is configured
 							syncListConfiguredFullScanOverride = true;
-						} else {
-							// dont set fullScanRequired to true as this is excessive if sync_list is not being used
-							fullScanRequired = false;
 						}
 					}
 
@@ -1532,11 +1531,27 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 							} else {
 								// --monitor in use
 								// Use individual calls with inotify checks between to avoid a race condition between these 2 functions
-								// Database scan
-								sync.scanForDifferencesDatabaseScan(localPath);
-								// handle any inotify events that occured 'whilst' we were scanning the database
-								m.update(true);
+								// Database scan integrity check to compare DB data vs actual content on disk to ensure what we think is local, is local 
+								// and that the data 'hash' as recorded in the DB equals the hash of the actual content
+								// This process can be extremely expensive time and CPU processing wise
+								//
+								// fullScanRequired is set to TRUE when the application starts up, or the config option 'monitor_fullscan_frequency' count is reached
+								// By default, 'monitor_fullscan_frequency' = 12, and 'monitor_interval' = 300, meaning that by default, a full database consistency check 
+								// is done once an hour.
+								//
+								// To change this behaviour adjust 'monitor_interval' and 'monitor_fullscan_frequency' to desired values in the application config file
+								if (fullScanRequired) {
+									log.vlog("Performing Database Consistency Integrity Check .. ");
+									sync.scanForDifferencesDatabaseScan(localPath);
+									// handle any inotify events that occured 'whilst' we were scanning the database
+									m.update(true);
+								} else {
+									log.vdebug("NOT performing Database Integrity Check .. fullScanRequired = FALSE");
+									m.update(true);
+								}
+								
 								// Filesystem walk to find new files not uploaded
+								log.vdebug("Searching local filesystem for new data");
 								sync.scanForDifferencesFilesystemScan(localPath);
 								// handle any inotify events that occured 'whilst' we were scanning the local filesystem
 								m.update(true);
@@ -1548,12 +1563,12 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 							// --synchronize & no sync_list     : fullScanRequired = false, syncListConfiguredFullScanOverride = false
 							// --synchronize & sync_list in use : fullScanRequired = false, syncListConfiguredFullScanOverride = true
 
-							// --monitor loops around 10 iterations. On the 1st loop, sets fullScanRequired = false, syncListConfiguredFullScanOverride = true if requried
+							// --monitor loops around 12 iterations. On the 1st loop, sets fullScanRequired = true, syncListConfiguredFullScanOverride = true if requried
 
 							// --monitor & no sync_list (loop #1)           : fullScanRequired = true, syncListConfiguredFullScanOverride = false
-							// --monitor & no sync_list (loop #2 - #10)     : fullScanRequired = false, syncListConfiguredFullScanOverride = false
+							// --monitor & no sync_list (loop #2 - #12)     : fullScanRequired = false, syncListConfiguredFullScanOverride = false
 							// --monitor & sync_list in use (loop #1)       : fullScanRequired = true, syncListConfiguredFullScanOverride = true
-							// --monitor & sync_list in use (loop #2 - #10) : fullScanRequired = false, syncListConfiguredFullScanOverride = false
+							// --monitor & sync_list in use (loop #2 - #12) : fullScanRequired = false, syncListConfiguredFullScanOverride = false
 
 							// Do not perform a full walk of the OneDrive objects
 							if ((!fullScanRequired) && (!syncListConfiguredFullScanOverride)){
