@@ -1541,7 +1541,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 								//
 								// To change this behaviour adjust 'monitor_interval' and 'monitor_fullscan_frequency' to desired values in the application config file
 								if (fullScanRequired) {
-									log.vdebug("Performing Database Integrity Check .. fullScanRequired = TRUE");
+									log.vlog("Performing Database Consistency Integrity Check .. ");
 									sync.scanForDifferencesDatabaseScan(localPath);
 									// handle any inotify events that occured 'whilst' we were scanning the database
 									m.update(true);
