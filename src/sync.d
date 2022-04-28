@@ -2667,6 +2667,12 @@ final class SyncEngine
 						// Configure the applicable permissions for the folder
 						log.vdebug("Setting directory permissions for: ", path);
 						path.setAttributes(cfg.returnRequiredDirectoryPermisions());
+						// Update the time of the folder to match the last modified time as is provided by OneDrive
+						// If there are any files then downloaded into this folder, the last modified time will get 
+						// updated by the local Operating System with the latest timestamp - as this is normal operation
+						// as the directory has been modified
+						log.vdebug("Setting directory lastModifiedDateTime for: ", path , " to ", item.mtime);
+						setTimes(path, item.mtime, item.mtime);
 					}
 				} catch (FileException e) {
 					// display the error message
@@ -3472,16 +3478,23 @@ final class SyncEngine
 	{
 		assert(item.type == ItemType.dir);
 		if (exists(path)) {
-			if (!isDir(path)) {
-				log.vlog("The item was a directory but now it is a file");
-				uploadDeleteItem(item, path);
-				uploadNewFile(path);
-			} else {
-				log.vlog("The directory has not changed");
-				// loop through the children
-				foreach (Item child; itemdb.selectChildren(item.driveId, item.id)) {
-					uploadDifferences(child);
+			// Fix https://github.com/abraunegg/onedrive/issues/1915
+			try {
+				if (!isDir(path)) {
+					log.vlog("The item was a directory but now it is a file");
+					uploadDeleteItem(item, path);
+					uploadNewFile(path);
+				} else {
+					log.vlog("The directory has not changed");
+					// loop through the children
+					foreach (Item child; itemdb.selectChildren(item.driveId, item.id)) {
+						uploadDifferences(child);
+					}
 				}
+			} catch (FileException e) {
+				// display the error message
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				return;
 			}
 		} else {
 			// Directory does not exist locally

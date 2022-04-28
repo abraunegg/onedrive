@@ -76,9 +76,10 @@ final class Config
 		longValues["skip_size"] = 0;
 		longValues["min_notify_changes"] = 5;
 		longValues["monitor_log_frequency"] = 5;
-		// Number of n sync runs before performing a full local scan of sync_dir
-		// By default 10 which means every ~7.5 minutes a full disk scan of sync_dir will occur
-		longValues["monitor_fullscan_frequency"] = 10;
+		// Number of N sync runs before performing a full local scan of sync_dir
+		// By default 12 which means every ~60 minutes a full disk scan of sync_dir will occur 
+		// 'monitor_interval' * 'monitor_fullscan_frequency' = 3600 = 1 hour
+		longValues["monitor_fullscan_frequency"] = 12;
 		// Number of children in a path that is locally removed which will be classified as a 'big data delete'
 		longValues["classify_as_big_delete"] = 1000;
 		// Delete source after successful transfer

@@ -19,7 +19,7 @@ Distribution packages may be of an older release when compared to the latest rel
 | OpenSuSE                        | [onedrive](https://software.opensuse.org/package/onedrive)                   |<a href="https://software.opensuse.org/package/onedrive"><img src="https://repology.org/badge/version-for-repo/opensuse_tumbleweed/onedrive.svg?header=" alt="openSUSE Tumbleweed package" width="46" height="20"></a>|✔|✔|❌|❌| |
 | OpenSuSE Build Service          | [onedrive](https://build.opensuse.org/package/show/home:npreining:debian-ubuntu-onedrive/onedrive) | No API Available |✔|✔|✔|✔| Package Build Service for Debian and Ubuntu | 
 | Raspbian                        | [onedrive](https://archive.raspbian.org/raspbian/pool/main/o/onedrive/)      |<a href="https://archive.raspbian.org/raspbian/pool/main/o/onedrive/"><img src="https://repology.org/badge/version-for-repo/raspbian_stable/onedrive.svg?header=" alt="Raspbian Stable package" width="46" height="20"></a> |❌|❌|✔|❌| **Note:** You must compile from source for Raspbian |
-| Slackware                       | [onedrive](https://slackbuilds.org/repository/14.2/network/onedrive/)        |<a href="https://slackbuilds.org/repository/14.2/network/onedrive/"><img src="https://repology.org/badge/version-for-repo/slackbuilds/onedrive.svg?header=" alt="SlackBuilds package" width="46" height="20"></a>|✔|✔|❌|❌| |
+| Slackware                       | [onedrive](https://slackbuilds.org/result/?search=onedrive&sv=)        |<a href="https://slackbuilds.org/result/?search=onedrive&sv="><img src="https://repology.org/badge/version-for-repo/slackbuilds/onedrive.svg?header=" alt="SlackBuilds package" width="46" height="20"></a>|✔|✔|❌|❌| |
 | Solus                           | [onedrive](https://dev.getsol.us/search/query/FB7PIf1jG9Z9/#R)               |<a href="https://dev.getsol.us/search/query/FB7PIf1jG9Z9/#R"><img src="https://repology.org/badge/version-for-repo/solus/onedrive.svg?header=" alt="Solus package" width="46" height="20"></a>|✔|✔|❌|❌| |
 | Ubuntu 18.04                    | [onedrive](https://packages.ubuntu.com/bionic/onedrive)                      |<a href="https://packages.ubuntu.com/bionic/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_18_04/onedrive.svg?header=" alt="Ubuntu 18.04 package" width="88" height="20"></a> |✔|✔|✔|❌| **Note:** Do not install from Ubuntu Universe<br><br>You must compile from source for this version of Ubuntu |
 | Ubuntu 20.04                    | [onedrive](https://packages.ubuntu.com/focal/onedrive)                       |<a href="https://packages.ubuntu.com/focal/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_20_04/onedrive.svg?header=" alt="Ubuntu 20.04 package" width="46" height="20"></a> |❌|✔|✔|✔| **Note:** Do not install from Ubuntu Universe<br><br>Install from OpenSuSE Build Service using the Ubuntu Package Install [Instructions](ubuntu-package-install.md) |
@@ -36,7 +36,7 @@ This information is specifically for the following platforms and distributions:
 *   POP OS
 *   Peppermint OS
 
-Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) Universe packages available for Ubuntu, do not install 'onedrive' from these Universe packages. The default Universe packages are out-of-date and are not supported and should not be used. If you wish to use a package, it is highly recommended that you utilise the [OpenSuSE Build Service](https://build.opensuse.org/project/show/home:npreining:debian-ubuntu-onedrive) to install packages for these platforms. If the OpenSuSE Build Service does not cater for your version, your only option is to build from source.
+Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) Universe packages available for Ubuntu, do not install 'onedrive' from these Universe packages. The default Universe packages are out-of-date and are not supported and should not be used. If you wish to use a package, it is highly recommended that you utilise the [OpenSuSE Build Service](ubuntu-package-install.md) to install packages for these platforms. If the OpenSuSE Build Service does not cater for your version, your only option is to build from source.
 
 If you wish to change this situation so that you can just use the Universe packages via 'apt install onedrive', consider becoming the Ubuntu package maintainer and contribute back to your community.
 
@@ -115,7 +115,7 @@ sudo update-alternatives --install "/usr/bin/ld" "ld" "/usr/bin/ld.gold" 20
 sudo update-alternatives --install "/usr/bin/ld" "ld" "/usr/bin/ld.bfd" 10
 ```
 
-### Dependencies: Ubuntu 18.x, Ubuntu 19.x, Ubuntu 20.x / Debian 9, Debian 10 - x86_64
+### Dependencies: Ubuntu 18.x -> Ubuntu 22.x / Debian 9 -> Debian 11 - x86_64
 These dependencies are also applicable for all Ubuntu based distributions such as:
 *   Lubuntu
 *   Linux Mint

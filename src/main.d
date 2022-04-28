@@ -133,12 +133,12 @@ int main(string[] args)
 	} catch (GetOptException e) {
 		// option errors
 		log.error(e.msg);
-		log.error("Try 'onedrive -h' for more information");
+		log.error("Try 'onedrive --help' for more information");
 		return EXIT_FAILURE;
 	} catch (Exception e) {
 		// generic error
 		log.error(e.msg);
-		log.error("Try 'onedrive -h' for more information");
+		log.error("Try 'onedrive --help' for more information");
 		return EXIT_FAILURE;
 	}
 
@@ -738,7 +738,7 @@ int main(string[] args)
 			if (exists(cfg.refreshTokenFilePath)) {
 				// OneDrive refresh token exists
 				log.log("\nApplication has been successfully authorised, however no additional command switches were provided.\n");
-				log.log("Please use --help for further assistance in regards to running this application.\n");
+				log.log("Please use 'onedrive --help' for further assistance in regards to running this application.\n");
 				// Use exit scopes to shutdown API
 				return EXIT_SUCCESS;
 			} else {
@@ -748,7 +748,7 @@ int main(string[] args)
 			}
 		} else {
 			// Application was not just authorised
-			log.log("\n--synchronize or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use --help for further assistance.\n");
+			log.log("\n--synchronize or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use 'onedrive --help' for further assistance.\n");
 			log.log("No OneDrive sync will be performed without one of these two arguments being present.\n");
 			// Use exit scopes to shutdown API
 			return EXIT_FAILURE;
@@ -758,7 +758,7 @@ int main(string[] args)
 	// if --synchronize && --monitor passed in, exit & display help as these conflict with each other
 	if (cfg.getValueBool("synchronize") && cfg.getValueBool("monitor")) {
 		writeln("\nERROR: --synchronize and --monitor cannot be used together\n");
-		writeln("Refer to --help to determine which command option you should use.\n");
+		writeln("Please use 'onedrive --help' for further assistance in regards to running this application.\n");
 		// Use exit scopes to shutdown API
 		return EXIT_FAILURE;
 	}
@@ -1090,9 +1090,9 @@ int main(string[] args)
 			m.onDirCreated = delegate(string path) {
 				// Handle .folder creation if skip_dotfiles is enabled
 				if ((cfg.getValueBool("skip_dotfiles")) && (selectiveSync.isDotFile(path))) {
-					log.vlog("[M] Skipping watching path - .folder found & --skip-dot-files enabled: ", path);
+					log.vlog("[M] Skipping watching local path - .folder found & --skip-dot-files enabled: ", path);
 				} else {
-					log.vlog("[M] Directory created: ", path);
+					log.vlog("[M] Local directory created: ", path);
 					try {
 						sync.scanForDifferences(path);
 					} catch (CurlException e) {
@@ -1103,7 +1103,7 @@ int main(string[] args)
 				}
 			};
 			m.onFileChanged = delegate(string path) {
-				log.vlog("[M] File changed: ", path);
+				log.vlog("[M] Local file changed: ", path);
 				try {
 					sync.scanForDifferences(path);
 				} catch (CurlException e) {
@@ -1113,7 +1113,8 @@ int main(string[] args)
 				}
 			};
 			m.onDelete = delegate(string path) {
-				log.vlog("[M] Item deleted: ", path);
+				log.log("Received inotify delete event from operating system .. attempting item deletion as requested");
+				log.vlog("[M] Local item deleted: ", path);
 				try {
 					sync.deleteByPath(path);
 				} catch (CurlException e) {
@@ -1129,7 +1130,7 @@ int main(string[] args)
 				}
 			};
 			m.onMove = delegate(string from, string to) {
-				log.vlog("[M] Item moved: ", from, " -> ", to);
+				log.vlog("[M] Local item moved: ", from, " -> ", to);
 				try {
 					// Handle .folder -> folder if skip_dotfiles is enabled
 					if ((cfg.getValueBool("skip_dotfiles")) && (selectiveSync.isDotFile(from))) {
@@ -1256,19 +1257,18 @@ int main(string[] args)
 						logMonitorCounter = 1;
 					}
 
-					// do we perform a full scan of sync_dir?
+					// do we perform a full scan of sync_dir and database integrity check?
 					fullScanCounter += 1;
+					// fullScanFrequency = 'monitor_fullscan_frequency' from config
 					if (fullScanCounter > fullScanFrequency){
-						// loop counter has exceeded
+						// 'monitor_fullscan_frequency' counter has exceeded
 						fullScanCounter = 1;
+						// set fullScanRequired = true due to 'monitor_fullscan_frequency' counter has been exceeded
+						fullScanRequired = true;
+						// are we using sync_list?
 						if (syncListConfigured) {
-							// set fullScanRequired = true due to sync_list being used
-							fullScanRequired = true;
 							// sync list is configured
 							syncListConfiguredFullScanOverride = true;
-						} else {
-							// dont set fullScanRequired to true as this is excessive if sync_list is not being used
-							fullScanRequired = false;
 						}
 					}
 
@@ -1531,11 +1531,27 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 							} else {
 								// --monitor in use
 								// Use individual calls with inotify checks between to avoid a race condition between these 2 functions
-								// Database scan
-								sync.scanForDifferencesDatabaseScan(localPath);
-								// handle any inotify events that occured 'whilst' we were scanning the database
-								m.update(true);
+								// Database scan integrity check to compare DB data vs actual content on disk to ensure what we think is local, is local 
+								// and that the data 'hash' as recorded in the DB equals the hash of the actual content
+								// This process can be extremely expensive time and CPU processing wise
+								//
+								// fullScanRequired is set to TRUE when the application starts up, or the config option 'monitor_fullscan_frequency' count is reached
+								// By default, 'monitor_fullscan_frequency' = 12, and 'monitor_interval' = 300, meaning that by default, a full database consistency check 
+								// is done once an hour.
+								//
+								// To change this behaviour adjust 'monitor_interval' and 'monitor_fullscan_frequency' to desired values in the application config file
+								if (fullScanRequired) {
+									log.vlog("Performing Database Consistency Integrity Check .. ");
+									sync.scanForDifferencesDatabaseScan(localPath);
+									// handle any inotify events that occured 'whilst' we were scanning the database
+									m.update(true);
+								} else {
+									log.vdebug("NOT performing Database Integrity Check .. fullScanRequired = FALSE");
+									m.update(true);
+								}
+								
 								// Filesystem walk to find new files not uploaded
+								log.vdebug("Searching local filesystem for new data");
 								sync.scanForDifferencesFilesystemScan(localPath);
 								// handle any inotify events that occured 'whilst' we were scanning the local filesystem
 								m.update(true);
@@ -1547,12 +1563,12 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 							// --synchronize & no sync_list     : fullScanRequired = false, syncListConfiguredFullScanOverride = false
 							// --synchronize & sync_list in use : fullScanRequired = false, syncListConfiguredFullScanOverride = true
 
-							// --monitor loops around 10 iterations. On the 1st loop, sets fullScanRequired = false, syncListConfiguredFullScanOverride = true if requried
+							// --monitor loops around 12 iterations. On the 1st loop, sets fullScanRequired = true, syncListConfiguredFullScanOverride = true if requried
 
 							// --monitor & no sync_list (loop #1)           : fullScanRequired = true, syncListConfiguredFullScanOverride = false
-							// --monitor & no sync_list (loop #2 - #10)     : fullScanRequired = false, syncListConfiguredFullScanOverride = false
+							// --monitor & no sync_list (loop #2 - #12)     : fullScanRequired = false, syncListConfiguredFullScanOverride = false
 							// --monitor & sync_list in use (loop #1)       : fullScanRequired = true, syncListConfiguredFullScanOverride = true
-							// --monitor & sync_list in use (loop #2 - #10) : fullScanRequired = false, syncListConfiguredFullScanOverride = false
+							// --monitor & sync_list in use (loop #2 - #12) : fullScanRequired = false, syncListConfiguredFullScanOverride = false
 
 							// Do not perform a full walk of the OneDrive objects
 							if ((!fullScanRequired) && (!syncListConfiguredFullScanOverride)){
