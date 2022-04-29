@@ -2983,7 +2983,7 @@ final class SyncEngine
 			log.fileOnly("Downloading file ", path, " ... done.");
 		} else {
 			writeln("failed!");
-			log.fileOnly("Downloading file ", path, " failed!");
+			log.fileOnly("Downloading file ", path, " ... failed!");
 		}
 	}
 
