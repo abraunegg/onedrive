@@ -2981,6 +2981,9 @@ final class SyncEngine
 		if (!downloadFailed) {
 			writeln("done.");
 			log.fileOnly("Downloading file ", path, " ... done.");
+		} else {
+			writeln("failed!");
+			log.fileOnly("Downloading file ", path, " ... failed!");
 		}
 	}
 
