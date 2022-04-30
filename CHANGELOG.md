@@ -2,7 +2,26 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## 2.4.16 - 2021-03-10
+## 2.4.17 - 2022-04-30
+### Fixed
+*   Fix docker build, by add missing git package for Fedora builds
+*   Fix application crash when attempting to sync a broken symbolic link
+*   Fix Internet connect disruption retry handling and logging output
+*   Fix local folder creation timestamp with timestamp from OneDrive
+*   Fix logging output when download failed
+
+### Added
+*   Add additional logging specifically for delete event to denote in log output the source of a deletion event when running in --monitor mode
+
+### Changed
+*   Improve when the local database integrity check is performed and on what frequency the database integrity check is performed
+
+### Updated
+*   Remove application output ambiguity on how to access 'help' for the client
+*   Update logging output when running in --monitor --verbose mode in regards to the inotify events
+*   Updated documentation (various)
+
+## 2.4.16 - 2022-03-10
 ### Fixed
 *   Update application file logging error handling
 *   Explicitly set libcurl options
