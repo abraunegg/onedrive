@@ -15,7 +15,16 @@ Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive
 ## Determine which instructions to use
 Ubuntu and its clones are based on various different releases, thus, you must use the correct instructions below, otherwise you may run into package dependancy issues and will be unable to install the client.
 
-### Step 1: Ensure your system is up-to-date
+### Step 1: Remove any configured PPA and associated 'onedrive' package
+Many Internet 'help' pages provide inconsistent details on how to install the OneDrive Client for Linux. A number of these continue to point users to install the client via a PPA repository. As this PPA repository is linked to the Debian packages, it is only updated when the Debian packages are updated. As such, it is not advisable to install from this PPA repository.
+
+To remove the PPA repository and the older client, perform the following actions:
+```text
+sudo apt remove onedrive
+sudo add-apt-repository --remove ppa:yann1ck/onedrive
+```
+
+### Step 2: Ensure your system is up-to-date
 Use a script, similar to the following to ensure your system is updated correctly:
 ```text
 #!/bin/bash
@@ -93,20 +102,26 @@ reboot
 ```
 
 
-### Step 2: Determine what your OS is based on
+### Step 3: Determine what your OS is based on
 Determine what your OS is based on. To do this, run the following command:
 ```text
 lsb_release -a
 ```
 
-### Step 3: Pick the correct instructions to use
+### Step 4: Pick the correct instructions to use
 If required, review the table below based on your 'lsb_release' information to pick the appropriate instructions to use:
 
 | Release & Codename | Instructions to use |
 |--------------------|---------------------|
-| 18.x / bionic            | You must build from source or upgrade your Operating System Ubuntu 20.x      |
+| Ubuntu 18.x / bionic     | You must build from source or upgrade your Operating System Ubuntu 20.x      |
 | Linux Mint 19.x / tina   | You must build from source or upgrade your Operating System Linux Mint 20.x  |
 | Linux Mint 20.x / ulyana | Use Ubuntu 20.04 instructions below  |
+| Debian 10                | Use Debian 10 instructions below     |
+| Debian 11                | Use Debian 11 instructions below     |
+| Ubuntu 20.04             | Use Ubuntu 20.04 instructions below  |
+| Ubuntu 21.04             | Use Ubuntu 21.04 instructions below  |
+| Ubuntu 21.10             | Use Ubuntu 21.10 instructions below  |
+| Ubuntu 22.04             | Use Ubuntu 22.04 instructions below  |
 
 ## Distribution Package Install Instructions
 
