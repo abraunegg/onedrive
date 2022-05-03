@@ -2,4 +2,4 @@ blank_issues_enabled: false
 contact_links:
   - name: "Have a question?"
     url: https://github.com/abraunegg/onedrive/discussions
-    about: "Please do not raise a GitHub issue for asking questions. Post your question in discussions. Thanks in advance for helping us keep the issue tracker clean!"
+    about: "Please do not raise a GitHub issue for asking questions - please post your question under GitHub Discussions. When opening a new discussion, please include all relevant details such as including your application version and how you installed the client. Thanks in advance for helping us keep the issue tracker clean!"
