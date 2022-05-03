@@ -7,7 +7,7 @@ FROM debian:${DEBIAN_VERSION} AS builder-onedrive
 ARG LDC_VERSION_MAIN
 
 RUN apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential curl ca-certificates libcurl4-openssl-dev libsqlite3-dev libxml2-dev pkg-config \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential curl ca-certificates libcurl4-openssl-dev libsqlite3-dev libxml2-dev pkg-config git \
  && rm -rf /var/lib/apt/lists/*
 
 RUN ARCH="$(dpkg --print-architecture)" \
