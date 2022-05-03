@@ -162,6 +162,17 @@ int main(string[] args)
 
 	// update configuration from command line args
 	cfg.update_from_args(args);
+	
+	// In some cases, a user may have a systemd service running, and, also attempt a manual sync
+	// This causes issues with DB items / DB entries if there are significant changes in the database
+	// Check to see if 'items.sqlite3-shm' and 'items.sqlite3-wal' are present - if they are present, we need to exit early
+	string activeShmFile = cfg.databaseFilePath ~ "-shm";
+	string activeWalFile = cfg.databaseFilePath ~ "-wal";
+	if (exists(asNormalizedPath(activeShmFile)) || exists(asNormalizedPath(activeWalFile))) {
+		log.error("ERROR: onedrive application is already running - check system process list for active application instances");
+		log.vlog(" - Use 'sudo ps aufxw | grep onedrive' to potentially determine acive running process");
+		return EXIT_FAILURE;
+	}
 
 	// --resync should be a 'last resort item' .. the user needs to 'accept' to proceed 
 	if (cfg.getValueBool("resync")) {
