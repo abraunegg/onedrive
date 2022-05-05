@@ -293,7 +293,10 @@ int main(string[] args)
 	// Was config file updated between last execution ang this execution?
 	if (currentConfigHash != previousConfigHash) {
 		// config file was updated, however we only want to trigger a --resync requirement if sync_dir, skip_dir, skip_file or drive_id was modified
-		log.log("config file has been updated, checking if --resync needed");
+		if (!cfg.getValueBool("display_config")){
+			// only print this message if we are not using --display-config
+			log.log("config file has been updated, checking if --resync needed");
+		}
 		if (exists(configBackupFile)) {
 			// check backup config what has changed for these configuration options if anything
 			// # sync_dir = "~/OneDrive"
