@@ -175,7 +175,7 @@ int main(string[] args)
 	}
 
 	// --resync should be a 'last resort item' .. the user needs to 'accept' to proceed 
-	if (cfg.getValueBool("resync")) {
+	if ((cfg.getValueBool("resync")) && (!cfg.getValueBool("display_config"))) {
 		// what is the risk acceptance?
 		bool resyncRiskAcceptance = false;
 	
@@ -293,7 +293,10 @@ int main(string[] args)
 	// Was config file updated between last execution ang this execution?
 	if (currentConfigHash != previousConfigHash) {
 		// config file was updated, however we only want to trigger a --resync requirement if sync_dir, skip_dir, skip_file or drive_id was modified
-		log.log("config file has been updated, checking if --resync needed");
+		if (!cfg.getValueBool("display_config")){
+			// only print this message if we are not using --display-config
+			log.log("config file has been updated, checking if --resync needed");
+		}
 		if (exists(configBackupFile)) {
 			// check backup config what has changed for these configuration options if anything
 			// # sync_dir = "~/OneDrive"
@@ -576,17 +579,6 @@ int main(string[] args)
 		}
 	}
 	
-	// Handle --resync to remove local files
-	if (cfg.getValueBool("resync")) {
-		log.vdebug("--resync requested");
-		log.log("Deleting the saved application sync status ...");
-		if (!cfg.getValueBool("dry_run")) {
-			safeRemove(cfg.databaseFilePath);
-			safeRemove(cfg.deltaLinkFilePath);
-			safeRemove(cfg.uploadStateFilePath);
-		}
-	}
-
 	// Display current application configuration, no application initialisation
 	if (cfg.getValueBool("display_config")){
 		// Display application version
@@ -652,6 +644,17 @@ int main(string[] args)
 		return EXIT_SUCCESS;
 	}
 
+	// Handle --resync to remove local files
+	if (cfg.getValueBool("resync")) {
+		log.vdebug("--resync requested");
+		log.log("Deleting the saved application sync status ...");
+		if (!cfg.getValueBool("dry_run")) {
+			safeRemove(cfg.databaseFilePath);
+			safeRemove(cfg.deltaLinkFilePath);
+			safeRemove(cfg.uploadStateFilePath);
+		}
+	}
+	
 	// Test if OneDrive service can be reached, exit if it cant be reached
 	log.vdebug("Testing network to ensure network connectivity to Microsoft OneDrive Service");
 	online = testNetwork();
