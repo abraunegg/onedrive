@@ -175,7 +175,7 @@ private void logfileWriteLine(T...)(T args)
 			// write out error message that we cant log to the requested file
 			writeln("\nUnable to write activity log to ", logFileName);
 			writeln("Please set appropriate permissions to allow write access to the logging directory for your user account");
-			writeln("The requested client activity log will instead be located in your users home directory\n");
+			writeln("The requested client activity log will instead be located in your users home directory");
 		
 			// set the flag so we dont keep printing this error message
 			logFileWriteFailFlag = true;
