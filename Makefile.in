@@ -107,7 +107,7 @@ onedrive: $(SOURCES)
 
 install: all
 	$(INSTALL) -D onedrive $(DESTDIR)$(bindir)/onedrive
-	$(INSTALL) -D onedrive.1 $(DESTDIR)$(mandir)/man1/onedrive.1
+	$(INSTALL) -D -m 644 onedrive.1 $(DESTDIR)$(mandir)/man1/onedrive.1
 	$(INSTALL) -D -m 644 contrib/logrotate/onedrive.logrotate $(DESTDIR)$(sysconfdir)/logrotate.d/onedrive
 	mkdir -p $(DESTDIR)$(docdir)
 	$(INSTALL) -D -m 644 $(DOCFILES) $(DESTDIR)$(docdir)
