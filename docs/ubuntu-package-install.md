@@ -113,15 +113,15 @@ If required, review the table below based on your 'lsb_release' information to p
 
 | Release & Codename | Instructions to use |
 |--------------------|---------------------|
-| Ubuntu 18.x / bionic     | You must build from source or upgrade your Operating System Ubuntu 20.x      |
+| Ubuntu 18.x / bionic     | You must build from source or upgrade your Operating System Ubuntu 22.x      |
 | Linux Mint 19.x / tina   | You must build from source or upgrade your Operating System Linux Mint 20.x  |
-| Linux Mint 20.x / ulyana | Use Ubuntu 20.04 instructions below  |
-| Debian 10                | Use Debian 10 instructions below     |
-| Debian 11                | Use Debian 11 instructions below     |
-| Ubuntu 20.04             | Use Ubuntu 20.04 instructions below  |
-| Ubuntu 21.04             | Use Ubuntu 21.04 instructions below  |
-| Ubuntu 21.10             | Use Ubuntu 21.10 instructions below  |
-| Ubuntu 22.04             | Use Ubuntu 22.04 instructions below  |
+| Linux Mint 20.x / ulyana | Use [Ubuntu 20.04](#distribution-ubuntu-2004) instructions below  |
+| Debian 10                | Use [Debian 10](#distribution-debian-10) instructions below     |
+| Debian 11                | Use [Debian 11](#distribution-debian-11) instructions below     |
+| Ubuntu 20.04             | Use [Ubuntu 20.04](#distribution-ubuntu-2004) instructions below  |
+| Ubuntu 21.04             | Use [Ubuntu 21.04](#distribution-ubuntu-2104) instructions below  |
+| Ubuntu 21.10             | Use [Ubuntu 21.10](#distribution-ubuntu-2110) instructions below  |
+| Ubuntu 22.04             | Use [Ubuntu 22.04](#distribution-ubuntu-2204) instructions below  |
 
 ## Distribution Package Install Instructions
 
@@ -144,13 +144,13 @@ echo 'deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubu
 ```
 
 #### Step 3: Update your apt package cache
-1.  Run: `sudo apt-get update`
+Run: `sudo apt-get update`
 
 #### Step 4: Install 'onedrive'
-1.  Run: `sudo apt install onedrive`
+Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
-1.  Read and understand the known issues with these packages below, taking any action that is needed.
+Read and understand the known issues with these packages below, taking any action that is needed.
 
 ### Distribution: Debian 11
 The packages support the following platform architectures:
@@ -171,13 +171,13 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-o
 ```
 
 #### Step 3: Update your apt package cache
-1.  Run: `sudo apt-get update`
+Run: `sudo apt-get update`
 
 #### Step 4: Install 'onedrive'
-1.  Run: `sudo apt install onedrive`
+Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
-1.  Read and understand the known issues with these packages below, taking any action that is needed.
+Read and understand the known issues with these packages below, taking any action that is needed.
 
 ### Distribution: Ubuntu 20.04
 The packages support the following platform architectures:
@@ -198,13 +198,13 @@ echo 'deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubu
 ```
 
 #### Step 3: Update your apt package cache
-1.  Run: `sudo apt-get update`
+Run: `sudo apt-get update`
 
 #### Step 4: Install 'onedrive'
-1.  Run: `sudo apt install onedrive`
+Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
-1.  Read and understand the known issues with these packages below, taking any action that is needed.
+Read and understand the known issues with these packages below, taking any action that is needed.
 
 ### Distribution: Ubuntu 21.04
 The packages support the following platform architectures:
@@ -225,13 +225,13 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-o
 ```
 
 #### Step 3: Update your apt package cache
-1.  Run: `sudo apt-get update`
+Run: `sudo apt-get update`
 
 #### Step 4: Install 'onedrive'
-1.  Run: `sudo apt install onedrive`
+Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
-1.  Read and understand the known issues with these packages below, taking any action that is needed.
+Read and understand the known issues with these packages below, taking any action that is needed.
 
 ### Distribution: Ubuntu 21.10
 The packages support the following platform architectures:
@@ -252,13 +252,13 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-o
 ```
 
 #### Step 3: Update your apt package cache
-1.  Run: `sudo apt-get update`
+Run: `sudo apt-get update`
 
 #### Step 4: Install 'onedrive'
-1.  Run: `sudo apt install onedrive`
+Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
-1.  Read and understand the known issues with these packages below, taking any action that is needed.
+Read and understand the known issues with these packages below, taking any action that is needed.
 
 ### Distribution: Ubuntu 22.04
 The packages support the following platform architectures:
@@ -279,13 +279,13 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-o
 ```
 
 #### Step 3: Update your apt package cache
-1.  Run: `sudo apt-get update`
+Run: `sudo apt-get update`
 
 #### Step 4: Install 'onedrive'
-1.  Run: `sudo apt install onedrive`
+Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
-1.  Read and understand the known issues with these packages below, taking any action that is needed.
+Read and understand the known issues with these packages below, taking any action that is needed.
 
 ## Known Issues with Installing from the above packages
 
@@ -304,9 +304,12 @@ sudo rm /etc/systemd/user/default.target.wants/onedrive.service
 
 This issue is being tracked by: [#1274](https://github.com/abraunegg/onedrive/issues/1274)
 
-**Important:** It is highly advisable that you remove this symbolic link before you configure or authenticate your client. If you do not remove this symbolic link before you configure or authenticate your client this could lead to multiple copies of the client running, leading to sync conflics and operational issues which may include data loss (data deleted locally & on OneDrive).
+**Important:** It is highly advisable that you remove this symbolic link before you configure or authenticate your client. If you do not remove this symbolic link before you configure or authenticate your client this will be a major contributor to why the following error message will be generated:
+```
+ERROR: onedrive application is already running - check system process list for active application instances
+```
 
-Do not rely on this symbolic link for your systemd configuration to automatically start your onedrive client - refer to [Running 'onedrive' as a system service](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#running-onedrive-as-a-system-service) on how to configure this correctly.
+**Important:** Do not rely on this symbolic link for your systemd configuration to automatically start your onedrive client - refer to [Running 'onedrive' as a system service](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#running-onedrive-as-a-system-service) on how to configure this correctly.
 
 ### 2. The client will segfault | core-dump when exiting
 When the client is being run in `--monitor` mode manually, or when using the systemd service, the client will segfault on exit.
