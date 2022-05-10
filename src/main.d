@@ -571,36 +571,73 @@ int main(string[] args)
 	// Display current application configuration, no application initialisation
 	if (cfg.getValueBool("display_config")){
 		// Display application version
-		writeln("onedrive version                       = ", strip(import("version")));
+		writeln("onedrive version                             = ", strip(import("version")));
 		// Display all of the pertinent configuration options
-		writeln("Config path                            = ", cfg.configDirName);
+		writeln("Config path                                  = ", cfg.configDirName);
 		// Does a config file exist or are we using application defaults
-		writeln("Config file found in config path       = ", exists(configFilePath));
-
-		// Config Options
-		writeln("Config option 'check_nosync'           = ", cfg.getValueBool("check_nosync"));
-		writeln("Config option 'sync_dir'               = ", syncDir);
-		writeln("Config option 'skip_dir'               = ", cfg.getValueString("skip_dir"));
-		writeln("Config option 'skip_file'              = ", cfg.getValueString("skip_file"));
-		writeln("Config option 'skip_dotfiles'          = ", cfg.getValueBool("skip_dotfiles"));
-		writeln("Config option 'skip_symlinks'          = ", cfg.getValueBool("skip_symlinks"));
-		writeln("Config option 'monitor_interval'       = ", cfg.getValueLong("monitor_interval"));
-		writeln("Config option 'min_notify_changes'     = ", cfg.getValueLong("min_notify_changes"));
-		writeln("Config option 'log_dir'                = ", cfg.getValueString("log_dir"));
-		writeln("Config option 'classify_as_big_delete' = ", cfg.getValueLong("classify_as_big_delete"));
-		writeln("Config option 'upload_only'            = ", cfg.getValueBool("upload_only"));
-		writeln("Config option 'no_remote_delete'       = ", cfg.getValueBool("no_remote_delete"));
-		writeln("Config option 'remove_source_files'    = ", cfg.getValueBool("remove_source_files"));
-
+		writeln("Config file found in config path             = ", exists(configFilePath));
+		
 		// Is config option drive_id configured?
 		if (cfg.getValueString("drive_id") != ""){
-			writeln("Config option 'drive_id'               = ", cfg.getValueString("drive_id"));
+			writeln("Config option 'drive_id'                     = ", cfg.getValueString("drive_id"));
 		}
 
-		// Is sync_list configured?
+		// Config Options as per 'config' file
+		writeln("Config option 'sync_dir'                     = ", syncDir);
+		
+		// logging and notifications
+		writeln("Config option 'enable_logging'               = ", cfg.getValueBool("enable_logging"));
+		writeln("Config option 'log_dir'                      = ", cfg.getValueString("log_dir"));
+		writeln("Config option 'disable_notifications'        = ", cfg.getValueBool("disable_notifications"));
+		writeln("Config option 'min_notify_changes'           = ", cfg.getValueLong("min_notify_changes"));
+		
+		// skip files and directory and 'matching' policy
+		writeln("Config option 'skip_dir'                     = ", cfg.getValueString("skip_dir"));
+		writeln("Config option 'skip_dir_strict_match'        = ", cfg.getValueBool("skip_dir_strict_match"));
+		writeln("Config option 'skip_file'                    = ", cfg.getValueString("skip_file"));
+		writeln("Config option 'skip_dotfiles'                = ", cfg.getValueBool("skip_dotfiles"));
+		writeln("Config option 'skip_symlinks'                = ", cfg.getValueBool("skip_symlinks"));
+		
+		// --monitor sync process options
+		writeln("Config option 'monitor_interval'             = ", cfg.getValueLong("monitor_interval"));
+		writeln("Config option 'monitor_log_frequency'        = ", cfg.getValueLong("monitor_log_frequency"));
+		writeln("Config option 'monitor_fullscan_frequency'   = ", cfg.getValueLong("monitor_fullscan_frequency"));
+		
+		// sync process and method
+		writeln("Config option 'dry_run'                      = ", cfg.getValueBool("dry_run"));
+		writeln("Config option 'upload_only'                  = ", cfg.getValueBool("upload_only"));
+		writeln("Config option 'download_only'                = ", cfg.getValueBool("download_only"));
+		writeln("Config option 'local_first'                  = ", cfg.getValueBool("local_first"));
+		writeln("Config option 'check_nosync'                 = ", cfg.getValueBool("check_nosync"));
+		writeln("Config option 'check_nomount'                = ", cfg.getValueBool("check_nomount"));
+		writeln("Config option 'resync'                       = ", cfg.getValueBool("resync"));
+		writeln("Config option 'resync_auth'                  = ", cfg.getValueBool("resync_auth"));
+
+		// data integrity
+		writeln("Config option 'classify_as_big_delete'       = ", cfg.getValueLong("classify_as_big_delete"));
+		writeln("Config option 'disable_upload_validation'    = ", cfg.getValueBool("disable_upload_validation"));
+		writeln("Config option 'bypass_data_preservation'     = ", cfg.getValueBool("bypass_data_preservation"));
+		writeln("Config option 'no_remote_delete'             = ", cfg.getValueBool("no_remote_delete"));
+		writeln("Config option 'remove_source_files'          = ", cfg.getValueBool("remove_source_files"));
+		writeln("Config option 'sync_dir_permissions'         = ", cfg.getValueLong("sync_dir_permissions"));
+		writeln("Config option 'sync_file_permissions'        = ", cfg.getValueLong("sync_file_permissions"));
+		
+		// curl operations
+		writeln("Config option 'application_id'               = ", cfg.getValueString("application_id"));
+		writeln("Config option 'azure_ad_endpoint'            = ", cfg.getValueString("azure_ad_endpoint"));
+		writeln("Config option 'azure_tenant_id'              = ", cfg.getValueString("azure_tenant_id"));
+		writeln("Config option 'user_agent'                   = ", cfg.getValueString("user_agent"));
+		writeln("Config option 'force_http_2'                 = ", cfg.getValueBool("force_http_2"));
+		writeln("Config option 'debug_https'                  = ", cfg.getValueBool("debug_https"));
+		writeln("Config option 'rate_limit'                   = ", cfg.getValueLong("rate_limit"));
+		writeln("Config option 'operation_timeout'            = ", cfg.getValueLong("operation_timeout"));
+		
+		
+		// Is sync_list configured ?
+		writeln("Config option 'sync_root_files'              = ", cfg.getValueBool("sync_root_files"));
 		if (exists(syncListFilePath)){
-			writeln("Config option 'sync_root_files'        = ", cfg.getValueBool("sync_root_files"));
-			writeln("Selective sync 'sync_list' configured  = true");
+			
+			writeln("Selective sync 'sync_list' configured        = true");
 			writeln("sync_list contents:");
 			// Output the sync_list contents
 			auto syncListFile = File(syncListFilePath);
@@ -610,13 +647,14 @@ int main(string[] args)
 				writeln(line);
 			}
 		} else {
-			writeln("Config option 'sync_root_files'        = ", cfg.getValueBool("sync_root_files"));
-			writeln("Selective sync 'sync_list' configured  = false");
+			writeln("Selective sync 'sync_list' configured        = false");
+			
 		}
 
-		// Is business_shared_folders configured
+		// Is business_shared_folders enabled and configured ?
+		writeln("Config option 'sync_business_shared_folders' = ", cfg.getValueBool("sync_business_shared_folders"));
 		if (exists(businessSharedFolderFilePath)){
-			writeln("Business Shared Folders configured     = true");
+			writeln("Business Shared Folders configured           = true");
 			writeln("business_shared_folders contents:");
 			// Output the business_shared_folders contents
 			auto businessSharedFolderFileList = File(businessSharedFolderFilePath);
@@ -626,9 +664,19 @@ int main(string[] args)
 				writeln(line);
 			}
 		} else {
-			writeln("Business Shared Folders configured     = false");
+			writeln("Business Shared Folders configured           = false");
 		}
-
+		
+		// Are webhooks enabled?
+		writeln("Config option 'webhook_enabled'              = ", cfg.getValueBool("webhook_enabled"));
+		if (cfg.getValueBool("webhook_enabled")) {
+			writeln("Config option 'webhook_public_url'           = ", cfg.getValueString("webhook_public_url"));
+			writeln("Config option 'webhook_listening_host'       = ", cfg.getValueString("webhook_listening_host"));
+			writeln("Config option 'webhook_listening_port'       = ", cfg.getValueLong("webhook_listening_port"));
+			writeln("Config option 'webhook_expiration_interval'  = ", cfg.getValueLong("webhook_expiration_interval"));
+			writeln("Config option 'webhook_renewal_interval'     = ", cfg.getValueLong("webhook_renewal_interval"));
+		}
+		
 		// Exit
 		return EXIT_SUCCESS;
 	}
