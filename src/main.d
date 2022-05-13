@@ -681,6 +681,13 @@ int main(string[] args)
 		return EXIT_SUCCESS;
 	}
 
+	// --upload-only and --download-only are mutually exclusive and cannot be used together
+	if ((cfg.getValueBool("upload_only")) && (cfg.getValueBool("download_only"))) {
+		// both cannot be true at the same time
+		log.error("ERROR: --upload-only and --download-only are mutually exclusive and cannot be used together.\n");
+		return EXIT_FAILURE;
+	}
+
 	// Handle --resync to remove local files
 	if (cfg.getValueBool("resync")) {
 		log.vdebug("--resync requested");
