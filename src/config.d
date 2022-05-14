@@ -303,6 +303,7 @@ final class Config
 		boolValues["synchronize"]         = false;
 		boolValues["force"]               = false;
 		boolValues["list_business_shared_folders"] = false;
+		boolValues["force_sync"]          = false;
 
 		// Application Startup option validation
 		try {
@@ -372,6 +373,9 @@ final class Config
 				"force",
 					"Force the deletion of data when a 'big delete' is detected",
 					&boolValues["force"],
+				"force-sync",
+					"Force a synchronization of a specific folder, only when using --single-directory and ignoring all non-default skip_dir and skip_file rules",
+					&boolValues["force_sync"],
 				"get-file-link",
 					"Display the file link of a synced file",
 					&stringValues["get_file_link"],
@@ -712,6 +716,20 @@ final class Config
 			configureRequiredFilePermisions();
 		}
 		return configuredFilePermissionMode;
+	}
+	
+	void resetSkipToDefaults() {
+		// reset skip_file and skip_dir to application defaults
+		// skip_file
+		log.vdebug("original skip_file: ", getValueString("skip_file"));
+		log.vdebug("resetting skip_file");
+		setValueString("skip_file", defaultSkipFile);
+		log.vdebug("reset skip_file: ", getValueString("skip_file"));
+		// skip_dir
+		log.vdebug("original skip_dir: ", getValueString("skip_dir"));
+		log.vdebug("resetting skip_dir");
+		setValueString("skip_dir", defaultSkipDir);
+		log.vdebug("reset skip_dir: ", getValueString("skip_dir"));
 	}
 }
 
