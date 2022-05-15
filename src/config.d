@@ -736,6 +736,8 @@ final class Config
 void outputLongHelp(Option[] opt)
 {
 	auto argsNeedingOptions = [
+		"--auth-files",
+		"--auth-response",
 		"--confdir",
 		"--create-directory",
 		"--create-share-link",
@@ -750,7 +752,9 @@ void outputLongHelp(Option[] opt)
 		"--monitor-fullscan-frequency",
 		"--remove-directory",
 		"--single-directory",
+		"--skip-dir",
 		"--skip-file",
+		"--skip-size",
 		"--source-directory",
 		"--syncdir",
 		"--user-agent" ];
