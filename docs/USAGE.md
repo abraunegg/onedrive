@@ -872,6 +872,7 @@ tail -f /var/log/onedrive/<username>.onedrive.log
 To change what 'user' the client runs under (by default root), manually edit the init.d service file and modify `daemon --user root onedrive_service.sh` for the correct user.
 
 ### OneDrive service running as root user via systemd (Arch, Ubuntu, Debian, OpenSuSE, Fedora)
+First, su to root using `su - root`, then enable the systemd service:
 ```text
 systemctl --user enable onedrive
 systemctl --user start onedrive
