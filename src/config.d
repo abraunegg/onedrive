@@ -374,7 +374,7 @@ final class Config
 					"Force the deletion of data when a 'big delete' is detected",
 					&boolValues["force"],
 				"force-sync",
-					"Force a synchronization of a specific folder, only when using --single-directory and ignoring all non-default skip_dir and skip_file rules",
+					"Force a synchronization of a specific folder, only when using --synchronize --single-directory and ignore all non-default skip_dir and skip_file rules",
 					&boolValues["force_sync"],
 				"get-file-link",
 					"Display the file link of a synced file",
