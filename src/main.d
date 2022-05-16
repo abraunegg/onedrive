@@ -684,7 +684,7 @@ int main(string[] args)
 	// --upload-only and --download-only are mutually exclusive and cannot be used together
 	if ((cfg.getValueBool("upload_only")) && (cfg.getValueBool("download_only"))) {
 		// both cannot be true at the same time
-		log.error("ERROR: --upload-only and --download-only are mutually exclusive and cannot be used together.\n");
+		writeln("ERROR: --upload-only and --download-only are mutually exclusive and cannot be used together.\n");
 		return EXIT_FAILURE;
 	}
 
@@ -940,6 +940,51 @@ int main(string[] args)
 	// All skip_file entries are valid
 	log.vdebug("skip_file: ", cfg.getValueString("skip_file"));
 	selectiveSync.setFileMask(cfg.getValueString("skip_file"));
+
+	// Implement https://github.com/abraunegg/onedrive/issues/1129
+	// Force a synchronization of a specific folder, only when using --synchronize --single-directory and ignoring all non-default skip_dir and skip_file rules
+	if ((cfg.getValueBool("synchronize")) && (cfg.getValueString("single_directory") != "") && (cfg.getValueBool("force_sync"))) {
+		log.log("\nWARNING: Overriding application configuration to use application defaults for skip_dir and skip_file due to --synchronize --single-directory --force-sync being used");
+		// performing this action could have undesirable effects .. the user must accept this risk
+		// what is the risk acceptance?
+		bool resyncRiskAcceptance = false;
+	
+		// need to prompt user
+		char response;
+		// warning message
+		writeln("\nThe use of --force-sync will reconfigure the application to use defaults. This may have untold and unknown future impacts.");
+		writeln("By proceeding in using this option you accept any impacts including any data loss that may occur as a result of using --force-sync.");
+		write("\nAre you sure you wish to proceed with --force-sync [Y/N] ");
+		
+		try {
+			// Attempt to read user response
+			readf(" %c\n", &response);
+		} catch (std.format.FormatException e) {
+			// Caught an error
+			return EXIT_FAILURE;
+		}
+		
+		// Evaluate user repsonse
+		if ((to!string(response) == "y") || (to!string(response) == "Y")) {
+			// User has accepted --force-sync risk to proceed
+			resyncRiskAcceptance = true;
+			// Are you sure you wish .. does not use writeln();
+			write("\n");
+		}
+		
+		// Action based on response
+		if (!resyncRiskAcceptance){
+			// --force-sync not accepted
+			return EXIT_FAILURE;
+		} else {
+			// --force-sync risk accepted
+			// reset set config using function to use application defaults
+			cfg.resetSkipToDefaults();
+			// update sync engine regex with reset defaults
+			selectiveSync.setDirMask(cfg.getValueString("skip_dir"));
+			selectiveSync.setFileMask(cfg.getValueString("skip_file"));		
+		}
+	}
 
 	// Initialize the sync engine
 	auto sync = new SyncEngine(cfg, oneDrive, itemDb, selectiveSync);
