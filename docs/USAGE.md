@@ -24,10 +24,11 @@
     + [skip_file](#skip_file)
     + [skip_dotfiles](#skip_dotfiles)
     + [monitor_interval](#monitor_interval)
-	+ [monitor_fullscan_frequency](#monitor_fullscan_frequency)
+    + [monitor_fullscan_frequency](#monitor_fullscan_frequency)
     + [min_notify_changes](#min_notify_changes)
     + [operation_timeout](#operation_timeout)
   * [Performing a --resync](#performing-a---resync)
+  * [Performing a --force-sync without a --resync or changing your configuration](#performing-a---force-sync-without-a---resync-or-changing-your-configuration)
   * [Handling Symbolic Links](#handling-symbolic-links)
   * [Selective sync via 'sync_list' file](#selective-sync-via-sync_list-file)
   * [Configuring the client for 'single tenant application' use](#configuring-the-client-for-single-tenant-application-use)
@@ -595,6 +596,28 @@ To proceed with using `--resync`, you must type 'y' or 'Y' to allow the applicat
 
 **Note:** In some automated environments (and it is 100% assumed you *know* what you are doing because of automation), in order to avoid this 'proceed with acknowledgement' requirement, add `--resync-auth` to automatically acknowledge the prompt.
 
+### Performing a --force-sync without a --resync or changing your configuration
+In some cases and situations, you may have configured the application to skip certain files and folders using 'skip_file' and 'skip_dir' configuration. You then may have a requirement to actually sync one of these items, but do not wish to modify your configuration, nor perform an entire `--resync` twice.
+
+The `--force-sync` option allows you to sync a specific directory, ignoring your 'skip_file' and 'skip_dir' configuration and negating the requirement to perform a `--resync`
+
+In order to use this option, you must run the application manually in the following manner:
+```text
+onedrive --synchronize --single-directory '<directory_to_sync>' --force-sync <add any other options needed or required>
+```
+
+When using `--force-sync`, the following warning and advice will be presented:
+```text
+WARNING: Overriding application configuration to use application defaults for skip_dir and skip_file due to --synchronize --single-directory --force-sync being used
+
+The use of --force-sync will reconfigure the application to use defaults. This may have untold and unknown future impacts.
+By proceeding in using this option you accept any impacts including any data loss that may occur as a result of using --force-sync.
+
+Are you sure you wish to proceed with --force-sync [Y/N] 
+```
+
+To proceed with using `--force-sync`, you must type 'y' or 'Y' to allow the application to continue.
+
 ### Handling Symbolic Links
 Microsoft OneDrive has zero concept or understanding of symbolic links, and attempting to upload a symbolic link to Microsoft OneDrive generates a platform API error. All data (files and folders) that are uploaded to OneDrive must be whole files or actual directories.
 
@@ -1118,6 +1141,8 @@ Options:
       Force the deletion of data when a 'big delete' is detected
   --force-http-2
       Force the use of HTTP/2 for all operations where applicable
+  --force-sync
+      Force a synchronization of a specific folder, only when using --single-directory and ignoring all non-default skip_dir and skip_file rules
   --get-O365-drive-id ARG
       Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library
   --get-file-link ARG
