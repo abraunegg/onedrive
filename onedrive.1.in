@@ -103,7 +103,7 @@ Force the use of HTTP/2 for all operations where applicable
 Configuration file key: \fBforce_http_2\fP (default: \fBfalse\fP)
 .TP
 \fB\-\-force\-sync\fP
-Force a synchronization of a specific folder, only when using --single-directory and ignoring 
+Force a synchronization of a specific folder, only when using --synchronize --single-directory and ignore 
 .br
 all non-default skip_dir and skip_file rules
 .TP
