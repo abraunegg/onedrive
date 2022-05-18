@@ -415,7 +415,7 @@ The following are directory and file default permissions for any new directory o
 *   Directories: 700 - This provides the following permissions: `drwx------`
 *   Files: 600 - This provides the following permissions: `-rw-------`
 
-To change the default permissions, update the following 2 configuration options with the required permissions. Utilise [Unix Permissions Calculator](http://permissions-calculator.org/) to assist in determining the required permissions.
+To change the default permissions, update the following 2 configuration options with the required permissions. Utilise the [Unix Permissions Calculator](https://chmod-calculator.com/) to assist in determining the required permissions.
 
 ```text
 # When changing a config option below, remove the '#' from the start of the line
