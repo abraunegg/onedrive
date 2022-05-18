@@ -261,9 +261,36 @@ int main(string[] args)
 	if (exists(configFilePath)) currentConfigHash = computeQuickXorHash(configFilePath);
 	if (exists(syncListFilePath)) currentSyncListHash = computeQuickXorHash(syncListFilePath);
 	if (exists(businessSharedFolderFilePath)) currentBusinessSharedFoldersHash = computeQuickXorHash(businessSharedFolderFilePath);
-	if (exists(configHashFile)) previousConfigHash = readText(configHashFile);
-	if (exists(syncListHashFile)) previousSyncListHash = readText(syncListHashFile);
-	if (exists(businessSharedFoldersHashFile)) previousBusinessSharedFoldersHash = readText(businessSharedFoldersHashFile);
+	if (exists(configHashFile)) {
+		try {
+			previousConfigHash = readText(configHashFile);
+		} catch (std.file.FileException e) {
+			// Unable to access required file
+			log.error("ERROR: Unable to access ", e.msg);
+			// Use exit scopes to shutdown API
+			return EXIT_FAILURE;
+		}
+	}
+	if (exists(syncListHashFile)) {
+		try {
+			previousSyncListHash = readText(syncListHashFile);
+		} catch (std.file.FileException e) {
+			// Unable to access required file
+			log.error("ERROR: Unable to access ", e.msg);
+			// Use exit scopes to shutdown API
+			return EXIT_FAILURE;
+		}
+	}
+	if (exists(businessSharedFoldersHashFile)) {
+		try {
+			previousBusinessSharedFoldersHash = readText(businessSharedFoldersHashFile);
+		} catch (std.file.FileException e) {
+			// Unable to access required file
+			log.error("ERROR: Unable to access ", e.msg);
+			// Use exit scopes to shutdown API
+			return EXIT_FAILURE;
+		}
+	}
 
 	// Was sync_list file updated?
 	if (currentSyncListHash != previousSyncListHash) {
