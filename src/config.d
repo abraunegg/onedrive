@@ -553,9 +553,19 @@ final class Config
 	private bool load(string filename)
 	{
 		// configure function variables
+		try {
+			readText(filename);
+		} catch (std.file.FileException e) {
+			// Unable to access required file
+			log.error("ERROR: Unable to access ", e.msg);
+			// Use exit scopes to shutdown API
+			return false;
+		}
+		
+		// We were able to readText the config file - so, we should be able to open and read it
 		auto file = File(filename, "r");
 		string lineBuffer;
-
+		
 		// configure scopes
 		// - failure
 		scope(failure) {
