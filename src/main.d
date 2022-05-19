@@ -52,6 +52,10 @@ int main(string[] args)
 	bool performSyncOK = false;
 	bool displayMemoryUsage = false;
 	bool displaySyncOptions = false;
+	
+	// hash file permission values
+	string hashPermissionValue = "600";
+	auto convertedPermissionValue = parse!long(hashPermissionValue, 8);
 
 	// Define scopes
 	scope(exit) {
@@ -223,18 +227,24 @@ int main(string[] args)
 	if ((exists(configFilePath)) && (!exists(configHashFile))) {
 		// Hash of config file needs to be created
 		std.file.write(configHashFile, computeQuickXorHash(configFilePath));
+		// Hash file should only be readable by the user who created it - 0600 permissions needed
+		configHashFile.setAttributes(to!int(convertedPermissionValue));
 	}
 
 	// Does a sync_list file exist with a valid hash file
 	if ((exists(syncListFilePath)) && (!exists(syncListHashFile))) {
 		// Hash of sync_list file needs to be created
 		std.file.write(syncListHashFile, computeQuickXorHash(syncListFilePath));
+		// Hash file should only be readable by the user who created it - 0600 permissions needed
+		syncListHashFile.setAttributes(to!int(convertedPermissionValue));
 	}
 
 	// check if business_shared_folders & business_shared_folders hash exists
 	if ((exists(businessSharedFolderFilePath)) && (!exists(businessSharedFoldersHashFile))) {
 		// Hash of business_shared_folders file needs to be created
 		std.file.write(businessSharedFoldersHashFile, computeQuickXorHash(businessSharedFolderFilePath));
+		// Hash file should only be readable by the user who created it - 0600 permissions needed
+		businessSharedFoldersHashFile.setAttributes(to!int(convertedPermissionValue));
 	}
 
 	// If hash files exist, but config files do not ... remove the hash, but only if --resync was issued as now the application will use 'defaults' which 'may' be different
@@ -261,9 +271,36 @@ int main(string[] args)
 	if (exists(configFilePath)) currentConfigHash = computeQuickXorHash(configFilePath);
 	if (exists(syncListFilePath)) currentSyncListHash = computeQuickXorHash(syncListFilePath);
 	if (exists(businessSharedFolderFilePath)) currentBusinessSharedFoldersHash = computeQuickXorHash(businessSharedFolderFilePath);
-	if (exists(configHashFile)) previousConfigHash = readText(configHashFile);
-	if (exists(syncListHashFile)) previousSyncListHash = readText(syncListHashFile);
-	if (exists(businessSharedFoldersHashFile)) previousBusinessSharedFoldersHash = readText(businessSharedFoldersHashFile);
+	if (exists(configHashFile)) {
+		try {
+			previousConfigHash = readText(configHashFile);
+		} catch (std.file.FileException e) {
+			// Unable to access required file
+			log.error("ERROR: Unable to access ", e.msg);
+			// Use exit scopes to shutdown API
+			return EXIT_FAILURE;
+		}
+	}
+	if (exists(syncListHashFile)) {
+		try {
+			previousSyncListHash = readText(syncListHashFile);
+		} catch (std.file.FileException e) {
+			// Unable to access required file
+			log.error("ERROR: Unable to access ", e.msg);
+			// Use exit scopes to shutdown API
+			return EXIT_FAILURE;
+		}
+	}
+	if (exists(businessSharedFoldersHashFile)) {
+		try {
+			previousBusinessSharedFoldersHash = readText(businessSharedFoldersHashFile);
+		} catch (std.file.FileException e) {
+			// Unable to access required file
+			log.error("ERROR: Unable to access ", e.msg);
+			// Use exit scopes to shutdown API
+			return EXIT_FAILURE;
+		}
+	}
 
 	// Was sync_list file updated?
 	if (currentSyncListHash != previousSyncListHash) {
@@ -352,9 +389,13 @@ int main(string[] args)
 					// update config hash
 					log.vdebug("updating config hash as it is out of date");
 					std.file.write(configHashFile, computeQuickXorHash(configFilePath));
+					// Hash file should only be readable by the user who created it - 0600 permissions needed
+					configHashFile.setAttributes(to!int(convertedPermissionValue));
 					// create backup copy of current config file
 					log.vdebug("making backup of config file as it is out of date");
 					std.file.copy(configFilePath, configBackupFile);
+					// File Copy should only be readable by the user who created it - 0600 permissions needed
+					configBackupFile.setAttributes(to!int(convertedPermissionValue));
 				}
 			}
 		}
@@ -364,6 +405,8 @@ int main(string[] args)
 	if ((exists(configFilePath)) && (!exists(configBackupFile))) {
 		// create backup copy of current config file
 		std.file.copy(configFilePath, configBackupFile);
+		// File Copy should only be readable by the user who created it - 0600 permissions needed
+		configBackupFile.setAttributes(to!int(convertedPermissionValue));
 	}
 
 	// config file set options can be changed via CLI input, specifically these will impact sync and --resync will be needed:
@@ -420,19 +463,27 @@ int main(string[] args)
 						// update hash
 						log.vdebug("updating config hash as --resync issued");
 						std.file.write(configHashFile, computeQuickXorHash(configFilePath));
+						// Hash file should only be readable by the user who created it - 0600 permissions needed
+						configHashFile.setAttributes(to!int(convertedPermissionValue));
 						// create backup copy of current config file
 						log.vdebug("making backup of config file as --resync issued");
 						std.file.copy(configFilePath, configBackupFile);
+						// File copy should only be readable by the user who created it - 0600 permissions needed
+						configBackupFile.setAttributes(to!int(convertedPermissionValue));
 					}
 					if (exists(syncListFilePath)) {
 						// update sync_list hash
 						log.vdebug("updating sync_list hash as --resync issued");
 						std.file.write(syncListHashFile, computeQuickXorHash(syncListFilePath));
+						// Hash file should only be readable by the user who created it - 0600 permissions needed
+						syncListHashFile.setAttributes(to!int(convertedPermissionValue));
 					}
 					if (exists(businessSharedFolderFilePath)) {
 						// update business_shared_folders hash
 						log.vdebug("updating business_shared_folders hash as --resync issued");
 						std.file.write(businessSharedFoldersHashFile, computeQuickXorHash(businessSharedFolderFilePath));
+						// Hash file should only be readable by the user who created it - 0600 permissions needed
+						businessSharedFoldersHashFile.setAttributes(to!int(convertedPermissionValue));
 					}
 				}
 			}
@@ -640,7 +691,7 @@ int main(string[] args)
 			writeln("Selective sync 'sync_list' configured        = true");
 			writeln("sync_list contents:");
 			// Output the sync_list contents
-			auto syncListFile = File(syncListFilePath);
+			auto syncListFile = File(syncListFilePath, "r");
 			auto range = syncListFile.byLine();
 			foreach (line; range)
 			{
@@ -657,7 +708,7 @@ int main(string[] args)
 			writeln("Business Shared Folders configured           = true");
 			writeln("business_shared_folders contents:");
 			// Output the business_shared_folders contents
-			auto businessSharedFolderFileList = File(businessSharedFolderFilePath);
+			auto businessSharedFolderFileList = File(businessSharedFolderFilePath, "r");
 			auto range = businessSharedFolderFileList.byLine();
 			foreach (line; range)
 			{
@@ -879,7 +930,7 @@ int main(string[] args)
 		log.vdebug("Loading user configured sync_list file ...");
 		syncListConfigured = true;
 		// list what will be synced
-		auto syncListFile = File(syncListFilePath);
+		auto syncListFile = File(syncListFilePath, "r");
 		auto range = syncListFile.byLine();
 		foreach (line; range)
 		{
@@ -897,7 +948,7 @@ int main(string[] args)
 	if (exists(businessSharedFolderFilePath)){
 		log.vdebug("Loading user configured business_shared_folders file ...");
 		// list what will be synced
-		auto businessSharedFolderFileList = File(businessSharedFolderFilePath);
+		auto businessSharedFolderFileList = File(businessSharedFolderFilePath, "r");
 		auto range = businessSharedFolderFileList.byLine();
 		foreach (line; range)
 		{
