@@ -28,7 +28,7 @@
     + [min_notify_changes](#min_notify_changes)
     + [operation_timeout](#operation_timeout)
   * [Performing a --resync](#performing-a---resync)
-  * [Performing a --force-sync without a --resync or changing your configuration](#performing-a---force-sync-without-a---resync-or-changing-your-configuration)
+  * [Performing a --force-sync without a --resync after changing your configuration](#performing-a---force-sync-without-a---resync-after-changing-your-configuration)
   * [Handling Symbolic Links](#handling-symbolic-links)
   * [Selective sync via 'sync_list' file](#selective-sync-via-sync_list-file)
   * [Configuring the client for 'single tenant application' use](#configuring-the-client-for-single-tenant-application-use)
@@ -596,7 +596,7 @@ To proceed with using `--resync`, you must type 'y' or 'Y' to allow the applicat
 
 **Note:** In some automated environments (and it is 100% assumed you *know* what you are doing because of automation), in order to avoid this 'proceed with acknowledgement' requirement, add `--resync-auth` to automatically acknowledge the prompt.
 
-### Performing a --force-sync without a --resync or changing your configuration
+### Performing a --force-sync without a --resync after changing your configuration
 In some cases and situations, you may have configured the application to skip certain files and folders using 'skip_file' and 'skip_dir' configuration. You then may have a requirement to actually sync one of these items, but do not wish to modify your configuration, nor perform an entire `--resync` twice.
 
 The `--force-sync` option allows you to sync a specific directory, ignoring your 'skip_file' and 'skip_dir' configuration and negating the requirement to perform a `--resync`
