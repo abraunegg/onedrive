@@ -51,7 +51,13 @@ final class ItemDatabase
 			dbVersion = db.getVersion();
 		} catch (SqliteException e) {
 			// An error was generated - what was the error?
-			log.error("\nAn internal database error occurred: " ~ e.msg ~ "\n");
+			if (e.msg == "database is locked") {
+				log.error("\nERROR: onedrive application is already running - check system process list for active application instances");
+				log.vlog(" - Use 'sudo ps aufxw | grep onedrive' to potentially determine acive running process");
+				write("\n");
+			} else {
+				log.error("\nERROR: An internal database error occurred: " ~ e.msg ~ "\n");
+			}
 			exit(-1);
 		}
 		
@@ -84,6 +90,10 @@ final class ItemDatabase
 		// https://www.sqlite.org/pragma.html#pragma_auto_vacuum
 		// PRAGMA schema.auto_vacuum = 0 | NONE | 1 | FULL | 2 | INCREMENTAL;
 		db.exec("PRAGMA auto_vacuum = FULL");
+		// This pragma sets or queries the database connection locking-mode. The locking-mode is either NORMAL or EXCLUSIVE.
+		// https://www.sqlite.org/pragma.html#pragma_locking_mode
+		// PRAGMA schema.locking_mode = NORMAL | EXCLUSIVE
+		db.exec("PRAGMA locking_mode = EXCLUSIVE");
 		
 		insertItemStmt = "
 			INSERT OR REPLACE INTO item (driveId, id, name, type, eTag, cTag, mtime, parentId, crc32Hash, sha1Hash, quickXorHash, remoteDriveId, remoteId, syncStatus)

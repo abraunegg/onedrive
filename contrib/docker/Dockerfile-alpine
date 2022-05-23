@@ -1,21 +1,35 @@
 # -*-Dockerfile-*-
-FROM alpine:3.13
-RUN apk add \
-    alpine-sdk gnupg xz curl-dev sqlite-dev binutils-gold \
-    autoconf automake ldc go
-RUN go get github.com/tianon/gosu
-COPY . /usr/src/onedrive
-RUN cd /usr/src/onedrive/ && \
-    autoreconf -fiv && \
-    ./configure && \
-    make clean && \
-    make && \
-    make install
 
-FROM alpine:3.13
-ENTRYPOINT ["/entrypoint.sh"]
-RUN apk add --no-cache \
-    bash libcurl libgcc shadow sqlite-libs ldc-runtime && \
-    mkdir -p /onedrive/conf /onedrive/data
+ARG ALPINE_VERSION=3.15
+ARG GO_VERSION=1.17
+ARG GOSU_VERSION=1.14
+
+FROM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS builder-gosu
+ARG GOSU_VERSION
+RUN go install -ldflags "-s -w" github.com/tianon/gosu@${GOSU_VERSION}
+
+FROM alpine:${ALPINE_VERSION} AS builder-onedrive
+
+RUN apk add --update --no-cache alpine-sdk gnupg xz curl-dev sqlite-dev binutils-gold autoconf automake ldc
+
+COPY . /usr/src/onedrive
+WORKDIR /usr/src/onedrive
+
+RUN autoreconf -fiv \
+ && ./configure \
+ && make clean \
+ && make \
+ && make install
+
+FROM alpine:${ALPINE_VERSION}
+
+RUN apk add --update --no-cache bash libcurl libgcc shadow sqlite-libs ldc-runtime  \
+ && mkdir -p /onedrive/conf /onedrive/data
+
+COPY --from=builder-gosu /go/bin/gosu /usr/local/bin/
+COPY --from=builder-onedrive /usr/local/bin/onedrive /usr/local/bin/
+
 COPY contrib/docker/entrypoint.sh /
-COPY --from=0 /root/go/bin/gosu /usr/local/bin/onedrive /usr/local/bin/
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

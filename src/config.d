@@ -43,7 +43,7 @@ final class Config
 	// Default file permission mode
 	public long defaultFilePermissionMode = 600;
 	public int configuredFilePermissionMode;
-	
+
 	this(string confdirOption)
 	{
 		// default configuration - entries in config file ~/.config/onedrive/config
@@ -59,6 +59,7 @@ final class Config
 		boolValues["check_nosync"] = false;
 		boolValues["download_only"] = false;
 		boolValues["disable_notifications"] = false;
+		boolValues["disable_download_validation"] = false;
 		boolValues["disable_upload_validation"] = false;
 		boolValues["enable_logging"] = false;
 		boolValues["force_http_2"] = false;
@@ -75,9 +76,10 @@ final class Config
 		longValues["skip_size"] = 0;
 		longValues["min_notify_changes"] = 5;
 		longValues["monitor_log_frequency"] = 5;
-		// Number of n sync runs before performing a full local scan of sync_dir
-		// By default 10 which means every ~7.5 minutes a full disk scan of sync_dir will occur
-		longValues["monitor_fullscan_frequency"] = 10;
+		// Number of N sync runs before performing a full local scan of sync_dir
+		// By default 12 which means every ~60 minutes a full disk scan of sync_dir will occur 
+		// 'monitor_interval' * 'monitor_fullscan_frequency' = 3600 = 1 hour
+		longValues["monitor_fullscan_frequency"] = 12;
 		// Number of children in a path that is locally removed which will be classified as a 'big data delete'
 		longValues["classify_as_big_delete"] = 1000;
 		// Delete source after successful transfer
@@ -89,6 +91,8 @@ final class Config
 		stringValues["application_id"] = "";
 		// allow for resync to be set via config file
 		boolValues["resync"] = false;
+		// resync now needs to be acknowledged based on the 'risk' of using it
+		boolValues["resync_auth"] = false;
 		// Ignore data safety checks and overwrite local data rather than preserve & rename
 		// This is a config file option ONLY
 		boolValues["bypass_data_preservation"] = false;
@@ -118,8 +122,19 @@ final class Config
 		longValues["sync_file_permissions"] = defaultFilePermissionMode;
 		// Configure download / upload rate limits
 		longValues["rate_limit"] = 0;
-		
-		// DEVELOPER OPTIONS 
+		// maximum time an operation is allowed to take
+		// This includes dns resolution, connecting, data transfer, etc.
+		longValues["operation_timeout"] = 3600;		
+
+		// Webhook options
+		boolValues["webhook_enabled"] = false;
+		stringValues["webhook_public_url"] = "";
+		stringValues["webhook_listening_host"] = "";
+		longValues["webhook_listening_port"] = 8888;
+		longValues["webhook_expiration_interval"] = 3600 * 24;
+		longValues["webhook_renewal_interval"] = 3600 * 12;
+
+		// DEVELOPER OPTIONS
 		// display_memory = true | false
 		//  - It may be desirable to display the memory usage of the application to assist with diagnosing memory issues with the application
 		//  - This is especially beneficial when debugging or performing memory tests with Valgrind
@@ -132,7 +147,7 @@ final class Config
 		// - It may be desirable to see what options are being passed in to performSync() without enabling the full verbose debug logging
 		boolValues["display_sync_options"] = false;
 
-		// Determine the users home directory. 
+		// Determine the users home directory.
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
 		// Check for HOME environment variable
 		if (environment.get("HOME") != ""){
@@ -152,10 +167,10 @@ final class Config
 				homePath = "~";
 			}
 		}
-	
+
 		// Output homePath calculation
 		log.vdebug("homePath: ", homePath);
-		
+
 		// Determine the correct configuration directory to use
 		string configDirBase;
 		string systemConfigDirBase;
@@ -181,7 +196,7 @@ final class Config
 				// Also set up a path to pre-shipped shared configs (which can be overridden by supplying a config file in userspace)
 				systemConfigDirBase = "/etc";
 			}
-	
+
 			// Output configDirBase calculation
 			log.vdebug("configDirBase: ", configDirBase);
 			// Set the default application configuration directory
@@ -191,7 +206,7 @@ final class Config
 			// systemConfigDirBase contains the correct path so we do not need to check for presence of '~'
 			systemConfigDirName = systemConfigDirBase ~ "/onedrive";
 		}
-		
+
 		// Config directory options all determined
 		if (!exists(configDirName)) {
 			// create the directory
@@ -199,11 +214,11 @@ final class Config
 			// Configure the applicable permissions for the folder
 			configDirName.setAttributes(returnRequiredDirectoryPermisions());
 		}
-		
+
 		// configDirName has a trailing /
-		log.vlog("Using 'user' Config Dir: ", configDirName);
-		log.vlog("Using 'system' Config Dir: ", systemConfigDirName);
-		
+		if (!configDirName.empty) log.vlog("Using 'user' Config Dir: ", configDirName);
+		if (!systemConfigDirName.empty) log.vlog("Using 'system' Config Dir: ", systemConfigDirName);
+
 		// Update application set variables based on configDirName
 		refreshTokenFilePath = buildNormalizedPath(configDirName ~ "/refresh_token");
 		deltaLinkFilePath = buildNormalizedPath(configDirName ~ "/delta_link");
@@ -214,7 +229,7 @@ final class Config
 		syncListFilePath = buildNormalizedPath(configDirName ~ "/sync_list");
 		systemConfigFilePath = buildNormalizedPath(systemConfigDirName ~ "/config");
 		businessSharedFolderFilePath = buildNormalizedPath(configDirName ~ "/business_shared_folders");
-		
+
 		// Debug Output for application set variables based on configDirName
 		log.vdebug("refreshTokenFilePath = ", refreshTokenFilePath);
 		log.vdebug("deltaLinkFilePath = ", deltaLinkFilePath);
@@ -272,20 +287,24 @@ final class Config
 		stringValues["create_share_link"] = "";
 		stringValues["destination_directory"] = "";
 		stringValues["get_file_link"]     = "";
+		stringValues["modified_by"]       = "";
 		stringValues["get_o365_drive_id"] = "";
 		stringValues["remove_directory"]  = "";
 		stringValues["single_directory"]  = "";
 		stringValues["source_directory"]  = "";
 		stringValues["auth_files"]        = "";
+		stringValues["auth_response"]     = "";
 		boolValues["display_config"]      = false;
 		boolValues["display_sync_status"] = false;
 		boolValues["print_token"]         = false;
 		boolValues["logout"]              = false;
+		boolValues["reauth"]              = false;
 		boolValues["monitor"]             = false;
 		boolValues["synchronize"]         = false;
 		boolValues["force"]               = false;
 		boolValues["list_business_shared_folders"] = false;
-		
+		boolValues["force_sync"]          = false;
+
 		// Application Startup option validation
 		try {
 			string tmpStr;
@@ -293,15 +312,18 @@ final class Config
 			long tmpVerb;
 			// duplicated from main.d to get full help output!
 			auto opt = getopt(
-				
+
 				args,
 				std.getopt.config.bundling,
 				std.getopt.config.caseSensitive,
 				"auth-files",
 					"Perform authentication not via interactive dialog but via files read/writes to these files.",
 					&stringValues["auth_files"],
+				"auth-response",
+					"Perform authentication not via interactive dialog but via providing the reponse url directly.",
+					&stringValues["auth_response"],
 				"check-for-nomount",
-					"Check for the presence of .nosync in the syncdir root. If found, do not perform sync.", 
+					"Check for the presence of .nosync in the syncdir root. If found, do not perform sync.",
 					&boolValues["check_nomount"],
 				"check-for-nosync",
 					"Check for the presence of .nosync in each directory. If found, skip directory from sync.",
@@ -315,8 +337,8 @@ final class Config
 				"create-share-link",
 					"Create a shareable link for an existing file on OneDrive",
 					&stringValues["create_share_link"],
-				"debug-https", 
-					"Debug OneDrive HTTPS communication.", 
+				"debug-https",
+					"Debug OneDrive HTTPS communication.",
 					&boolValues["debug_https"],
 				"destination-directory",
 					"Destination directory for renamed or move on OneDrive - no sync will be performed.",
@@ -324,6 +346,9 @@ final class Config
 				"disable-notifications",
 					"Do not use desktop notifications in monitor mode.",
 					&boolValues["disable_notifications"],
+				"disable-download-validation",
+					"Disable download validation when downloading from OneDrive",
+					&boolValues["disable_download_validation"],
 				"disable-upload-validation",
 					"Disable upload validation when uploading to OneDrive",
 					&boolValues["disable_upload_validation"],
@@ -348,6 +373,9 @@ final class Config
 				"force",
 					"Force the deletion of data when a 'big delete' is detected",
 					&boolValues["force"],
+				"force-sync",
+					"Force a synchronization of a specific folder, only when using --synchronize --single-directory and ignore all non-default skip_dir and skip_file rules",
+					&boolValues["force_sync"],
 				"get-file-link",
 					"Display the file link of a synced file",
 					&stringValues["get_file_link"],
@@ -366,6 +394,9 @@ final class Config
 				"min-notify-changes",
 					"Minimum number of pending incoming changes necessary to trigger a desktop notification",
 					&longValues["min_notify_changes"],
+				"modified-by",
+					"Display the last modified by details of a given path",
+					&stringValues["modified_by"],
 				"monitor|m",
 					"Keep monitoring for local and remote changes",
 					&boolValues["monitor"],
@@ -381,12 +412,21 @@ final class Config
 				"no-remote-delete",
 					"Do not delete local file 'deletes' from OneDrive when using --upload-only",
 					&boolValues["no_remote_delete"],
+				"operation-timeout",
+					"Maximum amount of time (in seconds) an operation is allowed to take",
+					&longValues["operation_timeout"],
 				"print-token",
 					"Print the access token, useful for debugging",
 					&boolValues["print_token"],
+				"reauth",
+					"Reauthenticate the client with OneDrive",
+					&boolValues["reauth"],
 				"resync",
 					"Forget the last saved state, perform a full sync",
 					&boolValues["resync"],
+				"resync-auth",
+					"Approve the use of performing a --resync action",
+					&boolValues["resync_auth"],
 				"remove-directory",
 					"Remove a directory on OneDrive - no sync will be performed.",
 					&stringValues["remove_directory"],
@@ -513,6 +553,16 @@ final class Config
 	private bool load(string filename)
 	{
 		// configure function variables
+		try {
+			readText(filename);
+		} catch (std.file.FileException e) {
+			// Unable to access required file
+			log.error("ERROR: Unable to access ", e.msg);
+			// Use exit scopes to shutdown API
+			return false;
+		}
+		
+		// We were able to readText the config file - so, we should be able to open and read it
 		auto file = File(filename, "r");
 		string lineBuffer;
 		
@@ -534,7 +584,7 @@ final class Config
 				file.close();
 			}
 		}
-	
+
 		// read file line by line
 		auto range = file.byLine();
 		foreach (line; range) {
@@ -581,7 +631,7 @@ final class Config
 								setValueString("skip_dir", configFileSkipDir);
 							}
 						}
-						
+
 						// Azure AD Configuration
 						if (key == "azure_ad_endpoint") {
 							string azureConfigValue = c.front.dup;
@@ -601,7 +651,7 @@ final class Config
 								case "CN":
 									log.log("Using config option for Azure AD China operated by 21Vianet");
 									break;
-								// Default - all other entries 
+								// Default - all other entries
 								default:
 									log.log("Unknown Azure AD Endpoint - using Global Azure AD Endpoints");
 							}
@@ -624,10 +674,10 @@ final class Config
 		}
 		return true;
 	}
-	
+
 	void configureRequiredDirectoryPermisions() {
 		// return the directory permission mode required
-		// - return octal!defaultDirectoryPermissionMode; ... cant be used .. which is odd 
+		// - return octal!defaultDirectoryPermissionMode; ... cant be used .. which is odd
 		// Error: variable defaultDirectoryPermissionMode cannot be read at compile time
 		if (getValueLong("sync_dir_permissions") != defaultDirectoryPermissionMode) {
 			// return user configured permissions as octal integer
@@ -641,10 +691,10 @@ final class Config
 			configuredDirectoryPermissionMode = to!int(convertedValue);
 		}
 	}
-	
+
 	void configureRequiredFilePermisions() {
 		// return the file permission mode required
-		// - return octal!defaultFilePermissionMode; ... cant be used .. which is odd 
+		// - return octal!defaultFilePermissionMode; ... cant be used .. which is odd
 		// Error: variable defaultFilePermissionMode cannot be read at compile time
 		if (getValueLong("sync_file_permissions") != defaultFilePermissionMode) {
 			// return user configured permissions as octal integer
@@ -658,7 +708,7 @@ final class Config
 			configuredFilePermissionMode = to!int(convertedValue);
 		}
 	}
-	
+
 	int returnRequiredDirectoryPermisions() {
 		// read the configuredDirectoryPermissionMode and return
 		if (configuredDirectoryPermissionMode == 0) {
@@ -668,7 +718,7 @@ final class Config
 		}
 		return configuredDirectoryPermissionMode;
 	}
-	
+
 	int returnRequiredFilePermisions() {
 		// read the configuredFilePermissionMode and return
 		if (configuredFilePermissionMode == 0) {
@@ -677,11 +727,27 @@ final class Config
 		}
 		return configuredFilePermissionMode;
 	}
+	
+	void resetSkipToDefaults() {
+		// reset skip_file and skip_dir to application defaults
+		// skip_file
+		log.vdebug("original skip_file: ", getValueString("skip_file"));
+		log.vdebug("resetting skip_file");
+		setValueString("skip_file", defaultSkipFile);
+		log.vdebug("reset skip_file: ", getValueString("skip_file"));
+		// skip_dir
+		log.vdebug("original skip_dir: ", getValueString("skip_dir"));
+		log.vdebug("resetting skip_dir");
+		setValueString("skip_dir", defaultSkipDir);
+		log.vdebug("reset skip_dir: ", getValueString("skip_dir"));
+	}
 }
 
 void outputLongHelp(Option[] opt)
 {
 	auto argsNeedingOptions = [
+		"--auth-files",
+		"--auth-response",
 		"--confdir",
 		"--create-directory",
 		"--create-share-link",
@@ -690,12 +756,15 @@ void outputLongHelp(Option[] opt)
 		"--get-O365-drive-id",
 		"--log-dir",
 		"--min-notify-changes",
+		"--modified-by",
 		"--monitor-interval",
 		"--monitor-log-frequency",
 		"--monitor-fullscan-frequency",
 		"--remove-directory",
 		"--single-directory",
+		"--skip-dir",
 		"--skip-file",
+		"--skip-size",
 		"--source-directory",
 		"--syncdir",
 		"--user-agent" ];

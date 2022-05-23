@@ -9,7 +9,7 @@ dnl - commit the changed files (configure.ac, configure)
 dnl - tag the release
 
 AC_PREREQ([2.69])
-AC_INIT([onedrive],[v2.4.13], [https://github.com/abraunegg/onedrive], [onedrive])
+AC_INIT([onedrive],[v2.4.18-dev], [https://github.com/abraunegg/onedrive], [onedrive])
 AC_CONFIG_SRCDIR([src/main.d])
 
 
@@ -104,7 +104,7 @@ case $(basename $DC) in
 		# remove everthing after ):
 		VERSION=${VERSION%%):*}
 		# now version should be something like L.M.N
-		MINVERSION=1.12.0
+		MINVERSION=1.17.0
 		;;
 	dmd)
 		# DMD64 D Compiler v2.085.1\n...
@@ -112,7 +112,7 @@ case $(basename $DC) in
 		VERSION=${VERSION#*Compiler v}
 		VERSION=${VERSION%% *}
 		# now version should be something like L.M.N
-		MINVERSION=2.083.1
+		MINVERSION=2.087.0
 		;;
 esac
 

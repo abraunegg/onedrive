@@ -351,6 +351,71 @@ string getFunctionName(alias func)() {
     return __traits(identifier, __traits(parent, func)) ~ "()\n";
 }
 
+// Get the latest release version from GitHub
+string getLatestReleaseVersion() {
+	// Import curl just for this function
+	import std.net.curl;
+	char[] content;
+	JSONValue json;
+	string latestTag;
+	
+	try {
+		content = get("https://api.github.com/repos/abraunegg/onedrive/releases/latest");
+	} catch (CurlException e) {
+		// curl generated an error - meaning we could not query GitHub
+		log.vdebug("Unable to query GitHub for latest release");
+	}
+	
+	try {
+		json = content.parseJSON();
+	} catch (JSONException e) {
+		// unable to parse the content JSON, set to blank JSON
+		log.vdebug("Unable to parse GitHub JSON response");
+		json = parseJSON("{}");
+	}
+	
+	// json has to be a valid JSON object
+	if (json.type() == JSONType.object){
+		if ("tag_name" in json) {
+			// use the provided tag
+			// "tag_name": "vA.B.CC" and strip 'v'
+			latestTag = strip(json["tag_name"].str, "v");
+		} else {
+			// set to latestTag zeros
+			log.vdebug("'tag_name' unavailable in JSON response. Setting latest GitHub release version to 0.0.0");
+			latestTag = "0.0.0";
+		}
+	} else {
+		// JSONValue is not an object
+		log.vdebug("Invalid JSON Object. Setting latest GitHub release version to 0.0.0");
+		latestTag = "0.0.0";
+	}
+		
+	// return the latest github version
+	return latestTag;
+}
+
+// Check the application version versus GitHub latestTag
+void checkApplicationVersion() {
+	// calculate if the client is current version or not
+	string latestVersion = strip(getLatestReleaseVersion());
+	auto currentVersionArray = strip(strip(import("version"), "v")).split("-");
+	string applicationVersion = currentVersionArray[0];
+	
+	// display warning if not current
+	if (applicationVersion != latestVersion) {
+		// is application version is older than available on GitHub
+		if (applicationVersion < latestVersion) {
+			// application version is obsolete and unsupported
+			writeln();
+			log.logAndNotify("WARNING: Your onedrive client version is obsolete and unsupported. Please upgrade your client version.");
+			log.vlog("Application version: ", applicationVersion);
+			log.vlog("Version available:   ", latestVersion);
+			writeln();
+		}
+	}
+}
+
 // Unit Tests
 unittest
 {

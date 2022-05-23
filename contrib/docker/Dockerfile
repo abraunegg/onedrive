@@ -1,26 +1,38 @@
-FROM centos:7
-ENV GOSU_VERSION=1.11
+# -*-Dockerfile-*-
 
-RUN yum install -y make git gcc libcurl-devel sqlite-devel pkg-config && \
-    yum install -y http://downloads.dlang.org/releases/2.x/2.092.1/dmd-2.092.1-0.fedora.x86_64.rpm && \
-	rm -rf /var/cache/yum/ && \
-    # gosu installation
-    gpg --keyserver hkps://keys.openpgp.org --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
-    && curl -o /usr/local/bin/gosu -SL "https://github.com/tianon/gosu/releases/download/${GOSU_VERSION}/gosu-amd64" \
-    && curl -o /usr/local/bin/gosu.asc -SL "https://github.com/tianon/gosu/releases/download/${GOSU_VERSION}/gosu-amd64.asc" \
-    && gpg --verify /usr/local/bin/gosu.asc \
-    && rm /usr/local/bin/gosu.asc \
-    && rm -r /root/.gnupg/ \
-    && chmod +x /usr/local/bin/gosu \
-    && gosu nobody true
-RUN mkdir -p /onedrive/conf /onedrive/data
+ARG FEDORA_VERSION=35
+ARG DEBIAN_VERSION=bullseye
+ARG GO_VERSION=1.17
+ARG GOSU_VERSION=1.14
+
+FROM golang:${GO_VERSION}-${DEBIAN_VERSION} AS builder-gosu
+ARG GOSU_VERSION
+RUN go install -ldflags "-s -w" github.com/tianon/gosu@${GOSU_VERSION}
+
+FROM fedora:${FEDORA_VERSION} AS builder-onedrive
+
+RUN dnf install -y ldc pkgconf libcurl-devel sqlite-devel git
+
+ENV PKG_CONFIG=/usr/bin/pkgconf
+
 COPY . /usr/src/onedrive
 WORKDIR /usr/src/onedrive
-RUN ./configure && \
-    make clean && \
-    make && \
-    make install
-COPY contrib/docker/entrypoint.sh /entrypoint.sh
-VOLUME ["/onedrive/conf"]
+
+RUN ./configure \
+ && make clean \
+ && make \
+ && make install
+
+FROM fedora:${FEDORA_VERSION}
+
+RUN dnf install -y libcurl sqlite ldc-libs \
+ && dnf clean all \
+ && mkdir -p /onedrive/conf /onedrive/data
+
+COPY --from=builder-gosu /go/bin/gosu /usr/local/bin/
+COPY --from=builder-onedrive /usr/local/bin/onedrive /usr/local/bin/
+
+COPY contrib/docker/entrypoint.sh /
+RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

@@ -9,11 +9,12 @@ A free Microsoft OneDrive Client which supports OneDrive Personal, OneDrive for 
 
 This powerful and highly configurable client can run on all major Linux distributions, FreeBSD, or as a Docker container. It supports one-way and two-way sync capabilities and securely connects to Microsoft OneDrive services.
 
-This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) client which was abandoned in 2018.
+This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) client, which the developer has confirmed he has no desire to maintain or support the client ([reference](https://github.com/skilion/onedrive/issues/518#issuecomment-717604726)). This fork has been in active development since mid 2018.
 
 ## Features
 *   State caching
-*   Real-Time file monitoring with Inotify
+*   Real-Time local file monitoring with inotify
+*   Real-Time syncing of remote updates via webhooks
 *   File upload / download validation to ensure data integrity
 *   Resumable uploads
 *   Support OneDrive for Business (part of Office 365)
@@ -23,12 +24,17 @@ This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) cl
 *   Dry-run capability to test configuration changes
 *   Prevent major OneDrive accidental data deletion after configuration change
 *   Support for National cloud deployments (Microsoft Cloud for US Government, Microsoft Cloud Germany, Azure and Office 365 operated by 21Vianet in China)
+*   Supports single & multi-tenanted applications
+*   Supports rate limiting of traffic
 
 ## What's missing
-*   While local changes are uploaded right away, remote changes are delayed until next automated sync cycle when using --monitor
 *   Ability to encrypt/decrypt files on-the-fly when uploading/downloading files from OneDrive
 *   Support for Windows 'On-Demand' functionality so file is only downloaded when accessed locally
-*   A GUI for configuration management
+
+## External Enhancements
+*   A GUI for configuration management: [OneDrive Client for Linux GUI](https://github.com/bpozdena/OneDriveGUI)
+*   Colorful log output terminal modification: [OneDrive Client for Linux Colorful log Output](https://github.com/zzzdeb/dotfiles/blob/master/scripts/tools/onedrive_log)
+*   System Tray Icon: [OneDrive Client for Linux System Tray Icon](https://github.com/DanielBorgesOliveira/onedrive_tray)
 
 ## Frequently Asked Questions
 Refer to [Frequently Asked Questions](https://github.com/abraunegg/onedrive/wiki/Frequently-Asked-Questions)
@@ -69,3 +75,7 @@ Refer to [docs/national-cloud-deployments.md](https://github.com/abraunegg/onedr
 
 ### Docker support
 Refer to [docs/Docker.md](https://github.com/abraunegg/onedrive/blob/master/docs/Docker.md)
+
+### Podman support
+Refer to [docs/Podman.md](https://github.com/abraunegg/onedrive/blob/master/docs/Podman.md)
+

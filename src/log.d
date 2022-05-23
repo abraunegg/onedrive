@@ -13,6 +13,7 @@ version(Notifications) {
 // enable verbose logging
 long verbose;
 bool writeLogFile = false;
+bool logFileWriteFailFlag = false;
 
 private bool doNotifications;
 
@@ -35,7 +36,7 @@ void init(string logDir)
 			// we got an error ..
 			writeln("\nUnable to access ", logFilePath);
 			writeln("Please manually create '",logFilePath, "' and set appropriate permissions to allow write access");
-			writeln("The requested client activity log will instead be located in the users home directory\n");
+			writeln("The requested client activity log will instead be located in your users home directory");
 		}
 	}
 }
@@ -169,6 +170,17 @@ private void logfileWriteLine(T...)(T args)
 		// We cannot open the log file in logFilePath location for writing
 		// The user is not part of the standard 'users' group (GID 100)
 		// Change logfile to ~/onedrive.log putting the log file in the users home directory
+		
+		if (!logFileWriteFailFlag) {
+			// write out error message that we cant log to the requested file
+			writeln("\nUnable to write activity log to ", logFileName);
+			writeln("Please set appropriate permissions to allow write access to the logging directory for your user account");
+			writeln("The requested client activity log will instead be located in your users home directory\n");
+		
+			// set the flag so we dont keep printing this error message
+			logFileWriteFailFlag = true;
+		}
+		
 		string homePath = environment.get("HOME");
 		string logFileNameAlternate = homePath ~ "/onedrive.log";
 		logFile = File(logFileNameAlternate, "a");

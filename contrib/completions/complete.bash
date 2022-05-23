@@ -12,8 +12,8 @@ _onedrive()
 	cur=${COMP_WORDS[COMP_CWORD]}
 	prev=${COMP_WORDS[COMP_CWORD-1]}
 
-	options='--check-for-nomount --check-for-nosync --debug-https --disable-notifications --display-config --display-sync-status --download-only --disable-upload-validation --dry-run --enable-logging --force-http-1.1 --force-http-2 --local-first --logout -m --monitor --no-remote-delete --print-token --resync --skip-dot-files --skip-symlinks --synchronize --upload-only -v --verbose --version -h --help'
-	argopts='--create-directory --get-O365-drive-id --remove-directory --single-directory --source-directory'
+	options='--check-for-nomount --check-for-nosync --debug-https --disable-notifications --display-config --display-sync-status --download-only --disable-upload-validation --dry-run --enable-logging --force-http-1.1 --force-http-2 --local-first --logout -m --monitor --no-remote-delete --print-token --reauth --resync --skip-dot-files --skip-symlinks --synchronize --upload-only -v --verbose --version -h --help'
+	argopts='--create-directory --get-O365-drive-id --operation-timeout --remove-directory --single-directory --source-directory'
 
 	# Loop on the arguments to manage conflicting options
 	for (( i=0; i < ${#COMP_WORDS[@]}-1; i++ )); do
@@ -27,7 +27,7 @@ _onedrive()
 		_filedir
 		return 0
 		;;
-	--create-directory|--get-O365-drive-id|--remove-directory|--single-directory|--source-directory)
+	--create-directory|--get-O365-drive-id|--operation-timeout|--remove-directory|--single-directory|--source-directory)
 		return 0
 		;;
 	*)
