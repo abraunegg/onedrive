@@ -2822,6 +2822,26 @@ final class SyncEngine
 				log.vdebug("WARNING: fileDetails['file']['hashes'] is missing - unable to compare file hash after download");
 			}
 			
+			// Is there enough free space locally to download the file
+			// - We can use '.' here as we change the current working directory to the configured 'sync_dir'
+			ulong localActualFreeSpace = to!ulong(getAvailableDiskSpace("."));
+			// So that we are not responsible to making the disk 100% full if we can download the file, reduce localActualFreeSpace by 100MB in bytes for our comparison testing
+			ulong localFreeSpaceLessReservation = localActualFreeSpace - 104857600;
+			// debug output
+			log.vdebug("Local Disk Space Actual: ", localActualFreeSpace);
+			log.vdebug("Local Disk Space Free: ", localFreeSpaceLessReservation);
+			log.vdebug("File Size to Download: ", fileSize);
+			// calculate if we can download file
+			if ((localFreeSpaceLessReservation < 0) || (fileSize > localFreeSpaceLessReservation)) {
+				// localFreeSpaceLessReservation is less than 0 .. insufficient free space
+				// fileSize is greater than localFreeSpaceLessReservation .. insufficient free space
+				writeln("failed!");
+				log.log("Insufficient local disk space to download file");
+				downloadFailed = true;
+				return;
+			}
+			
+			// Attempt to download the file
 			try {
 				onedrive.downloadById(item.driveId, item.id, path, fileSize);
 			} catch (OneDriveException e) {
