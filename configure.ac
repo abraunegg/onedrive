@@ -104,7 +104,7 @@ case $(basename $DC) in
 		# remove everthing after ):
 		VERSION=${VERSION%%):*}
 		# now version should be something like L.M.N
-		MINVERSION=1.17.0
+		MINVERSION=1.18.0
 		;;
 	dmd)
 		# DMD64 D Compiler v2.085.1\n...
@@ -112,7 +112,7 @@ case $(basename $DC) in
 		VERSION=${VERSION#*Compiler v}
 		VERSION=${VERSION%% *}
 		# now version should be something like L.M.N
-		MINVERSION=2.087.0
+		MINVERSION=2.088.0
 		;;
 esac
 

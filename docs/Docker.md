@@ -277,8 +277,8 @@ Compatible with:
 *    Raspberry Pi 3
 *    Raspberry Pi 4
 ``` bash
-docker build . -t local-onedrive-rpi -f contrib/docker/Dockerfile-rpi
-docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" local-ondrive-rpi:latest
+docker build . -t local-onedrive-armhf -f contrib/docker/Dockerfile-debian
+docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" local-onedrive-armhf:latest
 ```
 
 #### How to build and run a custom Docker image for AARCH64 Platforms

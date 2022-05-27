@@ -1,38 +1,17 @@
 # -*-Dockerfile-*-
 
 ARG DEBIAN_VERSION=bullseye
-ARG LDC_VERSION_MAIN=1.28.1
 
 FROM debian:${DEBIAN_VERSION} AS builder-onedrive
-ARG LDC_VERSION_MAIN
 
 RUN apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential curl ca-certificates libcurl4-openssl-dev libsqlite3-dev libxml2-dev pkg-config git \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential curl ca-certificates libcurl4-openssl-dev libsqlite3-dev libxml2-dev pkg-config git ldc \
  && rm -rf /var/lib/apt/lists/*
-
-RUN ARCH="$(dpkg --print-architecture)" \
- && case "${ARCH}" in \
-      aarch64|arm64) \
-        BINARY_URL="https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION_MAIN}/ldc2-${LDC_VERSION_MAIN}-linux-aarch64.tar.xz"; \
-        ;; \
-      amd64|x86-64) \
-        BINARY_URL="https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION_MAIN}/ldc2-${LDC_VERSION_MAIN}-linux-x86_64.tar.xz"; \
-        ;; \
-      *) \
-        echo "Unsupported arch: ${ARCH}"; \
-        exit 1; \
-        ;; \
-    esac \
- && echo ${BINARY_URL} \
- && curl -k -LfsSo /tmp/ldc.tar.xz ${BINARY_URL} \
- && mkdir -p /opt/ldc \
- && tar -xvf /tmp/ldc.tar.xz -C /opt/ldc --strip-components=1 \
- && rm -rf /tmp/ldc.tar.xz
 
 COPY . /usr/src/onedrive
 WORKDIR /usr/src/onedrive
 
-RUN ./configure DC=/opt/ldc/bin/ldmd2 \
+RUN ./configure DC=/usr/bin/ldmd2 \
  && make clean \
  && make \
  && make install
