@@ -4,11 +4,13 @@ This document covers the appropriate steps to install the 'onedrive' client usin
 
 #### Important information for all Ubuntu and Ubuntu based distribution users:
 This information is specifically for the following platforms and distributions:
-*   Ubuntu
+
 *   Lubuntu
 *   Linux Mint
 *   POP OS
 *   Peppermint OS
+*   Raspbian
+*   Ubuntu
 
 Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) Universe packages available for Ubuntu, do not install 'onedrive' from these Universe packages. The default Ubuntu Universe packages are out-of-date and are not supported and should not be used.
 
@@ -118,6 +120,7 @@ If required, review the table below based on your 'lsb_release' information to p
 | Linux Mint 20.x / ulyana | Use [Ubuntu 20.04](#distribution-ubuntu-2004) instructions below  |
 | Debian 10                | Use [Debian 10](#distribution-debian-10) instructions below     |
 | Debian 11                | Use [Debian 11](#distribution-debian-11) instructions below     |
+| Raspbian GNU/Linux 11    | Use [Debian 11](#distribution-debian-11) instructions below     |
 | Ubuntu 20.04             | Use [Ubuntu 20.04](#distribution-ubuntu-2004) instructions below  |
 | Ubuntu 21.04             | Use [Ubuntu 21.04](#distribution-ubuntu-2104) instructions below  |
 | Ubuntu 21.10             | Use [Ubuntu 21.10](#distribution-ubuntu-2110) instructions below  |
