@@ -48,7 +48,7 @@ If you wish to change this situation so that you can just use the Universe packa
 *   [SQLite 3](https://www.sqlite.org/) >= 3.7.15
 *   [Digital Mars D Compiler (DMD)](http://dlang.org/download.html) or [LDC – the LLVM-based D Compiler](https://github.com/ldc-developers/ldc)
 
-**Note:** DMD version >= 2.087.0 or LDC version >= 1.17.0 is required to compile this application
+**Note:** DMD version >= 2.088.0 or LDC version >= 1.18.0 is required to compile this application
 
 ### Example for installing DMD Compiler
 ```text
@@ -173,7 +173,7 @@ sudo pacman -S libnotify
 ```
 
 ### Dependencies: Raspbian (ARMHF) and Ubuntu 22.x / Debian 11 / Raspbian (ARM64)
-**Note:** The minimum LDC compiler version is now 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
+**Note:** The minimum LDC compiler version required to compile this application is now 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
 
 These instructions were validated using:
 *   `Linux raspberrypi 5.10.92-v8+ #1514 SMP PREEMPT Mon Jan 17 17:39:38 GMT 2022 aarch64` (2022-01-28-raspios-bullseye-armhf-lite) using Raspberry Pi 3B (revision 1.2)
@@ -245,13 +245,13 @@ sudo zypper install libnotify-devel
 ### Building using DMD Reference Compiler
 Before cloning and compiling, if you have installed DMD via curl for your OS, you will need to activate DMD as per example below:
 ```text
-Run `source ~/dlang/dmd-2.087.0/activate` in your shell to use dmd-2.087.0.
+Run `source ~/dlang/dmd-2.088.0/activate` in your shell to use dmd-2.088.0.
 This will setup PATH, LIBRARY_PATH, LD_LIBRARY_PATH, DMD, DC, and PS1.
 Run `deactivate` later on to restore your environment.
 ```
 Without performing this step, the compilation process will fail.
 
-**Note:** Depending on your DMD version, substitute `2.087.0` above with your DMD version that is installed.
+**Note:** Depending on your DMD version, substitute `2.088.0` above with your DMD version that is installed.
 
 ```text
 git clone https://github.com/abraunegg/onedrive.git
@@ -282,7 +282,7 @@ as far as possible automatically, but can be overridden by passing
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
 #### ARMHF Architecture (Raspbian) and ARM64 Architecture (Ubuntu 22.x / Debian 11 / Raspbian)
-**Note:** The minimum LDC compiler version is now 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
+**Note:** The minimum LDC compiler version required to compile this application is now 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
 
 **Note:** Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon`.
 ```text
