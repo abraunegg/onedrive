@@ -172,43 +172,19 @@ For notifications the following is also necessary:
 sudo pacman -S libnotify
 ```
 
-### Dependencies: Raspbian (ARMHF)
-Validated using:
-*   `Linux raspberrypi 5.4.79-v7+ #1373 SMP Mon Nov 23 13:22:33 GMT 2020 armv7l GNU/Linux` (2020-12-02-raspios-buster-armhf) using Raspberry Pi 2 Model B
-*   `Linux raspberrypi 5.4.83-v8+ #1379 SMP PREEMPT Mon Dec 14 13:15:14 GMT 2020 aarch64` (2021-01-11-raspios-buster-armhf) using Raspberry Pi 3 Model B+
+### Dependencies: Raspbian (ARMHF) and Ubuntu 22.x / Debian 11 / Raspbian (ARM64)
+**Note:** The minimum LDC compiler version is now 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
+
+These instructions were validated using:
+*   `Linux raspberrypi 5.10.92-v8+ #1514 SMP PREEMPT Mon Jan 17 17:39:38 GMT 2022 aarch64` (2022-01-28-raspios-bullseye-armhf-lite) using Raspberry Pi 3B (revision 1.2)
+*   `Linux raspberrypi 5.10.92-v8+ #1514 SMP PREEMPT Mon Jan 17 17:39:38 GMT 2022 aarch64` (2022-01-28-raspios-bullseye-arm64-lite) using Raspberry Pi 3B (revision 1.2)
+*   `Linux ubuntu 5.15.0-1005-raspi #5-Ubuntu SMP PREEMPT Mon Apr 4 12:21:48 UTC 2022 aarch64 aarch64 aarch64 GNU/Linux` (ubuntu-22.04-preinstalled-server-arm64+raspi) using Raspberry Pi 3B (revision 1.2)
 
 **Note:** Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon`.
 
 ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev
-sudo apt install libsqlite3-dev
-sudo apt install pkg-config
-sudo apt install git
-sudo apt install curl
-wget https://github.com/ldc-developers/ldc/releases/download/v1.17.0/ldc2-1.17.0-linux-armhf.tar.xz
-tar -xvf ldc2-1.17.0-linux-armhf.tar.xz
-```
-For notifications the following is also necessary:
-```text
-sudo apt install libnotify-dev
-```
-
-### Dependencies: Ubuntu 20.x / Debian 10 (ARM64)
-Validated using:
-*   `Ubuntu 20.04.2 LTS (GNU/Linux 5.4.0-1028-raspi aarch64)` (ubuntu-20.04.2-preinstalled-server-arm64+raspi) using Raspberry Pi 3 Model B+
-
-**Note:** Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon`.
-
-```text
-sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev
-sudo apt install libsqlite3-dev
-sudo apt install pkg-config
-sudo apt install git
-sudo apt install curl
-wget https://github.com/ldc-developers/ldc/releases/download/v1.25.1/ldc2-1.25.1-linux-aarch64.tar.xz
-tar -xvf ldc2-1.25.1-linux-aarch64.tar.xz
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc
 ```
 For notifications the following is also necessary:
 ```text
@@ -305,27 +281,30 @@ as far as possible automatically, but can be overridden by passing
 `--with-fish-completion-dir=<DIR>` to `configure`.
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
-#### ARMHF Architecture (Raspbian etc)
+#### ARMHF Architecture (Raspbian) and ARM64 Architecture (Ubuntu 22.x / Debian 11 / Raspbian)
+**Note:** The minimum LDC compiler version is now 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
+
 **Note:** Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon`.
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-./configure DC=~/ldc2-1.17.0-linux-armhf/bin/ldmd2
+./configure DC=/usr/bin/ldmd2
 make clean; make
 sudo make install
 ```
 
-#### ARM64 Architecture
-**Note:** Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon`
-```text
-git clone https://github.com/abraunegg/onedrive.git
-cd onedrive
-./configure DC=~/ldc2-1.25.1-linux-aarch64/bin/ldmd2
-make clean; make
-sudo make install
-```
+## Upgrading the client
+If you have installed the client from a distribution package, the client will be updated when the distribution package is updated by the package maintainer and will be updated to the new application version when you perform your package update.
+
+If you have built the client from source, to upgrade your client, you must first uninstall your existing 'onedrive' binary (see above), then re-install the client by re-cloning, re-compiling and re-installing the client again to install the new version.
+
+To confirm you have the new version installed, use `onedrive --version` to determine the version that is now installed.
 
 ## Uninstalling the client
+### Uninstalling the client if installed from distribution package
+Follow your distribution documentation to uninstall the package that you installed
+
+### Uninstalling the client if installed and built from source
 From within your GitHub repository clone, perform the following to remove the 'onedrive' binary:
 ```text
 sudo make uninstall
@@ -341,12 +320,3 @@ If you want to just delete the application key, but keep the items database:
 ```text
 rm -f ~/.config/onedrive/refresh_token
 ```
-
-## Upgrading the client
-If you have installed the client from a distribution package, the client will be updated when the distribution package is updated by the package maintainer and will be updated to the new application version when you perform your package update.
-
-If you have built the client from source, to upgrade your client, you must first uninstall your existing 'onedrive' binary (see above), then re-install the client by re-cloning, re-compiling and re-installing the client again to install the new version.
-
-To confirm you have the new version installed, use `onedrive --version` to determine the version that is now installed.
-
-
