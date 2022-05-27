@@ -19,7 +19,7 @@ Distribution packages may be of an older release when compared to the latest rel
 | NixOS                           | [onedrive](https://search.nixos.org/packages?channel=20.09&from=0&size=50&sort=relevance&query=onedrive)|<a href="https://search.nixos.org/packages?channel=20.09&from=0&size=50&sort=relevance&query=onedrive"><img src="https://repology.org/badge/version-for-repo/nix_unstable/onedrive.svg?header=" alt="nixpkgs unstable package" width="46" height="20"></a>|❌|✔|❌|❌| Use package `onedrive` either by adding it to `configuration.nix` or by using the command `nix-env -iA <channel name>.onedrive`. This does not install a service. To install a service, use unstable channel (will stabilize in 20.09) and add `services.onedrive.enable=true` in `configuration.nix`. You can also add a custom package using the `services.onedrive.package` option (recommended since package lags upstream). Enabling the service installs a default package too (based on the channel). You can also add multiple onedrive accounts trivially, see [documentation](https://github.com/NixOS/nixpkgs/pull/77734#issuecomment-575874225). |
 | OpenSuSE                        | [onedrive](https://software.opensuse.org/package/onedrive)                   |<a href="https://software.opensuse.org/package/onedrive"><img src="https://repology.org/badge/version-for-repo/opensuse_tumbleweed/onedrive.svg?header=" alt="openSUSE Tumbleweed package" width="46" height="20"></a>|✔|✔|❌|❌| |
 | OpenSuSE Build Service          | [onedrive](https://build.opensuse.org/package/show/home:npreining:debian-ubuntu-onedrive/onedrive) | No API Available |✔|✔|✔|✔| Package Build Service for Debian and Ubuntu | 
-| Raspbian                        | [onedrive](https://archive.raspbian.org/raspbian/pool/main/o/onedrive/)      |<a href="https://archive.raspbian.org/raspbian/pool/main/o/onedrive/"><img src="https://repology.org/badge/version-for-repo/raspbian_stable/onedrive.svg?header=" alt="Raspbian Stable package" width="46" height="20"></a> |❌|❌|✔|❌| **Note:** You must compile from source for Raspbian |
+| Raspbian                        | [onedrive](https://archive.raspbian.org/raspbian/pool/main/o/onedrive/)      |<a href="https://archive.raspbian.org/raspbian/pool/main/o/onedrive/"><img src="https://repology.org/badge/version-for-repo/raspbian_stable/onedrive.svg?header=" alt="Raspbian Stable package" width="46" height="20"></a> |❌|❌|✔|✔| **Note:** Do not install from Raspbian Package Repositories<br><br>Install from OpenSuSE Build Service using the Debian Package Install [Instructions](ubuntu-package-install.md) |
 | Slackware                       | [onedrive](https://slackbuilds.org/result/?search=onedrive&sv=)        |<a href="https://slackbuilds.org/result/?search=onedrive&sv="><img src="https://repology.org/badge/version-for-repo/slackbuilds/onedrive.svg?header=" alt="SlackBuilds package" width="46" height="20"></a>|✔|✔|❌|❌| |
 | Solus                           | [onedrive](https://dev.getsol.us/search/query/FB7PIf1jG9Z9/#R)               |<a href="https://dev.getsol.us/search/query/FB7PIf1jG9Z9/#R"><img src="https://repology.org/badge/version-for-repo/solus/onedrive.svg?header=" alt="Solus package" width="46" height="20"></a>|✔|✔|❌|❌| |
 | Ubuntu 18.04                    | [onedrive](https://packages.ubuntu.com/bionic/onedrive)                      |<a href="https://packages.ubuntu.com/bionic/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_18_04/onedrive.svg?header=" alt="Ubuntu 18.04 package" width="88" height="20"></a> |✔|✔|✔|❌| **Note:** Do not install from Ubuntu Universe<br><br>You must compile from source for this version of Ubuntu |
@@ -172,43 +172,19 @@ For notifications the following is also necessary:
 sudo pacman -S libnotify
 ```
 
-### Dependencies: Raspbian (ARMHF)
-Validated using:
-*   `Linux raspberrypi 5.4.79-v7+ #1373 SMP Mon Nov 23 13:22:33 GMT 2020 armv7l GNU/Linux` (2020-12-02-raspios-buster-armhf) using Raspberry Pi 2 Model B
-*   `Linux raspberrypi 5.4.83-v8+ #1379 SMP PREEMPT Mon Dec 14 13:15:14 GMT 2020 aarch64` (2021-01-11-raspios-buster-armhf) using Raspberry Pi 3 Model B+
+### Dependencies: Raspbian (ARMHF) and Ubuntu 22.x / Debian 11 / Raspbian (ARM64)
+**Note:** The minimum LDC compiler version required to compile this application is now 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
+
+These instructions were validated using:
+*   `Linux raspberrypi 5.10.92-v8+ #1514 SMP PREEMPT Mon Jan 17 17:39:38 GMT 2022 aarch64` (2022-01-28-raspios-bullseye-armhf-lite) using Raspberry Pi 3B (revision 1.2)
+*   `Linux raspberrypi 5.10.92-v8+ #1514 SMP PREEMPT Mon Jan 17 17:39:38 GMT 2022 aarch64` (2022-01-28-raspios-bullseye-arm64-lite) using Raspberry Pi 3B (revision 1.2)
+*   `Linux ubuntu 5.15.0-1005-raspi #5-Ubuntu SMP PREEMPT Mon Apr 4 12:21:48 UTC 2022 aarch64 aarch64 aarch64 GNU/Linux` (ubuntu-22.04-preinstalled-server-arm64+raspi) using Raspberry Pi 3B (revision 1.2)
 
 **Note:** Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon`.
 
 ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev
-sudo apt install libsqlite3-dev
-sudo apt install pkg-config
-sudo apt install git
-sudo apt install curl
-wget https://github.com/ldc-developers/ldc/releases/download/v1.17.0/ldc2-1.17.0-linux-armhf.tar.xz
-tar -xvf ldc2-1.17.0-linux-armhf.tar.xz
-```
-For notifications the following is also necessary:
-```text
-sudo apt install libnotify-dev
-```
-
-### Dependencies: Ubuntu 20.x / Debian 10 (ARM64)
-Validated using:
-*   `Ubuntu 20.04.2 LTS (GNU/Linux 5.4.0-1028-raspi aarch64)` (ubuntu-20.04.2-preinstalled-server-arm64+raspi) using Raspberry Pi 3 Model B+
-
-**Note:** Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon`.
-
-```text
-sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev
-sudo apt install libsqlite3-dev
-sudo apt install pkg-config
-sudo apt install git
-sudo apt install curl
-wget https://github.com/ldc-developers/ldc/releases/download/v1.25.1/ldc2-1.25.1-linux-aarch64.tar.xz
-tar -xvf ldc2-1.25.1-linux-aarch64.tar.xz
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc
 ```
 For notifications the following is also necessary:
 ```text
@@ -269,13 +245,13 @@ sudo zypper install libnotify-devel
 ### Building using DMD Reference Compiler
 Before cloning and compiling, if you have installed DMD via curl for your OS, you will need to activate DMD as per example below:
 ```text
-Run `source ~/dlang/dmd-2.087.0/activate` in your shell to use dmd-2.087.0.
+Run `source ~/dlang/dmd-2.088.0/activate` in your shell to use dmd-2.088.0.
 This will setup PATH, LIBRARY_PATH, LD_LIBRARY_PATH, DMD, DC, and PS1.
 Run `deactivate` later on to restore your environment.
 ```
 Without performing this step, the compilation process will fail.
 
-**Note:** Depending on your DMD version, substitute `2.087.0` above with your DMD version that is installed.
+**Note:** Depending on your DMD version, substitute `2.088.0` above with your DMD version that is installed.
 
 ```text
 git clone https://github.com/abraunegg/onedrive.git
@@ -305,27 +281,30 @@ as far as possible automatically, but can be overridden by passing
 `--with-fish-completion-dir=<DIR>` to `configure`.
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
-#### ARMHF Architecture (Raspbian etc)
+#### ARMHF Architecture (Raspbian) and ARM64 Architecture (Ubuntu 22.x / Debian 11 / Raspbian)
+**Note:** The minimum LDC compiler version required to compile this application is now 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
+
 **Note:** Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon`.
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
-./configure DC=~/ldc2-1.17.0-linux-armhf/bin/ldmd2
+./configure DC=/usr/bin/ldmd2
 make clean; make
 sudo make install
 ```
 
-#### ARM64 Architecture
-**Note:** Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon`
-```text
-git clone https://github.com/abraunegg/onedrive.git
-cd onedrive
-./configure DC=~/ldc2-1.25.1-linux-aarch64/bin/ldmd2
-make clean; make
-sudo make install
-```
+## Upgrading the client
+If you have installed the client from a distribution package, the client will be updated when the distribution package is updated by the package maintainer and will be updated to the new application version when you perform your package update.
+
+If you have built the client from source, to upgrade your client, you must first uninstall your existing 'onedrive' binary (see above), then re-install the client by re-cloning, re-compiling and re-installing the client again to install the new version.
+
+To confirm you have the new version installed, use `onedrive --version` to determine the version that is now installed.
 
 ## Uninstalling the client
+### Uninstalling the client if installed from distribution package
+Follow your distribution documentation to uninstall the package that you installed
+
+### Uninstalling the client if installed and built from source
 From within your GitHub repository clone, perform the following to remove the 'onedrive' binary:
 ```text
 sudo make uninstall
@@ -341,12 +320,3 @@ If you want to just delete the application key, but keep the items database:
 ```text
 rm -f ~/.config/onedrive/refresh_token
 ```
-
-## Upgrading the client
-If you have installed the client from a distribution package, the client will be updated when the distribution package is updated by the package maintainer and will be updated to the new application version when you perform your package update.
-
-If you have built the client from source, to upgrade your client, you must first uninstall your existing 'onedrive' binary (see above), then re-install the client by re-cloning, re-compiling and re-installing the client again to install the new version.
-
-To confirm you have the new version installed, use `onedrive --version` to determine the version that is now installed.
-
-
