@@ -35,6 +35,7 @@
   * [Configuring the client to use older 'skilion' application identifier](#configuring-the-client-to-use-older-skilion-application-identifier)
   * [How to 'skip' directories from syncing?](#how-to-skip-directories-from-syncing)
   * [How to 'rate limit' the application to control bandwidth consumed for upload & download operations](#how-to-rate-limit-the-application-to-control-bandwidth-consumed-for-upload--download-operations)
+  * [Preventing your local disk from filling up](#preventing-your-local-disk-from-filling-up)
   * [Shared folders (OneDrive Personal)](#shared-folders-onedrive-personal)
   * [Shared folders (OneDrive Business or Office 365)](#shared-folders-onedrive-business-or-office-365)
   * [SharePoint / Office 365 Shared Libraries](#sharepoint--office-365-shared-libraries)
@@ -777,7 +778,15 @@ Example:
 space_reservation = "10"
 ```
 
-The value entered is in MB (Mega Bytes). This will be converted by the appliction to bytes.
+The value entered is in MB (Mega Bytes). In this example, a value of 10MB is being used, and will be converted to bytes by the application. The value being used can be reviewed when using `--display-config`:
+```
+Config option 'sync_dir_permissions'         = 700
+Config option 'sync_file_permissions'        = 600
+Config option 'space_reservation'            = 10485760
+Config option 'application_id'               = 
+Config option 'azure_ad_endpoint'            = 
+Config option 'azure_tenant_id'              = common
+```
 
 Any value is valid here, however, if you use a value of '0' a value of '1' will actually be used, so that you actually do not run out of disk space.
 
