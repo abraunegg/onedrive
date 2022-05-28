@@ -672,6 +672,7 @@ int main(string[] args)
 		writeln("Config option 'remove_source_files'          = ", cfg.getValueBool("remove_source_files"));
 		writeln("Config option 'sync_dir_permissions'         = ", cfg.getValueLong("sync_dir_permissions"));
 		writeln("Config option 'sync_file_permissions'        = ", cfg.getValueLong("sync_file_permissions"));
+		writeln("Config option 'space_reservation'            = ", cfg.getValueLong("space_reservation"));
 		
 		// curl operations
 		writeln("Config option 'application_id'               = ", cfg.getValueString("application_id"));

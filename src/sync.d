@@ -2825,8 +2825,9 @@ final class SyncEngine
 			// Is there enough free space locally to download the file
 			// - We can use '.' here as we change the current working directory to the configured 'sync_dir'
 			ulong localActualFreeSpace = to!ulong(getAvailableDiskSpace("."));
-			// So that we are not responsible to making the disk 100% full if we can download the file, reduce localActualFreeSpace by 100MB in bytes for our comparison testing
-			ulong localFreeSpaceLessReservation = localActualFreeSpace - 104857600;
+			// So that we are not responsible to making the disk 100% full if we can download the file, reduce localActualFreeSpace by 50MB in bytes for our comparison testing
+			// This value is user configurable in the config file, 50MB by default
+			ulong localFreeSpaceLessReservation = localActualFreeSpace - (cfg.getValueLong("space_reservation"));
 			// debug output
 			log.vdebug("Local Disk Space Actual: ", localActualFreeSpace);
 			log.vdebug("Local Disk Space Free: ", localFreeSpaceLessReservation);
