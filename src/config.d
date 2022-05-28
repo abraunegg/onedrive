@@ -669,6 +669,10 @@ final class Config
 							if (key == "space_reservation") {
 								// temp value
 								ulong tempValue = to!long(c.front.dup);
+								// a value of 0 needs to be made at least 1MB .. 
+								if (tempValue == 0) {
+									tempValue = 1;
+								}
 								setValueLong("space_reservation", to!long(tempValue * 2^^20));
 							}
 						} else {
