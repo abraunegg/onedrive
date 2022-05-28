@@ -382,6 +382,7 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # webhook_listening_port = "8888"
 # webhook_expiration_interval = "86400"
 # webhook_renewal_interval = "43200"
+# space_reservation = "50"
 ```
 
 ### 'config' file configuration examples:
@@ -764,6 +765,21 @@ rate_limit = "131072"
 ```
 
 **Note:** A number greater than '131072' is a valid value, with '104857600' being tested as an upper limit.
+
+### Preventing your local disk from filling up
+By default, the application will reserve 50MB of disk space to prevent your filesystem to run out of disk space. This value can be modified by adding the following to your config file:
+
+Example:
+```text
+...
+# webhook_expiration_interval = "86400"
+# webhook_renewal_interval = "43200"
+space_reservation = "10"
+```
+
+The value entered is in MB (Mega Bytes). This will be converted by the appliction to bytes.
+
+Any value is valid here, however, if you use a value of '0' a value of '1' will actually be used, so that you actually do not run out of disk space.
 
 ### Shared folders (OneDrive Personal)
 Folders shared with you can be synced by adding them to your OneDrive. To do that open your Onedrive, go to the Shared files list, right click on the folder you want to sync and then click on "Add to my OneDrive".
@@ -1202,6 +1218,8 @@ Options:
       Skip syncing of symlinks
   --source-directory ARG
       Source directory to rename or move on OneDrive - no sync will be performed.
+  --space-reservation ARG
+      The amount of disk space to reserve (in MB) to avoid 100% disk space utilisation
   --sync-root-files
       Sync all files in sync_dir root when using sync_list.
   --sync-shared-folders
