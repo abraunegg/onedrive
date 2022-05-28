@@ -269,7 +269,7 @@ final class SyncEngine
 	private bool nationalCloudDeployment = false;
 	// array of all OneDrive driveId's for use with OneDrive Business Folders
 	private string[] driveIDsArray;
-
+	
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
 		assert(onedrive && itemdb && selectiveSync);
@@ -2827,15 +2827,16 @@ final class SyncEngine
 			ulong localActualFreeSpace = to!ulong(getAvailableDiskSpace("."));
 			// So that we are not responsible to making the disk 100% full if we can download the file, reduce localActualFreeSpace by 50MB in bytes for our comparison testing
 			// This value is user configurable in the config file, 50MB by default
-			ulong localFreeSpaceLessReservation = localActualFreeSpace - (cfg.getValueLong("space_reservation"));
+			ulong freeSpaceReservation = cfg.getValueLong("space_reservation");
 			// debug output
 			log.vdebug("Local Disk Space Actual: ", localActualFreeSpace);
-			log.vdebug("Local Disk Space Free: ", localFreeSpaceLessReservation);
-			log.vdebug("File Size to Download: ", fileSize);
+			log.vdebug("Free Space Reservation:  ", freeSpaceReservation);
+			log.vdebug("File Size to Download:   ", fileSize);
+			
 			// calculate if we can download file
-			if ((localFreeSpaceLessReservation < 0) || (fileSize > localFreeSpaceLessReservation)) {
-				// localFreeSpaceLessReservation is less than 0 .. insufficient free space
-				// fileSize is greater than localFreeSpaceLessReservation .. insufficient free space
+			if ((localActualFreeSpace < freeSpaceReservation) || (fileSize > localActualFreeSpace)) {
+				// localActualFreeSpace is less than freeSpaceReservation .. insufficient free space
+				// fileSize is greater than localActualFreeSpace .. insufficient free space
 				writeln("failed!");
 				log.log("Insufficient local disk space to download file");
 				downloadFailed = true;
