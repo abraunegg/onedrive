@@ -28,7 +28,8 @@ jobs:
             platforms: linux/amd64,linux/arm64
 
     steps:
-      - uses: actions/checkout@v2
+      - name: Check out code from GitHub
+        uses: actions/checkout@v2
         with:
           submodules: recursive
 
