@@ -269,7 +269,7 @@ final class SyncEngine
 	private bool nationalCloudDeployment = false;
 	// array of all OneDrive driveId's for use with OneDrive Business Folders
 	private string[] driveIDsArray;
-
+	
 	this(Config cfg, OneDriveApi onedrive, ItemDatabase itemdb, SelectiveSync selectiveSync)
 	{
 		assert(onedrive && itemdb && selectiveSync);
@@ -2850,6 +2850,28 @@ final class SyncEngine
 				log.vdebug("WARNING: fileDetails['file']['hashes'] is missing - unable to compare file hash after download");
 			}
 			
+			// Is there enough free space locally to download the file
+			// - We can use '.' here as we change the current working directory to the configured 'sync_dir'
+			ulong localActualFreeSpace = to!ulong(getAvailableDiskSpace("."));
+			// So that we are not responsible in making the disk 100% full if we can download the file, compare the current available space against the reservation set and file size
+			// The reservation value is user configurable in the config file, 50MB by default
+			ulong freeSpaceReservation = cfg.getValueLong("space_reservation");
+			// debug output
+			log.vdebug("Local Disk Space Actual: ", localActualFreeSpace);
+			log.vdebug("Free Space Reservation:  ", freeSpaceReservation);
+			log.vdebug("File Size to Download:   ", fileSize);
+			
+			// calculate if we can download file
+			if ((localActualFreeSpace < freeSpaceReservation) || (fileSize > localActualFreeSpace)) {
+				// localActualFreeSpace is less than freeSpaceReservation .. insufficient free space
+				// fileSize is greater than localActualFreeSpace .. insufficient free space
+				writeln("failed!");
+				log.log("Insufficient local disk space to download file");
+				downloadFailed = true;
+				return;
+			}
+			
+			// Attempt to download the file
 			try {
 				onedrive.downloadById(item.driveId, item.id, path, fileSize);
 			} catch (OneDriveException e) {

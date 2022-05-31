@@ -1580,6 +1580,16 @@ final class OneDriveApi
 				// Some other error was returned
 				log.error("  Error Message: ", errorMessage);
 				log.error("  Calling Function: ", getFunctionName!({}));
+				
+				// Was this a curl initialization error?
+				if (canFind(errorMessage, "Failed initialization on handle")) {
+					// initialization error ... prevent a run-away process if we have zero disk space
+					ulong localActualFreeSpace = to!ulong(getAvailableDiskSpace("."));
+					if (localActualFreeSpace == 0) {
+						// force exit
+						exit(-1);
+					}
+				}
 			}
 			// return an empty JSON for handling
 			return json;

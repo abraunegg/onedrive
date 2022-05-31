@@ -35,6 +35,7 @@
   * [Configuring the client to use older 'skilion' application identifier](#configuring-the-client-to-use-older-skilion-application-identifier)
   * [How to 'skip' directories from syncing?](#how-to-skip-directories-from-syncing)
   * [How to 'rate limit' the application to control bandwidth consumed for upload & download operations](#how-to-rate-limit-the-application-to-control-bandwidth-consumed-for-upload--download-operations)
+  * [Preventing your local disk from filling up](#preventing-your-local-disk-from-filling-up)
   * [Shared folders (OneDrive Personal)](#shared-folders-onedrive-personal)
   * [Shared folders (OneDrive Business or Office 365)](#shared-folders-onedrive-business-or-office-365)
   * [SharePoint / Office 365 Shared Libraries](#sharepoint--office-365-shared-libraries)
@@ -382,6 +383,7 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # webhook_listening_port = "8888"
 # webhook_expiration_interval = "86400"
 # webhook_renewal_interval = "43200"
+# space_reservation = "50"
 ```
 
 ### 'config' file configuration examples:
@@ -764,6 +766,29 @@ rate_limit = "131072"
 ```
 
 **Note:** A number greater than '131072' is a valid value, with '104857600' being tested as an upper limit.
+
+### Preventing your local disk from filling up
+By default, the application will reserve 50MB of disk space to prevent your filesystem to run out of disk space. This value can be modified by adding the following to your config file:
+
+Example:
+```text
+...
+# webhook_expiration_interval = "86400"
+# webhook_renewal_interval = "43200"
+space_reservation = "10"
+```
+
+The value entered is in MB (Mega Bytes). In this example, a value of 10MB is being used, and will be converted to bytes by the application. The value being used can be reviewed when using `--display-config`:
+```
+Config option 'sync_dir_permissions'         = 700
+Config option 'sync_file_permissions'        = 600
+Config option 'space_reservation'            = 10485760
+Config option 'application_id'               = 
+Config option 'azure_ad_endpoint'            = 
+Config option 'azure_tenant_id'              = common
+```
+
+Any value is valid here, however, if you use a value of '0' a value of '1' will actually be used, so that you actually do not run out of disk space.
 
 ### Shared folders (OneDrive Personal)
 Folders shared with you can be synced by adding them to your OneDrive. To do that open your Onedrive, go to the Shared files list, right click on the folder you want to sync and then click on "Add to my OneDrive".
@@ -1202,6 +1227,8 @@ Options:
       Skip syncing of symlinks
   --source-directory ARG
       Source directory to rename or move on OneDrive - no sync will be performed.
+  --space-reservation ARG
+      The amount of disk space to reserve (in MB) to avoid 100% disk space utilisation
   --sync-root-files
       Sync all files in sync_dir root when using sync_list.
   --sync-shared-folders
