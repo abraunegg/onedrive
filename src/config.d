@@ -124,8 +124,9 @@ final class Config
 		longValues["rate_limit"] = 0;
 		// maximum time an operation is allowed to take
 		// This includes dns resolution, connecting, data transfer, etc.
-		longValues["operation_timeout"] = 3600;		
-
+		longValues["operation_timeout"] = 3600;
+		// To ensure we do not fill up the load disk, how much disk space should be reserved by default
+		longValues["space_reservation"] = 50 * 2^^20; // 50 MB as Bytes
 		// Webhook options
 		boolValues["webhook_enabled"] = false;
 		stringValues["webhook_public_url"] = "";
@@ -457,6 +458,9 @@ final class Config
 				"source-directory",
 					"Source directory to rename or move on OneDrive - no sync will be performed.",
 					&stringValues["source_directory"],
+				"space-reservation",
+					"The amount of disk space to reserve (in MB) to avoid 100% disk space utilisation",
+					&longValues["space_reservation"],
 				"syncdir",
 					"Specify the local directory used for synchronization to OneDrive",
 					&stringValues["sync_dir"],
@@ -661,6 +665,16 @@ final class Config
 						if (ppp) {
 							c.popFront();
 							setValueLong(key, to!long(c.front.dup));
+							// if key is space_reservation we have to calculate MB -> bytes
+							if (key == "space_reservation") {
+								// temp value
+								ulong tempValue = to!long(c.front.dup);
+								// a value of 0 needs to be made at least 1MB .. 
+								if (tempValue == 0) {
+									tempValue = 1;
+								}
+								setValueLong("space_reservation", to!long(tempValue * 2^^20));
+							}
 						} else {
 							log.log("Unknown key in config file: ", key);
 							return false;
@@ -766,6 +780,7 @@ void outputLongHelp(Option[] opt)
 		"--skip-file",
 		"--skip-size",
 		"--source-directory",
+		"--space-reservation",
 		"--syncdir",
 		"--user-agent" ];
 	writeln(`OneDrive - a client for OneDrive Cloud Services

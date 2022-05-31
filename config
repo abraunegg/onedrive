@@ -50,3 +50,4 @@
 # webhook_listening_port = "8888"
 # webhook_expiration_interval = "86400"
 # webhook_renewal_interval = "43200"
+# space_reservation = "50"

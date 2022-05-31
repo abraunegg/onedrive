@@ -14,6 +14,7 @@ import std.uri;
 import std.json;
 import std.traits;
 import qxor;
+import core.stdc.stdlib;
 static import log;
 
 shared string deviceName;
@@ -332,7 +333,7 @@ void displayOneDriveErrorMessage(string message, string callingFunction)
 	}
 	
 	// Where in the code was this error generated
-	log.error("  Calling Function: ", callingFunction);
+	log.vlog("  Calling Function: ", callingFunction);
 }
 
 // Parse and display error message received from the local file system
@@ -343,7 +344,13 @@ void displayFileSystemErrorMessage(string message, string callingFunction)
 	// What was the error message
 	log.error("  Error Message:    ", errorArray[0]);
 	// Where in the code was this error generated
-	log.error("  Calling Function: ", callingFunction);
+	log.vlog("  Calling Function: ", callingFunction);
+	// If we are out of disk space (despite download reservations) we need to exit the application
+	ulong localActualFreeSpace = to!ulong(getAvailableDiskSpace("."));
+	if (localActualFreeSpace == 0) {
+		// force exit
+		exit(-1);
+	}
 }
 
 // Get the function name that is being called to assist with identifying where an error is being generated
