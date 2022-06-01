@@ -29,8 +29,8 @@ jobs:
 
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v2
-
+        run: git clone
+        
       - name: Docker meta
         id: docker_meta
         uses: marcelcoding/ghaction-docker-meta@v1
