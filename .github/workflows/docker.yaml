@@ -30,9 +30,6 @@ jobs:
     steps:
       - name: Check out code from GitHub
         uses: actions/checkout@v2
-        run: git clone
-        with:
-          submodules: recursive
 
       - name: Docker meta
         id: docker_meta
