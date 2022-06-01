@@ -7,7 +7,7 @@ on:
   pull_request:
 
 env:
-  DOCKER_HUB_SLUG: driveone/onedrive
+  DOCKER_HUB_SLUG: abraunegg/onedrive
 
 jobs:
   build:
@@ -19,12 +19,6 @@ jobs:
         include:
           - flavor: fedora
             dockerfile: ./contrib/docker/Dockerfile
-            platforms: linux/amd64
-          - flavor: debian
-            dockerfile: ./contrib/docker/Dockerfile-debian
-            platforms: linux/amd64
-          - flavor: alpine
-            dockerfile: ./contrib/docker/Dockerfile-alpine
             platforms: linux/amd64
 
     steps:
