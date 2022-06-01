@@ -78,7 +78,7 @@ jobs:
       - name: Build
         uses: docker/build-push-action@v2
         with:
-          context: ./onedrive
+          context: .
           file: ${{ matrix.dockerfile }}
           platforms: ${{ matrix.platforms }}
           push: ${{ github.event_name != 'pull_request' }}
