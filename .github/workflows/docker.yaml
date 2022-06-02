@@ -19,7 +19,7 @@ jobs:
         include:
           - flavor: fedora
             dockerfile: ./contrib/docker/Dockerfile
-            platforms: linux/amd64,linux/arm64,linux/arm/v7
+            platforms: linux/amd64
           - flavor: debian
             dockerfile: ./contrib/docker/Dockerfile-debian
             platforms: linux/amd64,linux/arm64,linux/arm/v7
@@ -28,7 +28,8 @@ jobs:
             platforms: linux/amd64,linux/arm64
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Check out code from GitHub
+        uses: actions/checkout@v3
         with:
           submodules: recursive
           fetch-depth: 0
@@ -65,7 +66,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-      - name: Build and Push
+      - name: Build and Push to Docker
         uses: docker/build-push-action@v3
         with:
           context: .
