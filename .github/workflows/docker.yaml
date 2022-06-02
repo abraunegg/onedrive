@@ -22,10 +22,10 @@ jobs:
             platforms: linux/amd64
           - flavor: debian
             dockerfile: ./contrib/docker/Dockerfile-debian
-            platforms: linux/amd64
+            platforms: linux/amd64,linux/arm64,linux/arm/v7
           - flavor: alpine
             dockerfile: ./contrib/docker/Dockerfile-alpine
-            platforms: linux/amd64
+            platforms: linux/amd64,linux/arm64
 
     steps:
       - uses: actions/checkout@v3
