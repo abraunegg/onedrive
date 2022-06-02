@@ -1,0 +1,85 @@
+name: Build Docker Images
+
+on:
+  push:
+    branches: [ master ]
+    tags: [ 'v*' ]
+  pull_request:
+
+env:
+  DOCKER_HUB_SLUG: driveone/onedrive
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        flavor: [ fedora, debian, alpine ]
+        include:
+          - flavor: fedora
+            dockerfile: ./contrib/docker/Dockerfile
+            platforms: linux/amd64
+          - flavor: debian
+            dockerfile: ./contrib/docker/Dockerfile-debian
+            platforms: linux/amd64,linux/arm64,linux/arm/v7
+          - flavor: alpine
+            dockerfile: ./contrib/docker/Dockerfile-alpine
+            platforms: linux/amd64,linux/arm64
+
+    steps:
+      - name: Check out code from GitHub
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Docker meta
+        id: docker_meta
+        uses: marcelcoding/ghaction-docker-meta@v1
+        with:
+          tag-edge: true
+          images: |
+            ${{ env.DOCKER_HUB_SLUG }}
+          tag-semver: |
+            {{version}}
+            {{major}}.{{minor}}
+          flavor: ${{ matrix.flavor }}
+          main-flavor: ${{ matrix.flavor == 'debian' }}
+
+      - uses: docker/setup-qemu-action@v2
+        if: matrix.platforms != 'linux/amd64'
+
+      - uses: docker/setup-buildx-action@v2
+
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ matrix.flavor }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-${{ matrix.flavor }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        if: github.event_name != 'pull_request'
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Build and Push to Docker
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platforms }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.docker_meta.outputs.tags }}
+          labels: ${{ steps.docker_meta.outputs.labels }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
