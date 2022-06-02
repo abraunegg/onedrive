@@ -5,13 +5,16 @@ on:
     branches: [ master ]
     tags: [ 'v*' ]
   pull_request:
+    branches:
+      - master
+    types: [closed]
 
 env:
   DOCKER_HUB_SLUG: driveone/onedrive
 
 jobs:
   build:
-    if: github.event.pull_request.merged == true
+    if: (!(github.event.action == 'closed' && github.event.pull_request.merged != true))
     runs-on: ubuntu-latest
 
     strategy:
