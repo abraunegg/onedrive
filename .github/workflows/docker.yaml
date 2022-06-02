@@ -7,7 +7,7 @@ on:
   pull_request:
     branches:
       - master
-    types: [opened, closed]
+    types: [closed]
 
 env:
   DOCKER_HUB_SLUG: driveone/onedrive
