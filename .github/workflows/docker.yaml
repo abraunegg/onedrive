@@ -40,7 +40,6 @@ jobs:
           tag-edge: true
           images: |
             ${{ env.DOCKER_HUB_SLUG }}
-            ghcr.io/${{ github.repository }}
           tag-semver: |
             {{version}}
             {{major}}.{{minor}}
