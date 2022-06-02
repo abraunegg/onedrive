@@ -36,7 +36,7 @@ jobs:
 
       - name: Docker meta
         id: docker_meta
-        uses: marcelcoding/ghaction-docker-meta@v1
+        uses: marcelcoding/ghaction-docker-meta@v2
         with:
           tag-edge: true
           images: |
