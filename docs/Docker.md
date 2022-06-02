@@ -1,16 +1,20 @@
 # Run the OneDrive Client for Linux under Docker
 This client can be run as a Docker container, with 3 available options for you to choose from:
-1.  Container based on Fedora 35 - Docker Tag: latest
-2.  Container based on Debian 11 - Docker Tag: debian
-3.  Container based on Alpine Linux - Docker Tag: alpine
+
+| Container Base | Docker Tag  | Description                                              | x86_64 | ARMHF | AARCH64 |
+|----------------|-------------|----------------------------------------------------------|:------:|:-----:|:-------:|
+| Alpine Linux   | edge-alpine | Docker container based on Apline 3.16 using 'master'     |✔|❌|✔|
+| Debian         | edge-debian | Docker container based on Debian Bullseye using 'master' |✔|✔|✔|
+| Debian         | edge        | Docker container based on Debian Bullseye using 'master' |✔|✔|✔|
+| Fedora         | edge-fedora | Docker container based on Fedora 36 using 'master'       |✔|❌|❌|
 
 These containers offer a simple monitoring-mode service for the OneDrive Client for Linux.
 
 The instructions below have been validated on:
 *   Red Hat Enterprise Linux 8.x 
-*   Ubuntu Server 20.04
+*   Ubuntu Server 22.04
 
-The instructions below will utilise the 'latest' tag, however this can be substituted for 'debian' or 'alpine' if desired.
+The instructions below will utilise the 'edge' tag, however this can be substituted for 'edge-alpine', 'edge-debian' or 'edge-fedora' if desired.
 
 ## Basic Setup
 ### 0. Install docker using your distribution platform's instructions
@@ -24,7 +28,7 @@ Once the above 4 steps are complete and you can successfully run `docker run hel
 ## Pulling and Running the Docker Image
 ### 1. Pull the image
 ```bash
-docker pull driveone/onedrive:latest
+docker pull driveone/onedrive:edge
 ```
 
 **NOTE:** SELinux context needs to be configured or disabled for Docker to be able to write to OneDrive host directory.
@@ -62,7 +66,7 @@ docker run -it --name onedrive -v onedrive_conf:/onedrive/conf \
     -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" \
     -e "ONEDRIVE_UID=${ONEDRIVE_UID}" \
     -e "ONEDRIVE_GID=${ONEDRIVE_GID}" \
-    driveone/onedrive:latest
+    driveone/onedrive:edge
 ```
 **Important:** The 'target' folder of `ONEDRIVE_DATA_DIR` must exist before running the Docker container, otherwise, Docker will create the target folder, and the folder will be given 'root' permissions, which then causes the Docker container to fail upon startup with the following error message:
 ```bash
@@ -80,7 +84,7 @@ docker run -it --name onedrive -v onedrive_conf:/onedrive/conf \
     -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" \
     -e "ONEDRIVE_UID=${ONEDRIVE_UID}" \
     -e "ONEDRIVE_GID=${ONEDRIVE_GID}" \
-    driveone/onedrive:latest
+    driveone/onedrive:edge
 ```
 
 When the Docker container successfully starts:
@@ -134,7 +138,7 @@ However, you can also use bind mounts for the configuration folder, e.g. `export
 version: "3"
 services:
     onedrive:
-        image: driveone/onedrive:latest
+        image: driveone/onedrive:edge
         restart: unless-stopped
         environment:
             - ONEDRIVE_UID=${PUID}
@@ -165,7 +169,7 @@ There are many ways to do this, the easiest is probably to
 ```
 export ONEDRIVE_DATA_DIR_WORK="/home/abraunegg/OneDriveWork"
 mkdir -p ${ONEDRIVE_DATA_DIR_WORK}
-docker run -it --restart unless-stopped --name onedrive_Work -v onedrive_conf_Work:/onedrive/conf -v "${ONEDRIVE_DATA_DIR_WORK}:/onedrive/data" driveone/onedrive:latest
+docker run -it --restart unless-stopped --name onedrive_Work -v onedrive_conf_Work:/onedrive/conf -v "${ONEDRIVE_DATA_DIR_WORK}:/onedrive/data" driveone/onedrive:edge
 ```
 
 ## Run or update with one script
@@ -178,10 +182,10 @@ ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
 mkdir -p ${ONEDRIVE_DATA_DIR} 
 
 firstRun='-d'
-docker pull driveone/onedrive:latest
+docker pull driveone/onedrive:edge
 docker inspect onedrive_conf > /dev/null 2>&1 || { docker volume create onedrive_conf; firstRun='-it'; }
 docker inspect onedrive > /dev/null 2>&1 && docker rm -f onedrive
-docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:latest
+docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:edge
 ```
 
 
@@ -203,24 +207,24 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 ### Usage Examples
 **Verbose Output:**
 ```bash
-docker container run -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:latest
+docker container run -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:edge
 ```
 **Debug Output:**
 ```bash
-docker container run -e ONEDRIVE_DEBUG=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:latest
+docker container run -e ONEDRIVE_DEBUG=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:edge
 ```
 **Perform a --resync:**
 ```bash
-docker container run -e ONEDRIVE_RESYNC=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:latest
+docker container run -e ONEDRIVE_RESYNC=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:edge
 ```
 **Perform a --resync and --verbose:**
 ```bash
-docker container run -e ONEDRIVE_RESYNC=1 -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:latest
+docker container run -e ONEDRIVE_RESYNC=1 -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:edge
 ```
 
 **Perform a --logout and re-authenticate:**
 ```bash
-docker container run -it -e ONEDRIVE_LOGOUT=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:latest
+docker container run -it -e ONEDRIVE_LOGOUT=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:edge
 ```
 
 ## Build instructions
