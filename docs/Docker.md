@@ -1,16 +1,24 @@
 # Run the OneDrive Client for Linux under Docker
 This client can be run as a Docker container, with 3 available options for you to choose from:
-1.  Container based on Fedora 35 - Docker Tag: latest
-2.  Container based on Debian 11 - Docker Tag: debian
-3.  Container based on Alpine Linux - Docker Tag: alpine
+
+| Container Base | Docker Tag  | Description                                                    | x86_64 | ARMHF | AARCH64 |
+|----------------|-------------|----------------------------------------------------------------|:------:|:-----:|:-------:|
+| Alpine Linux   | edge-alpine | Docker container based on Apline 3.16 using 'master'           |✔|❌|✔|
+| Alpine Linux   | alpine      | Docker container based on Apline 3.16 using latest release     |✔|❌|✔|
+| Debian         | edge-debian | Docker container based on Debian Bullseye using 'master'       |✔|✔|✔|
+| Debian         | debian      | Docker container based on Debian Bullseye using latest release |✔|✔|✔|
+| Debian         | edge        | Docker container based on Debian Bullseye using 'master'       |✔|✔|✔|
+| Debian         | latest      | Docker container based on Debian Bullseye using latest release |✔|✔|✔|
+| Fedora         | edge-fedora | Docker container based on Fedora 36 using 'master'             |✔|❌|❌|
+| Fedora         | fedora      | Docker container based on Fedora 36 using latest release       |✔|❌|❌|
 
 These containers offer a simple monitoring-mode service for the OneDrive Client for Linux.
 
 The instructions below have been validated on:
 *   Red Hat Enterprise Linux 8.x 
-*   Ubuntu Server 20.04
+*   Ubuntu Server 22.04
 
-The instructions below will utilise the 'latest' tag, however this can be substituted for 'debian' or 'alpine' if desired.
+The instructions below will utilise the 'edge' tag, however this can be substituted for 'edge-alpine', 'edge-debian' or 'edge-fedora' if desired.
 
 ## Basic Setup
 ### 0. Install docker using your distribution platform's instructions
