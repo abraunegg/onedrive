@@ -23,7 +23,7 @@ jobs:
         include:
           - flavor: fedora
             dockerfile: ./contrib/docker/Dockerfile
-            platforms: linux/amd64
+            platforms: linux/amd64,linux/arm64,linux/arm/v7
           - flavor: debian
             dockerfile: ./contrib/docker/Dockerfile-debian
             platforms: linux/amd64,linux/arm64,linux/arm/v7
@@ -49,7 +49,7 @@ jobs:
             {{version}}
             {{major}}.{{minor}}
           flavor: ${{ matrix.flavor }}
-          main-flavor: ${{ matrix.flavor == 'debian' }}
+          main-flavor: ${{ matrix.flavor == 'fedora' }}
 
       - uses: docker/setup-qemu-action@v2
         if: matrix.platforms != 'linux/amd64'
