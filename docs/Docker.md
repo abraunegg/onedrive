@@ -8,9 +8,9 @@ This client can be run as a Docker container, with 3 available options for you t
 | Debian         | edge-debian | Docker container based on Debian Bullseye using 'master'       |✔|✔|✔|
 | Debian         | debian      | Docker container based on Debian Bullseye using latest release |✔|✔|✔|
 | Debian         | edge        | Docker container based on Debian Bullseye using 'master'       |✔|✔|✔|
-| Debian         | latest      | Docker container based on Debian Bullseye using latest release |✔|✔|✔|
-| Fedora         | edge-fedora | Docker container based on Fedora 36 using 'master'             |✔|❌|❌|
-| Fedora         | fedora      | Docker container based on Fedora 36 using latest release       |✔|❌|❌|
+| Fedora         | latest      | Docker container based on Debian Bullseye using latest release |✔|✔|✔|
+| Fedora         | edge-fedora | Docker container based on Fedora 36 using 'master'             |✔|✔|✔|
+| Fedora         | fedora      | Docker container based on Fedora 36 using latest release       |✔|✔|✔|
 
 These containers offer a simple monitoring-mode service for the OneDrive Client for Linux.
 
