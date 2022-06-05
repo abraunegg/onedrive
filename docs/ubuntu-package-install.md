@@ -154,7 +154,7 @@ Run: `sudo apt-get update`
 Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
-Read and understand the known issues with these packages below, taking any action that is needed.
+Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
 
 ### Distribution: Ubuntu 20.04
 The packages support the following platform architectures:
@@ -181,7 +181,7 @@ Run: `sudo apt-get update`
 Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
-Read and understand the known issues with these packages below, taking any action that is needed.
+Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
 
 ### Distribution: Ubuntu 21.04
 The packages support the following platform architectures:
@@ -208,7 +208,7 @@ Run: `sudo apt-get update`
 Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
-Read and understand the known issues with these packages below, taking any action that is needed.
+Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
 
 ### Distribution: Ubuntu 21.10
 The packages support the following platform architectures:
@@ -235,7 +235,7 @@ Run: `sudo apt-get update`
 Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
-Read and understand the known issues with these packages below, taking any action that is needed.
+Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
 
 ### Distribution: Ubuntu 22.04
 The packages support the following platform architectures:
@@ -262,14 +262,14 @@ Run: `sudo apt-get update`
 Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
-Read and understand the known issues with these packages below, taking any action that is needed.
+Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
 
 ## Known Issues with Installing from the above packages
 
-### 1. The client will segfault | core-dump when exiting
-When the client is being run in `--monitor` mode manually, or when using the systemd service, the client will segfault on exit.
+### 1. The client mau segfault | core-dump when exiting
+When the client is run in `--monitor` mode manually, or when using the systemd service, the client may segfault on exit.
 
-This issue is caused by the way the Ubuntu 'onedrive' packages are built using the Ubuntu LDC package & compiler options which is the root cause for this issue. Refer to: https://bugs.launchpad.net/ubuntu/+source/ldc/+bug/1895969
+This issue is caused by the way the 'onedrive' packages are built using the distribution LDC package & the default distribution compiler options which is the root cause for this issue. Refer to: https://bugs.launchpad.net/ubuntu/+source/ldc/+bug/1895969
 
 **Additional references:**
 *  https://github.com/abraunegg/onedrive/issues/1053
