@@ -1488,11 +1488,11 @@ final class SyncEngine
 			// National Cloud Deployments (US and DE) do not support /delta as a query
 			// https://docs.microsoft.com/en-us/graph/deployments#supported-features
 			// Are we running against a National Cloud Deployments that does not support /delta
-			if ((nationalCloudDeployment) || ((driveId!= defaultDriveId) && (syncBusinessFolders))) {
+			if (nationalCloudDeployment) {
 				// Have to query /children rather than /delta
 				nationalCloudChildrenScan = true;
 				log.vdebug("Using /children call to query drive for items to populate 'changes' and 'changesAvailable'");
-				// In OneDrive Business Shared Folder scenario, if ALL items are downgraded, then this leads to local file deletion
+				// In a OneDrive Business Shared Folder scenario + nationalCloudDeployment, if ALL items are downgraded, then this leads to local file deletion
 				// Downgrade ONLY files associated with this driveId and idToQuery
 				log.vdebug("Downgrading all children for this driveId (" ~ driveId ~ ") and idToQuery (" ~ idToQuery ~ ") to an out-of-sync state");
 				// Before we get any data, flag any object in the database as out-of-sync for this driveID & ID
@@ -1505,7 +1505,7 @@ final class SyncEngine
 					}
 				}
 				
-				// Build own 'changes' response
+				// Build own 'changes' response to simulate a /delta response
 				try {
 					// we have to 'build' our own JSON response that looks like /delta
 					changes = generateDeltaResponse(driveId, idToQuery);
