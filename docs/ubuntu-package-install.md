@@ -266,7 +266,7 @@ Read and understand the [known issues](#known-issues-with-installing-from-the-ab
 
 ## Known Issues with Installing from the above packages
 
-### 1. The client mau segfault | core-dump when exiting
+### 1. The client may segfault | core-dump when exiting
 When the client is run in `--monitor` mode manually, or when using the systemd service, the client may segfault on exit.
 
 This issue is caused by the way the 'onedrive' packages are built using the distribution LDC package & the default distribution compiler options which is the root cause for this issue. Refer to: https://bugs.launchpad.net/ubuntu/+source/ldc/+bug/1895969
