@@ -7,4 +7,4 @@ dnotify.d
 
 notify.d
 	https://github.com/D-Programming-Deimos/libnotify/blob/master/deimos/notify/notify.d
-	License: GPL 2.1 or upwards, see file
+	License: GNU Lesser General Public License (LGPL) 2.1 or upwards, see file
