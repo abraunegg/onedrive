@@ -98,11 +98,10 @@ Reading state information... Done
 root@ubuntu-20-LTS:~#
 ```
 
-Reboot your system after running this process before continuing with Step 2.
+Reboot your system after running this process before continuing with Step 3.
 ```text
 reboot
 ```
-
 
 ### Step 3: Determine what your OS is based on
 Determine what your OS is based on. To do this, run the following command:
