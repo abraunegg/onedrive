@@ -18,7 +18,9 @@ The instructions below have been validated on:
 *   Red Hat Enterprise Linux 8.x 
 *   Ubuntu Server 22.04
 
-The instructions below will utilise the 'latest' tag, however this can be substituted for 'edge-alpine', 'edge-debian' or 'edge-fedora' if desired.
+The instructions below will utilise the 'latest' tag, however this can be substituted for any of the other docker tags from the table above if desired.
+
+Additionally there are specific version release tags for each release. Refer to https://hub.docker.com/r/driveone/onedrive/tags for any other Docker tags you may be interested in.
 
 ## Basic Setup
 ### 0. Install docker using your distribution platform's instructions

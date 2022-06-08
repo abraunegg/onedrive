@@ -1,9 +1,10 @@
 # Advanced Configuration of the OneDrive Free Client
 This document covers the following scenarios:
-*   Configuring the client to use multiple OneDrive accounts / configurations
-*   Configuring the client for use in dual-boot (Windows / Linux) situations
-*   Configuring the client for use when 'sync_dir' is a mounted directory
-*   Upload data from the local ~/OneDrive folder to a specific location on OneDrive
+*   [Configuring the client to use multiple OneDrive accounts / configurations](#configuring-the-client-to-use-multiple-onedrive-accounts--configurations)
+*   [Configuring the client to use multiple OneDrive accounts / configurations using Docker](#configuring-the-client-to-use-multiple-onedrive-accounts--configurations-using-docker)
+*   [Configuring the client for use in dual-boot (Windows / Linux) situations](#configuring-the-client-for-use-in-dual-boot-windows--linux-situations)
+*   [Configuring the client for use when 'sync_dir' is a mounted directory](#configuring-the-client-for-use-when-sync_dir-is-a-mounted-directory)
+*   [Upload data from the local ~/OneDrive folder to a specific location on OneDrive](#upload-data-from-the-local-onedrive-folder-to-a-specific-location-on-onedrive)
 
 ## Configuring the client to use multiple OneDrive accounts / configurations
 Essentially, each OneDrive account or SharePoint Shared Library which you require to be synced needs to have its own and unique configuration, local sync directory and service files. To do this, the following steps are needed:
@@ -124,6 +125,54 @@ systemctl --user start onedrive-my-new-config@myusername.service
 ```
 
 Repeat these steps for each OneDrive new account that you wish to use.
+
+## Configuring the client to use multiple OneDrive accounts / configurations using Docker
+In some situations it may be desirable to run multiple Docker containers at the same time, each with their own configuration.
+
+To run the Docker container sucessfully, it needs two unique Docker volumes to operate:
+*   Your configuration Docker volumes
+*   Your data Docker volume
+
+When running multiple Docker containers, this is no different - each Docker container must have it's own configuration and data volume.
+
+### High level steps:
+1.   Create the required unique Docker volumes for the configuration volume
+2.   Create the required unique local path used for the Docker data volume
+3.   Start the multiple Docker containers with the required configuration for each container
+
+#### Create the required unique Docker volumes for the configuration volume
+Create the required unique Docker volumes for the configuration volume(s):
+```text
+docker volume create onedrive_conf_sharepoint_site1
+docker volume create onedrive_conf_sharepoint_site2
+docker volume create onedrive_conf_sharepoint_site3
+...
+docker volume create onedrive_conf_sharepoint_site50
+```
+
+#### Create the required unique local path used for the Docker data volume
+Create the required unique local path used for the Docker data volume
+```text
+mkdir -p /use/full/local/path/no/tilda/SharePointSite1
+mkdir -p /use/full/local/path/no/tilda/SharePointSite2
+mkdir -p /use/full/local/path/no/tilda/SharePointSite3
+...
+mkdir -p /use/full/local/path/no/tilda/SharePointSite50
+```
+
+#### Start the Docker container with the required configuration (example)
+```text
+docker run -it --name onedrive -v onedrive_conf_sharepoint_site1:/onedrive/conf -v "/use/full/local/path/no/tilda/SharePointSite1:/onedrive/data" driveone/onedrive:latest
+docker run -it --name onedrive -v onedrive_conf_sharepoint_site2:/onedrive/conf -v "/use/full/local/path/no/tilda/SharePointSite2:/onedrive/data" driveone/onedrive:latest
+docker run -it --name onedrive -v onedrive_conf_sharepoint_site3:/onedrive/conf -v "/use/full/local/path/no/tilda/SharePointSite3:/onedrive/data" driveone/onedrive:latest
+...
+docker run -it --name onedrive -v onedrive_conf_sharepoint_site50:/onedrive/conf -v "/use/full/local/path/no/tilda/SharePointSite50:/onedrive/data" driveone/onedrive:latest
+```
+
+#### TIP
+To avoid 're-authenticating' and 'authorising' each individual Docker container, if all the Docker containers are using the 'same' OneDrive credentials, you can re-use the 'refresh_token' from one Docker container to another by copying this file to the configuration Docker volume of each Docker container.
+
+If the account credentials are different .. you will need to re-authenticate each Docker container individually.
 
 ## Configuring the client for use in dual-boot (Windows / Linux) situations
 When dual booting Windows and Linux, depending on the Windows OneDrive account configuration, the 'Files On-Demand' option may be enabled when running OneDrive within your Windows environment.
