@@ -62,6 +62,13 @@ if [ "${ONEDRIVE_DOWNLOADONLY:=0}" == "1" ]; then
    ARGS=(--download-only ${ARGS[@]})
 fi
 
+# Tell client to sync in upload-only mode based on environment variable
+if [ "${ONEDRIVE_UPLOADONLY:=0}" == "1" ]; then
+   echo "# We are synchronizing in upload-only mode"
+   echo "# Adding --upload-only"
+   ARGS=(--upload-only ${ARGS[@]})
+fi
+
 # Tell client to logout based on environment variable
 if [ "${ONEDRIVE_LOGOUT:=0}" == "1" ]; then
    echo "# We are logging out"
