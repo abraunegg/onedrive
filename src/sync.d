@@ -2468,11 +2468,11 @@ final class SyncEngine
 				
 				if (localModifiedTime != remoteModifiedTime) {
 					// Database update needed
-					log.vdebug("Updating local database with item details");
+					log.vdebug("Updating local database with item details as timestamps of items are different");
 					itemdb.update(item);
 				}
 			} else {
-				log.vdebug("Inserting item details to local database");
+				log.vdebug("Inserting new item details to local database");
 				itemdb.insert(item);
 			}
 			// What was the item that was saved
