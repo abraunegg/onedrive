@@ -2470,7 +2470,7 @@ final class SyncEngine
 				
 				if (localModifiedTime != remoteModifiedTime) {
 					// Database update needed for this item because our record is out-of-date
-					log.log("DATABASE UPDATE: Updating local database with item details as timestamps of items are different");
+					log.vdebug("Updating local database with item details as timestamps of items are different");
 					itemdb.update(item);
 				}
 			} else {
