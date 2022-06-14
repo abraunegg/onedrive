@@ -2437,6 +2437,7 @@ final class SyncEngine
 
 		// update the item
 		if (cached) {
+			// the item is in the items.sqlite3 database
 			log.vdebug("OneDrive change is an update to an existing local item");
 			applyChangedItem(oldItem, oldPath, item, path);
 		} else {
@@ -2450,6 +2451,7 @@ final class SyncEngine
 					}
 				}
 			}
+			// apply this new item
 			applyNewItem(item, path);
 		}
 
@@ -2458,10 +2460,22 @@ final class SyncEngine
 			// if the file was detected as malware and NOT downloaded, we dont want to falsify the DB as downloading it as otherwise the next pass will think it was deleted, thus delete the remote item
 			// Likewise if the download failed, we dont want to falsify the DB as downloading it as otherwise the next pass will think it was deleted, thus delete the remote item 
 			if (cached) {
-				log.vdebug("Updating local database with item details");
-				itemdb.update(item);
+				// the item is in the items.sqlite3 database
+				// Do we need to update the database with the details that were provided by the OneDrive API?
+				// Is the last modified timestamp in the DB the same as the API data?
+				SysTime localModifiedTime = oldItem.mtime;
+				localModifiedTime.fracSecs = Duration.zero;
+				SysTime remoteModifiedTime = item.mtime;
+				remoteModifiedTime.fracSecs = Duration.zero;
+				
+				if (localModifiedTime != remoteModifiedTime) {
+					// Database update needed for this item because our record is out-of-date
+					log.vdebug("Updating local database with item details as timestamps of items are different");
+					itemdb.update(item);
+				}
 			} else {
-				log.vdebug("Inserting item details to local database");
+				// item is not in the items.sqlite3 database
+				log.vdebug("Inserting new item details to local database");
 				itemdb.insert(item);
 			}
 			// What was the item that was saved
@@ -3028,12 +3042,15 @@ final class SyncEngine
 						return true;
 					} else {
 						log.vlog("The local item has a different modified time ", localModifiedTime, " when compared to ", itemSource, " modified time ", itemModifiedTime);
+						// The file has been modified ... is the hash the same?
+						// Test the file hash as the date / time stamp is different
+						// Generating a hash is computationally expensive - only generate the hash if timestamp was modified
+						if (testFileHash(path, item)) {
+							return true;
+						} else {
+							log.vlog("The local item has a different hash when compared to ", itemSource, " item hash");
+						}
 					}
-					if (testFileHash(path, item)) {
-						return true;
-					} else {
-						log.vlog("The local item has a different hash when compared to ", itemSource, " item hash");
-					}	
 				} else {
 					// Unable to read local file
 					log.log("Unable to determine the sync state of this file as it cannot be read (file permissions or file corruption): ", path);
