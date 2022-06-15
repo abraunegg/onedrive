@@ -2,6 +2,18 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.4.19 - 2022-06-15
+### Fixed
+*   Update Business Shared Folders to use a /delta query
+*   Update when DB is updated by OneDrive API data and update when file hash is required to be generated
+
+### Added
+*   Added ONEDRIVE_UPLOADONLY flag for Docker
+
+### Updated
+*   Updated GitHub workflows
+*   Updated documentation (various)
+
 ## 2.4.18 - 2022-06-02
 ### Fixed
 *   Fixed various database related access issues steming from running multiple instances of the application at the same time using the same configuration data
