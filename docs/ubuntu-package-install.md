@@ -98,11 +98,10 @@ Reading state information... Done
 root@ubuntu-20-LTS:~#
 ```
 
-Reboot your system after running this process before continuing with Step 2.
+Reboot your system after running this process before continuing with Step 3.
 ```text
 reboot
 ```
-
 
 ### Step 3: Determine what your OS is based on
 Determine what your OS is based on. To do this, run the following command:
@@ -154,7 +153,7 @@ Run: `sudo apt-get update`
 Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
-Read and understand the known issues with these packages below, taking any action that is needed.
+Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
 
 ### Distribution: Ubuntu 20.04
 The packages support the following platform architectures:
@@ -181,7 +180,7 @@ Run: `sudo apt-get update`
 Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
-Read and understand the known issues with these packages below, taking any action that is needed.
+Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
 
 ### Distribution: Ubuntu 21.04
 The packages support the following platform architectures:
@@ -208,7 +207,7 @@ Run: `sudo apt-get update`
 Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
-Read and understand the known issues with these packages below, taking any action that is needed.
+Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
 
 ### Distribution: Ubuntu 21.10
 The packages support the following platform architectures:
@@ -235,7 +234,7 @@ Run: `sudo apt-get update`
 Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
-Read and understand the known issues with these packages below, taking any action that is needed.
+Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
 
 ### Distribution: Ubuntu 22.04
 The packages support the following platform architectures:
@@ -262,36 +261,14 @@ Run: `sudo apt-get update`
 Run: `sudo apt install onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
-Read and understand the known issues with these packages below, taking any action that is needed.
+Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
 
 ## Known Issues with Installing from the above packages
 
-### 1. The 'onedrive' client will automatically startup post 'authentication' without any further actions.
-The 'onedrive' client will automatically startup post 'authentication' without any further actions. In some circumstances this may be highly undesirable and can also lead to data loss.
+### 1. The client may segfault | core-dump when exiting
+When the client is run in `--monitor` mode manually, or when using the systemd service, the client may segfault on exit.
 
-This is because, when the package is installed, the following symbolic link is created:
-```text
-Created symlink /etc/systemd/user/default.target.wants/onedrive.service → /usr/lib/systemd/user/onedrive.service.
-```
-
-To resolve this, so that the client is *not* automatically started, without 'enabling' the client yourself, you need to remove this symbolic link:
-```
-sudo rm /etc/systemd/user/default.target.wants/onedrive.service
-```
-
-This issue is being tracked by: [#1274](https://github.com/abraunegg/onedrive/issues/1274)
-
-**Important:** It is highly advisable that you remove this symbolic link before you configure or authenticate your client. If you do not remove this symbolic link before you configure or authenticate your client this will be a major contributor to why the following error message will be generated:
-```
-ERROR: onedrive application is already running - check system process list for active application instances
-```
-
-**Important:** Do not rely on this symbolic link for your systemd configuration to automatically start your onedrive client - refer to [Running 'onedrive' as a system service](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#running-onedrive-as-a-system-service) on how to configure this correctly.
-
-### 2. The client will segfault | core-dump when exiting
-When the client is being run in `--monitor` mode manually, or when using the systemd service, the client will segfault on exit.
-
-This issue is caused by the way the Ubuntu 'onedrive' packages are built using the Ubuntu LDC package & compiler options which is the root cause for this issue. Refer to: https://bugs.launchpad.net/ubuntu/+source/ldc/+bug/1895969
+This issue is caused by the way the 'onedrive' packages are built using the distribution LDC package & the default distribution compiler options which is the root cause for this issue. Refer to: https://bugs.launchpad.net/ubuntu/+source/ldc/+bug/1895969
 
 **Additional references:**
 *  https://github.com/abraunegg/onedrive/issues/1053
@@ -299,4 +276,3 @@ This issue is caused by the way the Ubuntu 'onedrive' packages are built using t
 
 **Resolution Options:**
 *  Uninstall the package and build client from source
-

@@ -1485,26 +1485,26 @@ int main(string[] args)
 						log.log("Cannot initialize connection to OneDrive");
 					}
 					// performSync complete, set lastCheckTime to current time
-					fullScanRequired = false;
-					if (syncListConfigured) {
-						syncListConfiguredFullScanOverride = false;
-					}
 					lastCheckTime = MonoTime.currTime();
+					
 					// Display memory details before cleanup
-					if (displayMemoryUsage) {
-						log.displayMemoryUsagePreGC();
-					}
+					if (displayMemoryUsage) log.displayMemoryUsagePreGC();
 					// Perform Garbage Cleanup
 					GC.collect();
 					// Display memory details after cleanup
-					if (displayMemoryUsage) {
-						log.displayMemoryUsagePostGC();
+					if (displayMemoryUsage) log.displayMemoryUsagePostGC();
+					
+					// If we did a full scan, make sure we merge the conents of the WAL and SHM to disk
+					if (fullScanRequired) {
+						// Write WAL and SHM data to file for this loop
+						log.vdebug("Merge contents of WAL and SHM files into main database file");
+						itemDb.performVacuum();
 					}
-
-					// Write WAL and SHM data to file for this loop
-					log.vdebug("Merge contents of WAL and SHM files into main database file");
-					itemDb.performVacuum();
-
+					
+					// reset fullScanRequired and syncListConfiguredFullScanOverride
+					fullScanRequired = false;
+					if (syncListConfigured) syncListConfiguredFullScanOverride = false;
+					
 					// monitor loop complete
 					logOutputMessage = "################################################ LOOP COMPLETE ###############################################";
 
@@ -1838,7 +1838,7 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 			// was itemDb initialised?
 			if (itemDb !is null) {
 				// Make sure the .wal file is incorporated into the main db before we exit
-				log.log("Shutting down db connection");
+				log.log("Shutting down db connection and merging temporary data");
 				itemDb.performVacuum();
 				destroy(itemDb);
 			}
