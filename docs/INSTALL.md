@@ -144,14 +144,14 @@ CentOS 6.x and RHEL 6.x reached End of Life status on November 30th 2020 and is 
 sudo yum groupinstall 'Development Tools'
 sudo yum install libcurl-devel
 sudo yum install sqlite-devel
-curl -fsS https://dlang.org/install.sh | bash -s dmd
+curl -fsS https://dlang.org/install.sh | bash -s dmd-2.099.0
 ```
 For notifications the following is also necessary:
 ```text
 sudo yum install libnotify-devel
 ```
 
-### Dependencies: Fedora > Version 18 / CentOS 8.x / RHEL 8.x
+### Dependencies: Fedora > Version 18 / CentOS 8.x / RHEL 8.x / RHEL 9.x
 ```text
 sudo dnf groupinstall 'Development Tools'
 sudo dnf install libcurl-devel
@@ -296,7 +296,7 @@ sudo make install
 ## Upgrading the client
 If you have installed the client from a distribution package, the client will be updated when the distribution package is updated by the package maintainer and will be updated to the new application version when you perform your package update.
 
-If you have built the client from source, to upgrade your client, you must first uninstall your existing 'onedrive' binary (see above), then re-install the client by re-cloning, re-compiling and re-installing the client again to install the new version.
+If you have built the client from source, to upgrade your client, you must first uninstall your existing 'onedrive' binary (see below), then re-install the client by re-cloning, re-compiling and re-installing the client again to install the new version.
 
 To confirm you have the new version installed, use `onedrive --version` to determine the version that is now installed.
 
@@ -314,7 +314,7 @@ If you are not upgrading your client, to remove your application state and confi
 ```
 rm -rf ~/.config/onedrive
 ```
-**Note:** If you are using the `--confdir option`, substitute `~/.config/onedrive` above for that directory.
+**Note:** If you are using the `--confdir option`, substitute `~/.config/onedrive` for the correct directory storing your client configuration.
 
 If you want to just delete the application key, but keep the items database:
 ```text
