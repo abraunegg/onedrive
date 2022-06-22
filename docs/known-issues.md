@@ -6,7 +6,7 @@ The below are known issues with this client:
 
 **Description:**
 
-When running the client in standalone mode (`--synchronize`) moving folders that are sucessfully synced around between subseqant standalone syncs causes a deletion & re-upload of data to occur.
+When running the client in standalone mode (`--synchronize`) moving folders that are sucessfully synced around between subsequent standalone syncs causes a deletion & re-upload of data to occur.
 
 **Explanation:**
 
