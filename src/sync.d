@@ -1776,6 +1776,44 @@ final class SyncEngine
 				}
 			}
 			
+			// In some OneDrive Business scenarios, the shared folder /delta response lacks the 'root' drive details
+			// When this occurs, this creates the following error: A database statement execution error occurred: foreign key constraint failed
+			// Ensure we query independently the root details for this shared folder and ensure that it is added before we process the /delta response
+			if ((!nationalCloudDeployment) && (driveId!= defaultDriveId) && (syncBusinessFolders)) {
+				// fetch this driveId root details to ensure we add this to the database for this remote drive
+				JSONValue rootData;
+				
+				try {
+					rootData = onedrive.getDriveIdRoot(driveId);
+				} catch (OneDriveException e) {
+					log.vdebug("rootData = onedrive.getDriveIdRoot(driveId) generated a OneDriveException");
+					// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
+					if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
+						// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+						if (e.httpStatusCode == 429) {
+							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - retrying applicable request");
+							handleOneDriveThrottleRequest();
+						}
+						if (e.httpStatusCode == 504) {
+							log.vdebug("Retrying original request that generated the HTTP 504 (Gateway Timeout) - retrying applicable request");
+							Thread.sleep(dur!"seconds"(30));
+						}
+						// Retry original request by calling function again to avoid replicating any further error handling
+						rootData = onedrive.getDriveIdRoot(driveId);
+						
+					} else {
+						// There was a HTTP 5xx Server Side Error
+						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+						// Must exit here
+						exit(-1);
+					}
+				}
+				
+				// apply this root drive data
+				applyDifference(rootData, driveId, true);
+			}
+			
+			// Process /delta response from OneDrive
 			// is changes a valid JSON response
 			if (changes.type() == JSONType.object) {
 				// Are there any changes to process?
