@@ -186,11 +186,15 @@ private Item makeItem(const ref JSONValue driveItem)
 		item.remoteId = driveItem["remoteItem"]["id"].str;
 	}
 	
-	// National Cloud Deployments (US and DE) do not support /delta as a query
+	// National Cloud Deployments need to support /delta as a query
 	// Thus we need to track in the database that this item is in sync
 	// As we are making an item, set the syncStatus to Y
 	// ONLY when using a National Cloud Deployment, all the existing DB entries will get set to N
 	// so when processing /children, it can be identified what the 'deleted' difference is
+	// 2022 Update:
+	// - It appears that Microsoft Cloud for US Government and Microsoft Cloud China operated by 21Vianet now support /delta query
+	// - Microsoft Cloud Germany still does not support /delta queries
+	// All others (USL4, USL5 and 21Vianet) should be able to use /delta
 	item.syncStatus = "Y";
 
 	return item;
@@ -1471,36 +1475,44 @@ final class SyncEngine
 			// To view changes correctly, we need to use the correct path id for the request
 			if (driveId == defaultDriveId) {
 				// The drive id matches our users default drive id
-				idToQuery = defaultRootId.dup;
 				log.vdebug("Configuring 'idToQuery' as defaultRootId duplicate");
+				idToQuery = defaultRootId.dup;
 			} else {
 				// The drive id does not match our users default drive id
 				// Potentially the 'path id' we are requesting the details of is a Shared Folder (remote item)
 				// Use the 'id' that was passed in (folderId)
-				idToQuery = id.dup;
 				log.vdebug("Configuring 'idToQuery' as 'id' duplicate");
+				idToQuery = id.dup;
 			}
 			// what path id are we going to query?
 			log.vdebug("Path object to query configured as 'idToQuery' = ", idToQuery);
 			long deltaChanges = 0;
 			
 			// What query do we use?
-			// National Cloud Deployments (US and DE) do not support /delta as a query
+			// National Cloud Deployments need to support /delta as a query
 			// https://docs.microsoft.com/en-us/graph/deployments#supported-features
 			// Are we running against a National Cloud Deployments that does not support /delta
+			// 2022 Update:
+			// - It appears that Microsoft Cloud for US Government and Microsoft Cloud China operated by 21Vianet now support /delta query
+			// - Microsoft Cloud Germany still does not support /delta queries
+			// All others (USL4, USL5 and 21Vianet) should be able to use /delta
+			
 			if (nationalCloudDeployment) {
+				// National Cloud Deployment using Microsoft Cloud Germany
 				// Have to query /children rather than /delta
 				nationalCloudChildrenScan = true;
 				log.vdebug("Using /children call to query drive for items to populate 'changes' and 'changesAvailable'");
 				// In a OneDrive Business Shared Folder scenario + nationalCloudDeployment, if ALL items are downgraded, then this leads to local file deletion
 				// Downgrade ONLY files associated with this driveId and idToQuery
 				log.vdebug("Downgrading all children for this driveId (" ~ driveId ~ ") and idToQuery (" ~ idToQuery ~ ") to an out-of-sync state");
+				
 				// Before we get any data, flag any object in the database as out-of-sync for this driveID & ID
 				auto drivePathChildren = itemdb.selectChildren(driveId, idToQuery);
 				if (count(drivePathChildren) > 0) {
 					// Children to process and flag as out-of-sync	
 					foreach (drivePathChild; drivePathChildren) {
 						// Flag any object in the database as out-of-sync for this driveID & ID
+						log.vdebug("Downgrading item as out-of-sync: ", drivePathChild.id);
 						itemdb.downgradeSyncStatusFlag(drivePathChild.driveId, drivePathChild.id);
 					}
 				}
@@ -1779,7 +1791,7 @@ final class SyncEngine
 			// In some OneDrive Business scenarios, the shared folder /delta response lacks the 'root' drive details
 			// When this occurs, this creates the following error: A database statement execution error occurred: foreign key constraint failed
 			// Ensure we query independently the root details for this shared folder and ensure that it is added before we process the /delta response
-			if ((!nationalCloudDeployment) && (driveId!= defaultDriveId) && (syncBusinessFolders)) {
+			if ((driveId!= defaultDriveId) && (syncBusinessFolders)) {
 				// fetch this driveId root details to ensure we add this to the database for this remote drive
 				JSONValue rootData;
 				
@@ -2506,9 +2518,10 @@ final class SyncEngine
 				SysTime remoteModifiedTime = item.mtime;
 				remoteModifiedTime.fracSecs = Duration.zero;
 				
-				if (localModifiedTime != remoteModifiedTime) {
-					// Database update needed for this item because our record is out-of-date
-					log.vdebug("Updating local database with item details as timestamps of items are different");
+				// If the timestamp is different, or we are running on a National Cloud Deployment that does not support /delta queries - we have to update the DB with the details from OneDrive
+				if ((localModifiedTime != remoteModifiedTime) || (nationalCloudDeployment)) {
+					// Database update needed for this item because our local record is out-of-date
+					log.vdebug("Updating local database with item details from OneDrive as local record needs to be updated");
 					itemdb.update(item);
 				}
 			} else {
@@ -3198,27 +3211,9 @@ final class SyncEngine
 		}
 		
 		// Are we configured to use a National Cloud Deployment
-		// Any entry in the DB than is flagged as out-of-sync needs to be cleaned up locally first before we scan the entire DB
-		// Normally, this is done at the end of processing all /delta queries, but National Cloud Deployments (US and DE) do not support /delta as a query
-		if ((nationalCloudDeployment) || (syncBusinessFolders)) {
+		if (nationalCloudDeployment) {
 			// Select items that have a out-of-sync flag set
-			foreach (driveId; driveIDsArray) {
-				// For each unique OneDrive driveID we know about
-				Item[] outOfSyncItems = itemdb.selectOutOfSyncItems(driveId);
-				foreach (item; outOfSyncItems) {
-					if (!dryRun) {
-						// clean up idsToDelete
-						idsToDelete.length = 0;
-						assumeSafeAppend(idsToDelete);
-						// flag to delete local file as it now is no longer in sync with OneDrive
-						log.vdebug("Flagging to delete local item as it now is no longer in sync with OneDrive");
-						log.vdebug("item: ", item);
-						idsToDelete ~= [item.driveId, item.id];	
-						// delete items in idsToDelete
-						if (idsToDelete.length > 0) deleteItems();
-					}
-				}
-			}
+			flagNationalCloudDeploymentOutOfSyncItems();
 		}
 		
 		// scan for changes in the path provided
@@ -3299,27 +3294,9 @@ final class SyncEngine
 		}
 		
 		// Are we configured to use a National Cloud Deployment
-		// Any entry in the DB than is flagged as out-of-sync needs to be cleaned up locally first before we scan the entire DB
-		// Normally, this is done at the end of processing all /delta queries, but National Cloud Deployments (US and DE) do not support /delta as a query
-		if ((nationalCloudDeployment) || (syncBusinessFolders)) {
+		if (nationalCloudDeployment) {
 			// Select items that have a out-of-sync flag set
-			foreach (driveId; driveIDsArray) {
-				// For each unique OneDrive driveID we know about
-				Item[] outOfSyncItems = itemdb.selectOutOfSyncItems(driveId);
-				foreach (item; outOfSyncItems) {
-					if (!dryRun) {
-						// clean up idsToDelete
-						idsToDelete.length = 0;
-						assumeSafeAppend(idsToDelete);
-						// flag to delete local file as it now is no longer in sync with OneDrive
-						log.vdebug("Flagging to delete local item as it now is no longer in sync with OneDrive");
-						log.vdebug("item: ", item);
-						idsToDelete ~= [item.driveId, item.id];	
-						// delete items in idsToDelete
-						if (idsToDelete.length > 0) deleteItems();
-					}
-				}
-			}
+			flagNationalCloudDeploymentOutOfSyncItems();
 		}
 		
 		// scan for changes in the path provided
@@ -3355,6 +3332,38 @@ final class SyncEngine
 					// Does it still exist on disk in the location the DB thinks it is
 					log.vdebug("Calling uploadDifferences(dbItem) as item is present in local cache DB");
 					uploadDifferences(item);
+				}
+			}
+		}
+	}
+	
+	void flagNationalCloudDeploymentOutOfSyncItems() {
+		// Any entry in the DB than is flagged as out-of-sync needs to be cleaned up locally first before we scan the entire DB
+		// Normally, this is done at the end of processing all /delta queries, but not all National Cloud Deployments support /delta as a query
+		
+		// National Cloud Deployments need to support /delta as a query
+		// https://docs.microsoft.com/en-us/graph/deployments#supported-features
+		// Are we running against a National Cloud Deployments that does not support /delta
+		// 2022 Update:
+		// - It appears that Microsoft Cloud for US Government and Microsoft Cloud China operated by 21Vianet now support /delta query
+		// - Microsoft Cloud Germany still does not support /delta queries
+		// All others (USL4, USL5 and 21Vianet) should be able to use /delta
+		
+		// Select items that have a out-of-sync flag set
+		foreach (driveId; driveIDsArray) {
+			// For each unique OneDrive driveID we know about
+			Item[] outOfSyncItems = itemdb.selectOutOfSyncItems(driveId);
+			foreach (item; outOfSyncItems) {
+				if (!dryRun) {
+					// clean up idsToDelete
+					idsToDelete.length = 0;
+					assumeSafeAppend(idsToDelete);
+					// flag to delete local file as it now is no longer in sync with OneDrive
+					log.vdebug("Flagging to delete local item as it now is no longer in sync with OneDrive");
+					log.vdebug("item: ", item);
+					idsToDelete ~= [item.driveId, item.id];	
+					// delete items in idsToDelete
+					if (idsToDelete.length > 0) deleteItems();
 				}
 			}
 		}

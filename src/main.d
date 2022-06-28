@@ -1100,7 +1100,19 @@ int main(string[] args)
 		// value is configured, is it a valid value?
 		if ((cfg.getValueString("azure_ad_endpoint") == "USL4") || (cfg.getValueString("azure_ad_endpoint") == "USL5") || (cfg.getValueString("azure_ad_endpoint") == "DE") || (cfg.getValueString("azure_ad_endpoint") == "CN")) {
 			// valid entries to flag we are using a National Cloud Deployment
-			sync.setNationalCloudDeployment();
+			
+			// National Cloud Deployments need to support /delta as a query
+			// https://docs.microsoft.com/en-us/graph/deployments#supported-features
+			// Are we running against a National Cloud Deployments that does not support /delta
+			// 2022 Update:
+			// - It appears that Microsoft Cloud for US Government and Microsoft Cloud China operated by 21Vianet now support /delta query
+			// - Microsoft Cloud Germany still does not support /delta queries
+			// All others (USL4, USL5 and 21Vianet should be able to use /delta
+			
+			if (cfg.getValueString("azure_ad_endpoint") == "DE") {
+				// Flag that we have a valid National Cloud Deployment that cannot use /delta queries
+				sync.setNationalCloudDeployment();
+			}
 		}
 	}
 
