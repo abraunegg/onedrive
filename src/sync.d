@@ -1498,8 +1498,8 @@ final class SyncEngine
 			// All others (USL4, USL5 and 21Vianet) should be able to use /delta
 			
 			if (nationalCloudDeployment) {
-				// National Cloud Deployment using Microsoft Cloud Germany
-				// Have to query /children rather than /delta
+				// National Cloud Deployment that does not support /delta query
+				// Have to query /children and build our own /delta response
 				nationalCloudChildrenScan = true;
 				log.vdebug("Using /children call to query drive for items to populate 'changes' and 'changesAvailable'");
 				// In a OneDrive Business Shared Folder scenario + nationalCloudDeployment, if ALL items are downgraded, then this leads to local file deletion
