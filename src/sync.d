@@ -1492,11 +1492,6 @@ final class SyncEngine
 			// National Cloud Deployments need to support /delta as a query
 			// https://docs.microsoft.com/en-us/graph/deployments#supported-features
 			// Are we running against a National Cloud Deployments that does not support /delta
-			// 2022 Update:
-			// - It appears that Microsoft Cloud for US Government and Microsoft Cloud China operated by 21Vianet now support /delta query
-			// - Microsoft Cloud Germany still does not support /delta queries
-			// All others (USL4, USL5 and 21Vianet) should be able to use /delta
-			
 			if (nationalCloudDeployment) {
 				// National Cloud Deployment that does not support /delta query
 				// Have to query /children and build our own /delta response
@@ -3344,10 +3339,6 @@ final class SyncEngine
 		// National Cloud Deployments need to support /delta as a query
 		// https://docs.microsoft.com/en-us/graph/deployments#supported-features
 		// Are we running against a National Cloud Deployments that does not support /delta
-		// 2022 Update:
-		// - It appears that Microsoft Cloud for US Government and Microsoft Cloud China operated by 21Vianet now support /delta query
-		// - Microsoft Cloud Germany still does not support /delta queries
-		// All others (USL4, USL5 and 21Vianet) should be able to use /delta
 		
 		// Select items that have a out-of-sync flag set
 		foreach (driveId; driveIDsArray) {
