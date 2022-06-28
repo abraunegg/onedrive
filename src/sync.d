@@ -2513,6 +2513,9 @@ final class SyncEngine
 				remoteModifiedTime.fracSecs = Duration.zero;
 				
 				// If the timestamp is different, or we are running on a National Cloud Deployment that does not support /delta queries - we have to update the DB with the details from OneDrive
+				// Unfortunatly because of the consequence of Nataional Cloud Deployments not supporting /delta queries, the application uses the local database to flag what is out-of-date / track changes
+				// This means that the constant disk writing to the database fix implemented with https://github.com/abraunegg/onedrive/pull/2004 cannot be utilised when using Nataional Cloud Deployments
+				// as all records are touched / updated when performing the OneDrive sync operations. The only way to change this, is for Microsoft to support /delta queries for Nataional Cloud Deployments
 				if ((localModifiedTime != remoteModifiedTime) || (nationalCloudDeployment)) {
 					// Database update needed for this item because our local record is out-of-date
 					log.vdebug("Updating local database with item details from OneDrive as local record needs to be updated");
