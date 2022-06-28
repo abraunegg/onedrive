@@ -186,15 +186,11 @@ private Item makeItem(const ref JSONValue driveItem)
 		item.remoteId = driveItem["remoteItem"]["id"].str;
 	}
 	
-	// National Cloud Deployments need to support /delta as a query
+	// National Cloud Deployments do not support /delta as a query
 	// Thus we need to track in the database that this item is in sync
 	// As we are making an item, set the syncStatus to Y
 	// ONLY when using a National Cloud Deployment, all the existing DB entries will get set to N
 	// so when processing /children, it can be identified what the 'deleted' difference is
-	// 2022 Update:
-	// - It appears that Microsoft Cloud for US Government and Microsoft Cloud China operated by 21Vianet now support /delta query
-	// - Microsoft Cloud Germany still does not support /delta queries
-	// All others (USL4, USL5 and 21Vianet) should be able to use /delta
 	item.syncStatus = "Y";
 
 	return item;
@@ -1489,7 +1485,7 @@ final class SyncEngine
 			long deltaChanges = 0;
 			
 			// What query do we use?
-			// National Cloud Deployments need to support /delta as a query
+			// National Cloud Deployments do not support /delta as a query
 			// https://docs.microsoft.com/en-us/graph/deployments#supported-features
 			// Are we running against a National Cloud Deployments that does not support /delta
 			if (nationalCloudDeployment) {
@@ -3334,12 +3330,8 @@ final class SyncEngine
 	
 	void flagNationalCloudDeploymentOutOfSyncItems() {
 		// Any entry in the DB than is flagged as out-of-sync needs to be cleaned up locally first before we scan the entire DB
-		// Normally, this is done at the end of processing all /delta queries, but not all National Cloud Deployments support /delta as a query
-		
-		// National Cloud Deployments need to support /delta as a query
+		// Normally, this is done at the end of processing all /delta queries, however National Cloud Deployments do not support /delta as a query
 		// https://docs.microsoft.com/en-us/graph/deployments#supported-features
-		// Are we running against a National Cloud Deployments that does not support /delta
-		
 		// Select items that have a out-of-sync flag set
 		foreach (driveId; driveIDsArray) {
 			// For each unique OneDrive driveID we know about

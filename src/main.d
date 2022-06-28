@@ -1100,7 +1100,7 @@ int main(string[] args)
 		// value is configured, is it a valid value?
 		if ((cfg.getValueString("azure_ad_endpoint") == "USL4") || (cfg.getValueString("azure_ad_endpoint") == "USL5") || (cfg.getValueString("azure_ad_endpoint") == "DE") || (cfg.getValueString("azure_ad_endpoint") == "CN")) {
 			// valid entries to flag we are using a National Cloud Deployment
-			// National Cloud Deployments need to support /delta as a query
+			// National Cloud Deployments do not support /delta as a query
 			// https://docs.microsoft.com/en-us/graph/deployments#supported-features
 			// Flag that we have a valid National Cloud Deployment that cannot use /delta queries
 			sync.setNationalCloudDeployment();
