@@ -1782,7 +1782,10 @@ final class SyncEngine
 			// In some OneDrive Business scenarios, the shared folder /delta response lacks the 'root' drive details
 			// When this occurs, this creates the following error: A database statement execution error occurred: foreign key constraint failed
 			// Ensure we query independently the root details for this shared folder and ensure that it is added before we process the /delta response
-			if ((driveId!= defaultDriveId) && (syncBusinessFolders)) {
+			
+			// However, if we are using a National Cloud Deployment, these deployments do not support /delta, so we generate a /delta response via generateDeltaResponse()
+			// This specifically adds the root drive details to the self generated /delta response
+			if ((!nationalCloudDeployment) && (driveId!= defaultDriveId) && (syncBusinessFolders)) {
 				// fetch this driveId root details to ensure we add this to the database for this remote drive
 				JSONValue rootData;
 				
