@@ -1106,6 +1106,12 @@ int main(string[] args)
 			sync.setNationalCloudDeployment();
 		}
 	}
+	
+	// Are we forcing to use /children scan instead of /delta to simulate National Cloud Deployment use of /children?
+	if (cfg.getValueBool("force_children_scan")) {
+		log.vdebug("Forcing client to use /children scan rather than /delta to simulate National Cloud Deployment use of /children");
+		sync.setNationalCloudDeployment();
+	}
 
 	// Do we need to validate the syncDir to check for the presence of a '.nosync' file
 	if (cfg.getValueBool("check_nomount")) {
