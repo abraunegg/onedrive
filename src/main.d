@@ -1100,8 +1100,17 @@ int main(string[] args)
 		// value is configured, is it a valid value?
 		if ((cfg.getValueString("azure_ad_endpoint") == "USL4") || (cfg.getValueString("azure_ad_endpoint") == "USL5") || (cfg.getValueString("azure_ad_endpoint") == "DE") || (cfg.getValueString("azure_ad_endpoint") == "CN")) {
 			// valid entries to flag we are using a National Cloud Deployment
+			// National Cloud Deployments do not support /delta as a query
+			// https://docs.microsoft.com/en-us/graph/deployments#supported-features
+			// Flag that we have a valid National Cloud Deployment that cannot use /delta queries
 			sync.setNationalCloudDeployment();
 		}
+	}
+	
+	// Are we forcing to use /children scan instead of /delta to simulate National Cloud Deployment use of /children?
+	if (cfg.getValueBool("force_children_scan")) {
+		log.vdebug("Forcing client to use /children scan rather than /delta to simulate National Cloud Deployment use of /children");
+		sync.setNationalCloudDeployment();
 	}
 
 	// Do we need to validate the syncDir to check for the presence of a '.nosync' file

@@ -147,7 +147,12 @@ final class Config
 		// display_sync_options = true | false
 		// - It may be desirable to see what options are being passed in to performSync() without enabling the full verbose debug logging
 		boolValues["display_sync_options"] = false;
-
+		// force_children_scan = true | false
+		// - Force client to use /children rather than /delta to query changes on OneDrive
+		// - This option flags nationalCloudDeployment as true, forcing the client to act like it is using a National Cloud Deployment
+		boolValues["force_children_scan"] = false;
+		
+		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
 		// Check for HOME environment variable
