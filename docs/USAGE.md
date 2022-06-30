@@ -85,7 +85,7 @@ The files and directories in the synchronization directory must follow the [Wind
 The application will attempt to handle instances where you have two files with the same names but with different capitalization. Where there is a namespace clash, the file name which clashes will not be synced. This is expected behavior and won't be fixed.
 
 ### curl compatibility
-If your system utilises curl >= 7.62.0 curl defaults to prefer HTTP/2 over HTTP/1.1 by default. If you wish to use HTTP/2 for some operations you will need to use the `--force-http-2` config option to enable otherwise all operations will use HTTP/1.1.
+If your system utilises curl >= 7.62.0 curl defaults to prefer HTTP/2 over HTTP/1.1 by default. If you wish to use HTTP/1.1 you will need to use the `--force-http-11` flag or set the config option `force_http_11 = "true"` to enable the application to use HTTP/1.1 otherwise all operations will use HTTP/2 or whatever is the curl default for your distribution.
 
 ### Authorize the application with your OneDrive Account
 After installing the application you must authorize the application with your OneDrive Account. This is done by running the application without any additional command switches.
@@ -1165,8 +1165,8 @@ Options:
       Enable client activity to a separate log file
   --force
       Force the deletion of data when a 'big delete' is detected
-  --force-http-2
-      Force the use of HTTP/2 for all operations where applicable
+  --force-http-11
+      Force the use of HTTP 1.1 for all operations
   --force-sync
       Force a synchronization of a specific folder, only when using --single-directory and ignoring all non-default skip_dir and skip_file rules
   --get-O365-drive-id ARG

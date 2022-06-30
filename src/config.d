@@ -62,7 +62,7 @@ final class Config
 		boolValues["disable_download_validation"] = false;
 		boolValues["disable_upload_validation"] = false;
 		boolValues["enable_logging"] = false;
-		boolValues["force_http_2"] = false;
+		boolValues["force_http_11"] = false;
 		boolValues["local_first"] = false;
 		boolValues["no_remote_delete"] = false;
 		boolValues["skip_symlinks"] = false;
@@ -373,9 +373,9 @@ final class Config
 				"enable-logging",
 					"Enable client activity to a separate log file",
 					&boolValues["enable_logging"],
-				"force-http-2",
-					"Force the use of HTTP/2 for all operations where applicable",
-					&boolValues["force_http_2"],
+				"force-http-11",
+					"Force the use of HTTP 1.1 for all operations",
+					&boolValues["force_http_11"],
 				"force",
 					"Force the deletion of data when a 'big delete' is detected",
 					&boolValues["force"],
