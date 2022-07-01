@@ -129,7 +129,7 @@ Repeat these steps for each OneDrive new account that you wish to use.
 ## Configuring the client to use multiple OneDrive accounts / configurations using Docker
 In some situations it may be desirable to run multiple Docker containers at the same time, each with their own configuration.
 
-To run the Docker container sucessfully, it needs two unique Docker volumes to operate:
+To run the Docker container successfully, it needs two unique Docker volumes to operate:
 *   Your configuration Docker volumes
 *   Your data Docker volume
 

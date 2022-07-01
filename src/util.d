@@ -141,7 +141,7 @@ bool testNetwork()
 	try {
 		log.vdebug("Attempting to contact online service");
 		http.perform();
-		log.vdebug("Shutting down HTTP engine as sucessfully reached OneDrive Online Service");
+		log.vdebug("Shutting down HTTP engine as successfully reached OneDrive Online Service");
 		http.shutdown();
 		return true;
 	} catch (SocketException e) {

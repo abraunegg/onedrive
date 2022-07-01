@@ -326,7 +326,7 @@ final class Config
 					"Perform authentication not via interactive dialog but via files read/writes to these files.",
 					&stringValues["auth_files"],
 				"auth-response",
-					"Perform authentication not via interactive dialog but via providing the reponse url directly.",
+					"Perform authentication not via interactive dialog but via providing the response url directly.",
 					&stringValues["auth_response"],
 				"check-for-nomount",
 					"Check for the presence of .nosync in the syncdir root. If found, do not perform sync.",
