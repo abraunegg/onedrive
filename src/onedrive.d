@@ -424,15 +424,14 @@ final class OneDriveApi
 
 		// What version of HTTP protocol do we use?
 		// Curl >= 7.62.0 defaults to http2 for a significant number of operations
-		if (cfg.getValueBool("force_http_2")) {
-			// Use curl defaults
-			log.vdebug("Upgrading all HTTP operations to HTTP/2 where applicable");
-		} else {
-			// Downgrade curl by default due to silent exist issues when using http/2
-			// See issue #501 for details and discussion
-			log.vdebug("Downgrading all HTTP operations to HTTP/1.1 by default");
+		if (cfg.getValueBool("force_http_11")) {
+			// Downgrade to curl to use HTTP 1.1 for all operations
+			log.vlog("Downgrading all HTTP operations to HTTP/1.1 due to user configuration");
 			// Downgrade to HTTP 1.1 - yes version = 2 is HTTP 1.1
 			http.handle.set(CurlOption.http_version,2);
+		} else {
+			// Use curl defaults
+			log.vlog("Using Curl defaults for all HTTP operations");
 		}
 
 		// Configure upload / download rate limits if configured
