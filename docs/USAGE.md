@@ -85,11 +85,11 @@ The files and directories in the synchronization directory must follow the [Wind
 The application will attempt to handle instances where you have two files with the same names but with different capitalization. Where there is a namespace clash, the file name which clashes will not be synced. This is expected behavior and won't be fixed.
 
 ### curl compatibility
-If your system utilises curl < 7.47.0 curl defaults to HTTP/1.1.
+If your system utilises curl < 7.47.0, curl defaults to HTTP/1.1 for HTTPS operations. The client will use HTTP/1.1.
 
-If your system utilises curl >= 7.47.0 and < 7.62.0 curl will prefer HTTP/2 for HTTPS but will stick to HTTP/1.1 by default.
+If your system utilises curl >= 7.47.0 and < 7.62.0, curl will prefer HTTP/2 for HTTPS but will stick to HTTP/1.1 by default. The client will use HTTP/1.1 for HTTPS operations.
 
-If your system utilises curl >= 7.62.0 curl defaults to prefer HTTP/2 over HTTP/1.1 by default.
+If your system utilises curl >= 7.62.0, curl defaults to prefer HTTP/2 over HTTP/1.1 by default. The client will utilse HTTP/2 for most HTTPS operations and HTTP/1.1 for others. This difference is governed by the OneDrive platform and not this client.
 
 If you wish to explicitly use HTTP/1.1 you will need to use the `--force-http-11` flag or set the config option `force_http_11 = "true"` to force the application to use HTTP/1.1 otherwise all client operations will use whatever is the curl default for your distribution.
 
