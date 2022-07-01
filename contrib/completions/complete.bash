@@ -1,5 +1,3 @@
-#!/bin/bash
-#
 # BASH completion code for OneDrive Linux Client
 # (c) 2019 Norbert Preining
 # License: GPLv3+ (as with the rest of the OneDrive Linux client project)
