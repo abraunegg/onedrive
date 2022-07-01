@@ -5,7 +5,7 @@ Current national clouds that are supported are:
 *   Microsoft Cloud Germany
 *   Azure and Office 365 operated by 21Vianet in China
 
-In order to sucessfully use these specific Microsoft Azure deployments, the following steps are required:
+In order to successfully use these specific Microsoft Azure deployments, the following steps are required:
 1. Register an application with the Microsoft identity platform using the Azure portal
 2. Configure the new application with the appropriate authentication scopes
 3. Validate that the authentication / redirect URI is correct for your application registration

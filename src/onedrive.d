@@ -743,7 +743,7 @@ final class OneDriveApi
 		download(url, saveToPath, fileSize);
 		// Does path exist?
 		if (exists(saveToPath)) {
-			// File was downloaded sucessfully - configure the applicable permissions for the file
+			// File was downloaded successfully - configure the applicable permissions for the file
 			log.vdebug("Setting file permissions for: ", saveToPath);
 			saveToPath.setAttributes(cfg.returnRequiredFilePermisions());
 		}
