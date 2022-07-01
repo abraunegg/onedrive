@@ -5600,7 +5600,7 @@ final class SyncEngine
 						if (errorMessage["error"]["message"].str == "Access denied. You do not have permission to perform this action or access this resource.") {
 							// Issue #1041 - Unable to delete OneDrive content when permissions prevent deletion
 							try {
-								log.vdebug("Attemtping a reverse delete of all child objects from OneDrive");
+								log.vdebug("Attempting a reverse delete of all child objects from OneDrive");
 								foreach_reverse (Item child; children) {
 									log.vdebug("Delete child item from drive: ", child.driveId);
 									log.vdebug("Delete this child item id: ", child.id);
@@ -5628,7 +5628,7 @@ final class SyncEngine
 						if (errorMessage["error"]["message"].str == "Request was cancelled by event received. If attempting to delete a non-empty folder, it's possible that it's on hold") {
 							// Issue #338 - Unable to delete OneDrive content when OneDrive Business Retention Policy is enabled
 							try {
-								log.vdebug("Attemtping a reverse delete of all child objects from OneDrive");
+								log.vdebug("Attempting a reverse delete of all child objects from OneDrive");
 								foreach_reverse (Item child; children) {
 									log.vdebug("Delete child item from drive: ", child.driveId);
 									log.vdebug("Delete this child item id: ", child.id);
