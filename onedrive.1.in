@@ -24,7 +24,7 @@ The authorization URL is written to the \fBauthUrl\fP, then \fBonedrive\fP waits
 the file \fBresponseUrl\fP to be present, and reads the response from that file.
 .TP
 \fB\-\-auth\-response\fP ARG
-Perform authentication not via interactive dialog but via providing the reponse url directly.
+Perform authentication not via interactive dialog but via providing the response url directly.
 .TP
 \fB\-\-check\-for\-nomount\fP
 Check for the presence of .nosync in the syncdir root. If found, do not perform sync.

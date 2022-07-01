@@ -90,7 +90,7 @@ if [ -n "${ONEDRIVE_AUTHFILES:=""}" ]; then
    ARGS=(--auth-files ${ONEDRIVE_AUTHFILES} ${ARGS[@]})
 fi
 
-# Tell client to utilize provided auth reponse based on environment variable
+# Tell client to utilize provided auth response based on environment variable
 if [ -n "${ONEDRIVE_AUTHRESPONSE:=""}" ]; then
    echo "# We are providing the auth response directly to perform authentication"
    echo "# Adding --auth-response ARG"
