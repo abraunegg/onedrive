@@ -679,7 +679,7 @@ int main(string[] args)
 		writeln("Config option 'azure_ad_endpoint'            = ", cfg.getValueString("azure_ad_endpoint"));
 		writeln("Config option 'azure_tenant_id'              = ", cfg.getValueString("azure_tenant_id"));
 		writeln("Config option 'user_agent'                   = ", cfg.getValueString("user_agent"));
-		writeln("Config option 'force_http_2'                 = ", cfg.getValueBool("force_http_2"));
+		writeln("Config option 'force_http_11'                = ", cfg.getValueBool("force_http_11"));
 		writeln("Config option 'debug_https'                  = ", cfg.getValueBool("debug_https"));
 		writeln("Config option 'rate_limit'                   = ", cfg.getValueLong("rate_limit"));
 		writeln("Config option 'operation_timeout'            = ", cfg.getValueLong("operation_timeout"));

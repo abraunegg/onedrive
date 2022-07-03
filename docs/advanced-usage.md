@@ -114,6 +114,13 @@ ExecStart=/usr/local/bin/onedrive --monitor --confdir="/home/myusername/.config/
 ```
 
 Then you can safely run these commands:
+#### Custom systemd service on Red Hat Enterprise Linux, CentOS Linux
+```text
+systemctl enable onedrive-my-new-config
+systemctl start onedrive-my-new-config
+```
+
+#### Custom systemd service on Arch, Ubuntu, Debian, OpenSuSE, Fedora
 ```text
 systemctl --user enable onedrive-my-new-config
 systemctl --user start onedrive-my-new-config
@@ -122,6 +129,11 @@ or
 ```text
 systemctl --user enable onedrive-my-new-config@myusername.service
 systemctl --user start onedrive-my-new-config@myusername.service
+```
+
+#### Viewing systemd logs for the custom service
+```text
+journalctl --unit=onedrive-my-new-config -f
 ```
 
 Repeat these steps for each OneDrive new account that you wish to use.
