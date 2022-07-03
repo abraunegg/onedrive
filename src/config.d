@@ -182,6 +182,8 @@ final class Config
 		string systemConfigDirBase;
 		if (confdirOption != "") {
 			// A CLI 'confdir' was passed in
+			// Clean up any stray " .. these should not be there ...
+			confdirOption = strip(confdirOption,"\"");
 			log.vdebug("configDirName: CLI override to set configDirName to: ", confdirOption);
 			if (canFind(confdirOption,"~")) {
 				// A ~ was found
