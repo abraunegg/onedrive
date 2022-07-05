@@ -719,7 +719,7 @@ There are two methods to achieve this:
 
 ### How to 'skip' directories from syncing?
 There are several mechanisms available to 'skip' a directory from the sync process:
-*   Utilise 'skip_dir' to configure what directories to skip
+*   Utilise 'skip_dir' to configure what directories to skip. Refer to above for configuration advice.
 *   Utilise 'sync_list' to configure what files and directories to sync, and what should be exluded
 
 One further method is to add a '.nosync' empty file to any folder. When this file is present, adding `--check-for-nosync` to your command line will now make the sync process skip any folder where the '.nosync' file is present.
@@ -737,7 +737,7 @@ check_nosync = "true"
 
 ### How to 'skip' certain files from syncing?
 There are two methods to achieve this:
-*   Utilise 'skip_file' to configure what files to skip
+*   Utilise 'skip_file' to configure what files to skip. Refer to above for configuration advice.
 *   Utilise 'sync_list' to configure what files and directories to sync, and what should be exluded
 
 ### How to 'rate limit' the application to control bandwidth consumed for upload & download operations
