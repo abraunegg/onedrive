@@ -8,7 +8,7 @@
   * [Show your configuration](#show-your-configuration)
   * [Testing your configuration](#testing-your-configuration)
   * [Performing a sync](#performing-a-sync)
-  * [Performing a selective directory sync](#performing-a-selective-directory-sync)
+  * [Performing a single directory sync](#performing-a-single-directory-sync)
   * [Performing a 'one-way' download sync](#performing-a-one-way-download-sync)
   * [Performing a 'one-way' upload sync](#performing-a-one-way-upload-sync)
   * [Increasing logging level](#increasing-logging-level)
@@ -193,7 +193,7 @@ If you prefer to use your local files as stored in `~/OneDrive` as the 'source o
 onedrive --synchronize --local-first
 ```
 
-### Performing a selective directory sync
+### Performing a single directory sync
 In some cases it may be desirable to sync a single directory under ~/OneDrive without having to change your client configuration. To do this use the following command:
 ```text
 onedrive --synchronize --single-directory '<dir_name>'
