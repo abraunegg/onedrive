@@ -218,7 +218,7 @@ onedrive --synchronize --upload-only --no-remote-delete
 
 ### Performing a selective sync via 'sync_list' file
 Selective sync allows you to sync only specific files and directories.
-To enable selective sync create a file named `sync_list` in `~/.config/onedrive`.
+To enable selective sync create a file named `sync_list` in your application configuration directory (default is `~/.config/onedrive`).
 Each line of the file represents a relative path from your `sync_dir`. All files and directories not matching any line of the file will be skipped during all operations.
 Here is an example of `sync_list`:
 ```text
@@ -268,6 +268,8 @@ To simplify 'exclusions' and 'inclusions', the following is also possible:
 # Include everything else
 /*
 ```
+
+**Note:** When enabling the use of 'sync_list' utilise the `--display-config` option to validate that your configuration will be used by the application, and test your configuration by adding `--dry-run` to ensure the client will operate as per your requirement.
 
 **Note:** After changing the sync_list, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
 
