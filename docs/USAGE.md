@@ -33,13 +33,15 @@
   * [Configuring the client for 'single tenant application' use](#configuring-the-client-for-single-tenant-application-use)
   * [Configuring the client to use older 'skilion' application identifier](#configuring-the-client-to-use-older-skilion-application-identifier)
 - [Frequently Asked Configuration Questions](#frequently-asked-configuration-questions)
+  * [How to sync only specific or single directory?](#how-to-sync-only-specific-or-single-directory)
   * [How to 'skip' directories from syncing?](#how-to-skip-directories-from-syncing)
-  * [How to 'rate limit' the application to control bandwidth consumed for upload & download operations](#how-to-rate-limit-the-application-to-control-bandwidth-consumed-for-upload--download-operations)
-  * [How to prevent your local disk from filling up](#how-to-prevent-your-local-disk-from-filling-up)
-  * [How are symbolic links handled by the client](#how-are-symbolic-links-handled-by-the-client)
-  * [How to sync shared folders (OneDrive Personal)](#how-to-sync-shared-folders-onedrive-personal)
-  * [How to sync shared folders (OneDrive Business or Office 365)](#how-to-sync-shared-folders-onedrive-business-or-office-365)
-  * [How to sync sharePoint / Office 365 Shared Libraries](#how-to-sync-sharepoint--office-365-shared-libraries)
+  * [How to 'skip' files from syncing?](#how-to-skip-files-from-syncing)
+  * [How to 'rate limit' the application to control bandwidth consumed for upload & download operations?](#how-to-rate-limit-the-application-to-control-bandwidth-consumed-for-upload--download-operations)
+  * [How to prevent your local disk from filling up?](#how-to-prevent-your-local-disk-from-filling-up)
+  * [How are symbolic links handled by the client?](#how-are-symbolic-links-handled-by-the-client)
+  * [How to sync shared folders (OneDrive Personal)?](#how-to-sync-shared-folders-onedrive-personal)
+  * [How to sync shared folders (OneDrive Business or Office 365)?](#how-to-sync-shared-folders-onedrive-business-or-office-365)
+  * [How to sync sharePoint / Office 365 Shared Libraries?](#how-to-sync-sharepoint--office-365-shared-libraries)
 - [Running 'onedrive' in 'monitor' mode](#running-onedrive-in-monitor-mode)
   * [Use webhook to subscribe to remote updates in 'monitor' mode](#use-webhook-to-subscribe-to-remote-updates-in-monitor-mode)
   * [More webhook configuration options](#more-webhook-configuration-options)
@@ -735,12 +737,12 @@ check_nosync = "true"
 # disable_notifications = "false"
 ```
 
-### How to 'skip' certain files from syncing?
+### How to 'skip' files from syncing?
 There are two methods to achieve this:
 *   Utilise 'skip_file' to configure what files to skip. Refer to above for configuration advice.
 *   Utilise 'sync_list' to configure what files and directories to sync, and what should be exluded
 
-### How to 'rate limit' the application to control bandwidth consumed for upload & download operations
+### How to 'rate limit' the application to control bandwidth consumed for upload & download operations?
 To minimise the Internet bandwidth for upload and download operations, you can configure the 'rate_limit' option within the config file.
 
 Example valid values for this are as follows:
@@ -761,7 +763,7 @@ rate_limit = "131072"
 
 **Note:** A number greater than '131072' is a valid value, with '104857600' being tested as an upper limit.
 
-### How to prevent your local disk from filling up
+### How to prevent your local disk from filling up?
 By default, the application will reserve 50MB of disk space to prevent your filesystem to run out of disk space. This value can be modified by adding the following to your config file:
 
 Example:
@@ -784,7 +786,7 @@ Config option 'azure_tenant_id'              = common
 
 Any value is valid here, however, if you use a value of '0' a value of '1' will actually be used, so that you actually do not run out of disk space.
 
-### How are symbolic links handled by the client
+### How are symbolic links handled by the client?
 Microsoft OneDrive has zero concept or understanding of symbolic links, and attempting to upload a symbolic link to Microsoft OneDrive generates a platform API error. All data (files and folders) that are uploaded to OneDrive must be whole files or actual directories.
 
 As such, there are only two methods to support symbolic links with this client:
@@ -804,15 +806,15 @@ Setting this to `"true"` will configure the client to skip all symbolic links wh
 
 The default setting is `"false"` which will sync the whole folder structure referenced by the symbolic link, duplicating the contents on OneDrive in the place where the symbolic link is.
 
-### How to sync shared folders (OneDrive Personal)
+### How to sync shared folders (OneDrive Personal)?
 Folders shared with you can be synced by adding them to your OneDrive. To do that open your Onedrive, go to the Shared files list, right click on the folder you want to sync and then click on "Add to my OneDrive".
 
-### How to sync shared folders (OneDrive Business or Office 365)
+### How to sync shared folders (OneDrive Business or Office 365)?
 Refer to [./BusinessSharedFolders.md](BusinessSharedFolders.md) for configuration assistance.
 
 Do not use the 'Add shortcut to My files' from the OneDrive web based interface to add a 'shortcut' to your shared folder. This shortcut is not supported by the OneDrive API, thus it cannot be used.
 
-### How to sync sharePoint / Office 365 Shared Libraries
+### How to sync sharePoint / Office 365 Shared Libraries?
 Refer to [./SharePoint-Shared-Libraries.md](SharePoint-Shared-Libraries.md) for configuration assistance.
 
 ## Running 'onedrive' in 'monitor' mode
