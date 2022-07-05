@@ -11,9 +11,9 @@
   * [Performing a single directory sync](#performing-a-single-directory-sync)
   * [Performing a 'one-way' download sync](#performing-a-one-way-download-sync)
   * [Performing a 'one-way' upload sync](#performing-a-one-way-upload-sync)
+  * [Performing a selective sync via 'sync_list' file](#performing-a-selective-sync-via-sync_list-file)
   * [Performing a --resync](#performing-a---resync)
   * [Performing a --force-sync without a --resync or changing your configuration](#performing-a---force-sync-without-a---resync-or-changing-your-configuration)
-  * [Performing a selective sync via 'sync_list' file](#performing-a-selective-sync-via-sync_list-file)
   * [Increasing logging level](#increasing-logging-level)
   * [Client Activity Log](#client-activity-log)
   * [Notifications](#notifications)
@@ -33,8 +33,7 @@
     + [Handling Symbolic Links](#handling-symbolic-links)
   * [Configuring the client for 'single tenant application' use](#configuring-the-client-for-single-tenant-application-use)
   * [Configuring the client to use older 'skilion' application identifier](#configuring-the-client-to-use-older-skilion-application-identifier)
-- [Frequently Asked Questions](#configuration)
-
+- [Frequently Asked Configuration Questions](#frequently-asked-configuration-questions)
   * [How to 'skip' directories from syncing?](#how-to-skip-directories-from-syncing)
   * [How to 'rate limit' the application to control bandwidth consumed for upload & download operations](#how-to-rate-limit-the-application-to-control-bandwidth-consumed-for-upload--download-operations)
   * [Preventing your local disk from filling up](#preventing-your-local-disk-from-filling-up)
@@ -219,54 +218,6 @@ onedrive --synchronize --upload-only
 onedrive --synchronize --upload-only --no-remote-delete
 ```
 
-### Performing a --resync
-If you modify any of the following configuration items, you will be required to perform a `--resync` to ensure your client is syncing your data with the updated configuration:
-*   sync_dir
-*   skip_dir
-*   skip_file
-*   drive_id
-*   Modifying sync_list
-*   Modifying business_shared_folders
-
-Additionally, you may choose to perform a `--resync` if you feel that this action needs to be taken to ensure your data is in sync. If you are using this switch simply because you dont know the sync status, you can query the actual sync status using `--display-sync-status`.
-
-When using `--resync`, the following warning and advice will be presented:
-```text
-The use of --resync will remove your local 'onedrive' client state, thus no record will exist regarding your current 'sync status'
-This has the potential to overwrite local versions of files with potentially older versions downloaded from OneDrive which can lead to data loss
-If in-doubt, backup your local data first before proceeding with --resync
-
-Are you sure you wish to proceed with --resync? [Y/N]
-```
-
-To proceed with using `--resync`, you must type 'y' or 'Y' to allow the application to continue.
-
-**Note:** It is highly recommended to only use `--resync` if the application advises you to use it. Do not just blindly set the application to start with `--resync` as the default option.
-
-**Note:** In some automated environments (and it is 100% assumed you *know* what you are doing because of automation), in order to avoid this 'proceed with acknowledgement' requirement, add `--resync-auth` to automatically acknowledge the prompt.
-
-### Performing a --force-sync without a --resync or changing your configuration
-In some cases and situations, you may have configured the application to skip certain files and folders using 'skip_file' and 'skip_dir' configuration. You then may have a requirement to actually sync one of these items, but do not wish to modify your configuration, nor perform an entire `--resync` twice.
-
-The `--force-sync` option allows you to sync a specific directory, ignoring your 'skip_file' and 'skip_dir' configuration and negating the requirement to perform a `--resync`
-
-In order to use this option, you must run the application manually in the following manner:
-```text
-onedrive --synchronize --single-directory '<directory_to_sync>' --force-sync <add any other options needed or required>
-```
-
-When using `--force-sync`, the following warning and advice will be presented:
-```text
-WARNING: Overriding application configuration to use application defaults for skip_dir and skip_file due to --synchronize --single-directory --force-sync being used
-
-The use of --force-sync will reconfigure the application to use defaults. This may have untold and unknown future impacts.
-By proceeding in using this option you accept any impacts including any data loss that may occur as a result of using --force-sync.
-
-Are you sure you wish to proceed with --force-sync [Y/N] 
-```
-
-To proceed with using `--force-sync`, you must type 'y' or 'Y' to allow the application to continue.
-
 ### Performing a selective sync via 'sync_list' file
 Selective sync allows you to sync only specific files and directories.
 To enable selective sync create a file named `sync_list` in `~/.config/onedrive`.
@@ -327,6 +278,54 @@ To simplify 'exclusions' and 'inclusions', the following is also possible:
 sync_root_files = "true"
 ```
 This will tell the application to sync any file that it finds in your 'sync_dir' root by default.
+
+### Performing a --resync
+If you modify any of the following configuration items, you will be required to perform a `--resync` to ensure your client is syncing your data with the updated configuration:
+*   sync_dir
+*   skip_dir
+*   skip_file
+*   drive_id
+*   Modifying sync_list
+*   Modifying business_shared_folders
+
+Additionally, you may choose to perform a `--resync` if you feel that this action needs to be taken to ensure your data is in sync. If you are using this switch simply because you dont know the sync status, you can query the actual sync status using `--display-sync-status`.
+
+When using `--resync`, the following warning and advice will be presented:
+```text
+The use of --resync will remove your local 'onedrive' client state, thus no record will exist regarding your current 'sync status'
+This has the potential to overwrite local versions of files with potentially older versions downloaded from OneDrive which can lead to data loss
+If in-doubt, backup your local data first before proceeding with --resync
+
+Are you sure you wish to proceed with --resync? [Y/N]
+```
+
+To proceed with using `--resync`, you must type 'y' or 'Y' to allow the application to continue.
+
+**Note:** It is highly recommended to only use `--resync` if the application advises you to use it. Do not just blindly set the application to start with `--resync` as the default option.
+
+**Note:** In some automated environments (and it is 100% assumed you *know* what you are doing because of automation), in order to avoid this 'proceed with acknowledgement' requirement, add `--resync-auth` to automatically acknowledge the prompt.
+
+### Performing a --force-sync without a --resync or changing your configuration
+In some cases and situations, you may have configured the application to skip certain files and folders using 'skip_file' and 'skip_dir' configuration. You then may have a requirement to actually sync one of these items, but do not wish to modify your configuration, nor perform an entire `--resync` twice.
+
+The `--force-sync` option allows you to sync a specific directory, ignoring your 'skip_file' and 'skip_dir' configuration and negating the requirement to perform a `--resync`
+
+In order to use this option, you must run the application manually in the following manner:
+```text
+onedrive --synchronize --single-directory '<directory_to_sync>' --force-sync <add any other options needed or required>
+```
+
+When using `--force-sync`, the following warning and advice will be presented:
+```text
+WARNING: Overriding application configuration to use application defaults for skip_dir and skip_file due to --synchronize --single-directory --force-sync being used
+
+The use of --force-sync will reconfigure the application to use defaults. This may have untold and unknown future impacts.
+By proceeding in using this option you accept any impacts including any data loss that may occur as a result of using --force-sync.
+
+Are you sure you wish to proceed with --force-sync [Y/N] 
+```
+
+To proceed with using `--force-sync`, you must type 'y' or 'Y' to allow the application to continue.
 
 ### Increasing logging level
 When running a sync it may be desirable to see additional information as to the progress and operation of the client. To do this, use the following command:
@@ -735,7 +734,12 @@ application_id = "22c49a0d-d21c-4792-aed1-8f163c982546"
 
 **Note:** After changing the 'application_id' you will need to restart any 'onedrive' process you have running, and potentially issue a `--reauth` to re-authenticate the client with this updated application ID.
 
-## Frequently Asked Questions
+## Frequently Asked Configuration Questions
+
+### How to sync only specific or single directory?
+There are two methods to achieve this:
+*   Utilise '--single-directory' option to only sync this specific path
+*   Utilise 'sync_list' to configure what files and directories to sync, and what to also exclude
 
 ### How to 'skip' directories from syncing?
 There are several mechanisms available to 'skip' a directory from the sync process:
