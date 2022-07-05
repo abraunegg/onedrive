@@ -13,7 +13,7 @@
   * [Performing a 'one-way' upload sync](#performing-a-one-way-upload-sync)
   * [Performing a --resync](#performing-a---resync)
   * [Performing a --force-sync without a --resync or changing your configuration](#performing-a---force-sync-without-a---resync-or-changing-your-configuration)
-  * [Selective sync via 'sync_list' file](#selective-sync-via-sync_list-file)
+  * [Performing a selective sync via 'sync_list' file](#performing-a-selective-sync-via-sync_list-file)
   * [Increasing logging level](#increasing-logging-level)
   * [Client Activity Log](#client-activity-log)
   * [Notifications](#notifications)
@@ -31,8 +31,10 @@
     + [min_notify_changes](#min_notify_changes)
     + [operation_timeout](#operation_timeout)
     + [Handling Symbolic Links](#handling-symbolic-links)
-    + [Configuring the client for 'single tenant application' use](#configuring-the-client-for-single-tenant-application-use)
-    + [Configuring the client to use older 'skilion' application identifier](#configuring-the-client-to-use-older-skilion-application-identifier)
+  * [Configuring the client for 'single tenant application' use](#configuring-the-client-for-single-tenant-application-use)
+  * [Configuring the client to use older 'skilion' application identifier](#configuring-the-client-to-use-older-skilion-application-identifier)
+- [Frequently Asked Questions](#configuration)
+
   * [How to 'skip' directories from syncing?](#how-to-skip-directories-from-syncing)
   * [How to 'rate limit' the application to control bandwidth consumed for upload & download operations](#how-to-rate-limit-the-application-to-control-bandwidth-consumed-for-upload--download-operations)
   * [Preventing your local disk from filling up](#preventing-your-local-disk-from-filling-up)
@@ -732,6 +734,8 @@ application_id = "22c49a0d-d21c-4792-aed1-8f163c982546"
 **Note:** The application will now use the older 'skilion' client identifier, however this may increase your chances of getting a OneDrive 429 error.
 
 **Note:** After changing the 'application_id' you will need to restart any 'onedrive' process you have running, and potentially issue a `--reauth` to re-authenticate the client with this updated application ID.
+
+## Frequently Asked Questions
 
 ### How to 'skip' directories from syncing?
 There are several mechanisms available to 'skip' a directory from the sync process:
