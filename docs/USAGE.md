@@ -688,25 +688,7 @@ Example:
 operation_timeout = "3600"
 ```
 
-#### Handling Symbolic Links
-Microsoft OneDrive has zero concept or understanding of symbolic links, and attempting to upload a symbolic link to Microsoft OneDrive generates a platform API error. All data (files and folders) that are uploaded to OneDrive must be whole files or actual directories.
 
-As such, there are only two methods to support symbolic links with this client:
-1. Follow the Linux symbolic link and upload what ever the link is pointing at to OneDrive. This is the default behaviour.
-2. Skip symbolic links by configuring the application to do so. In skipping, no data, no link, no reference is uploaded to OneDrive.
-
-To skip symbolic links, edit your configuration as per below:
-
-```text
-# local_first = "false"
-# no_remote_delete = "false"
-skip_symlinks = "true"
-# debug_https = "false"
-# skip_dotfiles = "false"
-```
-Setting this to `"true"` will configure the client to skip all symbolic links while syncing.
-
-The default setting is `"false"` which will sync the whole folder structure referenced by the symbolic link, duplicating the contents on OneDrive in the place where the symbolic link is.
 
 #### Configuring the client for 'single tenant application' use
 In some instances when using OneDrive Business Accounts, depending on the Azure organisational configuration, it will be necessary to configure the client as a 'single tenant application'.
@@ -802,6 +784,26 @@ Config option 'azure_tenant_id'              = common
 ```
 
 Any value is valid here, however, if you use a value of '0' a value of '1' will actually be used, so that you actually do not run out of disk space.
+
+### How are symbolic links handled by the client
+Microsoft OneDrive has zero concept or understanding of symbolic links, and attempting to upload a symbolic link to Microsoft OneDrive generates a platform API error. All data (files and folders) that are uploaded to OneDrive must be whole files or actual directories.
+
+As such, there are only two methods to support symbolic links with this client:
+1. Follow the Linux symbolic link and upload what ever the link is pointing at to OneDrive. This is the default behaviour.
+2. Skip symbolic links by configuring the application to do so. In skipping, no data, no link, no reference is uploaded to OneDrive.
+
+To skip symbolic links, edit your configuration as per below:
+
+```text
+# local_first = "false"
+# no_remote_delete = "false"
+skip_symlinks = "true"
+# debug_https = "false"
+# skip_dotfiles = "false"
+```
+Setting this to `"true"` will configure the client to skip all symbolic links while syncing.
+
+The default setting is `"false"` which will sync the whole folder structure referenced by the symbolic link, duplicating the contents on OneDrive in the place where the symbolic link is.
 
 ### How to sync shared folders (OneDrive Personal)
 Folders shared with you can be synced by adding them to your OneDrive. To do that open your Onedrive, go to the Shared files list, right click on the folder you want to sync and then click on "Add to my OneDrive".
