@@ -431,7 +431,7 @@ Configuration is determined by three layers: the default values, values set in t
 
 Most command line options have a respective configuration file setting.
 
-If you want to change the defaults, you can copy and edit the included config file into your configuration directory. Valid directories for the config file are:
+If you want to change the defaults, you can copy and edit the included config file into your configuration directory. Valid default directories for the config file are:
 *   `~/.config/onedrive`
 *   `/etc/onedrive`
 
@@ -444,6 +444,8 @@ nano ~/.config/onedrive/config
 This file does not get created by default, and should only be created if you want to change the 'default' operational parameters.
 
 See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/config) file for the full list of options, and [All available commands](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#all-available-commands) for all possible keys and their default values.
+
+**Note:** The location of the application configuration information can also be specified by using the `--confdir` configuration option which can be passed in at client run-time.
 
 ### The default configuration file is listed below:
 ```text
