@@ -132,21 +132,17 @@ onedrive --display-config
 ```
 This will display all the pertinent runtime interpretation of the options and configuration you are using. Example output is as follows:
 ```text
-onedrive version                       = vX.Y.Z-A-bcdefghi
-Config path                            = /home/alex/.config/onedrive
-Config file found in config path       = false
-Config option 'check_nosync'           = false
-Config option 'sync_dir'               = /home/alex/OneDrive
-Config option 'skip_dir'               =
-Config option 'skip_file'              = ~*|.~*|*.tmp
-Config option 'skip_dotfiles'          = false
-Config option 'skip_symlinks'          = false
-Config option 'monitor_interval'       = 300
-Config option 'min_notify_changes'     = 5
-Config option 'log_dir'                = /var/log/onedrive/
-Config option 'classify_as_big_delete' = 1000
-Config option 'sync_root_files'        = false
-Selective sync configured              = false
+Configuration file successfully loaded
+onedrive version                             = vX.Y.Z-A-bcdefghi
+Config path                                  = /home/alex/.config/onedrive
+Config file found in config path             = true
+Config option 'sync_dir'                     = /home/alex/OneDrive
+Config option 'enable_logging'               = false
+...
+Selective sync 'sync_list' configured        = false
+Config option 'sync_business_shared_folders' = false
+Business Shared Folders configured           = false
+Config option 'webhook_enabled'              = false
 ```
 
 ### Testing your configuration
@@ -467,7 +463,7 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # disable_notifications = "false"
 # disable_upload_validation = "false"
 # enable_logging = "false"
-# force_http_2 = "false"
+# force_http_11 = "false"
 # local_first = "false"
 # no_remote_delete = "false"
 # skip_symlinks = "false"
@@ -688,8 +684,6 @@ Example:
 operation_timeout = "3600"
 ```
 
-
-
 #### Configuring the client for 'single tenant application' use
 In some instances when using OneDrive Business Accounts, depending on the Azure organisational configuration, it will be necessary to configure the client as a 'single tenant application'.
 To configure this, after creating the application on your Azure tenant, update the 'config' file with the tenant name (not the GUID) and the newly created Application ID, then this will be used for the authentication process.
@@ -721,12 +715,12 @@ application_id = "22c49a0d-d21c-4792-aed1-8f163c982546"
 ### How to sync only specific or single directory?
 There are two methods to achieve this:
 *   Utilise '--single-directory' option to only sync this specific path
-*   Utilise 'sync_list' to configure what files and directories to sync, and what to also exclude
+*   Utilise 'sync_list' to configure what files and directories to sync, and what should be exluded
 
 ### How to 'skip' directories from syncing?
 There are several mechanisms available to 'skip' a directory from the sync process:
-*   Utilise 'skip_dir'
-*   Utilise 'sync_list'
+*   Utilise 'skip_dir' to configure what directories to skip
+*   Utilise 'sync_list' to configure what files and directories to sync, and what should be exluded
 
 One further method is to add a '.nosync' empty file to any folder. When this file is present, adding `--check-for-nosync` to your command line will now make the sync process skip any folder where the '.nosync' file is present.
 
@@ -740,6 +734,11 @@ check_nosync = "true"
 # download_only = "false"
 # disable_notifications = "false"
 ```
+
+### How to 'skip' certain files from syncing?
+There are two methods to achieve this:
+*   Utilise 'skip_file' to configure what files to skip
+*   Utilise 'sync_list' to configure what files and directories to sync, and what should be exluded
 
 ### How to 'rate limit' the application to control bandwidth consumed for upload & download operations
 To minimise the Internet bandwidth for upload and download operations, you can configure the 'rate_limit' option within the config file.
@@ -810,6 +809,8 @@ Folders shared with you can be synced by adding them to your OneDrive. To do tha
 
 ### How to sync shared folders (OneDrive Business or Office 365)
 Refer to [./BusinessSharedFolders.md](BusinessSharedFolders.md) for configuration assistance.
+
+Do not use the 'Add shortcut to My files' from the OneDrive web based interface to add a 'shortcut' to your shared folder. This shortcut is not supported by the OneDrive API, thus it cannot be used.
 
 ### How to sync sharePoint / Office 365 Shared Libraries
 Refer to [./SharePoint-Shared-Libraries.md](SharePoint-Shared-Libraries.md) for configuration assistance.
