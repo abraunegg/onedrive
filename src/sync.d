@@ -315,6 +315,7 @@ final class SyncEngine
 					log.error("\nERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
 				}
 				// Must exit here
+				onedrive.shutdown();
 				exit(-1);
 			}
 			if (e.httpStatusCode == 401) {
@@ -322,6 +323,7 @@ final class SyncEngine
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.\n");
 				// Must exit here
+				onedrive.shutdown();
 				exit(-1);
 			}
 			if (e.httpStatusCode == 429) {
@@ -337,6 +339,7 @@ final class SyncEngine
 				// There was a HTTP 5xx Server Side Error
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				// Must exit here
+				onedrive.shutdown();
 				exit(-1);
 			}
 		}
@@ -354,6 +357,7 @@ final class SyncEngine
 					log.error("\nERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
 				}
 				// Must exit here
+				onedrive.shutdown();
 				exit(-1);
 			}
 			if (e.httpStatusCode == 401) {
@@ -361,6 +365,7 @@ final class SyncEngine
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.\n");
 				// Must exit here
+				onedrive.shutdown();
 				exit(-1);
 			}
 			if (e.httpStatusCode == 429) {
@@ -376,6 +381,7 @@ final class SyncEngine
 				// There was a HTTP 5xx Server Side Error
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				// Must exit here
+				onedrive.shutdown();
 				exit(-1);
 			}
 		}
@@ -510,6 +516,7 @@ final class SyncEngine
 			log.vdebug("OneDrive Account Details:      ", oneDriveDetails);
 			log.vdebug("OneDrive Account Root Details: ", oneDriveRootDetails);
 			// Must exit here
+			onedrive.shutdown();
 			exit(-1);
 		}
 	}
@@ -672,6 +679,7 @@ final class SyncEngine
 					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.\n");
 					// Must exit here
+					onedrive.shutdown();
 					exit(-1);
 				}
 				if (e.httpStatusCode == 429) {
@@ -685,6 +693,7 @@ final class SyncEngine
 					// There was a HTTP 5xx Server Side Error
 					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					// Must exit here
+					onedrive.shutdown();
 					exit(-1);
 				}
 			}
@@ -866,6 +875,7 @@ final class SyncEngine
 					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.\n");
 					// Must exit here
+					onedrive.shutdown();
 					exit(-1);
 				}
 				if (e.httpStatusCode == 429) {
@@ -879,6 +889,7 @@ final class SyncEngine
 					// There was a HTTP 5xx Server Side Error
 					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					// Must exit here
+					onedrive.shutdown();
 					exit(-1);
 				}
 			}
@@ -1074,6 +1085,7 @@ final class SyncEngine
 			log.error("ERROR: Unable to query OneDrive for account details");
 			log.vdebug("onedrive.getDefaultRoot call returned an invalid JSON Object");
 			// Must exit here as we cant configure our required variables
+			onedrive.shutdown();
 			exit(-1);
 		}
 	}
@@ -1811,6 +1823,7 @@ final class SyncEngine
 						// There was a HTTP 5xx Server Side Error
 						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 						// Must exit here
+						onedrive.shutdown();
 						exit(-1);
 					}
 				}
@@ -5562,6 +5575,7 @@ final class SyncEngine
 					log.error("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on OneDrive");
 					log.error("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
 					// Must exit here to preserve data on OneDrive
+					onedrive.shutdown();
 					exit(-1);
 				}
 			}
@@ -6590,6 +6604,7 @@ final class SyncEngine
 				// There was a HTTP 5xx Server Side Error
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				// Must exit here
+				onedrive.shutdown();
 				exit(-1);
 			}
 		}
@@ -6618,6 +6633,7 @@ final class SyncEngine
 					// There was a HTTP 5xx Server Side Error
 					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					// Must exit here
+					onedrive.shutdown();
 					exit(-1);
 				}
 			}
@@ -6861,6 +6877,7 @@ final class SyncEngine
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.\n");
 				// Must exit here
+				onedrive.shutdown();
 				exit(-1);
 			}
 			if (e.httpStatusCode == 429) {
@@ -6874,6 +6891,7 @@ final class SyncEngine
 				// There was a HTTP 5xx Server Side Error
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				// Must exit here
+				onedrive.shutdown();
 				exit(-1);
 			}
 		}
@@ -6944,6 +6962,7 @@ final class SyncEngine
 			// broken tree in the database, we cant compute the path for this item id, exit
 			log.error("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
 			// Must exit here to preserve data
+			onedrive.shutdown();
 			exit(-1);
 		}
 		

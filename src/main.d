@@ -1319,6 +1319,7 @@ int main(string[] args)
 				} catch (MonitorException e) {
 					// monitor initialisation failed
 					log.error("ERROR: ", e.msg);
+					oneDrive.shutdown();
 					exit(-1);
 				}
 			}
