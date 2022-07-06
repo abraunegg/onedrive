@@ -1013,6 +1013,7 @@ final class OneDriveApi
 			
 			// We need to exit here, user needs to fix issue
 			log.error("ERROR: Unable to initialize subscriptions for updates. Please fix this issue.");
+			shutdown();
 			exit(-1);
 		}
 
@@ -1478,6 +1479,7 @@ final class OneDriveApi
 					ulong localActualFreeSpace = to!ulong(getAvailableDiskSpace("."));
 					if (localActualFreeSpace == 0) {
 						// force exit
+						shutdown();
 						exit(-1);
 					}
 				}
