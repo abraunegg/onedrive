@@ -25,7 +25,7 @@ Additionally there are specific version release tags for each release. Refer to 
 ## Basic Setup
 ### 0. Install docker using your distribution platform's instructions
 1.  Ensure that SELinux has been disabled on your system. A reboot may be required to ensure that this is correctly disabled.
-2.  Install Docker as per requried for your platform
+2.  Install Docker as per requried for your platform. Refer to https://docs.docker.com/engine/install/ for assistance.
 3.  Obtain your normal, non-root user UID and GID by using the `id` command
 4.  As your normal, non-root user, ensure that you can run `docker run hello-world` *without* using `sudo`
 
