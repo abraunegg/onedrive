@@ -1533,7 +1533,8 @@ int main(string[] args)
 						}
 					}
 				}
-				Thread.sleep(dur!"msecs"(500));
+				// Sleep the monitor thread for 1 second, loop around and pick up any inotify changes
+				Thread.sleep(dur!"seconds"(1));
 			}
 		}
 	}
