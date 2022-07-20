@@ -146,6 +146,9 @@ int main(string[] args)
 		return EXIT_FAILURE;
 	}
 
+	// confdirOption must be a directory, not a file
+	// - By default ~/.config/onedrive will be used
+	// - If the user is using --confdir , the confdirOption needs to be evaluated when trying to load any file
 	// load configuration file if available
 	auto cfg = new config.Config(confdirOption);
 	if (!cfg.initialize()) {
