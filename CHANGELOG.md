@@ -2,6 +2,26 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.4.20 - 2022-07-20
+### Fixed
+*   Fix 'foreign key constraint failed' when using OneDrive Business Shared Folders due to change to using /delta query
+*   Fix various little spelling fixes (check with lintian during Debian packaging)
+*   Fix handling of a custom configuration directory when using --confdir
+*   Fix to ensure that any active http instance is shutdown before any application exit
+*   Fix to enforce that --confdir must be a directory
+
+### Added
+*   Added 'force_http_11' configuration option to allow forcing HTTP/1.1 operations
+
+### Changed
+*   Increased thread sleep for better process I/O wait handling
+*   Removed 'force_http_2' configuration option
+
+### Updated
+*   Update OneDrive API response handling for National Cloud Deployments
+*   Updated to switch to using curl defaults for HTTP/2 operations
+*   Updated documentation (various)
+
 ## 2.4.19 - 2022-06-15
 ### Fixed
 *   Update Business Shared Folders to use a /delta query
