@@ -221,6 +221,20 @@ final class Config
 			mkdirRecurse(configDirName);
 			// Configure the applicable permissions for the folder
 			configDirName.setAttributes(returnRequiredDirectoryPermisions());
+		} else {
+			// The config path exists
+			// The path that exists must be a directory, not a file
+			if (!isDir(configDirName)) {
+				if (!confdirOption.empty) {
+					// the configuration path was passed in by the user .. user error
+					writeln("ERROR: --confdir entered value is an existing file instead of an existing directory");
+				} else {
+					// other error
+					writeln("ERROR: ~/.config/onedrive is a file rather than a directory");
+				}
+				// Must exit
+				exit(EXIT_FAILURE);	
+			}
 		}
 
 		// configDirName has a trailing /
