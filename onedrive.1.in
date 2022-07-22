@@ -24,7 +24,7 @@ The authorization URL is written to the \fBauthUrl\fP, then \fBonedrive\fP waits
 the file \fBresponseUrl\fP to be present, and reads the response from that file.
 .TP
 \fB\-\-auth\-response\fP ARG
-Perform authentication not via interactive dialog but via providing the reponse url directly.
+Perform authentication not via interactive dialog but via providing the response url directly.
 .TP
 \fB\-\-check\-for\-nomount\fP
 Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
@@ -97,10 +97,10 @@ Configuration file key: \fBenable_logging\fP (default: \fBfalse\fP)
 \fB\-\-force\fP
 Force the deletion of data when a 'big delete' is detected
 .TP
-\fB\-\-force\-http\-2\fP
-Force the use of HTTP/2 for all operations where applicable
+\fB\-\-force\-http\-11\fP
+Force the use of HTTP 1.1 for all operations
 .br
-Configuration file key: \fBforce_http_2\fP (default: \fBfalse\fP)
+Configuration file key: \fBforce_http_11\fP (default: \fBfalse\fP)
 .TP
 \fB\-\-force\-sync\fP
 Force a synchronization of a specific folder, only when using --synchronize --single-directory and ignore 

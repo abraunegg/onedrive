@@ -114,6 +114,13 @@ ExecStart=/usr/local/bin/onedrive --monitor --confdir="/home/myusername/.config/
 ```
 
 Then you can safely run these commands:
+#### Custom systemd service on Red Hat Enterprise Linux, CentOS Linux
+```text
+systemctl enable onedrive-my-new-config
+systemctl start onedrive-my-new-config
+```
+
+#### Custom systemd service on Arch, Ubuntu, Debian, OpenSuSE, Fedora
 ```text
 systemctl --user enable onedrive-my-new-config
 systemctl --user start onedrive-my-new-config
@@ -124,12 +131,17 @@ systemctl --user enable onedrive-my-new-config@myusername.service
 systemctl --user start onedrive-my-new-config@myusername.service
 ```
 
+#### Viewing systemd logs for the custom service
+```text
+journalctl --unit=onedrive-my-new-config -f
+```
+
 Repeat these steps for each OneDrive new account that you wish to use.
 
 ## Configuring the client to use multiple OneDrive accounts / configurations using Docker
 In some situations it may be desirable to run multiple Docker containers at the same time, each with their own configuration.
 
-To run the Docker container sucessfully, it needs two unique Docker volumes to operate:
+To run the Docker container successfully, it needs two unique Docker volumes to operate:
 *   Your configuration Docker volumes
 *   Your data Docker volume
 

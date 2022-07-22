@@ -8,9 +8,12 @@
   * [Show your configuration](#show-your-configuration)
   * [Testing your configuration](#testing-your-configuration)
   * [Performing a sync](#performing-a-sync)
-  * [Performing a selective directory sync](#performing-a-selective-directory-sync)
+  * [Performing a single directory sync](#performing-a-single-directory-sync)
   * [Performing a 'one-way' download sync](#performing-a-one-way-download-sync)
   * [Performing a 'one-way' upload sync](#performing-a-one-way-upload-sync)
+  * [Performing a selective sync via 'sync_list' file](#performing-a-selective-sync-via-sync_list-file)
+  * [Performing a --resync](#performing-a---resync)
+  * [Performing a --force-sync without a --resync or changing your configuration](#performing-a---force-sync-without-a---resync-or-changing-your-configuration)
   * [Increasing logging level](#increasing-logging-level)
   * [Client Activity Log](#client-activity-log)
   * [Notifications](#notifications)
@@ -27,18 +30,18 @@
     + [monitor_fullscan_frequency](#monitor_fullscan_frequency)
     + [min_notify_changes](#min_notify_changes)
     + [operation_timeout](#operation_timeout)
-  * [Performing a --resync](#performing-a---resync)
-  * [Performing a --force-sync without a --resync or changing your configuration](#performing-a---force-sync-without-a---resync-or-changing-your-configuration)
-  * [Handling Symbolic Links](#handling-symbolic-links)
-  * [Selective sync via 'sync_list' file](#selective-sync-via-sync_list-file)
   * [Configuring the client for 'single tenant application' use](#configuring-the-client-for-single-tenant-application-use)
   * [Configuring the client to use older 'skilion' application identifier](#configuring-the-client-to-use-older-skilion-application-identifier)
+- [Frequently Asked Configuration Questions](#frequently-asked-configuration-questions)
+  * [How to sync only specific or single directory?](#how-to-sync-only-specific-or-single-directory)
   * [How to 'skip' directories from syncing?](#how-to-skip-directories-from-syncing)
-  * [How to 'rate limit' the application to control bandwidth consumed for upload & download operations](#how-to-rate-limit-the-application-to-control-bandwidth-consumed-for-upload--download-operations)
-  * [Preventing your local disk from filling up](#preventing-your-local-disk-from-filling-up)
-  * [Shared folders (OneDrive Personal)](#shared-folders-onedrive-personal)
-  * [Shared folders (OneDrive Business or Office 365)](#shared-folders-onedrive-business-or-office-365)
-  * [SharePoint / Office 365 Shared Libraries](#sharepoint--office-365-shared-libraries)
+  * [How to 'skip' files from syncing?](#how-to-skip-files-from-syncing)
+  * [How to 'rate limit' the application to control bandwidth consumed for upload & download operations?](#how-to-rate-limit-the-application-to-control-bandwidth-consumed-for-upload--download-operations)
+  * [How to prevent your local disk from filling up?](#how-to-prevent-your-local-disk-from-filling-up)
+  * [How are symbolic links handled by the client?](#how-are-symbolic-links-handled-by-the-client)
+  * [How to sync shared folders (OneDrive Personal)?](#how-to-sync-shared-folders-onedrive-personal)
+  * [How to sync shared folders (OneDrive Business or Office 365)?](#how-to-sync-shared-folders-onedrive-business-or-office-365)
+  * [How to sync sharePoint / Office 365 Shared Libraries?](#how-to-sync-sharepoint--office-365-shared-libraries)
 - [Running 'onedrive' in 'monitor' mode](#running-onedrive-in-monitor-mode)
   * [Use webhook to subscribe to remote updates in 'monitor' mode](#use-webhook-to-subscribe-to-remote-updates-in-monitor-mode)
   * [More webhook configuration options](#more-webhook-configuration-options)
@@ -85,7 +88,13 @@ The files and directories in the synchronization directory must follow the [Wind
 The application will attempt to handle instances where you have two files with the same names but with different capitalization. Where there is a namespace clash, the file name which clashes will not be synced. This is expected behavior and won't be fixed.
 
 ### curl compatibility
-If your system utilises curl >= 7.62.0 curl defaults to prefer HTTP/2 over HTTP/1.1 by default. If you wish to use HTTP/2 for some operations you will need to use the `--force-http-2` config option to enable otherwise all operations will use HTTP/1.1.
+If your system utilises curl < 7.47.0, curl defaults to HTTP/1.1 for HTTPS operations. The client will use HTTP/1.1.
+
+If your system utilises curl >= 7.47.0 and < 7.62.0, curl will prefer HTTP/2 for HTTPS but will stick to HTTP/1.1 by default. The client will use HTTP/1.1 for HTTPS operations.
+
+If your system utilises curl >= 7.62.0, curl defaults to prefer HTTP/2 over HTTP/1.1 by default. The client will utilse HTTP/2 for most HTTPS operations and HTTP/1.1 for others. This difference is governed by the OneDrive platform and not this client.
+
+If you wish to explicitly use HTTP/1.1 you will need to use the `--force-http-11` flag or set the config option `force_http_11 = "true"` to force the application to use HTTP/1.1 otherwise all client operations will use whatever is the curl default for your distribution.
 
 ### Authorize the application with your OneDrive Account
 After installing the application you must authorize the application with your OneDrive Account. This is done by running the application without any additional command switches.
@@ -125,21 +134,17 @@ onedrive --display-config
 ```
 This will display all the pertinent runtime interpretation of the options and configuration you are using. Example output is as follows:
 ```text
-onedrive version                       = vX.Y.Z-A-bcdefghi
-Config path                            = /home/alex/.config/onedrive
-Config file found in config path       = false
-Config option 'check_nosync'           = false
-Config option 'sync_dir'               = /home/alex/OneDrive
-Config option 'skip_dir'               =
-Config option 'skip_file'              = ~*|.~*|*.tmp
-Config option 'skip_dotfiles'          = false
-Config option 'skip_symlinks'          = false
-Config option 'monitor_interval'       = 300
-Config option 'min_notify_changes'     = 5
-Config option 'log_dir'                = /var/log/onedrive/
-Config option 'classify_as_big_delete' = 1000
-Config option 'sync_root_files'        = false
-Selective sync configured              = false
+Configuration file successfully loaded
+onedrive version                             = vX.Y.Z-A-bcdefghi
+Config path                                  = /home/alex/.config/onedrive
+Config file found in config path             = true
+Config option 'sync_dir'                     = /home/alex/OneDrive
+Config option 'enable_logging'               = false
+...
+Selective sync 'sync_list' configured        = false
+Config option 'sync_business_shared_folders' = false
+Business Shared Folders configured           = false
+Config option 'webhook_enabled'              = false
 ```
 
 ### Testing your configuration
@@ -187,7 +192,7 @@ If you prefer to use your local files as stored in `~/OneDrive` as the 'source o
 onedrive --synchronize --local-first
 ```
 
-### Performing a selective directory sync
+### Performing a single directory sync
 In some cases it may be desirable to sync a single directory under ~/OneDrive without having to change your client configuration. To do this use the following command:
 ```text
 onedrive --synchronize --single-directory '<dir_name>'
@@ -210,6 +215,117 @@ onedrive --synchronize --upload-only
 ```text
 onedrive --synchronize --upload-only --no-remote-delete
 ```
+
+### Performing a selective sync via 'sync_list' file
+Selective sync allows you to sync only specific files and directories.
+To enable selective sync create a file named `sync_list` in your application configuration directory (default is `~/.config/onedrive`).
+Each line of the file represents a relative path from your `sync_dir`. All files and directories not matching any line of the file will be skipped during all operations.
+Here is an example of `sync_list`:
+```text
+# sync_list supports comments
+#
+# The ordering of entries is highly recommended - exclusions before inclusions
+#
+# Exclude temp folders under Documents
+!Documents/temp*
+# Exclude my secret data
+!/Secret_data/*
+#
+# Include my Backup folder
+Backup
+# Include Documents folder
+Documents/
+# Include all PDF documents
+Documents/*.pdf
+# Include this single document
+Documents/latest_report.docx
+# Include all Work/Project directories
+Work/Project*
+notes.txt
+# Include /Blender in the ~OneDrive root but not if elsewhere
+/Blender
+# Include these names if they match any file or folder
+Cinema Soc
+Codes
+Textbooks
+Year 2
+```
+The following are supported for pattern matching and exclusion rules:
+*   Use the `*` to wildcard select any characters to match for the item to be included
+*   Use either `!` or `-` characters at the start of the line to exclude an otherwise included item
+
+To simplify 'exclusions' and 'inclusions', the following is also possible:
+```text
+# sync_list supports comments
+#
+# The ordering of entries is highly recommended - exclusions before inclusions
+#
+# Exclude temp folders under Documents
+!Documents/temp*
+# Exclude my secret data
+!/Secret_data/*
+#
+# Include everything else
+/*
+```
+
+**Note:** When enabling the use of 'sync_list' utilise the `--display-config` option to validate that your configuration will be used by the application, and test your configuration by adding `--dry-run` to ensure the client will operate as per your requirement.
+
+**Note:** After changing the sync_list, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
+
+**Note:** In some circumstances, it may be required to sync all the individual files within the 'sync_dir', but due to frequent name change / addition / deletion of these files, it is not desirable to constantly change the 'sync_list' file to include / exclude these files and force a resync. To assist with this, enable the following in your configuration file:
+```text
+sync_root_files = "true"
+```
+This will tell the application to sync any file that it finds in your 'sync_dir' root by default.
+
+### Performing a --resync
+If you modify any of the following configuration items, you will be required to perform a `--resync` to ensure your client is syncing your data with the updated configuration:
+*   sync_dir
+*   skip_dir
+*   skip_file
+*   drive_id
+*   Modifying sync_list
+*   Modifying business_shared_folders
+
+Additionally, you may choose to perform a `--resync` if you feel that this action needs to be taken to ensure your data is in sync. If you are using this switch simply because you dont know the sync status, you can query the actual sync status using `--display-sync-status`.
+
+When using `--resync`, the following warning and advice will be presented:
+```text
+The use of --resync will remove your local 'onedrive' client state, thus no record will exist regarding your current 'sync status'
+This has the potential to overwrite local versions of files with potentially older versions downloaded from OneDrive which can lead to data loss
+If in-doubt, backup your local data first before proceeding with --resync
+
+Are you sure you wish to proceed with --resync? [Y/N]
+```
+
+To proceed with using `--resync`, you must type 'y' or 'Y' to allow the application to continue.
+
+**Note:** It is highly recommended to only use `--resync` if the application advises you to use it. Do not just blindly set the application to start with `--resync` as the default option.
+
+**Note:** In some automated environments (and it is 100% assumed you *know* what you are doing because of automation), in order to avoid this 'proceed with acknowledgement' requirement, add `--resync-auth` to automatically acknowledge the prompt.
+
+### Performing a --force-sync without a --resync or changing your configuration
+In some cases and situations, you may have configured the application to skip certain files and folders using 'skip_file' and 'skip_dir' configuration. You then may have a requirement to actually sync one of these items, but do not wish to modify your configuration, nor perform an entire `--resync` twice.
+
+The `--force-sync` option allows you to sync a specific directory, ignoring your 'skip_file' and 'skip_dir' configuration and negating the requirement to perform a `--resync`
+
+In order to use this option, you must run the application manually in the following manner:
+```text
+onedrive --synchronize --single-directory '<directory_to_sync>' --force-sync <add any other options needed or required>
+```
+
+When using `--force-sync`, the following warning and advice will be presented:
+```text
+WARNING: Overriding application configuration to use application defaults for skip_dir and skip_file due to --synchronize --single-directory --force-sync being used
+
+The use of --force-sync will reconfigure the application to use defaults. This may have untold and unknown future impacts.
+By proceeding in using this option you accept any impacts including any data loss that may occur as a result of using --force-sync.
+
+Are you sure you wish to proceed with --force-sync [Y/N] 
+```
+
+To proceed with using `--force-sync`, you must type 'y' or 'Y' to allow the application to continue.
 
 ### Increasing logging level
 When running a sync it may be desirable to see additional information as to the progress and operation of the client. To do this, use the following command:
@@ -315,7 +431,7 @@ Configuration is determined by three layers: the default values, values set in t
 
 Most command line options have a respective configuration file setting.
 
-If you want to change the defaults, you can copy and edit the included config file into your configuration directory. Valid directories for the config file are:
+If you want to change the defaults, you can copy and edit the included config file into your configuration directory. Valid default directories for the config file are:
 *   `~/.config/onedrive`
 *   `/etc/onedrive`
 
@@ -328,6 +444,8 @@ nano ~/.config/onedrive/config
 This file does not get created by default, and should only be created if you want to change the 'default' operational parameters.
 
 See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/config) file for the full list of options, and [All available commands](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#all-available-commands) for all possible keys and their default values.
+
+**Note:** The location of the application configuration information can also be specified by using the `--confdir` configuration option which can be passed in at client run-time.
 
 ### The default configuration file is listed below:
 ```text
@@ -351,7 +469,7 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # disable_notifications = "false"
 # disable_upload_validation = "false"
 # enable_logging = "false"
-# force_http_2 = "false"
+# force_http_11 = "false"
 # local_first = "false"
 # no_remote_delete = "false"
 # skip_symlinks = "false"
@@ -572,136 +690,7 @@ Example:
 operation_timeout = "3600"
 ```
 
-### Performing a --resync
-If you modify any of the following configuration items, you will be required to perform a `--resync` to ensure your client is syncing your data with the updated configuration:
-*   sync_dir
-*   skip_dir
-*   skip_file
-*   drive_id
-*   Modifying sync_list
-*   Modifying business_shared_folders
-
-Additionally, you may choose to perform a `--resync` if you feel that this action needs to be taken to ensure your data is in sync. If you are using this switch simply because you dont know the sync status, you can query the actual sync status using `--display-sync-status`.
-
-When using `--resync`, the following warning and advice will be presented:
-```text
-The use of --resync will remove your local 'onedrive' client state, thus no record will exist regarding your current 'sync status'
-This has the potential to overwrite local versions of files with potentially older versions downloaded from OneDrive which can lead to data loss
-If in-doubt, backup your local data first before proceeding with --resync
-
-Are you sure you wish to proceed with --resync? [Y/N]
-```
-
-To proceed with using `--resync`, you must type 'y' or 'Y' to allow the application to continue.
-
-**Note:** It is highly recommended to only use `--resync` if the application advises you to use it. Do not just blindly set the application to start with `--resync` as the default option.
-
-**Note:** In some automated environments (and it is 100% assumed you *know* what you are doing because of automation), in order to avoid this 'proceed with acknowledgement' requirement, add `--resync-auth` to automatically acknowledge the prompt.
-
-### Performing a --force-sync without a --resync or changing your configuration
-In some cases and situations, you may have configured the application to skip certain files and folders using 'skip_file' and 'skip_dir' configuration. You then may have a requirement to actually sync one of these items, but do not wish to modify your configuration, nor perform an entire `--resync` twice.
-
-The `--force-sync` option allows you to sync a specific directory, ignoring your 'skip_file' and 'skip_dir' configuration and negating the requirement to perform a `--resync`
-
-In order to use this option, you must run the application manually in the following manner:
-```text
-onedrive --synchronize --single-directory '<directory_to_sync>' --force-sync <add any other options needed or required>
-```
-
-When using `--force-sync`, the following warning and advice will be presented:
-```text
-WARNING: Overriding application configuration to use application defaults for skip_dir and skip_file due to --synchronize --single-directory --force-sync being used
-
-The use of --force-sync will reconfigure the application to use defaults. This may have untold and unknown future impacts.
-By proceeding in using this option you accept any impacts including any data loss that may occur as a result of using --force-sync.
-
-Are you sure you wish to proceed with --force-sync [Y/N] 
-```
-
-To proceed with using `--force-sync`, you must type 'y' or 'Y' to allow the application to continue.
-
-### Handling Symbolic Links
-Microsoft OneDrive has zero concept or understanding of symbolic links, and attempting to upload a symbolic link to Microsoft OneDrive generates a platform API error. All data (files and folders) that are uploaded to OneDrive must be whole files or actual directories.
-
-As such, there are only two methods to support symbolic links with this client:
-1. Follow the Linux symbolic link and upload what ever the link is pointing at to OneDrive. This is the default behaviour.
-2. Skip symbolic links by configuring the application to do so. In skipping, no data, no link, no reference is uploaded to OneDrive.
-
-To skip symbolic links, edit your configuration as per below:
-
-```text
-# local_first = "false"
-# no_remote_delete = "false"
-skip_symlinks = "true"
-# debug_https = "false"
-# skip_dotfiles = "false"
-```
-Setting this to `"true"` will configure the client to skip all symbolic links while syncing.
-
-The default setting is `"false"` which will sync the whole folder structure referenced by the symbolic link, duplicating the contents on OneDrive in the place where the symbolic link is.
-
-### Selective sync via 'sync_list' file
-Selective sync allows you to sync only specific files and directories.
-To enable selective sync create a file named `sync_list` in `~/.config/onedrive`.
-Each line of the file represents a relative path from your `sync_dir`. All files and directories not matching any line of the file will be skipped during all operations.
-Here is an example of `sync_list`:
-```text
-# sync_list supports comments
-#
-# The ordering of entries is highly recommended - exclusions before inclusions
-#
-# Exclude temp folders under Documents
-!Documents/temp*
-# Exclude my secret data
-!/Secret_data/*
-#
-# Include my Backup folder
-Backup
-# Include Documents folder
-Documents/
-# Include all PDF documents
-Documents/*.pdf
-# Include this single document
-Documents/latest_report.docx
-# Include all Work/Project directories
-Work/Project*
-notes.txt
-# Include /Blender in the ~OneDrive root but not if elsewhere
-/Blender
-# Include these names if they match any file or folder
-Cinema Soc
-Codes
-Textbooks
-Year 2
-```
-The following are supported for pattern matching and exclusion rules:
-*   Use the `*` to wildcard select any characters to match for the item to be included
-*   Use either `!` or `-` characters at the start of the line to exclude an otherwise included item
-
-To simplify 'exclusions' and 'inclusions', the following is also possible:
-```text
-# sync_list supports comments
-#
-# The ordering of entries is highly recommended - exclusions before inclusions
-#
-# Exclude temp folders under Documents
-!Documents/temp*
-# Exclude my secret data
-!/Secret_data/*
-#
-# Include everything else
-/*
-```
-
-**Note:** After changing the sync_list, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
-
-**Note:** In some circumstances, it may be required to sync all the individual files within the 'sync_dir', but due to frequent name change / addition / deletion of these files, it is not desirable to constantly change the 'sync_list' file to include / exclude these files and force a resync. To assist with this, enable the following in your configuration file:
-```text
-sync_root_files = "true"
-```
-This will tell the application to sync any file that it finds in your 'sync_dir' root by default.
-
-### Configuring the client for 'single tenant application' use
+#### Configuring the client for 'single tenant application' use
 In some instances when using OneDrive Business Accounts, depending on the Azure organisational configuration, it will be necessary to configure the client as a 'single tenant application'.
 To configure this, after creating the application on your Azure tenant, update the 'config' file with the tenant name (not the GUID) and the newly created Application ID, then this will be used for the authentication process.
 ```text
@@ -714,7 +703,7 @@ azure_tenant_id = "your.azure.tenant.name"
 # sync_business_shared_folders = "false"
 ```
 
-### Configuring the client to use older 'skilion' application identifier
+#### Configuring the client to use older 'skilion' application identifier
 In some instances it may be desirable to utilise the older 'skilion' application identifier to avoid authorising a new application ID within Microsoft Azure environments.
 To configure this, update the 'config' file with the old Application ID, then this will be used for the authentication process.
 ```text
@@ -727,11 +716,17 @@ application_id = "22c49a0d-d21c-4792-aed1-8f163c982546"
 
 **Note:** After changing the 'application_id' you will need to restart any 'onedrive' process you have running, and potentially issue a `--reauth` to re-authenticate the client with this updated application ID.
 
+## Frequently Asked Configuration Questions
+
+### How to sync only specific or single directory?
+There are two methods to achieve this:
+*   Utilise '--single-directory' option to only sync this specific path
+*   Utilise 'sync_list' to configure what files and directories to sync, and what should be exluded
 
 ### How to 'skip' directories from syncing?
 There are several mechanisms available to 'skip' a directory from the sync process:
-*   Utilise 'skip_dir'
-*   Utilise 'sync_list'
+*   Utilise 'skip_dir' to configure what directories to skip. Refer to above for configuration advice.
+*   Utilise 'sync_list' to configure what files and directories to sync, and what should be exluded
 
 One further method is to add a '.nosync' empty file to any folder. When this file is present, adding `--check-for-nosync` to your command line will now make the sync process skip any folder where the '.nosync' file is present.
 
@@ -746,7 +741,12 @@ check_nosync = "true"
 # disable_notifications = "false"
 ```
 
-### How to 'rate limit' the application to control bandwidth consumed for upload & download operations
+### How to 'skip' files from syncing?
+There are two methods to achieve this:
+*   Utilise 'skip_file' to configure what files to skip. Refer to above for configuration advice.
+*   Utilise 'sync_list' to configure what files and directories to sync, and what should be exluded
+
+### How to 'rate limit' the application to control bandwidth consumed for upload & download operations?
 To minimise the Internet bandwidth for upload and download operations, you can configure the 'rate_limit' option within the config file.
 
 Example valid values for this are as follows:
@@ -767,7 +767,7 @@ rate_limit = "131072"
 
 **Note:** A number greater than '131072' is a valid value, with '104857600' being tested as an upper limit.
 
-### Preventing your local disk from filling up
+### How to prevent your local disk from filling up?
 By default, the application will reserve 50MB of disk space to prevent your filesystem to run out of disk space. This value can be modified by adding the following to your config file:
 
 Example:
@@ -790,13 +790,35 @@ Config option 'azure_tenant_id'              = common
 
 Any value is valid here, however, if you use a value of '0' a value of '1' will actually be used, so that you actually do not run out of disk space.
 
-### Shared folders (OneDrive Personal)
+### How are symbolic links handled by the client?
+Microsoft OneDrive has zero concept or understanding of symbolic links, and attempting to upload a symbolic link to Microsoft OneDrive generates a platform API error. All data (files and folders) that are uploaded to OneDrive must be whole files or actual directories.
+
+As such, there are only two methods to support symbolic links with this client:
+1. Follow the Linux symbolic link and upload what ever the link is pointing at to OneDrive. This is the default behaviour.
+2. Skip symbolic links by configuring the application to do so. In skipping, no data, no link, no reference is uploaded to OneDrive.
+
+To skip symbolic links, edit your configuration as per below:
+
+```text
+# local_first = "false"
+# no_remote_delete = "false"
+skip_symlinks = "true"
+# debug_https = "false"
+# skip_dotfiles = "false"
+```
+Setting this to `"true"` will configure the client to skip all symbolic links while syncing.
+
+The default setting is `"false"` which will sync the whole folder structure referenced by the symbolic link, duplicating the contents on OneDrive in the place where the symbolic link is.
+
+### How to sync shared folders (OneDrive Personal)?
 Folders shared with you can be synced by adding them to your OneDrive. To do that open your Onedrive, go to the Shared files list, right click on the folder you want to sync and then click on "Add to my OneDrive".
 
-### Shared folders (OneDrive Business or Office 365)
+### How to sync shared folders (OneDrive Business or Office 365)?
 Refer to [./BusinessSharedFolders.md](BusinessSharedFolders.md) for configuration assistance.
 
-### SharePoint / Office 365 Shared Libraries
+Do not use the 'Add shortcut to My files' from the OneDrive web based interface to add a 'shortcut' to your shared folder. This shortcut is not supported by the OneDrive API, thus it cannot be used.
+
+### How to sync sharePoint / Office 365 Shared Libraries?
 Refer to [./SharePoint-Shared-Libraries.md](SharePoint-Shared-Libraries.md) for configuration assistance.
 
 ## Running 'onedrive' in 'monitor' mode
@@ -1130,7 +1152,7 @@ Options:
       The authorization URL is written to the `authUrl`, then onedrive waits for the file `responseUrl`
       to be present, and reads the response from that file.
   --auth-response ARG
-      Perform authentication not via interactive dialog but via providing the reponse url directly.
+      Perform authentication not via interactive dialog but via providing the response url directly.
   --check-for-nomount
       Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
   --check-for-nosync
@@ -1165,8 +1187,8 @@ Options:
       Enable client activity to a separate log file
   --force
       Force the deletion of data when a 'big delete' is detected
-  --force-http-2
-      Force the use of HTTP/2 for all operations where applicable
+  --force-http-11
+      Force the use of HTTP 1.1 for all operations
   --force-sync
       Force a synchronization of a specific folder, only when using --single-directory and ignoring all non-default skip_dir and skip_file rules
   --get-O365-drive-id ARG

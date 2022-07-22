@@ -146,6 +146,9 @@ int main(string[] args)
 		return EXIT_FAILURE;
 	}
 
+	// confdirOption must be a directory, not a file
+	// - By default ~/.config/onedrive will be used
+	// - If the user is using --confdir , the confdirOption needs to be evaluated when trying to load any file
 	// load configuration file if available
 	auto cfg = new config.Config(confdirOption);
 	if (!cfg.initialize()) {
@@ -679,7 +682,7 @@ int main(string[] args)
 		writeln("Config option 'azure_ad_endpoint'            = ", cfg.getValueString("azure_ad_endpoint"));
 		writeln("Config option 'azure_tenant_id'              = ", cfg.getValueString("azure_tenant_id"));
 		writeln("Config option 'user_agent'                   = ", cfg.getValueString("user_agent"));
-		writeln("Config option 'force_http_2'                 = ", cfg.getValueBool("force_http_2"));
+		writeln("Config option 'force_http_11'                = ", cfg.getValueBool("force_http_11"));
 		writeln("Config option 'debug_https'                  = ", cfg.getValueBool("debug_https"));
 		writeln("Config option 'rate_limit'                   = ", cfg.getValueLong("rate_limit"));
 		writeln("Config option 'operation_timeout'            = ", cfg.getValueLong("operation_timeout"));
@@ -1319,6 +1322,7 @@ int main(string[] args)
 				} catch (MonitorException e) {
 					// monitor initialisation failed
 					log.error("ERROR: ", e.msg);
+					oneDrive.shutdown();
 					exit(-1);
 				}
 			}
@@ -1532,7 +1536,8 @@ int main(string[] args)
 						}
 					}
 				}
-				Thread.sleep(dur!"msecs"(500));
+				// Sleep the monitor thread for 1 second, loop around and pick up any inotify changes
+				Thread.sleep(dur!"seconds"(1));
 			}
 		}
 	}

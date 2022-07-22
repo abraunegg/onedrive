@@ -62,7 +62,7 @@ final class Config
 		boolValues["disable_download_validation"] = false;
 		boolValues["disable_upload_validation"] = false;
 		boolValues["enable_logging"] = false;
-		boolValues["force_http_2"] = false;
+		boolValues["force_http_11"] = false;
 		boolValues["local_first"] = false;
 		boolValues["no_remote_delete"] = false;
 		boolValues["skip_symlinks"] = false;
@@ -182,6 +182,8 @@ final class Config
 		string systemConfigDirBase;
 		if (confdirOption != "") {
 			// A CLI 'confdir' was passed in
+			// Clean up any stray " .. these should not be there ...
+			confdirOption = strip(confdirOption,"\"");
 			log.vdebug("configDirName: CLI override to set configDirName to: ", confdirOption);
 			if (canFind(confdirOption,"~")) {
 				// A ~ was found
@@ -219,6 +221,20 @@ final class Config
 			mkdirRecurse(configDirName);
 			// Configure the applicable permissions for the folder
 			configDirName.setAttributes(returnRequiredDirectoryPermisions());
+		} else {
+			// The config path exists
+			// The path that exists must be a directory, not a file
+			if (!isDir(configDirName)) {
+				if (!confdirOption.empty) {
+					// the configuration path was passed in by the user .. user error
+					writeln("ERROR: --confdir entered value is an existing file instead of an existing directory");
+				} else {
+					// other error
+					writeln("ERROR: ~/.config/onedrive is a file rather than a directory");
+				}
+				// Must exit
+				exit(EXIT_FAILURE);	
+			}
 		}
 
 		// configDirName has a trailing /
@@ -326,7 +342,7 @@ final class Config
 					"Perform authentication not via interactive dialog but via files read/writes to these files.",
 					&stringValues["auth_files"],
 				"auth-response",
-					"Perform authentication not via interactive dialog but via providing the reponse url directly.",
+					"Perform authentication not via interactive dialog but via providing the response url directly.",
 					&stringValues["auth_response"],
 				"check-for-nomount",
 					"Check for the presence of .nosync in the syncdir root. If found, do not perform sync.",
@@ -373,9 +389,9 @@ final class Config
 				"enable-logging",
 					"Enable client activity to a separate log file",
 					&boolValues["enable_logging"],
-				"force-http-2",
-					"Force the use of HTTP/2 for all operations where applicable",
-					&boolValues["force_http_2"],
+				"force-http-11",
+					"Force the use of HTTP 1.1 for all operations",
+					&boolValues["force_http_11"],
 				"force",
 					"Force the deletion of data when a 'big delete' is detected",
 					&boolValues["force"],
