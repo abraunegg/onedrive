@@ -1216,9 +1216,21 @@ final class OneDriveApi
 					// If matching 5% of download, increment progress bar
 					if ((isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) && (previousDLPercent != currentDLPercent)) {
 						// What have we downloaded thus far
-						log.vdebugNewLine("Data Received  = ", dlnow);
-						log.vdebug("Expected Total = ", dltotal);
-						log.vdebug("Percent Complete = ", currentDLPercent);
+						writeln("Original Match for 5% of download");
+						writeln("Data Received  = ", dlnow);
+						writeln("Expected Total = ", dltotal);
+						writeln("Percent Complete = ", currentDLPercent);
+						// Increment counter & show bar update
+						p.next();
+						previousDLPercent = currentDLPercent;
+					} else {
+						// If the above was not triggered - what % was downloaded?
+						// What have we downloaded thus far
+						writeln("Percent check did not match equally 5%");
+						writeln("Data Received  = ", dlnow);
+						writeln("Expected Total = ", dltotal);
+						writeln("Previous Percent Complete = ", previousDLPercent);
+						writeln("Percent Now Complete = ", currentDLPercent);
 						// Increment counter & show bar update
 						p.next();
 						previousDLPercent = currentDLPercent;
