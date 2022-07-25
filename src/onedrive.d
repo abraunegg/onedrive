@@ -1232,7 +1232,7 @@ final class OneDriveApi
 						writeln("Previous Percent Complete = ", previousDLPercent);
 						writeln("Percent Now Complete = ", currentDLPercent);
 						// Increment counter & show bar update
-						p.next();
+						// p.next();
 						previousDLPercent = currentDLPercent;
 					}
 				} else {
