@@ -1199,7 +1199,6 @@ final class OneDriveApi
 		if (fileSize >= thresholdFileSize){
 			// Download Progress Bar
 			size_t iteration = 20;
-			
 			Progress p = new Progress(iteration);
 			p.title = "Downloading";
 			writeln();
@@ -1210,7 +1209,6 @@ final class OneDriveApi
 			http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
 			{
 				// For each onProgress, what is the % of dlnow to dltotal
-				
 				// floor - rounds down to nearest whole number
 				real currentDLPercent = floor(double(dlnow)/dltotal*100);
 				if (currentDLPercent > 0){
