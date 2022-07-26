@@ -1215,25 +1215,18 @@ final class OneDriveApi
 				real currentDLPercent = floor(double(dlnow)/dltotal*100);
 				if (currentDLPercent > 0){
 					// We have started downloading
-					
-					//writeln("Data Received    = ", dlnow);
-					//writeln("Expected Total   = ", dltotal);
-					//writeln("Percent Complete = ", currentDLPercent);
-					
+					log.vdebugNewLine("Data Received    = ", dlnow);
+					log.vdebug("Expected Total   = ", dltotal);
+					log.vdebug("Percent Complete = ", currentDLPercent);
 					// Every 5% download we need to increment the download bar
 					if (isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) {
 						// if the previous progress value does not equal our current divisible by 5 value 
 						if (previousProgressPercent != currentDLPercent) {
-							
-							//writeln("currentDLPercent is is divisible by 5");
-							
 							// Downloading  50% |oooooooooooooooooooo                    |   ETA   00:01:40  
 							// increment progress bar
 							p.next();
-							
 							// update values
 							previousProgressPercent = currentDLPercent;
-							
 						}
 					} else {
 						// when using rate_limit, we will get odd download rates, for example:
@@ -1247,23 +1240,14 @@ final class OneDriveApi
 						// Data Received    = 13685777
 						// Expected Total   = 52428800
 						// Percent Complete = 26
-					
 						if (currentDLPercent > (previousProgressPercent + 5)) {
-						
 							// we are +5% on the last segment we incremented the progress bar on
-							
 							// increment progress bar
 							p.next();
-							
 							// update values
 							previousProgressPercent = currentDLPercent;
-						
-						
 						}
-					
 					}
-
-
 				} else {
 					if ((currentDLPercent == 0) && (!barInit)) {
 						// Initialise the download bar at 0%
