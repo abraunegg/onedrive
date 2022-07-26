@@ -1203,7 +1203,7 @@ final class OneDriveApi
 			p.title = "Downloading";
 			writeln();
 			bool barInit = false;
-			real previousDLPercent = -1.0;
+			real previousProgressPercent = -1.0;
 			real percentCheck = 5.0;
 			// Setup progress bar to display
 			http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
@@ -1213,33 +1213,33 @@ final class OneDriveApi
 				real currentDLPercent = floor(double(dlnow)/dltotal*100);
 				if (currentDLPercent > 0){
 					// We have started downloading
-					// If matching 5% of download, increment progress bar
-					if ((isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) && (previousDLPercent != currentDLPercent)) {
-						// What have we downloaded thus far
-						writeln("Original Match for 5% of download");
-						writeln("Data Received  = ", dlnow);
-						writeln("Expected Total = ", dltotal);
-						writeln("Percent Complete = ", currentDLPercent);
-						// Increment counter & show bar update
-						p.next();
-						previousDLPercent = currentDLPercent;
-					} else {
-						// If the above was not triggered - what % was downloaded?
-						// What have we downloaded thus far
-						writeln("Percent check did not match equally 5%");
-						writeln("Percent check eval = ", fmod(currentDLPercent, percentCheck));
-						writeln("Data Received  = ", dlnow);
-						writeln("Expected Total = ", dltotal);
-						writeln("Previous Percent Complete = ", previousDLPercent);
-						writeln("Percent Now Complete = ", currentDLPercent);
-						// Increment counter & show bar update
-						// p.next();
-						previousDLPercent = currentDLPercent;
+					
+					//writeln("Data Received    = ", dlnow);
+					//writeln("Expected Total   = ", dltotal);
+					//writeln("Percent Complete = ", currentDLPercent);
+					
+					// Every 5% download we need to increment the download bar
+					if (isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) {
+						// if the previous progress value does not equal our current divisible by 5 value 
+						if (previousProgressPercent != currentDLPercent) {
+							
+							//writeln("currentDLPercent is is divisible by 5");
+							
+							// Downloading  50% |oooooooooooooooooooo                    |   ETA   00:01:40  
+							// increment progress bar
+							p.next();
+							
+							// update values
+							previousProgressPercent = currentDLPercent;
+							
+						}
 					}
+
+
 				} else {
 					if ((currentDLPercent == 0) && (!barInit)) {
 						// Initialise the download bar at 0%
-						// Downloading   0% |                                        |   ETA   --:--:--:^C
+						// Downloading   0% |                                        |   ETA   --:--:--:
 						p.next();
 						barInit = true;
 					}
