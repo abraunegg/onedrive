@@ -1214,16 +1214,16 @@ final class OneDriveApi
 				if (currentDLPercent > 0){
 					// We have started downloading
 					
-					//writeln("Data Received    = ", dlnow);
-					//writeln("Expected Total   = ", dltotal);
-					//writeln("Percent Complete = ", currentDLPercent);
+					writeln("Data Received    = ", dlnow);
+					writeln("Expected Total   = ", dltotal);
+					writeln("Percent Complete = ", currentDLPercent);
 					
 					// Every 5% download we need to increment the download bar
 					if (isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) {
 						// if the previous progress value does not equal our current divisible by 5 value 
 						if (previousProgressPercent != currentDLPercent) {
 							
-							//writeln("currentDLPercent is is divisible by 5");
+							writeln("currentDLPercent is is divisible by 5");
 							
 							// Downloading  50% |oooooooooooooooooooo                    |   ETA   00:01:40  
 							// increment progress bar
