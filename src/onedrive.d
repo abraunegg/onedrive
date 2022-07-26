@@ -1227,7 +1227,7 @@ final class OneDriveApi
 						// If the above was not triggered - what % was downloaded?
 						// What have we downloaded thus far
 						writeln("Percent check did not match equally 5%");
-						writeln("Percent check eval = ", fmod(currentDLPercent, percentCheck) );
+						writeln("Percent check eval = ", fmod(currentDLPercent, percentCheck));
 						writeln("Data Received  = ", dlnow);
 						writeln("Expected Total = ", dltotal);
 						writeln("Previous Percent Complete = ", previousDLPercent);
