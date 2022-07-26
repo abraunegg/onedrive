@@ -1199,6 +1199,7 @@ final class OneDriveApi
 		if (fileSize >= thresholdFileSize){
 			// Download Progress Bar
 			size_t iteration = 20;
+			
 			Progress p = new Progress(iteration);
 			p.title = "Downloading";
 			writeln();
@@ -1209,21 +1210,22 @@ final class OneDriveApi
 			http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
 			{
 				// For each onProgress, what is the % of dlnow to dltotal
+				
 				// floor - rounds down to nearest whole number
 				real currentDLPercent = floor(double(dlnow)/dltotal*100);
 				if (currentDLPercent > 0){
 					// We have started downloading
 					
-					writeln("Data Received    = ", dlnow);
-					writeln("Expected Total   = ", dltotal);
-					writeln("Percent Complete = ", currentDLPercent);
+					//writeln("Data Received    = ", dlnow);
+					//writeln("Expected Total   = ", dltotal);
+					//writeln("Percent Complete = ", currentDLPercent);
 					
 					// Every 5% download we need to increment the download bar
 					if (isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) {
 						// if the previous progress value does not equal our current divisible by 5 value 
 						if (previousProgressPercent != currentDLPercent) {
 							
-							writeln("currentDLPercent is is divisible by 5");
+							//writeln("currentDLPercent is is divisible by 5");
 							
 							// Downloading  50% |oooooooooooooooooooo                    |   ETA   00:01:40  
 							// increment progress bar
@@ -1233,6 +1235,32 @@ final class OneDriveApi
 							previousProgressPercent = currentDLPercent;
 							
 						}
+					} else {
+						// when using rate_limit, we will get odd download rates, for example:
+						// Percent Complete = 24
+						// Data Received    = 13080163
+						// Expected Total   = 52428800
+						// Percent Complete = 24
+						// Data Received    = 13685777
+						// Expected Total   = 52428800
+						// Percent Complete = 26   <---- jumps to 26% missing 25%, thus fmod above misses incrementing progress bar
+						// Data Received    = 13685777
+						// Expected Total   = 52428800
+						// Percent Complete = 26
+					
+						if (currentDLPercent > (previousProgressPercent + 5)) {
+						
+							// we are +5% on the last segment we incremented the progress bar on
+							
+							// increment progress bar
+							p.next();
+							
+							// update values
+							previousProgressPercent = currentDLPercent;
+						
+						
+						}
+					
 					}
 
 
