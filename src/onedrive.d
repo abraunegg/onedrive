@@ -1230,7 +1230,7 @@ final class OneDriveApi
 					// Percent Complete = 24
 					// Data Received    = 13685777
 					// Expected Total   = 52428800
-					// Percent Complete = 26   <---- jumps to 26% missing 25%, thus fmod above misses incrementing progress bar
+					// Percent Complete = 26   <---- jumps to 26% missing 25%, thus fmod misses incrementing progress bar
 					// Data Received    = 13685777
 					// Expected Total   = 52428800
 					// Percent Complete = 26
