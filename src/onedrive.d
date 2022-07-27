@@ -1240,7 +1240,7 @@ final class OneDriveApi
 						long thisSegmentData = dataPerSegment * segmentCount;
 						long nextSegmentData = dataPerSegment * (segmentCount + 1);
 						// Has the data that has been received in a 5% window that we need to increment the progress bar at
-						if ((dlnow > thisSegmentData) && (dlnow < nextSegmentData) && (previousProgressPercent != currentDLPercent)) {
+						if ((dlnow > thisSegmentData) && (dlnow < nextSegmentData) && (previousProgressPercent != currentDLPercent) || (dlnow == dltotal)) {
 							// Downloaded data equals approx 5%
 							log.vdebug("Incrementing Progress Bar using calculated 5% of data received");
 							// Downloading  50% |oooooooooooooooooooo                    |   ETA   00:01:40  
