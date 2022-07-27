@@ -1213,7 +1213,7 @@ final class OneDriveApi
 				// floor - rounds down to nearest whole number
 				real currentDLPercent = floor(double(dlnow)/dltotal*100);
 				// How much data should be in each segment to qualify for 5%
-				long dataPerSegment = dltotal / iteration;
+				long dataPerSegment = to!long(floor(double(dltotal)/iteration));
 				// Have we started downloading?
 				if (currentDLPercent > 0){
 					// We have started downloading
