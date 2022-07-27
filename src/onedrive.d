@@ -1212,8 +1212,6 @@ final class OneDriveApi
 				// For each onProgress, what is the % of dlnow to dltotal
 				// floor - rounds down to nearest whole number
 				real currentDLPercent = floor(double(dlnow)/dltotal*100);
-				// How much data should be in each segment to qualify for 5%
-				long dataPerSegment = to!long(floor(double(dltotal)/iteration));
 				// Have we started downloading?
 				if (currentDLPercent > 0){
 					// We have started downloading
@@ -1237,6 +1235,9 @@ final class OneDriveApi
 										
 					if (cfg.getValueLong("rate_limit") > 0) {
 						// User configured rate limit
+						// How much data should be in each segment to qualify for 5%
+						long dataPerSegment = to!long(floor(double(dltotal)/iteration));
+						// How much data received do we need to validate against
 						long thisSegmentData = dataPerSegment * segmentCount;
 						long nextSegmentData = dataPerSegment * (segmentCount + 1);
 						// Has the data that has been received in a 5% window that we need to increment the progress bar at
