@@ -1256,7 +1256,7 @@ final class OneDriveApi
 						// Is currentDLPercent divisible by 5 leaving remainder 0 and does previousProgressPercent not equal currentDLPercent
 						if ((isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) && (previousProgressPercent != currentDLPercent)) {
 							// currentDLPercent matches a new increment
-							writeln("Incrementing Progress Bar using fmod match");
+							log.vdebug("Incrementing Progress Bar using fmod match");
 							// Downloading  50% |oooooooooooooooooooo                    |   ETA   00:01:40  
 							// increment progress bar
 							p.next();
