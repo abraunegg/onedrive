@@ -96,11 +96,7 @@ cat /etc/debian_version
 First install development dependencies as per below:
 ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev
-sudo apt install libsqlite3-dev
-sudo apt install pkg-config
-sudo apt install git
-sudo apt install curl
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl
 ```
 For notifications the following is also necessary:
 ```text
@@ -124,11 +120,7 @@ These dependencies are also applicable for all Ubuntu based distributions such a
 *   Peppermint OS
 ```text
 sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev
-sudo apt install libsqlite3-dev
-sudo apt install pkg-config
-sudo apt install git
-sudo apt install curl
+sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For notifications the following is also necessary:
@@ -142,8 +134,7 @@ CentOS 6.x and RHEL 6.x reached End of Life status on November 30th 2020 and is 
 ### Dependencies: Fedora < Version 18 / CentOS 7.x / RHEL 7.x
 ```text
 sudo yum groupinstall 'Development Tools'
-sudo yum install libcurl-devel
-sudo yum install sqlite-devel
+sudo yum install libcurl-devel sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd-2.099.0
 ```
 For notifications the following is also necessary:
@@ -154,8 +145,7 @@ sudo yum install libnotify-devel
 ### Dependencies: Fedora > Version 18 / CentOS 8.x / RHEL 8.x / RHEL 9.x
 ```text
 sudo dnf groupinstall 'Development Tools'
-sudo dnf install libcurl-devel
-sudo dnf install sqlite-devel
+sudo dnf install libcurl-devel install sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For notifications the following is also necessary:
