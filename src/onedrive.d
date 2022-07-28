@@ -1203,30 +1203,72 @@ final class OneDriveApi
 			p.title = "Downloading";
 			writeln();
 			bool barInit = false;
-			real previousDLPercent = -1.0;
+			real previousProgressPercent = -1.0;
 			real percentCheck = 5.0;
+			long segmentCount = 1;
 			// Setup progress bar to display
 			http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
 			{
 				// For each onProgress, what is the % of dlnow to dltotal
 				// floor - rounds down to nearest whole number
 				real currentDLPercent = floor(double(dlnow)/dltotal*100);
+				// Have we started downloading?
 				if (currentDLPercent > 0){
 					// We have started downloading
-					// If matching 5% of download, increment progress bar
-					if ((isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) && (previousDLPercent != currentDLPercent)) {
-						// What have we downloaded thus far
-						log.vdebugNewLine("Data Received  = ", dlnow);
-						log.vdebug("Expected Total = ", dltotal);
-						log.vdebug("Percent Complete = ", currentDLPercent);
-						// Increment counter & show bar update
-						p.next();
-						previousDLPercent = currentDLPercent;
+					log.vdebugNewLine("Data Received    = ", dlnow);
+					log.vdebug("Expected Total   = ", dltotal);
+					log.vdebug("Percent Complete = ", currentDLPercent);
+					// Every 5% download we need to increment the download bar
+
+					// Has the user set a data rate limit?
+					// when using rate_limit, we will get odd download rates, for example:
+					// Percent Complete = 24
+					// Data Received    = 13080163
+					// Expected Total   = 52428800
+					// Percent Complete = 24
+					// Data Received    = 13685777
+					// Expected Total   = 52428800
+					// Percent Complete = 26   <---- jumps to 26% missing 25%, thus fmod misses incrementing progress bar
+					// Data Received    = 13685777
+					// Expected Total   = 52428800
+					// Percent Complete = 26
+										
+					if (cfg.getValueLong("rate_limit") > 0) {
+						// User configured rate limit
+						// How much data should be in each segment to qualify for 5%
+						long dataPerSegment = to!long(floor(double(dltotal)/iteration));
+						// How much data received do we need to validate against
+						long thisSegmentData = dataPerSegment * segmentCount;
+						long nextSegmentData = dataPerSegment * (segmentCount + 1);
+						// Has the data that has been received in a 5% window that we need to increment the progress bar at
+						if ((dlnow > thisSegmentData) && (dlnow < nextSegmentData) && (previousProgressPercent != currentDLPercent) || (dlnow == dltotal)) {
+							// Downloaded data equals approx 5%
+							log.vdebug("Incrementing Progress Bar using calculated 5% of data received");
+							// Downloading  50% |oooooooooooooooooooo                    |   ETA   00:01:40  
+							// increment progress bar
+							p.next();
+							// update values
+							log.vdebug("Setting previousProgressPercent to ", currentDLPercent);
+							previousProgressPercent = currentDLPercent;
+							log.vdebug("Incrementing segmentCount");
+							segmentCount++;
+						}
+					} else {
+						// Is currentDLPercent divisible by 5 leaving remainder 0 and does previousProgressPercent not equal currentDLPercent
+						if ((isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) && (previousProgressPercent != currentDLPercent)) {
+							// currentDLPercent matches a new increment
+							log.vdebug("Incrementing Progress Bar using fmod match");
+							// Downloading  50% |oooooooooooooooooooo                    |   ETA   00:01:40  
+							// increment progress bar
+							p.next();
+							// update values
+							previousProgressPercent = currentDLPercent;
+						}
 					}
 				} else {
 					if ((currentDLPercent == 0) && (!barInit)) {
 						// Initialise the download bar at 0%
-						// Downloading   0% |                                        |   ETA   --:--:--:^C
+						// Downloading   0% |                                        |   ETA   --:--:--:
 						p.next();
 						barInit = true;
 					}
