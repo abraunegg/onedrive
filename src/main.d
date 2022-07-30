@@ -622,8 +622,12 @@ int main(string[] args)
 		}
 	}
 	
-	// Display current application configuration, no application initialisation
-	if (cfg.getValueBool("display_config")){
+	// Display current application configuration
+	if ((cfg.getValueBool("display_config")) || (cfg.getValueBool("display_running_config"))) {
+		if (cfg.getValueBool("display_running_config")) {
+			writeln("--------------- Application Runtime Configuration ---------------");
+		}
+		
 		// Display application version
 		writeln("onedrive version                             = ", strip(import("version")));
 		// Display all of the pertinent configuration options
@@ -732,8 +736,14 @@ int main(string[] args)
 			writeln("Config option 'webhook_renewal_interval'     = ", cfg.getValueLong("webhook_renewal_interval"));
 		}
 		
-		// Exit
-		return EXIT_SUCCESS;
+		if (cfg.getValueBool("display_running_config")) {
+			writeln("-----------------------------------------------------------------");
+		}
+		
+		// Do we exit? We only exit if --display-config has been used
+		if (cfg.getValueBool("display_config")) {
+			return EXIT_SUCCESS;
+		}
 	}
 
 	// --upload-only and --download-only are mutually exclusive and cannot be used together
