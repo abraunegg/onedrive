@@ -744,9 +744,14 @@ int main(string[] args)
 		return EXIT_FAILURE;
 	}
 
-	// Handle --resync to remove local files
+	// Handle the actual --resync to remove local files
 	if (cfg.getValueBool("resync")) {
 		log.vdebug("--resync requested");
+		log.vdebug("Testing if we have exclusive access to local database file");
+		// Are we the only running instance? Test that we can open the database file path
+		itemDb = new ItemDatabase(cfg.databaseFilePath);
+		destroy(itemDb);
+		// If we have exclusive access we will not have exited
 		log.log("Deleting the saved application sync status ...");
 		if (!cfg.getValueBool("dry_run")) {
 			safeRemove(cfg.databaseFilePath);
