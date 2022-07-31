@@ -557,7 +557,17 @@ final class OneDriveApi
 	{
 		import std.stdio, std.regex;
 		char[] response;
-		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.Read.All%20Sites.ReadWrite.All%20offline_access&response_type=code&prompt=login&redirect_uri=" ~ redirectUrl;
+		string authScope;
+		// What authentication scope to use?
+		if (cfg.getValueBool("read_only_auth_scope")) {
+			// read-only authentication scopes has been requested
+			authScope = "&scope=Files.Read%20Files.Read.all%20Sites.Read.All%20offline_access&response_type=code&prompt=login&redirect_uri=";
+		} else {
+			// read-write authentication scopes will be used (default)
+			authScope = "&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.Read.All%20Sites.ReadWrite.All%20offline_access&response_type=code&prompt=login&redirect_uri=";
+		}
+		
+		string url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
 		string authFilesString = cfg.getValueString("auth_files");
 		string authResponseString = cfg.getValueString("auth_response");
 		if (authResponseString != "") {

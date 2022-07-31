@@ -127,6 +127,15 @@ Application has been successfully authorised, however no additional command swit
 Please use 'onedrive --help' for further assistance in regards to running this application.
 ```
 
+By default, the application will use Read & Write authentication scopes to access Microsoft OneDrive. To change this to 'read-only' access, add the following to your configuration file:
+```text
+read_only_auth_scope = "true"
+```
+
+This will change the authentication scopes to use read-only access.
+
+**Note:** When changing this value, you *must* manually re-authenticate the client using the `--reauth` option to utilise the change in authentication scopes. When using this method, uploading of any data to OneDrive will fail.
+
 ### Show your configuration
 To validate your configuration the application will use, utilize the following:
 ```text

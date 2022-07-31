@@ -134,6 +134,8 @@ final class Config
 		longValues["webhook_listening_port"] = 8888;
 		longValues["webhook_expiration_interval"] = 3600 * 24;
 		longValues["webhook_renewal_interval"] = 3600 * 12;
+		// Configure read-only authentication scope
+		boolValues["read_only_auth_scope"] = false;
 
 		// DEVELOPER OPTIONS
 		// display_memory = true | false
