@@ -609,7 +609,7 @@ final class OneDriveApi
 		// match the authorization code
 		auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
 		if (c.empty) {
-			log.log("Invalid uri");
+			log.log("Invalid response uri entered");
 			return false;
 		}
 		c.popFront(); // skip the whole match
@@ -1091,6 +1091,15 @@ final class OneDriveApi
 		}
 
 		if (response.type() == JSONType.object) {
+			// Has the client been configured to use read_only_auth_scope
+			if (cfg.getValueBool("read_only_auth_scope")) {
+				// read_only_auth_scope has been configured
+				if ("scope" in response){
+					// Display the effective authentication scopes
+					writeln("\nEffective API Authentication Scopes: ", response["scope"].str());
+				}
+			}
+		
 			if ("access_token" in response){
 				accessToken = "bearer " ~ response["access_token"].str();
 				refreshToken = response["refresh_token"].str();
