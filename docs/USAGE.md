@@ -134,7 +134,10 @@ read_only_auth_scope = "true"
 
 This will change the authentication scopes to use read-only access.
 
-**Note:** When changing this value, you *must* manually re-authenticate the client using the `--reauth` option to utilise the change in authentication scopes. When using this method, uploading of any data to OneDrive will fail.
+**Note:** When changing this value, you *must* manually re-authenticate the client using the `--reauth` option to utilise the change in authentication scopes. When using this method, uploading of any data or local change to OneDrive will fail.
+
+**Note:** You also will need to remove your existing application access consent by visiting https://account.live.com/consent/Manage otherwise old authentication scopes will still be used. 
+
 
 ### Show your configuration
 To validate your configuration the application will use, utilize the following:

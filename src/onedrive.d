@@ -564,7 +564,7 @@ final class OneDriveApi
 			authScope = "&scope=Files.Read%20Files.Read.all%20Sites.Read.All%20offline_access&response_type=code&prompt=login&redirect_uri=";
 		} else {
 			// read-write authentication scopes will be used (default)
-			authScope = "&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.Read.All%20Sites.ReadWrite.All%20offline_access&response_type=code&prompt=login&redirect_uri=";
+			authScope = "&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.ReadWrite.All%20offline_access&response_type=code&prompt=login&redirect_uri=";
 		}
 		
 		string url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
@@ -1095,8 +1095,18 @@ final class OneDriveApi
 			if (cfg.getValueBool("read_only_auth_scope")) {
 				// read_only_auth_scope has been configured
 				if ("scope" in response){
+					string effectiveScopes = response["scope"].str();
 					// Display the effective authentication scopes
-					writeln("\nEffective API Authentication Scopes: ", response["scope"].str());
+					writeln("\nEffective API Authentication Scopes: ", effectiveScopes);
+					// if we have any write scopes, we need to tell the user to update an remove online prior authentication and exit application
+					if (canFind(effectiveScopes, "Write")) {
+						// effective scopes contain write scopes .. so not a read-only configuration
+						writeln("\nERROR: You have authentication scopes that allow write operations. You need to remove your online prior authentication");
+						writeln("\nPlease login to https://account.live.com/consent/Manage and remove your existing application consent\n");
+						// force exit
+						shutdown();
+						exit(-1);
+					}
 				}
 			}
 		
