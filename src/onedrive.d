@@ -1101,8 +1101,8 @@ final class OneDriveApi
 					// if we have any write scopes, we need to tell the user to update an remove online prior authentication and exit application
 					if (canFind(effectiveScopes, "Write")) {
 						// effective scopes contain write scopes .. so not a read-only configuration
-						writeln("\nERROR: You have authentication scopes that allow write operations. You need to remove your online prior authentication");
-						writeln("\nPlease login to https://account.live.com/consent/Manage and remove your existing application consent\n");
+						writeln("\nERROR: You have authentication scopes that allow write operations. You need to remove your existing application access consent");
+						writeln("\nPlease login to https://account.live.com/consent/Manage and remove your existing application access consent\n");
 						// force exit
 						shutdown();
 						exit(-1);
