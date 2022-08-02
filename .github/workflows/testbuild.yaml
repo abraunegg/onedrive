@@ -1,1 +1,27 @@
 name: Test Build
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install build-essential
+      run: sudo apt install -y build-essential
+      
+    - name: Install build-dependencies
+      run: sudo apt install -y libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc
+
+    - name: configure
+      run: ./configure
+      
+    - name: Install dependencies
+      run: make clean; make;
