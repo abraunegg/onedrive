@@ -24,8 +24,14 @@ jobs:
     - name: Install build-dependencies
       run: sudo apt install -y libcurl4-openssl-dev libsqlite3-dev pkg-config git curl ldc
 
-    - name: configure
+    - name: Configure
       run: ./configure
       
-    - name: Install dependencies
+    - name: Compile
       run: make clean; make;
+
+    - name: Install
+      run: sudo make install
+      
+    - name: Run
+      run: onedrive --version
