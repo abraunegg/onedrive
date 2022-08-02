@@ -12,7 +12,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - name: Check out code from GitHub
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+        fetch-depth: 0
 
     - name: Install build-essential
       run: sudo apt install -y build-essential
