@@ -107,10 +107,10 @@ onedrive: $(SOURCES)
 
 install: all
 	$(INSTALL) -D onedrive $(DESTDIR)$(bindir)/onedrive
-	$(INSTALL) -D -m 644 onedrive.1 $(DESTDIR)$(mandir)/man1/onedrive.1
-	$(INSTALL) -D -m 644 contrib/logrotate/onedrive.logrotate $(DESTDIR)$(sysconfdir)/logrotate.d/onedrive
+	$(INSTALL) -D -m 0644 onedrive.1 $(DESTDIR)$(mandir)/man1/onedrive.1
+	$(INSTALL) -D -m 0644 contrib/logrotate/onedrive.logrotate $(DESTDIR)$(sysconfdir)/logrotate.d/onedrive
 	mkdir -p $(DESTDIR)$(docdir)
-	$(INSTALL) -D -m 644 $(DOCFILES) $(DESTDIR)$(docdir)
+	$(INSTALL) -D -m 0644 $(DOCFILES) $(DESTDIR)$(docdir)
 ifeq ($(HAVE_SYSTEMD),yes)
 	$(INSTALL) -d -m 0755 $(DESTDIR)$(systemduserunitdir) $(DESTDIR)$(systemdsystemunitdir)
 ifeq ($(RHEL),1)
@@ -127,9 +127,9 @@ ifeq ($(RHEL_VERSION),6)
 endif
 endif
 ifeq ($(COMPLETIONS),yes)
-	$(INSTALL) -D -m 644 contrib/completions/complete.zsh $(DESTDIR)$(ZSH_COMPLETION_DIR)/_onedrive
-	$(INSTALL) -D -m 644 contrib/completions/complete.bash $(DESTDIR)$(BASH_COMPLETION_DIR)/onedrive
-	$(INSTALL) -D -m 644 contrib/completions/complete.fish $(DESTDIR)$(FISH_COMPLETION_DIR)/onedrive.fish
+	$(INSTALL) -D -m 0644 contrib/completions/complete.zsh $(DESTDIR)$(ZSH_COMPLETION_DIR)/_onedrive
+	$(INSTALL) -D -m 0644 contrib/completions/complete.bash $(DESTDIR)$(BASH_COMPLETION_DIR)/onedrive
+	$(INSTALL) -D -m 0644 contrib/completions/complete.fish $(DESTDIR)$(FISH_COMPLETION_DIR)/onedrive.fish
 endif
 
 
