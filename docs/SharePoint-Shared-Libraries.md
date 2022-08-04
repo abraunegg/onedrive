@@ -7,6 +7,8 @@ Syncing a OneDrive SharePoint library requires additional configuration for your
 5.  Test the configuration using '--dry-run'
 6.  Sync the SharePoint Library as required
 
+**Note:** The `--get-O365-drive-id` process below requires a fully configured 'onedrive' configuration so that the applicable Drive ID for the given Office 365 SharePoint Shared Library can be determined. It is highly recommended that you do not use the application 'default' configuration directory for any SharePoint Site, and configure separate items for each site you wish to use.
+
 ## Listing available OneDrive SharePoint Libraries
 1.  Login to the OneDrive web interface and determine which shared library you wish to configure the client for:
 ![shared_libraries](./images/SharedLibraries.jpg)
