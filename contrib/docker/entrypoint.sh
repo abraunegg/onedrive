@@ -97,6 +97,13 @@ if [ -n "${ONEDRIVE_AUTHRESPONSE:=""}" ]; then
    ARGS=(--auth-response \"${ONEDRIVE_AUTHRESPONSE}\" ${ARGS[@]})
 fi
 
+# Tell client to print the running configuration at application startup
+if [ "${ONEDRIVE_DISPLAY_CONFIG:=0}" == "1" ]; then
+   echo "# We are printing the application running configuration at application startup"
+   echo "# Adding --display-running-config"
+   ARGS=(--display-running-config ${ARGS[@]})
+fi
+
 if [ ${#} -gt 0 ]; then
   ARGS=("${@}")
 fi
