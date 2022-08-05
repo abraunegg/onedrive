@@ -54,13 +54,11 @@ To change the application to 'read-only' access, add the following to your confi
 read_only_auth_scope = "true"
 ```
 
-This will change the user authentication scope requect to use read-only access.
+This will change the user authentication scope requect to use read-only access. When using read-only authentication scopes, the uploading of any data or local change to OneDrive will fail.
 
 **Note:** When changing this value, you *must* re-authenticate the client using the `--reauth` option to utilise the change in authentication scopes. 
 
-When using read-only authentication scopes, the uploading of any data or local change to OneDrive will fail.
- 
-**Note:** You also will need to remove your existing application access consent otherwise old authentication scopes will still be used.
+**Important:** You also will need to remove your existing application access consent otherwise old authentication consent will still be used and you will still be able to upload changes to OneDrive.
  
 ## Reviewing your existing application access consent
 
