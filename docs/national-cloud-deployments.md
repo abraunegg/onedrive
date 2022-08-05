@@ -35,9 +35,8 @@ Configure the API permissions as per the following:
 |---|---|---|---|
 | Files.ReadWrite | Delegated | Have full access to user files | No |
 | Files.ReadWrite.All  | Delegated | Have full access to all files user can access | No |
+| Sites.ReadWrite.All   | Delegated | Have full access to all items in all site collections | No |
 | offline_access   | Delegated | Maintain access to data you have given it access to | No |
-| Sites.Read.All   | Delegated | Read items in all site collections | No |
-| Sites.ReadWrite.All   | Delegated | Edit or delete items in all site collections | No |
 
 ![authentication_scopes](./images/authentication_scopes.jpg)
 

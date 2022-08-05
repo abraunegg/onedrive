@@ -52,3 +52,4 @@
 # webhook_renewal_interval = "43200"
 # space_reservation = "50"
 # display_running_config = "false"
+# read_only_auth_scope = "false"

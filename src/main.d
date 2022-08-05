@@ -678,6 +678,7 @@ int main(string[] args)
 		writeln("Config option 'monitor_fullscan_frequency'   = ", cfg.getValueLong("monitor_fullscan_frequency"));
 		
 		// sync process and method
+		writeln("Config option 'read_only_auth_scope'         = ", cfg.getValueBool("read_only_auth_scope"));
 		writeln("Config option 'dry_run'                      = ", cfg.getValueBool("dry_run"));
 		writeln("Config option 'upload_only'                  = ", cfg.getValueBool("upload_only"));
 		writeln("Config option 'download_only'                = ", cfg.getValueBool("download_only"));

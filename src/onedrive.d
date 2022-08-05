@@ -557,7 +557,17 @@ final class OneDriveApi
 	{
 		import std.stdio, std.regex;
 		char[] response;
-		string url = authUrl ~ "?client_id=" ~ clientId ~ "&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.Read.All%20Sites.ReadWrite.All%20offline_access&response_type=code&prompt=login&redirect_uri=" ~ redirectUrl;
+		string authScope;
+		// What authentication scope to use?
+		if (cfg.getValueBool("read_only_auth_scope")) {
+			// read-only authentication scopes has been requested
+			authScope = "&scope=Files.Read%20Files.Read.All%20Sites.Read.All%20offline_access&response_type=code&prompt=login&redirect_uri=";
+		} else {
+			// read-write authentication scopes will be used (default)
+			authScope = "&scope=Files.ReadWrite%20Files.ReadWrite.All%20Sites.ReadWrite.All%20offline_access&response_type=code&prompt=login&redirect_uri=";
+		}
+		
+		string url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
 		string authFilesString = cfg.getValueString("auth_files");
 		string authResponseString = cfg.getValueString("auth_response");
 		if (authResponseString != "") {
@@ -599,7 +609,7 @@ final class OneDriveApi
 		// match the authorization code
 		auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
 		if (c.empty) {
-			log.log("Invalid uri");
+			log.log("Invalid response uri entered");
 			return false;
 		}
 		c.popFront(); // skip the whole match
@@ -1081,6 +1091,25 @@ final class OneDriveApi
 		}
 
 		if (response.type() == JSONType.object) {
+			// Has the client been configured to use read_only_auth_scope
+			if (cfg.getValueBool("read_only_auth_scope")) {
+				// read_only_auth_scope has been configured
+				if ("scope" in response){
+					string effectiveScopes = response["scope"].str();
+					// Display the effective authentication scopes
+					writeln("\nEffective API Authentication Scopes: ", effectiveScopes);
+					// if we have any write scopes, we need to tell the user to update an remove online prior authentication and exit application
+					if (canFind(effectiveScopes, "Write")) {
+						// effective scopes contain write scopes .. so not a read-only configuration
+						writeln("\nERROR: You have authentication scopes that allow write operations. You need to remove your existing application access consent");
+						writeln("\nPlease login to https://account.live.com/consent/Manage and remove your existing application access consent\n");
+						// force exit
+						shutdown();
+						exit(-1);
+					}
+				}
+			}
+		
 			if ("access_token" in response){
 				accessToken = "bearer " ~ response["access_token"].str();
 				refreshToken = response["refresh_token"].str();
