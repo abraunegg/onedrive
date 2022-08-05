@@ -24,6 +24,8 @@ As such, the following API permissions are used by default:
 | Sites.Read.All   | Delegated | Have read-only access to all items in all site collections | No |
 | offline_access   | Delegated | Maintain access to data you have given it access to | No |
 
+![default_authentication_scopes](./images/default_authentication_scopes.jpg)
+
 ### Default User Authentication Permissions
 
 | API / Permissions name | Type | Description | Admin consent required |
@@ -44,7 +46,7 @@ When these delegated API permissions are commbined, these provide the effective 
 
 These 'default' permissions will allow the OneDrive Client for Linux to read, write and delete data associated with your OneDrive Account.
 
-## Configuring read-only access
+## Configuring read-only access to your OneDrive data
 In some situations, it may be desirable to configure the OneDrive Client for Linux totally in read-only operation.
 
 To change the application to 'read-only' access, add the following to your configuration file:
