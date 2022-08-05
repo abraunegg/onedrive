@@ -13,7 +13,7 @@ Security options should follow the security principal of 'least privilege':
 
 Reference: [https://csrc.nist.gov/glossary/term/least_privilege](https://csrc.nist.gov/glossary/term/least_privilege)
 
-As such, the folloiwng API permissions are used by default:
+As such, the following API permissions are used by default:
 
 ### Default Azure Application Permissions
 
@@ -54,7 +54,9 @@ read_only_auth_scope = "true"
 
 This will change the user authentication scope requect to use read-only access.
 
-**Note:** When changing this value, you *must* manually re-authenticate the client using the `--reauth` option to utilise the change in authentication scopes. When using this method, uploading of any data or local change to OneDrive will fail.
+**Note:** When changing this value, you *must* re-authenticate the client using the `--reauth` option to utilise the change in authentication scopes. 
+
+When using read-only authentication scopes, the uploading of any data or local change to OneDrive will fail.
  
 **Note:** You also will need to remove your existing application access consent otherwise old authentication scopes will still be used.
  
