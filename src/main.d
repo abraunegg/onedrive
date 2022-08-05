@@ -41,6 +41,7 @@ int main(string[] args)
 	string currentBusinessSharedFoldersHash;
 	string previousBusinessSharedFoldersHash;
 	string businessSharedFoldersHashFile;
+	string databaseFilePathDryRunGlobal;
 	bool configOptionsDifferent = false;
 	bool businessSharedFoldersDifferent = false;
 	bool syncListConfigured = false;
@@ -73,6 +74,8 @@ int main(string[] args)
 			itemDb.performVacuum();
 			destroy(itemDb);
 		}
+		// cleanup any dry-run data
+		cleanupDryRunDatabase(databaseFilePathDryRunGlobal);
 		// free API instance
 		if (oneDrive !is null) {
 			destroy(oneDrive);
@@ -100,6 +103,8 @@ int main(string[] args)
 			itemDb.performVacuum();
 			destroy(itemDb);
 		}
+		// cleanup any dry-run data
+		cleanupDryRunDatabase(databaseFilePathDryRunGlobal);
 		// free API instance
 		if (oneDrive !is null) {
 			destroy(oneDrive);
@@ -494,15 +499,26 @@ int main(string[] args)
 	}
 
 	// dry-run notification and database setup
-	if (cfg.getValueBool("dry_run")) {
-		log.log("DRY-RUN Configured. Output below shows what 'would' have occurred.");
-		string dryRunShmFile = cfg.databaseFilePathDryRun ~ "-shm";
-		string dryRunWalFile = cfg.databaseFilePathDryRun ~ "-wal";
+	// Are we performing a dry-run or querying an Office 365 Drive ID for a given Office 365 SharePoint Shared Library
+	if ((cfg.getValueBool("dry_run")) || (cfg.getValueString("get_o365_drive_id") != "")) {
+		// is this --dry-run
+		if (cfg.getValueBool("dry_run")) {
+			log.log("DRY-RUN Configured. Output below shows what 'would' have occurred.");
+		}
+		// is this --get-O365-drive-id
+		if (cfg.getValueString("get_o365_drive_id") != "") {
+			log.log("Using dry-run database copy for O365 Library Details query");
+		}
+		// configure databaseFilePathDryRunGlobal
+		databaseFilePathDryRunGlobal = cfg.databaseFilePathDryRun;
+		
+		string dryRunShmFile = databaseFilePathDryRunGlobal ~ "-shm";
+		string dryRunWalFile = databaseFilePathDryRunGlobal ~ "-wal";
 		// If the dry run database exists, clean this up
-		if (exists(cfg.databaseFilePathDryRun)) {
+		if (exists(databaseFilePathDryRunGlobal)) {
 			// remove the existing file
 			log.vdebug("Removing items-dryrun.sqlite3 as it still exists for some reason");
-			safeRemove(cfg.databaseFilePathDryRun);
+			safeRemove(databaseFilePathDryRunGlobal);
 		}
 		// silent cleanup of shm and wal files if they exist
 		if (exists(dryRunShmFile)) {
@@ -520,7 +536,7 @@ int main(string[] args)
 			if (!cfg.getValueBool("resync")) {
 				// copy the existing DB file to the dry-run copy
 				log.vdebug("Copying items.sqlite3 to items-dryrun.sqlite3 to use for dry run operations");
-				copy(cfg.databaseFilePath,cfg.databaseFilePathDryRun);
+				copy(cfg.databaseFilePath,databaseFilePathDryRunGlobal);
 			} else {
 				// no database copy due to --resync
 				log.vdebug("No database copy created for --dry-run due to --resync also being used");
@@ -893,14 +909,16 @@ int main(string[] args)
 
 	// Initialize the item database
 	log.vlog("Opening the item database ...");
-	if (!cfg.getValueBool("dry_run")) {
+	// Are we performing a dry-run or querying an Office 365 Drive ID for a given Office 365 SharePoint Shared Library
+	if ((cfg.getValueBool("dry_run")) || (cfg.getValueString("get_o365_drive_id") != "")) {
+		// Load the items-dryrun.sqlite3 file as the database
+		log.vdebug("Using database file: ", asNormalizedPath(databaseFilePathDryRunGlobal));
+		itemDb = new ItemDatabase(databaseFilePathDryRunGlobal);
+	} else {
+		// Not a dry-run scenario or trying to query O365 Library - should be the default scenario
 		// Load the items.sqlite3 file as the database
 		log.vdebug("Using database file: ", asNormalizedPath(cfg.databaseFilePath));
 		itemDb = new ItemDatabase(cfg.databaseFilePath);
-	} else {
-		// Load the items-dryrun.sqlite3 file as the database
-		log.vdebug("Using database file: ", asNormalizedPath(cfg.databaseFilePathDryRun));
-		itemDb = new ItemDatabase(cfg.databaseFilePathDryRun);
 	}
 
 	// What are the permission that have been set for the application?
@@ -1165,7 +1183,7 @@ int main(string[] args)
 	if (cfg.getValueString("get_o365_drive_id") != "") {
 		sync.querySiteCollectionForDriveID(cfg.getValueString("get_o365_drive_id"));
 		// Exit application
-		// Use exit scopes to shutdown API
+		// Use exit scopes to shutdown API and cleanup data
 		return EXIT_SUCCESS;
 	}
 
@@ -1557,30 +1575,32 @@ int main(string[] args)
 		}
 	}
 
-	// --dry-run temp database cleanup
-	if (cfg.getValueBool("dry_run")) {
-		string dryRunShmFile = cfg.databaseFilePathDryRun ~ "-shm";
-		string dryRunWalFile = cfg.databaseFilePathDryRun ~ "-wal";
-		if (exists(cfg.databaseFilePathDryRun)) {
-			// remove the file
-			log.vdebug("Removing items-dryrun.sqlite3 as dry run operations complete");
-			// remove items-dryrun.sqlite3
-			safeRemove(cfg.databaseFilePathDryRun);
-		}
-		// silent cleanup of shm and wal files if they exist
-		if (exists(dryRunShmFile)) {
-			// remove items-dryrun.sqlite3-shm
-			safeRemove(dryRunShmFile);
-		}
-		if (exists(dryRunWalFile)) {
-			// remove items-dryrun.sqlite3-wal
-			safeRemove(dryRunWalFile);
-		}
-	}
-
 	// Exit application
 	// Use exit scopes to shutdown API
 	return EXIT_SUCCESS;
+}
+
+void cleanupDryRunDatabase(string databaseFilePathDryRun)
+{
+	// cleanup dry-run data
+	log.vdebug("Running cleanupDryRunDatabase");
+	string dryRunShmFile = databaseFilePathDryRun ~ "-shm";
+	string dryRunWalFile = databaseFilePathDryRun ~ "-wal";
+	if (exists(databaseFilePathDryRun)) {
+		// remove the file
+		log.vdebug("Removing items-dryrun.sqlite3 as dry run operations complete");
+		// remove items-dryrun.sqlite3
+		safeRemove(databaseFilePathDryRun);
+	}
+	// silent cleanup of shm and wal files if they exist
+	if (exists(dryRunShmFile)) {
+		// remove items-dryrun.sqlite3-shm
+		safeRemove(dryRunShmFile);
+	}
+	if (exists(dryRunWalFile)) {
+		// remove items-dryrun.sqlite3-wal
+		safeRemove(dryRunWalFile);
+	}
 }
 
 bool initSyncEngine(SyncEngine sync)
