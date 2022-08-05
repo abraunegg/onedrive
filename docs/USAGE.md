@@ -1189,6 +1189,8 @@ Options:
       Disable upload validation when uploading to OneDrive
   --display-config
       Display what options the client will use as currently configured - no sync will be performed.
+  --display-running-config
+      Display what options the client has been configured to use on application startup.
   --display-sync-status
       Display the sync status of the client - no sync will be performed.
   --download-only

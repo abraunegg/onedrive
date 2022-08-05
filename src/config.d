@@ -134,6 +134,8 @@ final class Config
 		longValues["webhook_listening_port"] = 8888;
 		longValues["webhook_expiration_interval"] = 3600 * 24;
 		longValues["webhook_renewal_interval"] = 3600 * 12;
+		// Log to application output running configuration values
+		boolValues["display_running_config"] = false;
 		// Configure read-only authentication scope
 		boolValues["read_only_auth_scope"] = false;
 
@@ -379,6 +381,9 @@ final class Config
 				"display-config",
 					"Display what options the client will use as currently configured - no sync will be performed.",
 					&boolValues["display_config"],
+				"display-running-config",
+					"Display what options the client has been configured to use on application startup.",
+					&boolValues["display_running_config"],
 				"display-sync-status",
 					"Display the sync status of the client - no sync will be performed.",
 					&boolValues["display_sync_status"],
