@@ -33,4 +33,33 @@ As such, the folloiwng API permissions are used by default:
 | Sites.ReadWrite.All   | Delegated | Have full access to all items in all site collections | No |
 | offline_access   | Delegated | Maintain access to data you have given it access to | No |
 
-When these delegated API permissions are commbined, these provide the effective authentication scope for the OneDrive Client for Linux to access your data.
+When these delegated API permissions are commbined, these provide the effective authentication scope for the OneDrive Client for Linux to access your data. The effective 'default' permissions will be:
+
+| API / Permissions name | Type | Description | Admin consent required |
+|---|---|---|---|
+| Files.ReadWrite | Delegated | Have full access to user files | No |
+| Files.ReadWrite.All  | Delegated | Have full access to all files user can access | No |
+| Sites.ReadWrite.All   | Delegated | Have full access to all items in all site collections | No |
+| offline_access   | Delegated | Maintain access to data you have given it access to | No |
+
+These 'default' permissions will allow the OneDrive Client for Linux to read, write and delete data associated with your OneDrive Account.
+
+## Configuring read-only access
+In some situations, it may be desirable to configure the OneDrive Client for Linux totally in read-only operation.
+
+To change the application to 'read-only' access, add the following to your configuration file:
+```text
+read_only_auth_scope = "true"
+```
+
+This will change the user authentication scope requect to use read-only access.
+
+**Note:** When changing this value, you *must* manually re-authenticate the client using the `--reauth` option to utilise the change in authentication scopes. When using this method, uploading of any data or local change to OneDrive will fail.
+ 
+**Note:** You also will need to remove your existing application access consent otherwise old authentication scopes will still be used.
+ 
+## Reviewing your existing application access consent
+
+To review your existing application access consent, you need to access the following URL: https://account.live.com/consent/Manage
+
+From here, you are able to review what applications have been given what access to your data, and remove application access as required.
