@@ -1221,7 +1221,7 @@ Options:
       Frequency of logging in monitor mode
   --no-remote-delete
       Do not delete local file 'deletes' from OneDrive when using --upload-only
-  --operation-timeout
+  --operation-timeout ARG
       Maximum amount of time (in seconds) an operation is allowed to take
   --print-token
       Print the access token, useful for debugging
