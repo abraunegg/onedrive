@@ -9,12 +9,12 @@ Syncing a OneDrive SharePoint library requires additional configuration for your
 
 **Note:** The `--get-O365-drive-id` process below requires a fully configured 'onedrive' configuration so that the applicable Drive ID for the given Office 365 SharePoint Shared Library can be determined. It is highly recommended that you do not use the application 'default' configuration directory for any SharePoint Site, and configure separate items for each site you wish to use.
 
-## Listing available OneDrive SharePoint Libraries
-1.  Login to the OneDrive web interface and determine which shared library you wish to configure the client for:
+## 1. Listing available OneDrive SharePoint Libraries
+Login to the OneDrive web interface and determine which shared library you wish to configure the client for:
 ![shared_libraries](./images/SharedLibraries.jpg)
 
-## Query that shared library name using the client to obtain the required configuration details
-2.  Run the following command using the 'onedrive' client
+## 2. Query that shared library name using the client to obtain the required configuration details
+Run the following command using the 'onedrive' client
 ```text
 onedrive --get-O365-drive-id '<your site name to search>'
 ```
@@ -48,21 +48,31 @@ The following SharePoint site names were returned:
 ```
 This list of site names can be used as a basis to search for the correct site for which you are searching
 
+## 3. Create a new configuration directory for this SharePoint Library
+Create a new configuration directory for this SharePoint Library in the following manner:
+```text
+mkdir ~/.config/SharePoint_My_Library_Name
+```
 
-## Configure the client's config file with the required 'drive_id' & 'sync_dir' options
-3.  Create a new local folder to store the SharePoint Library data in
+Copy to this folder a copy of the default configuration file by downloading this file from GitHub and saving this file in the directory created above:
+```text
+wget https://raw.githubusercontent.com/abraunegg/onedrive/master/config -O ~/.config/SharePoint_My_Library_Name/config
+```
+
+## 4. Configure the client's config file with the required 'drive_id' & 'sync_dir' options
+Create a new local folder to store the SharePoint Library data in
 ```text
 mkdir ~/SharePoint_My_Library_Name
 ```
 
 **Note:** Do not use spaces in the directory name, use '_' as a replacement
 
-Update your 'onedrive' configuration file (`~/.config/onedrive/config`) with the following:
+Update your 'onedrive' configuration file (`~/.config/SharePoint_My_Library_Name/config`) with the following:
 ```text
 sync_dir = "~/SharePoint_My_Library_Name"
 ```
 
-4.  Once you have obtained the 'drive_id' above, add to your 'onedrive' configuration file (`~/.config/onedrive/config`) the following:
+Once you have obtained the 'drive_id' above, add to your 'onedrive' configuration file (`~/.config/SharePoint_My_Library_Name/config`) the following:
 ```text
 drive_id = "insert the drive_id value from above here"
 ```
@@ -70,11 +80,79 @@ The OneDrive client will now be configured to sync this SharePoint shared librar
 
 **Note:** After changing `drive_id`, you must perform a full re-synchronization by adding `--resync` to your existing command line.
 
-## Test the configuration using '--dry-run'
-5.  Test your new configuration using the `--dry-run` option to validate the the new configuration
+## 5. Validate and Test the configuration
+Validate your new configuration using the `--display-config` option to validate you have configured the application correctly:
+```text
+onedrive --confdir="~/.config/SharePoint_My_Library_Name" --display-config
+```
 
-## Sync the SharePoint Library as required
-6.  Sync the SharePoint Library to your system with either `--synchronize` or `--monitor` operations
+Test your new configuration using the `--dry-run` option to validate the application configuration:
+```text
+onedrive --confdir="~/.config/SharePoint_My_Library_Name" --synchronize --verbose --dry-run
+```
+
+## 6. Sync the SharePoint Library as required
+Sync the SharePoint Library to your system with either `--synchronize` or `--monitor` operations:
+```text
+onedrive --confdir="~/.config/SharePoint_My_Library_Name" --synchronize --verbose
+```
+
+```text
+onedrive --confdir="~/.config/SharePoint_My_Library_Name" --monitor --verbose
+```
+
+## 7. Enable systemd service 
+Systemd can be used to automatically run this configuration in the background, however, a unique systemd service will need to be setup for this SharePoint Library instance
+
+In order to automatically start syncing each SharePoint Library, you will need to create a service file for each SharePoint Library. From the applicable 'systemd folder' where the applicable systemd service file exists:
+*   RHEL / CentOS: `/usr/lib/systemd/system`
+*   Others: `/usr/lib/systemd/user` and `/lib/systemd/system`
+
+**Note:** The `onedrive.service` runs the service as the 'root' user, whereas the `onedrive@.service` runs the service as your user account.
+
+Copy the required service file to a new name:
+```text
+cp onedrive.service onedrive-SharePoint_My_Library_Name.service
+```
+or 
+```text
+cp onedrive@.service onedrive-SharePoint_My_Library_Name@.service
+```
+
+Edit the new file , updating the line beginning with `ExecStart` so that the confdir mirrors the one you used above:
+```text
+ExecStart=/usr/local/bin/onedrive --monitor --confdir="/full/path/to/config/dir"
+```
+
+Example:
+```text
+ExecStart=/usr/local/bin/onedrive --monitor --confdir="/home/myusername/.config/my-new-config"
+```
+
+Then you can safely run these commands:
+### Custom systemd service on Red Hat Enterprise Linux, CentOS Linux
+```text
+systemctl enable onedrive-SharePoint_My_Library_Name
+systemctl start onedrive-SharePoint_My_Library_Name
+```
+
+### Custom systemd service on Arch, Ubuntu, Debian, OpenSuSE, Fedora
+```text
+systemctl --user enable onedrive-SharePoint_My_Library_Name
+systemctl --user start onedrive-SharePoint_My_Library_Name
+```
+or
+```text
+systemctl --user enable onedrive-SharePoint_My_Library_Name@myusername.service
+systemctl --user start onedrive-SharePoint_My_Library_Name@myusername.service
+```
+
+### Viewing systemd logs for the custom service
+```text
+journalctl --unit=onedrive-my-new-config -f
+```
+
+Repeat these steps for each SharePoint Library that you wish to use.
 
 # How to configure multiple OneDrive SharePoint Shared Library sync
 Refer to [./advanced-usage.md](advanced-usage.md) for configuration assistance.
