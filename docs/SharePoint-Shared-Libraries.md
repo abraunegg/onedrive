@@ -59,7 +59,7 @@ Copy to this folder a copy of the default configuration file by downloading this
 wget https://raw.githubusercontent.com/abraunegg/onedrive/master/config -O ~/.config/SharePoint_My_Library_Name/config
 ```
 
-## 4. Configure the client's config file with the required 'drive_id' & 'sync_dir' options
+## 4. Configure SharePoint Library config file with the required 'drive_id' & 'sync_dir' options
 Create a new local folder to store the SharePoint Library data in
 ```text
 mkdir ~/SharePoint_My_Library_Name
