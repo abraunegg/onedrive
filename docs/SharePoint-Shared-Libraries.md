@@ -155,4 +155,4 @@ journalctl --unit=onedrive-my-new-config -f
 Repeat these steps for each SharePoint Library that you wish to use.
 
 # How to configure multiple OneDrive SharePoint Shared Library sync
-Refer to [./advanced-usage.md](advanced-usage.md) for configuration assistance.
+Create a new configuration as per the process above.
