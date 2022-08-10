@@ -113,7 +113,9 @@ In order to automatically start syncing each SharePoint Library, you will need t
 *   Others: `/usr/lib/systemd/user` and `/lib/systemd/system`
 
 **Note:** The `onedrive.service` runs the service as the 'root' user, whereas the `onedrive@.service` runs the service as your user account.
-### RHEL / CentOS
+
+### Create a new systemd service file
+#### Red Hat Enterprise Linux, CentOS Linux
 Copy the required service file to a new name:
 ```text
 sudo cp /usr/lib/systemd/system/onedrive.service /usr/lib/systemd/system/onedrive-SharePoint_My_Library_Name.service
@@ -123,7 +125,7 @@ or
 sudo cp /usr/lib/systemd/system/onedrive@.service /usr/lib/systemd/system/onedrive-SharePoint_My_Library_Name@.service
 ```
 
-### Others
+#### Others such as Arch, Ubuntu, Debian, OpenSuSE, Fedora
 Copy the required service file to a new name:
 ```text
 sudo cp /usr/lib/systemd/user/onedrive.service /usr/lib/systemd/user/onedrive-SharePoint_My_Library_Name.service
@@ -133,6 +135,7 @@ or
 sudo cp /lib/systemd/system/onedrive@.service /lib/systemd/system/onedrive-SharePoint_My_Library_Name@.service
 ```
 
+### Edit new systemd service file
 Edit the new systemd file, updating the line beginning with `ExecStart` so that the confdir mirrors the one you used above:
 ```text
 ExecStart=/usr/local/bin/onedrive --monitor --confdir="/full/path/to/config/dir"
@@ -145,14 +148,15 @@ ExecStart=/usr/local/bin/onedrive --monitor --confdir="/home/myusername/.config/
 
 **Note:** When running the client manually, `--confdir="~/.config/......` is acceptable. In a systemd configuration file, the full path must be used.
 
-Then you can safely run these commands:
-### Custom systemd service on Red Hat Enterprise Linux, CentOS Linux
+### Enable the new systemd service
+Once the file is correctly editied, you can enable the new systemd service using the following commands:
+#### Red Hat Enterprise Linux, CentOS Linux
 ```text
 systemctl enable onedrive-SharePoint_My_Library_Name
 systemctl start onedrive-SharePoint_My_Library_Name
 ```
 
-### Custom systemd service on Arch, Ubuntu, Debian, OpenSuSE, Fedora
+#### Others such as Arch, Ubuntu, Debian, OpenSuSE, Fedora
 ```text
 systemctl --user enable onedrive-SharePoint_My_Library_Name
 systemctl --user start onedrive-SharePoint_My_Library_Name
