@@ -48,18 +48,12 @@ The following SharePoint site names were returned:
 ```
 This list of site names can be used as a basis to search for the correct site for which you are searching
 
-## 3. Create a new configuration directory for this SharePoint Library
+## 3. Create a new configuration directory and sync location for this SharePoint Library
 Create a new configuration directory for this SharePoint Library in the following manner:
 ```text
 mkdir ~/.config/SharePoint_My_Library_Name
 ```
 
-Copy to this folder a copy of the default configuration file by downloading this file from GitHub and saving this file in the directory created above:
-```text
-wget https://raw.githubusercontent.com/abraunegg/onedrive/master/config -O ~/.config/SharePoint_My_Library_Name/config
-```
-
-## 4. Configure SharePoint Library config file with the required 'drive_id' & 'sync_dir' options
 Create a new local folder to store the SharePoint Library data in
 ```text
 mkdir ~/SharePoint_My_Library_Name
@@ -67,16 +61,23 @@ mkdir ~/SharePoint_My_Library_Name
 
 **Note:** Do not use spaces in the directory name, use '_' as a replacement
 
-Update your 'onedrive' configuration file (`~/.config/SharePoint_My_Library_Name/config`) with the following:
+## 4. Configure SharePoint Library config file with the required 'drive_id' & 'sync_dir' options
+
+Download a copy of the default configuration file by downloading this file from GitHub and saving this file in the directory created above:
+```text
+wget https://raw.githubusercontent.com/abraunegg/onedrive/master/config -O ~/.config/SharePoint_My_Library_Name/config
+```
+
+Update your 'onedrive' configuration file (`~/.config/SharePoint_My_Library_Name/config`) with the local folder where you will store your data:
 ```text
 sync_dir = "~/SharePoint_My_Library_Name"
 ```
 
-Once you have obtained the 'drive_id' above, add to your 'onedrive' configuration file (`~/.config/SharePoint_My_Library_Name/config`) the following:
+Update your 'onedrive' configuration file(`~/.config/SharePoint_My_Library_Name/config`) with the 'drive_id' value obtained in the steps above:
 ```text
 drive_id = "insert the drive_id value from above here"
 ```
-The OneDrive client will now be configured to sync this SharePoint shared library to your local system.
+The OneDrive client will now be configured to sync this SharePoint shared library to your local system and the location you have configured.
 
 **Note:** After changing `drive_id`, you must perform a full re-synchronization by adding `--resync` to your existing command line.
 
