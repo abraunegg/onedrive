@@ -92,18 +92,29 @@ In order to automatically start syncing your OneDrive accounts, you will need to
 *   RHEL / CentOS: `/usr/lib/systemd/system`
 *   Others: `/usr/lib/systemd/user` and `/lib/systemd/system`
 
-**Note:** The `onedrive.service` runs the service as the 'root' user, whereas the `onedrive@.service` runs the service as your user account.
-
+### Step1: Create a new systemd service file
+#### Red Hat Enterprise Linux, CentOS Linux
 Copy the required service file to a new name:
 ```text
-cp onedrive.service onedrive-my-new-config.service
+sudo cp /usr/lib/systemd/system/onedrive.service /usr/lib/systemd/system/onedrive-my-new-config
 ```
 or 
 ```text
-cp onedrive@.service onedrive-my-new-config@.service
+sudo cp /usr/lib/systemd/system/onedrive@.service /usr/lib/systemd/system/onedrive-my-new-config@.service
 ```
 
-Edit the line beginning with `ExecStart` so that the confdir mirrors the one you used above:
+#### Others such as Arch, Ubuntu, Debian, OpenSuSE, Fedora
+Copy the required service file to a new name:
+```text
+sudo cp /usr/lib/systemd/user/onedrive.service /usr/lib/systemd/user/onedrive-my-new-config.service
+```
+or 
+```text
+sudo cp /lib/systemd/system/onedrive@.service /lib/systemd/system/onedrive-my-new-config@.service
+```
+
+### Step 2: Edit new systemd service file
+Edit the new systemd file, updating the line beginning with `ExecStart` so that the confdir mirrors the one you used above:
 ```text
 ExecStart=/usr/local/bin/onedrive --monitor --confdir="/full/path/to/config/dir"
 ```
@@ -113,14 +124,18 @@ Example:
 ExecStart=/usr/local/bin/onedrive --monitor --confdir="/home/myusername/.config/my-new-config"
 ```
 
-Then you can safely run these commands:
-#### Custom systemd service on Red Hat Enterprise Linux, CentOS Linux
+**Note:** When running the client manually, `--confdir="~/.config/......` is acceptable. In a systemd configuration file, the full path must be used. The `~` must be expanded.
+
+### Step 3: Enable the new systemd service
+Once the file is correctly editied, you can enable the new systemd service using the following commands.
+
+#### Red Hat Enterprise Linux, CentOS Linux
 ```text
 systemctl enable onedrive-my-new-config
 systemctl start onedrive-my-new-config
 ```
 
-#### Custom systemd service on Arch, Ubuntu, Debian, OpenSuSE, Fedora
+#### Others such as Arch, Ubuntu, Debian, OpenSuSE, Fedora
 ```text
 systemctl --user enable onedrive-my-new-config
 systemctl --user start onedrive-my-new-config
@@ -131,9 +146,40 @@ systemctl --user enable onedrive-my-new-config@myusername.service
 systemctl --user start onedrive-my-new-config@myusername.service
 ```
 
-#### Viewing systemd logs for the custom service
+### Step 4: Viewing systemd status and logs for the custom service
+#### Viewing systemd service status - Red Hat Enterprise Linux, CentOS Linux
+```text
+systemctl status onedrive-my-new-config
+```
+
+#### Viewing systemd service status - Others such as Arch, Ubuntu, Debian, OpenSuSE, Fedora
+```text
+systemctl --user status onedrive-my-new-config
+```
+
+#### Viewing journalctl systemd logs - Red Hat Enterprise Linux, CentOS Linux
 ```text
 journalctl --unit=onedrive-my-new-config -f
+```
+
+#### Viewing journalctl systemd logs - Others such as Arch, Ubuntu, Debian, OpenSuSE, Fedora
+```text
+journalctl --user --unit=onedrive-my-new-config -f
+```
+
+### Step 5: (Optional) Run custom systemd service at boot without user login
+In some cases it may be desirable for the systemd service to start without having to login as your 'user'
+
+All the systemd steps above that utilise the `--user` option, will run the systemd service as your particular user. As such, the systemd service will not start unless you actually login to your system.
+
+To avoid this issue, you need to reconfigure your 'user' account so that the systemd services you have created will startup without you having to login to your system:
+```text
+loginctl enable-linger <your_user_name>
+```
+
+Example:
+```text
+alex@ubuntu-headless:~$ loginctl enable-linger alex
 ```
 
 Repeat these steps for each OneDrive new account that you wish to use.

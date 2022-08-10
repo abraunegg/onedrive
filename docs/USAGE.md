@@ -42,6 +42,7 @@
   * [How to sync shared folders (OneDrive Personal)?](#how-to-sync-shared-folders-onedrive-personal)
   * [How to sync shared folders (OneDrive Business or Office 365)?](#how-to-sync-shared-folders-onedrive-business-or-office-365)
   * [How to sync sharePoint / Office 365 Shared Libraries?](#how-to-sync-sharepoint--office-365-shared-libraries)
+  * [How to run a user systemd service at boot without user login?](#how-to-run-a-user-systemd-service-at-boot-without-user-login)
 - [Running 'onedrive' in 'monitor' mode](#running-onedrive-in-monitor-mode)
   * [Use webhook to subscribe to remote updates in 'monitor' mode](#use-webhook-to-subscribe-to-remote-updates-in-monitor-mode)
   * [More webhook configuration options](#more-webhook-configuration-options)
@@ -821,6 +822,14 @@ Do not use the 'Add shortcut to My files' from the OneDrive web based interface 
 ### How to sync sharePoint / Office 365 Shared Libraries?
 Refer to [./SharePoint-Shared-Libraries.md](SharePoint-Shared-Libraries.md) for configuration assistance.
 
+### How to run a user systemd service at boot without user login?
+In some cases it may be desirable for the systemd service to start without having to login as your 'user'
+
+To avoid this issue, you need to reconfigure your 'user' account so that the systemd services you have created will startup without you having to login to your system:
+```text
+loginctl enable-linger <your_user_name>
+```
+
 ## Running 'onedrive' in 'monitor' mode
 Monitor mode (`--monitor`) allows the onedrive process to continually monitor your local file system for changes to files.
 
@@ -928,6 +937,11 @@ systemctl --user start onedrive
 
 **Note:** This will run the 'onedrive' process with a UID/GID of '0', thus, any files or folders that are created will be owned by 'root'
 
+To view the status of the service running, use the following:
+```text
+systemctl --user status onedrive.service
+```
+
 To see the systemd application logs run:
 ```text
 journalctl --user-unit=onedrive -f
@@ -1004,6 +1018,11 @@ sudo systemctl disable onedrive@alex.service
 ```text
 systemctl --user enable onedrive
 systemctl --user start onedrive
+```
+
+To view the status of the service running for the user, use the following:
+```text
+systemctl --user status onedrive.service
 ```
 
 To see the systemd application logs run:
