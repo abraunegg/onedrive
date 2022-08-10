@@ -187,7 +187,7 @@ journalctl --unit=onedrive-SharePoint_My_Library_Name -f
 journalctl --user --unit=onedrive-SharePoint_My_Library_Name -f
 ```
 
-### Step 5: (Optional) Run custom systemd service at boot without login
+### Step 5: (Optional) Run custom systemd service at boot without user login
 In some cases it may be desirable for the systemd service to start without having to login as your 'user'
 
 All the systemd steps above that utilise the `--user` option, will run the systemd service as your particular user. As such, the systemd service will not start unless you actually login to your system.
