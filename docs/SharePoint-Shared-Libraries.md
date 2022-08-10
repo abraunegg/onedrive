@@ -112,8 +112,6 @@ In order to automatically start syncing each SharePoint Library, you will need t
 *   RHEL / CentOS: `/usr/lib/systemd/system`
 *   Others: `/usr/lib/systemd/user` and `/lib/systemd/system`
 
-**Note:** The `onedrive.service` runs the service as the 'root' user, whereas the `onedrive@.service` runs the service as your user account.
-
 ### Step1: Create a new systemd service file
 #### Red Hat Enterprise Linux, CentOS Linux
 Copy the required service file to a new name:
@@ -167,9 +165,25 @@ systemctl --user enable onedrive-SharePoint_My_Library_Name@myusername.service
 systemctl --user start onedrive-SharePoint_My_Library_Name@myusername.service
 ```
 
-### Step 4: Viewing systemd logs for the custom service
+### Step 4: Viewing systemd status and logs for the custom service
+#### Viewing systemd service status - Red Hat Enterprise Linux, CentOS Linux
 ```text
-journalctl --unit=onedrive-my-new-config -f
+systemctl status onedrive-SharePoint_My_Library_Name
+```
+
+#### Viewing systemd service status - Others such as Arch, Ubuntu, Debian, OpenSuSE, Fedora
+```text
+systemctl --user status onedrive-SharePoint_My_Library_Name
+```
+
+#### Viewing journalctl systemd logs - Red Hat Enterprise Linux, CentOS Linux
+```text
+journalctl --unit=onedrive-SharePoint_My_Library_Name -f
+```
+
+#### Viewing journalctl systemd logs - Others such as Arch, Ubuntu, Debian, OpenSuSE, Fedora
+```text
+journalctl --user --unit=onedrive-SharePoint_My_Library_Name -f
 ```
 
 Repeat these steps for each SharePoint Library that you wish to use.
