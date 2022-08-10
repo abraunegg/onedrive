@@ -91,6 +91,8 @@ Test your new configuration using the `--dry-run` option to validate the applica
 onedrive --confdir="~/.config/SharePoint_My_Library_Name" --synchronize --verbose --dry-run
 ```
 
+**Note:** As this is a *new* configuration, the application will be required to be re-authorised the first time this command is run with the new configuration.
+
 ## 6. Sync the SharePoint Library as required
 Sync the SharePoint Library to your system with either `--synchronize` or `--monitor` operations:
 ```text
@@ -101,6 +103,8 @@ onedrive --confdir="~/.config/SharePoint_My_Library_Name" --synchronize --verbos
 onedrive --confdir="~/.config/SharePoint_My_Library_Name" --monitor --verbose
 ```
 
+**Note:** As this is a *new* configuration, the application will be required to be re-authorised the first time this command is run with the new configuration.
+
 ## 7. Enable systemd service 
 Systemd can be used to automatically run this configuration in the background, however, a unique systemd service will need to be setup for this SharePoint Library instance
 
@@ -109,17 +113,27 @@ In order to automatically start syncing each SharePoint Library, you will need t
 *   Others: `/usr/lib/systemd/user` and `/lib/systemd/system`
 
 **Note:** The `onedrive.service` runs the service as the 'root' user, whereas the `onedrive@.service` runs the service as your user account.
-
+### RHEL / CentOS
 Copy the required service file to a new name:
 ```text
-cp onedrive.service onedrive-SharePoint_My_Library_Name.service
+sudo cp /usr/lib/systemd/system/onedrive.service /usr/lib/systemd/system/onedrive-SharePoint_My_Library_Name.service
 ```
 or 
 ```text
-cp onedrive@.service onedrive-SharePoint_My_Library_Name@.service
+sudo cp /usr/lib/systemd/system/onedrive@.service /usr/lib/systemd/system/onedrive-SharePoint_My_Library_Name@.service
 ```
 
-Edit the new file , updating the line beginning with `ExecStart` so that the confdir mirrors the one you used above:
+### Others
+Copy the required service file to a new name:
+```text
+sudo cp /usr/lib/systemd/user/onedrive.service /usr/lib/systemd/user/onedrive-SharePoint_My_Library_Name.service
+```
+or 
+```text
+sudo cp /lib/systemd/system/onedrive@.service /lib/systemd/system/onedrive-SharePoint_My_Library_Name@.service
+```
+
+Edit the new systemd file, updating the line beginning with `ExecStart` so that the confdir mirrors the one you used above:
 ```text
 ExecStart=/usr/local/bin/onedrive --monitor --confdir="/full/path/to/config/dir"
 ```
@@ -128,6 +142,8 @@ Example:
 ```text
 ExecStart=/usr/local/bin/onedrive --monitor --confdir="/home/myusername/.config/my-new-config"
 ```
+
+**Note:** When running the client manually, `--confdir="~/.config/......` is acceptable. In a systemd configuration file, the full path must be used.
 
 Then you can safely run these commands:
 ### Custom systemd service on Red Hat Enterprise Linux, CentOS Linux
