@@ -105,7 +105,7 @@ onedrive --confdir="~/.config/SharePoint_My_Library_Name" --monitor --verbose
 
 **Note:** As this is a *new* configuration, the application will be required to be re-authorised the first time this command is run with the new configuration.
 
-## 7. Enable systemd service 
+## 7. Enable custom systemd service for SharePoint Library
 Systemd can be used to automatically run this configuration in the background, however, a unique systemd service will need to be setup for this SharePoint Library instance
 
 In order to automatically start syncing each SharePoint Library, you will need to create a service file for each SharePoint Library. From the applicable 'systemd folder' where the applicable systemd service file exists:
@@ -147,7 +147,8 @@ ExecStart=/usr/local/bin/onedrive --monitor --confdir="/home/myusername/.config/
 **Note:** When running the client manually, `--confdir="~/.config/......` is acceptable. In a systemd configuration file, the full path must be used. The `~` must be expanded.
 
 ### Step 3: Enable the new systemd service
-Once the file is correctly editied, you can enable the new systemd service using the following commands:
+Once the file is correctly editied, you can enable the new systemd service using the following commands.
+
 #### Red Hat Enterprise Linux, CentOS Linux
 ```text
 systemctl enable onedrive-SharePoint_My_Library_Name
@@ -186,7 +187,23 @@ journalctl --unit=onedrive-SharePoint_My_Library_Name -f
 journalctl --user --unit=onedrive-SharePoint_My_Library_Name -f
 ```
 
-Repeat these steps for each SharePoint Library that you wish to use.
+### Step 5: (Optional) Run custom systemd service at boot without login
+In some cases it may be desirable for the systemd service to start without having to login as your 'user'
+
+All the systemd steps above that utilise the `--user` option, will run the systemd service as your particular user. As such, the systemd service will not start unless you actually login to your system.
+
+To avoid this issue, you need to reconfigure your 'user' account so that the systemd services you have created will startup without you having to login to your system:
+```text
+loginctl enable-linger <your_user_name>
+```
+
+Example:
+```text
+alex@ubuntu-headless:~$ loginctl enable-linger alex
+```
+
+## 8. Configuration for a SharePoint Library is complete
+The 'onedrive' client configuration for this particular SharePoint Library is now complete.
 
 # How to configure multiple OneDrive SharePoint Shared Library sync
-Create a new configuration as per the process above.
+Create a new configuration as per the process above. Repeat these steps for each SharePoint Library that you wish to use.
