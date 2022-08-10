@@ -13,8 +13,8 @@ Syncing a OneDrive SharePoint library requires additional configuration for your
 Login to the OneDrive web interface and determine which shared library you wish to configure the client for:
 ![shared_libraries](./images/SharedLibraries.jpg)
 
-## 2. Query that shared library name using the client to obtain the required configuration details
-Run the following command using the 'onedrive' client
+## 2. Query OneDrive API to obtain required configuration details
+Run the following command using the 'onedrive' client to query the OneDrive API to obtain the required 'drive_id' of the SharePoint Library that you wish to sync:
 ```text
 onedrive --get-O365-drive-id '<your site name to search>'
 ```
@@ -54,7 +54,7 @@ Create a new configuration directory for this SharePoint Library in the followin
 mkdir ~/.config/SharePoint_My_Library_Name
 ```
 
-Create a new local folder to store the SharePoint Library data in
+Create a new local folder to store the SharePoint Library data in:
 ```text
 mkdir ~/SharePoint_My_Library_Name
 ```
@@ -62,7 +62,6 @@ mkdir ~/SharePoint_My_Library_Name
 **Note:** Do not use spaces in the directory name, use '_' as a replacement
 
 ## 4. Configure SharePoint Library config file with the required 'drive_id' & 'sync_dir' options
-
 Download a copy of the default configuration file by downloading this file from GitHub and saving this file in the directory created above:
 ```text
 wget https://raw.githubusercontent.com/abraunegg/onedrive/master/config -O ~/.config/SharePoint_My_Library_Name/config
