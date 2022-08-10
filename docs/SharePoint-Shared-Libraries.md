@@ -141,7 +141,7 @@ ExecStart=/usr/local/bin/onedrive --monitor --confdir="/full/path/to/config/dir"
 
 Example:
 ```text
-ExecStart=/usr/local/bin/onedrive --monitor --confdir="/home/myusername/.config/my-new-config"
+ExecStart=/usr/local/bin/onedrive --monitor --confdir="/home/myusername/.config/SharePoint_My_Library_Name"
 ```
 
 **Note:** When running the client manually, `--confdir="~/.config/......` is acceptable. In a systemd configuration file, the full path must be used. The `~` must be expanded.
