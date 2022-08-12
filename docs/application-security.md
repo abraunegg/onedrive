@@ -53,12 +53,25 @@ To change the application to 'read-only' access, add the following to your confi
 ```text
 read_only_auth_scope = "true"
 ```
+This will change the user authentication scope request to use read-only access.
 
-This will change the user authentication scope requect to use read-only access. When using read-only authentication scopes, the uploading of any data or local change to OneDrive will fail.
+**Note:** When changing this value, you *must* re-authenticate the client using the `--reauth` option to utilise the change in authentication scopes.
 
-**Note:** When changing this value, you *must* re-authenticate the client using the `--reauth` option to utilise the change in authentication scopes. 
+When using read-only authentication scopes, the uploading of any data or local change to OneDrive will fail with the following error:
+```
+2022-Aug-06 13:16:45.3349625    ERROR: Microsoft OneDrive API returned an error with the following message:
+2022-Aug-06 13:16:45.3351661      Error Message:    HTTP request returned status code 403 (Forbidden)
+2022-Aug-06 13:16:45.3352467      Error Reason:     Access denied
+2022-Aug-06 13:16:45.3352838      Error Timestamp:  2022-06-12T13:16:45
+2022-Aug-06 13:16:45.3353171      API Request ID:   <redacted>
+```
 
-**Important:** You also will need to remove your existing application access consent otherwise old authentication consent will still be used and you will still be able to upload changes to OneDrive.
+As such, it is also advisable for you to add the following to your configuration file so that 'uploads' are prevented:
+```text
+download_only = "true"
+```
+
+**Important:** Additionally when using 'read_only_auth_scope' you also will need to remove your existing application access consent otherwise old authentication consent will be valid and will be used. This will mean the application will technically have the consent to upload data. See below on how to remove your prior application consent.
  
 ## Reviewing your existing application access consent
 
