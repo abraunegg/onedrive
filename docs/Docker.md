@@ -229,7 +229,6 @@ docker container run -e ONEDRIVE_RESYNC=1 -v onedrive_conf:/onedrive/conf -v "${
 ```bash
 docker container run -e ONEDRIVE_RESYNC=1 -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:latest
 ```
-
 **Perform a --logout and re-authenticate:**
 ```bash
 docker container run -it -e ONEDRIVE_LOGOUT=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:latest
@@ -265,8 +264,7 @@ docker build . -t local-onedrive -f contrib/docker/Dockerfile
 ```
 
 There are alternate, smaller images available by building
-Dockerfile-debian or Dockerfile-alpine.  These [multi-stage builder
-pattern](https://docs.docker.com/develop/develop-images/multistage-build/)
+Dockerfile-debian or Dockerfile-alpine.  These [multi-stage builder pattern](https://docs.docker.com/develop/develop-images/multistage-build/)
 Dockerfiles require Docker version at least 17.05.
 
 #### How to build and run a custom Docker image based on Debian

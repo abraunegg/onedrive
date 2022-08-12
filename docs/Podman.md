@@ -201,10 +201,12 @@ podman run -it --restart unless-stopped --name onedrive_work \
 | <B>ONEDRIVE_DEBUG_HTTPS</B> | Controls "--debug-https" switch on onedrive sync. Default is 0 | 1 |
 | <B>ONEDRIVE_RESYNC</B> | Controls "--resync" switch on onedrive sync. Default is 0 | 1 |
 | <B>ONEDRIVE_DOWNLOADONLY</B> | Controls "--download-only" switch on onedrive sync. Default is 0 | 1 |
+| <B>ONEDRIVE_UPLOADONLY</B> | Controls "--upload-only" switch on onedrive sync. Default is 0 | 1 |
 | <B>ONEDRIVE_LOGOUT</B> | Controls "--logout" switch. Default is 0 | 1 |
 | <B>ONEDRIVE_REAUTH</B> | Controls "--reauth" switch. Default is 0 | 1 |
 | <B>ONEDRIVE_AUTHFILES</B> | Controls "--auth-files" option. Default is "" | "authUrl:responseUrl" |
 | <B>ONEDRIVE_AUTHRESPONSE</B> | Controls "--auth-response" option. Default is "" | See [here](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#authorize-the-application-with-your-onedrive-account) |
+| <B>ONEDRIVE_DISPLAY_CONFIG</B> | Controls "--display-running-config" switch on onedrive sync. Default is 0 | 1 |
 
 ### Usage Examples
 **Verbose Output:**
@@ -229,7 +231,7 @@ podman run -it -e ONEDRIVE_LOGOUT=1 -v onedrive_conf:/onedrive/conf:U,Z -v "${ON
 ```
 
 ## Build instructions
-
+### Building a custom Podman image
 You can also build your own image instead of pulling the one from [hub.docker.com](https://hub.docker.com/r/driveone/onedrive):
 ```bash
 git clone https://github.com/abraunegg/onedrive
@@ -238,22 +240,22 @@ podman build . -t local-onedrive -f contrib/docker/Dockerfile
 ```
 
 There are alternate, smaller images available by building
-Dockerfile-stretch or Dockerfile-alpine.  These [multi-stage builder
-pattern](https://docs.docker.com/develop/develop-images/multistage-build/)
+Dockerfile-debian or Dockerfile-alpine.  These [multi-stage builder pattern](https://docs.docker.com/develop/develop-images/multistage-build/)
+Dockerfiles require Docker version at least 17.05.
 
-#### How to build and run a custom Docker image based on Debian Stretch
+#### How to build and run a custom Podman image based on Debian
 ``` bash
-podman build . -t local-ondrive-stretch -f contrib/docker/Dockerfile-stretch
-podman run -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" local-ondrive-stretch:latest
+podman build . -t local-ondrive-debian -f contrib/docker/Dockerfile-debian
+podman run -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" local-ondrive-debian:latest
 ```
 
-#### How to build and run a custom Docker image based on Alpine Linux
+#### How to build and run a custom Podman image based on Alpine Linux
 ``` bash
 podman build . -t local-ondrive-alpine -f contrib/docker/Dockerfile-alpine
 podman run -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" local-ondrive-alpine:latest
 ```
 
-#### How to build and run a custom Docker image for ARMHF (Raspberry Pi)
+#### How to build and run a custom Podman image for ARMHF (Raspberry Pi)
 Compatible with:
 *    Raspberry Pi
 *    Raspberry Pi 2
@@ -261,12 +263,12 @@ Compatible with:
 *    Raspberry Pi 3
 *    Raspberry Pi 4
 ``` bash
-podman build . -t local-onedrive-rpi -f contrib/docker/Dockerfile-rpi
-podman run -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" local-ondrive-rpi:latest
+podman build . -t local-onedrive-armhf -f contrib/docker/Dockerfile-debian
+podman run -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" local-onedrive-armhf:latest
 ```
 
-#### How to build and run a custom Docker image for AARCH64 Platforms
+#### How to build and run a custom Podman image for AARCH64 Platforms
 ``` bash
-podman build . -t local-onedrive-aarch64 -f contrib/docker/Dockerfile-aarch64
+podman build . -t local-onedrive-aarch64 -f contrib/docker/Dockerfile-debian
 podman run -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" local-onedrive-aarch64:latest
 ```
