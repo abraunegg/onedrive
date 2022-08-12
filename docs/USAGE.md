@@ -503,6 +503,8 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # webhook_expiration_interval = "86400"
 # webhook_renewal_interval = "43200"
 # space_reservation = "50"
+# display_running_config = "false"
+# read_only_auth_scope = "false"
 ```
 
 ### 'config' file configuration examples:
