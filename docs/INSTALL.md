@@ -284,7 +284,11 @@ sudo make install
 ## Upgrading the client
 If you have installed the client from a distribution package, the client will be updated when the distribution package is updated by the package maintainer and will be updated to the new application version when you perform your package update.
 
-If you have built the client from source, to upgrade your client, you must first uninstall your existing 'onedrive' binary (see below), then re-install the client by re-cloning, re-compiling and re-installing the client again to install the new version.
+If you have built the client from source, to upgrade your client, it is recommended that you first uninstall your existing 'onedrive' binary (see below), then re-install the client by re-cloning, re-compiling and re-installing the client again to install the new version.
+
+You can optionally choose to not perform this uninstallation step, and simply re-install the client by re-cloning, re-compiling and re-installing the client again - however the risk here is that you end up with two onedrive client binaries on your system, and depending on your system search path preferences, this will determine which binary is used.
+
+**Important:** Before performing any upgrade, stop any running systemd service if applicable to ensure that these services are restarted using the updated client version.
 
 To confirm you have the new version installed, use `onedrive --version` to determine the version that is now installed.
 
