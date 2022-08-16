@@ -4807,6 +4807,7 @@ final class SyncEngine
 										if (e.httpStatusCode == 401) {
 											// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
 											writeln("skipped.");
+											log.fileOnly("Uploading new file ", path, " ... skipped.");
 											log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 											uploadFailed = true;
 											return;
@@ -4829,6 +4830,7 @@ final class SyncEngine
 										} else {
 											// display what the error is
 											writeln("skipped.");
+											log.fileOnly("Uploading new file ", path, " ... skipped.");
 											displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 											uploadFailed = true;
 											return;
@@ -4836,6 +4838,7 @@ final class SyncEngine
 									} catch (FileException e) {
 										// display the error message
 										writeln("skipped.");
+										log.fileOnly("Uploading new file ", path, " ... skipped.");
 										displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 										uploadFailed = true;
 										return;
@@ -4854,6 +4857,7 @@ final class SyncEngine
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
 													writeln("skipped.");
+													log.fileOnly("Uploading new file ", path, " ... skipped.");
 													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 													uploadFailed = true;
 													return;
@@ -4886,6 +4890,7 @@ final class SyncEngine
 														} else {
 															// display what the error is
 															writeln("skipped.");
+															log.fileOnly("Uploading new file ", path, " ... skipped.");
 															displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 															uploadFailed = true;
 															return;
@@ -4894,6 +4899,7 @@ final class SyncEngine
 												} else {
 													// display what the error is
 													writeln("skipped.");
+													log.fileOnly("Uploading new file ", path, " ... skipped.");
 													displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
@@ -4901,6 +4907,7 @@ final class SyncEngine
 											} catch (FileException e) {
 												// display the error message
 												writeln("skipped.");
+												log.fileOnly("Uploading new file ", path, " ... skipped.");
 												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
@@ -4914,6 +4921,7 @@ final class SyncEngine
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
 													writeln("skipped.");
+													log.fileOnly("Uploading new file ", path, " ... skipped.");
 													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 													uploadFailed = true;
 													return;
@@ -4936,6 +4944,7 @@ final class SyncEngine
 												} else {
 													// display what the error is
 													writeln("skipped.");
+													log.fileOnly("Uploading new file ", path, " ... skipped.");
 													displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
@@ -4943,6 +4952,7 @@ final class SyncEngine
 											} catch (FileException e) {
 												// display the error message
 												writeln("skipped.");
+												log.fileOnly("Uploading new file ", path, " ... skipped.");
 												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
@@ -4957,6 +4967,7 @@ final class SyncEngine
 											if (e.httpStatusCode == 401) {
 												// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
 												writeln("skipped.");
+												log.fileOnly("Uploading new file ", path, " ... skipped.");
 												log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 												uploadFailed = true;
 												return;
@@ -4979,6 +4990,7 @@ final class SyncEngine
 											} else {
 												// display what the error is
 												writeln("skipped.");
+												log.fileOnly("Uploading new file ", path, " ... skipped.");
 												displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
@@ -4986,6 +4998,7 @@ final class SyncEngine
 										} catch (FileException e) {
 											// display the error message
 											writeln("skipped.");
+											log.fileOnly("Uploading new file ", path, " ... skipped.");
 											displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 											uploadFailed = true;
 											return;
@@ -5159,6 +5172,7 @@ final class SyncEngine
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
 													writeln("skipped.");
+													log.fileOnly("Uploading modified file ", path, " ... skipped.");
 													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 													uploadFailed = true;
 													return;
@@ -5193,6 +5207,7 @@ final class SyncEngine
 															// error uploading file
 															// display what the error is
 															writeln("skipped.");
+															log.fileOnly("Uploading modified file ", path, " ... skipped.");
 															displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 															uploadFailed = true;
 															return;
@@ -5201,6 +5216,7 @@ final class SyncEngine
 												} else {
 													// display what the error is
 													writeln("skipped.");
+													log.fileOnly("Uploading modified file ", path, " ... skipped.");
 													displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
@@ -5208,6 +5224,7 @@ final class SyncEngine
 											} catch (FileException e) {
 												// display the error message
 												writeln("skipped.");
+												log.fileOnly("Uploading modified file ", path, " ... skipped.");
 												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
@@ -5223,6 +5240,7 @@ final class SyncEngine
 												if (e.httpStatusCode == 401) {
 													// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
 													writeln("skipped.");
+													log.fileOnly("Uploading modified file ", path, " ... skipped.");
 													log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 													uploadFailed = true;
 													return;
@@ -5247,6 +5265,7 @@ final class SyncEngine
 													// error uploading file
 													// display what the error is
 													writeln("skipped.");
+													log.fileOnly("Uploading modified file ", path, " ... skipped.");
 													displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
@@ -5254,6 +5273,7 @@ final class SyncEngine
 											} catch (FileException e) {
 												// display the error message
 												writeln("skipped.");
+												log.fileOnly("Uploading modified file ", path, " ... skipped.");
 												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 												uploadFailed = true;
 												return;
@@ -5308,6 +5328,7 @@ final class SyncEngine
 													if (e.httpStatusCode == 401) {
 														// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
 														writeln("skipped.");
+														log.fileOnly("Uploading modified file ", path, " ... skipped.");
 														log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 														uploadFailed = true;
 														return;
@@ -5332,6 +5353,7 @@ final class SyncEngine
 														// error uploading file
 														// display what the error is
 														writeln("skipped.");
+														log.fileOnly("Uploading modified file ", path, " ... skipped.");
 														displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 														uploadFailed = true;
 														return;
@@ -5339,6 +5361,7 @@ final class SyncEngine
 												} catch (FileException e) {
 													// display the error message
 													writeln("skipped.");
+													log.fileOnly("Uploading modified file ", path, " ... skipped.");
 													displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 													uploadFailed = true;
 													return;
@@ -5476,12 +5499,14 @@ final class SyncEngine
 				if (e.httpStatusCode == 401) {
 					// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
 					writeln("skipped.");
+					log.fileOnly("Uploading modified file ", path, " ... skipped.");
 					log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 					uploadFailed = true;
 					return response;
 				} else {
 					// display what the error is
 					writeln("skipped.");
+					log.fileOnly("Uploading modified file ", path, " ... skipped.");
 					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					uploadFailed = true;
 					return response;
@@ -5489,6 +5514,7 @@ final class SyncEngine
 			} catch (FileException e) {
 				// display the error message
 				writeln("skipped.");
+				log.fileOnly("Uploading modified file ", path, " ... skipped.");
 				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				uploadFailed = true;
 				return response;
@@ -5505,12 +5531,14 @@ final class SyncEngine
 				if (e.httpStatusCode == 401) {
 					// OneDrive returned a 'HTTP/1.1 401 Unauthorized Error' - file failed to be uploaded
 					writeln("skipped.");
+					log.fileOnly("Uploading new file ", path, " ... skipped.");
 					log.vlog("OneDrive returned a 'HTTP 401 - Unauthorized' - gracefully handling error");
 					uploadFailed = true;
 					return response;
 				} else {
 					// display what the error is
 					writeln("skipped.");
+					log.fileOnly("Uploading new file ", path, " ... skipped.");
 					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					uploadFailed = true;
 					return response;
@@ -5518,6 +5546,7 @@ final class SyncEngine
 			} catch (FileException e) {
 				// display the error message
 				writeln("skipped.");
+				log.fileOnly("Uploading new file ", path, " ... skipped.");
 				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				uploadFailed = true;
 				return response;
