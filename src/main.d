@@ -13,6 +13,7 @@ ItemDatabase itemDb;
 
 bool onedriveInitialised = false;
 const int EXIT_UNAUTHORIZED = 3;
+const int EXIT_RESYNC_REQUIRED = 126;
 
 enum MONITOR_LOG_SILENT = 2;
 enum MONITOR_LOG_QUIET  = 1;
@@ -462,7 +463,7 @@ int main(string[] args)
 			if (!cfg.getValueBool("resync")) {
 				// --resync not issued, fail fast
 				log.error("An application configuration change has been detected where a --resync is required");
-				return EXIT_FAILURE;
+				return EXIT_RESYNC_REQUIRED;
 			} else {
 				// --resync issued, update hashes of config files if they exist
 				if (!cfg.getValueBool("dry_run")) {
