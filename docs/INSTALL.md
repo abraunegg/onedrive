@@ -225,7 +225,7 @@ sudo zypper install libnotify-devel
 
 ## Compilation & Installation
 ### High Level Steps
-1.  Install the platform dependancies for your Linux OS
+1.  Install the platform dependencies for your Linux OS
 2.  Activate your DMD or LDC compiler
 3.  Clone the GitHub repository, run configure and make, then install
 4.  Deactivate your DMD or LDC compiler
