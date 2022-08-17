@@ -903,8 +903,11 @@ int main(string[] args)
 
 	// if --synchronize && --monitor passed in, exit & display help as these conflict with each other
 	if (cfg.getValueBool("synchronize") && cfg.getValueBool("monitor")) {
-		writeln("\nERROR: --synchronize and --monitor cannot be used together\n");
-		writeln("Please use 'onedrive --help' for further assistance in regards to running this application.\n");
+		writeln();
+		writeln("ERROR: --synchronize and --monitor cannot be used together");
+		writeln();
+		writeln("Please use 'onedrive --help' for further assistance in regards to running this application.");
+		writeln();
 		// Use exit scopes to shutdown API
 		return EXIT_FAILURE;
 	}

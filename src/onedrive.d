@@ -1097,12 +1097,16 @@ final class OneDriveApi
 				if ("scope" in response){
 					string effectiveScopes = response["scope"].str();
 					// Display the effective authentication scopes
-					writeln("\nEffective API Authentication Scopes: ", effectiveScopes);
+					writeln();
+					writeln("Effective API Authentication Scopes: ", effectiveScopes);
 					// if we have any write scopes, we need to tell the user to update an remove online prior authentication and exit application
 					if (canFind(effectiveScopes, "Write")) {
 						// effective scopes contain write scopes .. so not a read-only configuration
-						writeln("\nERROR: You have authentication scopes that allow write operations. You need to remove your existing application access consent");
-						writeln("\nPlease login to https://account.live.com/consent/Manage and remove your existing application access consent\n");
+						writeln();
+						writeln("ERROR: You have authentication scopes that allow write operations. You need to remove your existing application access consent");
+						writeln();
+						writeln("Please login to https://account.live.com/consent/Manage and remove your existing application access consent");
+						writeln();
 						// force exit
 						shutdown();
 						exit(-1);
@@ -1145,7 +1149,9 @@ final class OneDriveApi
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
 				// flag error and notify
-				log.errorAndNotify("\nERROR: Refresh token invalid, use --reauth to authorize the client again.\n");
+				writeln();
+				log.errorAndNotify("ERROR: Refresh token invalid, use --reauth to authorize the client again.");
+				writeln();
 				// set error message
 				e.msg ~= "\nRefresh token invalid, use --reauth to authorize the client again";
 			}
@@ -1493,7 +1499,8 @@ final class OneDriveApi
 						retryAttempts++;
 						if (canFind(e.msg, "Couldn't connect to server on handle") || canFind(e.msg, "Couldn't resolve host name on handle") || canFind(errorMessage, "Timeout was reached on handle")) {
 							// no access to Internet
-							log.error("\nERROR: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
+							writeln();
+							log.error("ERROR: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
 							// what is the error reason to assis the user as what to check
 							if (canFind(e.msg, "Couldn't connect to server on handle")) {
 								log.log("  - Check HTTPS access or Firewall Rules");
