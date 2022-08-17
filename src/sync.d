@@ -312,7 +312,9 @@ final class SyncEngine
 				
 				// Check this
 				if (cfg.getValueString("drive_id").length) {
-					log.error("\nERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
+					writeln();
+					log.error("ERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect");
+					writeln();
 				}
 				// Must exit here
 				onedrive.shutdown();
@@ -321,10 +323,7 @@ final class SyncEngine
 			if (e.httpStatusCode == 401) {
 				// HTTP request returned status code 401 (Unauthorized)
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.\n");
-				// Must exit here
-				onedrive.shutdown();
-				exit(-1);
+				handleClientUnauthorised();
 			}
 			if (e.httpStatusCode == 429) {
 				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
@@ -354,7 +353,9 @@ final class SyncEngine
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				// Check this
 				if (cfg.getValueString("drive_id").length) {
-					log.error("\nERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect\n");
+					writeln();
+					log.error("ERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect");
+					writeln();
 				}
 				// Must exit here
 				onedrive.shutdown();
@@ -363,10 +364,7 @@ final class SyncEngine
 			if (e.httpStatusCode == 401) {
 				// HTTP request returned status code 401 (Unauthorized)
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.\n");
-				// Must exit here
-				onedrive.shutdown();
-				exit(-1);
+				handleClientUnauthorised();
 			}
 			if (e.httpStatusCode == 429) {
 				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
@@ -677,10 +675,7 @@ final class SyncEngine
 				if (e.httpStatusCode == 401) {
 					// HTTP request returned status code 401 (Unauthorized)
 					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-					log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.\n");
-					// Must exit here
-					onedrive.shutdown();
-					exit(-1);
+					handleClientUnauthorised();
 				}
 				if (e.httpStatusCode == 429) {
 					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
@@ -873,10 +868,7 @@ final class SyncEngine
 				if (e.httpStatusCode == 401) {
 					// HTTP request returned status code 401 (Unauthorized)
 					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-					log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.\n");
-					// Must exit here
-					onedrive.shutdown();
-					exit(-1);
+					handleClientUnauthorised();
 				}
 				if (e.httpStatusCode == 429) {
 					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
@@ -6102,7 +6094,8 @@ final class SyncEngine
 						if ("id" in searchResult) idAvailable = true;
 						
 						// Display error details for this site data
-						log.error("\nERROR: SharePoint Site details not provided for: ", siteNameAvailable);
+						writeln();
+						log.error("ERROR: SharePoint Site details not provided for: ", siteNameAvailable);
 						log.error("ERROR: The SharePoint Site results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator.");
 						log.error("ERROR: Your site security settings is preventing the following details from being accessed: 'displayName' or 'id'");
 						log.vlog(" - Is 'displayName' available = ", displayNameAvailable);
@@ -6151,9 +6144,11 @@ final class SyncEngine
 		
 		// Was the intended target found?
 		if(!found) {
-			log.error("\nERROR: The requested SharePoint site could not be found. Please check it's name and your permissions to access the site.");
+			writeln();
+			log.error("ERROR: The requested SharePoint site could not be found. Please check it's name and your permissions to access the site.");
 			// List all sites returned to assist user
-			log.log("\nThe following SharePoint site names were returned:");
+			writeln();
+			log.log("The following SharePoint site names were returned:");
 			foreach (searchResultEntry; siteSearchResults) {
 				// list the display name that we use to match against the user query
 				log.log(searchResultEntry);
@@ -6904,10 +6899,7 @@ final class SyncEngine
 			if (e.httpStatusCode == 401) {
 				// HTTP request returned status code 401 (Unauthorized)
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-				log.errorAndNotify("\nERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.\n");
-				// Must exit here
-				onedrive.shutdown();
-				exit(-1);
+				handleClientUnauthorised();
 			}
 			if (e.httpStatusCode == 429) {
 				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
@@ -6997,5 +6989,16 @@ final class SyncEngine
 		
 		// return calculated path as string
 		return calculatedPath;
+	}
+	
+	void handleClientUnauthorised() 
+	{
+		// common code for handling when a client is unauthorised
+		writeln();
+		log.errorAndNotify("ERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.");
+		writeln();
+		// Must exit here
+		onedrive.shutdown();
+		exit(-1);
 	}
 }

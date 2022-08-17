@@ -52,11 +52,14 @@ final class ItemDatabase
 		} catch (SqliteException e) {
 			// An error was generated - what was the error?
 			if (e.msg == "database is locked") {
-				log.error("\nERROR: onedrive application is already running - check system process list for active application instances");
+				writeln();
+				log.error("ERROR: onedrive application is already running - check system process list for active application instances");
 				log.vlog(" - Use 'sudo ps aufxw | grep onedrive' to potentially determine acive running process");
-				write("\n");
+				writeln();
 			} else {
-				log.error("\nERROR: An internal database error occurred: " ~ e.msg ~ "\n");
+				writeln();
+				log.error("ERROR: An internal database error occurred: " ~ e.msg);
+				writeln();
 			}
 			exit(-1);
 		}

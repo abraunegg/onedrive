@@ -269,7 +269,8 @@ bool containsASCIIHTMLCodes(string path)
 // Parse and display error message received from OneDrive
 void displayOneDriveErrorMessage(string message, string callingFunction)
 {
-	log.error("\nERROR: Microsoft OneDrive API returned an error with the following message:");
+	writeln();
+	log.error("ERROR: Microsoft OneDrive API returned an error with the following message:");
 	auto errorArray = splitLines(message);
 	log.error("  Error Message:    ", errorArray[0]);
 	// Extract 'message' as the reason
@@ -339,7 +340,8 @@ void displayOneDriveErrorMessage(string message, string callingFunction)
 // Parse and display error message received from the local file system
 void displayFileSystemErrorMessage(string message, string callingFunction) 
 {
-	log.error("\nERROR: The local file system returned an error with the following message:");
+	writeln();
+	log.error("ERROR: The local file system returned an error with the following message:");
 	auto errorArray = splitLines(message);
 	// What was the error message
 	log.error("  Error Message:    ", errorArray[0]);
