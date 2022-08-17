@@ -286,11 +286,13 @@ If you have installed the client from a distribution package, the client will be
 
 If you have built the client from source, to upgrade your client, it is recommended that you first uninstall your existing 'onedrive' binary (see below), then re-install the client by re-cloning, re-compiling and re-installing the client again to install the new version.
 
+**Note:** Following the uninstall process will remove all client components including *all* systemd files, including any custom files created for specific access such as SharePoint Libraries.
+
 You can optionally choose to not perform this uninstallation step, and simply re-install the client by re-cloning, re-compiling and re-installing the client again - however the risk here is that you end up with two onedrive client binaries on your system, and depending on your system search path preferences, this will determine which binary is used.
 
-**Important:** Before performing any upgrade, stop any running systemd service if applicable to ensure that these services are restarted using the updated client version.
+**Important:** Before performing any upgrade, it is highly recommended for you to stop any running systemd service if applicable to ensure that these services are restarted using the updated client version.
 
-To confirm you have the new version installed, use `onedrive --version` to determine the version that is now installed.
+Post re-install, to confirm that you have the new version of the client installed, use `onedrive --version` to determine the client version that is now installed.
 
 ## Uninstalling the client
 ### Uninstalling the client if installed from distribution package
