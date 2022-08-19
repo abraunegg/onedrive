@@ -70,7 +70,7 @@ int main(string[] args)
 			oneDrive.shutdown();
 		}
 		// was itemDb initialised?
-		if (itemDb.isDatabaseInitialised()) {
+		if (itemDb !is null) {
 			// Make sure the .wal file is incorporated into the main db before we exit
 			itemDb.performVacuum();
 			destroy(itemDb);
@@ -99,7 +99,7 @@ int main(string[] args)
 			oneDrive.shutdown();
 		}
 		// was itemDb initialised?
-		if (itemDb.isDatabaseInitialised()) {
+		if (itemDb !is null) {
 			// Make sure the .wal file is incorporated into the main db before we exit
 			itemDb.performVacuum();
 			destroy(itemDb);
