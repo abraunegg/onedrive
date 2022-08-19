@@ -70,7 +70,7 @@ int main(string[] args)
 			oneDrive.shutdown();
 		}
 		// was itemDb initialised?
-		if (itemDb !is null) {
+		if (itemDb.isDatabaseInitialised()) {
 			// Make sure the .wal file is incorporated into the main db before we exit
 			itemDb.performVacuum();
 			destroy(itemDb);
@@ -99,7 +99,7 @@ int main(string[] args)
 			oneDrive.shutdown();
 		}
 		// was itemDb initialised?
-		if (itemDb !is null) {
+		if (itemDb.isDatabaseInitialised()) {
 			// Make sure the .wal file is incorporated into the main db before we exit
 			itemDb.performVacuum();
 			destroy(itemDb);
@@ -1898,7 +1898,7 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 				oneDrive.shutdown();
 			}
 			// was itemDb initialised?
-			if (itemDb !is null) {
+			if (itemDb.isDatabaseInitialised()) {
 				// Make sure the .wal file is incorporated into the main db before we exit
 				log.log("Shutting down db connection and merging temporary data");
 				itemDb.performVacuum();
