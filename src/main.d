@@ -502,7 +502,7 @@ int main(string[] args)
 	// --dry-run operation notification and database setup
 	// Are we performing any of the following operations?
 	//  --dry-run, --list-shared-folders, --get-O365-drive-id, --get-file-link
-	if ( (cfg.getValueBool("dry_run")) || (cfg.getValueBool("list_business_shared_folders")) || (cfg.getValueString("get_o365_drive_id") != "") || (cfg.getValueString("get_file_link") != "")) {
+	if ((cfg.getValueBool("dry_run")) || (cfg.getValueBool("list_business_shared_folders")) || (!cfg.getValueString("get_o365_drive_id").empty) || (!cfg.getValueString("get_file_link").empty)) {
 		// is this a --list-shared-folders, --get-O365-drive-id, --get-file-link operation
 		if (cfg.getValueBool("dry_run")) {
 			// this is a --dry-run operation
@@ -915,8 +915,9 @@ int main(string[] args)
 
 	// Initialize the item database
 	log.vlog("Opening the item database ...");
-	// Are we performing a dry-run or querying an Office 365 Drive ID for a given Office 365 SharePoint Shared Library
-	if ((cfg.getValueBool("dry_run")) || (cfg.getValueString("get_o365_drive_id") != "")) {
+	// Are we performing any of the following operations?
+	//  --dry-run, --list-shared-folders, --get-O365-drive-id, --get-file-link
+	if ((cfg.getValueBool("dry_run")) || (cfg.getValueBool("list_business_shared_folders")) || (!cfg.getValueString("get_o365_drive_id").empty) || (!cfg.getValueString("get_file_link").empty)) {
 		// Load the items-dryrun.sqlite3 file as the database
 		log.vdebug("Using database file: ", asNormalizedPath(databaseFilePathDryRunGlobal));
 		itemDb = new ItemDatabase(databaseFilePathDryRunGlobal);
