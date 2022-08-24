@@ -502,7 +502,7 @@ int main(string[] args)
 	// --dry-run operation notification and database setup
 	// Are we performing any of the following operations?
 	//  --dry-run, --list-shared-folders, --get-O365-drive-id, --get-file-link
-	if ( (cfg.getValueBool("dry_run")) || (!cfg.getValueBool("list_business_shared_folders")) || (!cfg.getValueString("get_o365_drive_id").empty) || (!cfg.getValueString("get_file_link").empty)) {
+	if ( (cfg.getValueBool("dry_run")) || (!cfg.getValueBool("list_business_shared_folders")) || (cfg.getValueString("get_o365_drive_id") != "") || (cfg.getValueString("get_file_link") != "")) {
 		// is this a --list-shared-folders, --get-O365-drive-id, --get-file-link operation
 		if (cfg.getValueBool("dry_run")) {
 			// this is a --dry-run operation
