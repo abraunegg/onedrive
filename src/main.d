@@ -457,8 +457,9 @@ int main(string[] args)
 
 	// Has anything triggered a --resync requirement?
 	if (configOptionsDifferent || syncListDifferent || syncDirDifferent || skipFileDifferent || skipDirDifferent || businessSharedFoldersDifferent) {
-		// --resync needed, is the user just testing configuration changes?
-		if (!cfg.getValueBool("display_config")){
+		// --resync needed, is the user performing any operation where a --resync is not required?
+		// These flags do not need --resync as no sync operation is needed: --display-config, --list-shared-folders, --get-O365-drive-id, --get-file-link
+		if ( (!cfg.getValueBool("display_config")) || (!cfg.getValueBool("list_business_shared_folders")) || (!cfg.getValueString("get_o365_drive_id").empty) || (!cfg.getValueString("get_file_link").empty) ) {
 			// not testing configuration changes
 			if (!cfg.getValueBool("resync")) {
 				// --resync not issued, fail fast
