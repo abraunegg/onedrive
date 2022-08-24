@@ -53,3 +53,4 @@
 # space_reservation = "50"
 # display_running_config = "false"
 # read_only_auth_scope = "false"
+# cleanup_local_files = "false"

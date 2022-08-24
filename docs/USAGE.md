@@ -505,6 +505,7 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # space_reservation = "50"
 # display_running_config = "false"
 # read_only_auth_scope = "false"
+# cleanup_local_files = "false"
 ```
 
 ### 'config' file configuration examples:
@@ -1180,6 +1181,8 @@ Options:
       Check for the presence of .nosync in each directory. If found, skip directory from sync.
   --classify-as-big-delete
       Number of children in a path that is locally removed which will be classified as a 'big data delete'
+  --cleanup-local-files
+      Cleanup additional local files when using --download-only. This will remove local data.
   --confdir ARG
       Set the directory used to store the configuration files
   --create-directory ARG
