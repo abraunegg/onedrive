@@ -499,16 +499,17 @@ int main(string[] args)
 		}
 	}
 
-	// dry-run notification and database setup
-	// Are we performing a dry-run or querying an Office 365 Drive ID for a given Office 365 SharePoint Shared Library
-	if ((cfg.getValueBool("dry_run")) || (cfg.getValueString("get_o365_drive_id") != "")) {
-		// is this --dry-run
+	// --dry-run operation notification and database setup
+	// Are we performing any of the following operations?
+	//  --dry-run, --list-shared-folders, --get-O365-drive-id, --get-file-link
+	if ( (cfg.getValueBool("dry_run")) || (!cfg.getValueBool("list_business_shared_folders")) || (!cfg.getValueString("get_o365_drive_id").empty) || (!cfg.getValueString("get_file_link").empty)) {
+		// is this a --list-shared-folders, --get-O365-drive-id, --get-file-link operation
 		if (cfg.getValueBool("dry_run")) {
+			// this is a --dry-run operation
 			log.log("DRY-RUN Configured. Output below shows what 'would' have occurred.");
-		}
-		// is this --get-O365-drive-id
-		if (cfg.getValueString("get_o365_drive_id") != "") {
-			log.log("Using dry-run database copy for O365 Library Details query");
+		} else {
+			// is this a --list-shared-folders, --get-O365-drive-id, --get-file-link operation
+			log.log("Using dry-run database copy for OneDrive API query");
 		}
 		// configure databaseFilePathDryRunGlobal
 		databaseFilePathDryRunGlobal = cfg.databaseFilePathDryRun;
