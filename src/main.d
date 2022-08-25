@@ -688,6 +688,7 @@ int main(string[] args)
 		writeln("Config option 'check_nomount'                = ", cfg.getValueBool("check_nomount"));
 		writeln("Config option 'resync'                       = ", cfg.getValueBool("resync"));
 		writeln("Config option 'resync_auth'                  = ", cfg.getValueBool("resync_auth"));
+		writeln("Config option 'cleanup_local_files'          = ", cfg.getValueBool("cleanup_local_files"));
 
 		// data integrity
 		writeln("Config option 'classify_as_big_delete'       = ", cfg.getValueLong("classify_as_big_delete"));
@@ -1135,6 +1136,14 @@ int main(string[] args)
 		log.log("WARNING: Local data loss MAY occur in this scenario.");
 		sync.setBypassDataPreservation();
 	}
+	
+	// Do we configure to clean up local files if using --download-only ?
+	if ((cfg.getValueBool("download_only")) && (cfg.getValueBool("cleanup_local_files"))) {
+		// --download-only and --cleanup-local-files were passed in
+		log.log("WARNING: Application has been configured to cleanup local files that are not present online.");
+		log.log("WARNING: Local data loss MAY occur in this scenario if you are expecting data to remain archived locally.");
+		sync.setCleanupLocalFiles();
+	}
 
 	// Are we configured to use a National Cloud Deployment
 	if (cfg.getValueString("azure_ad_endpoint") != "") {
@@ -1361,7 +1370,7 @@ int main(string[] args)
 					// monitor initialisation failed
 					log.error("ERROR: ", e.msg);
 					oneDrive.shutdown();
-					exit(-1);
+					return EXIT_FAILURE;
 				}
 			}
 

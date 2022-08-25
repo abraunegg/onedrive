@@ -30,6 +30,9 @@ private bool disableUploadValidation = false;
 // Do we configure to disable the download validation routine
 private bool disableDownloadValidation = false;
 
+// Do we perform a local cleanup of files that are 'extra' on the local file system, when using --download-only
+private bool cleanupLocalFiles = false;
+
 private bool isItemFolder(const ref JSONValue item)
 {
 	return ("folder" in item) != null;
@@ -614,6 +617,13 @@ final class SyncEngine
 	{
 		nationalCloudDeployment = true;
 		log.vdebug("Setting nationalCloudDeployment = true");
+	}
+	
+	// set cleanupLocalFiles to true
+	void setCleanupLocalFiles()
+	{
+		cleanupLocalFiles = true;
+		log.vdebug("Setting cleanupLocalFiles = true");
 	}
 	
 	// return the OneDrive Account Type
