@@ -22,6 +22,8 @@ The instructions below will utilise the 'latest' tag, however this can be substi
 
 Additionally there are specific version release tags for each release. Refer to https://hub.docker.com/r/driveone/onedrive/tags for any other Docker tags you may be interested in.
 
+**Note:** If you are using Debian or Ubuntu platforms, it is recommended you use the 'debian' Docker tag rather than 'latest' to ensure maximum compatability with your Debian or Ubuntu ecosystem.
+
 ## Basic Setup
 ### 0. Install docker using your distribution platform's instructions
 1.  Ensure that SELinux has been disabled on your system. A reboot may be required to ensure that this is correctly disabled.
