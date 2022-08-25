@@ -457,9 +457,18 @@ int main(string[] args)
 
 	// Has anything triggered a --resync requirement?
 	if (configOptionsDifferent || syncListDifferent || syncDirDifferent || skipFileDifferent || skipDirDifferent || businessSharedFoldersDifferent) {
-		// --resync needed, is the user just testing configuration changes?
-		if (!cfg.getValueBool("display_config")){
-			// not testing configuration changes
+		// --resync needed, is the user performing any operation where a --resync is not required?
+		// flag to ignore --resync requirement
+		bool ignoreResyncRequirement = false;
+		// These flags do not need --resync as no sync operation is needed: --display-config, --list-shared-folders, --get-O365-drive-id, --get-file-link
+		if (cfg.getValueBool("display_config")) ignoreResyncRequirement = true;
+		if (cfg.getValueBool("list_business_shared_folders")) ignoreResyncRequirement = true;
+		if ((!cfg.getValueString("get_o365_drive_id").empty)) ignoreResyncRequirement = true;
+		if ((!cfg.getValueString("get_file_link").empty)) ignoreResyncRequirement = true;
+		
+		// Do we need to ignore a --resync requirement?
+		if (!ignoreResyncRequirement) {
+			// We are not ignoring --requirement
 			if (!cfg.getValueBool("resync")) {
 				// --resync not issued, fail fast
 				log.error("An application configuration change has been detected where a --resync is required");
@@ -499,16 +508,17 @@ int main(string[] args)
 		}
 	}
 
-	// dry-run notification and database setup
-	// Are we performing a dry-run or querying an Office 365 Drive ID for a given Office 365 SharePoint Shared Library
-	if ((cfg.getValueBool("dry_run")) || (cfg.getValueString("get_o365_drive_id") != "")) {
-		// is this --dry-run
+	// --dry-run operation notification and database setup
+	// Are we performing any of the following operations?
+	//  --dry-run, --list-shared-folders, --get-O365-drive-id, --get-file-link
+	if ((cfg.getValueBool("dry_run")) || (cfg.getValueBool("list_business_shared_folders")) || (!cfg.getValueString("get_o365_drive_id").empty) || (!cfg.getValueString("get_file_link").empty)) {
+		// is this a --list-shared-folders, --get-O365-drive-id, --get-file-link operation
 		if (cfg.getValueBool("dry_run")) {
+			// this is a --dry-run operation
 			log.log("DRY-RUN Configured. Output below shows what 'would' have occurred.");
-		}
-		// is this --get-O365-drive-id
-		if (cfg.getValueString("get_o365_drive_id") != "") {
-			log.log("Using dry-run database copy for O365 Library Details query");
+		} else {
+			// is this a --list-shared-folders, --get-O365-drive-id, --get-file-link operation
+			log.log("Using dry-run database copy for OneDrive API query");
 		}
 		// configure databaseFilePathDryRunGlobal
 		databaseFilePathDryRunGlobal = cfg.databaseFilePathDryRun;
@@ -915,8 +925,9 @@ int main(string[] args)
 
 	// Initialize the item database
 	log.vlog("Opening the item database ...");
-	// Are we performing a dry-run or querying an Office 365 Drive ID for a given Office 365 SharePoint Shared Library
-	if ((cfg.getValueBool("dry_run")) || (cfg.getValueString("get_o365_drive_id") != "")) {
+	// Are we performing any of the following operations?
+	//  --dry-run, --list-shared-folders, --get-O365-drive-id, --get-file-link
+	if ((cfg.getValueBool("dry_run")) || (cfg.getValueBool("list_business_shared_folders")) || (!cfg.getValueString("get_o365_drive_id").empty) || (!cfg.getValueString("get_file_link").empty)) {
 		// Load the items-dryrun.sqlite3 file as the database
 		log.vdebug("Using database file: ", asNormalizedPath(databaseFilePathDryRunGlobal));
 		itemDb = new ItemDatabase(databaseFilePathDryRunGlobal);
