@@ -458,9 +458,17 @@ int main(string[] args)
 	// Has anything triggered a --resync requirement?
 	if (configOptionsDifferent || syncListDifferent || syncDirDifferent || skipFileDifferent || skipDirDifferent || businessSharedFoldersDifferent) {
 		// --resync needed, is the user performing any operation where a --resync is not required?
+		// flag to ignore --resync requirement
+		bool ignoreResyncRequirement = false;
 		// These flags do not need --resync as no sync operation is needed: --display-config, --list-shared-folders, --get-O365-drive-id, --get-file-link
-		if ((!cfg.getValueBool("display_config")) || (!cfg.getValueBool("list_business_shared_folders")) || (!cfg.getValueString("get_o365_drive_id").empty) || (!cfg.getValueString("get_file_link").empty)) {
-			// not testing configuration changes
+		if (cfg.getValueBool("display_config")) ignoreResyncRequirement = true;
+		if (cfg.getValueBool("list_business_shared_folders")) ignoreResyncRequirement = true;
+		if ((!cfg.getValueString("get_o365_drive_id").empty)) ignoreResyncRequirement = true;
+		if ((!cfg.getValueString("get_file_link").empty)) ignoreResyncRequirement = true;
+		
+		// Do we need to ignore a --resync requirement?
+		if (!ignoreResyncRequirement) {
+			// We are not ignoring --requirement
 			if (!cfg.getValueBool("resync")) {
 				// --resync not issued, fail fast
 				log.error("An application configuration change has been detected where a --resync is required");
