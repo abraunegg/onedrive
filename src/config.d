@@ -138,6 +138,8 @@ final class Config
 		boolValues["display_running_config"] = false;
 		// Configure read-only authentication scope
 		boolValues["read_only_auth_scope"] = false;
+		// Flag to cleanup local files when using --download-only
+		boolValues["cleanup_local_files"] = false;
 
 		// DEVELOPER OPTIONS
 		// display_memory = true | false
@@ -357,6 +359,9 @@ final class Config
 				"classify-as-big-delete",
 					"Number of children in a path that is locally removed which will be classified as a 'big data delete'",
 					&longValues["classify_as_big_delete"],
+				"cleanup-local-files",
+					"Cleanup additional local files when using --download-only. This will remove local data.",
+					&boolValues["cleanup_local_files"],	
 				"create-directory",
 					"Create a directory on OneDrive - no sync will be performed.",
 					&stringValues["create_directory"],
