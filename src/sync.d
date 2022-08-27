@@ -4344,13 +4344,19 @@ final class SyncEngine
 						// --download-only --cleanup-local-files not used
 						uploadCreateDir(path);
 					} else {
-						// we need to clean up this file
+						// we need to clean up this directory
 						log.log("Removing local directory as --download-only & --cleanup-local-files configured");
 						// are we in a --dry-run scenario?
 						log.log("Removing local directory: ", path);
 						if (!dryRun) {
-							// No --dry-run ... process local file delete
-							safeRemove(path);
+							// No --dry-run ... process local directory delete
+							// Remove any children of this path if they still exist
+							// Resolve 'Directory not empty' error when deleting local files
+							foreach (DirEntry child; dirEntries(path, SpanMode.depth, false)) {
+								attrIsDir(child.linkAttributes) ? rmdir(child.name) : remove(child.name);
+							}
+							// Remove the path now that it is empty of children
+							rmdirRecurse(path);
 						}
 					}
 				}
