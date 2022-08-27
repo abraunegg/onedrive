@@ -1710,7 +1710,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 						// If yes, scan for local changes - but --cleanup-local-files is being used, a further flag will trigger local file deletes rather than attempt to upload files to OneDrive
 						if (cleanupLocalFiles) {
 							// --download-only and --cleanup-local-files were passed in
-							log.log("Searching local filesystem for extra files and folder which need to be removed");
+							log.log("Searching local filesystem for extra files and folders which need to be removed");
 							sync.scanForDifferencesFilesystemScan(localPath);					
 						} else {
 							// is this a --download-only request?
@@ -1764,7 +1764,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 						// If yes, scan for local changes - but --cleanup-local-files is being used, a further flag will trigger local file deletes rather than attempt to upload files to OneDrive
 						if (cleanupLocalFiles) {
 							// --download-only and --cleanup-local-files were passed in
-							log.log("Searching local filesystem for extra files and folder which need to be removed");
+							log.log("Searching local filesystem for extra files and folders which need to be removed");
 							sync.scanForDifferencesFilesystemScan(localPath);					
 						} else {
 							// is this a --download-only request?
