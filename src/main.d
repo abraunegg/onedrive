@@ -1650,7 +1650,7 @@ bool initSyncEngine(SyncEngine sync)
 }
 
 // try to synchronize the folder three times
-void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, bool localFirst, bool uploadOnly, long logLevel, bool fullScanRequired, bool syncListConfiguredFullScanOverride, bool displaySyncOptions, bool monitorEnabled, Monitor m, bool cleanupLocalFiles )
+void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, bool localFirst, bool uploadOnly, long logLevel, bool fullScanRequired, bool syncListConfiguredFullScanOverride, bool displaySyncOptions, bool monitorEnabled, Monitor m, bool cleanupLocalFiles)
 {
 	int count;
 	string remotePath = "/";
