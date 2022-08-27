@@ -3454,7 +3454,7 @@ final class SyncEngine
 		}
 	}
 	
-	// scan the given directory for new items - for use with --monitor
+	// scan the given directory for new items - for use with --monitor or --cleanup-local-files
 	void scanForDifferencesFilesystemScan(const(string) path)
 	{
 		// To improve logging output for this function, what is the 'logical path' we are scanning for file & folder differences?
@@ -3471,10 +3471,15 @@ final class SyncEngine
 		if (isDir(path)) {
 			// if this path is a directory, output this message.
 			// if a file, potentially leads to confusion as to what the client is actually doing
-			log.vlog("Uploading new items of ", logPath);
+			if (!cleanupLocalFiles) {
+				// if --cleanup-local-files was set, we will not be uploading data
+				log.vlog("Uploading new items of ", logPath);
+			}
 		}
 		
-		// Filesystem walk to find new files not uploaded
+		// Filesystem walk to find extra files that reside locally. 
+		// If --cleanup-local-files is not used, these will be uploaded (normal operation)
+		// If --download-only --cleanup-local-files is being used, extra files found locally will be deleted from the local filesystem
 		uploadNewItems(path);
 	}
 	
@@ -4334,14 +4339,30 @@ final class SyncEngine
 				// Was the path found in the database?
 				if (!pathFoundInDB) {
 					// Path not found in database when searching all drive id's
-					uploadCreateDir(path);
+					
+					if (!cleanupLocalFiles) {
+						// --download-only --cleanup-local-files not used
+						uploadCreateDir(path);
+					} else {
+						// we need to clean up this file
+						log.log("Removing local directory as --download-only & --cleanup-local-files configured");
+						// are we in a --dry-run scenario?
+						log.log("Removing local directory: ", path);
+						if (!dryRun) {
+							// No --dry-run ... process local file delete
+							safeRemove(path);
+						}
+					}
 				}
 				
 				// recursively traverse children
 				// the above operation takes time and the directory might have
 				// disappeared in the meantime
 				if (!exists(path)) {
-					log.vlog("Directory disappeared during upload: ", path);
+					if (!cleanupLocalFiles) {
+						// --download-only --cleanup-local-files not used
+						log.vlog("Directory disappeared during upload: ", path);
+					}
 					return;
 				}
 				
@@ -4375,22 +4396,35 @@ final class SyncEngine
 					
 					// Was the file found in the database?
 					if (!fileFoundInDB) {
-						// File not found in database when searching all drive id's, upload as new file
-						uploadNewFile(path);
-						// Did the upload fail?
-						if (!uploadFailed) {
-							// Upload did not fail
-							// Issue #763 - Delete local files after sync handling
-							// are we in an --upload-only & --remove-source-files scenario?
-							if ((uploadOnly) && (localDeleteAfterUpload)) {
-								// Log that we are deleting a local item
-								log.log("Removing local file as --upload-only & --remove-source-files configured");
-								// are we in a --dry-run scenario?
-								if (!dryRun) {
-									// No --dry-run ... process local file delete
+						// File not found in database when searching all drive id's
+						// Do we upload the file or clean up the file?
+						if (!cleanupLocalFiles) {
+							// --download-only --cleanup-local-files not used
+							uploadNewFile(path);
+							// Did the upload fail?
+							if (!uploadFailed) {
+								// Upload did not fail
+								// Issue #763 - Delete local files after sync handling
+								// are we in an --upload-only & --remove-source-files scenario?
+								if ((uploadOnly) && (localDeleteAfterUpload)) {
+									// Log that we are deleting a local item
+									log.log("Removing local file as --upload-only & --remove-source-files configured");
+									// are we in a --dry-run scenario?
 									log.vdebug("Removing local file: ", path);
-									safeRemove(path);
+									if (!dryRun) {
+										// No --dry-run ... process local file delete
+										safeRemove(path);
+									}
 								}
+							}
+						} else {
+							// we need to clean up this file
+							log.log("Removing local file as --download-only & --cleanup-local-files configured");
+							// are we in a --dry-run scenario?
+							log.log("Removing local file: ", path);
+							if (!dryRun) {
+								// No --dry-run ... process local file delete
+								safeRemove(path);
 							}
 						}
 					}
