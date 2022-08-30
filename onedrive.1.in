@@ -41,6 +41,11 @@ Number of children in a path that is locally removed which will be classified as
 .br
 Configuration file key: \fBclassify_as_big_delete\fP (default: \fB1000\fP)
 .TP
+\fB\-\-cleanup\-local\-files\fP
+Cleanup additional local files when using \-\-download-only. This will remove local data.
+.br
+Configuration file key: \fBcleanup_local_files\fP (default: \fBfalse\fP)
+.TP
 \fB\-\-confdir\fP ARG
 Set the directory used to store the configuration files
 .TP
