@@ -42,6 +42,7 @@ final class ItemDatabase
 	string selectItemByIdStmt;
 	string selectItemByParentIdStmt;
 	string deleteItemByIdStmt;
+	bool databaseInitialised = false;
 
 	this(const(char)[] filename)
 	{
@@ -61,7 +62,7 @@ final class ItemDatabase
 				log.error("ERROR: An internal database error occurred: " ~ e.msg);
 				writeln();
 			}
-			exit(-1);
+			return;
 		}
 		
 		if (dbVersion == 0) {
@@ -114,6 +115,14 @@ final class ItemDatabase
 		";
 		selectItemByParentIdStmt = "SELECT * FROM item WHERE driveId = ? AND parentId = ?";
 		deleteItemByIdStmt = "DELETE FROM item WHERE driveId = ? AND id = ?";
+		
+		// flag that the database is accessible and we have control
+		databaseInitialised = true;
+	}
+
+	bool isDatabaseInitialised()
+	{
+		return databaseInitialised;
 	}
 
 	void createTable()
