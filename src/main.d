@@ -936,6 +936,14 @@ int main(string[] args)
 		log.vdebug("Using database file: ", asNormalizedPath(cfg.databaseFilePath));
 		itemDb = new ItemDatabase(cfg.databaseFilePath);
 	}
+	
+	// did we successfully initialise the database class?
+	if (!itemDb.isDatabaseInitialised()) {
+		// no .. destroy class
+		itemDb = null;
+		// exit application
+		return EXIT_FAILURE;
+	}
 
 	// What are the permission that have been set for the application?
 	// These are relevant for:
@@ -1901,7 +1909,7 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 				oneDrive.shutdown();
 			}
 			// was itemDb initialised?
-			if (itemDb !is null) {
+			if (itemDb.isDatabaseInitialised()) {
 				// Make sure the .wal file is incorporated into the main db before we exit
 				log.log("Shutting down db connection and merging temporary data");
 				itemDb.performVacuum();
