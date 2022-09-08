@@ -30,13 +30,8 @@ sudo add-apt-repository --remove ppa:yann1ck/onedrive
 Use a script, similar to the following to ensure your system is updated correctly:
 ```text
 #!/bin/bash
-rm -rf /var/lib/dpkg/lock-frontend
-rm -rf /var/lib/dpkg/lock
 apt-get update
-apt-get upgrade -y
-apt-get dist-upgrade -y
-apt-get autoremove -y
-apt-get autoclean -y
+apt-get upgrade
 ```
 
 Run this script as 'root' by using `su -` to elevate to 'root'. Example below:
