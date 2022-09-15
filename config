@@ -24,6 +24,7 @@
 # skip_symlinks = "false"
 # debug_https = "false"
 # skip_dotfiles = "false"
+# skip_size = "1000"
 # dry_run = "false"
 # min_notify_changes = "5"
 # monitor_log_frequency = "5"
