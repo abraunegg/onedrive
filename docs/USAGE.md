@@ -36,6 +36,7 @@
   * [How to sync only specific or single directory?](#how-to-sync-only-specific-or-single-directory)
   * [How to 'skip' directories from syncing?](#how-to-skip-directories-from-syncing)
   * [How to 'skip' files from syncing?](#how-to-skip-files-from-syncing)
+  * [How to 'skip' files larger than a certain size from syncing?](#how-to-skip-files-larger-than-a-certain-size-from-syncing)
   * [How to 'rate limit' the application to control bandwidth consumed for upload & download operations?](#how-to-rate-limit-the-application-to-control-bandwidth-consumed-for-upload--download-operations)
   * [How to prevent your local disk from filling up?](#how-to-prevent-your-local-disk-from-filling-up)
   * [How are symbolic links handled by the client?](#how-are-symbolic-links-handled-by-the-client)
@@ -476,6 +477,7 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # skip_symlinks = "false"
 # debug_https = "false"
 # skip_dotfiles = "false"
+# skip_size = "1000"
 # dry_run = "false"
 # min_notify_changes = "5"
 # monitor_log_frequency = "5"
@@ -749,6 +751,11 @@ check_nosync = "true"
 There are two methods to achieve this:
 *   Utilise 'skip_file' to configure what files to skip. Refer to above for configuration advice.
 *   Utilise 'sync_list' to configure what files and directories to sync, and what should be exluded
+
+### How to 'skip' files larger than a certain size from syncing?
+There are two methods to achieve this:
+* Use `--skip-size ARG` as part of a CLI command to skip new files larger than this size (in MB)
+* Use `skip_size = "value"` as part of your 'config' file where files larger than this size (in MB) will be skipped
 
 ### How to 'rate limit' the application to control bandwidth consumed for upload & download operations?
 To minimise the Internet bandwidth for upload and download operations, you can configure the 'rate_limit' option within the config file.
