@@ -36,6 +36,7 @@
   * [How to sync only specific or single directory?](#how-to-sync-only-specific-or-single-directory)
   * [How to 'skip' directories from syncing?](#how-to-skip-directories-from-syncing)
   * [How to 'skip' files from syncing?](#how-to-skip-files-from-syncing)
+  * [How to 'skip' files larger than a certain size from syncing?](#how-to-skip-files-larger-than-a-certain-size-from-syncing)
   * [How to 'rate limit' the application to control bandwidth consumed for upload & download operations?](#how-to-rate-limit-the-application-to-control-bandwidth-consumed-for-upload--download-operations)
   * [How to prevent your local disk from filling up?](#how-to-prevent-your-local-disk-from-filling-up)
   * [How are symbolic links handled by the client?](#how-are-symbolic-links-handled-by-the-client)
