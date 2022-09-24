@@ -59,7 +59,7 @@ make
 %{_docdir}/%{name}
 %{_bindir}/%{name}
 %if 0%{?with_systemd}
-%{_unitdir}/%{name}.service
+%{_userunitdir}/%{name}.service
 %{_unitdir}/%{name}@.service
 %else
 %{_bindir}/onedrive_service.sh
