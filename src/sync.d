@@ -3540,19 +3540,19 @@ final class SyncEngine
 		
 		// Restriction and limitations about windows naming files
 		if (!isValidName(path)) {
-			log.log("Skipping item - invalid name (Microsoft Naming Convention): ", path);
+			log.logAndNotify("Skipping item - invalid name (Microsoft Naming Convention): ", path);
 			return;
 		}
 		
 		// Check for bad whitespace items
 		if (!containsBadWhiteSpace(path)) {
-			log.log("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
+			log.logAndNotify("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
 			return;
 		}
 		
 		// Check for HTML ASCII Codes as part of file name
 		if (!containsASCIIHTMLCodes(path)) {
-			log.log("Skipping item - invalid name (Contains HTML ASCII Code): ", path);
+			log.logAndNotify("Skipping item - invalid name (Contains HTML ASCII Code): ", path);
 			return;
 		}
 		
@@ -4244,7 +4244,7 @@ final class SyncEngine
 					if (relativeLinkTest) {
 						log.vdebug("Not skipping item - symbolic link is a 'relative link' to target ('", relativeLink, "') which can be supported: ", path);
 					} else {
-						log.log("Skipping item - invalid symbolic link: ", path);
+						log.logAndNotify("Skipping item - invalid symbolic link: ", path);
 						return;
 					}
 				}
@@ -4252,19 +4252,19 @@ final class SyncEngine
 			
 			// Restriction and limitations about windows naming files
 			if (!isValidName(path)) {
-				log.log("Skipping item - invalid name (Microsoft Naming Convention): ", path);
+				log.logAndNotify("Skipping item - invalid name (Microsoft Naming Convention): ", path);
 				return;
 			}
 			
 			// Check for bad whitespace items
 			if (!containsBadWhiteSpace(path)) {
-				log.log("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
+				log.logAndNotify("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
 				return;
 			}
 			
 			// Check for HTML ASCII Codes as part of file name
 			if (!containsASCIIHTMLCodes(path)) {
-				log.log("Skipping item - invalid name (Contains HTML ASCII Code): ", path);
+				log.logAndNotify("Skipping item - invalid name (Contains HTML ASCII Code): ", path);
 				return;
 			}
 
@@ -5862,26 +5862,26 @@ final class SyncEngine
 			}
 			// skip unexisting symbolic links
 			else if (!exists(readLink(to))) {
-				log.log("Skipping item - invalid symbolic link: ", to);
+				log.logAndNotify("Skipping item - invalid symbolic link: ", to);
 				return;
 			}
 		}
 		
 		// Restriction and limitations about windows naming files
 		if (!isValidName(to)) {
-			log.log("Skipping item - invalid name (Microsoft Naming Convention): ", to);
+			log.logAndNotify("Skipping item - invalid name (Microsoft Naming Convention): ", to);
 			return;
 		}
 		
 		// Check for bad whitespace items
 		if (!containsBadWhiteSpace(to)) {
-			log.log("Skipping item - invalid name (Contains an invalid whitespace item): ", to);
+			log.logAndNotify("Skipping item - invalid name (Contains an invalid whitespace item): ", to);
 			return;
 		}
 		
 		// Check for HTML ASCII Codes as part of file name
 		if (!containsASCIIHTMLCodes(to)) {
-			log.log("Skipping item - invalid name (Contains HTML ASCII Code): ", to);
+			log.logAndNotify("Skipping item - invalid name (Contains HTML ASCII Code): ", to);
 			return;
 		}
 		
