@@ -16,9 +16,11 @@ In order to successfully use these specific Microsoft Azure deployments, the fol
 ## Step 1: Register a new application with Microsoft Azure
 1. Log into your applicable Microsoft Azure Portal with your applicable Office365 identity:
 
-    Microsoft Cloud for US Government:        https://portal.azure.com/
-	Microsoft Cloud Germany:                  https://portal.azure.com/
-    Azure and Office365 operated by 21Vianet: https://portal.azure.cn/
+| National Cloud Environment | Microsoft Azure Portal |
+|---|---|
+| Microsoft Cloud for US Government        | https://portal.azure.com/ | 
+| Microsoft Cloud Germany                  | https://portal.azure.com/ | 
+| Azure and Office365 operated by 21Vianet | https://portal.azure.cn/  | 
 
 2. Select 'Azure Active Directory' as the service you wish to configure
 3. Under 'Manage', select 'App registrations' to register a new application
