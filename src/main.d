@@ -789,8 +789,19 @@ int main(string[] args)
 		log.vdebug("Testing if we have exclusive access to local database file");
 		// Are we the only running instance? Test that we can open the database file path
 		itemDb = new ItemDatabase(cfg.databaseFilePath);
-		destroy(itemDb);
+		
+		// did we successfully initialise the database class?
+		if (!itemDb.isDatabaseInitialised()) {
+			// no .. destroy class
+			itemDb = null;
+			// exit application
+			return EXIT_FAILURE;
+		}
+		
 		// If we have exclusive access we will not have exited
+		// destroy access test
+		destroy(itemDb);
+		// delete application sync state
 		log.log("Deleting the saved application sync status ...");
 		if (!cfg.getValueBool("dry_run")) {
 			safeRemove(cfg.databaseFilePath);
