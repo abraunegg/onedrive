@@ -2,6 +2,34 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.4.21 - 2022-09-27
+### Fixed
+*   Fix that the download progress bar doesn't always reach 100% when rate_limit is set
+*   Fix --resync handling of database file removal
+*   Fix Makefile to be consistent with permissions that are being used
+*   Fix that logging output for skipped uploaded files is missing
+*   Fix to allow non-sync tasks while sync is running
+*   Fix to resolve segfault when running 'onedrive --display-sync-status' when run as 2nd process
+*   Fix DMD 2.100.2 depreciation warning
+
+### Changed
+*   Change the exit code of the application to 126 when a --resync is required
+
+### Added
+*   Add GitHub Action Test Build Workflow (replacing Travis CI)
+*   Add option --display-running-config to display the running configuration as used at application startup
+*   Add 'config' option to request readonly access in oauth authorization step
+*   Add option --cleanup-local-files to cleanup local files regardless of sync state when using --download-only
+*   Add option --with-editing-perms to create a read-write shareable link when used with --create-share-link <file>
+
+### Updated
+*   Updated --get-O365-drive-id implementation for data access
+*   Update what application options require an argument
+*   Update application logging output for error messages to remove certain \n prefix when logging to a file
+*   Update onedrive.spec.in to fix error building RPM
+*   Update GUI notification handling for specific skipped scenarios
+*   Updated documentation (various)
+
 ## 2.4.20 - 2022-07-20
 ### Fixed
 *   Fix 'foreign key constraint failed' when using OneDrive Business Shared Folders due to change to using /delta query
