@@ -44,6 +44,7 @@
   * [How to sync shared folders (OneDrive Business or Office 365)?](#how-to-sync-shared-folders-onedrive-business-or-office-365)
   * [How to sync sharePoint / Office 365 Shared Libraries?](#how-to-sync-sharepoint--office-365-shared-libraries)
   * [How to run a user systemd service at boot without user login?](#how-to-run-a-user-systemd-service-at-boot-without-user-login)
+  * [How to create a shareable link?](#how-to-create-a-shareable-link)
 - [Running 'onedrive' in 'monitor' mode](#running-onedrive-in-monitor-mode)
   * [Use webhook to subscribe to remote updates in 'monitor' mode](#use-webhook-to-subscribe-to-remote-updates-in-monitor-mode)
   * [More webhook configuration options](#more-webhook-configuration-options)
