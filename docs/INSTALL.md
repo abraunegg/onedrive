@@ -143,7 +143,7 @@ sudo yum install libnotify-devel
 ### Dependencies: Fedora > Version 18 / CentOS 8.x / RHEL 8.x / RHEL 9.x
 ```text
 sudo dnf groupinstall 'Development Tools'
-sudo dnf install libcurl-devel install sqlite-devel
+sudo dnf install libcurl-devel sqlite-devel
 curl -fsS https://dlang.org/install.sh | bash -s dmd
 ```
 For notifications the following is also necessary:
