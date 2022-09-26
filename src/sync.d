@@ -6216,7 +6216,7 @@ final class SyncEngine
 	}
 	
 	// Create an anonymous read-only shareable link for an existing file on OneDrive
-	void createShareableLinkForFile(string filePath)
+	void createShareableLinkForFile(string filePath, bool writeablePermissions)
 	{
 		JSONValue onedrivePathDetails;
 		JSONValue createShareableLinkResponse;
@@ -6232,6 +6232,7 @@ final class SyncEngine
 			if (e.httpStatusCode == 404) {
 				// Requested path could not be found
 				log.error("ERROR: The requested path to query was not found on OneDrive");
+				log.error("ERROR: Cannot create a shareable link for a file that does not exist on OneDrive");
 				return;
 			}
 			
@@ -6240,7 +6241,7 @@ final class SyncEngine
 				handleOneDriveThrottleRequest();
 				// Retry original request by calling function again to avoid replicating any further error handling
 				log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - calling queryDriveForChanges(path);");
-				createShareableLinkForFile(filePath);
+				createShareableLinkForFile(filePath, writeablePermissions);
 				// return back to original call
 				return;
 			}
@@ -6249,7 +6250,7 @@ final class SyncEngine
 				// HTTP request returned status code 504 (Gateway Timeout)
 				log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' - retrying request");
 				// Retry original request by calling function again to avoid replicating any further error handling
-				createShareableLinkForFile(filePath);
+				createShareableLinkForFile(filePath, writeablePermissions);
 				// return back to original call
 				return;
 			} else {
@@ -6266,11 +6267,21 @@ final class SyncEngine
 			driveId = onedrivePathDetails["parentReference"]["driveId"].str;
 			itemId = onedrivePathDetails["id"].str;
 			
-			// configure the access scope
-			JSONValue accessScope = [
-				"type": "view",
-				"scope": "anonymous"
-			];
+			// What sort of shareable link is required?
+			JSONValue accessScope;
+			if (writeablePermissions) {
+				// configure the read-write access scope
+				accessScope = [
+					"type": "edit",
+					"scope": "anonymous"
+				];
+			} else {
+				// configure the read-only access scope (default)
+				accessScope = [
+					"type": "view",
+					"scope": "anonymous"
+				];
+			}
 			
 			// Create the shareable file link
 			createShareableLinkResponse = onedrive.createShareableLink(driveId, itemId, accessScope);
@@ -6278,6 +6289,10 @@ final class SyncEngine
 				// Extract the file share link from the JSON response
 				fileShareLink = createShareableLinkResponse["link"]["webUrl"].str;
 				writeln("File Shareable Link: ", fileShareLink);
+				if (writeablePermissions) {
+					writeln("Shareable Link has read-write permissions - use and provide with caution"); 
+				}
+				
 			} else {
 				// not a valid JSON object
 				log.error("ERROR: There was an error performing this operation on OneDrive");

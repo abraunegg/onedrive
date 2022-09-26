@@ -263,6 +263,9 @@ enables even more verbose debug statements.
 \fB\-\-version\fP
 Print the version and exit
 .TP
+\fB\-\-with\-editing\-perms\fP
+Create a read-write shareable link for an existing file on OneDrive when used with --create-share-link <file>
+.TP
 \fB\-h \-\-help\fP
 This help information.
 .PP

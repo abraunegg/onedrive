@@ -1208,12 +1208,12 @@ int main(string[] args)
 
 	// Do we need to create or remove a directory?
 	if ((cfg.getValueString("create_directory") != "") || (cfg.getValueString("remove_directory") != "")) {
-
+		// create directory
 		if (cfg.getValueString("create_directory") != "") {
 			// create a directory on OneDrive
 			sync.createDirectoryNoSync(cfg.getValueString("create_directory"));
 		}
-
+		//remove directory
 		if (cfg.getValueString("remove_directory") != "") {
 			// remove a directory on OneDrive
 			sync.deleteDirectoryNoSync(cfg.getValueString("remove_directory"));
@@ -1234,10 +1234,17 @@ int main(string[] args)
 		return EXIT_SUCCESS;
 	}
 
-	// Are we createing an anonymous read-only shareable link for an existing file on OneDrive?
+	// --create-share-link - Are we createing a shareable link for an existing file on OneDrive?
 	if (cfg.getValueString("create_share_link") != "") {
 		// Query OneDrive for the file, and if valid, create a shareable link for the file
-		sync.createShareableLinkForFile(cfg.getValueString("create_share_link"));
+		
+		// By default, the shareable link will be read-only. 
+		// If the user adds: 
+		//		--with-editing-perms 
+		// this will create a writeable link
+		bool writeablePermissions = cfg.getValueBool("with_editing_perms");
+		sync.createShareableLinkForFile(cfg.getValueString("create_share_link"), writeablePermissions);
+		
 		// Exit application
 		// Use exit scopes to shutdown API
 		return EXIT_SUCCESS;
