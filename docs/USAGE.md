@@ -840,6 +840,21 @@ To avoid this issue, you need to reconfigure your 'user' account so that the sys
 loginctl enable-linger <your_user_name>
 ```
 
+### How to create a shareable link?
+In some cases it may be desirable to create a shareable file link and give this link to other users to access a specific file.
+
+To do this, use the following command:
+```text
+onedrive --create-share-link <path/to/file>
+```
+**Note:** By default this will be a read-only link.
+
+To make this a read-write link, use the following command:
+```text
+onedrive --create-share-link <path/to/file> --with-editing-perms
+```
+**Note:** The ordering of the option file path and option flag is important.
+
 ## Running 'onedrive' in 'monitor' mode
 Monitor mode (`--monitor`) allows the onedrive process to continually monitor your local file system for changes to files.
 
@@ -1300,4 +1315,6 @@ Options:
       Print more details, useful for debugging (repeat for extra debugging)
   --version
       Print the version and exit
+  --with-editing-perms
+      Create a read-write shareable link for an existing file on OneDrive when used with --create-share-link <file>
 ```

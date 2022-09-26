@@ -332,6 +332,7 @@ final class Config
 		boolValues["force"]               = false;
 		boolValues["list_business_shared_folders"] = false;
 		boolValues["force_sync"]          = false;
+		boolValues["with_editing_perms"]  = false;
 
 		// Application Startup option validation
 		try {
@@ -523,7 +524,10 @@ final class Config
 					&boolValues["list_business_shared_folders"],
 				"sync-shared-folders",
 					"Sync OneDrive Business Shared Folders",
-					&boolValues["sync_business_shared_folders"]
+					&boolValues["sync_business_shared_folders"],
+				"with-editing-perms",
+					"Create a read-write shareable link for an existing file on OneDrive when used with --create-share-link <file>",
+					&boolValues["with_editing_perms"]
 			);
 			if (opt.helpWanted) {
 				outputLongHelp(opt.options);
