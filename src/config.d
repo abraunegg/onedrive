@@ -611,7 +611,6 @@ final class Config
 				// close open file
 				file.close();
 			}
-			return false;
 		}
 		// - exit
 		scope(exit) {
