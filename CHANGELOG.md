@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Fix Makefile to be consistent with permissions that are being used
 *   Fix that logging output for skipped uploaded files is missing
 *   Fix to allow non-sync tasks while sync is running
+*   Fix where --resync is enforced for non-sync operations
 *   Fix to resolve segfault when running 'onedrive --display-sync-status' when run as 2nd process
 *   Fix DMD 2.100.2 depreciation warning
 
