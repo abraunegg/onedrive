@@ -23,7 +23,7 @@ jobs:
         include:
           - flavor: fedora
             dockerfile: ./contrib/docker/Dockerfile
-            platforms: linux/amd64,linux/arm64,linux/arm/v7
+            platforms: linux/amd64,linux/arm64
           - flavor: debian
             dockerfile: ./contrib/docker/Dockerfile-debian
             platforms: linux/amd64,linux/arm64,linux/arm/v7
