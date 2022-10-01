@@ -5,9 +5,6 @@ on:
     branches: [ master ]
     tags: [ 'v*' ]
   pull_request:
-    branches:
-      - master
-    types: [closed]
 
 env:
   DOCKER_HUB_SLUG: driveone/onedrive
