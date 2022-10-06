@@ -75,7 +75,7 @@ final class Config
 		longValues["monitor_interval"] = 300;
 		longValues["skip_size"] = 0;
 		longValues["min_notify_changes"] = 5;
-		longValues["monitor_log_frequency"] = 5;
+		longValues["monitor_log_frequency"] = 6;
 		// Number of N sync runs before performing a full local scan of sync_dir
 		// By default 12 which means every ~60 minutes a full disk scan of sync_dir will occur 
 		// 'monitor_interval' * 'monitor_fullscan_frequency' = 3600 = 1 hour

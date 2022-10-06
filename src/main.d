@@ -1550,7 +1550,7 @@ int main(string[] args)
 							string startMessage = "Starting a sync with OneDrive";
 							string finishMessage = "Sync with OneDrive is complete";
 							// perform a --monitor sync
-							if ((cfg.getValueLong("verbose") > 0) || (logMonitorCounter == logInterval)) {
+							if ((cfg.getValueLong("verbose") > 0) || (logMonitorCounter == logInterval) || (fullScanRequired) ) {
 								// log to console and log file if enabled
 								log.log(startMessage);
 							} else {
@@ -1567,7 +1567,7 @@ int main(string[] args)
 									log.error("ERROR: The following inotify error was generated: ", e.msg);
 								}
 							}
-							if ((cfg.getValueLong("verbose") > 0) || (logMonitorCounter == logInterval)) {
+							if ((cfg.getValueLong("verbose") > 0) || (logMonitorCounter == logInterval) || (fullScanRequired) ) {
 								// log to console and log file if enabled
 								log.log(finishMessage);
 							} else {
@@ -1772,7 +1772,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 						}
 					} else {
 						// sync from OneDrive first before uploading files to OneDrive
-						if (logLevel < MONITOR_LOG_SILENT) log.log("Syncing changes from OneDrive ...");
+						if ((logLevel < MONITOR_LOG_SILENT) || (fullScanRequired)) log.log("Syncing changes from OneDrive ...");
 
 						// For the initial sync, always use the delta link so that we capture all the right delta changes including adds, moves & deletes
 						logOutputMessage = "Initial Scan: Call OneDrive Delta API for delta changes as compared to last successful sync.";
@@ -1829,7 +1829,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 									//
 									// To change this behaviour adjust 'monitor_interval' and 'monitor_fullscan_frequency' to desired values in the application config file
 									if (fullScanRequired) {
-										log.vlog("Performing Database Consistency Integrity Check .. ");
+										log.log("Performing a database consistency and integrity check on locally stored data ... ");
 										sync.scanForDifferencesDatabaseScan(localPath);
 										// handle any inotify events that occured 'whilst' we were scanning the database
 										m.update(true);
