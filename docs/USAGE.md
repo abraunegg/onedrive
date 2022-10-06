@@ -481,7 +481,7 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # skip_size = "1000"
 # dry_run = "false"
 # min_notify_changes = "5"
-# monitor_log_frequency = "5"
+# monitor_log_frequency = "6"
 # monitor_fullscan_frequency = "12"
 # sync_root_files = "false"
 # classify_as_big_delete = "1000"
@@ -654,7 +654,7 @@ Example:
 # dry_run = "false"
 monitor_interval = "600"
 # min_notify_changes = "5"
-# monitor_log_frequency = "5"
+# monitor_log_frequency = "6"
 ```
 
 #### monitor_fullscan_frequency
@@ -667,13 +667,37 @@ Setting this value to 24 means that the full scan of OneDrive and checking the i
 Example:
 ```text
 # min_notify_changes = "5"
-# monitor_log_frequency = "5"
+# monitor_log_frequency = "6"
 monitor_fullscan_frequency = "24"
 # sync_root_files = "false"
 # classify_as_big_delete = "1000"
 ```
 
-**Note:** When running in --monitor mode, at application start-up, a full scan will be performed to ensure data integrity. This option has zero effect when running the application in --synchronize mode and a full scan will always be performed.
+**Note:** When running in --monitor mode, at application start-up, a full scan will be performed to ensure data integrity. This option has zero effect when running the application in `--synchronize` mode and a full scan will always be performed.
+
+#### monitor_log_frequency
+This configuration option controls the output of when logging is performed to detail that a sync is occuring with OneDrive when using `--monitor` mode. The frequency of syncing with OneDrive is controled via 'monitor_interval'.
+
+By default without configuration, 'monitor_log_frequency' is set to 6.
+
+By default, at application start-up when using `--monitor` mode, the following will be logged to indicate that the application has correctly started and performed all the initial processing steps:
+```
+Configuring Global Azure AD Endpoints
+Initializing the Synchronization Engine ...
+Initializing monitor ...
+OneDrive monitor interval (seconds): 300
+Starting a sync with OneDrive
+Syncing changes from OneDrive ...
+Performing a database consistency and integrity check on locally stored data ... 
+Sync with OneDrive is complete
+```
+Then, based on 'monitor_log_frequency', the following will be logged when the value is reached:
+```
+Starting a sync with OneDrive
+Syncing changes from OneDrive ...
+Sync with OneDrive is complete
+```
+**Note:** The additional log output `Performing a database consistency and integrity check on locally stored data ...` will only be displayed when this activity is occuring which is triggered by 'monitor_fullscan_frequency'.
 
 #### min_notify_changes
 This option defines the minimum number of pending incoming changes necessary to trigger a desktop notification. This allows controlling the frequency of notifications.
@@ -683,7 +707,7 @@ Example:
 # dry_run = "false"
 # monitor_interval = "300"
 min_notify_changes = "50"
-# monitor_log_frequency = "5"
+# monitor_log_frequency = "6"
 # monitor_fullscan_frequency = "12"
 ```
 
