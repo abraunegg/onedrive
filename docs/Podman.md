@@ -67,6 +67,8 @@ podman run -it --name onedrive --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
 
 **If you plan to use podmans built in auto-updating of container images described in step 5, you must pass an additional argument to set a label during the first run.**
 
+**Important:** In some scenarios, 'podman' sets the configuration and data directories to a different UID & GID as specified. To resolve this situation, you must run 'podman' with the `--userns=keep-id` flag to ensure 'podman' uses the UID and GID as specified.
+
 The run command would look instead look like as follows:
 ```
 podman run -it --name onedrive --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
