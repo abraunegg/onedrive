@@ -56,7 +56,7 @@ The second docker volume is for your data folder and is created in the next step
 *   The owner of this specified folder must not be root
 *   The owner of this specified folder must have permissions for its parent directory
 
-**NOTE:** Issues occur when this target folder is a mounted folder of an external system (NAS, SMB mount, USB Drive etc) as the 'mount' itself is owed by 'root'. If this is your use case, you *must* ensure your normal user can mount your desired target without having the target mounted by 'root'. If you do not fix this, your Docker container will fail to start with the following error message:
+**NOTE:** Issues occur when this target folder is a mounted folder of an external system (NAS, SMB mount, USB Drive etc) as the 'mount' itself is owned by 'root'. If this is your use case, you *must* ensure your normal user can mount your desired target without having the target mounted by 'root'. If you do not fix this, your Docker container will fail to start with the following error message:
 ```bash
 ROOT level privileges prohibited!
 ```
