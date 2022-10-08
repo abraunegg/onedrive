@@ -350,7 +350,7 @@ The requested client activity log will instead be located in the users home dire
 On many systems this can be achieved by
 ```text
 sudo mkdir /var/log/onedrive
-sudo chown root.users /var/log/onedrive
+sudo chown root:users /var/log/onedrive
 sudo chmod 0775 /var/log/onedrive
 ```
 
