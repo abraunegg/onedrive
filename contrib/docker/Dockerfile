@@ -24,15 +24,14 @@ RUN ./configure \
  && make install
 
 FROM fedora:${FEDORA_VERSION}
-
-RUN dnf install -y libcurl sqlite ldc-libs \
- && dnf clean all \
- && mkdir -p /onedrive/conf /onedrive/data
-
 COPY --from=builder-gosu /go/bin/gosu /usr/local/bin/
 COPY --from=builder-onedrive /usr/local/bin/onedrive /usr/local/bin/
 
 COPY contrib/docker/entrypoint.sh /
 RUN chmod +x /entrypoint.sh
+
+RUN dnf install -y libcurl sqlite ldc-libs \
+ && dnf clean all \
+ && mkdir -p /onedrive/conf /onedrive/data
 
 ENTRYPOINT ["/entrypoint.sh"]

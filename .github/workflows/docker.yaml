@@ -5,16 +5,16 @@ on:
     branches: [ master ]
     tags: [ 'v*' ]
   pull_request:
-    branches:
-      - master
-    types: [closed]
+    #branches:
+    #  - master
+    #types: [closed]
 
 env:
   DOCKER_HUB_SLUG: driveone/onedrive
 
 jobs:
   build:
-    if: (!(github.event.action == 'closed' && github.event.pull_request.merged != true))
+    #if: (!(github.event.action == 'closed' && github.event.pull_request.merged != true))
     runs-on: ubuntu-latest
 
     strategy:
@@ -23,7 +23,7 @@ jobs:
         include:
           - flavor: fedora
             dockerfile: ./contrib/docker/Dockerfile
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm/v7
           - flavor: debian
             dockerfile: ./contrib/docker/Dockerfile-debian
             platforms: linux/amd64,linux/arm64,linux/arm/v7
