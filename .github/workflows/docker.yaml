@@ -53,7 +53,7 @@ jobs:
 
       - uses: docker/setup-qemu-action@v2
         with:
-          image: tonistiigi/binfmt:latest
+          image: tonistiigi/binfmt:qemu-v6.2.0-26
           platforms: all
         if: matrix.platforms != 'linux/amd64'
 
