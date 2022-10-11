@@ -1213,6 +1213,17 @@ final class SyncEngine
 		string deltaLinkAvailable;
 		bool nationalCloudChildrenScan = false;
 		
+		// Tracking processing performance
+		SysTime startFunctionProcessingTime;
+		SysTime endFunctionProcessingTime;
+		SysTime startBundleProcessingTime;
+		SysTime endBundleProcessingTime;
+		ulong cumulativeOneDriveItemCount = 0;
+		
+		writeln("============================================================");
+		startFunctionProcessingTime = Clock.currTime();
+		writeln("Start Function Processing Time: ", startFunctionProcessingTime);
+				
 		// Update the quota details for this driveId, as this could have changed since we started the application - the user could have added / deleted data online, or purchased additional storage
 		// Quota details are ONLY available for the main default driveId, as the OneDrive API does not provide quota details for shared folders
 		try {
@@ -1479,6 +1490,11 @@ final class SyncEngine
 		}
 		
 		for (;;) {
+		
+			writeln("------------------------------------------------------------");
+			startBundleProcessingTime = Clock.currTime();
+			writeln("Start 'change|item' API Response Bundle Processing Time: ", startBundleProcessingTime);
+					
 			// Due to differences in OneDrive API's between personal and business we need to get changes only from defaultRootId
 			// If we used the 'id' passed in & when using --single-directory with a business account we get:
 			//	'HTTP request returned status code 501 (Not Implemented): view.delta can only be called on the root.'
@@ -1895,7 +1911,10 @@ final class SyncEngine
 							log.vlog("Number of items from OneDrive to process: ", nrChanges);
 						}
 					}
-
+					
+					// Add nrChanges to cumulativeOneDriveItemCount so we can detail how may items in total were processed
+					cumulativeOneDriveItemCount = cumulativeOneDriveItemCount + nrChanges;
+					
 					foreach (item; changes["value"].array) {
 						bool isRoot = false;
 						string thisItemParentPath;
@@ -2118,6 +2137,12 @@ final class SyncEngine
 					log.vdebug("Updating completed deltaLink in DB to: ", deltaLink); 
 					itemdb.setDeltaLink(driveId, id, deltaLink);
 				}
+				
+				// Processing Timing for this bundle
+				endBundleProcessingTime = Clock.currTime();
+				writeln("End 'change|item' API Response Bundle Processing Time:   ", endBundleProcessingTime);
+				writeln("Elapsed Processing Time: ", (endBundleProcessingTime - startBundleProcessingTime));
+				
 				if ("@odata.nextLink" in changes) {
 					// Update deltaLink to next changeSet bundle
 					deltaLink = changes["@odata.nextLink"].str;
@@ -2141,6 +2166,16 @@ final class SyncEngine
 		// empty the skipped items
 		skippedItems.length = 0;
 		assumeSafeAppend(skippedItems);
+		
+		// Processing timing and metrics for everything that was processed
+		endFunctionProcessingTime = Clock.currTime();
+		// complete the bundle output
+		writeln("------------------------------------------------------------");
+		writeln("Start Function Processing Time:   ", startFunctionProcessingTime);
+		writeln("End Function Processing Time:     ", endFunctionProcessingTime);
+		writeln("Elapsed Function Processing Time: ", (endFunctionProcessingTime - startFunctionProcessingTime));
+		writeln("Total number of OneDrive items processed: ", cumulativeOneDriveItemCount);
+		writeln("============================================================");
 	}
 
 	// process the change of a single DriveItem

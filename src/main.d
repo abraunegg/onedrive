@@ -6,6 +6,7 @@ import std.net.curl: CurlException;
 import core.stdc.signal;
 import std.traits, std.format;
 import std.concurrency: receiveTimeout;
+import std.datetime;
 static import log;
 
 OneDriveApi oneDrive;
@@ -1547,12 +1548,18 @@ int main(string[] args)
 							return EXIT_FAILURE;
 						}
 						try {
+						
+							// performance timing
+							SysTime startSyncProcessingTime = Clock.currTime();
+							
+						
 							string startMessage = "Starting a sync with OneDrive";
 							string finishMessage = "Sync with OneDrive is complete";
 							// perform a --monitor sync
 							if ((cfg.getValueLong("verbose") > 0) || (logMonitorCounter == logInterval) || (fullScanRequired) ) {
 								// log to console and log file if enabled
-								log.log(startMessage);
+								//log.log(startMessage);
+								writeln(startMessage, " ", startSyncProcessingTime);
 							} else {
 								// log file only if enabled so we know when a sync started when not using --verbose
 								log.fileOnly(startMessage);
@@ -1569,7 +1576,11 @@ int main(string[] args)
 							}
 							if ((cfg.getValueLong("verbose") > 0) || (logMonitorCounter == logInterval) || (fullScanRequired) ) {
 								// log to console and log file if enabled
-								log.log(finishMessage);
+								SysTime endSyncProcessingTime = Clock.currTime();
+								//log.log(finishMessage);
+								writeln(finishMessage, " ", endSyncProcessingTime);
+								writeln("Elapsed Sync Time with OneDrive Service: ", (endSyncProcessingTime - startSyncProcessingTime));
+								
 							} else {
 								// log file only if enabled so we know when a sync completed when not using --verbose
 								log.fileOnly(finishMessage);
@@ -1772,7 +1783,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 						}
 					} else {
 						// sync from OneDrive first before uploading files to OneDrive
-						if ((logLevel < MONITOR_LOG_SILENT) || (fullScanRequired)) log.log("Syncing changes from OneDrive ...");
+						if ((logLevel < MONITOR_LOG_SILENT) || (fullScanRequired)) log.log("Syncing changes and items from OneDrive ...");
 
 						// For the initial sync, always use the delta link so that we capture all the right delta changes including adds, moves & deletes
 						logOutputMessage = "Initial Scan: Call OneDrive Delta API for delta changes as compared to last successful sync.";
@@ -1807,13 +1818,19 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 									log.vdebug(logOutputMessage);
 									log.vdebug(syncCallLogOutput);
 								}
-
+								
+								// performance timing for DB and file system integrity check - start
+								SysTime startIntegrityCheckProcessingTime = Clock.currTime();
+								writeln("============================================================");
+								writeln("Start Integrity Check Processing Time:   ", startIntegrityCheckProcessingTime);
+								
 								// What sort of local scan do we want to do?
 								// In --monitor mode, when performing the DB scan, a race condition occurs where by if a file or folder is moved during this process
 								// the inotify event is discarded once performSync() is finished (see m.update(false) above), so these events need to be handled
 								// This can be remediated by breaking the DB and file system scan into separate processes, and handing any applicable inotify events in between
 								if (!monitorEnabled) {
 									// --synchronize in use
+									log.log("Performing a database consistency and integrity check on locally stored data ... ");
 									// standard process flow
 									sync.scanForDifferences(localPath);
 								} else {
@@ -1829,7 +1846,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 									//
 									// To change this behaviour adjust 'monitor_interval' and 'monitor_fullscan_frequency' to desired values in the application config file
 									if (fullScanRequired) {
-										log.log("Performing a database consistency and integrity check on locally stored data ... ");
+										log.log("Performing a database consistency and integrity check on locally stored data due to fullscan requirement ... ");
 										sync.scanForDifferencesDatabaseScan(localPath);
 										// handle any inotify events that occured 'whilst' we were scanning the database
 										m.update(true);
@@ -1844,7 +1861,14 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 									// handle any inotify events that occured 'whilst' we were scanning the local filesystem
 									m.update(true);
 								}
-
+								
+								// performance timing for DB and file system integrity check - finish
+								SysTime endIntegrityCheckProcessingTime = Clock.currTime();
+								writeln("End Integrity Check Processing Time:     ", endIntegrityCheckProcessingTime);
+								writeln("Elapsed Function Processing Time: ", (endIntegrityCheckProcessingTime - startIntegrityCheckProcessingTime));
+								writeln("============================================================");
+								
+								
 								// At this point, all OneDrive changes / local changes should be uploaded and in sync
 								// This MAY not be the case when using sync_list, thus a full walk of OneDrive ojects is required
 
