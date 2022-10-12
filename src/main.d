@@ -1193,8 +1193,14 @@ int main(string[] args)
 	
 	// Are we forcing to use /children scan instead of /delta to simulate National Cloud Deployment use of /children?
 	if (cfg.getValueBool("force_children_scan")) {
-		log.vdebug("Forcing client to use /children scan rather than /delta to simulate National Cloud Deployment use of /children");
+		log.log("Forcing client to use /children scan rather than /delta to simulate National Cloud Deployment use of /children");
 		sync.setNationalCloudDeployment();
+	}
+	
+	// Do we need to display the function processing timing
+	if (cfg.getValueBool("display_processing_time")) {
+		log.log("Forcing client to display function processing times");
+		sync.setPerformanceProcessingOutput();
 	}
 
 	// Do we need to validate the syncDir to check for the presence of a '.nosync' file
@@ -1551,15 +1557,17 @@ int main(string[] args)
 						
 							// performance timing
 							SysTime startSyncProcessingTime = Clock.currTime();
-							
-						
 							string startMessage = "Starting a sync with OneDrive";
 							string finishMessage = "Sync with OneDrive is complete";
+							
 							// perform a --monitor sync
 							if ((cfg.getValueLong("verbose") > 0) || (logMonitorCounter == logInterval) || (fullScanRequired) ) {
 								// log to console and log file if enabled
-								//log.log(startMessage);
-								writeln(startMessage, " ", startSyncProcessingTime);
+								if (cfg.getValueBool("display_processing_time")) {
+									log.log(startMessage, " ", startSyncProcessingTime);
+								} else {
+									log.log(startMessage);
+								}
 							} else {
 								// log file only if enabled so we know when a sync started when not using --verbose
 								log.fileOnly(startMessage);
@@ -1574,13 +1582,15 @@ int main(string[] args)
 									log.error("ERROR: The following inotify error was generated: ", e.msg);
 								}
 							}
+							SysTime endSyncProcessingTime = Clock.currTime();
 							if ((cfg.getValueLong("verbose") > 0) || (logMonitorCounter == logInterval) || (fullScanRequired) ) {
 								// log to console and log file if enabled
-								SysTime endSyncProcessingTime = Clock.currTime();
-								//log.log(finishMessage);
-								writeln(finishMessage, " ", endSyncProcessingTime);
-								writeln("Elapsed Sync Time with OneDrive Service: ", (endSyncProcessingTime - startSyncProcessingTime));
-								
+								if (cfg.getValueBool("display_processing_time")) {
+									log.log(finishMessage, " ", endSyncProcessingTime);
+									log.log("Elapsed Sync Time with OneDrive Service: ", (endSyncProcessingTime - startSyncProcessingTime));
+								} else {
+									log.log(finishMessage);
+								}
 							} else {
 								// log file only if enabled so we know when a sync completed when not using --verbose
 								log.fileOnly(finishMessage);
@@ -1819,10 +1829,12 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 									log.vdebug(syncCallLogOutput);
 								}
 								
-								// performance timing for DB and file system integrity check - start
 								SysTime startIntegrityCheckProcessingTime = Clock.currTime();
-								writeln("============================================================");
-								writeln("Start Integrity Check Processing Time:   ", startIntegrityCheckProcessingTime);
+								if (sync.getPerformanceProcessingOutput()) {
+									// performance timing for DB and file system integrity check - start
+									writeln("============================================================");
+									writeln("Start Integrity Check Processing Time:   ", startIntegrityCheckProcessingTime);
+								}
 								
 								// What sort of local scan do we want to do?
 								// In --monitor mode, when performing the DB scan, a race condition occurs where by if a file or folder is moved during this process
@@ -1862,13 +1874,14 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 									m.update(true);
 								}
 								
-								// performance timing for DB and file system integrity check - finish
 								SysTime endIntegrityCheckProcessingTime = Clock.currTime();
-								writeln("End Integrity Check Processing Time:     ", endIntegrityCheckProcessingTime);
-								writeln("Elapsed Function Processing Time: ", (endIntegrityCheckProcessingTime - startIntegrityCheckProcessingTime));
-								writeln("============================================================");
-								
-								
+								if (sync.getPerformanceProcessingOutput()) {
+									// performance timing for DB and file system integrity check - finish
+									writeln("End Integrity Check Processing Time:     ", endIntegrityCheckProcessingTime);
+									writeln("Elapsed Function Processing Time: ", (endIntegrityCheckProcessingTime - startIntegrityCheckProcessingTime));
+									writeln("============================================================");
+								}
+																
 								// At this point, all OneDrive changes / local changes should be uploaded and in sync
 								// This MAY not be the case when using sync_list, thus a full walk of OneDrive ojects is required
 

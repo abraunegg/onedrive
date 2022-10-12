@@ -270,6 +270,8 @@ final class SyncEngine
 	private bool bypassDataPreservation = false;
 	// is National Cloud Deployments configured
 	private bool nationalCloudDeployment = false;
+	// has performance processing timings been requested
+	private bool displayProcessingTime = false;
 	// array of all OneDrive driveId's for use with OneDrive Business Folders
 	private string[] driveIDsArray;
 	
@@ -619,6 +621,19 @@ final class SyncEngine
 		log.vdebug("Setting nationalCloudDeployment = true");
 	}
 	
+	// set performance timing flag
+	void setPerformanceProcessingOutput()
+	{
+		displayProcessingTime = true;
+		log.vdebug("Setting displayProcessingTime = true");
+	}
+	
+	// get performance timing flag
+	bool getPerformanceProcessingOutput()
+	{
+		return displayProcessingTime;
+	}
+		
 	// set cleanupLocalFiles to true
 	void setCleanupLocalFiles()
 	{
@@ -1220,9 +1235,12 @@ final class SyncEngine
 		SysTime endBundleProcessingTime;
 		ulong cumulativeOneDriveItemCount = 0;
 		
-		writeln("============================================================");
-		startFunctionProcessingTime = Clock.currTime();
-		writeln("Start Function Processing Time: ", startFunctionProcessingTime);
+		if (displayProcessingTime) {
+			writeln("============================================================");
+			writeln("Querying OneDrive API for relevant 'changes|items' stored online for this account");
+			startFunctionProcessingTime = Clock.currTime();
+			writeln("Start Function Processing Time: ", startFunctionProcessingTime);
+		}
 				
 		// Update the quota details for this driveId, as this could have changed since we started the application - the user could have added / deleted data online, or purchased additional storage
 		// Quota details are ONLY available for the main default driveId, as the OneDrive API does not provide quota details for shared folders
@@ -1491,10 +1509,12 @@ final class SyncEngine
 		
 		for (;;) {
 		
-			writeln("------------------------------------------------------------");
-			startBundleProcessingTime = Clock.currTime();
-			writeln("Start 'change|item' API Response Bundle Processing Time: ", startBundleProcessingTime);
-					
+			if (displayProcessingTime) {
+				writeln("------------------------------------------------------------");
+				startBundleProcessingTime = Clock.currTime();
+				writeln("Start 'change|item' API Response Bundle Processing Time: ", startBundleProcessingTime);
+			}
+			
 			// Due to differences in OneDrive API's between personal and business we need to get changes only from defaultRootId
 			// If we used the 'id' passed in & when using --single-directory with a business account we get:
 			//	'HTTP request returned status code 501 (Not Implemented): view.delta can only be called on the root.'
@@ -1862,6 +1882,11 @@ final class SyncEngine
 					// OneDrive ships 'changes' in ~200 bundles. We display that we are processing X number of objects
 					// Do not display anything unless we are doing a verbose debug as due to #658 we are essentially doing a --resync each time when using sync_list
 					
+					// performance logging output
+					if (displayProcessingTime) {
+						writeln("Number of 'change|item' in this API Response Bundle from OneDrive to process: ", nrChanges);
+					}
+					
 					// is nrChanges >= min_notify_changes (default of min_notify_changes = 5)
 					if (nrChanges >= cfg.getValueLong("min_notify_changes")) {
 						// nrChanges is >= than min_notify_changes
@@ -1914,7 +1939,7 @@ final class SyncEngine
 					
 					// Add nrChanges to cumulativeOneDriveItemCount so we can detail how may items in total were processed
 					cumulativeOneDriveItemCount = cumulativeOneDriveItemCount + nrChanges;
-					
+										
 					foreach (item; changes["value"].array) {
 						bool isRoot = false;
 						string thisItemParentPath;
@@ -2139,9 +2164,11 @@ final class SyncEngine
 				}
 				
 				// Processing Timing for this bundle
-				endBundleProcessingTime = Clock.currTime();
-				writeln("End 'change|item' API Response Bundle Processing Time:   ", endBundleProcessingTime);
-				writeln("Elapsed Processing Time: ", (endBundleProcessingTime - startBundleProcessingTime));
+				if (displayProcessingTime) {
+					endBundleProcessingTime = Clock.currTime();
+					writeln("End 'change|item' API Response Bundle Processing Time:   ", endBundleProcessingTime);
+					writeln("Elapsed Processing Time: ", (endBundleProcessingTime - startBundleProcessingTime));
+				}
 				
 				if ("@odata.nextLink" in changes) {
 					// Update deltaLink to next changeSet bundle
@@ -2168,14 +2195,16 @@ final class SyncEngine
 		assumeSafeAppend(skippedItems);
 		
 		// Processing timing and metrics for everything that was processed
-		endFunctionProcessingTime = Clock.currTime();
-		// complete the bundle output
-		writeln("------------------------------------------------------------");
-		writeln("Start Function Processing Time:   ", startFunctionProcessingTime);
-		writeln("End Function Processing Time:     ", endFunctionProcessingTime);
-		writeln("Elapsed Function Processing Time: ", (endFunctionProcessingTime - startFunctionProcessingTime));
-		writeln("Total number of OneDrive items processed: ", cumulativeOneDriveItemCount);
-		writeln("============================================================");
+		if (displayProcessingTime) {
+			endFunctionProcessingTime = Clock.currTime();
+			// complete the bundle output
+			writeln("------------------------------------------------------------");
+			writeln("Start Function Processing Time:   ", startFunctionProcessingTime);
+			writeln("End Function Processing Time:     ", endFunctionProcessingTime);
+			writeln("Elapsed Function Processing Time: ", (endFunctionProcessingTime - startFunctionProcessingTime));
+			writeln("Total number of OneDrive items processed: ", cumulativeOneDriveItemCount);
+			writeln("============================================================");
+		}
 	}
 
 	// process the change of a single DriveItem
