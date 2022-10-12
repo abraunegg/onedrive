@@ -157,7 +157,11 @@ final class Config
 		// - Force client to use /children rather than /delta to query changes on OneDrive
 		// - This option flags nationalCloudDeployment as true, forcing the client to act like it is using a National Cloud Deployment
 		boolValues["force_children_scan"] = false;
-		
+		// display_processing_time = true | false
+		// - Enabling this option will add function processing times to the console output
+		// - This then enables tracking of where the application is spending most amount of time when processing data when users have questions re performance
+		boolValues["display_processing_time"] = false;
+				
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
