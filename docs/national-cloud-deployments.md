@@ -1,4 +1,8 @@
 # How to configure access to specific Microsoft Azure deployments
+## Application Version
+Before reading this document, please ensure you are running application version [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases) or greater. Use `onedrive --version` to determine what application version you are using and upgrade your client if required.
+
+## Process Overview
 In some cases it is a requirement to utilise specific Microsoft Azure cloud deployments to conform with data and security reuqirements that requires data to reside within the geographic borders of that country.
 Current national clouds that are supported are:
 *   Microsoft Cloud for US Government
