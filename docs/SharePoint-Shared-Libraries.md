@@ -1,4 +1,8 @@
 # How to configure OneDrive SharePoint Shared Library sync
+## Application Version
+Before reading this document, please ensure you are running application version [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases) or greater. Use `onedrive --version` to determine what application version you are using and upgrade your client if required.
+
+## Process Overview
 Syncing a OneDrive SharePoint library requires additional configuration for your 'onedrive' client:
 1.  Login to OneDrive and under 'Shared Libraries' obtain the shared library name
 2.  Query that shared library name using the client to obtain the required configuration details
