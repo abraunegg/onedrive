@@ -108,24 +108,34 @@ Determine what your OS is based on. To do this, run the following command:
 ```text
 lsb_release -a
 ```
+**Example:**
+```text
+alex@ubuntu-system:~$ lsb_release -a
+No LSB modules are available.
+Distributor ID: Ubuntu
+Description:    Ubuntu 22.04 LTS
+Release:        22.04
+Codename:       jammy
+```
 
 ### Step 4: Pick the correct instructions to use
 If required, review the table below based on your 'lsb_release' information to pick the appropriate instructions to use:
 
 | Release & Codename | Instructions to use |
 |--------------------|---------------------|
-| Ubuntu 18.x / bionic      | You must build from source or upgrade your Operating System to Ubuntu 22.x           |
-| Linux Mint 19.x / tina    | You must build from source or upgrade your Operating System to Linux Mint 20.x       |
-| Linux Mint 20.x / ulyana  | Use [Ubuntu 20.04](#distribution-ubuntu-2004) instructions below                     |
-| Linux Mint 21.x / vanessa | Use [Ubuntu 22.04](#distribution-ubuntu-2204) instructions below                     |
+| Ubuntu 18.x / Bionic      | You must build from source or upgrade your Operating System to Ubuntu 22.x           |
+| Linux Mint 19.x / Tina    | You must build from source or upgrade your Operating System to Linux Mint 20.x       |
+| Linux Mint 20.x / Ulyana  | Use [Ubuntu 20.04](#distribution-ubuntu-2004) instructions below                     |
+| Linux Mint 21.x / Vanessa | Use [Ubuntu 22.04](#distribution-ubuntu-2204) instructions below                     |
 | Debian 10                 | You must build from source or upgrade your Operating System to Debian 11             |
 | Debian 11                 | Use [Debian 11](#distribution-debian-11) instructions below                          |
 | Raspbian GNU/Linux 10     | You must build from source or upgrade your Operating System to Raspbian GNU/Linux 11 |
 | Raspbian GNU/Linux 11     | Use [Debian 11](#distribution-debian-11) instructions below                          |
-| Ubuntu 20.04              | Use [Ubuntu 20.04](#distribution-ubuntu-2004) instructions below                     |
-| Ubuntu 21.04              | Use [Ubuntu 21.04](#distribution-ubuntu-2104) instructions below                     |
-| Ubuntu 21.10              | Use [Ubuntu 21.10](#distribution-ubuntu-2110) instructions below                     |
-| Ubuntu 22.04              | Use [Ubuntu 22.04](#distribution-ubuntu-2204) instructions below                     |
+| Ubuntu 20.04 / Focal      | Use [Ubuntu 20.04](#distribution-ubuntu-2004) instructions below                     |
+| Ubuntu 21.04 / Hirsute    | Use [Ubuntu 21.04](#distribution-ubuntu-2104) instructions below                     |
+| Ubuntu 21.10 / Impish     | Use [Ubuntu 21.10](#distribution-ubuntu-2110) instructions below                     |
+| Ubuntu 22.04 / Jammy      | Use [Ubuntu 22.04](#distribution-ubuntu-2204) instructions below                     |
+| Ubuntu 22.10 / Kinetic    | Use [Ubuntu 22.10](#distribution-ubuntu-2210) instructions below                     |
 
 ## Distribution Package Install Instructions
 
@@ -253,6 +263,33 @@ wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ub
 Add the OpenSuSE Build Service repository using the following command:
 ```text
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-onedrive.gpg] https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_22.04/ ./" | sudo tee /etc/apt/sources.list.d/onedrive.list
+```
+
+#### Step 3: Update your apt package cache
+Run: `sudo apt-get update`
+
+#### Step 4: Install 'onedrive'
+Run: `sudo apt install onedrive`
+
+#### Step 5: Read 'Known Issues' with these packages
+Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
+
+### Distribution: Ubuntu 22.10
+The packages support the following platform architectures:
+| &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
+|:----:|:------:|:-----:|:-------:|
+❌|✔|✔|✔| |
+
+#### Step 1: Add the OpenSuSE Build Service repository release key
+Add the OpenSuSE Build Service repository release key using the following command:
+```text
+wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_22.10/Release.key | gpg --dearmor | sudo tee /usr/share/keyrings/obs-onedrive.gpg > /dev/null
+```
+
+#### Step 2: Add the OpenSuSE Build Service repository
+Add the OpenSuSE Build Service repository using the following command:
+```text
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-onedrive.gpg] https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_22.10/ ./" | sudo tee /etc/apt/sources.list.d/onedrive.list
 ```
 
 #### Step 3: Update your apt package cache
