@@ -5,17 +5,18 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-# Commented out hardenings are disabled because they don't work out of the box.
-# If you know what you are doing please try to enable them.
-ProtectSystem=full
+# Using these sandboxing options in a user unit requires
+# unprivileged user namespaces to be enabled
+#PrivateUsers=true
+#ProtectSystem=full
 #PrivateDevices=true
-ProtectHostname=true
+#ProtectHostname=true
 #ProtectClock=true
-ProtectKernelTunables=true
+#ProtectKernelTunables=true
 #ProtectKernelModules=true
 #ProtectKernelLogs=true
-ProtectControlGroups=true
-RestrictRealtime=true
+#ProtectControlGroups=true
+#RestrictRealtime=true
 ExecStart=@prefix@/bin/onedrive --monitor
 Restart=on-failure
 RestartSec=3
