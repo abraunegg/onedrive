@@ -1,4 +1,8 @@
 # How to configure OneDrive Business Shared Folder Sync
+## Application Version
+Before reading this document, please ensure you are running application version [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases) or greater. Use `onedrive --version` to determine what application version you are using and upgrade your client if required.
+
+## Process Overview
 Syncing OneDrive Business Shared Folders requires additional configuration for your 'onedrive' client:
 1.  List available shared folders to determine which folder you wish to sync & to validate that you have access to that folder
 2.  Create a new file called 'business_shared_folders' in your config directory which contains a list of the shared folders you wish to sync
