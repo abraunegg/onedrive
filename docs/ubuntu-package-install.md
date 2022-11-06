@@ -161,7 +161,7 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-o
 Run: `sudo apt-get update`
 
 #### Step 4: Install 'onedrive'
-Run: `sudo apt install onedrive`
+Run: `sudo apt install --no-install-recommends --no-install-suggests onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
 Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
@@ -188,7 +188,7 @@ echo 'deb https://download.opensuse.org/repositories/home:/npreining:/debian-ubu
 Run: `sudo apt-get update`
 
 #### Step 4: Install 'onedrive'
-Run: `sudo apt install onedrive`
+Run: `sudo apt install --no-install-recommends --no-install-suggests onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
 Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
@@ -215,7 +215,7 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-o
 Run: `sudo apt-get update`
 
 #### Step 4: Install 'onedrive'
-Run: `sudo apt install onedrive`
+Run: `sudo apt install --no-install-recommends --no-install-suggests onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
 Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
@@ -242,7 +242,7 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-o
 Run: `sudo apt-get update`
 
 #### Step 4: Install 'onedrive'
-Run: `sudo apt install onedrive`
+Run: `sudo apt install --no-install-recommends --no-install-suggests onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
 Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
@@ -269,7 +269,7 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-o
 Run: `sudo apt-get update`
 
 #### Step 4: Install 'onedrive'
-Run: `sudo apt install onedrive`
+Run: `sudo apt install --no-install-recommends --no-install-suggests onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
 Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
@@ -296,7 +296,7 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-o
 Run: `sudo apt-get update`
 
 #### Step 4: Install 'onedrive'
-Run: `sudo apt install onedrive`
+Run: `sudo apt install --no-install-recommends --no-install-suggests onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
 Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
