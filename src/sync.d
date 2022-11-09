@@ -2406,11 +2406,8 @@ final class SyncEngine
 			// Is the item parent in the local database?
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
 				// compute the item path to see if the path is excluded & need the full path for this file
-				log.vdebug("sync_list item to check: ", path);
-				if (path.empty) {
-					path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
-					path = buildNormalizedPath(path);
-				}
+				path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
+				path = buildNormalizedPath(path);
 				if (selectiveSync.isPathExcludedViaSyncList(path)) {
 					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
 					if ((isItemFile(driveItem)) && (cfg.getValueBool("sync_root_files")) && (rootName(path) == "") ) {
@@ -2634,17 +2631,11 @@ final class SyncEngine
 				}
 			} catch (FileException e) {
 				// file system generated an error message
-				if (isSymlink(path)) {
-					// path is a symbolic link
-					log.logAndNotify("Skipping item - invalid symbolic link: ", path);
-					return;
-				} else {
-					// display the error message
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-					return;
-				}
+				// display the error message
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				return;
 			}
-		
+	
 		if (localPathExists) {
 			// path exists locally
 			// Query DB for new remote item in specified path
@@ -2746,7 +2737,8 @@ final class SyncEngine
 				}
 			}
 		} else {
-			// Path does not exist locally - this will be a new file download or folder creation			
+			// Path does not exist locally - this will be a new file download or folder creation
+			
 			// Should this 'download' be skipped due to 'skip_dir' directive
 			if (cfg.getValueString("skip_dir") != "") {
 				string pathToCheck;
