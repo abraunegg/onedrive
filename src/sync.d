@@ -2406,7 +2406,10 @@ final class SyncEngine
 			// Is the item parent in the local database?
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
 				// compute the item path to see if the path is excluded & need the full path for this file
-				path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
+				log.vdebug("sync_list item to check: ", path);
+				if (path.empty) {
+					path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
+				}
 				path = buildNormalizedPath(path);
 				if (selectiveSync.isPathExcludedViaSyncList(path)) {
 					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
