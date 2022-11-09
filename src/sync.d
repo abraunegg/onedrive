@@ -2406,8 +2406,11 @@ final class SyncEngine
 			// Is the item parent in the local database?
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
 				// compute the item path to see if the path is excluded & need the full path for this file
-				path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
-				path = buildNormalizedPath(path);
+				log.vdebug("sync_list item to check: ", path);
+				if (path.empty) {
+					path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
+					path = buildNormalizedPath(path);
+				}
 				if (selectiveSync.isPathExcludedViaSyncList(path)) {
 					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
 					if ((isItemFile(driveItem)) && (cfg.getValueBool("sync_root_files")) && (rootName(path) == "") ) {
@@ -2564,7 +2567,7 @@ final class SyncEngine
 			log.vdebug("OneDrive change is an update to an existing local item");
 			applyChangedItem(oldItem, oldPath, item, path);
 		} else {
-			log.vdebug("OneDrive change is a new local item");
+			log.vdebug("OneDrive change is potentially a new local item");
 			// Check if file should be skipped based on size limit
 			if (isItemFile(driveItem)) {
 				if (cfg.getValueLong("skip_size") != 0) {
@@ -2621,7 +2624,28 @@ final class SyncEngine
 	// download an item that was not synced before
 	private void applyNewItem(const ref Item item, const(string) path)
 	{
-		if (exists(path)) {
+		bool localPathExists;
+		// Test for the local path existence 
+		try {
+				// Does the path actually exist locally?
+				if (exists(path)) {
+					// flag that the path exists locally
+					localPathExists = true;
+				}
+			} catch (FileException e) {
+				// file system generated an error message
+				if (isSymlink(path)) {
+					// path is a symbolic link
+					log.logAndNotify("Skipping item - invalid symbolic link: ", path);
+					return;
+				} else {
+					// display the error message
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					return;
+				}
+			}
+		
+		if (localPathExists) {
 			// path exists locally
 			// Query DB for new remote item in specified path
 			string itemSource = "remote";
@@ -2722,8 +2746,7 @@ final class SyncEngine
 				}
 			}
 		} else {
-			// Path does not exist locally - this will be a new file download or folder creation
-			
+			// Path does not exist locally - this will be a new file download or folder creation			
 			// Should this 'download' be skipped due to 'skip_dir' directive
 			if (cfg.getValueString("skip_dir") != "") {
 				string pathToCheck;
