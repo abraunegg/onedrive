@@ -9,7 +9,7 @@ Wants=network-online.target
 # If you know what you are doing please try to enable them.
 
 ProtectSystem=full
-#PrivateUsers=true
+PrivateUsers=true
 #PrivateDevices=true
 ProtectHostname=true
 #ProtectClock=true
