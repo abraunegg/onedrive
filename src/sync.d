@@ -2564,7 +2564,7 @@ final class SyncEngine
 			log.vdebug("OneDrive change is an update to an existing local item");
 			applyChangedItem(oldItem, oldPath, item, path);
 		} else {
-			log.vdebug("OneDrive change is a new local item");
+			log.vdebug("OneDrive change is potentially a new local item");
 			// Check if file should be skipped based on size limit
 			if (isItemFile(driveItem)) {
 				if (cfg.getValueLong("skip_size") != 0) {
@@ -2621,7 +2621,33 @@ final class SyncEngine
 	// download an item that was not synced before
 	private void applyNewItem(const ref Item item, const(string) path)
 	{
-		if (exists(path)) {
+		bool localPathExists;
+		// Test for the local path existence 
+		try {
+				// Does the path actually exist locally?
+				if (exists(path)) {
+					// flag that the path exists locally
+					localPathExists = true;
+				}
+			} catch (FileException e) {
+				// file system generated an error message
+				// display the error message
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				return;
+			}
+			
+		if (localPathExists) {
+			// test if a bad symbolic link
+			if (isSymlink(path)) {
+				log.vdebug("Path on local disk is a symbolic link ........");
+				if (!exists(readLink(path))) {
+					// reading the symbolic link failed	
+					log.vdebug("Reading the symbolic link target failed ........ ");
+					log.logAndNotify("Skipping item - invalid local symbolic link: ", path);
+					return;
+				}
+			}
+		
 			// path exists locally
 			// Query DB for new remote item in specified path
 			string itemSource = "remote";
