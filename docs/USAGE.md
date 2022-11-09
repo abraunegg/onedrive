@@ -1,4 +1,7 @@
 # Configuration and Usage of the OneDrive Free Client
+## Application Version
+Before reading this document, please ensure you are running application version [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases) or greater. Use `onedrive --version` to determine what application version you are using and upgrade your client if required.
+
 ## Table of Contents
 - [Using the client](#using-the-client)
   * [Upgrading from 'skilion' client](#upgrading-from-skilion-client)
@@ -64,11 +67,7 @@
   * [Setup selinux for a sync folder outside of the home folder](#setup-selinux-for-a-sync-folder-outside-of-the-home-folder)
 - [All available commands](#all-available-commands)
 
-
 ## Using the client
-### Application Version
-Before reading this document, please ensure you are running application version [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases) or greater. Use `onedrive --version` to determine what application version you are using and upgrade your client if required.
-
 ### Upgrading from 'skilion' client
 The 'skilion' version contains a significant number of defects in how the local sync state is managed. When upgrading from the 'skilion' version to this version, it is advisable to stop any service / onedrive process from running and then remove any `items.sqlite3` file from your configuration directory (`~/.config/onedrive/`) as this will force the creation of a new local cache file.
 
@@ -894,13 +893,19 @@ Both of these errors are local environment issues, where the following system va
 *   `fs.file-max`
 *   `fs.inotify.max_user_watches`
 
-To determine what these values are on your system use the following commands:
-```
+To determine what the existing values are on your system use the following commands:
+```text
 sysctl fs.file-max
 sysctl fs.inotify.max_user_watches
 ```
 
-To make a change to these variables:
+To determine what value to change to, you need to count all the files and folders in your configured 'sync_dir':
+```text
+cd /path/to/your/sync/dir
+ls -laR | wc -l
+```
+
+To make a change to these variables using your file and folder count:
 ```
 sudo sysctl fs.file-max=<new_value>
 sudo sysctl fs.inotify.max_user_watches=<new_value>
