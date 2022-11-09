@@ -2635,8 +2635,19 @@ final class SyncEngine
 				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				return;
 			}
-	
+			
 		if (localPathExists) {
+			// test if a bad symbolic link
+			if (isSymlink(path)) {
+				log.vdebug("Path on local disk is a symbolic link ........");
+				if (!exists(readLink(path))) {
+					// reading the symbolic link failed	
+					log.vdebug("Reading the symbolic link target failed ........ ");
+					log.logAndNotify("Skipping item - invalid local symbolic link: ", path);
+					return;
+				}
+			}
+		
 			// path exists locally
 			// Query DB for new remote item in specified path
 			string itemSource = "remote";
