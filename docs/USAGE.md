@@ -893,13 +893,19 @@ Both of these errors are local environment issues, where the following system va
 *   `fs.file-max`
 *   `fs.inotify.max_user_watches`
 
-To determine what these values are on your system use the following commands:
-```
+To determine what the existing values are on your system use the following commands:
+```text
 sysctl fs.file-max
 sysctl fs.inotify.max_user_watches
 ```
 
-To make a change to these variables:
+To determine what value to change to, you need to count all the files and folders in your configured 'sync_dir':
+```text
+cd /path/to/your/sync/dir
+ls -laR | wc -l
+```
+
+To make a change to these variables using your file and folder count:
 ```
 sudo sysctl fs.file-max=<new_value>
 sudo sysctl fs.inotify.max_user_watches=<new_value>
