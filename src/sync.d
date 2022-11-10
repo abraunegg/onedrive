@@ -2256,12 +2256,13 @@ final class SyncEngine
 				log.vdebug("This item was previously synced / seen by the client");				
 				if (("name" in driveItem["parentReference"]) != null) {
 					// How is this out of scope?
+					// is sync_list configured
 					if (syncListConfigured) {
 						// sync_list configured and in use
 						if (selectiveSync.isPathExcludedViaSyncList(driveItem["parentReference"]["name"].str)) {
 							// Previously synced item is now out of scope as it has been moved out of what is included in sync_list
 							log.vdebug("This previously synced item is now excluded from being synced due to sync_list exclusion");
-						}	
+						}
 					}
 					// flag to delete local file as it now is no longer in sync with OneDrive
 					log.vdebug("Flagging to delete item locally");
@@ -2409,13 +2410,19 @@ final class SyncEngine
 			// Is the item parent in the local database?
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
 				// parent item is in the local database
+				// compute the item path if currently empty
+				if (path.empty) {
+					path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
+				}
+				
+				// normalise the path
+				path = buildNormalizedPath(path);
+				// 'path' at this stage must not start with '/' otherwise sync_list matching issue
+				path = path.strip('/');
+				
+				// is sync_list configured
 				if (syncListConfigured) {
 					// sync_list configured and in use
-					if (path.empty) {
-						// compute the item path to see if the path is excluded & need the full path for this file
-						path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
-					}
-					path = buildNormalizedPath(path);
 					log.vdebug("sync_list item to check: ", path);
 					if (selectiveSync.isPathExcludedViaSyncList(path)) {
 						// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
@@ -2642,7 +2649,7 @@ final class SyncEngine
 				if (!exists(readLink(path))) {
 					// reading the symbolic link failed	
 					log.vdebug("Reading the symbolic link target failed ........ ");
-					log.logAndNotify("Skipping item - invalid local symbolic link: ", path);
+					log.logAndNotify("Skipping item - invalid symbolic link: ", path);
 					return;
 				}
 			}
@@ -3617,7 +3624,7 @@ final class SyncEngine
 		
 		// If path or filename does not exclude, is this excluded due to use of selective sync?
 		if (!unwanted) {
-			// Is the path excluded via sync_list?
+			// is sync_list configured
 			if (syncListConfigured) {
 				// sync_list configured and in use
 				unwanted = selectiveSync.isPathExcludedViaSyncList(path);
@@ -4400,6 +4407,7 @@ final class SyncEngine
 					}
 				}
 				
+				// is sync_list configured
 				if (syncListConfigured) {
 					// sync_list configured and in use
 					if (selectiveSync.isPathExcludedViaSyncList(path)) {
