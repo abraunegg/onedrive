@@ -2462,6 +2462,9 @@ final class SyncEngine
 				}
 			}
 		}
+
+		// 'path' at this stage must not start with '/'
+		path = path.strip('/');
 		
 		// skip downloading dot files if configured
 		if (cfg.getValueBool("skip_dotfiles")) {
@@ -2624,23 +2627,9 @@ final class SyncEngine
 	// download an item that was not synced before
 	private void applyNewItem(const ref Item item, const(string) path)
 	{
-		bool localPathExists;
-		// Test for the local path existence 
-		try {
-				// Does the path actually exist locally?
-				if (exists(path)) {
-					// flag that the path exists locally
-					localPathExists = true;
-				}
-			} catch (FileException e) {
-				// file system generated an error message
-				// display the error message
-				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-				return;
-			}
-			
-		if (localPathExists) {
-			// test if a bad symbolic link
+		// Test for the local path existence
+		if (exists(path)) {
+			// Issue #2209 fix - test if path is a bad symbolic link
 			if (isSymlink(path)) {
 				log.vdebug("Path on local disk is a symbolic link ........");
 				if (!exists(readLink(path))) {
@@ -2651,7 +2640,7 @@ final class SyncEngine
 				}
 			}
 		
-			// path exists locally
+			// path exists locally, is not a bad symbolic link
 			// Query DB for new remote item in specified path
 			string itemSource = "remote";
 			if (isItemSynced(item, path, itemSource)) {
