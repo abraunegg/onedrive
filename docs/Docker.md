@@ -5,10 +5,10 @@ This client can be run as a Docker container, with 3 available options for you t
 |----------------|-------------|----------------------------------------------------------------|:------:|:-----:|:-------:|
 | Alpine Linux   | edge-alpine | Docker container based on Apline 3.16 using 'master'           |✔|❌|✔|
 | Alpine Linux   | alpine      | Docker container based on Apline 3.16 using latest release     |✔|❌|✔|
-| Debian         | edge-debian | Docker container based on Debian Bullseye using 'master'       |✔|✔|✔|
 | Debian         | debian      | Docker container based on Debian Bullseye using latest release |✔|✔|✔|
+| Debian         | edge        | Docker container based on Debian Bullseye using 'master'       |✔|✔|✔|
+| Debian         | edge-debian | Docker container based on Debian Bullseye using 'master'       |✔|✔|✔|
 | Debian         | latest      | Docker container based on Debian Bullseye using latest release |✔|✔|✔|
-| Fedora         | edge        | Docker container based on Fedora 36 using 'master'             |✔|❌|✔|
 | Fedora         | edge-fedora | Docker container based on Fedora 36 using 'master'             |✔|❌|✔|
 | Fedora         | fedora      | Docker container based on Fedora 36 using latest release       |✔|❌|✔|
 
