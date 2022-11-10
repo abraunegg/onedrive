@@ -2360,13 +2360,15 @@ final class SyncEngine
 					
 					// The path that needs to be checked needs to include the '/'
 					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
+					// However, as 'path' used throughout, use a temp variable with this modification so that we use the temp variable for exclusion checks
+					string exclusionTestPath = "";
 					if (!startsWith(path, "/")){
 						// Add '/' to the path
-						path = '/' ~ path;
+						exclusionTestPath = '/' ~ path;
 					}
 					
-					log.vdebug("skip_file item to check: ", path);
-					unwanted = selectiveSync.isFileNameExcluded(path);
+					log.vdebug("skip_file item to check: ", exclusionTestPath);
+					unwanted = selectiveSync.isFileNameExcluded(exclusionTestPath);
 					log.vdebug("Result: ", unwanted);
 					if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
 				} else {
@@ -2410,36 +2412,30 @@ final class SyncEngine
 			// Is the item parent in the local database?
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
 				// parent item is in the local database
-				// is sync_list configured
-				if (syncListConfigured) {
-					// sync_list configured and in use
-					// compute the item path if currently empty
-					if (path.empty) {
-						path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
-					}
-					// normalise the path
-					path = buildNormalizedPath(path);
-					// 'path' at this stage must not start with '/' otherwise sync_list matching issue
-					path = path.strip('/');				
-					log.vdebug("sync_list item to check: ", path);
-					// check sync_list for path inclusion or exclusion
-					if (selectiveSync.isPathExcludedViaSyncList(path)) {
-						// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
-						if ((isItemFile(driveItem)) && (cfg.getValueBool("sync_root_files")) && (rootName(path) == "") ) {
-							// This is a file
-							// We are configured to sync all files in the root
-							// This is a file in the logical root
-							unwanted = false;
-						} else {
-							// path is unwanted
-							unwanted = true;
-							log.vlog("Skipping item - excluded by sync_list config: ", path);
-							// flagging to skip this file now, but does this exist in the DB thus needs to be removed / deleted?
-							if (itemdb.idInLocalDatabase(item.driveId, item.id)){
-								log.vlog("Flagging item for local delete as item exists in database: ", path);
-								// flag to delete
-								idsToDelete ~= [item.driveId, item.id];
-							}
+				// compute the item path if empty
+				if (path.empty) {
+					path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
+				}
+				// what path are we checking
+				log.vdebug("sync_list item to check: ", path);
+								
+				// Unfortunatly there is no avoiding this call to check if the path is excluded|included via sync_list
+				if (selectiveSync.isPathExcludedViaSyncList(path)) {
+					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
+					if ((isItemFile(driveItem)) && (cfg.getValueBool("sync_root_files")) && (rootName(path) == "") ) {
+						// This is a file
+						// We are configured to sync all files in the root
+						// This is a file in the logical root
+						unwanted = false;
+					} else {
+						// path is unwanted
+						unwanted = true;
+						log.vlog("Skipping item - excluded by sync_list config: ", path);
+						// flagging to skip this file now, but does this exist in the DB thus needs to be removed / deleted?
+						if (itemdb.idInLocalDatabase(item.driveId, item.id)){
+							log.vlog("Flagging item for local delete as item exists in database: ", path);
+							// flag to delete
+							idsToDelete ~= [item.driveId, item.id];
 						}
 					}
 				}
@@ -2476,9 +2472,6 @@ final class SyncEngine
 			}
 		}
 
-		// 'path' at this stage must not start with '/'
-		path = path.strip('/');
-		
 		// skip downloading dot files if configured
 		if (cfg.getValueBool("skip_dotfiles")) {
 			if (isDotFile(path)) {
@@ -3626,6 +3619,7 @@ final class SyncEngine
 			// is sync_list configured
 			if (syncListConfigured) {
 				// sync_list configured and in use
+				// Is the path excluded via sync_list?
 				unwanted = selectiveSync.isPathExcludedViaSyncList(path);
 			}
 		}
