@@ -2256,9 +2256,12 @@ final class SyncEngine
 				log.vdebug("This item was previously synced / seen by the client");				
 				if (("name" in driveItem["parentReference"]) != null) {
 					// How is this out of scope?
-					if (selectiveSync.isPathExcludedViaSyncList(driveItem["parentReference"]["name"].str)) {
-						// Previously synced item is now out of scope as it has been moved out of what is included in sync_list
-						log.vdebug("This previously synced item is now excluded from being synced due to sync_list exclusion");
+					if (syncListConfigured) {
+						// sync_list configured and in use
+						if (selectiveSync.isPathExcludedViaSyncList(driveItem["parentReference"]["name"].str)) {
+							// Previously synced item is now out of scope as it has been moved out of what is included in sync_list
+							log.vdebug("This previously synced item is now excluded from being synced due to sync_list exclusion");
+						}	
 					}
 					// flag to delete local file as it now is no longer in sync with OneDrive
 					log.vdebug("Flagging to delete item locally");
@@ -2405,28 +2408,32 @@ final class SyncEngine
 		if (!unwanted) {
 			// Is the item parent in the local database?
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
-				// compute the item path to see if the path is excluded & need the full path for this file
-				log.vdebug("sync_list item to check: ", path);
-				if (path.empty) {
-					path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
-				}
-				path = buildNormalizedPath(path);
-				if (selectiveSync.isPathExcludedViaSyncList(path)) {
-					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
-					if ((isItemFile(driveItem)) && (cfg.getValueBool("sync_root_files")) && (rootName(path) == "") ) {
-						// This is a file
-						// We are configured to sync all files in the root
-						// This is a file in the logical root
-						unwanted = false;
-					} else {
-						// path is unwanted
-						unwanted = true;
-						log.vlog("Skipping item - excluded by sync_list config: ", path);
-						// flagging to skip this file now, but does this exist in the DB thus needs to be removed / deleted?
-						if (itemdb.idInLocalDatabase(item.driveId, item.id)){
-							log.vlog("Flagging item for local delete as item exists in database: ", path);
-							// flag to delete
-							idsToDelete ~= [item.driveId, item.id];
+				// parent item is in the local database
+				if (syncListConfigured) {
+					// sync_list configured and in use
+					if (path.empty) {
+						// compute the item path to see if the path is excluded & need the full path for this file
+						path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
+					}
+					path = buildNormalizedPath(path);
+					log.vdebug("sync_list item to check: ", path);
+					if (selectiveSync.isPathExcludedViaSyncList(path)) {
+						// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
+						if ((isItemFile(driveItem)) && (cfg.getValueBool("sync_root_files")) && (rootName(path) == "") ) {
+							// This is a file
+							// We are configured to sync all files in the root
+							// This is a file in the logical root
+							unwanted = false;
+						} else {
+							// path is unwanted
+							unwanted = true;
+							log.vlog("Skipping item - excluded by sync_list config: ", path);
+							// flagging to skip this file now, but does this exist in the DB thus needs to be removed / deleted?
+							if (itemdb.idInLocalDatabase(item.driveId, item.id)){
+								log.vlog("Flagging item for local delete as item exists in database: ", path);
+								// flag to delete
+								idsToDelete ~= [item.driveId, item.id];
+							}
 						}
 					}
 				}
@@ -2813,7 +2820,7 @@ final class SyncEngine
 			
 			// Issue #658 handling - is sync_list in use?
 			if (syncListConfigured) {
-				// sync_list in use
+				// sync_list configured and in use
 				// path to create was previously checked if this should be included / excluded. No need to check again.
 				log.vdebug("Issue #658 handling");
 				setOneDriveFullScanTrigger();
@@ -3622,7 +3629,10 @@ final class SyncEngine
 		// If path or filename does not exclude, is this excluded due to use of selective sync?
 		if (!unwanted) {
 			// Is the path excluded via sync_list?
-			unwanted = selectiveSync.isPathExcludedViaSyncList(path);
+			if (syncListConfigured) {
+				// sync_list configured and in use
+				unwanted = selectiveSync.isPathExcludedViaSyncList(path);
+			}
 		}
 
 		// skip unwanted items
@@ -4401,19 +4411,22 @@ final class SyncEngine
 					}
 				}
 				
-				if (selectiveSync.isPathExcludedViaSyncList(path)) {
-					if ((isFile(path)) && (cfg.getValueBool("sync_root_files")) && (rootName(path.strip('.').strip('/')) == "")) {
-						log.vdebug("Not skipping path due to sync_root_files inclusion: ", path);
-					} else {
-						string userSyncList = cfg.configDirName ~ "/sync_list";
-						if (exists(userSyncList)){
-							// skipped most likely due to inclusion in sync_list
-							log.vlog("Skipping item - excluded by sync_list config: ", path);
-							return;
+				if (syncListConfigured) {
+					// sync_list configured and in use
+					if (selectiveSync.isPathExcludedViaSyncList(path)) {
+						if ((isFile(path)) && (cfg.getValueBool("sync_root_files")) && (rootName(path.strip('.').strip('/')) == "")) {
+							log.vdebug("Not skipping path due to sync_root_files inclusion: ", path);
 						} else {
-							// skipped for some other reason
-							log.vlog("Skipping item - path excluded by user config: ", path);
-							return;
+							string userSyncList = cfg.configDirName ~ "/sync_list";
+							if (exists(userSyncList)){
+								// skipped most likely due to inclusion in sync_list
+								log.vlog("Skipping item - excluded by sync_list config: ", path);
+								return;
+							} else {
+								// skipped for some other reason
+								log.vlog("Skipping item - path excluded by user config: ", path);
+								return;
+							}
 						}
 					}
 				}
