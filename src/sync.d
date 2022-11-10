@@ -2410,20 +2410,20 @@ final class SyncEngine
 			// Is the item parent in the local database?
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
 				// parent item is in the local database
-				// compute the item path if currently empty
-				if (path.empty) {
-					path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
-				}
-				
-				// normalise the path
-				path = buildNormalizedPath(path);
-				// 'path' at this stage must not start with '/' otherwise sync_list matching issue
-				path = path.strip('/');
 				
 				// is sync_list configured
 				if (syncListConfigured) {
 					// sync_list configured and in use
+					// compute the item path if currently empty
+					if (path.empty) {
+						path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
+					}
+					// normalise the path
+					path = buildNormalizedPath(path);
+					// 'path' at this stage must not start with '/' otherwise sync_list matching issue
+					path = path.strip('/');				
 					log.vdebug("sync_list item to check: ", path);
+					// check sync_list for path inclusion or exclusion
 					if (selectiveSync.isPathExcludedViaSyncList(path)) {
 						// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
 						if ((isItemFile(driveItem)) && (cfg.getValueBool("sync_root_files")) && (rootName(path) == "") ) {
