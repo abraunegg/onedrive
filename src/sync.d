@@ -2410,7 +2410,6 @@ final class SyncEngine
 			// Is the item parent in the local database?
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
 				// parent item is in the local database
-				
 				// is sync_list configured
 				if (syncListConfigured) {
 					// sync_list configured and in use
