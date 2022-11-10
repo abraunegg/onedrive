@@ -2256,9 +2256,13 @@ final class SyncEngine
 				log.vdebug("This item was previously synced / seen by the client");				
 				if (("name" in driveItem["parentReference"]) != null) {
 					// How is this out of scope?
-					if (selectiveSync.isPathExcludedViaSyncList(driveItem["parentReference"]["name"].str)) {
-						// Previously synced item is now out of scope as it has been moved out of what is included in sync_list
-						log.vdebug("This previously synced item is now excluded from being synced due to sync_list exclusion");
+					// is sync_list configured
+					if (syncListConfigured) {
+						// sync_list configured and in use
+						if (selectiveSync.isPathExcludedViaSyncList(driveItem["parentReference"]["name"].str)) {
+							// Previously synced item is now out of scope as it has been moved out of what is included in sync_list
+							log.vdebug("This previously synced item is now excluded from being synced due to sync_list exclusion");
+						}
 					}
 					// flag to delete local file as it now is no longer in sync with OneDrive
 					log.vdebug("Flagging to delete item locally");
@@ -2356,13 +2360,15 @@ final class SyncEngine
 					
 					// The path that needs to be checked needs to include the '/'
 					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
+					// However, as 'path' used throughout, use a temp variable with this modification so that we use the temp variable for exclusion checks
+					string exclusionTestPath = "";
 					if (!startsWith(path, "/")){
 						// Add '/' to the path
-						path = '/' ~ path;
+						exclusionTestPath = '/' ~ path;
 					}
 					
-					log.vdebug("skip_file item to check: ", path);
-					unwanted = selectiveSync.isFileNameExcluded(path);
+					log.vdebug("skip_file item to check: ", exclusionTestPath);
+					unwanted = selectiveSync.isFileNameExcluded(exclusionTestPath);
 					log.vdebug("Result: ", unwanted);
 					if (unwanted) log.vlog("Skipping item - excluded by skip_file config: ", item.name);
 				} else {
@@ -2405,16 +2411,15 @@ final class SyncEngine
 		if (!unwanted) {
 			// Is the item parent in the local database?
 			if (itemdb.idInLocalDatabase(item.driveId, item.parentId)){
-				// compute the item path to see if the path is excluded & need the full path for this file
-				log.vdebug("sync_list item to check: ", path);
+				// parent item is in the local database
+				// compute the item path if empty
 				if (path.empty) {
 					path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
 				}
-				path = buildNormalizedPath(path);
-				
-				// 'path' at this stage must not start with '/'
-				path = path.strip('/');
-				
+				// what path are we checking
+				log.vdebug("sync_list item to check: ", path);
+								
+				// Unfortunatly there is no avoiding this call to check if the path is excluded|included via sync_list
 				if (selectiveSync.isPathExcludedViaSyncList(path)) {
 					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
 					if ((isItemFile(driveItem)) && (cfg.getValueBool("sync_root_files")) && (rootName(path) == "") ) {
@@ -2467,9 +2472,6 @@ final class SyncEngine
 			}
 		}
 
-		// 'path' at this stage must not start with '/'
-		path = path.strip('/');
-		
 		// skip downloading dot files if configured
 		if (cfg.getValueBool("skip_dotfiles")) {
 			if (isDotFile(path)) {
@@ -2639,7 +2641,7 @@ final class SyncEngine
 				if (!exists(readLink(path))) {
 					// reading the symbolic link failed	
 					log.vdebug("Reading the symbolic link target failed ........ ");
-					log.logAndNotify("Skipping item - invalid local symbolic link: ", path);
+					log.logAndNotify("Skipping item - invalid symbolic link: ", path);
 					return;
 				}
 			}
@@ -2806,7 +2808,7 @@ final class SyncEngine
 			
 			// Issue #658 handling - is sync_list in use?
 			if (syncListConfigured) {
-				// sync_list in use
+				// sync_list configured and in use
 				// path to create was previously checked if this should be included / excluded. No need to check again.
 				log.vdebug("Issue #658 handling");
 				setOneDriveFullScanTrigger();
@@ -3614,8 +3616,12 @@ final class SyncEngine
 		
 		// If path or filename does not exclude, is this excluded due to use of selective sync?
 		if (!unwanted) {
-			// Is the path excluded via sync_list?
-			unwanted = selectiveSync.isPathExcludedViaSyncList(path);
+			// is sync_list configured
+			if (syncListConfigured) {
+				// sync_list configured and in use
+				// Is the path excluded via sync_list?
+				unwanted = selectiveSync.isPathExcludedViaSyncList(path);
+			}
 		}
 
 		// skip unwanted items
@@ -4394,19 +4400,23 @@ final class SyncEngine
 					}
 				}
 				
-				if (selectiveSync.isPathExcludedViaSyncList(path)) {
-					if ((isFile(path)) && (cfg.getValueBool("sync_root_files")) && (rootName(path.strip('.').strip('/')) == "")) {
-						log.vdebug("Not skipping path due to sync_root_files inclusion: ", path);
-					} else {
-						string userSyncList = cfg.configDirName ~ "/sync_list";
-						if (exists(userSyncList)){
-							// skipped most likely due to inclusion in sync_list
-							log.vlog("Skipping item - excluded by sync_list config: ", path);
-							return;
+				// is sync_list configured
+				if (syncListConfigured) {
+					// sync_list configured and in use
+					if (selectiveSync.isPathExcludedViaSyncList(path)) {
+						if ((isFile(path)) && (cfg.getValueBool("sync_root_files")) && (rootName(path.strip('.').strip('/')) == "")) {
+							log.vdebug("Not skipping path due to sync_root_files inclusion: ", path);
 						} else {
-							// skipped for some other reason
-							log.vlog("Skipping item - path excluded by user config: ", path);
-							return;
+							string userSyncList = cfg.configDirName ~ "/sync_list";
+							if (exists(userSyncList)){
+								// skipped most likely due to inclusion in sync_list
+								log.vlog("Skipping item - excluded by sync_list config: ", path);
+								return;
+							} else {
+								// skipped for some other reason
+								log.vlog("Skipping item - path excluded by user config: ", path);
+								return;
+							}
 						}
 					}
 				}
