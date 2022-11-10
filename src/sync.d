@@ -2411,6 +2411,10 @@ final class SyncEngine
 					path = computeItemPath(item.driveId, item.parentId) ~ "/" ~ item.name;
 				}
 				path = buildNormalizedPath(path);
+				
+				// 'path' at this stage must not start with '/'
+				path = path.strip('/');
+				
 				if (selectiveSync.isPathExcludedViaSyncList(path)) {
 					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
 					if ((isItemFile(driveItem)) && (cfg.getValueBool("sync_root_files")) && (rootName(path) == "") ) {
