@@ -31,7 +31,7 @@ Before reading this document, please ensure you are running application version 
     + [skip_dotfiles](#skip_dotfiles)
     + [monitor_interval](#monitor_interval)
     + [monitor_fullscan_frequency](#monitor_fullscan_frequency)
-	+ [monitor_log_frequency](#monitor_log_frequency)
+    + [monitor_log_frequency](#monitor_log_frequency)
     + [min_notify_changes](#min_notify_changes)
     + [operation_timeout](#operation_timeout)
   * [Configuring the client for 'single tenant application' use](#configuring-the-client-for-single-tenant-application-use)
