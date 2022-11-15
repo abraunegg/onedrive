@@ -6681,8 +6681,8 @@ version(Windows)
 }
 
 version(Posix) {
+	import core.sys.posix.unistd;
 	version(CRuntime_Musl) {} else {
-		import core.sys.posix.unistd;
 		private extern(C) int posix_spawn(pid_t*, const char*, void*, void*, const char**, const char**);
 	}
 }
