@@ -4443,25 +4443,41 @@ final class SyncEngine
 						log.log("Removing local directory as --download-only & --cleanup-local-files configured");
 						// Remove any children of this path if they still exist
 						// Resolve 'Directory not empty' error when deleting local files
-						foreach (DirEntry child; dirEntries(path, SpanMode.depth, false)) {
-							// what sort of child is this?
-							if (isDir(child.name)) {
-								log.log("Removing local directory: ", child.name);
-							} else {
-								log.log("Removing local file: ", child.name);
+						try {
+							foreach (DirEntry child; dirEntries(path, SpanMode.depth, false)) {
+								// what sort of child is this?
+								if (isDir(child.name)) {
+									log.log("Removing local directory: ", child.name);
+								} else {
+									log.log("Removing local file: ", child.name);
+								}
+								// are we in a --dry-run scenario?
+								if (!dryRun) {
+									// No --dry-run ... process local delete
+									try {
+										attrIsDir(child.linkAttributes) ? rmdir(child.name) : remove(child.name);
+									} catch (FileException e) {
+										// display the error message
+										displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+									}
+								}
 							}
+							// Remove the path now that it is empty of children
+							log.log("Removing local directory: ", path);
 							// are we in a --dry-run scenario?
 							if (!dryRun) {
 								// No --dry-run ... process local delete
-								attrIsDir(child.linkAttributes) ? rmdir(child.name) : remove(child.name);
+								try {
+									rmdirRecurse(path);
+								} catch (FileException e) {
+									// display the error message
+									displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+								}
 							}
-						}
-						// Remove the path now that it is empty of children
-						log.log("Removing local directory: ", path);
-						// are we in a --dry-run scenario?
-						if (!dryRun) {
-							// No --dry-run ... process local delete
-							rmdirRecurse(path);
+						} catch (FileException e) {
+							// display the error message
+							displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+							return;
 						}
 					}
 				}
