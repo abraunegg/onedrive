@@ -63,6 +63,8 @@ int main(string[] args)
 
 	// Define scopes
 	scope(exit) {
+		// detail what scope was called
+		log.vdebug("Exit scope called");
 		// Display memory details
 		if (displayMemoryUsage) {
 			log.displayMemoryUsagePreGC();
@@ -92,6 +94,8 @@ int main(string[] args)
 	}
 
 	scope(failure) {
+		// detail what scope was called
+		log.vdebug("Failure scope called");
 		// Display memory details
 		if (displayMemoryUsage) {
 			log.displayMemoryUsagePreGC();
@@ -978,20 +982,27 @@ int main(string[] args)
 
 	// configure the sync direcory based on syncDir config option
 	log.vlog("All operations will be performed in: ", syncDir);
-	if (!exists(syncDir)) {
-		log.vdebug("syncDir: Configured syncDir is missing. Creating: ", syncDir);
-		try {
-			// Attempt to create the sync dir we have been configured with
-			mkdirRecurse(syncDir);
-			// Configure the applicable permissions for the folder
-			log.vdebug("Setting directory permissions for: ", syncDir);
-			syncDir.setAttributes(cfg.returnRequiredDirectoryPermisions());
-		} catch (std.file.FileException e) {
-			// Creating the sync directory failed
-			log.error("ERROR: Unable to create local OneDrive syncDir - ", e.msg);
-			// Use exit scopes to shutdown API
-			return EXIT_FAILURE;
+	try {
+		if (!exists(syncDir)) {
+			log.vdebug("syncDir: Configured syncDir is missing. Creating: ", syncDir);
+			try {
+				// Attempt to create the sync dir we have been configured with
+				mkdirRecurse(syncDir);
+				// Configure the applicable permissions for the folder
+				log.vdebug("Setting directory permissions for: ", syncDir);
+				syncDir.setAttributes(cfg.returnRequiredDirectoryPermisions());
+			} catch (std.file.FileException e) {
+				// Creating the sync directory failed
+				log.error("ERROR: Unable to create local OneDrive syncDir - ", e.msg);
+				// Use exit scopes to shutdown API
+				return EXIT_FAILURE;
+			}
 		}
+	} catch (std.file.FileException e) {
+		// Creating the sync directory failed
+		log.error("ERROR: Unable to test the configured OneDrive syncDir - ", e.msg);
+		// Use exit scopes to shutdown API
+		return EXIT_FAILURE;
 	}
 
 	// Change the working directory to the 'sync_dir' configured item
