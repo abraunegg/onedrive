@@ -56,6 +56,11 @@ int main(string[] args)
 	bool displayMemoryUsage = false;
 	bool displaySyncOptions = false;
 	bool cleanupLocalFilesGlobal = false;
+	bool monitorConfigured = false;
+	
+	// start and finish messages
+	string startMessage = "Starting a sync with OneDrive";
+	string finishMessage = "Sync with OneDrive is complete";
 	
 	// hash file permission values
 	string hashPermissionValue = "600";
@@ -65,6 +70,9 @@ int main(string[] args)
 	scope(exit) {
 		// detail what scope was called
 		log.vdebug("Exit scope called");
+		if (!monitorConfigured) {
+			log.log(finishMessage);
+		}
 		// Display memory details
 		if (displayMemoryUsage) {
 			log.displayMemoryUsagePreGC();
@@ -827,6 +835,8 @@ int main(string[] args)
 		} else {
 			// Running as --monitor
 			log.error("Unable to reach Microsoft OneDrive API service at this point in time, re-trying network tests\n");
+			// set flag for exit scope
+			monitorConfigured = true;
 
 			// re-try network connection to OneDrive
 			// https://github.com/abraunegg/onedrive/issues/1184
@@ -1565,11 +1575,8 @@ int main(string[] args)
 							return EXIT_FAILURE;
 						}
 						try {
-						
 							// performance timing
 							SysTime startSyncProcessingTime = Clock.currTime();
-							string startMessage = "Starting a sync with OneDrive";
-							string finishMessage = "Sync with OneDrive is complete";
 							
 							// perform a --monitor sync
 							if ((cfg.getValueLong("verbose") > 0) || (logMonitorCounter == logInterval) || (fullScanRequired) ) {
