@@ -3603,7 +3603,6 @@ final class SyncEngine
 					return;
 				}
 			}
-			
 			// Is the path excluded?
 			unwanted = selectiveSync.isDirNameExcluded(item.name);
 		}
@@ -3630,7 +3629,7 @@ final class SyncEngine
 			return;
 		}
 		
-		// Restriction and limitations about windows naming files
+		// Check against Microsoft OneDrive restriction and limitations about Windows naming files
 		if (!isValidName(path)) {
 			log.logAndNotify("Skipping item - invalid name (Microsoft Naming Convention): ", path);
 			return;
@@ -4342,12 +4341,6 @@ final class SyncEngine
 				}
 			}
 			
-			// Restriction and limitations about windows naming files
-			if (!isValidName(path)) {
-				log.logAndNotify("Skipping item - invalid name (Microsoft Naming Convention): ", path);
-				return;
-			}
-			
 			// Check for bad whitespace items
 			if (!containsBadWhiteSpace(path)) {
 				log.logAndNotify("Skipping item - invalid name (Contains an invalid whitespace item): ", path);
@@ -4360,7 +4353,7 @@ final class SyncEngine
 				return;
 			}
 
-			// filter out user configured items to skip
+			// Is this item excluded by user configuration of skip_dir or skip_file?
 			if (path != ".") {
 				if (isDir(path)) {
 					log.vdebug("Checking local path: ", path);
@@ -4420,6 +4413,12 @@ final class SyncEngine
 						}
 					}
 				}
+			}
+			
+			// Check against Microsoft OneDrive restriction and limitations about Windows naming files
+			if (!isValidName(path)) {
+				log.logAndNotify("Skipping item - invalid name (Microsoft Naming Convention): ", path);
+				return;
 			}
 
 			// We want to upload this new item
@@ -5979,7 +5978,7 @@ final class SyncEngine
 			}
 		}
 		
-		// Restriction and limitations about windows naming files
+		// Check against Microsoft OneDrive restriction and limitations about Windows naming files
 		if (!isValidName(to)) {
 			log.logAndNotify("Skipping item - invalid name (Microsoft Naming Convention): ", to);
 			return;
