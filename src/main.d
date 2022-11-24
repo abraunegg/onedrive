@@ -56,7 +56,7 @@ int main(string[] args)
 	bool displayMemoryUsage = false;
 	bool displaySyncOptions = false;
 	bool cleanupLocalFilesGlobal = false;
-	bool monitorConfigured = false;
+	bool synchronizeConfigured = false;
 	
 	// start and finish messages
 	string startMessage = "Starting a sync with OneDrive";
@@ -70,7 +70,7 @@ int main(string[] args)
 	scope(exit) {
 		// detail what scope was called
 		log.vdebug("Exit scope called");
-		if (!monitorConfigured) {
+		if (synchronizeConfigured) {
 			log.log(finishMessage);
 		}
 		// Display memory details
@@ -835,9 +835,6 @@ int main(string[] args)
 		} else {
 			// Running as --monitor
 			log.error("Unable to reach Microsoft OneDrive API service at this point in time, re-trying network tests\n");
-			// set flag for exit scope
-			monitorConfigured = true;
-
 			// re-try network connection to OneDrive
 			// https://github.com/abraunegg/onedrive/issues/1184
 			// Back off & retry with incremental delay
@@ -1340,6 +1337,9 @@ int main(string[] args)
 
 		if (cfg.getValueBool("synchronize")) {
 			if (online) {
+				// set flag for exit scope
+				synchronizeConfigured = true;
+				
 				// Check user entry for local path - the above chdir means we are already in ~/OneDrive/ thus singleDirectory is local to this path
 				if (cfg.getValueString("single_directory") != "") {
 					// Does the directory we want to sync actually exist?
