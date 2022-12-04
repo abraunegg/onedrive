@@ -503,8 +503,14 @@ final class ItemDatabase
 	// Perform a vacuum on the database, commit WAL / SHM to file
 	void performVacuum()
 	{
-		auto stmt = db.prepare("VACUUM;");
-		stmt.exec();
+		try {
+			auto stmt = db.prepare("VACUUM;");
+			stmt.exec();
+		} catch (SqliteException e) {
+			writeln();
+			log.error("ERROR: Unable to perform a database vacuum: " ~ e.msg);
+			writeln();
+		}
 	}
 	
 	// Select distinct driveId items from database
