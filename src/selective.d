@@ -221,6 +221,7 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 {
 	// function variables
 	bool exclude = false;
+	bool exludeDirectMatch = false; // will get updated to true, if there is a pattern match to sync_list entry
 	bool excludeMatched = false; // will get updated to true, if there is a pattern match to sync_list entry
 	bool finalResult = true; // will get updated to false, if pattern match to sync_list entry
 	int offset;
@@ -232,8 +233,9 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 	if (allowedPaths.empty) return false;
 	path = buildNormalizedPath(path);
 	log.vdebug("Evaluation against 'sync_list' for this path: ", path);
-	log.vdebug("[S]exclude        = ", exclude);
-	log.vdebug("[S]excludeMatched = ", excludeMatched);
+	log.vdebug("[S]exclude           = ", exclude);
+	log.vdebug("[S]exludeDirectMatch = ", exludeDirectMatch);
+	log.vdebug("[S]excludeMatched    = ", excludeMatched);
 	
 	// unless path is an exact match, entire sync_list entries need to be processed to ensure
 	// negative matches are also correctly detected
@@ -298,9 +300,12 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 					// direct match, break and go sync
 					break;
 				} else {
-					log.vdebug("Evaluation against 'sync_list' result: direct match but to be excluded");
-					finalResult = true;
+					log.vdebug("Evaluation against 'sync_list' result: direct match - path to be excluded");
 					// do not set excludeMatched = true here, otherwise parental path also gets excluded
+					// flag exludeDirectMatch so that a 'wildcard match' will not override this exclude
+					exludeDirectMatch = true;
+					// final result
+					finalResult = true;
 				}	
 			} else {
 				// no exact path match, but something common does match
@@ -357,7 +362,7 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 			if (matchAll(path, allowedMask)) {
 				// regex wildcard evaluation matches
 				// if we have a prior pattern match for an exclude, excludeMatched = true
-				if (!exclude && !excludeMatched) {
+				if (!exclude && !excludeMatched && !exludeDirectMatch) {
 					// nothing triggered an exclusion before evaluation against wildcard match attempt
 					log.vdebug("Evaluation against 'sync_list' result: wildcard pattern match");
 					finalResult = false;
@@ -370,11 +375,12 @@ private bool isPathExcluded(string path, string[] allowedPaths)
 		}
 	}
 	// Interim results
-	log.vdebug("[F]exclude        = ", exclude);
-	log.vdebug("[F]excludeMatched = ", excludeMatched);
+	log.vdebug("[F]exclude           = ", exclude);
+	log.vdebug("[F]exludeDirectMatch = ", exludeDirectMatch);
+	log.vdebug("[F]excludeMatched    = ", excludeMatched);
 	
 	// If exclude or excludeMatched is true, then finalResult has to be true
-	if ((exclude) || (excludeMatched)) {
+	if ((exclude) || (excludeMatched) || (exludeDirectMatch)) {
 		finalResult = true;
 	}
 	
