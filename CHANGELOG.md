@@ -2,6 +2,35 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.4.22 - 2022-12-06
+### Fixed
+*   Fix application crash when local file is changed to a symbolic link with non-existent target
+*   Fix build error with dmd-2.101.0
+*   Fix build error with LDC 1.28.1 on Alpine
+*   Fix issue of silent exit when unable to delete local files when using --cleanup-local-files
+*   Fix application crash due to access permissions on configured path for sync_dir
+*   Fix potential application crash when exiting due to failure state and unable to cleanly shutdown the database
+*   Fix creation of parent empty directories when parent is excluded by sync_list
+
+### Added
+*   Added performance output details for key functions
+
+### Changed
+*   Switch Docker 'latest' to point at Debian builds rather than Fedora due to ongoing Fedora build failures
+*   Align application logging events to actual application defaults for --monitor operations
+*   Performance Improvement: Avoid duplicate costly path calculations and DB operations if not required
+*   Disable non-working remaining sandboxing options within systemd service files
+*   Performance Improvement: Only check 'sync_list' if this has been enabled and configured
+*   Display 'Sync with OneDrive is complete' when using --synchronize
+*   Change the order of processing between Microsoft OneDrive restrictions and limitations check and skip_file|skip_dir check
+
+### Removed
+*   Remove building Fedora ARMv7 builds due to ongoing build failures
+
+### Updated
+*   Update config change detection handling
+*   Updated documentation (various)
+
 ## 2.4.21 - 2022-09-27
 ### Fixed
 *   Fix that the download progress bar doesn't always reach 100% when rate_limit is set
@@ -13,15 +42,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Fix to resolve segfault when running 'onedrive --display-sync-status' when run as 2nd process
 *   Fix DMD 2.100.2 depreciation warning
 
-### Changed
-*   Change the exit code of the application to 126 when a --resync is required
-
 ### Added
 *   Add GitHub Action Test Build Workflow (replacing Travis CI)
 *   Add option --display-running-config to display the running configuration as used at application startup
 *   Add 'config' option to request readonly access in oauth authorization step
 *   Add option --cleanup-local-files to cleanup local files regardless of sync state when using --download-only
 *   Add option --with-editing-perms to create a read-write shareable link when used with --create-share-link <file>
+
+### Changed
+*   Change the exit code of the application to 126 when a --resync is required
 
 ### Updated
 *   Updated --get-O365-drive-id implementation for data access
