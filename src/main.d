@@ -246,54 +246,76 @@ int main(string[] args)
 	configBackupFile = buildNormalizedPath(cfg.configDirName ~ "/.config.backup");
 	businessSharedFoldersHashFile = buildNormalizedPath(cfg.configDirName ~ "/.business_shared_folders.hash");
 
-	// Does a config file exist with a valid hash file
-	if ((exists(configFilePath)) && (!exists(configHashFile))) {
-		// Hash of config file needs to be created
-		std.file.write(configHashFile, computeQuickXorHash(configFilePath));
-		// Hash file should only be readable by the user who created it - 0600 permissions needed
-		configHashFile.setAttributes(to!int(convertedPermissionValue));
-	}
-
-	// Does a sync_list file exist with a valid hash file
-	if ((exists(syncListFilePath)) && (!exists(syncListHashFile))) {
-		// Hash of sync_list file needs to be created
-		std.file.write(syncListHashFile, computeQuickXorHash(syncListFilePath));
-		// Hash file should only be readable by the user who created it - 0600 permissions needed
-		syncListHashFile.setAttributes(to!int(convertedPermissionValue));
-	}
-
-	// check if business_shared_folders & business_shared_folders hash exists
-	if ((exists(businessSharedFolderFilePath)) && (!exists(businessSharedFoldersHashFile))) {
-		// Hash of business_shared_folders file needs to be created
-		std.file.write(businessSharedFoldersHashFile, computeQuickXorHash(businessSharedFolderFilePath));
-		// Hash file should only be readable by the user who created it - 0600 permissions needed
-		businessSharedFoldersHashFile.setAttributes(to!int(convertedPermissionValue));
-	}
-
-	// If hash files exist, but config files do not ... remove the hash, but only if --resync was issued as now the application will use 'defaults' which 'may' be different
-	if ((!exists(configFilePath)) && (exists(configHashFile))) {
-		// if --resync safe remove config.hash and config.backup
-		if (cfg.getValueBool("resync")) {
-			safeRemove(configHashFile);
-			safeRemove(configBackupFile);
+	// Does a 'config' file exist with a valid hash file
+	if (exists(configFilePath)) {
+		if (!exists(configHashFile)) {
+			// hash of config file needs to be created, but only if we are not in a --resync scenario
+			if (!cfg.getValueBool("resync")) {
+				std.file.write(configHashFile, "initial-hash");
+				// Hash file should only be readable by the user who created it - 0600 permissions needed
+				configHashFile.setAttributes(to!int(convertedPermissionValue));
+			}
+		}
+	} else {
+		// no 'config' file exists, application defaults being used, no hash file required
+		if (exists(configHashFile)) {
+			// remove the hash, but only if --resync was issued as now the application will use 'defaults' which 'may' be different
+			if (cfg.getValueBool("resync")) {
+				// resync issued, remove hash files
+				safeRemove(configHashFile);
+				safeRemove(configBackupFile);
+			}
 		}
 	}
 
-	// If sync_list hash file exists, but sync_list file does not ... remove the hash, but only if --resync was issued as now the application will use 'defaults' which 'may' be different
-	if ((!exists(syncListFilePath)) && (exists(syncListHashFile))) {
-		// if --resync safe remove sync_list.hash
-		if (cfg.getValueBool("resync")) safeRemove(syncListHashFile);
+	// Does a 'sync_list' file exist with a valid hash file
+	if (exists(syncListFilePath)) {
+		if (!exists(syncListHashFile)) {
+			// hash of config file needs to be created, but only if we are not in a --resync scenario
+			if (!cfg.getValueBool("resync")) {
+				std.file.write(syncListHashFile, "initial-hash");
+				// Hash file should only be readable by the user who created it - 0600 permissions needed
+				syncListHashFile.setAttributes(to!int(convertedPermissionValue));
+			}
+		}
+	} else {
+		// no 'sync_list' file exists, no hash file required
+		if (exists(syncListHashFile)) {
+			// remove the hash, but only if --resync was issued as now the application will use 'defaults' which 'may' be different
+			if (cfg.getValueBool("resync")) {
+				// resync issued, remove hash files
+				safeRemove(syncListHashFile);
+			}
+		}
 	}
 
-	if ((!exists(businessSharedFolderFilePath)) && (exists(businessSharedFoldersHashFile))) {
-		// if --resync safe remove business_shared_folders.hash
-		if (cfg.getValueBool("resync")) safeRemove(businessSharedFoldersHashFile);
+	// Does a 'business_shared_folders' file exist with a valid hash file
+	if (exists(businessSharedFolderFilePath)) {
+		if (!exists(businessSharedFoldersHashFile)) {
+			// hash of config file needs to be created, but only if we are not in a --resync scenario
+			if (!cfg.getValueBool("resync")) {
+				std.file.write(businessSharedFoldersHashFile, "initial-hash");
+				// Hash file should only be readable by the user who created it - 0600 permissions needed
+				businessSharedFoldersHashFile.setAttributes(to!int(convertedPermissionValue));
+			}
+		}
+	} else {
+		// no 'business_shared_folders' file exists, no hash file required
+		if (exists(businessSharedFoldersHashFile)) {
+			// remove the hash, but only if --resync was issued as now the application will use 'defaults' which 'may' be different
+			if (cfg.getValueBool("resync")) {
+				// resync issued, remove hash files
+				safeRemove(businessSharedFoldersHashFile);
+			}
+		}
 	}
 
-	// Read config hashes if they exist
+	// Generate current hashes for the relevant configuration files if they exist
 	if (exists(configFilePath)) currentConfigHash = computeQuickXorHash(configFilePath);
 	if (exists(syncListFilePath)) currentSyncListHash = computeQuickXorHash(syncListFilePath);
 	if (exists(businessSharedFolderFilePath)) currentBusinessSharedFoldersHash = computeQuickXorHash(businessSharedFolderFilePath);
+	
+	// read the existing hashes for each of the relevant configuration files if they exist
 	if (exists(configHashFile)) {
 		try {
 			previousConfigHash = readText(configHashFile);
