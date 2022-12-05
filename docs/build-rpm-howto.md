@@ -20,13 +20,13 @@ mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 ## Build RPM from spec file
 Build the RPM from the provided spec file:
 ```text
-wget https://github.com/abraunegg/onedrive/archive/refs/tags/v2.4.21.tar.gz -O ~/rpmbuild/SOURCES/v2.4.21.tar.gz
+wget https://github.com/abraunegg/onedrive/archive/refs/tags/v2.4.22.tar.gz -O ~/rpmbuild/SOURCES/v2.4.22.tar.gz
 wget https://raw.githubusercontent.com/abraunegg/onedrive/master/contrib/spec/onedrive.spec.in -O ~/rpmbuild/SPECS/onedrive.spec
 rpmbuild -ba ~/rpmbuild/SPECS/onedrive.spec
 ```
 
-## RPM Build Results
-Below are output results of building, installing and running the RPM package on the respective platforms:
+## RPM Build Example Results
+Below are example output results of building, installing and running the RPM package on the respective platforms:
 
 ### CentOS 7
 ```text
