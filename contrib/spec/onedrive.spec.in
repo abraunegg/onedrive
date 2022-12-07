@@ -5,6 +5,12 @@
 %global with_systemd      0
 %endif
 
+%if 0%{?rhel} >= 7
+%global rhel_unitdir      1
+%else
+%global rhel_unitdir      0
+%endif
+
 Name:       onedrive
 Version:    2.4.22
 Release:    1%{?dist}
@@ -59,8 +65,13 @@ make
 %{_docdir}/%{name}
 %{_bindir}/%{name}
 %if 0%{?with_systemd}
+%if 0%{?rhel_unitdir}
+%{_unitdir}/%{name}.service
+%{_unitdir}/%{name}@.service
+%else
 %{_userunitdir}/%{name}.service
 %{_unitdir}/%{name}@.service
+%endif
 %else
 %{_bindir}/onedrive_service.sh
 /etc/init.d/onedrive
