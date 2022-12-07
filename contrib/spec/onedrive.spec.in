@@ -5,10 +5,10 @@
 %global with_systemd      0
 %endif
 
-%if 0%{?rhel} == 7
-%global rhel_7      1
+%if 0%{?rhel} >= 7
+%global rhel_unitdir      1
 %else
-%global rhel_7      0
+%global rhel_unitdir      0
 %endif
 
 Name:       onedrive
@@ -65,7 +65,7 @@ make
 %{_docdir}/%{name}
 %{_bindir}/%{name}
 %if 0%{?with_systemd}
-%if 0%{?rhel_7}
+%if 0%{?rhel_unitdir}
 %{_unitdir}/%{name}.service
 %{_unitdir}/%{name}@.service
 %else
