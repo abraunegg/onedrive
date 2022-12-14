@@ -616,6 +616,12 @@ final class OneDriveApi
 		redeemToken(c.front);
 		return true;
 	}
+	
+	string getSiteSearchUrl()
+	{
+		// Return the actual siteSearchUrl being used and/or requested when performing 'siteQuery = onedrive.o365SiteSearch(nextLink);' call
+		return .siteSearchUrl;
+	}
 
 	ulong getRetryAfterValue()
 	{
@@ -1780,7 +1786,7 @@ final class OneDriveApi
 			case 403:
 				// OneDrive responded that the user is forbidden
 				log.vlog("OneDrive returned a 'HTTP 403 - Forbidden' - gracefully handling error");
-				// Throw this as a specific exception so this is caught when performing sync.o365SiteSearch
+				// Throw this as a specific exception so this is caught when performing 'siteQuery = onedrive.o365SiteSearch(nextLink);' call
 				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
 
 			//	412 - Precondition Failed

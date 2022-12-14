@@ -6181,7 +6181,14 @@ final class SyncEngine
 				}
 				// Requested resource cannot be found
 				if (e.httpStatusCode == 404) {
-					log.error("ERROR: Your OneDrive Account and Authentication Scope cannot access this OneDrive API: /sites?search={query}");
+					string siteSearchUrl;
+					if (nextLink.empty) {
+						siteSearchUrl = onedrive.getSiteSearchUrl();
+					} else {
+						siteSearchUrl = nextLink;
+					}
+					// log the error
+					log.error("ERROR: Your OneDrive Account and Authentication Scope cannot access this OneDrive API: ", siteSearchUrl);
 					log.error("ERROR: To resolve, please discuss this issue with whomever supports your OneDrive and SharePoint environment.");
 					return;
 				}
