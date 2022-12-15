@@ -6160,6 +6160,13 @@ final class SyncEngine
 		string nextLink;
 		string[] siteSearchResults;
 		
+		// The account type must not be a personal account type
+		if (accountType == "personal"){
+			log.error("ERROR: A OneDrive Personal Account cannot be used with --get-O365-drive-id. Please re-authenticate your client using a OneDrive Business Account.");
+			return;
+		}
+		
+		// What query are we performing?
 		log.log("Office 365 Library Name Query: ", o365SharedLibraryName);
 		
 		for (;;) {
@@ -6167,9 +6174,22 @@ final class SyncEngine
 				siteQuery = onedrive.o365SiteSearch(nextLink);
 			} catch (OneDriveException e) {
 				log.error("ERROR: Query of OneDrive for Office 365 Library Name failed");
+				// Forbidden - most likely authentication scope needs to be updated
 				if (e.httpStatusCode == 403) {
-					// Forbidden - most likely authentication scope needs to be updated
 					log.error("ERROR: Authentication scope needs to be updated. Use --reauth and re-authenticate client.");
+					return;
+				}
+				// Requested resource cannot be found
+				if (e.httpStatusCode == 404) {
+					string siteSearchUrl;
+					if (nextLink.empty) {
+						siteSearchUrl = onedrive.getSiteSearchUrl();
+					} else {
+						siteSearchUrl = nextLink;
+					}
+					// log the error
+					log.error("ERROR: Your OneDrive Account and Authentication Scope cannot access this OneDrive API: ", siteSearchUrl);
+					log.error("ERROR: To resolve, please discuss this issue with whomever supports your OneDrive and SharePoint environment.");
 					return;
 				}
 				// HTTP request returned status code 429 (Too Many Requests)
