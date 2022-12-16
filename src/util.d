@@ -439,16 +439,17 @@ void checkApplicationVersion() {
 	releaseGracePeriod.fracSecs = Duration.zero;
 	// roll the grace period forward to allow distributions to catch up based on their release cycles
 	releaseGracePeriod = releaseGracePeriod.add!"months"(1);
+
+	// what is this clients version?
+	auto currentVersionArray = strip(strip(import("version"), "v")).split("-");
+	string applicationVersion = currentVersionArray[0];
 	
 	// debug output
+	log.vdebug("applicationVersion: ", applicationVersion);
 	log.vdebug("latestVersion:      ", latestVersion);
 	log.vdebug("publishedDate:      ", publishedDate);
 	log.vdebug("currentTime:        ", currentTime);
 	log.vdebug("releaseGracePeriod: ", releaseGracePeriod);
-	
-	// what is this clients version?
-	auto currentVersionArray = strip(strip(import("version"), "v")).split("-");
-	string applicationVersion = currentVersionArray[0];
 	
 	// display details if not current
 	if (applicationVersion != latestVersion) {
@@ -460,8 +461,8 @@ void checkApplicationVersion() {
 			if (releaseGracePeriod.toUnixTime() > currentTime.toUnixTime()) {
 				writeln();
 				log.logAndNotify("INFO: A new onedrive client version is available. Please upgrade your client version when possible.");
-				log.vlog("Current Application Version: ", applicationVersion);
-				log.vlog("Version Available:           ", latestVersion);
+				log.log("Current Application Version: ", applicationVersion);
+				log.log("Version Available:           ", latestVersion);
 				writeln();
 			} else {
 				// outside grace period
