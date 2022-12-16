@@ -361,12 +361,14 @@ string getFunctionName(alias func)() {
 }
 
 // Get the latest release version from GitHub
-string getLatestReleaseVersion() {
+JSONValue getLatestReleaseDetails() {
 	// Import curl just for this function
 	import std.net.curl;
 	char[] content;
-	JSONValue json;
+	JSONValue githubLatest;
+	JSONValue versionDetails;
 	string latestTag;
+	string publishedDate;
 	
 	try {
 		content = get("https://api.github.com/repos/abraunegg/onedrive/releases/latest");
@@ -376,51 +378,101 @@ string getLatestReleaseVersion() {
 	}
 	
 	try {
-		json = content.parseJSON();
+		githubLatest = content.parseJSON();
 	} catch (JSONException e) {
 		// unable to parse the content JSON, set to blank JSON
 		log.vdebug("Unable to parse GitHub JSON response");
-		json = parseJSON("{}");
+		githubLatest = parseJSON("{}");
 	}
 	
-	// json has to be a valid JSON object
-	if (json.type() == JSONType.object){
-		if ("tag_name" in json) {
+	// githubLatest has to be a valid JSON object
+	if (githubLatest.type() == JSONType.object){
+		// use the returned tag_name
+		if ("tag_name" in githubLatest) {
 			// use the provided tag
 			// "tag_name": "vA.B.CC" and strip 'v'
-			latestTag = strip(json["tag_name"].str, "v");
+			latestTag = strip(githubLatest["tag_name"].str, "v");
 		} else {
 			// set to latestTag zeros
-			log.vdebug("'tag_name' unavailable in JSON response. Setting latest GitHub release version to 0.0.0");
+			log.vdebug("'tag_name' unavailable in JSON response. Setting GitHub 'tag_name' release version to 0.0.0");
 			latestTag = "0.0.0";
+		}
+		// use the returned published_at date
+		if ("published_at" in githubLatest) {
+			// use the provided value
+			publishedDate = githubLatest["published_at"].str;
+		} else {
+			// set to v2.0.0 release date
+			log.vdebug("'published_at' unavailable in JSON response. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z");
+			publishedDate = "2018-07-18T18:00:00Z";
 		}
 	} else {
 		// JSONValue is not an object
-		log.vdebug("Invalid JSON Object. Setting latest GitHub release version to 0.0.0");
+		log.vdebug("Invalid JSON Object. Setting GitHub 'tag_name' release version to 0.0.0");
 		latestTag = "0.0.0";
+		log.vdebug("Invalid JSON Object. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z");
+		publishedDate = "2018-07-18T18:00:00Z";	
 	}
 		
-	// return the latest github version
-	return latestTag;
+	// return the latest github version and published date as our own JSON
+	versionDetails = [
+		"latestTag": JSONValue(latestTag),
+		"publishedDate": JSONValue(publishedDate)
+	];
+	
+	// return JSON
+	return versionDetails;
 }
 
 // Check the application version versus GitHub latestTag
 void checkApplicationVersion() {
-	// calculate if the client is current version or not
-	string latestVersion = strip(getLatestReleaseVersion());
+	// Get the latest details from GitHub
+	JSONValue latestVersionDetails = getLatestReleaseDetails();
+	string latestVersion = latestVersionDetails["latestTag"].str;
+	SysTime publishedDate = SysTime.fromISOExtString(latestVersionDetails["publishedDate"].str).toUTC();
+	SysTime releaseGracePeriod = publishedDate;
+	SysTime currentTime = Clock.currTime().toUTC();
+	
+	// drop fraction seconds
+	publishedDate.fracSecs = Duration.zero;
+	currentTime.fracSecs = Duration.zero;
+	releaseGracePeriod.fracSecs = Duration.zero;
+	// roll the grace period forward to allow distributions to catch up based on their release cycles
+	releaseGracePeriod = releaseGracePeriod.add!"months"(1);
+
+	// what is this clients version?
 	auto currentVersionArray = strip(strip(import("version"), "v")).split("-");
 	string applicationVersion = currentVersionArray[0];
 	
-	// display warning if not current
+	// debug output
+	log.vdebug("applicationVersion: ", applicationVersion);
+	log.vdebug("latestVersion:      ", latestVersion);
+	log.vdebug("publishedDate:      ", publishedDate);
+	log.vdebug("currentTime:        ", currentTime);
+	log.vdebug("releaseGracePeriod: ", releaseGracePeriod);
+	
+	// display details if not current
 	if (applicationVersion != latestVersion) {
 		// is application version is older than available on GitHub
+		// what warning do we present?
 		if (applicationVersion < latestVersion) {
-			// application version is obsolete and unsupported
-			writeln();
-			log.logAndNotify("WARNING: Your onedrive client version is obsolete and unsupported. Please upgrade your client version.");
-			log.vlog("Application version: ", applicationVersion);
-			log.vlog("Version available:   ", latestVersion);
-			writeln();
+			// if releaseGracePeriod > currentTime
+			// display an information warning that there is a new release available
+			if (releaseGracePeriod.toUnixTime() > currentTime.toUnixTime()) {
+				writeln();
+				log.logAndNotify("INFO: A new onedrive client version is available. Please upgrade your client version when possible.");
+				log.log("Current Application Version: ", applicationVersion);
+				log.log("Version Available:           ", latestVersion);
+				writeln();
+			} else {
+				// outside grace period
+				// application version is obsolete and unsupported
+				writeln();
+				log.logAndNotify("WARNING: Your onedrive client version is now obsolete and unsupported. Please upgrade your client version.");
+				log.log("Current Application Version: ", applicationVersion);
+				log.log("Version Available:           ", latestVersion);
+				writeln();
+			}
 		}
 	}
 }
