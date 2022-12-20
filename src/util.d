@@ -424,6 +424,65 @@ JSONValue getLatestReleaseDetails() {
 	return versionDetails;
 }
 
+// Get the release details from the 'current' running version
+JSONValue getCurrentVersionDetails(string thisVersion) {
+	// Import curl just for this function
+	import std.net.curl;
+	char[] content;
+	JSONValue githubDetails;
+	JSONValue versionDetails;
+	string versionTag = "v" ~ thisVersion;
+	string publishedDate;
+	
+	try {
+		content = get("https://api.github.com/repos/abraunegg/onedrive/releases");
+	} catch (CurlException e) {
+		// curl generated an error - meaning we could not query GitHub
+		log.vdebug("Unable to query GitHub for release details");
+	}
+	
+	try {
+		githubDetails = content.parseJSON();
+	} catch (JSONException e) {
+		// unable to parse the content JSON, set to blank JSON
+		log.vdebug("Unable to parse GitHub JSON response");
+		githubDetails = parseJSON("{}");
+	}
+	
+	// githubDetails has to be a valid JSON array
+	if (githubDetails.type() == JSONType.array){
+		foreach (searchResult; githubDetails.array) {
+			// searchResult["tag_name"].str;
+			if (searchResult["tag_name"].str == versionTag) {
+				log.vdebug("MATCHED version");
+				log.vdebug("tag_name: ", searchResult["tag_name"].str);
+				log.vdebug("published_at: ", searchResult["published_at"].str);
+				publishedDate = searchResult["published_at"].str;
+			}
+		}
+		
+		if (publishedDate.empty) {
+			// empty .. no version match ?
+			// set to v2.0.0 release date
+			log.vdebug("'published_at' unavailable in JSON response. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z");
+			publishedDate = "2018-07-18T18:00:00Z";
+		}
+	} else {
+		// JSONValue is not an Array
+		log.vdebug("Invalid JSON Array. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z");
+		publishedDate = "2018-07-18T18:00:00Z";	
+	}
+		
+	// return the latest github version and published date as our own JSON
+	versionDetails = [
+		"versionTag": JSONValue(thisVersion),
+		"publishedDate": JSONValue(publishedDate)
+	];
+	
+	// return JSON
+	return versionDetails;
+}
+
 // Check the application version versus GitHub latestTag
 void checkApplicationVersion() {
 	// Get the latest details from GitHub
@@ -445,34 +504,62 @@ void checkApplicationVersion() {
 	string applicationVersion = currentVersionArray[0];
 	
 	// debug output
-	log.vdebug("applicationVersion: ", applicationVersion);
-	log.vdebug("latestVersion:      ", latestVersion);
-	log.vdebug("publishedDate:      ", publishedDate);
-	log.vdebug("currentTime:        ", currentTime);
-	log.vdebug("releaseGracePeriod: ", releaseGracePeriod);
+	log.vdebug("applicationVersion:       ", applicationVersion);
+	log.vdebug("latestVersion:            ", latestVersion);
+	log.vdebug("publishedDate:            ", publishedDate);
+	log.vdebug("currentTime:              ", currentTime);
+	log.vdebug("releaseGracePeriod:       ", releaseGracePeriod);
 	
 	// display details if not current
+	// is application version is older than available on GitHub
 	if (applicationVersion != latestVersion) {
-		// is application version is older than available on GitHub
+		// application version is different
+		bool displayObsolete = false;
+		
 		// what warning do we present?
 		if (applicationVersion < latestVersion) {
-			// if releaseGracePeriod > currentTime
-			// display an information warning that there is a new release available
-			if (releaseGracePeriod.toUnixTime() > currentTime.toUnixTime()) {
-				writeln();
-				log.logAndNotify("INFO: A new onedrive client version is available. Please upgrade your client version when possible.");
-				log.log("Current Application Version: ", applicationVersion);
-				log.log("Version Available:           ", latestVersion);
-				writeln();
-			} else {
-				// outside grace period
-				// application version is obsolete and unsupported
-				writeln();
-				log.logAndNotify("WARNING: Your onedrive client version is now obsolete and unsupported. Please upgrade your client version.");
-				log.log("Current Application Version: ", applicationVersion);
-				log.log("Version Available:           ", latestVersion);
-				writeln();
+			// go get this running version details
+			JSONValue thisVersionDetails = getCurrentVersionDetails(applicationVersion);
+			SysTime thisVersionPublishedDate = SysTime.fromISOExtString(thisVersionDetails["publishedDate"].str).toUTC();
+			thisVersionPublishedDate.fracSecs = Duration.zero;
+			log.vdebug("thisVersionPublishedDate: ", thisVersionPublishedDate);
+			
+			// the running version grace period is its release date + 1 month
+			SysTime thisVersionReleaseGracePeriod = thisVersionPublishedDate;
+			thisVersionReleaseGracePeriod = thisVersionReleaseGracePeriod.add!"months"(1);
+			log.vdebug("thisVersionReleaseGracePeriod: ", thisVersionReleaseGracePeriod);
+			
+			// is the published latestest release date greater than the current running release date + grace period
+			if (thisVersionReleaseGracePeriod.toUnixTime() < publishedDate.toUnixTime()) {
+				// the running client is obsolete
+				displayObsolete = true;
 			}
+			
+			// is this running version obsolete ?
+			if (!displayObsolete) {
+				// if releaseGracePeriod > currentTime
+				// display an information warning that there is a new release available
+				if (releaseGracePeriod.toUnixTime() > currentTime.toUnixTime()) {
+					// inside release grace period ... set flag to false
+					displayObsolete = false;
+				} else {
+					// outside grace period
+					displayObsolete = true;
+				}
+			}
+			
+			// display version response
+			writeln();
+			if (!displayObsolete) {
+				// display the new version is available message
+				log.logAndNotify("INFO: A new onedrive client version is available. Please upgrade your client version when possible.");
+			} else {
+				// display the obsolete message
+				log.logAndNotify("WARNING: Your onedrive client version is now obsolete and unsupported. Please upgrade your client version.");
+			}
+			log.log("Current Application Version: ", applicationVersion);
+			log.log("Version Available:           ", latestVersion);
+			writeln();
 		}
 	}
 }
