@@ -35,7 +35,7 @@ As such, the following API permissions are used by default:
 | Sites.ReadWrite.All   | Delegated | Have full access to all items in all site collections | No |
 | offline_access   | Delegated | Maintain access to data you have given it access to | No |
 
-When these delegated API permissions are commbined, these provide the effective authentication scope for the OneDrive Client for Linux to access your data. The effective 'default' permissions will be:
+When these delegated API permissions are combined, these provide the effective authentication scope for the OneDrive Client for Linux to access your data. The effective 'default' permissions will be:
 
 | API / Permissions name | Type | Description | Admin consent required |
 |---|---|---|---|
