@@ -216,10 +216,11 @@ In some cases it may be desirable to 'upload only' to OneDrive. To do this use t
 ```text
 onedrive --synchronize --upload-only
 ```
-**Note:** If a file or folder is present on OneDrive, that does not exist locally, it will be removed. If the data on OneDrive should be kept, the following should be used:
+**Note:** If a file or folder is present on OneDrive, that was previously sycned and now does not exist locally, that item it will be removed from OneDrive. If the data on OneDrive should be kept, the following should be used:
 ```text
 onedrive --synchronize --upload-only --no-remote-delete
 ```
+**Note:** The operation of 'upload only' does not request data from OneDrive about what 'other' data exists online. The client only knows about the data that 'this' client uploaded, thus any files or folders created or uploaded outside of this client will remain untouched online.
 
 ### Performing a selective sync via 'sync_list' file
 Selective sync allows you to sync only specific files and directories.
