@@ -61,6 +61,7 @@ int main(string[] args)
 	// start and finish messages
 	string startMessage = "Starting a sync with OneDrive";
 	string finishMessage = "Sync with OneDrive is complete";
+	string helpMessage = "Please use 'onedrive --help' for further assistance in regards to running this application.";
 	
 	// hash file permission values
 	string hashPermissionValue = "600";
@@ -927,7 +928,36 @@ int main(string[] args)
 		performSyncOK = true;
 	}
 
-	// create-directory, remove-directory, source-directory, destination-directory
+	// --source-directory must only be used with --destination-directory
+	// neither can (or should) be added individually as they have a no operational impact if they are
+	if (((cfg.getValueString("source_directory") == "") && (cfg.getValueString("destination_directory") != "")) || ((cfg.getValueString("source_directory") != "") && (cfg.getValueString("destination_directory") == ""))) {
+		// so either --source-directory or --destination-directory was passed in, without the other required item being passed in
+		// --source-directory or --destination-directory cannot be used with --synchronize or --monitor
+		writeln();
+		if (performSyncOK) {
+			// log an error
+			log.error("ERROR: --source-directory or --destination-directory cannot be used with --synchronize or --monitor");
+		} else {
+			// display issue with using these options
+			string emptyParameter;
+			string dataParameter;
+			if (cfg.getValueString("source_directory").empty) {
+				emptyParameter = "--source-directory";
+				dataParameter = "--destination-directory";
+			} else {
+				emptyParameter = "--destination-directory";
+				dataParameter = "--source-directory";
+			}
+			log.error("ERROR: " ~ dataParameter ~ " was passed in without also using " ~ emptyParameter);	
+		}
+		// Use exit scopes to shutdown API
+		writeln();
+		log.error(helpMessage);
+		writeln();
+		return EXIT_FAILURE;
+	}
+
+	// --create-directory, --remove-directory, --source-directory, --destination-directory
 	// these are activities that dont perform a sync, so to not generate an error message for these items either
 	if (((cfg.getValueString("create_directory") != "") || (cfg.getValueString("remove_directory") != "")) || ((cfg.getValueString("source_directory") != "") && (cfg.getValueString("destination_directory") != "")) || (cfg.getValueString("get_file_link") != "") || (cfg.getValueString("modified_by") != "") || (cfg.getValueString("create_share_link") != "") || (cfg.getValueString("get_o365_drive_id") != "") || cfg.getValueBool("display_sync_status") || cfg.getValueBool("list_business_shared_folders")) {
 		performSyncOK = true;
@@ -941,7 +971,8 @@ int main(string[] args)
 			if (exists(cfg.refreshTokenFilePath)) {
 				// OneDrive refresh token exists
 				log.log("\nApplication has been successfully authorised, however no additional command switches were provided.\n");
-				log.log("Please use 'onedrive --help' for further assistance in regards to running this application.\n");
+				log.log(helpMessage);
+				writeln();
 				// Use exit scopes to shutdown API
 				return EXIT_SUCCESS;
 			} else {
@@ -961,9 +992,9 @@ int main(string[] args)
 	// if --synchronize && --monitor passed in, exit & display help as these conflict with each other
 	if (cfg.getValueBool("synchronize") && cfg.getValueBool("monitor")) {
 		writeln();
-		writeln("ERROR: --synchronize and --monitor cannot be used together");
+		log.error("ERROR: --synchronize and --monitor cannot be used together");
 		writeln();
-		writeln("Please use 'onedrive --help' for further assistance in regards to running this application.");
+		log.error(helpMessage);
 		writeln();
 		// Use exit scopes to shutdown API
 		return EXIT_FAILURE;
