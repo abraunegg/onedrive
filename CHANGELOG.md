@@ -2,6 +2,20 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.4.23 - 2023-01-06
+### Fixed
+*   Fixed RHEL7, RHEL8 and RHEL9 Makefile and SPEC file compatibility
+
+### Removed
+*   Disable systemd 'PrivateUsers' due to issues with systemd running processes when option is enabled, causes local file deletes on RHEL based systems
+
+### Updated
+*   Update --get-O365-drive-id error handling to display a more a more appropriate error message if the API cannot be found
+*   Update the GitHub version check to utilise the date a release was done, to allow 1 month grace period before generating obsolete version message
+*   Update Alpine Dockerfile to use Alpine 3.17 and Golang 1.19
+*   Update handling of --source-directory and --destination-directory if one is empty or missing and if used with --synchronize or --monitor
+*   Updated documentation (various)
+
 ## 2.4.22 - 2022-12-06
 ### Fixed
 *   Fix application crash when local file is changed to a symbolic link with non-existent target
