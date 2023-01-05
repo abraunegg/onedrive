@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Updated
 *   Update --get-O365-drive-id error handling to display a more a more appropriate error message if the API cannot be found
-*   Update the GitHub version check to also utilise the date a release was done, to allow 1 month grace period before generating obsolete version message
+*   Update the GitHub version check to utilise the date a release was done, to allow 1 month grace period before generating obsolete version message
 *   Update Alpine Dockerfile to use Alpine 3.17 and Golang 1.19
 *   Update handling of --source-directory and --destination-directory if one is empty or missing and if used with --synchronize or --monitor
 *   Updated documentation (various)
