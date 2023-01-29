@@ -60,7 +60,7 @@ export ONEDRIVE_GID=1000
 mkdir -p ${ONEDRIVE_DATA_DIR}
 podman run -it --name onedrive --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
     -v onedrive_conf:/onedrive/conf:U,Z \
-    -v "onedrive-test-data:/onedrive/data:U,Z" \
+    -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" \
     driveone/onedrive:latest
 ```
 **Important:** The 'target' folder of `ONEDRIVE_DATA_DIR` must exist before running the podman container
