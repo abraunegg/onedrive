@@ -104,6 +104,13 @@ if [ "${ONEDRIVE_DISPLAY_CONFIG:=0}" == "1" ]; then
    ARGS=(--display-running-config ${ARGS[@]})
 fi
 
+# Tell client to use sync single dir option
+if [ -n "${ONEDRIVE_SINGLE_DIRECTORY:=""}" ]; then
+   echo "# We are synchronizing in single-directory mode"
+   echo "# Adding --single-directory ARG"
+   ARGS=(--single-directory \"${ONEDRIVE_SINGLE_DIRECTORY}\" ${ARGS[@]})
+fi
+
 if [ ${#} -gt 0 ]; then
   ARGS=("${@}")
 fi
