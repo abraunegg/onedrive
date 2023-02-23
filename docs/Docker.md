@@ -196,22 +196,22 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 
 
 ## Environment Variables
-| Variable | Purpose |                                                           Sample Value                                                           |
+| Variable | Purpose | Sample Value |
 | ---------------- | --------------------------------------------------- |:--------------------------------------------------------------------------------------------------------------------------------:|
-| <B>ONEDRIVE_UID</B> | UserID (UID) to run as  |                                                               1000                                                               |
-| <B>ONEDRIVE_GID</B> | GroupID (GID) to run as |                                                               1000                                                               |
-| <B>ONEDRIVE_VERBOSE</B> | Controls "--verbose" switch on onedrive sync. Default is 0 |                                                                1                                                                 |
-| <B>ONEDRIVE_DEBUG</B> | Controls "--verbose --verbose" switch on onedrive sync. Default is 0 |                                                                1                                                                 |
-| <B>ONEDRIVE_DEBUG_HTTPS</B> | Controls "--debug-https" switch on onedrive sync. Default is 0 |                                                                1                                                                 |
-| <B>ONEDRIVE_RESYNC</B> | Controls "--resync" switch on onedrive sync. Default is 0 |                                                                1                                                                 |
-| <B>ONEDRIVE_DOWNLOADONLY</B> | Controls "--download-only" switch on onedrive sync. Default is 0 |                                                                1                                                                 |
-| <B>ONEDRIVE_UPLOADONLY</B> | Controls "--upload-only" switch on onedrive sync. Default is 0 |                                                                1                                                                 |
-| <B>ONEDRIVE_LOGOUT</B> | Controls "--logout" switch. Default is 0 |                                                                1                                                                 |
-| <B>ONEDRIVE_REAUTH</B> | Controls "--reauth" switch. Default is 0 |                                                                1                                                                 |
-| <B>ONEDRIVE_AUTHFILES</B> | Controls "--auth-files" option. Default is "" |                                                      "authUrl:responseUrl"                                                       |
+| <B>ONEDRIVE_UID</B> | UserID (UID) to run as  | 1000 |
+| <B>ONEDRIVE_GID</B> | GroupID (GID) to run as | 1000 |
+| <B>ONEDRIVE_VERBOSE</B> | Controls "--verbose" switch on onedrive sync. Default is 0 | 1 |
+| <B>ONEDRIVE_DEBUG</B> | Controls "--verbose --verbose" switch on onedrive sync. Default is 0 | 1 |
+| <B>ONEDRIVE_DEBUG_HTTPS</B> | Controls "--debug-https" switch on onedrive sync. Default is 0 | 1 |
+| <B>ONEDRIVE_RESYNC</B> | Controls "--resync" switch on onedrive sync. Default is 0 | 1 |
+| <B>ONEDRIVE_DOWNLOADONLY</B> | Controls "--download-only" switch on onedrive sync. Default is 0 | 1 |
+| <B>ONEDRIVE_UPLOADONLY</B> | Controls "--upload-only" switch on onedrive sync. Default is 0 | 1 |
+| <B>ONEDRIVE_LOGOUT</B> | Controls "--logout" switch. Default is 0 | 1 |
+| <B>ONEDRIVE_REAUTH</B> | Controls "--reauth" switch. Default is 0 | 1 |
+| <B>ONEDRIVE_AUTHFILES</B> | Controls "--auth-files" option. Default is "" | "authUrl:responseUrl" |
 | <B>ONEDRIVE_AUTHRESPONSE</B> | Controls "--auth-response" option. Default is "" | See [here](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#authorize-the-application-with-your-onedrive-account) |
-| <B>ONEDRIVE_DISPLAY_CONFIG</B> | Controls "--display-running-config" switch on onedrive sync. Default is 0 |                                                                1                                                                 |
-|<B>ONEDRIVE_SINGLE_DIRECTORY | Controls "--single-directory" option. Default = "" |                                                                "mydir"                                                                |
+| <B>ONEDRIVE_DISPLAY_CONFIG</B> | Controls "--display-running-config" switch on onedrive sync. Default is 0 | 1 |
+| <B>ONEDRIVE_SINGLE_DIRECTORY</B> | Controls "--single-directory" option. Default = "" | "mydir" |
 
 ### Usage Examples
 **Verbose Output:**

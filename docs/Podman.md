@@ -195,7 +195,7 @@ podman run -it --restart unless-stopped --name onedrive_work \
 ```
 
 ## Environment Variables
-| Variable | Purpose | Sample Value  |
+| Variable | Purpose | Sample Value |
 | ---------------- | --------------------------------------------------- |:-------------:|
 | <B>ONEDRIVE_UID</B> | UserID (UID) to run as  | 1000 |
 | <B>ONEDRIVE_GID</B> | GroupID (GID) to run as | 1000 |
@@ -210,6 +210,7 @@ podman run -it --restart unless-stopped --name onedrive_work \
 | <B>ONEDRIVE_AUTHFILES</B> | Controls "--auth-files" option. Default is "" | "authUrl:responseUrl" |
 | <B>ONEDRIVE_AUTHRESPONSE</B> | Controls "--auth-response" option. Default is "" | See [here](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#authorize-the-application-with-your-onedrive-account) |
 | <B>ONEDRIVE_DISPLAY_CONFIG</B> | Controls "--display-running-config" switch on onedrive sync. Default is 0 | 1 |
+| <B>ONEDRIVE_SINGLE_DIRECTORY</B> | Controls "--single-directory" option. Default = "" | "mydir" |
 
 ### Usage Examples
 **Verbose Output:**
