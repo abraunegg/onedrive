@@ -1,6 +1,7 @@
 # -*-Dockerfile-*-
 
 ARG DEBIAN_VERSION=bullseye
+# Update this variable to explicitly configure support for a specific locale type such as ja_JP.UTF-8
 ARG LANGUAGE=C.UTF-8
 
 FROM debian:${DEBIAN_VERSION} AS builder-onedrive
