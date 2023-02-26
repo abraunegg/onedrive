@@ -1,8 +1,6 @@
 # -*-Dockerfile-*-
 
 ARG DEBIAN_VERSION=bullseye
-# Update this variable to explicitly configure support for a specific locale type such as ja_JP.UTF-8
-ARG LANGUAGE=C.UTF-8
 
 FROM debian:${DEBIAN_VERSION} AS builder-onedrive
 
@@ -21,19 +19,15 @@ RUN ./configure DC=/usr/bin/ldmd2 \
 FROM debian:${DEBIAN_VERSION}-slim
 
 RUN apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gosu libcurl4 libsqlite3-0 ca-certificates libphobos2-ldc-shared94 locales \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gosu libcurl4 libsqlite3-0 ca-certificates libphobos2-ldc-shared94 \
  && rm -rf /var/lib/apt/lists/* \
- # Update locales
- && dpkg-reconfigure locales \
- && /usr/sbin/update-locale LANG=${LANGUAGE} \
  # Fix bug with ssl on armhf: https://serverfault.com/a/1045189
  && /usr/bin/c_rehash \
  && mkdir -p /onedrive/conf /onedrive/data
 
 COPY --from=builder-onedrive /usr/local/bin/onedrive /usr/local/bin/
+
 COPY contrib/docker/entrypoint.sh /
-
-ENV LANG ${LANGUAGE}
-
 RUN chmod +x /entrypoint.sh
+
 ENTRYPOINT ["/entrypoint.sh"]
