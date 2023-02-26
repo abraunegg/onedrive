@@ -25,7 +25,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  # Update locales
  && dpkg-reconfigure locales \
- && /usr/sbin/update-locale LANG=${LANGUAGE}
+ && /usr/sbin/update-locale LANG=${LANGUAGE} \
  # Fix bug with ssl on armhf: https://serverfault.com/a/1045189
  && /usr/bin/c_rehash \
  && mkdir -p /onedrive/conf /onedrive/data
