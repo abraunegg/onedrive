@@ -297,3 +297,22 @@ docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/o
 docker build . -t local-onedrive-aarch64 -f contrib/docker/Dockerfile-debian
 docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" local-onedrive-aarch64:latest
 ```
+
+#### How to support double-byte languages
+In some geographic regions, you may need to change and/or update the locale specification of the Docker container to better support the local language used for your local filesystem. To do this, follow the example below:
+```
+FROM driveone/onedrive
+
+ENV DEBIAN_FRONTEND noninteractive
+
+RUN apt-get update
+RUN apt-get install -y locales
+
+RUN echo "ja_JP.UTF-8 UTF-8" > /etc/locale.gen && \
+    locale-gen ja_JP.UTF-8 && \
+    dpkg-reconfigure locales && \
+    /usr/sbin/update-locale LANG=ja_JP.UTF-8
+
+ENV LC_ALL ja_JP.UTF-8
+```
+The above example changes the Docker container to support Japanese. To support your local language, change `ja_JP.UTF-8` to the required entry.
