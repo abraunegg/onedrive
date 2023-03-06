@@ -25,7 +25,7 @@ Additionally there are specific version release tags for each release. Refer to 
 ## Basic Setup
 ### 0. Install docker using your distribution platform's instructions
 1.  Ensure that SELinux has been disabled on your system. A reboot may be required to ensure that this is correctly disabled.
-2.  Install Docker as per requried for your platform. Refer to https://docs.docker.com/engine/install/ for assistance.
+2.  Install Docker as per required for your platform. Refer to https://docs.docker.com/engine/install/ for assistance.
 3.  Obtain your normal, non-root user UID and GID by using the `id` command
 4.  As your normal, non-root user, ensure that you can run `docker run hello-world` *without* using `sudo`
 
@@ -196,8 +196,8 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 
 
 ## Environment Variables
-| Variable | Purpose | Sample Value  |
-| ---------------- | --------------------------------------------------- |:-------------:|
+| Variable | Purpose | Sample Value |
+| ---------------- | --------------------------------------------------- |:--------------------------------------------------------------------------------------------------------------------------------:|
 | <B>ONEDRIVE_UID</B> | UserID (UID) to run as  | 1000 |
 | <B>ONEDRIVE_GID</B> | GroupID (GID) to run as | 1000 |
 | <B>ONEDRIVE_VERBOSE</B> | Controls "--verbose" switch on onedrive sync. Default is 0 | 1 |
@@ -211,6 +211,7 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 | <B>ONEDRIVE_AUTHFILES</B> | Controls "--auth-files" option. Default is "" | "authUrl:responseUrl" |
 | <B>ONEDRIVE_AUTHRESPONSE</B> | Controls "--auth-response" option. Default is "" | See [here](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#authorize-the-application-with-your-onedrive-account) |
 | <B>ONEDRIVE_DISPLAY_CONFIG</B> | Controls "--display-running-config" switch on onedrive sync. Default is 0 | 1 |
+| <B>ONEDRIVE_SINGLE_DIRECTORY</B> | Controls "--single-directory" option. Default = "" | "mydir" |
 
 ### Usage Examples
 **Verbose Output:**
@@ -296,3 +297,22 @@ docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/o
 docker build . -t local-onedrive-aarch64 -f contrib/docker/Dockerfile-debian
 docker container run -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" local-onedrive-aarch64:latest
 ```
+
+#### How to support double-byte languages
+In some geographic regions, you may need to change and/or update the locale specification of the Docker container to better support the local language used for your local filesystem. To do this, follow the example below:
+```
+FROM driveone/onedrive
+
+ENV DEBIAN_FRONTEND noninteractive
+
+RUN apt-get update
+RUN apt-get install -y locales
+
+RUN echo "ja_JP.UTF-8 UTF-8" > /etc/locale.gen && \
+    locale-gen ja_JP.UTF-8 && \
+    dpkg-reconfigure locales && \
+    /usr/sbin/update-locale LANG=ja_JP.UTF-8
+
+ENV LC_ALL ja_JP.UTF-8
+```
+The above example changes the Docker container to support Japanese. To support your local language, change `ja_JP.UTF-8` to the required entry.
