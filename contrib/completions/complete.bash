@@ -19,13 +19,22 @@ _onedrive()
 		[[ ${COMP_WORDS[i]} == '--synchronize' ]] && options=${options/--monitor}
 		[[ ${COMP_WORDS[i]} == '--monitor' ]] && options=${options/--synchronize}
 	done
-    
+
 	case "$prev" in
 	--confdir|--syncdir)
 		_filedir
 		return 0
 		;;
-	--create-directory|--get-file-link|--get-O365-drive-id|--operation-timeout|--remove-directory|--single-directory|--source-directory)
+
+	--get-file-link)
+		if command -v sed &> /dev/null; then
+			pushd "$(onedrive --display-config | sed -n "/sync_dir/s/.*= //p")" &> /dev/null
+			_filedir
+			popd &> /dev/null
+		fi
+		return 0
+		;;
+	--create-directory|--get-O365-drive-id|--operation-timeout|--remove-directory|--single-directory|--source-directory)
 		return 0
 		;;
 	*)
@@ -33,7 +42,7 @@ _onedrive()
 		return 0
 		;;
 	esac
-	
+
 	# notreached
 	return 0
 }
