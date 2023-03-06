@@ -844,8 +844,7 @@ final class OneDriveApi
 		const(char)[] url;
 		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
 		// Required format: /drives/{drive-id}/root:/{item-path}
-		// Strip quotation marks from path before first encoding
-		url = driveByIdUrl ~ driveId ~ "/root:/" ~ encodeComponent(strip(to!string(path), "\""));
+		url = driveByIdUrl ~ driveId ~ "/root:/" ~ encodeComponent(path);
 		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		return get(url);
 	}
