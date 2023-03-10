@@ -37,8 +37,6 @@ Before reading this document, please ensure you are running application version 
   * [Configuring the client for 'single tenant application' use](#configuring-the-client-for-single-tenant-application-use)
   * [Configuring the client to use older 'skilion' application identifier](#configuring-the-client-to-use-older-skilion-application-identifier)
 - [Frequently Asked Configuration Questions](#frequently-asked-configuration-questions)
-  * [How to sync both Personal and Business accounts at the same time?](#how-to-sync-both-personal-and-business-accounts-at-the-same-time)
-  * [How to sync multiple SharePoint Libraries at the same time?](#how-to-sync-multiple-sharepoint-libraries-at-the-same-time)
   * [How to sync only specific or single directory?](#how-to-sync-only-specific-or-single-directory)
   * [How to 'skip' directories from syncing?](#how-to-skip-directories-from-syncing)
   * [How to 'skip' files from syncing?](#how-to-skip-files-from-syncing)
@@ -51,6 +49,8 @@ Before reading this document, please ensure you are running application version 
   * [How to sync sharePoint / Office 365 Shared Libraries?](#how-to-sync-sharepoint--office-365-shared-libraries)
   * [How to run a user systemd service at boot without user login?](#how-to-run-a-user-systemd-service-at-boot-without-user-login)
   * [How to create a shareable link?](#how-to-create-a-shareable-link)
+  * [How to sync both Personal and Business accounts at the same time?](#how-to-sync-both-personal-and-business-accounts-at-the-same-time)
+  * [How to sync multiple SharePoint Libraries at the same time?](#how-to-sync-multiple-sharepoint-libraries-at-the-same-time)
 - [Running 'onedrive' in 'monitor' mode](#running-onedrive-in-monitor-mode)
   * [Use webhook to subscribe to remote updates in 'monitor' mode](#use-webhook-to-subscribe-to-remote-updates-in-monitor-mode)
   * [More webhook configuration options](#more-webhook-configuration-options)
@@ -754,16 +754,6 @@ application_id = "22c49a0d-d21c-4792-aed1-8f163c982546"
 
 ## Frequently Asked Configuration Questions
 
-### How to sync both Personal and Business accounts at the same time?
-You must configure 2 separate instances of the application for each account.
-
-Refer to [./advanced-usage.md](advanced-usage.md) for configuration assistance.
-
-### How to sync multiple SharePoint Libraries at the same time?
-You must configure a separate instances of the application for each SharePoint Library.
-
-Refer to [./advanced-usage.md](advanced-usage.md) for configuration assistance.
-
 ### How to sync only specific or single directory?
 There are two methods to achieve this:
 *   Utilise '--single-directory' option to only sync this specific path
@@ -894,6 +884,16 @@ To make this a read-write link, use the following command:
 onedrive --create-share-link <path/to/file> --with-editing-perms
 ```
 **Note:** The ordering of the option file path and option flag is important.
+
+### How to sync both Personal and Business accounts at the same time?
+You must configure separate instances of the application configuration for each account.
+
+Refer to [./advanced-usage.md](advanced-usage.md) for configuration assistance.
+
+### How to sync multiple SharePoint Libraries at the same time?
+You must configure a separate instances of the application configuration for each SharePoint Library.
+
+Refer to [./advanced-usage.md](advanced-usage.md) for configuration assistance.
 
 ## Running 'onedrive' in 'monitor' mode
 Monitor mode (`--monitor`) allows the onedrive process to continually monitor your local file system for changes to files.
