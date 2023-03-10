@@ -1161,11 +1161,13 @@ for extra details.
 
 ## Additional Configuration
 ### Advanced Configuration of the OneDrive Free Client
-*   Configuring the client to use mulitple OneDrive accounts / configurations
-*   Configuring the client for use in dual-boot (Windows / Linux) situations
-*   Configuring the client for use when 'sync_dir' is a mounted directory
-*   Upload data from the local ~/OneDrive folder to a specific location on OneDrive
-
+* Configuring the client to use mulitple OneDrive accounts / configurations, for example:
+  * Setup to use onedrive with both Personal and Business accounts
+  * Setup to use onedrive with multiple SharePoint Libraries
+* Configuring the client for use in dual-boot (Windows / Linux) situations
+* Configuring the client for use when 'sync_dir' is a mounted directory
+* Upload data from the local ~/OneDrive folder to a specific location on OneDrive
+	
 Refer to [./advanced-usage.md](advanced-usage.md) for configuration assistance.
 
 ### Access OneDrive service through a proxy
