@@ -37,6 +37,8 @@ Before reading this document, please ensure you are running application version 
   * [Configuring the client for 'single tenant application' use](#configuring-the-client-for-single-tenant-application-use)
   * [Configuring the client to use older 'skilion' application identifier](#configuring-the-client-to-use-older-skilion-application-identifier)
 - [Frequently Asked Configuration Questions](#frequently-asked-configuration-questions)
+  * [How to sync both Personal and Business accounts at the same time?](#how-to-sync-both-personal-and-business-accounts-at-the-same-time)
+  * [How to sync multiple SharePoint Libraries at the same time?](#how-to-sync-multiple-sharepoint-libraries-at-the-same-time)
   * [How to sync only specific or single directory?](#how-to-sync-only-specific-or-single-directory)
   * [How to 'skip' directories from syncing?](#how-to-skip-directories-from-syncing)
   * [How to 'skip' files from syncing?](#how-to-skip-files-from-syncing)
