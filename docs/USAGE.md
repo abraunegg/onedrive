@@ -752,6 +752,16 @@ application_id = "22c49a0d-d21c-4792-aed1-8f163c982546"
 
 ## Frequently Asked Configuration Questions
 
+### How to sync both Personal and Business accounts at the same time?
+You must configure 2 separate instances of the application for each account.
+
+Refer to [./advanced-usage.md](advanced-usage.md) for configuration assistance.
+
+### How to sync multiple SharePoint Libraries at the same time?
+You must configure a separate instances of the application for each SharePoint Library.
+
+Refer to [./advanced-usage.md](advanced-usage.md) for configuration assistance.
+
 ### How to sync only specific or single directory?
 There are two methods to achieve this:
 *   Utilise '--single-directory' option to only sync this specific path
