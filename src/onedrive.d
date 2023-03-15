@@ -1012,10 +1012,12 @@ final class OneDriveApi
 		auto expirationDateTime = Clock.currTime(UTC()) + subscriptionExpirationInterval;
 		const(char)[] url;
 		url = subscriptionUrl;
+		// Create a resource item using the account driveId rather than using /me/drive/root
+		string resourceItem = "/drives/" ~ driveId ~ "/root:/";
 		const JSONValue request = [
 			"changeType": "updated",
 			"notificationUrl": notificationUrl,
-			"resource": "/me/drive/root",
+			"resource": resourceItem,
 			"expirationDateTime": expirationDateTime.toISOExtString(),
  			"clientState": randomUUID().toString()
 		];
