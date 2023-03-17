@@ -1795,23 +1795,65 @@ final class SyncEngine
 						}
 						// re-try original request - retried for 429 and 504
 						try {
-							log.vdebug("Retrying Query: changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable)");
+							
+							log.log("Retrying Query: changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable)");
 							changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable);
-							log.vdebug("Query 'changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
+							log.log("Query 'changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
+							
+							// Issue #2238 Debugging
+							log.log("deltaChanges current value: ", deltaChanges);
+							if (changesAvailable.type() == JSONType.object) {
+								// are there any delta changes?
+								if (("value" in changesAvailable) != null) {
+									deltaChanges = count(changesAvailable["value"].array);
+									log.log("changesAvailable query reports that there are " , deltaChanges , " changes that need processing on OneDrive");
+								}
+							}
+							log.log("deltaChanges post retry value: ", deltaChanges);
+							
 						} catch (OneDriveException e) {
 							// display what the error is
-							log.vdebug("Query Error: changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) on re-try after delay");
+							log.log("Query Error: changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) on re-try after delay");
 							if (e.httpStatusCode == 504) {
 								log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
-								log.vdebug("changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying with empty deltaLinkAvailable");
+								log.log("changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying with empty deltaLinkAvailable");
 								try {
 									// try query with empty deltaLinkAvailable value
 									deltaLinkAvailable = null;
 									changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable);
-									log.vdebug("Query 'changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
+									log.log("Query 'changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
+									
+									
+									// Issue #2238 Debugging
+									log.log("deltaChanges current value: ", deltaChanges);
+									if (changesAvailable.type() == JSONType.object) {
+										// are there any delta changes?
+										if (("value" in changesAvailable) != null) {
+											deltaChanges = count(changesAvailable["value"].array);
+											log.log("changesAvailable query reports that there are " , deltaChanges , " changes that need processing on OneDrive when using a null deltaLink value");
+										}
+									}
+									log.log("deltaChanges post retry value: ", deltaChanges);
+									
+									
+									
 								} catch (OneDriveException e) {
 									// Tried 3 times, give up
 									displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+									
+									// OK .. if this was a 504, and running with --download-only & --cleanup-local-files 
+									// need to exit to preserve local data, otherwise potential files will be deleted that should not be deleted
+									// leading to undesirable potential data loss scenarios
+									
+									if ((e.httpStatusCode == 504) && (cleanupLocalFiles)) {
+										// log why we are exiting
+										log.log("Exiting application due to OneDrive API Gateway Timeout & --download-only & --cleanup-local-files configured to preserve local data");
+										// Must exit here
+										onedrive.shutdown();
+										exit(-1);
+									}
+									
+									
 									return;
 								}
 							} else {
