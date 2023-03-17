@@ -1370,6 +1370,14 @@ int main(string[] args)
 			log.error("ERROR: Unsupported account type for syncing OneDrive Business Shared Folders");
 		}
 	}
+	
+	// Ensure that the value stored for cfg.getValueString("single_directory") does not contain any extra quotation marks
+	if (cfg.getValueString("single_directory") != ""){
+		string originalSingleDirectoryValue = cfg.getValueString("single_directory");
+		// Strip quotation marks from provided path to ensure no issues within a Docker environment when using passed in values
+		string updatedSingleDirectoryValue = strip(originalSingleDirectoryValue, "\"");
+		cfg.setValueString("single_directory", updatedSingleDirectoryValue);
+	}
 
 	// Are we displaying the sync status of the client?
 	if (cfg.getValueBool("display_sync_status")) {
