@@ -1787,11 +1787,11 @@ final class SyncEngine
 						// re-try the specific changes queries	
 						if (e.httpStatusCode == 504) {
 							log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
-							log.vdebug("changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying");
+							log.log("changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying");
 							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+							log.log("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
 							Thread.sleep(dur!"seconds"(30));
-							log.vdebug("Retrying Query - using original deltaLinkAvailable after delay");
+							log.log("Retrying Query - using original deltaLinkAvailable after delay");
 						}
 						// re-try original request - retried for 429 and 504
 						try {
@@ -1817,6 +1817,10 @@ final class SyncEngine
 							if (e.httpStatusCode == 504) {
 								log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
 								log.log("changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying with empty deltaLinkAvailable");
+								// Increase delay and wait again before retry
+								log.log("Thread sleeping for 90 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+								Thread.sleep(dur!"seconds"(90));
+								log.log("Retrying Query - using a null deltaLinkAvailable after delay");
 								try {
 									// try query with empty deltaLinkAvailable value
 									deltaLinkAvailable = null;
