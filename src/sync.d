@@ -1787,21 +1787,17 @@ final class SyncEngine
 						// re-try the specific changes queries	
 						if (e.httpStatusCode == 504) {
 							log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
-							log.log("changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying");
+							log.vdebug("changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying");
 							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.log("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
 							Thread.sleep(dur!"seconds"(30));
-							log.log("Retrying Query - using original deltaLinkAvailable after delay");
+							log.vdebug("Retrying Query - using original deltaLinkAvailable after delay");
 						}
 						// re-try original request - retried for 429 and 504
 						try {
-							
-							log.log("Retrying Query: changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable)");
+							log.vdebug("Retrying Query: changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable)");
 							changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable);
-							log.log("Query 'changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
-							
-							// Issue #2238 Debugging
-							log.log("deltaChanges current value: ", deltaChanges);
+							log.vdebug("Query 'changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
 							if (changesAvailable.type() == JSONType.object) {
 								// are there any delta changes?
 								if (("value" in changesAvailable) != null) {
@@ -1809,38 +1805,28 @@ final class SyncEngine
 									log.log("changesAvailable query reports that there are " , deltaChanges , " changes that need processing on OneDrive");
 								}
 							}
-							log.log("deltaChanges post retry value: ", deltaChanges);
-							
 						} catch (OneDriveException e) {
 							// display what the error is
-							log.log("Query Error: changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) on re-try after delay");
+							log.vdebug("Query Error: changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) on re-try after delay");
 							if (e.httpStatusCode == 504) {
 								log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query for changes - retrying applicable request");
-								log.log("changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying with empty deltaLinkAvailable");
+								log.vdebug("changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable) previously threw an error - retrying with empty deltaLinkAvailable");
 								// Increase delay and wait again before retry
-								log.log("Thread sleeping for 90 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+								log.vdebug("Thread sleeping for 90 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
 								Thread.sleep(dur!"seconds"(90));
-								log.log("Retrying Query - using a null deltaLinkAvailable after delay");
+								log.vdebug("Retrying Query - using a null deltaLinkAvailable after delay");
 								try {
 									// try query with empty deltaLinkAvailable value
 									deltaLinkAvailable = null;
 									changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable);
-									log.log("Query 'changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
-									
-									
-									// Issue #2238 Debugging
-									log.log("deltaChanges current value: ", deltaChanges);
+									log.vdebug("Query 'changesAvailable = onedrive.viewChangesByItemId(driveId, idToQuery, deltaLinkAvailable)' performed successfully on re-try");
 									if (changesAvailable.type() == JSONType.object) {
 										// are there any delta changes?
 										if (("value" in changesAvailable) != null) {
 											deltaChanges = count(changesAvailable["value"].array);
-											log.log("changesAvailable query reports that there are " , deltaChanges , " changes that need processing on OneDrive when using a null deltaLink value");
+											log.vdebug("changesAvailable query reports that there are " , deltaChanges , " changes that need processing on OneDrive when using a null deltaLink value");
 										}
 									}
-									log.log("deltaChanges post retry value: ", deltaChanges);
-									
-									
-									
 								} catch (OneDriveException e) {
 									// Tried 3 times, give up
 									displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
@@ -1848,7 +1834,6 @@ final class SyncEngine
 									// OK .. if this was a 504, and running with --download-only & --cleanup-local-files 
 									// need to exit to preserve local data, otherwise potential files will be deleted that should not be deleted
 									// leading to undesirable potential data loss scenarios
-									
 									if ((e.httpStatusCode == 504) && (cleanupLocalFiles)) {
 										// log why we are exiting
 										log.log("Exiting application due to OneDrive API Gateway Timeout & --download-only & --cleanup-local-files configured to preserve local data");
@@ -1856,8 +1841,6 @@ final class SyncEngine
 										onedrive.shutdown();
 										exit(-1);
 									}
-									
-									
 									return;
 								}
 							} else {
