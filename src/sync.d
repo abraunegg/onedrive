@@ -1804,7 +1804,7 @@ final class SyncEngine
 								// are there any delta changes?
 								if (("value" in changesAvailable) != null) {
 									deltaChanges = count(changesAvailable["value"].array);
-									log.log("changesAvailable query reports that there are " , deltaChanges , " changes that need processing on OneDrive");
+									log.vdebug("changesAvailable query reports that there are " , deltaChanges , " changes that need processing on OneDrive");
 								}
 							}
 						} catch (OneDriveException e) {
