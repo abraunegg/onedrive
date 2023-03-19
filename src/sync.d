@@ -231,8 +231,10 @@ final class SyncEngine
 	private string[] skippedItems;
 	// list of items to delete after the changes has been downloaded
 	private string[2][] idsToDelete;
-	// list of items we fake created when running --dry-run
+	// list of items we fake created when using --dry-run
 	private string[2][] idsFaked;
+	// list of directory names changed online, but not changed locally when using --dry-run
+	private string[] pathsRenamed;
 	// default drive id
 	private string defaultDriveId;
 	// default root id
@@ -2907,20 +2909,32 @@ final class SyncEngine
 						} else {
 							// TODO: force remote sync by deleting local item
 							log.vlog("The destination is occupied, renaming the conflicting file...");
-							safeRename(newPath);
+							if (!dryRun) {
+								safeRename(newPath);
+							}
 						}
 					} else {
 						// to be overwritten item is not already in the itemdb, so it should
 						// be synced. Do a safe rename here, too.
 						// TODO: force remote sync by deleting local item
 						log.vlog("The destination is occupied by new file, renaming the conflicting file...");
-						safeRename(newPath);
+						if (!dryRun) {
+							safeRename(newPath);
+						}
 					}
 				}
 				// try and rename path, catch exception
 				try {
 					log.vdebug("Calling rename(oldPath, newPath)");
-					rename(oldPath, newPath);
+					if (!dryRun) {
+						// rename physical path on disk
+						rename(oldPath, newPath);
+					} else {
+						// track this as a faked id item
+						idsFaked ~= [newItem.driveId, newItem.id];
+						// we also need to track that we did not rename this path
+						pathsRenamed ~= [oldPath];
+					}
 				} catch (FileException e) {
 					// display the error message
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
@@ -4449,8 +4463,23 @@ final class SyncEngine
 				log.logAndNotify("Skipping item - invalid name (Microsoft Naming Convention): ", path);
 				return;
 			}
-
-			// We want to upload this new item
+			
+			// If we are in a --dry-run scenario, we may have renamed a folder - but it is technically not renamed locally
+			// Thus, that entire path may be attemtped to be uploaded as new data to OneDrive
+			if (dryRun) {
+				// check the pathsRenamed array for this path
+				// if any match - we need to exclude this path
+				foreach (thisRenamedPath; pathsRenamed) {
+					log.vdebug("Renamed Path to evaluate: ", thisRenamedPath);
+					// Can we find 'thisRenamedPath' in the given 'path'
+					if (canFind(path, thisRenamedPath)) {
+						log.vdebug("Renamed Path MATCH - DONT UPLOAD AS NEW");
+						return;
+					}
+				}
+			}
+			
+			// We want to upload this new local data
 			if (isDir(path)) {
 				Item item;
 				bool pathFoundInDB = false;
