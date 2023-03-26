@@ -241,17 +241,27 @@ Here is an example of `sync_list`:
 #
 # Include my Backup folder
 Backup
+#
 # Include Documents folder
 Documents/
+#
 # Include all PDF documents
 Documents/*.pdf
+#
 # Include this single document
 Documents/latest_report.docx
+#
 # Include all Work/Project directories
 Work/Project*
 notes.txt
+#
 # Include /Blender in the ~OneDrive root but not if elsewhere
 /Blender
+#
+# Include these directories that have a space in their name
+Pictures/Camera Roll
+Pictures/Saved Pictures
+#
 # Include these names if they match any file or folder
 Cinema Soc
 Codes
