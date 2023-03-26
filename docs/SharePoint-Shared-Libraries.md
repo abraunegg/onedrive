@@ -1,4 +1,5 @@
 # How to configure OneDrive SharePoint Shared Library sync
+_WARNING: Several users have reported files being overwritten causing data loss as a result of using this client with SharePoint. This may be caused by system processes or Office-replacement software modifying local files, or an unknown issue with the client. Please use this client with SharePoint with caution._ 
 ## Application Version
 Before reading this document, please ensure you are running application version [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases) or greater. Use `onedrive --version` to determine what application version you are using and upgrade your client if required.
 
