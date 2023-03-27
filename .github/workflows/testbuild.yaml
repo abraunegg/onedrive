@@ -18,6 +18,9 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
+    - name: Update Image
+      run: sudo apt-get update -y
+
     - name: Install build-essential
       run: sudo apt install -y build-essential
       
