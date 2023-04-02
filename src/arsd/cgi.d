@@ -54,7 +54,7 @@ void main() {
 */
 
 /++
-	Provides a uniform server-side API for CGI, FastCGI, SCGI, and HTTP web applications.
+	Provides a uniform server-side API for CGI, FastCGI, SCGI, and HTTP web applications. Offers both lower- and higher- level api options among other common (optional) things like websocket and event source serving support, session management, and job scheduling.
 
 	---
 	import arsd.cgi;
@@ -74,6 +74,30 @@ void main() {
 	mixin GenericMain!hello;
 	---
 
+	Or:
+	---
+	import arsd.cgi;
+
+	class MyApi : WebObject {
+		@UrlName("")
+		string hello(string name = null) {
+			if(name is null)
+				return "Hello, world!";
+			else
+				return "Hello, " ~ name;
+		}
+	}
+	mixin DispatcherMain!(
+		"/".serveApi!MyApi
+	);
+	---
+
+	$(NOTE
+		Please note that using the higher-level api will add a dependency on arsd.dom and arsd.jsvar to your application.
+		If you use `dmd -i` or `ldc2 -i` to build, it will just work, but with dub, you will have do `dub add arsd-official:jsvar`
+		and `dub add arsd-official:dom` yourself.
+	)
+
 	Test on console (works in any interface mode):
 	$(CONSOLE
 		$ ./cgi_hello GET / name=whatever
@@ -85,10 +109,12 @@ void main() {
 		# now you can go to http://localhost:8080/?name=whatever
 	)
 
-	Please note: the default port for http is 8085 and for cgi is 4000. I recommend you set your own by the command line argument in a startup script instead of relying on any hard coded defaults. It is possible though to hard code your own with [RequestServer].
+	Please note: the default port for http is 8085 and for scgi is 4000. I recommend you set your own by the command line argument in a startup script instead of relying on any hard coded defaults. It is possible though to code your own with [RequestServer], however.
 
 
-	Compile_versions:
+	Build_Configurations:
+
+	cgi.d tries to be flexible to meet your needs. It is possible to configure it both at runtime (by writing your own `main` function and constructing a [RequestServer] object) or at compile time using the `version` switch to the compiler or a dub `subConfiguration`.
 
 	If you are using `dub`, use:
 
@@ -105,11 +131,11 @@ void main() {
 	to change versions. The possible options for `VALUE_HERE` are:
 
 	$(LIST
-		* `embedded_httpd` for the embedded httpd version (built-in web server). This is the default.
-		* `cgi` for traditional cgi binaries.
-		* `fastcgi` for FastCGI builds.
-		* `scgi` for SCGI builds.
-		* `stdio_http` for speaking raw http over stdin and stdout. See [RequestServer.serveSingleHttpConnectionOnStdio] for more information.
+		* `embedded_httpd` for the embedded httpd version (built-in web server). This is the default for dub builds. You can run the program then connect directly to it from your browser.
+		* `cgi` for traditional cgi binaries. These are run by an outside web server as-needed to handle requests.
+		* `fastcgi` for FastCGI builds. FastCGI is managed from an outside helper, there's one built into Microsoft IIS, Apache httpd, and Lighttpd, and a generic program you can use with nginx called `spawn-fcgi`. If you don't already know how to use it, I suggest you use one of the other modes.
+		* `scgi` for SCGI builds. SCGI is a simplified form of FastCGI, where you run the server as an application service which is proxied by your outside webserver.
+		* `stdio_http` for speaking raw http over stdin and stdout. This is made for systemd services. See [RequestServer.serveSingleHttpConnectionOnStdio] for more information.
 	)
 
 	With dmd, use:
@@ -127,7 +153,8 @@ void main() {
 			- A FastCGI executable will be generated.
 		* - `-version=scgi`
 			- A SCGI (SimpleCGI) executable will be generated.
-
+		* - `-version=embedded_httpd_hybrid`
+			- A HTTP server that uses a combination of processes, threads, and fibers to better handle large numbers of idle connections. Recommended if you are going to serve websockets in a non-local application.
 		* - `-version=embedded_httpd_threads`
 			- The embedded HTTP server will use a single process with a thread pool. (use instead of plain `embedded_httpd` if you want this specific implementation)
 		* - `-version=embedded_httpd_processes`
@@ -141,7 +168,7 @@ void main() {
 		  + (can be used together with others)
 
 		* - `-version=cgi_with_websocket`
-			- The CGI class has websocket server support.
+			- The CGI class has websocket server support. (This is on by default now.)
 
 		* - `-version=with_openssl`
 			- not currently used
@@ -151,7 +178,7 @@ void main() {
 			- The session will be provided in a separate process, provided by cgi.d.
 	)
 
-	Compile_and_run:
+	For example,
 
 	For CGI, `dmd yourfile.d cgi.d` then put the executable in your cgi-bin directory.
 
@@ -161,77 +188,24 @@ void main() {
 
 	For an embedded HTTP server, run `dmd yourfile.d cgi.d -version=embedded_httpd` and run the generated program. It listens on port 8085 by default. You can change this on the command line with the --port option when running your program.
 
-	You can also simulate a request by passing parameters on the command line, like:
+	Simulating_requests:
+
+	If you are using one of the [GenericMain] or [DispatcherMain] mixins, or main with your own call to [RequestServer.trySimulatedRequest], you can simulate requests from your command-ine shell. Call the program like this:
 
 	$(CONSOLE
 	./yourprogram GET / name=adr
 	)
 
-	And it will print the result to stdout.
+	And it will print the result to stdout instead of running a server, regardless of build more..
 
 	CGI_Setup_tips:
 
-	On Apache, you may do `SetHandler cgi-script` in your `.htaccess` file.
+	On Apache, you may do `SetHandler cgi-script` in your `.htaccess` file to set a particular file to be run through the cgi program. Note that all "subdirectories" of it also run the program; if you configure `/foo` to be a cgi script, then going to `/foo/bar` will call your cgi handler function with `cgi.pathInfo == "/bar"`.
 
-	Integration_tips:
+	Overview_Of_Basic_Concepts:
 
-	cgi.d works well with dom.d for generating html. You may also use web.d for other utilities and automatic api wrapping.
+	cgi.d offers both lower-level handler apis as well as higher-level auto-dispatcher apis. For a lower-level handler function, you'll probably want to review the following functions:
 
-	dom.d usage:
-
-	---
-		import arsd.cgi;
-		import arsd.dom;
-
-		void hello_dom(Cgi cgi) {
-			auto document = new Document();
-
-			static import std.file;
-			// parse the file in strict mode, requiring it to be well-formed UTF-8 XHTML
-			// (You'll appreciate this if you've ever had to deal with a missing </div>
-			// or something in a php or erb template before that would randomly mess up
-			// the output in your browser. Just check it and throw an exception early!)
-			//
-			// You could also hard-code a template or load one at compile time with an
-			// import expression, but you might appreciate making it a regular file
-			// because that means it can be more easily edited by the frontend team and
-			// they can see their changes without needing to recompile the program.
-			//
-			// Note on CTFE: if you do choose to load a static file at compile time,
-			// you *can* parse it in CTFE using enum, which will cause it to throw at
-			// compile time, which is kinda cool too. Be careful in modifying that document,
-			// though, as it will be a static instance. You might want to clone on on demand,
-			// or perhaps modify it lazily as you print it out. (Try element.tree, it returns
-			// a range of elements which you could send through std.algorithm functions. But
-			// since my selector implementation doesn't work on that level yet, you'll find that
-			// harder to use. Of course, you could make a static list of matching elements and
-			// then use a simple e is e2 predicate... :) )
-			document.parseUtf8(std.file.read("your_template.html"), true, true);
-
-			// fill in data using DOM functions, so placing it is in the hands of HTML
-			// and it will be properly encoded as text too.
-			//
-			// Plain html templates can't run server side logic, but I think that's a
-			// good thing - it keeps them simple. You may choose to extend the html,
-			// but I think it is best to try to stick to standard elements and fill them
-			// in with requested data with IDs or class names. A further benefit of
-			// this is the designer can also highlight data based on sources in the CSS.
-			//
-			// However, all of dom.d is available, so you can format your data however
-			// you like. You can do partial templates with innerHTML too, or perhaps better,
-			// injecting cloned nodes from a partial document.
-			//
-			// There's a lot of possibilities.
-			document["#name"].innerText = cgi.request("name", "default name");
-
-			// send the document to the browser. The second argument to `cgi.write`
-			// indicates that this is all the data at once, enabling a few small
-			// optimizations.
-			cgi.write(document.toString(), true);
-		}
-	---
-
-	Concepts:
 		Input: [Cgi.get], [Cgi.post], [Cgi.request], [Cgi.files], [Cgi.cookies], [Cgi.pathInfo], [Cgi.requestMethod],
 		       and HTTP headers ([Cgi.headers], [Cgi.userAgent], [Cgi.referrer], [Cgi.accept], [Cgi.authorization], [Cgi.lastEventId])
 
@@ -245,12 +219,175 @@ void main() {
 
 		Other Information: [Cgi.remoteAddress], [Cgi.https], [Cgi.port], [Cgi.scriptName], [Cgi.requestUri], [Cgi.getCurrentCompleteUri], [Cgi.onRequestBodyDataReceived]
 
-		Overriding behavior: [Cgi.handleIncomingDataChunk], [Cgi.prepareForIncomingDataChunks], [Cgi.cleanUpPostDataState]
+		Websockets: [Websocket], [websocketRequested], [acceptWebsocket]. For websockets, use the `embedded_httpd_hybrid` build mode for best results, because it is optimized for handling large numbers of idle connections compared to the other build modes.
 
-		Installing: Apache, IIS, CGI, FastCGI, SCGI, embedded HTTPD (not recommended for production use)
+		Overriding behavior for special cases streaming input data: see the virtual functions [Cgi.handleIncomingDataChunk], [Cgi.prepareForIncomingDataChunks], [Cgi.cleanUpPostDataState]
+
+	A basic program using the lower-level api might look like:
+
+		---
+		import arsd.cgi;
+
+		// you write a request handler which always takes a Cgi object
+		void handler(Cgi cgi) {
+			/+
+				when the user goes to your site, suppose you are being hosted at http://example.com/yourapp
+
+				If the user goes to http://example.com/yourapp/test?name=value
+				then the url will be parsed out into the following pieces:
+
+					cgi.pathInfo == "/test". This is everything after yourapp's name. (If you are doing an embedded http server, your app's name is blank, so pathInfo will be the whole path of the url.)
+
+					cgi.scriptName == "yourapp". With an embedded http server, this will be blank.
+
+					cgi.host == "example.com"
+
+					cgi.https == false
+
+					cgi.queryString == "name=value" (there's also cgi.search, which will be "?name=value", including the ?)
+
+					The query string is further parsed into the `get` and `getArray` members, so:
+
+					cgi.get == ["name": "value"], meaning you can do `cgi.get["name"] == "value"`
+
+					And
+
+					cgi.getArray == ["name": ["value"]].
+
+					Why is there both `get` and `getArray`? The standard allows names to be repeated. This can be very useful,
+					it is how http forms naturally pass multiple items like a set of checkboxes. So `getArray` is the complete data
+					if you need it. But since so often you only care about one value, the `get` member provides more convenient access.
+
+				We can use these members to process the request and build link urls. Other info from the request are in other members, we'll look at them later.
+			+/
+			switch(cgi.pathInfo) {
+				// the home page will be a small html form that can set a cookie.
+				case "/":
+					cgi.write(`<!DOCTYPE html>
+					<html>
+					<body>
+						<form method="POST" action="set-cookie">
+							<label>Your name: <input type="text" name="name" /></label>
+							<input type="submit" value="Submit" />
+						</form>
+					</body>
+					</html>
+					`, true); // the , true tells it that this is the one, complete response i want to send, allowing some optimizations.
+				break;
+				// POSTing to this will set a cookie with our submitted name
+				case "/set-cookie":
+					// HTTP has a number of request methods (also called "verbs") to tell
+					// what you should do with the given resource.
+					// The most common are GET and POST, the ones used in html forms.
+					// You can check which one was used with the `cgi.requestMethod` property.
+					if(cgi.requestMethod == Cgi.RequestMethod.POST) {
+
+						// headers like redirections need to be set before we call `write`
+						cgi.setResponseLocation("read-cookie");
+
+						// just like how url params go into cgi.get/getArray, form data submitted in a POST
+						// body go to cgi.post/postArray. Please note that a POST request can also have get
+						// params in addition to post params.
+						//
+						// There's also a convenience function `cgi.request("name")` which checks post first,
+						// then get if it isn't found there, and then returns a default value if it is in neither.
+						if("name" in cgi.post) {
+							// we can set cookies with a method too
+							// again, cookies need to be set before calling `cgi.write`, since they
+							// are a kind of header.
+							cgi.setCookie("name" , cgi.post["name"]);
+						}
+
+						// the user will probably never see this, since the response location
+						// is an automatic redirect, but it is still best to say something anyway
+						cgi.write("Redirecting you to see the cookie...", true);
+					} else {
+						// you can write out response codes and headers
+						// as well as response bodies
+						//
+						// But always check the cgi docs before using the generic
+						// `header` method - if there is a specific method for your
+						// header, use it before resorting to the generic one to avoid
+						// a header value from being sent twice.
+						cgi.setResponseLocation("405 Method Not Allowed");
+						// there is no special accept member, so you can use the generic header function
+						cgi.header("Accept: POST");
+						// but content type does have a method, so prefer to use it:
+						cgi.setResponseContentType("text/plain");
+
+						// all the headers are buffered, and will be sent upon the first body
+						// write. you can actually modify some of them before sending if need be.
+						cgi.write("You must use the POST http verb on this resource.", true);
+					}
+				break;
+				// and GETting this will read the cookie back out
+				case "/read-cookie":
+					// I did NOT pass `,true` here because this is writing a partial response.
+					// It is possible to stream data to the user in chunks by writing partial
+					// responses the calling `cgi.flush();` to send the partial response immediately.
+					// normally, you'd only send partial chunks if you have to - it is better to build
+					// a response as a whole and send it as a whole whenever possible - but here I want
+					// to demo that you can.
+					cgi.write("Hello, ");
+					if("name" in cgi.cookies) {
+						import arsd.dom; // dom.d provides a lot of helpers for html
+						// since the cookie is set, we need to write it out properly to
+						// avoid cross-site scripting attacks.
+						//
+						// Getting this stuff right automatically is a benefit of using the higher
+						// level apis, but this demo is to show the fundamental building blocks, so
+						// we're responsible to take care of it.
+						cgi.write(htmlEntitiesEncode(cgi.cookies["name"]));
+					} else {
+						cgi.write("friend");
+					}
+
+					// note that I never called cgi.setResponseContentType, since the default is text/html.
+					// it doesn't hurt to do it explicitly though, just remember to do it before any cgi.write
+					// calls.
+				break;
+				default:
+					// no path matched
+					cgi.setResponseStatus("404 Not Found");
+					cgi.write("Resource not found.", true);
+			}
+		}
+
+		// and this adds the boilerplate to set up a server according to the
+		// compile version configuration and call your handler as requests come in
+		mixin GenericMain!handler; // the `handler` here is the name of your function
+		---
+
+	Even if you plan to always use the higher-level apis, I still recommend you at least familiarize yourself with the lower level functions, since they provide the lightest weight, most flexible options to get down to business if you ever need them.
+
+	In the lower-level api, the [Cgi] object represents your HTTP transaction. It has functions to describe the request and for you to send your response. It leaves the details of how you o it up to you. The general guideline though is to avoid depending any variables outside your handler function, since there's no guarantee they will survive to another handler. You can use global vars as a lazy initialized cache, but you should always be ready in case it is empty. (One exception: if you use `-version=embedded_httpd_threads -version=cgi_no_fork`, then you can rely on it more, but you should still really write things assuming your function won't have anything survive beyond its return for max scalability and compatibility.)
+
+	A basic program using the higher-level apis might look like:
+
+		---
+		/+
+		import arsd.cgi;
+
+		struct LoginData {
+			string currentUser;
+		}
+
+		class AppClass : WebObject {
+			string foo() {}
+		}
+
+		mixin DispatcherMain!(
+			"/assets/.serveStaticFileDirectory("assets/", true), // serve the files in the assets subdirectory
+			"/".serveApi!AppClass,
+			"/thing/".serveRestObject,
+		);
+		+/
+		---
 
 	Guide_for_PHP_users:
-		If you are coming from PHP, here's a quick guide to help you get started:
+		(Please note: I wrote this section in 2008. A lot of PHP hosts still ran 4.x back then, so it was common to avoid using classes - introduced in php 5 - to maintain compatibility! If you're coming from php more recently, this may not be relevant anymore, but still might help you.)
+
+		If you are coming from old-style PHP, here's a quick guide to help you get started:
 
 		$(SIDE_BY_SIDE
 			$(COLUMN
@@ -326,27 +463,101 @@ void main() {
 
 	See_Also:
 
-	You may also want to see [arsd.dom], [arsd.web], and [arsd.html] for more code for making
-	web applications.
+	You may also want to see [arsd.dom], [arsd.webtemplate], and maybe some functions from my old [arsd.html] for more code for making
+	web applications. dom and webtemplate are used by the higher-level api here in cgi.d.
 
 	For working with json, try [arsd.jsvar].
 
 	[arsd.database], [arsd.mysql], [arsd.postgres], [arsd.mssql], and [arsd.sqlite] can help in
 	accessing databases.
 
-	If you are looking to access a web application via HTTP, try [std.net.curl], [arsd.curl], or [arsd.http2].
+	If you are looking to access a web application via HTTP, try [arsd.http2].
 
 	Copyright:
 
-	cgi.d copyright 2008-2022, Adam D. Ruppe. Provided under the Boost Software License.
+	cgi.d copyright 2008-2023, Adam D. Ruppe. Provided under the Boost Software License.
 
 	Yes, this file is old, and yes, it is still actively maintained and used.
 +/
 module arsd.cgi;
 
-version(Demo)
-unittest {
+// FIXME: Nullable!T can be a checkbox that enables/disables the T on the automatic form
+// and a SumType!(T, R) can be a radio box to pick between T and R to disclose the extra boxes on the automatic form
 
+/++
+	This micro-example uses the [dispatcher] api to act as a simple http file server, serving files found in the current directory and its children.
++/
+unittest {
+	import arsd.cgi;
+
+	mixin DispatcherMain!(
+		"/".serveStaticFileDirectory(null, true)
+	);
+}
+
+/++
+	Same as the previous example, but written out long-form without the use of [DispatcherMain] nor [GenericMain].
++/
+unittest {
+	import arsd.cgi;
+
+	void requestHandler(Cgi cgi) {
+		cgi.dispatcher!(
+			"/".serveStaticFileDirectory(null, true)
+		);
+	}
+
+	// mixin GenericMain!requestHandler would add this function:
+	void main(string[] args) {
+		// this is all the content of [cgiMainImpl] which you can also call
+
+		// cgi.d embeds a few add on functions like real time event forwarders
+		// and session servers it can run in other processes. this spawns them, if needed.
+		if(tryAddonServers(args))
+			return;
+
+		// cgi.d allows you to easily simulate http requests from the command line,
+		// without actually starting a server. this function will do that.
+		if(trySimulatedRequest!(requestHandler, Cgi)(args))
+			return;
+
+		RequestServer server;
+		// you can change the default port here if you like
+		// server.listeningPort = 9000;
+
+		// then call this to let the command line args override your default
+		server.configureFromCommandLine(args);
+
+		// here is where you could print out the listeningPort to the user if you wanted
+
+		// and serve the request(s) according to the compile configuration
+		server.serve!(requestHandler)();
+
+		// or you could explicitly choose a serve mode like this:
+		// server.serveEmbeddedHttp!requestHandler();
+	}
+}
+
+/++
+	 cgi.d has built-in testing helpers too. These will provide mock requests and mock sessions that
+	 otherwise run through the rest of the internal mechanisms to call your functions without actually
+	 spinning up a server.
++/
+unittest {
+	import arsd.cgi;
+
+	void requestHandler(Cgi cgi) {
+
+	}
+
+	// D doesn't let me embed a unittest inside an example unittest
+	// so this is a function, but you can do it however in your real program
+	/* unittest */ void runTests() {
+		auto tester = new CgiTester(&requestHandler);
+
+		auto response = tester.GET("/");
+		assert(response.code == 200);
+	}
 }
 
 static import std.file;
@@ -2417,7 +2628,7 @@ class Cgi {
 			return; // don't double close
 
 		if(!outputtedResponseData)
-			write("", false, false);
+			write("", true, false);
 
 		// writing auto buffered data
 		if(requestMethod != RequestMethod.HEAD && autoBuffer) {
@@ -2542,6 +2753,23 @@ class Cgi {
 	version(preserveData) // note: this can eat lots of memory; don't use unless you're sure you need it.
 	immutable(ubyte)[] originalPostData;
 
+	/++
+		This holds the posted body data if it has not been parsed into [post] and [postArray].
+
+		It is intended to be used for JSON and XML request content types, but also may be used
+		for other content types your application can handle. But it will NOT be populated
+		for content types application/x-www-form-urlencoded or multipart/form-data, since those are
+		parsed into the post and postArray members.
+
+		Remember that anything beyond your `maxContentLength` param when setting up [GenericMain], etc.,
+		will be discarded to the client with an error. This helps keep this array from being exploded in size
+		and consuming all your server's memory (though it may still be possible to eat excess ram from a concurrent
+		client in certain build modes.)
+
+		History:
+			Added January 5, 2021
+			Documented February 21, 2023 (dub v11.0)
+	+/
 	public immutable string postBody;
 	alias postJson = postBody; // old name
 
@@ -3302,7 +3530,11 @@ string toHexUpper(long num) {
 
 // the generic mixins
 
-/// Use this instead of writing your own main
+/++
+	Use this instead of writing your own main
+
+	It ultimately calls [cgiMainImpl] which creates a [RequestServer] for you.
++/
 mixin template GenericMain(alias fun, long maxContentLength = defaultMaxContentLength) {
 	mixin CustomCgiMain!(Cgi, fun, maxContentLength);
 }
@@ -3704,7 +3936,7 @@ struct RequestServer {
 	/++
 		Serves a single "connection", but the connection is spoken on stdin and stdout instead of on a socket.
 
-		Intended for cases like working from systemd, like discussed here: https://forum.dlang.org/post/avmkfdiitirnrenzljwc@forum.dlang.org
+		Intended for cases like working from systemd, like discussed here: [https://forum.dlang.org/post/avmkfdiitirnrenzljwc@forum.dlang.org]
 
 		History:
 			Added May 29, 2021
@@ -3757,15 +3989,17 @@ struct RequestServer {
 	static void stop(ForceStop stopPriority = ForceStop.afterCurrentRequestsComplete) {
 		globalStopFlag = true;
 
-		version(Posix)
-		if(cancelfd > 0) {
-			ulong a = 1;
-			core.sys.posix.unistd.write(cancelfd, &a, a.sizeof);
+		version(Posix) {
+			if(cancelfd > 0) {
+				ulong a = 1;
+				core.sys.posix.unistd.write(cancelfd, &a, a.sizeof);
+			}
 		}
-		version(Windows)
-		if(iocp) {
-			foreach(i; 0 .. 16) // FIXME
-			PostQueuedCompletionStatus(iocp, 0, cast(ULONG_PTR) null, null);
+		version(Windows) {
+			if(iocp) {
+				foreach(i; 0 .. 16) // FIXME
+				PostQueuedCompletionStatus(iocp, 0, cast(ULONG_PTR) null, null);
+			}
 		}
 	}
 }
@@ -4168,6 +4402,8 @@ string defaultListeningHost() {
 /++
 	This is the function [GenericMain] calls. View its source for some simple boilerplate you can copy/paste and modify, or you can call it yourself from your `main`.
 
+	Please note that this may spawn other helper processes that will call `main` again. It does this currently for the timer server and event source server (and the quasi-deprecated web socket server).
+
 	Params:
 		fun = Your request handler
 		CustomCgi = a subclass of Cgi, if you wise to customize it further
@@ -4175,7 +4411,7 @@ string defaultListeningHost() {
 		args = command-line arguments
 
 	History:
-	Documented Sept 26, 2020.
+		Documented Sept 26, 2020.
 +/
 void cgiMainImpl(alias fun, CustomCgi = Cgi, long maxContentLength = defaultMaxContentLength)(string[] args) if(is(CustomCgi : Cgi)) {
 	if(tryAddonServers(args))
@@ -5265,7 +5501,8 @@ class ListeningConnectionManager {
 			fd_set read_fds;
 			FD_ZERO(&read_fds);
 			FD_SET(listener.handle, &read_fds);
-			FD_SET(cancelfd, &read_fds);
+			if(cancelfd != -1)
+				FD_SET(cancelfd, &read_fds);
 			auto max = listener.handle > cancelfd ? listener.handle : cancelfd;
 			auto ret = select(max + 1, &read_fds, null, null, null);
 			if(ret == -1) {
@@ -5276,7 +5513,7 @@ class ListeningConnectionManager {
 					throw new Exception("wtf select");
 			}
 
-			if(FD_ISSET(cancelfd, &read_fds)) {
+			if(cancelfd != -1 && FD_ISSET(cancelfd, &read_fds)) {
 				return null;
 			}
 
@@ -5284,8 +5521,25 @@ class ListeningConnectionManager {
 				return listener.accept();
 
 			return null;
-		} else
-			return listener.accept(); // FIXME: check the cancel flag!
+		} else {
+
+			Socket socket = listener;
+
+			auto check = new SocketSet();
+
+			keep_looping:
+			check.reset();
+			check.add(socket);
+
+			// just to check the stop flag on a kinda busy loop. i hate this FIXME
+			auto got = Socket.select(check, null, null, 3.seconds);
+			if(got > 0)
+				return listener.accept();
+			if(globalStopFlag)
+				return null;
+			else
+				goto keep_looping;
+		}
 	}
 
 	int defaultNumberOfThreads() {
@@ -7160,7 +7414,7 @@ mixin template ImplementRpcClientInterface(T, string serverPath, string cmdArg) 
 
 	// derivedMembers on an interface seems to give exactly what I want: the virtual functions we need to implement. so I am just going to use it directly without more filtering.
 	static foreach(idx, member; __traits(derivedMembers, T)) {
-	static if(__traits(isVirtualFunction, __traits(getMember, T, member)))
+	static if(__traits(isVirtualMethod, __traits(getMember, T, member)))
 		mixin( q{
 		std.traits.ReturnType!(__traits(getMember, T, member))
 		} ~ member ~ q{(std.traits.Parameters!(__traits(getMember, T, member)) params)
@@ -7253,7 +7507,7 @@ void dispatchRpcServer(Interface, Class)(Class this_, ubyte[] data, int fd) if(i
 
 	sw: switch(calledIdx) {
 		foreach(idx, memberName; __traits(derivedMembers, Interface))
-		static if(__traits(isVirtualFunction, __traits(getMember, Interface, memberName))) {
+		static if(__traits(isVirtualMethod, __traits(getMember, Interface, memberName))) {
 			case idx:
 				assert(calledFunction == __traits(getMember, Interface, memberName).mangleof);
 
@@ -9267,8 +9521,10 @@ css";
 	Element htmlContainer() {
 		auto document = new Document(q"html
 <!DOCTYPE html>
-<html>
+<html class="no-script">
 <head>
+	<script>document.documentElement.classList.remove("no-script");</script>
+	<style>.no-script requires-script { display: none; }</style>
 	<title>D Application</title>
 	<link rel="stylesheet" href="style.css" />
 </head>
@@ -9301,8 +9557,33 @@ html", true, true);
 	}
 
 	void presentSuccessfulReturn(T, Meta)(Cgi cgi, T ret, Meta meta, string format) {
-		// FIXME? format?
-		(cast(CRTP) this).presentSuccessfulReturnAsHtml(cgi, ret, meta);
+		switch(format) {
+			case "html":
+				(cast(CRTP) this).presentSuccessfulReturnAsHtml(cgi, ret, meta);
+			break;
+			case "json":
+				import arsd.jsvar;
+				static if(is(typeof(ret) == MultipleResponses!Types, Types...)) {
+					var json;
+					foreach(index, type; Types) {
+						if(ret.contains == index)
+							json = ret.payload[index];
+					}
+				} else {
+					var json = ret;
+				}
+				var envelope = json; // var.emptyObject;
+				/*
+				envelope.success = true;
+				envelope.result = json;
+				envelope.error = null;
+				*/
+				cgi.setResponseContentType("application/json");
+				cgi.write(envelope.toJson(), true);
+			break;
+			default:
+				cgi.setResponseStatus("406 Not Acceptable"); // not exactly but sort of.
+		}
 	}
 
 	/// typeof(null) (which is also used to represent functions returning `void`) do nothing
@@ -9342,9 +9623,14 @@ html", true, true);
 			assert(0);
 	}
 
-	/// An instance of the [arsd.dom.FileResource] interface has its own content type; assume it is a download of some sort.
+	/++
+		An instance of the [arsd.dom.FileResource] interface has its own content type; assume it is a download of some sort if the filename member is non-null of the FileResource interface.
+	+/
 	void presentSuccessfulReturn(T : FileResource, Meta)(Cgi cgi, T ret, Meta meta, string format) {
 		cgi.setCache(true); // not necessarily true but meh
+		if(auto fn = ret.filename()) {
+			cgi.header("Content-Disposition: attachment; filename="~fn~";");
+		}
 		cgi.setResponseContentType(ret.contentType);
 		cgi.write(ret.getData(), true);
 	}
@@ -9357,6 +9643,21 @@ html", true, true);
 	}
 
 	/++
+
+		History:
+			Added January 23, 2023 (dub v11.0)
+	+/
+	void presentExceptionalReturn(Meta)(Cgi cgi, Throwable t, Meta meta, string format) {
+		switch(format) {
+			case "html":
+				presentExceptionAsHtml(cgi, t, meta);
+			break;
+			default:
+		}
+	}
+
+
+	/++
 		If you override this, you will need to cast the exception type `t` dynamically,
 		but can then use the template arguments here to refer back to the function.
 
@@ -9364,14 +9665,29 @@ html", true, true);
 		method on the live object. You could, in theory, change arguments and retry, but I
 		provide that information mostly with the expectation that you will use them to make
 		useful forms or richer error messages for the user.
+
+		History:
+			BREAKING CHANGE on January 23, 2023 (v11.0 ): it previously took an `alias func` and `T dg` to call the function again.
+			I removed this in favor of a `Meta` param.
+
+			Before: `void presentExceptionAsHtml(alias func, T)(Cgi cgi, Throwable t, T dg)`
+
+			After: `void presentExceptionAsHtml(Meta)(Cgi cgi, Throwable t, Meta meta)`
+
+			If you used the func for something, move that something into your `methodMeta` template.
+
+			What is the benefit of this change? Somewhat smaller executables and faster builds thanks to more reused functions, together with
+			enabling an easier implementation of [presentExceptionalReturn].
 	+/
-	void presentExceptionAsHtml(alias func, T)(Cgi cgi, Throwable t, T dg) {
+	void presentExceptionAsHtml(Meta)(Cgi cgi, Throwable t, Meta meta) {
 		Form af;
+		/+
 		foreach(attr; __traits(getAttributes, func)) {
 			static if(__traits(isSame, attr, AutomaticForm)) {
 				af = createAutomaticFormForFunction!(func)(dg);
 			}
 		}
+		+/
 		presentExceptionAsHtmlImpl(cgi, t, af);
 	}
 
@@ -9975,7 +10291,7 @@ private auto serveApiInternal(T)(string urlPrefix) {
 			switch(cgi.request("format", "html")) {
 				case "html":
 					static void dummy() {}
-					presenter.presentExceptionAsHtml!(dummy)(cgi, t, &dummy);
+					presenter.presentExceptionAsHtml(cgi, t, null);
 				return true;
 				case "json":
 					var envelope = var.emptyObject;
@@ -10183,47 +10499,25 @@ private auto serveApiInternal(T)(string urlPrefix) {
 					if(callFunction)
 				+/
 
-					if(automaticForm && cgi.requestMethod == Cgi.RequestMethod.GET) {
+					auto format = cgi.request("format", defaultFormat!overload());
+					auto wantsFormFormat = format.startsWith("form-");
+
+					if(wantsFormFormat || (automaticForm && cgi.requestMethod == Cgi.RequestMethod.GET)) {
 						// Should I still show the form on a json thing? idk...
 						auto ret = presenter.createAutomaticFormForFunction!((__traits(getOverloads, obj, methodName)[idx]))(&(__traits(getOverloads, obj, methodName)[idx]));
-						presenter.presentSuccessfulReturn(cgi, ret, presenter.methodMeta!(__traits(getOverloads, obj, methodName)[idx]), "html");
+						presenter.presentSuccessfulReturn(cgi, ret, presenter.methodMeta!(__traits(getOverloads, obj, methodName)[idx]), wantsFormFormat ? format["form_".length .. $] : "html");
 						return true;
 					}
-					switch(cgi.request("format", defaultFormat!overload())) {
-						case "html":
-							// a void return (or typeof(null) lol) means you, the user, is doing it yourself. Gives full control.
-							try {
 
-								auto ret = callFromCgi!(__traits(getOverloads, obj, methodName)[idx])(&(__traits(getOverloads, obj, methodName)[idx]), cgi);
-								presenter.presentSuccessfulReturn(cgi, ret, presenter.methodMeta!(__traits(getOverloads, obj, methodName)[idx]), "html");
-							} catch(Throwable t) {
-								presenter.presentExceptionAsHtml!(__traits(getOverloads, obj, methodName)[idx])(cgi, t, &(__traits(getOverloads, obj, methodName)[idx]));
-							}
-						return true;
-						case "json":
-							auto ret = callFromCgi!(__traits(getOverloads, obj, methodName)[idx])(&(__traits(getOverloads, obj, methodName)[idx]), cgi);
-							static if(is(typeof(ret) == MultipleResponses!Types, Types...)) {
-								var json;
-								foreach(index, type; Types) {
-									if(ret.contains == index)
-										json = ret.payload[index];
-								}
-							} else {
-								var json = ret;
-							}
-							var envelope = json; // var.emptyObject;
-							/*
-							envelope.success = true;
-							envelope.result = json;
-							envelope.error = null;
-							*/
-							cgi.setResponseContentType("application/json");
-							cgi.write(envelope.toJson(), true);
-						return true;
-						default:
-							cgi.setResponseStatus("406 Not Acceptable"); // not exactly but sort of.
-						return true;
+					try {
+						// a void return (or typeof(null) lol) means you, the user, is doing it yourself. Gives full control.
+						auto ret = callFromCgi!(__traits(getOverloads, obj, methodName)[idx])(&(__traits(getOverloads, obj, methodName)[idx]), cgi);
+						presenter.presentSuccessfulReturn(cgi, ret, presenter.methodMeta!(__traits(getOverloads, obj, methodName)[idx]), format);
+					} catch(Throwable t) {
+						// presenter.presentExceptionAsHtml!(__traits(getOverloads, obj, methodName)[idx])(cgi, t, &(__traits(getOverloads, obj, methodName)[idx]));
+						presenter.presentExceptionalReturn(cgi, t, presenter.methodMeta!(__traits(getOverloads, obj, methodName)[idx]), format);
 					}
+					return true;
 				//}}
 
 				//cgi.header("Accept: POST"); // FIXME list the real thing
@@ -10872,13 +11166,11 @@ bool restObjectServeHandler(T, Presenter)(Cgi cgi, Presenter presenter, string u
 			// FIXME: OPTIONS, HEAD
 	}
 	catch(Throwable t) {
-		presenter.presentExceptionAsHtml!(DUMMY)(cgi, t, null);
+		presenter.presentExceptionAsHtml(cgi, t);
 	}
 
 	return true;
 }
-
-struct DUMMY {}
 
 /+
 struct SetOfFields(T) {
@@ -10897,6 +11189,33 @@ struct SetOfFields(T) {
 enum readonly;
 enum hideonindex;
 +/
+
+/++
+	Returns true if I recommend gzipping content of this type. You might
+	want to call it from your Presenter classes before calling cgi.write.
+
+	---
+	cgi.setResponseContentType(yourContentType);
+	cgi.gzipResponse = gzipRecommendedForContentType(yourContentType);
+	cgi.write(yourData, true);
+	---
+
+	This is used internally by [serveStaticFile], [serveStaticFileDirectory], [serveStaticData], and maybe others I forgot to update this doc about.
+
+
+	The implementation considers text content to be recommended to gzip. This may change, but it seems reasonable enough for now.
+
+	History:
+		Added January 28, 2023 (dub v11.0)
++/
+bool gzipRecommendedForContentType(string contentType) {
+	if(contentType.startsWith("text/"))
+		return true;
+	if(contentType.startsWith("application/javascript"))
+		return true;
+
+	return false;
+}
 
 /++
 	Serves a static file. To be used with [dispatcher].
@@ -10919,9 +11238,10 @@ auto serveStaticFile(string urlPrefix, string filename = null, string contentTyp
 	}
 
 	static bool internalHandler(string urlPrefix, Cgi cgi, Object presenter, DispatcherDetails details) {
-		if(details.contentType.indexOf("image/") == 0)
+		if(details.contentType.indexOf("image/") == 0 || details.contentType.indexOf("audio/") == 0)
 			cgi.setCache(true);
 		cgi.setResponseContentType(details.contentType);
+		cgi.gzipResponse = gzipRecommendedForContentType(details.contentType);
 		cgi.write(std.file.read(details.filename), true);
 		return true;
 	}
@@ -10973,28 +11293,56 @@ string contentTypeFromFileExtension(string filename) {
 			return "application/wasm";
 		if(filename.endsWith(".mp3"))
 			return "audio/mpeg";
+		if(filename.endsWith(".pdf"))
+			return "application/pdf";
 		return null;
 }
 
 /// This serves a directory full of static files, figuring out the content-types from file extensions.
 /// It does not let you to descend into subdirectories (or ascend out of it, of course)
-auto serveStaticFileDirectory(string urlPrefix, string directory = null) {
+auto serveStaticFileDirectory(string urlPrefix, string directory = null, bool recursive = false) {
 	assert(urlPrefix[0] == '/');
 	assert(urlPrefix[$-1] == '/');
 
 	static struct DispatcherDetails {
 		string directory;
+		bool recursive;
 	}
 
 	if(directory is null)
 		directory = urlPrefix[1 .. $];
 
+	if(directory.length == 0)
+		directory = "./";
+
 	assert(directory[$-1] == '/');
 
 	static bool internalHandler(string urlPrefix, Cgi cgi, Object presenter, DispatcherDetails details) {
 		auto file = decodeComponent(cgi.pathInfo[urlPrefix.length .. $]); // FIXME: is this actually correct
-		if(file.indexOf("/") != -1 || file.indexOf("\\") != -1)
-			return false;
+
+		if(details.recursive) {
+			// never allow a backslash since it isn't in a typical url anyway and makes the following checks easier
+			if(file.indexOf("\\") != -1)
+				return false;
+
+			import std.path;
+
+			file = std.path.buildNormalizedPath(file);
+			enum upOneDir = ".." ~ std.path.dirSeparator;
+
+			// also no point doing any kind of up directory things since that makes it more likely to break out of the parent
+			if(file == ".." || file.startsWith(upOneDir))
+				return false;
+			if(std.path.isAbsolute(file))
+				return false;
+
+			// FIXME: if it has slashes and stuff, should we redirect to the canonical resource? or what?
+
+			// once it passes these filters it is probably ok.
+		} else {
+			if(file.indexOf("/") != -1 || file.indexOf("\\") != -1)
+				return false;
+		}
 
 		auto contentType = contentTypeFromFileExtension(file);
 
@@ -11005,6 +11353,7 @@ auto serveStaticFileDirectory(string urlPrefix, string directory = null) {
 			//else if(contentType.indexOf("audio/") == 0)
 				cgi.setCache(true);
 			cgi.setResponseContentType(contentType);
+			cgi.gzipResponse = gzipRecommendedForContentType(contentType);
 			cgi.write(std.file.read(fn), true);
 			return true;
 		} else {
@@ -11012,7 +11361,7 @@ auto serveStaticFileDirectory(string urlPrefix, string directory = null) {
 		}
 	}
 
-	return DispatcherDefinition!(internalHandler, DispatcherDetails)(urlPrefix, false, DispatcherDetails(directory));
+	return DispatcherDefinition!(internalHandler, DispatcherDetails)(urlPrefix, false, DispatcherDetails(directory, recursive));
 }
 
 /++
@@ -11090,14 +11439,162 @@ auto dispatchTo(alias handler)(string urlPrefix) {
 	return DispatcherDefinition!(internalHandler)(urlPrefix, false);
 }
 
-/+
 /++
 	See [serveStaticFile] if you want to serve a file off disk.
-+/
-auto serveStaticData(string urlPrefix, const(void)[] data, string contentType) {
 
-}
+	History:
+		Added January 28, 2023 (dub v11.0)
 +/
+auto serveStaticData(string urlPrefix, immutable(ubyte)[] data, string contentType, string filenameToSuggestAsDownload = null) {
+	assert(urlPrefix[0] == '/');
+
+	static struct DispatcherDetails {
+		immutable(ubyte)[] data;
+		string contentType;
+		string filenameToSuggestAsDownload;
+	}
+
+	static bool internalHandler(string urlPrefix, Cgi cgi, Object presenter, DispatcherDetails details) {
+		cgi.setCache(true);
+		cgi.setResponseContentType(details.contentType);
+		if(details.filenameToSuggestAsDownload.length)
+    			cgi.header("Content-Disposition: attachment; filename=\""~details.filenameToSuggestAsDownload~"\"");
+		cgi.gzipResponse = gzipRecommendedForContentType(details.contentType);
+		cgi.write(details.data, true);
+		return true;
+	}
+	return DispatcherDefinition!(internalHandler, DispatcherDetails)(urlPrefix, true, DispatcherDetails(data, contentType, filenameToSuggestAsDownload));
+}
+
+/++
+	Placeholder for use with [dispatchSubsection]'s `NewPresenter` argument to indicate you want to keep the parent's presenter.
+
+	History:
+		Added January 28, 2023 (dub v11.0)
++/
+alias KeepExistingPresenter = typeof(null);
+
+/++
+	For use with [dispatchSubsection]. Calls your filter with the request and if your filter returns false,
+	this issues the given errorCode and stops processing.
+
+	---
+		bool hasAdminPermissions(Cgi cgi) {
+			return true;
+		}
+
+		mixin DispatcherMain!(
+			"/admin".dispatchSubsection!(
+				passFilterOrIssueError!(hasAdminPermissions, 403),
+				KeepExistingPresenter,
+				"/".serveApi!AdminFunctions
+			)
+		);
+	---
+
+	History:
+		Added January 28, 2023 (dub v11.0)
++/
+template passFilterOrIssueError(alias filter, int errorCode) {
+	bool passFilterOrIssueError(DispatcherDetails)(DispatcherDetails dd) {
+		if(filter(dd.cgi))
+			return true;
+		dd.presenter.renderBasicError(dd.cgi, errorCode);
+		return false;
+	}
+}
+
+/++
+	Allows for a subsection of your dispatched urls to be passed through other a pre-request filter, optionally pick up an new presenter class,
+	and then be dispatched to their own handlers.
+
+	---
+	/+
+	// a long-form filter function
+	bool permissionCheck(DispatcherData)(DispatcherData dd) {
+		// you are permitted to call mutable methods on the Cgi object
+		// Note if you use a Cgi subclass, you can try dynamic casting it back to your custom type to attach per-request data
+		// though much of the request is immutable so there's only so much you're allowed to do to modify it.
+
+		if(checkPermissionOnRequest(dd.cgi)) {
+			return true; // OK, allow processing to continue
+		} else {
+			dd.presenter.renderBasicError(dd.cgi, 403); // reply forbidden to the requester
+			return false; // and stop further processing into this subsection
+		}
+	}
+	+/
+
+	// but you can also do short-form filters:
+
+	bool permissionCheck(Cgi cgi) {
+		return ("ok" in cgi.get) !is null;
+	}
+
+	// handler for the subsection
+	class AdminClass : WebObject {
+		int foo() { return 5; }
+	}
+
+	// handler for the main site
+	class TheMainSite : WebObject {}
+
+	mixin DispatcherMain!(
+		"/admin".dispatchSubsection!(
+			// converts our short-form filter into a long-form filter
+			passFilterOrIssueError!(permissionCheck, 403),
+			// can use a new presenter if wanted for the subsection
+			KeepExistingPresenter,
+			// and then provide child route dispatchers
+			"/".serveApi!AdminClass
+		),
+		// and back to the top level
+		"/".serveApi!TheMainSite
+	);
+	---
+
+	Note you can encapsulate sections in files like this:
+
+	---
+	auto adminDispatcher(string urlPrefix) {
+		return urlPrefix.dispatchSubsection!(
+			....
+		);
+	}
+
+	mixin DispatcherMain!(
+		"/admin".adminDispatcher,
+		// and so on
+	)
+	---
+
+	If you want no filter, you can pass `(cgi) => true` as the filter to approve all requests.
+
+	If you want to keep the same presenter as the parent, use [KeepExistingPresenter] as the presenter argument.
+
+
+	History:
+		Added January 28, 2023 (dub v11.0)
++/
+auto dispatchSubsection(alias PreRequestFilter, NewPresenter, definitions...)(string urlPrefix) {
+	assert(urlPrefix[0] == '/');
+	assert(urlPrefix[$-1] != '/');
+	static bool internalHandler(Presenter)(string urlPrefix, Cgi cgi, Presenter presenter, const void* details) {
+		static if(!is(PreRequestFilter == typeof(null))) {
+			if(!PreRequestFilter(DispatcherData!Presenter(cgi, presenter, urlPrefix.length)))
+				return true; // we handled it by rejecting it
+		}
+
+		static if(is(NewPresenter == Presenter) || is(NewPresenter == typeof(null))) {
+			return dispatcher!definitions(DispatcherData!Presenter(cgi, presenter, urlPrefix.length));
+		} else {
+			auto newPresenter = new NewPresenter();
+			return dispatcher!(definitions(DispatcherData!NewPresenter(cgi, presenter, urlPrefix.length)));
+		}
+	}
+
+	return DispatcherDefinition!(internalHandler)(urlPrefix, false);
+}
 
 /++
 	A URL dispatcher.
@@ -11114,10 +11611,11 @@ auto serveStaticData(string urlPrefix, const(void)[] data, string contentType) {
 
 	You define a series of url prefixes followed by handlers.
 
-	[dispatchTo] will send the request to another function for handling.
 	You may want to do different pre- and post- processing there, for example,
 	an authorization check and different page layout. You can use different
-	presenters and different function chains. NOT IMPLEMENTED
+	presenters and different function chains. See [dispatchSubsection] for details.
+
+	[dispatchTo] will send the request to another function for handling.
 +/
 template dispatcher(definitions...) {
 	bool dispatcher(Presenter)(Cgi cgi, Presenter presenterArg = null) {
@@ -11301,11 +11799,11 @@ bool apiDispatcher()(Cgi cgi) {
 version(linux)
 private extern(C) int eventfd (uint initval, int flags) nothrow @trusted @nogc;
 /*
-Copyright: Adam D. Ruppe, 2008 - 2022
+Copyright: Adam D. Ruppe, 2008 - 2023
 License:   [http://www.boost.org/LICENSE_1_0.txt|Boost License 1.0].
 Authors: Adam D. Ruppe
 
-	Copyright Adam D. Ruppe 2008 - 2022.
+	Copyright Adam D. Ruppe 2008 - 2023.
 Distributed under the Boost Software License, Version 1.0.
    (See accompanying file LICENSE_1_0.txt or copy at
 	http://www.boost.org/LICENSE_1_0.txt)
