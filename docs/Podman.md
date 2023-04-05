@@ -1,5 +1,5 @@
 # Run the OneDrive Client for Linux under Podman
-This client can be run as a Docker container, with 3 available container base options for you to choose from:
+This client can be run as a Podman container, with 3 available container base options for you to choose from:
 
 | Container Base | Docker Tag  | Description                                                    | i686 | x86_64 | ARMHF | AARCH64 |
 |----------------|-------------|----------------------------------------------------------------|:------:|:------:|:-----:|:-------:|
