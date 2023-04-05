@@ -1,17 +1,27 @@
 # Run the OneDrive Client for Linux under Podman
-This client can be run as a Podman container, with 3 available options for you to choose from:
-1.  Container based on Fedora 36 - Docker Tag: latest
-2.  Container based on Debian 11 - Docker Tag: debian
-3.  Container based on Alpine Linux - Docker Tag: alpine
+This client can be run as a Podman container, with 3 available container base options for you to choose from:
+
+| Container Base | Docker Tag  | Description                                                    | i686 | x86_64 | ARMHF | AARCH64 |
+|----------------|-------------|----------------------------------------------------------------|:------:|:------:|:-----:|:-------:|
+| Alpine Linux   | edge-alpine | Podman container based on Alpine 3.17 using 'master'           |❌|✔|❌|✔|
+| Alpine Linux   | alpine      | Podman container based on Alpine 3.17 using latest release     |❌|✔|❌|✔|
+| Debian         | debian      | Podman container based on Debian Bullseye using latest release |✔|✔|✔|✔|
+| Debian         | edge        | Podman container based on Debian Bullseye using 'master'       |✔|✔|✔|✔|
+| Debian         | edge-debian | Podman container based on Debian Bullseye using 'master'       |✔|✔|✔|✔|
+| Debian         | latest      | Podman container based on Debian Bullseye using latest release |✔|✔|✔|✔|
+| Fedora         | edge-fedora | Podman container based on Fedora 36 using 'master'             |❌|✔|❌|✔|
+| Fedora         | fedora      | Podman container based on Fedora 36 using latest release       |❌|✔|❌|✔|
 
 These containers offer a simple monitoring-mode service for the OneDrive Client for Linux.
 
 The instructions below have been validated on:
 *   Fedora 35
 
-The instructions below will utilise the 'latest' tag, however this can be substituted for 'debian' or 'alpine' if desired. The below instructions for podman have only been tested as the root user while running the containers themselves as non-root users.
+The instructions below will utilise the 'latest' tag, however this can be substituted for any of the other docker tags from the table above if desired.
 
-**Note:** If you are using Debian or Ubuntu platforms, it is recommended you use the 'debian' Docker tag rather than 'latest' to ensure maximum compatability with your Debian or Ubuntu ecosystem.
+Additionally there are specific version release tags for each release. Refer to https://hub.docker.com/r/driveone/onedrive/tags for any other Docker tags you may be interested in.
+
+**Note:** The below instructions for podman have only been tested as the root user while running the containers themselves as non-root users.
 
 ## Basic Setup
 ### 0. Install podman using your distribution platform's instructions if not already installed

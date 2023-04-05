@@ -26,7 +26,7 @@ jobs:
             platforms: linux/amd64,linux/arm64
           - flavor: debian
             dockerfile: ./contrib/docker/Dockerfile-debian
-            platforms: linux/amd64,linux/arm64,linux/arm/v7
+            platforms: linux/386,linux/amd64,linux/arm64,linux/arm/v7
           - flavor: alpine
             dockerfile: ./contrib/docker/Dockerfile-alpine
             platforms: linux/amd64,linux/arm64
