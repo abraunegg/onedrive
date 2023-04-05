@@ -3,8 +3,8 @@ This client can be run as a Docker container, with 3 available options for you t
 
 | Container Base | Docker Tag  | Description                                                    | x86_64 | ARMHF | AARCH64 |
 |----------------|-------------|----------------------------------------------------------------|:------:|:-----:|:-------:|
-| Alpine Linux   | edge-alpine | Docker container based on Alpine 3.16 using 'master'           |✔|❌|✔|
-| Alpine Linux   | alpine      | Docker container based on Alpine 3.16 using latest release     |✔|❌|✔|
+| Alpine Linux   | edge-alpine | Docker container based on Alpine 3.17 using 'master'           |✔|❌|✔|
+| Alpine Linux   | alpine      | Docker container based on Alpine 3.17 using latest release     |✔|❌|✔|
 | Debian         | debian      | Docker container based on Debian Bullseye using latest release |✔|✔|✔|
 | Debian         | edge        | Docker container based on Debian Bullseye using 'master'       |✔|✔|✔|
 | Debian         | edge-debian | Docker container based on Debian Bullseye using 'master'       |✔|✔|✔|
