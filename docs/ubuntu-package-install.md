@@ -124,9 +124,9 @@ If required, review the table below based on your 'lsb_release' information to p
 | Release & Codename | Instructions to use |
 |--------------------|---------------------|
 | Ubuntu 18.x / Bionic      | You must build from source or upgrade your Operating System to Ubuntu 22.x           |
-| Linux Mint 19.x / Tina    | You must build from source or upgrade your Operating System to Linux Mint 20.x       |
-| Linux Mint 20.x / Ulyana  | Use [Ubuntu 20.04](#distribution-ubuntu-2004) instructions below                     |
-| Linux Mint 21.x / Vanessa | Use [Ubuntu 22.04](#distribution-ubuntu-2204) instructions below                     |
+| Linux Mint 19.x           | You must build from source or upgrade your Operating System to Linux Mint 20.x       |
+| Linux Mint 20.x           | Use [Ubuntu 20.04](#distribution-ubuntu-2004) instructions below                     |
+| Linux Mint 21.x           | Use [Ubuntu 22.04](#distribution-ubuntu-2204) instructions below                     |
 | Debian 10                 | You must build from source or upgrade your Operating System to Debian 11             |
 | Debian 11                 | Use [Debian 11](#distribution-debian-11) instructions below                          |
 | Raspbian GNU/Linux 10     | You must build from source or upgrade your Operating System to Raspbian GNU/Linux 11 |
