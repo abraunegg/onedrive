@@ -227,38 +227,56 @@ onedrive --synchronize --upload-only --no-remote-delete
 ### Performing a selective sync via 'sync_list' file
 Selective sync allows you to sync only specific files and directories.
 To enable selective sync create a file named `sync_list` in your application configuration directory (default is `~/.config/onedrive`).
-Each line of the file represents a relative path from your `sync_dir`. All files and directories not matching any line of the file will be skipped during all operations.
+
+Important points to understand before using 'sync_list'.
+*    'sync_list' excludes _everything_ by default on onedrive.
+*    'sync_list' follows an _"exclude overrides include"_ rule, and requires **explicit inclusion**.
+*    Order exclusions before inclusions, so that anything _specifically included_ is included.
+*    How and where you place your `/` matters for excludes and includes in sub directories.
+
+Each line of the file represents a relative path from your `sync_dir`. All files and directories not matching any line of the file will be skipped during all operations. 
+
+Additionally, the use of `/` is critically important to determine how a rule is interpreted. It is very similar to `**` wildcards, for those that are familiar with globbing patterns.
 Here is an example of `sync_list`:
 ```text
 # sync_list supports comments
 #
 # The ordering of entries is highly recommended - exclusions before inclusions
 #
-# Exclude temp folders under Documents
+# Exclude temp folder(s) or file(s) under Documents folder(s), anywhere in Onedrive
 !Documents/temp*
-# Exclude my secret data
+#
+# Exclude secret data folder in root directory only
 !/Secret_data/*
 #
-# Include my Backup folder
+# Include everything else in root directory
+/*
+#
+# Include my Backup folder(s) or file(s) anywhere on Onedrive
 Backup
 #
-# Include Documents folder
+# Include my Backup folder in root
+/Backup/
+#
+# Include Documents folder(s) anywhere in Onedrive
 Documents/
 #
-# Include all PDF documents
+# Include all PDF files in Documents folder(s), anywhere in Onedrive
 Documents/*.pdf
 #
-# Include this single document
+# Include this single document in Documents folder(s), anywhere in Onedrive
 Documents/latest_report.docx
 #
-# Include all Work/Project directories
+# Include all Work/Project directories or files, inside 'Work' folder(s), anywhere in Onedrive
 Work/Project*
+#
+# Include all "notes.txt" files, anywhere in Onedrive
 notes.txt
 #
-# Include /Blender in the ~OneDrive root but not if elsewhere
+# Include /Blender in the ~Onedrive root but not if elsewhere in Onedrive
 /Blender
 #
-# Include these directories that have a space in their name
+# Include these directories(or files) in 'Pictures' folder(s), that have a space in their name
 Pictures/Camera Roll
 Pictures/Saved Pictures
 #
@@ -272,20 +290,6 @@ The following are supported for pattern matching and exclusion rules:
 *   Use the `*` to wildcard select any characters to match for the item to be included
 *   Use either `!` or `-` characters at the start of the line to exclude an otherwise included item
 
-To simplify 'exclusions' and 'inclusions', the following is also possible:
-```text
-# sync_list supports comments
-#
-# The ordering of entries is highly recommended - exclusions before inclusions
-#
-# Exclude temp folders under Documents
-!Documents/temp*
-# Exclude my secret data
-!/Secret_data/*
-#
-# Include everything else
-/*
-```
 
 **Note:** When enabling the use of 'sync_list' utilise the `--display-config` option to validate that your configuration will be used by the application, and test your configuration by adding `--dry-run` to ensure the client will operate as per your requirement.
 
