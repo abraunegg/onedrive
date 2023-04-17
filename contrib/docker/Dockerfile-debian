@@ -19,6 +19,7 @@ RUN ./configure DC=/usr/bin/ldmd2 \
 FROM debian:${DEBIAN_VERSION}-slim
 
 RUN apt-get update \
+ && apt-get upgrade -y \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gosu libcurl4 libsqlite3-0 ca-certificates libphobos2-ldc-shared94 \
  && rm -rf /var/lib/apt/lists/* \
  # Fix bug with ssl on armhf: https://serverfault.com/a/1045189
