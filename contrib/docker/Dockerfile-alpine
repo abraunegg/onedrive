@@ -23,6 +23,9 @@ RUN autoreconf -fiv \
 
 FROM alpine:${ALPINE_VERSION}
 
+RUN apk add --upgrade apk-tools \
+ && apk upgrade --available
+
 RUN apk add --update --no-cache bash libcurl libgcc shadow sqlite-libs ldc-runtime  \
  && mkdir -p /onedrive/conf /onedrive/data
 
