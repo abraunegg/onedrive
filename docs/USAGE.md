@@ -790,11 +790,28 @@ check_nosync = "true"
 # download_only = "false"
 # disable_notifications = "false"
 ```
+**Default:** False
 
 ### How to 'skip' files from syncing?
 There are two methods to achieve this:
 *   Utilise 'skip_file' to configure what files to skip. Refer to above for configuration advice.
 *   Utilise 'sync_list' to configure what files and directories to sync, and what should be exluded
+
+### How to 'skip' dot files and folders from syncing?
+There are three methods to achieve this:
+*   Utilise 'skip_file' or 'skip_dir' to configure what files or folders to skip. Refer to above for configuration advice.
+*   Utilise 'sync_list' to configure what files and directories to sync, and what should be exluded
+*   Utilise 'skip_dotfiles' to skip any dot file (for example: `.Trash-1000` or `.xdg-volume-info`) from syncing to OneDrive.
+
+Example:
+```text
+# skip_symlinks = "false"
+# debug_https = "false"
+skip_dotfiles = "true"
+# skip_size = "1000"
+# dry_run = "false"
+```
+**Default:** False
 
 ### How to 'skip' files larger than a certain size from syncing?
 There are two methods to achieve this:
