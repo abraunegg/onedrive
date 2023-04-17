@@ -1,6 +1,6 @@
 # -*-Dockerfile-*-
 
-ARG FEDORA_VERSION=36
+ARG FEDORA_VERSION=37
 ARG DEBIAN_VERSION=bullseye
 ARG GO_VERSION=1.17
 ARG GOSU_VERSION=1.14
@@ -24,6 +24,9 @@ RUN ./configure \
  && make install
 
 FROM fedora:${FEDORA_VERSION}
+
+RUN dnf clean all \
+ && dnf -y update
 
 RUN dnf install -y libcurl sqlite ldc-libs \
  && dnf clean all \
