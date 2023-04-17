@@ -40,6 +40,7 @@ Before reading this document, please ensure you are running application version 
   * [How to sync only specific or single directory?](#how-to-sync-only-specific-or-single-directory)
   * [How to 'skip' directories from syncing?](#how-to-skip-directories-from-syncing)
   * [How to 'skip' files from syncing?](#how-to-skip-files-from-syncing)
+  * [How to 'skip' dot files and folders from syncing?](#how-to-skip-dot-files-and-folders-from-syncing)
   * [How to 'skip' files larger than a certain size from syncing?](#how-to-skip-files-larger-than-a-certain-size-from-syncing)
   * [How to 'rate limit' the application to control bandwidth consumed for upload & download operations?](#how-to-rate-limit-the-application-to-control-bandwidth-consumed-for-upload--download-operations)
   * [How to prevent your local disk from filling up?](#how-to-prevent-your-local-disk-from-filling-up)
@@ -790,11 +791,28 @@ check_nosync = "true"
 # download_only = "false"
 # disable_notifications = "false"
 ```
+**Default:** False
 
 ### How to 'skip' files from syncing?
 There are two methods to achieve this:
 *   Utilise 'skip_file' to configure what files to skip. Refer to above for configuration advice.
 *   Utilise 'sync_list' to configure what files and directories to sync, and what should be exluded
+
+### How to 'skip' dot files and folders from syncing?
+There are three methods to achieve this:
+*   Utilise 'skip_file' or 'skip_dir' to configure what files or folders to skip. Refer to above for configuration advice.
+*   Utilise 'sync_list' to configure what files and directories to sync, and what should be exluded
+*   Utilise 'skip_dotfiles' to skip any dot file (for example: `.Trash-1000` or `.xdg-volume-info`) from syncing to OneDrive.
+
+Example:
+```text
+# skip_symlinks = "false"
+# debug_https = "false"
+skip_dotfiles = "true"
+# skip_size = "1000"
+# dry_run = "false"
+```
+**Default:** False
 
 ### How to 'skip' files larger than a certain size from syncing?
 There are two methods to achieve this:
