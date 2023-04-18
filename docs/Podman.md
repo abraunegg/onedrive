@@ -9,8 +9,8 @@ This client can be run as a Podman container, with 3 available container base op
 | Debian         | edge        | Podman container based on Debian Bullseye using 'master'       |✔|✔|✔|✔|
 | Debian         | edge-debian | Podman container based on Debian Bullseye using 'master'       |✔|✔|✔|✔|
 | Debian         | latest      | Podman container based on Debian Bullseye using latest release |✔|✔|✔|✔|
-| Fedora         | edge-fedora | Podman container based on Fedora 36 using 'master'             |❌|✔|❌|✔|
-| Fedora         | fedora      | Podman container based on Fedora 36 using latest release       |❌|✔|❌|✔|
+| Fedora         | edge-fedora | Podman container based on Fedora 37 using 'master'             |❌|✔|❌|✔|
+| Fedora         | fedora      | Podman container based on Fedora 37 using latest release       |❌|✔|❌|✔|
 
 These containers offer a simple monitoring-mode service for the OneDrive Client for Linux.
 
