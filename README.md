@@ -42,7 +42,7 @@ Refer to [Frequently Asked Questions](https://github.com/abraunegg/onedrive/wiki
 ## Have a question
 If you have a question or need something clarified, please raise a new disscussion post [here](https://github.com/abraunegg/onedrive/discussions)
 
-## Supported Application Versions
+## Supported Application Version
 Only the current application version or greater is supported. 
 
 The current supported application version is: [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases)
