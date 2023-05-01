@@ -43,11 +43,13 @@ Refer to [Frequently Asked Questions](https://github.com/abraunegg/onedrive/wiki
 If you have a question or need something clarified, please raise a new disscussion post [here](https://github.com/abraunegg/onedrive/discussions)
 
 ## Supported Application Version
-Only the current release version or greater is supported. 
+Only the current application release version or greater is supported. 
 
-The current release version is: [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases)
+The current application release version is: [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases)
 
 Check the version of the application you are using `onedrive --version` and ensure that you are running either the current release or compile the application yourself from master to get the latest version.
+
+If you are not using the above application version or greater, you must upgrade your application to obtain support.
 
 ## Reporting an Issue or Bug
 If you encounter any bugs you can report them here on Github. Before filing an issue be sure to:
