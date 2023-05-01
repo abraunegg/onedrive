@@ -52,7 +52,7 @@ Check the version of the application you are using `onedrive --version` and ensu
 If you are not using the above application version or greater, you must upgrade your application to obtain support.
 
 ## Reporting an Issue or Bug
-If you encounter any bugs you can report them here on Github. Before filing an issue be sure to:
+If you encounter any bugs you can report them here on GitHub. Before filing an issue be sure to:
 
 1.  Check the version of the application you are using `onedrive --version` and ensure that you are running a supported application version. If you are not using a supported application version, you must first upgrade your application to a supported version and then re-test for your issue.
 2.  If you are using a supported applcation version, fill in a new bug report using the [issue template](https://github.com/abraunegg/onedrive/issues/new?template=bug_report.md)
