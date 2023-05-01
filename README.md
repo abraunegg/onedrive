@@ -36,12 +36,6 @@ This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) cl
 *   Colorful log output terminal modification: [OneDrive Client for Linux Colorful log Output](https://github.com/zzzdeb/dotfiles/blob/master/scripts/tools/onedrive_log)
 *   System Tray Icon: [OneDrive Client for Linux System Tray Icon](https://github.com/DanielBorgesOliveira/onedrive_tray)
 
-## Frequently Asked Questions
-Refer to [Frequently Asked Questions](https://github.com/abraunegg/onedrive/wiki/Frequently-Asked-Questions)
-
-## Have a question
-If you have a question or need something clarified, please raise a new disscussion post [here](https://github.com/abraunegg/onedrive/discussions)
-
 ## Supported Application Version
 Only the current application release version or greater is supported. 
 
@@ -50,6 +44,14 @@ The current application release version is: [![Version](https://img.shields.io/g
 Check the version of the application you are using `onedrive --version` and ensure that you are running either the current release or compile the application yourself from master to get the latest version.
 
 If you are not using the above application version or greater, you must upgrade your application to obtain support.
+
+## Have a Question
+If you have a question or need something clarified, please raise a new disscussion post [here](https://github.com/abraunegg/onedrive/discussions)
+
+Be sure to review the Frequently Asked Questions as well before raising a new discussion post.
+
+## Frequently Asked Questions
+Refer to [Frequently Asked Questions](https://github.com/abraunegg/onedrive/wiki/Frequently-Asked-Questions)
 
 ## Reporting an Issue or Bug
 If you encounter any bugs you can report them here on GitHub. Before filing an issue be sure to:
