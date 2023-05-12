@@ -57,6 +57,7 @@ int main(string[] args)
 	bool displaySyncOptions = false;
 	bool cleanupLocalFilesGlobal = false;
 	bool synchronizeConfigured = false;
+	bool invalidSyncExit = false;
 	
 	// start and finish messages
 	string startMessage = "Starting a sync with OneDrive";
@@ -85,7 +86,9 @@ int main(string[] args)
 		// was itemDb initialised?
 		if (itemDb !is null) {
 			// Make sure the .wal file is incorporated into the main db before we exit
-			itemDb.performVacuum();
+			if(!invalidSyncExit) {
+				itemDb.performVacuum();
+			}
 			destroy(itemDb);
 		}
 		// cleanup any dry-run data
@@ -116,7 +119,9 @@ int main(string[] args)
 		// was itemDb initialised?
 		if (itemDb !is null) {
 			// Make sure the .wal file is incorporated into the main db before we exit
-			itemDb.performVacuum();
+			if(!invalidSyncExit) {
+				itemDb.performVacuum();
+			}
 			destroy(itemDb);
 		}
 		// cleanup any dry-run data
@@ -985,6 +990,7 @@ int main(string[] args)
 			log.log("\n--synchronize or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use 'onedrive --help' for further assistance.\n");
 			log.log("No OneDrive sync will be performed without one of these two arguments being present.\n");
 			// Use exit scopes to shutdown API
+			invalidSyncExit = true;
 			return EXIT_FAILURE;
 		}
 	}
