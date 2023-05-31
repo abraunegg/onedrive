@@ -69,7 +69,7 @@ Ubuntu Linux 18.x LTS reached the end of its five-year LTS window on May 31th 20
 ### Dependencies: Debian 9
 Debian 9 reached the end of its five-year support window on June 30th 2022 and is no longer supported.
 
-### Dependencies: Ubuntu 20.x -> Ubuntu 22.x / Debian 10 -> Debian 11 - x86_64
+### Dependencies: Ubuntu 20.x -> Ubuntu 23.x / Debian 10 -> Debian 11 - x86_64
 These dependencies are also applicable for all Ubuntu based distributions such as:
 *   Lubuntu
 *   Linux Mint
