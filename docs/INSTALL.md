@@ -23,7 +23,6 @@ Distribution packages may be of an older release when compared to the latest rel
 | Raspbian                        | [onedrive](https://archive.raspbian.org/raspbian/pool/main/o/onedrive/)      |<a href="https://archive.raspbian.org/raspbian/pool/main/o/onedrive/"><img src="https://repology.org/badge/version-for-repo/raspbian_stable/onedrive.svg?header=" alt="Raspbian Stable package" width="46" height="20"></a> |❌|❌|✔|✔| **Note:** Do not install from Raspbian Package Repositories<br><br>It is recommended that for Raspbian that you install from OpenSuSE Build Service using the Debian Package Install [Instructions](ubuntu-package-install.md) |
 | Slackware                       | [onedrive](https://slackbuilds.org/result/?search=onedrive&sv=)        |<a href="https://slackbuilds.org/result/?search=onedrive&sv="><img src="https://repology.org/badge/version-for-repo/slackbuilds/onedrive.svg?header=" alt="SlackBuilds package" width="46" height="20"></a>|✔|✔|❌|❌| |
 | Solus                           | [onedrive](https://dev.getsol.us/search/query/FB7PIf1jG9Z9/#R)               |<a href="https://dev.getsol.us/search/query/FB7PIf1jG9Z9/#R"><img src="https://repology.org/badge/version-for-repo/solus/onedrive.svg?header=" alt="Solus package" width="46" height="20"></a>|✔|✔|❌|❌| |
-| Ubuntu 18.04                    | [onedrive](https://packages.ubuntu.com/bionic/onedrive)                      |<a href="https://packages.ubuntu.com/bionic/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_18_04/onedrive.svg?header=" alt="Ubuntu 18.04 package" width="88" height="20"></a> |✔|✔|✔|❌| **Note:** Do not install from Ubuntu Universe<br><br>You must compile from source for this version of Ubuntu |
 | Ubuntu 20.04                    | [onedrive](https://packages.ubuntu.com/focal/onedrive)                       |<a href="https://packages.ubuntu.com/focal/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_20_04/onedrive.svg?header=" alt="Ubuntu 20.04 package" width="46" height="20"></a> |❌|✔|✔|✔| **Note:** Do not install from Ubuntu Universe<br><br>It is recommended that for Ubuntu that you install from OpenSuSE Build Service using the Ubuntu Package Install [Instructions](ubuntu-package-install.md) |
 | Ubuntu 22.04                    | [onedrive](https://packages.ubuntu.com/jammy/onedrive)                       |<a href="https://packages.ubuntu.com/jammy/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_22_04/onedrive.svg?header=" alt="Ubuntu 22.04 package" width="46" height="20"></a> |❌|✔|✔|✔| **Note:** Do not install from Ubuntu Universe<br><br>It is recommended that for Ubuntu that you install from OpenSuSE Build Service using the Ubuntu Package Install [Instructions](ubuntu-package-install.md) |
 | Void Linux                      | [onedrive](https://voidlinux.org/packages/?arch=x86_64&q=onedrive)           |<a href="https://voidlinux.org/packages/?arch=x86_64&q=onedrive"><img src="https://repology.org/badge/version-for-repo/void_x86_64/onedrive.svg?header=" alt="Void Linux x86_64 package" width="46" height="20"></a>|✔|✔|❌|❌| |
@@ -61,57 +60,15 @@ curl -fsS https://dlang.org/install.sh | bash -s ldc
 
 ## Distribution Package Dependencies
 ### Dependencies: Ubuntu 16.x
-Ubuntu Linux 16.04 LTS reached the end of its five-year LTS window on April 30th 2021 and is no longer supported.
+Ubuntu Linux 16.x LTS reached the end of its five-year LTS window on April 30th 2021 and is no longer supported.
 
-### Dependencies: Ubuntu 18.x / Lubuntu 18.x / Debian 9 - i386 / i686
-These dependencies are also applicable for all Ubuntu based distributions such as:
-*   Lubuntu
-*   Linux Mint
-*   POP OS
-*   Peppermint OS
+### Dependencies: Ubuntu 18.x / Lubuntu 18.x
+Ubuntu Linux 18.x LTS reached the end of its five-year LTS window on May 31th 2023 and is no longer supported.
 
-**Important:** The DMD compiler cannot be used in its default configuration on Ubuntu 18.x / Lubuntu 18.x / Debian 9 i386 / i686 architectures due to an issue in the Ubuntu / Debian linking process. See [https://issues.dlang.org/show_bug.cgi?id=19116](https://issues.dlang.org/show_bug.cgi?id=19116) for further details.
+### Dependencies: Debian 9
+Debian 9 reached the end of its five-year support window on June 30th 2022 and is no longer supported.
 
-**Note:** Ubuntu 18.x validated with the DMD compiler on the following Ubuntu i386 / i686 platform:
-```text
-DISTRIB_ID=Ubuntu
-DISTRIB_RELEASE=18.04
-DISTRIB_CODENAME=bionic
-DISTRIB_DESCRIPTION="Ubuntu 18.04.3 LTS"
-```
-**Note:** Lubuntu 18.x validated with the DMD compiler on the following Lubuntu i386 / i686 platform:
-```text
-DISTRIB_ID=Ubuntu
-DISTRIB_RELEASE=18.10
-DISTRIB_CODENAME=cosmic
-DISTRIB_DESCRIPTION="Ubuntu 18.10"
-```
-**Note:** Debian 9 validated with the DMD compiler on the following Debian i386 / i686 platform:
-```text
-cat /etc/debian_version 
-9.11
-```
-
-First install development dependencies as per below:
-```text
-sudo apt install build-essential
-sudo apt install libcurl4-openssl-dev libsqlite3-dev pkg-config git curl
-```
-For notifications the following is also necessary:
-```text
-sudo apt install libnotify-dev
-```
-Second, install the DMD compiler as per below:
-```text
-curl -fsS https://dlang.org/install.sh | bash -s dmd
-```
-Thirdly, reconfigure the default linker as per below:
-```text
-sudo update-alternatives --install "/usr/bin/ld" "ld" "/usr/bin/ld.gold" 20
-sudo update-alternatives --install "/usr/bin/ld" "ld" "/usr/bin/ld.bfd" 10
-```
-
-### Dependencies: Ubuntu 18.x -> Ubuntu 22.x / Debian 9 -> Debian 11 - x86_64
+### Dependencies: Ubuntu 20.x -> Ubuntu 22.x / Debian 10 -> Debian 11 - x86_64
 These dependencies are also applicable for all Ubuntu based distributions such as:
 *   Lubuntu
 *   Linux Mint
