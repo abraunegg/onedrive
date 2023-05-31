@@ -25,6 +25,7 @@ Distribution packages may be of an older release when compared to the latest rel
 | Solus                           | [onedrive](https://dev.getsol.us/search/query/FB7PIf1jG9Z9/#R)               |<a href="https://dev.getsol.us/search/query/FB7PIf1jG9Z9/#R"><img src="https://repology.org/badge/version-for-repo/solus/onedrive.svg?header=" alt="Solus package" width="46" height="20"></a>|✔|✔|❌|❌| |
 | Ubuntu 20.04                    | [onedrive](https://packages.ubuntu.com/focal/onedrive)                       |<a href="https://packages.ubuntu.com/focal/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_20_04/onedrive.svg?header=" alt="Ubuntu 20.04 package" width="46" height="20"></a> |❌|✔|✔|✔| **Note:** Do not install from Ubuntu Universe<br><br>It is recommended that for Ubuntu that you install from OpenSuSE Build Service using the Ubuntu Package Install [Instructions](ubuntu-package-install.md) |
 | Ubuntu 22.04                    | [onedrive](https://packages.ubuntu.com/jammy/onedrive)                       |<a href="https://packages.ubuntu.com/jammy/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_22_04/onedrive.svg?header=" alt="Ubuntu 22.04 package" width="46" height="20"></a> |❌|✔|✔|✔| **Note:** Do not install from Ubuntu Universe<br><br>It is recommended that for Ubuntu that you install from OpenSuSE Build Service using the Ubuntu Package Install [Instructions](ubuntu-package-install.md) |
+| Ubuntu 23.04                    | [onedrive](https://packages.ubuntu.com/lunar/onedrive)                       |<a href="https://packages.ubuntu.com/lunar/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_23_04/onedrive.svg?header=" alt="Ubuntu 23.04 package" width="46" height="20"></a> |❌|✔|✔|✔| Install from Ubuntu Universe using the standard Ubuntu package installation process |
 | Void Linux                      | [onedrive](https://voidlinux.org/packages/?arch=x86_64&q=onedrive)           |<a href="https://voidlinux.org/packages/?arch=x86_64&q=onedrive"><img src="https://repology.org/badge/version-for-repo/void_x86_64/onedrive.svg?header=" alt="Void Linux x86_64 package" width="46" height="20"></a>|✔|✔|❌|❌| |
 
 #### Important information for all Ubuntu and Ubuntu based distribution users:
@@ -68,7 +69,7 @@ Ubuntu Linux 18.x LTS reached the end of its five-year LTS window on May 31th 20
 ### Dependencies: Debian 9
 Debian 9 reached the end of its five-year support window on June 30th 2022 and is no longer supported.
 
-### Dependencies: Ubuntu 20.x -> Ubuntu 22.x / Debian 10 -> Debian 11 - x86_64
+### Dependencies: Ubuntu 20.x -> Ubuntu 23.x / Debian 10 -> Debian 11 - x86_64
 These dependencies are also applicable for all Ubuntu based distributions such as:
 *   Lubuntu
 *   Linux Mint
