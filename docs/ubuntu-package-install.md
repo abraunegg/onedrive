@@ -18,7 +18,7 @@ Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive
 Ubuntu and its clones are based on various different releases, thus, you must use the correct instructions below, otherwise you may run into package dependancy issues and will be unable to install the client.
 
 ### Step 1: Remove any configured PPA and associated 'onedrive' package
-Many Internet 'help' pages provide inconsistent details on how to install the OneDrive Client for Linux. A number of these continue to point users to install the client via a PPA repository. As this PPA repository is linked to the Debian packages, it is only updated when the Debian packages are updated. As such, it is not advisable to install from this PPA repository.
+Many Internet 'help' pages provide inconsistent details on how to install the OneDrive Client for Linux. A number of these websites continue to point users to install the client via the yann1ck PPA repository however this PPA no longer exists and should not be used.
 
 To remove the PPA repository and the older client, perform the following actions:
 ```text
