@@ -17,13 +17,22 @@ Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive
 ## Determine which instructions to use
 Ubuntu and its clones are based on various different releases, thus, you must use the correct instructions below, otherwise you may run into package dependancy issues and will be unable to install the client.
 
-### Step 1: Remove any configured PPA and associated 'onedrive' package
+### Step 1: Remove any configured PPA and associated 'onedrive' package and systemd service files
 Many Internet 'help' pages provide inconsistent details on how to install the OneDrive Client for Linux. A number of these websites continue to point users to install the client via the yann1ck PPA repository however this PPA no longer exists and should not be used.
 
 To remove the PPA repository and the older client, perform the following actions:
 ```text
 sudo apt remove onedrive
 sudo add-apt-repository --remove ppa:yann1ck/onedrive
+```
+
+Additionally, Ubuntu and its clones have a bad habit of creating a 'default' systemd service file when installing the 'onedrive' package so that the client will automatically run the client post being authenticated. This systemd entry is erroneous and needs to be removed.
+```
+Created symlink /etc/systemd/user/default.target.wants/onedrive.service → /usr/lib/systemd/user/onedrive.service.
+```
+To remove this symbolic link, run the following command:
+```
+sudo rm /etc/systemd/user/default.target.wants/onedrive.service
 ```
 
 ### Step 2: Ensure your system is up-to-date
