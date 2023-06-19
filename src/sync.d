@@ -98,9 +98,9 @@ private bool hasQuickXorHash(const ref JSONValue item)
 	return ("quickXorHash" in item["file"]["hashes"]) != null;
 }
 
-private bool hasSha1Hash(const ref JSONValue item)
+private bool hasSHA256Hash(const ref JSONValue item)
 {
-	return ("sha1Hash" in item["file"]["hashes"]) != null;
+	return ("sha256Hash" in item["file"]["hashes"]) != null;
 }
 
 private bool isDotFile(const(string) path)
@@ -173,16 +173,24 @@ private Item makeItem(const ref JSONValue driveItem)
 
 	// extract the file hash
 	if (isItemFile(driveItem) && ("hashes" in driveItem["file"])) {
-		if ("crc32Hash" in driveItem["file"]["hashes"]) {
-			item.crc32Hash = driveItem["file"]["hashes"]["crc32Hash"].str;
-		} else if ("sha1Hash" in driveItem["file"]["hashes"]) {
-			item.sha1Hash = driveItem["file"]["hashes"]["sha1Hash"].str;
-		} else if ("quickXorHash" in driveItem["file"]["hashes"]) {
+		// Get quickXorHash
+		if ("quickXorHash" in driveItem["file"]["hashes"]) {
 			item.quickXorHash = driveItem["file"]["hashes"]["quickXorHash"].str;
 		} else {
-			log.vlog("The file does not have any hash");
+			log.vdebug("quickXorHash is missing");
 		}
-	}
+		// sha256Hash
+		if ("sha256Hash" in driveItem["file"]["hashes"]) {
+			item.sha256Hash = driveItem["file"]["hashes"]["sha256Hash"].str;
+		} else {
+			log.vdebug("sha256Hash is missing");
+		}
+		// No hashes ..
+		if ((item.quickXorHash.empty) && (item.sha256Hash.empty) ) {
+			// Odd .. no hash ......
+			log.error("ERROR: OneDrive API inconsistency - the file does not have any hash");
+		}
+	}	
 
 	if (isItemRemote(driveItem)) {
 		item.remoteDriveId = driveItem["remoteItem"]["parentReference"]["driveId"].str;
@@ -201,13 +209,11 @@ private Item makeItem(const ref JSONValue driveItem)
 
 private bool testFileHash(const(string) path, const ref Item item)
 {
-	// Try and compute the file hash
-	if (item.crc32Hash) {
-		if (item.crc32Hash == computeCrc32(path)) return true;
-	} else if (item.sha1Hash) {
-		if (item.sha1Hash == computeSha1Hash(path)) return true;
-	} else if (item.quickXorHash) {
+	// Generate QuickXORHash first before others
+	if (item.quickXorHash) {
 		if (item.quickXorHash == computeQuickXorHash(path)) return true;
+	} else if (item.sha256Hash) {
+		if (item.sha256Hash == computeSHA256Hash(path)) return true;
 	}
 	return false;
 }
@@ -3018,11 +3024,11 @@ final class SyncEngine
 						OneDriveFileHash = fileDetails["file"]["hashes"]["quickXorHash"].str;
 					}
 				} 
-				// Check for Sha1Hash
-				if (hasSha1Hash(fileDetails)) {
-					// Use the configured sha1Hash as reported by OneDrive
-					if (fileDetails["file"]["hashes"]["sha1Hash"].str != "") {
-						OneDriveFileHash = fileDetails["file"]["hashes"]["sha1Hash"].str;
+				// Check for sha256Hash
+				if (hasSHA256Hash(fileDetails)) {
+					// Use the configured sha256Hash as reported by OneDrive
+					if (fileDetails["file"]["hashes"]["sha256Hash"].str != "") {
+						OneDriveFileHash = fileDetails["file"]["hashes"]["sha256Hash"].str;
 					}
 				}
 			} else {
@@ -3152,9 +3158,9 @@ final class SyncEngine
 					// A 'file' was downloaded - does what we downloaded = reported fileSize or if there is some sort of funky local disk compression going on
 					// does the file hash OneDrive reports match what we have locally?
 					string quickXorHash = computeQuickXorHash(path);
-					string sha1Hash = computeSha1Hash(path);
+					string sha256Hash = computeSHA256Hash(path);
 					
-					if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash) || (OneDriveFileHash == sha1Hash)) {
+					if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash) || (OneDriveFileHash == sha256Hash)) {
 						// downloaded matches either size or hash
 						log.vdebug("Downloaded file matches reported size and or reported file hash");
 						try {
@@ -3173,7 +3179,7 @@ final class SyncEngine
 							log.error("ERROR: File download size mis-match. Increase logging verbosity to determine why.");
 						}
 						// hash error?
-						if ((OneDriveFileHash != quickXorHash) || (OneDriveFileHash != sha1Hash))  {
+						if ((OneDriveFileHash != quickXorHash) || (OneDriveFileHash != sha256Hash))  {
 							// downloaded file hash does not match
 							log.vdebug("Actual file hash:           ", OneDriveFileHash);
 							log.vdebug("OneDrive API reported hash: ", quickXorHash);
@@ -6769,16 +6775,16 @@ final class SyncEngine
 		
 		// real id / eTag / cTag are different format for personal / business account
 		auto sha1 = new SHA1Digest();
-		ubyte[] hash1 = sha1.digest(path);
+		ubyte[] fakedOneDriveItemValues = sha1.digest(path);
 		
 		JSONValue fakeResponse;
 		
 		if (isDir(path)) {
 			// path is a directory
 			fakeResponse = [
-							"id": JSONValue(toHexString(hash1)),
-							"cTag": JSONValue(toHexString(hash1)),
-							"eTag": JSONValue(toHexString(hash1)),
+							"id": JSONValue(toHexString(fakedOneDriveItemValues)),
+							"cTag": JSONValue(toHexString(fakedOneDriveItemValues)),
+							"eTag": JSONValue(toHexString(fakedOneDriveItemValues)),
 							"fileSystemInfo": JSONValue([
 														"createdDateTime": mtime.toISOExtString(),
 														"lastModifiedDateTime": mtime.toISOExtString()
@@ -6797,9 +6803,9 @@ final class SyncEngine
 			string quickXorHash = computeQuickXorHash(path);
 	
 			fakeResponse = [
-							"id": JSONValue(toHexString(hash1)),
-							"cTag": JSONValue(toHexString(hash1)),
-							"eTag": JSONValue(toHexString(hash1)),
+							"id": JSONValue(toHexString(fakedOneDriveItemValues)),
+							"cTag": JSONValue(toHexString(fakedOneDriveItemValues)),
+							"eTag": JSONValue(toHexString(fakedOneDriveItemValues)),
 							"fileSystemInfo": JSONValue([
 														"createdDateTime": mtime.toISOExtString(),
 														"lastModifiedDateTime": mtime.toISOExtString()
