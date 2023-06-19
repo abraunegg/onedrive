@@ -3178,7 +3178,7 @@ final class SyncEngine
 							log.error("ERROR: File download size mis-match. Increase logging verbosity to determine why.");
 						}
 						// hash error?
-						if (OneDriveFileHash != quickXorHash)  {
+						if (OneDriveFileHash != quickXorHash) {
 							// downloaded file hash does not match
 							log.vdebug("Actual file hash:           ", OneDriveFileHash);
 							log.vdebug("OneDrive API reported hash: ", quickXorHash);
