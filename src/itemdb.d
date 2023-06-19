@@ -23,9 +23,8 @@ struct Item {
 	string   cTag;
 	SysTime  mtime;
 	string   parentId;
-	string   crc32Hash;
-	string   sha1Hash;
 	string   quickXorHash;
+	string   sha256Hash;
 	string   remoteDriveId;
 	string   remoteId;
 	string   syncStatus;
@@ -34,7 +33,7 @@ struct Item {
 final class ItemDatabase
 {
 	// increment this for every change in the db schema
-	immutable int itemDatabaseVersion = 10;
+	immutable int itemDatabaseVersion = 11;
 
 	Database db;
 	string insertItemStmt;
@@ -100,12 +99,12 @@ final class ItemDatabase
 		db.exec("PRAGMA locking_mode = EXCLUSIVE");
 		
 		insertItemStmt = "
-			INSERT OR REPLACE INTO item (driveId, id, name, type, eTag, cTag, mtime, parentId, crc32Hash, sha1Hash, quickXorHash, remoteDriveId, remoteId, syncStatus)
-			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+			INSERT OR REPLACE INTO item (driveId, id, name, type, eTag, cTag, mtime, parentId, quickXorHash, sha256Hash, remoteDriveId, remoteId, syncStatus)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
 		";
 		updateItemStmt = "
 			UPDATE item
-			SET name = ?3, type = ?4, eTag = ?5, cTag = ?6, mtime = ?7, parentId = ?8, crc32Hash = ?9, sha1Hash = ?10, quickXorHash = ?11, remoteDriveId = ?12, remoteId = ?13, syncStatus = ?14
+			SET name = ?3, type = ?4, eTag = ?5, cTag = ?6, mtime = ?7, parentId = ?8, quickXorHash = ?9, sha256Hash = ?10, remoteDriveId = ?11, remoteId = ?12, syncStatus = ?13
 			WHERE driveId = ?1 AND id = ?2
 		";
 		selectItemByIdStmt = "
@@ -136,9 +135,8 @@ final class ItemDatabase
 				cTag             TEXT,
 				mtime            TEXT NOT NULL,
 				parentId         TEXT,
-				crc32Hash        TEXT,
-				sha1Hash         TEXT,
 				quickXorHash     TEXT,
+				sha256Hash       TEXT,
 				remoteDriveId    TEXT,
 				remoteId         TEXT,
 				deltaLink        TEXT,
@@ -321,19 +319,18 @@ final class ItemDatabase
 			bind(6, cTag);
 			bind(7, mtime.toISOExtString());
 			bind(8, parentId);
-			bind(9, crc32Hash);
-			bind(10, sha1Hash);
-			bind(11, quickXorHash);
-			bind(12, remoteDriveId);
-			bind(13, remoteId);
-			bind(14, syncStatus);
+			bind(9, quickXorHash);
+			bind(10, sha256Hash);
+			bind(11, remoteDriveId);
+			bind(12, remoteId);
+			bind(13, syncStatus);
 		}
 	}
 
 	private Item buildItem(Statement.Result result)
 	{
 		assert(!result.empty, "The result must not be empty");
-		assert(result.front.length == 15, "The result must have 15 columns");
+		assert(result.front.length == 14, "The result must have 14 columns");
 		Item item = {
 			driveId: result.front[0].dup,
 			id: result.front[1].dup,
@@ -342,12 +339,11 @@ final class ItemDatabase
 			cTag: result.front[5].dup,
 			mtime: SysTime.fromISOExtString(result.front[6]),
 			parentId: result.front[7].dup,
-			crc32Hash: result.front[8].dup,
-			sha1Hash: result.front[9].dup,
-			quickXorHash: result.front[10].dup,
-			remoteDriveId: result.front[11].dup,
-			remoteId: result.front[12].dup,
-			syncStatus: result.front[14].dup
+			quickXorHash: result.front[8].dup,
+			sha256Hash: result.front[9].dup,
+			remoteDriveId: result.front[10].dup,
+			remoteId: result.front[11].dup,
+			syncStatus: result.front[12].dup
 		};
 		switch (result.front[3]) {
 			case "file":    item.type = ItemType.file;    break;

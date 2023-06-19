@@ -48,28 +48,6 @@ void safeRemove(const(char)[] path)
 	if (exists(path)) remove(path);
 }
 
-// returns the crc32 hex string of a file
-string computeCrc32(string path)
-{
-	CRC32 crc;
-	auto file = File(path, "rb");
-	foreach (ubyte[] data; chunks(file, 4096)) {
-		crc.put(data);
-	}
-	return crc.finish().toHexString().dup;
-}
-
-// returns the sha1 hash hex string of a file
-string computeSha1Hash(string path)
-{
-	SHA1 sha;
-	auto file = File(path, "rb");
-	foreach (ubyte[] data; chunks(file, 4096)) {
-		sha.put(data);
-	}
-	return sha.finish().toHexString().dup;
-}
-
 // returns the quickXorHash base64 string of a file
 string computeQuickXorHash(string path)
 {
@@ -79,6 +57,16 @@ string computeQuickXorHash(string path)
 		qxor.put(data);
 	}
 	return Base64.encode(qxor.finish());
+}
+
+// returns the SHA256 hex string of a file
+string computeSHA256Hash(string path) {
+	SHA256 sha256;
+    auto file = File(path, "rb");
+    foreach (ubyte[] data; chunks(file, 4096)) {
+        sha256.put(data);
+    }
+    return sha256.finish().toHexString().dup;
 }
 
 // converts wildcards (*, ?) to regex
