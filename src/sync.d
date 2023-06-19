@@ -3158,9 +3158,8 @@ final class SyncEngine
 					// A 'file' was downloaded - does what we downloaded = reported fileSize or if there is some sort of funky local disk compression going on
 					// does the file hash OneDrive reports match what we have locally?
 					string quickXorHash = computeQuickXorHash(path);
-					string sha256Hash = computeSHA256Hash(path);
 					
-					if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash) || (OneDriveFileHash == sha256Hash)) {
+					if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash)) {
 						// downloaded matches either size or hash
 						log.vdebug("Downloaded file matches reported size and or reported file hash");
 						try {
@@ -3179,7 +3178,7 @@ final class SyncEngine
 							log.error("ERROR: File download size mis-match. Increase logging verbosity to determine why.");
 						}
 						// hash error?
-						if ((OneDriveFileHash != quickXorHash) || (OneDriveFileHash != sha256Hash))  {
+						if (OneDriveFileHash != quickXorHash)  {
 							// downloaded file hash does not match
 							log.vdebug("Actual file hash:           ", OneDriveFileHash);
 							log.vdebug("OneDrive API reported hash: ", quickXorHash);
