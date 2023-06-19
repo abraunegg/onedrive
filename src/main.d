@@ -761,7 +761,10 @@ int main(string[] args)
 		writeln("Config option 'debug_https'                  = ", cfg.getValueBool("debug_https"));
 		writeln("Config option 'rate_limit'                   = ", cfg.getValueLong("rate_limit"));
 		writeln("Config option 'operation_timeout'            = ", cfg.getValueLong("operation_timeout"));
-		
+		writeln("Config option 'dns_timeout'                  = ", cfg.getValueLong("dns_timeout"));
+		writeln("Config option 'connect_timeout'              = ", cfg.getValueLong("connect_timeout"));
+		writeln("Config option 'data_timeout'                 = ", cfg.getValueLong("data_timeout"));
+		writeln("Config option 'ip_protocol_version'          = ", cfg.getValueLong("ip_protocol_version"));
 		
 		// Is sync_list configured ?
 		writeln("Config option 'sync_root_files'              = ", cfg.getValueBool("sync_root_files"));
@@ -853,7 +856,7 @@ int main(string[] args)
 	
 	// Test if OneDrive service can be reached, exit if it cant be reached
 	log.vdebug("Testing network to ensure network connectivity to Microsoft OneDrive Service");
-	online = testNetwork();
+	online = testNetwork(cfg);
 	if (!online) {
 		// Cant initialise the API as we are not online
 		if (!cfg.getValueBool("monitor")) {
@@ -885,7 +888,7 @@ int main(string[] args)
 					Thread.sleep(dur!"seconds"(maxBackoffInterval));
 				}
 				// perform the re-rty
-				online = testNetwork();
+				online = testNetwork(cfg);
 				if (online) {
 					// We are now online
 					log.log("Internet connectivity to Microsoft OneDrive service has been restored");

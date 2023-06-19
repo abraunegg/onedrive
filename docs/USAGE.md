@@ -34,6 +34,7 @@ Before reading this document, please ensure you are running application version 
     + [monitor_log_frequency](#monitor_log_frequency)
     + [min_notify_changes](#min_notify_changes)
     + [operation_timeout](#operation_timeout)
+    + [ip_protocol_version](#ip_protocol_version)
   * [Configuring the client for 'single tenant application' use](#configuring-the-client-for-single-tenant-application-use)
   * [Configuring the client to use older 'skilion' application identifier](#configuring-the-client-to-use-older-skilion-application-identifier)
 - [Frequently Asked Configuration Questions](#frequently-asked-configuration-questions)
@@ -518,7 +519,6 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # sync_dir_permissions = "700"
 # sync_file_permissions = "600"
 # rate_limit = "131072"
-# operation_timeout = "3600"
 # webhook_enabled = "false"
 # webhook_public_url = ""
 # webhook_listening_host = ""
@@ -529,6 +529,11 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # display_running_config = "false"
 # read_only_auth_scope = "false"
 # cleanup_local_files = "false"
+# operation_timeout = "3600"
+# dns_timeout = "60"
+# connect_timeout = "10"
+# data_timeout = "600"
+# ip_protocol_version = "0"
 ```
 
 ### 'config' file configuration examples:
@@ -740,6 +745,23 @@ Example:
 # rate_limit = "131072"
 operation_timeout = "3600"
 ```
+
+#### ip_protocol_version
+By default, the application will use IPv4 and IPv6 to resolve and communicate with Microsoft OneDrive. In some Linux distributions (most notably Ubuntu and those distributions based on Ubuntu) this will cause problems due to how DNS resolution is being performed.
+
+To configure the application to use a specific IP version, configure the following in your config file:
+```text
+# operation_timeout = "3600"
+# dns_timeout = "60"
+# connect_timeout = "10"
+# data_timeout = "600"
+ip_protocol_version = "1"
+
+```
+**Note:**
+* A value of 0 will mean the client will use IPv4 and IPv6. This is the default.
+* A value of 1 will mean the client will use IPv4 only.
+* A value of 2 will mean the client will use IPv6 only.
 
 #### Configuring the client for 'single tenant application' use
 In some instances when using OneDrive Business Accounts, depending on the Azure organisational configuration, it will be necessary to configure the client as a 'single tenant application'.
