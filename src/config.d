@@ -43,6 +43,35 @@ final class Config
 	// Default file permission mode
 	public long defaultFilePermissionMode = 600;
 	public int configuredFilePermissionMode;
+	
+	// Bring in v2.5.0 config items
+	
+	// HTTP Struct items, used for configuring HTTP()
+	// Curl Timeout Handling
+	// libcurl dns_cache_timeout timeout
+	immutable int defaultDnsTimeout = 60;
+	// Connect timeout for HTTP|HTTPS connections
+	immutable int defaultConnectTimeout = 10;
+	// With the following settings we force
+	// - if there is no data flow for 10min, abort
+	// - if the download time for one item exceeds 1h, abort
+	//
+	// Timeout for activity on connection
+	//  this translates into Curl's CURLOPT_LOW_SPEED_TIME
+	//  which says:
+	//   It contains the time in number seconds that the
+	//   transfer speed should be below the CURLOPT_LOW_SPEED_LIMIT
+	//   for the library to consider it too slow and abort.
+	immutable int defaultDataTimeout = 600;
+	// Maximum time any operation is allowed to take
+	// This includes dns resolution, connecting, data transfer, etc.
+	immutable int defaultOperationTimeout = 3600;
+	// Specify how many redirects should be allowed
+	immutable int defaultMaxRedirects = 5;
+	// Specify what IP protocol version should be used when communicating with OneDrive
+	immutable int defaultIpProtocol = 0; // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
+	
+	
 
 	this(string confdirOption)
 	{
@@ -122,9 +151,6 @@ final class Config
 		longValues["sync_file_permissions"] = defaultFilePermissionMode;
 		// Configure download / upload rate limits
 		longValues["rate_limit"] = 0;
-		// maximum time an operation is allowed to take
-		// This includes dns resolution, connecting, data transfer, etc.
-		longValues["operation_timeout"] = 3600;
 		// To ensure we do not fill up the load disk, how much disk space should be reserved by default
 		longValues["space_reservation"] = 50 * 2^^20; // 50 MB as Bytes
 		// Webhook options
@@ -161,6 +187,19 @@ final class Config
 		// - Enabling this option will add function processing times to the console output
 		// - This then enables tracking of where the application is spending most amount of time when processing data when users have questions re performance
 		boolValues["display_processing_time"] = false;
+		
+		// HTTPS & CURL Operation Settings
+		// - Maximum time an operation is allowed to take
+		//   This includes dns resolution, connecting, data transfer, etc.
+		longValues["operation_timeout"] = defaultOperationTimeout;
+		// libcurl dns_cache_timeout timeout
+		longValues["dns_timeout"] = defaultDnsTimeout;
+		// Timeout for HTTPS connections
+		longValues["connect_timeout"] = defaultConnectTimeout;
+		// Timeout for activity on a HTTPS connection
+		longValues["data_timeout"] = defaultDataTimeout;
+		// What IP protocol version should be used when communicating with OneDrive
+		longValues["ip_protocol_version"] = defaultIpProtocol; // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
 				
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.
@@ -451,9 +490,6 @@ final class Config
 				"no-remote-delete",
 					"Do not delete local file 'deletes' from OneDrive when using --upload-only",
 					&boolValues["no_remote_delete"],
-				"operation-timeout",
-					"Maximum amount of time (in seconds) an operation is allowed to take",
-					&longValues["operation_timeout"],
 				"print-token",
 					"Print the access token, useful for debugging",
 					&boolValues["print_token"],

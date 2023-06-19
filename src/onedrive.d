@@ -214,9 +214,9 @@ final class OneDriveApi
 		http = HTTP();
 		// Curl Timeout Handling
 		// libcurl dns_cache_timeout timeout
-		http.dnsTimeout = (dur!"seconds"(60));
+		http.dnsTimeout = (dur!"seconds"(cfg.getValueLong("dns_timeout")));
 		// Timeout for HTTPS connections
-		http.connectTimeout = (dur!"seconds"(10));
+		http.connectTimeout = (dur!"seconds"(cfg.getValueLong("connect_timeout")));
 		// with the following settings we force
 		// - if there is no data flow for 10min, abort
 		// - if the download time for one item exceeds 1h, abort
@@ -227,17 +227,27 @@ final class OneDriveApi
 		//   It contains the time in number seconds that the
 		//   transfer speed should be below the CURLOPT_LOW_SPEED_LIMIT
 		//   for the library to consider it too slow and abort.
-		http.dataTimeout = (dur!"seconds"(600));
+		http.dataTimeout = (dur!"seconds"(cfg.getValueLong("data_timeout")));
 		// maximum time an operation is allowed to take
 		// This includes dns resolution, connecting, data transfer, etc.
 		http.operationTimeout = (dur!"seconds"(cfg.getValueLong("operation_timeout")));
+		// What IP protocol version should be used when using Curl - IPv4 & IPv6, IPv4 or IPv6
+		http.handle.set(CurlOption.ipresolve,cfg.getValueLong("ip_protocol_version")); // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
 		// Specify how many redirects should be allowed
-		http.maxRedirects(5);
+		http.maxRedirects(cfg.defaultMaxRedirects);
 
 		// Do we enable curl debugging?
 		if (cfg.getValueBool("debug_https")) {
 			http.verbose = true;
 			.debugResponse = true;
+			
+			// Output what options we are using so that in the debug log this can be tracked
+			log.vdebug("http.dnsTimeout = ", cfg.getValueLong("dns_timeout"));
+			log.vdebug("http.connectTimeout = ", cfg.getValueLong("connect_timeout"));
+			log.vdebug("http.dataTimeout = ", cfg.getValueLong("data_timeout"));
+			log.vdebug("http.operationTimeout = ", cfg.getValueLong("operation_timeout"));
+			log.vdebug("http.CurlOption.ipresolve = ", cfg.getValueLong("ip_protocol_version"));
+			log.vdebug("http.maxRedirects = ", cfg.defaultMaxRedirects);
 		}
 
 		// Update clientId if application_id is set in config file

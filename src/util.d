@@ -15,7 +15,9 @@ import std.json;
 import std.traits;
 import qxor;
 import core.stdc.stdlib;
-static import log;
+
+import log;
+import config;
 
 shared string deviceName;
 
@@ -114,15 +116,23 @@ Regex!char wild2regex(const(char)[] pattern)
 }
 
 // returns true if the network connection is available
-bool testNetwork()
+bool testNetwork(Config cfg)
 {
 	// Use low level HTTP struct
 	auto http = HTTP();
 	http.url = "https://login.microsoftonline.com";
 	// DNS lookup timeout
-	http.dnsTimeout = (dur!"seconds"(5));
+	http.dnsTimeout = (dur!"seconds"(cfg.getValueLong("dns_timeout")));
 	// Timeout for connecting
-	http.connectTimeout = (dur!"seconds"(5));
+	http.connectTimeout = (dur!"seconds"(cfg.getValueLong("connect_timeout")));
+	// Data Timeout for HTTPS connections
+	http.dataTimeout = (dur!"seconds"(cfg.getValueLong("data_timeout")));
+	// maximum time any operation is allowed to take
+	// This includes dns resolution, connecting, data transfer, etc.
+	http.operationTimeout = (dur!"seconds"(cfg.getValueLong("operation_timeout")));	
+	// What IP protocol version should be used when using Curl - IPv4 & IPv6, IPv4 or IPv6
+	http.handle.set(CurlOption.ipresolve,cfg.getValueLong("ip_protocol_version")); // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
+	
 	// HTTP connection test method
 	http.method = HTTP.Method.head;
 	// Attempt to contact the Microsoft Online Service
