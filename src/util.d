@@ -527,12 +527,6 @@ void checkApplicationVersion() {
 			thisVersionReleaseGracePeriod = thisVersionReleaseGracePeriod.add!"months"(1);
 			log.vdebug("thisVersionReleaseGracePeriod: ", thisVersionReleaseGracePeriod);
 			
-			// is the published latestest release date greater than the current running release date + grace period
-			if (thisVersionReleaseGracePeriod.toUnixTime() < publishedDate.toUnixTime()) {
-				// the running client is obsolete
-				displayObsolete = true;
-			}
-			
 			// is this running version obsolete ?
 			if (!displayObsolete) {
 				// if releaseGracePeriod > currentTime
