@@ -117,7 +117,7 @@ private bool isDotFile(const(string) path)
 }
 
 // construct an Item struct from a JSON driveItem
-private Item makeItem(const ref JSONValue driveItem)
+private Item makeDatabaseItem(const ref JSONValue driveItem)
 {
 	Item item = {
 		id: driveItem["id"].str,
@@ -177,18 +177,13 @@ private Item makeItem(const ref JSONValue driveItem)
 		if ("quickXorHash" in driveItem["file"]["hashes"]) {
 			item.quickXorHash = driveItem["file"]["hashes"]["quickXorHash"].str;
 		} else {
-			log.vdebug("quickXorHash is missing");
+			log.vdebug("quickXorHash is missing from ", driveItem["id"].str);
 		}
 		// sha256Hash
 		if ("sha256Hash" in driveItem["file"]["hashes"]) {
 			item.sha256Hash = driveItem["file"]["hashes"]["sha256Hash"].str;
 		} else {
-			log.vdebug("sha256Hash is missing");
-		}
-		// No hashes ..
-		if ((item.quickXorHash.empty) && (item.sha256Hash.empty) ) {
-			// Odd .. no hash ......
-			log.error("ERROR: OneDrive API inconsistency - the file does not have any hash");
+			log.vdebug("sha256Hash is missing from ", driveItem["id"].str);
 		}
 	}	
 
@@ -7269,4 +7264,36 @@ final class SyncEngine
 		onedrive.shutdown();
 		exit(-1);
 	}
+	
+	// Wrapper function for makeDatabaseItem so we can check if the item, if a file, has any hashes
+	private Item makeItem(JSONValue onedriveJSONItem) 
+	{
+		Item newDatabaseItem = makeDatabaseItem(onedriveJSONItem);
+		
+		// Check for hashes in this DB item
+		if (newDatabaseItem.type == ItemType.file) {
+			// Does this file have a size greater than 0 - zero size files will potentially not have a hash
+			if (hasFileSize(onedriveJSONItem)) {
+				if (onedriveJSONItem["size"].integer > 0) {
+					// Does the item have any hashes?
+					if ((newDatabaseItem.quickXorHash.empty) && (newDatabaseItem.sha256Hash.empty)) {
+						// Odd .. no hash ......
+						string apiMessage = "WARNING: OneDrive API inconsistency - this file does not have any hash: ";
+						// This is computationally expensive .. but we are only doing this if there are no hashses provided:
+						bool parentInDatabase = itemdb.idInLocalDatabase(newDatabaseItem.driveId, newDatabaseItem.parentId);
+						if (parentInDatabase) {
+							// Calculate this item path
+							string newItemPath = computeItemPath(newDatabaseItem.driveId, newDatabaseItem.parentId) ~ "/" ~ newDatabaseItem.name;
+							log.log(apiMessage, newItemPath);
+						} else {
+							// Use the item ID
+							log.log(apiMessage, newDatabaseItem.id);
+						}
+					}
+				}
+			}
+		}
+		return newDatabaseItem;
+	}
+	
 }
