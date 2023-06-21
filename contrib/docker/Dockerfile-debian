@@ -1,10 +1,11 @@
 # -*-Dockerfile-*-
 
-ARG DEBIAN_VERSION=bullseye
+ARG DEBIAN_VERSION=stable
 
 FROM debian:${DEBIAN_VERSION} AS builder-onedrive
 
-RUN apt-get update \
+RUN apt-get clean \
+ && apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential curl ca-certificates libcurl4-openssl-dev libsqlite3-dev libxml2-dev pkg-config git ldc \
  && rm -rf /var/lib/apt/lists/*
 
@@ -18,9 +19,10 @@ RUN ./configure DC=/usr/bin/ldmd2 \
 
 FROM debian:${DEBIAN_VERSION}-slim
 
-RUN apt-get update \
+RUN apt-get clean \
+ && apt-get update \
  && apt-get upgrade -y \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gosu libcurl4 libsqlite3-0 ca-certificates libphobos2-ldc-shared94 \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gosu libcurl4 libsqlite3-0 ca-certificates libphobos2-ldc-shared100 \
  && rm -rf /var/lib/apt/lists/* \
  # Fix bug with ssl on armhf: https://serverfault.com/a/1045189
  && /usr/bin/c_rehash \
