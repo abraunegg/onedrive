@@ -9,7 +9,8 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    #runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
     - name: Check out code from GitHub
@@ -19,7 +20,9 @@ jobs:
         fetch-depth: 0
 
     - name: Update Image
-      run: sudo apt-get update -y
+      run: |
+        sudo apt-get clean
+        sudo apt-get update -y
 
     - name: Install build-essential
       run: sudo apt install -y build-essential
