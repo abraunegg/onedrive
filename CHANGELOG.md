@@ -5,7 +5,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## 2.4.25 - 2023-06-21
 ### Fixed
 *   Fixed that the application was reporting as v2.2.24 when in fact it was v2.4.24 (release tagging issue)
-*   Fixed that the running version obsolete flag (due to above issue) was causing a false flagging as obsolete
+*   Fixed that the running version obsolete flag (due to above issue) was causing a false flag as being obsolete
 *   Fixed that zero-byte files do not have a hash as reported by the OneDrive API thus should not generate an error message
 
 ### Updated
