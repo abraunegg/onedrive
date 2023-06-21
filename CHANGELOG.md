@@ -2,6 +2,18 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## 2.4.25 - 2023-06-21
+### Fixed
+*   Fixed that the application was reporting as v2.2.24 when in fact it was v2.4.24 (release tagging issue)
+*   Fixed that the running version obsolete flag (due to above issue) was causing a false flag as being obsolete
+*   Fixed that zero-byte files do not have a hash as reported by the OneDrive API thus should not generate an error message
+
+### Updated
+*   Update to Debian Docker file to resolve Docker image Operating System reported vulnerabilities
+*   Update to Alpine Docker file to resolve Docker image Operating System reported vulnerabilities
+*   Update to Fedora Docker file to resolve Docker image Operating System reported vulnerabilities
+*   Updated documentation (various)
+
 ## 2.4.24 - 2023-06-20
 ### Fixed
 *   Fix for extra encoded quotation marks surrounding Docker environment variables
