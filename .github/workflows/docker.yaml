@@ -5,16 +5,20 @@ on:
     branches: [ master ]
     tags: [ 'v*' ]
   pull_request:
-    branches:
-      - master
-    types: [closed]
+    # Comment these out to force a test build on a PR
+    #branches:
+    #  - master
+    #types: [closed]
 
 env:
   DOCKER_HUB_SLUG: driveone/onedrive
 
 jobs:
   build:
-    if: (!(github.event.action == 'closed' && github.event.pull_request.merged != true))
+    # Comment this out to force a test build on a PR
+    #if: (!(github.event.action == 'closed' && github.event.pull_request.merged != true))
+    
+    # Build runs on
     runs-on: ubuntu-latest
 
     strategy:

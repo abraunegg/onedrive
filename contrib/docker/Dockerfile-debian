@@ -1,6 +1,6 @@
 # -*-Dockerfile-*-
 
-ARG DEBIAN_VERSION=bullseye
+ARG DEBIAN_VERSION=stable
 
 FROM debian:${DEBIAN_VERSION} AS builder-onedrive
 
