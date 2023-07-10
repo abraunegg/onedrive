@@ -1046,6 +1046,9 @@ final class OneDriveApi
 		http.addRequestHeader("Content-Type", "application/json");
 		JSONValue response;
 
+		// Debug output of the subscription URL
+		log.vdebug("Subsription URL: ", url);
+
 		try {
 			response = post(url, request.toString());
 		} catch (OneDriveException e) {
