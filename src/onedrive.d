@@ -1029,6 +1029,8 @@ final class OneDriveApi
 		} else {
 				resourceItem = "/me/drive/root";
 		}
+		// Debug output for the subscription resource item
+		log.vdebug("Setting subsription resourceItem as: ", resourceItem);
 		
 		// create JSON request to create webhook subscription
 		const JSONValue request = [
@@ -1038,6 +1040,9 @@ final class OneDriveApi
 			"expirationDateTime": expirationDateTime.toISOExtString(),
  			"clientState": randomUUID().toString()
 		];
+		
+		// Debug output of the full required for the webhook subscription creation
+		log.vdebug("Create subsription request: ", request.toString());
 		http.addRequestHeader("Content-Type", "application/json");
 		JSONValue response;
 
