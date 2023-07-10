@@ -178,9 +178,14 @@ class OneDriveWebhook {
 		cgi.setResponseContentType("text/plain");
 
 		if ("validationToken" in cgi.get)	{
+			log.vdebug("validationToken provided within cgi.get");
 			// For validation requests, respond with the validation token passed in the query string
 			// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/concepts/webhook-receiver-validation-request
-			cgi.write(cgi.get["validationToken"]);
+			
+			auto validationToken = cgi.get["validationToken"];
+			log.vdebug("validationToken: ", validationToken);
+			
+			cgi.write(validationToken);
 			log.log("Webhook: handled validation request");
 		} else {
 			// Notifications don't include any information about the changes that triggered them.
@@ -1050,6 +1055,7 @@ final class OneDriveApi
 		log.vdebug("Subsription URL: ", url);
 
 		try {
+			// This is expecting a JSON response
 			response = post(url, request.toString());
 		} catch (OneDriveException e) {
 			displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
