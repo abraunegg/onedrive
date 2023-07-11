@@ -986,7 +986,7 @@ A webhook can be optionally enabled in the monitor mode to allow the onedrive pr
 
 To enable this feature, you need to configure the following options in the config file:
 
-```
+```text
 webhook_enabled = "true"
 webhook_public_url = "<public-facing url to reach your webhook>"
 ```
@@ -997,16 +997,40 @@ Setting `webhook_enabled` to `true` enables the webhook in 'monitor' mode. The o
 
 For example, below is a nginx config snippet to proxy traffic into the webhook:
 
-```
+```text
 server {
 	listen 80;
 	location /webhooks/onedrive {
+		proxy_http_version 1.1;
 		proxy_pass http://127.0.0.1:8888;
 	}
 }
 ```
 
 With nginx running, you can configure `webhook_public_url` to `https://<your_host>/webhooks/onedrive`.
+
+If you receive this application error:
+```text
+Subscription validation request failed. Response must exactly match validationToken query parameter.
+```
+The most likely cause for this error will be your nginx configuration. To resolve, potentially investigate the following configuration for nginx:
+
+```text
+server {
+	listen 80;
+	location /webhooks/onedrive {
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Original-Request-URI $request_uri;
+		proxy_read_timeout 300s;
+		proxy_connect_timeout 75s;
+		proxy_buffering off;
+		proxy_http_version 1.1;
+		proxy_pass http://127.0.0.1:8888;
+	}
+}
+```
+
+For any further nginx configuration assistance, please refer to: https://docs.nginx.com/
 
 ### More webhook configuration options
 
