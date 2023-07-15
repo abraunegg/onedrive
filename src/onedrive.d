@@ -422,7 +422,10 @@ final class OneDriveApi
 		// SharePoint Queries
 		log.vdebug("Configured siteSearchUrl:    ", siteSearchUrl);
 		log.vdebug("Configured siteDriveUrl:     ", siteDriveUrl);
-
+		
+		// Webhook Queries
+		log.vdebug("Configured subscriptionUrl:  ",subscriptionUrl);
+		
 		// Configure the User Agent string
 		if (cfg.getValueString("user_agent") == "") {
 			// Application User Agent string defaults
@@ -1051,7 +1054,7 @@ final class OneDriveApi
 		http.addRequestHeader("Content-Type", "application/json");
 		JSONValue response;
 
-		// Debug output of the subscription URL
+		// Debug output of the subscription URL we are using for this action
 		log.vdebug("Subsription URL: ", url);
 
 		try {
