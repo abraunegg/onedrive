@@ -69,6 +69,13 @@ if [ "${ONEDRIVE_UPLOADONLY:=0}" == "1" ]; then
    ARGS=(--upload-only ${ARGS[@]})
 fi
 
+# Tell client to sync in no-remote-delete mode based on environment variable
+if [ "${ONEDRIVE_NOREMOTEDELETE:=1}" == "1" ]; then
+   echo "# We are synchronizing in no-remote-delete mode"
+   echo "# Adding --no-remote-delete"
+   ARGS=(--no-remote-delete ${ARGS[@]})
+fi
+
 # Tell client to logout based on environment variable
 if [ "${ONEDRIVE_LOGOUT:=0}" == "1" ]; then
    echo "# We are logging out"
