@@ -70,7 +70,7 @@ if [ "${ONEDRIVE_UPLOADONLY:=0}" == "1" ]; then
 fi
 
 # Tell client to sync in no-remote-delete mode based on environment variable
-if [ "${ONEDRIVE_NOREMOTEDELETE:=1}" == "1" ]; then
+if [ "${ONEDRIVE_NOREMOTEDELETE:=0}" == "1" ]; then
    echo "# We are synchronizing in no-remote-delete mode"
    echo "# Adding --no-remote-delete"
    ARGS=(--no-remote-delete ${ARGS[@]})
