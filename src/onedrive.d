@@ -586,9 +586,19 @@ final class OneDriveApi
 			string[] authFiles = authFilesString.split(":");
 			string authUrl = authFiles[0];
 			string responseUrl = authFiles[1];
-			auto authUrlFile = File(authUrl, "w");
-			authUrlFile.write(url);
-			authUrlFile.close();
+			
+			try {
+				// Try and write out the auth URL to the nominated file
+				auto authUrlFile = File(authUrl, "w");
+				authUrlFile.write(url);
+				authUrlFile.close();
+			} catch (std.exception.ErrnoException e) {
+				// There was a file system error
+				// display the error message
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				return false;
+			}
+			
 			while (!exists(responseUrl)) {
 				Thread.sleep(dur!("msecs")(100));
 			}
