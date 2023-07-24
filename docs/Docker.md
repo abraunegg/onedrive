@@ -207,6 +207,7 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 | <B>ONEDRIVE_RESYNC</B> | Controls "--resync" switch on onedrive sync. Default is 0 | 1 |
 | <B>ONEDRIVE_DOWNLOADONLY</B> | Controls "--download-only" switch on onedrive sync. Default is 0 | 1 |
 | <B>ONEDRIVE_UPLOADONLY</B> | Controls "--upload-only" switch on onedrive sync. Default is 0 | 1 |
+| <B>ONEDRIVE_NOREMOTEDELETE</B> | Controls "--no-remote-delete" switch on onedrive sync. Default is 0 | 1 |
 | <B>ONEDRIVE_LOGOUT</B> | Controls "--logout" switch. Default is 0 | 1 |
 | <B>ONEDRIVE_REAUTH</B> | Controls "--reauth" switch. Default is 0 | 1 |
 | <B>ONEDRIVE_AUTHFILES</B> | Controls "--auth-files" option. Default is "" | "authUrl:responseUrl" |
