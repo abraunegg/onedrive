@@ -13,7 +13,7 @@ Distribution packages may be of an older release when compared to the latest rel
 | Alpine Linux                    | [onedrive](https://pkgs.alpinelinux.org/packages?name=onedrive&branch=edge)  |<a href="https://pkgs.alpinelinux.org/packages?name=onedrive&branch=edge"><img src="https://repology.org/badge/version-for-repo/alpine_edge/onedrive.svg?header=" alt="Alpine Linux Edge package" width="46" height="20"></a>|❌|✔|❌|✔ | |
 | Arch Linux<br><br>Manjaro Linux | [onedrive-abraunegg](https://aur.archlinux.org/packages/onedrive-abraunegg/) |<a href="https://aur.archlinux.org/packages/onedrive-abraunegg"><img src="https://repology.org/badge/version-for-repo/aur/onedrive-abraunegg.svg?header=" alt="AUR package" width="46" height="20"></a>|✔|✔|✔|✔ | Install via: `pamac build onedrive-abraunegg` from the Arch Linux User Repository (AUR)<br><br>**Note:** If asked regarding a provider for 'd-runtime' and 'd-compiler', select 'liblphobos' and 'ldc'<br><br>**Note:** System must have at least 1GB of memory & 1GB swap space
 | Debian 11                       | [onedrive](https://packages.debian.org/bullseye/source/onedrive)             |<a href="https://packages.debian.org/bullseye/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_11/onedrive.svg?header=" alt="Debian 11 package" width="46" height="20"></a>|✔|✔|✔|✔| **Note:** Do not install from Debian Package Repositories<br><br>It is recommended that for Debian 11 that you install from OpenSuSE Build Service using the Debian Package Install [Instructions](ubuntu-package-install.md) |
-| Debian 12                       | [onedrive](https://packages.debian.org/bookworm/source/onedrive)             |<a href="https://packages.debian.org/bookworm/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_12/onedrive.svg?header=" alt="Debian 12 package" width="46" height="20"></a>|✔|✔|✔|✔| Install via: `sudo apt install --no-install-recommends --no-install-suggests onedrive` |
+| Debian 12                       | [onedrive](https://packages.debian.org/bookworm/source/onedrive)             |<a href="https://packages.debian.org/bookworm/source/onedrive"><img src="https://repology.org/badge/version-for-repo/debian_12/onedrive.svg?header=" alt="Debian 12 package" width="46" height="20"></a>|✔|✔|✔|✔| **Note:** Do not install from Debian Package Repositories<br><br>It is recommended that for Debian 12 that you install from OpenSuSE Build Service using the Debian Package Install [Instructions](ubuntu-package-install.md) |
 | Fedora                          | [onedrive](https://koji.fedoraproject.org/koji/packageinfo?packageID=26044)  |<a href="https://koji.fedoraproject.org/koji/packageinfo?packageID=26044"><img src="https://repology.org/badge/version-for-repo/fedora_rawhide/onedrive.svg?header=" alt="Fedora Rawhide package" width="46" height="20"></a>|✔|✔|✔|✔| |
 | Gentoo                          | [onedrive](https://gpo.zugaina.org/net-misc/onedrive)                        | No API Available |✔|✔|❌|❌| |
 | Homebrew                        | [onedrive](https://formulae.brew.sh/formula/onedrive)                        | <a href="https://formulae.brew.sh/formula/onedrive"><img src="https://repology.org/badge/version-for-repo/homebrew/onedrive.svg?header=" alt="Homebrew package" width="46" height="20"></a> |❌|✔|❌|❌| |
@@ -71,7 +71,7 @@ Ubuntu Linux 18.x LTS reached the end of its five-year LTS window on May 31th 20
 ### Dependencies: Debian 9
 Debian 9 reached the end of its five-year support window on June 30th 2022 and is no longer supported.
 
-### Dependencies: Ubuntu 20.x -> Ubuntu 23.x / Debian 10 -> Debian 11 - x86_64
+### Dependencies: Ubuntu 20.x -> Ubuntu 23.x / Debian 10 -> Debian 12 - x86_64
 These dependencies are also applicable for all Ubuntu based distributions such as:
 *   Lubuntu
 *   Linux Mint
@@ -121,7 +121,7 @@ For notifications the following is also necessary:
 sudo pacman -S libnotify
 ```
 
-### Dependencies: Raspbian (ARMHF) and Ubuntu 22.x / Debian 11 / Raspbian (ARM64)
+### Dependencies: Raspbian (ARMHF) and Ubuntu 22.x / Debian 11 / Debian 12 / Raspbian (ARM64)
 **Note:** The minimum LDC compiler version required to compile this application is now 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
 
 These instructions were validated using:
