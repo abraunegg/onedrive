@@ -220,7 +220,7 @@ In some cases it may be desirable to 'upload only' to OneDrive. To do this use t
 ```text
 onedrive --synchronize --upload-only
 ```
-**Note:** If a file or folder is present on OneDrive, that was previously sycned and now does not exist locally, that item it will be removed from OneDrive. If the data on OneDrive should be kept, the following should be used:
+**Note:** If a file or folder is present on OneDrive, that was previously synced and now does not exist locally, that item it will be removed from OneDrive. If the data on OneDrive should be kept, the following should be used:
 ```text
 onedrive --synchronize --upload-only --no-remote-delete
 ```
