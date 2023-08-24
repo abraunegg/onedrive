@@ -2998,13 +2998,13 @@ final class SyncEngine
 		}
 		
 		if (!dryRun) {
-			ulong fileSize = 0;
+			ulong onlineFileSize = 0;
 			string OneDriveFileHash;
 			
 			// fileDetails should be a valid JSON due to prior check
 			if (hasFileSize(fileDetails)) {
-				// Use the configured filesize as reported by OneDrive
-				fileSize = fileDetails["size"].integer;
+				// Use the configured onlineFileSize as reported by OneDrive
+				onlineFileSize = fileDetails["size"].integer;
 			} else {
 				// filesize missing
 				log.vdebug("WARNING: fileDetails['size'] is missing");
@@ -3018,12 +3018,13 @@ final class SyncEngine
 					if (fileDetails["file"]["hashes"]["quickXorHash"].str != "") {
 						OneDriveFileHash = fileDetails["file"]["hashes"]["quickXorHash"].str;
 					}
-				} 
-				// Check for sha256Hash
-				if (hasSHA256Hash(fileDetails)) {
-					// Use the configured sha256Hash as reported by OneDrive
-					if (fileDetails["file"]["hashes"]["sha256Hash"].str != "") {
-						OneDriveFileHash = fileDetails["file"]["hashes"]["sha256Hash"].str;
+				} else {
+					// Check for sha256Hash as quickXorHash did not exist
+					if (hasSHA256Hash(fileDetails)) {
+						// Use the configured sha256Hash as reported by OneDrive
+						if (fileDetails["file"]["hashes"]["sha256Hash"].str != "") {
+							OneDriveFileHash = fileDetails["file"]["hashes"]["sha256Hash"].str;
+						}
 					}
 				}
 			} else {
@@ -3040,12 +3041,12 @@ final class SyncEngine
 			// debug output
 			log.vdebug("Local Disk Space Actual: ", localActualFreeSpace);
 			log.vdebug("Free Space Reservation:  ", freeSpaceReservation);
-			log.vdebug("File Size to Download:   ", fileSize);
+			log.vdebug("File Size to Download:   ", onlineFileSize);
 			
 			// calculate if we can download file
-			if ((localActualFreeSpace < freeSpaceReservation) || (fileSize > localActualFreeSpace)) {
+			if ((localActualFreeSpace < freeSpaceReservation) || (onlineFileSize > localActualFreeSpace)) {
 				// localActualFreeSpace is less than freeSpaceReservation .. insufficient free space
-				// fileSize is greater than localActualFreeSpace .. insufficient free space
+				// onlineFileSize is greater than localActualFreeSpace .. insufficient free space
 				writeln("failed!");
 				log.log("Insufficient local disk space to download file");
 				downloadFailed = true;
@@ -3054,9 +3055,9 @@ final class SyncEngine
 			
 			// Attempt to download the file
 			try {
-				onedrive.downloadById(item.driveId, item.id, path, fileSize);
+				onedrive.downloadById(item.driveId, item.id, path, onlineFileSize);
 			} catch (OneDriveException e) {
-				log.vdebug("onedrive.downloadById(item.driveId, item.id, path, fileSize); generated a OneDriveException");
+				log.vdebug("onedrive.downloadById(item.driveId, item.id, path, onlineFileSize); generated a OneDriveException");
 				// 408 = Request Time Out 
 				// 429 = Too Many Requests - need to delay
 				if (e.httpStatusCode == 408) {
@@ -3070,11 +3071,11 @@ final class SyncEngine
 						// retry in 2,4,8,16,32,64,128,256,512,1024 seconds
 						Thread.sleep(dur!"seconds"(retryAttempts*backoffInterval));
 						try {
-							onedrive.downloadById(item.driveId, item.id, path, fileSize);
+							onedrive.downloadById(item.driveId, item.id, path, onlineFileSize);
 							// successful download
 							retryAttempts = retryCount;
 						} catch (OneDriveException e) {
-							log.vdebug("onedrive.downloadById(item.driveId, item.id, path, fileSize); generated a OneDriveException");
+							log.vdebug("onedrive.downloadById(item.driveId, item.id, path, onlineFileSize); generated a OneDriveException");
 							if ((e.httpStatusCode == 429) || (e.httpStatusCode == 408)) {
 								// If another 408 .. 
 								if (e.httpStatusCode == 408) {
@@ -3105,11 +3106,11 @@ final class SyncEngine
 						// retry after waiting the timeout value from the 429 HTTP response header Retry-After
 						handleOneDriveThrottleRequest();
 						try {
-							onedrive.downloadById(item.driveId, item.id, path, fileSize);
+							onedrive.downloadById(item.driveId, item.id, path, onlineFileSize);
 							// successful download
 							retryAttempts = retryCount;
 						} catch (OneDriveException e) {
-							log.vdebug("onedrive.downloadById(item.driveId, item.id, path, fileSize); generated a OneDriveException");
+							log.vdebug("onedrive.downloadById(item.driveId, item.id, path, onlineFileSize); generated a OneDriveException");
 							if ((e.httpStatusCode == 429) || (e.httpStatusCode == 408)) {
 								// If another 408 .. 
 								if (e.httpStatusCode == 408) {
@@ -3150,11 +3151,13 @@ final class SyncEngine
 				// we have implemented --disable-download-validation to disable these checks
 				
 				if (!disableDownloadValidation) {
-					// A 'file' was downloaded - does what we downloaded = reported fileSize or if there is some sort of funky local disk compression going on
+					// A 'file' was downloaded - does what we downloaded = reported onlineFileSize or if there is some sort of funky local disk compression going on
 					// does the file hash OneDrive reports match what we have locally?
 					string quickXorHash = computeQuickXorHash(path);
+					// Compute the local file size
+					ulong localFileSize = getSize(path);
 					
-					if ((getSize(path) == fileSize) || (OneDriveFileHash == quickXorHash)) {
+					if ((localFileSize == onlineFileSize) || (OneDriveFileHash == quickXorHash)) {
 						// downloaded matches either size or hash
 						log.vdebug("Downloaded file matches reported size and or reported file hash");
 						try {
@@ -3166,17 +3169,17 @@ final class SyncEngine
 						}
 					} else {
 						// size error?
-						if (getSize(path) != fileSize) {
+						if (localFileSize != onlineFileSize) {
 							// downloaded file size does not match
-							log.vdebug("File size on disk:          ", getSize(path));
-							log.vdebug("OneDrive API reported size: ", fileSize);
+							log.vdebug("Actual file size on disk:   ", localFileSize);
+							log.vdebug("OneDrive API reported size: ", onlineFileSize);
 							log.error("ERROR: File download size mis-match. Increase logging verbosity to determine why.");
 						}
 						// hash error?
 						if (OneDriveFileHash != quickXorHash) {
 							// downloaded file hash does not match
-							log.vdebug("Actual file hash:           ", OneDriveFileHash);
-							log.vdebug("OneDrive API reported hash: ", quickXorHash);
+							log.vdebug("Actual local file hash:     ", quickXorHash);
+							log.vdebug("OneDrive API reported hash: ", OneDriveFileHash);
 							log.error("ERROR: File download hash mis-match. Increase logging verbosity to determine why.");
 						}
 						// add some workaround messaging
