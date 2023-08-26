@@ -55,7 +55,7 @@ class ApplicationConfig {
 	// - Identify as ISV and include Company Name, App Name separated by a pipe character and then adding Version number separated with a slash character
 	
 	//immutable string defaultUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ strip(import("version"));
-	immutable string defaultUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ "v2.5.0-alpha-0");
+	immutable string defaultUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ "v2.5.0-alpha-0";
 	
 	// HTTP Struct items, used for configuring HTTP()
 	// Curl Timeout Handling
