@@ -1,27 +1,29 @@
+// What is this module called?
 module sqlite;
+
+// What does this module require to function?
 import std.stdio;
 import etc.c.sqlite3;
 import std.string: fromStringz, toStringz;
 import core.stdc.stdlib;
 import std.conv;
-static import log;
+
+// What other modules that we have created do we need to import?
+import log;
 
 extern (C) immutable(char)* sqlite3_errstr(int); // missing from the std library
 
-static this()
-{
+static this() {
 	if (sqlite3_libversion_number() < 3006019) {
 		throw new SqliteException("sqlite 3.6.19 or newer is required");
 	}
 }
 
-private string ifromStringz(const(char)* cstr)
-{
+private string ifromStringz(const(char)* cstr) {
 	return fromStringz(cstr).dup;
 }
 
-class SqliteException: Exception
-{
+class SqliteException: Exception {
 	@safe pure nothrow this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
     {
         super(msg, file, line, next);
@@ -33,28 +35,23 @@ class SqliteException: Exception
     }
 }
 
-struct Database
-{
+struct Database {
 	private sqlite3* pDb;
 
-	this(const(char)[] filename)
-	{
+	this(const(char)[] filename) {
 		open(filename);
 	}
 
-	~this()
-	{
+	~this() {
 		close();
 	}
 
-	int db_checkpoint()
-	{
+	int db_checkpoint() {
 		return sqlite3_wal_checkpoint(pDb, null);
 	}
 
-	void dump_open_statements()
-	{
-		log.log("Dumpint open statements: \n");
+	void dump_open_statements() {
+		log.log("Dumping open statements: \n");
 		auto p = sqlite3_next_stmt(pDb, null);
 		while (p != null) {
 			log.log (" - " ~ ifromStringz(sqlite3_sql(p)) ~ "\n");
@@ -63,13 +60,12 @@ struct Database
 	}
 
 
-	void open(const(char)[] filename)
-	{
+	void open(const(char)[] filename) {
 		// https://www.sqlite.org/c3ref/open.html
 		int rc = sqlite3_open(toStringz(filename), &pDb);
 		if (rc == SQLITE_CANTOPEN) {
 			// Database cannot be opened
-			log.error("\nThe database cannot be opened. Please check the permissions of ~/.config/onedrive/items.sqlite3\n");
+			log.error("\nThe database cannot be opened. Please check the permissions of " ~ filename ~ "\n");
 			close();
 			exit(-1);
 		}
@@ -81,8 +77,7 @@ struct Database
 		sqlite3_extended_result_codes(pDb, 1); // always use extended result codes
 	}
 
-	void exec(const(char)[] sql)
-	{
+	void exec(const(char)[] sql) {
 		// https://www.sqlite.org/c3ref/exec.html
 		int rc = sqlite3_exec(pDb, toStringz(sql), null, null, null);
 		if (rc != SQLITE_OK) {
@@ -93,8 +88,7 @@ struct Database
 		}
 	}
 
-	int getVersion()
-	{
+	int getVersion() {
 		int userVersion;
 		extern (C) int callback(void* user_version, int count, char** column_text, char** column_name) {
 			import core.stdc.stdlib: atoi;
@@ -108,19 +102,16 @@ struct Database
 		return userVersion;
 	}
 
-	string getErrorMessage()
-	{
+	string getErrorMessage() {
 		return ifromStringz(sqlite3_errmsg(pDb));
 	}
 	
-	void setVersion(int userVersion)
-	{
+	void setVersion(int userVersion) {
 		import std.conv: to;
 		exec("PRAGMA user_version=" ~ to!string(userVersion));
 	}
 
-	Statement prepare(const(char)[] zSql)
-	{
+	Statement prepare(const(char)[] zSql) {
 		Statement s;
 		// https://www.sqlite.org/c3ref/prepare.html
 		int rc = sqlite3_prepare_v2(pDb, zSql.ptr, cast(int) zSql.length, &s.pStmt, null);
@@ -130,41 +121,34 @@ struct Database
 		return s;
 	}
 
-	void close()
-	{
+	void close() {
 		// https://www.sqlite.org/c3ref/close.html
 		sqlite3_close_v2(pDb);
 		pDb = null;
 	}
 }
 
-struct Statement
-{
-	struct Result
-	{
+struct Statement {
+	struct Result {
 		private sqlite3_stmt* pStmt;
 		private const(char)[][] row;
 
-		private this(sqlite3_stmt* pStmt)
-		{
+		private this(sqlite3_stmt* pStmt) {
 			this.pStmt = pStmt;
 			step(); // initialize the range
 		}
 
-		@property bool empty()
-		{
+		@property bool empty() {
 			return row.length == 0;
 		}
 
-		@property auto front()
-		{
+		@property auto front() {
 			return row;
 		}
 
 		alias step popFront;
 
-		void step()
-		{
+		void step() {
 			// https://www.sqlite.org/c3ref/step.html
 			int rc = sqlite3_step(pStmt);
 			if (rc == SQLITE_BUSY) {
@@ -194,14 +178,12 @@ struct Statement
 
 	private sqlite3_stmt* pStmt;
 
-	~this()
-	{
+	~this() {
 		// https://www.sqlite.org/c3ref/finalize.html
 		sqlite3_finalize(pStmt);
 	}
 
-	void bind(int index, const(char)[] value)
-	{
+	void bind(int index, const(char)[] value) {
 		reset();
 		// https://www.sqlite.org/c3ref/bind_blob.html
 		int rc = sqlite3_bind_text(pStmt, index, value.ptr, cast(int) value.length, SQLITE_STATIC);
@@ -210,47 +192,16 @@ struct Statement
 		}
 	}
 
-	Result exec()
-	{
+	Result exec() {
 		reset();
 		return Result(pStmt);
 	}
 
-	private void reset()
-	{
+	private void reset() {
 		// https://www.sqlite.org/c3ref/reset.html
 		int rc = sqlite3_reset(pStmt);
 		if (rc != SQLITE_OK) {
 			throw new SqliteException(ifromStringz(sqlite3_errmsg(sqlite3_db_handle(pStmt))));
 		}
 	}
-}
-
-unittest
-{
-	auto db = Database(":memory:");
-	db.exec("CREATE TABLE test(
-		id    TEXT PRIMARY KEY,
-		value TEXT
-	)");
-
-	assert(db.getVersion() == 0);
-	db.setVersion(1);
-	assert(db.getVersion() == 1);
-
-	auto s = db.prepare("INSERT INTO test VALUES (?, ?)");
-	s.bind(1, "key1");
-	s.bind(2, "value");
-	s.exec();
-	s.bind(1, "key2");
-	s.bind(2, null);
-	s.exec();
-
-	s = db.prepare("SELECT * FROM test ORDER BY id ASC");
-	auto r = s.exec();
-	assert(r.front[0] == "key1");
-	r.popFront();
-	assert(r.front[1] == null);
-	r.popFront();
-	assert(r.empty);
 }

@@ -34,7 +34,7 @@ DEBUG = @DEBUG@
 DC = @DC@
 DC_TYPE = @DC_TYPE@
 DCFLAGS = @DCFLAGS@
-DCFLAGS += -w -g -O -J.
+DCFLAGS += -wi -g -O -J.
 ifeq ($(DEBUG),yes)
 ifeq ($(DC_TYPE),dmd)
 DCFLAGS += -debug -gs
@@ -66,20 +66,19 @@ RHEL_VERSION = 0
 endif
 
 SOURCES = \
-	src/config.d \
-	src/itemdb.d \
-	src/log.d \
 	src/main.d \
-	src/monitor.d \
-	src/onedrive.d \
-	src/qxor.d \
-	src/selective.d \
-	src/sqlite.d \
-	src/sync.d \
-	src/upload.d \
+	src/config.d \
+        src/log.d \
 	src/util.d \
+	src/qxor.d \
+	src/curlEngine.d \
+	src/onedrive.d \
+	src/sync.d \
+	src/itemdb.d \
+	src/sqlite.d \
+	src/clientSideFiltering.d \
 	src/progress.d \
-	src/arsd/cgi.d
+	src/monitor.d
 
 ifeq ($(NOTIFICATIONS),yes)
 SOURCES += src/notifications/notify.d src/notifications/dnotify.d

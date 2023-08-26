@@ -1,27 +1,48 @@
-import core.sys.linux.sys.inotify;
-import core.stdc.errno;
-import core.sys.posix.poll, core.sys.posix.unistd;
-import std.exception, std.file, std.path, std.regex, std.stdio, std.string, std.algorithm;
-import core.stdc.stdlib;
-import config;
-import selective;
-import util;
-static import log;
+// What is this module called?
+module monitor;
 
-// relevant inotify events
+// What does this module require to function?
+import core.stdc.errno;
+import core.stdc.stdlib;
+import core.sys.linux.sys.inotify;
+import core.sys.posix.poll;
+import core.sys.posix.unistd;
+import std.algorithm;
+import std.exception;
+import std.file;
+import std.path;
+import std.regex;
+import std.stdio;
+import std.string;
+
+// What other modules that we have created do we need to import?
+import config;
+import util;
+import log;
+import clientSideFiltering;
+
+// Relevant inotify events
 private immutable uint32_t mask = IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MOVE | IN_IGNORED | IN_Q_OVERFLOW;
 
-class MonitorException: ErrnoException
-{
-    @safe this(string msg, string file = __FILE__, size_t line = __LINE__)
-    {
+class MonitorException: ErrnoException {
+    @safe this(string msg, string file = __FILE__, size_t line = __LINE__) {
         super(msg, file, line);
     }
 }
 
-final class Monitor
-{
-	bool verbose;
+final class Monitor {
+	// Class variables
+	ApplicationConfig appConfig;
+	ClientSideFiltering selectiveSync;
+
+	// Are we verbose in logging output
+	bool verbose = false;
+	// skip symbolic links
+	bool skip_symlinks = false;
+	// check for .nosync if enabled
+	bool check_nosync = false;
+	
+	// Configure Private Class Variables
 	// inotify file descriptor
 	private int fd;
 	// map every inotify watch descriptor to its directory
@@ -30,29 +51,27 @@ final class Monitor
 	private string[int] cookieToPath;
 	// buffer to receive the inotify events
 	private void[] buffer;
-	// skip symbolic links
-	bool skip_symlinks;
-	// check for .nosync if enabled
-	bool check_nosync;
 	
-	private SelectiveSync selectiveSync;
-
+	// Configure function delegates
 	void delegate(string path) onDirCreated;
 	void delegate(string path) onFileChanged;
 	void delegate(string path) onDelete;
 	void delegate(string from, string to) onMove;
-
-	this(SelectiveSync selectiveSync)
-	{
-		assert(selectiveSync);
+	
+	// Configure the class varaible to consume the application configuration including selective sync
+	this(ApplicationConfig appConfig, ClientSideFiltering selectiveSync) {
+		this.appConfig = appConfig;
 		this.selectiveSync = selectiveSync;
 	}
-
-	void init(Config cfg, bool verbose, bool skip_symlinks, bool check_nosync)
-	{
-		this.verbose = verbose;
-		this.skip_symlinks = skip_symlinks;
-		this.check_nosync = check_nosync;
+	
+	// Initialise the monitor class
+	void initialise() {
+		// Configure the variables
+		skip_symlinks = appConfig.getValueBool("skip_symlinks");
+		check_nosync = appConfig.getValueBool("check_nosync");
+		if (appConfig.getValueLong("verbose") > 0) {
+			verbose = true;
+		}
 		
 		assert(onDirCreated && onFileChanged && onDelete && onMove);
 		fd = inotify_init();
@@ -61,9 +80,9 @@ final class Monitor
 		
 		// from which point do we start watching for changes?
 		string monitorPath;
-		if (cfg.getValueString("single_directory") != ""){
-			// single directory in use, monitor only this
-			monitorPath = "./" ~ cfg.getValueString("single_directory");
+		if (appConfig.getValueString("single_directory") != ""){
+			// single directory in use, monitor only this path
+			monitorPath = "./" ~ appConfig.getValueString("single_directory");
 		} else {
 			// default 
 			monitorPath = ".";
@@ -71,14 +90,14 @@ final class Monitor
 		addRecursive(monitorPath);
 	}
 
-	void shutdown()
-	{
+	// Shutdown the monitor class
+	void shutdown() {
 		if (fd > 0) close(fd);
 		wdToDirName = null;
 	}
 
-	private void addRecursive(string dirname)
-	{
+	// Recursivly add this path to be monitored
+	private void addRecursive(string dirname) {
 		// skip non existing/disappeared items
 		if (!exists(dirname)) {
 			log.vlog("Not adding non-existing/disappeared directory: ", dirname);
@@ -173,8 +192,8 @@ final class Monitor
 		}
 	}
 
-	private void add(string pathname)
-	{
+	// Add this path to be monitored
+	private void add(string pathname) {
 		int wd = inotify_add_watch(fd, toStringz(pathname), mask);
 		if (wd < 0) {
 			if (errno() == ENOSPC) {
@@ -185,7 +204,7 @@ final class Monitor
 				log.log("sudo sysctl fs.inotify.max_user_watches=524288");
 			}
 			if (errno() == 13) {
-				if ((selectiveSync.getSkipDotfiles()) && (selectiveSync.isDotFile(pathname))) {
+				if ((selectiveSync.getSkipDotfiles()) && (isDotFile(pathname))) {
 					// no misleading output that we could not add a watch due to permission denied
 					return;
 				} else {
@@ -206,18 +225,17 @@ final class Monitor
 		if (isDir(pathname)) {
 			// This is a directory			
 			// is the path exluded if skip_dotfiles configured and path is a .folder?
-			if ((selectiveSync.getSkipDotfiles()) && (selectiveSync.isDotFile(pathname))) {
+			if ((selectiveSync.getSkipDotfiles()) && (isDotFile(pathname))) {
 				// no misleading output that we are monitoring this directory
 				return;
 			}
 			// Log that this is directory is being monitored
-			log.vlog("Monitor directory: ", pathname);
+			log.vlog("Monitoring directory: ", pathname);
 		}
 	}
 
-	// remove a watch descriptor
-	private void remove(int wd)
-	{
+	// Remove a watch descriptor
+	private void remove(int wd) {
 		assert(wd in wdToDirName);
 		int ret = inotify_rm_watch(fd, wd);
 		if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
@@ -225,9 +243,8 @@ final class Monitor
 		wdToDirName.remove(wd);
 	}
 
-	// remove the watch descriptors associated to the given path
-	private void remove(const(char)[] path)
-	{
+	// Remove the watch descriptors associated to the given path
+	private void remove(const(char)[] path) {
 		path ~= "/";
 		foreach (wd, dirname; wdToDirName) {
 			if (dirname.startsWith(path)) {
@@ -239,17 +256,17 @@ final class Monitor
 		}
 	}
 
-	// return the file path from an inotify event
-	private string getPath(const(inotify_event)* event)
-	{
+	// Return the file path from an inotify event
+	private string getPath(const(inotify_event)* event) {
 		string path = wdToDirName[event.wd];
 		if (event.len > 0) path ~= fromStringz(event.name.ptr);
 		log.vdebug("inotify path event for: ", path);
 		return path;
 	}
 
-	void update(bool useCallbacks = true)
-	{
+	// Update
+	void update(bool useCallbacks = true) {
+	
 		pollfd fds = {
 			fd: fd,
 			events: POLLIN

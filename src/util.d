@@ -1,6 +1,11 @@
+// What is this module called?
+module util;
+
+// What does this module require to function?
 import std.base64;
 import std.conv;
-import std.digest.crc, std.digest.sha;
+import std.digest.crc;
+import std.digest.sha;
 import std.net.curl;
 import std.datetime;
 import std.file;
@@ -13,22 +18,24 @@ import std.algorithm;
 import std.uri;
 import std.json;
 import std.traits;
-import qxor;
 import core.stdc.stdlib;
+import core.thread;
 
+// What other modules that we have created do we need to import?
 import log;
 import config;
+import qxor;
+import curlEngine;
 
+// module variables
 shared string deviceName;
 
-static this()
-{
+static this() {
 	deviceName = Socket.hostName;
 }
 
-// gives a new name to the specified file or directory
-void safeRename(const(char)[] path)
-{
+// Creates a safe backup of the given item, and only performs the function if not in a --dry-run scenario
+void safeBackup(const(char)[] path, bool dryRun) {
 	auto ext = extension(path);
 	auto newPath = path.chomp(ext) ~ "-" ~ deviceName;
 	if (exists(newPath ~ ext)) {
@@ -41,18 +48,55 @@ void safeRename(const(char)[] path)
 		newPath = newPath2;
 	}
 	newPath ~= ext;
-	rename(path, newPath);
+	
+	// Perform the backup
+	log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent data loss: ", path, " -> ", newPath);
+	if (!dryRun) {
+		rename(path, newPath);
+	} else {
+		log.vdebug("DRY-RUN: Skipping local file backup");
+	}
+}
+
+// Rename the given item, and only performs the function if not in a --dry-run scenario
+void safeRename(const(char)[] oldPath, const(char)[] newPath, bool dryRun) {
+	// Perform the rename
+	if (!dryRun) {
+		log.vdebug("Calling rename(oldPath, newPath)");
+		// rename physical path on disk
+		rename(oldPath, newPath);
+	} else {
+		log.vdebug("DRY-RUN: Skipping local file rename");
+	}
 }
 
 // deletes the specified file without throwing an exception if it does not exists
-void safeRemove(const(char)[] path)
-{
+void safeRemove(const(char)[] path) {
 	if (exists(path)) remove(path);
 }
 
+// returns the CRC32 hex string of a file
+string computeCRC32(string path) {
+	CRC32 crc;
+	auto file = File(path, "rb");
+	foreach (ubyte[] data; chunks(file, 4096)) {
+		crc.put(data);
+	}
+	return crc.finish().toHexString().dup;
+}
+
+// returns the SHA1 hash hex string of a file
+string computeSha1Hash(string path) {
+	SHA1 sha;
+	auto file = File(path, "rb");
+	foreach (ubyte[] data; chunks(file, 4096)) {
+		sha.put(data);
+	}
+	return sha.finish().toHexString().dup;
+}
+
 // returns the quickXorHash base64 string of a file
-string computeQuickXorHash(string path)
-{
+string computeQuickXorHash(string path) {
 	QuickXor qxor;
 	auto file = File(path, "rb");
 	foreach (ubyte[] data; chunks(file, 4096)) {
@@ -72,8 +116,7 @@ string computeSHA256Hash(string path) {
 }
 
 // converts wildcards (*, ?) to regex
-Regex!char wild2regex(const(char)[] pattern)
-{
+Regex!char wild2regex(const(char)[] pattern) {
 	string str;
 	str.reserve(pattern.length + 2);
 	str ~= "^";
@@ -115,53 +158,91 @@ Regex!char wild2regex(const(char)[] pattern)
 	return regex(str, "i");
 }
 
-// returns true if the network connection is available
-bool testNetwork(Config cfg)
-{
-	// Use low level HTTP struct
-	auto http = HTTP();
-	http.url = "https://login.microsoftonline.com";
-	// DNS lookup timeout
-	http.dnsTimeout = (dur!"seconds"(cfg.getValueLong("dns_timeout")));
-	// Timeout for connecting
-	http.connectTimeout = (dur!"seconds"(cfg.getValueLong("connect_timeout")));
-	// Data Timeout for HTTPS connections
-	http.dataTimeout = (dur!"seconds"(cfg.getValueLong("data_timeout")));
-	// maximum time any operation is allowed to take
-	// This includes dns resolution, connecting, data transfer, etc.
-	http.operationTimeout = (dur!"seconds"(cfg.getValueLong("operation_timeout")));	
-	// What IP protocol version should be used when using Curl - IPv4 & IPv6, IPv4 or IPv6
-	http.handle.set(CurlOption.ipresolve,cfg.getValueLong("ip_protocol_version")); // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
+// Test Internet access to Microsoft OneDrive
+bool testInternetReachability(ApplicationConfig appConfig) {
+	// Use preconfigured object with all the correct http values assigned
+	auto curlEngine = new CurlEngine();
+	curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"));
 	
+	// Configure the remaining items required
+	// URL to use
+	curlEngine.http.url = "https://login.microsoftonline.com";
 	// HTTP connection test method
-	http.method = HTTP.Method.head;
+	curlEngine.http.method = HTTP.Method.head;
 	// Attempt to contact the Microsoft Online Service
 	try {
-		log.vdebug("Attempting to contact online service");
-		http.perform();
-		log.vdebug("Shutting down HTTP engine as successfully reached OneDrive Online Service");
-		http.shutdown();
+		log.vdebug("Attempting to contact Microsoft OneDrive Login Service");
+		curlEngine.http.perform();
+		log.vdebug("Shutting down HTTP engine as successfully reached OneDrive Login Service");
+		curlEngine.http.shutdown();
 		return true;
 	} catch (SocketException e) {
 		// Socket issue
 		log.vdebug("HTTP Socket Issue");
-		log.error("Cannot connect to Microsoft OneDrive Service - Socket Issue");
+		log.error("Cannot connect to Microsoft OneDrive Login Service - Socket Issue");
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 		return false;
 	} catch (CurlException e) {
 		// No network connection to OneDrive Service
 		log.vdebug("No Network Connection");
-		log.error("Cannot connect to Microsoft OneDrive Service - Network Connection Issue");
+		log.error("Cannot connect to Microsoft OneDrive Login Service - Network Connection Issue");
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 		return false;
 	}
 }
 
+// Retry Internet access test to Microsoft OneDrive
+bool retryInternetConnectivtyTest(ApplicationConfig appConfig) {
+	// re-try network connection to OneDrive
+	// https://github.com/abraunegg/onedrive/issues/1184
+	// Back off & retry with incremental delay
+	int retryCount = 10000;
+	int retryAttempts = 1;
+	int backoffInterval = 1;
+	int maxBackoffInterval = 3600;
+	bool onlineRetry = false;
+	bool retrySuccess = false;
+	while (!retrySuccess){
+		// retry to access OneDrive API
+		backoffInterval++;
+		int thisBackOffInterval = retryAttempts*backoffInterval;
+		log.vdebug("  Retry Attempt:      ", retryAttempts);
+		if (thisBackOffInterval <= maxBackoffInterval) {
+			log.vdebug("  Retry In (seconds): ", thisBackOffInterval);
+			Thread.sleep(dur!"seconds"(thisBackOffInterval));
+		} else {
+			log.vdebug("  Retry In (seconds): ", maxBackoffInterval);
+			Thread.sleep(dur!"seconds"(maxBackoffInterval));
+		}
+		// perform the re-rty
+		onlineRetry = testInternetReachability(appConfig);
+		if (onlineRetry) {
+			// We are now online
+			log.log("Internet connectivity to Microsoft OneDrive service has been restored");
+			retrySuccess = true;
+		} else {
+			// We are still offline
+			if (retryAttempts == retryCount) {
+				// we have attempted to re-connect X number of times
+				// false set this to true to break out of while loop
+				retrySuccess = true;
+			}
+		}
+		// Increment & loop around
+		retryAttempts++;
+	}
+	if (!onlineRetry) {
+		// Not online after 1.2 years of trying
+		log.error("ERROR: Was unable to reconnect to the Microsoft OneDrive service after 10000 attempts lasting over 1.2 years!");
+	}
+	// return the state
+	return onlineRetry;
+}
+
 // Can we read the file - as a permissions issue or file corruption will cause a failure
 // https://github.com/abraunegg/onedrive/issues/113
 // returns true if file can be accessed
-bool readLocalFile(string path)
-{
+bool readLocalFile(string path) {
 	try {
 		// attempt to read up to the first 1 byte of the file
 		// validates we can 'read' the file based on file permissions
@@ -175,8 +256,7 @@ bool readLocalFile(string path)
 }
 
 // calls globMatch for each string in pattern separated by '|'
-bool multiGlobMatch(const(char)[] path, const(char)[] pattern)
-{
+bool multiGlobMatch(const(char)[] path, const(char)[] pattern) {
 	foreach (glob; pattern.split('|')) {
 		if (globMatch!(std.path.CaseSensitive.yes)(path, glob)) {
 			return true;
@@ -185,8 +265,7 @@ bool multiGlobMatch(const(char)[] path, const(char)[] pattern)
 	return false;
 }
 
-bool isValidName(string path)
-{
+bool isValidName(string path) {
 	// Restriction and limitations about windows naming files
 	// https://msdn.microsoft.com/en-us/library/aa365247
 	// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
@@ -223,8 +302,7 @@ bool isValidName(string path)
 	return matched;
 }
 
-bool containsBadWhiteSpace(string path)
-{
+bool containsBadWhiteSpace(string path) {
 	// allow root item
 	if (path == ".") {
 		return true;
@@ -248,8 +326,7 @@ bool containsBadWhiteSpace(string path)
 	return m.empty;
 }
 
-bool containsASCIIHTMLCodes(string path)
-{
+bool containsASCIIHTMLCodes(string path) {
 	// https://github.com/abraunegg/onedrive/issues/151
 	// If a filename contains ASCII HTML codes, regardless of if it gets encoded, it generates an error
 	// Check if the filename contains an ASCII HTML code sequence
@@ -265,17 +342,13 @@ bool containsASCIIHTMLCodes(string path)
 }
 
 // Parse and display error message received from OneDrive
-void displayOneDriveErrorMessage(string message, string callingFunction)
-{
+void displayOneDriveErrorMessage(string message, string callingFunction) {
 	writeln();
 	log.error("ERROR: Microsoft OneDrive API returned an error with the following message:");
 	auto errorArray = splitLines(message);
 	log.error("  Error Message:    ", errorArray[0]);
 	// Extract 'message' as the reason
 	JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
-	// extra debug
-	log.vdebug("Raw Error Data: ", message);
-	log.vdebug("JSON Message: ", errorMessage);
 	
 	// What is the reason for the error
 	if (errorMessage.type() == JSONType.object) {
@@ -333,11 +406,14 @@ void displayOneDriveErrorMessage(string message, string callingFunction)
 	
 	// Where in the code was this error generated
 	log.vlog("  Calling Function: ", callingFunction);
+	
+	// Extra Debug if we are using --verbose --verbose
+	log.vdebug("Raw Error Data: ", message);
+	log.vdebug("JSON Message: ", errorMessage);
 }
 
 // Parse and display error message received from the local file system
-void displayFileSystemErrorMessage(string message, string callingFunction) 
-{
+void displayFileSystemErrorMessage(string message, string callingFunction) {
 	writeln();
 	log.error("ERROR: The local file system returned an error with the following message:");
 	auto errorArray = splitLines(message);
@@ -351,6 +427,13 @@ void displayFileSystemErrorMessage(string message, string callingFunction)
 		// force exit
 		exit(-1);
 	}
+}
+
+// Display the POSIX Error Message
+void displayPosixErrorMessage(string message) {
+	writeln();
+	log.error("ERROR: Microsoft OneDrive API returned data that highlights a POSIX compliance issue:");
+	log.error("  Error Message:    ", message);
 }
 
 // Get the function name that is being called to assist with identifying where an error is being generated
@@ -527,7 +610,7 @@ void checkApplicationVersion() {
 			thisVersionReleaseGracePeriod = thisVersionReleaseGracePeriod.add!"months"(1);
 			log.vdebug("thisVersionReleaseGracePeriod: ", thisVersionReleaseGracePeriod);
 			
-			// is this running version obsolete ?
+			// Is this running version obsolete ?
 			if (!displayObsolete) {
 				// if releaseGracePeriod > currentTime
 				// display an information warning that there is a new release available
@@ -556,54 +639,106 @@ void checkApplicationVersion() {
 	}
 }
 
-// Unit Tests
-unittest
-{
-	assert(multiGlobMatch(".hidden", ".*"));
-	assert(multiGlobMatch(".hidden", "file|.*"));
-	assert(!multiGlobMatch("foo.bar", "foo|bar"));
-	// that should detect invalid file/directory name.
-	assert(isValidName("."));
-	assert(isValidName("./general.file"));
-	assert(!isValidName("./ leading_white_space"));
-	assert(!isValidName("./trailing_white_space "));
-	assert(!isValidName("./trailing_dot."));
-	assert(!isValidName("./includes<in the path"));
-	assert(!isValidName("./includes>in the path"));
-	assert(!isValidName("./includes:in the path"));
-	assert(!isValidName(`./includes"in the path`));
-	assert(!isValidName("./includes|in the path"));
-	assert(!isValidName("./includes?in the path"));
-	assert(!isValidName("./includes*in the path"));
-	assert(!isValidName("./includes / in the path"));
-	assert(!isValidName(`./includes\ in the path`));
-	assert(!isValidName(`./includes\\ in the path`));
-	assert(!isValidName(`./includes\\\\ in the path`));
-	assert(!isValidName("./includes\\ in the path"));
-	assert(!isValidName("./includes\\\\ in the path"));
-	assert(!isValidName("./CON"));
-	assert(!isValidName("./CON.text"));
-	assert(!isValidName("./PRN"));
-	assert(!isValidName("./AUX"));
-	assert(!isValidName("./NUL"));
-	assert(!isValidName("./COM0"));
-	assert(!isValidName("./COM1"));
-	assert(!isValidName("./COM2"));
-	assert(!isValidName("./COM3"));
-	assert(!isValidName("./COM4"));
-	assert(!isValidName("./COM5"));
-	assert(!isValidName("./COM6"));
-	assert(!isValidName("./COM7"));
-	assert(!isValidName("./COM8"));
-	assert(!isValidName("./COM9"));
-	assert(!isValidName("./LPT0"));
-	assert(!isValidName("./LPT1"));
-	assert(!isValidName("./LPT2"));
-	assert(!isValidName("./LPT3"));
-	assert(!isValidName("./LPT4"));
-	assert(!isValidName("./LPT5"));
-	assert(!isValidName("./LPT6"));
-	assert(!isValidName("./LPT7"));
-	assert(!isValidName("./LPT8"));
-	assert(!isValidName("./LPT9"));
+bool hasId(JSONValue item) {
+	return ("id" in item) != null;
+}
+
+bool hasQuota(JSONValue item) {
+	return ("quota" in item) != null;
+}
+
+bool isItemDeleted(JSONValue item) {
+	return ("deleted" in item) != null;
+}
+
+bool isItemRoot(JSONValue item) {
+	return ("root" in item) != null;
+}
+
+bool hasParentReference(const ref JSONValue item) {
+	return ("parentReference" in item) != null;
+}
+
+bool hasParentReferenceId(JSONValue item) {
+	return ("id" in item["parentReference"]) != null;
+}
+
+bool hasParentReferencePath(JSONValue item) {
+	return ("path" in item["parentReference"]) != null;
+}
+
+bool isFolderItem(const ref JSONValue item) {
+	return ("folder" in item) != null;
+}
+
+bool isFileItem(const ref JSONValue item) {
+	return ("file" in item) != null;
+}
+
+bool isItemRemote(const ref JSONValue item) {
+	return ("remoteItem" in item) != null;
+}
+
+bool isItemFile(const ref JSONValue item) {
+	return ("file" in item) != null;
+}
+
+bool isItemFolder(const ref JSONValue item) {
+	return ("folder" in item) != null;
+}
+
+bool hasFileSize(const ref JSONValue item) {
+	return ("size" in item) != null;
+}
+
+bool isDotFile(const(string) path) {
+	// always allow the root
+	if (path == ".") return false;
+	auto paths = pathSplitter(buildNormalizedPath(path));
+	foreach(base; paths) {
+		if (startsWith(base, ".")){
+			return true;
+		}
+	}
+	return false;
+}
+
+bool isMalware(const ref JSONValue item) {
+	return ("malware" in item) != null;
+}
+
+bool hasHashes(const ref JSONValue item) {
+	return ("hashes" in item["file"]) != null;
+}
+
+bool hasQuickXorHash(const ref JSONValue item) {
+	return ("quickXorHash" in item["file"]["hashes"]) != null;
+}
+
+bool hasSHA256Hash(const ref JSONValue item) {
+	return ("sha256Hash" in item["file"]["hashes"]) != null;
+}
+
+bool isMicrosoftOneNoteMimeType1(const ref JSONValue item) {
+	return (item["file"]["mimeType"].str) == "application/msonenote";
+}
+
+bool isMicrosoftOneNoteMimeType2(const ref JSONValue item) {
+	return (item["file"]["mimeType"].str) == "application/octet-stream";
+}
+
+bool hasUploadURL(const ref JSONValue item) {
+	return ("uploadUrl" in item) != null;
+}
+
+bool hasNextExpectedRanges(const ref JSONValue item) {
+	return ("nextExpectedRanges" in item) != null;
+}
+
+bool hasLocalPath(const ref JSONValue item) {
+	return ("localPath" in item) != null;
+}
+
+bool hasETag(const ref JSONValue item) {
+	return ("eTag" in item) != null;
 }

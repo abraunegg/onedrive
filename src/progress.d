@@ -1,11 +1,15 @@
+// What is this module called?
 module progress;
 
+// What does this module require to function?
 import std.stdio;
 import std.range;
 import std.format;
 import std.datetime;
 import core.sys.posix.unistd;
 import core.sys.posix.sys.ioctl;
+
+// What other modules that we have created do we need to import?
 
 class Progress
 {
