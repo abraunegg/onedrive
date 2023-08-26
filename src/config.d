@@ -53,7 +53,9 @@ class ApplicationConfig {
 	// Comply with OneDrive traffic decoration requirements
 	// https://docs.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
 	// - Identify as ISV and include Company Name, App Name separated by a pipe character and then adding Version number separated with a slash character
-	immutable string defaultUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ strip(import("version"));
+	
+	//immutable string defaultUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ strip(import("version"));
+	immutable string defaultUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ "v2.5.0-alpha-0");
 	
 	// HTTP Struct items, used for configuring HTTP()
 	// Curl Timeout Handling
@@ -314,7 +316,9 @@ class ApplicationConfig {
 		boolValues["webhook_enabled"] = false;
 		
 		// Print in debug the application version as soon as possible
-		log.vdebug("Application Version: ",	strip(import("version")));
+		
+		//log.vdebug("Application Version: ",	strip(import("version")));
+		log.vdebug("Application Version: v2.5.0-alpha-0");
 		
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.

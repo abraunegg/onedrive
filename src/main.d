@@ -106,7 +106,8 @@ int main(string[] cliArgs) {
 		}
 		// Print the version and exit
 		if (printVersion) {
-			writeln("onedrive ", strip(import("version")));
+			//writeln("onedrive ", strip(import("version")));
+			writeln("onedrive v2.5.0-alpha-0");
 			return EXIT_SUCCESS;
 		}
 	} catch (GetOptException e) {
