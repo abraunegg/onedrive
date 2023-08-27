@@ -438,7 +438,7 @@ int main(string[] cliArgs) {
 			filesystemMonitor.onFileChanged = delegate(string path) {
 				log.vlog("[M] Local file changed: ", path);
 				try {
-					syncEngineInstance.scanLocalFilesystemPathForNewData(path);
+					syncEngineInstance.scanLocalFilesystemPathForNewData(dirName(path));
 				} catch (CurlException e) {
 					log.vlog("Offline, cannot upload changed item!");
 				} catch(Exception e) {

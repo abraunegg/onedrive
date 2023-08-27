@@ -1852,7 +1852,9 @@ class SyncEngine {
 	void displaySyncEngineDetails() {
 		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
 		//log.vlog("Application version:  ", strip(import("version")));
-		log.vlog("Application version:  v2.5.0-alpha-0");
+		
+		string tempVersion = "v2.5.0-alpha-0" ~ " GitHub version: " ~ strip(import("version"));
+		log.vlog("Application version:  ", tempVersion);
 		
 		log.vlog("Account Type:         ", appConfig.accountType);
 		log.vlog("Default Drive ID:     ", appConfig.defaultDriveId);
@@ -4181,9 +4183,8 @@ class SyncEngine {
 				try {
 					// what item are we trying to delete?
 					log.vdebug("Attempting to delete this item id: ", itemToDelete.id, " from drive: ", itemToDelete.driveId);
-					
 					// perform the delete via the default OneDrive API instance
-					oneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id, itemToDelete.eTag);
+					oneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id);
 					
 					// Delete the reference in the local database
 					itemDB.deleteById(itemToDelete.driveId, itemToDelete.id);

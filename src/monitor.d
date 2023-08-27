@@ -403,6 +403,8 @@ final class Monitor {
 				remove(path);
 				cookieToPath.remove(cookie);
 			}
+			
+			log.log("inotify events flushed");
 		}
 	}
 }
