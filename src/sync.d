@@ -1851,7 +1851,9 @@ class SyncEngine {
 	// Display the pertinant details of the sync engine
 	void displaySyncEngineDetails() {
 		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
-		log.vlog("Application version:  ", strip(import("version")));
+		//log.vlog("Application version:  ", strip(import("version")));
+		log.vlog("Application version:  v2.5.0-alpha-0");
+		
 		log.vlog("Account Type:         ", appConfig.accountType);
 		log.vlog("Default Drive ID:     ", appConfig.defaultDriveId);
 		log.vlog("Default Root ID:      ", appConfig.defaultRootId);
