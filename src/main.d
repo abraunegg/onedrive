@@ -57,7 +57,10 @@ int main(string[] cliArgs) {
 	string runtimeSyncDirectory;
 	// Configure the runtime database file path. Typically this will be the default, but in a --dry-run scenario, we use a separate database file
 	string runtimeDatabaseFile;
-		
+	
+	// Application Start Time - used during monitor loop to detail how long it has been running for
+	auto applicationStartTime = Clock.currTime();
+	
 	// DEVELOPER OPTIONS OUTPUT VARIABLES
 	bool displayMemoryUsage = false;
 	bool displaySyncOptions = false;
@@ -535,26 +538,38 @@ int main(string[] cliArgs) {
 					// Increment monitorLoopFullCount
 					monitorLoopFullCount++;
 					log.vdebug(loopStartOutputMessage);
-					log.vdebug("Loop Number: ", monitorLoopFullCount);
-					log.log("Starting a sync with Microsoft OneDrive");
+					log.log("Loop Number: ", monitorLoopFullCount);
 					SysTime startFunctionProcessingTime = Clock.currTime();
 					log.vdebug("Start Monitor Loop Time:              ", startFunctionProcessingTime);
 					
-					// Did the user specify --upload-only?
-					if (appConfig.getValueBool("upload_only")) {
-						// Perform the --upload-only sync process
-						performUploadOnlySyncProcess(localPath);
+					// How long has the application been running for?
+					auto elapsedTime = Clock.currTime() - applicationStartTime;
+					log.log("Application run-time thus far: ", elapsedTime);
+					
+					// Need to re-validate that the client is still online for this loop
+					if (testInternetReachability(appConfig)) {
+						// Starting a sync 
+						log.log("Starting a sync with Microsoft OneDrive");
+						
+						// Did the user specify --upload-only?
+						if (appConfig.getValueBool("upload_only")) {
+							// Perform the --upload-only sync process
+							performUploadOnlySyncProcess(localPath);
+						} else {
+							// Perform the standard sync process
+							performStandardSyncProcess(localPath);
+						}
+						
+						// Detail the outcome of the sync process
+						displaySyncOutcome();
+						
+						// Write WAL and SHM data to file for this loop
+						log.vdebug("Merge contents of WAL and SHM files into main database file");
+						itemDB.performVacuum();
 					} else {
-						// Perform the standard sync process
-						performStandardSyncProcess(localPath);
+						// Not online
+						log.log("Microsoft OneDrive service is not reachable at this time");
 					}
-					
-					// Detail the outcome of the sync process
-					displaySyncOutcome();
-					
-					// Write WAL and SHM data to file for this loop
-					log.vdebug("Merge contents of WAL and SHM files into main database file");
-					itemDB.performVacuum();
 					
 					// Output end of loop processing times
 					SysTime endFunctionProcessingTime = Clock.currTime();

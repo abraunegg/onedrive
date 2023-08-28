@@ -134,6 +134,11 @@ class SyncEngine {
 		this.itemDB = itemDB;
 		// Configure the class variable to consume the selective sync (skip_dir, skip_file and sync_list) configuration
 		this.selectiveSync = selectiveSync;
+		
+		// Configure the dryRun flag to capture if --dry-run was used
+		// Application startup already flagged we are also in a --dry-run state, so no need to output anything else here
+		this.dryRun = appConfig.getValueBool("dry_run");
+		
 		// Configure file size limit
 		if (appConfig.getValueLong("skip_size") != 0) {
 			fileSizeLimit = appConfig.getValueLong("skip_size") * 2^^20;
@@ -142,10 +147,6 @@ class SyncEngine {
 		
 		// Is there a sync_list file present?
 		if (exists(appConfig.syncListFilePath)) this.syncListConfigured = true;
-		
-		// Configure the dryRun flag to capture if --dry-run was used
-		// Application startup already flagged we are also in a --dry-run state, so no need to output anything else here
-		this.dryRun = appConfig.getValueBool("dry_run");
 		
 		// Configure the uploadOnly flag to capture if --upload-only was used
 		if (appConfig.getValueBool("upload_only")) {
@@ -195,6 +196,31 @@ class SyncEngine {
 			log.log("WARNING: Local data loss MAY occur in this scenario.");
 			this.bypassDataPreservation = true;
 		}
+		
+		// Did the user configure a specific rate limit for the application?
+		if (appConfig.getValueLong("rate_limit") > 0) {
+			// User configured rate limit
+			log.log("User Configured Rate Limit: ", appConfig.getValueLong("rate_limit"));
+			// If user provided rate limit is < 131072, flag that this is too low, setting to the minimum of 131072
+			if (appConfig.getValueLong("rate_limit") < 131072) {
+				// user provided limit too low
+				log.log("WARNING: User configured rate limit too low for normal application processing and preventing application timeouts. Overriding to default minimum of 131072 (128KB/s)");
+				appConfig.setValueLong("rate_limit", 131072);
+			}
+		}
+		
+		// Did the user downgrade all HTTP operations to force HTTP 1.1
+		if (appConfig.getValueBool("force_http_11")) {
+			// User is forcing downgrade to curl to use HTTP 1.1 for all operations
+			log.vlog("Downgrading all HTTP operations to HTTP/1.1 due to user configuration");
+		} else {
+			// Use curl defaults
+			log.vdebug("Using Curl defaults for HTTP operational protocol version (potentially HTTP/2)");
+		}
+		
+		
+		
+		
 	}
 	
 	// Initialise the Sync Engine class
@@ -1779,8 +1805,9 @@ class SyncEngine {
 		getDeltaQueryOneDriveApiInstance.initialise();
 		try {
 			deltaChangesBundle = getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink);
+			getDeltaQueryOneDriveApiInstance.shutdown();
 		} catch (OneDriveException exception) {
-			log.vdebug("deltaChangesBundle = oneDriveApiInstance.viewChangesByItemId() generated a OneDriveException");
+			log.vdebug("deltaChangesBundle = getDeltaQueryOneDriveApiInstance.viewChangesByItemId() generated a OneDriveException");
 			// display error message
 			displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 		}
@@ -4173,7 +4200,6 @@ class SyncEngine {
 						log.error("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on OneDrive");
 						log.error("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
 						// Must exit here to preserve data on OneDrive
-						oneDriveApiInstance.shutdown();
 						exit(-1);
 					}
 				}
@@ -4183,12 +4209,18 @@ class SyncEngine {
 			if (!dryRun) {
 				// We are not in a dry run scenario
 				log.vdebug("itemToDelete: ", itemToDelete);
+				
+				// Create new OneDrive API Instance
+				OneDriveApi uploadDeletedItemOneDriveApiInstance;
+				uploadDeletedItemOneDriveApiInstance = new OneDriveApi(appConfig);
+				uploadDeletedItemOneDriveApiInstance.initialise();
+				
 				// Attempt to do the delete
 				try {
 					// what item are we trying to delete?
 					log.vdebug("Attempting to delete this item id: ", itemToDelete.id, " from drive: ", itemToDelete.driveId);
 					// perform the delete via the default OneDrive API instance
-					oneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id);
+					uploadDeletedItemOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id);
 					
 					// Delete the reference in the local database
 					itemDB.deleteById(itemToDelete.driveId, itemToDelete.id);
@@ -4196,6 +4228,8 @@ class SyncEngine {
 						// If the item is a remote item, delete the reference in the local database
 						itemDB.deleteById(itemToDelete.remoteDriveId, itemToDelete.remoteId);
 					}
+					// Shutdown API
+					uploadDeletedItemOneDriveApiInstance.shutdown();
 				} catch (OneDriveException e) {
 					if (e.httpStatusCode == 404) {
 						// item.id, item.eTag could not be found on the specified driveId
@@ -4206,7 +4240,7 @@ class SyncEngine {
 						// Issue #1041 - Unable to delete OneDrive content when permissions prevent deletion
 						if (appConfig.accountType != "personal") {
 							if (e.httpStatusCode == 401) {
-								log.vdebug("oneDriveApiInstance.deleteById generated a 401 error response when attempting to delete object by item id");
+								log.vdebug("uploadDeletedItemOneDriveApiInstance.deleteById generated a 401 error response when attempting to delete object by item id");
 								try {
 									performReverseDeletionOfOneDriveItems(children, itemToDelete);
 								} catch (OneDriveException e) {
@@ -4217,7 +4251,7 @@ class SyncEngine {
 							}
 							
 							if (e.httpStatusCode == 403) {
-								log.vdebug("oneDriveApiInstance.deleteById generated a 403 error response when attempting to delete object by item id");
+								log.vdebug("uploadDeletedItemOneDriveApiInstance.deleteById generated a 403 error response when attempting to delete object by item id");
 								try {
 									performReverseDeletionOfOneDriveItems(children, itemToDelete);
 								} catch (OneDriveException e) {
@@ -4227,7 +4261,7 @@ class SyncEngine {
 								}
 							} else {
 								// Not a 401 or 403 error response & OneDrive Business Account / O365 Shared Folder / Library
-								log.vdebug("oneDriveApiInstance.deleteById generated an error response when attempting to delete object by item id");
+								log.vdebug("uploadDeletedItemOneDriveApiInstance.deleteById generated an error response when attempting to delete object by item id");
 								// display what the error is
 								displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 							}

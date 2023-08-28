@@ -404,7 +404,7 @@ final class Monitor {
 				cookieToPath.remove(cookie);
 			}
 			
-			log.log("inotify events flushed");
+			log.vdebug("inotify events flushed");
 		}
 	}
 }

@@ -732,7 +732,7 @@ class ApplicationConfig {
 						}
 						// Azure AD Configuration
 						if (key == "azure_ad_endpoint") {
-							string azureConfigValue = c.front.dup;
+							string azureConfigValue = strip(c.front.dup);
 							switch(azureConfigValue) {
 								case "":
 									log.log("Using config option for Global Azure AD Endpoints");
@@ -752,6 +752,18 @@ class ApplicationConfig {
 								// Default - all other entries
 								default:
 									log.log("Unknown Azure AD Endpoint - using Global Azure AD Endpoints");
+							}
+						}
+						
+						// Application ID
+						if (key == "application_id") {
+							// This key cannot be empty
+							string tempApplicationId = strip(c.front.dup);
+							if (tempApplicationId.empty) {
+								log.vdebug("application_id in config file cannot be empty - using default application_id");
+								setValueString("application_id", defaultApplicationId);
+							} else {
+								setValueString("application_id", tempApplicationId);
 							}
 						}
 					} else {

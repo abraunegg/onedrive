@@ -285,12 +285,12 @@ class OneDriveApi {
 			// Try and read the value from the appConfig if it is set, rather than trying to read the value from disk
 			if (!appConfig.refreshToken.empty) {
 				log.vdebug("read token from appConfig");
-				refreshToken = appConfig.refreshToken;
+				refreshToken = strip(appConfig.refreshToken);
 				authorised = true;
 			} else {
 				// Try and read the file from disk
 				try {
-					refreshToken = readText(appConfig.refreshTokenFilePath);
+					refreshToken = strip(readText(appConfig.refreshTokenFilePath));
 					// is the refresh_token empty?
 					if (refreshToken.empty) {
 						log.error("refreshToken exists but is empty: ", appConfig.refreshTokenFilePath);
@@ -712,24 +712,27 @@ class OneDriveApi {
 			}
 		
 			if ("access_token" in response){
-				accessToken = "bearer " ~ response["access_token"].str();
-				refreshToken = response["refresh_token"].str();
+				accessToken = "bearer " ~ strip(response["access_token"].str);
+				refreshToken = strip(response["refresh_token"].str);
 				accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
 				if (!dryRun) {
 					// Update the refreshToken in appConfig so that we can reuse it
 					if (appConfig.refreshToken.empty) {
 						// The access token is empty
+						log.vdebug("Updating appConfig.refreshToken with new refreshToken as appConfig.refreshToken is empty");
 						appConfig.refreshToken = refreshToken;
 					} else {
 						// Is the access token different?
 						if (appConfig.refreshToken != refreshToken) {
 							// Update the memory version
+							log.vdebug("Updating appConfig.refreshToken with updated refreshToken");
 							appConfig.refreshToken = refreshToken;
 						}
 					}
 					
 					// try and update the refresh_token file on disk
 					try {
+						log.vdebug("Updating refreshToken on disk");
 						std.file.write(appConfig.refreshTokenFilePath, refreshToken);
 						log.vdebug("Setting file permissions for: ", appConfig.refreshTokenFilePath);
 						appConfig.refreshTokenFilePath.setAttributes(appConfig.returnRequiredFilePermisions());
@@ -737,9 +740,8 @@ class OneDriveApi {
 						// display the error message
 						displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 					}
-					
 				}
-				if (printAccessToken) writeln("New access token: ", accessToken);
+				if (printAccessToken) writeln("Current access token: ", accessToken);
 			} else {
 				log.error("\nInvalid authentication response from OneDrive. Please check the response uri\n");
 				// re-authorize
