@@ -284,13 +284,13 @@ class OneDriveApi {
 		} else {
 			// Try and read the value from the appConfig if it is set, rather than trying to read the value from disk
 			if (!appConfig.refreshToken.empty) {
+				log.vdebug("read token from appConfig");
 				refreshToken = appConfig.refreshToken;
 				authorised = true;
 			} else {
 				// Try and read the file from disk
 				try {
 					refreshToken = readText(appConfig.refreshTokenFilePath);
-						
 					// is the refresh_token empty?
 					if (refreshToken.empty) {
 						log.error("refreshToken exists but is empty: ", appConfig.refreshTokenFilePath);
@@ -298,6 +298,8 @@ class OneDriveApi {
 					} else {
 						// existing token not empty
 						authorised = true;
+						// update appConfig.refreshToken
+						appConfig.refreshToken = refreshToken;	
 					}
 				} catch (FileException e) {
 					authorised = authorise();
@@ -307,6 +309,11 @@ class OneDriveApi {
 					log.error("  Error Reason:", e.msg);
 					authorised = false;
 				}
+			}
+			
+			if (refreshToken.empty) {
+				// PROBLEM
+				writeln("refreshToken is empty !!!!!!!!!! will cause 4xx errors");
 			}
 		}
 		// Return if we are authorised

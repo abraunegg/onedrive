@@ -1773,12 +1773,16 @@ class SyncEngine {
 		// Function variables
 		JSONValue deltaChangesBundle;
 		// Get the /delta data for this account | driveId | deltaLink combination
+		// Create a new API Instance for this thread and initialise it
+		OneDriveApi getDeltaQueryOneDriveApiInstance;
+		getDeltaQueryOneDriveApiInstance = new OneDriveApi(appConfig);
+		getDeltaQueryOneDriveApiInstance.initialise();
 		try {
-			deltaChangesBundle = oneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink);
+			deltaChangesBundle = getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink);
 		} catch (OneDriveException exception) {
 			log.vdebug("deltaChangesBundle = oneDriveApiInstance.viewChangesByItemId() generated a OneDriveException");
-			// display error and exit
-			defaultUnhandledHTTPErrorCode(exception);
+			// display error message
+			displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 		}
 		
 		// If the JSON response is a correct JSON object, and has an 'id' we can set these details

@@ -532,12 +532,13 @@ int main(string[] cliArgs) {
 				
 				// Do we perform a sync with OneDrive?
 				if (notificationReceived || (currentTime - lastCheckTime > checkOnlineInterval) || (monitorLoopFullCount == 0)) {
+					// Increment monitorLoopFullCount
+					monitorLoopFullCount++;
 					log.vdebug(loopStartOutputMessage);
+					log.vdebug("Loop Number: ", monitorLoopFullCount);
 					log.log("Starting a sync with Microsoft OneDrive");
 					SysTime startFunctionProcessingTime = Clock.currTime();
 					log.vdebug("Start Monitor Loop Time:              ", startFunctionProcessingTime);
-					// Increment monitorLoopFullCount
-					monitorLoopFullCount++;
 					
 					// Did the user specify --upload-only?
 					if (appConfig.getValueBool("upload_only")) {
