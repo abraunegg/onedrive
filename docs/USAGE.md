@@ -681,6 +681,7 @@ monitor_interval = "600"
 # min_notify_changes = "5"
 # monitor_log_frequency = "6"
 ```
+**Note:** It is strongly advised you do not use a value of less than 300 seconds for 'monitor_interval'. Using a value less than 300 means your application will be constantly needlessly checking OneDrive online for changes. Future versions of the application may enforce the checking of this minimum value.
 
 #### monitor_fullscan_frequency
 This configuration option controls the number of 'monitor_interval' iterations between when a full scan of your data is performed to ensure data integrity and consistency.
