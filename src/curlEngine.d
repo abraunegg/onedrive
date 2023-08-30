@@ -60,8 +60,11 @@ class CurlEngine {
 		//   Ensure that TCP_NODELAY is set to 0 to ensure that TCP NAGLE is enabled
 		http.handle.set(CurlOption.tcp_nodelay,0);
 		//   https://curl.se/libcurl/c/CURLOPT_FORBID_REUSE.html
-		//   Ensure that we ARE reusing connections - setting to 0 ensures that we are reusing connections
-		http.handle.set(CurlOption.forbid_reuse,0);
+		//   CURLOPT_FORBID_REUSE - make connection get closed at once after use
+		//   Ensure that we ARE NOT reusing TCP sockets connections - setting to 0 ensures that we ARE reusing connections (we did this in v2.4.xx)
+		//   Setting this to 1 ensures that when we close the curl instance, any open sockets are closed - which we need to do when running 
+		//   multiple threads and API instances at the same time otherwise we run out of local files | sockets pretty quickly
+		http.handle.set(CurlOption.forbid_reuse,1);
 		
 		if (httpsDebug) {
 			// Output what options we are using so that in the debug log this can be tracked
@@ -73,11 +76,16 @@ class CurlEngine {
 		}
 	}
 	
-	void setMethodPost(){
+	void setMethodPost() {
 		http.method = HTTP.Method.post;
 	}
 	
-	void setMethodPatch(){
+	void setMethodPatch() {
 		http.method = HTTP.Method.patch;
+	}
+	
+	void setDisableSSLVerifyPeer() {
+		log.vdebug("Switching off CurlOption.ssl_verifypeer");
+		http.handle.set(CurlOption.ssl_verifypeer, 0);
 	}
 }

@@ -14,6 +14,7 @@ import std.path;
 import std.regex;
 import std.stdio;
 import std.string;
+import std.conv;
 
 // What other modules that we have created do we need to import?
 import config;
@@ -197,11 +198,13 @@ final class Monitor {
 		int wd = inotify_add_watch(fd, toStringz(pathname), mask);
 		if (wd < 0) {
 			if (errno() == ENOSPC) {
+				// Get the current value
+				ulong maxInotifyWatches = to!int(strip(readText("/proc/sys/user/max_inotify_watches")));
 				log.log("The user limit on the total number of inotify watches has been reached.");
-				log.log("To see the current max number of watches run:");
-				log.log("sysctl fs.inotify.max_user_watches");
-				log.log("To change the current max number of watches to 524288 run:");
-				log.log("sudo sysctl fs.inotify.max_user_watches=524288");
+				log.log("Your current limit of inotify watches is: ", maxInotifyWatches);
+				log.log("It is recommended that you change the max number of inotify watches to at least double your existing value.");
+				log.log("To change the current max number of watches to " , (maxInotifyWatches * 2) , " run:");
+				log.log("EXAMPLE: sudo sysctl fs.inotify.max_user_watches=", (maxInotifyWatches * 2));
 			}
 			if (errno() == 13) {
 				if ((selectiveSync.getSkipDotfiles()) && (isDotFile(pathname))) {
@@ -404,7 +407,7 @@ final class Monitor {
 				cookieToPath.remove(cookie);
 			}
 			
-			log.vdebug("inotify events flushed");
+			log.log("inotify events flushed");
 		}
 	}
 }

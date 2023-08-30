@@ -684,7 +684,12 @@ class OneDriveApi {
 			response = post(tokenUrl, postData);
 		} catch (OneDriveException e) {
 			// an error was generated
-			displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+			if (e.httpStatusCode >= 500) {
+				// There was a HTTP 5xx Server Side Error - retry
+				acquireToken(postData);
+			} else {
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+			}
 		}
 
 		if (response.type() == JSONType.object) {
@@ -748,7 +753,7 @@ class OneDriveApi {
 				authorise();
 			}
 		} else {
-			log.log("Invalid response from the OneDrive API. Unable to initialise application.");
+			log.log("Invalid response from the OneDrive API. Unable to initialise OneDrive API instance.");
 			exit(-1);
 		}
 	}
@@ -1109,20 +1114,40 @@ class OneDriveApi {
 					throw new OneDriveException(408, "Request Timeout - HTTP 408 or Internet down?");
 				}
 			} else {
-				// Log that an error was returned
-				log.error("ERROR: OneDrive returned an error with the following message:");
-				// Some other error was returned
-				log.error("  Error Message: ", errorMessage);
-				log.error("  Calling Function: ", getFunctionName!({}));
+			
+				// what error was returned?
+				if (canFind(errorMessage, "Problem with the SSL CA cert (path? access rights?) on handle")) {
+					// error setting certificate verify locations:
+					//  CAfile: /etc/pki/tls/certs/ca-bundle.crt
+					//	CApath: none
+					// 
+					// Tell the Curl Engine to bypass SSL check - essentially SSL is passing back a bad value due to 'stdio' compile time option
+					// Further reading:
+					//  https://github.com/curl/curl/issues/6090
+					//  https://github.com/openssl/openssl/issues/7536
+					//  https://stackoverflow.com/questions/45829588/brew-install-fails-curl77-error-setting-certificate-verify
+					//  https://forum.dlang.org/post/vwvkbubufexgeuaxhqfl@forum.dlang.org
+					
+					log.vdebug("Problem with reading the SSL CA cert via libcurl - attempting work around");
+					curlEngine.setDisableSSLVerifyPeer();
+					// retry origional call
+					performHTTPOperation();
+				} else {
+					// Log that an error was returned
+					log.error("ERROR: OneDrive returned an error with the following message:");
+					// Some other error was returned
+					log.error("  Error Message: ", errorMessage);
+					log.error("  Calling Function: ", getFunctionName!({}));
 				
-				// Was this a curl initialization error?
-				if (canFind(errorMessage, "Failed initialization on handle")) {
-					// initialization error ... prevent a run-away process if we have zero disk space
-					ulong localActualFreeSpace = getAvailableDiskSpace(".");
-					if (localActualFreeSpace == 0) {
-						// force exit
-						shutdown();
-						exit(-1);
+					// Was this a curl initialization error?
+					if (canFind(errorMessage, "Failed initialization on handle")) {
+						// initialization error ... prevent a run-away process if we have zero disk space
+						ulong localActualFreeSpace = getAvailableDiskSpace(".");
+						if (localActualFreeSpace == 0) {
+							// force exit
+							shutdown();
+							exit(-1);
+						}
 					}
 				}
 			}
@@ -1178,10 +1203,6 @@ class OneDriveApi {
 		checkHttpResponseCode(response);
 		return response;
 	}
-	
-	
-	
-	
 	
 	private void checkHTTPResponseHeaders() {
 		// Get the HTTP Response headers - needed for correct 429 handling

@@ -415,7 +415,17 @@ int main(string[] cliArgs) {
 		
 		// Are we doing a --monitor operation?
 		if (appConfig.getValueBool("monitor")) {
+			// What are the current values for the platform we are running on
+			// Max number of open files /proc/sys/fs/file-max
+			string maxOpenFiles = strip(readText("/proc/sys/fs/file-max"));
+			// What is the currently configured maximum inotify watches that can be used
+			// /proc/sys/user/max_inotify_watches
+			string maxInotifyWatches = strip(readText("/proc/sys/user/max_inotify_watches"));
+			
+			// Start the monitor process
 			log.log("OneDrive syncronisation interval (seconds): ", appConfig.getValueLong("monitor_interval"));
+			log.vlog("Maximum allowed open files:                 ", maxOpenFiles);
+			log.vlog("Maximum allowed inotify watches:            ", maxInotifyWatches);
 			
 			// Configure the monitor class
 			Monitor filesystemMonitor = new Monitor(appConfig, selectiveSync);
@@ -515,10 +525,9 @@ int main(string[] cliArgs) {
 			string loopStopOutputMessage = "################################################ LOOP COMPLETE ###############################################";
 			
 			while (performMonitor) {
-			
 				try {
 					// Process any inotify events
-					filesystemMonitor.update(online);
+					filesystemMonitor.update(true);
 				} catch (MonitorException e) {
 					// Catch any exceptions thrown by inotify / monitor engine
 					log.error("ERROR: The following inotify error was generated: ", e.msg);
@@ -528,7 +537,6 @@ int main(string[] cliArgs) {
 				bool notificationReceived = false;
 				
 				// Check here for a webhook notification
-				
 				
 				// Get the current time this loop is starting
 				auto currentTime = MonoTime.currTime();
@@ -554,11 +562,14 @@ int main(string[] cliArgs) {
 						// Did the user specify --upload-only?
 						if (appConfig.getValueBool("upload_only")) {
 							// Perform the --upload-only sync process
-							performUploadOnlySyncProcess(localPath);
+							performUploadOnlySyncProcess(localPath, filesystemMonitor);
 						} else {
 							// Perform the standard sync process
-							performStandardSyncProcess(localPath);
+							performStandardSyncProcess(localPath, filesystemMonitor);
 						}
+						
+						// Discard any inotify events generated as part of any sync operation
+						filesystemMonitor.update(false);
 						
 						// Detail the outcome of the sync process
 						displaySyncOutcome();
@@ -568,7 +579,7 @@ int main(string[] cliArgs) {
 						itemDB.performVacuum();
 					} else {
 						// Not online
-						log.log("Microsoft OneDrive service is not reachable at this time");
+						log.log("Microsoft OneDrive service is not reachable at this time. Will re-try on next loop attempt.");
 					}
 					
 					// Output end of loop processing times
@@ -585,7 +596,6 @@ int main(string[] cliArgs) {
 				Thread.sleep(dur!"seconds"(1));
 			}
 		}
-		
 	} else {
 		// Exit application as the sync engine could not be initialised
 		log.error("Application Sync Engine could not be initialised correctly");
@@ -603,35 +613,71 @@ int main(string[] cliArgs) {
 	return EXIT_SUCCESS;
 }
 
-void performUploadOnlySyncProcess(string localPath) {
+void performUploadOnlySyncProcess(string localPath, Monitor filesystemMonitor = null) {
 	// Perform the local database consistency check, picking up locally modified data and uploading this to OneDrive
 	syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
+	if (appConfig.getValueBool("monitor")) {
+		// Handle any inotify events whilst the DB was being scanned
+		filesystemMonitor.update(true);
+	}
+	
 	// Scan the configured 'sync_dir' for new data to upload
 	syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
+	if (appConfig.getValueBool("monitor")) {
+		// Handle any new inotify events whilst the local filesystem was being scanned
+		filesystemMonitor.update(true);
+	}
 }
 
-void performStandardSyncProcess(string localPath) {
+void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = null) {
 
 	// Which way do we sync first?
 	// OneDrive first then local changes (normal operational process that uses OneDrive as the source of truth)
 	// Local First then OneDrive changes (alternate operation process to use local files as source of truth)
-
 	if (appConfig.getValueBool("local_first")) {
 		// Local data first 
 		// Perform the local database consistency check, picking up locally modified data and uploading this to OneDrive
 		syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
+		if (appConfig.getValueBool("monitor")) {
+			// Handle any inotify events whilst the DB was being scanned
+			filesystemMonitor.update(true);
+		}
+		
 		// Scan the configured 'sync_dir' for new data to upload to OneDrive
 		syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
+		if (appConfig.getValueBool("monitor")) {
+			// Handle any new inotify events whilst the local filesystem was being scanned
+			filesystemMonitor.update(true);
+		}
+		
 		// Download data from OneDrive last
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
+		if (appConfig.getValueBool("monitor")) {
+		// Cancel out any inotify events from downloading data
+			filesystemMonitor.update(false);
+		}
 	} else {
 		// Normal sync
 		// Download data from OneDrive first
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
+		if (appConfig.getValueBool("monitor")) {
+			// Cancel out any inotify events from downloading data
+			filesystemMonitor.update(false);
+		}
+		
 		// Perform the local database consistency check, picking up locally modified data and uploading this to OneDrive
 		syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
+		if (appConfig.getValueBool("monitor")) {
+			// Handle any inotify events whilst the DB was being scanned
+			filesystemMonitor.update(true);
+		}
+		
 		// Scan the configured 'sync_dir' for new data to upload to OneDrive
 		syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
+		if (appConfig.getValueBool("monitor")) {
+			// Handle any new inotify events whilst the local filesystem was being scanned
+			filesystemMonitor.update(true);
+		}
 	}
 }
 

@@ -4564,11 +4564,16 @@ class SyncEngine {
 			pathToQuery = ".";
 		}
 		
+		// Create new OneDrive API Instance
+		OneDriveApi generateDeltaResponseOneDriveApiInstance;
+		generateDeltaResponseOneDriveApiInstance = new OneDriveApi(appConfig);
+		generateDeltaResponseOneDriveApiInstance.initialise();
+		
 		if (!singleDirectoryScope) {
 			// In a --resync scenario, there is no DB data to query, so we have to query the OneDrive API here to get relevant details
 			try {
 				// Query the OneDrive API
-				pathData = oneDriveApiInstance.getPathDetails(pathToQuery);
+				pathData = generateDeltaResponseOneDriveApiInstance.getPathDetails(pathToQuery);
 				// Is the path on OneDrive local or remote to our account drive id?
 				if (isItemRemote(pathData)) {
 					// The path we are seeking is remote to our account drive id
@@ -4583,7 +4588,7 @@ class SyncEngine {
 				// Display error message
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				// Must exit here
-				oneDriveApiInstance.shutdown();
+				generateDeltaResponseOneDriveApiInstance.shutdown();
 				exit(-1);
 			}
 		} else {
@@ -4610,27 +4615,27 @@ class SyncEngine {
 		
 		// Get drive details for the provided driveId
 		try {
-			driveData = oneDriveApiInstance.getPathDetailsById(searchItem.driveId, searchItem.id);
+			driveData = generateDeltaResponseOneDriveApiInstance.getPathDetailsById(searchItem.driveId, searchItem.id);
 		} catch (OneDriveException e) {
-			log.vdebug("driveData = oneDriveApiInstance.getPathDetailsById(searchItem.driveId, searchItem.id) generated a OneDriveException");
+			log.vdebug("driveData = generateDeltaResponseOneDriveApiInstance.getPathDetailsById(searchItem.driveId, searchItem.id) generated a OneDriveException");
 			// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
 			if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
 				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 				if (e.httpStatusCode == 429) {
 					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - retrying applicable request");
-					handleOneDriveThrottleRequest(oneDriveApiInstance);
+					handleOneDriveThrottleRequest(generateDeltaResponseOneDriveApiInstance);
 				}
 				if (e.httpStatusCode == 504) {
 					log.vdebug("Retrying original request that generated the HTTP 504 (Gateway Timeout) - retrying applicable request");
 					Thread.sleep(dur!"seconds"(30));
 				}
 				// Retry original request by calling function again to avoid replicating any further error handling
-				driveData = oneDriveApiInstance.getPathDetailsById(searchItem.driveId, searchItem.id);
+				driveData = generateDeltaResponseOneDriveApiInstance.getPathDetailsById(searchItem.driveId, searchItem.id);
 			} else {
 				// There was a HTTP 5xx Server Side Error
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 				// Must exit here
-				oneDriveApiInstance.shutdown();
+				generateDeltaResponseOneDriveApiInstance.shutdown();
 				exit(-1);
 			}
 		}
@@ -4639,7 +4644,7 @@ class SyncEngine {
 		if (!isItemRoot(driveData)) {
 			// Get root details for the provided driveId
 			try {
-				rootData = oneDriveApiInstance.getDriveIdRoot(searchItem.driveId);
+				rootData = generateDeltaResponseOneDriveApiInstance.getDriveIdRoot(searchItem.driveId);
 			} catch (OneDriveException e) {
 				log.vdebug("rootData = onedrive.getDriveIdRoot(searchItem.driveId) generated a OneDriveException");
 				// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
@@ -4647,20 +4652,20 @@ class SyncEngine {
 					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 					if (e.httpStatusCode == 429) {
 						log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - retrying applicable request");
-						handleOneDriveThrottleRequest(oneDriveApiInstance);
+						handleOneDriveThrottleRequest(generateDeltaResponseOneDriveApiInstance);
 					}
 					if (e.httpStatusCode == 504) {
 						log.vdebug("Retrying original request that generated the HTTP 504 (Gateway Timeout) - retrying applicable request");
 						Thread.sleep(dur!"seconds"(30));
 					}
 					// Retry original request by calling function again to avoid replicating any further error handling
-					rootData = oneDriveApiInstance.getDriveIdRoot(searchItem.driveId);
+					rootData = generateDeltaResponseOneDriveApiInstance.getDriveIdRoot(searchItem.driveId);
 					
 				} else {
 					// There was a HTTP 5xx Server Side Error
 					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					// Must exit here
-					oneDriveApiInstance.shutdown();
+					generateDeltaResponseOneDriveApiInstance.shutdown();
 					exit(-1);
 				}
 			}
@@ -4677,11 +4682,11 @@ class SyncEngine {
 		for (;;) {
 			// query top level children
 			try {
-				topLevelChildren = oneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink);
+				topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink);
 			} catch (OneDriveException e) {
 				// OneDrive threw an error
 				log.vdebug("------------------------------------------------------------------");
-				log.vdebug("Query Error: topLevelChildren = oneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink)");
+				log.vdebug("Query Error: topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink)");
 				log.vdebug("driveId:   ", searchItem.driveId);
 				log.vdebug("idToQuery: ", searchItem.id);
 				log.vdebug("nextLink:  ", nextLink);
@@ -4689,7 +4694,7 @@ class SyncEngine {
 				// HTTP request returned status code 429 (Too Many Requests)
 				if (e.httpStatusCode == 429) {
 					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-					handleOneDriveThrottleRequest(oneDriveApiInstance);
+					handleOneDriveThrottleRequest(generateDeltaResponseOneDriveApiInstance);
 					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query OneDrive drive children");
 				}
 				
@@ -4711,12 +4716,12 @@ class SyncEngine {
 					}
 					// re-try original request - retried for 429 and 504
 					try {
-						log.vdebug("Retrying Query: topLevelChildren = oneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink)");
-						topLevelChildren = oneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink);
-						log.vdebug("Query 'topLevelChildren = oneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink)' performed successfully on re-try");
+						log.vdebug("Retrying Query: topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink)");
+						topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink);
+						log.vdebug("Query 'topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink)' performed successfully on re-try");
 					} catch (OneDriveException e) {
 						// display what the error is
-						log.vdebug("Query Error: topLevelChildren = oneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink) on re-try after delay");
+						log.vdebug("Query Error: topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink) on re-try after delay");
 						// error was not a 504 this time
 						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					}
@@ -4843,17 +4848,22 @@ class SyncEngine {
 	// Query the OneDrive API for the child objects for this element
 	JSONValue queryThisLevelChildren(string driveId, string idToQuery, string nextLink) {
 		JSONValue thisLevelChildren;
+		
+		// Create new OneDrive API Instance
+		OneDriveApi queryChildrenOneDriveApiInstance;
+		queryChildrenOneDriveApiInstance = new OneDriveApi(appConfig);
+		queryChildrenOneDriveApiInstance.initialise();
 	
 		// query children
 		try {
 			// attempt API call
-			log.vdebug("Attempting Query: thisLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink)");
-			thisLevelChildren = oneDriveApiInstance.listChildren(driveId, idToQuery, nextLink);
-			log.vdebug("Query 'thisLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink)' performed successfully");
+			log.vdebug("Attempting Query: thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink)");
+			thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink);
+			log.vdebug("Query 'thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink)' performed successfully");
 		} catch (OneDriveException e) {
 			// OneDrive threw an error
 			log.vdebug("------------------------------------------------------------------");
-			log.vdebug("Query Error: thisLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink)");
+			log.vdebug("Query Error: thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink)");
 			log.vdebug("driveId: ", driveId);
 			log.vdebug("idToQuery: ", idToQuery);
 			log.vdebug("nextLink: ", nextLink);
@@ -4861,7 +4871,7 @@ class SyncEngine {
 			// HTTP request returned status code 429 (Too Many Requests)
 			if (e.httpStatusCode == 429) {
 				// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-				handleOneDriveThrottleRequest(oneDriveApiInstance);
+				handleOneDriveThrottleRequest(queryChildrenOneDriveApiInstance);
 				log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query OneDrive drive children");
 			}
 			
@@ -4871,7 +4881,7 @@ class SyncEngine {
 				if (e.httpStatusCode == 504) {
 					// transient error - try again in 30 seconds
 					log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query OneDrive drive children - retrying applicable request");
-					log.vdebug("thisLevelChildren = onedrive.listChildren(driveId, idToQuery, nextLink) previously threw an error - retrying");
+					log.vdebug("thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink) previously threw an error - retrying");
 					// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
 					log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
 					Thread.sleep(dur!"seconds"(30));
