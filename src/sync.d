@@ -632,7 +632,7 @@ class SyncEngine {
 	}
 	
 	// Query OneDrive API for /delta changes and iterate through items online
-	void fetchOneDriveDeltaAPIResponse(string driveIdToQuery = null, string itemIdToQuery = null, string sharedFolderName = null, bool performFullScanTrueUp) {
+	void fetchOneDriveDeltaAPIResponse(string driveIdToQuery = null, string itemIdToQuery = null, string sharedFolderName = null, bool performFullScanTrueUp = false) {
 		string deltaLink = null;
 		string deltaLinkAvailable;
 		JSONValue deltaChanges;
