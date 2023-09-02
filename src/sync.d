@@ -747,7 +747,9 @@ class SyncEngine {
 		} else {
 			// We have to generate our own /delta response
 			// Log what we are doing so that the user knows something is happening
-			log.log("Generating a /delta compatible JSON response from the OneDrive API ...");
+			if (!appConfig.surpressLoggingOutput) {
+				log.log("Generating a /delta compatible JSON response from the OneDrive API ...");
+			}
 			
 			// What 'path' are we going to start generating the response for
 			string pathToQuery;
@@ -787,7 +789,9 @@ class SyncEngine {
 				processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope);	
 			}
 			// Log that we have finished generating our self generated /delta response
-			log.log("Finished processing self generated /delta JSON response from the OneDrive API");
+			if (!appConfig.surpressLoggingOutput) {
+				log.log("Finished processing self generated /delta JSON response from the OneDrive API");
+			}
 		}
 		
 		// We have JSON items received from the OneDrive API
@@ -2294,7 +2298,9 @@ class SyncEngine {
 	// Perform a database integrity check - checking all the items that are in-sync at the moment, validating what we know should be on disk, to what is actually on disk
 	void performDatabaseConsistencyAndIntegrityCheck() {
 		// Log what we are doing
-		log.log("Performing a database consistency and integrity check on locally stored data ... ");
+		if (!appConfig.surpressLoggingOutput) {
+			log.log("Performing a database consistency and integrity check on locally stored data ... ");
+		}
 		
 		// What driveIDsArray do we use? If we are doing a --single-directory we need to use just the drive id associated with that operation
 		string[] consistencyCheckDriveIdsArray;
