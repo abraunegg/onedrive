@@ -119,6 +119,9 @@ class ApplicationConfig {
 	bool quotaAvailable = true;
 	bool quotaRestricted = false;
 	
+	bool fullScanTrueUpRequired = false;
+	bool surpressLoggingOutput = false;
+	
 	// This is the value that needs testing when we are actually downloading and uploading data
 	ulong concurrentThreads = 16;
 		
@@ -760,6 +763,7 @@ class ApplicationConfig {
 							// This key cannot be empty
 							string tempApplicationId = strip(c.front.dup);
 							if (tempApplicationId.empty) {
+								log.log("Invalid value for key in config file - using default value: ", key);
 								log.vdebug("application_id in config file cannot be empty - using default application_id");
 								setValueString("application_id", defaultApplicationId);
 							} else {
@@ -781,6 +785,31 @@ class ApplicationConfig {
 							}
 							
 							setValueLong(key, thisConfigValue);
+							
+							// if key is 'monitor_interval' the value must be 300 or greater
+							if (key == "monitor_interval") {
+								// temp value
+								ulong tempValue = thisConfigValue;
+								// the temp value needs to be greater than 300 
+								if (tempValue < 300) {
+									log.log("Invalid value for key in config file - using default value: ", key);
+									tempValue = 300;
+								}
+								setValueLong("monitor_interval", to!long(tempValue));
+							}
+							
+							// if key is 'monitor_fullscan_frequency' the value must be 12 or greater
+							if (key == "monitor_fullscan_frequency") {
+								// temp value
+								ulong tempValue = thisConfigValue;
+								// the temp value needs to be greater than 12 
+								if (tempValue < 12) {
+									log.log("Invalid value for key in config file - using default value: ", key);
+									tempValue = 12;
+								}
+								setValueLong("monitor_fullscan_frequency", to!long(tempValue));
+							}
+							
 							// if key is 'space_reservation' we have to calculate MB -> bytes
 							if (key == "space_reservation") {
 								// temp value
@@ -799,7 +828,7 @@ class ApplicationConfig {
 								ulong tempValue = thisConfigValue;
 								// If greater than 2, set to default
 								if (tempValue > 2) {
-									log.log("Invalid value for key in config file - using default: ", key);
+									log.log("Invalid value for key in config file - using default value: ", key);
 									// Set to default of 0
 									tempValue = 0;
 								}

@@ -320,6 +320,8 @@ int main(string[] cliArgs) {
 				// invalidSyncExit = true;
 				return EXIT_FAILURE;
 			}
+			// We do not need this instance, as the API was initialised, and individual instances are used during sync process
+			oneDriveApiInstance.shutdown();
 		} else {
 			// API could not be initialised
 			log.error("The OneDrive API could not be initialised");
@@ -508,17 +510,19 @@ int main(string[] cliArgs) {
 			} catch (MonitorException e) {	
 				// monitor class initialisation failed
 				log.error("ERROR: ", e.msg);
-				oneDriveApiInstance.shutdown();
 				return EXIT_FAILURE;
 			}
 		
 			// Filesystem monitor loop
 			bool performMonitor = true;
 			ulong monitorLoopFullCount = 0;
+			ulong fullScanFrequencyLoopCount = 0;
+			ulong monitorLogOutputLoopCount = 0;
 			immutable auto checkOnlineInterval = dur!"seconds"(appConfig.getValueLong("monitor_interval"));
 			immutable auto githubCheckInterval = dur!"seconds"(86400);
 			immutable ulong logOutputSupressionInterval = appConfig.getValueLong("monitor_log_frequency");
 			immutable ulong fullScanFrequency = appConfig.getValueLong("monitor_fullscan_frequency");
+			immutable ulong monitorLogOutputFrequency = appConfig.getValueLong("monitor_log_frequency");
 			MonoTime lastCheckTime = MonoTime.currTime();
 			MonoTime lastGitHubCheckTime = MonoTime.currTime();
 			string loopStartOutputMessage = "################################################## NEW LOOP ##################################################";
@@ -543,12 +547,55 @@ int main(string[] cliArgs) {
 				
 				// Do we perform a sync with OneDrive?
 				if (notificationReceived || (currentTime - lastCheckTime > checkOnlineInterval) || (monitorLoopFullCount == 0)) {
-					// Increment monitorLoopFullCount
+					// Increment relevant counters
 					monitorLoopFullCount++;
+					fullScanFrequencyLoopCount++;
+					monitorLogOutputLoopCount++;
+					
 					log.vdebug(loopStartOutputMessage);
-					log.log("Loop Number: ", monitorLoopFullCount);
+					log.log("Total Run-Time Loop Number:     ", monitorLoopFullCount);
+					log.log("Full Scan Freqency Loop Number: ", fullScanFrequencyLoopCount);
 					SysTime startFunctionProcessingTime = Clock.currTime();
 					log.vdebug("Start Monitor Loop Time:              ", startFunctionProcessingTime);
+					
+					// Do we flag to perform a full scan of the online data?
+					if (fullScanFrequencyLoopCount > fullScanFrequency) {
+						// set full scan trigger for true up
+						fullScanFrequencyLoopCount = 1;
+						log.vdebug("Enabling Full Scan True Up");
+						appConfig.fullScanTrueUpRequired = true;
+					} else {
+						// unset full scan trigger for true up
+						log.vdebug("Disabling Full Scan True Up");
+						appConfig.fullScanTrueUpRequired = false;
+					}
+					
+					// Do we perform any monitor logging output surpression?
+					// 'monitor_log_frequency' controls how often, in a non-verbose application output mode, how often 
+					// the full output of what is occuring is done. This is done to lessen the 'verbosity' of non-verbose 
+					// logging, but only when running in --monitor
+					if (monitorLogOutputLoopCount > monitorLogOutputFrequency) {
+						// unsurpress the logging output
+						monitorLogOutputLoopCount = 1;
+						log.vdebug("Unsuppressing log output");
+						appConfig.surpressLoggingOutput = false;
+					} else {
+						// do we surpress the logging output to absolute minimal
+						if (monitorLoopFullCount == 1) {
+							// application startup with --monitor
+							log.vdebug("Unsuppressing initial sync log output");
+							appConfig.surpressLoggingOutput = false;
+						} else {
+							// only surpress if we are not doing --verbose or higher
+							if (log.verbose == 0) {
+								log.vdebug("Suppressing --monitor log output");
+								appConfig.surpressLoggingOutput = true;
+							} else {
+								log.vdebug("Unsuppressing log output");
+								appConfig.surpressLoggingOutput = false;
+							}
+						}
+					}
 					
 					// How long has the application been running for?
 					auto elapsedTime = Clock.currTime() - applicationStartTime;
@@ -631,6 +678,11 @@ void performUploadOnlySyncProcess(string localPath, Monitor filesystemMonitor = 
 
 void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = null) {
 
+	// If we are performing log supression, output this message so the user knows what is happening
+	if (appConfig.surpressLoggingOutput) {
+		log.log("Syncing changes from OneDrive ...");
+	}
+	
 	// Which way do we sync first?
 	// OneDrive first then local changes (normal operational process that uses OneDrive as the source of truth)
 	// Local First then OneDrive changes (alternate operation process to use local files as source of truth)
@@ -677,6 +729,18 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 		if (appConfig.getValueBool("monitor")) {
 			// Handle any new inotify events whilst the local filesystem was being scanned
 			filesystemMonitor.update(true);
+		}
+		
+		// Perform the final true up scan to ensure we have correctly replicated the current online state locally
+		if (!appConfig.surpressLoggingOutput) {
+			log.log("Perfoming final true up scan of online data from OneDrive");
+		}
+		// We pass in the 'appConfig.fullScanTrueUpRequired' value which then flags do we use the configured 'deltaLink'
+		// If 'appConfig.fullScanTrueUpRequired' is true, we do not use the 'deltaLink' if we are in --monitor mode, thus forcing a full scan true up
+		syncEngineInstance.syncOneDriveAccountToLocalDisk(appConfig.fullScanTrueUpRequired);
+		if (appConfig.getValueBool("monitor")) {
+			// Cancel out any inotify events from downloading data
+			filesystemMonitor.update(false);
 		}
 	}
 }
@@ -798,11 +862,6 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 	try {
 		assumeNoGC ( () {
 			log.log("Got termination signal, performing clean up");
-			// if initialised, shut down the HTTP instance
-			if (appConfig.apiWasInitialised) {
-				log.log("Shutting down the HTTP instance");
-				oneDriveApiInstance.shutdown();
-			}
 			// was itemDb initialised?
 			if (itemDB.isDatabaseInitialised()) {
 				// Make sure the .wal file is incorporated into the main db before we exit

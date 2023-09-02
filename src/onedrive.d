@@ -347,17 +347,17 @@ class OneDriveApi {
 	
 	// Shutdown OneDrive API Curl Engine
 	void shutdown() {
-		// delete subscription if there exists any
+		// Delete subscription if there exists any
 		//deleteSubscription();
 
-		// reset any values to defaults, freeing any set objects
+		// Reset any values to defaults, freeing any set objects
 		curlEngine.http.clearRequestHeaders();
 		curlEngine.http.onSend = null;
 		curlEngine.http.onReceive = null;
 		curlEngine.http.onReceiveHeader = null;
 		curlEngine.http.onReceiveStatusLine = null;
 		curlEngine.http.contentLength = 0;
-		// shut down the curl instance
+		// Shut down the curl instance & close any open sockets
 		curlEngine.http.shutdown();
 	}
 	
