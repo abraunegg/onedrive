@@ -319,9 +319,9 @@ class ApplicationConfig {
 		boolValues["webhook_enabled"] = false;
 		
 		// Print in debug the application version as soon as possible
-		
-		//log.vdebug("Application Version: ",	strip(import("version")));
-		log.vdebug("Application Version: v2.5.0-alpha-0");
+		//log.vdebug("Application Version: ", strip(import("version")));
+		string tempVersion = "v2.5.0-alpha-0" ~ " GitHub version: " ~ strip(import("version"));
+		log.vdebug("Application Version: ", tempVersion);
 		
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.
@@ -1089,7 +1089,11 @@ class ApplicationConfig {
 		}
 		
 		// Display application version
-		writeln("onedrive version                             = ", strip(import("version")));
+		//writeln("onedrive version                             = ", strip(import("version")));
+		
+		string tempVersion = "v2.5.0-alpha-0" ~ " GitHub version: " ~ strip(import("version"));
+		writeln("onedrive version                             = ", tempVersion);
+		
 		// Display all of the pertinent configuration options
 		writeln("Config path                                  = ", configDirName);
 		// Does a config file exist or are we using application defaults

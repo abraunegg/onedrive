@@ -294,7 +294,7 @@ class SyncEngine {
 					Thread.sleep(dur!"seconds"(30));
 				}
 				// re-try original request - retried for 429 and 504 - but loop back calling this function 
-				log.vdebug("Retrying Query: getDefaultDriveDetails()");
+				log.vdebug("Retrying Function: getDefaultDriveDetails()");
 				getDefaultDriveDetails();
 			} else {
 				// Default operation if not 408,429,503,504 errors
@@ -458,7 +458,7 @@ class SyncEngine {
 					Thread.sleep(dur!"seconds"(30));
 				}
 				// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-				log.vdebug("Retrying Query: getDefaultRootDetails()");
+				log.vdebug("Retrying Function: getDefaultRootDetails()");
 				getDefaultRootDetails();
 			} else {
 				// Default operation if not 408,429,503,504 errors
@@ -3657,10 +3657,8 @@ class SyncEngine {
 			// thus, the entries are not in the dry-run DB copy, thus, at this point the client thinks that this is an item to upload
 			// Check this 'path' for an entry in pathFakeDeletedArray - if it is there, this is unwanted
 			if (dryRun) {
-				// Is this path in the array of fake deleted items?
-				unwanted = canFind(pathFakeDeletedArray, path);
-				// Return early, nothing else to do
-				return;
+				// Is this path in the array of fake deleted items? If yes, return early, nothing else to do, save processing
+				if (canFind(pathFakeDeletedArray, path)) return;
 			}
 			
 			// This not a Client Side Filtering check, nor a Microsoft Check, but is a sanity check that the path provided is UTF encoded correctly
@@ -5473,8 +5471,12 @@ class SyncEngine {
 						Thread.sleep(dur!"seconds"(30));
 					}
 					// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-					log.vdebug("Retrying Query: generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink)");
-					topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink);
+					//log.vdebug("Retrying Query: generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink)");
+					//topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink);
+					
+					log.vdebug("Retrying Function: ", thisFunctionName);
+					generateDeltaResponse(pathToQuery);
+					
 				} else {
 					// Default operation if not 408,429,503,504 errors
 					// display what the error is
@@ -5633,49 +5635,73 @@ class SyncEngine {
 
 		for (;;) {
 			// query children
-			thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink);
 			
-			// process this level children
-			if (!childParentPath.empty) {
-				// We dont use childParentPath to log, as this poses an information leak risk.
-				// The full parent path of the child, as per the JSON might be:
-				//   /Level 1/Level 2/Level 3/Child Shared Folder/some folder/another folder
-				// But 'Child Shared Folder' is what is shared, thus '/Level 1/Level 2/Level 3/' is a potential information leak if logged.
-				// Plus, the application output now shows accuratly what is being shared - so that is a good thing.
-				log.vlog("Adding ", count(thisLevelChildren["value"].array), " OneDrive items for processing from ", pathForLogging);
+			try {
+			
+				thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink);
+			
+			} catch (OneDriveException exception) {
+			
+			
+				writeln("EXCEPTION HANDLING NEEDED: thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink)");
+			
+			
+			
 			}
-			foreach (child; thisLevelChildren["value"].array) {
-				// Check for any Client Side Filtering here ... we should skip querying the OneDrive API for 'folders' that we are going to just process and skip anyway.
-				// This avoids needless calls to the OneDrive API, and potentially speeds up this process.
-				if (!checkJSONAgainstClientSideFiltering(child)) {
-					// add this child to the array of objects
-					thisLevelChildrenData ~= child;
-					// is this child a folder?
-					if (isItemFolder(child)){
-						// We have to query this folders children if childCount > 0
-						if (child["folder"]["childCount"].integer > 0){
-							// This child folder has children
-							string childIdToQuery = child["id"].str;
-							string childDriveToQuery = child["parentReference"]["driveId"].str;
-							auto grandchildParentPath = child["parentReference"]["path"].str.split(":");
-							string folderPathToScan = grandchildParentPath[1] ~ "/" ~ child["name"].str;
-							string newLoggingPath = pathForLogging ~ "/" ~ child["name"].str;
-							JSONValue[] grandChildrenData = queryForChildren(childDriveToQuery, childIdToQuery, folderPathToScan, newLoggingPath);
-							foreach (grandChild; grandChildrenData.array) {
-								// add the grandchild to the array
-								thisLevelChildrenData ~= grandChild;
+			
+			// Was a valid JSON response for 'thisLevelChildren' provided?
+			if (thisLevelChildren.type() == JSONType.object) {
+			
+				// process this level children
+				if (!childParentPath.empty) {
+					// We dont use childParentPath to log, as this poses an information leak risk.
+					// The full parent path of the child, as per the JSON might be:
+					//   /Level 1/Level 2/Level 3/Child Shared Folder/some folder/another folder
+					// But 'Child Shared Folder' is what is shared, thus '/Level 1/Level 2/Level 3/' is a potential information leak if logged.
+					// Plus, the application output now shows accuratly what is being shared - so that is a good thing.
+					log.vlog("Adding ", count(thisLevelChildren["value"].array), " OneDrive items for processing from ", pathForLogging);
+				}
+				foreach (child; thisLevelChildren["value"].array) {
+					// Check for any Client Side Filtering here ... we should skip querying the OneDrive API for 'folders' that we are going to just process and skip anyway.
+					// This avoids needless calls to the OneDrive API, and potentially speeds up this process.
+					if (!checkJSONAgainstClientSideFiltering(child)) {
+						// add this child to the array of objects
+						thisLevelChildrenData ~= child;
+						// is this child a folder?
+						if (isItemFolder(child)){
+							// We have to query this folders children if childCount > 0
+							if (child["folder"]["childCount"].integer > 0){
+								// This child folder has children
+								string childIdToQuery = child["id"].str;
+								string childDriveToQuery = child["parentReference"]["driveId"].str;
+								auto grandchildParentPath = child["parentReference"]["path"].str.split(":");
+								string folderPathToScan = grandchildParentPath[1] ~ "/" ~ child["name"].str;
+								string newLoggingPath = pathForLogging ~ "/" ~ child["name"].str;
+								JSONValue[] grandChildrenData = queryForChildren(childDriveToQuery, childIdToQuery, folderPathToScan, newLoggingPath);
+								foreach (grandChild; grandChildrenData.array) {
+									// add the grandchild to the array
+									thisLevelChildrenData ~= grandChild;
+								}
 							}
 						}
 					}
 				}
+				// If a collection exceeds the default page size (200 items), the @odata.nextLink property is returned in the response 
+				// to indicate more items are available and provide the request URL for the next page of items.
+				if ("@odata.nextLink" in thisLevelChildren) {
+					// Update nextLink to next changeSet bundle
+					nextLink = thisLevelChildren["@odata.nextLink"].str;
+					log.vdebug("Setting nextLink to (@odata.nextLink): ", nextLink);
+				} else break;
+			
+			} else {
+			
+				// driveData is an invalid JSON object
+				writeln("CODING TO DO: The query of OneDrive API to thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink) generated an invalid JSON response - thus we cant build our own /delta simulated response ... how to handle?");
+				// Must exit here
+				exit(-1);
 			}
-			// If a collection exceeds the default page size (200 items), the @odata.nextLink property is returned in the response 
-			// to indicate more items are available and provide the request URL for the next page of items.
-			if ("@odata.nextLink" in thisLevelChildren) {
-				// Update nextLink to next changeSet bundle
-				nextLink = thisLevelChildren["@odata.nextLink"].str;
-				log.vdebug("Setting nextLink to (@odata.nextLink): ", nextLink);
-			} else break;
+			
 		}
 		
 		// return response
@@ -5735,8 +5761,11 @@ class SyncEngine {
 					Thread.sleep(dur!"seconds"(30));
 				}
 				// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-				log.vdebug("Retrying Query: thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink)");
-				thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink);
+				//log.vdebug("Retrying Query: thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink)");
+				//thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink);
+				log.vdebug("Retrying Function: ", thisFunctionName);
+				queryThisLevelChildren(driveId, idToQuery, nextLink);
+				
 			} else {
 				// Default operation if not 408,429,503,504 errors
 				// display what the error is
