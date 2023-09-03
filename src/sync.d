@@ -5371,8 +5371,10 @@ class SyncEngine {
 							Thread.sleep(dur!"seconds"(30));
 						}
 						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						log.vdebug("Retrying Function: ", thisFunctionName);
-						generateDeltaResponse(pathToQuery);
+						log.log("Retrying Query: rootData = generateDeltaResponseOneDriveApiInstance.getDriveIdRoot(searchItem.driveId)");
+						rootData = generateDeltaResponseOneDriveApiInstance.getDriveIdRoot(searchItem.driveId);
+						
+						
 					} else {
 						// Default operation if not 408,429,503,504 errors
 						// display what the error is
@@ -5634,24 +5636,17 @@ class SyncEngine {
 		string nextLink;
 
 		for (;;) {
-			// query children
-			
+			// query this level children
 			try {
-			
 				thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink);
-			
 			} catch (OneDriveException exception) {
-			
-			
-				writeln("EXCEPTION HANDLING NEEDED: thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink)");
-			
-			
+				
+				writeln("CODING TO DO: EXCEPTION HANDLING NEEDED: thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink)");
 			
 			}
 			
 			// Was a valid JSON response for 'thisLevelChildren' provided?
 			if (thisLevelChildren.type() == JSONType.object) {
-			
 				// process this level children
 				if (!childParentPath.empty) {
 					// We dont use childParentPath to log, as this poses an information leak risk.
@@ -5695,13 +5690,14 @@ class SyncEngine {
 				} else break;
 			
 			} else {
-			
-				// driveData is an invalid JSON object
-				writeln("CODING TO DO: The query of OneDrive API to thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink) generated an invalid JSON response - thus we cant build our own /delta simulated response ... how to handle?");
-				// Must exit here
-				exit(-1);
+				// Invalid JSON response when querying this level children
+				log.vdebug("INVALID JSON response when attempting a retry of parent function - queryForChildren(driveId, idToQuery, childParentPath, pathForLogging)");
+				// retry thisLevelChildren = queryThisLevelChildren
+				log.vdebug("Thread sleeping for an additional 30 seconds");
+				Thread.sleep(dur!"seconds"(30));
+				log.vdebug("Retry this call thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink)");
+				thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink);
 			}
-			
 		}
 		
 		// return response
