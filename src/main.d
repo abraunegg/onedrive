@@ -155,7 +155,7 @@ int main(string[] cliArgs) {
 	// Set runtimeDatabaseFile, this will get updated if we are using --dry-run
 	runtimeDatabaseFile = appConfig.databaseFilePath;
 	
-	// Expand any ~ in the configuration for our operational environment
+	// Expand any ~ in the configuration for our operational environment. Read in 'sync_dir' from appConfig
 	runtimeSyncDirectory = updateTildeConfigDirectives(appConfig.getValueString("sync_dir"));
 	
 	// DEVELOPER OPTIONS OUTPUT
@@ -800,32 +800,46 @@ void displaySyncOutcome() {
 	}
 }
 
-string updateTildeConfigDirectives(string configValue) {
+string updateTildeConfigDirectives(string inputValue) {
+	string outputValue;
+	
+	log.vdebug("sync_dir: Setting runtimeSyncDirectory from config value 'sync_dir'");
+	
 	if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
 		log.vdebug("sync_dir: No SHELL or USER environment variable configuration detected");
 		// No shell or user set, so expandTilde() will fail - usually headless system running under init.d / systemd or potentially Docker
 		// Does the 'currently configured' sync_dir include a ~
-		if (canFind(appConfig.getValueString("sync_dir"), "~")) {
+		if (canFind(inputValue, "~")) {
 			// A ~ was found in sync_dir
-			log.vdebug("sync_dir: A '~' was found in sync_dir, using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set");
-			configValue = appConfig.defaultHomePath ~ strip(appConfig.getValueString("sync_dir"), "~");
+			log.vdebug("sync_dir: A '~' was found in 'sync_dir', using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set");
+			outputValue = appConfig.defaultHomePath ~ strip(inputValue, "~");
 		} else {
 			// No ~ found in sync_dir, use as is
-			log.vdebug("sync_dir: Getting runtimeSyncDirectory from config value sync_dir");
-			configValue = appConfig.getValueString("sync_dir");
+			log.vdebug("sync_dir: Using configured 'sync_dir' path as-is as no SHELL or USER environment variable configuration detected");
+			outputValue = inputValue;
 		}
 	} else {
-		// A shell and user is set, expand any ~ as this will be expanded correctly if present
-		log.vdebug("sync_dir: Getting runtimeSyncDirectory from config value sync_dir");
-		if (canFind(appConfig.getValueString("sync_dir"), "~")) {
-			log.vdebug("sync_dir: A '~' was found in configured sync_dir, automatically expanding as SHELL and USER environment variable is set");
-			configValue = expandTilde(appConfig.getValueString("sync_dir"));
+		// A shell and user environment variable is set, expand any ~ as this will be expanded correctly if present
+		if (canFind(inputValue, "~")) {
+			log.vdebug("sync_dir: A '~' was found in configured 'sync_dir', automatically expanding as SHELL and USER environment variable is set");
+			outputValue = expandTilde(inputValue);
 		} else {
-			configValue = appConfig.getValueString("sync_dir");
+			// No ~ found in sync_dir, does the path begin with a '/' ?
+			log.vdebug("sync_dir: Using configured 'sync_dir' path as-is as however SHELL or USER environment variable configuration detected - should be placed in USER home directory");
+			if (!startsWith(inputValue, "/")) {
+				log.log("Configured 'sync_dir' does not start with a '/' or '~/' - adjusting configured 'sync_dir' to use User Home Directory as base for 'sync_dir' path");
+				string updatedPathWithHome = "~/" ~ inputValue;
+				outputValue = expandTilde(updatedPathWithHome);
+			} else {
+				log.vdebug("use 'sync_dir' as is - no touch");
+				outputValue = inputValue;
+			}
 		}
 	}
 	
-	return configValue;
+	// What will runtimeSyncDirectory be actually set to?
+	log.vdebug("runtimeSyncDirectory set to: ", outputValue);
+	return outputValue;
 }
 
 void processResyncDatabaseRemoval(string databaseFilePathToRemove) {
