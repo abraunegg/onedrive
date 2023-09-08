@@ -68,25 +68,27 @@ int main(string[] cliArgs) {
 	// Define 'exit' and 'failure' scopes
 	scope(exit) {
 		// detail what scope was called
-		log.vdebug("Exit scope called");
+		log.vdebug("Exit scope was called");
 		
 		// Was itemDB initialised?
 		if (itemDB !is null) {
 			// Make sure the .wal file is incorporated into the main db before we exit
 			itemDB.performVacuum();
 			destroy(itemDB);
+			itemDB = null;
 		}
 	}
 	
 	scope(failure) {
 		// detail what scope was called
-		log.vdebug("Failure scope called");
+		log.vdebug("Failure scope was called");
 		
 		// Was itemDB initialised?
 		if (itemDB !is null) {
 			// Make sure the .wal file is incorporated into the main db before we exit
 			itemDB.performVacuum();
 			destroy(itemDB);
+			itemDB = null;
 		}
 	}
 	
@@ -330,7 +332,32 @@ int main(string[] cliArgs) {
 		}
 	}
 	
-	// Change the working directory to the 'sync_dir' configured directory
+	// Configure the sync direcory based on the runtimeSyncDirectory configured directory
+	log.log("All application operations will be performed in: ", runtimeSyncDirectory);
+	try {
+		if (!exists(runtimeSyncDirectory)) {
+			log.vdebug("runtimeSyncDirectory: Configured 'sync_dir' is missing locally. Creating: ", runtimeSyncDirectory);
+			try {
+				// Attempt to create the sync dir we have been configured with
+				mkdirRecurse(runtimeSyncDirectory);
+				// Configure the applicable permissions for the folder
+				log.vdebug("Setting directory permissions for: ", runtimeSyncDirectory);
+				runtimeSyncDirectory.setAttributes(appConfig.returnRequiredDirectoryPermisions());
+			} catch (std.file.FileException e) {
+				// Creating the sync directory failed
+				log.error("ERROR: Unable to create local OneDrive 'sync_dir' - ", e.msg);
+				// Use exit scopes to shutdown API
+				return EXIT_FAILURE;
+			}
+		}
+	} catch (std.file.FileException e) {
+		// Creating the sync directory failed
+		log.error("ERROR: Unable to test the existence of the configured OneDrive 'sync_dir' - ", e.msg);
+		// Use exit scopes to shutdown API
+		return EXIT_FAILURE;
+	}
+	
+	// Change the working directory to the 'sync_dir' as configured
 	chdir(runtimeSyncDirectory);
 	
 	// Do we need to validate the runtimeSyncDirectory to check for the presence of a '.nosync' file
@@ -553,23 +580,23 @@ int main(string[] cliArgs) {
 					fullScanFrequencyLoopCount++;
 					monitorLogOutputLoopCount++;
 					
-					log.vdebug(loopStartOutputMessage);
-					log.log("Total Run-Time Loop Number:     ", monitorLoopFullCount);
-					log.log("Full Scan Freqency Loop Number: ", fullScanFrequencyLoopCount);
-					SysTime startFunctionProcessingTime = Clock.currTime();
-					log.vdebug("Start Monitor Loop Time:              ", startFunctionProcessingTime);
-					
 					// Do we flag to perform a full scan of the online data?
 					if (fullScanFrequencyLoopCount > fullScanFrequency) {
 						// set full scan trigger for true up
+						log.log("Enabling Full Scan True Up (fullScanFrequencyLoopCount > fullScanFrequency), resetting fullScanFrequencyLoopCount = 1");
 						fullScanFrequencyLoopCount = 1;
-						log.vdebug("Enabling Full Scan True Up");
 						appConfig.fullScanTrueUpRequired = true;
 					} else {
 						// unset full scan trigger for true up
 						log.vdebug("Disabling Full Scan True Up");
 						appConfig.fullScanTrueUpRequired = false;
 					}
+					
+					log.vdebug(loopStartOutputMessage);
+					log.log("Total Run-Time Loop Number:     ", monitorLoopFullCount);
+					log.log("Full Scan Freqency Loop Number: ", fullScanFrequencyLoopCount);
+					SysTime startFunctionProcessingTime = Clock.currTime();
+					log.vdebug("Start Monitor Loop Time:              ", startFunctionProcessingTime);
 					
 					// Do we perform any monitor logging output surpression?
 					// 'monitor_log_frequency' controls how often, in a non-verbose application output mode, how often 
@@ -683,6 +710,10 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 	if (appConfig.surpressLoggingOutput) {
 		log.log("Syncing changes from OneDrive ...");
 	}
+	
+	// Zero out these arrays
+	syncEngineInstance.fileDownloadFailures = [];
+	syncEngineInstance.fileUploadFailures = [];
 	
 	// Which way do we sync first?
 	// OneDrive first then local changes (normal operational process that uses OneDrive as the source of truth)

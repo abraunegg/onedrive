@@ -175,6 +175,9 @@ class ApplicationConfig {
 	private string configFileSyncDir = defaultSyncDir;
 	private string configFileSkipFile = defaultSkipFile;
 	private string configFileSkipDir = ""; // Default here is no directories are skipped
+	private string configFileDriveId = ""; // Default here is that no drive id is specified
+	private bool configFileSkipDotfiles = false;
+	private bool configFileSkipSymbolicLinks = false;
 	
 	// Array of values that are the actual application runtime configuration
 	// The values stored in these array's are the actual application configuration which can then be accessed by getValue & setValue
@@ -694,6 +697,16 @@ class ApplicationConfig {
 					c.popFront();
 					// only accept "true" as true value. TODO Should we support other formats?
 					setValueBool(key, c.front.dup == "true" ? true : false);
+					
+					// skip_dotfiles tracking for change
+					if (key == "skip_dotfiles") {
+						configFileSkipDotfiles = true;
+					}
+					
+					// skip_symlinks tracking for change
+					if (key == "skip_symlinks") {
+						configFileSkipSymbolicLinks = true;
+					}
 				} else {
 					auto pp = key in stringValues;
 					if (pp) {
@@ -770,6 +783,21 @@ class ApplicationConfig {
 								setValueString("application_id", tempApplicationId);
 							}
 						}
+						
+						// Drive ID
+						if (key == "drive_id") {
+							// This key cannot be empty
+							string tempApplicationId = strip(c.front.dup);
+							if (tempApplicationId.empty) {
+								log.error("Invalid value for key in config file: ", key);
+								log.error("drive_id in config file cannot be empty - this is a fatal error and must be corrected");
+								exit(EXIT_FAILURE);
+							} else {
+								setValueString("drive_id", tempApplicationId);
+								configFileDriveId = tempApplicationId;
+							}
+						}
+						
 					} else {
 						auto ppp = key in longValues;
 						if (ppp) {
@@ -1270,6 +1298,7 @@ class ApplicationConfig {
 		bool skipDirDifferent = false;
 		bool skipDotFilesDifferent = false;
 		bool skipSymbolicLinksDifferent = false;
+		bool driveIdDifferent = false;
 		
 		// Create the required initial hash files
 		createRequiredInitialConfigurationHashFiles();
@@ -1313,6 +1342,16 @@ class ApplicationConfig {
 				backupConfigStringValues["skip_dotfiles"] = "";
 				backupConfigStringValues["skip_symlinks"] = "";
 				
+				// bool flags to trigger if the entries that trigger a --resync were found in the backup config file
+				// if these were not in the backup file, they may have been added ... thus new, thus we need to double check the existing
+				// config file to see if this was a newly added config option
+				bool drive_id_present = false;
+				bool sync_dir_present = false;
+				bool skip_file_present = false;
+				bool skip_dir_present = false;
+				bool skip_dotfiles_present = false;
+				bool skip_symlinks_present = false;
+				
 				// Common debug message if an element is different
 				string configOptionModifiedMessage = " was modified since the last time the application was successfully run, --resync required";
 				
@@ -1335,29 +1374,52 @@ class ApplicationConfig {
 						if (p) {
 							c.popFront();
 							// compare this key
-							if ((key == "sync_dir") && (c.front.dup != getValueString("sync_dir"))) {
-								log.vdebug(key, configOptionModifiedMessage);
-								configFileOptionsDifferent = true;
+							if (key == "drive_id") {
+								drive_id_present = true;
+								if (c.front.dup != getValueString("drive_id")) {
+									log.vdebug(key, configOptionModifiedMessage);
+									configFileOptionsDifferent = true;
+								}
 							}
-							if ((key == "skip_file") && (c.front.dup != getValueString("skip_file"))){
-								log.vdebug(key, configOptionModifiedMessage);
-								configFileOptionsDifferent = true;
+							
+							if (key == "sync_dir") {
+								sync_dir_present = true;
+								if (c.front.dup != getValueString("sync_dir")) {
+									log.vdebug(key, configOptionModifiedMessage);
+									configFileOptionsDifferent = true;
+								}
 							}
-							if ((key == "skip_dir") && (c.front.dup != getValueString("skip_dir"))){
-								log.vdebug(key, configOptionModifiedMessage);
-								configFileOptionsDifferent = true;
+							
+							if (key == "skip_file") {
+								skip_file_present = true;
+								if (c.front.dup != getValueString("skip_file")) {
+									log.vdebug(key, configOptionModifiedMessage);
+									configFileOptionsDifferent = true;
+								}
 							}
-							if ((key == "drive_id") && (c.front.dup != getValueString("drive_id"))){
-								log.vdebug(key, configOptionModifiedMessage);
-								configFileOptionsDifferent = true;
+							
+							if (key == "skip_dir") {
+								skip_dir_present = true;
+								if (c.front.dup != getValueString("skip_dir")) {
+									log.vdebug(key, configOptionModifiedMessage);
+									configFileOptionsDifferent = true;
+								}
 							}
-							if ((key == "skip_dotfiles") && (c.front.dup != to!string(getValueBool("skip_dotfiles")))){
-								log.vdebug(key, configOptionModifiedMessage);
-								configFileOptionsDifferent = true;
+							
+							if (key == "skip_dotfiles") {
+								skip_dotfiles_present = true;
+								if (c.front.dup != to!string(getValueBool("skip_dotfiles"))) {
+									log.vdebug(key, configOptionModifiedMessage);
+									configFileOptionsDifferent = true;
+								}
 							}
-							if ((key == "skip_symlinks") && (c.front.dup != to!string(getValueBool("skip_symlinks")))){
-								log.vdebug(key, configOptionModifiedMessage);
-								configFileOptionsDifferent = true;
+							
+							if (key == "skip_symlinks") {
+								skip_symlinks_present = true;
+								if (c.front.dup != to!string(getValueBool("skip_symlinks"))) {
+									log.vdebug(key, configOptionModifiedMessage);
+									configFileOptionsDifferent = true;
+								}
 							}
 						}
 					}
@@ -1367,6 +1429,52 @@ class ApplicationConfig {
 				if (configBackupFileHandle.isOpen()) {
 					// close open file
 					configBackupFileHandle.close();
+				}
+				
+				// Were any of the items that trigger a --resync not in the existing backup 'config' file .. thus newly added?
+				if ((!drive_id_present) || (!sync_dir_present) || (! skip_file_present) || (!skip_dir_present) || (!skip_dotfiles_present) || (!skip_symlinks_present)) {
+					log.vdebug("drive_id present in config backup:      ", drive_id_present);
+					log.vdebug("sync_dir present in config backup:      ", sync_dir_present);
+					log.vdebug("skip_file present in config backup:     ", skip_file_present);
+					log.vdebug("skip_dir present in config backup:      ", skip_dir_present);
+					log.vdebug("skip_dotfiles present in config backup: ", skip_dotfiles_present);
+					log.vdebug("skip_symlinks present in config backup: ", skip_symlinks_present);
+					
+					if ((!drive_id_present) && (configFileDriveId != "")) {
+						writeln("drive_id newly added ... --resync needed");
+						configFileOptionsDifferent = true;
+						driveIdDifferent = true;
+					}
+					
+					if ((!sync_dir_present) && (configFileSyncDir != "")) {
+						writeln("sync_dir newly added ... --resync needed");
+						configFileOptionsDifferent = true;
+						syncDirDifferent = true;
+					}
+					
+					if ((!skip_file_present) && (configFileSkipFile != defaultSkipFile)) {
+						writeln("skip_file newly added ... --resync needed");
+						configFileOptionsDifferent = true;
+						skipFileDifferent = true;
+					}
+					
+					if ((!skip_dir_present) && (configFileSkipDir != "")) {
+						writeln("skip_dir newly added ... --resync needed");
+						configFileOptionsDifferent = true;
+						skipFileDifferent = true;
+					}
+					
+					if ((!skip_dotfiles_present) && (configFileSkipDotfiles)) {
+						writeln("skip_dotfiles newly added ... --resync needed");
+						configFileOptionsDifferent = true;
+						skipDotFilesDifferent = true;
+					}
+					
+					if ((!skip_symlinks_present) && (configFileSkipSymbolicLinks)) {
+						writeln("skip_symlinks newly added ... --resync needed");
+						configFileOptionsDifferent = true;
+						skipSymbolicLinksDifferent = true;
+					}
 				}
 			} else {
 				// no backup to check
@@ -1378,6 +1486,9 @@ class ApplicationConfig {
 		//  --syncdir ARG
 		//  --skip-file ARG
 		//  --skip-dir ARG
+		//  --skip-dot-files
+		//  --skip-symlinks
+		
 		if (exists(applicableConfigFilePath)) {
 			// config file exists
 			// was the sync_dir updated by CLI?
@@ -1409,6 +1520,24 @@ class ApplicationConfig {
 					skipDirDifferent = true;
 				}
 			}
+			
+			// was skip_dotfiles updated by --skip-dot-files ?
+			if (!configFileSkipDotfiles) {
+				// was not set in config file
+				if (getValueBool("skip_dotfiles")) {
+					// --skip-dot-files passed in
+					log.vdebug("skip_dotfiles: CLI override of config file option, --resync needed");
+				}
+			}
+			
+			// was skip_symlinks updated by --skip-symlinks ?
+			if (!configFileSkipSymbolicLinks) {
+				// was not set in config file
+				if (getValueBool("skip_symlinks")) {
+					// --skip-symlinks passed in
+					log.vdebug("skip_symlinks: CLI override of config file option, --resync needed");
+				}
+			}
 		}
 		
 		// Did any of the config files or CLI options trigger a --resync requirement?
@@ -1418,8 +1547,11 @@ class ApplicationConfig {
 		log.vdebug("syncDirDifferent: ", syncDirDifferent);
 		log.vdebug("skipFileDifferent: ", skipFileDifferent);
 		log.vdebug("skipDirDifferent: ", skipDirDifferent);
+		log.vdebug("driveIdDifferent: ", driveIdDifferent);
+		log.vdebug("skipDotFilesDifferent: ", skipDotFilesDifferent);
 		
-		if ((configFileOptionsDifferent) || (syncListFileDifferent) || (businessSharedItemsFileDifferent) || (syncDirDifferent) || (skipFileDifferent) || (skipDirDifferent)) {
+		
+		if ((configFileOptionsDifferent) || (syncListFileDifferent) || (businessSharedItemsFileDifferent) || (syncDirDifferent) || (skipFileDifferent) || (skipDirDifferent) || (driveIdDifferent) || (skipDotFilesDifferent) || (skipSymbolicLinksDifferent) ) {
 			// set the flag
 			resyncRequired = true;
 		}
