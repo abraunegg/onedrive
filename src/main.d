@@ -333,7 +333,6 @@ int main(string[] cliArgs) {
 	}
 	
 	// Configure the sync direcory based on the runtimeSyncDirectory configured directory
-	log.log("All application operations will be performed in: ", runtimeSyncDirectory);
 	try {
 		if (!exists(runtimeSyncDirectory)) {
 			log.vdebug("runtimeSyncDirectory: Configured 'sync_dir' is missing locally. Creating: ", runtimeSyncDirectory);
@@ -358,6 +357,7 @@ int main(string[] cliArgs) {
 	}
 	
 	// Change the working directory to the 'sync_dir' as configured
+	log.log("All application operations will be performed in: ", runtimeSyncDirectory);
 	chdir(runtimeSyncDirectory);
 	
 	// Do we need to validate the runtimeSyncDirectory to check for the presence of a '.nosync' file

@@ -1446,7 +1446,7 @@ class ApplicationConfig {
 						driveIdDifferent = true;
 					}
 					
-					if ((!sync_dir_present) && (configFileSyncDir != "")) {
+					if ((!sync_dir_present) && (configFileSyncDir != defaultSyncDir)) {
 						writeln("sync_dir newly added ... --resync needed");
 						configFileOptionsDifferent = true;
 						syncDirDifferent = true;
@@ -1527,6 +1527,7 @@ class ApplicationConfig {
 				if (getValueBool("skip_dotfiles")) {
 					// --skip-dot-files passed in
 					log.vdebug("skip_dotfiles: CLI override of config file option, --resync needed");
+					skipDotFilesDifferent = true;
 				}
 			}
 			
@@ -1536,6 +1537,7 @@ class ApplicationConfig {
 				if (getValueBool("skip_symlinks")) {
 					// --skip-symlinks passed in
 					log.vdebug("skip_symlinks: CLI override of config file option, --resync needed");
+					skipSymbolicLinksDifferent = true;
 				}
 			}
 		}
@@ -1549,7 +1551,6 @@ class ApplicationConfig {
 		log.vdebug("skipDirDifferent: ", skipDirDifferent);
 		log.vdebug("driveIdDifferent: ", driveIdDifferent);
 		log.vdebug("skipDotFilesDifferent: ", skipDotFilesDifferent);
-		
 		
 		if ((configFileOptionsDifferent) || (syncListFileDifferent) || (businessSharedItemsFileDifferent) || (syncDirDifferent) || (skipFileDifferent) || (skipDirDifferent) || (driveIdDifferent) || (skipDotFilesDifferent) || (skipSymbolicLinksDifferent) ) {
 			// set the flag
