@@ -795,7 +795,7 @@ void displaySyncOutcome() {
 			log.log("To fix any download failures you may need to perform a --resync to ensure this system is correctly synced with your Microsoft OneDrive Account");
 		}
 		if (!syncEngineInstance.fileUploadFailures.empty) {
-			log.log("To fix any upload failures you may need run the application again to ensure this system is correctly synced with your Microsoft OneDrive Account");
+			log.log("To fix any upload failures you may need to perform a --resync to ensure this system is correctly synced with your Microsoft OneDrive Account");
 		}
 	}
 }

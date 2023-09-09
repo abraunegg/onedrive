@@ -3622,18 +3622,57 @@ class SyncEngine {
 			parentItem.id = appConfig.defaultRootId;  		// Should give something like 12345ABCDE1234A1!101
 			parentPathFoundinDB = true;
 		} else {
-			// Query the database using each of the driveId's we are using
-			foreach (driveId; driveIDsArray) {
-				// Query the database for this parent path using each driveId
-				Item dbResponse;
-				if(itemDB.selectByPath(parentPath, driveId, dbResponse)){
-					// Use the database details for parentItem
-					parentItem = dbResponse;
-					parentPathFoundinDB = true;
+			
+			// Query the parent path online
+			try {
+				log.vdebug("Attempting to query OneDrive for this parent path: ", parentPath);
+				onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetails(parentPath);
+				saveItem(onlinePathData);
+				parentItem = makeItem(onlinePathData);
+			} catch (OneDriveException exception) {
+				
+				if (exception.httpStatusCode == 404) {
+					// Parent does not exist ... need to create parent
+					log.log("Parent path does not exist: ", parentPath);
+					createDirectoryOnline(parentPath);
+				} else {
+					
+					string thisFunctionName = getFunctionName!({});
+					// HTTP request returned status code 408,429,503,504
+					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+						// Handle the 429
+						if (exception.httpStatusCode == 429) {
+							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+							handleOneDriveThrottleRequest(createDirectoryOnlineOneDriveApiInstance);
+							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+						}
+						// re-try the specific changes queries
+						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+							// 408 - Request Time Out
+							// 503 - Service Unavailable
+							// 504 - Gateway Timeout
+							// Transient error - try again in 30 seconds
+							auto errorArray = splitLines(exception.msg);
+							log.log(errorArray[0], " when attempting to create a remote directory on OneDrive - retrying applicable request in 30 seconds");
+							log.vdebug(thisFunctionName, " previously threw an error - retrying");
+							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+							Thread.sleep(dur!"seconds"(30));
+						}
+						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
+						log.vdebug("Retrying Function: ", thisFunctionName);
+						createDirectoryOnline(thisNewPathToCreate);
+					} else {
+						// Default operation if not 408,429,503,504 errors
+						// display what the error is
+						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+					}
 				}
 			}
 		}
 		
+		
+		/**
 		// If we did not find the details in the local database, query this online
 		if (!parentPathFoundinDB) {
 			// No database entry for the path .. which is odd.
@@ -3642,6 +3681,7 @@ class SyncEngine {
 			onlinePathData = queryOneDriveForSpecificPathAndCreateIfMissing(parentPath, false);
 			parentItem = makeItem(onlinePathData);
 		}
+		**/
 		
 		// Make sure the full path does not exist online, this should generate a 404 response, to which then the folder will be created online
 		try {
@@ -3750,8 +3790,6 @@ class SyncEngine {
 				return;
 			} else {
 			
-				
-				
 				string thisFunctionName = getFunctionName!({});
 				// HTTP request returned status code 408,429,503,504
 				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -3782,6 +3820,8 @@ class SyncEngine {
 					// display what the error is
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				}
+				
+				
 			}
 		}
 		
