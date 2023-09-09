@@ -2129,9 +2129,6 @@ class SyncEngine {
 			uploadLastModifiedTimeApiInstance.shutdown();
 		} catch (OneDriveException exception) {
 			
-			
-			
-			
 			string thisFunctionName = getFunctionName!({});
 			// HTTP request returned status code 408,429,503,504
 			if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -2159,10 +2156,15 @@ class SyncEngine {
 				uploadLastModifiedTime(driveId, id, mtime, eTag);
 			} else {
 				// Default operation if not 408,429,503,504 errors
-				// display what the error is
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				if (exception.httpStatusCode == 409) {
+					// ETag does not match current item's value - use a null eTag
+					log.vdebug("Retrying Function: ", thisFunctionName);
+					uploadLastModifiedTime(driveId, id, mtime, null);
+				} else {
+					// display what the error is
+					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				}
 			}
-			
 		} 
 		// save the updated response from OneDrive in the database
 		log.vdebug("uploadLastModifiedTime response: ", response);
@@ -3361,7 +3363,10 @@ class SyncEngine {
 			
 			// How much data do we need to upload? This is important, as, we need to know how much data to determine if all the files can be uploaded
 			foreach (uploadFilePath; newLocalFilesToUploadToOneDrive) {
-				totalDataToUpload = totalDataToUpload + getSize(uploadFilePath);
+				// validate that the path actually exists so that it can be counted
+				if (exists(uploadFilePath)) {
+					totalDataToUpload = totalDataToUpload + getSize(uploadFilePath);
+				}
 			}
 			
 			// How many bytes to upload
@@ -3750,6 +3755,8 @@ class SyncEngine {
 						createDirectoryOnlineAPIResponse = createDirectoryOnlineOneDriveApiInstance.createById(parentItem.driveId, parentItem.id, newDriveItem);
 						// Is the response a valid JSON object - validation checking done in saveItem
 						saveItem(createDirectoryOnlineAPIResponse);
+						// Log that the directory was created
+						log.log("Successfully created the remote directory ", thisNewPathToCreate, " on OneDrive");
 					} catch (OneDriveException exception) {
 						if (exception.httpStatusCode == 409) {
 							// OneDrive API returned a 404 (above) to say the directory did not exist
@@ -3770,9 +3777,10 @@ class SyncEngine {
 					saveItem(fakeResponse);
 				}
 				
-				// Log that the directory was created
-				log.log("Successfully created the remote directory ", thisNewPathToCreate, " on OneDrive");
+				// Shutdown API instance
+				createDirectoryOnlineOneDriveApiInstance.shutdown();
 				return;
+				
 			} else {
 			
 				string thisFunctionName = getFunctionName!({});
@@ -3801,17 +3809,11 @@ class SyncEngine {
 					log.vdebug("Retrying Function: ", thisFunctionName);
 					createDirectoryOnline(thisNewPathToCreate);
 				} else {
-					// Default operation if not 408,429,503,504 errors
-					// display what the error is
-					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+					// Re-Try
+					createDirectoryOnline(thisNewPathToCreate);
 				}
-				
-				
 			}
 		}
-		
-		// Shutdown API instance
-		createDirectoryOnlineOneDriveApiInstance.shutdown();
 		
 		// If we get to this point - onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, thisNewPathToCreate) generated a 'valid' response ....
 		// This means that the folder potentially exists online .. which is odd .. as it should not have existed
@@ -4230,8 +4232,14 @@ class SyncEngine {
 						try {
 							// Try and perform the upload session
 							uploadResponse = performSessionFileUpload(uploadFileOneDriveApiInstance, thisFileSize, uploadSessionData, threadUploadSessionFilePath);
-							uploadFailed = false;
-							log.log("Uploading new file ", fileToUpload, " ... done.");
+							
+							if (uploadResponse.type() == JSONType.object) {
+								uploadFailed = false;
+								log.log("Uploading new file ", fileToUpload, " ... done.");
+							} else {
+								log.log("Uploading new file ", fileToUpload, " ... failed.");
+								uploadFailed = true;
+							}
 						} catch (OneDriveException exception) {
 						
 							string thisFunctionName = getFunctionName!({});
@@ -4493,8 +4501,13 @@ class SyncEngine {
 					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					// set uploadResponse to null as the fragment upload was in error twice
 					uploadResponse = null;
+				} catch (std.exception.ErrnoException e) {
+					// There was a file system error - display the error message
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					return uploadResponse;
 				}
 			}
+			
 			// was the fragment uploaded without issue?
 			if (uploadResponse.type() == JSONType.object){
 				offset += fragmentSize;
@@ -4580,13 +4593,6 @@ class SyncEngine {
 					log.vdebug("Attempting to delete this item id: ", itemToDelete.id, " from drive: ", itemToDelete.driveId);
 					// perform the delete via the default OneDrive API instance
 					uploadDeletedItemOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id);
-					
-					// Delete the reference in the local database
-					itemDB.deleteById(itemToDelete.driveId, itemToDelete.id);
-					if (itemToDelete.remoteId != null) {
-						// If the item is a remote item, delete the reference in the local database
-						itemDB.deleteById(itemToDelete.remoteDriveId, itemToDelete.remoteId);
-					}
 					// Shutdown API
 					uploadDeletedItemOneDriveApiInstance.shutdown();
 				} catch (OneDriveException e) {
@@ -4629,6 +4635,24 @@ class SyncEngine {
 							displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 						}
 					}
+				}
+				
+				// Delete from the database
+				if (itemDB.idInLocalDatabase(itemToDelete.driveId, itemToDelete.id)) {
+					log.vdebug("record to delete is in DB");
+					log.vdebug("itemToDelete.driveId: ", itemToDelete.driveId);
+					log.vdebug("itemToDelete.id:      ", itemToDelete.id);
+				
+					// Delete the reference in the local database
+					itemDB.deleteById(itemToDelete.driveId, itemToDelete.id);
+					if (itemToDelete.remoteId != null) {
+						// If the item is a remote item, delete the reference in the local database
+						itemDB.deleteById(itemToDelete.remoteDriveId, itemToDelete.remoteId);
+					}
+				} else {
+					// item to delete is not in the local database
+					writeln("the item details as requested to delete are not in the database ... --resync ?");
+					exit(-1);
 				}
 			}
 		}
