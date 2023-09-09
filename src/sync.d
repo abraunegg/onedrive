@@ -3612,7 +3612,6 @@ class SyncEngine {
 		
 		// What parent path to use?
 		string parentPath = dirName(thisNewPathToCreate); // will be either . or something else
-		bool parentPathFoundinDB = false;
 		
 		// Configure the parentItem by if this is the account 'root' use the root details, or search the database for the parent details
 		if (parentPath == ".") {
@@ -3620,9 +3619,7 @@ class SyncEngine {
 			// Use client defaults
 			parentItem.driveId = appConfig.defaultDriveId; 	// Should give something like 12345abcde1234a1
 			parentItem.id = appConfig.defaultRootId;  		// Should give something like 12345ABCDE1234A1!101
-			parentPathFoundinDB = true;
 		} else {
-			
 			// Query the parent path online
 			try {
 				log.vdebug("Attempting to query OneDrive for this parent path: ", parentPath);
@@ -3633,7 +3630,7 @@ class SyncEngine {
 				
 				if (exception.httpStatusCode == 404) {
 					// Parent does not exist ... need to create parent
-					log.log("Parent path does not exist: ", parentPath);
+					log.vdebug("Parent path does not exist online: ", parentPath);
 					createDirectoryOnline(parentPath);
 				} else {
 					
@@ -3670,18 +3667,6 @@ class SyncEngine {
 				}
 			}
 		}
-		
-		
-		/**
-		// If we did not find the details in the local database, query this online
-		if (!parentPathFoundinDB) {
-			// No database entry for the path .. which is odd.
-			// Search online for this particular parent path
-			log.log("Parent path not found in local database. Attempting to query OneDrive for this parent path: ", parentPath);
-			onlinePathData = queryOneDriveForSpecificPathAndCreateIfMissing(parentPath, false);
-			parentItem = makeItem(onlinePathData);
-		}
-		**/
 		
 		// Make sure the full path does not exist online, this should generate a 404 response, to which then the folder will be created online
 		try {
