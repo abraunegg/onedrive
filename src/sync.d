@@ -2422,7 +2422,7 @@ class SyncEngine {
 				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 			}
 		} else {
-			// Directory does not exist locally, but is in our database as a dbItem containing all the data was passed into this function
+			// Directory does not exist locally, but it is in our database as a dbItem containing all the data was passed into this function
 			// If we are in a --dry-run situation - this directory may never have existed as we never created it
 			if (!dryRun) {
 				// Not --dry-run situation
@@ -2437,6 +2437,8 @@ class SyncEngine {
 				// A moved directory will be uploaded as 'new', delete the old directory and database reference
 				// Upload to OneDrive the instruction to delete this item. This will handle the 'noRemoteDelete' flag if set
 				uploadDeletedItem(dbItem, localFilePath);
+				writeln("GOT HERE checkDirectoryDatabaseItemForConsistency back from uploadDeletedItem");
+				return;
 			} else {
 				// We are in a --dry-run situation, directory appears to have been deleted locally - this directory may never have existed locally as we never created it due to --dry-run
 				// Did we 'fake create it' as part of --dry-run ?
@@ -4544,7 +4546,7 @@ class SyncEngine {
 	
 		// Are we in a situation where we HAVE to keep the data online - do not delete the remote object
 		if (noRemoteDelete) {
-			if (isDir(path)) {
+			if ((itemToDelete.type == ItemType.dir)) {
 				// Do not process remote directory delete
 				log.vlog("Skipping remote directory delete as --upload-only & --no-remote-delete configured");
 			} else {
@@ -4555,24 +4557,28 @@ class SyncEngine {
 			// Process the delete - delete the object online
 			log.log("Deleting item from OneDrive: ", path);
 			bool flagAsBigDelete = false;
-		
-			// Query the database - how many objects will this remove?
-			auto children = getChildren(itemToDelete.driveId, itemToDelete.id);
-			// Count the returned items + the original item (1)
-			ulong itemsToDelete = count(children) + 1;
-			log.vdebug("Number of items online to delete: ", itemsToDelete);
 			
-			// Are we running in monitor mode? A local delete of a file|folder when using --monitor  will issue a inotify event, which will trigger the local & remote data immediately be deleted
-			if (!appConfig.getValueBool("monitor")) {
-				// not running in monitor mode
-				if (itemsToDelete > appConfig.getValueLong("classify_as_big_delete")) {
-					// A big delete detected
-					flagAsBigDelete = true;
-					if (!appConfig.getValueBool("force")) {
-						log.error("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on OneDrive");
-						log.error("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
-						// Must exit here to preserve data on OneDrive
-						exit(-1);
+			Item[] children;
+		
+			if ((itemToDelete.type == ItemType.dir)) {
+				// Query the database - how many objects will this remove?
+				children = getChildren(itemToDelete.driveId, itemToDelete.id);
+				// Count the returned items + the original item (1)
+				ulong itemsToDelete = count(children) + 1;
+				log.vdebug("Number of items online to delete: ", itemsToDelete);
+				
+				// Are we running in monitor mode? A local delete of a file|folder when using --monitor  will issue a inotify event, which will trigger the local & remote data immediately be deleted
+				if (!appConfig.getValueBool("monitor")) {
+					// not running in monitor mode
+					if (itemsToDelete > appConfig.getValueLong("classify_as_big_delete")) {
+						// A big delete detected
+						flagAsBigDelete = true;
+						if (!appConfig.getValueBool("force")) {
+							log.error("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on OneDrive");
+							log.error("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
+							// Must exit here to preserve data on OneDrive
+							exit(-1);
+						}
 					}
 				}
 			}
@@ -4582,78 +4588,46 @@ class SyncEngine {
 				// We are not in a dry run scenario
 				log.vdebug("itemToDelete: ", itemToDelete);
 				
-				// Create new OneDrive API Instance
-				OneDriveApi uploadDeletedItemOneDriveApiInstance;
-				uploadDeletedItemOneDriveApiInstance = new OneDriveApi(appConfig);
-				uploadDeletedItemOneDriveApiInstance.initialise();
-				
-				// Attempt to do the delete
-				try {
-					// what item are we trying to delete?
-					log.vdebug("Attempting to delete this item id: ", itemToDelete.id, " from drive: ", itemToDelete.driveId);
-					// perform the delete via the default OneDrive API instance
-					uploadDeletedItemOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id);
-					// Shutdown API
-					uploadDeletedItemOneDriveApiInstance.shutdown();
-				} catch (OneDriveException e) {
-					if (e.httpStatusCode == 404) {
-						// item.id, item.eTag could not be found on the specified driveId
-						log.vlog("OneDrive reported: The resource could not be found to be deleted.");
-					} else {
-						// Business and SharePoint accounts can have issues with deleting data
-						// Issue #338  - Unable to delete OneDrive content when OneDrive Business Retention Policy is enabled
-						// Issue #1041 - Unable to delete OneDrive content when permissions prevent deletion
-						if (appConfig.accountType != "personal") {
-							if (e.httpStatusCode == 401) {
-								log.vdebug("uploadDeletedItemOneDriveApiInstance.deleteById generated a 401 error response when attempting to delete object by item id");
-								try {
-									performReverseDeletionOfOneDriveItems(children, itemToDelete);
-								} catch (OneDriveException e) {
-									// display what the error is
-									log.vdebug("A further error was generated when attempting a reverse delete of objects from OneDrive");
-									displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-								}
-							}
-							
-							if (e.httpStatusCode == 403) {
-								log.vdebug("uploadDeletedItemOneDriveApiInstance.deleteById generated a 403 error response when attempting to delete object by item id");
-								try {
-									performReverseDeletionOfOneDriveItems(children, itemToDelete);
-								} catch (OneDriveException e) {
-									// display what the error is
-									log.vdebug("A further error was generated when attempting a reverse delete of objects from OneDrive");
-									displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-								}
-							} else {
-								// Not a 401 or 403 error response & OneDrive Business Account / O365 Shared Folder / Library
-								log.vdebug("uploadDeletedItemOneDriveApiInstance.deleteById generated an error response when attempting to delete object by item id");
-								// display what the error is
-								displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-							}
-						} else {
-							// Some other error
-							displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+				if ((itemToDelete.type == ItemType.dir)) {
+					try {
+						// try to delete the directory and children in reverse order
+						performReverseDeletionOfOneDriveItems(children, itemToDelete);
+					} catch (OneDriveException e) {
+						if (e.httpStatusCode == 404) {
+							// item.id, item.eTag could not be found on the specified driveId
+							log.vlog("OneDrive reported: The resource could not be found to be deleted.");
 						}
 					}
-				}
+				} else {
+					// Create new OneDrive API Instance
+					OneDriveApi uploadDeletedItemOneDriveApiInstance;
+					uploadDeletedItemOneDriveApiInstance = new OneDriveApi(appConfig);
+					uploadDeletedItemOneDriveApiInstance.initialise();
 				
-				// Delete from the database
-				if (itemDB.idInLocalDatabase(itemToDelete.driveId, itemToDelete.id)) {
-					log.vdebug("record to delete is in DB");
-					log.vdebug("itemToDelete.driveId: ", itemToDelete.driveId);
-					log.vdebug("itemToDelete.id:      ", itemToDelete.id);
-				
+					// what item are we trying to delete?
+					log.vdebug("Attempting to delete this single item id: ", itemToDelete.id, " from drive: ", itemToDelete.driveId);
+					try {
+						// perform the delete via the default OneDrive API instance
+						uploadDeletedItemOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id);
+						// Shutdown API
+						uploadDeletedItemOneDriveApiInstance.shutdown();	
+					} catch (OneDriveException e) {
+						if (e.httpStatusCode == 404) {
+							// item.id, item.eTag could not be found on the specified driveId
+							log.vlog("OneDrive reported: The resource could not be found to be deleted.");
+						}
+					}
+					
 					// Delete the reference in the local database
 					itemDB.deleteById(itemToDelete.driveId, itemToDelete.id);
 					if (itemToDelete.remoteId != null) {
 						// If the item is a remote item, delete the reference in the local database
 						itemDB.deleteById(itemToDelete.remoteDriveId, itemToDelete.remoteId);
 					}
-				} else {
-					// item to delete is not in the local database
-					writeln("the item details as requested to delete are not in the database ... --resync ?");
-					exit(-1);
 				}
+			} else {
+				// log that this is a dry-run activity
+				log.log("dry run - no delete activity");
 			}
 		}
 	}
@@ -4679,7 +4653,6 @@ class SyncEngine {
 		OneDriveApi performReverseDeletionOneDriveApiInstance;
 		performReverseDeletionOneDriveApiInstance = new OneDriveApi(appConfig);
 		performReverseDeletionOneDriveApiInstance.initialise();
-		
 		
 		foreach_reverse (Item child; children) {
 			// Log the action
