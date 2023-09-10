@@ -215,10 +215,6 @@ class SyncEngine {
 			// Use curl defaults
 			log.vdebug("Using Curl defaults for HTTP operational protocol version (potentially HTTP/2)");
 		}
-		
-		
-		
-		
 	}
 	
 	// Initialise the Sync Engine class
@@ -351,8 +347,8 @@ class SyncEngine {
 			log.vdebug("appConfig.quotaRestricted    = ", appConfig.quotaRestricted);
 			
 			// DEVELOPMENT SUPPORT HALT
-			if (appConfig.accountType != "personal") {
-				writeln("ERROR: Account Type is not yet supported. Only 'Personal' account types have been validated and tested at this time ... sorry!");
+			if (appConfig.accountType == "documentLibrary") {
+				writeln("ERROR: SharePoint Account Type is not yet supported. Only 'Personal' and 'Business' account types have been validated and tested at this time ... sorry!");
 			}
 			
 			// Make sure that appConfig.defaultDriveId is in our driveIDs array to use when checking if item is in database
@@ -1277,7 +1273,7 @@ class SyncEngine {
 		// Are there any items to delete locally? Cleanup space locally first
 		if (!idsToDelete.empty) {
 			// There are elements that need to be deleted locally
-			log.log("Items to Delete Locally: ", idsToDelete.length);
+			log.vlog("Items to potentially delete locally: ", idsToDelete.length);
 			processDeleteItems();
 			// Cleanup array memory
 			idsToDelete = [];
@@ -2025,11 +2021,13 @@ class SyncEngine {
 			// Compute this item path
 			path = computeItemPath(i[0], i[1]);
 			
-			// Log the action
-			if (item.type == ItemType.file) {
-				log.log("Trying to delete file ", path);
-			} else {
-				log.log("Trying to delete directory ", path);
+			// Log the action if the path exists .. it may of already been removed and this is a legacy array item
+			if (exists(path)) {
+				if (item.type == ItemType.file) {
+					log.log("Trying to delete file ", path);
+				} else {
+					log.log("Trying to delete directory ", path);
+				}
 			}
 			
 			// Process the database entry removal. In a --dry-run scenario, this is being done against a DB copy
@@ -3363,7 +3361,7 @@ class SyncEngine {
 		// Are there any items to download post fetching the /delta data?
 		if (!newLocalFilesToUploadToOneDrive.empty) {
 			// There are elements to upload
-			log.log("New items to upload to OneDrive: ", newLocalFilesToUploadToOneDrive.length);
+			log.vlog("New items to upload to OneDrive: ", newLocalFilesToUploadToOneDrive.length);
 			
 			// How much data do we need to upload? This is important, as, we need to know how much data to determine if all the files can be uploaded
 			foreach (uploadFilePath; newLocalFilesToUploadToOneDrive) {
@@ -4099,13 +4097,13 @@ class SyncEngine {
 			// Not a dry-run situation
 			// Do we use simpleUpload or create an upload session?
 			bool useSimpleUpload = false;
-			if ((appConfig.accountType == "personal") && (thisFileSize <= sessionThresholdFileSize)) {
+			if (thisFileSize <= sessionThresholdFileSize) {
 				useSimpleUpload = true;
 			}
 			
 			// We can only upload zero size files via simpleFileUpload regardless of account type
 			// Reference: https://github.com/OneDrive/onedrive-api-docs/issues/53
-			// Additionally, only Personal accounts where file size is < 4MB should be uploaded by simpleUpload - everything else should use a session to upload
+			// Additionally, only where file size is < 4MB should be uploaded by simpleUpload - everything else should use a session to upload
 			
 			if ((thisFileSize == 0) || (useSimpleUpload)) { 
 				try {
@@ -4332,9 +4330,6 @@ class SyncEngine {
 					// The session includes a Request Body element containing lastModifiedDateTime
 					// which negates the need for a modify event against OneDrive
 					// Is the response a valid JSON object - validation checking done in saveItem
-					
-					writeln("uploadResponse: ", uploadResponse);
-					
 					saveItem(uploadResponse);
 				}
 			} else {
