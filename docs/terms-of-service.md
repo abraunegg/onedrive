@@ -28,7 +28,7 @@ The OneDrive Client for Linux software is subject to the GPLv3, and you must res
 
 ## 5. Disclaimer of Warranties
 
-The OneDrive Client for Linux software and the Service are provided "as is" without any warranties, either expressed or implied. We do not guarantee that the use of the Application will be error-free or uninterrupted.
+The OneDrive Client for Linux software is provided "as is" without any warranties, either expressed or implied. We do not guarantee that the use of the Application will be error-free or uninterrupted.
 
 Microsoft is not responsible for OneDrive Client for Linux. Any issues or problems with OneDrive Client for Linux should be raised on GitHub at https://github.com/abraunegg/onedrive or email support@mynas.com.au
 
