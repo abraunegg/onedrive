@@ -556,7 +556,11 @@ class SyncEngine {
 		string deltaLinkAvailable;
 		JSONValue deltaChanges;
 		ulong responseBundleCount;
-		ulong jsonItemsReceived;
+		ulong jsonItemsReceived = 0;
+		
+		// Reset jsonItemsToProcess & processedCount
+		jsonItemsToProcess = [];
+		processedCount = 0;
 		
 		// Was a driveId provided as an input
 		if (driveIdToQuery.empty) {
@@ -743,10 +747,8 @@ class SyncEngine {
 		log.vdebug("Number of JSON items to process is: ", jsonItemsToProcess.length);
 		log.vdebug("Number of JSON items processed was: ", processedCount);
 		
-		// Free up memory as it is pointless now having this data around
-		if (jsonItemsToProcess.length == processedCount) {
-			jsonItemsToProcess = [];
-		}
+		// Free up memory and items processed as it is pointless now having this data around
+		jsonItemsToProcess = []; 
 		
 		// Keep the driveIDsArray with unique entries only
 		if (!canFind(driveIDsArray, driveIdToQuery)) {
@@ -5047,7 +5049,6 @@ class SyncEngine {
 				// display what the error is
 				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 			}
-			
 		}
 		
 		// Was a valid JSON response for 'driveData' provided?

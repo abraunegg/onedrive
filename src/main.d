@@ -797,6 +797,8 @@ void displaySyncOutcome() {
 		if (!syncEngineInstance.fileUploadFailures.empty) {
 			log.log("To fix any upload failures you may need to perform a --resync to ensure this system is correctly synced with your Microsoft OneDrive Account");
 		}
+		// So that from a logging perspective these messages are clear, add a line break in
+		writeln();
 	}
 }
 
