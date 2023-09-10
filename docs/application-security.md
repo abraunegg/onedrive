@@ -1,12 +1,27 @@
 # OneDrive Client for Linux Application Security
-This document details the application security used, and provides details for users on changing these security options.
+This document details the following information:
 
+* Why is this application an 'unverified publisher'?
+* Application Security and Permission Scopes
+* How to change Permission Scopes
+* How to review your existing application access consent
+
+## Why is this application an 'unverified publisher'?
+Publisher Verification, as per the Microsoft [process](https://learn.microsoft.com/en-us/azure/active-directory/develop/publisher-verification-overview) has actually been configured, and, actually has been verified!
+
+### Verified Publisher Configuration Evidence
+As per the impage below, the Azure portal shows that the 'Publisher Domain' has actually been verified:
+![confirmed_verified_publisher](./images/confirmed_verified_publisher.jpg)
+
+* The 'Publisher Domain' is: https://abraunegg.github.io/
+* The required 'Microsoft Identity Association' is: https://abraunegg.github.io/.well-known/microsoft-identity-association.json
+
+## Application Security and Permission Scopes
 There are 2 main components regarding security for this application:
 * Azure Application Permissions
 * User Authentication Permissions
 
-## Default Application Security
-Security options should follow the security principal of 'least privilege':
+Keeping this in mind, security options should follow the security principal of 'least privilege':
 > The principle that a security architecture should be designed so that each entity 
 > is granted the minimum system resources and authorizations that the entity needs 
 > to perform its function.
@@ -28,6 +43,8 @@ As such, the following API permissions are used by default:
 
 ### Default User Authentication Permissions
 
+When a user authenticates with Microsoft OneDrive, additional account permissions are provided by service to give the user specific access to their data. These are delegated permissions provided by the platform:
+
 | API / Permissions name | Type | Description | Admin consent required |
 |---|---|---|---|
 | Files.ReadWrite | Delegated | Have full access to user files | No |
@@ -35,7 +52,7 @@ As such, the following API permissions are used by default:
 | Sites.ReadWrite.All   | Delegated | Have full access to all items in all site collections | No |
 | offline_access   | Delegated | Maintain access to data you have given it access to | No |
 
-When these delegated API permissions are combined, these provide the effective authentication scope for the OneDrive Client for Linux to access your data. The effective 'default' permissions will be:
+When these delegated API permissions are combined, these provide the effective authentication scope for the OneDrive Client for Linux to access your data. The resulting effective 'default' permissions will be:
 
 | API / Permissions name | Type | Description | Admin consent required |
 |---|---|---|---|
