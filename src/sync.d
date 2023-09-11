@@ -2437,8 +2437,6 @@ class SyncEngine {
 				// A moved directory will be uploaded as 'new', delete the old directory and database reference
 				// Upload to OneDrive the instruction to delete this item. This will handle the 'noRemoteDelete' flag if set
 				uploadDeletedItem(dbItem, localFilePath);
-				writeln("GOT HERE checkDirectoryDatabaseItemForConsistency back from uploadDeletedItem");
-				return;
 			} else {
 				// We are in a --dry-run situation, directory appears to have been deleted locally - this directory may never have existed locally as we never created it due to --dry-run
 				// Did we 'fake create it' as part of --dry-run ?
@@ -4585,43 +4583,32 @@ class SyncEngine {
 				// We are not in a dry run scenario
 				log.vdebug("itemToDelete: ", itemToDelete);
 				
-				if ((itemToDelete.type == ItemType.dir)) {
-					try {
-						// try to delete the directory and children in reverse order
-						performReverseDeletionOfOneDriveItems(children, itemToDelete);
-					} catch (OneDriveException e) {
-						if (e.httpStatusCode == 404) {
-							// item.id, item.eTag could not be found on the specified driveId
-							log.vlog("OneDrive reported: The resource could not be found to be deleted.");
-						}
-					}
-				} else {
-					// Create new OneDrive API Instance
-					OneDriveApi uploadDeletedItemOneDriveApiInstance;
-					uploadDeletedItemOneDriveApiInstance = new OneDriveApi(appConfig);
-					uploadDeletedItemOneDriveApiInstance.initialise();
-				
-					// what item are we trying to delete?
-					log.vdebug("Attempting to delete this single item id: ", itemToDelete.id, " from drive: ", itemToDelete.driveId);
-					try {
-						// perform the delete via the default OneDrive API instance
-						uploadDeletedItemOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id);
-						// Shutdown API
-						uploadDeletedItemOneDriveApiInstance.shutdown();	
-					} catch (OneDriveException e) {
-						if (e.httpStatusCode == 404) {
-							// item.id, item.eTag could not be found on the specified driveId
-							log.vlog("OneDrive reported: The resource could not be found to be deleted.");
-						}
-					}
-					
-					// Delete the reference in the local database
-					itemDB.deleteById(itemToDelete.driveId, itemToDelete.id);
-					if (itemToDelete.remoteId != null) {
-						// If the item is a remote item, delete the reference in the local database
-						itemDB.deleteById(itemToDelete.remoteDriveId, itemToDelete.remoteId);
+				// Create new OneDrive API Instance
+				OneDriveApi uploadDeletedItemOneDriveApiInstance;
+				uploadDeletedItemOneDriveApiInstance = new OneDriveApi(appConfig);
+				uploadDeletedItemOneDriveApiInstance.initialise();
+			
+				// what item are we trying to delete?
+				log.log("Attempting to delete this single item id: ", itemToDelete.id, " from drive: ", itemToDelete.driveId);
+				try {
+					// perform the delete via the default OneDrive API instance
+					uploadDeletedItemOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id);
+					// Shutdown API
+					uploadDeletedItemOneDriveApiInstance.shutdown();	
+				} catch (OneDriveException e) {
+					if (e.httpStatusCode == 404) {
+						// item.id, item.eTag could not be found on the specified driveId
+						log.vlog("OneDrive reported: The resource could not be found to be deleted.");
 					}
 				}
+				
+				// Delete the reference in the local database
+				itemDB.deleteById(itemToDelete.driveId, itemToDelete.id);
+				if (itemToDelete.remoteId != null) {
+					// If the item is a remote item, delete the reference in the local database
+					itemDB.deleteById(itemToDelete.remoteDriveId, itemToDelete.remoteId);
+				}
+				
 			} else {
 				// log that this is a dry-run activity
 				log.log("dry run - no delete activity");
