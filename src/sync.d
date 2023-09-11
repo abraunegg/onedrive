@@ -4305,31 +4305,24 @@ class SyncEngine {
 		
 			// OK as the upload did not fail, we need to save the response from OneDrive, but it has to be a valid JSON response
 			if (uploadResponse.type() == JSONType.object) {
-				// How do we handle this upload response?
-				if ((appConfig.accountType == "personal") || (thisFileSize == 0)) {
-					// Update the item's metadata on OneDrive
-					string newFileId = uploadResponse["id"].str;
-					string newFileETag = uploadResponse["eTag"].str;
-					
-					// check if the path exists locally before we try to set the file times online - as short lived files, whilst we uploaded it - it may not exist locally aready
-					if (exists(fileToUpload)) {
-						SysTime mtime = timeLastModified(fileToUpload).toUTC();
-						// update the file modified time on OneDrive and save item details to database
-						if (!dryRun) {
-							// We are not in a --dry-run situation, ensure that the uploaded file has the correct timestamp
-							uploadLastModifiedTime(parentItem.driveId, newFileId, mtime, newFileETag);
-						}
-					} else {
-						// will be removed in different event!
-						log.log("File disappeared after upload: ", fileToUpload);
+				
+				// Update the item's metadata on OneDrive
+				string newFileId = uploadResponse["id"].str;
+				string newFileETag = uploadResponse["eTag"].str;
+				
+				// check if the path still exists locally before we try to set the file times online - as short lived files, whilst we uploaded it - it may not exist locally aready
+				if (exists(fileToUpload)) {
+					SysTime mtime = timeLastModified(fileToUpload).toUTC();
+					// update the file modified time on OneDrive and save item details to database
+					if (!dryRun) {
+						// We are not in a --dry-run situation, ensure that the uploaded file has the correct timestamp
+						uploadLastModifiedTime(parentItem.driveId, newFileId, mtime, newFileETag);
 					}
 				} else {
-					// OneDrive Business Account - always use a session to upload new files
-					// The session includes a Request Body element containing lastModifiedDateTime
-					// which negates the need for a modify event against OneDrive
-					// Is the response a valid JSON object - validation checking done in saveItem
-					saveItem(uploadResponse);
+					// will be removed in different event!
+					log.log("File disappeared locally after upload: ", fileToUpload);
 				}
+				
 			} else {
 				// Log that an invalid JSON object was returned
 				log.vdebug("uploadFileOneDriveApiInstance.simpleUpload or session.upload call returned an invalid JSON Object from the OneDrive API");
