@@ -609,7 +609,20 @@ class SyncEngine {
 			for (;;) {
 				responseBundleCount++;
 				// Get the /delta changes via the OneDrive API
+				
+				log.vdebug("");
+				log.vdebug("driveIdToQuery: ", driveIdToQuery);
+				log.vdebug("itemIdToQuery:  ", itemIdToQuery);
+				log.vdebug("deltaLink:      ", deltaLink);
+				
+				// getDeltaChangesByItemId has the re-try logic for transient errors
 				deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink);
+				
+				// If deltaChanges is an invalid JSON object, must exit
+				if (deltaChanges.type() != JSONType.object){
+					// Handle the invalid JSON response
+					invalidJSONResponseFromOneDriveAPI();
+				}
 				
 				ulong nrChanges = count(deltaChanges["value"].array);
 				int changeCount = 0;
@@ -1884,18 +1897,59 @@ class SyncEngine {
 		getDeltaQueryOneDriveApiInstance.initialise();
 		try {
 			deltaChangesBundle = getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink);
-			getDeltaQueryOneDriveApiInstance.shutdown();
 		} catch (OneDriveException exception) {
+			// caught an exception
 			log.vdebug("deltaChangesBundle = getDeltaQueryOneDriveApiInstance.viewChangesByItemId() generated a OneDriveException");
-			// display error message
-			displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+			
+			auto errorArray = splitLines(exception.msg);
+			string thisFunctionName = getFunctionName!({});
+			// HTTP request returned status code 408,429,503,504
+			if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+				// Handle the 429
+				if (exception.httpStatusCode == 429) {
+					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+					handleOneDriveThrottleRequest(getDeltaQueryOneDriveApiInstance);
+					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+				}
+				// re-try the specific changes queries
+				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+					// 408 - Request Time Out
+					// 503 - Service Unavailable
+					// 504 - Gateway Timeout
+					// Transient error - try again in 30 seconds
+					log.log(errorArray[0], " when attempting to query OneDrive API for Delta Changes - retrying applicable request in 30 seconds");
+					log.vdebug(thisFunctionName, " previously threw an error - retrying");
+					// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+					log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+					Thread.sleep(dur!"seconds"(30));
+				}
+				// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
+				log.vdebug("Retrying Query: ");
+				deltaChangesBundle = getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink);
+			} else {
+				// Default operation if not 408,429,503,504 errors
+				if (exception.httpStatusCode == 410) {
+					log.log("\nWARNING: OneDrive API responded with an error that indicates the stored deltaLink value is invalid");
+					// Essentially the 'providedDeltaLink' that we have stored is no longer available ... re-try without the stored deltaLink
+					log.log("WARNING: Retrying OneDrive API call without using stored deltaLink value");
+					// Configure an empty deltaLink
+					string emptyDeltaLink;
+					deltaChangesBundle = getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, emptyDeltaLink);
+				} else {
+					// display what the error is
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+				}
+			}
 		}
 		
-		// If the JSON response is a correct JSON object, and has an 'id' we can set these details
-		if (!deltaChangesBundle.type() == JSONType.object) {
+		// Check the response JSON
+		if (deltaChangesBundle.type() != JSONType.object){
 			// Handle the invalid JSON response
 			invalidJSONResponseFromOneDriveAPI();
 		}
+		
+		// Shutdown the API
+		getDeltaQueryOneDriveApiInstance.shutdown();
 		return deltaChangesBundle;
 	}
 	
