@@ -4589,7 +4589,7 @@ class SyncEngine {
 				uploadDeletedItemOneDriveApiInstance.initialise();
 			
 				// what item are we trying to delete?
-				log.log("Attempting to delete this single item id: ", itemToDelete.id, " from drive: ", itemToDelete.driveId);
+				log.vdebug("Attempting to delete this single item id: ", itemToDelete.id, " from drive: ", itemToDelete.driveId);
 				try {
 					// perform the delete via the default OneDrive API instance
 					uploadDeletedItemOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id);
