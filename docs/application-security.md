@@ -10,7 +10,7 @@ This document details the following information:
 Publisher Verification, as per the Microsoft [process](https://learn.microsoft.com/en-us/azure/active-directory/develop/publisher-verification-overview) has actually been configured, and, actually has been verified!
 
 ### Verified Publisher Configuration Evidence
-As per the impage below, the Azure portal shows that the 'Publisher Domain' has actually been verified:
+As per the image below, the Azure portal shows that the 'Publisher Domain' has actually been verified:
 ![confirmed_verified_publisher](./images/confirmed_verified_publisher.jpg)
 
 * The 'Publisher Domain' is: https://abraunegg.github.io/
