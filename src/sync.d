@@ -1362,6 +1362,7 @@ class SyncEngine {
 				log.vdebug("Update/Insert local database with item details");
 				itemDB.upsert(newDatabaseItem);
 				log.vdebug("item details: ", newDatabaseItem);
+				return;
 			} else {
 				// Item details from OneDrive and local item details in database are NOT in-sync
 				log.vdebug("The item to sync exists locally but is NOT in the local database - otherwise this would be handled as changed item");
@@ -1399,15 +1400,13 @@ class SyncEngine {
 						// 3. The local modified time > remote modified time
 						// 4. The id of the item from OneDrive is not in the database
 						
-						
-						
 						// Has the user configured to IGNORE local data protection rules?
 						if (bypassDataPreservation) {
 							// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
 							log.vlog("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: ", newItemPath);
 						} else {
 							// local data protection is configured, renaming local file
-							log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: ", newItemPath, " -> ", renamedNewItemPath);
+							log.log("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: ", newItemPath, " -> ", renamedNewItemPath);
 							// perform the rename action of the local file
 							if (!dryRun) {
 								// Perform the local rename of the existing local file
@@ -1443,49 +1442,49 @@ class SyncEngine {
 				}
 			}
 			
-		} else {
-			// Path does not exist locally - this will be a new file download or new folder creation
-			// how to handle this JSON item?
-			final switch (newDatabaseItem.type) {
-				case ItemType.file:
-					// Add to the items to download array for processing
-					fileJSONItemsToDownload ~= onedriveJSONItem;
-					break;
-				case ItemType.dir:
-				case ItemType.remote:
-					log.log("Creating local directory: ", newItemPath);
-					if (!dryRun) {
-						try {
-							// Create the new directory
-							log.vdebug("Requested path does not exist, creating directory structure: ", newItemPath);
-							mkdirRecurse(newItemPath);
-							// Configure the applicable permissions for the folder
-							log.vdebug("Setting directory permissions for: ", newItemPath);
-							newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
-							// Update the time of the folder to match the last modified time as is provided by OneDrive
-							// If there are any files then downloaded into this folder, the last modified time will get 
-							// updated by the local Operating System with the latest timestamp - as this is normal operation
-							// as the directory has been modified
-							log.vdebug("Setting directory lastModifiedDateTime for: ", newItemPath , " to ", newDatabaseItem.mtime);
-							log.vdebug("Calling setTimes() for this file: ", newItemPath);
-							setTimes(newItemPath, newDatabaseItem.mtime, newDatabaseItem.mtime);
-							// Save the item to the database
-							saveItem(onedriveJSONItem);
-						} catch (FileException e) {
-							// display the error message
-							displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-						}
-					} else {
-						// we dont create the directory, but we need to track that we 'faked it'
-						idsFaked ~= [newDatabaseItem.driveId, newDatabaseItem.id];
-						// Save the item to the dry-run database
+		} 
+			
+		// Path does not exist locally (should not exist locally if renamed file) - this will be a new file download or new folder creation
+		// How to handle this Potentially New Local Item JSON ?
+		final switch (newDatabaseItem.type) {
+			case ItemType.file:
+				// Add to the items to download array for processing
+				fileJSONItemsToDownload ~= onedriveJSONItem;
+				break;
+			case ItemType.dir:
+			case ItemType.remote:
+				log.log("Creating local directory: ", newItemPath);
+				if (!dryRun) {
+					try {
+						// Create the new directory
+						log.vdebug("Requested path does not exist, creating directory structure: ", newItemPath);
+						mkdirRecurse(newItemPath);
+						// Configure the applicable permissions for the folder
+						log.vdebug("Setting directory permissions for: ", newItemPath);
+						newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
+						// Update the time of the folder to match the last modified time as is provided by OneDrive
+						// If there are any files then downloaded into this folder, the last modified time will get 
+						// updated by the local Operating System with the latest timestamp - as this is normal operation
+						// as the directory has been modified
+						log.vdebug("Setting directory lastModifiedDateTime for: ", newItemPath , " to ", newDatabaseItem.mtime);
+						log.vdebug("Calling setTimes() for this file: ", newItemPath);
+						setTimes(newItemPath, newDatabaseItem.mtime, newDatabaseItem.mtime);
+						// Save the item to the database
 						saveItem(onedriveJSONItem);
+					} catch (FileException e) {
+						// display the error message
+						displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 					}
-					break;
-				case ItemType.unknown:
-					// Unknown type - we dont action or sync these items
-					break;
-			}
+				} else {
+					// we dont create the directory, but we need to track that we 'faked it'
+					idsFaked ~= [newDatabaseItem.driveId, newDatabaseItem.id];
+					// Save the item to the dry-run database
+					saveItem(onedriveJSONItem);
+				}
+				break;
+			case ItemType.unknown:
+				// Unknown type - we dont action or sync these items
+				break;
 		}
 	}
 	
