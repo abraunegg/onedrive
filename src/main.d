@@ -688,7 +688,11 @@ int main(string[] cliArgs) {
 	}
 		
 	// Exit application using exit scope
-	return EXIT_SUCCESS;
+	if (!syncEngineInstance.syncFailures) {
+		return EXIT_SUCCESS;
+	} else {
+		return EXIT_FAILURE;
+	}
 }
 
 void performUploadOnlySyncProcess(string localPath, Monitor filesystemMonitor = null) {
@@ -882,21 +886,21 @@ void cleanupDryRunDatabaseFiles(string dryRunDatabaseFile) {
 	// If the dry run database exists, clean this up
 	if (exists(dryRunDatabaseFile)) {
 		// remove the existing file
-		log.log("DRY-RUN: Removing items-dryrun.sqlite3 as it still exists for some reason");
+		log.vdebug("DRY-RUN: Removing items-dryrun.sqlite3 as it still exists for some reason");
 		safeRemove(dryRunDatabaseFile);
 	}
 	
 	// silent cleanup of shm files if it exists
 	if (exists(dryRunShmFile)) {
 		// remove items-dryrun.sqlite3-shm
-		log.log("DRY-RUN: Removing items-dryrun.sqlite3-shm as it still exists for some reason");
+		log.vdebug("DRY-RUN: Removing items-dryrun.sqlite3-shm as it still exists for some reason");
 		safeRemove(dryRunShmFile);
 	}
 	
 	// silent cleanup of wal files if it exists
 	if (exists(dryRunWalFile)) {
 		// remove items-dryrun.sqlite3-wal
-		log.log("DRY-RUN: Removing items-dryrun.sqlite3-wal as it still exists for some reason");
+		log.vdebug("DRY-RUN: Removing items-dryrun.sqlite3-wal as it still exists for some reason");
 		safeRemove(dryRunWalFile);
 	}
 }
