@@ -553,6 +553,7 @@ class SyncEngine {
 		JSONValue deltaChanges;
 		ulong responseBundleCount;
 		ulong jsonItemsReceived = 0;
+		bool generateSimulatedDeltaResponse = false;
 		
 		// Reset jsonItemsToProcess & processedCount
 		jsonItemsToProcess = [];
@@ -576,8 +577,13 @@ class SyncEngine {
 		//   https://docs.microsoft.com/en-us/graph/deployments#supported-features
 		//
 		// - Are we performing a --single-directory sync, which will exclude many items online, focusing in on a specific online directory
-		bool generateSimulatedDeltaResponse = false;
-		if ((singleDirectoryScope) || (nationalCloudDeployment)) {
+		// 
+		// - Are we performing a --download-only --cleanup-local-files action?
+		//   - If we are, and we use a normal /delta query, we get all the local 'deleted' objects as well.
+		//   - If the user deletes a folder online, then replaces it online, we download the deletion events and process the new 'upload' via the web iterface .. 
+		//     the net effect of this, is that the valid local files we want to keep, are actually deleted ...... not desirable
+		if ((singleDirectoryScope) || (nationalCloudDeployment) || (cleanupLocalFiles)) {
+			// Generate a simulated /delta response so that we correctly capture the current online state, less any 'online' delete and replace activity
 			generateSimulatedDeltaResponse = true;
 		}
 		
@@ -977,7 +983,7 @@ class SyncEngine {
 							}
 							// flag to delete local file as it now is no longer in sync with OneDrive
 							log.vdebug("Flagging to delete item locally: ", onedriveJSONItem);
-							idsToDelete ~= [thisItemDriveId, thisItemId];	
+							idsToDelete ~= [thisItemDriveId, thisItemId];
 						}
 					}	
 				}
@@ -1176,8 +1182,8 @@ class SyncEngine {
 							log.vlog("Skipping item - excluded by sync_list config: ", newItemPath);
 							// flagging to skip this item now, but does this exist in the DB thus needs to be removed / deleted?
 							if (existingDBEntry) {
-								log.vlog("Flagging item for local delete as item exists in database: ", newItemPath);
 								// flag to delete
+								log.vlog("Flagging item for local delete as item exists in database: ", newItemPath);
 								idsToDelete ~= [thisItemDriveId, thisItemId];
 							}
 						}
@@ -1285,9 +1291,22 @@ class SyncEngine {
 	
 		// Are there any items to delete locally? Cleanup space locally first
 		if (!idsToDelete.empty) {
-			// There are elements that need to be deleted locally
+			// There are elements that potentially need to be deleted locally
 			log.vlog("Items to potentially delete locally: ", idsToDelete.length);
-			processDeleteItems();
+			if (appConfig.getValueBool("download_only")) {
+				// Download only has been configured
+				if (cleanupLocalFiles) {
+					// Process online deleted items
+					log.vlog("Processing local deletion activity as --download-only & --cleanup-local-files configured");
+					processDeleteItems();
+				} else {
+					// Not cleaning up local files
+					log.vlog("Skipping local deletion activity as --download-only has been used");
+				}
+			} else {
+				// Not using --download-only process normally
+				processDeleteItems();
+			}
 			// Cleanup array memory
 			idsToDelete = [];
 		}
@@ -1929,10 +1948,11 @@ class SyncEngine {
 			} else {
 				// Default operation if not 408,429,503,504 errors
 				if (exception.httpStatusCode == 410) {
-					log.log("\nWARNING: OneDrive API responded with an error that indicates the stored deltaLink value is invalid");
+					log.log("\nWARNING: The OneDrive API responded with an error that indicates the locally stored deltaLink value is invalid");
 					// Essentially the 'providedDeltaLink' that we have stored is no longer available ... re-try without the stored deltaLink
-					log.log("WARNING: Retrying OneDrive API call without using stored deltaLink value");
+					log.log("WARNING: Retrying OneDrive API call without using the locally stored deltaLink value");
 					// Configure an empty deltaLink
+					log.vdebug("Delta link expired for 'getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink)', setting 'deltaLink = null'");
 					string emptyDeltaLink;
 					deltaChangesBundle = getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, emptyDeltaLink);
 				} else {
@@ -2249,9 +2269,17 @@ class SyncEngine {
 			// Make the logging more accurate - we cant update driveId as this then breaks the below queries
 			log.vlog("Processing DB entries for this Drive ID: ", driveId);
 			
-			// Was --single-directory used to limit sync scope, or are we performing a sync against a National Cloud Deployment?
-			if ((singleDirectoryScope) || (nationalCloudDeployment)) {
-			
+			// What OneDrive API query do we use?
+			// - Are we running against a National Cloud Deployments that does not support /delta ?
+			//   National Cloud Deployments do not support /delta as a query
+			//   https://docs.microsoft.com/en-us/graph/deployments#supported-features
+			//
+			// - Are we performing a --single-directory sync, which will exclude many items online, focusing in on a specific online directory
+			// 
+			// - Are we performing a --download-only --cleanup-local-files action?
+			//
+			// If we did, we self generated a /delta response, thus need to now process elements that are still flagged as out-of-sync
+			if ((singleDirectoryScope) || (nationalCloudDeployment) || (cleanupLocalFiles)) {
 				// Any entry in the DB than is flagged as out-of-sync needs to be cleaned up locally first before we scan the entire DB
 				// Normally, this is done at the end of processing all /delta queries, however when using --single-directory or a National Cloud Deployments is configured
 				// We cant use /delta to query the OneDrive API as National Cloud Deployments dont support /delta
@@ -2308,14 +2336,17 @@ class SyncEngine {
 			}
 		}
 		
-		// Do we have any known items, where the content has changed locally, that needs to be uploaded?
-		if (!databaseItemsWhereContentHasChanged.empty) {
-			// There are changed local files that were in the DB to upload
-			log.log("Changed local items to upload to OneDrive: ", databaseItemsWhereContentHasChanged.length);
-			processChangedLocalItemsToUpload();
-			// Cleanup array memory
-			databaseItemsWhereContentHasChanged = [];
-		}	
+		// Are we doing a --download-only sync?
+		if (!appConfig.getValueBool("download_only")) {
+			// Do we have any known items, where the content has changed locally, that needs to be uploaded?
+			if (!databaseItemsWhereContentHasChanged.empty) {
+				// There are changed local files that were in the DB to upload
+				log.log("Changed local items to upload to OneDrive: ", databaseItemsWhereContentHasChanged.length);
+				processChangedLocalItemsToUpload();
+				// Cleanup array memory
+				databaseItemsWhereContentHasChanged = [];
+			}
+		}
 	}
 	
 	// Check this Database Item for its consistency on disk
@@ -2386,14 +2417,22 @@ class SyncEngine {
 							// Is the local file 'newer' or 'older' (ie was an old file 'restored locally' by a different backup / replacement process?)
 							if (localModifiedTime >= itemModifiedTime) {
 								// Local file is newer
-								log.vlog("The file content has changed locally and has a newer timestamp, thus needs to be uploaded to OneDrive");
-								// Add to an array of files we need to upload as this file has changed locally in-between doing the /delta check and performing this check
-								databaseItemsWhereContentHasChanged ~= [dbItem.driveId, dbItem.id, localFilePath];
+								if (!appConfig.getValueBool("download_only")) {
+									log.vlog("The file content has changed locally and has a newer timestamp, thus needs to be uploaded to OneDrive");
+									// Add to an array of files we need to upload as this file has changed locally in-between doing the /delta check and performing this check
+									databaseItemsWhereContentHasChanged ~= [dbItem.driveId, dbItem.id, localFilePath];
+								} else {
+									log.vlog("The file content has changed locally and has a newer timestamp. The file will remain different to online file due to --download-only being used");
+								}
 							} else {
 								// Local file is older - data recovery process? something else?
-								log.vlog("The file content has changed locally and file now has a older timestamp. Uploading this file to OneDrive may potentially cause data-loss online");
-								// Add to an array of files we need to upload as this file has changed locally in-between doing the /delta check and performing this check
-								databaseItemsWhereContentHasChanged ~= [dbItem.driveId, dbItem.id, localFilePath];
+								if (!appConfig.getValueBool("download_only")) {
+									log.vlog("The file content has changed locally and file now has a older timestamp. Uploading this file to OneDrive may potentially cause data-loss online");
+									// Add to an array of files we need to upload as this file has changed locally in-between doing the /delta check and performing this check
+									databaseItemsWhereContentHasChanged ~= [dbItem.driveId, dbItem.id, localFilePath];
+								} else {
+									log.vlog("The file content has changed locally and file now has a older timestamp. The file will remain different to online file due to --download-only being used");
+								}
 							}
 						} else {
 							// The file contents have not changed, but the modified timestamp has
@@ -3394,7 +3433,11 @@ class SyncEngine {
 		
 		// Log the action that we are performing
 		if (!appConfig.surpressLoggingOutput) {
-			log.log("Scanning local filesystem '", logPath, "' for new data to upload ...");
+			if (!cleanupLocalFiles) {
+				log.log("Scanning local filesystem '", logPath, "' for new data to upload ...");
+			} else {
+				log.log("Scanning local filesystem '", logPath, "' for data to cleanup ...");
+			}
 		}
 		
 		auto startTime = Clock.currTime();
@@ -3558,14 +3601,17 @@ class SyncEngine {
 									} else {
 										log.log("Removing local file: ", child.name);
 									}
+									
 									// are we in a --dry-run scenario?
 									if (!dryRun) {
 										// No --dry-run ... process local delete
-										try {
-											attrIsDir(child.linkAttributes) ? rmdir(child.name) : remove(child.name);
-										} catch (FileException e) {
-											// display the error message
-											displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+										if (exists(child)) {
+											try {
+												attrIsDir(child.linkAttributes) ? rmdir(child.name) : remove(child.name);
+											} catch (FileException e) {
+												// display the error message
+												displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+											}
 										}
 									}
 								}

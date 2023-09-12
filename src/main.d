@@ -423,10 +423,13 @@ int main(string[] cliArgs) {
 			if (appConfig.getValueBool("download_only")) {
 				// Only download data from OneDrive
 				syncEngineInstance.syncOneDriveAccountToLocalDisk();
+				// Perform the DB consistency check 
+				// This will also delete any out-of-sync flagged items if configured to do so
+				syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 				// Do we cleanup local files?
-				// - Deletes online will already have been performed, but what we are now doing is searching the local filesystem
+				// - Deletes of data from online will already have been performed, but what we are now doing is searching the local filesystem
 				//   for any new data locally, that usually would be uploaded to OneDrive, but instead, because of the options being
-				//   used, will be deleted from the local filesystem
+				//   used, will need to be deleted from the local filesystem
 				if (appConfig.getValueBool("cleanup_local_files")) {
 					// Perform the filesystem walk
 					syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
