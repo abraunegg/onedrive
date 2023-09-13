@@ -35,6 +35,7 @@ Before reading this document, please ensure you are running application version 
     + [min_notify_changes](#min_notify_changes)
     + [operation_timeout](#operation_timeout)
     + [ip_protocol_version](#ip_protocol_version)
+	+ [classify_as_big_delete](#classify_as_big_delete)
   * [Configuring the client for 'single tenant application' use](#configuring-the-client-for-single-tenant-application-use)
   * [Configuring the client to use older 'skilion' application identifier](#configuring-the-client-to-use-older-skilion-application-identifier)
 - [Frequently Asked Configuration Questions](#frequently-asked-configuration-questions)
@@ -763,6 +764,26 @@ ip_protocol_version = "1"
 * A value of 0 will mean the client will use IPv4 and IPv6. This is the default.
 * A value of 1 will mean the client will use IPv4 only.
 * A value of 2 will mean the client will use IPv6 only.
+
+#### classify_as_big_delete
+This configuration option will help prevent the online deletion of files and folders online, when the directory that has been deleted contains more items than the specified value.
+
+By default, this value is 1000 which will count files and folders as children of the directory that has been deleted.
+
+To change this value, configure the following in your config file:
+```text
+# monitor_fullscan_frequency = "12"
+# sync_root_files = "false"
+classify_as_big_delete = "3000"
+# user_agent = ""
+# remove_source_files = "false"
+```
+
+**Note:**
+* This option only looks at Directories. It has zero effect on deleting files located in your 'sync_dir' root
+* This option (in v2.4.x and below) only gets activated when using `--monitor`. In `--synchronize` mode it is ignored as it is assumed you performed that desired operation before you started your next manual sync with OneDrive.
+* Be sensible with setting this value - do not use a low value such as '1' as this will prevent you from syncing your data each and every time you delete a single file.
+
 
 #### Configuring the client for 'single tenant application' use
 In some instances when using OneDrive Business Accounts, depending on the Azure organisational configuration, it will be necessary to configure the client as a 'single tenant application'.
