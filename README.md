@@ -36,28 +36,17 @@ This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) cl
 *   Colorful log output terminal modification: [OneDrive Client for Linux Colorful log Output](https://github.com/zzzdeb/dotfiles/blob/master/scripts/tools/onedrive_log)
 *   System Tray Icon: [OneDrive Client for Linux System Tray Icon](https://github.com/DanielBorgesOliveira/onedrive_tray)
 
-## Supported Application Version
-Only the current application release version or greater is supported. 
-
-The current application release version is: [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases)
-
-Check the version of the application you are using `onedrive --version` and ensure that you are running either the current release or compile the application yourself from master to get the latest version.
-
-If you are not using the above application version or greater, you must upgrade your application to obtain support.
-
-## Have a Question
-If you have a question or need something clarified, please raise a new disscussion post [here](https://github.com/abraunegg/onedrive/discussions)
-
-Be sure to review the Frequently Asked Questions as well before raising a new discussion post.
-
 ## Frequently Asked Questions
 Refer to [Frequently Asked Questions](https://github.com/abraunegg/onedrive/wiki/Frequently-Asked-Questions)
 
-## Reporting an Issue or Bug
-If you encounter any bugs you can report them here on GitHub. Before filing an issue be sure to:
+## Have a question
+If you have a question or need something clarified, please raise a new disscussion post [here](https://github.com/abraunegg/onedrive/discussions)
 
-1.  Check the version of the application you are using `onedrive --version` and ensure that you are running a supported application version. If you are not using a supported application version, you must first upgrade your application to a supported version and then re-test for your issue.
-2.  If you are using a supported applcation version, fill in a new bug report using the [issue template](https://github.com/abraunegg/onedrive/issues/new?template=bug_report.md)
+## Reporting an Issue or Bug
+If you encounter any bugs you can report them here on Github. Before filing an issue be sure to:
+
+1.  Check the version of the application you are using `onedrive --version` and ensure that you are running either the latest [release](https://github.com/abraunegg/onedrive/releases) or built from master.
+2.  Fill in a new bug report using the [issue template](https://github.com/abraunegg/onedrive/issues/new?template=bug_report.md)
 3.  Generate a debug log for support using the following [process](https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support)
     *   If you are in *any* way concerned regarding the sensitivity of the data contained with in the verbose debug log file, create a new OneDrive account, configure the client to use that, use *dummy* data to simulate your environment and then replicate your original issue
     *   If you are still concerned, provide an NDA or confidentiality document to sign
@@ -70,23 +59,23 @@ Refer to [docs/known-issues.md](https://github.com/abraunegg/onedrive/blob/maste
 
 ## Documentation and Configuration Assistance
 ### Installing from Distribution Packages or Building the OneDrive Client for Linux from source
-Refer to [docs/INSTALL.md](https://github.com/abraunegg/onedrive/blob/master/docs/INSTALL.md)
+Refer to [docs/install.md](https://github.com/abraunegg/onedrive/blob/master/docs/install.md)
 
 ### Configuration and Usage
-Refer to [docs/USAGE.md](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md)
+Refer to [docs/usage.md](https://github.com/abraunegg/onedrive/blob/master/docs/usage.md)
 
 ### Configure OneDrive Business Shared Folders
-Refer to [docs/BusinessSharedFolders.md](https://github.com/abraunegg/onedrive/blob/master/docs/BusinessSharedFolders.md)
+Refer to [docs/business-shared-folders.md](https://github.com/abraunegg/onedrive/blob/master/docs/business-shared-folders.md)
 
 ### Configure SharePoint / Office 365 Shared Libraries (Business or Education)
-Refer to [docs/SharePoint-Shared-Libraries.md](https://github.com/abraunegg/onedrive/blob/master/docs/SharePoint-Shared-Libraries.md)
+Refer to [docs/sharepoint-libraries.md](https://github.com/abraunegg/onedrive/blob/master/docs/sharepoint-libraries.md)
 
 ### Configure National Cloud support
 Refer to [docs/national-cloud-deployments.md](https://github.com/abraunegg/onedrive/blob/master/docs/national-cloud-deployments.md)
 
 ### Docker support
-Refer to [docs/Docker.md](https://github.com/abraunegg/onedrive/blob/master/docs/Docker.md)
+Refer to [docs/docker.md](https://github.com/abraunegg/onedrive/blob/master/docs/docker.md)
 
 ### Podman support
-Refer to [docs/Podman.md](https://github.com/abraunegg/onedrive/blob/master/docs/Podman.md)
+Refer to [docs/podman.md](https://github.com/abraunegg/onedrive/blob/master/docs/podman.md)
 

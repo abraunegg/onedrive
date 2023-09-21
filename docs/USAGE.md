@@ -931,12 +931,12 @@ The default setting is `"false"` which will sync the whole folder structure refe
 Folders shared with you can be synced by adding them to your OneDrive. To do that open your Onedrive, go to the Shared files list, right click on the folder you want to sync and then click on "Add to my OneDrive".
 
 ### How to sync shared folders (OneDrive Business or Office 365)?
-Refer to [./BusinessSharedFolders.md](BusinessSharedFolders.md) for configuration assistance.
+Refer to [./business-shared-folders.md](business-shared-folders.md) for configuration assistance.
 
 Do not use the 'Add shortcut to My files' from the OneDrive web based interface to add a 'shortcut' to your shared folder. This shortcut is not supported by the OneDrive API, thus it cannot be used.
 
 ### How to sync sharePoint / Office 365 Shared Libraries?
-Refer to [./SharePoint-Shared-Libraries.md](SharePoint-Shared-Libraries.md) for configuration assistance.
+Refer to [./sharepoint-libraries.md](sharepoint-libraries.md) for configuration assistance.
 
 ### How to run a user systemd service at boot without user login?
 In some cases it may be desirable for the systemd service to start without having to login as your 'user'
