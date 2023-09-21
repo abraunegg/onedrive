@@ -284,7 +284,7 @@ class OneDriveApi {
 		} else {
 			// Try and read the value from the appConfig if it is set, rather than trying to read the value from disk
 			if (!appConfig.refreshToken.empty) {
-				log.vdebug("read token from appConfig");
+				log.vdebug("Read token from appConfig");
 				refreshToken = strip(appConfig.refreshToken);
 				authorised = true;
 			} else {
@@ -494,6 +494,12 @@ class OneDriveApi {
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
 	JSONValue viewChangesByItemId(string driveId, string id, string deltaLink) {
 		checkAccessTokenExpired();
+		
+		// If Business Account add addIncludeFeatureRequestHeader() which should add Prefer: Include-Feature=AddToOneDrive
+		if ((appConfig.accountType != "personal") && ( appConfig.getValueBool("sync_business_shared_items"))) {
+			addIncludeFeatureRequestHeader();
+		}
+		
 		string url;
 		// configure deltaLink to query
 		if (deltaLink.empty) {
@@ -507,6 +513,12 @@ class OneDriveApi {
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_list_children
 	JSONValue listChildren(string driveId, string id, string nextLink) {
 		checkAccessTokenExpired();
+		
+		// If Business Account add addIncludeFeatureRequestHeader() which should add Prefer: Include-Feature=AddToOneDrive
+		if ((appConfig.accountType != "personal") && ( appConfig.getValueBool("sync_business_shared_items"))) {
+			addIncludeFeatureRequestHeader();
+		}
+		
 		string url;
 		// configure URL to query
 		if (nextLink.empty) {
@@ -677,6 +689,11 @@ class OneDriveApi {
 		curlEngine.http.addRequestHeader("Authorization", accessToken);
 	}
 	
+	private void addIncludeFeatureRequestHeader() {
+		log.vdebug("Adding 'Include-Feature=AddToOneDrive' API request header as 'sync_business_shared_items' config option is enabled");
+		curlEngine.http.addRequestHeader("Prefer", "Include-Feature=AddToOneDrive");
+	}
+	
 	private void acquireToken(char[] postData) {
 		JSONValue response;
 
@@ -684,11 +701,16 @@ class OneDriveApi {
 			response = post(tokenUrl, postData);
 		} catch (OneDriveException e) {
 			// an error was generated
-			if (e.httpStatusCode >= 500) {
-				// There was a HTTP 5xx Server Side Error - retry
-				acquireToken(postData);
+			if ((e.httpStatusCode == 400) || (e.httpStatusCode == 401)) {
+				// Handle an unauthorised client
+				handleClientUnauthorised(e.httpStatusCode, e.msg);
 			} else {
-				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+				if (e.httpStatusCode >= 500) {
+					// There was a HTTP 5xx Server Side Error - retry
+					acquireToken(postData);
+				} else {
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+				}
 			}
 		}
 

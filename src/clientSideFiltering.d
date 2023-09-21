@@ -41,7 +41,7 @@ class ClientSideFiltering {
 		
 		// Load the Business Shared Items file if it exists
 		if (exists(appConfig.businessSharedItemsFilePath)){
-			loadSyncList(appConfig.businessSharedItemsFilePath);
+			loadBusinessSharedItems(appConfig.businessSharedItemsFilePath);
 		}
 
 		// Configure skip_dir, skip_file, skip-dir-strict-match & skip_dotfiles from config entries

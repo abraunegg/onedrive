@@ -55,7 +55,7 @@ class ApplicationConfig {
 	// - Identify as ISV and include Company Name, App Name separated by a pipe character and then adding Version number separated with a slash character
 	
 	//immutable string defaultUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ strip(import("version"));
-	immutable string defaultUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ "v2.5.0-alpha-0";
+	immutable string defaultUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ "v2.5.0-alpha-1";
 	
 	// HTTP Struct items, used for configuring HTTP()
 	// Curl Timeout Handling
@@ -146,20 +146,18 @@ class ApplicationConfig {
 	private string userConfigFilePath = "";
 	// - Store the system 'config' file path
 	private string systemConfigFilePath = "";
+	// - What is the 'config' file path that will be used?
+	private string applicableConfigFilePath = "";
 	// - Store the 'sync_list' file path
 	string syncListFilePath = "";
 	// - Store the 'business_shared_items' file path
 	string businessSharedItemsFilePath = "";
-	// - What is the 'config' file path that will be used?
-	private string applicableConfigFilePath = "";
 	
 	// Hash files so that we can detect when the configuration has changed, in items that will require a --resync
 	private string configHashFile = "";
 	private string configBackupFile = "";
 	private string syncListHashFile = "";
 	private string businessSharedItemsHashFile = "";
-	// hash file permission values (set via initialize function)
-	private int convertedPermissionValue;
 	
 	// Store the actual 'runtime' hash
 	private string currentConfigHash = "";
@@ -178,6 +176,10 @@ class ApplicationConfig {
 	private string configFileDriveId = ""; // Default here is that no drive id is specified
 	private bool configFileSkipDotfiles = false;
 	private bool configFileSkipSymbolicLinks = false;
+	private bool configFileSyncBusinessSharedItems = false;
+	
+	// File permission values (set via initialize function)
+	private int convertedPermissionValue;
 	
 	// Array of values that are the actual application runtime configuration
 	// The values stored in these array's are the actual application configuration which can then be accessed by getValue & setValue
@@ -323,7 +325,7 @@ class ApplicationConfig {
 		
 		// Print in debug the application version as soon as possible
 		//log.vdebug("Application Version: ", strip(import("version")));
-		string tempVersion = "v2.5.0-alpha-0" ~ " GitHub version: " ~ strip(import("version"));
+		string tempVersion = "v2.5.0-alpha-1" ~ " GitHub version: " ~ strip(import("version"));
 		log.vdebug("Application Version: ", tempVersion);
 		
 		// EXPAND USERS HOME DIRECTORY
@@ -448,8 +450,13 @@ class ApplicationConfig {
 		userConfigFilePath = buildNormalizedPath(configDirName ~ "/config");
 		// - What is the full path for the system 'config' file if it is required
 		systemConfigFilePath = buildNormalizedPath(systemConfigDirName ~ "/config");
+		
+		
+		
 		// - What is the full path for the 'business_shared_items'
 		businessSharedItemsFilePath = buildNormalizedPath(configDirName ~ "/business_shared_items");
+		
+		
 		
 		// To determine if any configuration items has changed, where a --resync would be required, we need to have a hash file for the following items
 		// - 'config.backup' file
@@ -707,6 +714,12 @@ class ApplicationConfig {
 					if (key == "skip_symlinks") {
 						configFileSkipSymbolicLinks = true;
 					}
+					
+					// sync_business_shared_items tracking for change
+					if (key == "sync_business_shared_items") {
+						configFileSyncBusinessSharedItems = true;
+					}
+					
 				} else {
 					auto pp = key in stringValues;
 					if (pp) {
@@ -1084,12 +1097,6 @@ class ApplicationConfig {
 				"version",
 					"Print the version and exit",
 					&tmpBol,
-				"list-shared-folders",
-					"List OneDrive Business Shared Items",
-					&boolValues["list_business_shared_items"],
-				"sync-shared-folders",
-					"Sync OneDrive Business Shared Items",
-					&boolValues["sync_business_shared_items"],
 				"with-editing-perms",
 					"Create a read-write shareable link for an existing file on OneDrive when used with --create-share-link <file>",
 					&boolValues["with_editing_perms"]
@@ -1119,7 +1126,7 @@ class ApplicationConfig {
 		// Display application version
 		//writeln("onedrive version                             = ", strip(import("version")));
 		
-		string tempVersion = "v2.5.0-alpha-0" ~ " GitHub version: " ~ strip(import("version"));
+		string tempVersion = "v2.5.0-alpha-1" ~ " GitHub version: " ~ strip(import("version"));
 		writeln("onedrive version                             = ", tempVersion);
 		
 		// Display all of the pertinent configuration options
@@ -1188,7 +1195,7 @@ class ApplicationConfig {
 		writeln("Config option 'ip_protocol_version'          = ", getValueLong("ip_protocol_version"));
 		
 		// Is sync_list configured ?
-		writeln("Config option 'sync_root_files'              = ", getValueBool("sync_root_files"));
+		writeln("\nConfig option 'sync_root_files'              = ", getValueBool("sync_root_files"));
 		if (exists(syncListFilePath)){
 			
 			writeln("Selective sync 'sync_list' configured        = true");
@@ -1206,9 +1213,10 @@ class ApplicationConfig {
 		}
 
 		// Is sync_business_shared_items enabled and configured ?
-		writeln("Config option 'sync_business_shared_items'   = ", getValueBool("sync_business_shared_items"));
+			writeln("\nConfig option 'sync_business_shared_items'   = ", getValueBool("sync_business_shared_items"));
+		
 		if (exists(businessSharedItemsFilePath)){
-			writeln("Business Shared Items configured             = true");
+			writeln("Selective Business Shared Items configured   = true");
 			writeln("sync_business_shared_items contents:");
 			// Output the sync_business_shared_items contents
 			auto businessSharedItemsFileList = File(businessSharedItemsFilePath, "r");
@@ -1218,11 +1226,13 @@ class ApplicationConfig {
 				writeln(line);
 			}
 		} else {
-			writeln("Business Shared Items configured             = false");
+			writeln("Selective Business Shared Items configured   = false");
 		}
 		
+		
+		
 		// Are webhooks enabled?
-		writeln("Config option 'webhook_enabled'              = ", getValueBool("webhook_enabled"));
+		writeln("\nConfig option 'webhook_enabled'              = ", getValueBool("webhook_enabled"));
 		if (getValueBool("webhook_enabled")) {
 			writeln("Config option 'webhook_public_url'           = ", getValueString("webhook_public_url"));
 			writeln("Config option 'webhook_listening_host'       = ", getValueString("webhook_listening_host"));
@@ -1292,13 +1302,14 @@ class ApplicationConfig {
 		// Configuration File Flags
 		bool configFileOptionsDifferent = false;
 		bool syncListFileDifferent = false;
-		bool businessSharedItemsFileDifferent = false;
 		bool syncDirDifferent = false;
 		bool skipFileDifferent = false;
 		bool skipDirDifferent = false;
 		bool skipDotFilesDifferent = false;
 		bool skipSymbolicLinksDifferent = false;
 		bool driveIdDifferent = false;
+		bool syncBusinessSharedItemsDifferent = false;
+		bool businessSharedItemsFileDifferent = false;
 		
 		// Create the required initial hash files
 		createRequiredInitialConfigurationHashFiles();
@@ -1334,6 +1345,7 @@ class ApplicationConfig {
 				// # skip_dir = ""
 				// # skip_dotfiles = ""
 				// # skip_symlinks = ""
+				// # sync_business_shared_items  = ""
 				string[string] backupConfigStringValues;
 				backupConfigStringValues["drive_id"] = "";
 				backupConfigStringValues["sync_dir"] = "";
@@ -1341,6 +1353,7 @@ class ApplicationConfig {
 				backupConfigStringValues["skip_dir"] = "";
 				backupConfigStringValues["skip_dotfiles"] = "";
 				backupConfigStringValues["skip_symlinks"] = "";
+				backupConfigStringValues["sync_business_shared_items"] = "";
 				
 				// bool flags to trigger if the entries that trigger a --resync were found in the backup config file
 				// if these were not in the backup file, they may have been added ... thus new, thus we need to double check the existing
@@ -1351,6 +1364,7 @@ class ApplicationConfig {
 				bool skip_dir_present = false;
 				bool skip_dotfiles_present = false;
 				bool skip_symlinks_present = false;
+				bool sync_business_shared_items_present = false;
 				
 				// Common debug message if an element is different
 				string configOptionModifiedMessage = " was modified since the last time the application was successfully run, --resync required";
@@ -1421,6 +1435,14 @@ class ApplicationConfig {
 									configFileOptionsDifferent = true;
 								}
 							}
+							
+							if (key == "sync_business_shared_items") {
+								sync_business_shared_items_present = true;
+								if (c.front.dup != to!string(getValueBool("sync_business_shared_items"))) {
+									log.vdebug(key, configOptionModifiedMessage);
+									configFileOptionsDifferent = true;
+								}
+							}
 						}
 					}
 				}
@@ -1433,12 +1455,13 @@ class ApplicationConfig {
 				
 				// Were any of the items that trigger a --resync not in the existing backup 'config' file .. thus newly added?
 				if ((!drive_id_present) || (!sync_dir_present) || (! skip_file_present) || (!skip_dir_present) || (!skip_dotfiles_present) || (!skip_symlinks_present)) {
-					log.vdebug("drive_id present in config backup:      ", drive_id_present);
-					log.vdebug("sync_dir present in config backup:      ", sync_dir_present);
-					log.vdebug("skip_file present in config backup:     ", skip_file_present);
-					log.vdebug("skip_dir present in config backup:      ", skip_dir_present);
-					log.vdebug("skip_dotfiles present in config backup: ", skip_dotfiles_present);
-					log.vdebug("skip_symlinks present in config backup: ", skip_symlinks_present);
+					log.vdebug("drive_id present in config backup:                   ", drive_id_present);
+					log.vdebug("sync_dir present in config backup:                   ", sync_dir_present);
+					log.vdebug("skip_file present in config backup:                  ", skip_file_present);
+					log.vdebug("skip_dir present in config backup:                   ", skip_dir_present);
+					log.vdebug("skip_dotfiles present in config backup:              ", skip_dotfiles_present);
+					log.vdebug("skip_symlinks present in config backup:              ", skip_symlinks_present);
+					log.vdebug("sync_business_shared_items present in config backup: ", sync_business_shared_items_present);
 					
 					if ((!drive_id_present) && (configFileDriveId != "")) {
 						writeln("drive_id newly added ... --resync needed");
@@ -1474,6 +1497,12 @@ class ApplicationConfig {
 						writeln("skip_symlinks newly added ... --resync needed");
 						configFileOptionsDifferent = true;
 						skipSymbolicLinksDifferent = true;
+					}
+					
+					if ((!sync_business_shared_items_present) && (configFileSyncBusinessSharedItems)) {
+						writeln("sync_business_shared_items newly added ... --resync needed");
+						configFileOptionsDifferent = true;
+						syncBusinessSharedItemsDifferent = true;
 					}
 				}
 			} else {
@@ -1543,16 +1572,20 @@ class ApplicationConfig {
 		}
 		
 		// Did any of the config files or CLI options trigger a --resync requirement?
-		log.vdebug("configFileOptionsDifferent: ", configFileOptionsDifferent);
-		log.vdebug("syncListFileDifferent: ", syncListFileDifferent);
+		log.vdebug("configFileOptionsDifferent:       ", configFileOptionsDifferent);
+		// Options
+		log.vdebug("driveIdDifferent:                 ", driveIdDifferent);
+		log.vdebug("syncDirDifferent:                 ", syncDirDifferent);
+		log.vdebug("skipFileDifferent:                ", skipFileDifferent);
+		log.vdebug("skipDirDifferent:                 ", skipDirDifferent);
+		log.vdebug("skipDotFilesDifferent:            ", skipDotFilesDifferent);
+		log.vdebug("skipSymbolicLinksDifferent:       ", skipSymbolicLinksDifferent);
+		log.vdebug("syncBusinessSharedItemsDifferent: ", syncBusinessSharedItemsDifferent);
+		// Files
+		log.vdebug("syncListFileDifferent:            ", syncListFileDifferent);
 		log.vdebug("businessSharedItemsFileDifferent: ", businessSharedItemsFileDifferent);
-		log.vdebug("syncDirDifferent: ", syncDirDifferent);
-		log.vdebug("skipFileDifferent: ", skipFileDifferent);
-		log.vdebug("skipDirDifferent: ", skipDirDifferent);
-		log.vdebug("driveIdDifferent: ", driveIdDifferent);
-		log.vdebug("skipDotFilesDifferent: ", skipDotFilesDifferent);
 		
-		if ((configFileOptionsDifferent) || (syncListFileDifferent) || (businessSharedItemsFileDifferent) || (syncDirDifferent) || (skipFileDifferent) || (skipDirDifferent) || (driveIdDifferent) || (skipDotFilesDifferent) || (skipSymbolicLinksDifferent) ) {
+		if ((configFileOptionsDifferent) || (syncListFileDifferent) || (businessSharedItemsFileDifferent) || (syncDirDifferent) || (skipFileDifferent) || (skipDirDifferent) || (driveIdDifferent) || (skipDotFilesDifferent) || (skipSymbolicLinksDifferent) || (syncBusinessSharedItemsDifferent) ) {
 			// set the flag
 			resyncRequired = true;
 		}
@@ -1594,6 +1627,8 @@ class ApplicationConfig {
 				// Hash file should only be readable by the user who created it - 0600 permissions needed
 				syncListHashFile.setAttributes(convertedPermissionValue);
 			}
+			
+			
 			// Update 'update business_shared_items' files
 			if (exists(businessSharedItemsFilePath)) {
 				// update business_shared_folders hash
@@ -1602,6 +1637,7 @@ class ApplicationConfig {
 				// Hash file should only be readable by the user who created it - 0600 permissions needed
 				businessSharedItemsHashFile.setAttributes(convertedPermissionValue);
 			}
+			
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
 			log.log("DRY RUN: Not updating hash files as --dry-run has been used");

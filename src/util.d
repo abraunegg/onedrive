@@ -2,6 +2,7 @@
 module util;
 
 // What does this module require to function?
+import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import std.base64;
 import std.conv;
 import std.digest.crc;
@@ -341,7 +342,7 @@ bool containsASCIIHTMLCodes(string path) {
 	return m.empty;
 }
 
-/**
+
 // Parse and display error message received from OneDrive
 void displayOneDriveErrorMessage(string message, string callingFunction) {
 	writeln();
@@ -412,84 +413,39 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 	log.vdebug("Raw Error Data: ", message);
 	log.vdebug("JSON Message: ", errorMessage);
 }
-**/
 
-// Alpha-0 Testing .....
-void displayOneDriveErrorMessage(string message, string callingFunction) {
-	writeln();
-	log.log("ERROR: Microsoft OneDrive API returned an error with the following message:");
+// Common code for handling when a client is unauthorised
+void handleClientUnauthorised(int httpStatusCode, string message) {
+	// Split the lines of the error message
 	auto errorArray = splitLines(message);
-	log.log("  Error Message:    ", errorArray[0]);
 	// Extract 'message' as the reason
 	JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
+	log.vdebug("errorMessage: ", errorMessage);
 	
-	// What is the reason for the error
-	if (errorMessage.type() == JSONType.object) {
+	if (httpStatusCode == 400) {
+		// bad request or a new auth token is needed
 		// configure the error reason
-		string errorReason;
-		string requestDate;
-		string requestId;
-		
-		// set the reason for the error
-		try {
-			// Use error_description as reason
-			errorReason = errorMessage["error_description"].str;
-		} catch (JSONException e) {
-			// we dont want to do anything here
-		}
-		
-		// set the reason for the error
-		try {
-			// Use ["error"]["message"] as reason
-			errorReason = errorMessage["error"]["message"].str;	
-		} catch (JSONException e) {
-			// we dont want to do anything here
-		}
-		
-		// Display the error reason
-		if (errorReason.startsWith("<!DOCTYPE")) {
-			// a HTML Error Reason was given
-			log.log("  Error Reason:  A HTML Error response was provided. Use debug logging (--verbose --verbose) to view this error");
-			log.log(errorReason);
-		} else {
-			// a non HTML Error Reason was given
-			log.log("  Error Reason:     ", errorReason);
-		}
-		
-		// Get the date of request if available
-		try {
-			// Use ["error"]["innerError"]["date"] as date
-			requestDate = errorMessage["error"]["innerError"]["date"].str;	
-		} catch (JSONException e) {
-			// we dont want to do anything here
-		}
-		
-		// Get the request-id if available
-		try {
-			// Use ["error"]["innerError"]["request-id"] as request-id
-			requestId = errorMessage["error"]["innerError"]["request-id"].str;	
-		} catch (JSONException e) {
-			// we dont want to do anything here
-		}
-		
-		// Display the date and request id if available
-		if (requestDate != "") log.error("  Error Timestamp:  ", requestDate);
-		if (requestId != "")   log.error("  API Request ID:   ", requestId);
+		writeln();
+		string[] errorReason = splitLines(errorMessage["error_description"].str);
+		log.errorAndNotify(errorReason[0]);
+		writeln();
+		log.errorAndNotify("ERROR: You will need to issue a --reauth and re-authorise this client to obtain a fresh auth token.");
+		writeln();
 	}
 	
-	// Where in the code was this error generated
-	log.log("  Calling Function: ", callingFunction);
+	if (httpStatusCode == 401) {
 	
-	// Extra Debug if we are using --verbose --verbose
-	log.log("Raw Error Data: ", message);
-	log.log("JSON Message: ", errorMessage);
+		writeln("CODING TO DO: Triggered a 401 HTTP unauthorised response");
+		
+		writeln();
+		log.errorAndNotify("ERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.");
+		writeln();
+		
+	}
+	
+	// Must exit here
+	exit(EXIT_FAILURE);
 }
-
-
-
-
-
-
 
 // Parse and display error message received from the local file system
 void displayFileSystemErrorMessage(string message, string callingFunction) {
@@ -504,7 +460,7 @@ void displayFileSystemErrorMessage(string message, string callingFunction) {
 	ulong localActualFreeSpace = to!ulong(getAvailableDiskSpace("."));
 	if (localActualFreeSpace == 0) {
 		// force exit
-		exit(-1);
+		exit(EXIT_FAILURE);
 	}
 }
 
@@ -819,5 +775,9 @@ bool hasLocalPath(const ref JSONValue item) {
 }
 
 bool hasETag(const ref JSONValue item) {
+	return ("eTag" in item) != null;
+}
+
+bool hasSharedElement(const ref JSONValue item) {
 	return ("eTag" in item) != null;
 }

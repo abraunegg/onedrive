@@ -28,6 +28,7 @@ struct Item {
 	string   driveId;
 	string   id;
 	string   name;
+	string   remoteName;
 	ItemType type;
 	string   eTag;
 	string   cTag;
@@ -43,11 +44,15 @@ struct Item {
 
 // Construct an Item struct from a JSON driveItem
 Item makeDatabaseItem(JSONValue driveItem) {
+	
+	log.vdebug("Starting this function: ", getFunctionName!({}));
+
 	Item item = {
 		id: driveItem["id"].str,
-		name: "name" in driveItem ? driveItem["name"].str : null, // name may be missing for deleted files in OneDrive Biz
-		eTag: "eTag" in driveItem ? driveItem["eTag"].str : null, // eTag is not returned for the root in OneDrive Biz
-		cTag: "cTag" in driveItem ? driveItem["cTag"].str : null, // cTag is missing in old files (and all folders in OneDrive Biz)
+		name: "name" in driveItem ? driveItem["name"].str : null, // name may be missing for deleted files in OneDrive Business
+		eTag: "eTag" in driveItem ? driveItem["eTag"].str : null, // eTag is not returned for the root in OneDrive Business
+		cTag: "cTag" in driveItem ? driveItem["cTag"].str : null, // cTag is missing in old files (and all folders in OneDrive Business)
+		remoteName: "actualOnlineName" in driveItem ? driveItem["actualOnlineName"].str : null, // actualOnlineName is only used with OneDrive Business Shared Folders
 	};
 
 	// OneDrive API Change: https://github.com/OneDrive/onedrive-api-docs/issues/834
@@ -164,6 +169,7 @@ final class ItemDatabase {
 	string insertItemStmt;
 	string updateItemStmt;
 	string selectItemByIdStmt;
+	string selectItemByRemoteIdStmt;
 	string selectItemByParentIdStmt;
 	string deleteItemByIdStmt;
 	bool databaseInitialised = false;
@@ -205,7 +211,11 @@ final class ItemDatabase {
 		db.exec("PRAGMA recursive_triggers = TRUE");
 		// Set the journal mode for databases associated with the current connection
 		// https://www.sqlite.org/pragma.html#pragma_journal_mode
-		db.exec("PRAGMA journal_mode = WAL");
+		
+		
+		//db.exec("PRAGMA journal_mode = WAL");
+		
+		
 		// Automatic indexing is enabled by default as of version 3.7.17
 		// https://www.sqlite.org/pragma.html#pragma_automatic_index 
 		// PRAGMA automatic_index = boolean;
@@ -223,18 +233,23 @@ final class ItemDatabase {
 		db.exec("PRAGMA locking_mode = EXCLUSIVE");
 		
 		insertItemStmt = "
-			INSERT OR REPLACE INTO item (driveId, id, name, type, eTag, cTag, mtime, parentId, quickXorHash, sha256Hash, remoteDriveId, remoteId, syncStatus, size)
-			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+			INSERT OR REPLACE INTO item (driveId, id, name, remoteName, type, eTag, cTag, mtime, parentId, quickXorHash, sha256Hash, remoteDriveId, remoteId, syncStatus, size)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
 		";
 		updateItemStmt = "
 			UPDATE item
-			SET name = ?3, type = ?4, eTag = ?5, cTag = ?6, mtime = ?7, parentId = ?8, quickXorHash = ?9, sha256Hash = ?10, remoteDriveId = ?11, remoteId = ?12, syncStatus = ?13, size = ?14
+			SET name = ?3, remoteName = ?4, type = ?5, eTag = ?6, cTag = ?7, mtime = ?8, parentId = ?9, quickXorHash = ?10, sha256Hash = ?11, remoteDriveId = ?12, remoteId = ?13, syncStatus = ?14, size = ?15
 			WHERE driveId = ?1 AND id = ?2
 		";
 		selectItemByIdStmt = "
 			SELECT *
 			FROM item
 			WHERE driveId = ?1 AND id = ?2
+		";
+		selectItemByRemoteIdStmt = "
+			SELECT *
+			FROM item
+			WHERE remoteDriveId = ?1 AND remoteId = ?2
 		";
 		selectItemByParentIdStmt = "SELECT * FROM item WHERE driveId = ? AND parentId = ?";
 		deleteItemByIdStmt = "DELETE FROM item WHERE driveId = ? AND id = ?";
@@ -252,6 +267,7 @@ final class ItemDatabase {
 				driveId          TEXT NOT NULL,
 				id               TEXT NOT NULL,
 				name             TEXT NOT NULL,
+				remoteName       TEXT,
 				type             TEXT NOT NULL,
 				eTag             TEXT,
 				cTag             TEXT,
@@ -334,6 +350,18 @@ final class ItemDatabase {
 		return false;
 	}
 
+	bool selectByRemoteId(const(char)[] remoteDriveId, const(char)[] remoteId, out Item item) {
+		auto p = db.prepare(selectItemByRemoteIdStmt);
+		p.bind(1, remoteDriveId);
+		p.bind(2, remoteId);
+		auto r = p.exec();
+		if (!r.empty) {
+			item = buildItem(r);
+			return true;
+		}
+		return false;
+	}
+	
 	// returns true if an item id is in the database
 	bool idInLocalDatabase(const(string) driveId, const(string)id) {
 		auto p = db.prepare(selectItemByIdStmt);
@@ -420,6 +448,7 @@ final class ItemDatabase {
 			bind(1, driveId);
 			bind(2, id);
 			bind(3, name);
+			bind(4, remoteName);
 			string typeStr = null;
 			final switch (type) with (ItemType) {
 				case file:    typeStr = "file";    break;
@@ -427,41 +456,60 @@ final class ItemDatabase {
 				case remote:  typeStr = "remote";  break;
 				case unknown: typeStr = "unknown"; break;
 			}
-			bind(4, typeStr);
-			bind(5, eTag);
-			bind(6, cTag);
-			bind(7, mtime.toISOExtString());
-			bind(8, parentId);
-			bind(9, quickXorHash);
-			bind(10, sha256Hash);
-			bind(11, remoteDriveId);
-			bind(12, remoteId);
-			bind(13, syncStatus);
-			bind(14, size);
+			bind(5, typeStr);
+			bind(6, eTag);
+			bind(7, cTag);
+			bind(8, mtime.toISOExtString());
+			bind(9, parentId);
+			bind(10, quickXorHash);
+			bind(11, sha256Hash);
+			bind(12, remoteDriveId);
+			bind(13, remoteId);
+			bind(14, syncStatus);
+			bind(15, size);
 		}
 	}
 
 	private Item buildItem(Statement.Result result) {
 		assert(!result.empty, "The result must not be empty");
-		assert(result.front.length == 15, "The result must have 15 columns");
+		assert(result.front.length == 16, "The result must have 16 columns");
 		Item item = {
+		
+			// column 0: driveId
+			// column 1: id
+			// column 2: name
+			// column 3: remoteName - only used when there is a difference in the local name & remote shared folder name
+			// column 4: type
+			// column 5: eTag
+			// column 6: cTag
+			// column 7: mtime
+			// column 8: parentId
+			// column 9: quickXorHash
+			// column 10: sha256Hash
+			// column 11: remoteDriveId
+			// column 12: remoteId
+			// column 13: deltaLink
+			// column 14: syncStatus
+			// column 15: size
+				
 			driveId: result.front[0].dup,
 			id: result.front[1].dup,
 			name: result.front[2].dup,
-			// Column 3 is type - not set here
-			eTag: result.front[4].dup,
-			cTag: result.front[5].dup,
-			mtime: SysTime.fromISOExtString(result.front[6]),
-			parentId: result.front[7].dup,
-			quickXorHash: result.front[8].dup,
-			sha256Hash: result.front[9].dup,
-			remoteDriveId: result.front[10].dup,
-			remoteId: result.front[11].dup,
-			// Column 12 is deltaLink - not set here
-			syncStatus: result.front[13].dup,
-			size: result.front[14].dup
+			remoteName: result.front[3].dup,
+			// Column 4 is type - not set here
+			eTag: result.front[5].dup,
+			cTag: result.front[6].dup,
+			mtime: SysTime.fromISOExtString(result.front[7]),
+			parentId: result.front[8].dup,
+			quickXorHash: result.front[9].dup,
+			sha256Hash: result.front[10].dup,
+			remoteDriveId: result.front[11].dup,
+			remoteId: result.front[12].dup,
+			// Column 13 is deltaLink - not set here
+			syncStatus: result.front[14].dup,
+			size: result.front[15].dup
 		};
-		switch (result.front[3]) {
+		switch (result.front[4]) {
 			case "file":    item.type = ItemType.file;    break;
 			case "dir":     item.type = ItemType.dir;     break;
 			case "remote":  item.type = ItemType.remote;  break;

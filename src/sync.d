@@ -124,8 +124,6 @@ class SyncEngine {
 	// VARIABLES NEEDED BUT STILL TO BE TESTED WITH AND USED CORRECTLY
 	bool syncBusinessFolders = false; // this one will change as we will not be just doing business folders
 	
-	
-	
 	// Configure this class instance
 	this(ApplicationConfig appConfig, ItemDatabase itemDB, ClientSideFiltering selectiveSync) {
 		// Configure the class varaible to consume the application configuration
@@ -221,6 +219,7 @@ class SyncEngine {
 	
 	// Initialise the Sync Engine class
 	bool initialise() {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// create a new instance of the OneDrive API
 		oneDriveApiInstance = new OneDriveApi(appConfig);
 		if (oneDriveApiInstance.initialise()) {
@@ -239,6 +238,7 @@ class SyncEngine {
 	
 	// Get Default Drive Details for this Account
 	void getDefaultDriveDetails() {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// Function variables
 		JSONValue defaultOneDriveDriveDetails;
 		
@@ -251,23 +251,9 @@ class SyncEngine {
 			
 			string thisFunctionName = getFunctionName!({});
 			
-			if (exception.httpStatusCode == 400) {
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-				// Check this
-				if (appConfig.getValueString("drive_id").length) {
-					writeln();
-					log.error("ERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect");
-					writeln();
-				}
-				// Must exit here
-				oneDriveApiInstance.shutdown();
-				exit(-1);
-			}
-			
-			if (exception.httpStatusCode == 401) {
-				// HTTP request returned status code 401 (Unauthorized)
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-				handleClientUnauthorised();
+			if ((exception.httpStatusCode == 400) || (exception.httpStatusCode == 401)) {
+				// Handle the 400 | 401 error
+				handleClientUnauthorised(exception.httpStatusCode, exception.msg);
 			}
 			
 			// HTTP request returned status code 408,429,503,504
@@ -367,6 +353,7 @@ class SyncEngine {
 	
 	// Get Default Root Details for this Account
 	void getDefaultRootDetails() {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// Function variables
 		JSONValue defaultOneDriveRootDetails;
 		
@@ -379,23 +366,9 @@ class SyncEngine {
 
 			string thisFunctionName = getFunctionName!({});
 
-			if (exception.httpStatusCode == 400) {
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-				// Check this
-				if (appConfig.getValueString("drive_id").length) {
-					writeln();
-					log.error("ERROR: Check your 'drive_id' entry in your configuration file as it may be incorrect");
-					writeln();
-				}
-				// Must exit here
-				oneDriveApiInstance.shutdown();
-				exit(-1);
-			}
-			
-			if (exception.httpStatusCode == 401) {
-				// HTTP request returned status code 401 (Unauthorized)
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-				handleClientUnauthorised();
+			if ((exception.httpStatusCode == 400) || (exception.httpStatusCode == 401)) {
+				// Handle the 400 | 401 error
+				handleClientUnauthorised(exception.httpStatusCode, exception.msg);
 			}
 			
 			// HTTP request returned status code 408,429,503,504
@@ -450,6 +423,7 @@ class SyncEngine {
 	// - Process any deletes (remove local data)
 	// - Walk local file system for any differences (new files / data to upload to OneDrive)
 	void syncOneDriveAccountToLocalDisk(bool performFullScanTrueUp = false) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// performFullScanTrueUp value
 		log.vdebug("performFullScanTrueUp: ", performFullScanTrueUp);
 		// Fetch the API response of /delta to track changes on OneDrive
@@ -489,10 +463,48 @@ class SyncEngine {
 					processDownloadActivities();
 				}
 			} else {
-				// Not a 'Personal' Account Type - so will either be Business or SharePoint Library, and these need to follow a different process
-				// - OneDrive Business Shared Folder Handling
-				// - SharePoint Links ?
-			
+				// Is this a Business Account with Sync Business Shared Items enabled?
+				if ((appConfig.accountType == "business") && ( appConfig.getValueBool("sync_business_shared_items"))) {
+				
+					// Business Account Shared Items Handling
+					// - OneDrive Business Shared Folder
+					// - OneDrive Business Shared Files ??
+					// - SharePoint Links
+				
+					// Get the Remote Items from the Database
+					Item[] remoteItems = itemDB.selectRemoteItems();
+					
+					foreach (remoteItem; remoteItems) {
+						// Check if this path is specifically excluded by 'skip_dir', but only if 'skip_dir' is not empty
+						if (appConfig.getValueString("skip_dir") != "") {
+							// The path that needs to be checked needs to include the '/'
+							// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
+							if (selectiveSync.isDirNameExcluded(remoteItem.name)) {
+								// This directory name is excluded
+								log.vlog("Skipping item - excluded by skip_dir config: ", remoteItem.name);
+								continue;
+							}
+						}
+						
+						// Directory name is not excluded or skip_dir is not populated
+						if (!appConfig.surpressLoggingOutput) {
+							log.log("Syncing this OneDrive Business Shared Folder: ", remoteItem.name);
+						}
+						
+						log.vdebug("Fetching /delta API response for:");
+						log.vdebug("    remoteItem.remoteDriveId: ", remoteItem.remoteDriveId);
+						log.vdebug("    remoteItem.remoteId:      ", remoteItem.remoteId);
+						
+						// Check this OneDrive Personal Shared Folder for changes
+						fetchOneDriveDeltaAPIResponse(remoteItem.remoteDriveId, remoteItem.remoteId, remoteItem.name, performFullScanTrueUp);
+						
+						// Process any download activities or cleanup actions for this OneDrive Personal Shared Folder
+						processDownloadActivities();
+						
+						
+						
+					}
+				}
 			}
 		}
 	}
@@ -500,6 +512,7 @@ class SyncEngine {
 	// Configure singleDirectoryScope = true if this function is called
 	// By default, singleDirectoryScope = false
 	void setSingleDirectoryScope(string normalisedSingleDirectoryPath) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		
 		// Function variables
 		Item searchItem;
@@ -550,6 +563,8 @@ class SyncEngine {
 	
 	// Query OneDrive API for /delta changes and iterate through items online
 	void fetchOneDriveDeltaAPIResponse(string driveIdToQuery = null, string itemIdToQuery = null, string sharedFolderName = null, bool performFullScanTrueUp = false) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		string deltaLink = null;
 		string deltaLinkAvailable;
 		JSONValue deltaChanges;
@@ -715,7 +730,7 @@ class SyncEngine {
 			// When these JSON items are then processed, if the item exists online, and is in the DB, and that the values match, the DB item is flipped back to 'Y' 
 			// This then allows the application to look for any remaining 'N' values, and delete these as no longer needed locally
 			deltaChanges = generateDeltaResponse(pathToQuery);
-				
+			
 			ulong nrChanges = count(deltaChanges["value"].array);
 			int changeCount = 0;
 			log.vdebug("API Response Bundle: ", responseBundleCount, " - Quantity of 'changes|items' in this bundle to process: ", nrChanges);
@@ -776,6 +791,7 @@ class SyncEngine {
 	
 	// Process the /delta API JSON response items
 	void processDeltaJSONItem(JSONValue onedriveJSONItem, ulong nrChanges, int changeCount, ulong responseBundleCount, bool singleDirectoryScope) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// Variables for this foreach loop
 		string thisItemId;
 		bool itemIsRoot = false;
@@ -833,16 +849,48 @@ class SyncEngine {
 			log.vdebug("handleItemAsRootObject                               = ", handleItemAsRootObject);
 			log.vdebug("itemHasParentReferenceId                             = ", itemHasParentReferenceId);
 			log.vdebug("itemIsDeletedOnline                                  = ", itemIsDeletedOnline);
-			log.vdebug("Handling change as 'root item', or has no parent reference id or is a deleted item");
+			log.vdebug("Handling change immediately as 'root item', or has no parent reference id or is a deleted item");
 			// OK ... do something with this JSON post here ....
 			processRootAndDeletedJSONItems(onedriveJSONItem, objectParentDriveId, handleItemAsRootObject, itemIsDeletedOnline, itemHasParentReferenceId);
 		} else {
+			// Do we need to update this RAW JSON from OneDrive?
+			if ( (objectParentDriveId != appConfig.defaultDriveId) && (appConfig.accountType == "business") && (appConfig.getValueBool("sync_business_shared_items")) ) {
+				// Potentially need to update this JSON data
+				log.vdebug("Potentially need to update this source JSON .... need to check the database");
+				
+				// Check the DB for 'remote' objects, searching 'remoteDriveId' and 'remoteId' items for this remoteItem.driveId and remoteItem.id
+				Item remoteDBItem;
+				itemDB.selectByRemoteId(objectParentDriveId, thisItemId, remoteDBItem);
+				
+				// Is the data that was returned from the database what we are looking for?
+				if ((remoteDBItem.remoteDriveId == objectParentDriveId) && (remoteDBItem.remoteId == thisItemId)) {
+					// Yes, this is the record we are looking for
+					log.vdebug("DB Item response for remoteDBItem: ", remoteDBItem);
+				
+					// Must compare remoteDBItem.name with remoteItem.name
+					if (remoteDBItem.name != onedriveJSONItem["name"].str) {
+						// Update JSON Item
+						string actualOnlineName = onedriveJSONItem["name"].str;
+						log.vdebug("Updating source JSON 'name' to that which is the actual local directory");
+						log.vdebug("onedriveJSONItem['name'] was:         ", onedriveJSONItem["name"].str);
+						log.vdebug("Updating onedriveJSONItem['name'] to: ", remoteDBItem.name);
+						onedriveJSONItem["name"] = remoteDBItem.name;
+						log.vdebug("onedriveJSONItem['name'] now:         ", onedriveJSONItem["name"].str);
+						// Add the original name to the JSON 
+						onedriveJSONItem["actualOnlineName"] = actualOnlineName;
+					}
+				}
+			}
+		
+			// Add this JSON item for further processing
+			log.vdebug("Adding this Raw JSON OneDrive Item to jsonItemsToProcess array for further processing");
 			jsonItemsToProcess ~= onedriveJSONItem;
 		}
 	}
 	
 	// Process 'root' and 'deleted' OneDrive JSON items
 	void processRootAndDeletedJSONItems(JSONValue onedriveJSONItem, string driveId, bool handleItemAsRootObject, bool itemIsDeletedOnline, bool itemHasParentReferenceId) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// Is the item deleted online?
 		if(!itemIsDeletedOnline) {
 			
@@ -887,6 +935,7 @@ class SyncEngine {
 	
 	// Process each of the elements contained in jsonItemsToProcess[]
 	void processJSONItemsInBatch(JSONValue[] array) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		
 		foreach (i, onedriveJSONItem; array.enumerate) {
 			// Use the JSON elements rather can computing a DB struct via makeItem()
@@ -904,6 +953,9 @@ class SyncEngine {
 			bool parentInDatabase = false;
 			// What is the path of the new item
 			string newItemPath;
+			
+			// Configure the remoteItem - so if it is used, it can be utilised later
+			Item remoteItem;
 			
 			// Check the database for an existing entry for this JSON item
 			bool existingDBEntry = itemDB.selectById(thisItemDriveId, thisItemId, existingDatabaseItem);
@@ -930,34 +982,73 @@ class SyncEngine {
 					unwanted = true;
 				} else {
 					// Edge case as the parent (from another users OneDrive account) will never be in the database - potentially a shared object?
-					log.log("Potential Shared Object Item: ", onedriveJSONItem);
+					log.vdebug("Potential Shared Object Item: ", onedriveJSONItem);
 					// Format the OneDrive change into a consumable object for the database
-					Item remoteItem = makeItem(onedriveJSONItem);
-					log.log("The reported parentId is not in the database. This potentially is a shared folder as 'remoteItem.driveId' != 'appConfig.defaultDriveId'. Relevant Details: remoteItem.driveId (", remoteItem.driveId,"), remoteItem.parentId (", remoteItem.parentId,")");
+					remoteItem = makeItem(onedriveJSONItem);
+					log.vdebug("The reported parentId is not in the database. This potentially is a shared folder as 'remoteItem.driveId' != 'appConfig.defaultDriveId'. Relevant Details: remoteItem.driveId (", remoteItem.driveId,"), remoteItem.parentId (", remoteItem.parentId,")");
 					
-					// If we are syncing OneDrive Business Shared Folders, a 'folder' shared with us, has a 'parent' that is not shared with us hence the above message
-					// What we need to do is query the DB for this 'remoteItem.driveId' and use the response from the DB to set the 'remoteItem.parentId' for this new item we are trying to add to the database
 					if (appConfig.accountType == "personal") {
-						// Personal Account Type
-						// - Ensure that this item has no parent
-						log.log("Setting remoteItem.parentId to be null");
+						// Personal Account Handling
+						// Ensure that this item has no parent
+						log.vdebug("Setting remoteItem.parentId to be null");
 						remoteItem.parentId = null;
+						// Add this record to the local database
+						log.vdebug("Update/Insert local database with remoteItem details with remoteItem.parentId as null: ", remoteItem);
+						itemDB.upsert(remoteItem);
 					} else {
-						// This is a Business or SharePoint Account Type
-						// Has the user configured Business Shared Folders to sync ?
-						if (syncBusinessFolders) {
-							foreach(dbItem; itemDB.selectByDriveId(remoteItem.driveId)) {
-								if (dbItem.name == "root") {
-									// Ensure that this item uses the root id as parent
-									log.vdebug("Falsifying remoteItem.parentId to be ", dbItem.id);
-									remoteItem.parentId = dbItem.id;
-								}
+						// Business or SharePoint Account Handling
+						log.vdebug("Handling a Business or SharePoint Shared Item JSON object");
+						
+						if (appConfig.accountType == "business") {
+							// Create a DB Tie Record for this parent object
+							Item parentItem;
+							parentItem.driveId = onedriveJSONItem["parentReference"]["driveId"].str;
+							parentItem.id = onedriveJSONItem["parentReference"]["id"].str;
+							parentItem.name = "root";
+							parentItem.type = ItemType.dir;
+							parentItem.mtime = remoteItem.mtime;
+							parentItem.parentId = null;
+							
+							// Add this parent record to the local database
+							log.vdebug("Insert local database with remoteItem parent details: ", parentItem);
+							itemDB.upsert(parentItem);
+							
+							// Ensure that this item has no parent
+							log.vdebug("Setting remoteItem.parentId to be null");
+							remoteItem.parentId = null;
+							
+							// Check the DB for 'remote' objects, searching 'remoteDriveId' and 'remoteId' items for this remoteItem.driveId and remoteItem.id
+							Item remoteDBItem;
+							itemDB.selectByRemoteId(remoteItem.driveId, remoteItem.id, remoteDBItem);
+							
+							// Must compare remoteDBItem.name with remoteItem.name
+							if ((!remoteDBItem.name.empty) && (remoteDBItem.name != remoteItem.name)) {
+								// Update DB Item
+								log.vdebug("The shared item stored in OneDrive, has a different name to the actual name on the remote drive");
+								log.vdebug("Updating remoteItem.name JSON data with the actual name being used on account drive and local folder");
+								log.vdebug("remoteItem.name was:              ", remoteItem.name);
+								log.vdebug("Updating remoteItem.name to:      ", remoteDBItem.name);
+								remoteItem.name = remoteDBItem.name;
+								log.vdebug("Setting remoteItem.remoteName to: ", onedriveJSONItem["name"].str);
+								
+								// Update JSON Item
+								remoteItem.remoteName = onedriveJSONItem["name"].str;
+								log.vdebug("Updating source JSON 'name' to that which is the actual local directory");
+								log.vdebug("onedriveJSONItem['name'] was:         ", onedriveJSONItem["name"].str);
+								log.vdebug("Updating onedriveJSONItem['name'] to: ", remoteDBItem.name);
+								onedriveJSONItem["name"] = remoteDBItem.name;
+								log.vdebug("onedriveJSONItem['name'] now:         ", onedriveJSONItem["name"].str);
+								
+								// Update newItemPath value
+								newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ remoteDBItem.name;
+								log.vdebug("New Item updated calculated full path is: ", newItemPath);
 							}
+								
+							// Add this record to the local database
+							log.vdebug("Update/Insert local database with remoteItem details: ", remoteItem);
+							itemDB.upsert(remoteItem);
 						}
 					}
-					// Add this record to the local database
-					log.log("Update/Insert local database with remoteItem details: ", remoteItem);
-					itemDB.upsert(remoteItem);
 				}
 			}
 			
@@ -999,7 +1090,9 @@ class SyncEngine {
 					log.vdebug("The item we are syncing is a folder");
 				} else if (isItemRemote(onedriveJSONItem)) {
 					log.vdebug("The item we are syncing is a remote item");
+					/**
 					assert(isItemFolder(onedriveJSONItem["remoteItem"]), "The remote item is not a folder");
+					**/
 				} else {
 					// Why was this unwanted?
 					if (newItemPath.empty) {
@@ -1048,7 +1141,9 @@ class SyncEngine {
 							} else {
 								log.vdebug("Parent details not in database - unable to compute complex path to check");
 							}
-							log.vdebug("skip_dir path to check (complex): ", complexPathToCheck);
+							if (!complexPathToCheck.empty) {
+								log.vdebug("skip_dir path to check (complex): ", complexPathToCheck);
+							}
 						} else {
 							simplePathToCheck = onedriveJSONItem["name"].str;
 						}
@@ -1247,6 +1342,7 @@ class SyncEngine {
 			} else {
 				// This JSON item is wanted - we need to process this JSON item further
 				// Take the JSON item and create a consumable object for eventual database insertion
+				log.vdebug("Making newDatabaseItem from this JSON: ", onedriveJSONItem);
 				Item newDatabaseItem = makeItem(onedriveJSONItem);
 				
 				if (existingDBEntry) {
@@ -1278,7 +1374,14 @@ class SyncEngine {
 					// The actual item may actually exist locally already, meaning that just the database is out-of-date or missing the data due to --resync
 					// But we also cannot compute the newItemPath as the parental objects may not exist as well
 					log.vdebug("OneDrive change is potentially a new local item");
-					// Attempt to apply this new item
+					
+					// Attempt to apply this potentially new item
+					
+					//writeln("newDatabaseItem: ", newDatabaseItem);
+					//writeln("onedriveJSONItem: ", onedriveJSONItem);
+					//writeln("newItemPath: ", newItemPath);
+					
+					
 					applyPotentiallyNewLocalItem(newDatabaseItem, onedriveJSONItem, newItemPath);
 				}
 			}
@@ -1290,6 +1393,7 @@ class SyncEngine {
 	
 	// Perform the download of any required objects in parallel
 	void processDownloadActivities() {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 	
 		// Are there any items to delete locally? Cleanup space locally first
 		if (!idsToDelete.empty) {
@@ -1331,6 +1435,7 @@ class SyncEngine {
 	
 	// If the JSON item is not in the database, it is potentially a new item that we need to action
 	void applyPotentiallyNewLocalItem(Item newDatabaseItem, JSONValue onedriveJSONItem, string newItemPath) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 	
 		// The JSON and Database items being passed in here have passed the following checks:
 		// - skip_file
@@ -1362,8 +1467,8 @@ class SyncEngine {
 				// Item details from OneDrive and local item details in database are in-sync
 				log.vdebug("The item to sync is already present on the local filesystem and is in-sync with the local database");
 				log.vdebug("Update/Insert local database with item details");
+				log.vdebug("item details to update/insert: ", newDatabaseItem);
 				itemDB.upsert(newDatabaseItem);
-				log.vdebug("item details: ", newDatabaseItem);
 				return;
 			} else {
 				// Item details from OneDrive and local item details in database are NOT in-sync
@@ -1492,6 +1597,7 @@ class SyncEngine {
 	
 	// If the JSON item IS in the database, this will be an update to an existing in-sync item
 	void applyPotentiallyChangedItem(Item existingDatabaseItem, string existingItemPath, Item changedOneDriveItem, string changedItemPath, JSONValue onedriveJSONItem) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		
 		// If we are moving the item, we do not need to download it again
 		bool itemWasMoved = false;
@@ -1503,7 +1609,7 @@ class SyncEngine {
 				log.log("Moving ", existingItemPath, " to ", changedItemPath);
 				// Is the destination path empty .. or does something exist at that location?
 				if (exists(changedItemPath)) {
-					// Destination exists ... does this destination exist in the database?
+					// Destination we are moving to exists ... 
 					Item changedLocalItem;
 					// Query DB for this changed item in specified path that exists and see if it is in-sync
 					if (itemDB.selectByPath(changedItemPath, changedOneDriveItem.driveId, changedLocalItem)) {
@@ -1568,6 +1674,17 @@ class SyncEngine {
 			} else {
 				// Save this item in the database
 				saveItem(onedriveJSONItem);
+				
+				// If the 'Add shortcut to My files' link was the item that was actually renamed .. we have to update our DB records
+				if (changedOneDriveItem.type == ItemType.remote) {
+					// Select remote item data from the database
+					Item existingRemoteDbItem;
+					itemDB.selectById(changedOneDriveItem.remoteDriveId, changedOneDriveItem.remoteId, existingRemoteDbItem);
+					// Update the 'name' in existingRemoteDbItem and save it back to the database
+					// This is the local name stored on disk that was just 'moved'
+					existingRemoteDbItem.name = changedOneDriveItem.name;
+					itemDB.upsert(existingRemoteDbItem);
+				}
 			}
 		} else {
 			// The existingDatabaseItem.eTag == changedOneDriveItem.eTag .. nothing has changed, so save this item
@@ -1577,6 +1694,7 @@ class SyncEngine {
 	
 	// Download new file items as identified
 	void downloadOneDriveItems() {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// Lets deal with the JSON items in a batch process
 		ulong batchSize = appConfig.concurrentThreads;
 		ulong batchCount = (fileJSONItemsToDownload.length + batchSize - 1) / batchSize;
@@ -1589,6 +1707,7 @@ class SyncEngine {
 	
 	// Download items in parallel
 	void downloadOneDriveItemsInParallel(JSONValue[] array) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		foreach (i, onedriveJSONItem; taskPool.parallel(array)) {
 			// Take the JSON item and create a consumable object for eventual database insertion
 			Item newDatabaseItem = makeItem(onedriveJSONItem);
@@ -1598,6 +1717,7 @@ class SyncEngine {
 	
 	// Perform the actual download of an object from OneDrive
 	void downloadFileItem(Item newDatabaseItem, JSONValue onedriveJSONItem) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		
 		bool downloadFailed = false;
 		string OneDriveFileXORHash;
@@ -1836,6 +1956,7 @@ class SyncEngine {
 	
 	// Test if the given item is in-sync. Returns true if the given item corresponds to the local one
 	bool isItemSynced(Item item, string path, string itemSource) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		if (!exists(path)) return false;
 		final switch (item.type) {
 		case ItemType.file:
@@ -1908,6 +2029,7 @@ class SyncEngine {
 	
 	// Get the /delta data using the provided details
 	JSONValue getDeltaChangesByItemId(string selectedDriveId, string selectedItemId, string providedDeltaLink) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// Function variables
 		JSONValue deltaChangesBundle;
 		// Get the /delta data for this account | driveId | deltaLink combination
@@ -1974,17 +2096,9 @@ class SyncEngine {
 		return deltaChangesBundle;
 	}
 	
-	// Common code for handling when a client is unauthorised
-	void handleClientUnauthorised() {
-		writeln();
-		log.errorAndNotify("ERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.");
-		writeln();
-		// Must exit here
-		exit(-1);
-	}
-	
 	// Common code to handle a 408 or 429 response from the OneDrive API
 	void handleOneDriveThrottleRequest(OneDriveApi activeOneDriveApiInstance) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// If OneDrive sends a status code 429 then this function will be used to process the Retry-After response header which contains the value by which we need to wait
 		log.vdebug("Handling a OneDrive HTTP 429 Response Code (Too Many Requests)");
 		// Read in the Retry-After HTTP header as set and delay as per this value before retrying the request
@@ -2018,6 +2132,7 @@ class SyncEngine {
 	
 	// If the JSON response is not correct JSON object, exit
 	void invalidJSONResponseFromOneDriveAPI() {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		log.error("ERROR: Query of the OneDrive API returned an invalid JSON response");
 		// Must exit
 		exit(-1);
@@ -2025,6 +2140,7 @@ class SyncEngine {
 	
 	// Handle an unhandled API error
 	void defaultUnhandledHTTPErrorCode(OneDriveException exception) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// display error
 		displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 		// Must exit here
@@ -2033,10 +2149,11 @@ class SyncEngine {
 	
 	// Display the pertinant details of the sync engine
 	void displaySyncEngineDetails() {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
 		//log.vlog("Application version:  ", strip(import("version")));
 		
-		string tempVersion = "v2.5.0-alpha-0" ~ " GitHub version: " ~ strip(import("version"));
+		string tempVersion = "v2.5.0-alpha-1" ~ " GitHub version: " ~ strip(import("version"));
 		log.vlog("Application version:  ", tempVersion);
 		
 		log.vlog("Account Type:         ", appConfig.accountType);
@@ -2059,6 +2176,7 @@ class SyncEngine {
 	
 	// Query itemdb.computePath() and catch potential assert when DB consistency issue occurs
 	string computeItemPath(string thisDriveId, string thisItemId) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// static declare this for this function
 		static import core.exception;
 		string calculatedPath;
@@ -2077,7 +2195,8 @@ class SyncEngine {
 	}
 	
 	// Try and compute the file hash for the given item
-	bool testFileHash(string path, Item item) {		
+	bool testFileHash(string path, Item item) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// Generate QuickXORHash first before attempting to generate any other type of hash
 		if (item.quickXorHash) {
 			if (item.quickXorHash == computeQuickXorHash(path)) return true;
@@ -2089,6 +2208,7 @@ class SyncEngine {
 	
 	// Process items that need to be removed
 	void processDeleteItems() {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		foreach_reverse (i; idsToDelete) {
 			Item item;
 			string path;
@@ -2174,6 +2294,7 @@ class SyncEngine {
 	
 	// Update the timestamp of an object online
 	void uploadLastModifiedTime(string driveId, string id, SysTime mtime, string eTag) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		string itemModifiedTime;
 		itemModifiedTime = mtime.toISOExtString();
 		JSONValue data = [
@@ -2250,6 +2371,7 @@ class SyncEngine {
 	
 	// Perform a database integrity check - checking all the items that are in-sync at the moment, validating what we know should be on disk, to what is actually on disk
 	void performDatabaseConsistencyAndIntegrityCheck() {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// Log what we are doing
 		if (!appConfig.surpressLoggingOutput) {
 			log.log("Performing a database consistency and integrity check on locally stored data ... ");
@@ -2352,6 +2474,7 @@ class SyncEngine {
 	
 	// Check this Database Item for its consistency on disk
 	void checkDatabaseItemForConsistency(Item dbItem) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 	
 		// What is the local path item
 		string localFilePath;
@@ -2371,16 +2494,17 @@ class SyncEngine {
 			logOutputPath = localFilePath;
 		}
 		
+		// Log what we are doing
+		log.vlog("Processing ", logOutputPath);
+		
 		// Determine which action to take
 		final switch (dbItem.type) {
 		case ItemType.file:
 			// Logging output
-			log.vlog("Processing ", logOutputPath);
 			checkFileDatabaseItemForConsistency(dbItem, localFilePath);
 			break;
 		case ItemType.dir:
 			// Logging output
-			log.vlog("Processing ", logOutputPath);
 			checkDirectoryDatabaseItemForConsistency(dbItem, localFilePath);
 			break;
 		case ItemType.remote:
@@ -2394,6 +2518,7 @@ class SyncEngine {
 	
 	// Perform the database consistency check on this file item
 	void checkFileDatabaseItemForConsistency(Item dbItem, string localFilePath) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// What is the source of this item data?
 		string itemSource = "database";
 		
@@ -2487,6 +2612,7 @@ class SyncEngine {
 	
 	// Perform the database consistency check on this directory item
 	void checkDirectoryDatabaseItemForConsistency(Item dbItem, string localFilePath) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 	
 		// What is the source of this item data?
 		string itemSource = "database";
@@ -2571,6 +2697,7 @@ class SyncEngine {
 	
 	// Does this Database Item (directory or file) get excluded from any operation based on any client side filtering rules?
 	bool checkDBItemAndPathAgainstClientSideFiltering(Item dbItem, string localFilePath) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// Check the item and path against client side filtering rules
 		// Return a true|false response
 		bool clientSideRuleExcludesItem = false;
@@ -2629,6 +2756,7 @@ class SyncEngine {
 	
 	// Does this local path (directory or file) conform with the Microsoft Naming Restrictions?
 	bool checkPathAgainstMicrosoftNamingRestrictions(string localFilePath) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 	
 		// Check if the given path violates certain Microsoft restrictions and limitations
 		// Return a true|false response
@@ -2663,6 +2791,7 @@ class SyncEngine {
 	
 	// Does this local path (directory or file) get excluded from any operation based on any client side filtering rules?
 	bool checkPathAgainstClientSideFiltering(string localFilePath) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// Unlike checkDBItemAndPathAgainstClientSideFiltering - we need to check the path only
 	
 		// Check the path against client side filtering rules
@@ -2831,6 +2960,7 @@ class SyncEngine {
 	// Does this JSON item (as received from OneDrive API) get excluded from any operation based on any client side filtering rules?
 	// This function is only used when we are fetching objects from the OneDrive API using a /children query to help speed up what object we query
 	bool checkJSONAgainstClientSideFiltering(JSONValue onedriveJSONItem) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 	
 		bool clientSideRuleExcludesPath = false;
 		
@@ -2885,7 +3015,9 @@ class SyncEngine {
 						} else {
 							log.vdebug("Parent details not in database - unable to compute complex path to check");
 						}
-						log.vdebug("skip_dir path to check (complex): ", complexPathToCheck);
+						if (!complexPathToCheck.empty) {
+							log.vdebug("skip_dir path to check (complex): ", complexPathToCheck);
+						}
 					} else {
 						simplePathToCheck = onedriveJSONItem["name"].str;
 					}
@@ -2975,6 +3107,7 @@ class SyncEngine {
 	
 	// Process the list of local changes to upload to OneDrive
 	void processChangedLocalItemsToUpload() {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// Each element in this array 'databaseItemsWhereContentHasChanged' is an Database Item ID that has been modified locally
 		ulong batchSize = appConfig.concurrentThreads;
 		ulong batchCount = (databaseItemsWhereContentHasChanged.length + batchSize - 1) / batchSize;
@@ -2988,6 +3121,7 @@ class SyncEngine {
 	
 	// Upload changed local files to OneDrive in parallel
 	void uploadChangedLocalFileToOneDrive(string[3][] array) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 	
 		foreach (i, localItemDetails; taskPool.parallel(array)) {
 		
@@ -3116,6 +3250,7 @@ class SyncEngine {
 	
 	// Perform the upload of a locally modified file to OneDrive
 	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, ulong thisFileSizeLocal) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 	
 		JSONValue uploadResponse;
 		OneDriveApi uploadFileOneDriveApiInstance;
@@ -3336,6 +3471,7 @@ class SyncEngine {
 		
 	// Query the OneDrive API using the provided driveId to get the latest quota details
 	ulong getRemainingFreeSpace(string driveId) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		
 		// Get the quota details for this driveId, as this could have changed since we started the application - the user could have added / deleted data online, or purchased additional storage
 		// Quota details are ONLY available for the main default driveId, as the OneDrive API does not provide quota details for shared folders
@@ -3418,6 +3554,7 @@ class SyncEngine {
 	
 	// Perform a filesystem walk to uncover new data to upload to OneDrive
 	void scanLocalFilesystemPathForNewData(string path) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// To improve logging output for this function, what is the 'logical path' we are scanning for file & folder differences?
 		string logPath;
 		if (path == ".") {
@@ -3495,6 +3632,7 @@ class SyncEngine {
 	
 	// Scan this path for new data
 	void scanPathForNewData(string path) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 	
 		ulong maxPathLength;
 		ulong pathWalkLength;
@@ -3691,12 +3829,15 @@ class SyncEngine {
 	
 	// Query the database to determine if this path is within the existing database
 	bool pathFoundInDatabase(string searchPath) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// Check if this path in the database
 		Item databaseItem;
 		bool pathFoundInDB = false;
 		foreach (driveId; driveIDsArray) {
 			if (itemDB.selectByPath(searchPath, driveId, databaseItem)) {
-				pathFoundInDB = true; 
+				pathFoundInDB = true;
+				log.vdebug("databaseItem: ", databaseItem);
+				log.vdebug("pathFoundInDB: ", pathFoundInDB);
 			}
 		}
 		return pathFoundInDB;
@@ -3706,6 +3847,7 @@ class SyncEngine {
 	// - Test if we can get the parent path details from the database, otherwise we need to search online
 	//   for the path flow and create the folder that way
 	void createDirectoryOnline(string thisNewPathToCreate) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		log.log("OneDrive Client requested to create this directory online: ", thisNewPathToCreate);
 		
 		Item parentItem;
@@ -3727,51 +3869,77 @@ class SyncEngine {
 			parentItem.id = appConfig.defaultRootId;  		// Should give something like 12345ABCDE1234A1!101
 		} else {
 			// Query the parent path online
-			try {
-				log.vdebug("Attempting to query OneDrive for this parent path: ", parentPath);
-				onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetails(parentPath);
-				saveItem(onlinePathData);
-				parentItem = makeItem(onlinePathData);
-			} catch (OneDriveException exception) {
-				
-				if (exception.httpStatusCode == 404) {
-					// Parent does not exist ... need to create parent
-					log.vdebug("Parent path does not exist online: ", parentPath);
-					createDirectoryOnline(parentPath);
-				} else {
-					
-					string thisFunctionName = getFunctionName!({});
-					// HTTP request returned status code 408,429,503,504
-					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-						// Handle the 429
-						if (exception.httpStatusCode == 429) {
-							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-							handleOneDriveThrottleRequest(createDirectoryOnlineOneDriveApiInstance);
-							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-						}
-						// re-try the specific changes queries
-						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-							// 408 - Request Time Out
-							// 503 - Service Unavailable
-							// 504 - Gateway Timeout
-							// Transient error - try again in 30 seconds
-							auto errorArray = splitLines(exception.msg);
-							log.log(errorArray[0], " when attempting to create a remote directory on OneDrive - retrying applicable request in 30 seconds");
-							log.vdebug(thisFunctionName, " previously threw an error - retrying");
-							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-							Thread.sleep(dur!"seconds"(30));
-						}
-						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						log.vdebug("Retrying Function: ", thisFunctionName);
-						createDirectoryOnline(thisNewPathToCreate);
-					} else {
-						// Default operation if not 408,429,503,504 errors
-						// display what the error is
-						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-					}
+			log.vlog("Attempting to query Local Database for this parent path: ", parentPath);
+			
+			// Attempt a 2 step process to work out where to create the directory
+			// Step 1: Query the DB first
+			// Step 2: Query online as last resort
+			
+			// Step 1: Check if this path in the database
+			Item databaseItem;
+			bool pathFoundInDB = false;
+			foreach (driveId; driveIDsArray) {
+				if (itemDB.selectByPath(parentPath, driveId, databaseItem)) {
+					pathFoundInDB = true;
+					log.vdebug("databaseItem: ", databaseItem);
+					log.vdebug("pathFoundInDB: ", pathFoundInDB);
 				}
 			}
+			
+			// Step 2: Query for the path online
+			if (!pathFoundInDB) {
+			
+				try {
+					log.vlog("Attempting to query OneDrive Online for this parent path: ", parentPath);
+					onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetails(parentPath);
+					saveItem(onlinePathData);
+					parentItem = makeItem(onlinePathData);
+				} catch (OneDriveException exception) {
+					
+					if (exception.httpStatusCode == 404) {
+						// Parent does not exist ... need to create parent
+						log.vdebug("Parent path does not exist online: ", parentPath);
+						createDirectoryOnline(parentPath);
+					} else {
+						
+						string thisFunctionName = getFunctionName!({});
+						// HTTP request returned status code 408,429,503,504
+						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+							// Handle the 429
+							if (exception.httpStatusCode == 429) {
+								// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+								handleOneDriveThrottleRequest(createDirectoryOnlineOneDriveApiInstance);
+								log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+							}
+							// re-try the specific changes queries
+							if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+								// 408 - Request Time Out
+								// 503 - Service Unavailable
+								// 504 - Gateway Timeout
+								// Transient error - try again in 30 seconds
+								auto errorArray = splitLines(exception.msg);
+								log.log(errorArray[0], " when attempting to create a remote directory on OneDrive - retrying applicable request in 30 seconds");
+								log.vdebug(thisFunctionName, " previously threw an error - retrying");
+								// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+								log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+								Thread.sleep(dur!"seconds"(30));
+							}
+							// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
+							log.vdebug("Retrying Function: ", thisFunctionName);
+							createDirectoryOnline(thisNewPathToCreate);
+						} else {
+							// Default operation if not 408,429,503,504 errors
+							// display what the error is
+							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+						}
+					}
+				}
+			
+			} else {
+				// parent path found in database ... use those details ...
+				parentItem = databaseItem;
+			}
+			
 		}
 		
 		// Make sure the full path does not exist online, this should generate a 404 response, to which then the folder will be created online
@@ -3779,7 +3947,6 @@ class SyncEngine {
 			// Try and query the OneDrive API for the path we need to create
 			log.vlog("Attempting to query OneDrive for this path: ", thisNewPathToCreate);
 			
-			// What query & method should be used to query if this path exists online?
 			if (parentItem.driveId == appConfig.defaultDriveId) {
 				// Use getPathDetailsByDriveId
 				onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, thisNewPathToCreate);
@@ -3790,6 +3957,7 @@ class SyncEngine {
 				// If no match, the folder we want to create does not exist at the location we are seeking to create it at, thus generate a 404
 				onlinePathData = createDirectoryOnlineOneDriveApiInstance.searchDriveForPath(parentItem.driveId, baseName(thisNewPathToCreate));
 				
+				// Process the response from searching the drive
 				ulong responseCount = count(onlinePathData["value"].array);
 				if (responseCount > 0) {
 					// Search 'name' matches were found .. need to match these against parentItem.id
@@ -3948,6 +4116,7 @@ class SyncEngine {
 	
 	// Test that the online name actually matches the requested local name
 	void performPosixTest(string localNameToCheck, string onlineName) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 	
 		// https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
 		// Do not assume case sensitivity. For example, consider the names OSCAR, Oscar, and oscar to be the same, 
@@ -3962,6 +4131,7 @@ class SyncEngine {
 	
 	// Upload new file items as identified
 	void uploadNewLocalFileItems() {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// Lets deal with the new local items in a batch process
 		ulong batchSize = appConfig.concurrentThreads;
 		ulong batchCount = (newLocalFilesToUploadToOneDrive.length + batchSize - 1) / batchSize;
@@ -3974,6 +4144,7 @@ class SyncEngine {
 	
 	// Upload the file batches in parallel
 	void uploadNewLocalFileItemsInParallel(string[] array) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		foreach (i, fileToUpload; taskPool.parallel(array)) {
 			log.vdebug("Upload Thread ", i, " Starting: ", Clock.currTime());
 			uploadNewFile(fileToUpload);
@@ -3983,6 +4154,7 @@ class SyncEngine {
 	
 	// Upload a new file to OneDrive
 	void uploadNewFile(string fileToUpload) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 	
 		// Debug for the moment
 		log.vdebug("fileToUpload: ", fileToUpload);
@@ -4196,6 +4368,7 @@ class SyncEngine {
 	
 	// Perform the actual upload to OneDrive
 	bool performNewFileUpload(Item parentItem, string fileToUpload, ulong thisFileSize) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 	
 		// Assume that by default the upload fails
 		bool uploadFailed = true;
@@ -4456,6 +4629,7 @@ class SyncEngine {
 	
 	// Create the OneDrive Upload Session
 	JSONValue createSessionFileUpload(OneDriveApi activeOneDriveApiInstance, string fileToUpload, string parentDriveId, string parentId, string filename, string eTag, string threadUploadSessionFilePath) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		// Upload file via a OneDrive API session
 		JSONValue uploadSession;
 		
@@ -4496,6 +4670,7 @@ class SyncEngine {
 	
 	// Save the session upload data
 	void saveSessionFile(string threadUploadSessionFilePath, JSONValue uploadSessionData) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 		try {
 			std.file.write(threadUploadSessionFilePath, uploadSessionData.toString());
 		} catch (FileException e) {
@@ -4506,6 +4681,7 @@ class SyncEngine {
 	
 	// Perform the upload of file via the Upload Session that was created
 	JSONValue performSessionFileUpload(OneDriveApi activeOneDriveApiInstance, ulong thisFileSize, JSONValue uploadSessionData, string threadUploadSessionFilePath) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 	
 		// Response for upload
 		JSONValue uploadResponse;
@@ -4652,6 +4828,7 @@ class SyncEngine {
 	
 	// Delete an item on OneDrive
 	void uploadDeletedItem(Item itemToDelete, string path) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 	
 		// Are we in a situation where we HAVE to keep the data online - do not delete the remote object
 		if (noRemoteDelete) {
@@ -4668,27 +4845,28 @@ class SyncEngine {
 			bool flagAsBigDelete = false;
 			
 			Item[] children;
+			ulong itemsToDelete;
 		
 			if ((itemToDelete.type == ItemType.dir)) {
 				// Query the database - how many objects will this remove?
 				children = getChildren(itemToDelete.driveId, itemToDelete.id);
 				// Count the returned items + the original item (1)
-				ulong itemsToDelete = count(children) + 1;
+				itemsToDelete = count(children) + 1;
 				log.vdebug("Number of items online to delete: ", itemsToDelete);
-				
-				// Are we running in monitor mode? A local delete of a file|folder when using --monitor  will issue a inotify event, which will trigger the local & remote data immediately be deleted
-				if (!appConfig.getValueBool("monitor")) {
-					// not running in monitor mode
-					if (itemsToDelete > appConfig.getValueLong("classify_as_big_delete")) {
-						// A big delete detected
-						flagAsBigDelete = true;
-						if (!appConfig.getValueBool("force")) {
-							log.error("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on OneDrive");
-							log.error("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
-							// Must exit here to preserve data on OneDrive
-							exit(-1);
-						}
-					}
+			} else {
+				itemsToDelete = 1;
+			}
+			
+			// A local delete of a file|folder when using --monitor  will issue a inotify event, which will trigger the local & remote data immediately be deleted
+			// The user may also be --sync process, so we are checking if something was deleted between application use
+			if (itemsToDelete >= appConfig.getValueLong("classify_as_big_delete")) {
+				// A big delete has been detected
+				flagAsBigDelete = true;
+				if (!appConfig.getValueBool("force")) {
+					log.error("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on OneDrive");
+					log.error("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
+					// Must exit here to preserve data on online 
+					exit(-1);
 				}
 			}
 			
@@ -4732,6 +4910,8 @@ class SyncEngine {
 	
 	// Get the children of an item id from the database
 	Item[] getChildren(string driveId, string id) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		Item[] children;
 		children ~= itemDB.selectChildren(driveId, id);
 		foreach (Item child; children) {
@@ -4745,6 +4925,8 @@ class SyncEngine {
 	
 	// Perform a 'reverse' delete of all child objects on OneDrive
 	void performReverseDeletionOfOneDriveItems(Item[] children, Item itemToDelete) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
+	
 		log.vdebug("Attempting a reverse delete of all child objects from OneDrive");
 		
 		// Create a new API Instance for this thread and initialise it
@@ -4770,6 +4952,8 @@ class SyncEngine {
 	
 	// Create a fake OneDrive response suitable for use with saveItem
 	JSONValue createFakeResponse(const(string) path) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
+	
 		import std.digest.sha;
 		// Generate a simulated JSON response which can be used
 		// At a minimum we need:
@@ -4861,6 +5045,8 @@ class SyncEngine {
 	
 	// Save JSON item details into the item database
 	void saveItem(JSONValue jsonItem) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
+	
 		// jsonItem has to be a valid object
 		if (jsonItem.type() == JSONType.object){
 			// Check if the response JSON has an 'id', otherwise makeItem() fails with 'Key not found: id'
@@ -4884,10 +5070,10 @@ class SyncEngine {
 						// Check for parentReference
 						if (hasParentReference(jsonItem)) {
 							// Set the correct item.driveId
+							log.vdebug("ROOT JSON Item HAS parentReference .... setting item.driveId = jsonItem['parentReference']['driveId'].str");
 							item.driveId = jsonItem["parentReference"]["driveId"].str;
-						} else {
-							writeln("DEBUG TO REMOVE: saveItem ROOT JSON Item has no parentReference .... this may not even be needed .... ");
 						}
+						
 						// We only should be adding our account 'root' to the database, not shared folder 'root' items
 						if (item.driveId != appConfig.defaultDriveId) {
 							// Shared Folder drive 'root' object .. we dont want this item
@@ -4923,6 +5109,8 @@ class SyncEngine {
 	
 	// Wrapper function for makeDatabaseItem so we can check to ensure that the item has the required hashes
 	Item makeItem(JSONValue onedriveJSONItem) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
+	
 		// Make the DB Item from the JSON data provided
 		Item newDatabaseItem = makeDatabaseItem(onedriveJSONItem);
 		
@@ -4977,8 +5165,9 @@ class SyncEngine {
 	
 	// Print the fileDownloadFailures and fileUploadFailures arrays if they are not empty
 	void displaySyncFailures() {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
+	
 		// Were there any file download failures?
-		
 		if (!fileDownloadFailures.empty) {
 			// There are download failures ...
 			log.log("\nFailed items to download from OneDrive: ", fileDownloadFailures.length);
@@ -5041,6 +5230,7 @@ class SyncEngine {
 	// then once the target of the --single-directory request is hit, all of the children of that path can be queried, giving a much more focused
 	// JSON response which can then be processed, negating the need to continuously traverse the tree and 'exclude' items
 	JSONValue generateDeltaResponse(string pathToQuery = null) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 	
 		// JSON value which will be responded with
 		JSONValue selfGeneratedDeltaResponse;
@@ -5318,6 +5508,8 @@ class SyncEngine {
 	
 	// Query the OneDrive API for the specified child id for any children objects
 	JSONValue[] queryForChildren(string driveId, string idToQuery, string childParentPath, string pathForLogging) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// function variables
 		JSONValue thisLevelChildren;
 		JSONValue[] thisLevelChildrenData;
@@ -5394,6 +5586,8 @@ class SyncEngine {
 	
 	// Query the OneDrive API for the child objects for this element
 	JSONValue queryThisLevelChildren(string driveId, string idToQuery, string nextLink) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		JSONValue thisLevelChildren;
 		
 		// Create new OneDrive API Instance
@@ -5465,6 +5659,7 @@ class SyncEngine {
 	// This function also ensures that each path in the requested path actually matches the requested element to ensure that the OneDrive API response
 	// is not falsely matching a 'case insensitive' match to the actual request which is a POSIX compliance issue.
 	JSONValue queryOneDriveForSpecificPathAndCreateIfMissing(string thisNewPathToSearch, bool createPathIfMissing) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
 	
 		JSONValue getPathDetailsAPIResponse;
 		string currentPathTree;
@@ -5726,6 +5921,8 @@ class SyncEngine {
 	// Delete an item by it's path
 	// This function is only used in --monitor mode
 	void deleteByPath(const(string) path) {
+		log.vdebug("Starting this function: ", getFunctionName!({}));
+	
 		Item dbItem;
 		// Need to check all driveid's we know about, not just the defaultDriveId
 		bool itemInDB = false;
