@@ -1,28 +1,36 @@
+// What is this module called?
+module log;
+
+// What does this module require to function?
 import std.stdio;
 import std.file;
 import std.datetime;
 import std.process;
 import std.conv;
 import core.memory;
-import core.sys.posix.pwd, core.sys.posix.unistd, core.stdc.string : strlen;
+import core.sys.posix.pwd;
+import core.sys.posix.unistd;
+import core.stdc.string : strlen;
 import std.algorithm : splitter;
+
 version(Notifications) {
 	import dnotify;
 }
 
-// enable verbose logging
+// module variables
+// verbose logging count
 long verbose;
+// do we write a log file? ... this should be a config falue
 bool writeLogFile = false;
+// did the log file write fail?
 bool logFileWriteFailFlag = false;
-
 private bool doNotifications;
 
 // shared string variable for username
 string username;
 string logFilePath;
 
-void init(string logDir)
-{
+void init(string logDir) {
 	writeLogFile = true;
 	username = getUserName();
 	logFilePath = logDir;
@@ -41,8 +49,7 @@ void init(string logDir)
 	}
 }
 
-void setNotifications(bool value)
-{
+void setNotifications(bool value) {
 	version(Notifications) {
 		// if we try to enable notifications, check for server availability
 		// and disable in case dbus server is not reachable
@@ -57,8 +64,7 @@ void setNotifications(bool value)
 	doNotifications = value;
 }
 
-void log(T...)(T args)
-{
+void log(T...)(T args) {
 	writeln(args);
 	if(writeLogFile){
 		// Write to log file
@@ -66,22 +72,19 @@ void log(T...)(T args)
 	}
 }
 
-void logAndNotify(T...)(T args)
-{
+void logAndNotify(T...)(T args) {
 	notify(args);
 	log(args);
 }
 
-void fileOnly(T...)(T args)
-{
+void fileOnly(T...)(T args) {
 	if(writeLogFile){
 		// Write to log file
 		logfileWriteLine(args);
 	}
 }
 
-void vlog(T...)(T args)
-{
+void vlog(T...)(T args) {
 	if (verbose >= 1) {
 		writeln(args);
 		if(writeLogFile){
@@ -91,8 +94,7 @@ void vlog(T...)(T args)
 	}
 }
 
-void vdebug(T...)(T args)
-{
+void vdebug(T...)(T args) {
 	if (verbose >= 2) {
 		writeln("[DEBUG] ", args);
 		if(writeLogFile){
@@ -102,8 +104,7 @@ void vdebug(T...)(T args)
 	}
 }
 
-void vdebugNewLine(T...)(T args)
-{
+void vdebugNewLine(T...)(T args) {
 	if (verbose >= 2) {
 		writeln("\n[DEBUG] ", args);
 		if(writeLogFile){
@@ -113,8 +114,7 @@ void vdebugNewLine(T...)(T args)
 	}
 }
 
-void error(T...)(T args)
-{
+void error(T...)(T args) {
 	stderr.writeln(args);
 	if(writeLogFile){
 		// Write to log file
@@ -122,14 +122,12 @@ void error(T...)(T args)
 	}
 }
 
-void errorAndNotify(T...)(T args)
-{
+void errorAndNotify(T...)(T args) {
 	notify(args);
 	error(args);
 }
 
-void notify(T...)(T args)
-{
+void notify(T...)(T args) {
 	version(Notifications) {
 		if (doNotifications) {
 			string result;
@@ -153,8 +151,7 @@ void notify(T...)(T args)
 	}
 }
 
-private void logfileWriteLine(T...)(T args)
-{
+private void logfileWriteLine(T...)(T args) {
 	static import std.exception;
 	// Write to log file
 	string logFileName = .logFilePath ~ .username ~ ".onedrive.log";
@@ -190,8 +187,7 @@ private void logfileWriteLine(T...)(T args)
 	logFile.close();
 }
 
-private string getUserName()
-{
+private string getUserName() {
 	auto pw = getpwuid(getuid);
 	
 	// get required details
@@ -216,24 +212,20 @@ private string getUserName()
 	}
 }
 
-void displayMemoryUsagePreGC()
-{
+void displayMemoryUsagePreGC() {
 // Display memory usage
 writeln("\nMemory Usage pre GC (bytes)");
 writeln("--------------------");
-writeln("memory usedSize = ", GC.stats.usedSize);
-writeln("memory freeSize = ", GC.stats.freeSize);
-// uncomment this if required, if not using LDC 1.16 as this does not exist in that version
-//writeln("memory allocatedInCurrentThread = ", GC.stats.allocatedInCurrentThread, "\n");
+writeln("memory usedSize                 = ", GC.stats.usedSize);
+writeln("memory freeSize                 = ", GC.stats.freeSize);
+writeln("memory allocatedInCurrentThread = ", GC.stats.allocatedInCurrentThread, "\n");
 }
 
-void displayMemoryUsagePostGC()
-{
+void displayMemoryUsagePostGC() {
 // Display memory usage
 writeln("\nMemory Usage post GC (bytes)");
 writeln("--------------------");
-writeln("memory usedSize = ", GC.stats.usedSize);
-writeln("memory freeSize = ", GC.stats.freeSize);
-// uncomment this if required, if not using LDC 1.16 as this does not exist in that version
-//writeln("memory allocatedInCurrentThread = ", GC.stats.allocatedInCurrentThread, "\n");
+writeln("memory usedSize                 = ", GC.stats.usedSize);
+writeln("memory freeSize                 = ", GC.stats.freeSize);
+writeln("memory allocatedInCurrentThread = ", GC.stats.allocatedInCurrentThread, "\n");
 }
