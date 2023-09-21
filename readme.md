@@ -5,11 +5,13 @@
 [![Build Docker Images](https://github.com/abraunegg/onedrive/actions/workflows/docker.yaml/badge.svg)](https://github.com/abraunegg/onedrive/actions/workflows/docker.yaml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/driveone/onedrive)](https://hub.docker.com/r/driveone/onedrive)
 
-A free Microsoft OneDrive Client which supports OneDrive Personal, OneDrive for Business, OneDrive for Office365 and SharePoint.
+Introducing a free Microsoft OneDrive Client that seamlessly supports OneDrive Personal, OneDrive for Business, OneDrive for Office365, and SharePoint Libraries.
 
-This powerful and highly configurable client can run on all major Linux distributions, FreeBSD, or as a Docker container. It supports one-way and two-way sync capabilities and securely connects to Microsoft OneDrive services.
+This robust and highly customisable client is compatible with all major Linux distributions and FreeBSD, and can also be deployed as a container using Docker or Podman. It offers both one-way and two-way synchronisation capabilities while ensuring a secure connection to Microsoft OneDrive services.
 
-This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) client, which the developer has confirmed he has no desire to maintain or support the client ([reference](https://github.com/skilion/onedrive/issues/518#issuecomment-717604726)). This fork has been in active development since mid 2018.
+Originally derived as a 'fork' from the [skilion](https://github.com/skilion/onedrive) client, it's worth noting that the developer of the original client has explicitly stated they have no intention of maintaining or supporting their work ([reference](https://github.com/skilion/onedrive/issues/518#issuecomment-717604726)).
+
+This client represents a 100% re-imagining of the original work, addressing numerous notable bugs and issues while incorporating a significant array of new features. This client has been under active development since mid-2018.
 
 ## Features
 *   State caching
@@ -26,6 +28,7 @@ This client is a 'fork' of the [skilion](https://github.com/skilion/onedrive) cl
 *   Support for National cloud deployments (Microsoft Cloud for US Government, Microsoft Cloud Germany, Azure and Office 365 operated by 21Vianet in China)
 *   Supports single & multi-tenanted applications
 *   Supports rate limiting of traffic
+*   Supports multi-threaded uploads and downloads
 
 ## What's missing
 *   Ability to encrypt/decrypt files on-the-fly when uploading/downloading files from OneDrive
