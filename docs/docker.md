@@ -66,7 +66,7 @@ ROOT level privileges prohibited!
 ### 3. First run
 The 'onedrive' client within the Docker container needs to be authorized with your Microsoft account. This is achieved by initially running docker in interactive mode. 
 
-Run the docker image with the commands below and make sure to change `ONEDRIVE_DATA_DIR` to the actual onedrive data directory on your filesystem that you wish to use (e.g. `"/home/abraunegg/OneDrive"`).
+Run the docker image with the commands below and make sure to change the value of `ONEDRIVE_DATA_DIR` to the actual onedrive data directory on your filesystem that you wish to use (e.g. `"/home/abraunegg/OneDrive"`).
 ```bash
 export ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
 mkdir -p ${ONEDRIVE_DATA_DIR}

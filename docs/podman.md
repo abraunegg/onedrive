@@ -59,7 +59,7 @@ This will create a podman volume labeled `onedrive_conf`, where all configuratio
 ### 2. First run
 The 'onedrive' client within the container needs to be authorized with your Microsoft account. This is achieved by initially running podman in interactive mode. 
 
-Run the podman image with the commands below and make sure to change `ONEDRIVE_DATA_DIR` to the actual onedrive data directory on your filesystem that you wish to use (e.g. `"/home/abraunegg/OneDrive"`).
+Run the podman image with the commands below and make sure to change the value of `ONEDRIVE_DATA_DIR` to the actual onedrive data directory on your filesystem that you wish to use (e.g. `"/home/abraunegg/OneDrive"`).
 
 It is a requirement that the container be run using a non-root uid and gid, you must insert a non-root UID and GID (e.g.` export ONEDRIVE_UID=1000` and export `ONEDRIVE_GID=1000`). 
 
