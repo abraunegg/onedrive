@@ -211,11 +211,7 @@ final class ItemDatabase {
 		db.exec("PRAGMA recursive_triggers = TRUE");
 		// Set the journal mode for databases associated with the current connection
 		// https://www.sqlite.org/pragma.html#pragma_journal_mode
-		
-		
-		//db.exec("PRAGMA journal_mode = WAL");
-		
-		
+		db.exec("PRAGMA journal_mode = WAL");
 		// Automatic indexing is enabled by default as of version 3.7.17
 		// https://www.sqlite.org/pragma.html#pragma_automatic_index 
 		// PRAGMA automatic_index = boolean;
