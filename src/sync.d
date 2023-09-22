@@ -80,6 +80,10 @@ class SyncEngine {
 	string[] pathsRenamed;
 	// List of paths that were a POSIX case-insensitive match, thus could not be created online
 	string[] posixViolationPaths;
+	// List of local paths, that, when using the OneDrive Business Shared Folders feature, then diabling it, folder still exists locally and online
+	// This list of local paths need to be skipped
+	string[] businessSharedFoldersOnlineToSkip;
+	
 	// Flag that there were upload or download failures listed
 	bool syncFailures = false;
 	// Is sync_list configured
@@ -3774,19 +3778,34 @@ class SyncEngine {
 						}
 					}
 				
-					// Try and access this directory and any path below
-					try {
-						auto entries = dirEntries(path, SpanMode.shallow, false);
-						foreach (DirEntry entry; entries) {
-							string thisPath = entry.name;
-							scanPathForNewData(thisPath);
+					// flag for if we are going traverse this path
+					bool skipFolderTraverse = false;
+					
+					// Before we traverse this 'path', we need to make a last check to see if this was just excluded
+					if (appConfig.accountType == "business") {
+						// search businessSharedFoldersOnlineToSkip for this path
+						if (canFind(businessSharedFoldersOnlineToSkip, path)) {
+							// This path was skipped - why?
+							log.logAndNotify("Skipping item '", path, "' due to this path matching an existing online Business Shared Folder name");
+							skipFolderTraverse = true;
 						}
-					} catch (FileException e) {
-						// display the error message
-						displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-						return;
 					}
 					
+					// Do we traverse this path?
+					if (!skipFolderTraverse) {
+						// Try and access this directory and any path below
+						try {
+							auto entries = dirEntries(path, SpanMode.shallow, false);
+							foreach (DirEntry entry; entries) {
+								string thisPath = entry.name;
+								scanPathForNewData(thisPath);
+							}
+						} catch (FileException e) {
+							// display the error message
+							displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+							return;
+						}
+					}
 				} else {
 					// https://github.com/abraunegg/onedrive/issues/984
 					// path is not a directory, is it a valid file?
@@ -4090,6 +4109,20 @@ class SyncEngine {
 			// A valid object was responded with
 			if (onlinePathData["name"].str == baseName(thisNewPathToCreate)) {
 				// OneDrive 'name' matches local path name
+				if (appConfig.accountType == "business") {
+					// We are a business account, this existing online folder, could be a Shared Online Folder and is the 'Add shortcut to My files' item
+					log.vdebug("onlinePathData: ", onlinePathData);
+					if (isItemRemote(onlinePathData)) {
+						// The folder is a remote item ... we do not want to create this ...
+						log.vdebug("Remote Existing Online Folder is most likely a OneDrive Shared Business Folder Link added by 'Add shortcut to My files'");
+						log.vdebug("We need to skip this path: ", thisNewPathToCreate);
+						// Add this path to businessSharedFoldersOnlineToSkip
+						businessSharedFoldersOnlineToSkip ~= [thisNewPathToCreate];
+						// no save to database, no online create
+						return;
+					}
+				}
+				
 				log.vlog("The requested directory to create was found on OneDrive - skipping creating the directory: ", thisNewPathToCreate);
 				// Is the response a valid JSON object - validation checking done in saveItem
 				saveItem(onlinePathData);
