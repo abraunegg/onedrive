@@ -877,6 +877,11 @@ class ApplicationConfig {
 							}
 						} else {
 							log.log("Unknown key in config file: ", key);
+							// Application configuration update required for Business Shared Folders
+							if (key == "sync_business_shared_folders") {
+								log.log("\nThe method to sync Business Shared Folders has changed. Please read the updated documentation and update your client configuration.");
+							}
+							// Return false
 							return false;
 						}
 					}
