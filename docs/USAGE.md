@@ -622,7 +622,7 @@ Patterns are case insensitive. `*` and `?` [wildcards characters](https://techne
 
 Files can be skipped in the following fashion:
 *   Specify a wildcard, eg: '*.txt' (skip all txt files)
-*   Explicitly specify the filename and it's full path relative to your sync_dir, eg: 'path/to/file/filename.ext'
+*   Explicitly specify the filename and it's full path relative to your sync_dir, eg: '/path/to/file/filename.ext'
 *   Explicitly specify the filename only and skip every instance of this filename, eg: 'filename.ext'
 
 By default, the following files will be skipped:
@@ -638,7 +638,7 @@ Example:
 # For explanations of all config options below see docs/USAGE.md or the man page.
 #
 # sync_dir = "~/OneDrive"
-skip_file = "~*|Documents/OneNote*|Documents/config.xlaunch|myfile.ext"
+skip_file = "~*|/Documents/OneNote*|/Documents/config.xlaunch|myfile.ext|/Documents/keepass.kdbx"
 # monitor_interval = "300"
 # skip_dir = ""
 # log_dir = "/var/log/onedrive/"
@@ -649,10 +649,11 @@ skip_file = "~*|Documents/OneNote*|Documents/config.xlaunch|myfile.ext"
 skip_file = "~*|.~*|*.tmp|*.swp"
 skip_file = "*.blah"
 skip_file = "never_sync.file"
+skip_file = "/Documents/keepass.kdbx"
 ```
 This will be interpreted the same as:
 ```text
-skip_file = "~*|.~*|*.tmp|*.swp|*.blah|never_sync.file"
+skip_file = "~*|.~*|*.tmp|*.swp|*.blah|never_sync.file|/Documents/keepass.kdbx"
 ```
 
 **Note:** after changing `skip_file`, you must perform a full re-synchronization by adding `--resync` to your existing command line - for example: `onedrive --synchronize --resync`
