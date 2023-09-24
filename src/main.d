@@ -770,6 +770,9 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 			filesystemMonitor.update(true);
 		}
 		
+		// Make sure we sync any DB data to this point
+		itemDB.performVacuum();
+		
 		// Perform the final true up scan to ensure we have correctly replicated the current online state locally
 		if (!appConfig.surpressLoggingOutput) {
 			log.log("Perfoming final true up scan of online data from OneDrive");

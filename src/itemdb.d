@@ -45,8 +45,6 @@ struct Item {
 // Construct an Item struct from a JSON driveItem
 Item makeDatabaseItem(JSONValue driveItem) {
 	
-	log.vdebug("Starting this function: ", getFunctionName!({}));
-
 	Item item = {
 		id: driveItem["id"].str,
 		name: "name" in driveItem ? driveItem["name"].str : null, // name may be missing for deleted files in OneDrive Business
@@ -587,6 +585,10 @@ final class ItemDatabase {
 	}
 
 	string getDeltaLink(const(char)[] driveId, const(char)[] id) {
+		// Log what we received
+		log.vdebug("DeltaLink Query (driveId): ", driveId);
+		log.vdebug("DeltaLink Query (id):      ", id);
+	
 		assert(driveId && id);
 		auto stmt = db.prepare("SELECT deltaLink FROM item WHERE driveId = ?1 AND id = ?2");
 		stmt.bind(1, driveId);

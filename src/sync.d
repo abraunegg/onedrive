@@ -223,7 +223,7 @@ class SyncEngine {
 	
 	// Initialise the Sync Engine class
 	bool initialise() {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+
 		// create a new instance of the OneDrive API
 		oneDriveApiInstance = new OneDriveApi(appConfig);
 		if (oneDriveApiInstance.initialise()) {
@@ -242,7 +242,7 @@ class SyncEngine {
 	
 	// Get Default Drive Details for this Account
 	void getDefaultDriveDetails() {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// Function variables
 		JSONValue defaultOneDriveDriveDetails;
 		
@@ -357,7 +357,7 @@ class SyncEngine {
 	
 	// Get Default Root Details for this Account
 	void getDefaultRootDetails() {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// Function variables
 		JSONValue defaultOneDriveRootDetails;
 		
@@ -427,7 +427,7 @@ class SyncEngine {
 	// - Process any deletes (remove local data)
 	// - Walk local file system for any differences (new files / data to upload to OneDrive)
 	void syncOneDriveAccountToLocalDisk(bool performFullScanTrueUp = false) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// performFullScanTrueUp value
 		log.vdebug("performFullScanTrueUp: ", performFullScanTrueUp);
 		// Fetch the API response of /delta to track changes on OneDrive
@@ -504,9 +504,6 @@ class SyncEngine {
 						
 						// Process any download activities or cleanup actions for this OneDrive Personal Shared Folder
 						processDownloadActivities();
-						
-						
-						
 					}
 				}
 			}
@@ -516,7 +513,6 @@ class SyncEngine {
 	// Configure singleDirectoryScope = true if this function is called
 	// By default, singleDirectoryScope = false
 	void setSingleDirectoryScope(string normalisedSingleDirectoryPath) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
 		
 		// Function variables
 		Item searchItem;
@@ -567,8 +563,7 @@ class SyncEngine {
 	
 	// Query OneDrive API for /delta changes and iterate through items online
 	void fetchOneDriveDeltaAPIResponse(string driveIdToQuery = null, string itemIdToQuery = null, string sharedFolderName = null, bool performFullScanTrueUp = false) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-		
+				
 		string deltaLink = null;
 		string deltaLinkAvailable;
 		JSONValue deltaChanges;
@@ -695,13 +690,16 @@ class SyncEngine {
 				else break;
 			}
 			
+			// To finish off the JSON processing items, this is needed to reflect this in the log
+			log.vdebug("------------------------------------------------------------------");
+			
 			// Log that we have finished querying the /delta API
 			if (log.verbose <= 1) {
 				if (!appConfig.surpressLoggingOutput) {
 					write("\n");
 				}
 			} else {
-				log.vdebug("Finished getting /delta from the OneDrive API");
+				log.vdebug("Finished processing /delta JSON response from the OneDrive API");
 			}
 		} else {
 			// We have to generate our own /delta response
@@ -747,6 +745,10 @@ class SyncEngine {
 				// Process the OneDrive object item JSON
 				processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope);	
 			}
+			
+			// To finish off the JSON processing items, this is needed to reflect this in the log
+			log.vdebug("------------------------------------------------------------------");
+			
 			// Log that we have finished generating our self generated /delta response
 			if (!appConfig.surpressLoggingOutput) {
 				log.log("Finished processing self generated /delta JSON response from the OneDrive API");
@@ -777,7 +779,9 @@ class SyncEngine {
 			// Chunk the total items to process into 500 lot items
 			batchesProcessed++;
 			log.vlog("Processing OneDrive JSON item batch [", batchesProcessed,"/", batchCount, "] to ensure consistent local state");
-			processJSONItemsInBatch(batchOfJSONItems);
+			processJSONItemsInBatch(batchOfJSONItems, batchesProcessed);
+			// To finish off the JSON processing items, this is needed to reflect this in the log
+			log.vdebug("------------------------------------------------------------------");
 		}
 		
 		log.vdebug("Number of JSON items to process is: ", jsonItemsToProcess.length);
@@ -795,7 +799,7 @@ class SyncEngine {
 	
 	// Process the /delta API JSON response items
 	void processDeltaJSONItem(JSONValue onedriveJSONItem, ulong nrChanges, int changeCount, ulong responseBundleCount, bool singleDirectoryScope) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// Variables for this foreach loop
 		string thisItemId;
 		bool itemIsRoot = false;
@@ -894,7 +898,7 @@ class SyncEngine {
 	
 	// Process 'root' and 'deleted' OneDrive JSON items
 	void processRootAndDeletedJSONItems(JSONValue onedriveJSONItem, string driveId, bool handleItemAsRootObject, bool itemIsDeletedOnline, bool itemHasParentReferenceId) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// Is the item deleted online?
 		if(!itemIsDeletedOnline) {
 			
@@ -938,11 +942,18 @@ class SyncEngine {
 	}
 	
 	// Process each of the elements contained in jsonItemsToProcess[]
-	void processJSONItemsInBatch(JSONValue[] array) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-		
+	void processJSONItemsInBatch(JSONValue[] array, ulong batchGroup) {
+	
+		ulong batchElementCount = array.length;
+
 		foreach (i, onedriveJSONItem; array.enumerate) {
 			// Use the JSON elements rather can computing a DB struct via makeItem()
+			ulong elementCount = i +1;
+			
+			// To show this is the processing for this particular item, start off with this breaker line
+			log.vdebug("------------------------------------------------------------------");
+			log.vdebug("Processing OneDrive JSON item ", elementCount, " of ", batchElementCount, " as part of JSON item batch ", batchGroup);
+			
 			string thisItemId = onedriveJSONItem["id"].str;
 			string thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
 			string thisItemParentId = onedriveJSONItem["parentReference"]["id"].str;
@@ -1346,7 +1357,6 @@ class SyncEngine {
 			} else {
 				// This JSON item is wanted - we need to process this JSON item further
 				// Take the JSON item and create a consumable object for eventual database insertion
-				log.vdebug("Making newDatabaseItem from this JSON: ", onedriveJSONItem);
 				Item newDatabaseItem = makeItem(onedriveJSONItem);
 				
 				if (existingDBEntry) {
@@ -1380,12 +1390,6 @@ class SyncEngine {
 					log.vdebug("OneDrive change is potentially a new local item");
 					
 					// Attempt to apply this potentially new item
-					
-					//writeln("newDatabaseItem: ", newDatabaseItem);
-					//writeln("onedriveJSONItem: ", onedriveJSONItem);
-					//writeln("newItemPath: ", newItemPath);
-					
-					
 					applyPotentiallyNewLocalItem(newDatabaseItem, onedriveJSONItem, newItemPath);
 				}
 			}
@@ -1397,8 +1401,7 @@ class SyncEngine {
 	
 	// Perform the download of any required objects in parallel
 	void processDownloadActivities() {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+			
 		// Are there any items to delete locally? Cleanup space locally first
 		if (!idsToDelete.empty) {
 			// There are elements that potentially need to be deleted locally
@@ -1439,8 +1442,7 @@ class SyncEngine {
 	
 	// If the JSON item is not in the database, it is potentially a new item that we need to action
 	void applyPotentiallyNewLocalItem(Item newDatabaseItem, JSONValue onedriveJSONItem, string newItemPath) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+			
 		// The JSON and Database items being passed in here have passed the following checks:
 		// - skip_file
 		// - skip_dir
@@ -1601,8 +1603,7 @@ class SyncEngine {
 	
 	// If the JSON item IS in the database, this will be an update to an existing in-sync item
 	void applyPotentiallyChangedItem(Item existingDatabaseItem, string existingItemPath, Item changedOneDriveItem, string changedItemPath, JSONValue onedriveJSONItem) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-		
+				
 		// If we are moving the item, we do not need to download it again
 		bool itemWasMoved = false;
 		
@@ -1698,7 +1699,7 @@ class SyncEngine {
 	
 	// Download new file items as identified
 	void downloadOneDriveItems() {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// Lets deal with the JSON items in a batch process
 		ulong batchSize = appConfig.concurrentThreads;
 		ulong batchCount = (fileJSONItemsToDownload.length + batchSize - 1) / batchSize;
@@ -1711,7 +1712,7 @@ class SyncEngine {
 	
 	// Download items in parallel
 	void downloadOneDriveItemsInParallel(JSONValue[] array) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		foreach (i, onedriveJSONItem; taskPool.parallel(array)) {
 			// Take the JSON item and create a consumable object for eventual database insertion
 			Item newDatabaseItem = makeItem(onedriveJSONItem);
@@ -1721,8 +1722,7 @@ class SyncEngine {
 	
 	// Perform the actual download of an object from OneDrive
 	void downloadFileItem(Item newDatabaseItem, JSONValue onedriveJSONItem) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-		
+				
 		bool downloadFailed = false;
 		string OneDriveFileXORHash;
 		string OneDriveFileSHA256Hash;
@@ -1960,7 +1960,7 @@ class SyncEngine {
 	
 	// Test if the given item is in-sync. Returns true if the given item corresponds to the local one
 	bool isItemSynced(Item item, string path, string itemSource) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		if (!exists(path)) return false;
 		final switch (item.type) {
 		case ItemType.file:
@@ -2033,7 +2033,7 @@ class SyncEngine {
 	
 	// Get the /delta data using the provided details
 	JSONValue getDeltaChangesByItemId(string selectedDriveId, string selectedItemId, string providedDeltaLink) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// Function variables
 		JSONValue deltaChangesBundle;
 		// Get the /delta data for this account | driveId | deltaLink combination
@@ -2102,7 +2102,7 @@ class SyncEngine {
 	
 	// Common code to handle a 408 or 429 response from the OneDrive API
 	void handleOneDriveThrottleRequest(OneDriveApi activeOneDriveApiInstance) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// If OneDrive sends a status code 429 then this function will be used to process the Retry-After response header which contains the value by which we need to wait
 		log.vdebug("Handling a OneDrive HTTP 429 Response Code (Too Many Requests)");
 		// Read in the Retry-After HTTP header as set and delay as per this value before retrying the request
@@ -2136,7 +2136,7 @@ class SyncEngine {
 	
 	// If the JSON response is not correct JSON object, exit
 	void invalidJSONResponseFromOneDriveAPI() {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		log.error("ERROR: Query of the OneDrive API returned an invalid JSON response");
 		// Must exit
 		exit(-1);
@@ -2144,7 +2144,7 @@ class SyncEngine {
 	
 	// Handle an unhandled API error
 	void defaultUnhandledHTTPErrorCode(OneDriveException exception) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// display error
 		displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 		// Must exit here
@@ -2153,7 +2153,7 @@ class SyncEngine {
 	
 	// Display the pertinant details of the sync engine
 	void displaySyncEngineDetails() {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
 		//log.vlog("Application version:  ", strip(import("version")));
 		
@@ -2180,7 +2180,7 @@ class SyncEngine {
 	
 	// Query itemdb.computePath() and catch potential assert when DB consistency issue occurs
 	string computeItemPath(string thisDriveId, string thisItemId) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// static declare this for this function
 		static import core.exception;
 		string calculatedPath;
@@ -2200,7 +2200,7 @@ class SyncEngine {
 	
 	// Try and compute the file hash for the given item
 	bool testFileHash(string path, Item item) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// Generate QuickXORHash first before attempting to generate any other type of hash
 		if (item.quickXorHash) {
 			if (item.quickXorHash == computeQuickXorHash(path)) return true;
@@ -2212,7 +2212,7 @@ class SyncEngine {
 	
 	// Process items that need to be removed
 	void processDeleteItems() {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		foreach_reverse (i; idsToDelete) {
 			Item item;
 			string path;
@@ -2298,7 +2298,7 @@ class SyncEngine {
 	
 	// Update the timestamp of an object online
 	void uploadLastModifiedTime(string driveId, string id, SysTime mtime, string eTag) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		string itemModifiedTime;
 		itemModifiedTime = mtime.toISOExtString();
 		JSONValue data = [
@@ -2366,8 +2366,6 @@ class SyncEngine {
 				}
 			}
 		} 
-		// save the updated response from OneDrive in the database
-		log.vdebug("uploadLastModifiedTime response: ", response);
 		
 		// Is the response a valid JSON object - validation checking done in saveItem
 		saveItem(response);
@@ -2375,7 +2373,7 @@ class SyncEngine {
 	
 	// Perform a database integrity check - checking all the items that are in-sync at the moment, validating what we know should be on disk, to what is actually on disk
 	void performDatabaseConsistencyAndIntegrityCheck() {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// Log what we are doing
 		if (!appConfig.surpressLoggingOutput) {
 			log.log("Performing a database consistency and integrity check on locally stored data ... ");
@@ -2478,8 +2476,7 @@ class SyncEngine {
 	
 	// Check this Database Item for its consistency on disk
 	void checkDatabaseItemForConsistency(Item dbItem) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+			
 		// What is the local path item
 		string localFilePath;
 		// Do we want to onward process this item?
@@ -2522,7 +2519,7 @@ class SyncEngine {
 	
 	// Perform the database consistency check on this file item
 	void checkFileDatabaseItemForConsistency(Item dbItem, string localFilePath) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// What is the source of this item data?
 		string itemSource = "database";
 		
@@ -2616,8 +2613,7 @@ class SyncEngine {
 	
 	// Perform the database consistency check on this directory item
 	void checkDirectoryDatabaseItemForConsistency(Item dbItem, string localFilePath) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+			
 		// What is the source of this item data?
 		string itemSource = "database";
 		
@@ -2701,7 +2697,7 @@ class SyncEngine {
 	
 	// Does this Database Item (directory or file) get excluded from any operation based on any client side filtering rules?
 	bool checkDBItemAndPathAgainstClientSideFiltering(Item dbItem, string localFilePath) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// Check the item and path against client side filtering rules
 		// Return a true|false response
 		bool clientSideRuleExcludesItem = false;
@@ -2760,8 +2756,7 @@ class SyncEngine {
 	
 	// Does this local path (directory or file) conform with the Microsoft Naming Restrictions?
 	bool checkPathAgainstMicrosoftNamingRestrictions(string localFilePath) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+			
 		// Check if the given path violates certain Microsoft restrictions and limitations
 		// Return a true|false response
 		bool invalidPath = false;
@@ -2795,7 +2790,7 @@ class SyncEngine {
 	
 	// Does this local path (directory or file) get excluded from any operation based on any client side filtering rules?
 	bool checkPathAgainstClientSideFiltering(string localFilePath) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// Unlike checkDBItemAndPathAgainstClientSideFiltering - we need to check the path only
 	
 		// Check the path against client side filtering rules
@@ -2964,8 +2959,7 @@ class SyncEngine {
 	// Does this JSON item (as received from OneDrive API) get excluded from any operation based on any client side filtering rules?
 	// This function is only used when we are fetching objects from the OneDrive API using a /children query to help speed up what object we query
 	bool checkJSONAgainstClientSideFiltering(JSONValue onedriveJSONItem) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+			
 		bool clientSideRuleExcludesPath = false;
 		
 		// Check the path against client side filtering rules
@@ -3111,7 +3105,7 @@ class SyncEngine {
 	
 	// Process the list of local changes to upload to OneDrive
 	void processChangedLocalItemsToUpload() {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// Each element in this array 'databaseItemsWhereContentHasChanged' is an Database Item ID that has been modified locally
 		ulong batchSize = appConfig.concurrentThreads;
 		ulong batchCount = (databaseItemsWhereContentHasChanged.length + batchSize - 1) / batchSize;
@@ -3125,8 +3119,7 @@ class SyncEngine {
 	
 	// Upload changed local files to OneDrive in parallel
 	void uploadChangedLocalFileToOneDrive(string[3][] array) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+			
 		foreach (i, localItemDetails; taskPool.parallel(array)) {
 		
 			log.vdebug("Thread ", i, " Starting: ", Clock.currTime());
@@ -3254,8 +3247,7 @@ class SyncEngine {
 	
 	// Perform the upload of a locally modified file to OneDrive
 	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, ulong thisFileSizeLocal) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+			
 		JSONValue uploadResponse;
 		OneDriveApi uploadFileOneDriveApiInstance;
 		uploadFileOneDriveApiInstance = new OneDriveApi(appConfig);
@@ -3475,8 +3467,7 @@ class SyncEngine {
 		
 	// Query the OneDrive API using the provided driveId to get the latest quota details
 	ulong getRemainingFreeSpace(string driveId) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-		
+				
 		// Get the quota details for this driveId, as this could have changed since we started the application - the user could have added / deleted data online, or purchased additional storage
 		// Quota details are ONLY available for the main default driveId, as the OneDrive API does not provide quota details for shared folders
 		
@@ -3488,6 +3479,7 @@ class SyncEngine {
 			OneDriveApi getCurrentDriveQuotaApiInstance;
 			getCurrentDriveQuotaApiInstance = new OneDriveApi(appConfig);
 			getCurrentDriveQuotaApiInstance.initialise();
+			log.vdebug("Seeking available quota for this drive id: ", driveId);
 			currentDriveQuota = getCurrentDriveQuotaApiInstance.getDriveQuota(driveId);
 			// Shut this API instance down
 			getCurrentDriveQuotaApiInstance.shutdown();
@@ -3553,12 +3545,14 @@ class SyncEngine {
 			}
 		}
 		
+		// what was the determined available quota?
+		log.vdebug("Available quota: ", remainingQuota);
 		return remainingQuota;
 	}
 	
 	// Perform a filesystem walk to uncover new data to upload to OneDrive
 	void scanLocalFilesystemPathForNewData(string path) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// To improve logging output for this function, what is the 'logical path' we are scanning for file & folder differences?
 		string logPath;
 		if (path == ".") {
@@ -3636,8 +3630,7 @@ class SyncEngine {
 	
 	// Scan this path for new data
 	void scanPathForNewData(string path) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+			
 		ulong maxPathLength;
 		ulong pathWalkLength;
 		
@@ -3848,15 +3841,13 @@ class SyncEngine {
 	
 	// Query the database to determine if this path is within the existing database
 	bool pathFoundInDatabase(string searchPath) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// Check if this path in the database
 		Item databaseItem;
 		bool pathFoundInDB = false;
 		foreach (driveId; driveIDsArray) {
 			if (itemDB.selectByPath(searchPath, driveId, databaseItem)) {
 				pathFoundInDB = true;
-				log.vdebug("databaseItem: ", databaseItem);
-				log.vdebug("pathFoundInDB: ", pathFoundInDB);
 			}
 		}
 		return pathFoundInDB;
@@ -3866,7 +3857,7 @@ class SyncEngine {
 	// - Test if we can get the parent path details from the database, otherwise we need to search online
 	//   for the path flow and create the folder that way
 	void createDirectoryOnline(string thisNewPathToCreate) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		log.log("OneDrive Client requested to create this directory online: ", thisNewPathToCreate);
 		
 		Item parentItem;
@@ -4149,8 +4140,7 @@ class SyncEngine {
 	
 	// Test that the online name actually matches the requested local name
 	void performPosixTest(string localNameToCheck, string onlineName) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+			
 		// https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
 		// Do not assume case sensitivity. For example, consider the names OSCAR, Oscar, and oscar to be the same, 
 		// even though some file systems (such as a POSIX-compliant file system) may consider them as different. 
@@ -4164,7 +4154,7 @@ class SyncEngine {
 	
 	// Upload new file items as identified
 	void uploadNewLocalFileItems() {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// Lets deal with the new local items in a batch process
 		ulong batchSize = appConfig.concurrentThreads;
 		ulong batchCount = (newLocalFilesToUploadToOneDrive.length + batchSize - 1) / batchSize;
@@ -4177,7 +4167,7 @@ class SyncEngine {
 	
 	// Upload the file batches in parallel
 	void uploadNewLocalFileItemsInParallel(string[] array) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		foreach (i, fileToUpload; taskPool.parallel(array)) {
 			log.vdebug("Upload Thread ", i, " Starting: ", Clock.currTime());
 			uploadNewFile(fileToUpload);
@@ -4187,8 +4177,7 @@ class SyncEngine {
 	
 	// Upload a new file to OneDrive
 	void uploadNewFile(string fileToUpload) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+			
 		// Debug for the moment
 		log.vdebug("fileToUpload: ", fileToUpload);
 		
@@ -4401,8 +4390,7 @@ class SyncEngine {
 	
 	// Perform the actual upload to OneDrive
 	bool performNewFileUpload(Item parentItem, string fileToUpload, ulong thisFileSize) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+			
 		// Assume that by default the upload fails
 		bool uploadFailed = true;
 		
@@ -4662,7 +4650,7 @@ class SyncEngine {
 	
 	// Create the OneDrive Upload Session
 	JSONValue createSessionFileUpload(OneDriveApi activeOneDriveApiInstance, string fileToUpload, string parentDriveId, string parentId, string filename, string eTag, string threadUploadSessionFilePath) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		// Upload file via a OneDrive API session
 		JSONValue uploadSession;
 		
@@ -4703,7 +4691,7 @@ class SyncEngine {
 	
 	// Save the session upload data
 	void saveSessionFile(string threadUploadSessionFilePath, JSONValue uploadSessionData) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
+		
 		try {
 			std.file.write(threadUploadSessionFilePath, uploadSessionData.toString());
 		} catch (FileException e) {
@@ -4714,8 +4702,7 @@ class SyncEngine {
 	
 	// Perform the upload of file via the Upload Session that was created
 	JSONValue performSessionFileUpload(OneDriveApi activeOneDriveApiInstance, ulong thisFileSize, JSONValue uploadSessionData, string threadUploadSessionFilePath) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+			
 		// Response for upload
 		JSONValue uploadResponse;
 	
@@ -4861,8 +4848,7 @@ class SyncEngine {
 	
 	// Delete an item on OneDrive
 	void uploadDeletedItem(Item itemToDelete, string path) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+			
 		// Are we in a situation where we HAVE to keep the data online - do not delete the remote object
 		if (noRemoteDelete) {
 			if ((itemToDelete.type == ItemType.dir)) {
@@ -4943,8 +4929,7 @@ class SyncEngine {
 	
 	// Get the children of an item id from the database
 	Item[] getChildren(string driveId, string id) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-		
+				
 		Item[] children;
 		children ~= itemDB.selectChildren(driveId, id);
 		foreach (Item child; children) {
@@ -4958,8 +4943,8 @@ class SyncEngine {
 	
 	// Perform a 'reverse' delete of all child objects on OneDrive
 	void performReverseDeletionOfOneDriveItems(Item[] children, Item itemToDelete) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+		
+		// Log what is happening
 		log.vdebug("Attempting a reverse delete of all child objects from OneDrive");
 		
 		// Create a new API Instance for this thread and initialise it
@@ -4985,8 +4970,7 @@ class SyncEngine {
 	
 	// Create a fake OneDrive response suitable for use with saveItem
 	JSONValue createFakeResponse(const(string) path) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+		
 		import std.digest.sha;
 		// Generate a simulated JSON response which can be used
 		// At a minimum we need:
@@ -5078,8 +5062,7 @@ class SyncEngine {
 	
 	// Save JSON item details into the item database
 	void saveItem(JSONValue jsonItem) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+			
 		// jsonItem has to be a valid object
 		if (jsonItem.type() == JSONType.object){
 			// Check if the response JSON has an 'id', otherwise makeItem() fails with 'Key not found: id'
@@ -5092,7 +5075,7 @@ class SyncEngine {
 					log.vdebug("Skipping adding to database as --upload-only & --remove-source-files configured");
 				} else {
 					// What is the JSON item we are trying to create a DB record with?
-					log.vdebug("Creating DB item from this JSON: ", jsonItem);
+					log.vdebug("saveItem - creating DB item from this JSON: ", jsonItem);
 					// Takes a JSON input and formats to an item which can be used by the database
 					Item item = makeItem(jsonItem);
 					
@@ -5142,8 +5125,7 @@ class SyncEngine {
 	
 	// Wrapper function for makeDatabaseItem so we can check to ensure that the item has the required hashes
 	Item makeItem(JSONValue onedriveJSONItem) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+			
 		// Make the DB Item from the JSON data provided
 		Item newDatabaseItem = makeDatabaseItem(onedriveJSONItem);
 		
@@ -5198,8 +5180,7 @@ class SyncEngine {
 	
 	// Print the fileDownloadFailures and fileUploadFailures arrays if they are not empty
 	void displaySyncFailures() {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+			
 		// Were there any file download failures?
 		if (!fileDownloadFailures.empty) {
 			// There are download failures ...
@@ -5263,8 +5244,7 @@ class SyncEngine {
 	// then once the target of the --single-directory request is hit, all of the children of that path can be queried, giving a much more focused
 	// JSON response which can then be processed, negating the need to continuously traverse the tree and 'exclude' items
 	JSONValue generateDeltaResponse(string pathToQuery = null) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+			
 		// JSON value which will be responded with
 		JSONValue selfGeneratedDeltaResponse;
 		
@@ -5541,8 +5521,7 @@ class SyncEngine {
 	
 	// Query the OneDrive API for the specified child id for any children objects
 	JSONValue[] queryForChildren(string driveId, string idToQuery, string childParentPath, string pathForLogging) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-		
+				
 		// function variables
 		JSONValue thisLevelChildren;
 		JSONValue[] thisLevelChildrenData;
@@ -5619,8 +5598,8 @@ class SyncEngine {
 	
 	// Query the OneDrive API for the child objects for this element
 	JSONValue queryThisLevelChildren(string driveId, string idToQuery, string nextLink) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
 		
+		// function variables 
 		JSONValue thisLevelChildren;
 		
 		// Create new OneDrive API Instance
@@ -5692,8 +5671,8 @@ class SyncEngine {
 	// This function also ensures that each path in the requested path actually matches the requested element to ensure that the OneDrive API response
 	// is not falsely matching a 'case insensitive' match to the actual request which is a POSIX compliance issue.
 	JSONValue queryOneDriveForSpecificPathAndCreateIfMissing(string thisNewPathToSearch, bool createPathIfMissing) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+		
+		// function variables
 		JSONValue getPathDetailsAPIResponse;
 		string currentPathTree;
 		Item parentDetails;
@@ -5954,9 +5933,10 @@ class SyncEngine {
 	// Delete an item by it's path
 	// This function is only used in --monitor mode
 	void deleteByPath(const(string) path) {
-		log.vdebug("Starting this function: ", getFunctionName!({}));
-	
+		
+		// function variables
 		Item dbItem;
+		
 		// Need to check all driveid's we know about, not just the defaultDriveId
 		bool itemInDB = false;
 		foreach (searchDriveId; driveIDsArray) {
