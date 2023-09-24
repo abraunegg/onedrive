@@ -342,7 +342,6 @@ bool containsASCIIHTMLCodes(string path) {
 	return m.empty;
 }
 
-
 // Parse and display error message received from OneDrive
 void displayOneDriveErrorMessage(string message, string callingFunction) {
 	writeln();

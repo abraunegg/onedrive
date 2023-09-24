@@ -124,10 +124,6 @@ class SyncEngine {
 	// How many items have been processed for the active operation
 	ulong processedCount;
 	
-	
-	// VARIABLES NEEDED BUT STILL TO BE TESTED WITH AND USED CORRECTLY
-	bool syncBusinessFolders = false; // this one will change as we will not be just doing business folders
-	
 	// Configure this class instance
 	this(ApplicationConfig appConfig, ItemDatabase itemDB, ClientSideFiltering selectiveSync) {
 		// Configure the class varaible to consume the application configuration
@@ -1105,9 +1101,6 @@ class SyncEngine {
 					log.vdebug("The item we are syncing is a folder");
 				} else if (isItemRemote(onedriveJSONItem)) {
 					log.vdebug("The item we are syncing is a remote item");
-					/**
-					assert(isItemFolder(onedriveJSONItem["remoteItem"]), "The remote item is not a folder");
-					**/
 				} else {
 					// Why was this unwanted?
 					if (newItemPath.empty) {
@@ -2882,25 +2875,6 @@ class SyncEngine {
 							clientSideRuleExcludesPath = true;
 						}
 					}
-				
-					/**
-					
-					// In the event that this 'new item' is actually a OneDrive Business Shared Folder
-					// however the user may have omitted --sync-shared-folders, thus 'technically' this is a new item
-					// for this account OneDrive root, however this then would cause issues if --sync-shared-folders 
-					// is added again after this sync
-					if ((exists(cfg.businessSharedFolderFilePath)) && (!syncBusinessFolders)){
-						// business_shared_folders file exists, but we are not using / syncing them
-						// The file contents can only contain 'folder' names, so we need to strip './' from any path we are checking
-						if(selectiveSync.isSharedFolderMatched(strip(path,"./"))){
-							// path detected as a 'new item' is matched as a path in business_shared_folders
-							log.vlog("Skipping item - excluded as included in business_shared_folders config: ", path);
-							log.vlog("To sync this directory to your OneDrive Account update your business_shared_folders config");
-							return;
-						}
-					}
-					
-					**/
 				}
 				
 				// skip_file handling
@@ -3582,6 +3556,9 @@ class SyncEngine {
 		// Perform the filesystem walk of this path, building an array of new items to upload
 		scanPathForNewData(path);
 		
+		// To finish off the processing items, this is needed to reflect this in the log
+		log.vdebug("------------------------------------------------------------------");
+		
 		auto finishTime = Clock.currTime();
 		log.vdebug("Finished Filesystem Walk:     ", finishTime);
 		
@@ -3633,6 +3610,11 @@ class SyncEngine {
 			
 		ulong maxPathLength;
 		ulong pathWalkLength;
+		
+		// Add this logging break to assist with what was checked for each path
+		if (path != ".") {
+			log.vdebug("------------------------------------------------------------------");
+		}
 		
 		// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
 		// If the path is greater than allowed characters, then one drive will return a '400 - Bad Request'
@@ -6100,10 +6082,4 @@ class SyncEngine {
 			uploadDeletedItem(oldItem, oldPath);
 		}
 	}
-	
-	
-	
-	
-	
-	
 }

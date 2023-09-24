@@ -586,7 +586,7 @@ int main(string[] cliArgs) {
 					// Do we flag to perform a full scan of the online data?
 					if (fullScanFrequencyLoopCount > fullScanFrequency) {
 						// set full scan trigger for true up
-						log.log("Enabling Full Scan True Up (fullScanFrequencyLoopCount > fullScanFrequency), resetting fullScanFrequencyLoopCount = 1");
+						log.vdebug("Enabling Full Scan True Up (fullScanFrequencyLoopCount > fullScanFrequency), resetting fullScanFrequencyLoopCount = 1");
 						fullScanFrequencyLoopCount = 1;
 						appConfig.fullScanTrueUpRequired = true;
 					} else {
@@ -596,8 +596,8 @@ int main(string[] cliArgs) {
 					}
 					
 					log.vdebug(loopStartOutputMessage);
-					log.log("Total Run-Time Loop Number:     ", monitorLoopFullCount);
-					log.log("Full Scan Freqency Loop Number: ", fullScanFrequencyLoopCount);
+					log.vdebug("Total Run-Time Loop Number:     ", monitorLoopFullCount);
+					log.vdebug("Full Scan Freqency Loop Number: ", fullScanFrequencyLoopCount);
 					SysTime startFunctionProcessingTime = Clock.currTime();
 					log.vdebug("Start Monitor Loop Time:              ", startFunctionProcessingTime);
 					
@@ -630,7 +630,7 @@ int main(string[] cliArgs) {
 					
 					// How long has the application been running for?
 					auto elapsedTime = Clock.currTime() - applicationStartTime;
-					log.log("Application run-time thus far: ", elapsedTime);
+					log.vdebug("Application run-time thus far: ", elapsedTime);
 					
 					// Need to re-validate that the client is still online for this loop
 					if (testInternetReachability(appConfig)) {

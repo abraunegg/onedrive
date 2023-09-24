@@ -381,8 +381,4 @@ class ClientSideFiltering {
 		}
 		return finalResult;
 	}
-	
-	
-	
-	
 }
