@@ -178,7 +178,7 @@ class ApplicationConfig {
 	private bool configFileSkipSymbolicLinks = false;
 	private bool configFileSyncBusinessSharedItems = false;
 	
-	// File permission values (set via initialize function)
+	// File permission values (set via initialise function)
 	private int convertedPermissionValue;
 	
 	// Array of values that are the actual application runtime configuration
@@ -187,8 +187,10 @@ class ApplicationConfig {
 	long[string] longValues;
 	bool[string] boolValues;
 	
+	bool shellEnvironmentSet = false;
+	
 	// Initialise the application configuration
-	bool initialize(string confdirOption) {
+	bool initialise(string confdirOption) {
 		
 		// Default runtime configuration - entries in config file ~/.config/onedrive/config or derived from variables above
 		// An entry here means it can be set via the config file if there is a coresponding entry, read from config and set via update_from_args()
@@ -223,7 +225,7 @@ class ApplicationConfig {
 		stringValues["azure_tenant_id"] = "";
 		
 		// - Store how many times was --verbose added
-		longValues["verbose"] = log.verbose; // might also be initialized by the first getopt call!
+		longValues["verbose"] = log.verbose; // might also be initialised by the first getopt call!
 		// - The amount of time (seconds) between monitor sync loops
 		longValues["monitor_interval"] = 300;
 		// - What size of file should be skipped?
@@ -1884,7 +1886,83 @@ class ApplicationConfig {
 		log.vdebug("reset skip_dir: ", getValueString("skip_dir"));
 	}
 	
+	// Initialise the correct 'sync_dir' expanding any '~' if present
+	string initialiseRuntimeSyncDirectory() {
 	
+		string outputValue;
+		
+		log.vdebug("sync_dir: Setting runtimeSyncDirectory from config value 'sync_dir'");
+		
+		if (!shellEnvironmentSet){
+			log.vdebug("sync_dir: No SHELL or USER environment variable configuration detected");
+			// No shell or user set, so expandTilde() will fail - usually headless system running under init.d / systemd or potentially Docker
+			// Does the 'currently configured' sync_dir include a ~
+			if (canFind(getValueString("sync_dir"), "~")) {
+				// A ~ was found in sync_dir
+				log.vdebug("sync_dir: A '~' was found in 'sync_dir', using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set");
+				outputValue = defaultHomePath ~ strip(getValueString("sync_dir"), "~");
+			} else {
+				// No ~ found in sync_dir, use as is
+				log.vdebug("sync_dir: Using configured 'sync_dir' path as-is as no SHELL or USER environment variable configuration detected");
+				outputValue = getValueString("sync_dir");
+			}
+		} else {
+			// A shell and user environment variable is set, expand any ~ as this will be expanded correctly if present
+			if (canFind(getValueString("sync_dir"), "~")) {
+				log.vdebug("sync_dir: A '~' was found in the configured 'sync_dir', automatically expanding as SHELL and USER environment variable is set");
+				outputValue = expandTilde(getValueString("sync_dir"));
+			} else {
+				// No ~ found in sync_dir, does the path begin with a '/' ?
+				log.vdebug("sync_dir: Using configured 'sync_dir' path as-is as however SHELL or USER environment variable configuration detected - should be placed in USER home directory");
+				if (!startsWith(getValueString("sync_dir"), "/")) {
+					log.vdebug("Configured 'sync_dir' does not start with a '/' or '~/' - adjusting configured 'sync_dir' to use User Home Directory as base for 'sync_dir' path");
+					string updatedPathWithHome = "~/" ~ getValueString("sync_dir");
+					outputValue = expandTilde(updatedPathWithHome);
+				} else {
+					log.vdebug("use 'sync_dir' as is - no touch");
+					outputValue = getValueString("sync_dir");
+				}
+			}
+		}
+		
+		// What will runtimeSyncDirectory be actually set to?
+		log.vdebug("runtimeSyncDirectory set to: ", outputValue);
+		return outputValue;
+	}
+	
+	// Initialise the correct 'log_dir' when application logging to a separate file is enabled with 'enable_logging' and expanding any '~' if present
+	string initialiseLogDirectory() {
+		
+		string initialisedLogDirPath;
+		
+		log.vdebug("log_dir: Setting runtime application log from config value 'log_dir'");
+		
+		if (getValueString("log_dir") != defaultLogFileDir) {
+			// User modified 'log_dir' to be used with 'enable_logging'
+			// if 'log_dir' contains a '~' this needs to be expanded correctly
+			if (canFind(getValueString("log_dir"), "~")) {
+				// ~ needs to be expanded correctly
+				if (!shellEnvironmentSet) {
+					// No shell or user environment variable set, so expandTilde() will fail - usually headless system running under init.d / systemd or potentially Docker
+					log.vdebug("log_dir: A '~' was found in log_dir, using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set");
+					initialisedLogDirPath = defaultHomePath ~ strip(getValueString("log_dir"), "~");
+				} else {
+					// A shell and user environment variable is set, expand any ~ as this will be expanded correctly if present
+					log.vdebug("log_dir: A '~' was found in the configured 'log_dir', automatically expanding as SHELL and USER environment variable is set");
+					initialisedLogDirPath = expandTilde(getValueString("log_dir"));
+				}		
+			} else {
+				// '~' not found in log_dir entry, use as is
+				initialisedLogDirPath = getValueString("log_dir");
+			}
+		} else {
+			// Default 'log_dir' to be used with 'enable_logging'
+			initialisedLogDirPath = defaultLogFileDir;
+		}
+	
+		// Return the initialised application log path
+		return initialisedLogDirPath;
+	}
 }
 
 // Output the full application help when --help is passed in

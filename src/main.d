@@ -136,14 +136,26 @@ int main(string[] cliArgs) {
 	appConfig = new ApplicationConfig();
 	// Initialise the application configuration, utilising --confdir if it was passed in
 	// Otherwise application defaults will be used to configure the application
-	if (!appConfig.initialize(confdirOption)) {
+	if (!appConfig.initialise(confdirOption)) {
 		// There was an error loading the user specified application configuration
 		// Error message already printed
 		return EXIT_FAILURE;
 	}
 	
+	// Are there environment variables available?
+	detectEnvironmentVariables();
+	
 	// Update the existing application configuration (default or 'config' file) from any passed in command line arguments
 	appConfig.updateFromArgs(cliArgs);
+	
+	// Configure application logging to a log file only if enabled, and do this early
+	if (appConfig.getValueBool("enable_logging")){
+		// configure the application logging directory
+		string initialisedLogDirPath = appConfig.initialiseLogDirectory();
+		// Initialise using the configured logging directory
+		log.vlog("Using the following directory to store the runtime application log: ", initialisedLogDirPath);
+		log.initialise(initialisedLogDirPath);
+	}
 	
 	// Configure Client Side Filtering (selective sync) by parsing and getting a usable regex for skip_file, skip_dir and sync_list config components
 	selectiveSync = new ClientSideFiltering(appConfig);
@@ -155,8 +167,8 @@ int main(string[] cliArgs) {
 	// Set runtimeDatabaseFile, this will get updated if we are using --dry-run
 	runtimeDatabaseFile = appConfig.databaseFilePath;
 	
-	// Expand any ~ in the configuration for our operational environment. Read in 'sync_dir' from appConfig
-	runtimeSyncDirectory = updateTildeConfigDirectives(appConfig.getValueString("sync_dir"));
+	// Read in 'sync_dir' from appConfig with '~' if present expanded
+	runtimeSyncDirectory = appConfig.initialiseRuntimeSyncDirectory();
 	
 	// DEVELOPER OPTIONS OUTPUT
 	// Set to display memory details as early as possible
@@ -622,7 +634,7 @@ int main(string[] cliArgs) {
 					SysTime startFunctionProcessingTime = Clock.currTime();
 					log.vdebug("Start Monitor Loop Time:              ", startFunctionProcessingTime);
 					
-					// Do we perform any monitor logging output surpression?
+					// Do we perform any monitor console logging output surpression?
 					// 'monitor_log_frequency' controls how often, in a non-verbose application output mode, how often 
 					// the full output of what is occuring is done. This is done to lessen the 'verbosity' of non-verbose 
 					// logging, but only when running in --monitor
@@ -833,46 +845,16 @@ void displaySyncOutcome() {
 	}
 }
 
-string updateTildeConfigDirectives(string inputValue) {
-	string outputValue;
-	
-	log.vdebug("sync_dir: Setting runtimeSyncDirectory from config value 'sync_dir'");
-	
-	if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
-		log.vdebug("sync_dir: No SHELL or USER environment variable configuration detected");
-		// No shell or user set, so expandTilde() will fail - usually headless system running under init.d / systemd or potentially Docker
-		// Does the 'currently configured' sync_dir include a ~
-		if (canFind(inputValue, "~")) {
-			// A ~ was found in sync_dir
-			log.vdebug("sync_dir: A '~' was found in 'sync_dir', using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set");
-			outputValue = appConfig.defaultHomePath ~ strip(inputValue, "~");
-		} else {
-			// No ~ found in sync_dir, use as is
-			log.vdebug("sync_dir: Using configured 'sync_dir' path as-is as no SHELL or USER environment variable configuration detected");
-			outputValue = inputValue;
-		}
+// Set the appConfig flag that environment variables are available
+void detectEnvironmentVariables() {
+	// Detect if these environment variables have been set
+	if ((environment.get("SHELL").empty) && (environment.get("USER").empty)){
+		log.vdebug("runtime_environment: No SHELL or USER environment variable configuration detected");
+		appConfig.shellEnvironmentSet = false;
 	} else {
-		// A shell and user environment variable is set, expand any ~ as this will be expanded correctly if present
-		if (canFind(inputValue, "~")) {
-			log.vdebug("sync_dir: A '~' was found in configured 'sync_dir', automatically expanding as SHELL and USER environment variable is set");
-			outputValue = expandTilde(inputValue);
-		} else {
-			// No ~ found in sync_dir, does the path begin with a '/' ?
-			log.vdebug("sync_dir: Using configured 'sync_dir' path as-is as however SHELL or USER environment variable configuration detected - should be placed in USER home directory");
-			if (!startsWith(inputValue, "/")) {
-				log.log("Configured 'sync_dir' does not start with a '/' or '~/' - adjusting configured 'sync_dir' to use User Home Directory as base for 'sync_dir' path");
-				string updatedPathWithHome = "~/" ~ inputValue;
-				outputValue = expandTilde(updatedPathWithHome);
-			} else {
-				log.vdebug("use 'sync_dir' as is - no touch");
-				outputValue = inputValue;
-			}
-		}
+		log.vdebug("runtime_environment: SHELL and USER environment variable detected, expansion of '~' should be possible");
+		appConfig.shellEnvironmentSet = true;
 	}
-	
-	// What will runtimeSyncDirectory be actually set to?
-	log.vdebug("runtimeSyncDirectory set to: ", outputValue);
-	return outputValue;
 }
 
 void processResyncDatabaseRemoval(string databaseFilePathToRemove) {

@@ -618,6 +618,7 @@ class SyncEngine {
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (log.verbose <= 1) {
 				if (!appConfig.surpressLoggingOutput) {
+					log.fileOnly("Fetching items from the OneDrive API for Drive ID: ", driveIdToQuery);
 					write("Fetching items from the OneDrive API for Drive ID: ", driveIdToQuery, " .");
 				}
 			} else {
@@ -703,6 +704,12 @@ class SyncEngine {
 			if (!appConfig.surpressLoggingOutput) {
 				log.log("Generating a /delta compatible JSON response from the OneDrive API ...");
 			}
+			
+			// Why are are generating a /delta response
+			log.vdebug("Why are we generating a /delta response:");
+			log.vdebug(" singleDirectoryScope:    ", singleDirectoryScope);
+			log.vdebug(" nationalCloudDeployment: ", nationalCloudDeployment);
+			log.vdebug(" cleanupLocalFiles:       ", cleanupLocalFiles);
 			
 			// What 'path' are we going to start generating the response for
 			string pathToQuery;
