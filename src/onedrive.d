@@ -1054,12 +1054,21 @@ final class OneDriveApi
 		try {
 			response = post(url, request.toString());
 		} catch (OneDriveException e) {
-			displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-			
-			// We need to exit here, user needs to fix issue
-			log.error("ERROR: Unable to initialize subscriptions for updates. Please fix this issue.");
-			shutdown();
-			exit(-1);
+			// The OneDrive API returned that there was an error
+			if (e.httpStatusCode == 409) {
+				// If the API returns a 409, there is a conflict with a very specific subscription id
+				//   Subscription Id <UUID> already exists for the requested combination
+				// The conflict <UUID> is in the error message
+				deleteConflictSubscription(e.msg);
+				createSubscription();
+			} else {
+				// Display the error message
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+				// We need to exit here, user needs to fix issue
+				log.error("ERROR: Unable to initialize subscriptions for updates. Please fix this issue.");
+				shutdown();
+				exit(-1);
+			}
 		}
 
 		// Save important subscription metadata including id and expiration
@@ -1092,6 +1101,21 @@ final class OneDriveApi
 		url = subscriptionUrl ~ "/" ~ subscriptionId;
 		del(url);
 		log.log("Deleted subscription");
+	}
+	
+	private void deleteConflictSubscription(string message) {
+		log.log("The OneDrive API reported that the Subscription ID already exists for the requested combination, thus generating a conflict");
+		auto errorArray = splitLines(message);
+		JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
+		string errorReason = errorMessage["error"]["message"].str;
+		auto errorReasonArray = errorReason.split!isWhite;
+		string conflictUUID = errorReasonArray[2];
+		log.log("The Subscription ID that is in conflict is: ", conflictUUID);
+		log.log("Attempting to delete the conflict Subscription ID");
+		const(char)[] url;
+		url = subscriptionUrl ~ "/" ~ conflictUUID;
+		del(url);
+		log.log("Deleted the conflict Subscription ID");
 	}
 
 	private void redeemToken(const(char)[] authCode)
