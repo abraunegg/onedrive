@@ -230,8 +230,6 @@ class ApplicationConfig {
 		longValues["monitor_interval"] = 300;
 		// - What size of file should be skipped?
 		longValues["skip_size"] = 0;
-		// - How many 'changes' from the OneDrive API need to occur to trigger a notification?
-		longValues["min_notify_changes"] = 5;
 		// - How many 'loops' when using --monitor, before we print out high frequency recurring items?
 		longValues["monitor_log_frequency"] = 6;
 		// - Number of N sync runs before performing a full local scan of sync_dir
@@ -1014,9 +1012,6 @@ class ApplicationConfig {
 				"logout",
 					"Logout the current user",
 					&boolValues["logout"],
-				"min-notify-changes",
-					"Minimum number of pending incoming changes necessary to trigger a desktop notification",
-					&longValues["min_notify_changes"],
 				"modified-by",
 					"Display the last modified by details of a given path",
 					&stringValues["modified_by"],
@@ -1151,7 +1146,6 @@ class ApplicationConfig {
 		writeln("Config option 'enable_logging'               = ", getValueBool("enable_logging"));
 		writeln("Config option 'log_dir'                      = ", getValueString("log_dir"));
 		writeln("Config option 'disable_notifications'        = ", getValueBool("disable_notifications"));
-		writeln("Config option 'min_notify_changes'           = ", getValueLong("min_notify_changes"));
 		
 		// skip files and directory and 'matching' policy
 		writeln("Config option 'skip_dir'                     = ", getValueString("skip_dir"));

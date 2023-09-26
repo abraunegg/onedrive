@@ -133,15 +133,9 @@ Configuration file key: \fBlocal_first\fP (default: \fBfalse\fP)
 Logout the current user
 .TP
 \fB\-\-log\-dir\fP ARG
-defines the directory where logging output is saved to, needs to end with a slash
+Defines the directory where logging output is saved to
 .br
 Configuration file key: \fBlog_dir\fP (default: \fB/var/log/onedrive/\fP)
-.TP
-\fB\-\-min\-notify\-changes\fP
-the minimum number of pending incoming changes necessary to trigger
-a desktop notification
-.br
-Configuration file key: \fBmin_notify_changes\fP (default: \fB5\fP)
 .TP
 \fB\-m \-\-modified\-by\fP ARG
 Display the last modified by details of a given path
