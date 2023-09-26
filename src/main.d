@@ -236,7 +236,7 @@ int main(string[] cliArgs) {
 	if (appConfig.getValueBool("resync")) {
 		// what is the risk acceptance for --resync?
 		bool resyncRiskAcceptance = appConfig.displayResyncRiskForAcceptance();
-		log.vdebug("Returned Risk Acceptance: ", resyncRiskAcceptance);
+		log.vdebug("Returned --resync risk acceptance: ", resyncRiskAcceptance);
 		// Action based on user response
 		if (!resyncRiskAcceptance){
 			// --resync risk not accepted
@@ -264,6 +264,27 @@ int main(string[] cliArgs) {
 			appConfig.createBackupConfigFile();
 			// Update hash files and generate a new config backup
 			appConfig.updateHashContentsForConfigFiles();
+		}
+	}
+	
+	// Implement https://github.com/abraunegg/onedrive/issues/1129
+	// Force a synchronization of a specific folder, only when using --synchronize --single-directory and ignoring all non-default skip_dir and skip_file rules
+	if (appConfig.getValueBool("force_sync")) {
+		// appConfig.checkForBasicOptionConflicts() has already checked for the basic requirements for --force-sync
+		log.log("\nWARNING: Overriding application configuration to use application defaults for skip_dir and skip_file due to --synch --single-directory --force-sync being used");
+		bool forceSyncRiskAcceptance = appConfig.displayForceSyncRiskForAcceptance();
+		log.vdebug("Returned --force-sync risk acceptance: ", forceSyncRiskAcceptance);
+		// Action based on user response
+		if (!forceSyncRiskAcceptance){
+			// --force-sync risk not accepted
+			return EXIT_FAILURE;
+		} else {
+			// --force-sync risk accepted
+			// reset set config using function to use application defaults
+			appConfig.resetSkipToDefaults();
+			// update sync engine regex with reset defaults
+			selectiveSync.setDirMask(appConfig.getValueString("skip_dir"));
+			selectiveSync.setFileMask(appConfig.getValueString("skip_file"));	
 		}
 	}
 	

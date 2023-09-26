@@ -775,7 +775,7 @@ class SyncEngine {
 			// Chunk the total items to process into 500 lot items
 			batchesProcessed++;
 			log.vlog("Processing OneDrive JSON item batch [", batchesProcessed,"/", batchCount, "] to ensure consistent local state");
-			processJSONItemsInBatch(batchOfJSONItems, batchesProcessed);
+			processJSONItemsInBatch(batchOfJSONItems, batchesProcessed, batchCount);
 			// To finish off the JSON processing items, this is needed to reflect this in the log
 			log.vdebug("------------------------------------------------------------------");
 		}
@@ -938,7 +938,7 @@ class SyncEngine {
 	}
 	
 	// Process each of the elements contained in jsonItemsToProcess[]
-	void processJSONItemsInBatch(JSONValue[] array, ulong batchGroup) {
+	void processJSONItemsInBatch(JSONValue[] array, ulong batchGroup, ulong batchCount) {
 	
 		ulong batchElementCount = array.length;
 
@@ -948,7 +948,8 @@ class SyncEngine {
 			
 			// To show this is the processing for this particular item, start off with this breaker line
 			log.vdebug("------------------------------------------------------------------");
-			log.vdebug("Processing OneDrive JSON item ", elementCount, " of ", batchElementCount, " as part of JSON item batch ", batchGroup);
+			log.vdebug("Processing OneDrive JSON item ", elementCount, " of ", batchElementCount, " as part of JSON Item Batch ", batchGroup, " of ", batchCount);
+			log.vdebug("Raw JSON OneDrive Item: ", onedriveJSONItem);
 			
 			string thisItemId = onedriveJSONItem["id"].str;
 			string thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
@@ -1464,7 +1465,7 @@ class SyncEngine {
 			string itemSource = "remote";
 			if (isItemSynced(newDatabaseItem, newItemPath, itemSource)) {
 				// Item details from OneDrive and local item details in database are in-sync
-				log.vdebug("The item to sync is already present on the local filesystem and is in-sync with the local database");
+				log.vdebug("The item to sync is already present on the local filesystem and is in-sync with what is reported online");
 				log.vdebug("Update/Insert local database with item details");
 				log.vdebug("item details to update/insert: ", newDatabaseItem);
 				itemDB.upsert(newDatabaseItem);
@@ -1547,7 +1548,6 @@ class SyncEngine {
 					}
 				}
 			}
-			
 		} 
 			
 		// Path does not exist locally (should not exist locally if renamed file) - this will be a new file download or new folder creation
@@ -5169,7 +5169,7 @@ class SyncEngine {
 			log.log("\nFailed items to download from OneDrive: ", fileDownloadFailures.length);
 			foreach(failedFileToDownload; fileDownloadFailures) {
 				// List the detail of the item that failed to download
-				log.log("Failed to download: ", failedFileToDownload);
+				log.logAndNotify("Failed to download: ", failedFileToDownload);
 				
 				// Is this failed item in the DB? It should not be ..
 				Item downloadDBItem;
@@ -5197,7 +5197,7 @@ class SyncEngine {
 			log.log("\nFailed items to upload to OneDrive: ", fileUploadFailures.length);
 			foreach(failedFileToUpload; fileUploadFailures) {
 				// List the path of the item that failed to upload
-				log.log("Failed to upload: ", failedFileToUpload);
+				log.logAndNotify("Failed to upload: ", failedFileToUpload);
 				
 				// Is this failed item in the DB? It should not be ..
 				Item uploadDBItem;

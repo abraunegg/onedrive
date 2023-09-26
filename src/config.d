@@ -1298,6 +1298,46 @@ class ApplicationConfig {
 		return userRiskAcceptance;
 	}
 	
+	// Prompt the user to accept the risk of using --force-sync
+	bool displayForceSyncRiskForAcceptance() {
+		// what is the user risk acceptance?
+		bool userRiskAcceptance = false;
+		
+		// need to prompt user
+		char response;
+		
+		// --force-sync warning message
+		writeln("\nThe use of --force-sync will reconfigure the application to use defaults. This may have untold and unknown future impacts.");
+		writeln("By proceeding in using this option you accept any impacts including any data loss that may occur as a result of using --force-sync.");
+		write("\nAre you sure you wish to proceed with --force-sync [Y/N] ");
+		
+		try {
+			// Attempt to read user response
+			string input = readln().strip;
+			if (input.length > 0) {
+				response = std.ascii.toUpper(input[0]);
+			}
+		} catch (std.format.FormatException e) {
+			userRiskAcceptance = false;
+			// Caught an error
+			return EXIT_FAILURE;
+		}
+		
+		// What did the user enter?
+		log.vdebug("--force-sync warning User Response Entered: ", (to!string(response)));
+		
+		// Evaluate user repsonse
+		if ((to!string(response) == "y") || (to!string(response) == "Y")) {
+			// User has accepted --force-sync risk to proceed
+			userRiskAcceptance = true;
+			// Are you sure you wish .. does not use writeln();
+			write("\n");
+		}
+		
+		// Return the --resync acceptance or not
+		return userRiskAcceptance;
+	}
+	
 	// Check the application configuration for any changes that need to trigger a --resync
 	// This function is only called if --resync is not present
 	bool applicationChangeWhereResyncRequired() {
@@ -1812,9 +1852,39 @@ class ApplicationConfig {
 			operationalConflictDetected = true;
 		}
 		
+		// --force-sync can only be used when using --sync --single-directory
+		if (getValueBool("force_sync")) {
+		
+			bool conflict = false;
+			// Should not be used with --monitor
+			if (getValueBool("monitor")) conflict = true;
+			// single_directory must not be empty
+			if (getValueString("single_directory").empty) conflict = true;
+			if (conflict) {
+				log.error("ERROR: --force-sync can only be used with --sync --single-directory.");
+				operationalConflictDetected = true;
+			}
+		}
+		
 		// Return bool value indicating if we have an operational conflict
 		return operationalConflictDetected;
 	}
+	
+	// Reset skip_file and skip_dir to application defaults when --force-sync is used
+	void resetSkipToDefaults() {
+		// skip_file
+		log.vdebug("original skip_file: ", getValueString("skip_file"));
+		log.vdebug("resetting skip_file to application defaults");
+		setValueString("skip_file", defaultSkipFile);
+		log.vdebug("reset skip_file: ", getValueString("skip_file"));
+		// skip_dir
+		log.vdebug("original skip_dir: ", getValueString("skip_dir"));
+		log.vdebug("resetting skip_dir to application defaults");
+		setValueString("skip_dir", defaultSkipDir);
+		log.vdebug("reset skip_dir: ", getValueString("skip_dir"));
+	}
+	
+	
 }
 
 // Output the full application help when --help is passed in
