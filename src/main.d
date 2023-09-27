@@ -153,7 +153,7 @@ int main(string[] cliArgs) {
 		// configure the application logging directory
 		string initialisedLogDirPath = appConfig.initialiseLogDirectory();
 		// Initialise using the configured logging directory
-		log.vlog("Using the following directory to store the runtime application log: ", initialisedLogDirPath);
+		log.vlog("Using the following path to store the runtime application log: ", initialisedLogDirPath);
 		log.initialise(initialisedLogDirPath);
 	}
 	

@@ -71,7 +71,7 @@ class ClientSideFiltering {
 		foreach(entry; appConfig.getValueString("skip_file").split("|")){
 			if (entry == ".*") {
 				// invalid entry element detected
-				log.logAndNotify("ERROR: Invalid skip_file entry '.*' detected");
+				log.error("ERROR: Invalid skip_file entry '.*' detected");
 				return false;
 			}
 		}

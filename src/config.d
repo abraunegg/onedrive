@@ -528,13 +528,15 @@ class ApplicationConfig {
 			}
 		}
 		
-		// Advise the user path that we use for the application configuration
+		// Advise the user path that we will use for the application state data
 		if (canFind(applicableConfigFilePath, configDirName)) {
-			log.vlog("Using 'user' Config Dir: ", configDirName);
+			log.vlog("Using 'user' configuration path for application state data: ", configDirName);
 		}
 		if (canFind(applicableConfigFilePath, systemConfigDirName)) {
-			log.vlog("Using 'system' Config Dir: ", systemConfigDirName);
+			log.vlog("Using 'system' configuration path for application state data: ", systemConfigDirName);
 		}
+		
+		// return if the configuration was initialised
 		return configurationInitialised;
 	}
 	
