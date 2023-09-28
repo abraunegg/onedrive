@@ -310,7 +310,7 @@ The following are supported for pattern matching and exclusion rules:
 
 **Note:** When enabling the use of 'sync_list,' utilise the `--display-config` option to validate that your configuration will be used by the application, and test your configuration by adding `--dry-run` to ensure the client will operate as per your requirement.
 
-**Note:** After changing the sync_list, you must perform a full re-synchronisation by adding `--resync` to your existing command line - for example: `onedrive --synchronise --resync`
+**Note:** After changing the sync_list, you must perform a full re-synchronisation by adding `--resync` to your existing command line - for example: `onedrive --sync --resync`
 
 **Note:** In some circumstances, it may be required to sync all the individual files within the 'sync_dir', but due to frequent name change / addition / deletion of these files, it is not desirable to constantly change the 'sync_list' file to include / exclude these files and force a resync. To assist with this, enable the following in your configuration file:
 ```text
@@ -353,7 +353,7 @@ The `--force-sync` option allows you to sync a specific directory, ignoring your
 
 To use this option, you must run the application manually in the following manner:
 ```text
-onedrive --synchronise --single-directory '<directory_to_sync>' --force-sync <add any other options needed or required>
+onedrive --sync --single-directory '<directory_to_sync>' --force-sync <add any other options needed or required>
 ```
 
 When using `--force-sync`, you'll encounter the following warning and advice:
