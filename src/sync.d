@@ -661,20 +661,16 @@ class SyncEngine {
 			for (;;) {
 				responseBundleCount++;
 				// Get the /delta changes via the OneDrive API
-				log.vdebug("");
-				log.vdebug("------------------------------------------------------------------");
-				log.vdebug("driveIdToQuery: ", driveIdToQuery);
-				log.vdebug("itemIdToQuery:  ", itemIdToQuery);
-				log.vdebug("deltaLink:      ", deltaLink);
-				log.vdebug("------------------------------------------------------------------");
-				
 				// getDeltaChangesByItemId has the re-try logic for transient errors
 				deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink);
 				
-				// If deltaChanges is an invalid JSON object, must exit
-				if (deltaChanges.type() != JSONType.object){
-					// Handle the invalid JSON response
-					invalidJSONResponseFromOneDriveAPI();
+				// If the initial deltaChanges response is an invalid JSON object, keep trying ..
+				if (deltaChanges.type() != JSONType.object) {
+					while (deltaChanges.type() != JSONType.object) {
+						// Handle the invalid JSON response adn retry
+						log.error("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response");
+						deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink);
+					}
 				}
 				
 				ulong nrChanges = count(deltaChanges["value"].array);
@@ -2147,18 +2143,19 @@ class SyncEngine {
 		OneDriveApi getDeltaQueryOneDriveApiInstance;
 		getDeltaQueryOneDriveApiInstance = new OneDriveApi(appConfig);
 		getDeltaQueryOneDriveApiInstance.initialise();
+		
+		log.vdebug("------------------------------------------------------------------");
+		log.vdebug("selectedDriveId:   ", selectedDriveId);
+		log.vdebug("selectedItemId:    ", selectedItemId);
+		log.vdebug("providedDeltaLink: ", providedDeltaLink);
+		log.vdebug("------------------------------------------------------------------");
+		
 		try {
 			deltaChangesBundle = getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink);
 		} catch (OneDriveException exception) {
 			// caught an exception
-			log.log("------------------------------------------------------------------");
-			log.log("getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink) generated a OneDriveException");
-			log.log("");
-			log.log("selectedDriveId:   ", selectedDriveId);
-			log.log("selectedItemId:    ", selectedItemId);
-			log.log("providedDeltaLink: ", providedDeltaLink);
-			log.log("------------------------------------------------------------------");
-						
+			log.vdebug("getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink) generated a OneDriveException");
+			
 			auto errorArray = splitLines(exception.msg);
 			string thisFunctionName = getFunctionName!({});
 			// HTTP request returned status code 408,429,503,504
@@ -2181,9 +2178,9 @@ class SyncEngine {
 					log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
 					Thread.sleep(dur!"seconds"(30));
 				}
-				// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-				log.vdebug("Retrying Query: ");
-				deltaChangesBundle = getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink);
+				// dont retry request, loop back to calling function
+				log.vdebug("Looping back after failure");
+				deltaChangesBundle = null;
 			} else {
 				// Default operation if not 408,429,503,504 errors
 				if (exception.httpStatusCode == 410) {
@@ -2192,19 +2189,16 @@ class SyncEngine {
 					log.log("WARNING: Retrying OneDrive API call without using the locally stored deltaLink value");
 					// Configure an empty deltaLink
 					log.vdebug("Delta link expired for 'getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink)', setting 'deltaLink = null'");
-					string emptyDeltaLink;
+					string emptyDeltaLink = "";
+					// retry with empty deltaLink
 					deltaChangesBundle = getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, emptyDeltaLink);
 				} else {
 					// display what the error is
+					log.log("CODING TO DO: Hitting this failure error output");
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+					deltaChangesBundle = null;
 				}
 			}
-		}
-		
-		// Check the response JSON
-		if (deltaChangesBundle.type() != JSONType.object){
-			// Handle the invalid JSON response
-			invalidJSONResponseFromOneDriveAPI();
 		}
 		
 		// Shutdown the API
@@ -2250,7 +2244,6 @@ class SyncEngine {
 	
 	// If the JSON response is not correct JSON object, exit
 	void invalidJSONResponseFromOneDriveAPI() {
-		
 		log.error("ERROR: Query of the OneDrive API returned an invalid JSON response");
 		// Must exit
 		exit(-1);

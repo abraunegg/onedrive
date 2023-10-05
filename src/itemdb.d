@@ -671,6 +671,7 @@ final class ItemDatabase {
 	
 	// Perform a vacuum on the database, commit WAL / SHM to file
 	void performVacuum() {
+		log.vdebug("Attempting to perform a database vacuum to merge any temporary data");
 		try {
 			auto stmt = db.prepare("VACUUM;");
 			stmt.exec();

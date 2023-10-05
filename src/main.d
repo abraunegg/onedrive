@@ -109,6 +109,14 @@ int main(string[] cliArgs) {
 		if (oneDriveApiInstance !is null) object.destroy(oneDriveApiInstance);
 		if (selectiveSync !is null) object.destroy(selectiveSync);
 		if (syncEngineInstance !is null) object.destroy(syncEngineInstance);
+		
+		// Set these to be null due to failure scope - prevent 'ERROR: Unable to perform a database vacuum: out of memory' when the exit scope is then called
+		log.vdebug("Setting Class Objects to null due to failure scope");
+		itemDB = null;
+		appConfig = null;
+		oneDriveApiInstance = null;
+		selectiveSync = null;
+		syncEngineInstance = null;
 	}
 	
 	// Read in application options as passed in
