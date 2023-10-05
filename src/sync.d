@@ -1622,7 +1622,7 @@ class SyncEngine {
 						log.vdebug("Calling setTimes() for this file: ", newItemPath);
 						setTimes(newItemPath, newDatabaseItem.mtime, newDatabaseItem.mtime);
 						// Save the item to the database
-						writeln("Line: 1612");
+						writeln("Save Item Line: 1625");
 						saveItem(onedriveJSONItem);
 					} catch (FileException e) {
 						// display the error message
@@ -1632,7 +1632,7 @@ class SyncEngine {
 					// we dont create the directory, but we need to track that we 'faked it'
 					idsFaked ~= [newDatabaseItem.driveId, newDatabaseItem.id];
 					// Save the item to the dry-run database
-					writeln("Line: 1622");
+					writeln("Save Item Line: 1635");
 					saveItem(onedriveJSONItem);
 				}
 				break;
@@ -1732,7 +1732,7 @@ class SyncEngine {
 					// Is the last modified timestamp in the DB the same as the API data or are we running an operational mode where we simulated the /delta response?
 					if ((existingItemModifiedTime != changedOneDriveItemModifiedTime) || (generateSimulatedDeltaResponse)) {
 					// Save this item in the database
-						writeln("Line: 1722");
+						writeln("DB Upsert Item Line: 1735");
 						// Add to the local database
 						log.vdebug("Adding changed OneDrive Item to database: ", changedOneDriveItem);
 						itemDB.upsert(changedOneDriveItem);
@@ -1740,7 +1740,7 @@ class SyncEngine {
 				}
 			} else {
 				// Save this item in the database
-				writeln("Line: 1730");
+				writeln("Save Item Line: 1743");
 				saveItem(onedriveJSONItem);
 				
 				// If the 'Add shortcut to My files' link was the item that was actually renamed .. we have to update our DB records
@@ -1768,7 +1768,7 @@ class SyncEngine {
 			// Is the last modified timestamp in the DB the same as the API data or are we running an operational mode where we simulated the /delta response?
 			if ((existingItemModifiedTime != changedOneDriveItemModifiedTime) || (generateSimulatedDeltaResponse)) {
 				// Database update needed for this item because our local record is out-of-date
-				writeln("Line: 1758");
+				writeln("Save Item Line: 1771");
 				// Add to the local database
 				log.vdebug("Adding changed OneDrive Item to database: ", changedOneDriveItem);
 				itemDB.upsert(changedOneDriveItem);
@@ -2039,7 +2039,7 @@ class SyncEngine {
 				// Download did not fail
 				log.log("Downloading file ", newItemPath, " ... done");
 				// Save this item into the database
-				writeln("Line: 1992");
+				writeln("Save Item Line: 2042");
 				saveItem(onedriveJSONItem);
 				
 				/**
@@ -2443,6 +2443,9 @@ class SyncEngine {
 			uploadLastModifiedTimeApiInstance.shutdown();
 			// Free object and memory
 			object.destroy(uploadLastModifiedTimeApiInstance);
+			// Is the response a valid JSON object - validation checking done in saveItem
+			writeln("Save Item Line: 2447");
+			saveItem(response);
 		} catch (OneDriveException exception) {
 			
 			string thisFunctionName = getFunctionName!({});
@@ -2482,11 +2485,7 @@ class SyncEngine {
 					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 				}
 			}
-		} 
-		
-		// Is the response a valid JSON object - validation checking done in saveItem
-		writeln("Line: 2428");
-		saveItem(response);
+		}
 	}
 	
 	// Perform a database integrity check - checking all the items that are in-sync at the moment, validating what we know should be on disk, to what is actually on disk
@@ -3326,7 +3325,7 @@ class SyncEngine {
 				log.logAndNotify("Uploading modified file ", localFilePath, " ... done.");
 				
 				// Save JSON item in database
-				writeln("Line: 3269");
+				writeln("Save Item Line: 3328");
 				saveItem(uploadResponse);
 				
 				if (!dryRun) {
@@ -4022,7 +4021,7 @@ class SyncEngine {
 				try {
 					log.vdebug("Attempting to query OneDrive Online for this parent path as path not found in local database: ", parentPath);
 					onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetails(parentPath);
-					writeln("Line: 3961");
+					writeln("Save Item Line: 4024");
 					saveItem(onlinePathData);
 					parentItem = makeItem(onlinePathData);
 				} catch (OneDriveException exception) {
@@ -4154,7 +4153,7 @@ class SyncEngine {
 						// Attempt to create a new folder on the configured parent driveId & parent id
 						createDirectoryOnlineAPIResponse = createDirectoryOnlineOneDriveApiInstance.createById(parentItem.driveId, parentItem.id, newDriveItem);
 						// Is the response a valid JSON object - validation checking done in saveItem
-						writeln("Line: 4093");
+						writeln("Save Item Line: 4156");
 						saveItem(createDirectoryOnlineAPIResponse);
 						// Log that the directory was created
 						log.log("Successfully created the remote directory ", thisNewPathToCreate, " on OneDrive");
@@ -4175,7 +4174,7 @@ class SyncEngine {
 					// Simulate a successful 'directory create' & save it to the dryRun database copy
 					// The simulated response has to pass 'makeItem' as part of saveItem
 					auto fakeResponse = createFakeResponse(thisNewPathToCreate);
-					writeln("Line: 4114");
+					writeln("Save Item Line: 4177");
 					saveItem(fakeResponse);
 				}
 				
@@ -4241,7 +4240,7 @@ class SyncEngine {
 				
 				log.vlog("The requested directory to create was found on OneDrive - skipping creating the directory: ", thisNewPathToCreate);
 				// Is the response a valid JSON object - validation checking done in saveItem
-				writeln("Line: 4178");
+				writeln("Save Item Line: 4243");
 				saveItem(onlinePathData);
 				return;
 			} else {
@@ -4434,6 +4433,15 @@ class SyncEngine {
 							fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload);
 							// Portable Operating System Interface (POSIX) testing of JSON response from OneDrive API
 							performPosixTest(baseName(fileToUpload), fileDetailsFromOneDrive["name"].str);
+							
+							// No 404 or otherwise was triggered, meaning that the file already exists online and passes the POSIX test ...
+							log.vdebug("fileDetailsFromOneDrive after exist online check: ", fileDetailsFromOneDrive);
+							// Does the data from online match our local file?
+							if (performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize)) {
+								// yes, save the data
+								writeln("Save Item Line: 4442");
+								saveItem(fileDetailsFromOneDrive);
+							}
 						} catch (OneDriveException exception) {
 							// If we get a 404 .. the file is not online .. this is what we want .. file does not exist online
 							if (exception.httpStatusCode == 404) {
@@ -4472,20 +4480,10 @@ class SyncEngine {
 									// display what the error is
 									displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 								}
-								
 							}
 						} catch (posixException e) {
 							displayPosixErrorMessage(e.msg);
 							uploadFailed = true;
-						}
-						
-						// No 404 or otherwise, meaning that the file already exists online and passes the POSIX test ...
-						log.vdebug("fileDetailsFromOneDrive after exist online check: ", fileDetailsFromOneDrive);
-						// Does the data from online match our local file?
-						if (performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize)) {
-							// yes, save the data
-							writeln("Line: 4421");
-							saveItem(fileDetailsFromOneDrive);
 						}
 						
 						// Operations in this thread are done / complete - either upload was done or it failed
@@ -5858,7 +5856,7 @@ class SyncEngine {
 				try {
 					getPathDetailsAPIResponse = queryOneDriveForSpecificPath.getPathDetails(currentPathTree);
 					parentDetails = makeItem(getPathDetailsAPIResponse);
-					writeln("Line: 5779");
+					writeln("Save Item Line: 5860");
 					saveItem(getPathDetailsAPIResponse);
 					directoryFoundOnline = true;
 				} catch (OneDriveException exception) {
@@ -5911,7 +5909,7 @@ class SyncEngine {
 						performPosixTest(thisFolderName, getPathDetailsAPIResponse["name"].str);
 						// No POSIX issue with requested path element
 						parentDetails = makeItem(getPathDetailsAPIResponse);
-						writeln("Line: 5832");
+						writeln("Save Item Line: 5913");
 						saveItem(getPathDetailsAPIResponse);
 						directoryFoundOnline = true;
 						
@@ -5992,7 +5990,7 @@ class SyncEngine {
 									// Use these details for the next entry path
 									getPathDetailsAPIResponse = child;
 									parentDetails = makeItem(getPathDetailsAPIResponse);
-									writeln("Line: 5913");
+									writeln("Save Item Line: 5994");
 									saveItem(getPathDetailsAPIResponse);
 									// No need to continue searching
 									break;
@@ -6053,7 +6051,7 @@ class SyncEngine {
 								// Attempt to create a new folder on the configured parent driveId & parent id
 								createByIdAPIResponse = queryOneDriveForSpecificPath.createById(parentDetails.driveId, parentDetails.id, newDriveItem);
 								// Is the response a valid JSON object - validation checking done in saveItem
-								writeln("Line: 5974");
+								writeln("Save Item Line: 6055");
 								saveItem(createByIdAPIResponse);
 								// Set getPathDetailsAPIResponse to createByIdAPIResponse
 								getPathDetailsAPIResponse = createByIdAPIResponse;
@@ -6072,7 +6070,7 @@ class SyncEngine {
 							// Simulate a successful 'directory create' & save it to the dryRun database copy
 							// The simulated response has to pass 'makeItem' as part of saveItem
 							auto fakeResponse = createFakeResponse(thisNewPathToSearch);
-							writeln("Line: 5993");
+							writeln("Save Item Line: 6074");
 							saveItem(fakeResponse);
 						}
 					}
@@ -6254,7 +6252,7 @@ class SyncEngine {
 				
 				// save the move response from OneDrive in the database
 				// Is the response a valid JSON object - validation checking done in saveItem
-				writeln("Line: 6171");
+				writeln("Save Item Line: 6256");
 				saveItem(response);
 			}
 		} else {
@@ -6271,38 +6269,44 @@ class SyncEngine {
 	
 		if (!disableUploadValidation) {
 			// Integrity validation has not been disabled (this is the default so we are always integrity checking our uploads)
-			ulong uploadFileSize = uploadResponse["size"].integer;
-			string uploadFileHash = uploadResponse["file"]["hashes"]["quickXorHash"].str;
-			string localFileHash = computeQuickXorHash(localFilePath);
-			
-			if ((localFileSize == uploadFileSize) && (localFileHash == uploadFileHash)) {
-				// Uploaded file integrity intact
-				log.vdebug("Uploaded local file matches reported online size and hash values");
-				integrityValid = true;
+			if (uploadResponse.type() == JSONType.object) {
+				// Provided JSON is a valid JSON	
+				ulong uploadFileSize = uploadResponse["size"].integer;
+				string uploadFileHash = uploadResponse["file"]["hashes"]["quickXorHash"].str;
+				string localFileHash = computeQuickXorHash(localFilePath);
+				
+				if ((localFileSize == uploadFileSize) && (localFileHash == uploadFileHash)) {
+					// Uploaded file integrity intact
+					log.vdebug("Uploaded local file matches reported online size and hash values");
+					integrityValid = true;
+				} else {
+					// Upload integrity failure .. what failed?
+					// There are 2 scenarios where this happens:
+					// 1. Failed Transfer
+					// 2. Upload file is going to a SharePoint Site, where Microsoft enriches the file with additional metadata with no way to disable
+					log.logAndNotify("WARNING: Uploaded file integrity failure for: ", localFilePath);
+					
+					// What integrity failed - size?
+					if (localFileSize != uploadFileSize) {
+						log.vlog("WARNING: Uploaded file integrity failure - Size Mismatch");
+					}
+					// What integrity failed - hash?
+					if (localFileHash != uploadFileHash) {
+						log.vlog("WARNING: Uploaded file integrity failure - Hash Mismatch");
+					}
+					
+					// What account type is this?
+					if (appConfig.accountType != "personal") {
+						// Not a personal account, thus the integrity failure is most likely due to SharePoint
+						log.vlog("CAUTION: Microsoft SharePoint enhances files after you upload them, which means this file may now have technical differences from your local copy, resulting in an integrity issue.");
+						log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
+					}
+					// How can this be disabled?
+					log.log("To disable the integrity checking of uploaded files use --disable-upload-validation");
+				}
 			} else {
-				// Upload integrity failure .. what failed?
-				// There are 2 scenarios where this happens:
-				// 1. Failed Transfer
-				// 2. Upload file is going to a SharePoint Site, where Microsoft enriches the file with additional metadata with no way to disable
-				log.logAndNotify("WARNING: Uploaded file integrity failure for: ", localFilePath);
-				
-				// What integrity failed - size?
-				if (localFileSize != uploadFileSize) {
-					log.vlog("WARNING: Uploaded file integrity failure - Size Mismatch");
-				}
-				// What integrity failed - hash?
-				if (localFileHash != uploadFileHash) {
-					log.vlog("WARNING: Uploaded file integrity failure - Hash Mismatch");
-				}
-				
-				// What account type is this?
-				if (appConfig.accountType != "personal") {
-					// Not a personal account, thus the integrity failure is most likely due to SharePoint
-					log.vlog("CAUTION: Microsoft SharePoint enhances files after you upload them, which means this file may now have technical differences from your local copy, resulting in an integrity issue.");
-					log.vlog("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details");
-				}
-				// How can this be disabled?
-				log.log("To disable the integrity checking of uploaded files use --disable-upload-validation");
+				log.log("Upload file validation unable to be performed: input JSON was invalid");
+				log.log("WARNING: Skipping upload integrity check for: ", localFilePath);
 			}
 		} else {
 			// We are bypassing integrity checks due to --disable-upload-validation
