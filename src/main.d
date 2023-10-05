@@ -526,13 +526,13 @@ int main(string[] cliArgs) {
 			// Max number of open files /proc/sys/fs/file-max
 			string maxOpenFiles = strip(readText("/proc/sys/fs/file-max"));
 			// What is the currently configured maximum inotify watches that can be used
-			// /proc/sys/user/max_inotify_watches
-			string maxInotifyWatches = strip(readText("/proc/sys/user/max_inotify_watches"));
+			// /proc/sys/fs/inotify/max_user_watches
+			string maxInotifyWatches = strip(readText("/proc/sys/fs/inotify/max_user_watches"));
 			
 			// Start the monitor process
 			log.log("OneDrive synchronisation interval (seconds): ", appConfig.getValueLong("monitor_interval"));
 			log.vlog("Maximum allowed open files:                  ", maxOpenFiles);
-			log.vlog("Maximum allowed inotify watches:             ", maxInotifyWatches);
+			log.vlog("Maximum allowed inotify user watches:        ", maxInotifyWatches);
 			
 			// Configure the monitor class
 			Monitor filesystemMonitor = new Monitor(appConfig, selectiveSync);

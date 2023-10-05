@@ -199,7 +199,7 @@ final class Monitor {
 		if (wd < 0) {
 			if (errno() == ENOSPC) {
 				// Get the current value
-				ulong maxInotifyWatches = to!int(strip(readText("/proc/sys/user/max_inotify_watches")));
+				ulong maxInotifyWatches = to!int(strip(readText("/proc/sys/fs/inotify/max_user_watches")));
 				log.log("The user limit on the total number of inotify watches has been reached.");
 				log.log("Your current limit of inotify watches is: ", maxInotifyWatches);
 				log.log("It is recommended that you change the max number of inotify watches to at least double your existing value.");
