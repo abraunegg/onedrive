@@ -75,17 +75,18 @@ int main(string[] cliArgs) {
 		if (itemDB !is null) {
 			// Make sure the .wal file is incorporated into the main db before we exit
 			itemDB.performVacuum();
+			object.destroy(itemDB);
 		}
 		
-		// Cleanup any existing dry-run elements ... these should never be left hanging around
-		cleanupDryRunDatabaseFiles(appConfig.databaseFilePathDryRun);
-		
-		// Free object and memory
-		object.destroy(appConfig);
-		object.destroy(oneDriveApiInstance);
-		object.destroy(selectiveSync);
-		object.destroy(syncEngineInstance);
-		object.destroy(itemDB);
+		// Free other objects and memory
+		if (appConfig !is null) {
+			// Cleanup any existing dry-run elements ... these should never be left hanging around
+			cleanupDryRunDatabaseFiles(appConfig.databaseFilePathDryRun);
+			object.destroy(appConfig);
+		}
+		if (oneDriveApiInstance !is null) object.destroy(oneDriveApiInstance);
+		if (selectiveSync !is null) object.destroy(selectiveSync);
+		if (syncEngineInstance !is null) object.destroy(syncEngineInstance);
 	}
 	
 	scope(failure) {
@@ -96,17 +97,18 @@ int main(string[] cliArgs) {
 		if (itemDB !is null) {
 			// Make sure the .wal file is incorporated into the main db before we exit
 			itemDB.performVacuum();
+			object.destroy(itemDB);
 		}
 		
-		// Cleanup any existing dry-run elements ... these should never be left hanging around
-		cleanupDryRunDatabaseFiles(appConfig.databaseFilePathDryRun);
-		
-		// Free object and memory
-		object.destroy(appConfig);
-		object.destroy(oneDriveApiInstance);
-		object.destroy(selectiveSync);
-		object.destroy(syncEngineInstance);
-		object.destroy(itemDB);
+		// Free other objects and memory
+		if (appConfig !is null) {
+			// Cleanup any existing dry-run elements ... these should never be left hanging around
+			cleanupDryRunDatabaseFiles(appConfig.databaseFilePathDryRun);
+			object.destroy(appConfig);
+		}
+		if (oneDriveApiInstance !is null) object.destroy(oneDriveApiInstance);
+		if (selectiveSync !is null) object.destroy(selectiveSync);
+		if (syncEngineInstance !is null) object.destroy(syncEngineInstance);
 	}
 	
 	// Read in application options as passed in
