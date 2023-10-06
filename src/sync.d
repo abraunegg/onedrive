@@ -485,11 +485,13 @@ class SyncEngine {
 	// Reset syncFailures to false
 	void resetSyncFailures() {
 		// Reset syncFailures to false if these are both empty
-		if ((fileDownloadFailures.empty) && (fileUploadFailures.empty)) {
-			log.log("Resetting syncFailures = false");
-			syncFailures = false;
-		} else {
-			log.log("File activity array's not empty - not resetting syncFailures");
+		if (syncFailures) {
+			if ((fileDownloadFailures.empty) && (fileUploadFailures.empty)) {
+				log.log("Resetting syncFailures = false");
+				syncFailures = false;
+			} else {
+				log.log("File activity array's not empty - not resetting syncFailures");
+			}
 		}
 	}
 	
