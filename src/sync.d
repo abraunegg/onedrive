@@ -482,6 +482,17 @@ class SyncEngine {
 		}
 	}
 	
+	// Reset syncFailures to false
+	void resetSyncFailures() {
+		// Reset syncFailures to false if these are both empty
+		if ((fileDownloadFailures.empty) && (fileUploadFailures.empty)) {
+			log.log("Resetting syncFailures = false");
+			syncFailures = false;
+		} else {
+			log.log("File activity array's not empty - not resetting syncFailures");
+		}
+	}
+	
 	// Perform a sync of the OneDrive Account
 	// - Query /delta
 	//		- If singleDirectoryScope or nationalCloudDeployment is used we need to generate a /delta like response
@@ -491,7 +502,7 @@ class SyncEngine {
 	// - Process any deletes (remove local data)
 	// - Walk local file system for any differences (new files / data to upload to OneDrive)
 	void syncOneDriveAccountToLocalDisk() {
-		
+	
 		// performFullScanTrueUp value
 		log.vdebug("Perform a Full Scan True-Up: ", appConfig.fullScanTrueUpRequired);
 		// Fetch the API response of /delta to track changes on OneDrive

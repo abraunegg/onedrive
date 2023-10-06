@@ -722,6 +722,9 @@ int main(string[] cliArgs) {
 						// Starting a sync 
 						log.log("Starting a sync with Microsoft OneDrive");
 						
+						// Attempt to reset syncFailures
+						syncEngineInstance.resetSyncFailures();
+						
 						// Did the user specify --upload-only?
 						if (appConfig.getValueBool("upload_only")) {
 							// Perform the --upload-only sync process
