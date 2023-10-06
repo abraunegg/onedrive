@@ -40,6 +40,13 @@ class posixException: Exception {
 	}	
 }
 
+class accountDetailsException: Exception {
+	@safe pure this() {
+		string msg = format("Unable to query OneDrive API to obtain required account details");
+		super(msg);
+	}	
+}
+
 class SyncException: Exception {
     @nogc @safe pure nothrow this(string msg, string file = __FILE__, size_t line = __LINE__) {
         super(msg, file, line);
@@ -247,20 +254,54 @@ class SyncEngine {
 		// create a new instance of the OneDrive API
 		oneDriveApiInstance = new OneDriveApi(appConfig);
 		if (oneDriveApiInstance.initialise()) {
-			log.log("Sync Engine Initialised with new Onedrive API instance");
-			// Get the default account drive details
-			getDefaultDriveDetails();
-			getDefaultRootDetails();
-			displaySyncEngineDetails();	
+			try {
+				// Get the relevant default account & drive details
+				getDefaultDriveDetails();
+			} catch (accountDetailsException exception) {
+				// details could not be queried
+				log.error(exception.msg);
+				// Shutdown API instance
+				oneDriveApiInstance.shutdown();
+				// Free object and memory
+				object.destroy(oneDriveApiInstance);
+				exit(-1);
+			}
+			
+			try {
+				// Get the relevant default account & drive details
+				getDefaultRootDetails();
+			} catch (accountDetailsException exception) {
+				// details could not be queried
+				log.error(exception.msg);
+				// Shutdown API instance
+				oneDriveApiInstance.shutdown();
+				// Free object and memory
+				object.destroy(oneDriveApiInstance);
+				exit(-1);
+			}
+			
+			try {
+				// Display details
+				displaySyncEngineDetails();
+			} catch (accountDetailsException exception) {
+				// details could not be queried
+				log.error(exception.msg);
+				// Shutdown API instance
+				oneDriveApiInstance.shutdown();
+				// Free object and memory
+				object.destroy(oneDriveApiInstance);
+				exit(-1);
+			}
 		} else {
 			// API could not be initialised
-			log.error("OneDrive API could not be initialised");
+			log.error("OneDrive API could not be initialised with previously used details");
 			// Shutdown API instance
 			oneDriveApiInstance.shutdown();
 			// Free object and memory
 			object.destroy(oneDriveApiInstance);
 			exit(-1);
 		}
+		log.log("Sync Engine Initialised with new Onedrive API instance");
 		// Shutdown API instance
 		oneDriveApiInstance.shutdown();
 		// Free object and memory
@@ -374,7 +415,7 @@ class SyncEngine {
 			}
 		} else {
 			// Handle the invalid JSON response
-			invalidJSONResponseFromOneDriveAPI();
+			throw new accountDetailsException();
 		}
 	}
 	
@@ -437,7 +478,7 @@ class SyncEngine {
 			saveItem(defaultOneDriveRootDetails);
 		} else {
 			// Handle the invalid JSON response
-			invalidJSONResponseFromOneDriveAPI();
+			throw new accountDetailsException();
 		}
 	}
 	
@@ -668,7 +709,7 @@ class SyncEngine {
 				if (deltaChanges.type() != JSONType.object) {
 					while (deltaChanges.type() != JSONType.object) {
 						// Handle the invalid JSON response adn retry
-						log.error("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response");
+						log.vdebug("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response");
 						deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink);
 					}
 				}
@@ -1618,7 +1659,6 @@ class SyncEngine {
 						log.vdebug("Calling setTimes() for this file: ", newItemPath);
 						setTimes(newItemPath, newDatabaseItem.mtime, newDatabaseItem.mtime);
 						// Save the item to the database
-						writeln("Save Item Line: 1625");
 						saveItem(onedriveJSONItem);
 					} catch (FileException e) {
 						// display the error message
@@ -1628,7 +1668,6 @@ class SyncEngine {
 					// we dont create the directory, but we need to track that we 'faked it'
 					idsFaked ~= [newDatabaseItem.driveId, newDatabaseItem.id];
 					// Save the item to the dry-run database
-					writeln("Save Item Line: 1635");
 					saveItem(onedriveJSONItem);
 				}
 				break;
@@ -1728,7 +1767,6 @@ class SyncEngine {
 					// Is the last modified timestamp in the DB the same as the API data or are we running an operational mode where we simulated the /delta response?
 					if ((existingItemModifiedTime != changedOneDriveItemModifiedTime) || (generateSimulatedDeltaResponse)) {
 					// Save this item in the database
-						writeln("DB Upsert Item Line: 1735");
 						// Add to the local database
 						log.vdebug("Adding changed OneDrive Item to database: ", changedOneDriveItem);
 						itemDB.upsert(changedOneDriveItem);
@@ -1736,7 +1774,6 @@ class SyncEngine {
 				}
 			} else {
 				// Save this item in the database
-				writeln("Save Item Line: 1743");
 				saveItem(onedriveJSONItem);
 				
 				// If the 'Add shortcut to My files' link was the item that was actually renamed .. we have to update our DB records
@@ -1764,7 +1801,6 @@ class SyncEngine {
 			// Is the last modified timestamp in the DB the same as the API data or are we running an operational mode where we simulated the /delta response?
 			if ((existingItemModifiedTime != changedOneDriveItemModifiedTime) || (generateSimulatedDeltaResponse)) {
 				// Database update needed for this item because our local record is out-of-date
-				writeln("Save Item Line: 1771");
 				// Add to the local database
 				log.vdebug("Adding changed OneDrive Item to database: ", changedOneDriveItem);
 				itemDB.upsert(changedOneDriveItem);
@@ -2035,7 +2071,6 @@ class SyncEngine {
 				// Download did not fail
 				log.log("Downloading file ", newItemPath, " ... done");
 				// Save this item into the database
-				writeln("Save Item Line: 2042");
 				saveItem(onedriveJSONItem);
 				
 				/**
@@ -2437,7 +2472,6 @@ class SyncEngine {
 			// Free object and memory
 			object.destroy(uploadLastModifiedTimeApiInstance);
 			// Is the response a valid JSON object - validation checking done in saveItem
-			writeln("Save Item Line: 2447");
 			saveItem(response);
 		} catch (OneDriveException exception) {
 			
@@ -3318,7 +3352,6 @@ class SyncEngine {
 				log.logAndNotify("Uploading modified file ", localFilePath, " ... done.");
 				
 				// Save JSON item in database
-				writeln("Save Item Line: 3328");
 				saveItem(uploadResponse);
 				
 				if (!dryRun) {
@@ -4014,7 +4047,7 @@ class SyncEngine {
 				try {
 					log.vdebug("Attempting to query OneDrive Online for this parent path as path not found in local database: ", parentPath);
 					onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetails(parentPath);
-					writeln("Save Item Line: 4024");
+					// Save item to the database
 					saveItem(onlinePathData);
 					parentItem = makeItem(onlinePathData);
 				} catch (OneDriveException exception) {
@@ -4146,7 +4179,6 @@ class SyncEngine {
 						// Attempt to create a new folder on the configured parent driveId & parent id
 						createDirectoryOnlineAPIResponse = createDirectoryOnlineOneDriveApiInstance.createById(parentItem.driveId, parentItem.id, newDriveItem);
 						// Is the response a valid JSON object - validation checking done in saveItem
-						writeln("Save Item Line: 4156");
 						saveItem(createDirectoryOnlineAPIResponse);
 						// Log that the directory was created
 						log.log("Successfully created the remote directory ", thisNewPathToCreate, " on OneDrive");
@@ -4167,7 +4199,7 @@ class SyncEngine {
 					// Simulate a successful 'directory create' & save it to the dryRun database copy
 					// The simulated response has to pass 'makeItem' as part of saveItem
 					auto fakeResponse = createFakeResponse(thisNewPathToCreate);
-					writeln("Save Item Line: 4177");
+					// Save item to the database
 					saveItem(fakeResponse);
 				}
 				
@@ -4233,7 +4265,6 @@ class SyncEngine {
 				
 				log.vlog("The requested directory to create was found on OneDrive - skipping creating the directory: ", thisNewPathToCreate);
 				// Is the response a valid JSON object - validation checking done in saveItem
-				writeln("Save Item Line: 4243");
 				saveItem(onlinePathData);
 				return;
 			} else {
@@ -4431,8 +4462,7 @@ class SyncEngine {
 							log.vdebug("fileDetailsFromOneDrive after exist online check: ", fileDetailsFromOneDrive);
 							// Does the data from online match our local file?
 							if (performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize)) {
-								// yes, save the data
-								writeln("Save Item Line: 4442");
+								// Save item to the database
 								saveItem(fileDetailsFromOneDrive);
 							}
 						} catch (OneDriveException exception) {
@@ -5849,7 +5879,7 @@ class SyncEngine {
 				try {
 					getPathDetailsAPIResponse = queryOneDriveForSpecificPath.getPathDetails(currentPathTree);
 					parentDetails = makeItem(getPathDetailsAPIResponse);
-					writeln("Save Item Line: 5860");
+					// Save item to the database
 					saveItem(getPathDetailsAPIResponse);
 					directoryFoundOnline = true;
 				} catch (OneDriveException exception) {
@@ -5902,7 +5932,7 @@ class SyncEngine {
 						performPosixTest(thisFolderName, getPathDetailsAPIResponse["name"].str);
 						// No POSIX issue with requested path element
 						parentDetails = makeItem(getPathDetailsAPIResponse);
-						writeln("Save Item Line: 5913");
+						// Save item to the database
 						saveItem(getPathDetailsAPIResponse);
 						directoryFoundOnline = true;
 						
@@ -5983,7 +6013,7 @@ class SyncEngine {
 									// Use these details for the next entry path
 									getPathDetailsAPIResponse = child;
 									parentDetails = makeItem(getPathDetailsAPIResponse);
-									writeln("Save Item Line: 5994");
+									// Save item to the database
 									saveItem(getPathDetailsAPIResponse);
 									// No need to continue searching
 									break;
@@ -6044,7 +6074,6 @@ class SyncEngine {
 								// Attempt to create a new folder on the configured parent driveId & parent id
 								createByIdAPIResponse = queryOneDriveForSpecificPath.createById(parentDetails.driveId, parentDetails.id, newDriveItem);
 								// Is the response a valid JSON object - validation checking done in saveItem
-								writeln("Save Item Line: 6055");
 								saveItem(createByIdAPIResponse);
 								// Set getPathDetailsAPIResponse to createByIdAPIResponse
 								getPathDetailsAPIResponse = createByIdAPIResponse;
@@ -6063,7 +6092,7 @@ class SyncEngine {
 							// Simulate a successful 'directory create' & save it to the dryRun database copy
 							// The simulated response has to pass 'makeItem' as part of saveItem
 							auto fakeResponse = createFakeResponse(thisNewPathToSearch);
-							writeln("Save Item Line: 6074");
+							// Save item to the database
 							saveItem(fakeResponse);
 						}
 					}
@@ -6245,7 +6274,6 @@ class SyncEngine {
 				
 				// save the move response from OneDrive in the database
 				// Is the response a valid JSON object - validation checking done in saveItem
-				writeln("Save Item Line: 6256");
 				saveItem(response);
 			}
 		} else {
