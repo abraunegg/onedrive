@@ -422,6 +422,7 @@ int main(string[] cliArgs) {
 	}
 	
 	// Configure the sync direcory based on the runtimeSyncDirectory configured directory
+	log.vlog("All application operations will be performed in the configured local 'sync_dir' directory: ", runtimeSyncDirectory);
 	try {
 		if (!exists(runtimeSyncDirectory)) {
 			log.vdebug("runtimeSyncDirectory: Configured 'sync_dir' is missing locally. Creating: ", runtimeSyncDirectory);
@@ -433,20 +434,19 @@ int main(string[] cliArgs) {
 				runtimeSyncDirectory.setAttributes(appConfig.returnRequiredDirectoryPermisions());
 			} catch (std.file.FileException e) {
 				// Creating the sync directory failed
-				log.error("ERROR: Unable to create local OneDrive 'sync_dir' - ", e.msg);
+				log.error("ERROR: Unable to create the configured local 'sync_dir' directory: ", e.msg);
 				// Use exit scopes to shutdown API
 				return EXIT_FAILURE;
 			}
 		}
 	} catch (std.file.FileException e) {
 		// Creating the sync directory failed
-		log.error("ERROR: Unable to test the existence of the configured OneDrive 'sync_dir' - ", e.msg);
+		log.error("ERROR: Unable to test for the existence of the configured local 'sync_dir' directory: ", e.msg);
 		// Use exit scopes to shutdown API
 		return EXIT_FAILURE;
 	}
 	
 	// Change the working directory to the 'sync_dir' as configured
-	log.log("All application operations will be performed in: ", runtimeSyncDirectory);
 	chdir(runtimeSyncDirectory);
 	
 	// Do we need to validate the runtimeSyncDirectory to check for the presence of a '.nosync' file
