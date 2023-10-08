@@ -3,7 +3,90 @@
 Before reading this document, please ensure you are running application version [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases) or greater. Use `onedrive --version` to determine what application version you are using and upgrade your client if required.
 
 ## Table of Contents
-TABLE OF CONTENTS GOES HERE
+
+- [Configuration File Options](#configuration-file-options)
+  - [application_id](#application_id)
+  - [azure_ad_endpoint](#azure_ad_endpoint)
+  - [azure_tenant_id](#azure_tenant_id)
+  - [bypass_data_preservation](#bypass_data_preservation)
+  - [check_nomount](#check_nomount)
+  - [check_nosync](#check_nosync)
+  - [classify_as_big_delete](#classify_as_big_delete)
+  - [cleanup_local_files](#cleanup_local_files)
+  - [connect_timeout](#connect_timeout)
+  - [data_timeout](#data_timeout)
+  - [debug_https](#debug_https)
+  - [disable_download_validation](#disable_download_validation)
+  - [disable_notifications](#disable_notifications)
+  - [disable_upload_validation](#disable_upload_validation)
+  - [display_running_config](#display_running_config)
+  - [dns_timeout](#dns_timeout)
+  - [download_only](#download_only)
+  - [drive_id](#drive_id)
+  - [dry_run](#dry_run)
+  - [enable_logging](#enable_logging)
+  - [force_http_11](#force_http_11)
+  - [ip_protocol_version](#ip_protocol_version)
+  - [local_first](#local_first)
+  - [log_dir](#log_dir)
+  - [monitor_fullscan_frequency](#monitor_fullscan_frequency)
+  - [monitor_interval](#monitor_interval)
+  - [monitor_log_frequency](#monitor_log_frequency)
+  - [no_remote_delete](#no_remote_delete)
+  - [operation_timeout](#operation_timeout)
+  - [rate_limit](#rate_limit)
+  - [read_only_auth_scope](#read_only_auth_scope)
+  - [remove_source_files](#remove_source_files)
+  - [resync](#resync)
+  - [resync_auth](#resync_auth)
+  - [skip_dir](#skip_dir)
+  - [skip_dir_strict_match](#skip_dir_strict_match)
+  - [skip_dotfiles](#skip_dotfiles)
+  - [skip_file](#skip_file)
+  - [skip_size](#skip_size)
+  - [skip_symlinks](#skip_symlinks)
+  - [space_reservation](#space_reservation)
+  - [sync_business_shared_items](#sync_business_shared_items)
+  - [sync_dir](#sync_dir)
+  - [sync_dir_permissions](#sync_dir_permissions)
+  - [sync_file_permissions](#sync_file_permissions)
+  - [sync_root_files](#sync_root_files)
+  - [upload_only](#upload_only)
+  - [user_agent](#user_agent)
+  - [webhook_enabled](#webhook_enabled)
+  - [webhook_expiration_interval](#webhook_expiration_interval)
+  - [webhook_listening_host](#webhook_listening_host)
+  - [webhook_listening_port](#webhook_listening_port)
+  - [webhook_public_url](#webhook_public_url)
+  - [webhook_renewal_interval](#webhook_renewal_interval)
+- [Command Line Interface (CLI) Only Options](#command-line-interface-cli-only-options)
+  - [CLI Option: --auth-files](#cli-option---auth-files)
+  - [CLI Option: --auth-response](#cli-option---auth-response)
+  - [CLI Option: --confdir](#cli-option---confdir)
+  - [CLI Option: --create-directory](#cli-option---create-directory)
+  - [CLI Option: --create-share-link](#cli-option---create-share-link)
+  - [CLI Option: --destination-directory](#cli-option---destination-directory)
+  - [CLI Option: --display-config](#cli-option---display-config)
+  - [CLI Option: --display-sync-status](#cli-option---display-sync-status)
+  - [CLI Option: --force](#cli-option---force)
+  - [CLI Option: --force-sync](#cli-option---force-sync)
+  - [CLI Option: --get-file-link](#cli-option---get-file-link)
+  - [CLI Option: --get-sharepoint-drive-id](#cli-option---get-sharepoint-drive-id)
+  - [CLI Option: --logout](#cli-option---logout)
+  - [CLI Option: --modified-by](#cli-option---modified-by)
+  - [CLI Option: --monitor | -m](#cli-option---monitor--m)
+  - [CLI Option: --print-access-token](#cli-option---print-access-token)
+  - [CLI Option: --reauth](#cli-option---reauth)
+  - [CLI Option: --remove-directory](#cli-option---remove-directory)
+  - [CLI Option: --single-directory](#cli-option---single-directory)
+  - [CLI Option: --source-directory](#cli-option---source-directory)
+  - [CLI Option: --sync | -s](#cli-option---sync--s)
+  - [CLI Option: --verbose | -v+](#cli-option---verbose--v)
+  - [CLI Option: --with-editing-perms](#cli-option---with-editing-perms)
+- [Depreciated Configuration File and CLI Options](#depreciated-configuration-file-and-cli-options)
+  - [min_notify_changes](#min_notify_changes)
+  - [CLI Option: --synchronize](#cli-option---synchronize)
+
 
 ## Configuration File Options
 
@@ -775,14 +858,27 @@ _**Description:**_
 _**Usage Example:**_
 
 ### CLI Option: --force
-_**Description:**_ This CLI option enables the force the deletion of data when a 'big delete' is detected
+_**Description:**_ This CLI option enables the force the deletion of data when a 'big delete' is detected. 
 
 _**Usage Example:**_
+
+_**Additional Usage Notes:**_ This option should only be used when a 'big delete' has been triggered and you actually want to delete all the data, that will be deleted, online.
 
 ### CLI Option: --force-sync
-_**Description:**_
+_**Description:**_ This CLI option enables the syncing of a specific directory, using the Client Side Filtering application defaults, overriding any user application configuration.
 
-_**Usage Example:**_
+_**Usage Example:**_ `onedrive --sync --verbose --force-sync --single-directory 'Data'
+
+_**Additional Usage Notes:**_ When this option is used, you will be presented with the following warning and risk acceptance:
+```text
+WARNING: Overriding application configuration to use application defaults for skip_dir and skip_file due to --synch --single-directory --force-sync being used
+
+The use of --force-sync will reconfigure the application to use defaults. This may have untold and unknown future impacts.
+By proceeding in using this option you accept any impacts including any data loss that may occur as a result of using --force-sync.
+
+Are you sure you wish to proceed with --force-sync [Y/N] 
+```
+To procceed with this sync task, you must risk accept the actions you are taking. If you have any concerns, first use `--dry-run` and evaluate the outcome before proceeding with the actual action.
 
 ### CLI Option: --get-file-link
 _**Description:**_
@@ -827,9 +923,11 @@ _**Description:**_
 _**Usage Example:**_
 
 ### CLI Option: --single-directory
-_**Description:**_
+_**Description:**_ This CLI option controls the applications ability to sync a specific single directory.
 
-_**Usage Example:**_
+_**Usage Example:**_ `onedrive --sync --single-directory 'Data'`
+
+_**Additional Usage Notes:**_ The path specified is relative to your configured 'sync_dir' path. If the physical local path 'Folder' to sync is `~/OneDrive/Data/Folder` then the command would be `--single-directory 'Data/Folder'`.
 
 ### CLI Option: --source-directory
 _**Description:**_
@@ -842,9 +940,9 @@ _**Description:**_ This CLI option controls the 'Standalone Mode' operational as
 _**Usage Example:**_ `onedrive --sync` or `onedrive -s`
 
 ### CLI Option: --verbose | -v+
-_**Description:**_
+_**Description:**_ This CLI option controls the verbosity of the application output. Use the option once, to have normal verbose output, use twice to have debug level application output.
 
-_**Usage Example:**_
+_**Usage Example:**_ `onedrive --sync --verbose` or `onedrive --monitor --verbose`
 
 ### CLI Option: --with-editing-perms
 _**Description:**_
