@@ -838,9 +838,11 @@ _**Description:**_
 _**Usage Example:**_
 
 ### CLI Option: --create-share-link
-_**Description:**_
+_**Description:**_ This CLI option enables the creation of a shareable file link that can be provided to users to access the file that is stored on Microsoft OneDrive. By default, the permissions for the file will be 'read-only'.
 
-_**Usage Example:**_
+_**Usage Example:**_ `onedrive --create-share-link 'relative/path/to/your/file.txt'`
+
+_**Additional Usage Notes:**_ If writable access to the file is required, you must add `--with-editing-perms` to your command. See below for details.
 
 ### CLI Option: --destination-directory
 _**Description:**_
@@ -951,9 +953,11 @@ _**Description:**_ This CLI option controls the verbosity of the application out
 _**Usage Example:**_ `onedrive --sync --verbose` or `onedrive --monitor --verbose`
 
 ### CLI Option: --with-editing-perms
-_**Description:**_
+_**Description:**_ This CLI option enables the creation of a writable shareable file link that can be provided to users to access the file that is stored on Microsoft OneDrive. This option can only be used in conjunction with `--create-share-link`
 
-_**Usage Example:**_
+_**Usage Example:**_ `onedrive --create-share-link 'relative/path/to/your/file.txt' --with-editing-perms`
+
+_**Additional Usage Notes:**_ Placement of `--with-editing-perms` is critical. It *must* be placed after the file path as per the example above.
 
 ## Depreciated Configuration File and CLI Options
 The following configuration options are no longer supported

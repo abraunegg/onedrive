@@ -441,6 +441,20 @@ int main(string[] cliArgs) {
 					return EXIT_SUCCESS;
 				}
 				
+				// --create-share-link - Are we createing a shareable link for an existing file on OneDrive?
+				if (appConfig.getValueString("create_share_link") != "") {
+					// Query OneDrive for the file, and if valid, create a shareable link for the file
+					
+					// By default, the shareable link will be read-only. 
+					// If the user adds: 
+					//		--with-editing-perms 
+					// this will create a writeable link
+					syncEngineInstance.queryOneDriveForFileDetails(appConfig.getValueString("create_share_link"), runtimeSyncDirectory, "ShareableLink");
+					// Exit application
+					// Use exit scopes to shutdown API
+					return EXIT_SUCCESS;
+				}
+				
 				// If we get to this point, we have not performed a 'no-sync' task ..
 				log.error("\n --sync or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use 'onedrive --help' for further assistance.\n");
 				log.error("No OneDrive sync will be performed without one of these two arguments being present.\n");

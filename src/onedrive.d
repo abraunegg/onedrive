@@ -483,6 +483,16 @@ class OneDriveApi {
 		return get(url);
 	}
 	
+	// Create a shareable link for an existing file on OneDrive based on the accessScope JSON permissions
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createlink
+	JSONValue createShareableLink(string driveId, string id, JSONValue accessScope) {
+		checkAccessTokenExpired();
+		string url;
+		url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/createLink";
+		curlEngine.http.addRequestHeader("Content-Type", "application/json");
+		return post(url, accessScope.toString());
+	}
+	
 	// Return the requested details of the specified path on the specified drive id and path
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
 	JSONValue getPathDetailsByDriveId(string driveId, string path) {
