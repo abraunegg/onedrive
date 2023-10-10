@@ -883,9 +883,11 @@ Are you sure you wish to proceed with --force-sync [Y/N]
 To procceed with this sync task, you must risk accept the actions you are taking. If you have any concerns, first use `--dry-run` and evaluate the outcome before proceeding with the actual action.
 
 ### CLI Option: --get-file-link
-_**Description:**_
+_**Description:**_ This CLI option queries the OneDrive API and return's the WebURL for the given local file.
 
-_**Usage Example:**_
+_**Usage Example:**_ `onedrive --get-file-link 'relative/path/to/your/file.txt'`
+
+_**Additional Usage Notes:**_ The path that you should use must be relative to your 'sync_dir'
 
 ### CLI Option: --get-sharepoint-drive-id
 _**Description:**_ This CLI option queries the OneDrive API and return's the Office 365 Drive ID for a given Office 365 SharePoint Shared Library that can then be used with 'drive_id' to sync a specific SharePoint Library.
@@ -898,9 +900,11 @@ _**Description:**_ This CLI option removes this clients authentictaion status wi
 _**Usage Example:**_ `onedrive --logout`
 
 ### CLI Option: --modified-by
-_**Description:**_
+_**Description:**_ This CLI option queries the OneDrive API and return's the last modified details for the given local file.
 
-_**Usage Example:**_
+_**Usage Example:**_ `onedrive --modified-by 'relative/path/to/your/file.txt'`
+
+_**Additional Usage Notes:**_ The path that you should use must be relative to your 'sync_dir'
 
 ### CLI Option: --monitor | -m
 _**Description:**_ This CLI option controls the 'Monitor Mode' operational aspect of the client. When this option is used, the client will perform on-going syncs of data between Microsoft OneDrive and your local system. Local changes will be uploaded in near-realtime, whilst online changes will be downloaded on the next sync process. The frequency of these checks is governed by the 'monitor_interval' value.

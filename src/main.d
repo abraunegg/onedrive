@@ -423,6 +423,24 @@ int main(string[] cliArgs) {
 					return EXIT_SUCCESS;
 				}
 				
+				// --get-file-link - Get the URL path for a synced file?
+				if (appConfig.getValueString("get_file_link") != "") {
+					// Query the OneDrive API for the file link
+					syncEngineInstance.queryOneDriveForFileDetails(appConfig.getValueString("get_file_link"), runtimeSyncDirectory, "URL");
+					// Exit application
+					// Use exit scopes to shutdown API and cleanup data
+					return EXIT_SUCCESS;
+				}
+				
+				// --modified-by - Are we listing the modified-by details of a provided path?
+				if (appConfig.getValueString("modified_by") != "") {
+					// Query the OneDrive API for the last modified by details
+					syncEngineInstance.queryOneDriveForFileDetails(appConfig.getValueString("modified_by"), runtimeSyncDirectory, "ModifiedBy");
+					// Exit application
+					// Use exit scopes to shutdown API and cleanup data
+					return EXIT_SUCCESS;
+				}
+				
 				// If we get to this point, we have not performed a 'no-sync' task ..
 				log.error("\n --sync or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use 'onedrive --help' for further assistance.\n");
 				log.error("No OneDrive sync will be performed without one of these two arguments being present.\n");

@@ -6660,4 +6660,77 @@ class SyncEngine {
 			writeln("There are no pending changes from Microsoft OneDrive; your local directory matches the data online.");
 		}
 	}
+	
+	// Query OneDrive for file details of a given path, returning either the 'webURL' or 'lastModifiedBy' JSON facet
+	void queryOneDriveForFileDetails(string inputFilePath, string runtimePath, string outputType) {
+	
+		// Calculate the full local file path
+		string fullLocalFilePath = buildNormalizedPath(buildPath(runtimePath, inputFilePath));
+		
+		// Query if file is valid locally
+		if (exists(fullLocalFilePath)) {
+			// search drive_id list
+			string[] distinctDriveIds = itemDB.selectDistinctDriveIds();
+			bool fileInDB = false;
+			Item dbItem;
+			
+			foreach (searchDriveId; distinctDriveIds) {
+				// Does this path exist in the database, use the 'inputFilePath'
+				if (itemDB.selectByPath(inputFilePath, searchDriveId, dbItem)) {
+					// item is in the database
+					fileInDB = true;
+					JSONValue fileDetailsFromOneDrive;
+				
+					// Create a new API Instance for this thread and initialise it
+					OneDriveApi queryOneDriveForFileDetailsApiInstance;
+					queryOneDriveForFileDetailsApiInstance = new OneDriveApi(appConfig);
+					queryOneDriveForFileDetailsApiInstance.initialise();
+					
+					try {
+						fileDetailsFromOneDrive = queryOneDriveForFileDetailsApiInstance.getPathDetailsById(dbItem.driveId, dbItem.id);
+					} catch (OneDriveException exception) {
+						// display what the error is
+						displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+						return;
+					}
+					
+					// debug output of response
+					log.vdebug("API Response: ", fileDetailsFromOneDrive);
+					
+					// What sort of response to we generate
+					// --get-file-link response
+					if (outputType == "URL") {
+						if ((fileDetailsFromOneDrive.type() == JSONType.object) && ("webUrl" in fileDetailsFromOneDrive)) {
+							// Valid JSON object
+							writeln();
+							writeln("WebURL: ", fileDetailsFromOneDrive["webUrl"].str);
+						}
+					}
+					
+					// --modified-by response
+					if (outputType == "ModifiedBy") {
+						if ((fileDetailsFromOneDrive.type() == JSONType.object) && ("lastModifiedBy" in fileDetailsFromOneDrive)) {
+							// Valid JSON object
+							writeln();
+							writeln("Last modified:    ", fileDetailsFromOneDrive["lastModifiedDateTime"].str);
+							writeln("Last modified by: ", fileDetailsFromOneDrive["lastModifiedBy"]["user"]["displayName"].str);
+							// if 'email' provided, add this to the output
+							if ("email" in fileDetailsFromOneDrive["lastModifiedBy"]["user"]) {
+								writeln("Email Address:    ", fileDetailsFromOneDrive["lastModifiedBy"]["user"]["email"].str);
+							}
+						}
+					}
+				}
+			}
+			
+			// was path found?
+			if (!fileInDB) {
+				// File has not been synced with OneDrive
+				log.error("Path has not been synced with OneDrive: ", inputFilePath);
+			}
+		} else {
+			// File does not exist locally
+			log.error("Path not found on local system: ", inputFilePath);
+		}
+	}
 }
