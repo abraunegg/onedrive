@@ -853,16 +853,18 @@ _**Description:**_ This CLI option will display the effective application config
 _**Usage Example:**_ `onedrive --display-config`
 
 ### CLI Option: --display-sync-status
-_**Description:**_
+_**Description:**_ This CLI option will display the sync status of the configured 'sync_dir'
 
-_**Usage Example:**_
+_**Usage Example:**_ `onedrive --display-sync-status`
+
+_**Additional Usage Notes:**_ This option can also use the `--single-directory` option to determine the sync status of a specific directory within the configured 'sync_dir'
 
 ### CLI Option: --force
 _**Description:**_ This CLI option enables the force the deletion of data when a 'big delete' is detected. 
 
-_**Usage Example:**_
+_**Usage Example:**_ `onedrive --sync --verbose --force`
 
-_**Additional Usage Notes:**_ This option should only be used when a 'big delete' has been triggered and you actually want to delete all the data, that will be deleted, online.
+_**Additional Usage Notes:**_ This option should only be used exclusively in cases where you've initiated a 'big delete' and genuinely intend to remove all the data that is set to be deleted online.
 
 ### CLI Option: --force-sync
 _**Description:**_ This CLI option enables the syncing of a specific directory, using the Client Side Filtering application defaults, overriding any user application configuration.

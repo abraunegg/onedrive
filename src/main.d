@@ -395,16 +395,34 @@ int main(string[] cliArgs) {
 				// Are we performing some sort of 'no-sync' task?
 				// - Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
 				// - Are we createing a shareable link for an existing file on OneDrive?
-				// ... others ??
+				// - Are we displaying the sync satus?
 				
+				// Get the SharePoint Library drive_id
 				if (appConfig.getValueString("sharepoint_library_name") != "") {
+					// Get the SharePoint Library drive_id
 					syncEngineInstance.querySiteCollectionForDriveID(appConfig.getValueString("sharepoint_library_name"));
 					// Exit application
 					// Use exit scopes to shutdown API and cleanup data
 					return EXIT_SUCCESS;
 				}
 				
-			
+				// Query the sync status
+				if (appConfig.getValueBool("display_sync_status")) {
+					// path to query variable
+					string pathToQueryStatusOn;
+					// What path do we query?
+					if (!appConfig.getValueString("single_directory").empty) {
+						pathToQueryStatusOn = "/" ~ appConfig.getValueString("single_directory");
+					} else {
+						pathToQueryStatusOn = "/";
+					}
+					// Query the sync status
+					syncEngineInstance.queryOneDriveForSyncStatus(pathToQueryStatusOn);
+					// Exit application
+					// Use exit scopes to shutdown API and cleanup data
+					return EXIT_SUCCESS;
+				}
+				
 				// If we get to this point, we have not performed a 'no-sync' task ..
 				log.error("\n --sync or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use 'onedrive --help' for further assistance.\n");
 				log.error("No OneDrive sync will be performed without one of these two arguments being present.\n");

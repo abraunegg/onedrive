@@ -741,14 +741,13 @@ class SyncEngine {
 				
 				jsonItemsReceived = jsonItemsReceived + nrChanges;
 				
-				// This means we are most likely processing 200+ items at the same time as the OneDrive API bundles the JSON items
-				// into 200+ bundle lots and there is zero way to configure or change this
+				// We have a valid deltaChanges JSON array. This means we have at least 200+ JSON items to process.
 				// The API response however cannot be run in parallel as the OneDrive API sends the JSON items in the order in which they must be processed
 				foreach (onedriveJSONItem; deltaChanges["value"].array) {
 					// increment change count for this item
 					changeCount++;
 					// Process the OneDrive object item JSON
-					processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope);	
+					processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope);
 				}
 				
 				// The response may contain either @odata.deltaLink or @odata.nextLink
@@ -2844,73 +2843,6 @@ class SyncEngine {
 		}
 	}
 	
-	/**
-	// Perform the database consistency check on this remote directory item
-	void checkRemoteDirectoryDatabaseItemForConsistency(Item dbItem, string localFilePath) {
-	
-		writeln("CODING TO DO: checkRemoteDirectoryDatabaseItemForConsistency");
-	}
-	**/
-	
-	// Does this Database Item (directory or file) get excluded from any operation based on any client side filtering rules?
-	bool checkDBItemAndPathAgainstClientSideFiltering(Item dbItem, string localFilePath) {
-		
-		// Check the item and path against client side filtering rules
-		// Return a true|false response
-		bool clientSideRuleExcludesItem = false;
-		
-		// Is this item a directory or 'remote' type? A 'remote' type is a folder DB tie so should be compared as directory for exclusion
-		if ((dbItem.type == ItemType.dir) || (dbItem.type == ItemType.remote)) {
-			
-			// Directory Path Tests
-			if (!clientSideRuleExcludesItem) {
-				// Do we need to check for .nosync? Only if --check-for-nosync was passed in
-				if (appConfig.getValueBool("check_nosync")) {
-					if (exists(localFilePath ~ "/.nosync")) {
-						log.vlog("Skipping item - .nosync found & --check-for-nosync enabled: ", localFilePath);
-						clientSideRuleExcludesItem = true;
-					}
-				}
-				
-				// Is this item excluded by user configuration of skip_dir?
-				if (!clientSideRuleExcludesItem) {
-					clientSideRuleExcludesItem = selectiveSync.isDirNameExcluded(dbItem.name);
-				}
-			}
-		}
-		
-		// Is this item a file?
-		if (dbItem.type == ItemType.file) {
-			// Is this item excluded by user configuration of skip_file?
-			if (!clientSideRuleExcludesItem) {
-				clientSideRuleExcludesItem = selectiveSync.isFileNameExcluded(dbItem.name);
-			}
-			
-			if (!clientSideRuleExcludesItem) {
-				// Check if file should be skipped based on user configured size limit 'skip_size'
-				if (fileSizeLimit != 0) {
-					// Get the file size
-					ulong thisFileSize = getSize(localFilePath);
-					if (thisFileSize >= fileSizeLimit) {
-						clientSideRuleExcludesItem = true;
-						log.vlog("Skipping item - excluded by skip_size config: ", localFilePath, " (", thisFileSize/2^^20," MB)");
-					}
-				}
-			} 
-		}
-		
-		if (!clientSideRuleExcludesItem) {
-			// Is sync_list configured?
-			if (syncListConfigured) {
-				// Is this item excluded by user configuration of sync_list?
-				clientSideRuleExcludesItem = selectiveSync.isPathExcludedViaSyncList(localFilePath);
-			}
-		}
-	
-		// Return bool value
-		return clientSideRuleExcludesItem;
-	}
-	
 	// Does this local path (directory or file) conform with the Microsoft Naming Restrictions?
 	bool checkPathAgainstMicrosoftNamingRestrictions(string localFilePath) {
 			
@@ -2948,8 +2880,6 @@ class SyncEngine {
 	// Does this local path (directory or file) get excluded from any operation based on any client side filtering rules?
 	bool checkPathAgainstClientSideFiltering(string localFilePath) {
 		
-		// Unlike checkDBItemAndPathAgainstClientSideFiltering - we need to check the path only
-	
 		// Check the path against client side filtering rules
 		// - check_nosync
 		// - skip_dotfiles
@@ -3214,7 +3144,16 @@ class SyncEngine {
 					// Calculate this items path based on database entries
 					newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
 				} else {
-					newItemPath = thisItemName;
+					// parent not in the database
+					if (("path" in onedriveJSONItem["parentReference"]) != null) {
+						// If there is a parent reference path, try and use it
+						string selfBuiltPath = onedriveJSONItem["parentReference"]["path"].str ~ "/" ~ onedriveJSONItem["name"].str;
+						auto splitPath = selfBuiltPath.split("root:");
+						newItemPath = splitPath[1];
+					} else {
+						// no parent reference path available
+						newItemPath = thisItemName;
+					}
 				}
 				
 				// What path are we checking?
@@ -5897,7 +5836,6 @@ class SyncEngine {
 					directoryFoundOnline = true;
 				} catch (OneDriveException exception) {
 				
-				
 					string thisFunctionName = getFunctionName!({});
 					// HTTP request returned status code 408,429,503,504
 					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -6353,8 +6291,7 @@ class SyncEngine {
 	}
 	
 	// Query Office 365 SharePoint Shared Library site name to obtain it's Drive ID
-	void querySiteCollectionForDriveID(string sharepointLibraryNameToQuery)
-	{
+	void querySiteCollectionForDriveID(string sharepointLibraryNameToQuery) {
 		// Steps to get the ID:
 		// 1. Query https://graph.microsoft.com/v1.0/sites?search= with the name entered
 		// 2. Evaluate the response. A valid response will contain the description and the id. If the response comes back with nothing, the site name cannot be found or no access
@@ -6569,5 +6506,158 @@ class SyncEngine {
 		querySharePointLibraryNameApiInstance.shutdown();
 		// Free object and memory
 		object.destroy(querySharePointLibraryNameApiInstance);
+	}
+	
+	// Query the sync status of the client and the local system
+	void queryOneDriveForSyncStatus(string pathToQueryStatusOn) {
+	
+		// Query the account driveId and rootId to get the /delta JSON information
+		// Process that JSON data for relevancy
+		
+		// Function variables
+		ulong downloadSize = 0;
+		string deltaLink = null;
+		string driveIdToQuery = appConfig.defaultDriveId;
+		string itemIdToQuery = appConfig.defaultRootId;
+		JSONValue deltaChanges;
+		
+		// Array of JSON items
+		JSONValue[] jsonItemsArray;
+		
+		// Query Database for a potential deltaLink starting point
+		deltaLink = itemDB.getDeltaLink(driveIdToQuery, itemIdToQuery);
+		
+		write("Querying the change status of Drive ID: ", driveIdToQuery, " .");
+		// Query the OenDrive API using the applicable details, following nextLink if applicable
+		for (;;) {
+			// Add a processing '.'
+			write(".");
+		
+			// Get the /delta changes via the OneDrive API
+			// getDeltaChangesByItemId has the re-try logic for transient errors
+			deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink);
+			
+			// If the initial deltaChanges response is an invalid JSON object, keep trying ..
+			if (deltaChanges.type() != JSONType.object) {
+				while (deltaChanges.type() != JSONType.object) {
+					// Handle the invalid JSON response adn retry
+					log.vdebug("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response");
+					deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink);
+				}
+			}
+			
+			// We have a valid deltaChanges JSON array. This means we have at least 200+ JSON items to process.
+			// The API response however cannot be run in parallel as the OneDrive API sends the JSON items in the order in which they must be processed
+			foreach (onedriveJSONItem; deltaChanges["value"].array) {
+				// is the JSON a root object - we dont want to count this
+				if (!isItemRoot(onedriveJSONItem)) {
+					// Files are the only item that we want to calculate
+					if (isItemFile(onedriveJSONItem)) {
+						// JSON item is a file
+						bool clientSideFilteredOut = false;
+						// Client Side Filtering Check (skip_dir, skip_file, sync_list)
+						clientSideFilteredOut = checkJSONAgainstClientSideFiltering(onedriveJSONItem);
+						// Is the item filtered out due to client side filtering rules?
+						if (!clientSideFilteredOut) {
+							// Is the path of this JSON item 'in-scope' or 'out-of-scope' ?
+							if (pathToQueryStatusOn != "/") {
+								// We need to check the path of this item against pathToQueryStatusOn
+								string thisItemPath = "";
+								if (("path" in onedriveJSONItem["parentReference"]) != null) {
+									// If there is a parent reference path, try and use it
+									string selfBuiltPath = onedriveJSONItem["parentReference"]["path"].str ~ "/" ~ onedriveJSONItem["name"].str;
+									auto splitPath = selfBuiltPath.split("root:");
+									thisItemPath = splitPath[1];
+								} else {
+									// no parent reference path available
+									thisItemPath = onedriveJSONItem["name"].str;
+								}
+								// can we find 'pathToQueryStatusOn' in 'thisItemPath' ?
+								if (canFind(thisItemPath, pathToQueryStatusOn)) {
+									// Add this to the array for processing
+									jsonItemsArray ~= onedriveJSONItem;
+								}
+							} else {
+								// We are not doing a --single-directory check
+								// Add this to the array for processing
+								jsonItemsArray ~= onedriveJSONItem;
+							}
+						}
+					}
+				}
+			}
+			
+			// The response may contain either @odata.deltaLink or @odata.nextLink
+			if ("@odata.deltaLink" in deltaChanges) {
+				deltaLink = deltaChanges["@odata.deltaLink"].str;
+				log.vdebug("Setting next deltaLink to (@odata.deltaLink): ", deltaLink);
+			}
+			
+			// Update deltaLink to next changeSet bundle
+			if ("@odata.nextLink" in deltaChanges) {	
+				deltaLink = deltaChanges["@odata.nextLink"].str;
+				log.vdebug("Setting next deltaLink to (@odata.nextLink): ", deltaLink);
+			}
+			else break;
+		}
+		// Needed after printing out '....' when fetching changes from OneDrive API
+		writeln();
+		
+		// Are there any JSON items to process?
+		if (count(jsonItemsArray) != 0) {
+			// There are items to process
+			foreach (onedriveJSONItem; jsonItemsArray.array) {
+			
+				// variables we need
+				string thisItemParentDriveId;
+				string thisItemId;
+				string thisItemHash;
+				bool existingDBEntry = false;
+				
+				// Is this file a remote item (on a shared folder) ?
+				if (isItemRemote(onedriveJSONItem)) {
+					// remote drive item
+					thisItemParentDriveId = onedriveJSONItem["remoteItem"]["parentReference"]["driveId"].str;
+					thisItemId = onedriveJSONItem["id"].str;
+				} else {
+					// standard drive item
+					thisItemParentDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+					thisItemId = onedriveJSONItem["id"].str;
+				}
+				
+				// Get the file hash
+				thisItemHash = onedriveJSONItem["file"]["hashes"]["quickXorHash"].str;
+				
+				// Check if the item has been seen before
+				Item existingDatabaseItem;
+				existingDBEntry = itemDB.selectById(thisItemParentDriveId, thisItemId, existingDatabaseItem);
+				
+				if (existingDBEntry) {
+					// item exists in database .. do the database details match the JSON record?
+					if (existingDatabaseItem.quickXorHash != thisItemHash) {
+						// file hash is different, will trigger a download event
+						downloadSize = downloadSize + onedriveJSONItem["size"].integer;
+					} 
+				} else {
+					// item does not exist in the database
+					// this item has already passed client side filtering rules (skip_dir, skip_file, sync_list)
+					downloadSize = downloadSize + onedriveJSONItem["size"].integer;
+				}
+			}
+		}
+			
+		// Was anything detected that would constitute a download?
+		if (downloadSize > 0) {
+			// we have something to download
+			if (pathToQueryStatusOn != "/") {
+				writeln("The selected local directory via --single-directory is out of sync with Microsoft OneDrive");
+			} else {
+				writeln("The configured local 'sync_dir' directory is out of sync with Microsoft OneDrive");
+			}
+			writeln("Approximate data to download from Microsoft OneDrive: ", (downloadSize/1024), " KB");
+		} else {
+			// No changes were returned
+			writeln("There are no pending changes from Microsoft OneDrive; your local directory matches the data online.");
+		}
 	}
 }
