@@ -816,9 +816,29 @@ _**Config Example:**_
 ## Command Line Interface (CLI) Only Options
 
 ### CLI Option: --auth-files
-_**Description:**_
+_**Description:**_ This CLI option allows the user to perform application authentication not via an interactive dialog but via specific files that the application uses to read the authentication data from.
 
-_**Usage Example:**_
+_**Usage Example:**_ `onedrive --auth-files authUrl:responseUrl`
+
+_**Additional Usage Notes:**_ The authorisation URL is written to the specified 'authUrl' file, then onedrive waits for the file 'responseUrl' to be present, and reads the authentication response from that file. Example:
+
+```text
+onedrive --auth-files '~/onedrive-auth-url:~/onedrive-response-url' 
+Reading configuration file: /home/alex/.config/onedrive/config
+Configuration file successfully loaded
+Configuring Global Azure AD Endpoints
+Client requires authentication before proceeding. Waiting for --auth-files elements to be available.
+```
+At this point, the client has written the file `~/onedrive-auth-url` which contains the authentication URL that needs to be visited to perform the authentication process. The client will now wait and watch for the presence of the file `~/onedrive-response-url`.
+
+Visit the authentication URL, and then create a new file called `~/onedrive-response-url` with the response URI. Once this has been done, the application will acknowledge the presence of this file, read the contents, and authenticate the application.
+```text
+Sync Engine Initialised with new Onedrive API instance
+
+ --sync or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use 'onedrive --help' for further assistance.
+
+No OneDrive sync will be performed without one of these two arguments being present.
+```
 
 ### CLI Option: --auth-response
 _**Description:**_

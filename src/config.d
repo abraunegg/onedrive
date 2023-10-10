@@ -909,16 +909,25 @@ class ApplicationConfig {
 							
 							bool ignore_depreciation = false;
 							
-							// min_notify_changes as been depreciated
+							// min_notify_changes has been depreciated
 							if (key == "min_notify_changes") {
-								log.log("\nThis option 'min_notify_changes' has been depreciated and will be ignored. Please read the updated documentation and update your client configuration.");
+								log.log("\nThe option 'min_notify_changes' has been depreciated and will be ignored. Please read the updated documentation and update your client configuration.");
+								writeln();
+								ignore_depreciation = true;
+							}
+							
+							// force_http_2 has been depreciated
+							if (key == "force_http_2") {
+								log.log("\nThe option 'force_http_2' has been depreciated and will be ignored. Please read the updated documentation and update your client configuration.");
 								writeln();
 								ignore_depreciation = true;
 							}
 							
 							// Application configuration update required for Business Shared Folders
 							if (key == "sync_business_shared_folders") {
-								log.log("\nThe method to sync Business Shared Folders has changed. Please read the updated documentation and update your client configuration.");
+								log.log("\nThe process for synchronising Microsoft OneDrive Business Shared Folders has changed.");
+								log.log("Please review the revised documentation on how to configure this application feature. You must update your client configuration and make any necessary online adjustments accordingly.");
+								writeln();
 							}
 							// Return false
 							return ignore_depreciation;
@@ -1151,6 +1160,54 @@ class ApplicationConfig {
 					"Create a read-write shareable link for an existing file on OneDrive when used with --create-share-link <file>",
 					&boolValues["with_editing_perms"]
 			);
+			
+			// Was --auth-files used?
+			if (!getValueString("auth_files").empty) {
+				// --auth-files used, need to validate that '~' was not used as a path identifier, and if yes, perform the correct expansion
+				string[] tempAuthFiles = getValueString("auth_files").split(":");
+				string tempAuthUrl = tempAuthFiles[0];
+				string tempResponseUrl = tempAuthFiles[1];
+				string newAuthFilesString;
+				
+				// shell expansion if required
+				if (!shellEnvironmentSet){
+					// No shell environment is set, no automatic expansion of '~' if present is possible
+					// Does the 'currently configured' tempAuthUrl include a ~
+					if (canFind(tempAuthUrl, "~")) {	
+						// A ~ was found in auth_files(authURL)
+						log.vdebug("auth_files: A '~' was found in 'auth_files(authURL)', using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set");
+						tempAuthUrl = buildNormalizedPath(buildPath(defaultHomePath, strip(tempAuthUrl, "~")));
+					}
+					
+					// Does the 'currently configured' tempAuthUrl include a ~
+					if (canFind(tempResponseUrl, "~")) {
+						// A ~ was found in auth_files(authURL)
+						log.vdebug("auth_files: A '~' was found in 'auth_files(tempResponseUrl)', using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set");
+						tempResponseUrl = buildNormalizedPath(buildPath(defaultHomePath, strip(tempResponseUrl, "~")));
+					}
+				} else {
+					// Shell environment is set, automatic expansion of '~' if present is possible
+					// Does the 'currently configured' tempAuthUrl include a ~
+					if (canFind(tempAuthUrl, "~")) {
+						// A ~ was found in auth_files(authURL)
+						log.vdebug("auth_files: A '~' was found in the configured 'auth_files(authURL)', automatically expanding as SHELL and USER environment variable is set");
+						tempAuthUrl = expandTilde(tempAuthUrl);
+					}
+					
+					// Does the 'currently configured' tempAuthUrl include a ~
+					if (canFind(tempResponseUrl, "~")) {
+						// A ~ was found in auth_files(authURL)
+						log.vdebug("auth_files: A '~' was found in the configured 'auth_files(tempResponseUrl)', automatically expanding as SHELL and USER environment variable is set");
+						tempResponseUrl = expandTilde(tempResponseUrl);
+					}
+				}
+				
+				// Build new string
+				newAuthFilesString = tempAuthUrl ~ ":" ~ tempResponseUrl;
+				log.vdebug("auth_files - updated value: ", newAuthFilesString);
+				setValueString("auth_files", newAuthFilesString);
+			}
+			
 			if (opt.helpWanted) {
 				outputLongHelp(opt.options);
 				exit(EXIT_SUCCESS);
@@ -1188,7 +1245,6 @@ class ApplicationConfig {
 				log.error("DEPRECIATION WARNING: --get-O365-drive-id has been depreciated in favour of --get-sharepoint-drive-id");
 				depreciatedCommandsFound = true;
 			}
-			
 		}
 	
 		if (depreciatedCommandsFound) {

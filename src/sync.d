@@ -502,7 +502,6 @@ class SyncEngine {
 	// - Process any items to add (download data to local)
 	// - Detail any files that we failed to download
 	// - Process any deletes (remove local data)
-	// - Walk local file system for any differences (new files / data to upload to OneDrive)
 	void syncOneDriveAccountToLocalDisk() {
 	
 		// performFullScanTrueUp value
@@ -6787,7 +6786,4 @@ class SyncEngine {
 			log.error("Selected path not found on local system: ", inputFilePath);
 		}
 	}
-	
-	
-	
 }

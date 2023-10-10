@@ -839,14 +839,6 @@ int main(string[] cliArgs) {
 		return EXIT_FAILURE;
 	}
 	
-	/**
-	// Before we exit, if we are using --dry-run, clean up the local syste,
-	if (appConfig.getValueBool("dry_run")) {
-		// Cleanup any existing dry-run elements ... these should never be left hanging around
-		cleanupDryRunDatabaseFiles(appConfig.databaseFilePathDryRun);
-	}
-	**/
-		
 	// Exit application using exit scope
 	if (!syncEngineInstance.syncFailures) {
 		return EXIT_SUCCESS;
