@@ -380,10 +380,23 @@ class OneDriveApi {
 			string[] authFiles = authFilesString.split(":");
 			string authUrl = authFiles[0];
 			string responseUrl = authFiles[1];
-			auto authUrlFile = File(authUrl, "w");
-			authUrlFile.write(url);
-			authUrlFile.close();
 			
+			try {
+				auto authUrlFile = File(authUrl, "w");
+				authUrlFile.write(url);
+				authUrlFile.close();
+			} catch (FileException e) {
+				// There was a file system error
+				// display the error message
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				exit(-1);
+			} catch (ErrnoException e) {
+				// There was a file system error
+				// display the error message
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				exit(-1);
+			}
+	
 			log.log("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
 			
 			while (!exists(responseUrl)) {
