@@ -201,8 +201,8 @@ final class OneDriveApi
 	private SysTime accessTokenExpiration;
 	private HTTP http;
 	private OneDriveWebhook webhook;
-	private SysTime subscriptionExpiration;
-	private Duration subscriptionExpirationInterval, subscriptionRenewalInterval;
+	private SysTime subscriptionExpiration, subscriptionLastErrorAt;
+	private Duration subscriptionExpirationInterval, subscriptionRenewalInterval, subscriptionRetryInternal;
 	private string notificationUrl;
 
 	// if true, every new access token is printed
@@ -240,7 +240,7 @@ final class OneDriveApi
 		if (cfg.getValueBool("debug_https")) {
 			http.verbose = true;
 			.debugResponse = true;
-			
+
 			// Output what options we are using so that in the debug log this can be tracked
 			log.vdebug("http.dnsTimeout = ", cfg.getValueLong("dns_timeout"));
 			log.vdebug("http.connectTimeout = ", cfg.getValueLong("connect_timeout"));
@@ -475,7 +475,7 @@ final class OneDriveApi
 		//   https://curl.se/libcurl/c/CURLOPT_FORBID_REUSE.html
 		//   Ensure that we ARE reusing connections - setting to 0 ensures that we are reusing connections
 		http.handle.set(CurlOption.forbid_reuse,0);
-		
+
 		// Do we set the dryRun handlers?
 		if (cfg.getValueBool("dry_run")) {
 			.dryRun = true;
@@ -485,8 +485,10 @@ final class OneDriveApi
 		}
 
 		subscriptionExpiration = Clock.currTime(UTC());
+		subscriptionLastErrorAt = SysTime.fromUnixTime(0);
 		subscriptionExpirationInterval = dur!"seconds"(cfg.getValueLong("webhook_expiration_interval"));
 		subscriptionRenewalInterval = dur!"seconds"(cfg.getValueLong("webhook_renewal_interval"));
+		subscriptionRetryInternal = dur!"seconds"(cfg.getValueLong("webhook_retry_interval"));
 		notificationUrl = cfg.getValueString("webhook_public_url");
 	}
 
@@ -576,7 +578,7 @@ final class OneDriveApi
 			// read-write authentication scopes will be used (default)
 			authScope = "&scope=Files.ReadWrite%20Files.ReadWrite.All%20Sites.ReadWrite.All%20offline_access&response_type=code&prompt=login&redirect_uri=";
 		}
-		
+
 		string url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
 		string authFilesString = cfg.getValueString("auth_files");
 		string authResponseString = cfg.getValueString("auth_response");
@@ -586,7 +588,7 @@ final class OneDriveApi
 			string[] authFiles = authFilesString.split(":");
 			string authUrl = authFiles[0];
 			string responseUrl = authFiles[1];
-			
+
 			try {
 				// Try and write out the auth URL to the nominated file
 				auto authUrlFile = File(authUrl, "w");
@@ -598,7 +600,7 @@ final class OneDriveApi
 				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				return false;
 			}
-			
+
 			while (!exists(responseUrl)) {
 				Thread.sleep(dur!("msecs")(100));
 			}
@@ -636,7 +638,7 @@ final class OneDriveApi
 		redeemToken(c.front);
 		return true;
 	}
-	
+
 	string getSiteSearchUrl()
 	{
 		// Return the actual siteSearchUrl being used and/or requested when performing 'siteQuery = onedrive.o365SiteSearch(nextLink);' call
@@ -1004,17 +1006,25 @@ final class OneDriveApi
 			spawn(&OneDriveWebhook.serve);
 		}
 
-		if (!hasValidSubscription()) {
-			createSubscription();
-		} else if (isSubscriptionUpForRenewal()) {
-			try {
+		auto elapsed = Clock.currTime(UTC()) - subscriptionLastErrorAt;
+		if (elapsed < subscriptionRetryInternal) {
+			return;
+		}
+
+		try {
+			if (!hasValidSubscription()) {
+				createSubscription();
+			} else if (isSubscriptionUpForRenewal()) {
 				renewSubscription();
-			} catch (OneDriveException e) {
-				if (e.httpStatusCode == 404) {
-					log.log("The subscription is not found on the server. Recreating subscription ...");
-					createSubscription();
-				}
 			}
+		} catch (OneDriveException e) {
+			logSubscriptionError(e);
+			subscriptionLastErrorAt = Clock.currTime(UTC());
+			log.log("Will retry creating or renewing subscription in ", subscriptionRetryInternal);
+		} catch (JSONException e) {
+			log.error("ERROR: Unexpected JSON error: ", e.msg);
+			subscriptionLastErrorAt = Clock.currTime(UTC());
+			log.log("Will retry creating or renewing subscription in ", subscriptionRetryInternal);
 		}
 	}
 
@@ -1039,7 +1049,7 @@ final class OneDriveApi
 		} else {
 				resourceItem = "/me/drive/root";
 		}
-		
+
 		// create JSON request to create webhook subscription
 		const JSONValue request = [
 			"changeType": "updated",
@@ -1049,22 +1059,56 @@ final class OneDriveApi
  			"clientState": randomUUID().toString()
 		];
 		http.addRequestHeader("Content-Type", "application/json");
-		JSONValue response;
 
 		try {
-			response = post(url, request.toString());
-		} catch (OneDriveException e) {
-			displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-			
-			// We need to exit here, user needs to fix issue
-			log.error("ERROR: Unable to initialize subscriptions for updates. Please fix this issue.");
-			shutdown();
-			exit(-1);
-		}
+			JSONValue response = post(url, request.toString());
 
-		// Save important subscription metadata including id and expiration
-		subscriptionId = response["id"].str;
-		subscriptionExpiration = SysTime.fromISOExtString(response["expirationDateTime"].str);
+			// Save important subscription metadata including id and expiration
+			subscriptionId = response["id"].str;
+			subscriptionExpiration = SysTime.fromISOExtString(response["expirationDateTime"].str);
+			log.log("Created new subscription ", subscriptionId, " with expiration: ", subscriptionExpiration.toISOExtString());
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 409) {
+				// Take over an existing subscription on HTTP 409.
+				//
+				// Sample 409 error:
+				// {
+				// 	"error": {
+				// 			"code": "ObjectIdentifierInUse",
+				// 			"innerError": {
+				// 					"client-request-id": "615af209-467a-4ab7-8eff-27c1d1efbc2d",
+				// 					"date": "2023-09-26T09:27:45",
+				// 					"request-id": "615af209-467a-4ab7-8eff-27c1d1efbc2d"
+				// 			},
+				// 			"message": "Subscription Id c0bba80e-57a3-43a7-bac2-e6f525a76e7c already exists for the requested combination"
+				// 	}
+				// }
+
+				// Make sure the error code is "ObjectIdentifierInUse"
+				try {
+					if (e.error["error"]["code"].str != "ObjectIdentifierInUse") {
+						throw e;
+					}
+				} catch (JSONException jsonEx) {
+					throw e;
+				}
+
+				// Extract the existing subscription id from the error message
+				import std.regex;
+				auto idReg = ctRegex!(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "i");
+				auto m = matchFirst(e.error["error"]["message"].str, idReg);
+				if (!m) {
+					throw e;
+				}
+
+				// Save the subscription id and renew it immediately since we don't know the expiration timestamp
+				subscriptionId = m[0];
+				log.log("Found existing subscription ", subscriptionId);
+				renewSubscription();
+			} else {
+				throw e;
+			}
+		}
 	}
 
 	private void renewSubscription() {
@@ -1077,10 +1121,23 @@ final class OneDriveApi
 			"expirationDateTime": expirationDateTime.toISOExtString()
 		];
 		http.addRequestHeader("Content-Type", "application/json");
-		JSONValue response = patch(url, request.toString());
 
-		// Update subscription expiration from the response
-		subscriptionExpiration = SysTime.fromISOExtString(response["expirationDateTime"].str);
+		try {
+			JSONValue response = patch(url, request.toString());
+
+			// Update subscription expiration from the response
+			subscriptionExpiration = SysTime.fromISOExtString(response["expirationDateTime"].str);
+			log.log("Renewed subscription ", subscriptionId, " with expiration: ", subscriptionExpiration.toISOExtString());
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 404) {
+				log.log("The subscription is not found on the server. Recreating subscription ...");
+				subscriptionId = null;
+				subscriptionExpiration = Clock.currTime(UTC());
+				createSubscription();
+			} else {
+				throw e;
+			}
+		}
 	}
 
 	private void deleteSubscription() {
@@ -1092,6 +1149,100 @@ final class OneDriveApi
 		url = subscriptionUrl ~ "/" ~ subscriptionId;
 		del(url);
 		log.log("Deleted subscription");
+	}
+
+	private void logSubscriptionError(OneDriveException e) {
+		if (e.httpStatusCode == 400) {
+			// Log known 400 error where Microsoft cannot get a 200 OK from the webhook endpoint
+			//
+			// Sample 400 error:
+			// {
+			// 	"error": {
+			// 			"code": "InvalidRequest",
+			// 			"innerError": {
+			// 					"client-request-id": "<uuid>",
+			// 					"date": "<timestamp>",
+			// 					"request-id": "<uuid>"
+			// 			},
+			// 			"message": "Subscription validation request failed. Notification endpoint must respond with 200 OK to validation request."
+			// 	}
+			// }
+
+			try {
+				if (e.error["error"]["code"].str == "InvalidRequest") {
+					import std.regex;
+					auto msgReg = ctRegex!(r"Subscription validation request failed", "i");
+					auto m = matchFirst(e.error["error"]["message"].str, msgReg);
+					if (m) {
+						log.error("ERROR: Cannot create or renew subscription: Microsoft did not get 200 OK from the webhook endpoint.");
+						return;
+					}
+				}
+			} catch (JSONException) {
+				// fallthrough
+			}
+		} else if (e.httpStatusCode == 401) {
+			// Log known 401 error where authentication failed
+			//
+			// Sample 401 error:
+			// {
+			// 	"error": {
+			// 			"code": "ExtensionError",
+			// 			"innerError": {
+			// 					"client-request-id": "<uuid>",
+			// 					"date": "<timestamp>",
+			// 					"request-id": "<uuid>"
+			// 			},
+			// 			"message": "Operation: Create; Exception: [Status Code: Unauthorized; Reason: Authentication failed]"
+			// 	}
+			// }
+
+			try {
+				if (e.error["error"]["code"].str == "ExtensionError") {
+					import std.regex;
+					auto msgReg = ctRegex!(r"Authentication failed", "i");
+					auto m = matchFirst(e.error["error"]["message"].str, msgReg);
+					if (m) {
+						log.error("ERROR: Cannot create or renew subscription: Authentication failed.");
+						return;
+					}
+				}
+			} catch (JSONException) {
+				// fallthrough
+			}
+		} else if (e.httpStatusCode == 403) {
+			// Log known 403 error where the number of subscriptions on item has exceeded limit
+			//
+			// Sample 403 error:
+			// {
+			// 	"error": {
+			// 			"code": "ExtensionError",
+			// 			"innerError": {
+			// 					"client-request-id": "<uuid>",
+			// 					"date": "<timestamp>",
+			// 					"request-id": "<uuid>"
+			// 			},
+			// 			"message": "Operation: Create; Exception: [Status Code: Forbidden; Reason: Number of subscriptions on item has exceeded limit]"
+			// 	}
+			// }
+			try {
+				if (e.error["error"]["code"].str == "ExtensionError") {
+					import std.regex;
+					auto msgReg = ctRegex!(r"Number of subscriptions on item has exceeded limit", "i");
+					auto m = matchFirst(e.error["error"]["message"].str, msgReg);
+					if (m) {
+						log.error("ERROR: Cannot create or renew subscription: Number of subscriptions has exceeded limit.");
+						return;
+					}
+				}
+			} catch (JSONException) {
+				// fallthrough
+			}
+		}
+
+		// Log detailed message for unknown errors
+		log.error("ERROR: Cannot create or renew subscription.");
+		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 	}
 
 	private void redeemToken(const(char)[] authCode)
@@ -1148,7 +1299,7 @@ final class OneDriveApi
 					}
 				}
 			}
-		
+
 			if ("access_token" in response){
 				accessToken = "bearer " ~ response["access_token"].str();
 				refreshToken = response["refresh_token"].str();
@@ -1229,11 +1380,11 @@ final class OneDriveApi
 	{
 		// Threshold for displaying download bar
 		long thresholdFileSize = 4 * 2^^20; // 4 MiB
-		
-		// To support marking of partially-downloaded files, 
+
+		// To support marking of partially-downloaded files,
 		string originalFilename = filename;
 		string downloadFilename = filename ~ ".partial";
-		
+
 		// open downloadFilename as write in binary mode
 		auto file = File(downloadFilename, "wb");
 
@@ -1302,7 +1453,7 @@ final class OneDriveApi
 					// Data Received    = 13685777
 					// Expected Total   = 52428800
 					// Percent Complete = 26
-										
+
 					if (cfg.getValueLong("rate_limit") > 0) {
 						// User configured rate limit
 						// How much data should be in each segment to qualify for 5%
@@ -1314,7 +1465,7 @@ final class OneDriveApi
 						if ((dlnow > thisSegmentData) && (dlnow < nextSegmentData) && (previousProgressPercent != currentDLPercent) || (dlnow == dltotal)) {
 							// Downloaded data equals approx 5%
 							log.vdebug("Incrementing Progress Bar using calculated 5% of data received");
-							// Downloading  50% |oooooooooooooooooooo                    |   ETA   00:01:40  
+							// Downloading  50% |oooooooooooooooooooo                    |   ETA   00:01:40
 							// increment progress bar
 							p.next();
 							// update values
@@ -1328,7 +1479,7 @@ final class OneDriveApi
 						if ((isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) && (previousProgressPercent != currentDLPercent)) {
 							// currentDLPercent matches a new increment
 							log.vdebug("Incrementing Progress Bar using fmod match");
-							// Downloading  50% |oooooooooooooooooooo                    |   ETA   00:01:40  
+							// Downloading  50% |oooooooooooooooooooo                    |   ETA   00:01:40
 							// increment progress bar
 							p.next();
 							// update values
@@ -1491,7 +1642,7 @@ final class OneDriveApi
 			log.vdebug("onedrive.perform() Generated a OneDrive CurlException");
 			auto errorArray = splitLines(e.msg);
 			string errorMessage = errorArray[0];
-			
+
 			// what is contained in the curl error message?
 			if (canFind(errorMessage, "Couldn't connect to server on handle") || canFind(errorMessage, "Couldn't resolve host name on handle") || canFind(errorMessage, "Timeout was reached on handle")) {
 				// This is a curl timeout
@@ -1505,12 +1656,12 @@ final class OneDriveApi
 				int timestampAlign = 0;
 				bool retrySuccess = false;
 				SysTime currentTime;
-				
+
 				// what caused the initial curl exception?
 				if (canFind(errorMessage, "Couldn't connect to server on handle")) log.vdebug("Unable to connect to server - HTTPS access blocked?");
 				if (canFind(errorMessage, "Couldn't resolve host name on handle")) log.vdebug("Unable to resolve server - DNS access blocked?");
 				if (canFind(errorMessage, "Timeout was reached on handle")) log.vdebug("A timeout was triggered - data too slow, no response ... use --debug-https to diagnose further");
-				
+
 				while (!retrySuccess){
 					try {
 						// configure libcurl to perform a fresh connection
@@ -1540,16 +1691,16 @@ final class OneDriveApi
 							if (canFind(e.msg, "Couldn't connect to server on handle")) {
 								log.log("  - Check HTTPS access or Firewall Rules");
 								timestampAlign = 9;
-							}	
+							}
 							if (canFind(e.msg, "Couldn't resolve host name on handle")) {
 								log.log("  - Check DNS resolution or Firewall Rules");
 								timestampAlign = 0;
 							}
-							
+
 							// increment backoff interval
 							backoffInterval++;
 							int thisBackOffInterval = retryAttempts*backoffInterval;
-							
+
 							// display retry information
 							currentTime.fracSecs = Duration.zero;
 							auto timeString = currentTime.toString();
@@ -1558,13 +1709,13 @@ final class OneDriveApi
 							if (thisBackOffInterval > maxBackoffInterval) {
 								thisBackOffInterval = maxBackoffInterval;
 							}
-							
+
 							// detail when the next attempt will be tried
 							// factor in the delay for curl to generate the exception - otherwise the next timestamp appears to be 'out' even though technically correct
 							auto nextRetry = currentTime + dur!"seconds"(thisBackOffInterval) + dur!"seconds"(timestampAlign);
 							log.vlog("  Next retry in approx:   ", (thisBackOffInterval + timestampAlign), " seconds");
 							log.vlog("  Next retry approx:      ", nextRetry);
-							
+
 							// thread sleep
 							Thread.sleep(dur!"seconds"(thisBackOffInterval));
 						}
@@ -1585,7 +1736,7 @@ final class OneDriveApi
 				// Some other error was returned
 				log.error("  Error Message: ", errorMessage);
 				log.error("  Calling Function: ", getFunctionName!({}));
-				
+
 				// Was this a curl initialization error?
 				if (canFind(errorMessage, "Failed initialization on handle")) {
 					// initialization error ... prevent a run-away process if we have zero disk space

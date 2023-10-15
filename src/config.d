@@ -43,9 +43,9 @@ final class Config
 	// Default file permission mode
 	public long defaultFilePermissionMode = 600;
 	public int configuredFilePermissionMode;
-	
+
 	// Bring in v2.5.0 config items
-	
+
 	// HTTP Struct items, used for configuring HTTP()
 	// Curl Timeout Handling
 	// libcurl dns_cache_timeout timeout
@@ -70,8 +70,8 @@ final class Config
 	immutable int defaultMaxRedirects = 5;
 	// Specify what IP protocol version should be used when communicating with OneDrive
 	immutable int defaultIpProtocol = 0; // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
-	
-	
+
+
 
 	this(string confdirOption)
 	{
@@ -106,7 +106,7 @@ final class Config
 		longValues["min_notify_changes"] = 5;
 		longValues["monitor_log_frequency"] = 6;
 		// Number of N sync runs before performing a full local scan of sync_dir
-		// By default 12 which means every ~60 minutes a full disk scan of sync_dir will occur 
+		// By default 12 which means every ~60 minutes a full disk scan of sync_dir will occur
 		// 'monitor_interval' * 'monitor_fullscan_frequency' = 3600 = 1 hour
 		longValues["monitor_fullscan_frequency"] = 12;
 		// Number of children in a path that is locally removed which will be classified as a 'big data delete'
@@ -158,8 +158,9 @@ final class Config
 		stringValues["webhook_public_url"] = "";
 		stringValues["webhook_listening_host"] = "";
 		longValues["webhook_listening_port"] = 8888;
-		longValues["webhook_expiration_interval"] = 3600 * 24;
-		longValues["webhook_renewal_interval"] = 3600 * 12;
+		longValues["webhook_expiration_interval"] = 60 * 10;
+		longValues["webhook_renewal_interval"] = 60 * 5;
+		longValues["webhook_retry_interval"] = 60;
 		// Log to application output running configuration values
 		boolValues["display_running_config"] = false;
 		// Configure read-only authentication scope
@@ -187,7 +188,7 @@ final class Config
 		// - Enabling this option will add function processing times to the console output
 		// - This then enables tracking of where the application is spending most amount of time when processing data when users have questions re performance
 		boolValues["display_processing_time"] = false;
-		
+
 		// HTTPS & CURL Operation Settings
 		// - Maximum time an operation is allowed to take
 		//   This includes dns resolution, connecting, data transfer, etc.
@@ -200,7 +201,7 @@ final class Config
 		longValues["data_timeout"] = defaultDataTimeout;
 		// What IP protocol version should be used when communicating with OneDrive
 		longValues["ip_protocol_version"] = defaultIpProtocol; // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
-				
+
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
@@ -282,7 +283,7 @@ final class Config
 					writeln("ERROR: ~/.config/onedrive is a file rather than a directory");
 				}
 				// Must exit
-				exit(EXIT_FAILURE);	
+				exit(EXIT_FAILURE);
 			}
 		}
 
@@ -405,7 +406,7 @@ final class Config
 					&longValues["classify_as_big_delete"],
 				"cleanup-local-files",
 					"Cleanup additional local files when using --download-only. This will remove local data.",
-					&boolValues["cleanup_local_files"],	
+					&boolValues["cleanup_local_files"],
 				"create-directory",
 					"Create a directory on OneDrive - no sync will be performed.",
 					&stringValues["create_directory"],
@@ -642,11 +643,11 @@ final class Config
 			// Use exit scopes to shutdown API
 			return false;
 		}
-		
+
 		// We were able to readText the config file - so, we should be able to open and read it
 		auto file = File(filename, "r");
 		string lineBuffer;
-		
+
 		// configure scopes
 		// - failure
 		scope(failure) {
@@ -711,7 +712,7 @@ final class Config
 								setValueString("skip_dir", configFileSkipDir);
 							}
 						}
-						// --single-directory Strip quotation marks from path 
+						// --single-directory Strip quotation marks from path
 						// This is an issue when using ONEDRIVE_SINGLE_DIRECTORY with Docker
 						if (key == "single_directory") {
 							// Strip quotation marks from provided path
@@ -751,7 +752,7 @@ final class Config
 							if (key == "space_reservation") {
 								// temp value
 								ulong tempValue = to!long(c.front.dup);
-								// a value of 0 needs to be made at least 1MB .. 
+								// a value of 0 needs to be made at least 1MB ..
 								if (tempValue == 0) {
 									tempValue = 1;
 								}
@@ -823,7 +824,7 @@ final class Config
 		}
 		return configuredFilePermissionMode;
 	}
-	
+
 	void resetSkipToDefaults() {
 		// reset skip_file and skip_dir to application defaults
 		// skip_file

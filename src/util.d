@@ -96,7 +96,7 @@ Regex!char wild2regex(const(char)[] pattern)
 			break;
 		case ' ':
 			str ~= "\\s+";
-			break;	
+			break;
 		case '/':
 			str ~= "\\/";
 			break;
@@ -129,10 +129,10 @@ bool testNetwork(Config cfg)
 	http.dataTimeout = (dur!"seconds"(cfg.getValueLong("data_timeout")));
 	// maximum time any operation is allowed to take
 	// This includes dns resolution, connecting, data transfer, etc.
-	http.operationTimeout = (dur!"seconds"(cfg.getValueLong("operation_timeout")));	
+	http.operationTimeout = (dur!"seconds"(cfg.getValueLong("operation_timeout")));
 	// What IP protocol version should be used when using Curl - IPv4 & IPv6, IPv4 or IPv6
 	http.handle.set(CurlOption.ipresolve,cfg.getValueLong("ip_protocol_version")); // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
-	
+
 	// HTTP connection test method
 	http.method = HTTP.Method.head;
 	// Attempt to contact the Microsoft Online Service
@@ -190,7 +190,7 @@ bool isValidName(string path)
 	// Restriction and limitations about windows naming files
 	// https://msdn.microsoft.com/en-us/library/aa365247
 	// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
-	
+
 	// allow root item
 	if (path == ".") {
 		return true;
@@ -210,7 +210,7 @@ bool isValidName(string path)
 		);
 	auto m = match(itemName, invalidNameReg);
 	matched = m.empty;
-	
+
 	// Additional explicit validation checks
 	if (itemName == ".lock") {matched = false;}
 	if (itemName == "desktop.ini") {matched = false;}
@@ -218,7 +218,7 @@ bool isValidName(string path)
 	if(canFind(itemName, "_vti_")){matched = false;}
 	// Item name cannot equal '~'
 	if (itemName == "~") {matched = false;}
-	
+
 	// return response
 	return matched;
 }
@@ -229,7 +229,7 @@ bool containsBadWhiteSpace(string path)
 	if (path == ".") {
 		return true;
 	}
-	
+
 	// https://github.com/abraunegg/onedrive/issues/35
 	// Issue #35 presented an interesting issue where the filename contained a newline item
 	//		'State-of-the-art, challenges, and open issues in the integration of Internet of'$'\n''Things and Cloud Computing.pdf'
@@ -237,7 +237,7 @@ bool containsBadWhiteSpace(string path)
 	//		/v1.0/me/drive/root:/.%2FState-of-the-art%2C%20challenges%2C%20and%20open%20issues%20in%20the%20integration%20of%20Internet%20of%0AThings%20and%20Cloud%20Computing.pdf
 	// The '$'\n'' is translated to %0A which causes the OneDrive query to fail
 	// Check for the presence of '%0A' via regex
-	
+
 	string itemName = encodeComponent(baseName(path));
 	auto invalidWhitespaceReg =
 		ctRegex!(
@@ -254,12 +254,12 @@ bool containsASCIIHTMLCodes(string path)
 	// If a filename contains ASCII HTML codes, regardless of if it gets encoded, it generates an error
 	// Check if the filename contains an ASCII HTML code sequence
 
-	auto invalidASCIICode = 
+	auto invalidASCIICode =
 		ctRegex!(
 			// Check to see if &#XXXX is in the filename
 			`(?:&#|&#[0-9][0-9]|&#[0-9][0-9][0-9]|&#[0-9][0-9][0-9][0-9])`
 		);
-	
+
 	auto m = match(path, invalidASCIICode);
 	return m.empty;
 }
@@ -276,14 +276,15 @@ void displayOneDriveErrorMessage(string message, string callingFunction)
 	// extra debug
 	log.vdebug("Raw Error Data: ", message);
 	log.vdebug("JSON Message: ", errorMessage);
-	
+
 	// What is the reason for the error
 	if (errorMessage.type() == JSONType.object) {
 		// configure the error reason
 		string errorReason;
+		string errorCode;
 		string requestDate;
 		string requestId;
-		
+
 		// set the reason for the error
 		try {
 			// Use error_description as reason
@@ -291,15 +292,15 @@ void displayOneDriveErrorMessage(string message, string callingFunction)
 		} catch (JSONException e) {
 			// we dont want to do anything here
 		}
-		
+
 		// set the reason for the error
 		try {
 			// Use ["error"]["message"] as reason
-			errorReason = errorMessage["error"]["message"].str;	
+			errorReason = errorMessage["error"]["message"].str;
 		} catch (JSONException e) {
 			// we dont want to do anything here
 		}
-		
+
 		// Display the error reason
 		if (errorReason.startsWith("<!DOCTYPE")) {
 			// a HTML Error Reason was given
@@ -309,34 +310,43 @@ void displayOneDriveErrorMessage(string message, string callingFunction)
 			// a non HTML Error Reason was given
 			log.error("  Error Reason:     ", errorReason);
 		}
-		
+
+		// Get the error code if available
+		try {
+			// Use ["error"]["code"] as code
+			errorCode = errorMessage["error"]["code"].str;
+		} catch (JSONException e) {
+			// we dont want to do anything here
+		}
+
 		// Get the date of request if available
 		try {
 			// Use ["error"]["innerError"]["date"] as date
-			requestDate = errorMessage["error"]["innerError"]["date"].str;	
+			requestDate = errorMessage["error"]["innerError"]["date"].str;
 		} catch (JSONException e) {
 			// we dont want to do anything here
 		}
-		
+
 		// Get the request-id if available
 		try {
 			// Use ["error"]["innerError"]["request-id"] as request-id
-			requestId = errorMessage["error"]["innerError"]["request-id"].str;	
+			requestId = errorMessage["error"]["innerError"]["request-id"].str;
 		} catch (JSONException e) {
 			// we dont want to do anything here
 		}
-		
-		// Display the date and request id if available
+
+		// Display the error code, date and request id if available
+		if (errorCode != "")   log.error("  Error Code:       ", errorCode);
 		if (requestDate != "") log.error("  Error Timestamp:  ", requestDate);
 		if (requestId != "")   log.error("  API Request ID:   ", requestId);
 	}
-	
+
 	// Where in the code was this error generated
 	log.vlog("  Calling Function: ", callingFunction);
 }
 
 // Parse and display error message received from the local file system
-void displayFileSystemErrorMessage(string message, string callingFunction) 
+void displayFileSystemErrorMessage(string message, string callingFunction)
 {
 	writeln();
 	log.error("ERROR: The local file system returned an error with the following message:");
@@ -367,14 +377,14 @@ JSONValue getLatestReleaseDetails() {
 	JSONValue versionDetails;
 	string latestTag;
 	string publishedDate;
-	
+
 	try {
 		content = get("https://api.github.com/repos/abraunegg/onedrive/releases/latest");
 	} catch (CurlException e) {
 		// curl generated an error - meaning we could not query GitHub
 		log.vdebug("Unable to query GitHub for latest release");
 	}
-	
+
 	try {
 		githubLatest = content.parseJSON();
 	} catch (JSONException e) {
@@ -382,7 +392,7 @@ JSONValue getLatestReleaseDetails() {
 		log.vdebug("Unable to parse GitHub JSON response");
 		githubLatest = parseJSON("{}");
 	}
-	
+
 	// githubLatest has to be a valid JSON object
 	if (githubLatest.type() == JSONType.object){
 		// use the returned tag_name
@@ -409,15 +419,15 @@ JSONValue getLatestReleaseDetails() {
 		log.vdebug("Invalid JSON Object. Setting GitHub 'tag_name' release version to 0.0.0");
 		latestTag = "0.0.0";
 		log.vdebug("Invalid JSON Object. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z");
-		publishedDate = "2018-07-18T18:00:00Z";	
+		publishedDate = "2018-07-18T18:00:00Z";
 	}
-		
+
 	// return the latest github version and published date as our own JSON
 	versionDetails = [
 		"latestTag": JSONValue(latestTag),
 		"publishedDate": JSONValue(publishedDate)
 	];
-	
+
 	// return JSON
 	return versionDetails;
 }
@@ -431,14 +441,14 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 	JSONValue versionDetails;
 	string versionTag = "v" ~ thisVersion;
 	string publishedDate;
-	
+
 	try {
 		content = get("https://api.github.com/repos/abraunegg/onedrive/releases");
 	} catch (CurlException e) {
 		// curl generated an error - meaning we could not query GitHub
 		log.vdebug("Unable to query GitHub for release details");
 	}
-	
+
 	try {
 		githubDetails = content.parseJSON();
 	} catch (JSONException e) {
@@ -446,7 +456,7 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 		log.vdebug("Unable to parse GitHub JSON response");
 		githubDetails = parseJSON("{}");
 	}
-	
+
 	// githubDetails has to be a valid JSON array
 	if (githubDetails.type() == JSONType.array){
 		foreach (searchResult; githubDetails.array) {
@@ -458,7 +468,7 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 				publishedDate = searchResult["published_at"].str;
 			}
 		}
-		
+
 		if (publishedDate.empty) {
 			// empty .. no version match ?
 			// set to v2.0.0 release date
@@ -468,15 +478,15 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 	} else {
 		// JSONValue is not an Array
 		log.vdebug("Invalid JSON Array. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z");
-		publishedDate = "2018-07-18T18:00:00Z";	
+		publishedDate = "2018-07-18T18:00:00Z";
 	}
-		
+
 	// return the latest github version and published date as our own JSON
 	versionDetails = [
 		"versionTag": JSONValue(thisVersion),
 		"publishedDate": JSONValue(publishedDate)
 	];
-	
+
 	// return JSON
 	return versionDetails;
 }
@@ -489,7 +499,7 @@ void checkApplicationVersion() {
 	SysTime publishedDate = SysTime.fromISOExtString(latestVersionDetails["publishedDate"].str).toUTC();
 	SysTime releaseGracePeriod = publishedDate;
 	SysTime currentTime = Clock.currTime().toUTC();
-	
+
 	// drop fraction seconds
 	publishedDate.fracSecs = Duration.zero;
 	currentTime.fracSecs = Duration.zero;
@@ -500,20 +510,20 @@ void checkApplicationVersion() {
 	// what is this clients version?
 	auto currentVersionArray = strip(strip(import("version"), "v")).split("-");
 	string applicationVersion = currentVersionArray[0];
-	
+
 	// debug output
 	log.vdebug("applicationVersion:       ", applicationVersion);
 	log.vdebug("latestVersion:            ", latestVersion);
 	log.vdebug("publishedDate:            ", publishedDate);
 	log.vdebug("currentTime:              ", currentTime);
 	log.vdebug("releaseGracePeriod:       ", releaseGracePeriod);
-	
+
 	// display details if not current
 	// is application version is older than available on GitHub
 	if (applicationVersion != latestVersion) {
 		// application version is different
 		bool displayObsolete = false;
-		
+
 		// what warning do we present?
 		if (applicationVersion < latestVersion) {
 			// go get this running version details
@@ -521,12 +531,12 @@ void checkApplicationVersion() {
 			SysTime thisVersionPublishedDate = SysTime.fromISOExtString(thisVersionDetails["publishedDate"].str).toUTC();
 			thisVersionPublishedDate.fracSecs = Duration.zero;
 			log.vdebug("thisVersionPublishedDate: ", thisVersionPublishedDate);
-			
+
 			// the running version grace period is its release date + 1 month
 			SysTime thisVersionReleaseGracePeriod = thisVersionPublishedDate;
 			thisVersionReleaseGracePeriod = thisVersionReleaseGracePeriod.add!"months"(1);
 			log.vdebug("thisVersionReleaseGracePeriod: ", thisVersionReleaseGracePeriod);
-			
+
 			// is this running version obsolete ?
 			if (!displayObsolete) {
 				// if releaseGracePeriod > currentTime
@@ -539,7 +549,7 @@ void checkApplicationVersion() {
 					displayObsolete = true;
 				}
 			}
-			
+
 			// display version response
 			writeln();
 			if (!displayObsolete) {

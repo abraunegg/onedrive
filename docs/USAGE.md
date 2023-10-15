@@ -57,8 +57,8 @@ Before reading this document, please ensure you are running application version 
 - [Running 'onedrive' in 'monitor' mode](#running-onedrive-in-monitor-mode)
   * [Use webhook to subscribe to remote updates in 'monitor' mode](#use-webhook-to-subscribe-to-remote-updates-in-monitor-mode)
   * [More webhook configuration options](#more-webhook-configuration-options)
-    + [webhook_listening_host and webhook_listening_port](#webhook_listening_host-and-webhook_listening_port)
-    + [webhook_expiration_interval and webhook_renewal_interval](#webhook_expiration_interval-and-webhook_renewal_interval)
+    + [Webhook listening host and port](#webhook-listening-host-and-port)
+    + [Webhook expiration, renewal and retry intervals](#webhook-expiration-renewal-and-retry-intervals)
 - [Running 'onedrive' as a system service](#running-onedrive-as-a-system-service)
   * [OneDrive service running as root user via init.d](#onedrive-service-running-as-root-user-via-initd)
   * [OneDrive service running as root user via systemd (Arch, Ubuntu, Debian, OpenSuSE, Fedora)](#onedrive-service-running-as-root-user-via-systemd-arch-ubuntu-debian-opensuse-fedora)
@@ -524,8 +524,8 @@ See the [config](https://raw.githubusercontent.com/abraunegg/onedrive/master/con
 # webhook_public_url = ""
 # webhook_listening_host = ""
 # webhook_listening_port = "8888"
-# webhook_expiration_interval = "86400"
-# webhook_renewal_interval = "43200"
+# webhook_expiration_interval = "600"
+# webhook_renewal_interval = "300"
 # space_reservation = "50"
 # display_running_config = "false"
 # read_only_auth_scope = "false"
@@ -891,8 +891,8 @@ By default, the application will reserve 50MB of disk space to prevent your file
 Example:
 ```text
 ...
-# webhook_expiration_interval = "86400"
-# webhook_renewal_interval = "43200"
+# webhook_expiration_interval = "600"
+# webhook_renewal_interval = "300"
 space_reservation = "10"
 ```
 
@@ -1059,7 +1059,7 @@ For any further nginx configuration assistance, please refer to: https://docs.ng
 
 Below options can be optionally configured. The default is usually good enough.
 
-#### webhook_listening_host and webhook_listening_port
+#### Webhook listening host and port
 
 Set `webhook_listening_host` and `webhook_listening_port` to change the webhook listening endpoint. If `webhook_listening_host` is left empty, which is the default, the webhook will bind to `0.0.0.0`. The default `webhook_listening_port` is `8888`.
 
@@ -1068,16 +1068,21 @@ webhook_listening_host = ""
 webhook_listening_port = "8888"
 ```
 
-#### webhook_expiration_interval and webhook_renewal_interval
+#### Webhook expiration, renewal and retry intervals
 
-Set `webhook_expiration_interval` and `webhook_renewal_interval` to change the frequency of subscription renewal. By default, the webhook asks Microsoft to keep subscriptions alive for 24 hours, and it renews subscriptions when it is less than 12 hours before their expiration.
+Set `webhook_expiration_interval` and `webhook_renewal_interval` to change the frequency of subscription renewal. Set `webhook_retry_interval` to change the delay before retrying after an error happens while communicating with Microsoft's subscription endpoints.
+
+By default, the webhook asks Microsoft to keep subscriptions alive for 10 minutes, and it renews subscriptions when it is less than 5 minutes before their expiration. When errors happen, it waits 1 minute before retrying.
 
 ```
-# Default expiration interval is 24 hours
-webhook_expiration_interval = "86400"
+# Default expiration interval is 10 minutes
+webhook_expiration_interval = "600"
 
-# Default renewal interval is 12 hours
-webhook_renewal_interval = "43200"
+# Default renewal interval is 5 minutes
+webhook_renewal_interval = "300"
+
+# Default retry interval is 1 minute
+webhook_retry_interval = "60"
 ```
 
 ## Running 'onedrive' as a system service
