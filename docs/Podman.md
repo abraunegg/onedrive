@@ -221,6 +221,7 @@ podman run -it --restart unless-stopped --name onedrive_work \
 | <B>ONEDRIVE_AUTHFILES</B> | Controls "--auth-files" option. Default is "" | "authUrl:responseUrl" |
 | <B>ONEDRIVE_AUTHRESPONSE</B> | Controls "--auth-response" option. Default is "" | See [here](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#authorize-the-application-with-your-onedrive-account) |
 | <B>ONEDRIVE_DISPLAY_CONFIG</B> | Controls "--display-running-config" switch on onedrive sync. Default is 0 | 1 |
+| <B>ONEDRIVE_DISPLAY_SYNC_STATUS</B> | Controls "--display-sync-status" switch on onedrive sync. Default is 0 | 1 |
 | <B>ONEDRIVE_SINGLE_DIRECTORY</B> | Controls "--single-directory" option. Default = "" | "mydir" |
 
 ### Usage Examples

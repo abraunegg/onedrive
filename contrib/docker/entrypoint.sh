@@ -111,6 +111,13 @@ if [ "${ONEDRIVE_DISPLAY_CONFIG:=0}" == "1" ]; then
    ARGS=(--display-running-config ${ARGS[@]})
 fi
 
+# Tell client to print the sync status at application startup
+if [ "${ONEDRIVE_DISPLAY_SYNC_STATUS:=0}" == "1" ]; then
+   echo "# We are printing the application sync status at application startup"
+   echo "# Adding --display-sync-status"
+   ARGS=(--display-sync-status ${ARGS[@]})
+fi
+
 # Tell client to use sync single dir option
 if [ -n "${ONEDRIVE_SINGLE_DIRECTORY:=""}" ]; then
    echo "# We are synchronizing in single-directory mode"
