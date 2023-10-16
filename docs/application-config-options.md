@@ -373,7 +373,7 @@ _**Config Example:**_ `monitor_fullscan_frequency = "24"`
 
 _**CLI Option Use:**_ `--monitor-fullscan-frequency '24'`
 
-_**Additional Usage Notes:**_ By default without configuration, 'monitor_fullscan_frequency' is set to 12. In this default state, this means that a full scan is performed every 'monitor_interval' x 'monitor_fullscan_frequency' = 3600 seconds. This setting is only applicable when running in `--monitor` mode.
+_**Additional Usage Notes:**_ By default without configuration, 'monitor_fullscan_frequency' is set to 12. In this default state, this means that a full scan is performed every 'monitor_interval' x 'monitor_fullscan_frequency' = 3600 seconds. This setting is only applicable when running in `--monitor` mode. Setting this configuration option to '0' will *disable* the full scan of your data online.
 
 ### monitor_interval
 _**Description:**_ This configuration setting determines how often the synchronisation loops run in --monitor mode, measured in seconds. When this time period elapses, the client will check for online changes in Microsoft OneDrive, conduct integrity checks on local data and scan the local 'sync_dir' to identify any new content that hasn't been uploaded yet.
@@ -841,9 +841,15 @@ No OneDrive sync will be performed without one of these two arguments being pres
 ```
 
 ### CLI Option: --auth-response
-_**Description:**_
+_**Description:**_ This CLI option allows the user to perform application authentication not via an interactive dialog but via providing the authentication response URI directly.
 
-_**Usage Example:**_
+_**Usage Example:**_ `onedrive --auth-response https://login.microsoftonline.com/common/oauth2/nativeclient?code=<redacted>`
+
+_**Additional Usage Notes:**_ Typically, unless the application client identifier, authentication scopes are being modified or a specific Azure Tenant is being specified, the authentication URL will mostlikely be as follows:
+```text
+https://login.microsoftonline.com/common/oauth2/v2.0/authorise?client_id=22c49a0d-d21c-4792-aed1-8f163c982546&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
+```
+With this URL being known, it is possible ahead of time to request an authentication token by visiting this URL, and performing the authenticaton access request.
 
 ### CLI Option: --confdir
 _**Description:**_ This CLI option allows the user to specify where all the application configuration and relevant components are stored.

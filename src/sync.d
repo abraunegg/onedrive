@@ -144,9 +144,10 @@ class SyncEngine {
 	ulong totalDataToUpload;
 	// How many items have been processed for the active operation
 	ulong processedCount;
-	
 	// Are we creating a simulated /delta response? This is critically important in terms of how we 'update' the database
 	bool generateSimulatedDeltaResponse = false;
+	// Store the latest DeltaLink
+	string latestDeltaLink;
 	
 	// Configure this class instance
 	this(ApplicationConfig appConfig, ItemDatabase itemDB, ClientSideFiltering selectiveSync) {
@@ -641,6 +642,7 @@ class SyncEngine {
 	void fetchOneDriveDeltaAPIResponse(string driveIdToQuery = null, string itemIdToQuery = null, string sharedFolderName = null) {
 				
 		string deltaLink = null;
+		string currentDeltaLink = null;
 		string deltaLinkAvailable;
 		JSONValue deltaChanges;
 		ulong responseBundleCount;
@@ -690,15 +692,15 @@ class SyncEngine {
 			// Get the current delta link from the database for this DriveID and RootID
 			deltaLinkAvailable = itemDB.getDeltaLink(driveIdToQuery, itemIdToQuery);
 			if (!deltaLinkAvailable.empty) {
-				log.vdebug("Using stored deltaLink");
-				deltaLink = deltaLinkAvailable;
+				log.vdebug("Using database stored deltaLink");
+				currentDeltaLink = deltaLinkAvailable;
 			}
 			
 			// Do we need to perform a Full Scan True Up? Is 'appConfig.fullScanTrueUpRequired' set to 'true'?
 			if (appConfig.fullScanTrueUpRequired) {
 				log.log("Performing a full scan of online data to ensure consistent local state");
-				log.vdebug("Setting deltaLink = null");
-				deltaLink = null;
+				log.vdebug("Setting currentDeltaLink = null");
+				currentDeltaLink = null;
 			}
 			
 			// Dynamic output for a non-verbose run so that the user knows something is happening
@@ -711,18 +713,23 @@ class SyncEngine {
 				log.vdebug("Fetching /delta response from the OneDrive API for driveId: ", driveIdToQuery);
 			}
 							
+			// Create a new API Instance for querying /delta and initialise it
+			OneDriveApi getDeltaQueryOneDriveApiInstance;
+			getDeltaQueryOneDriveApiInstance = new OneDriveApi(appConfig);
+			getDeltaQueryOneDriveApiInstance.initialise();
+			
 			for (;;) {
 				responseBundleCount++;
 				// Get the /delta changes via the OneDrive API
 				// getDeltaChangesByItemId has the re-try logic for transient errors
-				deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink);
+				deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink, getDeltaQueryOneDriveApiInstance);
 				
 				// If the initial deltaChanges response is an invalid JSON object, keep trying ..
 				if (deltaChanges.type() != JSONType.object) {
 					while (deltaChanges.type() != JSONType.object) {
 						// Handle the invalid JSON response adn retry
 						log.vdebug("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response");
-						deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink);
+						deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink, getDeltaQueryOneDriveApiInstance);
 					}
 				}
 				
@@ -751,26 +758,35 @@ class SyncEngine {
 				
 				// The response may contain either @odata.deltaLink or @odata.nextLink
 				if ("@odata.deltaLink" in deltaChanges) {
-					deltaLink = deltaChanges["@odata.deltaLink"].str;
-					log.vdebug("Setting next deltaLink to (@odata.deltaLink): ", deltaLink);
+					// Log action
+					log.vdebug("Setting next currentDeltaLink to (@odata.deltaLink): ", deltaChanges["@odata.deltaLink"].str);
+					// Update currentDeltaLink
+					currentDeltaLink = deltaChanges["@odata.deltaLink"].str;
+					// Store this for later use post processing jsonItemsToProcess items
+					latestDeltaLink = deltaChanges["@odata.deltaLink"].str;
 				}
-				// Update the deltaLink in the database so that we can reuse this
-				if (!deltaLink.empty) {
-					log.vdebug("Updating completed deltaLink in DB to: ", deltaLink); 
-					itemDB.setDeltaLink(driveIdToQuery, itemIdToQuery, deltaLink);
-				}
+				
 				// Update deltaLink to next changeSet bundle
 				if ("@odata.nextLink" in deltaChanges) {	
-					deltaLink = deltaChanges["@odata.nextLink"].str;
+					// Log action
+					log.vdebug("Setting next currentDeltaLink & deltaLinkAvailable to (@odata.nextLink): ", deltaChanges["@odata.nextLink"].str);
+					// Update currentDeltaLink
+					currentDeltaLink = deltaChanges["@odata.nextLink"].str;
 					// Update deltaLinkAvailable to next changeSet bundle to quantify how many changes we have to process
 					deltaLinkAvailable = deltaChanges["@odata.nextLink"].str;
-					log.vdebug("Setting next deltaLink & deltaLinkAvailable to (@odata.nextLink): ", deltaLink);
+					// Store this for later use post processing jsonItemsToProcess items
+					latestDeltaLink = deltaChanges["@odata.nextLink"].str;
 				}
 				else break;
 			}
 			
 			// To finish off the JSON processing items, this is needed to reflect this in the log
 			log.vdebug("------------------------------------------------------------------");
+			
+			// Shutdown the API
+			getDeltaQueryOneDriveApiInstance.shutdown();
+			// Free object and memory
+			object.destroy(getDeltaQueryOneDriveApiInstance);
 			
 			// Log that we have finished querying the /delta API
 			if (log.verbose <= 1) {
@@ -846,6 +862,9 @@ class SyncEngine {
 			}
 		}
 		
+		// Cleanup deltaChanges as this is no longer needed
+		object.destroy(deltaChanges);
+		
 		// We have JSON items received from the OneDrive API
 		log.vdebug("Number of JSON Objects received from OneDrive API:                 ", jsonItemsReceived);
 		log.vdebug("Number of JSON Objects already processed (root and deleted items): ", (jsonItemsReceived - jsonItemsToProcess.length));
@@ -854,32 +873,63 @@ class SyncEngine {
 		// Additionally, we should have a new array, that now contains all the JSON items we need to process that are non 'root' or deleted items
 		log.vdebug("Number of JSON items to process is: ", jsonItemsToProcess.length);
 		
-		// Lets deal with the JSON items in a batch process
-		ulong batchSize = 500;
-		ulong batchCount = (jsonItemsToProcess.length + batchSize - 1) / batchSize;
-		ulong batchesProcessed = 0;
-		
-		if (log.verbose == 0) {
-			// Dynamic output for a non-verbose run so that the user knows something is happening
+		// Are there items to process?
+		if (jsonItemsToProcess.length > 0) {
+			// Lets deal with the JSON items in a batch process
+			ulong batchSize = 100;
+			ulong batchCount = (jsonItemsToProcess.length + batchSize - 1) / batchSize;
+			ulong batchesProcessed = 0;
+			
+			if (log.verbose == 0) {
+				// Dynamic output for a non-verbose run so that the user knows something is happening
+				if (!appConfig.surpressLoggingOutput) {
+					write("Processing ", jsonItemsToProcess.length, " applicable changes and items received from Microsoft OneDrive ");
+					log.fileOnly("Processing ", jsonItemsToProcess.length, " applicable changes and items received from Microsoft OneDrive");
+				}
+			}
+			
+			foreach (batchOfJSONItems; jsonItemsToProcess.chunks(batchSize)) {
+				// Chunk the total items to process into 500 lot items
+				batchesProcessed++;
+				
+				if (log.verbose == 0) {
+					// Dynamic output for a non-verbose run so that the user knows something is happening
+					if (!appConfig.surpressLoggingOutput) {
+						write(".");
+					}
+				} else {
+					log.vlog("Processing OneDrive JSON item batch [", batchesProcessed,"/", batchCount, "] to ensure consistent local state");
+				}	
+					
+				// Process the batch
+				processJSONItemsInBatch(batchOfJSONItems, batchesProcessed, batchCount);
+				
+				// To finish off the JSON processing items, this is needed to reflect this in the log
+				log.vdebug("------------------------------------------------------------------");
+			}
+			
+			if (log.verbose == 0) {
+				// close off '.' output
+				writeln();
+			}
+			
+			// Free up memory and items processed as it is pointless now having this data around
+			jsonItemsToProcess = [];
+			
+			// Debug output - what was processed
+			log.vdebug("Number of JSON items to process is: ", jsonItemsToProcess.length);
+			log.vdebug("Number of JSON items processed was: ", processedCount);	
+		} else {
 			if (!appConfig.surpressLoggingOutput) {
-				log.log("Processing changes and items received from Microsoft OneDrive ...");
+				log.log("No additional changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive");
 			}
 		}
 		
-		foreach (batchOfJSONItems; jsonItemsToProcess.chunks(batchSize)) {
-			// Chunk the total items to process into 500 lot items
-			batchesProcessed++;
-			log.vlog("Processing OneDrive JSON item batch [", batchesProcessed,"/", batchCount, "] to ensure consistent local state");
-			processJSONItemsInBatch(batchOfJSONItems, batchesProcessed, batchCount);
-			// To finish off the JSON processing items, this is needed to reflect this in the log
-			log.vdebug("------------------------------------------------------------------");
+		// Update the deltaLink in the database so that we can reuse this now that jsonItemsToProcess has been processed
+		if (!latestDeltaLink.empty) {
+			log.vdebug("Updating completed deltaLink in DB to: ", latestDeltaLink);
+			itemDB.setDeltaLink(driveIdToQuery, itemIdToQuery, latestDeltaLink);
 		}
-		
-		log.vdebug("Number of JSON items to process is: ", jsonItemsToProcess.length);
-		log.vdebug("Number of JSON items processed was: ", processedCount);
-		
-		// Free up memory and items processed as it is pointless now having this data around
-		jsonItemsToProcess = []; 
 		
 		// Keep the driveIDsArray with unique entries only
 		if (!canFind(driveIDsArray, driveIdToQuery)) {
@@ -981,9 +1031,22 @@ class SyncEngine {
 				}
 			}
 		
-			// Add this JSON item for further processing
-			log.vdebug("Adding this Raw JSON OneDrive Item to jsonItemsToProcess array for further processing");
-			jsonItemsToProcess ~= onedriveJSONItem;
+			// If we are not self-generating a /delta response, check this initial /delta JSON bundle item against the basic checks 
+			// of applicability against 'skip_file', 'skip_dir' and 'sync_list'
+			// We only do this if we did not generate a /delta response, as generateDeltaResponse() performs the checkJSONAgainstClientSideFiltering()
+			// against elements as it is building the /delta compatible response
+			// If we blindly just 'check again' all JSON responses then there is potentially double JSON processing going on if we used generateDeltaResponse()
+			bool discardDeltaJSONItem = false;
+			if (!generateSimulatedDeltaResponse) {
+				// Check applicability against 'skip_file', 'skip_dir' and 'sync_list'
+				discardDeltaJSONItem = checkJSONAgainstClientSideFiltering(onedriveJSONItem);
+			}
+			
+			// Add this JSON item for further processing if this is not being discarded
+			if (!discardDeltaJSONItem) {
+				log.vdebug("Adding this Raw JSON OneDrive Item to jsonItemsToProcess array for further processing");
+				jsonItemsToProcess ~= onedriveJSONItem;
+			}
 		}
 	}
 	
@@ -2180,16 +2243,12 @@ class SyncEngine {
 	}
 	
 	// Get the /delta data using the provided details
-	JSONValue getDeltaChangesByItemId(string selectedDriveId, string selectedItemId, string providedDeltaLink) {
+	JSONValue getDeltaChangesByItemId(string selectedDriveId, string selectedItemId, string providedDeltaLink, OneDriveApi getDeltaQueryOneDriveApiInstance) {
 		
 		// Function variables
 		JSONValue deltaChangesBundle;
-		// Get the /delta data for this account | driveId | deltaLink combination
-		// Create a new API Instance for this thread and initialise it
-		OneDriveApi getDeltaQueryOneDriveApiInstance;
-		getDeltaQueryOneDriveApiInstance = new OneDriveApi(appConfig);
-		getDeltaQueryOneDriveApiInstance.initialise();
 		
+		// Get the /delta data for this account | driveId | deltaLink combination
 		log.vdebug("------------------------------------------------------------------");
 		log.vdebug("selectedDriveId:   ", selectedDriveId);
 		log.vdebug("selectedItemId:    ", selectedItemId);
@@ -2247,10 +2306,6 @@ class SyncEngine {
 			}
 		}
 		
-		// Shutdown the API
-		getDeltaQueryOneDriveApiInstance.shutdown();
-		// Free object and memory
-		object.destroy(getDeltaQueryOneDriveApiInstance);
 		return deltaChangesBundle;
 	}
 	
@@ -3033,7 +3088,7 @@ class SyncEngine {
 		// - check_nosync (MISSING)
 		// - skip_dotfiles (MISSING)
 		// - skip_symlinks (MISSING)
-		// - skip_file (MISSING)
+		// - skip_file
 		// - skip_dir 
 		// - sync_list
 		// - skip_size (MISSING)
@@ -3051,12 +3106,12 @@ class SyncEngine {
 		// Calculate if the Parent Item is in the database so that it can be re-used
 		parentInDatabase = itemDB.idInLocalDatabase(thisItemDriveId, thisItemParentId);
 		
-		// Check if this is excluded by config option: skip_dir
+		// Check if this is excluded by config option: skip_dir 
 		if (!clientSideRuleExcludesPath) {
-			// Only check path if config is != ""
-			if (!appConfig.getValueString("skip_dir").empty) {
-				// Is the item a folder?
-				if (isItemFolder(onedriveJSONItem)) {
+			// Is the item a folder?
+			if (isItemFolder(onedriveJSONItem)) {
+				// Only check path if config is != ""
+				if (!appConfig.getValueString("skip_dir").empty) {
 					// work out the 'snippet' path where this folder would be created
 					string simplePathToCheck = "";
 					string complexPathToCheck = "";
@@ -3124,6 +3179,62 @@ class SyncEngine {
 						// This path should be skipped
 						log.vlog("Skipping item - excluded by skip_dir config: ", matchDisplay);
 					}
+				}
+			}
+		}
+		
+		// Check if this is excluded by config option: skip_file
+		if (!clientSideRuleExcludesPath) {
+			// is the item a file ?
+			if (isFileItem(onedriveJSONItem)) {
+				// JSON item is a file
+				
+				// skip_file can contain 4 types of entries:
+				// - wildcard - *.txt
+				// - text + wildcard - name*.txt
+				// - full path + combination of any above two - /path/name*.txt
+				// - full path to file - /path/to/file.txt
+				
+				string exclusionTestPath = "";
+				
+				// is the parent id in the database?
+				if (parentInDatabase) {
+					// parent id is in the database, so we can try and calculate the full file path
+					string jsonItemPath = "";
+					
+					// Compute this item path & need the full path for this file
+					jsonItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
+					// Log the calculation
+					log.vdebug("New Item calculated full path is: ", jsonItemPath);
+					
+					// The path that needs to be checked needs to include the '/'
+					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
+					// However, as 'path' used throughout, use a temp variable with this modification so that we use the temp variable for exclusion checks
+					if (!startsWith(jsonItemPath, "/")){
+						// Add '/' to the path
+						exclusionTestPath = '/' ~ jsonItemPath;
+					}
+					
+					// what are we checking
+					log.vdebug("skip_file item to check (full calculated path): ", exclusionTestPath);
+				} else {
+					// parent not in database, we can only check using this JSON item's name
+					if (!startsWith(thisItemName, "/")){
+						// Add '/' to the path
+						exclusionTestPath = '/' ~ thisItemName;
+					}
+					
+					// what are we checking
+					log.vdebug("skip_file item to check (file name only - parent path not in database): ", exclusionTestPath);
+					clientSideRuleExcludesPath = selectiveSync.isFileNameExcluded(exclusionTestPath);
+				}
+				
+				// Perform the 'skip_file' evaluation
+				clientSideRuleExcludesPath = selectiveSync.isFileNameExcluded(exclusionTestPath);
+				log.vdebug("Result: ", clientSideRuleExcludesPath);
+				if (clientSideRuleExcludesPath) {
+					// This path should be skipped
+					log.vlog("Skipping item - excluded by skip_file config: ", exclusionTestPath);
 				}
 			}
 		}
@@ -6528,20 +6639,26 @@ class SyncEngine {
 		
 		write("Querying the change status of Drive ID: ", driveIdToQuery, " .");
 		// Query the OenDrive API using the applicable details, following nextLink if applicable
+		
+		// Create a new API Instance for querying /delta and initialise it
+		OneDriveApi getDeltaQueryOneDriveApiInstance;
+		getDeltaQueryOneDriveApiInstance = new OneDriveApi(appConfig);
+		getDeltaQueryOneDriveApiInstance.initialise();
+		
 		for (;;) {
 			// Add a processing '.'
 			write(".");
 		
 			// Get the /delta changes via the OneDrive API
 			// getDeltaChangesByItemId has the re-try logic for transient errors
-			deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink);
+			deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink, getDeltaQueryOneDriveApiInstance);
 			
 			// If the initial deltaChanges response is an invalid JSON object, keep trying ..
 			if (deltaChanges.type() != JSONType.object) {
 				while (deltaChanges.type() != JSONType.object) {
 					// Handle the invalid JSON response adn retry
 					log.vdebug("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response");
-					deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink);
+					deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink, getDeltaQueryOneDriveApiInstance);
 				}
 			}
 			
@@ -6553,11 +6670,8 @@ class SyncEngine {
 					// Files are the only item that we want to calculate
 					if (isItemFile(onedriveJSONItem)) {
 						// JSON item is a file
-						bool clientSideFilteredOut = false;
-						// Client Side Filtering Check (skip_dir, skip_file, sync_list)
-						clientSideFilteredOut = checkJSONAgainstClientSideFiltering(onedriveJSONItem);
 						// Is the item filtered out due to client side filtering rules?
-						if (!clientSideFilteredOut) {
+						if (!checkJSONAgainstClientSideFiltering(onedriveJSONItem)) {
 							// Is the path of this JSON item 'in-scope' or 'out-of-scope' ?
 							if (pathToQueryStatusOn != "/") {
 								// We need to check the path of this item against pathToQueryStatusOn

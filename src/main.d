@@ -718,15 +718,21 @@ int main(string[] cliArgs) {
 					fullScanFrequencyLoopCount++;
 					monitorLogOutputLoopCount++;
 					
-					// Do we flag to perform a full scan of the online data?
-					if (fullScanFrequencyLoopCount > fullScanFrequency) {
-						// set full scan trigger for true up
-						log.vdebug("Enabling Full Scan True Up (fullScanFrequencyLoopCount > fullScanFrequency), resetting fullScanFrequencyLoopCount = 1");
-						fullScanFrequencyLoopCount = 1;
-						appConfig.fullScanTrueUpRequired = true;
+					// If full scan at a specific frequency enabled?
+					if (fullScanFrequency > 0) {
+						// Full Scan set for some 'frequency' - do we flag to perform a full scan of the online data?
+						if (fullScanFrequencyLoopCount > fullScanFrequency) {
+							// set full scan trigger for true up
+							log.vdebug("Enabling Full Scan True Up (fullScanFrequencyLoopCount > fullScanFrequency), resetting fullScanFrequencyLoopCount = 1");
+							fullScanFrequencyLoopCount = 1;
+							appConfig.fullScanTrueUpRequired = true;
+						} else {
+							// unset full scan trigger for true up
+							log.vdebug("Disabling Full Scan True Up");
+							appConfig.fullScanTrueUpRequired = false;
+						}
 					} else {
-						// unset full scan trigger for true up
-						log.vdebug("Disabling Full Scan True Up");
+						// No it is disabled - ensure this is false
 						appConfig.fullScanTrueUpRequired = false;
 					}
 					
@@ -930,7 +936,7 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 		
 		// Perform the final true up scan to ensure we have correctly replicated the current online state locally
 		if (!appConfig.surpressLoggingOutput) {
-			log.log("Performing a final true-up scan of online data from Microsoft OneDrive");
+			log.log("Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process");
 		}
 		// We pass in the 'appConfig.fullScanTrueUpRequired' value which then flags do we use the configured 'deltaLink'
 		// If 'appConfig.fullScanTrueUpRequired' is true, we do not use the 'deltaLink' if we are in --monitor mode, thus forcing a full scan true up

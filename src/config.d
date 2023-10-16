@@ -15,6 +15,7 @@ import std.path;
 import std.getopt;
 import std.format;
 import std.ascii;
+import std.datetime;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -99,6 +100,11 @@ class ApplicationConfig {
 	string refreshTokenFilePath = "";
 	// Store the refreshToken for use within the application
 	string refreshToken;
+	// Store the accessTokenExpiration for use within the application
+	SysTime accessTokenExpiration;
+	// Store the current accessToken for use within the application
+	string accessToken;
+	
 	// Store the 'session_upload.CRC32-HASH' file path
 	string uploadSessionFilePath = "";
 	
@@ -873,8 +879,12 @@ class ApplicationConfig {
 								ulong tempValue = thisConfigValue;
 								// the temp value needs to be greater than 12 
 								if (tempValue < 12) {
-									log.log("Invalid value for key in config file - using default value: ", key);
-									tempValue = 12;
+									// If this is not set to zero (0) then we are not disabling 'monitor_fullscan_frequency'
+									if (tempValue != 0) {
+										// invalid value
+										log.log("Invalid value for key in config file - using default value: ", key);
+										tempValue = 12;
+									}
 								}
 								setValueLong("monitor_fullscan_frequency", to!long(tempValue));
 							}

@@ -67,8 +67,6 @@ class OneDriveApi {
 	string tenantId = "";
 	string authScope = "";
 	string refreshToken = "";
-	string accessToken = "";
-	SysTime accessTokenExpiration;
 	bool dryRun = false;
 	bool debugResponse = false;
 	ulong retryAfterValue = 0;
@@ -737,7 +735,7 @@ class OneDriveApi {
 	}
 	
 	private void addAccessTokenHeader() {
-		curlEngine.http.addRequestHeader("Authorization", accessToken);
+		curlEngine.http.addRequestHeader("Authorization", appConfig.accessToken);
 	}
 	
 	private void addIncludeFeatureRequestHeader() {
@@ -790,20 +788,20 @@ class OneDriveApi {
 			}
 		
 			if ("access_token" in response){
-				accessToken = "bearer " ~ strip(response["access_token"].str);
+				appConfig.accessToken = "bearer " ~ strip(response["access_token"].str);
 				
 				// Do we print the current access token
 				if (log.verbose > 1) {
 					if (appConfig.getValueBool("debug_https")) {
 						if (appConfig.getValueBool("print_token")) {
 							// This needs to be highly restricted in output .... 
-							log.vdebug("CAUTION - KEEP THIS SAFE: Current access token: ", accessToken);
+							log.vdebug("CAUTION - KEEP THIS SAFE: Current access token: ", appConfig.accessToken);
 						}
 					}
 				}
 				
 				refreshToken = strip(response["refresh_token"].str);
-				accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
+				appConfig.accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
 				if (!dryRun) {
 					// Update the refreshToken in appConfig so that we can reuse it
 					if (appConfig.refreshToken.empty) {
@@ -843,9 +841,9 @@ class OneDriveApi {
 	
 	private void checkAccessTokenExpired() {
 		try {
-			if (Clock.currTime() >= accessTokenExpiration) {
+			if (Clock.currTime() >= appConfig.accessTokenExpiration) {
 				newToken();
-			}
+			} 
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
 				// flag error and notify
