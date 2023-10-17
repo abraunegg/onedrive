@@ -842,8 +842,11 @@ class OneDriveApi {
 	private void checkAccessTokenExpired() {
 		try {
 			if (Clock.currTime() >= appConfig.accessTokenExpiration) {
+				log.vdebug("Microsoft OneDrive Access Token has EXPIRED. Must generate a new Microsoft OneDrive Access Token");
 				newToken();
-			} 
+			} else {
+				log.vdebug("Existing Microsoft OneDrive Access Token Expires: ", appConfig.accessTokenExpiration);
+			}
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
 				// flag error and notify
@@ -1034,6 +1037,7 @@ class OneDriveApi {
 	}
 	
 	private void newToken() {
+		log.vdebug("Need to generate a new access token for Microsoft OneDrive");
 		string postData =
 			"client_id=" ~ clientId ~
 			"&redirect_uri=" ~ redirectUrl ~

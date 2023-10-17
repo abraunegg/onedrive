@@ -589,8 +589,12 @@ int main(string[] cliArgs) {
 			
 			// Start the monitor process
 			log.log("OneDrive synchronisation interval (seconds): ", appConfig.getValueLong("monitor_interval"));
-			log.vlog("Maximum allowed open files:                  ", maxOpenFiles);
-			log.vlog("Maximum allowed inotify user watches:        ", maxInotifyWatches);
+			
+			// If we are in a --download-only method of operation, the output of these is not required
+			if (!appConfig.getValueBool("download_only")) {
+				log.vlog("Maximum allowed open files:                  ", maxOpenFiles);
+				log.vlog("Maximum allowed inotify user watches:        ", maxInotifyWatches);
+			}
 			
 			// Configure the monitor class
 			Monitor filesystemMonitor = new Monitor(appConfig, selectiveSync);
@@ -616,7 +620,7 @@ int main(string[] cliArgs) {
 			filesystemMonitor.onFileChanged = delegate(string path) {
 				log.vlog("[M] Local file changed: ", path);
 				try {
-					syncEngineInstance.scanLocalFilesystemPathForNewData(dirName(path));
+					syncEngineInstance.handleLocalFileTrigger(path);
 				} catch (CurlException e) {
 					log.vlog("Offline, cannot upload changed item!");
 				} catch(Exception e) {
@@ -665,15 +669,19 @@ int main(string[] cliArgs) {
 			signal(SIGINT, &exitHandler);
 			signal(SIGTERM, &exitHandler);
 			
-			// Initialise the filesystem monitor class
-			try {
-				log.log("Initialising filesystem inotify monitoring ...");
-				filesystemMonitor.initialise();
-				log.log("Performing initial syncronisation to ensure consistent local state ...");
-			} catch (MonitorException e) {	
-				// monitor class initialisation failed
-				log.error("ERROR: ", e.msg);
-				return EXIT_FAILURE;
+			// Initialise the local filesystem monitor class using inotify to monitor for local filesystem changes
+			// If we are in a --download-only method of operation, we do not enable local filesystem monitoring
+			if (!appConfig.getValueBool("download_only")) {
+				// Not using --download-only
+				try {
+					log.log("Initialising filesystem inotify monitoring ...");
+					filesystemMonitor.initialise();
+					log.log("Performing initial syncronisation to ensure consistent local state ...");
+				} catch (MonitorException e) {	
+					// monitor class initialisation failed
+					log.error("ERROR: ", e.msg);
+					return EXIT_FAILURE;
+				}
 			}
 		
 			// Filesystem monitor loop
@@ -695,12 +703,15 @@ int main(string[] cliArgs) {
 				// Do we need to validate the runtimeSyncDirectory to check for the presence of a '.nosync' file - the disk may have been ejected ..
 				checkForNoMountScenario();
 			
-				try {
-					// Process any inotify events
-					filesystemMonitor.update(true);
-				} catch (MonitorException e) {
-					// Catch any exceptions thrown by inotify / monitor engine
-					log.error("ERROR: The following inotify error was generated: ", e.msg);
+				// If we are in a --download-only method of operation, there is no filesystem monitoring, so no inotify events to check
+				if (!appConfig.getValueBool("download_only")) {
+					try {
+						// Process any inotify events
+						filesystemMonitor.update(true);
+					} catch (MonitorException e) {
+						// Catch any exceptions thrown by inotify / monitor engine
+						log.error("ERROR: The following inotify error was generated: ", e.msg);
+					}
 				}
 			
 				// Check for notifications pushed from Microsoft to the webhook

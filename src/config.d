@@ -1590,7 +1590,8 @@ class ApplicationConfig {
 							
 							if (key == "skip_file") {
 								skip_file_present = true;
-								if (c.front.dup != getValueString("skip_file")) {
+								string computedBackupSkipFile = defaultSkipFile ~ "|" ~ to!string(c.front.dup);
+								if (computedBackupSkipFile != getValueString("skip_file")) {
 									log.vdebug(key, configOptionModifiedMessage);
 									configFileOptionsDifferent = true;
 								}
@@ -1991,9 +1992,15 @@ class ApplicationConfig {
 			operationalConflictDetected = true;
 		}
 		
-		// --monitor and --download-only cannot be used together
-		if ((getValueBool("monitor")) && (getValueBool("download_only"))) {
-			log.error("ERROR: --monitor and --download-only cannot be used together.");
+		// --monitor and --display-sync-status cannot be used together
+		if ( (getValueBool("monitor")) && (getValueBool("display_sync_status"))) {
+			log.error("ERROR: --monitor and --display-sync-status cannot be used together.");
+			operationalConflictDetected = true;
+		}
+		
+		// --sync and and --display-sync-status cannot be used together
+		if ((getValueBool("synchronize")) && (getValueBool("display_sync_status"))) {
+			log.error("ERROR: --sync and and --display-sync-status cannot be used together.");
 			operationalConflictDetected = true;
 		}
 		

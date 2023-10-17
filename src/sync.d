@@ -8,6 +8,7 @@ import core.time;
 import std.algorithm;
 import std.array;
 import std.concurrency;
+import std.container.rbtree;
 import std.conv;
 import std.datetime;
 import std.encoding;
@@ -62,7 +63,7 @@ class SyncEngine {
 	
 	// Array of directory databaseItem.id to skip while applying the changes.
 	// These are the 'parent path' id's that are being excluded, so if the parent id is in here, the child needs to be skipped as well
-	string[] skippedItems;
+	RedBlackTree!string skippedItems = redBlackTree!string();
 	// Array of databaseItem.id to delete after the changes have been downloaded
 	string[2][] idsToDelete;
 	// Array of JSON items which are files or directories that are not 'root', skipped or to be deleted, that need to be processed
@@ -704,13 +705,14 @@ class SyncEngine {
 			}
 			
 			// Dynamic output for a non-verbose run so that the user knows something is happening
-			if (log.verbose <= 1) {
+			if (log.verbose == 0) {
 				if (!appConfig.surpressLoggingOutput) {
 					log.fileOnly("Fetching items from the OneDrive API for Drive ID: ", driveIdToQuery);
+					// Use the dots to show the application is 'doing something'
 					write("Fetching items from the OneDrive API for Drive ID: ", driveIdToQuery, " .");
 				}
 			} else {
-				log.vdebug("Fetching /delta response from the OneDrive API for driveId: ", driveIdToQuery);
+				log.vlog("Fetching /delta response from the OneDrive API for Drive ID: ", driveIdToQuery);
 			}
 							
 			// Create a new API Instance for querying /delta and initialise it
@@ -736,7 +738,7 @@ class SyncEngine {
 				ulong nrChanges = count(deltaChanges["value"].array);
 				int changeCount = 0;
 				
-				if (log.verbose <= 1) {
+				if (log.verbose == 0) {
 					// Dynamic output for a non-verbose run so that the user knows something is happening
 					if (!appConfig.surpressLoggingOutput) {
 						write(".");
@@ -789,7 +791,7 @@ class SyncEngine {
 			object.destroy(getDeltaQueryOneDriveApiInstance);
 			
 			// Log that we have finished querying the /delta API
-			if (log.verbose <= 1) {
+			if (log.verbose == 0) {
 				if (!appConfig.surpressLoggingOutput) {
 					write("\n");
 				}
@@ -803,12 +805,6 @@ class SyncEngine {
 				appConfig.fullScanTrueUpRequired = false;
 			}
 		} else {
-			// We have to generate our own /delta response
-			// Log what we are doing so that the user knows something is happening
-			if (!appConfig.surpressLoggingOutput) {
-				log.log("Generating a /delta compatible JSON response from the OneDrive API ...");
-			}
-			
 			// Why are are generating a /delta response
 			log.vdebug("Why are we generating a /delta response:");
 			log.vdebug(" singleDirectoryScope:    ", singleDirectoryScope);
@@ -876,18 +872,22 @@ class SyncEngine {
 		// Are there items to process?
 		if (jsonItemsToProcess.length > 0) {
 			// Lets deal with the JSON items in a batch process
-			ulong batchSize = 100;
+			ulong batchSize = 500;
 			ulong batchCount = (jsonItemsToProcess.length + batchSize - 1) / batchSize;
 			ulong batchesProcessed = 0;
 			
-			if (log.verbose == 0) {
-				// Dynamic output for a non-verbose run so that the user knows something is happening
-				if (!appConfig.surpressLoggingOutput) {
-					write("Processing ", jsonItemsToProcess.length, " applicable changes and items received from Microsoft OneDrive ");
-					log.fileOnly("Processing ", jsonItemsToProcess.length, " applicable changes and items received from Microsoft OneDrive");
+			// Dynamic output for a non-verbose run so that the user knows something is happening
+			if (!appConfig.surpressLoggingOutput) {
+				write("Processing ", jsonItemsToProcess.length, " applicable changes and items received from Microsoft OneDrive ");
+				log.fileOnly("Processing ", jsonItemsToProcess.length, " applicable changes and items received from Microsoft OneDrive");
+				if (log.verbose != 0) {
+					// close out processing line
+					writeln();
 				}
 			}
 			
+			// For each batch, process the JSON items that need to be now processed.
+			// 'root' and deleted objects have already been handled
 			foreach (batchOfJSONItems; jsonItemsToProcess.chunks(batchSize)) {
 				// Chunk the total items to process into 500 lot items
 				batchesProcessed++;
@@ -1089,7 +1089,7 @@ class SyncEngine {
 			} else {
 				// Flag to ignore
 				log.vdebug("Flagging item to skip: ", onedriveJSONItem);
-				skippedItems ~= thisItemId;
+				skippedItems.insert(thisItemId);
 			}
 		}
 	}
@@ -1145,7 +1145,7 @@ class SyncEngine {
 				if (thisItemDriveId == appConfig.defaultDriveId) {
 					// Flagging as unwanted
 					log.vdebug("Flagging as unwanted: thisItemDriveId (", thisItemDriveId,"), thisItemParentId (", thisItemParentId,") not in local database");
-					if (skippedItems.find(thisItemParentId).length != 0) {
+					if (thisItemParentId in skippedItems) {
 						log.vdebug("Reason: thisItemParentId listed within skippedItems");
 					}
 					unwanted = true;
@@ -1223,7 +1223,7 @@ class SyncEngine {
 			
 			// Check the skippedItems array for the parent id of this JSONItem if this is something we need to skip
 			if (!unwanted) {
-				if (skippedItems.find(thisItemParentId).length != 0) {
+				if (thisItemParentId in skippedItems) {
 					// Flag this JSON item as unwanted
 					log.vdebug("Flagging as unwanted: find(thisItemParentId).length != 0");
 					unwanted = true;
@@ -1503,7 +1503,7 @@ class SyncEngine {
 				log.vdebug("Skipping OneDrive change as this is determined to be unwanted");
 				// Add to the skippedItems array, but only if it is a directory ... pointless adding 'files' here, as it is the 'id' we check as the parent path which can only be a directory
 				if (!isItemFile(onedriveJSONItem)) {
-					skippedItems ~= thisItemId;
+					skippedItems.insert(thisItemId);
 				}
 			} else {
 				// This JSON item is wanted - we need to process this JSON item further
@@ -1587,7 +1587,7 @@ class SyncEngine {
 		// Are there any skipped items still?
 		if (!skippedItems.empty) {
 			// Cleanup array memory
-			skippedItems = [];
+			skippedItems.clear();
 		}
 	}
 	
@@ -3266,6 +3266,11 @@ class SyncEngine {
 					}
 				}
 				
+				// Update newItemPath
+				if(newItemPath[0] == '/') {
+					newItemPath = newItemPath[1..$];
+				}
+				
 				// What path are we checking?
 				log.vdebug("sync_list item to check: ", newItemPath);
 				
@@ -3766,12 +3771,14 @@ class SyncEngine {
 			}
 		}
 		
-		// Log the action that we are performing
-		if (!appConfig.surpressLoggingOutput) {
-			if (!cleanupLocalFiles) {
-				log.log("Scanning the local file system '", logPath, "' for new data to upload ...");
-			} else {
-				log.log("Scanning the local file system '", logPath, "' for data to cleanup ...");
+		// Log the action that we are performing, however only if this is a directory
+		if (isDir(path)) {
+			if (!appConfig.surpressLoggingOutput) {
+				if (!cleanupLocalFiles) {
+					log.log("Scanning the local file system '", logPath, "' for new data to upload ...");
+				} else {
+					log.log("Scanning the local file system '", logPath, "' for data to cleanup ...");
+				}
 			}
 		}
 		
@@ -4033,7 +4040,7 @@ class SyncEngine {
 									safeRemove(path);
 								}
 							}
-						}	
+						}
 					} else {
 						// path is not a valid file
 						log.logAndNotify("Skipping item - item is not a valid file: ", path);
@@ -4043,6 +4050,31 @@ class SyncEngine {
 		} else {
 			// This path was skipped - why?
 			log.logAndNotify("Skipping item '", path, "' due to the full path exceeding ", maxPathLength, " characters (Microsoft OneDrive limitation)");
+		}
+	}
+	
+	// Handle a single file inotify trigger when using --monitor
+	void handleLocalFileTrigger(string localFilePath) {
+		// Is this path a new file or an existing one?
+		// Normally we would use pathFoundInDatabase() to calculate, but we need 'databaseItem' as well if the item is in the database
+		Item databaseItem;
+		bool fileFoundInDB = false;
+		string[3][] modifiedItemToUpload; 
+		
+		foreach (driveId; driveIDsArray) {
+			if (itemDB.selectByPath(localFilePath, driveId, databaseItem)) {
+				fileFoundInDB = true;
+			}
+		}
+		
+		// Was the file found in the database?
+		if (!fileFoundInDB) {
+			// This is a new file
+			scanLocalFilesystemPathForNewData(localFilePath);
+		} else {
+			// This is a modified file, needs to be handled as such
+			modifiedItemToUpload ~= [databaseItem.driveId, databaseItem.id, localFilePath];
+			uploadChangedLocalFileToOneDrive(modifiedItemToUpload);
 		}
 	}
 	
@@ -5385,7 +5417,7 @@ class SyncEngine {
 								} else {
 									// Parent is not in the database .. why?
 									// Check if the parent item had been skipped .. 
-									if (skippedItems.find(newDatabaseItem.parentId).length != 0) {
+									if (newDatabaseItem.parentId in skippedItems) {
 										log.vdebug(apiWarningMessage, "newDatabaseItem.parentId listed within skippedItems");
 									} else {
 										// Use the item ID .. there is no other reference available, parent is not being skipped, so we should have been able to calculate this - but we could not
@@ -5583,6 +5615,17 @@ class SyncEngine {
 		// Was a valid JSON response for 'driveData' provided?
 		if (driveData.type() == JSONType.object) {
 		
+			// Dynamic output for a non-verbose run so that the user knows something is happening
+			if (log.verbose == 0) {
+				if (!appConfig.surpressLoggingOutput) {
+					log.fileOnly("Fetching items from the OneDrive API for Drive ID: ", searchItem.driveId);
+					// Use the dots to show the application is 'doing something'
+					write("Fetching items from the OneDrive API for Drive ID: ", searchItem.driveId, " .");
+				}
+			} else {
+				log.vlog("Generating a /delta response from the OneDrive API for Drive ID: ", searchItem.driveId);
+			}
+		
 			// Process this initial JSON response
 			if (!isItemRoot(driveData)) {
 				// Get root details for the provided driveId
@@ -5616,14 +5659,11 @@ class SyncEngine {
 						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
 						log.log("Retrying Query: rootData = generateDeltaResponseOneDriveApiInstance.getDriveIdRoot(searchItem.driveId)");
 						rootData = generateDeltaResponseOneDriveApiInstance.getDriveIdRoot(searchItem.driveId);
-						
-						
 					} else {
 						// Default operation if not 408,429,503,504 errors
 						// display what the error is
 						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					}
-					
 				}
 				// Add driveData JSON data to array
 				log.vlog("Adding OneDrive root details for processing");
@@ -5633,7 +5673,6 @@ class SyncEngine {
 			// Add driveData JSON data to array
 			log.vlog("Adding OneDrive folder details for processing");
 			childrenData ~= driveData;
-			
 		} else {
 			// driveData is an invalid JSON object
 			writeln("CODING TO DO: The query of OneDrive API to getPathDetailsById generated an invalid JSON response - thus we cant build our own /delta simulated response ... how to handle?");
@@ -5738,6 +5777,13 @@ class SyncEngine {
 			} else break;
 		}
 		
+		if (log.verbose == 0) {
+			// Dynamic output for a non-verbose run so that the user knows something is happening
+			if (!appConfig.surpressLoggingOutput) {
+				writeln();
+			}
+		}
+		
 		// Craft response from all returned JSON elements
 		selfGeneratedDeltaResponse = [
 						"@odata.context": JSONValue("https://graph.microsoft.com/v1.0/$metadata#Collection(driveItem)"),
@@ -5760,15 +5806,27 @@ class SyncEngine {
 		JSONValue thisLevelChildren;
 		JSONValue[] thisLevelChildrenData;
 		string nextLink;
-
+		
+		// Create new OneDrive API Instance
+		OneDriveApi queryChildrenOneDriveApiInstance;
+		queryChildrenOneDriveApiInstance = new OneDriveApi(appConfig);
+		queryChildrenOneDriveApiInstance.initialise();
+		
 		for (;;) {
 			// query this level children
 			try {
-				thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink);
+				thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance);
 			} catch (OneDriveException exception) {
 				
-				writeln("CODING TO DO: EXCEPTION HANDLING NEEDED: thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink)");
+				writeln("CODING TO DO: EXCEPTION HANDLING NEEDED: thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance)");
 			
+			}
+			
+			if (log.verbose == 0) {
+				// Dynamic output for a non-verbose run so that the user knows something is happening
+				if (!appConfig.surpressLoggingOutput) {
+					write(".");
+				}
 			}
 			
 			// Was a valid JSON response for 'thisLevelChildren' provided?
@@ -5821,35 +5879,32 @@ class SyncEngine {
 				// retry thisLevelChildren = queryThisLevelChildren
 				log.vdebug("Thread sleeping for an additional 30 seconds");
 				Thread.sleep(dur!"seconds"(30));
-				log.vdebug("Retry this call thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink)");
-				thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink);
+				log.vdebug("Retry this call thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance)");
+				thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance);
 			}
 		}
+		
+		// Shutdown API instance
+		queryChildrenOneDriveApiInstance.shutdown();
+		// Free object and memory
+		object.destroy(queryChildrenOneDriveApiInstance);
 		
 		// return response
 		return thisLevelChildrenData;
 	}
 	
 	// Query the OneDrive API for the child objects for this element
-	JSONValue queryThisLevelChildren(string driveId, string idToQuery, string nextLink) {
+	JSONValue queryThisLevelChildren(string driveId, string idToQuery, string nextLink, OneDriveApi queryChildrenOneDriveApiInstance) {
 		
 		// function variables 
 		JSONValue thisLevelChildren;
 		
-		// Create new OneDrive API Instance
-		OneDriveApi queryChildrenOneDriveApiInstance;
-		queryChildrenOneDriveApiInstance = new OneDriveApi(appConfig);
-		queryChildrenOneDriveApiInstance.initialise();
-	
 		// query children
 		try {
 			// attempt API call
 			log.vdebug("Attempting Query: thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink)");
 			thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink);
 			log.vdebug("Query 'thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink)' performed successfully");
-			queryChildrenOneDriveApiInstance.shutdown();
-			// Free object and memory
-			object.destroy(queryChildrenOneDriveApiInstance);
 		} catch (OneDriveException exception) {
 			// OneDrive threw an error
 			log.vdebug("------------------------------------------------------------------");
@@ -5881,10 +5936,8 @@ class SyncEngine {
 					Thread.sleep(dur!"seconds"(30));
 				}
 				// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-				//log.vdebug("Retrying Query: thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink)");
-				//thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink);
 				log.vdebug("Retrying Function: ", thisFunctionName);
-				queryThisLevelChildren(driveId, idToQuery, nextLink);
+				queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance);
 				
 			} else {
 				// Default operation if not 408,429,503,504 errors
