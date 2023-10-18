@@ -56,7 +56,7 @@ class ApplicationConfig {
 	// - Identify as ISV and include Company Name, App Name separated by a pipe character and then adding Version number separated with a slash character
 	
 	//immutable string defaultUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ strip(import("version"));
-	immutable string defaultUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ "v2.5.0-alpha-2";
+	immutable string defaultUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ "v2.5.0-alpha-3";
 	
 	// HTTP Struct items, used for configuring HTTP()
 	// Curl Timeout Handling
@@ -323,7 +323,7 @@ class ApplicationConfig {
 		
 		// Print in debug the application version as soon as possible
 		//log.vdebug("Application Version: ", strip(import("version")));
-		string tempVersion = "v2.5.0-alpha-2" ~ " GitHub version: " ~ strip(import("version"));
+		string tempVersion = "v2.5.0-alpha-3" ~ " GitHub version: " ~ strip(import("version"));
 		log.vdebug("Application Version: ", tempVersion);
 		
 		// EXPAND USERS HOME DIRECTORY
@@ -1272,7 +1272,7 @@ class ApplicationConfig {
 		// Display application version
 		//writeln("onedrive version                             = ", strip(import("version")));
 		
-		string tempVersion = "v2.5.0-alpha-2" ~ " GitHub version: " ~ strip(import("version"));
+		string tempVersion = "v2.5.0-alpha-3" ~ " GitHub version: " ~ strip(import("version"));
 		writeln("onedrive version                             = ", tempVersion);
 		
 		// Display all of the pertinent configuration options

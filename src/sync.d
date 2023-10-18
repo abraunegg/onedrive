@@ -2367,7 +2367,7 @@ class SyncEngine {
 		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
 		//log.vlog("Application version:  ", strip(import("version")));
 		
-		string tempVersion = "v2.5.0-alpha-2" ~ " GitHub version: " ~ strip(import("version"));
+		string tempVersion = "v2.5.0-alpha-3" ~ " GitHub version: " ~ strip(import("version"));
 		log.vlog("Application version:  ", tempVersion);
 		
 		log.vlog("Account Type:         ", appConfig.accountType);
