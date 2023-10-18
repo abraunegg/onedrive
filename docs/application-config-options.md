@@ -873,9 +873,11 @@ _**Usage Example:**_ `onedrive --create-share-link 'relative/path/to/your/file.t
 _**Additional Usage Notes:**_ If writable access to the file is required, you must add `--with-editing-perms` to your command. See below for details.
 
 ### CLI Option: --destination-directory
-_**Description:**_
+_**Description:**_ This CLI option specifies the 'destination' portion of moving a file or folder online, without performing a sync operation.
 
-_**Usage Example:**_
+_**Usage Example:**_ `onedrive --source-directory 'path/as/source/' --destination-directory 'path/as/destination'`
+
+_**Additional Usage Notes:**_ All specified paths are relative to your configured 'sync_dir'.
 
 ### CLI Option: --display-config
 _**Description:**_ This CLI option will display the effective application configuration
@@ -968,9 +970,11 @@ _**Usage Example:**_ `onedrive --sync --single-directory 'Data'`
 _**Additional Usage Notes:**_ The path specified is relative to your configured 'sync_dir' path. If the physical local path 'Folder' to sync is `~/OneDrive/Data/Folder` then the command would be `--single-directory 'Data/Folder'`.
 
 ### CLI Option: --source-directory
-_**Description:**_
+_**Description:**_ This CLI option specifies the 'source' portion of moving a file or folder online, without performing a sync operation.
 
-_**Usage Example:**_
+_**Usage Example:**_ `onedrive --source-directory 'path/as/source/' --destination-directory 'path/as/destination'`
+
+_**Additional Usage Notes:**_ All specified paths are relative to your configured 'sync_dir'.
 
 ### CLI Option: --sync | -s
 _**Description:**_ This CLI option controls the 'Standalone Mode' operational aspect of the client. When this option is used, the client will perform a one-time sync of data between Microsoft OneDrive and your local system.

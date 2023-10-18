@@ -1986,9 +1986,9 @@ class ApplicationConfig {
 			operationalConflictDetected = true;
 		}
 		
-		// --get-O365-drive-id cannot be used with --resync and/or --resync-auth
+		// --get-sharepoint-drive-id cannot be used with --resync and/or --resync-auth
 		if ((!getValueString("sharepoint_library_name").empty) && ((getValueBool("resync")) || (getValueBool("resync_auth")))) {
-			log.error("ERROR: --get-O365-drive-id cannot be used with --resync or --resync-auth.");
+			log.error("ERROR: --get-sharepoint-drive-id cannot be used with --resync or --resync-auth.");
 			operationalConflictDetected = true;
 		}
 		
@@ -2057,6 +2057,30 @@ class ApplicationConfig {
 		// --sync and --remove-directory cannot be used together
 		if ((getValueBool("synchronize")) && (!getValueString("remove_directory").empty)) {
 			log.error("ERROR: --sync and --remove-directory cannot be used together.");
+			operationalConflictDetected = true;
+		}
+		
+		// --monitor and --source-directory cannot be used together
+		if ((getValueBool("monitor")) && (!getValueString("source_directory").empty)) {
+			log.error("ERROR: --monitor and --source-directory cannot be used together.");
+			operationalConflictDetected = true;
+		}
+		
+		// --sync and --source-directory cannot be used together
+		if ((getValueBool("synchronize")) && (!getValueString("source_directory").empty)) {
+			log.error("ERROR: --sync and --source-directory cannot be used together.");
+			operationalConflictDetected = true;
+		}
+		
+		// --monitor and --destination-directory cannot be used together
+		if ((getValueBool("monitor")) && (!getValueString("destination_directory").empty)) {
+			log.error("ERROR: --monitor and --destination-directory cannot be used together.");
+			operationalConflictDetected = true;
+		}
+		
+		// --sync and --destination-directory cannot be used together
+		if ((getValueBool("synchronize")) && (!getValueString("destination_directory").empty)) {
+			log.error("ERROR: --sync and --destination-directory cannot be used together.");
 			operationalConflictDetected = true;
 		}
 		

@@ -400,6 +400,7 @@ int main(string[] cliArgs) {
 				// - Are we createing a shareable link for an existing file on OneDrive?
 				// - Are we just creating a directory online, without any sync being performed?
 				// - Are we just deleting a directory online, without any sync being performed?
+				// - Are we renaming or moving a directory?
 								
 				// --get-sharepoint-drive-id - Get the SharePoint Library drive_id
 				if (appConfig.getValueString("sharepoint_library_name") != "") {
@@ -472,6 +473,16 @@ int main(string[] cliArgs) {
 				if ((appConfig.getValueString("remove_directory") != "")) {
 					// Handle the remote path deletion without performing a sync
 					syncEngineInstance.deleteByPath(appConfig.getValueString("remove_directory"));
+					// Exit application
+					// Use exit scopes to shutdown API
+					return EXIT_SUCCESS;
+				}
+				
+				// Are we renaming or moving a directory?
+				// 	onedrive --source-directory 'path/as/source/' --destination-directory 'path/as/destination'
+				if ((appConfig.getValueString("source_directory") != "") && (appConfig.getValueString("destination_directory") != "")) {
+					// We are renaming or moving a directory
+					syncEngineInstance.uploadMoveItem(appConfig.getValueString("source_directory"), appConfig.getValueString("destination_directory"));
 					// Exit application
 					// Use exit scopes to shutdown API
 					return EXIT_SUCCESS;

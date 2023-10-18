@@ -2947,6 +2947,12 @@ class SyncEngine {
 		// Return a true|false response
 		
 		bool clientSideRuleExcludesPath = false;
+		
+		// does the path exist?
+		if (!exists(localFilePath)) {
+			// path does not exist - we cant review any client side rules on something that does not exist locally
+			return clientSideRuleExcludesPath;
+		}
 	
 		// - check_nosync
 		if (!clientSideRuleExcludesPath) {
@@ -6246,7 +6252,7 @@ class SyncEngine {
 		if (!itemInDB) {
 			// path to delete is not in the local database ..
 			// was this a --remove-directory attempt?
-			if ((appConfig.getValueString("remove_directory") != "")) {
+			if (!appConfig.getValueBool("monitor")) {
 				// --remove-directory deletion attempt
 				log.error("The item to delete is not in the local database - unable to delete online");
 				return;
@@ -6357,12 +6363,23 @@ class SyncEngine {
 				}
 			} else {
 				if (!exists(newPath)) {
-					log.vlog("uploadMoveItem target has disappeared: ", newPath);
-					return;
+					// is this --monitor use?
+					if (appConfig.getValueBool("monitor")) {
+						log.vlog("uploadMoveItem target has disappeared: ", newPath);
+						return;
+					}
 				}
 			
 				// Configure the modification JSON item
-				SysTime mtime = timeLastModified(newPath).toUTC();
+				SysTime mtime;
+				if (appConfig.getValueBool("monitor")) {
+					// Use the newPath modified timestamp
+					mtime = timeLastModified(newPath).toUTC();
+				} else {
+					// Use the current system time
+					mtime = Clock.currTime().toUTC();
+				}
+								
 				JSONValue data = [
 					"name": JSONValue(baseName(newPath)),
 					"parentReference": JSONValue([
