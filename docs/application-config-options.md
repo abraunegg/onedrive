@@ -859,9 +859,11 @@ _**Usage Example:**_ `onedrive --confdir '~/.config/onedrive-business/'`
 _**Additional Usage Notes:**_ If using this option, it must be specified each and every time the application is used. If this is ommited, the application default configuration directory will be used.
 
 ### CLI Option: --create-directory
-_**Description:**_
+_**Description:**_ This CLI option allows the user to create the specified directory path on Microsoft OneDrive without performing a sync.
 
-_**Usage Example:**_
+_**Usage Example:**_ `onedrive --create-directory 'path/of/new/folder/structure/to/create/'`
+
+_**Additional Usage Notes:**_ The specified path to create is relative to your configured 'sync_dir'.
 
 ### CLI Option: --create-share-link
 _**Description:**_ This CLI option enables the creation of a shareable file link that can be provided to users to access the file that is stored on Microsoft OneDrive. By default, the permissions for the file will be 'read-only'.
@@ -952,9 +954,11 @@ _**Description:**_ This CLI option controls the ability to re-authenticate your 
 _**Usage Example:**_ `onedrive --reauth`
 
 ### CLI Option: --remove-directory
-_**Description:**_
+_**Description:**_ This CLI option allows the user to remove the specified directory path on Microsoft OneDrive without performing a sync.
 
-_**Usage Example:**_
+_**Usage Example:**_ `onedrive --remove-directory 'path/of/new/folder/structure/to/remove/'`
+
+_**Additional Usage Notes:**_ The specified path to remove is relative to your configured 'sync_dir'.
 
 ### CLI Option: --single-directory
 _**Description:**_ This CLI option controls the applications ability to sync a specific single directory.

@@ -4139,7 +4139,7 @@ class SyncEngine {
 			
 			// Step 2: Query for the path online
 			if (!pathFoundInDB) {
-			
+				// path not found in database
 				try {
 					log.vdebug("Attempting to query OneDrive Online for this parent path as path not found in local database: ", parentPath);
 					onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetails(parentPath);
@@ -4147,13 +4147,14 @@ class SyncEngine {
 					saveItem(onlinePathData);
 					parentItem = makeItem(onlinePathData);
 				} catch (OneDriveException exception) {
-					
 					if (exception.httpStatusCode == 404) {
 						// Parent does not exist ... need to create parent
 						log.vdebug("Parent path does not exist online: ", parentPath);
 						createDirectoryOnline(parentPath);
+						// no return here as we need to continue, but need to re-query the OneDrive API to get the right parental details now that they exist
+						onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetails(parentPath);
+						parentItem = makeItem(onlinePathData);
 					} else {
-						
 						string thisFunctionName = getFunctionName!({});
 						// HTTP request returned status code 408,429,503,504
 						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -4186,12 +4187,10 @@ class SyncEngine {
 						}
 					}
 				}
-			
 			} else {
 				// parent path found in database ... use those details ...
 				parentItem = databaseItem;
 			}
-			
 		}
 		
 		// Make sure the full path does not exist online, this should generate a 404 response, to which then the folder will be created online
@@ -4293,6 +4292,7 @@ class SyncEngine {
 					}
 				} else {
 					// Simulate a successful 'directory create' & save it to the dryRun database copy
+					log.log("Successfully created the remote directory ", thisNewPathToCreate, " on OneDrive");
 					// The simulated response has to pass 'makeItem' as part of saveItem
 					auto fakeResponse = createFakeResponse(thisNewPathToCreate);
 					// Save item to the database
@@ -4341,7 +4341,7 @@ class SyncEngine {
 		
 		// If we get to this point - onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, thisNewPathToCreate) generated a 'valid' response ....
 		// This means that the folder potentially exists online .. which is odd .. as it should not have existed
-		if (onlinePathData.type() == JSONType.object){
+		if (onlinePathData.type() == JSONType.object) {
 			// A valid object was responded with
 			if (onlinePathData["name"].str == baseName(thisNewPathToCreate)) {
 				// OneDrive 'name' matches local path name
@@ -5179,7 +5179,6 @@ class SyncEngine {
 					// If the item is a remote item, delete the reference in the local database
 					itemDB.deleteById(itemToDelete.remoteDriveId, itemToDelete.remoteId);
 				}
-				
 			} else {
 				// log that this is a dry-run activity
 				log.log("dry run - no delete activity");
@@ -6227,8 +6226,8 @@ class SyncEngine {
 	}
 	
 	// Delete an item by it's path
-	// This function is only used in --monitor mode
-	void deleteByPath(const(string) path) {
+	// This function is only used in --monitor mode and --remove-directory directive
+	void deleteByPath(string path) {
 		
 		// function variables
 		Item dbItem;
@@ -6242,10 +6241,22 @@ class SyncEngine {
 				break;
 			}
 		}
+		
+		// Was the item found in the database?
 		if (!itemInDB) {
-			throw new SyncException("The item to delete is not in the local database");
+			// path to delete is not in the local database ..
+			// was this a --remove-directory attempt?
+			if ((appConfig.getValueString("remove_directory") != "")) {
+				// --remove-directory deletion attempt
+				log.error("The item to delete is not in the local database - unable to delete online");
+				return;
+			} else {
+				// normal use .. --monitor being used
+				throw new SyncException("The item to delete is not in the local database");
+			}
 		}
 		
+		// This needs to be enforced as we have to know the parent id of the object being deleted
 		if (dbItem.parentId == null) {
 			// the item is a remote folder, need to do the operation on the parent
 			enforce(itemDB.selectByPathWithoutRemote(path, appConfig.defaultDriveId, dbItem));

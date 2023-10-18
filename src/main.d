@@ -398,6 +398,8 @@ int main(string[] cliArgs) {
 				// - Are we getting the URL for a file online
 				// - Are we listing who modified a file last online
 				// - Are we createing a shareable link for an existing file on OneDrive?
+				// - Are we just creating a directory online, without any sync being performed?
+				// - Are we just deleting a directory online, without any sync being performed?
 								
 				// --get-sharepoint-drive-id - Get the SharePoint Library drive_id
 				if (appConfig.getValueString("sharepoint_library_name") != "") {
@@ -452,6 +454,24 @@ int main(string[] cliArgs) {
 					//		--with-editing-perms 
 					// this will create a writeable link
 					syncEngineInstance.queryOneDriveForFileDetails(appConfig.getValueString("create_share_link"), runtimeSyncDirectory, "ShareableLink");
+					// Exit application
+					// Use exit scopes to shutdown API
+					return EXIT_SUCCESS;
+				}
+				
+				// --create-directory - Are we just creating a directory online, without any sync being performed?
+				if ((appConfig.getValueString("create_directory") != "")) {
+					// Handle the remote path creation and updating of the local database without performing a sync
+					syncEngineInstance.createDirectoryOnline(appConfig.getValueString("create_directory"));
+					// Exit application
+					// Use exit scopes to shutdown API
+					return EXIT_SUCCESS;
+				}
+				
+				// --remove-directory - Are we just deleting a directory online, without any sync being performed?
+				if ((appConfig.getValueString("remove_directory") != "")) {
+					// Handle the remote path deletion without performing a sync
+					syncEngineInstance.deleteByPath(appConfig.getValueString("remove_directory"));
 					// Exit application
 					// Use exit scopes to shutdown API
 					return EXIT_SUCCESS;
@@ -632,15 +652,15 @@ int main(string[] cliArgs) {
 			
 			// Delegated function for when inotify detects a delete event
 			filesystemMonitor.onDelete = delegate(string path) {
-				log.log("Received inotify delete event from operating system .. attempting item deletion as requested");
 				log.vlog("[M] Local item deleted: ", path);
 				try {
+					log.log("The operating system sent a deletion notification. Trying to delete the item as requested");
 					syncEngineInstance.deleteByPath(path);
 				} catch (CurlException e) {
 					log.vlog("Offline, cannot delete item!");
 				} catch(SyncException e) {
 					if (e.msg == "The item to delete is not in the local database") {
-						log.vlog("Item cannot be deleted from OneDrive because it was not found in the local database");
+						log.vlog("Item cannot be deleted from Microsoft OneDrive because it was not found in the local database");
 					} else {
 						log.logAndNotify("Cannot delete remote item: ", e.msg);
 					}

@@ -1993,7 +1993,7 @@ class ApplicationConfig {
 		}
 		
 		// --monitor and --display-sync-status cannot be used together
-		if ( (getValueBool("monitor")) && (getValueBool("display_sync_status"))) {
+		if ((getValueBool("monitor")) && (getValueBool("display_sync_status"))) {
 			log.error("ERROR: --monitor and --display-sync-status cannot be used together.");
 			operationalConflictDetected = true;
 		}
@@ -2033,6 +2033,30 @@ class ApplicationConfig {
 		// When using --syncdir, the value cannot be empty.
 		if (strip(getValueString("sync_dir")).empty) {
 			log.error("ERROR: --syncdir value cannot be empty.");
+			operationalConflictDetected = true;
+		}
+		
+		// --monitor and --create-directory cannot be used together
+		if ((getValueBool("monitor")) && (!getValueString("create_directory").empty)) {
+			log.error("ERROR: --monitor and --create-directory cannot be used together.");
+			operationalConflictDetected = true;
+		}
+		
+		// --sync and --create-directory cannot be used together
+		if ((getValueBool("synchronize")) && (!getValueString("create_directory").empty)) {
+			log.error("ERROR: --sync and --create-directory cannot be used together.");
+			operationalConflictDetected = true;
+		}
+		
+		// --monitor and --remove-directory cannot be used together
+		if ((getValueBool("monitor")) && (!getValueString("remove_directory").empty)) {
+			log.error("ERROR: --monitor and --remove-directory cannot be used together.");
+			operationalConflictDetected = true;
+		}
+		
+		// --sync and --remove-directory cannot be used together
+		if ((getValueBool("synchronize")) && (!getValueString("remove_directory").empty)) {
+			log.error("ERROR: --sync and --remove-directory cannot be used together.");
 			operationalConflictDetected = true;
 		}
 		
