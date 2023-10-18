@@ -65,6 +65,7 @@ int main(string[] cliArgs) {
 	// DEVELOPER OPTIONS OUTPUT VARIABLES
 	bool displayMemoryUsage = false;
 	bool displaySyncOptions = false;
+	bool monitorFailures = false;
 	
 	// Define 'exit' and 'failure' scopes
 	scope(exit) {
@@ -644,6 +645,7 @@ int main(string[] cliArgs) {
 			
 			// Configure the monitor class
 			Monitor filesystemMonitor = new Monitor(appConfig, selectiveSync);
+			Tid workerTid;
 			
 			// Delegated function for when inotify detects a new local directory has been created
 			filesystemMonitor.onDirCreated = delegate(string path) {
@@ -722,6 +724,7 @@ int main(string[] cliArgs) {
 				try {
 					log.log("Initialising filesystem inotify monitoring ...");
 					filesystemMonitor.initialise();
+					workerTid = filesystemMonitor.watch();
 					log.log("Performing initial syncronisation to ensure consistent local state ...");
 				} catch (MonitorException e) {	
 					// monitor class initialisation failed
@@ -796,7 +799,7 @@ int main(string[] cliArgs) {
 				auto currentTime = MonoTime.currTime();
 				
 				// Do we perform a sync with OneDrive?
-				if (notificationReceived || (currentTime - lastCheckTime > checkOnlineInterval) || (monitorLoopFullCount == 0)) {
+				if (notificationReceived || (currentTime - lastCheckTime >= checkOnlineInterval) || (monitorLoopFullCount == 0)) {
 					// Increment relevant counters
 					monitorLoopFullCount++;
 					fullScanFrequencyLoopCount++;
@@ -918,8 +921,35 @@ int main(string[] cliArgs) {
 						}
 					}
 				}
-				// Sleep the monitor thread for 1 second, loop around and pick up any inotify changes
-				Thread.sleep(dur!"seconds"(1));
+
+				if(performMonitor) {
+					auto nextCheckTime = lastCheckTime + checkOnlineInterval;
+					currentTime = MonoTime.currTime();
+					auto sleepTime = nextCheckTime - currentTime;
+					if(filesystemMonitor.initialised) {
+						// If local monitor is on
+						// start the worker and wait for event
+						if(!filesystemMonitor.isWorking()) {
+							workerTid.send(1);
+						}
+						int res = 1;
+						
+						receiveTimeout(sleepTime, (int msg) {
+							res = msg;
+						});
+						if(res == -1) {
+							log.error("Error: Monitor worker failed.");
+							monitorFailures = true;
+							performMonitor = false;
+						}
+					} else {
+						// no hooks available, nothing to check
+						Thread.sleep(sleepTime);
+					}
+				}
+			}
+			if (filesystemMonitor.initialised) {
+				workerTid.send(0); // exit signal
 			}
 		}
 	} else {
@@ -930,7 +960,7 @@ int main(string[] cliArgs) {
 	}
 	
 	// Exit application using exit scope
-	if (!syncEngineInstance.syncFailures) {
+	if (!syncEngineInstance.syncFailures && !monitorFailures) {
 		return EXIT_SUCCESS;
 	} else {
 		return EXIT_FAILURE;
