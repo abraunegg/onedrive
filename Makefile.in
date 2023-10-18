@@ -68,7 +68,7 @@ endif
 SOURCES = \
 	src/main.d \
 	src/config.d \
-        src/log.d \
+	src/log.d \
 	src/util.d \
 	src/qxor.d \
 	src/curlEngine.d \
@@ -78,7 +78,8 @@ SOURCES = \
 	src/sqlite.d \
 	src/clientSideFiltering.d \
 	src/progress.d \
-	src/monitor.d
+	src/monitor.d \
+	src/arsd/cgi.d
 
 ifeq ($(NOTIFICATIONS),yes)
 SOURCES += src/notifications/notify.d src/notifications/dnotify.d

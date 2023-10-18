@@ -496,7 +496,10 @@ int main(string[] cliArgs) {
 				return EXIT_FAILURE;
 			}
 			// We do not need this instance, as the API was initialised, and individual instances are used during sync process
-			oneDriveApiInstance.shutdown();
+			// However we need this instance to hang around if we are using --monitor for handling subscriptions
+			if (!appConfig.getValueBool("monitor")) {
+				oneDriveApiInstance.shutdown();
+			}
 		} else {
 			// API could not be initialised
 			log.error("The OneDrive API could not be initialised");
@@ -717,22 +720,24 @@ int main(string[] cliArgs) {
 				}
 			}
 		
-			// Filesystem monitor loop
-			bool performMonitor = true;
-			ulong monitorLoopFullCount = 0;
-			ulong fullScanFrequencyLoopCount = 0;
-			ulong monitorLogOutputLoopCount = 0;
+			// Filesystem monitor loop variables
+			// immutables
 			immutable auto checkOnlineInterval = dur!"seconds"(appConfig.getValueLong("monitor_interval"));
 			immutable auto githubCheckInterval = dur!"seconds"(86400);
 			immutable ulong fullScanFrequency = appConfig.getValueLong("monitor_fullscan_frequency");
 			immutable ulong logOutputSupressionInterval = appConfig.getValueLong("monitor_log_frequency");
+			immutable bool webhookEnabled = appConfig.getValueBool("webhook_enabled");
+			// changables
+			bool performMonitor = true;
+			ulong monitorLoopFullCount = 0;
+			ulong fullScanFrequencyLoopCount = 0;
+			ulong monitorLogOutputLoopCount = 0;
 			MonoTime lastCheckTime = MonoTime.currTime();
 			MonoTime lastGitHubCheckTime = MonoTime.currTime();
 			string loopStartOutputMessage = "################################################## NEW LOOP ##################################################";
 			string loopStopOutputMessage = "################################################ LOOP COMPLETE ###############################################";
 			
 			while (performMonitor) {
-				
 				// Do we need to validate the runtimeSyncDirectory to check for the presence of a '.nosync' file - the disk may have been ejected ..
 				checkForNoMountScenario();
 			
@@ -747,10 +752,35 @@ int main(string[] cliArgs) {
 					}
 				}
 			
-				// Check for notifications pushed from Microsoft to the webhook
+				// Webhook Notification Handling
 				bool notificationReceived = false;
 				
-				// Check here for a webhook notification
+				// Check for notifications pushed from Microsoft to the webhook
+				if (webhookEnabled) {
+					// Create a subscription on the first run, or renew the subscription
+					// on subsequent runs when it is about to expire.
+					oneDriveApiInstance.createOrRenewSubscription();
+
+					// Process incoming notifications if any.
+
+					// Empirical evidence shows that Microsoft often sends multiple
+					// notifications for one single change, so we need a loop to exhaust
+					// all signals that were queued up by the webhook. The notifications
+					// do not contain any actual changes, and we will always rely do the
+					// delta endpoint to sync to latest. Therefore, only one sync run is
+					// good enough to catch up for multiple notifications.
+					for (int signalCount = 0;; signalCount++) {
+						const auto signalExists = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
+						if (signalExists) {
+							notificationReceived = true;
+						} else {
+							if (notificationReceived) {
+								log.log("Received ", signalCount," refresh signals from the webhook");
+							}
+							break;
+						}
+					}
+				}
 				
 				// Get the current time this loop is starting
 				auto currentTime = MonoTime.currTime();
