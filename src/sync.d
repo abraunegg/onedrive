@@ -704,15 +704,15 @@ class SyncEngine {
 				currentDeltaLink = null;
 			}
 			
-			// Dynamic output for a non-verbose run so that the user knows something is happening
-			if (log.verbose == 0) {
+			// Dynamic output for non-verbose and verbose run so that the user knows something is being retreived from the OneDrive API
+			if (log.verbose <= 1) {
 				if (!appConfig.surpressLoggingOutput) {
 					log.fileOnly("Fetching items from the OneDrive API for Drive ID: ", driveIdToQuery);
 					// Use the dots to show the application is 'doing something'
 					write("Fetching items from the OneDrive API for Drive ID: ", driveIdToQuery, " .");
 				}
 			} else {
-				log.vlog("Fetching /delta response from the OneDrive API for Drive ID: ", driveIdToQuery);
+				log.vdebug("Fetching /delta response from the OneDrive API for Drive ID: ", driveIdToQuery);
 			}
 							
 			// Create a new API Instance for querying /delta and initialise it
@@ -738,7 +738,7 @@ class SyncEngine {
 				ulong nrChanges = count(deltaChanges["value"].array);
 				int changeCount = 0;
 				
-				if (log.verbose == 0) {
+				if (log.verbose <= 1) {
 					// Dynamic output for a non-verbose run so that the user knows something is happening
 					if (!appConfig.surpressLoggingOutput) {
 						write(".");
@@ -791,7 +791,7 @@ class SyncEngine {
 			object.destroy(getDeltaQueryOneDriveApiInstance);
 			
 			// Log that we have finished querying the /delta API
-			if (log.verbose == 0) {
+			if (log.verbose <= 1) {
 				if (!appConfig.surpressLoggingOutput) {
 					write("\n");
 				}
