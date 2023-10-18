@@ -881,7 +881,7 @@ class SyncEngine {
 				write("Processing ", jsonItemsToProcess.length, " applicable changes and items received from Microsoft OneDrive ");
 				log.fileOnly("Processing ", jsonItemsToProcess.length, " applicable changes and items received from Microsoft OneDrive");
 				if (log.verbose != 0) {
-					// close out processing line
+					// close out the write() processing line above
 					writeln();
 				}
 			}
@@ -910,7 +910,9 @@ class SyncEngine {
 			
 			if (log.verbose == 0) {
 				// close off '.' output
-				writeln();
+				if (!appConfig.surpressLoggingOutput) {
+					writeln();
+				}
 			}
 			
 			// Free up memory and items processed as it is pointless now having this data around

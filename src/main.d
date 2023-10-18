@@ -394,10 +394,12 @@ int main(string[] cliArgs) {
 				
 				// Are we performing some sort of 'no-sync' task?
 				// - Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
-				// - Are we createing a shareable link for an existing file on OneDrive?
 				// - Are we displaying the sync satus?
-				
-				// Get the SharePoint Library drive_id
+				// - Are we getting the URL for a file online
+				// - Are we listing who modified a file last online
+				// - Are we createing a shareable link for an existing file on OneDrive?
+								
+				// --get-sharepoint-drive-id - Get the SharePoint Library drive_id
 				if (appConfig.getValueString("sharepoint_library_name") != "") {
 					// Get the SharePoint Library drive_id
 					syncEngineInstance.querySiteCollectionForDriveID(appConfig.getValueString("sharepoint_library_name"));
@@ -406,7 +408,7 @@ int main(string[] cliArgs) {
 					return EXIT_SUCCESS;
 				}
 				
-				// Query the sync status
+				// --display-sync-status - Query the sync status
 				if (appConfig.getValueBool("display_sync_status")) {
 					// path to query variable
 					string pathToQueryStatusOn;
@@ -456,8 +458,8 @@ int main(string[] cliArgs) {
 				}
 				
 				// If we get to this point, we have not performed a 'no-sync' task ..
-				log.error("\n --sync or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use 'onedrive --help' for further assistance.\n");
-				log.error("No OneDrive sync will be performed without one of these two arguments being present.\n");
+				log.error("\nYour command line input is missing either the '--sync' or '--monitor' switches. Please include one (but not both) of these switches in your command line, or refer to 'onedrive --help' for additional guidance.\n");
+				log.error("It is important to note that you must include one of these two arguments in your command line for the application to perform a synchronisation with Microsoft OneDrive\n");
 				// Use exit scopes to shutdown API
 				// invalidSyncExit = true;
 				return EXIT_FAILURE;
