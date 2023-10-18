@@ -55,7 +55,7 @@ endif
 system_unit_files = contrib/systemd/onedrive@.service
 user_unit_files = contrib/systemd/onedrive.service
 
-DOCFILES = README.md config LICENSE CHANGELOG.md docs/Docker.md docs/INSTALL.md docs/SharePoint-Shared-Libraries.md docs/USAGE.md docs/BusinessSharedFolders.md docs/advanced-usage.md docs/application-security.md
+DOCFILES = readme.md config LICENSE changelog.md docs/advanced-usage.md docs/application-config-options.md docs/application-security.md docs/business-shared-folders.md docs/docker.md docs/install.md docs/national-cloud-deployments.md docs/podman.md docs/privacy-policy.md docs/sharepoint-libraries.md docs/terms-of-service.md docs/ubuntu-package-install.md docs/usage.md 
 
 ifneq ("$(wildcard /etc/redhat-release)","")
 RHEL = $(shell cat /etc/redhat-release | grep -E "(Red Hat Enterprise Linux|CentOS)" | wc -l)
@@ -66,20 +66,19 @@ RHEL_VERSION = 0
 endif
 
 SOURCES = \
-	src/config.d \
-	src/itemdb.d \
-	src/log.d \
 	src/main.d \
-	src/monitor.d \
-	src/onedrive.d \
-	src/qxor.d \
-	src/selective.d \
-	src/sqlite.d \
-	src/sync.d \
-	src/upload.d \
+	src/config.d \
+        src/log.d \
 	src/util.d \
+	src/qxor.d \
+	src/curlEngine.d \
+	src/onedrive.d \
+	src/sync.d \
+	src/itemdb.d \
+	src/sqlite.d \
+	src/clientSideFiltering.d \
 	src/progress.d \
-	src/arsd/cgi.d
+	src/monitor.d
 
 ifeq ($(NOTIFICATIONS),yes)
 SOURCES += src/notifications/notify.d src/notifications/dnotify.d

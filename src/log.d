@@ -1,31 +1,47 @@
+// What is this module called?
+module log;
+
+// What does this module require to function?
 import std.stdio;
 import std.file;
 import std.datetime;
 import std.process;
 import std.conv;
+import std.path;
+import std.string;
 import core.memory;
-import core.sys.posix.pwd, core.sys.posix.unistd, core.stdc.string : strlen;
+import core.sys.posix.pwd;
+import core.sys.posix.unistd;
+import core.stdc.string : strlen;
 import std.algorithm : splitter;
+
 version(Notifications) {
 	import dnotify;
 }
 
-// enable verbose logging
+// module variables
+// verbose logging count
 long verbose;
+// do we write a log file? ... this should be a config falue
 bool writeLogFile = false;
+// did the log file write fail?
 bool logFileWriteFailFlag = false;
-
-private bool doNotifications;
+private bool triggerNotification;
 
 // shared string variable for username
 string username;
 string logFilePath;
+string logFileName;
+string logFileFullPath;
 
-void init(string logDir)
-{
+void initialise(string logDir) {
 	writeLogFile = true;
+	
+	// Configure various variables
 	username = getUserName();
 	logFilePath = logDir;
+	logFileName = username ~ ".onedrive.log";
+	logFileFullPath = buildPath(logFilePath, logFileName);
 	
 	if (!exists(logFilePath)){
 		// logfile path does not exist
@@ -34,15 +50,19 @@ void init(string logDir)
 		} 
 		catch (std.file.FileException e) {
 			// we got an error ..
-			writeln("\nUnable to access ", logFilePath);
-			writeln("Please manually create '",logFilePath, "' and set appropriate permissions to allow write access");
-			writeln("The requested client activity log will instead be located in your users home directory");
+			writeln();
+			writeln("ERROR: Unable to access ", logFilePath);
+			writeln("ERROR: Please manually create '",logFilePath, "' and set appropriate permissions to allow write access");
+			writeln("ERROR: The requested client activity log will instead be located in your users home directory");
+			writeln();
+			
+			// set the flag so we dont keep printing this sort of message
+			logFileWriteFailFlag = true;
 		}
 	}
 }
 
-void setNotifications(bool value)
-{
+void enableNotifications(bool value) {
 	version(Notifications) {
 		// if we try to enable notifications, check for server availability
 		// and disable in case dbus server is not reachable
@@ -54,11 +74,10 @@ void setNotifications(bool value)
 			}
 		}
 	}
-	doNotifications = value;
+	triggerNotification = value;
 }
 
-void log(T...)(T args)
-{
+void log(T...)(T args) {
 	writeln(args);
 	if(writeLogFile){
 		// Write to log file
@@ -66,22 +85,19 @@ void log(T...)(T args)
 	}
 }
 
-void logAndNotify(T...)(T args)
-{
+void logAndNotify(T...)(T args) {
 	notify(args);
 	log(args);
 }
 
-void fileOnly(T...)(T args)
-{
+void fileOnly(T...)(T args) {
 	if(writeLogFile){
 		// Write to log file
 		logfileWriteLine(args);
 	}
 }
 
-void vlog(T...)(T args)
-{
+void vlog(T...)(T args) {
 	if (verbose >= 1) {
 		writeln(args);
 		if(writeLogFile){
@@ -91,8 +107,7 @@ void vlog(T...)(T args)
 	}
 }
 
-void vdebug(T...)(T args)
-{
+void vdebug(T...)(T args) {
 	if (verbose >= 2) {
 		writeln("[DEBUG] ", args);
 		if(writeLogFile){
@@ -102,8 +117,7 @@ void vdebug(T...)(T args)
 	}
 }
 
-void vdebugNewLine(T...)(T args)
-{
+void vdebugNewLine(T...)(T args) {
 	if (verbose >= 2) {
 		writeln("\n[DEBUG] ", args);
 		if(writeLogFile){
@@ -113,8 +127,7 @@ void vdebugNewLine(T...)(T args)
 	}
 }
 
-void error(T...)(T args)
-{
+void error(T...)(T args) {
 	stderr.writeln(args);
 	if(writeLogFile){
 		// Write to log file
@@ -122,16 +135,14 @@ void error(T...)(T args)
 	}
 }
 
-void errorAndNotify(T...)(T args)
-{
+void errorAndNotify(T...)(T args) {
 	notify(args);
 	error(args);
 }
 
-void notify(T...)(T args)
-{
+void notify(T...)(T args) {
 	version(Notifications) {
-		if (doNotifications) {
+		if (triggerNotification) {
 			string result;
 			foreach (index, arg; args) {
 				result ~= to!string(arg);
@@ -153,45 +164,44 @@ void notify(T...)(T args)
 	}
 }
 
-private void logfileWriteLine(T...)(T args)
-{
+private void logfileWriteLine(T...)(T args) {
 	static import std.exception;
 	// Write to log file
-	string logFileName = .logFilePath ~ .username ~ ".onedrive.log";
 	auto currentTime = Clock.currTime();
-	auto timeString = currentTime.toString();
+	auto timeString = leftJustify(currentTime.toString(), 28, '0');
 	File logFile;
 	
 	// Resolve: std.exception.ErrnoException@std/stdio.d(423): Cannot open file `/var/log/onedrive/xxxxx.onedrive.log' in mode `a' (Permission denied)
 	try {
-		logFile = File(logFileName, "a");
+		logFile = File(logFileFullPath, "a");
 		} 
 	catch (std.exception.ErrnoException e) {
-		// We cannot open the log file in logFilePath location for writing
+		// We cannot open the log file logFileFullPath for writing
 		// The user is not part of the standard 'users' group (GID 100)
 		// Change logfile to ~/onedrive.log putting the log file in the users home directory
 		
 		if (!logFileWriteFailFlag) {
 			// write out error message that we cant log to the requested file
-			writeln("\nUnable to write activity log to ", logFileName);
-			writeln("Please set appropriate permissions to allow write access to the logging directory for your user account");
-			writeln("The requested client activity log will instead be located in your users home directory\n");
+			writeln();
+			writeln("ERROR: Unable to write activity log to ", logFileFullPath);
+			writeln("ERROR: Please set appropriate permissions to allow write access to the logging directory for your user account");
+			writeln("ERROR: The requested client activity log will instead be located in your users home directory");
+			writeln();
 		
 			// set the flag so we dont keep printing this error message
 			logFileWriteFailFlag = true;
 		}
 		
 		string homePath = environment.get("HOME");
-		string logFileNameAlternate = homePath ~ "/onedrive.log";
-		logFile = File(logFileNameAlternate, "a");
+		string logFileFullPathAlternate = homePath ~ "/onedrive.log";
+		logFile = File(logFileFullPathAlternate, "a");
 	} 
 	// Write to the log file
 	logFile.writeln(timeString, "\t", args);
 	logFile.close();
 }
 
-private string getUserName()
-{
+private string getUserName() {
 	auto pw = getpwuid(getuid);
 	
 	// get required details
@@ -216,24 +226,27 @@ private string getUserName()
 	}
 }
 
-void displayMemoryUsagePreGC()
-{
-// Display memory usage
-writeln("\nMemory Usage pre GC (bytes)");
-writeln("--------------------");
-writeln("memory usedSize = ", GC.stats.usedSize);
-writeln("memory freeSize = ", GC.stats.freeSize);
-// uncomment this if required, if not using LDC 1.16 as this does not exist in that version
-//writeln("memory allocatedInCurrentThread = ", GC.stats.allocatedInCurrentThread, "\n");
+void displayMemoryUsagePreGC() {
+	// Display memory usage
+	writeln();
+	writeln("Memory Usage pre GC (KB)");
+	writeln("------------------------");
+	writeMemoryStats();
+	writeln();
 }
 
-void displayMemoryUsagePostGC()
-{
-// Display memory usage
-writeln("\nMemory Usage post GC (bytes)");
-writeln("--------------------");
-writeln("memory usedSize = ", GC.stats.usedSize);
-writeln("memory freeSize = ", GC.stats.freeSize);
-// uncomment this if required, if not using LDC 1.16 as this does not exist in that version
-//writeln("memory allocatedInCurrentThread = ", GC.stats.allocatedInCurrentThread, "\n");
+void displayMemoryUsagePostGC() {
+	// Display memory usage
+	writeln();
+	writeln("Memory Usage post GC (KB)");
+	writeln("-------------------------");
+	writeMemoryStats();
+	writeln();
+}
+
+void writeMemoryStats() {
+	// write memory stats
+	writeln("memory usedSize                 = ", (GC.stats.usedSize/1024));
+	writeln("memory freeSize                 = ", (GC.stats.freeSize/1024));
+	writeln("memory allocatedInCurrentThread = ", (GC.stats.allocatedInCurrentThread/1024));
 }

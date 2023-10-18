@@ -1,104 +1,45 @@
-import std.net.curl;
-import etc.c.curl: CurlOption;
-import std.datetime, std.datetime.systime, std.exception, std.file, std.json, std.path;
-import std.stdio, std.string, std.uni, std.uri, std.file, std.uuid;
-import std.array: split;
-import core.atomic : atomicOp;
-import core.stdc.stdlib;
-import core.thread, std.conv, std.math;
+// What is this module called?
+module onedrive;
+
+// What does this module require to function?
+import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
+import core.memory;
+import core.thread;
+import std.stdio;
+import std.string;
+import std.utf;
+import std.file;
+import std.exception;
+import std.regex;
+import std.json;
 import std.algorithm.searching;
-import std.concurrency;
-import progress;
-import config;
-import util;
-import arsd.cgi;
+import std.net.curl;
 import std.datetime;
-static import log;
-shared bool debugResponse = false;
-private bool dryRun = false;
-private bool simulateNoRefreshTokenFile = false;
-private ulong retryAfterValue = 0;
+import std.path;
+import std.conv;
+import std.math;
+import std.uri;
 
-private immutable {
-	// Client ID / Application ID (abraunegg)
-	string clientIdDefault = "d50ca740-c83f-4d1b-b616-12c519384f0c";
+// What other modules that we have created do we need to import?
+import config;
+import log;
+import util;
+import curlEngine;
+import progress;
 
-	// Azure Active Directory & Graph Explorer Endpoints
-	// Global & Defaults
-	string globalAuthEndpoint = "https://login.microsoftonline.com";
-	string globalGraphEndpoint = "https://graph.microsoft.com";
-
-	// US Government L4
-	string usl4AuthEndpoint = "https://login.microsoftonline.us";
-	string usl4GraphEndpoint = "https://graph.microsoft.us";
-
-	// US Government L5
-	string usl5AuthEndpoint = "https://login.microsoftonline.us";
-	string usl5GraphEndpoint = "https://dod-graph.microsoft.us";
-
-	// Germany
-	string deAuthEndpoint = "https://login.microsoftonline.de";
-	string deGraphEndpoint = "https://graph.microsoft.de";
-
-	// China
-	string cnAuthEndpoint = "https://login.chinacloudapi.cn";
-	string cnGraphEndpoint = "https://microsoftgraph.chinacloudapi.cn";
-}
-
-private {
-	// Client ID / Application ID
-	string clientId = clientIdDefault;
-
-	// Default User Agent configuration
-	string isvTag = "ISV";
-	string companyName = "abraunegg";
-	// Application name as per Microsoft Azure application registration
-	string appTitle = "OneDrive Client for Linux";
-
-	// Default Drive ID
-	string driveId = "";
-
-	// API Query URL's, based on using defaults, but can be updated by config option 'azure_ad_endpoint'
-	// Authentication
-	string authUrl = globalAuthEndpoint ~ "/common/oauth2/v2.0/authorize";
-	string redirectUrl = globalAuthEndpoint ~ "/common/oauth2/nativeclient";
-	string tokenUrl = globalAuthEndpoint ~ "/common/oauth2/v2.0/token";
-
-	// Drive Queries
-	string driveUrl = globalGraphEndpoint ~ "/v1.0/me/drive";
-	string driveByIdUrl = globalGraphEndpoint ~ "/v1.0/drives/";
-
-	// What is 'shared with me' Query
-	string sharedWithMeUrl = globalGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
-
-	// Item Queries
-	string itemByIdUrl = globalGraphEndpoint ~ "/v1.0/me/drive/items/";
-	string itemByPathUrl = globalGraphEndpoint ~ "/v1.0/me/drive/root:/";
-
-	// Office 365 / SharePoint Queries
-	string siteSearchUrl = globalGraphEndpoint ~ "/v1.0/sites?search";
-	string siteDriveUrl = globalGraphEndpoint ~ "/v1.0/sites/";
-
-	// Subscriptions
-	string subscriptionUrl = globalGraphEndpoint ~ "/v1.0/subscriptions";
-}
-
-class OneDriveException: Exception
-{
+class OneDriveException: Exception {
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/concepts/errors
 	int httpStatusCode;
 	JSONValue error;
 
-	@safe pure this(int httpStatusCode, string reason, string file = __FILE__, size_t line = __LINE__)
-	{
+	@safe pure this(int httpStatusCode, string reason, string file = __FILE__, size_t line = __LINE__) {
 		this.httpStatusCode = httpStatusCode;
 		this.error = error;
 		string msg = format("HTTP request returned status code %d (%s)", httpStatusCode, reason);
 		super(msg, file, line);
 	}
 
-	this(int httpStatusCode, string reason, ref const JSONValue error, string file = __FILE__, size_t line = __LINE__)
-	{
+	this(int httpStatusCode, string reason, ref const JSONValue error, string file = __FILE__, size_t line = __LINE__) {
 		this.httpStatusCode = httpStatusCode;
 		this.error = error;
 		string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(error, true));
@@ -106,470 +47,96 @@ class OneDriveException: Exception
 	}
 }
 
-class OneDriveWebhook {
-	// We need OneDriveWebhook.serve to be a static function, otherwise we would hit the member function
-	// "requires a dual-context, which is deprecated" warning. The root cause is described here:
-	//   - https://issues.dlang.org/show_bug.cgi?id=5710
-	//   - https://forum.dlang.org/post/fkyppfxzegenniyzztos@forum.dlang.org
-	// The problem is deemed a bug and should be fixed in the compilers eventually. The singleton stuff
-	// could be undone when it is fixed.
-	//
-	// Following the singleton pattern described here: https://wiki.dlang.org/Low-Lock_Singleton_Pattern
-	// Cache instantiation flag in thread-local bool
-	// Thread local
-	private static bool instantiated_;
-
-	// Thread global
-	private __gshared OneDriveWebhook instance_;
-
-	private string host;
-	private ushort port;
-	private Tid parentTid;
-	private shared uint count;
-
-	static OneDriveWebhook getOrCreate(string host, ushort port, Tid parentTid) {
-		if (!instantiated_) {
-			synchronized(OneDriveWebhook.classinfo) {
-				if (!instance_) {
-						instance_ = new OneDriveWebhook(host, port, parentTid);
-				}
-
-				instantiated_ = true;
-			}
-		}
-
-		return instance_;
-	}
-
-	private this(string host, ushort port, Tid parentTid) {
-		this.host = host;
-		this.port = port;
-		this.parentTid = parentTid;
-		this.count = 0;
-	}
-
-	// The static serve() is necessary because spawn() does not like instance methods
-	static serve() {
-		// we won't create the singleton instance if it hasn't been created already
-		// such case is a bug which should crash the program and gets fixed
-		instance_.serveImpl();
-	}
-
-	// The static handle() is necessary to work around the dual-context warning mentioned above
-	private static void handle(Cgi cgi) {
-		// we won't create the singleton instance if it hasn't been created already
-		// such case is a bug which should crash the program and gets fixed
-		instance_.handleImpl(cgi);
-	}
-
-	private void serveImpl() {
-		auto server = new RequestServer(host, port);
-		server.serveEmbeddedHttp!handle();
-	}
-
-	private void handleImpl(Cgi cgi) {
-		if (.debugResponse) {
-			log.log("Webhook request: ", cgi.requestMethod, " ", cgi.requestUri);
-			if (!cgi.postBody.empty) {
-				log.log("Webhook post body: ", cgi.postBody);
-			}
-		}
-
-		cgi.setResponseContentType("text/plain");
-
-		if ("validationToken" in cgi.get)	{
-			// For validation requests, respond with the validation token passed in the query string
-			// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/concepts/webhook-receiver-validation-request
-			cgi.write(cgi.get["validationToken"]);
-			log.log("Webhook: handled validation request");
-		} else {
-			// Notifications don't include any information about the changes that triggered them.
-			// Put a refresh signal in the queue and let the main monitor loop process it.
-			// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/concepts/using-webhooks
-			count.atomicOp!"+="(1);
-			send(parentTid, to!ulong(count));
-			cgi.write("OK");
-			log.log("Webhook: sent refresh signal #", count);
-		}
-	}
-}
-
-final class OneDriveApi
-{
-	private Config cfg;
-	private string refreshToken, accessToken, subscriptionId;
-	private SysTime accessTokenExpiration;
-	private HTTP http;
-	private OneDriveWebhook webhook;
-	private SysTime subscriptionExpiration;
-	private Duration subscriptionExpirationInterval, subscriptionRenewalInterval;
-	private string notificationUrl;
-
-	// if true, every new access token is printed
-	bool printAccessToken;
-
-	this(Config cfg)
-	{
-		this.cfg = cfg;
-		http = HTTP();
-		// Curl Timeout Handling
-		// libcurl dns_cache_timeout timeout
-		http.dnsTimeout = (dur!"seconds"(cfg.getValueLong("dns_timeout")));
-		// Timeout for HTTPS connections
-		http.connectTimeout = (dur!"seconds"(cfg.getValueLong("connect_timeout")));
-		// with the following settings we force
-		// - if there is no data flow for 10min, abort
-		// - if the download time for one item exceeds 1h, abort
-		//
-		// timeout for activity on connection
-		// this translates into Curl's CURLOPT_LOW_SPEED_TIME
-		// which says
-		//   It contains the time in number seconds that the
-		//   transfer speed should be below the CURLOPT_LOW_SPEED_LIMIT
-		//   for the library to consider it too slow and abort.
-		http.dataTimeout = (dur!"seconds"(cfg.getValueLong("data_timeout")));
-		// maximum time an operation is allowed to take
-		// This includes dns resolution, connecting, data transfer, etc.
-		http.operationTimeout = (dur!"seconds"(cfg.getValueLong("operation_timeout")));
-		// What IP protocol version should be used when using Curl - IPv4 & IPv6, IPv4 or IPv6
-		http.handle.set(CurlOption.ipresolve,cfg.getValueLong("ip_protocol_version")); // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
-		// Specify how many redirects should be allowed
-		http.maxRedirects(cfg.defaultMaxRedirects);
-
-		// Do we enable curl debugging?
-		if (cfg.getValueBool("debug_https")) {
-			http.verbose = true;
-			.debugResponse = true;
-			
-			// Output what options we are using so that in the debug log this can be tracked
-			log.vdebug("http.dnsTimeout = ", cfg.getValueLong("dns_timeout"));
-			log.vdebug("http.connectTimeout = ", cfg.getValueLong("connect_timeout"));
-			log.vdebug("http.dataTimeout = ", cfg.getValueLong("data_timeout"));
-			log.vdebug("http.operationTimeout = ", cfg.getValueLong("operation_timeout"));
-			log.vdebug("http.CurlOption.ipresolve = ", cfg.getValueLong("ip_protocol_version"));
-			log.vdebug("http.maxRedirects = ", cfg.defaultMaxRedirects);
-		}
-
-		// Update clientId if application_id is set in config file
-		if (cfg.getValueString("application_id") != "") {
-			// an application_id is set in config file
-			log.vdebug("Setting custom application_id to: " , cfg.getValueString("application_id"));
-			clientId = cfg.getValueString("application_id");
-			companyName = "custom_application";
-		}
-
-		// Configure tenant id value, if 'azure_tenant_id' is configured,
-		// otherwise use the "common" multiplexer
-		string tenantId = "common";
-		if (cfg.getValueString("azure_tenant_id") != "") {
-			// Use the value entered by the user
-			tenantId = cfg.getValueString("azure_tenant_id");
-		}
-
-		// Configure Azure AD endpoints if 'azure_ad_endpoint' is configured
-		string azureConfigValue = cfg.getValueString("azure_ad_endpoint");
-		switch(azureConfigValue) {
-			case "":
-				if (tenantId == "common") {
-					log.log("Configuring Global Azure AD Endpoints");
-				} else {
-					log.log("Configuring Global Azure AD Endpoints - Single Tenant Application");
-				}
-				// Authentication
-				authUrl = globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
-				redirectUrl = globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
-				tokenUrl = globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
-				break;
-			case "USL4":
-				log.log("Configuring Azure AD for US Government Endpoints");
-				// Authentication
-				authUrl = usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
-				tokenUrl = usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
-				if (clientId == clientIdDefault) {
-					// application_id == default
-					log.vdebug("USL4 AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint");
-					redirectUrl = globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
-				} else {
-					// custom application_id
-					redirectUrl = usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
-				}
-
-				// Drive Queries
-				driveUrl = usl4GraphEndpoint ~ "/v1.0/me/drive";
-				driveByIdUrl = usl4GraphEndpoint ~ "/v1.0/drives/";
-				// Item Queries
-				itemByIdUrl = usl4GraphEndpoint ~ "/v1.0/me/drive/items/";
-				itemByPathUrl = usl4GraphEndpoint ~ "/v1.0/me/drive/root:/";
-				// Office 365 / SharePoint Queries
-				siteSearchUrl = usl4GraphEndpoint ~ "/v1.0/sites?search";
-				siteDriveUrl = usl4GraphEndpoint ~ "/v1.0/sites/";
-				// Shared With Me
-				sharedWithMeUrl = usl4GraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
-				// Subscriptions
-				subscriptionUrl = usl4GraphEndpoint ~ "/v1.0/subscriptions";
-				break;
-			case "USL5":
-				log.log("Configuring Azure AD for US Government Endpoints (DOD)");
-				// Authentication
-				authUrl = usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
-				tokenUrl = usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
-				if (clientId == clientIdDefault) {
-					// application_id == default
-					log.vdebug("USL5 AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint");
-					redirectUrl = globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
-				} else {
-					// custom application_id
-					redirectUrl = usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
-				}
-
-				// Drive Queries
-				driveUrl = usl5GraphEndpoint ~ "/v1.0/me/drive";
-				driveByIdUrl = usl5GraphEndpoint ~ "/v1.0/drives/";
-				// Item Queries
-				itemByIdUrl = usl5GraphEndpoint ~ "/v1.0/me/drive/items/";
-				itemByPathUrl = usl5GraphEndpoint ~ "/v1.0/me/drive/root:/";
-				// Office 365 / SharePoint Queries
-				siteSearchUrl = usl5GraphEndpoint ~ "/v1.0/sites?search";
-				siteDriveUrl = usl5GraphEndpoint ~ "/v1.0/sites/";
-				// Shared With Me
-				sharedWithMeUrl = usl5GraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
-				// Subscriptions
-				subscriptionUrl = usl5GraphEndpoint ~ "/v1.0/subscriptions";
-				break;
-			case "DE":
-				log.log("Configuring Azure AD Germany");
-				// Authentication
-				authUrl = deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
-				tokenUrl = deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
-				if (clientId == clientIdDefault) {
-					// application_id == default
-					log.vdebug("DE AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint");
-					redirectUrl = globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
-				} else {
-					// custom application_id
-					redirectUrl = deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
-				}
-
-				// Drive Queries
-				driveUrl = deGraphEndpoint ~ "/v1.0/me/drive";
-				driveByIdUrl = deGraphEndpoint ~ "/v1.0/drives/";
-				// Item Queries
-				itemByIdUrl = deGraphEndpoint ~ "/v1.0/me/drive/items/";
-				itemByPathUrl = deGraphEndpoint ~ "/v1.0/me/drive/root:/";
-				// Office 365 / SharePoint Queries
-				siteSearchUrl = deGraphEndpoint ~ "/v1.0/sites?search";
-				siteDriveUrl = deGraphEndpoint ~ "/v1.0/sites/";
-				// Shared With Me
-				sharedWithMeUrl = deGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
-				// Subscriptions
-				subscriptionUrl = deGraphEndpoint ~ "/v1.0/subscriptions";
-				break;
-			case "CN":
-				log.log("Configuring AD China operated by 21Vianet");
-				// Authentication
-				authUrl = cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
-				tokenUrl = cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
-				if (clientId == clientIdDefault) {
-					// application_id == default
-					log.vdebug("CN AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint");
-					redirectUrl = globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
-				} else {
-					// custom application_id
-					redirectUrl = cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
-				}
-
-				// Drive Queries
-				driveUrl = cnGraphEndpoint ~ "/v1.0/me/drive";
-				driveByIdUrl = cnGraphEndpoint ~ "/v1.0/drives/";
-				// Item Queries
-				itemByIdUrl = cnGraphEndpoint ~ "/v1.0/me/drive/items/";
-				itemByPathUrl = cnGraphEndpoint ~ "/v1.0/me/drive/root:/";
-				// Office 365 / SharePoint Queries
-				siteSearchUrl = cnGraphEndpoint ~ "/v1.0/sites?search";
-				siteDriveUrl = cnGraphEndpoint ~ "/v1.0/sites/";
-				// Shared With Me
-				sharedWithMeUrl = cnGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
-				// Subscriptions
-				subscriptionUrl = cnGraphEndpoint ~ "/v1.0/subscriptions";
-				break;
-			// Default - all other entries
-			default:
-				log.log("Unknown Azure AD Endpoint request - using Global Azure AD Endpoints");
-		}
-
-		// Debug output of configured URL's
-		// Authentication
-		log.vdebug("Configured authUrl:          ", authUrl);
-		log.vdebug("Configured redirectUrl:      ", redirectUrl);
-		log.vdebug("Configured tokenUrl:         ", tokenUrl);
-
+class OneDriveApi {
+	// Class variables
+	ApplicationConfig appConfig;
+	CurlEngine curlEngine;
+	string clientId = "";
+	string companyName = "";
+	string authUrl = "";
+	string redirectUrl = "";
+	string tokenUrl = "";
+	string driveUrl = "";
+	string driveByIdUrl = "";
+	string sharedWithMeUrl = "";
+	string itemByIdUrl = "";
+	string itemByPathUrl = "";
+	string siteSearchUrl = "";
+	string siteDriveUrl = "";
+	string subscriptionUrl = "";
+	string tenantId = "";
+	string authScope = "";
+	string refreshToken = "";
+	bool dryRun = false;
+	bool debugResponse = false;
+	ulong retryAfterValue = 0;
+	
+	this(ApplicationConfig appConfig) {
+		// Configure the class varaible to consume the application configuration
+		this.appConfig = appConfig;
+		// Configure the major API Query URL's, based on using application configuration
+		// These however can be updated by config option 'azure_ad_endpoint', thus handled differently
+		
 		// Drive Queries
-		log.vdebug("Configured driveUrl:         ", driveUrl);
-		log.vdebug("Configured driveByIdUrl:     ", driveByIdUrl);
+		driveUrl = appConfig.globalGraphEndpoint ~ "/v1.0/me/drive";
+		driveByIdUrl = appConfig.globalGraphEndpoint ~ "/v1.0/drives/";
 
-		// Shared With Me
-		log.vdebug("Configured sharedWithMeUrl:  ", sharedWithMeUrl);
+		// What is 'shared with me' Query
+		sharedWithMeUrl = appConfig.globalGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
 
 		// Item Queries
-		log.vdebug("Configured itemByIdUrl:      ", itemByIdUrl);
-		log.vdebug("Configured itemByPathUrl:    ", itemByPathUrl);
+		itemByIdUrl = appConfig.globalGraphEndpoint ~ "/v1.0/me/drive/items/";
+		itemByPathUrl = appConfig.globalGraphEndpoint ~ "/v1.0/me/drive/root:/";
 
-		// SharePoint Queries
-		log.vdebug("Configured siteSearchUrl:    ", siteSearchUrl);
-		log.vdebug("Configured siteDriveUrl:     ", siteDriveUrl);
+		// Office 365 / SharePoint Queries
+		siteSearchUrl = appConfig.globalGraphEndpoint ~ "/v1.0/sites?search";
+		siteDriveUrl = appConfig.globalGraphEndpoint ~ "/v1.0/sites/";
 
-		// Configure the User Agent string
-		if (cfg.getValueString("user_agent") == "") {
-			// Application User Agent string defaults
-			// Comply with OneDrive traffic decoration requirements
-			// https://docs.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
-			// - Identify as ISV and include Company Name, App Name separated by a pipe character and then adding Version number separated with a slash character
-			// Note: If you've created an application, the recommendation is to register and use AppID and AppTitle
-			// The issue here is that currently the application is still using the 'skilion' application ID, thus no idea what the AppTitle used was.
-			http.setUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ strip(import("version"));
-		} else {
-			// Use the value entered by the user
-			http.setUserAgent = cfg.getValueString("user_agent");
-		}
+		// Subscriptions
+		subscriptionUrl = appConfig.globalGraphEndpoint ~ "/v1.0/subscriptions";
+	}
+	
+	// Initialise the OneDrive API class
+	bool initialise() {
+		// Initialise the curl engine
+		curlEngine = new CurlEngine();
+		curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"));
 
-		// What version of HTTP protocol do we use?
-		// Curl >= 7.62.0 defaults to http2 for a significant number of operations
-		if (cfg.getValueBool("force_http_11")) {
-			// Downgrade to curl to use HTTP 1.1 for all operations
-			log.vlog("Downgrading all HTTP operations to HTTP/1.1 due to user configuration");
-			// Downgrade to HTTP 1.1 - yes version = 2 is HTTP 1.1
-			http.handle.set(CurlOption.http_version,2);
-		} else {
-			// Use curl defaults
-			log.vlog("Using Curl defaults for all HTTP operations");
-		}
+		// Authorised value to return
+		bool authorised = false;
 
-		// Configure upload / download rate limits if configured
-		long userRateLimit = cfg.getValueLong("rate_limit");
-		// 131072 = 128 KB/s - minimum for basic application operations to prevent timeouts
-		// A 0 value means rate is unlimited, and is the curl default
-
-		if (userRateLimit > 0) {
-			// User configured rate limit
-			writeln("User Configured Rate Limit: ", userRateLimit);
-
-			// If user provided rate limit is < 131072, flag that this is too low, setting to the minimum of 131072
-			if (userRateLimit < 131072) {
-				// user provided limit too low
-				log.log("WARNING: User configured rate limit too low for normal application processing and preventing application timeouts. Overriding to default minimum of 131072 (128KB/s)");
-				userRateLimit = 131072;
-			}
-
-			// set rate limit
-			http.handle.set(CurlOption.max_send_speed_large,userRateLimit);
-			http.handle.set(CurlOption.max_recv_speed_large,userRateLimit);
-		}
-
-		// Explicitly set libcurl options
-		//   https://curl.se/libcurl/c/CURLOPT_NOSIGNAL.html
-		//   Ensure that nosignal is set to 0 - Setting CURLOPT_NOSIGNAL to 0 makes libcurl ask the system to ignore SIGPIPE signals
-		http.handle.set(CurlOption.nosignal,0);
-		//   https://curl.se/libcurl/c/CURLOPT_TCP_NODELAY.html
-		//   Ensure that TCP_NODELAY is set to 0 to ensure that TCP NAGLE is enabled
-		http.handle.set(CurlOption.tcp_nodelay,0);
-		//   https://curl.se/libcurl/c/CURLOPT_FORBID_REUSE.html
-		//   Ensure that we ARE reusing connections - setting to 0 ensures that we are reusing connections
-		http.handle.set(CurlOption.forbid_reuse,0);
+		// Did the user specify --dry-run
+		dryRun = appConfig.getValueBool("dry_run");
 		
-		// Do we set the dryRun handlers?
-		if (cfg.getValueBool("dry_run")) {
-			.dryRun = true;
-			if (cfg.getValueBool("logout")) {
-				.simulateNoRefreshTokenFile = true;
-			}
+		// Did the user specify --debug-https
+		debugResponse = appConfig.getValueBool("debug_https");
+		
+		// Set clientId to use the configured 'application_id'
+		clientId = appConfig.getValueString("application_id");
+		if (clientId != appConfig.defaultApplicationId) {
+			// a custom 'application_id' was set
+			companyName = "custom_application";
 		}
-
-		subscriptionExpiration = Clock.currTime(UTC());
-		subscriptionExpirationInterval = dur!"seconds"(cfg.getValueLong("webhook_expiration_interval"));
-		subscriptionRenewalInterval = dur!"seconds"(cfg.getValueLong("webhook_renewal_interval"));
-		notificationUrl = cfg.getValueString("webhook_public_url");
-	}
-
-	// Shutdown OneDrive HTTP construct
-	void shutdown()
-	{
-		// delete subscription if there exists any
-		deleteSubscription();
-
-		// reset any values to defaults, freeing any set objects
-		http.clearRequestHeaders();
-		http.onSend = null;
-		http.onReceive = null;
-		http.onReceiveHeader = null;
-		http.onReceiveStatusLine = null;
-		http.contentLength = 0;
-		// shut down the curl instance
-		http.shutdown();
-	}
-
-	bool init()
-	{
-		static import std.utf;
-		// detail what we are using for applicaion identification
-		log.vdebug("clientId    = ", clientId);
-		log.vdebug("companyName = ", companyName);
-		log.vdebug("appTitle    = ", appTitle);
-
-		try {
-			driveId = cfg.getValueString("drive_id");
-			if (driveId.length) {
-				driveUrl = driveByIdUrl ~ driveId;
-				itemByIdUrl = driveUrl ~ "/items";
-				itemByPathUrl = driveUrl ~ "/root:/";
-			}
-		} catch (Exception e) {}
-
-		if (!.dryRun) {
-			// original code
-			try {
-				refreshToken = readText(cfg.refreshTokenFilePath);
-			} catch (FileException e) {
-				try {
-					return authorize();
-				} catch (CurlException e) {
-					log.error("Cannot authorize with Microsoft OneDrive Service");
-					return false;
-				}
-			} catch (std.utf.UTFException e) {
-				// path contains characters which generate a UTF exception
-				log.error("Cannot read refreshToken from: ", cfg.refreshTokenFilePath);
-				log.error("  Error Reason:", e.msg);
-				return false;
-			}
-			return true;
+		
+		// Do we have a custom Azure Tenant ID?
+		if (!appConfig.getValueString("azure_tenant_id").empty) {
+			// Use the value entered by the user
+			tenantId = appConfig.getValueString("azure_tenant_id");
 		} else {
-			// --dry-run
-			if (!.simulateNoRefreshTokenFile) {
-				try {
-					refreshToken = readText(cfg.refreshTokenFilePath);
-				} catch (FileException e) {
-					return authorize();
-				} catch (std.utf.UTFException e) {
-					// path contains characters which generate a UTF exception
-					log.error("Cannot read refreshToken from: ", cfg.refreshTokenFilePath);
-					log.error("  Error Reason:", e.msg);
-					return false;
-				}
-				return true;
-			} else {
-				// --dry-run & --reauth
-				return authorize();
-			}
+			// set to common
+			tenantId = "common";
 		}
-	}
-
-	bool authorize()
-	{
-		import std.stdio, std.regex;
-		char[] response;
-		string authScope;
-		// What authentication scope to use?
-		if (cfg.getValueBool("read_only_auth_scope")) {
+		
+		// Did the user specify a 'drive_id' ?
+		if (!appConfig.getValueString("drive_id").empty) {
+			// Update base URL's
+			driveUrl = driveByIdUrl ~ appConfig.getValueString("drive_id");
+			itemByIdUrl = driveUrl ~ "/items";
+			itemByPathUrl = driveUrl ~ "/root:/";
+		}
+		
+		// Configure the authentication scope
+		if (appConfig.getValueBool("read_only_auth_scope")) {
 			// read-only authentication scopes has been requested
 			authScope = "&scope=Files.Read%20Files.Read.All%20Sites.Read.All%20offline_access&response_type=code&prompt=login&redirect_uri=";
 		} else {
@@ -577,10 +144,235 @@ final class OneDriveApi
 			authScope = "&scope=Files.ReadWrite%20Files.ReadWrite.All%20Sites.ReadWrite.All%20offline_access&response_type=code&prompt=login&redirect_uri=";
 		}
 		
+		// Configure Azure AD endpoints if 'azure_ad_endpoint' is configured
+		string azureConfigValue = appConfig.getValueString("azure_ad_endpoint");
+		switch(azureConfigValue) {
+			case "":
+				if (tenantId == "common") {
+					if (!appConfig.apiWasInitialised) log.log("Configuring Global Azure AD Endpoints");
+				} else {
+					if (!appConfig.apiWasInitialised) log.log("Configuring Global Azure AD Endpoints - Single Tenant Application");
+				}
+				// Authentication
+				authUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
+				redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				tokenUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
+				break;
+			case "USL4":
+				if (!appConfig.apiWasInitialised) log.log("Configuring Azure AD for US Government Endpoints");
+				// Authentication
+				authUrl = appConfig.usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
+				tokenUrl = appConfig.usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
+				if (clientId == appConfig.defaultApplicationId) {
+					// application_id == default
+					log.vdebug("USL4 AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint");
+					redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				} else {
+					// custom application_id
+					redirectUrl = appConfig.usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				}
+
+				// Drive Queries
+				driveUrl = appConfig.usl4GraphEndpoint ~ "/v1.0/me/drive";
+				driveByIdUrl = appConfig.usl4GraphEndpoint ~ "/v1.0/drives/";
+				// Item Queries
+				itemByIdUrl = appConfig.usl4GraphEndpoint ~ "/v1.0/me/drive/items/";
+				itemByPathUrl = appConfig.usl4GraphEndpoint ~ "/v1.0/me/drive/root:/";
+				// Office 365 / SharePoint Queries
+				siteSearchUrl = appConfig.usl4GraphEndpoint ~ "/v1.0/sites?search";
+				siteDriveUrl = appConfig.usl4GraphEndpoint ~ "/v1.0/sites/";
+				// Shared With Me
+				sharedWithMeUrl = appConfig.usl4GraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				// Subscriptions
+				subscriptionUrl = appConfig.usl4GraphEndpoint ~ "/v1.0/subscriptions";
+				break;
+			case "USL5":
+				if (!appConfig.apiWasInitialised) log.log("Configuring Azure AD for US Government Endpoints (DOD)");
+				// Authentication
+				authUrl = appConfig.usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
+				tokenUrl = appConfig.usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
+				if (clientId == appConfig.defaultApplicationId) {
+					// application_id == default
+					log.vdebug("USL5 AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint");
+					redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				} else {
+					// custom application_id
+					redirectUrl = appConfig.usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				}
+
+				// Drive Queries
+				driveUrl = appConfig.usl5GraphEndpoint ~ "/v1.0/me/drive";
+				driveByIdUrl = appConfig.usl5GraphEndpoint ~ "/v1.0/drives/";
+				// Item Queries
+				itemByIdUrl = appConfig.usl5GraphEndpoint ~ "/v1.0/me/drive/items/";
+				itemByPathUrl = appConfig.usl5GraphEndpoint ~ "/v1.0/me/drive/root:/";
+				// Office 365 / SharePoint Queries
+				siteSearchUrl = appConfig.usl5GraphEndpoint ~ "/v1.0/sites?search";
+				siteDriveUrl = appConfig.usl5GraphEndpoint ~ "/v1.0/sites/";
+				// Shared With Me
+				sharedWithMeUrl = appConfig.usl5GraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				// Subscriptions
+				subscriptionUrl = appConfig.usl5GraphEndpoint ~ "/v1.0/subscriptions";
+				break;
+			case "DE":
+				if (!appConfig.apiWasInitialised) log.log("Configuring Azure AD Germany");
+				// Authentication
+				authUrl = appConfig.deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
+				tokenUrl = appConfig.deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
+				if (clientId == appConfig.defaultApplicationId) {
+					// application_id == default
+					log.vdebug("DE AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint");
+					redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				} else {
+					// custom application_id
+					redirectUrl = appConfig.deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				}
+
+				// Drive Queries
+				driveUrl = appConfig.deGraphEndpoint ~ "/v1.0/me/drive";
+				driveByIdUrl = appConfig.deGraphEndpoint ~ "/v1.0/drives/";
+				// Item Queries
+				itemByIdUrl = appConfig.deGraphEndpoint ~ "/v1.0/me/drive/items/";
+				itemByPathUrl = appConfig.deGraphEndpoint ~ "/v1.0/me/drive/root:/";
+				// Office 365 / SharePoint Queries
+				siteSearchUrl = appConfig.deGraphEndpoint ~ "/v1.0/sites?search";
+				siteDriveUrl = appConfig.deGraphEndpoint ~ "/v1.0/sites/";
+				// Shared With Me
+				sharedWithMeUrl = appConfig.deGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				// Subscriptions
+				subscriptionUrl = appConfig.deGraphEndpoint ~ "/v1.0/subscriptions";
+				break;
+			case "CN":
+				if (!appConfig.apiWasInitialised) log.log("Configuring AD China operated by 21Vianet");
+				// Authentication
+				authUrl = appConfig.cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
+				tokenUrl = appConfig.cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
+				if (clientId == appConfig.defaultApplicationId) {
+					// application_id == default
+					log.vdebug("CN AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint");
+					redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				} else {
+					// custom application_id
+					redirectUrl = appConfig.cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
+				}
+
+				// Drive Queries
+				driveUrl = appConfig.cnGraphEndpoint ~ "/v1.0/me/drive";
+				driveByIdUrl = appConfig.cnGraphEndpoint ~ "/v1.0/drives/";
+				// Item Queries
+				itemByIdUrl = appConfig.cnGraphEndpoint ~ "/v1.0/me/drive/items/";
+				itemByPathUrl = appConfig.cnGraphEndpoint ~ "/v1.0/me/drive/root:/";
+				// Office 365 / SharePoint Queries
+				siteSearchUrl = appConfig.cnGraphEndpoint ~ "/v1.0/sites?search";
+				siteDriveUrl = appConfig.cnGraphEndpoint ~ "/v1.0/sites/";
+				// Shared With Me
+				sharedWithMeUrl = appConfig.cnGraphEndpoint ~ "/v1.0/me/drive/sharedWithMe";
+				// Subscriptions
+				subscriptionUrl = appConfig.cnGraphEndpoint ~ "/v1.0/subscriptions";
+				break;
+			// Default - all other entries
+			default:
+				if (!appConfig.apiWasInitialised) log.log("Unknown Azure AD Endpoint request - using Global Azure AD Endpoints");
+		}
+		
+		// Has the application been authenticated?
+		if (!exists(appConfig.refreshTokenFilePath)) {
+			log.vdebug("Application has no 'refresh_token' thus needs to be authenticated");
+			authorised = authorise();
+		} else {
+			// Try and read the value from the appConfig if it is set, rather than trying to read the value from disk
+			if (!appConfig.refreshToken.empty) {
+				log.vdebug("Read token from appConfig");
+				refreshToken = strip(appConfig.refreshToken);
+				authorised = true;
+			} else {
+				// Try and read the file from disk
+				try {
+					refreshToken = strip(readText(appConfig.refreshTokenFilePath));
+					// is the refresh_token empty?
+					if (refreshToken.empty) {
+						log.error("refreshToken exists but is empty: ", appConfig.refreshTokenFilePath);
+						authorised = authorise();
+					} else {
+						// existing token not empty
+						authorised = true;
+						// update appConfig.refreshToken
+						appConfig.refreshToken = refreshToken;	
+					}
+				} catch (FileException e) {
+					authorised = authorise();
+				} catch (std.utf.UTFException e) {
+					// path contains characters which generate a UTF exception
+					log.error("Cannot read refreshToken from: ", appConfig.refreshTokenFilePath);
+					log.error("  Error Reason:", e.msg);
+					authorised = false;
+				}
+			}
+			
+			if (refreshToken.empty) {
+				// PROBLEM
+				writeln("refreshToken is empty !!!!!!!!!! will cause 4xx errors");
+			}
+		}
+		// Return if we are authorised
+		log.vdebug("Authorised State: ", authorised);
+		return authorised;
+	}
+	
+	// If the API has been configured correctly, print the items that been configured
+	void debugOutputConfiguredAPIItems() {
+		// Debug output of configured URL's
+		// Application Identification
+		log.vdebug("Configured clientId          ", clientId);
+		log.vdebug("Configured userAgent         ", appConfig.getValueString("user_agent"));
+		// Authentication
+		log.vdebug("Configured authScope:        ", authScope);
+		log.vdebug("Configured authUrl:          ", authUrl);
+		log.vdebug("Configured redirectUrl:      ", redirectUrl);
+		log.vdebug("Configured tokenUrl:         ", tokenUrl);
+		// Drive Queries
+		log.vdebug("Configured driveUrl:         ", driveUrl);
+		log.vdebug("Configured driveByIdUrl:     ", driveByIdUrl);
+		// Shared With Me
+		log.vdebug("Configured sharedWithMeUrl:  ", sharedWithMeUrl);
+		// Item Queries
+		log.vdebug("Configured itemByIdUrl:      ", itemByIdUrl);
+		log.vdebug("Configured itemByPathUrl:    ", itemByPathUrl);
+		// SharePoint Queries
+		log.vdebug("Configured siteSearchUrl:    ", siteSearchUrl);
+		log.vdebug("Configured siteDriveUrl:     ", siteDriveUrl);
+	}
+	
+	// Shutdown OneDrive API Curl Engine
+	void shutdown() {
+		// Delete subscription if there exists any
+		//deleteSubscription();
+
+		// Reset any values to defaults, freeing any set objects
+		curlEngine.http.clearRequestHeaders();
+		curlEngine.http.onSend = null;
+		curlEngine.http.onReceive = null;
+		curlEngine.http.onReceiveHeader = null;
+		curlEngine.http.onReceiveStatusLine = null;
+		curlEngine.http.contentLength = 0;
+		// Shut down the curl instance & close any open sockets
+		curlEngine.http.shutdown();
+		// Free object and memory
+		object.destroy(curlEngine);
+	}
+	
+	// Authenticate this client against Microsoft OneDrive API
+	bool authorise() {
+	
+		char[] response;
+		// What URL should be presented to the user to access
 		string url = authUrl ~ "?client_id=" ~ clientId ~ authScope ~ redirectUrl;
-		string authFilesString = cfg.getValueString("auth_files");
-		string authResponseString = cfg.getValueString("auth_response");
-		if (authResponseString != "") {
+		// Configure automated authentication if --auth-files authUrl:responseUrl is being used
+		string authFilesString = appConfig.getValueString("auth_files");
+		string authResponseString = appConfig.getValueString("auth_response");
+	
+		if (!authResponseString.empty) {
+			// read the response from authResponseString
 			response = cast(char[]) authResponseString;
 		} else if (authFilesString != "") {
 			string[] authFiles = authFilesString.split(":");
@@ -588,22 +380,28 @@ final class OneDriveApi
 			string responseUrl = authFiles[1];
 			
 			try {
-				// Try and write out the auth URL to the nominated file
 				auto authUrlFile = File(authUrl, "w");
 				authUrlFile.write(url);
 				authUrlFile.close();
-			} catch (std.exception.ErrnoException e) {
+			} catch (FileException e) {
 				// There was a file system error
 				// display the error message
 				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-				return false;
+				exit(-1);
+			} catch (ErrnoException e) {
+				// There was a file system error
+				// display the error message
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				exit(-1);
 			}
+	
+			log.log("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
 			
 			while (!exists(responseUrl)) {
 				Thread.sleep(dur!("msecs")(100));
 			}
 
-			// read response from OneDrive
+			// read response from provided from OneDrive
 			try {
 				response = cast(char[]) read(responseUrl);
 			} catch (OneDriveException e) {
@@ -621,129 +419,265 @@ final class OneDriveApi
 				return false;
 			}
 		} else {
-			log.log("Authorize this app visiting:\n");
-			write(url, "\n\n", "Enter the response uri: ");
+			log.log("Authorise this application by visiting:\n");
+			write(url, "\n\n", "Enter the response uri from your browser: ");
 			readln(response);
-			cfg.applicationAuthorizeResponseUri = true;
+			appConfig.applicationAuthorizeResponseUri = true;
 		}
 		// match the authorization code
 		auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
 		if (c.empty) {
-			log.log("Invalid response uri entered");
+			log.log("An empty or invalid response uri was entered");
 			return false;
 		}
 		c.popFront(); // skip the whole match
 		redeemToken(c.front);
+		
+		
 		return true;
+		
 	}
 	
-	string getSiteSearchUrl()
-	{
-		// Return the actual siteSearchUrl being used and/or requested when performing 'siteQuery = onedrive.o365SiteSearch(nextLink);' call
-		return .siteSearchUrl;
-	}
-
-	ulong getRetryAfterValue()
-	{
-		// Return the current value of retryAfterValue if it has been set to something other than 0
-		return .retryAfterValue;
-	}
-
-	void resetRetryAfterValue()
-	{
-		// Reset the current value of retryAfterValue to 0 after it has been used
-		.retryAfterValue = 0;
-	}
-
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_get
-	JSONValue getDefaultDrive()
-	{
+	JSONValue getDefaultDriveDetails() {
 		checkAccessTokenExpired();
-		const(char)[] url;
+		string url;
 		url = driveUrl;
 		return get(driveUrl);
 	}
-
+	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
-	JSONValue getDefaultRoot()
-	{
+	JSONValue getDefaultRootDetails() {
 		checkAccessTokenExpired();
-		const(char)[] url;
+		string url;
 		url = driveUrl ~ "/root";
 		return get(url);
 	}
-
+	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
-	JSONValue getDriveIdRoot(const(char)[] driveId)
-	{
+	JSONValue getDriveIdRoot(string driveId) {
 		checkAccessTokenExpired();
-		const(char)[] url;
+		string url;
 		url = driveByIdUrl ~ driveId ~ "/root";
 		return get(url);
 	}
-
-	// https://docs.microsoft.com/en-us/graph/api/drive-sharedwithme
-	JSONValue getSharedWithMe()
-	{
-		checkAccessTokenExpired();
-		return get(sharedWithMeUrl);
-	}
-
+	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_get
-	JSONValue getDriveQuota(const(char)[] driveId)
-	{
+	JSONValue getDriveQuota(string driveId) {
 		checkAccessTokenExpired();
-		const(char)[] url;
+		string url;
 		url = driveByIdUrl ~ driveId ~ "/";
 		url ~= "?select=quota";
 		return get(url);
 	}
-
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
-	JSONValue viewChangesByItemId(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink)
-	{
+	
+	// Return the details of the specified path, by giving the path we wish to query
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
+	JSONValue getPathDetails(string path) {
 		checkAccessTokenExpired();
-		const(char)[] url;
+		string url;
+		if ((path == ".")||(path == "/")) {
+			url = driveUrl ~ "/root/";
+		} else {
+			url = itemByPathUrl ~ encodeComponent(path) ~ ":/";
+		}
+		return get(url);
+	}
+	
+	// Return the details of the specified item based on its driveID and itemID
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
+	JSONValue getPathDetailsById(string driveId, string id) {
+		checkAccessTokenExpired();
+		string url;
+		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
+		//url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		return get(url);
+	}
+	
+	// Create a shareable link for an existing file on OneDrive based on the accessScope JSON permissions
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createlink
+	JSONValue createShareableLink(string driveId, string id, JSONValue accessScope) {
+		checkAccessTokenExpired();
+		string url;
+		url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/createLink";
+		curlEngine.http.addRequestHeader("Content-Type", "application/json");
+		return post(url, accessScope.toString());
+	}
+	
+	// Return the requested details of the specified path on the specified drive id and path
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
+	JSONValue getPathDetailsByDriveId(string driveId, string path) {
+		checkAccessTokenExpired();
+		string url;
+		// Required format: /drives/{drive-id}/root:/{item-path}
+		url = driveByIdUrl ~ driveId ~ "/root:/" ~ encodeComponent(path);
+		return get(url);
+	}
+	
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
+	JSONValue viewChangesByItemId(string driveId, string id, string deltaLink) {
+		checkAccessTokenExpired();
+		
+		// If Business Account add addIncludeFeatureRequestHeader() which should add Prefer: Include-Feature=AddToOneDrive
+		if ((appConfig.accountType != "personal") && ( appConfig.getValueBool("sync_business_shared_items"))) {
+			addIncludeFeatureRequestHeader();
+		}
+		
+		string url;
 		// configure deltaLink to query
 		if (deltaLink.empty) {
 			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/delta";
-			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		} else {
 			url = deltaLink;
 		}
 		return get(url);
 	}
-
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
-	JSONValue viewChangesByDriveId(const(char)[] driveId, const(char)[] deltaLink)
-	{
-		checkAccessTokenExpired();
-		const(char)[] url = deltaLink;
-		if (url == null) {
-			url = driveByIdUrl ~ driveId ~ "/root/delta";
-			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
-		}
-		return get(url);
-	}
-
+	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_list_children
-	JSONValue listChildren(const(char)[] driveId, const(char)[] id, const(char)[] nextLink)
-	{
+	JSONValue listChildren(string driveId, string id, string nextLink) {
 		checkAccessTokenExpired();
-		const(char)[] url;
+		
+		// If Business Account add addIncludeFeatureRequestHeader() which should add Prefer: Include-Feature=AddToOneDrive
+		if ((appConfig.accountType != "personal") && ( appConfig.getValueBool("sync_business_shared_items"))) {
+			addIncludeFeatureRequestHeader();
+		}
+		
+		string url;
 		// configure URL to query
 		if (nextLink.empty) {
 			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/children";
-			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+			//url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		} else {
 			url = nextLink;
 		}
 		return get(url);
 	}
+	
+	// https://learn.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_search
+	JSONValue searchDriveForPath(string driveId, string path) {
+		checkAccessTokenExpired();
+		string url;
+		url = "https://graph.microsoft.com/v1.0/drives/" ~ driveId ~ "/root/search(q='" ~ encodeComponent(path) ~ "')";
+		return get(url);
+	}
+	
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_update
+	JSONValue updateById(const(char)[] driveId, const(char)[] id, JSONValue data, const(char)[] eTag = null) {
+		checkAccessTokenExpired();
+		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
+		if (eTag) curlEngine.http.addRequestHeader("If-Match", eTag);
+		curlEngine.http.addRequestHeader("Content-Type", "application/json");
+		return patch(url, data.toString());
+	}
+	
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delete
+	void deleteById(const(char)[] driveId, const(char)[] id, const(char)[] eTag = null) {
+		checkAccessTokenExpired();
+		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
+		//TODO: investigate why this always fail with 412 (Precondition Failed)
+		//if (eTag) http.addRequestHeader("If-Match", eTag);
+		performDelete(url);
+	}
+	
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_post_children
+	JSONValue createById(string parentDriveId, string parentId, JSONValue item) {
+		checkAccessTokenExpired();
+		string url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ "/children";
+		curlEngine.http.addRequestHeader("Content-Type", "application/json");
+		return post(url, item.toString());
+	}
+	
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
+	JSONValue simpleUpload(string localPath, string parentDriveId, string parentId, string filename) {
+		checkAccessTokenExpired();
+		string url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ ":/" ~ encodeComponent(filename) ~ ":/content";
+		return upload(localPath, url);
+	}
+	
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
+	JSONValue simpleUploadReplace(string localPath, string driveId, string id) {
+		checkAccessTokenExpired();
+		string url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content";
+		return upload(localPath, url);
+	}
+	
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createuploadsession
+	//JSONValue createUploadSession(string parentDriveId, string parentId, string filename, string eTag = null, JSONValue item = null) {
+	JSONValue createUploadSession(string parentDriveId, string parentId, string filename, const(char)[] eTag = null, JSONValue item = null) {
+		checkAccessTokenExpired();
+		string url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ ":/" ~ encodeComponent(filename) ~ ":/createUploadSession";
+		// eTag If-Match header addition commented out for the moment
+		// At some point, post the creation of this upload session the eTag is being 'updated' by OneDrive, thus when uploadFragment() is used
+		// this generates a 412 Precondition Failed and then a 416 Requested Range Not Satisfiable
+		// This needs to be investigated further as to why this occurs
+		//if (eTag) curlEngine.http.addRequestHeader("If-Match", eTag);
+		curlEngine.http.addRequestHeader("Content-Type", "application/json");
+		return post(url, item.toString());
+	}
+	
+	// https://dev.onedrive.com/items/upload_large_files.htm
+	JSONValue uploadFragment(string uploadUrl, string filepath, long offset, long offsetSize, long fileSize) {
+		checkAccessTokenExpired();
+		// open file as read-only in binary mode
+		
+		// If we upload a modified file, with the current known online eTag, this gets changed when the session is started - thus, the tail end of uploading
+		// a fragment fails with a 412 Precondition Failed and then a 416 Requested Range Not Satisfiable
+		// For the moment, comment out adding the If-Match header in createUploadSession, which then avoids this issue
+		
+		auto file = File(filepath, "rb");
+		file.seek(offset);
+		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
+		log.vdebugNewLine("contentRange: ", contentRange);
 
+		// function scopes
+		scope(exit) {
+			curlEngine.http.clearRequestHeaders();
+			curlEngine.http.onSend = null;
+			curlEngine.http.onReceive = null;
+			curlEngine.http.onReceiveHeader = null;
+			curlEngine.http.onReceiveStatusLine = null;
+			curlEngine.http.contentLength = 0;
+			// close file if open
+			if (file.isOpen()){
+				// close open file
+				file.close();
+			}
+		}
+
+		curlEngine.http.method = HTTP.Method.put;
+		curlEngine.http.url = uploadUrl;
+		curlEngine.http.addRequestHeader("Content-Range", contentRange);
+		curlEngine.http.onSend = data => file.rawRead(data).length;
+		// convert offsetSize to ulong
+		curlEngine.http.contentLength = to!ulong(offsetSize);
+		auto response = performHTTPOperation();
+		checkHttpResponseCode(response);
+		return response;
+	}
+	
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/site_search?view=odsp-graph-online
+	JSONValue o365SiteSearch(string nextLink) {
+		checkAccessTokenExpired();
+		string url;
+		// configure URL to query
+		if (nextLink.empty) {
+			url = siteSearchUrl ~ "=*";
+		} else {
+			url = nextLink;
+		}
+		return get(url);
+	}
+	
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_list?view=odsp-graph-online
+	JSONValue o365SiteDrives(string site_id){
+		checkAccessTokenExpired();
+		string url;
+		url = siteDriveUrl ~ site_id ~ "/drives";
+		return get(url);
+	}
+	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
-	void downloadById(const(char)[] driveId, const(char)[] id, string saveToPath, long fileSize)
-	{
+	void downloadById(const(char)[] driveId, const(char)[] id, string saveToPath, long fileSize) {
 		checkAccessTokenExpired();
 		scope(failure) {
 			if (exists(saveToPath)) {
@@ -767,7 +701,7 @@ final class OneDriveApi
 				mkdirRecurse(newPath);
 				// Configure the applicable permissions for the folder
 				log.vdebug("Setting directory permissions for: ", newPath);
-				newPath.setAttributes(cfg.returnRequiredDirectoryPermisions());
+				newPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
 			} catch (FileException e) {
 				// display the error message
 				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
@@ -776,358 +710,62 @@ final class OneDriveApi
 
 		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content?AVOverride=1";
 		// Download file
-		download(url, saveToPath, fileSize);
+		downloadFile(url, saveToPath, fileSize);
 		// Does path exist?
 		if (exists(saveToPath)) {
 			// File was downloaded successfully - configure the applicable permissions for the file
 			log.vdebug("Setting file permissions for: ", saveToPath);
-			saveToPath.setAttributes(cfg.returnRequiredFilePermisions());
+			saveToPath.setAttributes(appConfig.returnRequiredFilePermisions());
 		}
 	}
-
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
-	JSONValue simpleUpload(string localPath, string parentDriveId, string parentId, string filename, const(char)[] eTag = null)
-	{
-		checkAccessTokenExpired();
-		string url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ ":/" ~ encodeComponent(filename) ~ ":/content";
-		// TODO: investigate why this fails for remote folders
-		//if (eTag) http.addRequestHeader("If-Match", eTag);
-		/*else http.addRequestHeader("If-None-Match", "*");*/
-		return upload(localPath, url);
+	
+	// Return the actual siteSearchUrl being used and/or requested when performing 'siteQuery = onedrive.o365SiteSearch(nextLink);' call
+	string getSiteSearchUrl() {
+		return siteSearchUrl;
+	}
+	
+	// Return the current value of retryAfterValue
+	ulong getRetryAfterValue() {
+		return retryAfterValue;
 	}
 
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
-	JSONValue simpleUploadReplace(string localPath, string driveId, string id, const(char)[] eTag = null)
-	{
-		checkAccessTokenExpired();
-		string url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content";
-		if (eTag) http.addRequestHeader("If-Match", eTag);
-		return upload(localPath, url);
+	// Reset the current value of retryAfterValue to 0 after it has been used
+	void resetRetryAfterValue() {
+		retryAfterValue = 0;
 	}
-
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_update
-	JSONValue updateById(const(char)[] driveId, const(char)[] id, JSONValue data, const(char)[] eTag = null)
-	{
-		checkAccessTokenExpired();
-		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		if (eTag) http.addRequestHeader("If-Match", eTag);
-		http.addRequestHeader("Content-Type", "application/json");
-		return patch(url, data.toString());
+	
+	private void addAccessTokenHeader() {
+		curlEngine.http.addRequestHeader("Authorization", appConfig.accessToken);
 	}
-
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delete
-	void deleteById(const(char)[] driveId, const(char)[] id, const(char)[] eTag = null)
-	{
-		checkAccessTokenExpired();
-		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		//TODO: investigate why this always fail with 412 (Precondition Failed)
-		//if (eTag) http.addRequestHeader("If-Match", eTag);
-		del(url);
+	
+	private void addIncludeFeatureRequestHeader() {
+		log.vdebug("Adding 'Include-Feature=AddToOneDrive' API request header as 'sync_business_shared_items' config option is enabled");
+		curlEngine.http.addRequestHeader("Prefer", "Include-Feature=AddToOneDrive");
 	}
-
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_post_children
-	JSONValue createById(const(char)[] parentDriveId, const(char)[] parentId, JSONValue item)
-	{
-		checkAccessTokenExpired();
-		const(char)[] url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ "/children";
-		http.addRequestHeader("Content-Type", "application/json");
-		return post(url, item.toString());
-	}
-
-	// Return the details of the specified path
-	JSONValue getPathDetails(const(string) path)
-	{
-		checkAccessTokenExpired();
-		const(char)[] url;
-		if ((path == ".")||(path == "/")) url = driveUrl ~ "/root/";
-		else url = itemByPathUrl ~ encodeComponent(path) ~ ":/";
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
-		return get(url);
-	}
-
-	// Return the details of the specified id
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
-	JSONValue getPathDetailsById(const(char)[] driveId, const(char)[] id)
-	{
-		checkAccessTokenExpired();
-		const(char)[] url;
-		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
-		return get(url);
-	}
-
-	// Return the requested details of the specified path on the specified drive id and path
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get?view=odsp-graph-online
-	JSONValue getPathDetailsByDriveId(const(char)[] driveId, const(string) path)
-	{
-		checkAccessTokenExpired();
-		const(char)[] url;
-		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
-		// Required format: /drives/{drive-id}/root:/{item-path}
-		url = driveByIdUrl ~ driveId ~ "/root:/" ~ encodeComponent(path);
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
-		return get(url);
-	}
-
-	// Return the requested details of the specified path on the specified drive id and item id
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get?view=odsp-graph-online
-	JSONValue getPathDetailsByDriveIdAndItemId(const(char)[] driveId, const(char)[] itemId)
-	{
-		checkAccessTokenExpired();
-		const(char)[] url;
-		//		string driveByIdUrl = "https://graph.microsoft.com/v1.0/drives/";
-		// Required format: /drives/{drive-id}/items/{item-id}
-		url = driveByIdUrl ~ driveId ~ "/items/" ~ itemId;
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
-		return get(url);
-	}
-
-	// Return the requested details of the specified id
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
-	JSONValue getFileDetails(const(char)[] driveId, const(char)[] id)
-	{
-		checkAccessTokenExpired();
-		const(char)[] url;
-		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		url ~= "?select=size,malware,file,webUrl,lastModifiedBy,lastModifiedDateTime";
-		return get(url);
-	}
-
-	// Create an anonymous read-only shareable link for an existing file on OneDrive
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createlink
-	JSONValue createShareableLink(const(char)[] driveId, const(char)[] id, JSONValue accessScope)
-	{
-		checkAccessTokenExpired();
-		const(char)[] url;
-		url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/createLink";
-		http.addRequestHeader("Content-Type", "application/json");
-		return post(url, accessScope.toString());
-	}
-
-	// https://dev.onedrive.com/items/move.htm
-	JSONValue moveByPath(const(char)[] sourcePath, JSONValue moveData)
-	{
-		// Need to use itemByPathUrl
-		checkAccessTokenExpired();
-		string url = itemByPathUrl ~ encodeComponent(sourcePath);
-		http.addRequestHeader("Content-Type", "application/json");
-		return move(url, moveData.toString());
-	}
-
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createuploadsession
-	JSONValue createUploadSession(const(char)[] parentDriveId, const(char)[] parentId, const(char)[] filename, const(char)[] eTag = null, JSONValue item = null)
-	{
-		checkAccessTokenExpired();
-		const(char)[] url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ ":/" ~ encodeComponent(filename) ~ ":/createUploadSession";
-		if (eTag) http.addRequestHeader("If-Match", eTag);
-		http.addRequestHeader("Content-Type", "application/json");
-		return post(url, item.toString());
-	}
-
-	// https://dev.onedrive.com/items/upload_large_files.htm
-	JSONValue uploadFragment(const(char)[] uploadUrl, string filepath, long offset, long offsetSize, long fileSize)
-	{
-		checkAccessTokenExpired();
-		// open file as read-only in binary mode
-		auto file = File(filepath, "rb");
-		file.seek(offset);
-		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
-		log.vdebugNewLine("contentRange: ", contentRange);
-
-		// function scopes
-		scope(exit) {
-			http.clearRequestHeaders();
-			http.onSend = null;
-			http.onReceive = null;
-			http.onReceiveHeader = null;
-			http.onReceiveStatusLine = null;
-			http.contentLength = 0;
-			// close file if open
-			if (file.isOpen()){
-				// close open file
-				file.close();
-			}
-		}
-
-		http.method = HTTP.Method.put;
-		http.url = uploadUrl;
-		http.addRequestHeader("Content-Range", contentRange);
-		http.onSend = data => file.rawRead(data).length;
-		// convert offsetSize to ulong
-		http.contentLength = to!ulong(offsetSize);
-		auto response = perform();
-		// TODO: retry on 5xx errors
-		checkHttpCode(response);
-		return response;
-	}
-
-	// https://dev.onedrive.com/items/upload_large_files.htm
-	JSONValue requestUploadStatus(const(char)[] uploadUrl)
-	{
-		checkAccessTokenExpired();
-		// when using microsoft graph the auth code is different
-		return get(uploadUrl, true);
-	}
-
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/site_search?view=odsp-graph-online
-	JSONValue o365SiteSearch(const(char)[] nextLink){
-		checkAccessTokenExpired();
-		const(char)[] url;
-		// configure URL to query
-		if (nextLink.empty) {
-			url = siteSearchUrl ~ "=*";
-		} else {
-			url = nextLink;
-		}
-		return get(url);
-	}
-
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_list?view=odsp-graph-online
-	JSONValue o365SiteDrives(string site_id){
-		checkAccessTokenExpired();
-		const(char)[] url;
-		url = siteDriveUrl ~ site_id ~ "/drives";
-		return get(url);
-	}
-
-	// Create a new subscription or renew the existing subscription
-	void createOrRenewSubscription() {
-		checkAccessTokenExpired();
-
-		// Kick off the webhook server first
-		if (webhook is null) {
-			webhook = OneDriveWebhook.getOrCreate(
-				cfg.getValueString("webhook_listening_host"),
-				to!ushort(cfg.getValueLong("webhook_listening_port")),
-				thisTid
-			);
-			spawn(&OneDriveWebhook.serve);
-		}
-
-		if (!hasValidSubscription()) {
-			createSubscription();
-		} else if (isSubscriptionUpForRenewal()) {
-			try {
-				renewSubscription();
-			} catch (OneDriveException e) {
-				if (e.httpStatusCode == 404) {
-					log.log("The subscription is not found on the server. Recreating subscription ...");
-					createSubscription();
-				}
-			}
-		}
-	}
-
-	private bool hasValidSubscription() {
-		return !subscriptionId.empty && subscriptionExpiration > Clock.currTime(UTC());
-	}
-
-	private bool isSubscriptionUpForRenewal() {
-		return subscriptionExpiration < Clock.currTime(UTC()) + subscriptionRenewalInterval;
-	}
-
-	private void createSubscription() {
-		log.log("Initializing subscription for updates ...");
-
-		auto expirationDateTime = Clock.currTime(UTC()) + subscriptionExpirationInterval;
-		const(char)[] url;
-		url = subscriptionUrl;
-		// Create a resource item based on if we have a driveId
-		string resourceItem;
-		if (driveId.length) {
-				resourceItem = "/drives/" ~ driveId ~ "/root";
-		} else {
-				resourceItem = "/me/drive/root";
-		}
-		
-		// create JSON request to create webhook subscription
-		const JSONValue request = [
-			"changeType": "updated",
-			"notificationUrl": notificationUrl,
-			"resource": resourceItem,
-			"expirationDateTime": expirationDateTime.toISOExtString(),
- 			"clientState": randomUUID().toString()
-		];
-		http.addRequestHeader("Content-Type", "application/json");
-		JSONValue response;
-
-		try {
-			response = post(url, request.toString());
-		} catch (OneDriveException e) {
-			displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-			
-			// We need to exit here, user needs to fix issue
-			log.error("ERROR: Unable to initialize subscriptions for updates. Please fix this issue.");
-			shutdown();
-			exit(-1);
-		}
-
-		// Save important subscription metadata including id and expiration
-		subscriptionId = response["id"].str;
-		subscriptionExpiration = SysTime.fromISOExtString(response["expirationDateTime"].str);
-	}
-
-	private void renewSubscription() {
-		log.log("Renewing subscription for updates ...");
-
-		auto expirationDateTime = Clock.currTime(UTC()) + subscriptionExpirationInterval;
-		const(char)[] url;
-		url = subscriptionUrl ~ "/" ~ subscriptionId;
-		const JSONValue request = [
-			"expirationDateTime": expirationDateTime.toISOExtString()
-		];
-		http.addRequestHeader("Content-Type", "application/json");
-		JSONValue response = patch(url, request.toString());
-
-		// Update subscription expiration from the response
-		subscriptionExpiration = SysTime.fromISOExtString(response["expirationDateTime"].str);
-	}
-
-	private void deleteSubscription() {
-		if (!hasValidSubscription()) {
-			return;
-		}
-
-		const(char)[] url;
-		url = subscriptionUrl ~ "/" ~ subscriptionId;
-		del(url);
-		log.log("Deleted subscription");
-	}
-
-	private void redeemToken(const(char)[] authCode)
-	{
-		const(char)[] postData =
-			"client_id=" ~ clientId ~
-			"&redirect_uri=" ~ redirectUrl ~
-			"&code=" ~ authCode ~
-			"&grant_type=authorization_code";
-		acquireToken(postData);
-	}
-
-	private void newToken()
-	{
-		string postData =
-			"client_id=" ~ clientId ~
-			"&redirect_uri=" ~ redirectUrl ~
-			"&refresh_token=" ~ refreshToken ~
-			"&grant_type=refresh_token";
-		acquireToken(postData);
-	}
-
-	private void acquireToken(const(char)[] postData)
-	{
+	
+	private void acquireToken(char[] postData) {
 		JSONValue response;
 
 		try {
 			response = post(tokenUrl, postData);
 		} catch (OneDriveException e) {
 			// an error was generated
-			displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+			if ((e.httpStatusCode == 400) || (e.httpStatusCode == 401)) {
+				// Handle an unauthorised client
+				handleClientUnauthorised(e.httpStatusCode, e.msg);
+			} else {
+				if (e.httpStatusCode >= 500) {
+					// There was a HTTP 5xx Server Side Error - retry
+					acquireToken(postData);
+				} else {
+					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+				}
+			}
 		}
 
 		if (response.type() == JSONType.object) {
 			// Has the client been configured to use read_only_auth_scope
-			if (cfg.getValueBool("read_only_auth_scope")) {
+			if (appConfig.getValueBool("read_only_auth_scope")) {
 				// read_only_auth_scope has been configured
 				if ("scope" in response){
 					string effectiveScopes = response["scope"].str();
@@ -1150,36 +788,64 @@ final class OneDriveApi
 			}
 		
 			if ("access_token" in response){
-				accessToken = "bearer " ~ response["access_token"].str();
-				refreshToken = response["refresh_token"].str();
-				accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
-				if (!.dryRun) {
+				appConfig.accessToken = "bearer " ~ strip(response["access_token"].str);
+				
+				// Do we print the current access token
+				if (log.verbose > 1) {
+					if (appConfig.getValueBool("debug_https")) {
+						if (appConfig.getValueBool("print_token")) {
+							// This needs to be highly restricted in output .... 
+							log.vdebug("CAUTION - KEEP THIS SAFE: Current access token: ", appConfig.accessToken);
+						}
+					}
+				}
+				
+				refreshToken = strip(response["refresh_token"].str);
+				appConfig.accessTokenExpiration = Clock.currTime() + dur!"seconds"(response["expires_in"].integer());
+				if (!dryRun) {
+					// Update the refreshToken in appConfig so that we can reuse it
+					if (appConfig.refreshToken.empty) {
+						// The access token is empty
+						log.vdebug("Updating appConfig.refreshToken with new refreshToken as appConfig.refreshToken is empty");
+						appConfig.refreshToken = refreshToken;
+					} else {
+						// Is the access token different?
+						if (appConfig.refreshToken != refreshToken) {
+							// Update the memory version
+							log.vdebug("Updating appConfig.refreshToken with updated refreshToken");
+							appConfig.refreshToken = refreshToken;
+						}
+					}
+					
+					// try and update the refresh_token file on disk
 					try {
-						// try and update the refresh_token file
-						std.file.write(cfg.refreshTokenFilePath, refreshToken);
-						log.vdebug("Setting file permissions for: ", cfg.refreshTokenFilePath);
-						cfg.refreshTokenFilePath.setAttributes(cfg.returnRequiredFilePermisions());
+						log.vdebug("Updating refreshToken on disk");
+						std.file.write(appConfig.refreshTokenFilePath, refreshToken);
+						log.vdebug("Setting file permissions for: ", appConfig.refreshTokenFilePath);
+						appConfig.refreshTokenFilePath.setAttributes(appConfig.returnRequiredFilePermisions());
 					} catch (FileException e) {
 						// display the error message
 						displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 					}
 				}
-				if (printAccessToken) writeln("New access token: ", accessToken);
 			} else {
 				log.error("\nInvalid authentication response from OneDrive. Please check the response uri\n");
 				// re-authorize
-				authorize();
+				authorise();
 			}
 		} else {
-			log.vdebug("Invalid JSON response from OneDrive unable to initialize application");
+			log.log("Invalid response from the OneDrive API. Unable to initialise OneDrive API instance.");
+			exit(-1);
 		}
 	}
-
-	private void checkAccessTokenExpired()
-	{
+	
+	private void checkAccessTokenExpired() {
 		try {
-			if (Clock.currTime() >= accessTokenExpiration) {
+			if (Clock.currTime() >= appConfig.accessTokenExpiration) {
+				log.vdebug("Microsoft OneDrive Access Token has EXPIRED. Must generate a new Microsoft OneDrive Access Token");
 				newToken();
+			} else {
+				log.vdebug("Existing Microsoft OneDrive Access Token Expires: ", appConfig.accessTokenExpiration);
 			}
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
@@ -1192,41 +858,17 @@ final class OneDriveApi
 			}
 		}
 	}
-
-	private void addAccessTokenHeader()
-	{
-		http.addRequestHeader("Authorization", accessToken);
-	}
-
-	private JSONValue get(const(char)[] url, bool skipToken = false)
-	{
-		scope(exit) http.clearRequestHeaders();
-		log.vdebug("Request URL = ", url);
-		http.method = HTTP.Method.get;
-		http.url = url;
-		if (!skipToken) addAccessTokenHeader(); // HACK: requestUploadStatus
-		JSONValue response;
-		response = perform();
-		checkHttpCode(response);
-		// OneDrive API Response Debugging if --https-debug is being used
-		if (.debugResponse){
-			log.vdebug("OneDrive API Response: ", response);
-        }
-		return response;
-	}
-
-	private void del(const(char)[] url)
-	{
-		scope(exit) http.clearRequestHeaders();
-		http.method = HTTP.Method.del;
-		http.url = url;
+	
+	private void performDelete(const(char)[] url) {
+		scope(exit) curlEngine.http.clearRequestHeaders();
+		curlEngine.http.method = HTTP.Method.del;
+		curlEngine.http.url = url;
 		addAccessTokenHeader();
-		auto response = perform();
-		checkHttpCode(response);
+		auto response = performHTTPOperation();
+		checkHttpResponseCode(response);
 	}
-
-	private void download(const(char)[] url, string filename, long fileSize)
-	{
+	
+	private void downloadFile(const(char)[] url, string filename, long fileSize) {
 		// Threshold for displaying download bar
 		long thresholdFileSize = 4 * 2^^20; // 4 MiB
 		
@@ -1239,14 +881,14 @@ final class OneDriveApi
 
 		// function scopes
 		scope(exit) {
-			http.clearRequestHeaders();
-			http.onSend = null;
-			http.onReceive = null;
-			http.onReceiveHeader = null;
-			http.onReceiveStatusLine = null;
-			http.contentLength = 0;
+			curlEngine.http.clearRequestHeaders();
+			curlEngine.http.onSend = null;
+			curlEngine.http.onReceive = null;
+			curlEngine.http.onReceiveHeader = null;
+			curlEngine.http.onReceiveStatusLine = null;
+			curlEngine.http.contentLength = 0;
 			// Reset onProgress to not display anything for next download
-			http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
+			curlEngine.http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
 			{
 				return 0;
 			};
@@ -1257,11 +899,11 @@ final class OneDriveApi
 			}
 		}
 
-		http.method = HTTP.Method.get;
-		http.url = url;
+		curlEngine.http.method = HTTP.Method.get;
+		curlEngine.http.url = url;
 		addAccessTokenHeader();
 
-		http.onReceive = (ubyte[] data) {
+		curlEngine.http.onReceive = (ubyte[] data) {
 			file.rawWrite(data);
 			return data.length;
 		};
@@ -1277,7 +919,7 @@ final class OneDriveApi
 			real percentCheck = 5.0;
 			long segmentCount = 1;
 			// Setup progress bar to display
-			http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
+			curlEngine.http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
 			{
 				// For each onProgress, what is the % of dlnow to dltotal
 				// floor - rounds down to nearest whole number
@@ -1303,13 +945,13 @@ final class OneDriveApi
 					// Expected Total   = 52428800
 					// Percent Complete = 26
 										
-					if (cfg.getValueLong("rate_limit") > 0) {
+					if (appConfig.getValueLong("rate_limit") > 0) {
 						// User configured rate limit
 						// How much data should be in each segment to qualify for 5%
-						long dataPerSegment = to!long(floor(double(dltotal)/iteration));
+						ulong dataPerSegment = to!ulong(floor(double(dltotal)/iteration));
 						// How much data received do we need to validate against
-						long thisSegmentData = dataPerSegment * segmentCount;
-						long nextSegmentData = dataPerSegment * (segmentCount + 1);
+						ulong thisSegmentData = dataPerSegment * segmentCount;
+						ulong nextSegmentData = dataPerSegment * (segmentCount + 1);
 						// Has the data that has been received in a 5% window that we need to increment the progress bar at
 						if ((dlnow > thisSegmentData) && (dlnow < nextSegmentData) && (previousProgressPercent != currentDLPercent) || (dlnow == dltotal)) {
 							// Downloaded data equals approx 5%
@@ -1349,7 +991,7 @@ final class OneDriveApi
 			// Perform download & display progress bar
 			try {
 				// try and catch any curl error
-				http.perform();
+				curlEngine.http.perform();
 				// Check the HTTP Response headers - needed for correct 429 handling
 				// check will be performed in checkHttpCode()
 				writeln();
@@ -1363,7 +1005,7 @@ final class OneDriveApi
 			// No progress bar
 			try {
 				// try and catch any curl error
-				http.perform();
+				curlEngine.http.perform();
 				// Check the HTTP Response headers - needed for correct 429 handling
 				// check will be performed in checkHttpCode()
 			} catch (CurlException e) {
@@ -1378,81 +1020,59 @@ final class OneDriveApi
 		checkHttpCode();
 	}
 
-	private auto patch(T)(const(char)[] url, const(T)[] patchData)
-	{
-		scope(exit) http.clearRequestHeaders();
-		http.method = HTTP.Method.patch;
-		http.url = url;
+	private JSONValue get(string url, bool skipToken = false) {
+		scope(exit) curlEngine.http.clearRequestHeaders();
+		log.vdebug("Request URL = ", url);
+		curlEngine.http.method = HTTP.Method.get;
+		curlEngine.http.url = url;
+		if (!skipToken) addAccessTokenHeader(); // HACK: requestUploadStatus
+		JSONValue response;
+		response = performHTTPOperation();
+		checkHttpResponseCode(response);
+		// OneDrive API Response Debugging if --https-debug is being used
+		if (debugResponse){
+			log.vdebug("OneDrive API Response: ", response);
+        }
+		return response;
+	}
+	
+	private void newToken() {
+		log.vdebug("Need to generate a new access token for Microsoft OneDrive");
+		string postData =
+			"client_id=" ~ clientId ~
+			"&redirect_uri=" ~ redirectUrl ~
+			"&refresh_token=" ~ refreshToken ~
+			"&grant_type=refresh_token";
+		char[] strArr = postData.dup;
+		acquireToken(strArr);
+	}
+	
+	private auto patch(T)(const(char)[] url, const(T)[] patchData) {
+		curlEngine.setMethodPatch();
+		curlEngine.http.url = url;
 		addAccessTokenHeader();
 		auto response = perform(patchData);
-		checkHttpCode(response);
+		checkHttpResponseCode(response);
 		return response;
 	}
-
-	private auto post(T)(const(char)[] url, const(T)[] postData)
-	{
-		scope(exit) http.clearRequestHeaders();
-		http.method = HTTP.Method.post;
-		http.url = url;
+	
+	private auto post(T)(string url, const(T)[] postData) {
+		curlEngine.setMethodPost();
+		curlEngine.http.url = url;
 		addAccessTokenHeader();
 		auto response = perform(postData);
-		checkHttpCode(response);
+		checkHttpResponseCode(response);
 		return response;
 	}
-
-	private auto move(T)(const(char)[] url, const(T)[] postData)
-	{
-		scope(exit) http.clearRequestHeaders();
-		http.method = HTTP.Method.patch;
-		http.url = url;
-		addAccessTokenHeader();
-		auto response = perform(postData);
-		// Check the HTTP response code, which, if a 429, will also check response headers
-		checkHttpCode();
-		return response;
-	}
-
-	private JSONValue upload(string filepath, string url)
-	{
-		checkAccessTokenExpired();
-		// open file as read-only in binary mode
-		auto file = File(filepath, "rb");
-
-		// function scopes
+	
+	private JSONValue perform(const(void)[] sendData) {
 		scope(exit) {
-			http.clearRequestHeaders();
-			http.onSend = null;
-			http.onReceive = null;
-			http.onReceiveHeader = null;
-			http.onReceiveStatusLine = null;
-			http.contentLength = 0;
-			// close file if open
-			if (file.isOpen()){
-				// close open file
-				file.close();
-			}
-		}
-
-		http.method = HTTP.Method.put;
-		http.url = url;
-		addAccessTokenHeader();
-		http.addRequestHeader("Content-Type", "application/octet-stream");
-		http.onSend = data => file.rawRead(data).length;
-		http.contentLength = file.size;
-		auto response = perform();
-		checkHttpCode(response);
-		return response;
-	}
-
-	private JSONValue perform(const(void)[] sendData)
-	{
-		scope(exit) {
-			http.onSend = null;
-			http.contentLength = 0;
+			curlEngine.http.onSend = null;
+			curlEngine.http.contentLength = 0;
 		}
 		if (sendData) {
-			http.contentLength = sendData.length;
-			http.onSend = (void[] buf) {
+			curlEngine.http.contentLength = sendData.length;
+			curlEngine.http.onSend = (void[] buf) {
 				import std.algorithm: min;
 				size_t minLen = min(buf.length, sendData.length);
 				if (minLen == 0) return 0;
@@ -1461,34 +1081,33 @@ final class OneDriveApi
 				return minLen;
 			};
 		} else {
-			http.onSend = buf => 0;
+			curlEngine.http.onSend = buf => 0;
 		}
-		auto response = perform();
+		auto response = performHTTPOperation();
 		return response;
 	}
-
-	private JSONValue perform()
-	{
-		scope(exit) http.onReceive = null;
+	
+	private JSONValue performHTTPOperation() {
+		scope(exit) curlEngine.http.onReceive = null;
 		char[] content;
 		JSONValue json;
 
-		http.onReceive = (ubyte[] data) {
+		curlEngine.http.onReceive = (ubyte[] data) {
 			content ~= data;
 			// HTTP Server Response Code Debugging if --https-debug is being used
-			if (.debugResponse){
-				log.vdebug("onedrive.perform() => OneDrive HTTP Server Response: ", http.statusLine.code);
+			if (debugResponse){
+				log.vdebug("onedrive.performHTTPOperation() => OneDrive HTTP Server Response: ", curlEngine.http.statusLine.code);
 			}
 			return data.length;
 		};
 
 		try {
-			http.perform();
+			curlEngine.http.perform();
 			// Check the HTTP Response headers - needed for correct 429 handling
 			checkHTTPResponseHeaders();
 		} catch (CurlException e) {
 			// Parse and display error message received from OneDrive
-			log.vdebug("onedrive.perform() Generated a OneDrive CurlException");
+			log.vdebug("onedrive.performHTTPOperation() Generated a OneDrive CurlException");
 			auto errorArray = splitLines(e.msg);
 			string errorMessage = errorArray[0];
 			
@@ -1515,16 +1134,16 @@ final class OneDriveApi
 					try {
 						// configure libcurl to perform a fresh connection
 						log.vdebug("Configuring libcurl to use a fresh connection for re-try");
-						http.handle.set(CurlOption.fresh_connect,1);
+						curlEngine.http.handle.set(CurlOption.fresh_connect,1);
 						// try the access
-						http.perform();
+						curlEngine.http.perform();
 						// Check the HTTP Response headers - needed for correct 429 handling
 						checkHTTPResponseHeaders();
 						// no error from http.perform() on re-try
 						log.log("Internet connectivity to Microsoft OneDrive service has been restored");
 						// unset the fresh connect option as this then creates performance issues if left enabled
 						log.vdebug("Unsetting libcurl to use a fresh connection as this causes a performance impact if left enabled");
-						http.handle.set(CurlOption.fresh_connect,0);
+						curlEngine.http.handle.set(CurlOption.fresh_connect,0);
 						// connectivity restored
 						retrySuccess = true;
 					} catch (CurlException e) {
@@ -1580,20 +1199,40 @@ final class OneDriveApi
 					throw new OneDriveException(408, "Request Timeout - HTTP 408 or Internet down?");
 				}
 			} else {
-				// Log that an error was returned
-				log.error("ERROR: OneDrive returned an error with the following message:");
-				// Some other error was returned
-				log.error("  Error Message: ", errorMessage);
-				log.error("  Calling Function: ", getFunctionName!({}));
+			
+				// what error was returned?
+				if (canFind(errorMessage, "Problem with the SSL CA cert (path? access rights?) on handle")) {
+					// error setting certificate verify locations:
+					//  CAfile: /etc/pki/tls/certs/ca-bundle.crt
+					//	CApath: none
+					// 
+					// Tell the Curl Engine to bypass SSL check - essentially SSL is passing back a bad value due to 'stdio' compile time option
+					// Further reading:
+					//  https://github.com/curl/curl/issues/6090
+					//  https://github.com/openssl/openssl/issues/7536
+					//  https://stackoverflow.com/questions/45829588/brew-install-fails-curl77-error-setting-certificate-verify
+					//  https://forum.dlang.org/post/vwvkbubufexgeuaxhqfl@forum.dlang.org
+					
+					log.vdebug("Problem with reading the SSL CA cert via libcurl - attempting work around");
+					curlEngine.setDisableSSLVerifyPeer();
+					// retry origional call
+					performHTTPOperation();
+				} else {
+					// Log that an error was returned
+					log.error("ERROR: OneDrive returned an error with the following message:");
+					// Some other error was returned
+					log.error("  Error Message: ", errorMessage);
+					log.error("  Calling Function: ", getFunctionName!({}));
 				
-				// Was this a curl initialization error?
-				if (canFind(errorMessage, "Failed initialization on handle")) {
-					// initialization error ... prevent a run-away process if we have zero disk space
-					ulong localActualFreeSpace = to!ulong(getAvailableDiskSpace("."));
-					if (localActualFreeSpace == 0) {
-						// force exit
-						shutdown();
-						exit(-1);
+					// Was this a curl initialization error?
+					if (canFind(errorMessage, "Failed initialization on handle")) {
+						// initialization error ... prevent a run-away process if we have zero disk space
+						ulong localActualFreeSpace = getAvailableDiskSpace(".");
+						if (localActualFreeSpace == 0) {
+							// force exit
+							shutdown();
+							exit(-1);
+						}
 					}
 				}
 			}
@@ -1609,26 +1248,135 @@ final class OneDriveApi
 		}
 		return json;
 	}
+	
+	private void redeemToken(char[] authCode){
+		char[] postData =
+			"client_id=" ~ clientId ~
+			"&redirect_uri=" ~ redirectUrl ~
+			"&code=" ~ authCode ~
+			"&grant_type=authorization_code";
+		acquireToken(postData);
+	}
+	
+	private JSONValue upload(string filepath, string url) {
+		checkAccessTokenExpired();
+		// open file as read-only in binary mode
+		auto file = File(filepath, "rb");
 
-	private void checkHTTPResponseHeaders()
-	{
+		// function scopes
+		scope(exit) {
+			curlEngine.http.clearRequestHeaders();
+			curlEngine.http.onSend = null;
+			curlEngine.http.onReceive = null;
+			curlEngine.http.onReceiveHeader = null;
+			curlEngine.http.onReceiveStatusLine = null;
+			curlEngine.http.contentLength = 0;
+			// close file if open
+			if (file.isOpen()){
+				// close open file
+				file.close();
+			}
+		}
+
+		curlEngine.http.method = HTTP.Method.put;
+		curlEngine.http.url = url;
+		addAccessTokenHeader();
+		curlEngine.http.addRequestHeader("Content-Type", "application/octet-stream");
+		curlEngine.http.onSend = data => file.rawRead(data).length;
+		curlEngine.http.contentLength = file.size;
+		auto response = performHTTPOperation();
+		checkHttpResponseCode(response);
+		return response;
+	}
+	
+	private void checkHTTPResponseHeaders() {
 		// Get the HTTP Response headers - needed for correct 429 handling
-		auto responseHeaders = http.responseHeaders();
-		if (.debugResponse){
-			log.vdebug("http.perform() => HTTP Response Headers: ", responseHeaders);
+		auto responseHeaders = curlEngine.http.responseHeaders();
+		if (debugResponse){
+			log.vdebug("curlEngine.http.perform() => HTTP Response Headers: ", responseHeaders);
 		}
 
 		// is retry-after in the response headers
-		if ("retry-after" in http.responseHeaders) {
+		if ("retry-after" in curlEngine.http.responseHeaders) {
 			// Set the retry-after value
-			log.vdebug("http.perform() => Received a 'Retry-After' Header Response with the following value: ", http.responseHeaders["retry-after"]);
-			log.vdebug("http.perform() => Setting retryAfterValue to: ", http.responseHeaders["retry-after"]);
-			.retryAfterValue = to!ulong(http.responseHeaders["retry-after"]);
+			log.vdebug("curlEngine.http.perform() => Received a 'Retry-After' Header Response with the following value: ", curlEngine.http.responseHeaders["retry-after"]);
+			log.vdebug("curlEngine.http.perform() => Setting retryAfterValue to: ", curlEngine.http.responseHeaders["retry-after"]);
+			retryAfterValue = to!ulong(curlEngine.http.responseHeaders["retry-after"]);
 		}
 	}
 
-	private void checkHttpCode()
-	{
+	private void checkHttpResponseCode(JSONValue response) {
+		switch(curlEngine.http.statusLine.code) {
+			//  0 - OK ... HTTP2 version of 200 OK
+			case 0:
+				break;
+			//  100 - Continue
+			case 100:
+				break;
+			//	200 - OK
+			case 200:
+				// No Log ..
+				break;
+			//	201 - Created OK
+			//  202 - Accepted
+			//	204 - Deleted OK
+			case 201,202,204:
+				// No actions, but log if verbose logging
+				//log.vlog("OneDrive Response: '", curlEngine.http.statusLine.code, " - ", curlEngine.http.statusLine.reason, "'");
+				break;
+
+			// 302 - resource found and available at another location, redirect
+			case 302:
+				break;
+
+			// 400 - Bad Request
+			case 400:
+				// Bad Request .. how should we act?
+				// make sure this is thrown so that it is caught
+				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
+
+			// 403 - Forbidden
+			case 403:
+				// OneDrive responded that the user is forbidden
+				log.vlog("OneDrive returned a 'HTTP 403 - Forbidden' - gracefully handling error");
+				// Throw this as a specific exception so this is caught when performing 'siteQuery = onedrive.o365SiteSearch(nextLink);' call
+				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
+
+			//	412 - Precondition Failed
+			case 412:
+				// Throw this as a specific exception so this is caught when performing sync.uploadLastModifiedTime
+				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
+
+			// Server side (OneDrive) Errors
+			//  500 - Internal Server Error
+			// 	502 - Bad Gateway
+			//	503 - Service Unavailable
+			//  504 - Gateway Timeout (Issue #320)
+			case 500:
+				// Throw this as a specific exception so this is caught
+				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
+
+			case 502:
+				// Throw this as a specific exception so this is caught
+				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
+
+			case 503:
+				// Throw this as a specific exception so this is caught
+				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
+
+			case 504:
+				// Throw this as a specific exception so this is caught
+				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
+
+			// Default - all other errors that are not a 2xx or a 302
+			default:
+			if (curlEngine.http.statusLine.code / 100 != 2 && curlEngine.http.statusLine.code != 302) {
+				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
+			}
+		}
+	}
+	
+	private void checkHttpCode() {
 		// https://dev.onedrive.com/misc/errors.htm
 		// https://developer.overdrive.com/docs/reference-guide
 
@@ -1673,7 +1421,7 @@ final class OneDriveApi
 
 		*/
 
-		switch(http.statusLine.code)
+		switch(curlEngine.http.statusLine.code)
 		{
 			//  0 - OK ... HTTP2 version of 200 OK
 			case 0:
@@ -1746,7 +1494,7 @@ final class OneDriveApi
 				checkHTTPResponseHeaders();
 				// https://docs.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
 				log.vlog("OneDrive returned a 'HTTP 429 - Too Many Requests' - gracefully handling error");
-				throw new OneDriveException(http.statusLine.code, http.statusLine.reason);
+				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason);
 
 			// Server side (OneDrive) Errors
 			//  500 - Internal Server Error
@@ -1775,113 +1523,7 @@ final class OneDriveApi
 
 			// "else"
 			default:
-				throw new OneDriveException(http.statusLine.code, http.statusLine.reason);
+				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason);
 		}
 	}
-
-	private void checkHttpCode(ref const JSONValue response)
-	{
-		switch(http.statusLine.code)
-		{
-			//  0 - OK ... HTTP2 version of 200 OK
-			case 0:
-				break;
-			//  100 - Continue
-			case 100:
-				break;
-			//	200 - OK
-			case 200:
-				// No Log ..
-				break;
-			//	201 - Created OK
-			//  202 - Accepted
-			//	204 - Deleted OK
-			case 201,202,204:
-				// No actions, but log if verbose logging
-				//log.vlog("OneDrive Response: '", http.statusLine.code, " - ", http.statusLine.reason, "'");
-				break;
-
-			// 302 - resource found and available at another location, redirect
-			case 302:
-				break;
-
-			// 400 - Bad Request
-			case 400:
-				// Bad Request .. how should we act?
-				// make sure this is thrown so that it is caught
-				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
-
-			// 403 - Forbidden
-			case 403:
-				// OneDrive responded that the user is forbidden
-				log.vlog("OneDrive returned a 'HTTP 403 - Forbidden' - gracefully handling error");
-				// Throw this as a specific exception so this is caught when performing 'siteQuery = onedrive.o365SiteSearch(nextLink);' call
-				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
-
-			//	412 - Precondition Failed
-			case 412:
-				// Throw this as a specific exception so this is caught when performing sync.uploadLastModifiedTime
-				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
-
-			// Server side (OneDrive) Errors
-			//  500 - Internal Server Error
-			// 	502 - Bad Gateway
-			//	503 - Service Unavailable
-			//  504 - Gateway Timeout (Issue #320)
-			case 500:
-				// Throw this as a specific exception so this is caught
-				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
-
-			case 502:
-				// Throw this as a specific exception so this is caught
-				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
-
-			case 503:
-				// Throw this as a specific exception so this is caught
-				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
-
-			case 504:
-				// Throw this as a specific exception so this is caught
-				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
-
-			// Default - all other errors that are not a 2xx or a 302
-			default:
-			if (http.statusLine.code / 100 != 2 && http.statusLine.code != 302) {
-				throw new OneDriveException(http.statusLine.code, http.statusLine.reason, response);
-			}
-		}
-	}
-}
-
-unittest
-{
-	string configDirName = expandTilde("~/.config/onedrive");
-	auto cfg = new config.Config(configDirName);
-	cfg.init();
-	OneDriveApi onedrive = new OneDriveApi(cfg);
-	onedrive.init();
-	std.file.write("/tmp/test", "test");
-
-	// simpleUpload
-	auto item = onedrive.simpleUpload("/tmp/test", "/test");
-	try {
-		item = onedrive.simpleUpload("/tmp/test", "/test");
-	} catch (OneDriveException e) {
-		assert(e.httpStatusCode == 409);
-	}
-	try {
-		item = onedrive.simpleUpload("/tmp/test", "/test", "123");
-	} catch (OneDriveException e) {
-		assert(e.httpStatusCode == 412);
-	}
-	item = onedrive.simpleUpload("/tmp/test", "/test", item["eTag"].str);
-
-	// deleteById
-	try {
-		onedrive.deleteById(item["id"].str, "123");
-	} catch (OneDriveException e) {
-		assert(e.httpStatusCode == 412);
-	}
-	onedrive.deleteById(item["id"].str, item["eTag"].str);
-	onedrive.http.shutdown();
 }

@@ -211,8 +211,10 @@ sudo make install
 ```
 
 ### Build options
-Notifications can be enabled using the `configure` switch `--enable-notifications`.
+#### GUI Notification Support
+GUI notification support can be enabled using the `configure` switch `--enable-notifications`.
 
+#### systemd service directory customisation support
 Systemd service files are installed in the appropriate directories on the system,
 as provided by `pkg-config systemd` settings. If the need for overriding the
 deduced path are necessary, the two options `--with-systemdsystemunitdir` (for
@@ -220,9 +222,11 @@ the Systemd system unit location), and `--with-systemduserunitdir` (for the
 Systemd user unit location) can be specified. Passing in `no` to one of these
 options disabled service file installation.
 
+#### Additional Compiler Debug
 By passing `--enable-debug` to the `configure` call, `onedrive` gets built with additional debug
 information, useful (for example) to get `perf`-issued figures.
 
+#### Shell Completion Support
 By passing `--enable-completions` to the `configure` call, shell completion functions are
 installed for `bash`, `zsh` and `fish`. The installation directories are determined
 as far as possible automatically, but can be overridden by passing

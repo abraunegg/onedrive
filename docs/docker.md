@@ -66,7 +66,7 @@ ROOT level privileges prohibited!
 ### 3. First run
 The 'onedrive' client within the Docker container needs to be authorized with your Microsoft account. This is achieved by initially running docker in interactive mode. 
 
-Run the docker image with the commands below and make sure to change `ONEDRIVE_DATA_DIR` to the actual onedrive data directory on your filesystem that you wish to use (e.g. `"/home/abraunegg/OneDrive"`).
+Run the docker image with the commands below and make sure to change the value of `ONEDRIVE_DATA_DIR` to the actual onedrive data directory on your filesystem that you wish to use (e.g. `export ONEDRIVE_DATA_DIR="/home/abraunegg/OneDrive"`).
 ```bash
 export ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
 mkdir -p ${ONEDRIVE_DATA_DIR}
@@ -168,7 +168,7 @@ docker volume inspect onedrive_conf
 
 Or you can map your own config folder to the config volume. Make sure to copy all files from the docker volume into your mapped folder first.
 
-The detailed document for the config can be found here: [Configuration](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#configuration)
+The detailed document for the config can be found here: [Configuration](https://github.com/abraunegg/onedrive/blob/master/docs/usage.md#configuration)
 
 ### 7. Sync multiple accounts
 There are many ways to do this, the easiest is probably to
@@ -211,7 +211,7 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 | <B>ONEDRIVE_LOGOUT</B> | Controls "--logout" switch. Default is 0 | 1 |
 | <B>ONEDRIVE_REAUTH</B> | Controls "--reauth" switch. Default is 0 | 1 |
 | <B>ONEDRIVE_AUTHFILES</B> | Controls "--auth-files" option. Default is "" | "authUrl:responseUrl" |
-| <B>ONEDRIVE_AUTHRESPONSE</B> | Controls "--auth-response" option. Default is "" | See [here](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#authorize-the-application-with-your-onedrive-account) |
+| <B>ONEDRIVE_AUTHRESPONSE</B> | Controls "--auth-response" option. Default is "" | See [here](https://github.com/abraunegg/onedrive/blob/master/docs/usage.md#authorize-the-application-with-your-onedrive-account) |
 | <B>ONEDRIVE_DISPLAY_CONFIG</B> | Controls "--display-running-config" switch on onedrive sync. Default is 0 | 1 |
 | <B>ONEDRIVE_SINGLE_DIRECTORY</B> | Controls "--single-directory" option. Default = "" | "mydir" |
 

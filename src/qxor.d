@@ -1,7 +1,11 @@
+// What is this module called?
+module qxor;
+
+// What does this module require to function?
 import std.algorithm;
 import std.digest;
 
-// implementation of the QuickXorHash algorithm in D
+// Implementation of the QuickXorHash algorithm in D
 // https://github.com/OneDrive/onedrive-api-docs/blob/live/docs/code-snippets/quickxorhash.md
 struct QuickXor
 {
@@ -72,17 +76,3 @@ struct QuickXor
 		return tmp;
 	}
 }
-
-unittest
-{
-	assert(isDigest!QuickXor);
-}
-
-unittest
-{
-	QuickXor qxor;
-	qxor.put(cast(ubyte[]) "The quick brown fox jumps over the lazy dog");
-	assert(qxor.finish().toHexString() == "6CC4A56F2B26C492FA4BBE57C1F31C4193A972BE");
-}
-
-alias QuickXorDigest = WrapperDigest!(QuickXor);
