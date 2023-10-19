@@ -7017,4 +7017,85 @@ class SyncEngine {
 			log.error("Selected path not found on local system: ", inputFilePath);
 		}
 	}
+	
+	// Query OneDrive for the quota details
+	void queryOneDriveForQuotaDetails() {
+		// This function is similar to getRemainingFreeSpace() but is different in data being analysed and output method
+	
+		JSONValue currentDriveQuota;
+		string driveId;
+
+		if (appConfig.getValueString("drive_id").length) {
+			driveId = appConfig.getValueString("drive_id");
+		} else {
+			driveId = appConfig.defaultDriveId;
+		}
+		
+		try {
+			// Create a new OneDrive API instance
+			OneDriveApi getCurrentDriveQuotaApiInstance;
+			getCurrentDriveQuotaApiInstance = new OneDriveApi(appConfig);
+			getCurrentDriveQuotaApiInstance.initialise();
+			log.vdebug("Seeking available quota for this drive id: ", driveId);
+			currentDriveQuota = getCurrentDriveQuotaApiInstance.getDriveQuota(driveId);
+			// Shut this API instance down
+			getCurrentDriveQuotaApiInstance.shutdown();
+			// Free object and memory
+			object.destroy(getCurrentDriveQuotaApiInstance);
+		} catch (OneDriveException e) {
+			log.vdebug("currentDriveQuota = onedrive.getDriveQuota(driveId) generated a OneDriveException");
+		}
+		
+		// validate that currentDriveQuota is a JSON value
+		if (currentDriveQuota.type() == JSONType.object) {
+			// was 'quota' in response?
+			if ("quota" in currentDriveQuota) {
+		
+				// debug output of response
+				log.vdebug("currentDriveQuota: ", currentDriveQuota);
+				
+				// human readable output of response
+				string deletedValue = "Not Provided";
+				string remainingValue = "Not Provided";
+				string stateValue = "Not Provided";
+				string totalValue = "Not Provided";
+				string usedValue = "Not Provided";
+			
+				// Update values
+				if ("deleted" in currentDriveQuota["quota"]) {
+					deletedValue = to!string(currentDriveQuota["quota"]["deleted"].integer);
+				}
+				
+				if ("remaining" in currentDriveQuota["quota"]) {
+					remainingValue = to!string(currentDriveQuota["quota"]["remaining"].integer);
+				}
+				
+				if ("state" in currentDriveQuota["quota"]) {
+					stateValue = currentDriveQuota["quota"]["state"].str;
+				}
+				
+				if ("total" in currentDriveQuota["quota"]) {
+					totalValue = to!string(currentDriveQuota["quota"]["total"].integer);
+				}
+				
+				if ("used" in currentDriveQuota["quota"]) {
+					usedValue = to!string(currentDriveQuota["quota"]["used"].integer);
+				}
+				
+				writeln("Microsoft OneDrive quota information as reported for this Drive ID: ", driveId);
+				writeln();
+				writeln("Deleted:   ", deletedValue);
+				writeln("Remaining: ", remainingValue);
+				writeln("State:     ", stateValue);
+				writeln("Total:     ", totalValue);
+				writeln("Used:      ", usedValue);
+				writeln();
+				writeln("The numeric values above are expressed in bytes");
+			
+			} else {
+				writeln("Microsoft OneDrive quota information is being restricted for this Drive ID: ", driveId);
+			}
+	
+		} 
+	}
 }

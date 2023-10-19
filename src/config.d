@@ -975,6 +975,7 @@ class ApplicationConfig {
 		stringValues["auth_response"] = "";
 		boolValues["display_config"] = false;
 		boolValues["display_sync_status"] = false;
+		boolValues["display_quota"] = false;
 		boolValues["print_token"] = false;
 		boolValues["logout"] = false;
 		boolValues["reauth"] = false;
@@ -1044,6 +1045,9 @@ class ApplicationConfig {
 				"display-sync-status",
 					"Display the sync status of the client - no sync will be performed.",
 					&boolValues["display_sync_status"],
+				"display-quota",
+					"Display the quota status of the client - no sync will be performed.",
+					&boolValues["display_quota"],
 				"download-only",
 					"Replicate the OneDrive online state locally, by only downloading changes from OneDrive. Do not upload local changes to OneDrive.",
 					&boolValues["download_only"],
@@ -2006,6 +2010,18 @@ class ApplicationConfig {
 			operationalConflictDetected = true;
 		}
 		
+		// --monitor and --display-quota cannot be used together
+		if ((getValueBool("monitor")) && (getValueBool("display_quota"))) {
+			log.error("ERROR: --monitor and --display-quota cannot be used together");
+			operationalConflictDetected = true;
+		}
+		
+		// --sync and and --display-quota cannot be used together
+		if ((getValueBool("synchronize")) && (getValueBool("display_quota"))) {
+			log.error("ERROR: --sync and and --display-quota cannot be used together");
+			operationalConflictDetected = true;
+		}
+				
 		// --force-sync can only be used when using --sync --single-directory
 		if (getValueBool("force_sync")) {
 		

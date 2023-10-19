@@ -401,6 +401,7 @@ int main(string[] cliArgs) {
 				// - Are we just creating a directory online, without any sync being performed?
 				// - Are we just deleting a directory online, without any sync being performed?
 				// - Are we renaming or moving a directory?
+				// - Are we displaying the quota information?
 								
 				// --get-sharepoint-drive-id - Get the SharePoint Library drive_id
 				if (appConfig.getValueString("sharepoint_library_name") != "") {
@@ -483,6 +484,15 @@ int main(string[] cliArgs) {
 				if ((appConfig.getValueString("source_directory") != "") && (appConfig.getValueString("destination_directory") != "")) {
 					// We are renaming or moving a directory
 					syncEngineInstance.uploadMoveItem(appConfig.getValueString("source_directory"), appConfig.getValueString("destination_directory"));
+					// Exit application
+					// Use exit scopes to shutdown API
+					return EXIT_SUCCESS;
+				}
+				
+				// Are we displaying the quota information?
+				if (appConfig.getValueBool("display_quota")) {
+					// Query and respond with the quota details
+					syncEngineInstance.queryOneDriveForQuotaDetails();
 					// Exit application
 					// Use exit scopes to shutdown API
 					return EXIT_SUCCESS;

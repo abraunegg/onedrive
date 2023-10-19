@@ -68,6 +68,7 @@ Before reading this document, please ensure you are running application version 
   - [CLI Option: --destination-directory](#cli-option---destination-directory)
   - [CLI Option: --display-config](#cli-option---display-config)
   - [CLI Option: --display-sync-status](#cli-option---display-sync-status)
+  - [CLI Option: --display-quota](#cli-option---display-quota)
   - [CLI Option: --force](#cli-option---force)
   - [CLI Option: --force-sync](#cli-option---force-sync)
   - [CLI Option: --get-file-link](#cli-option---get-file-link)
@@ -946,6 +947,11 @@ _**Description:**_ This CLI option will display the sync status of the configure
 _**Usage Example:**_ `onedrive --display-sync-status`
 
 _**Additional Usage Notes:**_ This option can also use the `--single-directory` option to determine the sync status of a specific directory within the configured 'sync_dir'
+
+### CLI Option: ---display-quota
+_**Description:**_ This CLI option will display the quota status of the account drive id or the configured 'drive_id' value
+
+_**Usage Example:**_ `onedrive --display-quota`
 
 ### CLI Option: --force
 _**Description:**_ This CLI option enables the force the deletion of data when a 'big delete' is detected. 
