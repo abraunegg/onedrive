@@ -173,7 +173,7 @@ class OneDriveApi {
 	string subscriptionUrl = "";
 	string subscriptionId = "";
 	SysTime subscriptionExpiration, subscriptionLastErrorAt;
-	Duration subscriptionExpirationInterval, subscriptionRenewalInterval, subscriptionRetryInternal;
+	Duration subscriptionExpirationInterval, subscriptionRenewalInterval, subscriptionRetryInterval;
 	string notificationUrl = "";
 	
 	this(ApplicationConfig appConfig) {
@@ -203,7 +203,7 @@ class OneDriveApi {
 		subscriptionLastErrorAt = SysTime.fromUnixTime(0);
 		subscriptionExpirationInterval = dur!"seconds"(appConfig.getValueLong("webhook_expiration_interval"));
 		subscriptionRenewalInterval = dur!"seconds"(appConfig.getValueLong("webhook_renewal_interval"));
-		subscriptionRetryInternal = dur!"seconds"(appConfig.getValueLong("webhook_retry_interval"));
+		subscriptionRetryInterval = dur!"seconds"(appConfig.getValueLong("webhook_retry_interval"));
 		notificationUrl = appConfig.getValueString("webhook_public_url");
 	}
 	
@@ -862,7 +862,7 @@ class OneDriveApi {
 		}
 
 		auto elapsed = Clock.currTime(UTC()) - subscriptionLastErrorAt;
-		if (elapsed < subscriptionRetryInternal) {
+		if (elapsed < subscriptionRetryInterval) {
 			return;
 		}
 
@@ -875,11 +875,11 @@ class OneDriveApi {
 		} catch (OneDriveException e) {
 			logSubscriptionError(e);
 			subscriptionLastErrorAt = Clock.currTime(UTC());
-			log.log("Will retry creating or renewing subscription in ", subscriptionRetryInternal);
+			log.log("Will retry creating or renewing subscription in ", subscriptionRetryInterval);
 		} catch (JSONException e) {
 			log.error("ERROR: Unexpected JSON error: ", e.msg);
 			subscriptionLastErrorAt = Clock.currTime(UTC());
-			log.log("Will retry creating or renewing subscription in ", subscriptionRetryInternal);
+			log.log("Will retry creating or renewing subscription in ", subscriptionRetryInterval);
 		}
 	}
 		

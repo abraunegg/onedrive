@@ -758,60 +758,116 @@ _**Config Example:**_ `user_agent = "ISV|CompanyName|AppName/Version"`
 _**Additional Usage Notes:**_ The current value conforms the the Microsoft Graph API documentation for presenting an appropriate 'User-Agent' header and aligns to the registered 'application_id' that this application uses.
 
 ### webhook_enabled
-_**Description:**_ 
+_**Description:**_ This configuration option controls the application feature 'webhooks' to allow you to subscribe to remote updates as published by Microsoft OneDrive. This option only operates when the client is using 'Monitor Mode'.
 
-_**Value Type:**_ 
+_**Value Type:**_ Boolean
 
-_**Default Value:**_ 
+_**Default Value:**_ False
 
-_**Config Example:**_ 
+_**Config Example:**_ The following is the minimum working example that needs to be added to your 'config' file to enable 'webhooks' successfully:
+```text
+webhook_enabled = "true"
+webhook_public_url = "http://<your_host_ip>:8888/"
+```
+
+_**Additional Usage Notes:**_ 
+
+etting `webhook_enabled = "true"` enables the webhook feature in 'monitor' mode. The onedrive process will listen for incoming updates at a configurable endpoint, which defaults to `0.0.0.0:8888`. The `webhook_public_url` must be set to an public-facing url for Microsoft to send updates to your webhook. 
+
+If your host is directly exposed to the Internet, the `webhook_public_url` can be set to `http://<your_host_ip>:8888/` to match the default endpoint. In this case, it is also advisable to configure a reverse proxy like `nginx` to proxy the traffic to the client. For example, below is a nginx config snippet to proxy traffic into the webhook:
+```text
+server {
+	listen 80;
+	location /webhooks/onedrive {
+		proxy_http_version 1.1;
+		proxy_pass http://127.0.0.1:8888;
+	}
+}
+```
+
+With nginx running, you can configure 'webhook_public_url' to `https://<public_facing_url_to_reach_your_webhook>/webhooks/onedrive`
+
+**Note:** A valid HTTPS certificate is required for your public-facing URL if using nginx.
+
+If you receive this application error: `Subscription validation request failed. Response must exactly match validationToken query parameter.` the most likely cause for this error will be your nginx configuration.
+
+To resolve this configuration issue, potentially investigate the following configuration for nginx:
+```text
+server {
+	listen 80;
+	location /webhooks/onedrive {
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Original-Request-URI $request_uri;
+		proxy_read_timeout 300s;
+		proxy_connect_timeout 75s;
+		proxy_buffering off;
+		proxy_http_version 1.1;
+		proxy_pass http://127.0.0.1:8888;
+	}
+}
+```
+For any further nginx configuration assistance, please refer to: https://docs.nginx.com/
 
 ### webhook_expiration_interval
-_**Description:**_ 
+_**Description:**_ This configuration option controls the frequency at which an existing Microsoft OneDrive webhook subscription expires. The value is expressed in the number of seconds before expiry.
 
-_**Value Type:**_ 
+_**Value Type:**_ Integer
 
-_**Default Value:**_ 
+_**Default Value:**_ 600 
 
-_**Config Example:**_ 
+_**Config Example:**_ `webhook_expiration_interval = "1200"`
 
 ### webhook_listening_host
-_**Description:**_ 
+_**Description:**_ This configuration option controls the host address that this client binds to, when the webhook feature is enabled.
 
-_**Value Type:**_ 
+_**Value Type:**_ String
 
-_**Default Value:**_ 
+_**Default Value:**_ 0.0.0.0
 
-_**Config Example:**_ 
+_**Config Example:**_ `webhook_listening_host = ""` - this will use the default value. `webhook_listening_host = "192.168.3.4"` - this will bind the client to use the IP address 192.168.3.4.
+
+_**Additional Usage Notes:**_ Use in conjunction with 'webhook_listening_port' to change the webhook listening endpoint.
 
 ### webhook_listening_port
-_**Description:**_ 
+_**Description:**_ This configuration option controls the TCP port that this client listens on, when the webhook feature is enabled.
 
-_**Value Type:**_ 
+_**Value Type:**_ Integer
 
-_**Default Value:**_ 
+_**Default Value:**_ 8888
 
-_**Config Example:**_ 
+_**Config Example:**_ `webhook_listening_port = "9999"`
+
+_**Additional Usage Notes:**_ Use in conjunction with 'webhook_listening_host' to change the webhook listening endpoint.
 
 ### webhook_public_url
-_**Description:**_ 
+_**Description:**_ This configuration option controls the URL that Microsoft will send subscription notifications to. This must be a valid Internet accessible URL.
 
-_**Value Type:**_ 
+_**Value Type:**_ String
 
-_**Default Value:**_ 
+_**Default Value:**_ *empty*
 
 _**Config Example:**_ 
+
+*  If your host is directly connected to the Internet: `webhook_public_url = "http://<your_host_ip>:8888/"`
+*  If you are using nginx to reverse proxy traffic from the Internet: `webhook_public_url = "https://<public_facing_url_to_reach_your_webhook>/webhooks/onedrive"`
 
 ### webhook_renewal_interval
-_**Description:**_ 
+_**Description:**_ This configuration option controls the frequency at which an existing Microsoft OneDrive webhook subscription is renewed. The value is expressed in the number of seconds before renewal.
 
-_**Value Type:**_ 
+_**Value Type:**_ Integer
 
-_**Default Value:**_ 
+_**Default Value:**_ 300
 
-_**Config Example:**_ 
+_**Config Example:**_ `webhook_renewal_interval = "600"`
 
+### webhook_retry_interval
+_**Description:**_ This configuration option controls the frequency at which an existing Microsoft OneDrive webhook subscription is retried when creating or renewing a subscription failed. The value is expressed in the number of seconds before retry.
 
+_**Value Type:**_ Integer
+
+_**Default Value:**_ 60
+
+_**Config Example:**_ `webhook_retry_interval = "120"`
 
 ## Command Line Interface (CLI) Only Options
 
