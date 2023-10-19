@@ -2086,6 +2086,12 @@ class ApplicationConfig {
 			operationalConflictDetected = true;
 		}
 		
+		// --download-only and --local-first cannot be used together
+		if ((getValueBool("download_only")) && (!getValueBool("local_first"))) {
+			log.error("ERROR: --download-only cannot be used with --local-first .");
+			operationalConflictDetected = true;
+		}
+				
 		// Return bool value indicating if we have an operational conflict
 		return operationalConflictDetected;
 	}
