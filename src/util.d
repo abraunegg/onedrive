@@ -357,6 +357,7 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 	if (errorMessage.type() == JSONType.object) {
 		// configure the error reason
 		string errorReason;
+		string errorCode;
 		string requestDate;
 		string requestId;
 		
@@ -386,6 +387,14 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 			log.error("  Error Reason:     ", errorReason);
 		}
 		
+		// Get the error code if available
+		try {
+			// Use ["error"]["code"] as code
+			errorCode = errorMessage["error"]["code"].str;
+		} catch (JSONException e) {
+			// we dont want to do anything here
+		}
+		
 		// Get the date of request if available
 		try {
 			// Use ["error"]["innerError"]["date"] as date
@@ -402,7 +411,8 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 			// we dont want to do anything here
 		}
 		
-		// Display the date and request id if available
+		// Display the error code, date and request id if available
+		if (errorCode != "")   log.error("  Error Code:       ", errorCode);
 		if (requestDate != "") log.error("  Error Timestamp:  ", requestDate);
 		if (requestId != "")   log.error("  API Request ID:   ", requestId);
 	}

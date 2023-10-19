@@ -314,13 +314,14 @@ class ApplicationConfig {
 		boolValues["cleanup_local_files"] = false;
 		
 		// Webhook Feature Options
+		boolValues["webhook_enabled"] = false;
 		stringValues["webhook_public_url"] = "";
 		stringValues["webhook_listening_host"] = "";
 		longValues["webhook_listening_port"] = 8888;
-		longValues["webhook_expiration_interval"] = 3600 * 24;
-		longValues["webhook_renewal_interval"] = 3600 * 12;
-		boolValues["webhook_enabled"] = false;
-		
+		longValues["webhook_expiration_interval"] = 600;
+		longValues["webhook_renewal_interval"] = 300;
+		longValues["webhook_retry_interval"] = 60;
+				
 		// Print in debug the application version as soon as possible
 		//log.vdebug("Application Version: ", strip(import("version")));
 		string tempVersion = "v2.5.0-alpha-3" ~ " GitHub version: " ~ strip(import("version"));
@@ -1383,6 +1384,7 @@ class ApplicationConfig {
 			writeln("Config option 'webhook_listening_port'       = ", getValueLong("webhook_listening_port"));
 			writeln("Config option 'webhook_expiration_interval'  = ", getValueLong("webhook_expiration_interval"));
 			writeln("Config option 'webhook_renewal_interval'     = ", getValueLong("webhook_renewal_interval"));
+			writeln("Config option 'webhook_retry_interval'       = ", getValueLong("webhook_retry_interval"));
 		}
 		
 		if (getValueBool("display_running_config")) {
