@@ -1962,6 +1962,41 @@ class SyncEngine {
 				log.vdebug("WARNING: onedriveJSONItem['file']['hashes'] is missing - unable to compare file hash after download");
 			}
 		
+			// Is this a --download-only scenario?
+			if (appConfig.getValueBool("download_only")) {
+				if (exists(newItemPath)) {
+					// file exists locally already
+					Item databaseItem;
+					bool fileFoundInDB = false;
+					
+					foreach (driveId; driveIDsArray) {
+						if (itemDB.selectByPath(newItemPath, driveId, databaseItem)) {
+							fileFoundInDB = true;
+							break;
+						}
+					}
+					
+					// Log the DB details
+					log.vdebug("File to download exists locally and this is the DB record: ", databaseItem);
+					
+					// Does the DB (what we think is in sync) hash match the existing local file hash?
+					if (!testFileHash(newItemPath, databaseItem)) {
+						// local file is different to what we know to be true
+						log.log("The local file to replace (", newItemPath,") has been modified locally since the last download. Renaming it to avoid potential local data loss.");
+						
+						// do the rename if we are not in a --dry-run scenario
+						if (!dryRun) {
+							// If we need to rename the file, what do we rename it to?
+							auto ext = extension(newItemPath);
+							auto renamedNewItemPath = newItemPath.chomp(ext) ~ "-" ~ deviceName ~ ext;
+							
+							// Perform the local rename of the existing local file
+							safeRename(newItemPath, renamedNewItemPath, dryRun);
+						}
+					}
+				}
+			}
+			
 			// Is there enough free space locally to download the file
 			// - We can use '.' here as we change the current working directory to the configured 'sync_dir'
 			ulong localActualFreeSpace = to!ulong(getAvailableDiskSpace("."));
@@ -2148,14 +2183,6 @@ class SyncEngine {
 				log.log("Downloading file ", newItemPath, " ... done");
 				// Save this item into the database
 				saveItem(onedriveJSONItem);
-				
-				/**
-				log.vdebug("Inserting new item details to local database");
-				// What was the item that was saved
-				log.vdebug("item details: ", newDatabaseItem);
-				itemDB.upsert(newDatabaseItem);
-				**/
-				
 				
 				// If we are in a --dry-run situation - if we are, we need to track that we faked the download
 				if (dryRun) {
