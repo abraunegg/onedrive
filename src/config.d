@@ -1918,7 +1918,7 @@ class ApplicationConfig {
 		// - Any new file created under ~/OneDrive or 'sync_dir'
 		// valid permissions are 000 -> 777 - anything else is invalid
 		if ((getValueLong("sync_dir_permissions") < 0) || (getValueLong("sync_file_permissions") < 0) || (getValueLong("sync_dir_permissions") > 777) || (getValueLong("sync_file_permissions") > 777)) {
-			log.error("ERROR: Invalid 'User|Group|Other' permissions set within config file. Please check your configuration.");
+			log.error("ERROR: Invalid 'User|Group|Other' permissions set within config file. Please check your configuration");
 			operationalConflictDetected = true;
 		} else {
 			// Debug log output what permissions are being set to
@@ -1930,79 +1930,79 @@ class ApplicationConfig {
 		
 		// --upload-only and --download-only cannot be used together
 		if ((getValueBool("upload_only")) && (getValueBool("download_only"))) {
-			log.error("ERROR: --upload-only and --download-only cannot be used together. Use one, not both at the same time.");
+			log.error("ERROR: --upload-only and --download-only cannot be used together. Use one, not both at the same time");
 			operationalConflictDetected = true;
 		}
 		
 		// --sync and --monitor cannot be used together
 		if ((getValueBool("synchronize")) && (getValueBool("monitor"))) {
-			log.error("ERROR: --sync and --monitor cannot be used together. Use one, not both at the same time.");
+			log.error("ERROR: --sync and --monitor cannot be used together. Use one, not both at the same time");
 			operationalConflictDetected = true;
 		}
 		
 		// --no-remote-delete can ONLY be enabled when --upload-only is used
 		if ((getValueBool("no_remote_delete")) && (!getValueBool("upload_only"))) {
-			log.error("ERROR: --no-remote-delete can only be used with --upload-only.");
+			log.error("ERROR: --no-remote-delete can only be used with --upload-only");
 			operationalConflictDetected = true;
 		}
 		
 		// --remove-source-files can ONLY be enabled when --upload-only is used
 		if ((getValueBool("remove_source_files")) && (!getValueBool("upload_only"))) {
-			log.error("ERROR: --remove-source-files can only be used with --upload-only.");
+			log.error("ERROR: --remove-source-files can only be used with --upload-only");
 			operationalConflictDetected = true;
 		}
 		
 		// --cleanup-local-files can ONLY be enabled when --download-only is used
 		if ((getValueBool("cleanup_local_files")) && (!getValueBool("download_only"))) {
-			log.error("ERROR: --cleanup-local-files can only be used with --download-only.");
+			log.error("ERROR: --cleanup-local-files can only be used with --download-only");
 			operationalConflictDetected = true;
 		}
 		
 		// --list-shared-folders cannot be used with --resync and/or --resync-auth
 		if ((getValueBool("list_business_shared_items")) && ((getValueBool("resync")) || (getValueBool("resync_auth")))) {
-			log.error("ERROR: --list-shared-folders cannot be used with --resync or --resync-auth.");
+			log.error("ERROR: --list-shared-folders cannot be used with --resync or --resync-auth");
 			operationalConflictDetected = true;
 		}
 		
 		// --display-sync-status cannot be used with --resync and/or --resync-auth
 		if ((getValueBool("display_sync_status")) && ((getValueBool("resync")) || (getValueBool("resync_auth")))) {
-			log.error("ERROR: --display-sync-status cannot be used with --resync or --resync-auth.");
+			log.error("ERROR: --display-sync-status cannot be used with --resync or --resync-auth");
 			operationalConflictDetected = true;
 		}
 		
 		// --modified-by cannot be used with --resync and/or --resync-auth
 		if ((!getValueString("modified_by").empty) && ((getValueBool("resync")) || (getValueBool("resync_auth")))) {
-			log.error("ERROR: --modified-by cannot be used with --resync or --resync-auth.");
+			log.error("ERROR: --modified-by cannot be used with --resync or --resync-auth");
 			operationalConflictDetected = true;
 		}
 		
 		// --get-file-link cannot be used with --resync and/or --resync-auth
 		if ((!getValueString("get_file_link").empty) && ((getValueBool("resync")) || (getValueBool("resync_auth")))) {
-			log.error("ERROR: --get-file-link cannot be used with --resync or --resync-auth.");
+			log.error("ERROR: --get-file-link cannot be used with --resync or --resync-auth");
 			operationalConflictDetected = true;
 		}
 		
 		// --create-share-link cannot be used with --resync and/or --resync-auth
 		if ((!getValueString("create_share_link").empty) && ((getValueBool("resync")) || (getValueBool("resync_auth")))) {
-			log.error("ERROR: --create-share-link cannot be used with --resync or --resync-auth.");
+			log.error("ERROR: --create-share-link cannot be used with --resync or --resync-auth");
 			operationalConflictDetected = true;
 		}
 		
 		// --get-sharepoint-drive-id cannot be used with --resync and/or --resync-auth
 		if ((!getValueString("sharepoint_library_name").empty) && ((getValueBool("resync")) || (getValueBool("resync_auth")))) {
-			log.error("ERROR: --get-sharepoint-drive-id cannot be used with --resync or --resync-auth.");
+			log.error("ERROR: --get-sharepoint-drive-id cannot be used with --resync or --resync-auth");
 			operationalConflictDetected = true;
 		}
 		
 		// --monitor and --display-sync-status cannot be used together
 		if ((getValueBool("monitor")) && (getValueBool("display_sync_status"))) {
-			log.error("ERROR: --monitor and --display-sync-status cannot be used together.");
+			log.error("ERROR: --monitor and --display-sync-status cannot be used together");
 			operationalConflictDetected = true;
 		}
 		
 		// --sync and and --display-sync-status cannot be used together
 		if ((getValueBool("synchronize")) && (getValueBool("display_sync_status"))) {
-			log.error("ERROR: --sync and and --display-sync-status cannot be used together.");
+			log.error("ERROR: --sync and and --display-sync-status cannot be used together");
 			operationalConflictDetected = true;
 		}
 		
@@ -2015,80 +2015,80 @@ class ApplicationConfig {
 			// single_directory must not be empty
 			if (getValueString("single_directory").empty) conflict = true;
 			if (conflict) {
-				log.error("ERROR: --force-sync can only be used with --sync --single-directory.");
+				log.error("ERROR: --force-sync can only be used with --sync --single-directory");
 				operationalConflictDetected = true;
 			}
 		}
 		
 		// When using 'azure_ad_endpoint', 'azure_tenant_id' cannot be empty
 		if ((!getValueString("azure_ad_endpoint").empty) && (getValueString("azure_tenant_id").empty)) {
-			log.error("ERROR: config option 'azure_tenant_id' cannot be empty when 'azure_ad_endpoint' is configured.");
+			log.error("ERROR: config option 'azure_tenant_id' cannot be empty when 'azure_ad_endpoint' is configured");
 			operationalConflictDetected = true;
 		}
 		
 		// When using --enable-logging the 'log_dir' cannot be empty
 		if ((getValueBool("enable_logging")) && (getValueString("log_dir").empty)) {
-			log.error("ERROR: config option 'log_dir' cannot be empty when 'enable_logging' is configured.");
+			log.error("ERROR: config option 'log_dir' cannot be empty when 'enable_logging' is configured");
 			operationalConflictDetected = true;
 		}
 		
 		// When using --syncdir, the value cannot be empty.
 		if (strip(getValueString("sync_dir")).empty) {
-			log.error("ERROR: --syncdir value cannot be empty.");
+			log.error("ERROR: --syncdir value cannot be empty");
 			operationalConflictDetected = true;
 		}
 		
 		// --monitor and --create-directory cannot be used together
 		if ((getValueBool("monitor")) && (!getValueString("create_directory").empty)) {
-			log.error("ERROR: --monitor and --create-directory cannot be used together.");
+			log.error("ERROR: --monitor and --create-directory cannot be used together");
 			operationalConflictDetected = true;
 		}
 		
 		// --sync and --create-directory cannot be used together
 		if ((getValueBool("synchronize")) && (!getValueString("create_directory").empty)) {
-			log.error("ERROR: --sync and --create-directory cannot be used together.");
+			log.error("ERROR: --sync and --create-directory cannot be used together");
 			operationalConflictDetected = true;
 		}
 		
 		// --monitor and --remove-directory cannot be used together
 		if ((getValueBool("monitor")) && (!getValueString("remove_directory").empty)) {
-			log.error("ERROR: --monitor and --remove-directory cannot be used together.");
+			log.error("ERROR: --monitor and --remove-directory cannot be used together");
 			operationalConflictDetected = true;
 		}
 		
 		// --sync and --remove-directory cannot be used together
 		if ((getValueBool("synchronize")) && (!getValueString("remove_directory").empty)) {
-			log.error("ERROR: --sync and --remove-directory cannot be used together.");
+			log.error("ERROR: --sync and --remove-directory cannot be used together");
 			operationalConflictDetected = true;
 		}
 		
 		// --monitor and --source-directory cannot be used together
 		if ((getValueBool("monitor")) && (!getValueString("source_directory").empty)) {
-			log.error("ERROR: --monitor and --source-directory cannot be used together.");
+			log.error("ERROR: --monitor and --source-directory cannot be used together");
 			operationalConflictDetected = true;
 		}
 		
 		// --sync and --source-directory cannot be used together
 		if ((getValueBool("synchronize")) && (!getValueString("source_directory").empty)) {
-			log.error("ERROR: --sync and --source-directory cannot be used together.");
+			log.error("ERROR: --sync and --source-directory cannot be used together");
 			operationalConflictDetected = true;
 		}
 		
 		// --monitor and --destination-directory cannot be used together
 		if ((getValueBool("monitor")) && (!getValueString("destination_directory").empty)) {
-			log.error("ERROR: --monitor and --destination-directory cannot be used together.");
+			log.error("ERROR: --monitor and --destination-directory cannot be used together");
 			operationalConflictDetected = true;
 		}
 		
 		// --sync and --destination-directory cannot be used together
 		if ((getValueBool("synchronize")) && (!getValueString("destination_directory").empty)) {
-			log.error("ERROR: --sync and --destination-directory cannot be used together.");
+			log.error("ERROR: --sync and --destination-directory cannot be used together");
 			operationalConflictDetected = true;
 		}
 		
 		// --download-only and --local-first cannot be used together
-		if ((getValueBool("download_only")) && (!getValueBool("local_first"))) {
-			log.error("ERROR: --download-only cannot be used with --local-first .");
+		if ((getValueBool("download_only")) && (getValueBool("local_first"))) {
+			log.error("ERROR: --download-only cannot be used with --local-first");
 			operationalConflictDetected = true;
 		}
 				

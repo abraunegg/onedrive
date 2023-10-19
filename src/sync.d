@@ -5123,71 +5123,78 @@ class SyncEngine {
 				log.vlog("Skipping remote file delete as --upload-only & --no-remote-delete configured");
 			}
 		} else {
-			// Process the delete - delete the object online
-			log.log("Deleting item from OneDrive: ", path);
-			bool flagAsBigDelete = false;
 			
-			Item[] children;
-			ulong itemsToDelete;
-		
-			if ((itemToDelete.type == ItemType.dir)) {
-				// Query the database - how many objects will this remove?
-				children = getChildren(itemToDelete.driveId, itemToDelete.id);
-				// Count the returned items + the original item (1)
-				itemsToDelete = count(children) + 1;
-				log.vdebug("Number of items online to delete: ", itemsToDelete);
-			} else {
-				itemsToDelete = 1;
-			}
-			
-			// A local delete of a file|folder when using --monitor  will issue a inotify event, which will trigger the local & remote data immediately be deleted
-			// The user may also be --sync process, so we are checking if something was deleted between application use
-			if (itemsToDelete >= appConfig.getValueLong("classify_as_big_delete")) {
-				// A big delete has been detected
-				flagAsBigDelete = true;
-				if (!appConfig.getValueBool("force")) {
-					log.error("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on OneDrive");
-					log.error("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
-					// Must exit here to preserve data on online 
-					exit(-1);
-				}
-			}
-			
-			// Are we in a --dry-run scenario?
-			if (!dryRun) {
-				// We are not in a dry run scenario
-				log.vdebug("itemToDelete: ", itemToDelete);
+			// Is this a --download-only operation?
+			if (!appConfig.getValueBool("download_only")) {
+				// Process the delete - delete the object online
+				log.log("Deleting item from OneDrive: ", path);
+				bool flagAsBigDelete = false;
 				
-				// Create new OneDrive API Instance
-				OneDriveApi uploadDeletedItemOneDriveApiInstance;
-				uploadDeletedItemOneDriveApiInstance = new OneDriveApi(appConfig);
-				uploadDeletedItemOneDriveApiInstance.initialise();
+				Item[] children;
+				ulong itemsToDelete;
 			
-				// what item are we trying to delete?
-				log.vdebug("Attempting to delete this single item id: ", itemToDelete.id, " from drive: ", itemToDelete.driveId);
-				try {
-					// perform the delete via the default OneDrive API instance
-					uploadDeletedItemOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id);
-					// Shutdown API
-					uploadDeletedItemOneDriveApiInstance.shutdown();
-					// Free object and memory
-					object.destroy(uploadDeletedItemOneDriveApiInstance);
-				} catch (OneDriveException e) {
-					if (e.httpStatusCode == 404) {
-						// item.id, item.eTag could not be found on the specified driveId
-						log.vlog("OneDrive reported: The resource could not be found to be deleted.");
+				if ((itemToDelete.type == ItemType.dir)) {
+					// Query the database - how many objects will this remove?
+					children = getChildren(itemToDelete.driveId, itemToDelete.id);
+					// Count the returned items + the original item (1)
+					itemsToDelete = count(children) + 1;
+					log.vdebug("Number of items online to delete: ", itemsToDelete);
+				} else {
+					itemsToDelete = 1;
+				}
+				
+				// A local delete of a file|folder when using --monitor  will issue a inotify event, which will trigger the local & remote data immediately be deleted
+				// The user may also be --sync process, so we are checking if something was deleted between application use
+				if (itemsToDelete >= appConfig.getValueLong("classify_as_big_delete")) {
+					// A big delete has been detected
+					flagAsBigDelete = true;
+					if (!appConfig.getValueBool("force")) {
+						log.error("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on OneDrive");
+						log.error("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
+						// Must exit here to preserve data on online 
+						exit(-1);
 					}
 				}
 				
-				// Delete the reference in the local database
-				itemDB.deleteById(itemToDelete.driveId, itemToDelete.id);
-				if (itemToDelete.remoteId != null) {
-					// If the item is a remote item, delete the reference in the local database
-					itemDB.deleteById(itemToDelete.remoteDriveId, itemToDelete.remoteId);
+				// Are we in a --dry-run scenario?
+				if (!dryRun) {
+					// We are not in a dry run scenario
+					log.vdebug("itemToDelete: ", itemToDelete);
+					
+					// Create new OneDrive API Instance
+					OneDriveApi uploadDeletedItemOneDriveApiInstance;
+					uploadDeletedItemOneDriveApiInstance = new OneDriveApi(appConfig);
+					uploadDeletedItemOneDriveApiInstance.initialise();
+				
+					// what item are we trying to delete?
+					log.vdebug("Attempting to delete this single item id: ", itemToDelete.id, " from drive: ", itemToDelete.driveId);
+					try {
+						// perform the delete via the default OneDrive API instance
+						uploadDeletedItemOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id);
+						// Shutdown API
+						uploadDeletedItemOneDriveApiInstance.shutdown();
+						// Free object and memory
+						object.destroy(uploadDeletedItemOneDriveApiInstance);
+					} catch (OneDriveException e) {
+						if (e.httpStatusCode == 404) {
+							// item.id, item.eTag could not be found on the specified driveId
+							log.vlog("OneDrive reported: The resource could not be found to be deleted.");
+						}
+					}
+					
+					// Delete the reference in the local database
+					itemDB.deleteById(itemToDelete.driveId, itemToDelete.id);
+					if (itemToDelete.remoteId != null) {
+						// If the item is a remote item, delete the reference in the local database
+						itemDB.deleteById(itemToDelete.remoteDriveId, itemToDelete.remoteId);
+					}
+				} else {
+					// log that this is a dry-run activity
+					log.log("dry run - no delete activity");
 				}
 			} else {
-				// log that this is a dry-run activity
-				log.log("dry run - no delete activity");
+				// --download-only operation, we are not uploading any delete event to OneDrive
+				log.vdebug("Not pushing local delete to Microsoft OneDrive due to --download-only being used");
 			}
 		}
 	}
