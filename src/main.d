@@ -41,6 +41,7 @@ OneDriveApi oneDriveApiInstance;
 SyncEngine syncEngineInstance;
 ItemDatabase itemDB;
 ClientSideFiltering selectiveSync;
+Monitor filesystemMonitor;
 
 int main(string[] cliArgs) {
 	// Disable buffering on stdout - this is needed so that when we are using plain write() it will go to the terminal
@@ -72,44 +73,14 @@ int main(string[] cliArgs) {
 		// detail what scope was called
 		log.vdebug("Exit scope was called");
 		
-		// Was itemDB initialised?
-		if (itemDB !is null) {
-			// Make sure the .wal file is incorporated into the main db before we exit
-			itemDB.performVacuum();
-			object.destroy(itemDB);
-		}
-		
-		// Free other objects and memory
-		if (appConfig !is null) {
-			// Cleanup any existing dry-run elements ... these should never be left hanging around
-			cleanupDryRunDatabaseFiles(appConfig.databaseFilePathDryRun);
-			object.destroy(appConfig);
-		}
-		if (oneDriveApiInstance !is null) object.destroy(oneDriveApiInstance);
-		if (selectiveSync !is null) object.destroy(selectiveSync);
-		if (syncEngineInstance !is null) object.destroy(syncEngineInstance);
+		performStandardExitProcess();
 	}
 	
 	scope(failure) {
 		// detail what scope was called
 		log.vdebug("Failure scope was called");
 		
-		// Was itemDB initialised?
-		if (itemDB !is null) {
-			// Make sure the .wal file is incorporated into the main db before we exit
-			itemDB.performVacuum();
-			object.destroy(itemDB);
-		}
-		
-		// Free other objects and memory
-		if (appConfig !is null) {
-			// Cleanup any existing dry-run elements ... these should never be left hanging around
-			cleanupDryRunDatabaseFiles(appConfig.databaseFilePathDryRun);
-			object.destroy(appConfig);
-		}
-		if (oneDriveApiInstance !is null) object.destroy(oneDriveApiInstance);
-		if (selectiveSync !is null) object.destroy(selectiveSync);
-		if (syncEngineInstance !is null) object.destroy(syncEngineInstance);
+		performStandardExitProcess();
 		
 		// Set these to be null due to failure scope - prevent 'ERROR: Unable to perform a database vacuum: out of memory' when the exit scope is then called
 		log.vdebug("Setting Class Objects to null due to failure scope");
@@ -644,8 +615,8 @@ int main(string[] cliArgs) {
 			}
 			
 			// Configure the monitor class
-			Monitor filesystemMonitor = new Monitor(appConfig, selectiveSync);
 			Tid workerTid;
+			filesystemMonitor = new Monitor(appConfig, selectiveSync);
 			
 			// Delegated function for when inotify detects a new local directory has been created
 			filesystemMonitor.onDirCreated = delegate(string path) {
@@ -972,9 +943,6 @@ int main(string[] cliArgs) {
 					}
 				}
 			}
-			if (filesystemMonitor.initialised) {
-				workerTid.send(0); // exit signal
-			}
 		}
 	} else {
 		// Exit application as the sync engine could not be initialised
@@ -989,6 +957,27 @@ int main(string[] cliArgs) {
 	} else {
 		return EXIT_FAILURE;
 	}
+}
+
+void performStandardExitProcess() {
+	// Was itemDB initialised?
+	if (itemDB !is null) {
+		// Make sure the .wal file is incorporated into the main db before we exit
+		itemDB.performVacuum();
+		object.destroy(itemDB);
+	}
+	
+	// Free other objects and memory
+	if (appConfig !is null) {
+		// Cleanup any existing dry-run elements ... these should never be left hanging around
+		cleanupDryRunDatabaseFiles(appConfig.databaseFilePathDryRun);
+		object.destroy(appConfig);
+	}
+	if (oneDriveApiInstance !is null) object.destroy(oneDriveApiInstance);
+	if (selectiveSync !is null) object.destroy(selectiveSync);
+	if (syncEngineInstance !is null) object.destroy(syncEngineInstance);
+	// cleanup hooks
+	if (filesystemMonitor && filesystemMonitor.initialised) filesystemMonitor.shutdown();
 }
 
 void performUploadOnlySyncProcess(string localPath, Monitor filesystemMonitor = null) {

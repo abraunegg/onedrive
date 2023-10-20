@@ -128,7 +128,10 @@ shared class MonitorBackgroundWorker {
 	}
 
 	void shutdown() {
-		if (fd > 0) close(fd);
+		if (fd > 0) {
+			close(fd);
+			fd = 0;
+		}
 	}
 }
 
