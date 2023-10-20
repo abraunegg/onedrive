@@ -749,6 +749,7 @@ int main(string[] cliArgs) {
 			MonoTime lastGitHubCheckTime = MonoTime.currTime();
 			string loopStartOutputMessage = "################################################## NEW LOOP ##################################################";
 			string loopStopOutputMessage = "################################################ LOOP COMPLETE ###############################################";
+			bool notificationReceived = false;
 			
 			while (performMonitor) {
 				// Do we need to validate the runtimeSyncDirectory to check for the presence of a '.nosync' file - the disk may have been ejected ..
@@ -766,33 +767,12 @@ int main(string[] cliArgs) {
 				}
 			
 				// Webhook Notification Handling
-				bool notificationReceived = false;
 				
 				// Check for notifications pushed from Microsoft to the webhook
 				if (webhookEnabled) {
 					// Create a subscription on the first run, or renew the subscription
 					// on subsequent runs when it is about to expire.
 					oneDriveApiInstance.createOrRenewSubscription();
-
-					// Process incoming notifications if any.
-
-					// Empirical evidence shows that Microsoft often sends multiple
-					// notifications for one single change, so we need a loop to exhaust
-					// all signals that were queued up by the webhook. The notifications
-					// do not contain any actual changes, and we will always rely do the
-					// delta endpoint to sync to latest. Therefore, only one sync run is
-					// good enough to catch up for multiple notifications.
-					for (int signalCount = 0;; signalCount++) {
-						const auto signalExists = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
-						if (signalExists) {
-							notificationReceived = true;
-						} else {
-							if (notificationReceived) {
-								log.log("Received ", signalCount," refresh signals from the webhook");
-							}
-							break;
-						}
-					}
 				}
 				
 				// Get the current time this loop is starting
@@ -926,17 +906,61 @@ int main(string[] cliArgs) {
 					auto nextCheckTime = lastCheckTime + checkOnlineInterval;
 					currentTime = MonoTime.currTime();
 					auto sleepTime = nextCheckTime - currentTime;
-					if(filesystemMonitor.initialised) {
-						// If local monitor is on
-						// start the worker and wait for event
-						if(!filesystemMonitor.isWorking()) {
-							workerTid.send(1);
+					log.vdebug("Sleep for ", sleepTime);
+
+					if(filesystemMonitor.initialised || webhookEnabled) {
+						if(filesystemMonitor.initialised) {
+							// If local monitor is on
+							// start the worker and wait for event
+							if(!filesystemMonitor.isWorking()) {
+								workerTid.send(1);
+							}
 						}
+
+						if(webhookEnabled) {
+							// if onedrive webhook is enabled
+							// update sleep time based on renew interval
+							Duration nextWebhookCheckDuration = oneDriveApiInstance.getNextExpirationCheckDuration();
+							if (nextWebhookCheckDuration < sleepTime) {
+								sleepTime = nextWebhookCheckDuration;
+								log.vdebug("Update sleeping time to ", sleepTime);
+							}
+							notificationReceived = false;
+						}
+
 						int res = 1;
-						
-						receiveTimeout(sleepTime, (int msg) {
-							res = msg;
-						});
+						// Process incoming notifications if any.
+						auto signalExists = receiveTimeout(sleepTime, 
+							(int msg) {
+								res = msg;
+							},
+							(ulong _) {
+								notificationReceived = true;
+							}
+						);
+						log.vdebug("signalExists = ", signalExists);
+						log.vdebug("worker status = ", res);
+						log.vdebug("notificationReceived = ", notificationReceived);
+
+						// Empirical evidence shows that Microsoft often sends multiple
+						// notifications for one single change, so we need a loop to exhaust
+						// all signals that were queued up by the webhook. The notifications
+						// do not contain any actual changes, and we will always rely do the
+						// delta endpoint to sync to latest. Therefore, only one sync run is
+						// good enough to catch up for multiple notifications.
+						int signalCount = notificationReceived ? 1 : 0;
+						for (;; signalCount++) {
+							signalExists = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
+							if (signalExists) {
+								notificationReceived = true;
+							} else {
+								if (notificationReceived) {
+									log.log("Received ", signalCount," refresh signals from the webhook");
+								}
+								break;
+							}
+						}
+
 						if(res == -1) {
 							log.error("Error: Monitor worker failed.");
 							monitorFailures = true;

@@ -846,6 +846,15 @@ class OneDriveApi {
 	void resetRetryAfterValue() {
 		retryAfterValue = 0;
 	}
+
+	// Return the duration to next subscriptionExpiration check
+	Duration getNextExpirationCheckDuration() {
+		SysTime now = Clock.currTime(UTC());
+		if (hasValidSubscription())
+			return subscriptionExpiration - now - subscriptionRenewalInterval;
+		else
+			return subscriptionRetryInterval;
+	}
 	
 	// Create a new subscription or renew the existing subscription
 	void createOrRenewSubscription() {
