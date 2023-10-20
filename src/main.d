@@ -976,14 +976,7 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 			filesystemMonitor.update(true);
 		}
 		
-		// Scan the configured 'sync_dir' for new data to upload to OneDrive
-		syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
-		if (appConfig.getValueBool("monitor")) {
-			// Handle any new inotify events whilst the local filesystem was being scanned
-			filesystemMonitor.update(true);
-		}
-		
-		// Download data from OneDrive last
+		// Download data from OneDrive first so that we won't have to check local file one by one first
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
 		if (appConfig.getValueBool("monitor")) {
 		// Cancel out any inotify events from downloading data
@@ -998,42 +991,40 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 			filesystemMonitor.update(false);
 		}
 		
-		
-		
 		// Perform the local database consistency check, picking up locally modified data and uploading this to OneDrive
 		syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 		if (appConfig.getValueBool("monitor")) {
 			// Handle any inotify events whilst the DB was being scanned
 			filesystemMonitor.update(true);
 		}
-			
-		// Is --download-only NOT configured?
-		if (!appConfig.getValueBool("download_only")) {
+	}
+	
+	// Is --download-only NOT configured?
+	if (!appConfig.getValueBool("download_only")) {
 		
-			// Scan the configured 'sync_dir' for new data to upload to OneDrive
-			syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
-			if (appConfig.getValueBool("monitor")) {
-				// Handle any new inotify events whilst the local filesystem was being scanned
-				filesystemMonitor.update(true);
-			}
-			
-			// Make sure we sync any DB data to this point, but only if not in --monitor mode
-			// In --monitor mode, this is handled within the 'loop', based on when the full scan true up is being performed
-			if (!appConfig.getValueBool("monitor")) {
-				itemDB.performVacuum();
-			}
-			
-			// Perform the final true up scan to ensure we have correctly replicated the current online state locally
-			if (!appConfig.surpressLoggingOutput) {
-				log.log("Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process");
-			}
-			// We pass in the 'appConfig.fullScanTrueUpRequired' value which then flags do we use the configured 'deltaLink'
-			// If 'appConfig.fullScanTrueUpRequired' is true, we do not use the 'deltaLink' if we are in --monitor mode, thus forcing a full scan true up
-			syncEngineInstance.syncOneDriveAccountToLocalDisk();
-			if (appConfig.getValueBool("monitor")) {
-				// Cancel out any inotify events from downloading data
-				filesystemMonitor.update(false);
-			}
+		// Scan the configured 'sync_dir' for new data to upload to OneDrive
+		syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
+		if (appConfig.getValueBool("monitor")) {
+			// Handle any new inotify events whilst the local filesystem was being scanned
+			filesystemMonitor.update(true);
+		}
+		
+		// Make sure we sync any DB data to this point, but only if not in --monitor mode
+		// In --monitor mode, this is handled within the 'loop', based on when the full scan true up is being performed
+		if (!appConfig.getValueBool("monitor")) {
+			itemDB.performVacuum();
+		}
+		
+		// Perform the final true up scan to ensure we have correctly replicated the current online state locally
+		if (!appConfig.surpressLoggingOutput) {
+			log.log("Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process");
+		}
+		// We pass in the 'appConfig.fullScanTrueUpRequired' value which then flags do we use the configured 'deltaLink'
+		// If 'appConfig.fullScanTrueUpRequired' is true, we do not use the 'deltaLink' if we are in --monitor mode, thus forcing a full scan true up
+		syncEngineInstance.syncOneDriveAccountToLocalDisk();
+		if (appConfig.getValueBool("monitor")) {
+			// Cancel out any inotify events from downloading data
+			filesystemMonitor.update(false);
 		}
 	}
 }

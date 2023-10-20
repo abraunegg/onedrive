@@ -510,6 +510,19 @@ class SyncEngine {
 		log.vdebug("Perform a Full Scan True-Up: ", appConfig.fullScanTrueUpRequired);
 		// Fetch the API response of /delta to track changes on OneDrive
 		fetchOneDriveDeltaAPIResponse(null, null, null);
+		
+		// Are we doing a --download-only sync?
+		if (!appConfig.getValueBool("download_only")) {
+			// Do we have any existing remote items, where the content is not in-sync with local ones, that needs to be uploaded?
+			if (!databaseItemsWhereContentHasChanged.empty) {
+				// There are changed local files that were not in DB to upload
+				log.log("Changed local items to upload to OneDrive: ", databaseItemsWhereContentHasChanged.length);
+				processChangedLocalItemsToUpload();
+			}
+		}
+		// Cleanup array memory
+		databaseItemsWhereContentHasChanged = [];
+
 		// Process any download activities or cleanup actions
 		processDownloadActivities();
 		
@@ -1628,6 +1641,14 @@ class SyncEngine {
 				log.vdebug("Update/Insert local database with item details");
 				log.vdebug("item details to update/insert: ", newDatabaseItem);
 				itemDB.upsert(newDatabaseItem);
+				return;
+			} else if (appConfig.getValueBool("local_first")) {
+				// Item is not in database but exists locally
+				// In local_first mode, upload it instead
+				log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local_first is used, upload it instead.");
+				// save in database for so it can be found for later updates
+				itemDB.upsert(newDatabaseItem);
+				databaseItemsWhereContentHasChanged ~= [newDatabaseItem.driveId, newDatabaseItem.id, newItemPath];
 				return;
 			} else {
 				// Item details from OneDrive and local item details in database are NOT in-sync
