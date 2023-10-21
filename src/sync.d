@@ -716,9 +716,11 @@ class SyncEngine {
 			}
 							
 			// Create a new API Instance for querying /delta and initialise it
+			// Reuse the socket to speed up
+			long forbidReuse = 0;
 			OneDriveApi getDeltaQueryOneDriveApiInstance;
 			getDeltaQueryOneDriveApiInstance = new OneDriveApi(appConfig);
-			getDeltaQueryOneDriveApiInstance.initialise();
+			getDeltaQueryOneDriveApiInstance.initialise(forbidReuse);
 			
 			for (;;) {
 				responseBundleCount++;

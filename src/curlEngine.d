@@ -18,7 +18,7 @@ class CurlEngine {
 		http = HTTP();
 	}
 	
-	void initialise(long dnsTimeout, long connectTimeout, long dataTimeout, long operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, long userRateLimit, long protocolVersion) {
+	void initialise(long dnsTimeout, long connectTimeout, long dataTimeout, long operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, long userRateLimit, long protocolVersion, long forbidReuse=1) {
 		// Curl Timeout Handling
 		
 		// libcurl dns_cache_timeout timeout
@@ -83,7 +83,7 @@ class CurlEngine {
 		//   Setting this to 1 ensures that when we close the curl instance, any open sockets are closed - which we need to do when running 
 		//   multiple threads and API instances at the same time otherwise we run out of local files | sockets pretty quickly
 		//   The libcurl default is 1 - ensure we are configuring not to reuse connections and leave unused sockets open
-		http.handle.set(CurlOption.forbid_reuse,1);
+		http.handle.set(CurlOption.forbid_reuse,forbidReuse);
 		
 		if (httpsDebug) {
 			// Output what options we are using so that in the debug log this can be tracked
@@ -93,6 +93,7 @@ class CurlEngine {
 			log.vdebug("http.operationTimeout = ", operationTimeout);
 			log.vdebug("http.maxRedirects = ", maxRedirects);
 			log.vdebug("http.CurlOption.ipresolve = ", protocolVersion);
+			log.vdebug("http.forbid_reuse.forbidReuse = ", forbidReuse);
 		}
 	}
 	
