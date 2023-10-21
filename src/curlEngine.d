@@ -13,12 +13,17 @@ import std.stdio;
 
 class CurlEngine {
 	HTTP http;
+	bool keepAlive;
 	
 	this() {	
 		http = HTTP();
 	}
 	
-	void initialise(long dnsTimeout, long connectTimeout, long dataTimeout, long operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, long userRateLimit, long protocolVersion) {
+	void initialise(long dnsTimeout, long connectTimeout, long dataTimeout, long operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, long userRateLimit, long protocolVersion, bool keepAlive=false) {
+		//   Setting this to false ensures that when we close the curl instance, any open sockets are closed - which we need to do when running 
+		//   multiple threads and API instances at the same time otherwise we run out of local files | sockets pretty quickly
+		this.keepAlive = keepAlive;
+
 		// Curl Timeout Handling
 		
 		// libcurl dns_cache_timeout timeout
@@ -77,14 +82,6 @@ class CurlEngine {
 		//   Ensure that TCP_NODELAY is set to 0 to ensure that TCP NAGLE is enabled
 		http.handle.set(CurlOption.tcp_nodelay,0);
 		
-		//   https://curl.se/libcurl/c/CURLOPT_FORBID_REUSE.html
-		//   CURLOPT_FORBID_REUSE - make connection get closed at once after use
-		//   Ensure that we ARE NOT reusing TCP sockets connections - setting to 0 ensures that we ARE reusing connections (we did this in v2.4.xx) to ensure connections remained open and usable
-		//   Setting this to 1 ensures that when we close the curl instance, any open sockets are closed - which we need to do when running 
-		//   multiple threads and API instances at the same time otherwise we run out of local files | sockets pretty quickly
-		//   The libcurl default is 1 - ensure we are configuring not to reuse connections and leave unused sockets open
-		http.handle.set(CurlOption.forbid_reuse,1);
-		
 		if (httpsDebug) {
 			// Output what options we are using so that in the debug log this can be tracked
 			log.vdebug("http.dnsTimeout = ", dnsTimeout);
@@ -93,15 +90,15 @@ class CurlEngine {
 			log.vdebug("http.operationTimeout = ", operationTimeout);
 			log.vdebug("http.maxRedirects = ", maxRedirects);
 			log.vdebug("http.CurlOption.ipresolve = ", protocolVersion);
+			log.vdebug("http.header.Connection.keepAlive = ", keepAlive);
 		}
 	}
-	
-	void setMethodPost() {
-		http.method = HTTP.Method.post;
-	}
-	
-	void setMethodPatch() {
-		http.method = HTTP.Method.patch;
+
+	void connect(HTTP.Method method, const(char)[] url) {
+		if (!keepAlive)
+			http.addRequestHeader("Connection", "close");
+		http.method = method;
+		http.url = url;
 	}
 	
 	void setDisableSSLVerifyPeer() {

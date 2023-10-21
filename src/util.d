@@ -167,9 +167,8 @@ bool testInternetReachability(ApplicationConfig appConfig) {
 	
 	// Configure the remaining items required
 	// URL to use
-	curlEngine.http.url = "https://login.microsoftonline.com";
 	// HTTP connection test method
-	curlEngine.http.method = HTTP.Method.head;
+	curlEngine.connect(HTTP.Method.head, "https://login.microsoftonline.com");
 	// Attempt to contact the Microsoft Online Service
 	try {
 		log.vdebug("Attempting to contact Microsoft OneDrive Login Service");
