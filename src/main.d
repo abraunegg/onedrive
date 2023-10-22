@@ -1139,6 +1139,8 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 	try {
 		assumeNoGC ( () {
 			log.log("Got termination signal, performing clean up");
+			// Wait for all parallel jobs that depend on the database to complete
+			taskPool.finish(true);
 			// was itemDb initialised?
 			if (itemDB.isDatabaseInitialised()) {
 				// Make sure the .wal file is incorporated into the main db before we exit
