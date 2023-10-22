@@ -1416,6 +1416,7 @@ class OneDriveApi {
 	}
 	
 	private auto patch(T)(const(char)[] url, const(T)[] patchData) {
+		scope(exit) curlEngine.http.clearRequestHeaders();
 		curlEngine.setMethodPatch();
 		curlEngine.http.url = url;
 		addAccessTokenHeader();
@@ -1425,6 +1426,7 @@ class OneDriveApi {
 	}
 	
 	private auto post(T)(string url, const(T)[] postData) {
+		scope(exit) curlEngine.http.clearRequestHeaders();
 		curlEngine.setMethodPost();
 		curlEngine.http.url = url;
 		addAccessTokenHeader();
