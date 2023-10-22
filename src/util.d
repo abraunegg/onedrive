@@ -53,7 +53,7 @@ void safeBackup(const(char)[] path, bool dryRun) {
 	// Perform the backup
 	log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent data loss: ", path, " -> ", newPath);
 	if (!dryRun) {
-		rename(path, newPath);
+		std.file.copy(path, newPath);
 	} else {
 		log.vdebug("DRY-RUN: Skipping local file backup");
 	}
