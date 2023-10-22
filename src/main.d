@@ -750,7 +750,7 @@ int main(string[] cliArgs) {
 				auto currentTime = MonoTime.currTime();
 				
 				// Do we perform a sync with OneDrive?
-				if (notificationReceived || (currentTime - lastCheckTime >= checkOnlineInterval) || (monitorLoopFullCount == 0)) {
+				if ((currentTime - lastCheckTime >= checkOnlineInterval) || (monitorLoopFullCount == 0)) {
 					// Increment relevant counters
 					monitorLoopFullCount++;
 					fullScanFrequencyLoopCount++;
@@ -927,6 +927,7 @@ int main(string[] cliArgs) {
 							} else {
 								if (notificationReceived) {
 									log.log("Received ", signalCount," refresh signals from the webhook");
+									oneDriveWebhookCallback();
 								}
 								break;
 							}
@@ -978,6 +979,26 @@ void performStandardExitProcess() {
 	if (syncEngineInstance !is null) object.destroy(syncEngineInstance);
 	// cleanup hooks
 	if (filesystemMonitor && filesystemMonitor.initialised) filesystemMonitor.shutdown();
+}
+
+void oneDriveWebhookCallback() {
+	// If we are in a --download-only method of operation, there is no filesystem monitoring, so no inotify events to check
+	if (!appConfig.getValueBool("download_only")) {
+		try {
+			// Process any inotify events
+			filesystemMonitor.update(true);
+		} catch (MonitorException e) {
+			// Catch any exceptions thrown by inotify / monitor engine
+			log.error("ERROR: The following inotify error was generated: ", e.msg);
+		}
+	}
+
+	// Download data from OneDrive last
+	syncEngineInstance.syncOneDriveAccountToLocalDisk();
+	if (appConfig.getValueBool("monitor")) {
+	// Cancel out any inotify events from downloading data
+		filesystemMonitor.update(false);
+	}
 }
 
 void performUploadOnlySyncProcess(string localPath, Monitor filesystemMonitor = null) {
