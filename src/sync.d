@@ -3369,105 +3369,112 @@ class SyncEngine {
 			// This is because the Item[] has no other functions to allow is to parallel process those elements, so we have to use a string array as input to this function
 			Item dbItem;
 			itemDB.selectById(changedItemParentId, changedItemId, dbItem);
-		
-			// Query the available space online
-			// This will update appConfig.quotaAvailable & appConfig.quotaRestricted values
-			remainingFreeSpace = getRemainingFreeSpace(dbItem.driveId);
+
+			// before uploading, check if it is really necessary
+			string itemSource = "database";
+			if (isItemSynced(dbItem, localFilePath, itemSource)) {
+				log.vdebug("Skipped due to item is already in-sync: ", localFilePath);
+			} else {
 			
-			// Get the file size
-			ulong thisFileSizeLocal = getSize(localFilePath);
-			ulong thisFileSizeFromDB = to!ulong(dbItem.size);
+				// Query the available space online
+				// This will update appConfig.quotaAvailable & appConfig.quotaRestricted values
+				remainingFreeSpace = getRemainingFreeSpace(dbItem.driveId);
+				
+				// Get the file size
+				ulong thisFileSizeLocal = getSize(localFilePath);
+				ulong thisFileSizeFromDB = to!ulong(dbItem.size);
+				
+				// remainingFreeSpace online includes the current file online
+				// we need to remove the online file (add back the existing file size) then take away the new local file size to get a new approximate value
+				ulong calculatedSpaceOnlinePostUpload = (remainingFreeSpace + thisFileSizeFromDB) - thisFileSizeLocal;
+				
+				// Based on what we know, for this thread - can we safely upload this modified local file?
+				log.vdebug("This Thread Current Free Space Online:                ", remainingFreeSpace);
+				log.vdebug("This Thread Calculated Free Space Online Post Upload: ", calculatedSpaceOnlinePostUpload);
 			
-			// remainingFreeSpace online includes the current file online
-			// we need to remove the online file (add back the existing file size) then take away the new local file size to get a new approximate value
-			ulong calculatedSpaceOnlinePostUpload = (remainingFreeSpace + thisFileSizeFromDB) - thisFileSizeLocal;
-			
-			// Based on what we know, for this thread - can we safely upload this modified local file?
-			log.vdebug("This Thread Current Free Space Online:                ", remainingFreeSpace);
-			log.vdebug("This Thread Calculated Free Space Online Post Upload: ", calculatedSpaceOnlinePostUpload);
-		
-			JSONValue uploadResponse;
-			
-			bool spaceAvailableOnline = false;
-			// If 'personal' accounts, if driveId == defaultDriveId, then we will have data - appConfig.quotaAvailable will be updated
-			// If 'personal' accounts, if driveId != defaultDriveId, then we will not have quota data - appConfig.quotaRestricted will be set as true
-			// If 'business' accounts, if driveId == defaultDriveId, then we will have data
-			// If 'business' accounts, if driveId != defaultDriveId, then we will have data, but it will be a 0 value - appConfig.quotaRestricted will be set as true
-			
-			// What was the latest getRemainingFreeSpace() value?
-			if (appConfig.quotaAvailable) {
-				// Our query told us we have free space online .. if we upload this file, will we exceed space online - thus upload will fail during upload?
-				if (calculatedSpaceOnlinePostUpload > 0) {
-					// Based on this thread action, we beleive that there is space available online to upload - proceed
+				JSONValue uploadResponse;
+				
+				bool spaceAvailableOnline = false;
+				// If 'personal' accounts, if driveId == defaultDriveId, then we will have data - appConfig.quotaAvailable will be updated
+				// If 'personal' accounts, if driveId != defaultDriveId, then we will not have quota data - appConfig.quotaRestricted will be set as true
+				// If 'business' accounts, if driveId == defaultDriveId, then we will have data
+				// If 'business' accounts, if driveId != defaultDriveId, then we will have data, but it will be a 0 value - appConfig.quotaRestricted will be set as true
+				
+				// What was the latest getRemainingFreeSpace() value?
+				if (appConfig.quotaAvailable) {
+					// Our query told us we have free space online .. if we upload this file, will we exceed space online - thus upload will fail during upload?
+					if (calculatedSpaceOnlinePostUpload > 0) {
+						// Based on this thread action, we beleive that there is space available online to upload - proceed
+						spaceAvailableOnline = true;
+					}
+				}
+				// Is quota being restricted?
+				if (appConfig.quotaRestricted) {
+					// Space available online is being restricted - so we have no way to really know if there is space available online
 					spaceAvailableOnline = true;
 				}
-			}
-			// Is quota being restricted?
-			if (appConfig.quotaRestricted) {
-				// Space available online is being restricted - so we have no way to really know if there is space available online
-				spaceAvailableOnline = true;
-			}
-				
-			// Do we have space available or is space available being restricted (so we make the blind assumption that there is space available)
-			if (spaceAvailableOnline) {
-				// Does this file exceed the maximum file size to upload to OneDrive?
-				if (thisFileSizeLocal <= maxUploadFileSize) {
-					// Attempt to upload the modified file
-					// Error handling is in performModifiedFileUpload(), and the JSON that is responded with - will either be null or a valid JSON object containing the upload result
-					uploadResponse = performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
 					
-					// Evaluate the returned JSON uploadResponse
-					// If there was an error uploading the file, uploadResponse should be empty and invalid
-					if (uploadResponse.type() != JSONType.object){
+				// Do we have space available or is space available being restricted (so we make the blind assumption that there is space available)
+				if (spaceAvailableOnline) {
+					// Does this file exceed the maximum file size to upload to OneDrive?
+					if (thisFileSizeLocal <= maxUploadFileSize) {
+						// Attempt to upload the modified file
+						// Error handling is in performModifiedFileUpload(), and the JSON that is responded with - will either be null or a valid JSON object containing the upload result
+						uploadResponse = performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
+						
+						// Evaluate the returned JSON uploadResponse
+						// If there was an error uploading the file, uploadResponse should be empty and invalid
+						if (uploadResponse.type() != JSONType.object){
+							uploadFailed = true;
+							skippedExceptionError = true;
+						}
+						
+					} else {
+						// Skip file - too large
 						uploadFailed = true;
-						skippedExceptionError = true;
+						skippedMaxSize = true;
 					}
-					
 				} else {
-					// Skip file - too large
+					// Cant upload this file - no space available
 					uploadFailed = true;
-					skippedMaxSize = true;
 				}
-			} else {
-				// Cant upload this file - no space available
-				uploadFailed = true;
-			}
-			
-			// Did the upload fail?
-			if (uploadFailed) {
-				// Upload failed .. why?
-				// No space available online
-				if (!spaceAvailableOnline) {
-					log.logAndNotify("Skipping uploading modified file ", localFilePath, " due to insufficient free space available on OneDrive");
-				}
-				// File exceeds max allowed size
-				if (skippedMaxSize) {
-					log.logAndNotify("Skipping uploading this modified file as it exceeds the maximum size allowed by OneDrive: ", localFilePath);
-				}
-				// Generic message
-				if (skippedExceptionError) {
-					// normal failure message if API or exception error generated
-					log.logAndNotify("Uploading modified file ", localFilePath, " ... failed!");
-				}
-			} else {
-				// Upload was successful
-				log.logAndNotify("Uploading modified file ", localFilePath, " ... done.");
 				
-				// Save JSON item in database
-				saveItem(uploadResponse);
-				
-				if (!dryRun) {
-					// Check the integrity of the uploaded modified file
-					performUploadIntegrityValidationChecks(uploadResponse, localFilePath, thisFileSizeLocal);
+				// Did the upload fail?
+				if (uploadFailed) {
+					// Upload failed .. why?
+					// No space available online
+					if (!spaceAvailableOnline) {
+						log.logAndNotify("Skipping uploading modified file ", localFilePath, " due to insufficient free space available on OneDrive");
+					}
+					// File exceeds max allowed size
+					if (skippedMaxSize) {
+						log.logAndNotify("Skipping uploading this modified file as it exceeds the maximum size allowed by OneDrive: ", localFilePath);
+					}
+					// Generic message
+					if (skippedExceptionError) {
+						// normal failure message if API or exception error generated
+						log.logAndNotify("Uploading modified file ", localFilePath, " ... failed!");
+					}
+				} else {
+					// Upload was successful
+					log.logAndNotify("Uploading modified file ", localFilePath, " ... done.");
 					
-					// Update the date / time of the file online to match the local item
-					// Get the local file last modified time
-					SysTime localModifiedTime = timeLastModified(localFilePath).toUTC();
-					localModifiedTime.fracSecs = Duration.zero;
-					// Get the latest eTag, and use that
-					string etagFromUploadResponse = uploadResponse["eTag"].str;
-					// Attempt to update the online date time stamp based on our local data
-					uploadLastModifiedTime(dbItem.driveId, dbItem.id, localModifiedTime, etagFromUploadResponse);
+					// Save JSON item in database
+					saveItem(uploadResponse);
+					
+					if (!dryRun) {
+						// Check the integrity of the uploaded modified file
+						performUploadIntegrityValidationChecks(uploadResponse, localFilePath, thisFileSizeLocal);
+						
+						// Update the date / time of the file online to match the local item
+						// Get the local file last modified time
+						SysTime localModifiedTime = timeLastModified(localFilePath).toUTC();
+						localModifiedTime.fracSecs = Duration.zero;
+						// Get the latest eTag, and use that
+						string etagFromUploadResponse = uploadResponse["eTag"].str;
+						// Attempt to update the online date time stamp based on our local data
+						uploadLastModifiedTime(dbItem.driveId, dbItem.id, localModifiedTime, etagFromUploadResponse);
+					}
 				}
 			}
 			

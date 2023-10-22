@@ -828,8 +828,8 @@ int main(string[] cliArgs) {
 							performStandardSyncProcess(localPath, filesystemMonitor);
 						}
 						
-						// Discard any inotify events generated as part of any sync operation
-						filesystemMonitor.update(false);
+						// Handle any new inotify events
+						filesystemMonitor.update(true);
 						
 						// Detail the outcome of the sync process
 						displaySyncOutcome();
@@ -996,8 +996,8 @@ void oneDriveWebhookCallback() {
 	// Download data from OneDrive last
 	syncEngineInstance.syncOneDriveAccountToLocalDisk();
 	if (appConfig.getValueBool("monitor")) {
-	// Cancel out any inotify events from downloading data
-		filesystemMonitor.update(false);
+	// Handle any new inotify events
+		filesystemMonitor.update(true);
 	}
 }
 
@@ -1050,16 +1050,16 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 		// Download data from OneDrive last
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
 		if (appConfig.getValueBool("monitor")) {
-		// Cancel out any inotify events from downloading data
-			filesystemMonitor.update(false);
+		// Handle any new inotify events
+			filesystemMonitor.update(true);
 		}
 	} else {
 		// Normal sync
 		// Download data from OneDrive first
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
 		if (appConfig.getValueBool("monitor")) {
-			// Cancel out any inotify events from downloading data
-			filesystemMonitor.update(false);
+			// Handle any new inotify events
+			filesystemMonitor.update(true);
 		}
 		
 		
