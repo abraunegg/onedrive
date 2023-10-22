@@ -3939,45 +3939,48 @@ class SyncEngine {
 				// Is this path in the array of fake deleted items? If yes, return early, nothing else to do, save processing
 				if (canFind(pathFakeDeletedArray, path)) return;
 			}
-			
-			// This not a Client Side Filtering check, nor a Microsoft Check, but is a sanity check that the path provided is UTF encoded correctly
-			// Check the std.encoding of the path against: Unicode 5.0, ASCII, ISO-8859-1, ISO-8859-2, WINDOWS-1250, WINDOWS-1251, WINDOWS-1252
-			if (!unwanted) {
-				if(!isValid(path)) {
-					// Path is not valid according to https://dlang.org/phobos/std_encoding.html
-					log.logAndNotify("Skipping item - invalid character encoding sequence: ", path);
-					unwanted = true;
+
+			// Check if item if found in database
+			bool itemFoundInDB = pathFoundInDatabase(path);
+
+			// The item should be included if it already exists in the database
+			if (!itemFoundInDB) {
+				// This not a Client Side Filtering check, nor a Microsoft Check, but is a sanity check that the path provided is UTF encoded correctly
+				// Check the std.encoding of the path against: Unicode 5.0, ASCII, ISO-8859-1, ISO-8859-2, WINDOWS-1250, WINDOWS-1251, WINDOWS-1252
+				if (!unwanted) {
+					if(!isValid(path)) {
+						// Path is not valid according to https://dlang.org/phobos/std_encoding.html
+						log.logAndNotify("Skipping item - invalid character encoding sequence: ", path);
+						unwanted = true;
+					}
 				}
-			}
-			
-			// Check this path against the Client Side Filtering Rules
-			// - check_nosync
-			// - skip_dotfiles
-			// - skip_symlinks
-			// - skip_file
-			// - skip_dir
-			// - sync_list
-			// - skip_size
-			if (!unwanted) {
-				unwanted = checkPathAgainstClientSideFiltering(path);
-			}
-			
-			// Check this path against the Microsoft Naming Conventions & Restristions
-			// - Microsoft OneDrive restriction and limitations about Windows naming files
-			// - Bad whitespace items
-			// - HTML ASCII Codes as part of file name
-			if (!unwanted) {
-				unwanted = checkPathAgainstMicrosoftNamingRestrictions(path);
+				
+				// Check this path against the Client Side Filtering Rules
+				// - check_nosync
+				// - skip_dotfiles
+				// - skip_symlinks
+				// - skip_file
+				// - skip_dir
+				// - sync_list
+				// - skip_size
+				if (!unwanted) {
+					unwanted = checkPathAgainstClientSideFiltering(path);
+				}
+				
+				// Check this path against the Microsoft Naming Conventions & Restristions
+				// - Microsoft OneDrive restriction and limitations about Windows naming files
+				// - Bad whitespace items
+				// - HTML ASCII Codes as part of file name
+				if (!unwanted) {
+					unwanted = checkPathAgainstMicrosoftNamingRestrictions(path);
+				}
 			}
 			
 			if (!unwanted) {
 				// At this point, this path, we want to scan for new data as it is not excluded
 				if (isDir(path)) {
-					// Check if this path in the database
-					bool directoryFoundInDB = pathFoundInDatabase(path);
-					
 					// Was the path found in the database?
-					if (!directoryFoundInDB) {
+					if (!itemFoundInDB) {
 						// Path not found in database when searching all drive id's
 						if (!cleanupLocalFiles) {
 							// --download-only --cleanup-local-files not used
@@ -4065,9 +4068,8 @@ class SyncEngine {
 					//  prw-rw-r--.  1 user user    0 Jul  7 05:55 my_pipe
 					if (isFile(path)) {
 						// Path is a valid file, not a pipe
-						bool fileFoundInDB = pathFoundInDatabase(path);
 						// Was the file found in the database?
-						if (!fileFoundInDB) {
+						if (!itemFoundInDB) {
 							// File not found in database when searching all drive id's
 							// Do we upload the file or clean up the file?
 							if (!cleanupLocalFiles) {
