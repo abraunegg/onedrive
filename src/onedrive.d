@@ -622,8 +622,9 @@ class OneDriveApi {
 	JSONValue getPathDetailsByDriveId(string driveId, string path) {
 		checkAccessTokenExpired();
 		string url;
-		// Required format: /drives/{drive-id}/root:/{item-path}
-		url = driveByIdUrl ~ driveId ~ "/root:/" ~ encodeComponent(path);
+		// https://learn.microsoft.com/en-us/onedrive/developer/rest-api/concepts/addressing-driveitems?view=odsp-graph-online
+		// Required format: /drives/{drive-id}/root:/{item-path}:
+		url = driveByIdUrl ~ driveId ~ "/root:/" ~ encodeComponent(path) ~ ":";
 		return get(url);
 	}
 	
