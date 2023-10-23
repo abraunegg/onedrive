@@ -4591,10 +4591,17 @@ class SyncEngine {
 							
 							// No 404 or otherwise was triggered, meaning that the file already exists online and passes the POSIX test ...
 							log.vdebug("fileDetailsFromOneDrive after exist online check: ", fileDetailsFromOneDrive);
+
+							// Save item to the database
+							saveItem(fileDetailsFromOneDrive);
+							
 							// Does the data from online match our local file?
-							if (performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize)) {
-								// Save item to the database
-								saveItem(fileDetailsFromOneDrive);
+							if (disableUploadValidation || !performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize)) {
+								// The item already exists online, replace it instead
+								string changedItemParentId = fileDetailsFromOneDrive["parentReference"]["driveId"].str;
+								string changedItemId = fileDetailsFromOneDrive["id"].str;
+								databaseItemsWhereContentHasChanged ~= [changedItemParentId, changedItemId, fileToUpload];
+								processChangedLocalItemsToUpload();
 							}
 						} catch (OneDriveException exception) {
 							// If we get a 404 .. the file is not online .. this is what we want .. file does not exist online
