@@ -6434,6 +6434,7 @@ class SyncEngine {
 				];
 				
 				// Perform the move operation on OneDrive
+				bool isMoveSuccess = false;
 				JSONValue response;
 				
 				// Create a new API Instance for this thread and initialise it
@@ -6441,27 +6442,41 @@ class SyncEngine {
 				movePathOnlineApiInstance = new OneDriveApi(appConfig);
 				movePathOnlineApiInstance.initialise();
 				
-				try {
-					response = movePathOnlineApiInstance.updateById(oldItem.driveId, oldItem.id, data, oldItem.eTag);
-				} catch (OneDriveException e) {
-					if (e.httpStatusCode == 412) {
-						// OneDrive threw a 412 error, most likely: ETag does not match current item's value
-						// Retry without eTag
-						log.vdebug("File Move Failed - OneDrive eTag / cTag match issue");
-						log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting to move the file - gracefully handling error");
-						string nullTag = null;
-						// move the file but without the eTag
-						response = movePathOnlineApiInstance.updateById(oldItem.driveId, oldItem.id, data, nullTag);
-					}
-				} 
+				const(char)[] eTag = oldItem.eTag;
+				for (int i = 0; i < 3; i++) {
+					try {
+						response = movePathOnlineApiInstance.updateById(oldItem.driveId, oldItem.id, data, eTag);
+						isMoveSuccess = true;
+						break;
+					} catch (OneDriveException e) {
+						if (e.httpStatusCode == 412) {
+							// OneDrive threw a 412 error, most likely: ETag does not match current item's value
+							// Retry without eTag
+							log.vdebug("File Move Failed - OneDrive eTag / cTag match issue");
+							log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting to move the file - gracefully handling error");
+							// move the file but without the eTag
+							eTag = null;
+						} else if (e.httpStatusCode == 409) {
+							// Destination item already exists, delete it first
+							log.log("Moved local item overwrote an existing item - deleting old online item");
+							uploadDeletedItem(newItem, newPath);
+						} else
+							break;
+					} 
+				}
 				// Shutdown API instance
 				movePathOnlineApiInstance.shutdown();
 				// Free object and memory
 				object.destroy(movePathOnlineApiInstance);
 				
-				// save the move response from OneDrive in the database
-				// Is the response a valid JSON object - validation checking done in saveItem
-				saveItem(response);
+				if (isMoveSuccess) {
+					// save the move response from OneDrive in the database
+					// Is the response a valid JSON object - validation checking done in saveItem
+					saveItem(response);
+					log.log("Moving ", oldPath, " to ", newPath, " ... done.");
+				} else {
+					log.error("ERROR: Unable to move from ", oldPath, " to ", newPath);
+				}
 			}
 		} else {
 			// Moved item is unwanted
