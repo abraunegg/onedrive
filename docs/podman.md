@@ -130,7 +130,7 @@ podman run -it --name onedrive --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
 ```
 
 
-**Important:** If you plan to use the 'podman' built in auto-updating of container images described in step XXXX below, you must pass an additional argument to set a label during the first run. The updated script example to support auto-updating of container images is below:
+**Important:** If you plan to use the 'podman' built in auto-updating of container images described in 'Systemd Service & Auto Updating' below, you must pass an additional argument to set a label during the first run. The updated script example to support auto-updating of container images is below:
 
 ```bash
 export ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
@@ -141,8 +141,8 @@ podman run -it --name onedrive --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
     --userns=keep-id \
     -v onedrive_conf:/onedrive/conf:U,Z \
     -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" \
-	-e PODMAN=1 \
-	--label "io.containers.autoupdate=image" \
+    -e PODMAN=1 \
+    --label "io.containers.autoupdate=image" \
     driveone/onedrive:latest
 ```
 
@@ -188,7 +188,7 @@ podman rm -f onedrive
 
 ### Systemd Service & Auto Updating
 
-Podman supports running containers as a systemd service and also auto updating of the container images. Using the existing running container you can generate a systemd unit file to be installed by the **root** user. To have your container image auto-update with podman, it must first be created with the label `"io.containers.autoupdate=image"` mentioned in step 2.
+Podman supports running containers as a systemd service and also auto updating of the container images. Using the existing running container you can generate a systemd unit file to be installed by the **root** user. To have your container image auto-update with podman, it must first be created with the label `"io.containers.autoupdate=image"` mentioned in step 5 above.
 
 ```
 cd /tmp
@@ -259,8 +259,8 @@ podman run -it --name onedrive_work --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
     --userns=keep-id \
     -v onedrive_conf_work:/onedrive/conf:U,Z \
     -v "${ONEDRIVE_DATA_DIR_WORK}:/onedrive/data:U,Z" \
-	-e PODMAN=1 \
-	--label "io.containers.autoupdate=image" \
+    -e PODMAN=1 \
+    --label "io.containers.autoupdate=image" \
     driveone/onedrive:latest
 ```
 
