@@ -607,16 +607,6 @@ class OneDriveApi {
 		return get(url);
 	}
 	
-	// Create a shareable link for an existing file on OneDrive based on the accessScope JSON permissions
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createlink
-	JSONValue createShareableLink(string driveId, string id, JSONValue accessScope) {
-		checkAccessTokenExpired();
-		string url;
-		url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/createLink";
-		curlEngine.http.addRequestHeader("Content-Type", "application/json");
-		return post(url, accessScope.toString());
-	}
-	
 	// Return the requested details of the specified path on the specified drive id and path
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
 	JSONValue getPathDetailsByDriveId(string driveId, string path) {
@@ -626,6 +616,16 @@ class OneDriveApi {
 		// Required format: /drives/{drive-id}/root:/{item-path}:
 		url = driveByIdUrl ~ driveId ~ "/root:/" ~ encodeComponent(path) ~ ":";
 		return get(url);
+	}
+
+	// Create a shareable link for an existing file on OneDrive based on the accessScope JSON permissions
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createlink
+	JSONValue createShareableLink(string driveId, string id, JSONValue accessScope) {
+		checkAccessTokenExpired();
+		string url;
+		url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/createLink";
+		curlEngine.http.addRequestHeader("Content-Type", "application/json");
+		return post(url, accessScope.toString());
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
@@ -674,6 +674,14 @@ class OneDriveApi {
 		url = "https://graph.microsoft.com/v1.0/drives/" ~ driveId ~ "/root/search(q='" ~ encodeComponent(path) ~ "')";
 		return get(url);
 	}
+
+	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_post_children
+	JSONValue createById(string parentDriveId, string parentId, JSONValue item) {
+		checkAccessTokenExpired();
+		string url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ "/children";
+		curlEngine.http.addRequestHeader("Content-Type", "application/json");
+		return post(url, item.toString());
+	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_update
 	JSONValue updateById(const(char)[] driveId, const(char)[] id, JSONValue data, const(char)[] eTag = null) {
@@ -691,14 +699,6 @@ class OneDriveApi {
 		//TODO: investigate why this always fail with 412 (Precondition Failed)
 		//if (eTag) http.addRequestHeader("If-Match", eTag);
 		performDelete(url);
-	}
-	
-	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_post_children
-	JSONValue createById(string parentDriveId, string parentId, JSONValue item) {
-		checkAccessTokenExpired();
-		string url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ "/children";
-		curlEngine.http.addRequestHeader("Content-Type", "application/json");
-		return post(url, item.toString());
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
@@ -1102,15 +1102,36 @@ class OneDriveApi {
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 	}
 	
-	private void addAccessTokenHeader() {
-		curlEngine.http.addRequestHeader("Authorization", appConfig.accessToken);
-	}
-	
 	private void addIncludeFeatureRequestHeader() {
 		log.vdebug("Adding 'Include-Feature=AddToOneDrive' API request header as 'sync_business_shared_items' config option is enabled");
 		curlEngine.http.addRequestHeader("Prefer", "Include-Feature=AddToOneDrive");
 	}
-	
+
+	// Oauth
+	private void checkAccessTokenExpired() {
+		try {
+			if (Clock.currTime() >= appConfig.accessTokenExpiration) {
+				log.vdebug("Microsoft OneDrive Access Token has EXPIRED. Must generate a new Microsoft OneDrive Access Token");
+				newToken();
+			} else {
+				log.vdebug("Existing Microsoft OneDrive Access Token Expires: ", appConfig.accessTokenExpiration);
+			}
+		} catch (OneDriveException e) {
+			if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
+				// flag error and notify
+				writeln();
+				log.errorAndNotify("ERROR: Refresh token invalid, use --reauth to authorize the client again.");
+				writeln();
+				// set error message
+				e.msg ~= "\nRefresh token invalid, use --reauth to authorize the client again";
+			}
+		}
+	}
+		
+	private void addAccessTokenHeader() {
+		curlEngine.http.addRequestHeader("Authorization", appConfig.accessToken);
+	}
+
 	private void acquireToken(char[] postData) {
 		JSONValue response;
 
@@ -1207,24 +1228,58 @@ class OneDriveApi {
 		}
 	}
 	
-	private void checkAccessTokenExpired() {
-		try {
-			if (Clock.currTime() >= appConfig.accessTokenExpiration) {
-				log.vdebug("Microsoft OneDrive Access Token has EXPIRED. Must generate a new Microsoft OneDrive Access Token");
-				newToken();
-			} else {
-				log.vdebug("Existing Microsoft OneDrive Access Token Expires: ", appConfig.accessTokenExpiration);
-			}
-		} catch (OneDriveException e) {
-			if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
-				// flag error and notify
-				writeln();
-				log.errorAndNotify("ERROR: Refresh token invalid, use --reauth to authorize the client again.");
-				writeln();
-				// set error message
-				e.msg ~= "\nRefresh token invalid, use --reauth to authorize the client again";
-			}
-		}
+	private void newToken() {
+		log.vdebug("Need to generate a new access token for Microsoft OneDrive");
+		string postData =
+			"client_id=" ~ clientId ~
+			"&redirect_uri=" ~ redirectUrl ~
+			"&refresh_token=" ~ refreshToken ~
+			"&grant_type=refresh_token";
+		char[] strArr = postData.dup;
+		acquireToken(strArr);
+	}
+	
+	private void redeemToken(char[] authCode){
+		char[] postData =
+			"client_id=" ~ clientId ~
+			"&redirect_uri=" ~ redirectUrl ~
+			"&code=" ~ authCode ~
+			"&grant_type=authorization_code";
+		acquireToken(postData);
+	}
+
+	// connection
+	private JSONValue get(string url, bool skipToken = false) {
+		scope(exit) curlEngine.http.clearRequestHeaders();
+		log.vdebug("Request URL = ", url);
+		curlEngine.connect(HTTP.Method.get, url);
+		if (!skipToken) addAccessTokenHeader(); // HACK: requestUploadStatus
+		JSONValue response;
+		response = performHTTPOperation();
+		checkHttpResponseCode(response);
+		// OneDrive API Response Debugging if --https-debug is being used
+		if (debugResponse){
+			log.vdebug("OneDrive API Response: ", response);
+        }
+		return response;
+	}
+		
+	private auto patch(T)(const(char)[] url, const(T)[] patchData) {
+		scope(exit) curlEngine.http.clearRequestHeaders();
+		curlEngine.connect(HTTP.Method.patch, url);
+		addAccessTokenHeader();
+		auto response = perform(patchData);
+		checkHttpResponseCode(response);
+		return response;
+	}
+	
+	private auto post(T)(string url, const(T)[] postData) {
+		scope(exit) curlEngine.http.clearRequestHeaders();
+		curlEngine.connect(HTTP.Method.post, url);
+		addAccessTokenHeader();
+		auto response = perform(postData);
+		checkHttpResponseCode(response);
+		return response;
 	}
 	
 	private void performDelete(const(char)[] url) {
@@ -1233,6 +1288,36 @@ class OneDriveApi {
 		addAccessTokenHeader();
 		auto response = performHTTPOperation();
 		checkHttpResponseCode(response);
+	}
+	
+	private JSONValue upload(string filepath, string url) {
+		checkAccessTokenExpired();
+		// open file as read-only in binary mode
+		auto file = File(filepath, "rb");
+
+		// function scopes
+		scope(exit) {
+			curlEngine.http.clearRequestHeaders();
+			curlEngine.http.onSend = null;
+			curlEngine.http.onReceive = null;
+			curlEngine.http.onReceiveHeader = null;
+			curlEngine.http.onReceiveStatusLine = null;
+			curlEngine.http.contentLength = 0;
+			// close file if open
+			if (file.isOpen()){
+				// close open file
+				file.close();
+			}
+		}
+
+		curlEngine.connect(HTTP.Method.put, url);
+		addAccessTokenHeader();
+		curlEngine.http.addRequestHeader("Content-Type", "application/octet-stream");
+		curlEngine.http.onSend = data => file.rawRead(data).length;
+		curlEngine.http.contentLength = file.size;
+		auto response = performHTTPOperation();
+		checkHttpResponseCode(response);
+		return response;
 	}
 	
 	private void downloadFile(const(char)[] url, string filename, long fileSize) {
@@ -1386,50 +1471,6 @@ class OneDriveApi {
 		checkHttpCode();
 	}
 
-	private JSONValue get(string url, bool skipToken = false) {
-		scope(exit) curlEngine.http.clearRequestHeaders();
-		log.vdebug("Request URL = ", url);
-		curlEngine.connect(HTTP.Method.get, url);
-		if (!skipToken) addAccessTokenHeader(); // HACK: requestUploadStatus
-		JSONValue response;
-		response = performHTTPOperation();
-		checkHttpResponseCode(response);
-		// OneDrive API Response Debugging if --https-debug is being used
-		if (debugResponse){
-			log.vdebug("OneDrive API Response: ", response);
-        }
-		return response;
-	}
-	
-	private void newToken() {
-		log.vdebug("Need to generate a new access token for Microsoft OneDrive");
-		string postData =
-			"client_id=" ~ clientId ~
-			"&redirect_uri=" ~ redirectUrl ~
-			"&refresh_token=" ~ refreshToken ~
-			"&grant_type=refresh_token";
-		char[] strArr = postData.dup;
-		acquireToken(strArr);
-	}
-	
-	private auto patch(T)(const(char)[] url, const(T)[] patchData) {
-		scope(exit) curlEngine.http.clearRequestHeaders();
-		curlEngine.connect(HTTP.Method.patch, url);
-		addAccessTokenHeader();
-		auto response = perform(patchData);
-		checkHttpResponseCode(response);
-		return response;
-	}
-	
-	private auto post(T)(string url, const(T)[] postData) {
-		scope(exit) curlEngine.http.clearRequestHeaders();
-		curlEngine.connect(HTTP.Method.post, url);
-		addAccessTokenHeader();
-		auto response = perform(postData);
-		checkHttpResponseCode(response);
-		return response;
-	}
-	
 	private JSONValue perform(const(void)[] sendData) {
 		scope(exit) {
 			curlEngine.http.onSend = null;
@@ -1451,7 +1492,7 @@ class OneDriveApi {
 		auto response = performHTTPOperation();
 		return response;
 	}
-	
+
 	private JSONValue performHTTPOperation() {
 		scope(exit) curlEngine.http.onReceive = null;
 		char[] content;
@@ -1612,45 +1653,6 @@ class OneDriveApi {
 			log.vdebug("JSON Exception caught when performing HTTP operations - use --debug-https to diagnose further");
 		}
 		return json;
-	}
-	
-	private void redeemToken(char[] authCode){
-		char[] postData =
-			"client_id=" ~ clientId ~
-			"&redirect_uri=" ~ redirectUrl ~
-			"&code=" ~ authCode ~
-			"&grant_type=authorization_code";
-		acquireToken(postData);
-	}
-	
-	private JSONValue upload(string filepath, string url) {
-		checkAccessTokenExpired();
-		// open file as read-only in binary mode
-		auto file = File(filepath, "rb");
-
-		// function scopes
-		scope(exit) {
-			curlEngine.http.clearRequestHeaders();
-			curlEngine.http.onSend = null;
-			curlEngine.http.onReceive = null;
-			curlEngine.http.onReceiveHeader = null;
-			curlEngine.http.onReceiveStatusLine = null;
-			curlEngine.http.contentLength = 0;
-			// close file if open
-			if (file.isOpen()){
-				// close open file
-				file.close();
-			}
-		}
-
-		curlEngine.connect(HTTP.Method.put, url);
-		addAccessTokenHeader();
-		curlEngine.http.addRequestHeader("Content-Type", "application/octet-stream");
-		curlEngine.http.onSend = data => file.rawRead(data).length;
-		curlEngine.http.contentLength = file.size;
-		auto response = performHTTPOperation();
-		checkHttpResponseCode(response);
-		return response;
 	}
 	
 	private void checkHTTPResponseHeaders() {
