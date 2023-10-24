@@ -15,28 +15,78 @@ This client can be run as a Podman container, with 3 available container base op
 These containers offer a simple monitoring-mode service for the OneDrive Client for Linux.
 
 The instructions below have been validated on:
-*   Fedora 35
+*   Fedora 38
 
 The instructions below will utilise the 'latest' tag, however this can be substituted for any of the other docker tags from the table above if desired.
 
 Additionally there are specific version release tags for each release. Refer to https://hub.docker.com/r/driveone/onedrive/tags for any other Docker tags you may be interested in.
 
-**Note:** The below instructions for podman have only been tested as the root user while running the containers themselves as non-root users.
+**Note:** The below instructions for podman has been tested and validated when logging into the system as an unprivileged user (non 'root' user).
 
-## Basic Setup
-### 0. Install podman using your distribution platform's instructions if not already installed
-1.  Ensure that SELinux has been disabled on your system. A reboot may be required to ensure that this is correctly disabled.
-2.  Install Podman as per requried for your platform
-3.  Obtain your normal, non-root user UID and GID by using the `id` command or select another non-root id to run the container as
+## High Level Configuration Steps
+1. Install 'podman' as per your distribution platform's instructions if not already installed.
+2. Disable 'SELinux' as per your distribution platform's instructions
+3. Test 'podman' by running a test container
+4. Prepare the required podman volumes to store the configuration and data
+5. Run the 'onedrive' container and perform authorisation
+6. Running the 'onedrive' container under 'podman'
 
-**NOTE:** SELinux context needs to be configured or disabled for Podman to be able to write to OneDrive host directory.
+## Configuration Steps
 
-### 1.1 Prepare data volume
-The container requries 2 Podman volumes:
+### 1. Install 'podman' on your platform
+Install 'podman' as per your distribution platform's instructions if not already installed.
+
+### 2. Disable SELinux on your platform
+In order to run the Docker container under 'podman', SELinux must be disabled. Without doing this, when the application is authenticated in the steps below, the following error will be presented:
+```text
+ERROR: The local file system returned an error with the following message:
+  Error Message:    /onedrive/conf/refresh_token: Permission denied
+
+The database cannot be opened. Please check the permissions of ~/.config/onedrive/items.sqlite3
+```
+The only known work-around at present is to disable SELinux. Please refer to your distribution platform's instructions on how to perform this step.
+
+### 3. Test 'podman' on your platform
+Test that 'podman' is operational for your 'non-root' user, as per below.
+
+```bash
+[alex@fedora38-podman ~]$ podman pull fedora
+Resolved "fedora" as an alias (/etc/containers/registries.conf.d/000-shortnames.conf)
+Trying to pull registry.fedoraproject.org/fedora:latest...
+Getting image source signatures
+Copying blob b30887322388 done   | 
+Copying config a1cd3cbf8a done   | 
+Writing manifest to image destination
+a1cd3cbf8adaa422629f2fcdc629fd9297138910a467b11c66e5ddb2c2753dff
+[alex@fedora38-podman ~]$ podman run fedora /bin/echo "Welcome to the Podman World"
+Welcome to the Podman World
+[alex@fedora38-podman ~]$ 
+```
+
+### 4. Configure the required podman volumes
+The 'onedrive' Docker container requires 2 podman volumes to operate:
 *    Config Volume
 *    Data Volume
 
-The first volume is for your data folder and is created in the next step. This volume needs to be a path to a directory on your local filesystem, and this is where your data will be stored from OneDrive. Keep in mind that:
+The first volume is the configuration volume that stores all the applicable application configuration + current runtime state. In a non-containerised environment, this normally resides in `~/.config/onedrive` - in a containerised environment this is stored in the volume tagged as `/onedrive/conf`
+
+The second volume is the data volume, where all your data from Microsoft OneDrive is stored locally. This volume is mapped to an actual directory point on your local filesystem and this is stored in the volume tagged as `/onedrive/data`
+
+#### 4.1 Prepare the 'config' volume
+Create the 'config' volume with the following command:
+```bash
+podman volume create onedrive_conf
+```
+
+This will create a podman volume labeled `onedrive_conf`, where all configuration of your onedrive account will be stored. You can add a custom config file in this location at a later point in time if required.
+
+#### 4.2 Prepare the 'data' volume
+Create the 'data' volume with the following command:
+```bash
+podman volume create onedrive_data
+```
+
+This will create a podman volume labeled `onedrive_data` and will map to a path on your local filesystem. This is where your data from Microsoft OneDrive will be stored. Keep in mind that:
 
 *   The owner of this specified folder must not be root
 *   Podman will attempt to change the permissions of the volume to the user the container is configured to run as
@@ -46,46 +96,53 @@ The first volume is for your data folder and is created in the next step. This v
 ROOT level privileges prohibited!
 ```
 
-### 1.2 Prepare config volume
-Although not required, you can prepare the config volume before starting the container. Otherwise it will be created automatically during initial startup of the container.
-
-Create the config volume with the following command:
-```bash
-podman volume create onedrive_conf
-```
-
-This will create a podman volume labeled `onedrive_conf`, where all configuration of your onedrive account will be stored. You can add a custom config file and other things later.
-
-### 2. First run
-The 'onedrive' client within the container needs to be authorized with your Microsoft account. This is achieved by initially running podman in interactive mode. 
+### 5. First run of Docker container under podman and performing authorisation
+The 'onedrive' client within the container first needs to be authorised with your Microsoft account. This is achieved by initially running podman in interactive mode.
 
 Run the podman image with the commands below and make sure to change the value of `ONEDRIVE_DATA_DIR` to the actual onedrive data directory on your filesystem that you wish to use (e.g. `export ONEDRIVE_DATA_DIR="/home/abraunegg/OneDrive"`).
 
-It is a requirement that the container be run using a non-root uid and gid, you must insert a non-root UID and GID (e.g.` export ONEDRIVE_UID=1000` and export `ONEDRIVE_GID=1000`). 
+**Important:** The 'target' folder of `ONEDRIVE_DATA_DIR` must exist before running the podman container. The script below will create 'ONEDRIVE_DATA_DIR' so that it exists locally for the podman volument mapping to occur.
 
+It is also a requirement that the container be run using a non-root uid and gid, you must insert a non-root UID and GID (e.g.` export ONEDRIVE_UID=1000` and export `ONEDRIVE_GID=1000`). The script below will use `id` to evaluate your system environment to use the correct values.
 ```bash
 export ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
-export ONEDRIVE_UID=1000
-export ONEDRIVE_GID=1000
+export ONEDRIVE_UID=`id -u`
+export ONEDRIVE_GID=`id -g`
 mkdir -p ${ONEDRIVE_DATA_DIR}
 podman run -it --name onedrive --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
     -v onedrive_conf:/onedrive/conf:U,Z \
     -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" \
     driveone/onedrive:latest
 ```
-**Important:** The 'target' folder of `ONEDRIVE_DATA_DIR` must exist before running the podman container
 
-**If you plan to use podmans built in auto-updating of container images described in step 5, you must pass an additional argument to set a label during the first run.**
+**Important:** In some scenarios, 'podman' sets the configuration and data directories to a different UID & GID as specified. To resolve this situation, you must run 'podman' with the `--userns=keep-id` flag to ensure 'podman' uses the UID and GID as specified. The updated script example when using `--userns=keep-id` is below:
 
-**Important:** In some scenarios, 'podman' sets the configuration and data directories to a different UID & GID as specified. To resolve this situation, you must run 'podman' with the `--userns=keep-id` flag to ensure 'podman' uses the UID and GID as specified.
-
-The run command would look instead look like as follows:
-```
+```bash
+export ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
+export ONEDRIVE_UID=`id -u`
+export ONEDRIVE_GID=`id -g`
+mkdir -p ${ONEDRIVE_DATA_DIR}
 podman run -it --name onedrive --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
+    --userns=keep-id \
     -v onedrive_conf:/onedrive/conf:U,Z \
-    -v "onedrive-test-data:/onedrive/data:U,Z" \
-    -e PODMAN=1 \
-    --label "io.containers.autoupdate=image"
+    -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" \
+    driveone/onedrive:latest
+```
+
+
+**Important:** If you plan to use the 'podman' built in auto-updating of container images described in step XXXX below, you must pass an additional argument to set a label during the first run. The updated script example to support auto-updating of container images is below:
+
+```bash
+export ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
+export ONEDRIVE_UID=`id -u`
+export ONEDRIVE_GID=`id -g`
+mkdir -p ${ONEDRIVE_DATA_DIR}
+podman run -it --name onedrive --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
+    --userns=keep-id \
+    -v onedrive_conf:/onedrive/conf:U,Z \
+    -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" \
+	-e PODMAN=1 \
+	--label "io.containers.autoupdate=image" \
     driveone/onedrive:latest
 ```
 
@@ -99,39 +156,37 @@ Once the 'onedrive' application is authorised, the client will automatically sta
 
 If the client is working as expected, you can detach from the container with Ctrl+p, Ctrl+q.
 
-### 4. Podman Container Status, stop, and restart
-Check if the monitor service is running
+### 6. Running the 'onedrive' container under 'podman'
 
+#### 6.1 Check if the monitor service is running
 ```bash
 podman ps -f name=onedrive
 ```
 
-Show monitor run logs
-
+#### 6.2 Show 'onedrive' runtime logs
 ```bash
 podman logs onedrive
 ```
 
-Stop running monitor
-
+#### 6.3 Stop running 'onedrive' container
 ```bash
 podman stop onedrive
 ```
 
-Resume monitor
-
+#### 6.4 Start 'onedrive' container
 ```bash
 podman start onedrive
 ```
 
-Remove onedrive container
-
+#### 6.5 Remove 'onedrive' container
 ```bash
 podman rm -f onedrive
 ```
-## Advanced Setup
 
-### 5. Systemd Service & Auto Updating
+
+## Advanced Usage
+
+### Systemd Service & Auto Updating
 
 Podman supports running containers as a systemd service and also auto updating of the container images. Using the existing running container you can generate a systemd unit file to be installed by the **root** user. To have your container image auto-update with podman, it must first be created with the label `"io.containers.autoupdate=image"` mentioned in step 2.
 
@@ -179,7 +234,7 @@ systemctl start podman-auto-update.timer
 systemctl list-timers --all
 ```
 
-### 6. Edit the config
+### Editing the running configuration and using a 'config' file
 The 'onedrive' client should run in default configuration, however you can change this default configuration by placing a custom config file in the `onedrive_conf` podman volume. First download the default config from [here](https://raw.githubusercontent.com/abraunegg/onedrive/master/config)  
 Then put it into your onedrive_conf volume path, which can be found with:  
 
@@ -190,21 +245,26 @@ Or you can map your own config folder to the config volume. Make sure to copy al
 
 The detailed document for the config can be found here: [Configuration](https://github.com/abraunegg/onedrive/blob/master/docs/usage.md#configuration)
 
-### 7. Sync multiple accounts
+### Syncing multiple accounts
 There are many ways to do this, the easiest is probably to
-1. Create a second podman config volume (replace `Work` with your desired name):  `podman volume create onedrive_conf_Work`
-2. And start a second podman monitor container (again replace `Work` with your desired name):
-```
+1. Create a second podman config volume (replace `work` with your desired name):  `podman volume create onedrive_conf_work`
+2. And start a second podman monitor container (again replace `work` with your desired name):
+
+```bash
 export ONEDRIVE_DATA_DIR_WORK="/home/abraunegg/OneDriveWork"
+export ONEDRIVE_UID=`id -u`
+export ONEDRIVE_GID=`id -g`
 mkdir -p ${ONEDRIVE_DATA_DIR_WORK}
-podman run -it --restart unless-stopped --name onedrive_work \
-   -v onedrive_conf_Work:/onedrive/conf \
-   -v "${ONEDRIVE_DATA_DIR_WORK}:/onedrive/data" \
-   --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
-   driveone/onedrive:latest
+podman run -it --name onedrive_work --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
+    --userns=keep-id \
+    -v onedrive_conf_work:/onedrive/conf:U,Z \
+    -v "${ONEDRIVE_DATA_DIR_WORK}:/onedrive/data:U,Z" \
+	-e PODMAN=1 \
+	--label "io.containers.autoupdate=image" \
+    driveone/onedrive:latest
 ```
 
-## Environment Variables
+## Supported Podman Environment Variables
 | Variable | Purpose | Sample Value |
 | ---------------- | --------------------------------------------------- |:-------------:|
 | <B>ONEDRIVE_UID</B> | UserID (UID) to run as  | 1000 |
@@ -245,8 +305,7 @@ podman run -e ONEDRIVE_RESYNC=1 -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive
 podman run -it -e ONEDRIVE_LOGOUT=1 -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" driveone/onedrive:latest
 ```
 
-## Build instructions
-### Building a custom Podman image
+## Building a custom Podman image
 You can also build your own image instead of pulling the one from [hub.docker.com](https://hub.docker.com/r/driveone/onedrive):
 ```bash
 git clone https://github.com/abraunegg/onedrive
@@ -258,19 +317,19 @@ There are alternate, smaller images available by building
 Dockerfile-debian or Dockerfile-alpine.  These [multi-stage builder pattern](https://docs.docker.com/develop/develop-images/multistage-build/)
 Dockerfiles require Docker version at least 17.05.
 
-#### How to build and run a custom Podman image based on Debian
+### How to build and run a custom Podman image based on Debian
 ``` bash
 podman build . -t local-ondrive-debian -f contrib/docker/Dockerfile-debian
-podman run -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" local-ondrive-debian:latest
+podman run -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" --userns=keep-id local-ondrive-debian:latest
 ```
 
-#### How to build and run a custom Podman image based on Alpine Linux
+### How to build and run a custom Podman image based on Alpine Linux
 ``` bash
 podman build . -t local-ondrive-alpine -f contrib/docker/Dockerfile-alpine
-podman run -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" local-ondrive-alpine:latest
+podman run -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" --userns=keep-id local-ondrive-alpine:latest
 ```
 
-#### How to build and run a custom Podman image for ARMHF (Raspberry Pi)
+### How to build and run a custom Podman image for ARMHF (Raspberry Pi)
 Compatible with:
 *    Raspberry Pi
 *    Raspberry Pi 2
@@ -279,11 +338,11 @@ Compatible with:
 *    Raspberry Pi 4
 ``` bash
 podman build . -t local-onedrive-armhf -f contrib/docker/Dockerfile-debian
-podman run -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" local-onedrive-armhf:latest
+podman run -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" --userns=keep-id local-onedrive-armhf:latest
 ```
 
-#### How to build and run a custom Podman image for AARCH64 Platforms
+### How to build and run a custom Podman image for AARCH64 Platforms
 ``` bash
 podman build . -t local-onedrive-aarch64 -f contrib/docker/Dockerfile-debian
-podman run -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" local-onedrive-aarch64:latest
+podman run -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" --userns=keep-id local-onedrive-aarch64:latest
 ```
