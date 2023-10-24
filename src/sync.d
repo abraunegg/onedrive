@@ -60,7 +60,7 @@ class SyncEngine {
 	OneDriveApi oneDriveApiInstance;
 	ItemDatabase itemDB;
 	ClientSideFiltering selectiveSync;
-	
+
 	// Array of directory databaseItem.id to skip while applying the changes.
 	// These are the 'parent path' id's that are being excluded, so if the parent id is in here, the child needs to be skipped as well
 	RedBlackTree!string skippedItems = redBlackTree!string();
@@ -716,9 +716,11 @@ class SyncEngine {
 			}
 							
 			// Create a new API Instance for querying /delta and initialise it
+			// Reuse the socket to speed up
+			bool keepAlive = true;
 			OneDriveApi getDeltaQueryOneDriveApiInstance;
 			getDeltaQueryOneDriveApiInstance = new OneDriveApi(appConfig);
-			getDeltaQueryOneDriveApiInstance.initialise();
+			getDeltaQueryOneDriveApiInstance.initialise(keepAlive);
 			
 			for (;;) {
 				responseBundleCount++;
