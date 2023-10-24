@@ -101,6 +101,12 @@ struct Database {
 		}
 		return userVersion;
 	}
+	
+	int getThreadsafeValue() {
+		// Get the threadsafe value
+		auto threadsafeValue = sqlite3_threadsafe();
+		return threadsafeValue;
+	}
 
 	string getErrorMessage() {
 		return ifromStringz(sqlite3_errmsg(pDb));
