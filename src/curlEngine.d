@@ -5,23 +5,84 @@ module curlEngine;
 import std.net.curl;
 import etc.c.curl: CurlOption;
 import std.datetime;
+import std.conv;
+import std.file;
+import std.json;
+import std.stdio;
 
 // What other modules that we have created do we need to import?
 import log;
 
-import std.stdio;
+
+class CurlResponse {
+	char[] content;
+	bool debugResponse;
+	string[string] responseHeaders;
+	HTTP.StatusLine status;
+
+	this(bool debugResponse) {
+		this.debugResponse = debugResponse;
+	}
+
+	JSONValue json() {
+		JSONValue json;
+		try {
+			json = content.parseJSON();
+		} catch (JSONException e) {
+			// Log that a JSON Exception was caught, dont output the HTML response from OneDrive
+			log.vdebug("JSON Exception caught when performing HTTP operations - use --debug-https to diagnose further");
+		}
+		if (debugResponse){
+			log.vdebug("OneDrive API Response: ", json);
+        }
+		return json;
+	};
+
+	void update(HTTP *http) {
+		this.responseHeaders = http.responseHeaders();
+		this.status = http.statusLine;
+		if (debugResponse)
+			log.vdebug("curlEngine.http.perform() => HTTP Response Headers: ", responseHeaders);
+	}
+
+	@safe pure HTTP.StatusLine getStatus() {
+		return this.status;
+	}
+
+	// Return the current value of retryAfterValue
+	ulong getRetryAfterValue() {
+		ulong delayBeforeRetry;
+		// is retry-after in the response headers
+		if ("retry-after" in responseHeaders) {
+			// Set the retry-after value
+			log.vdebug("curlEngine.http.perform() => Received a 'Retry-After' Header Response with the following value: ", responseHeaders["retry-after"]);
+			log.vdebug("curlEngine.http.perform() => Setting retryAfterValue to: ", responseHeaders["retry-after"]);
+			delayBeforeRetry = to!ulong(responseHeaders["retry-after"]);
+		} else {
+			// Use a 120 second delay as a default given header value was zero
+			// This value is based on log files and data when determining correct process for 429 response handling
+			delayBeforeRetry = 120;
+			// Update that we are over-riding the provided value with a default
+			log.vdebug("HTTP Response Header retry-after value was 0 - Using a preconfigured default of: ", delayBeforeRetry);
+		}
+		
+		return delayBeforeRetry; // default to 60 seconds
+	}
+}
 
 class CurlEngine {
 	HTTP http;
 	bool keepAlive;
+	bool debugResponse;
 	
 	this() {	
 		http = HTTP();
 	}
 	
-	void initialise(long dnsTimeout, long connectTimeout, long dataTimeout, long operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, long userRateLimit, long protocolVersion, bool keepAlive=false) {
+	void initialise(long dnsTimeout, long connectTimeout, long dataTimeout, long operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, long userRateLimit, long protocolVersion, bool debugResponse, bool keepAlive=false) {
 		//   Setting this to false ensures that when we close the curl instance, any open sockets are closed - which we need to do when running 
 		//   multiple threads and API instances at the same time otherwise we run out of local files | sockets pretty quickly
+		this.debugResponse = debugResponse;
 		this.keepAlive = keepAlive;
 
 		// Curl Timeout Handling
@@ -99,6 +160,64 @@ class CurlEngine {
 			http.addRequestHeader("Connection", "close");
 		http.method = method;
 		http.url = url;
+	}
+
+	void setContent(const(char)[] contentType, const(void)[] sendData) {
+		http.addRequestHeader("Content-Type", contentType);
+		if (sendData) {
+			http.contentLength = sendData.length;
+			http.onSend = (void[] buf) {
+				import std.algorithm: min;
+				size_t minLen = min(buf.length, sendData.length);
+				if (minLen == 0) return 0;
+				buf[0 .. minLen] = sendData[0 .. minLen];
+				sendData = sendData[minLen .. $];
+				return minLen;
+			};
+		}
+	}
+
+	void setFile(File* file, ulong offsetSize) {
+		http.addRequestHeader("Content-Type", "application/octet-stream");
+		http.onSend = data => file.rawRead(data).length;
+		http.contentLength = offsetSize;
+	}
+
+	CurlResponse execute() {
+		scope(exit) {
+			cleanUp();
+		}
+		CurlResponse response = new CurlResponse(debugResponse);
+		http.onReceive = (ubyte[] data) {
+			response.content ~= data;
+			// HTTP Server Response Code Debugging if --https-debug is being used
+			if (debugResponse) {
+				log.vdebug("onedrive.performHTTPOperation() => OneDrive HTTP Server Response: ", http.statusLine.code);
+			}
+			return data.length;
+		};
+		http.perform();
+		response.update(&http);
+		return response;
+	}
+
+	void cleanUp() {
+		// Reset any values to defaults, freeing any set objects
+		http.clearRequestHeaders();
+		http.onSend = null;
+		http.onReceive = null;
+		http.onReceiveHeader = null;
+		http.onReceiveStatusLine = null;
+		http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow) {
+			return 0;
+		};
+		http.contentLength = 0;
+	}
+
+	void shutdown() {
+		cleanUp();
+		// Shut down the curl instance & close any open sockets
+		http.shutdown();
 	}
 	
 	void setDisableSSLVerifyPeer() {

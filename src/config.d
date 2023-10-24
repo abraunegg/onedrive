@@ -16,10 +16,16 @@ import std.getopt;
 import std.format;
 import std.ascii;
 import std.datetime;
+import std.utf;
 
 // What other modules that we have created do we need to import?
 import log;
 import util;
+
+struct EndpointConfig {
+	string auth;
+	string graph;
+}
 
 class ApplicationConfig {
 	// Application default values - these do not change
@@ -76,34 +82,18 @@ class ApplicationConfig {
 	immutable int defaultMaxRedirects = 5;
 		
 	// Azure Active Directory & Graph Explorer Endpoints
-	// - Global & Default
-	immutable string globalAuthEndpoint = "https://login.microsoftonline.com";
-	immutable string globalGraphEndpoint = "https://graph.microsoft.com";
-	// - US Government L4
-	immutable string usl4AuthEndpoint = "https://login.microsoftonline.us";
-	immutable string usl4GraphEndpoint = "https://graph.microsoft.us";
-	// - US Government L5
-	immutable string usl5AuthEndpoint = "https://login.microsoftonline.us";
-	immutable string usl5GraphEndpoint = "https://dod-graph.microsoft.us";
-	// - Germany
-	immutable string deAuthEndpoint = "https://login.microsoftonline.de";
-	immutable string deGraphEndpoint = "https://graph.microsoft.de";
-	// - China
-	immutable string cnAuthEndpoint = "https://login.chinacloudapi.cn";
-	immutable string cnGraphEndpoint = "https://microsoftgraph.chinacloudapi.cn";
+	immutable EndpointConfig[string] endpoints;
 	
 	// Application items that depend on application run-time environment, thus cannot be immutable
 	// Public variables
-	// Was the application just authorised - paste of response uri
-	bool applicationAuthorizeResponseUri = false;
 	// Store the 'refresh_token' file path
 	string refreshTokenFilePath = "";
 	// Store the refreshToken for use within the application
-	string refreshToken;
+	const(char)[] refreshToken;
 	// Store the accessTokenExpiration for use within the application
 	SysTime accessTokenExpiration;
 	// Store the current accessToken for use within the application
-	string accessToken;
+	const(char)[] accessToken;
 	
 	// Store the 'session_upload.CRC32-HASH' file path
 	string uploadSessionFilePath = "";
@@ -186,6 +176,35 @@ class ApplicationConfig {
 	bool[string] boolValues;
 	
 	bool shellEnvironmentSet = false;
+
+	this() {
+		endpoints = [
+			"": EndpointConfig(
+				"https://login.microsoftonline.com",
+				"https://graph.microsoft.com"
+			), 
+			// - US Government L4
+			"USL4": EndpointConfig(
+				"https://login.microsoftonline.us",
+				"https://graph.microsoft.us"
+			), 
+			// - US Government L5
+			"USL5": EndpointConfig(
+				"https://login.microsoftonline.us",
+				"https://dod-graph.microsoft.us"
+			), 
+			// - Germany
+			"DE": EndpointConfig(
+				"https://login.microsoftonline.de",
+				"https://graph.microsoft.de"
+			), 
+			// - China
+			"CN": EndpointConfig(
+				"https://login.chinacloudapi.cn",
+				"https://microsoftgraph.chinacloudapi.cn"
+			), 
+		];
+	}
 	
 	// Initialise the application configuration
 	bool initialise(string confdirOption) {
@@ -2202,6 +2221,44 @@ class ApplicationConfig {
 	
 		// Return the initialised application log path
 		return initialisedLogDirPath;
+	}
+
+	const(char)[] getOneDriveRefreshToken() {
+		if (!refreshToken.empty)
+			return refreshToken;
+
+		if (!exists(refreshTokenFilePath))
+			return null;
+
+		try {
+			refreshToken = strip(readText(refreshTokenFilePath));
+			return refreshToken;
+		} catch (FileException e) {
+			return null;
+		} catch (std.utf.UTFException e) {
+			// path contains characters which generate a UTF exception
+			log.error("Cannot read refreshToken from: ", refreshTokenFilePath);
+			log.error("  Error Reason:", e.msg);
+			return null;
+		}
+	}
+
+	void updateToken(SysTime accessTokenExpiration, const(char)[] accessToken, const(char)[] refreshToken) {
+		this.accessToken = accessToken;
+		this.accessTokenExpiration = accessTokenExpiration;
+		if (this.refreshToken != refreshToken) {
+			this.refreshToken = refreshToken;
+			// try and update the refresh_token file on disk
+			try {
+				log.vdebug("Updating refreshToken on disk");
+				std.file.write(refreshTokenFilePath, refreshToken);
+				log.vdebug("Setting file permissions for: ", refreshTokenFilePath);
+				refreshTokenFilePath.setAttributes(returnRequiredFilePermisions());
+			} catch (FileException e) {
+				// display the error message
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+			}
+		}
 	}
 }
 

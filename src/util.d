@@ -163,7 +163,7 @@ Regex!char wild2regex(const(char)[] pattern) {
 bool testInternetReachability(ApplicationConfig appConfig) {
 	// Use preconfigured object with all the correct http values assigned
 	auto curlEngine = new CurlEngine();
-	curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"));
+	curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"), appConfig.getValueBool("debug_https"));
 	
 	// Configure the remaining items required
 	// URL to use
@@ -422,39 +422,6 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 	// Extra Debug if we are using --verbose --verbose
 	log.vdebug("Raw Error Data: ", message);
 	log.vdebug("JSON Message: ", errorMessage);
-}
-
-// Common code for handling when a client is unauthorised
-void handleClientUnauthorised(int httpStatusCode, string message) {
-	// Split the lines of the error message
-	auto errorArray = splitLines(message);
-	// Extract 'message' as the reason
-	JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
-	log.vdebug("errorMessage: ", errorMessage);
-	
-	if (httpStatusCode == 400) {
-		// bad request or a new auth token is needed
-		// configure the error reason
-		writeln();
-		string[] errorReason = splitLines(errorMessage["error_description"].str);
-		log.errorAndNotify(errorReason[0]);
-		writeln();
-		log.errorAndNotify("ERROR: You will need to issue a --reauth and re-authorise this client to obtain a fresh auth token.");
-		writeln();
-	}
-	
-	if (httpStatusCode == 401) {
-	
-		writeln("CODING TO DO: Triggered a 401 HTTP unauthorised response when client was unauthorised");
-		
-		writeln();
-		log.errorAndNotify("ERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.");
-		writeln();
-		
-	}
-	
-	// Must exit here
-	exit(EXIT_FAILURE);
 }
 
 // Parse and display error message received from the local file system

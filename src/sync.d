@@ -252,62 +252,28 @@ class SyncEngine {
 	
 	// Initialise the Sync Engine class
 	bool initialise() {
-
 		// create a new instance of the OneDrive API
 		oneDriveApiInstance = new OneDriveApi(appConfig);
-		if (oneDriveApiInstance.initialise()) {
-			try {
-				// Get the relevant default account & drive details
-				getDefaultDriveDetails();
-			} catch (accountDetailsException exception) {
-				// details could not be queried
-				log.error(exception.msg);
-				// Shutdown API instance
-				oneDriveApiInstance.shutdown();
-				// Free object and memory
-				object.destroy(oneDriveApiInstance);
-				exit(-1);
-			}
-			
-			try {
-				// Get the relevant default account & drive details
-				getDefaultRootDetails();
-			} catch (accountDetailsException exception) {
-				// details could not be queried
-				log.error(exception.msg);
-				// Shutdown API instance
-				oneDriveApiInstance.shutdown();
-				// Free object and memory
-				object.destroy(oneDriveApiInstance);
-				exit(-1);
-			}
-			
-			try {
-				// Display details
-				displaySyncEngineDetails();
-			} catch (accountDetailsException exception) {
-				// details could not be queried
-				log.error(exception.msg);
-				// Shutdown API instance
-				oneDriveApiInstance.shutdown();
-				// Free object and memory
-				object.destroy(oneDriveApiInstance);
-				exit(-1);
-			}
-		} else {
-			// API could not be initialised
-			log.error("OneDrive API could not be initialised with previously used details");
+		scope (exit) {
 			// Shutdown API instance
 			oneDriveApiInstance.shutdown();
 			// Free object and memory
 			object.destroy(oneDriveApiInstance);
-			exit(-1);
 		}
+		try {
+			// Get the relevant default account & drive details
+			getDefaultDriveDetails();
+			// Get the relevant default account & drive details
+			getDefaultRootDetails();
+			// Display details
+			displaySyncEngineDetails();
+		} catch (accountDetailsException exception) {
+			// details could not be queried
+			log.error(exception.msg);
+			return false;
+		}
+		
 		log.log("Sync Engine Initialised with new Onedrive API instance");
-		// Shutdown API instance
-		oneDriveApiInstance.shutdown();
-		// Free object and memory
-		object.destroy(oneDriveApiInstance);
 		return true;
 	}
 	
@@ -323,43 +289,7 @@ class SyncEngine {
 			defaultOneDriveDriveDetails = oneDriveApiInstance.getDefaultDriveDetails();
 		} catch (OneDriveException exception) {
 			log.vdebug("defaultOneDriveDriveDetails = oneDriveApiInstance.getDefaultDriveDetails() generated a OneDriveException");
-			
-			string thisFunctionName = getFunctionName!({});
-			
-			if ((exception.httpStatusCode == 400) || (exception.httpStatusCode == 401)) {
-				// Handle the 400 | 401 error
-				handleClientUnauthorised(exception.httpStatusCode, exception.msg);
-			}
-			
-			// HTTP request returned status code 408,429,503,504
-			if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-				// Handle the 429
-				if (exception.httpStatusCode == 429) {
-					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-					handleOneDriveThrottleRequest(oneDriveApiInstance);
-					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-				}
-				// re-try the specific changes queries
-				if ((exception.httpStatusCode == 408) ||(exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-					// 408 - Request Time Out
-					// 503 - Service Unavailable
-					// 504 - Gateway Timeout
-					// Transient error - try again in 30 seconds
-					auto errorArray = splitLines(exception.msg);
-					log.log(errorArray[0], " when attempting to query Account Default Drive Details - retrying applicable request in 30 seconds");
-					log.vdebug("defaultOneDriveDriveDetails = oneDriveApiInstance.getDefaultDriveDetails() previously threw an error - retrying");
-					// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-					log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-					Thread.sleep(dur!"seconds"(30));
-				}
-				// re-try original request - retried for 429 and 504 - but loop back calling this function 
-				log.vdebug("Retrying Function: getDefaultDriveDetails()");
-				getDefaultDriveDetails();
-			} else {
-				// Default operation if not 408,429,503,504 errors
-				// display what the error is
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-			}
+			displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 		}
 		
 		// If the JSON response is a correct JSON object, and has an 'id' we can set these details
@@ -433,42 +363,7 @@ class SyncEngine {
 			defaultOneDriveRootDetails = oneDriveApiInstance.getDefaultRootDetails();
 		} catch (OneDriveException exception) {
 			log.vdebug("defaultOneDriveRootDetails = oneDriveApiInstance.getDefaultRootDetails() generated a OneDriveException");
-
-			string thisFunctionName = getFunctionName!({});
-
-			if ((exception.httpStatusCode == 400) || (exception.httpStatusCode == 401)) {
-				// Handle the 400 | 401 error
-				handleClientUnauthorised(exception.httpStatusCode, exception.msg);
-			}
-			
-			// HTTP request returned status code 408,429,503,504
-			if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-				// Handle the 429
-				if (exception.httpStatusCode == 429) {
-					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-					handleOneDriveThrottleRequest(oneDriveApiInstance);
-					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-				}
-				// re-try the specific changes queries
-				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-					// 503 - Service Unavailable
-					// 504 - Gateway Timeout
-					// Transient error - try again in 30 seconds
-					auto errorArray = splitLines(exception.msg);
-					log.log(errorArray[0], " when attempting to query Account Default Root Details - retrying applicable request in 30 seconds");
-					log.vdebug("defaultOneDriveRootDetails = oneDriveApiInstance.getDefaultRootDetails() previously threw an error - retrying");
-					// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-					log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-					Thread.sleep(dur!"seconds"(30));
-				}
-				// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-				log.vdebug("Retrying Function: getDefaultRootDetails()");
-				getDefaultRootDetails();
-			} else {
-				// Default operation if not 408,429,503,504 errors
-				// display what the error is
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-			}
+			displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 		}
 		
 		// If the JSON response is a correct JSON object, and has an 'id' we can set these details
@@ -719,8 +614,7 @@ class SyncEngine {
 			// Reuse the socket to speed up
 			bool keepAlive = true;
 			OneDriveApi getDeltaQueryOneDriveApiInstance;
-			getDeltaQueryOneDriveApiInstance = new OneDriveApi(appConfig);
-			getDeltaQueryOneDriveApiInstance.initialise(keepAlive);
+			getDeltaQueryOneDriveApiInstance = new OneDriveApi(appConfig, keepAlive);
 			
 			for (;;) {
 				responseBundleCount++;
@@ -2024,7 +1918,6 @@ class SyncEngine {
 					OneDriveApi downloadFileOneDriveApiInstance;
 					downloadFileOneDriveApiInstance = new OneDriveApi(appConfig);
 					try {	
-						downloadFileOneDriveApiInstance.initialise();
 						downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize);
 						downloadFileOneDriveApiInstance.shutdown();
 						// Free object and memory
@@ -2032,36 +1925,9 @@ class SyncEngine {
 					} catch (OneDriveException exception) {
 						log.vdebug("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize); generated a OneDriveException");
 						
-						string thisFunctionName = getFunctionName!({});
-						// HTTP request returned status code 408,429,503,504
-						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-							// Handle the 429
-							if (exception.httpStatusCode == 429) {
-								// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-								handleOneDriveThrottleRequest(downloadFileOneDriveApiInstance);
-								log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-							}
-							// re-try the specific changes queries
-							if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-								// 408 - Request Time Out
-								// 503 - Service Unavailable
-								// 504 - Gateway Timeout
-								// Transient error - try again in 30 seconds
-								auto errorArray = splitLines(exception.msg);
-								log.log(errorArray[0], " when attempting to download an item from OneDrive - retrying applicable request in 30 seconds");
-								log.vdebug(thisFunctionName, " previously threw an error - retrying");
-								// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-								log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-								Thread.sleep(dur!"seconds"(30));
-							}
-							// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-							log.vdebug("Retrying Function: ", thisFunctionName);
-							downloadFileItem(onedriveJSONItem);
-						} else {
-							// Default operation if not 408,429,503,504 errors
-							// display what the error is
-							displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-						}
+						// Default operation if not 408,429,503,504 errors
+						// display what the error is
+						displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 						
 					} catch (FileException e) {
 						// There was a file system error
@@ -2294,84 +2160,26 @@ class SyncEngine {
 			
 			auto errorArray = splitLines(exception.msg);
 			string thisFunctionName = getFunctionName!({});
-			// HTTP request returned status code 408,429,503,504
-			if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-				// Handle the 429
-				if (exception.httpStatusCode == 429) {
-					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-					handleOneDriveThrottleRequest(getDeltaQueryOneDriveApiInstance);
-					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-				}
-				// re-try the specific changes queries
-				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-					// 408 - Request Time Out
-					// 503 - Service Unavailable
-					// 504 - Gateway Timeout
-					// Transient error - try again in 30 seconds
-					log.log(errorArray[0], " when attempting to query OneDrive API for Delta Changes - retrying applicable request in 30 seconds");
-					log.vdebug(thisFunctionName, " previously threw an error - retrying");
-					// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-					log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-					Thread.sleep(dur!"seconds"(30));
-				}
-				// dont retry request, loop back to calling function
-				log.vdebug("Looping back after failure");
-				deltaChangesBundle = null;
+		
+			// Default operation if not 408,429,503,504 errors
+			if (exception.httpStatusCode == 410) {
+				log.log("\nWARNING: The OneDrive API responded with an error that indicates the locally stored deltaLink value is invalid");
+				// Essentially the 'providedDeltaLink' that we have stored is no longer available ... re-try without the stored deltaLink
+				log.log("WARNING: Retrying OneDrive API call without using the locally stored deltaLink value");
+				// Configure an empty deltaLink
+				log.vdebug("Delta link expired for 'getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink)', setting 'deltaLink = null'");
+				string emptyDeltaLink = "";
+				// retry with empty deltaLink
+				deltaChangesBundle = getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, emptyDeltaLink);
 			} else {
-				// Default operation if not 408,429,503,504 errors
-				if (exception.httpStatusCode == 410) {
-					log.log("\nWARNING: The OneDrive API responded with an error that indicates the locally stored deltaLink value is invalid");
-					// Essentially the 'providedDeltaLink' that we have stored is no longer available ... re-try without the stored deltaLink
-					log.log("WARNING: Retrying OneDrive API call without using the locally stored deltaLink value");
-					// Configure an empty deltaLink
-					log.vdebug("Delta link expired for 'getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink)', setting 'deltaLink = null'");
-					string emptyDeltaLink = "";
-					// retry with empty deltaLink
-					deltaChangesBundle = getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, emptyDeltaLink);
-				} else {
-					// display what the error is
-					log.log("CODING TO DO: Hitting this failure error output");
-					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-					deltaChangesBundle = null;
-				}
+				// display what the error is
+				log.log("CODING TO DO: Hitting this failure error output");
+				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+				deltaChangesBundle = null;
 			}
 		}
 		
 		return deltaChangesBundle;
-	}
-	
-	// Common code to handle a 408 or 429 response from the OneDrive API
-	void handleOneDriveThrottleRequest(OneDriveApi activeOneDriveApiInstance) {
-		
-		// If OneDrive sends a status code 429 then this function will be used to process the Retry-After response header which contains the value by which we need to wait
-		log.vdebug("Handling a OneDrive HTTP 429 Response Code (Too Many Requests)");
-		// Read in the Retry-After HTTP header as set and delay as per this value before retrying the request
-		auto retryAfterValue = activeOneDriveApiInstance.getRetryAfterValue();
-		log.vdebug("Using Retry-After Value = ", retryAfterValue);
-		
-		// HTTP request returned status code 429 (Too Many Requests)
-		// https://github.com/abraunegg/onedrive/issues/133
-		// https://github.com/abraunegg/onedrive/issues/815
-		
-		ulong delayBeforeRetry = 0;
-		if (retryAfterValue != 0) {
-			// Use the HTTP Response Header Value
-			delayBeforeRetry = retryAfterValue;
-		} else {
-			// Use a 120 second delay as a default given header value was zero
-			// This value is based on log files and data when determining correct process for 429 response handling
-			delayBeforeRetry = 120;
-			// Update that we are over-riding the provided value with a default
-			log.vdebug("HTTP Response Header retry-after value was 0 - Using a preconfigured default of: ", delayBeforeRetry);
-		}
-		
-		// Sleep thread as per request
-		log.log("Thread sleeping due to 'HTTP request returned status code 429' - The request has been throttled");
-		log.log("Sleeping for ", delayBeforeRetry, " seconds");
-		Thread.sleep(dur!"seconds"(delayBeforeRetry));
-		
-		// Reset retry-after value to zero as we have used this value now and it may be changed in the future to a different value
-		activeOneDriveApiInstance.resetRetryAfterValue();
 	}
 	
 	// If the JSON response is not correct JSON object, exit
@@ -2558,7 +2366,6 @@ class SyncEngine {
 		// Create a new OneDrive API instance
 		OneDriveApi uploadLastModifiedTimeApiInstance;
 		uploadLastModifiedTimeApiInstance = new OneDriveApi(appConfig);
-		uploadLastModifiedTimeApiInstance.initialise();
 		
 		// Try and update the online last modified time
 		try {
@@ -2573,41 +2380,14 @@ class SyncEngine {
 		} catch (OneDriveException exception) {
 			
 			string thisFunctionName = getFunctionName!({});
-			// HTTP request returned status code 408,429,503,504
-			if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-				// Handle the 429
-				if (exception.httpStatusCode == 429) {
-					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-					handleOneDriveThrottleRequest(uploadLastModifiedTimeApiInstance);
-					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-				}
-				// re-try the specific changes queries
-				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-					// 408 - Request Time Out
-					// 503 - Service Unavailable
-					// 504 - Gateway Timeout
-					// Transient error - try again in 30 seconds
-					auto errorArray = splitLines(exception.msg);
-					log.log(errorArray[0], " when attempting to update the timestamp on an item on OneDrive - retrying applicable request in 30 seconds");
-					log.vdebug(thisFunctionName, " previously threw an error - retrying");
-					// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-					log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-					Thread.sleep(dur!"seconds"(30));
-				}
-				// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
+			// Default operation if not 408,429,503,504 errors
+			if (exception.httpStatusCode == 409) {
+				// ETag does not match current item's value - use a null eTag
 				log.vdebug("Retrying Function: ", thisFunctionName);
-				uploadLastModifiedTime(driveId, id, mtime, eTag);
-				return;
+				uploadLastModifiedTime(driveId, id, mtime, null);
 			} else {
-				// Default operation if not 408,429,503,504 errors
-				if (exception.httpStatusCode == 409) {
-					// ETag does not match current item's value - use a null eTag
-					log.vdebug("Retrying Function: ", thisFunctionName);
-					uploadLastModifiedTime(driveId, id, mtime, null);
-				} else {
-					// display what the error is
-					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-				}
+				// display what the error is
+				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 			}
 		}
 	}
@@ -3484,7 +3264,6 @@ class SyncEngine {
 		JSONValue uploadResponse;
 		OneDriveApi uploadFileOneDriveApiInstance;
 		uploadFileOneDriveApiInstance = new OneDriveApi(appConfig);
-		uploadFileOneDriveApiInstance.initialise();
 		
 		// Is this a dry-run scenario?
 		if (!dryRun) {
@@ -3508,36 +3287,10 @@ class SyncEngine {
 				} catch (OneDriveException exception) {
 				
 					string thisFunctionName = getFunctionName!({});
-					// HTTP request returned status code 408,429,503,504
-					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-						// Handle the 429
-						if (exception.httpStatusCode == 429) {
-							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-							handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
-							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-						}
-						// re-try the specific changes queries
-						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-							// 408 - Request Time Out
-							// 503 - Service Unavailable
-							// 504 - Gateway Timeout
-							// Transient error - try again in 30 seconds
-							auto errorArray = splitLines(exception.msg);
-							log.log(errorArray[0], " when attempting to upload a modified file to OneDrive - retrying applicable request in 30 seconds");
-							log.vdebug(thisFunctionName, " previously threw an error - retrying");
-							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-							Thread.sleep(dur!"seconds"(30));
-						}
-						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						log.vdebug("Retrying Function: ", thisFunctionName);
-						performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);	
-					} else {
-						// Default operation if not 408,429,503,504 errors
-						// display what the error is
-						displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-					}
-				
+					
+					// Default operation if not 408,429,503,504 errors
+					// display what the error is
+					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 				} catch (FileException e) {
 					// filesystem error
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
@@ -3558,36 +3311,10 @@ class SyncEngine {
 				} catch (OneDriveException exception) {
 				
 					string thisFunctionName = getFunctionName!({});
-					// HTTP request returned status code 408,429,503,504
-					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-						// Handle the 429
-						if (exception.httpStatusCode == 429) {
-							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-							handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
-							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-						}
-						// re-try the specific changes queries
-						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-							// 408 - Request Time Out
-							// 503 - Service Unavailable
-							// 504 - Gateway Timeout
-							// Transient error - try again in 30 seconds
-							auto errorArray = splitLines(exception.msg);
-							log.log(errorArray[0], " when attempting to obtain latest file details from OneDrive - retrying applicable request in 30 seconds");
-							log.vdebug(thisFunctionName, " previously threw an error - retrying");
-							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-							Thread.sleep(dur!"seconds"(30));
-						}
-						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						log.vdebug("Retrying Function: ", thisFunctionName);
-						performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
-					} else {
-						// Default operation if not 408,429,503,504 errors
-						// display what the error is
-						displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-					}
-					
+					// Default operation if not 408,429,503,504 errors
+					// display what the error is
+					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+										
 				}
 				
 				// Was a valid JSON response provided?
@@ -3611,35 +3338,9 @@ class SyncEngine {
 				} catch (OneDriveException exception) {
 					
 					string thisFunctionName = getFunctionName!({});
-					// HTTP request returned status code 408,429,503,504
-					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-						// Handle the 429
-						if (exception.httpStatusCode == 429) {
-							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-							handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
-							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-						}
-						// re-try the specific changes queries
-						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-							// 408 - Request Time Out
-							// 503 - Service Unavailable
-							// 504 - Gateway Timeout
-							// Transient error - try again in 30 seconds
-							auto errorArray = splitLines(exception.msg);
-							log.log(errorArray[0], " when attempting to create an upload session on OneDrive - retrying applicable request in 30 seconds");
-							log.vdebug(thisFunctionName, " previously threw an error - retrying");
-							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-							Thread.sleep(dur!"seconds"(30));
-						}
-						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						log.vdebug("Retrying Function: ", thisFunctionName);
-						performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);	
-					} else {
-						// Default operation if not 408,429,503,504 errors
-						// display what the error is
-						displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-					}
+					// Default operation if not 408,429,503,504 errors
+					// display what the error is
+					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 					
 				} catch (FileException e) {
 					writeln("DEBUG TO REMOVE: Modified file upload FileException Handling (Create the Upload Session)");
@@ -3652,35 +3353,9 @@ class SyncEngine {
 				} catch (OneDriveException exception) {
 					
 					string thisFunctionName = getFunctionName!({});
-					// HTTP request returned status code 408,429,503,504
-					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-						// Handle the 429
-						if (exception.httpStatusCode == 429) {
-							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-							handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
-							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-						}
-						// re-try the specific changes queries
-						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-							// 408 - Request Time Out
-							// 503 - Service Unavailable
-							// 504 - Gateway Timeout
-							// Transient error - try again in 30 seconds
-							auto errorArray = splitLines(exception.msg);
-							log.log(errorArray[0], " when attempting to upload a file via a session to OneDrive - retrying applicable request in 30 seconds");
-							log.vdebug(thisFunctionName, " previously threw an error - retrying");
-							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-							Thread.sleep(dur!"seconds"(30));
-						}
-						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						log.vdebug("Retrying Function: ", thisFunctionName);
-						performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
-					} else {
-						// Default operation if not 408,429,503,504 errors
-						// display what the error is
-						displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-					}
+					// Default operation if not 408,429,503,504 errors
+					// display what the error is
+					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 					
 				} catch (FileException e) {
 					writeln("DEBUG TO REMOVE: Modified file upload FileException Handling (Perform the Upload using the session)");
@@ -3717,7 +3392,6 @@ class SyncEngine {
 			// Create a new OneDrive API instance
 			OneDriveApi getCurrentDriveQuotaApiInstance;
 			getCurrentDriveQuotaApiInstance = new OneDriveApi(appConfig);
-			getCurrentDriveQuotaApiInstance.initialise();
 			log.vdebug("Seeking available quota for this drive id: ", driveId);
 			currentDriveQuota = getCurrentDriveQuotaApiInstance.getDriveQuota(driveId);
 			// Shut this API instance down
@@ -4142,7 +3816,6 @@ class SyncEngine {
 		// Create a new API Instance for this thread and initialise it
 		OneDriveApi createDirectoryOnlineOneDriveApiInstance;
 		createDirectoryOnlineOneDriveApiInstance = new OneDriveApi(appConfig);
-		createDirectoryOnlineOneDriveApiInstance.initialise();
 		
 		// What parent path to use?
 		string parentPath = dirName(thisNewPathToCreate); // will be either . or something else
@@ -4192,34 +3865,10 @@ class SyncEngine {
 					} else {
 						string thisFunctionName = getFunctionName!({});
 						// HTTP request returned status code 408,429,503,504
-						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-							// Handle the 429
-							if (exception.httpStatusCode == 429) {
-								// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-								handleOneDriveThrottleRequest(createDirectoryOnlineOneDriveApiInstance);
-								log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-							}
-							// re-try the specific changes queries
-							if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-								// 408 - Request Time Out
-								// 503 - Service Unavailable
-								// 504 - Gateway Timeout
-								// Transient error - try again in 30 seconds
-								auto errorArray = splitLines(exception.msg);
-								log.log(errorArray[0], " when attempting to create a remote directory on OneDrive - retrying applicable request in 30 seconds");
-								log.vdebug(thisFunctionName, " previously threw an error - retrying");
-								// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-								log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-								Thread.sleep(dur!"seconds"(30));
-							}
-							// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-							log.vdebug("Retrying Function: ", thisFunctionName);
-							createDirectoryOnline(thisNewPathToCreate);
-						} else {
-							// Default operation if not 408,429,503,504 errors
-							// display what the error is
-							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-						}
+						
+						// Default operation if not 408,429,503,504 errors
+						// display what the error is
+						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					}
 				}
 			} else {
@@ -4343,34 +3992,8 @@ class SyncEngine {
 			} else {
 			
 				string thisFunctionName = getFunctionName!({});
-				// HTTP request returned status code 408,429,503,504
-				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-					// Handle the 429
-					if (exception.httpStatusCode == 429) {
-						// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-						handleOneDriveThrottleRequest(createDirectoryOnlineOneDriveApiInstance);
-						log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-					}
-					// re-try the specific changes queries
-					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-						// 408 - Request Time Out
-						// 503 - Service Unavailable
-						// 504 - Gateway Timeout
-						// Transient error - try again in 30 seconds
-						auto errorArray = splitLines(exception.msg);
-						log.log(errorArray[0], " when attempting to create a remote directory on OneDrive - retrying applicable request in 30 seconds");
-						log.vdebug(thisFunctionName, " previously threw an error - retrying");
-						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-						Thread.sleep(dur!"seconds"(30));
-					}
-					// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-					log.vdebug("Retrying Function: ", thisFunctionName);
-					createDirectoryOnline(thisNewPathToCreate);
-				} else {
-					// Re-Try
-					createDirectoryOnline(thisNewPathToCreate);
-				}
+				// Re-Try
+				createDirectoryOnline(thisNewPathToCreate);
 			}
 		}
 		
@@ -4572,7 +4195,6 @@ class SyncEngine {
 						// Create a new API Instance for this thread and initialise it
 						OneDriveApi checkFileOneDriveApiInstance;
 						checkFileOneDriveApiInstance = new OneDriveApi(appConfig);
-						checkFileOneDriveApiInstance.initialise();
 						
 						JSONValue fileDetailsFromOneDrive;
 
@@ -4605,35 +4227,9 @@ class SyncEngine {
 							} else {
 								
 								string thisFunctionName = getFunctionName!({});
-								// HTTP request returned status code 408,429,503,504
-								if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-									// Handle the 429
-									if (exception.httpStatusCode == 429) {
-										// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-										handleOneDriveThrottleRequest(checkFileOneDriveApiInstance);
-										log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-									}
-									// re-try the specific changes queries
-									if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-										// 408 - Request Time Out
-										// 503 - Service Unavailable
-										// 504 - Gateway Timeout
-										// Transient error - try again in 30 seconds
-										auto errorArray = splitLines(exception.msg);
-										log.log(errorArray[0], " when attempting to validate file details on OneDrive - retrying applicable request in 30 seconds");
-										log.vdebug(thisFunctionName, " previously threw an error - retrying");
-										// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-										log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-										Thread.sleep(dur!"seconds"(30));
-									}
-									// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-									log.vdebug("Retrying Function: ", thisFunctionName);
-									uploadNewFile(fileToUpload);
-								} else {
-									// Default operation if not 408,429,503,504 errors
-									// display what the error is
-									displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-								}
+								// Default operation if not 408,429,503,504 errors
+								// display what the error is
+								displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 							}
 						} catch (posixException e) {
 							displayPosixErrorMessage(e.msg);
@@ -4689,7 +4285,6 @@ class SyncEngine {
 		// Create the OneDriveAPI Upload Instance
 		OneDriveApi uploadFileOneDriveApiInstance;
 		uploadFileOneDriveApiInstance = new OneDriveApi(appConfig);
-		uploadFileOneDriveApiInstance.initialise();
 		
 		// Calculate upload speed
 		auto uploadStartTime = Clock.currTime();
@@ -4721,37 +4316,10 @@ class SyncEngine {
 					// An error was responded with - what was it
 					
 					string thisFunctionName = getFunctionName!({});
-					// HTTP request returned status code 408,429,503,504
-					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-						// Handle the 429
-						if (exception.httpStatusCode == 429) {
-							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-							handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
-							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-						}
-						// re-try the specific changes queries
-						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-							// 408 - Request Time Out
-							// 503 - Service Unavailable
-							// 504 - Gateway Timeout
-							// Transient error - try again in 30 seconds
-							auto errorArray = splitLines(exception.msg);
-							log.log(errorArray[0], " when attempting to upload a new file to OneDrive - retrying applicable request in 30 seconds");
-							log.vdebug(thisFunctionName, " previously threw an error - retrying");
-							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-							Thread.sleep(dur!"seconds"(30));
-						}
-						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						performNewFileUpload(parentItem, fileToUpload, thisFileSize);
-						// Return upload status
-						return uploadFailed;
-					} else {
-						// Default operation if not 408,429,503,504 errors
-						// display what the error is
-						log.log("Uploading new file ", fileToUpload, " ... failed.");
-						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-					}
+					// Default operation if not 408,429,503,504 errors
+					// display what the error is
+					log.log("Uploading new file ", fileToUpload, " ... failed.");
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					
 				} catch (FileException e) {
 					// display the error message
@@ -4775,36 +4343,10 @@ class SyncEngine {
 					// An error was responded with - what was it
 					
 					string thisFunctionName = getFunctionName!({});
-					// HTTP request returned status code 408,429,503,504
-					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-						// Handle the 429
-						if (exception.httpStatusCode == 429) {
-							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-							handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
-							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-						}
-						// re-try the specific changes queries
-						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-							// 408 - Request Time Out
-							// 503 - Service Unavailable
-							// 504 - Gateway Timeout
-							// Transient error - try again in 30 seconds
-							auto errorArray = splitLines(exception.msg);
-							log.log(errorArray[0], " when attempting to create an upload session on OneDrive - retrying applicable request in 30 seconds");
-							log.vdebug(thisFunctionName, " previously threw an error - retrying");
-							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-							Thread.sleep(dur!"seconds"(30));
-						}
-						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						log.vdebug("Retrying Function: ", thisFunctionName);
-						performNewFileUpload(parentItem, fileToUpload, thisFileSize);
-					} else {
-						// Default operation if not 408,429,503,504 errors
-						// display what the error is
-						log.log("Uploading new file ", fileToUpload, " ... failed.");
-						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-					}
+					// Default operation if not 408,429,503,504 errors
+					// display what the error is
+					log.log("Uploading new file ", fileToUpload, " ... failed.");
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					
 				} catch (FileException e) {
 					// display the error message
@@ -4850,36 +4392,10 @@ class SyncEngine {
 						} catch (OneDriveException exception) {
 						
 							string thisFunctionName = getFunctionName!({});
-							// HTTP request returned status code 408,429,503,504
-							if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-								// Handle the 429
-								if (exception.httpStatusCode == 429) {
-									// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-									handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
-									log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-								}
-								// re-try the specific changes queries
-								if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-									// 408 - Request Time Out
-									// 503 - Service Unavailable
-									// 504 - Gateway Timeout
-									// Transient error - try again in 30 seconds
-									auto errorArray = splitLines(exception.msg);
-									log.log(errorArray[0], " when attempting to upload a new file via a session to OneDrive - retrying applicable request in 30 seconds");
-									log.vdebug(thisFunctionName, " previously threw an error - retrying");
-									// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-									log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-									Thread.sleep(dur!"seconds"(30));
-								}
-								// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-								log.vdebug("Retrying Function: ", thisFunctionName);
-								performNewFileUpload(parentItem, fileToUpload, thisFileSize);
-							} else {
-								// Default operation if not 408,429,503,504 errors
-								// display what the error is
-								log.log("Uploading new file ", fileToUpload, " ... failed.");
-								displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-							}
+							// Default operation if not 408,429,503,504 errors
+							// display what the error is
+							log.log("Uploading new file ", fileToUpload, " ... failed.");
+							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 						
 						}
 					} else {
@@ -5057,34 +4573,13 @@ class SyncEngine {
 				//   504 - Gateway Timeout
 					
 				// HTTP request returned status code 408,429,503,504
-				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-					// Handle 'HTTP request returned status code 429 (Too Many Requests)' first
-					log.vdebug("Fragment upload failed - received throttle request uploadResponse from OneDrive");
-					if (exception.httpStatusCode == 429) {
-						auto retryAfterValue = activeOneDriveApiInstance.getRetryAfterValue();
-						log.vdebug("Using Retry-After Value = ", retryAfterValue);
-						// Sleep thread as per request
-						log.log("\nThread sleeping due to 'HTTP request returned status code 429' - The request has been throttled");
-						log.log("Sleeping for ", retryAfterValue, " seconds");
-						Thread.sleep(dur!"seconds"(retryAfterValue));
-						log.log("Retrying fragment upload");
-					} else {
-						// Handle 408, 503 and 504
-						auto errorArray = splitLines(exception.msg);
-						auto retryAfterValue = 30;
-						log.log("\nThread sleeping due to '", errorArray[0], "' - retrying applicable request in 30 seconds");
-						log.log("Sleeping for ", retryAfterValue, " seconds");
-						Thread.sleep(dur!"seconds"(retryAfterValue));
-						log.log("Retrying fragment upload");
-					}
-				} else {
-					// insert a new line as well, so that the below error is inserted on the console in the right location
-					log.vlog("\nFragment upload failed - received an exception response from OneDrive API");
-					// display what the error is
-					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-					// retry fragment upload in case error is transient
-					log.vlog("Retrying fragment upload");
-				}
+			
+				// insert a new line as well, so that the below error is inserted on the console in the right location
+				log.vlog("\nFragment upload failed - received an exception response from OneDrive API");
+				// display what the error is
+				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				// retry fragment upload in case error is transient
+				log.vlog("Retrying fragment upload");
 				
 				try {
 					uploadResponse = activeOneDriveApiInstance.uploadFragment(
@@ -5193,7 +4688,6 @@ class SyncEngine {
 					// Create new OneDrive API Instance
 					OneDriveApi uploadDeletedItemOneDriveApiInstance;
 					uploadDeletedItemOneDriveApiInstance = new OneDriveApi(appConfig);
-					uploadDeletedItemOneDriveApiInstance.initialise();
 				
 					// what item are we trying to delete?
 					log.vdebug("Attempting to delete this single item id: ", itemToDelete.id, " from drive: ", itemToDelete.driveId);
@@ -5251,7 +4745,6 @@ class SyncEngine {
 		// Create a new API Instance for this thread and initialise it
 		OneDriveApi performReverseDeletionOneDriveApiInstance;
 		performReverseDeletionOneDriveApiInstance = new OneDriveApi(appConfig);
-		performReverseDeletionOneDriveApiInstance.initialise();
 		
 		foreach_reverse (Item child; children) {
 			// Log the action
@@ -5569,7 +5062,6 @@ class SyncEngine {
 		// Create new OneDrive API Instance
 		OneDriveApi generateDeltaResponseOneDriveApiInstance;
 		generateDeltaResponseOneDriveApiInstance = new OneDriveApi(appConfig);
-		generateDeltaResponseOneDriveApiInstance.initialise();
 		
 		if (!singleDirectoryScope) {
 			// In a --resync scenario, there is no DB data to query, so we have to query the OneDrive API here to get relevant details
@@ -5624,35 +5116,10 @@ class SyncEngine {
 			log.vdebug("driveData = generateDeltaResponseOneDriveApiInstance.getPathDetailsById(searchItem.driveId, searchItem.id) generated a OneDriveException");
 			
 			string thisFunctionName = getFunctionName!({});
-			// HTTP request returned status code 408,429,503,504
-			if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-				// Handle the 429
-				if (exception.httpStatusCode == 429) {
-					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-					handleOneDriveThrottleRequest(generateDeltaResponseOneDriveApiInstance);
-					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-				}
-				// re-try the specific changes queries
-				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-					// 408 - Request Time Out
-					// 503 - Service Unavailable
-					// 504 - Gateway Timeout
-					// Transient error - try again in 30 seconds
-					auto errorArray = splitLines(exception.msg);
-					log.log(errorArray[0], " when attempting to query path details on OneDrive - retrying applicable request in 30 seconds");
-					log.vdebug(thisFunctionName, " previously threw an error - retrying");
-					// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-					log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-					Thread.sleep(dur!"seconds"(30));
-				}
-				// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-				log.vdebug("Retrying Function: ", thisFunctionName);
-				generateDeltaResponse(pathToQuery);
-			} else {
-				// Default operation if not 408,429,503,504 errors
-				// display what the error is
-				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-			}
+			
+			// Default operation if not 408,429,503,504 errors
+			// display what the error is
+			displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 		}
 		
 		// Was a valid JSON response for 'driveData' provided?
@@ -5678,35 +5145,9 @@ class SyncEngine {
 					log.vdebug("rootData = onedrive.getDriveIdRoot(searchItem.driveId) generated a OneDriveException");
 					
 					string thisFunctionName = getFunctionName!({});
-					// HTTP request returned status code 408,429,503,504
-					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-						// Handle the 429
-						if (exception.httpStatusCode == 429) {
-							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-							handleOneDriveThrottleRequest(generateDeltaResponseOneDriveApiInstance);
-							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-						}
-						// re-try the specific changes queries
-						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-							// 408 - Request Time Out
-							// 503 - Service Unavailable
-							// 504 - Gateway Timeout
-							// Transient error - try again in 30 seconds
-							auto errorArray = splitLines(exception.msg);
-							log.log(errorArray[0], " when attempting to query drive root details on OneDrive - retrying applicable request in 30 seconds");
-							log.vdebug(thisFunctionName, " previously threw an error - retrying");
-							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-							Thread.sleep(dur!"seconds"(30));
-						}
-						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						log.log("Retrying Query: rootData = generateDeltaResponseOneDriveApiInstance.getDriveIdRoot(searchItem.driveId)");
-						rootData = generateDeltaResponseOneDriveApiInstance.getDriveIdRoot(searchItem.driveId);
-					} else {
-						// Default operation if not 408,429,503,504 errors
-						// display what the error is
-						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-					}
+					// Default operation if not 408,429,503,504 errors
+					// display what the error is
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				}
 				// Add driveData JSON data to array
 				log.vlog("Adding OneDrive root details for processing");
@@ -5740,39 +5181,9 @@ class SyncEngine {
 				log.vdebug("nextLink:  ", nextLink);
 				
 				string thisFunctionName = getFunctionName!({});
-				// HTTP request returned status code 408,429,503,504
-				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-					// Handle the 429
-					if (exception.httpStatusCode == 429) {
-						// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-						handleOneDriveThrottleRequest(generateDeltaResponseOneDriveApiInstance);
-						log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink)");
-					}
-					// re-try the specific changes queries
-					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-						// 408 - Request Time Out
-						// 503 - Service Unavailable
-						// 504 - Gateway Timeout
-						// Transient error - try again in 30 seconds
-						auto errorArray = splitLines(exception.msg);
-						log.log(errorArray[0], " when attempting to query OneDrive top level drive children on OneDrive - retrying applicable request in 30 seconds");
-						log.vdebug("generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink) previously threw an error - retrying");
-						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-						Thread.sleep(dur!"seconds"(30));
-					}
-					// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-					//log.vdebug("Retrying Query: generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink)");
-					//topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink);
-					
-					log.vdebug("Retrying Function: ", thisFunctionName);
-					generateDeltaResponse(pathToQuery);
-					
-				} else {
-					// Default operation if not 408,429,503,504 errors
-					// display what the error is
-					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-				}
+				// Default operation if not 408,429,503,504 errors
+				// display what the error is
+				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 			}
 			
 			// process top level children
@@ -5853,7 +5264,6 @@ class SyncEngine {
 		// Create new OneDrive API Instance
 		OneDriveApi queryChildrenOneDriveApiInstance;
 		queryChildrenOneDriveApiInstance = new OneDriveApi(appConfig);
-		queryChildrenOneDriveApiInstance.initialise();
 		
 		for (;;) {
 			// query this level children
@@ -5957,36 +5367,9 @@ class SyncEngine {
 			log.vdebug("nextLink: ", nextLink);
 			
 			string thisFunctionName = getFunctionName!({});
-			// HTTP request returned status code 408,429,503,504
-			if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-				// Handle the 429
-				if (exception.httpStatusCode == 429) {
-					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-					handleOneDriveThrottleRequest(queryChildrenOneDriveApiInstance);
-					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-				}
-				// re-try the specific changes queries
-				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-					// 408 - Request Time Out
-					// 503 - Service Unavailable
-					// 504 - Gateway Timeout
-					// Transient error - try again in 30 seconds
-					auto errorArray = splitLines(exception.msg);
-					log.log(errorArray[0], " when attempting to query OneDrive drive item children - retrying applicable request in 30 seconds");
-					log.vdebug("thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink) previously threw an error - retrying");
-					// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-					log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-					Thread.sleep(dur!"seconds"(30));
-				}
-				// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-				log.vdebug("Retrying Function: ", thisFunctionName);
-				queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance);
-				
-			} else {
-				// Default operation if not 408,429,503,504 errors
-				// display what the error is
-				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-			}
+			// Default operation if not 408,429,503,504 errors
+			// display what the error is
+			displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 		}
 				
 		// return response
@@ -6016,7 +5399,6 @@ class SyncEngine {
 		// Create a new API Instance for this thread and initialise it
 		OneDriveApi queryOneDriveForSpecificPath;
 		queryOneDriveForSpecificPath = new OneDriveApi(appConfig);
-		queryOneDriveForSpecificPath.initialise();
 		
 		foreach (thisFolderName; pathSplitter(thisNewPathToSearch)) {
 			log.vdebug("Testing for the existance online of this folder path: ", thisFolderName);
@@ -6043,35 +5425,9 @@ class SyncEngine {
 				} catch (OneDriveException exception) {
 				
 					string thisFunctionName = getFunctionName!({});
-					// HTTP request returned status code 408,429,503,504
-					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-						// Handle the 429
-						if (exception.httpStatusCode == 429) {
-							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-							handleOneDriveThrottleRequest(queryOneDriveForSpecificPath);
-							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-						}
-						// re-try the specific changes queries
-						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-							// 408 - Request Time Out
-							// 503 - Service Unavailable
-							// 504 - Gateway Timeout
-							// Transient error - try again in 30 seconds
-							auto errorArray = splitLines(exception.msg);
-							log.log(errorArray[0], " when attempting to query path on OneDrive - retrying applicable request in 30 seconds");
-							log.vdebug(thisFunctionName, " previously threw an error - retrying");
-							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-							Thread.sleep(dur!"seconds"(30));
-						}
-						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						log.vdebug("Retrying Function: ", thisFunctionName);
-						queryOneDriveForSpecificPathAndCreateIfMissing(thisNewPathToSearch, createPathIfMissing);	
-					} else {
-						// Default operation if not 408,429,503,504 errors
-						// display what the error is
-						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-					}	
+					// Default operation if not 408,429,503,504 errors
+					// display what the error is
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				}
 			} else {
 				// Ensure we have a valid driveId to search here
@@ -6121,35 +5477,9 @@ class SyncEngine {
 						} else {
 						
 							string thisFunctionName = getFunctionName!({});
-							// HTTP request returned status code 408,429,503,504
-							if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-								// Handle the 429
-								if (exception.httpStatusCode == 429) {
-									// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-									handleOneDriveThrottleRequest(queryOneDriveForSpecificPath);
-									log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
-								}
-								// re-try the specific changes queries
-								if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-									// 408 - Request Time Out
-									// 503 - Service Unavailable
-									// 504 - Gateway Timeout
-									// Transient error - try again in 30 seconds
-									auto errorArray = splitLines(exception.msg);
-									log.log(errorArray[0], " when attempting to query path on OneDrive - retrying applicable request in 30 seconds");
-									log.vdebug(thisFunctionName, " previously threw an error - retrying");
-									// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-									log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-									Thread.sleep(dur!"seconds"(30));
-								}
-								// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-								log.vdebug("Retrying Function: ", thisFunctionName);
-								queryOneDriveForSpecificPathAndCreateIfMissing(thisNewPathToSearch, createPathIfMissing);
-							} else {
-								// Default operation if not 408,429,503,504 errors
-								// display what the error is
-								displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-							}
+							// Default operation if not 408,429,503,504 errors
+							// display what the error is
+							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 						}
 					}
 				} else {
@@ -6432,7 +5762,6 @@ class SyncEngine {
 				// Create a new API Instance for this thread and initialise it
 				OneDriveApi movePathOnlineApiInstance;
 				movePathOnlineApiInstance = new OneDriveApi(appConfig);
-				movePathOnlineApiInstance.initialise();
 				
 				try {
 					response = movePathOnlineApiInstance.updateById(oldItem.driveId, oldItem.id, data, oldItem.eTag);
@@ -6538,7 +5867,6 @@ class SyncEngine {
 		// Create a new API Instance for this thread and initialise it
 		OneDriveApi querySharePointLibraryNameApiInstance;
 		querySharePointLibraryNameApiInstance = new OneDriveApi(appConfig);
-		querySharePointLibraryNameApiInstance.initialise();
 		
 		// The account type must not be a personal account type
 		if (appConfig.accountType == "personal") {
@@ -6573,39 +5901,9 @@ class SyncEngine {
 					log.error("ERROR: To resolve, please discuss this issue with whomever supports your OneDrive and SharePoint environment.");
 					return;
 				}
-				// HTTP request returned status code 429 (Too Many Requests)
-				if (e.httpStatusCode == 429) {
-					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-					handleOneDriveThrottleRequest(querySharePointLibraryNameApiInstance);
-					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query OneDrive drive children");
-				}
-				// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
-				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
-					// re-try the specific changes queries	
-					if (e.httpStatusCode == 504) {
-						log.log("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query Sharepoint Sites - retrying applicable request");
-						log.vdebug("siteQuery = onedrive.o365SiteSearch(nextLink) previously threw an error - retrying");
-						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
-						Thread.sleep(dur!"seconds"(30));
-					}
-					// re-try original request - retried for 429 and 504
-					try {
-						log.vdebug("Retrying Query: siteQuery = onedrive.o365SiteSearch(nextLink)");
-						siteQuery = querySharePointLibraryNameApiInstance.o365SiteSearch(nextLink);
-						log.vdebug("Query 'siteQuery = onedrive.o365SiteSearch(nextLink)' performed successfully on re-try");
-					} catch (OneDriveException e) {
-						// display what the error is
-						log.vdebug("Query Error: siteQuery = onedrive.o365SiteSearch(nextLink) on re-try after delay");
-						// error was not a 504 this time
-						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-						return;
-					}
-				} else {
-					// display what the error is
-					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-					return;
-				}
+				// display what the error is
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+				return;
 			}
 			
 			// is siteQuery a valid JSON object & contain data we can use?
@@ -6762,7 +6060,6 @@ class SyncEngine {
 		// Create a new API Instance for querying /delta and initialise it
 		OneDriveApi getDeltaQueryOneDriveApiInstance;
 		getDeltaQueryOneDriveApiInstance = new OneDriveApi(appConfig);
-		getDeltaQueryOneDriveApiInstance.initialise();
 		
 		for (;;) {
 			// Add a processing '.'
@@ -6916,7 +6213,6 @@ class SyncEngine {
 					// Create a new API Instance for this thread and initialise it
 					OneDriveApi queryOneDriveForFileDetailsApiInstance;
 					queryOneDriveForFileDetailsApiInstance = new OneDriveApi(appConfig);
-					queryOneDriveForFileDetailsApiInstance.initialise();
 					
 					try {
 						fileDetailsFromOneDrive = queryOneDriveForFileDetailsApiInstance.getPathDetailsById(dbItem.driveId, dbItem.id);
@@ -7037,7 +6333,6 @@ class SyncEngine {
 			// Create a new OneDrive API instance
 			OneDriveApi getCurrentDriveQuotaApiInstance;
 			getCurrentDriveQuotaApiInstance = new OneDriveApi(appConfig);
-			getCurrentDriveQuotaApiInstance.initialise();
 			log.vdebug("Seeking available quota for this drive id: ", driveId);
 			currentDriveQuota = getCurrentDriveQuotaApiInstance.getDriveQuota(driveId);
 			// Shut this API instance down

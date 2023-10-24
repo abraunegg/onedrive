@@ -37,11 +37,11 @@ const int EXIT_RESYNC_REQUIRED = 126;
 
 // Class objects
 ApplicationConfig appConfig;
-OneDriveApi oneDriveApiInstance;
 SyncEngine syncEngineInstance;
 ItemDatabase itemDB;
 ClientSideFiltering selectiveSync;
 Monitor filesystemMonitor;
+OneDriveWebhook oneDriveWebhook;
 
 int main(string[] cliArgs) {
 	// Disable buffering on stdout - this is needed so that when we are using plain write() it will go to the terminal
@@ -329,8 +329,7 @@ int main(string[] cliArgs) {
 		checkApplicationVersion();
 		// Initialise the OneDrive API
 		log.vlog("Attempting to initialise the OneDrive API ...");
-		oneDriveApiInstance = new OneDriveApi(appConfig);
-		appConfig.apiWasInitialised = oneDriveApiInstance.initialise();
+		OneDriveApi oneDriveApiInstance = new OneDriveApi(appConfig);
 		if (appConfig.apiWasInitialised) {
 			log.vlog("The OneDrive API was initialised successfully");
 			// Flag that we were able to initalise the API in the application config
@@ -468,11 +467,7 @@ int main(string[] cliArgs) {
 				// invalidSyncExit = true;
 				return EXIT_FAILURE;
 			}
-			// We do not need this instance, as the API was initialised, and individual instances are used during sync process
-			// However we need this instance to hang around if we are using --monitor for handling subscriptions
-			if (!appConfig.getValueBool("monitor")) {
-				oneDriveApiInstance.shutdown();
-			}
+			oneDriveApiInstance.shutdown();
 		} else {
 			// API could not be initialised
 			log.error("The OneDrive API could not be initialised");
@@ -732,7 +727,9 @@ int main(string[] cliArgs) {
 				if (webhookEnabled) {
 					// Create a subscription on the first run, or renew the subscription
 					// on subsequent runs when it is about to expire.
-					oneDriveApiInstance.createOrRenewSubscription();
+					if (oneDriveWebhook is null) 
+						oneDriveWebhook = OneDriveWebhook.getOrCreate(thisTid, appConfig);
+					oneDriveWebhook.createOrRenewSubscription();
 
 					// Process incoming notifications if any.
 
@@ -912,9 +909,9 @@ void performStandardExitProcess(string scopeCaller) {
 	}
 
 	// Shutdown the OneDrive API instance
-	if (oneDriveApiInstance !is null) {
-		oneDriveApiInstance.shutdown();
-		object.destroy(oneDriveApiInstance);
+	if (oneDriveWebhook !is null) {
+		oneDriveWebhook.shutdown();
+		object.destroy(oneDriveWebhook);
 	}
 	
 	// Shutdown the sync engine
@@ -941,7 +938,7 @@ void performStandardExitProcess(string scopeCaller) {
 		log.vdebug("Setting Class Objects to null due to failure scope");
 		itemDB = null;
 		appConfig = null;
-		oneDriveApiInstance = null;
+		oneDriveWebhook = null;
 		selectiveSync = null;
 		syncEngineInstance = null;
 	}
@@ -1152,12 +1149,7 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 			// Wait for all parallel jobs that depend on the database to complete
 			taskPool.finish(true);
 			// Was itemDb initialised?
-			if (itemDB.isDatabaseInitialised()) {
-				// Make sure the .wal file is incorporated into the main db before we exit
-				log.log("Shutting down DB connection and merging temporary data");
-				itemDB.performVacuum();
-				object.destroy(itemDB);
-			}
+			performStandardExitProcess("Interrupt Signal");
 		})();
 	} catch(Exception e) {}
 	exit(0);
