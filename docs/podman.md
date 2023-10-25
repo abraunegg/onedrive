@@ -44,7 +44,13 @@ ERROR: The local file system returned an error with the following message:
 
 The database cannot be opened. Please check the permissions of ~/.config/onedrive/items.sqlite3
 ```
-The only known work-around at present is to disable SELinux. Please refer to your distribution platform's instructions on how to perform this step.
+The only known work-around for the above problem at present is to disable SELinux. Please refer to your distribution platform's instructions on how to perform this step.
+
+Post disabling SELinux and reboot, confirm that `getenforce` returns `Disabled`:
+```text
+$ getenforce
+Disabled
+```
 
 ### 3. Test 'podman' on your platform
 Test that 'podman' is operational for your 'non-root' user, as per below.
