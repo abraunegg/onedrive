@@ -203,6 +203,11 @@ final class ItemDatabase {
 			db.exec("DROP TABLE item");
 			createTable();
 		}
+		
+		// What is the threadsafe value
+		auto threadsafeValue = db.getThreadsafeValue();
+		log.vdebug("Threadsafe database value: ", threadsafeValue);
+		
 		// Set the enforcement of foreign key constraints.
 		// https://www.sqlite.org/pragma.html#pragma_foreign_keys
 		// PRAGMA foreign_keys = boolean;

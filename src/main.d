@@ -70,25 +70,17 @@ int main(string[] cliArgs) {
 	
 	// Define 'exit' and 'failure' scopes
 	scope(exit) {
-		// detail what scope was called
+		// Detail what scope was called
 		log.vdebug("Exit scope was called");
-		
+		// Perform exit tasks
 		performStandardExitProcess();
 	}
 	
 	scope(failure) {
-		// detail what scope was called
+		// Detail what scope was called
 		log.vdebug("Failure scope was called");
-		
+		// Perform exit tasks
 		performStandardExitProcess();
-		
-		// Set these to be null due to failure scope - prevent 'ERROR: Unable to perform a database vacuum: out of memory' when the exit scope is then called
-		log.vdebug("Setting Class Objects to null due to failure scope");
-		itemDB = null;
-		appConfig = null;
-		oneDriveApiInstance = null;
-		selectiveSync = null;
-		syncEngineInstance = null;
 	}
 	
 	// Read in application options as passed in
@@ -967,7 +959,6 @@ void performStandardExitProcess() {
 		itemDB.performVacuum();
 		object.destroy(itemDB);
 	}
-	
 	// Free other objects and memory
 	if (appConfig !is null) {
 		// Cleanup any existing dry-run elements ... these should never be left hanging around
@@ -978,7 +969,10 @@ void performStandardExitProcess() {
 	if (selectiveSync !is null) object.destroy(selectiveSync);
 	if (syncEngineInstance !is null) object.destroy(syncEngineInstance);
 	// cleanup hooks
-	if (filesystemMonitor && filesystemMonitor.initialised) filesystemMonitor.shutdown();
+	if (filesystemMonitor !is null && filesystemMonitor.initialised) {
+		filesystemMonitor.shutdown();
+		object.destroy(filesystemMonitor);
+	}
 }
 
 void oneDriveWebhookCallback() {
@@ -1203,12 +1197,14 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 	try {
 		assumeNoGC ( () {
 			log.log("Got termination signal, performing clean up");
-			// was itemDb initialised?
+			// Wait for all parallel jobs that depend on the database to complete
+			taskPool.finish(true);
+			// Was itemDb initialised?
 			if (itemDB.isDatabaseInitialised()) {
 				// Make sure the .wal file is incorporated into the main db before we exit
 				log.log("Shutting down DB connection and merging temporary data");
 				itemDB.performVacuum();
-				destroy(itemDB);
+				object.destroy(itemDB);
 			}
 		})();
 	} catch(Exception e) {}

@@ -208,10 +208,10 @@ class OneDriveApi {
 	}
 	
 	// Initialise the OneDrive API class
-	bool initialise() {
+	bool initialise(bool keepAlive=false) {
 		// Initialise the curl engine
 		curlEngine = new CurlEngine();
-		curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"));
+		curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"), keepAlive);
 
 		// Authorised value to return
 		bool authorised = false;
@@ -622,8 +622,9 @@ class OneDriveApi {
 	JSONValue getPathDetailsByDriveId(string driveId, string path) {
 		checkAccessTokenExpired();
 		string url;
-		// Required format: /drives/{drive-id}/root:/{item-path}
-		url = driveByIdUrl ~ driveId ~ "/root:/" ~ encodeComponent(path);
+		// https://learn.microsoft.com/en-us/onedrive/developer/rest-api/concepts/addressing-driveitems?view=odsp-graph-online
+		// Required format: /drives/{drive-id}/root:/{item-path}:
+		url = driveByIdUrl ~ driveId ~ "/root:/" ~ encodeComponent(path) ~ ":";
 		return get(url);
 	}
 	
@@ -757,8 +758,7 @@ class OneDriveApi {
 			}
 		}
 
-		curlEngine.http.method = HTTP.Method.put;
-		curlEngine.http.url = uploadUrl;
+		curlEngine.connect(HTTP.Method.put, uploadUrl);
 		curlEngine.http.addRequestHeader("Content-Range", contentRange);
 		curlEngine.http.onSend = data => file.rawRead(data).length;
 		// convert offsetSize to ulong
@@ -1238,8 +1238,7 @@ class OneDriveApi {
 	
 	private void performDelete(const(char)[] url) {
 		scope(exit) curlEngine.http.clearRequestHeaders();
-		curlEngine.http.method = HTTP.Method.del;
-		curlEngine.http.url = url;
+		curlEngine.connect(HTTP.Method.del, url);
 		addAccessTokenHeader();
 		auto response = performHTTPOperation();
 		checkHttpResponseCode(response);
@@ -1276,8 +1275,7 @@ class OneDriveApi {
 			}
 		}
 
-		curlEngine.http.method = HTTP.Method.get;
-		curlEngine.http.url = url;
+		curlEngine.connect(HTTP.Method.get, url);
 		addAccessTokenHeader();
 
 		curlEngine.http.onReceive = (ubyte[] data) {
@@ -1400,8 +1398,7 @@ class OneDriveApi {
 	private JSONValue get(string url, bool skipToken = false) {
 		scope(exit) curlEngine.http.clearRequestHeaders();
 		log.vdebug("Request URL = ", url);
-		curlEngine.http.method = HTTP.Method.get;
-		curlEngine.http.url = url;
+		curlEngine.connect(HTTP.Method.get, url);
 		if (!skipToken) addAccessTokenHeader(); // HACK: requestUploadStatus
 		JSONValue response;
 		response = performHTTPOperation();
@@ -1425,8 +1422,8 @@ class OneDriveApi {
 	}
 	
 	private auto patch(T)(const(char)[] url, const(T)[] patchData) {
-		curlEngine.setMethodPatch();
-		curlEngine.http.url = url;
+		scope(exit) curlEngine.http.clearRequestHeaders();
+		curlEngine.connect(HTTP.Method.patch, url);
 		addAccessTokenHeader();
 		auto response = perform(patchData);
 		checkHttpResponseCode(response);
@@ -1434,8 +1431,8 @@ class OneDriveApi {
 	}
 	
 	private auto post(T)(string url, const(T)[] postData) {
-		curlEngine.setMethodPost();
-		curlEngine.http.url = url;
+		scope(exit) curlEngine.http.clearRequestHeaders();
+		curlEngine.connect(HTTP.Method.post, url);
 		addAccessTokenHeader();
 		auto response = perform(postData);
 		checkHttpResponseCode(response);
@@ -1655,8 +1652,7 @@ class OneDriveApi {
 			}
 		}
 
-		curlEngine.http.method = HTTP.Method.put;
-		curlEngine.http.url = url;
+		curlEngine.connect(HTTP.Method.put, url);
 		addAccessTokenHeader();
 		curlEngine.http.addRequestHeader("Content-Type", "application/octet-stream");
 		curlEngine.http.onSend = data => file.rawRead(data).length;
