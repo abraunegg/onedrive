@@ -72,14 +72,14 @@ int main(string[] cliArgs) {
 		// Detail what scope was called
 		log.vdebug("Exit scope was called");
 		// Perform exit tasks
-		performStandardExitProcess();
+		performStandardExitProcess("exitScope");
 	}
 	
 	scope(failure) {
 		// Detail what scope was called
 		log.vdebug("Failure scope was called");
 		// Perform exit tasks
-		performStandardExitProcess();
+		performStandardExitProcess("failureScope");
 	}
 	
 	// Read in application options as passed in
@@ -900,27 +900,50 @@ int main(string[] cliArgs) {
 	}
 }
 
-void performStandardExitProcess() {
-	// Was itemDB initialised?
+void performStandardExitProcess(string scopeCaller) {
+	// Who called this function
+	log.vdebug("Running performStandardExitProcess due to: ", scopeCaller);
+
+	// Shutdown the database
 	if (itemDB !is null) {
 		// Make sure the .wal file is incorporated into the main db before we exit
 		itemDB.performVacuum();
 		object.destroy(itemDB);
 	}
 
-	// Free other objects and memory
+	// Shutdown the OneDrive API instance
+	if (oneDriveApiInstance !is null) {
+		oneDriveApiInstance.shutdown();
+		object.destroy(oneDriveApiInstance);
+	}
+	
+	// Shutdown the sync engine
+	if (syncEngineInstance !is null) object.destroy(syncEngineInstance);
+	
+	// Shutdown the client side filtering objects
+	if (selectiveSync !is null) object.destroy(selectiveSync);
+	
+	// Shutdown the application configuration objects
 	if (appConfig !is null) {
 		// Cleanup any existing dry-run elements ... these should never be left hanging around
 		cleanupDryRunDatabaseFiles(appConfig.databaseFilePathDryRun);
 		object.destroy(appConfig);
 	}
-	if (oneDriveApiInstance !is null) object.destroy(oneDriveApiInstance);
-	if (selectiveSync !is null) object.destroy(selectiveSync);
-	if (syncEngineInstance !is null) object.destroy(syncEngineInstance);
 	
+	// Shutdown any local filesystem monitoring
 	if (filesystemMonitor !is null) {
 		filesystemMonitor.shutdown();
 		object.destroy(filesystemMonitor);
+	}
+	
+	if (scopeCaller == "failureScope") {
+		// Set these to be null due to failure scope - prevent 'ERROR: Unable to perform a database vacuum: out of memory' when the exit scope is then called
+		log.vdebug("Setting Class Objects to null due to failure scope");
+		itemDB = null;
+		appConfig = null;
+		oneDriveApiInstance = null;
+		selectiveSync = null;
+		syncEngineInstance = null;
 	}
 }
 
