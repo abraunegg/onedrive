@@ -2406,7 +2406,7 @@ class SyncEngine {
 		// What do we display here for space remaining
 		if (appConfig.remainingFreeSpace > 0) {
 			// Display the actual value
-			log.vlog("Remaining Free Space: ", (appConfig.remainingFreeSpace/1024) , " KB");
+			log.vlog("Remaining Free Space: ", byteToGibiByte(appConfig.remainingFreeSpace) , " GB (", appConfig.remainingFreeSpace, " bytes)");
 		} else {
 			// zero or non-zero value or restricted
 			if (!appConfig.quotaRestricted){
@@ -7023,6 +7023,8 @@ class SyncEngine {
 	// Query OneDrive for the quota details
 	void queryOneDriveForQuotaDetails() {
 		// This function is similar to getRemainingFreeSpace() but is different in data being analysed and output method
+		
+		
 	
 		JSONValue currentDriveQuota;
 		string driveId;
@@ -7065,11 +7067,11 @@ class SyncEngine {
 			
 				// Update values
 				if ("deleted" in currentDriveQuota["quota"]) {
-					deletedValue = to!string(currentDriveQuota["quota"]["deleted"].integer);
+					deletedValue = byteToGibiByte(currentDriveQuota["quota"]["deleted"].integer);
 				}
 				
 				if ("remaining" in currentDriveQuota["quota"]) {
-					remainingValue = to!string(currentDriveQuota["quota"]["remaining"].integer);
+					remainingValue = byteToGibiByte(currentDriveQuota["quota"]["remaining"].integer);
 				}
 				
 				if ("state" in currentDriveQuota["quota"]) {
@@ -7077,23 +7079,21 @@ class SyncEngine {
 				}
 				
 				if ("total" in currentDriveQuota["quota"]) {
-					totalValue = to!string(currentDriveQuota["quota"]["total"].integer);
+					totalValue = byteToGibiByte(currentDriveQuota["quota"]["total"].integer);
 				}
 				
 				if ("used" in currentDriveQuota["quota"]) {
-					usedValue = to!string(currentDriveQuota["quota"]["used"].integer);
+					usedValue = byteToGibiByte(currentDriveQuota["quota"]["used"].integer);
 				}
 				
 				writeln("Microsoft OneDrive quota information as reported for this Drive ID: ", driveId);
 				writeln();
-				writeln("Deleted:   ", deletedValue);
-				writeln("Remaining: ", remainingValue);
+				writeln("Deleted:   ", deletedValue, " GB (", currentDriveQuota["quota"]["deleted"].integer, " bytes)");
+				writeln("Remaining: ", remainingValue, " GB (", currentDriveQuota["quota"]["remaining"].integer, " bytes)");
 				writeln("State:     ", stateValue);
-				writeln("Total:     ", totalValue);
-				writeln("Used:      ", usedValue);
+				writeln("Total:     ", totalValue, " GB (", currentDriveQuota["quota"]["total"].integer, " bytes)");
+				writeln("Used:      ", usedValue, " GB (", currentDriveQuota["quota"]["used"].integer, " bytes)");
 				writeln();
-				writeln("The numeric values above are expressed in bytes");
-			
 			} else {
 				writeln("Microsoft OneDrive quota information is being restricted for this Drive ID: ", driveId);
 			}

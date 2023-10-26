@@ -21,6 +21,8 @@ import std.json;
 import std.traits;
 import core.stdc.stdlib;
 import core.thread;
+import std.math;
+import std.format;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -790,4 +792,11 @@ bool hasETag(const ref JSONValue item) {
 
 bool hasSharedElement(const ref JSONValue item) {
 	return ("eTag" in item) != null;
+}
+
+// Convert bytes to GB
+string byteToGibiByte(ulong bytes) {
+	double gib = bytes / pow(1024.0,3);
+	double roundedGib = round(gib * 100) / 100;
+	return to!string(format("%.2f", roundedGib)); // Format to ensure two decimal places
 }
