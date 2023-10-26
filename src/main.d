@@ -468,11 +468,6 @@ int main(string[] cliArgs) {
 				// invalidSyncExit = true;
 				return EXIT_FAILURE;
 			}
-			// We do not need this instance, as the API was initialised, and individual instances are used during sync process
-			// However we need this instance to hang around if we are using --monitor for handling subscriptions
-			if (!appConfig.getValueBool("monitor")) {
-				oneDriveApiInstance.shutdown();
-			}
 		} else {
 			// API could not be initialised
 			log.error("The OneDrive API could not be initialised");
