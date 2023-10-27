@@ -898,28 +898,33 @@ int main(string[] cliArgs) {
 void performStandardExitProcess(string scopeCaller) {
 	// Who called this function
 	log.vdebug("Running performStandardExitProcess due to: ", scopeCaller);
-
-	// Shutdown the database
-	if (itemDB !is null) {
-		// Make sure the .wal file is incorporated into the main db before we exit
-		itemDB.performVacuum();
-		object.destroy(itemDB);
-	}
-
+	
+	// Wait for all parallel jobs that depend on the database to complete
+	log.vdebug("Wait for all parallel jobs that depend on the database to complete");
+	taskPool.finish(true);
+	
 	// Shutdown the OneDrive API instance
 	if (oneDriveApiInstance !is null) {
+		log.vdebug("Shutdown OneDrive API instance");
 		oneDriveApiInstance.shutdown();
 		object.destroy(oneDriveApiInstance);
 	}
 	
 	// Shutdown the sync engine
-	if (syncEngineInstance !is null) object.destroy(syncEngineInstance);
+	if (syncEngineInstance !is null) {
+		log.vdebug("Shutdown Sync Engine instance");
+		object.destroy(syncEngineInstance);
+	}
 	
 	// Shutdown the client side filtering objects
-	if (selectiveSync !is null) object.destroy(selectiveSync);
+	if (selectiveSync !is null) {
+		log.vdebug("Shutdown Client Side Filtering instance");
+		object.destroy(selectiveSync);
+	}
 	
 	// Shutdown the application configuration objects
 	if (appConfig !is null) {
+		log.vdebug("Shutdown Application Configuration instance");
 		// Cleanup any existing dry-run elements ... these should never be left hanging around
 		cleanupDryRunDatabaseFiles(appConfig.databaseFilePathDryRun);
 		object.destroy(appConfig);
@@ -927,10 +932,22 @@ void performStandardExitProcess(string scopeCaller) {
 	
 	// Shutdown any local filesystem monitoring
 	if (filesystemMonitor !is null) {
+		log.vdebug("Shutdown Filesystem Monitoring instance");
 		filesystemMonitor.shutdown();
 		object.destroy(filesystemMonitor);
 	}
 	
+	// Shutdown the database
+	if (itemDB !is null) {
+		log.vdebug("Shutdown Database instance");
+		// Make sure the .wal file is incorporated into the main db before we exit
+		if (itemDB.isDatabaseInitialised()) {
+			itemDB.performVacuum();
+		}
+		object.destroy(itemDB);
+	}
+	
+	// Set all objects to null
 	if (scopeCaller == "failureScope") {
 		// Set these to be null due to failure scope - prevent 'ERROR: Unable to perform a database vacuum: out of memory' when the exit scope is then called
 		log.vdebug("Setting Class Objects to null due to failure scope");

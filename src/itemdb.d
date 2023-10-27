@@ -680,6 +680,7 @@ final class ItemDatabase {
 		try {
 			auto stmt = db.prepare("VACUUM;");
 			stmt.exec();
+			log.vdebug("Database vacuum is complete");
 		} catch (SqliteException e) {
 			writeln();
 			log.error("ERROR: Unable to perform a database vacuum: " ~ e.msg);

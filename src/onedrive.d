@@ -76,6 +76,7 @@ class OneDriveWebhook {
 	private ushort port;
 	private Tid parentTid;
 	private shared uint count;
+	private bool started;
 
 	static OneDriveWebhook getOrCreate(string host, ushort port, Tid parentTid) {
 		if (!instantiated_) {
@@ -97,9 +98,23 @@ class OneDriveWebhook {
 		this.parentTid = parentTid;
 		this.count = 0;
 	}
+	
+	void serve() {
+		spawn(&serveStatic);
+		this.started = true;
+		log.log("Started webhook server");
+	}
+
+	void stop() {
+		if (this.started) {
+			RequestServer.stop();
+			this.started = false;
+		}
+		log.log("Stopped webhook server");
+	}
 
 	// The static serve() is necessary because spawn() does not like instance methods
-	static serve() {
+	private static void serveStatic() {
 		// we won't create the singleton instance if it hasn't been created already
 		// such case is a bug which should crash the program and gets fixed
 		instance_.serveImpl();
@@ -458,9 +473,20 @@ class OneDriveApi {
 	
 	// Shutdown OneDrive API Curl Engine
 	void shutdown() {
+		
 		// Delete subscription if there exists any
-		deleteSubscription();
-
+		try {
+			deleteSubscription();
+		} catch (OneDriveException e) {
+			logSubscriptionError(e);
+		}
+		
+		// Shutdown webhook server if it is running
+		if (webhook !is null) {
+			webhook.stop();
+			object.destroy(webhook);
+		}
+		
 		// Reset any values to defaults, freeing any set objects
 		curlEngine.http.clearRequestHeaders();
 		curlEngine.http.onSend = null;
@@ -858,7 +884,7 @@ class OneDriveApi {
 				to!ushort(appConfig.getValueLong("webhook_listening_port")),
 				thisTid
 			);
-			spawn(&OneDriveWebhook.serve);
+			webhook.serve();
 		}
 
 		auto elapsed = Clock.currTime(UTC()) - subscriptionLastErrorAt;
@@ -999,13 +1025,14 @@ class OneDriveApi {
 	
 	private void deleteSubscription() {
 		if (!hasValidSubscription()) {
+			log.vdebug("No valid Microsoft OneDrive webhook subscription to delete");
 			return;
 		}
 
 		string url;
 		url = subscriptionUrl ~ "/" ~ subscriptionId;
-		del(url);
-		log.log("Deleted subscription");
+		performDelete(url);
+		log.vdebug("Deleted Microsoft OneDrive webhook subscription");
 	}
 	
 	private void logSubscriptionError(OneDriveException e) {
