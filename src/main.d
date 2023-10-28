@@ -899,10 +899,6 @@ void performStandardExitProcess(string scopeCaller) {
 	// Who called this function
 	log.vdebug("Running performStandardExitProcess due to: ", scopeCaller);
 	
-	// Wait for all parallel jobs that depend on the database to complete
-	log.vdebug("Wait for all parallel jobs that depend on the database to complete");
-	taskPool.finish(true);
-	
 	// Shutdown the OneDrive API instance
 	if (oneDriveApiInstance !is null) {
 		log.vdebug("Shutdown OneDrive API instance");

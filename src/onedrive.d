@@ -68,6 +68,7 @@ class OneDriveWebhook {
 	// Cache instantiation flag in thread-local bool
 	// Thread local
 	private static bool instantiated_;
+	private RequestServer server;
 
 	// Thread global
 	private __gshared OneDriveWebhook instance_;
@@ -107,10 +108,11 @@ class OneDriveWebhook {
 
 	void stop() {
 		if (this.started) {
-			RequestServer.stop();
+			server.stop();
 			this.started = false;
 		}
 		log.log("Stopped webhook server");
+		object.destroy(server);
 	}
 
 	// The static serve() is necessary because spawn() does not like instance methods
@@ -128,7 +130,7 @@ class OneDriveWebhook {
 	}
 
 	private void serveImpl() {
-		auto server = new RequestServer(host, port);
+		server = RequestServer(host, port);
 		server.serveEmbeddedHttp!handle();
 	}
 
