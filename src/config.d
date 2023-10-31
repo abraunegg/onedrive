@@ -956,6 +956,7 @@ class ApplicationConfig {
 		// Free object and memory
 		object.destroy(file);
 		object.destroy(range);
+		object.destroy(lineBuffer);
 		return true;
 	}
 	
@@ -985,7 +986,10 @@ class ApplicationConfig {
 		boolValues["list_business_shared_items"] = false;
 		boolValues["force_sync"] = false;
 		boolValues["with_editing_perms"] = false;
-
+		
+		// Specific options for CLI input handling
+		stringValues["sync_dir_cli"] = "";
+		
 		// Application Startup option validation
 		try {
 			string tmpStr;
@@ -1148,8 +1152,8 @@ class ApplicationConfig {
 					"The amount of disk space to reserve (in MB) to avoid 100% disk space utilisation",
 					&longValues["space_reservation"],
 				"syncdir",
-					"Specify the local directory used for synchronization to OneDrive",
-					&stringValues["sync_dir"],
+					"Specify the local directory used for synchronisation to OneDrive",
+					&stringValues["sync_dir_cli"],
 				"sync|s",
 					"Perform a synchronisation with Microsoft OneDrive",
 					&boolValues["synchronize"],
@@ -1175,6 +1179,86 @@ class ApplicationConfig {
 					"Create a read-write shareable link for an existing file on OneDrive when used with --create-share-link <file>",
 					&boolValues["with_editing_perms"]
 			);
+			
+			// Was --syncdir used?
+			if (!getValueString("sync_dir_cli").empty) {
+				// Build the line we need to update and/or write out
+				string newConfigOptionSyncDirLine = "sync_dir = \"" ~ getValueString("sync_dir_cli") ~ "\"";
+				
+				// Does a 'config' file exist?
+				if (!exists(applicableConfigFilePath)) {
+					// No existing 'config' file exists, create it, and write the 'sync_dir' configuration to it
+					if (!getValueBool("dry_run")) {
+						std.file.write(applicableConfigFilePath, newConfigOptionSyncDirLine);
+						// Config file should only be readable by the user who created it - 0600 permissions needed
+						applicableConfigFilePath.setAttributes(convertedPermissionValue);
+					}
+				} else {
+					// an existing config file exists .. so this now becomes tricky
+					// string replace 'sync_dir' if it exists, in the existing 'config' file, but only if 'sync_dir' (already read in) is different from 'sync_dir_cli'
+					if ( (getValueString("sync_dir")) != (getValueString("sync_dir_cli")) ) {
+						// values are different
+						File applicableConfigFilePathFileHandle = File(applicableConfigFilePath, "r");
+						string lineBuffer;
+						string[] newConfigFileEntries;
+						
+						// read applicableConfigFilePath line by line
+						auto range = applicableConfigFilePathFileHandle.byLine();
+						
+						// for each 'config' file line
+						foreach (line; range) {
+							lineBuffer = stripLeft(line).to!string;
+							if (lineBuffer.length == 0 || lineBuffer[0] == ';' || lineBuffer[0] == '#') {
+								newConfigFileEntries ~= [lineBuffer];
+							} else {
+								auto c = lineBuffer.matchFirst(configRegex);
+								if (!c.empty) {
+									c.popFront(); // skip the whole match
+									string key = c.front.dup;
+									if (key == "sync_dir") {
+										// lineBuffer is the line we want to keep
+										newConfigFileEntries ~= [newConfigOptionSyncDirLine];
+									} else {
+										newConfigFileEntries ~= [lineBuffer];
+									}
+								}
+							}
+						}
+						
+						// close original 'config' file if still open
+						if (applicableConfigFilePathFileHandle.isOpen()) {
+							// close open file
+							applicableConfigFilePathFileHandle.close();
+						}
+						
+						// free memory from file open
+						object.destroy(applicableConfigFilePathFileHandle);
+						
+						// Update the existing item in the file line array
+						if (!getValueBool("dry_run")) {
+							// Open the file with write access using 'w' mode to overwrite existing content
+							File applicableConfigFilePathFileHandleWrite = File(applicableConfigFilePath, "w");
+							
+							// Write each line from the 'newConfigFileEntries' array to the file
+							foreach (line; newConfigFileEntries) {
+								applicableConfigFilePathFileHandleWrite.writeln(line);
+							}
+
+							// Flush and close the file handle to ensure all data is written
+							if (applicableConfigFilePathFileHandleWrite.isOpen()) {
+							applicableConfigFilePathFileHandleWrite.flush();
+								applicableConfigFilePathFileHandleWrite.close();
+							}
+							
+							// free memory from file open
+							object.destroy(applicableConfigFilePathFileHandleWrite);
+						}
+					}
+				}
+				
+				// Final - configure sync_dir with the value of sync_dir_cli so that it can be used as part of the application configuration and detect change
+				setValueString("sync_dir", getValueString("sync_dir_cli"));
+			}
 			
 			// Was --auth-files used?
 			if (!getValueString("auth_files").empty) {
@@ -1346,10 +1430,9 @@ class ApplicationConfig {
 		writeln("Config option 'ip_protocol_version'          = ", getValueLong("ip_protocol_version"));
 		
 		// Is sync_list configured ?
-		writeln("\nConfig option 'sync_root_files'              = ", getValueBool("sync_root_files"));
 		if (exists(syncListFilePath)){
-			
-			writeln("Selective sync 'sync_list' configured        = true");
+			writeln("\nSelective sync 'sync_list' configured        = true");
+			writeln("sync_list config option 'sync_root_files'    = ", getValueBool("sync_root_files"));
 			writeln("sync_list contents:");
 			// Output the sync_list contents
 			auto syncListFile = File(syncListFilePath, "r");
@@ -1359,10 +1442,9 @@ class ApplicationConfig {
 				writeln(line);
 			}
 		} else {
-			writeln("Selective sync 'sync_list' configured        = false");
-			
+			writeln("\nSelective sync 'sync_list' configured        = false");
 		}
-
+		
 		// Is sync_business_shared_items enabled and configured ?
 		writeln("\nConfig option 'sync_business_shared_items'   = ", getValueBool("sync_business_shared_items"));
 		
@@ -1696,6 +1778,11 @@ class ApplicationConfig {
 						syncBusinessSharedItemsDifferent = true;
 					}
 				}
+				
+				object.destroy(configBackupFileHandle);
+				object.destroy(range);
+				object.destroy(lineBuffer);
+				
 			} else {
 				// no backup to check
 				log.log("WARNING: no backup config file was found, unable to validate if any changes made");
