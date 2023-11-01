@@ -193,8 +193,6 @@ docker start onedrive
 docker rm -f onedrive
 ```
 
-##############################################################################################################################################################
-
 ## Advanced Usage
 
 ### How to support double-byte languages
@@ -217,7 +215,7 @@ ENV LC_ALL ja_JP.UTF-8
 The above example changes the Docker container to support Japanese. To support your local language, change `ja_JP.UTF-8` to the required entry.
 
 ### How to use Docker-compose
-You can utilise 'docker-compose' if available on your platform if you are able to use docker compose schemas > 3.
+You can utilise `docker-compose` if available on your platform if you are able to use docker compose schemas > 3.
 
 In the following example it is assumed you have a `ONEDRIVE_DATA_DIR` environment variable and have already created the `onedrive_conf` volume. 
 
