@@ -17,7 +17,9 @@ These containers offer a simple monitoring-mode service for the OneDrive Client 
 The instructions below have been validated on:
 *   Fedora 38
 
-The instructions below will utilise the 'latest' tag, however this can be substituted for any of the other docker tags from the table above if desired.
+The instructions below will utilise the 'edge' tag, however this can be substituted for any of the other docker tags such as 'latest' from the table above if desired.
+
+The 'edge' Docker Container will align closer to all documentation and features, where as 'latest' is the release version from a static point in time. The 'latest' tag however may contain bugs and/or issues that will have been fixed, and those fixes are contained in 'edge'.
 
 Additionally there are specific version release tags for each release. Refer to https://hub.docker.com/r/driveone/onedrive/tags for any other Docker tags you may be interested in.
 
@@ -46,15 +48,19 @@ The database cannot be opened. Please check the permissions of ~/.config/onedriv
 ```
 The only known work-around for the above problem at present is to disable SELinux. Please refer to your distribution platform's instructions on how to perform this step.
 
-Post disabling SELinux and reboot, confirm that `getenforce` returns `Disabled`:
+* Fedora: https://docs.fedoraproject.org/en-US/quick-docs/selinux-changing-states-and-modes/#_disabling_selinux
+* Red Hat Enterprise Linux: https://access.redhat.com/solutions/3176
+
+Post disabling SELinux and reboot your system, confirm that `getenforce` returns `Disabled`:
 ```text
 $ getenforce
 Disabled
 ```
 
-### 3. Test 'podman' on your platform
-Test that 'podman' is operational for your 'non-root' user, as per below.
+If you are still experiencing permission issues despite disabling SELinux, please read https://www.redhat.com/sysadmin/container-permission-denied-errors
 
+### 3. Test 'podman' on your platform
+Test that 'podman' is operational for your 'non-root' user, as per below:
 ```bash
 [alex@fedora38-podman ~]$ podman pull fedora
 Resolved "fedora" as an alias (/etc/containers/registries.conf.d/000-shortnames.conf)
@@ -107,7 +113,7 @@ The 'onedrive' client within the container first needs to be authorised with you
 
 Run the podman image with the commands below and make sure to change the value of `ONEDRIVE_DATA_DIR` to the actual onedrive data directory on your filesystem that you wish to use (e.g. `export ONEDRIVE_DATA_DIR="/home/abraunegg/OneDrive"`).
 
-**Important:** The 'target' folder of `ONEDRIVE_DATA_DIR` must exist before running the podman container. The script below will create 'ONEDRIVE_DATA_DIR' so that it exists locally for the podman volument mapping to occur.
+**Important:** The 'target' folder of `ONEDRIVE_DATA_DIR` must exist before running the podman container. The script below will create 'ONEDRIVE_DATA_DIR' so that it exists locally for the podman volume mapping to occur.
 
 It is also a requirement that the container be run using a non-root uid and gid, you must insert a non-root UID and GID (e.g.` export ONEDRIVE_UID=1000` and export `ONEDRIVE_GID=1000`). The script below will use `id` to evaluate your system environment to use the correct values.
 ```bash
@@ -118,7 +124,7 @@ mkdir -p ${ONEDRIVE_DATA_DIR}
 podman run -it --name onedrive --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
     -v onedrive_conf:/onedrive/conf:U,Z \
     -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" \
-    driveone/onedrive:latest
+    driveone/onedrive:edge
 ```
 
 **Important:** In some scenarios, 'podman' sets the configuration and data directories to a different UID & GID as specified. To resolve this situation, you must run 'podman' with the `--userns=keep-id` flag to ensure 'podman' uses the UID and GID as specified. The updated script example when using `--userns=keep-id` is below:
@@ -132,7 +138,7 @@ podman run -it --name onedrive --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
     --userns=keep-id \
     -v onedrive_conf:/onedrive/conf:U,Z \
     -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" \
-    driveone/onedrive:latest
+    driveone/onedrive:edge
 ```
 
 
@@ -149,7 +155,7 @@ podman run -it --name onedrive --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
     -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" \
     -e PODMAN=1 \
     --label "io.containers.autoupdate=image" \
-    driveone/onedrive:latest
+    driveone/onedrive:edge
 ```
 
 When the Podman container successfully starts:
@@ -252,7 +258,7 @@ Or you can map your own config folder to the config volume. Make sure to copy al
 The detailed document for the config can be found here: [Configuration](https://github.com/abraunegg/onedrive/blob/master/docs/usage.md#configuration)
 
 ### Syncing multiple accounts
-There are many ways to do this, the easiest is probably to
+There are many ways to do this, the easiest is probably to do the following:
 1. Create a second podman config volume (replace `work` with your desired name):  `podman volume create onedrive_conf_work`
 2. And start a second podman monitor container (again replace `work` with your desired name):
 
@@ -267,7 +273,7 @@ podman run -it --name onedrive_work --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
     -v "${ONEDRIVE_DATA_DIR_WORK}:/onedrive/data:U,Z" \
     -e PODMAN=1 \
     --label "io.containers.autoupdate=image" \
-    driveone/onedrive:latest
+    driveone/onedrive:edge
 ```
 
 ## Supported Podman Environment Variables
@@ -289,26 +295,26 @@ podman run -it --name onedrive_work --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
 | <B>ONEDRIVE_DISPLAY_CONFIG</B> | Controls "--display-running-config" switch on onedrive sync. Default is 0 | 1 |
 | <B>ONEDRIVE_SINGLE_DIRECTORY</B> | Controls "--single-directory" option. Default = "" | "mydir" |
 
-### Usage Examples
+### Environment Variables Usage Examples
 **Verbose Output:**
 ```bash
-podman run -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" driveone/onedrive:latest
+podman run -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" driveone/onedrive:edge
 ```
 **Debug Output:**
 ```bash
-podman run -e ONEDRIVE_DEBUG=1 -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" driveone/onedrive:latest
+podman run -e ONEDRIVE_DEBUG=1 -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" driveone/onedrive:edge
 ```
 **Perform a --resync:**
 ```bash
-podman run -e ONEDRIVE_RESYNC=1 -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" driveone/onedrive:latest
+podman run -e ONEDRIVE_RESYNC=1 -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" driveone/onedrive:edge
 ```
 **Perform a --resync and --verbose:**
 ```bash
-podman run -e ONEDRIVE_RESYNC=1 -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" driveone/onedrive:latest
+podman run -e ONEDRIVE_RESYNC=1 -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" driveone/onedrive:edge
 ```
 **Perform a --logout and re-authenticate:**
 ```bash
-podman run -it -e ONEDRIVE_LOGOUT=1 -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" driveone/onedrive:latest
+podman run -it -e ONEDRIVE_LOGOUT=1 -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" driveone/onedrive:edge
 ```
 
 ## Building a custom Podman image
