@@ -1803,8 +1803,16 @@ class ApplicationConfig {
 				// sync_dir was set in config file
 				if (configFileSyncDir != getValueString("sync_dir")) {
 					// config file was set and CLI input changed this
-					log.vdebug("sync_dir: CLI override of config file option, --resync needed");
-					syncDirDifferent = true;
+					
+					// Is this potentially running as a Docker container?
+					if (entrypointExists) {
+						// entrypoint.sh exists
+						log.vdebug("sync_dir: CLI override of config file option, however entrypoint.sh exists, thus most likely first run of Docker container");
+					} else {
+						// entrypoint.sh does not exist
+						log.vdebug("sync_dir: CLI override of config file option, --resync needed");
+						syncDirDifferent = true;
+					}
 				}
 			}
 			

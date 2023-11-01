@@ -800,3 +800,11 @@ string byteToGibiByte(ulong bytes) {
 	double roundedGib = round(gib * 100) / 100;
 	return to!string(format("%.2f", roundedGib)); // Format to ensure two decimal places
 }
+
+// Test if entrypoint.sh exists on the root filesystem
+bool entrypointExists() {
+	// build the path
+	string entrypointPath = buildNormalizedPath(buildPath("/", "entrypoint.sh"));
+	// return if path exists
+	return exists(entrypointPath);
+}
