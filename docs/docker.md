@@ -117,7 +117,7 @@ Create the 'config' volume with the following command:
 docker volume create onedrive_conf
 ```
 
-This will create a podman volume labeled `onedrive_conf`, where all configuration of your onedrive account will be stored. You can add a custom config file in this location at a later point in time if required.
+This will create a docker volume labeled `onedrive_conf`, where all configuration of your onedrive account will be stored. You can add a custom config file in this location at a later point in time if required.
 
 #### 5.2 Prepare the 'data' volume
 Create the 'data' volume with the following command:
@@ -125,7 +125,7 @@ Create the 'data' volume with the following command:
 docker volume create onedrive_data
 ```
 
-This will create a podman volume labeled `onedrive_data` and will map to a path on your local filesystem. This is where your data from Microsoft OneDrive will be stored. Keep in mind that:
+This will create a docker volume labeled `onedrive_data` and will map to a path on your local filesystem. This is where your data from Microsoft OneDrive will be stored. Keep in mind that:
 
 *   The owner of this specified folder must not be root
 *   The owner of this specified folder must have permissions for its parent directory
