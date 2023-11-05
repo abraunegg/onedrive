@@ -118,6 +118,13 @@ if [ -n "${ONEDRIVE_SINGLE_DIRECTORY:=""}" ]; then
    ARGS=(--single-directory \"${ONEDRIVE_SINGLE_DIRECTORY}\" ${ARGS[@]})
 fi
 
+# Tell client run in dry-run mode
+if [ "${ONEDRIVE_DRYRUN:=0}" == "1" ]; then
+   echo "# We are running in dry-run mode"
+   echo "# Adding --dry-run"
+   ARGS=(--dry-run ${ARGS[@]})
+fi
+
 if [ ${#} -gt 0 ]; then
   ARGS=("${@}")
 fi
