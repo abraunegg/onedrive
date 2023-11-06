@@ -294,6 +294,7 @@ podman run -it --name onedrive_work --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
 | <B>ONEDRIVE_AUTHRESPONSE</B> | Controls "--auth-response" option. Default is "" | See [here](https://github.com/abraunegg/onedrive/blob/master/docs/usage.md#authorize-the-application-with-your-onedrive-account) |
 | <B>ONEDRIVE_DISPLAY_CONFIG</B> | Controls "--display-running-config" switch on onedrive sync. Default is 0 | 1 |
 | <B>ONEDRIVE_SINGLE_DIRECTORY</B> | Controls "--single-directory" option. Default = "" | "mydir" |
+| <B>ONEDRIVE_DRYRUN</B> | Controls "--dry-run" option. Default is 0 | 1 |
 
 ### Environment Variables Usage Examples
 **Verbose Output:**
