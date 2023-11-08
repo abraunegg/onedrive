@@ -1642,10 +1642,6 @@ class SyncEngine {
 				localModifiedTime.fracSecs = Duration.zero;
 				itemModifiedTime.fracSecs = Duration.zero;
 				
-				// If we need to rename the file, what do we rename it to?
-				auto ext = extension(newItemPath);
-				auto renamedNewItemPath = newItemPath.chomp(ext) ~ "-" ~ deviceName ~ ext;
-				
 				// Is the local modified time greater than that from OneDrive?
 				if (localModifiedTime > itemModifiedTime) {
 					// Local file is newer than item on OneDrive based on file modified time
@@ -1673,16 +1669,8 @@ class SyncEngine {
 							// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
 							log.vlog("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: ", newItemPath);
 						} else {
-							// local data protection is configured, renaming local file
-							log.log("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: ", newItemPath, " -> ", renamedNewItemPath);
-							// perform the rename action of the local file
-							if (!dryRun) {
-								// Perform the local rename of the existing local file
-								safeRename(newItemPath, renamedNewItemPath, dryRun);
-							} else {
-								// Expectation here is that there is a new file locally (renamedNewItemPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
-								log.vdebug("DRY-RUN: Skipping local file rename");
-							}
+							// local data protection is configured, rename the local file
+							safeBackup(newItemPath, dryRun);
 						}
 					}
 				} else {
@@ -1696,16 +1684,8 @@ class SyncEngine {
 						// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
 						log.vlog("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: ", newItemPath);
 					} else {
-						// local data protection is configured, renaming local file
-						log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent data loss: ", newItemPath, " -> ", renamedNewItemPath);
-						// perform the rename action of the local file
-						if (!dryRun) {
-							// Perform the local rename of the existing local file
-							safeRename(newItemPath, renamedNewItemPath, dryRun);
-						} else {
-							// Expectation here is that there is a new file locally (renamedNewItemPath) however as we don't create this, the "new file" will not be uploaded as it does not exist
-							log.vdebug("DRY-RUN: Skipping local file rename");
-						}							
+						// local data protection is configured, rename the local file
+						safeBackup(newItemPath, dryRun);							
 					}
 				}
 			}
@@ -1801,7 +1781,7 @@ class SyncEngine {
 				// Try and rename path, catch any exception generated
 				try {
 					// Rename this item, passing in if we are performing a --dry-run or not
-					safeRename(existingItemPath, changedItemPath, dryRun);
+					safeBackup(changedItemPath, dryRun);
 					
 					// If the item is a file, make sure that the local timestamp now is the same as the timestamp online
 					// Otherwise when we do the DB check, the move on the file system, the file technically has a newer timestamp
@@ -1988,12 +1968,8 @@ class SyncEngine {
 						
 						// do the rename if we are not in a --dry-run scenario
 						if (!dryRun) {
-							// If we need to rename the file, what do we rename it to?
-							auto ext = extension(newItemPath);
-							auto renamedNewItemPath = newItemPath.chomp(ext) ~ "-" ~ deviceName ~ ext;
-							
 							// Perform the local rename of the existing local file
-							safeRename(newItemPath, renamedNewItemPath, dryRun);
+							safeBackup(newItemPath, dryRun);
 						}
 					}
 				}

@@ -53,23 +53,24 @@ void safeBackup(const(char)[] path, bool dryRun) {
 	newPath ~= ext;
 	
 	// Perform the backup
-	log.vlog("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent data loss: ", path, " -> ", newPath);
+	log.log("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: ", path, " -> ", newPath);
+	
+	// Are we in a --dry-run scenario?
 	if (!dryRun) {
+		// There are 2 options to rename a file
+		// rename() - https://dlang.org/library/std/file/rename.html
+		// std.file.copy() - https://dlang.org/library/std/file/copy.html
+		//
+		// rename:
+		//   It is not possible to rename a file across different mount points or drives. On POSIX, the operation is atomic. That means, if to already exists there will be no time period during the operation where to is missing.
+		//
+		// std.file.copy
+		//   Copy file from to file to. File timestamps are preserved. File attributes are preserved, if preserve equals Yes.preserveAttributes
+		//
+		// Use rename() as it Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
 		rename(path, newPath);
 	} else {
-		log.vdebug("DRY-RUN: Skipping local file backup");
-	}
-}
-
-// Rename the given item, and only performs the function if not in a --dry-run scenario
-void safeRename(const(char)[] oldPath, const(char)[] newPath, bool dryRun) {
-	// Perform the rename
-	if (!dryRun) {
-		log.vdebug("Calling rename(oldPath, newPath)");
-		// rename physical path on disk
-		rename(oldPath, newPath);
-	} else {
-		log.vdebug("DRY-RUN: Skipping local file rename");
+		log.vdebug("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: ", path, " -> ", newPath);
 	}
 }
 
