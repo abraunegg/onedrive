@@ -151,7 +151,7 @@ If required, review the table below based on your 'lsb_release' information to p
 | Ubuntu 22.04 / Jammy      | Use [Ubuntu 22.04](#distribution-ubuntu-2204) instructions below |
 | Ubuntu 22.10 / Kinetic    | Use [Ubuntu 22.10](#distribution-ubuntu-2210) instructions below |
 | Ubuntu 23.04 / Lunar      | Use [Ubuntu 23.04](#distribution-ubuntu-2304) instructions below |
-| Ubuntu 23.10 / Lunar      | TBA |
+| Ubuntu 23.10 / Mantic     | Use [Ubuntu 23.10](#distribution-ubuntu-2310) instructions below |
 
 ## Distribution Package Install Instructions
 
@@ -159,7 +159,7 @@ If required, review the table below based on your 'lsb_release' information to p
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
-|✔|✔|✔|✔| |
+|✔|✔|✔|✔|
 
 #### Step 1: Add the OpenSuSE Build Service repository release key
 Add the OpenSuSE Build Service repository release key using the following command:
@@ -186,7 +186,7 @@ Read and understand the [known issues](#known-issues-with-installing-from-the-ab
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
-|✔|✔|✔|✔| |
+|✔|✔|✔|✔|
 
 #### Step 1: Add the OpenSuSE Build Service repository release key
 Add the OpenSuSE Build Service repository release key using the following command:
@@ -213,7 +213,7 @@ Read and understand the [known issues](#known-issues-with-installing-from-the-ab
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
-❌|✔|✔|✔| |
+|❌|✔|✔|✔|
 
 #### Step 1: Add the OpenSuSE Build Service repository release key
 Add the OpenSuSE Build Service repository release key using the following command:
@@ -240,7 +240,7 @@ Read and understand the [known issues](#known-issues-with-installing-from-the-ab
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
-❌|✔|✔|✔| |
+|❌|✔|✔|✔|
 
 #### Step 1: Add the OpenSuSE Build Service repository release key
 Add the OpenSuSE Build Service repository release key using the following command:
@@ -267,7 +267,7 @@ Read and understand the [known issues](#known-issues-with-installing-from-the-ab
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
-❌|✔|✔|✔| |
+|❌|✔|✔|✔|
 
 #### Step 1: Add the OpenSuSE Build Service repository release key
 Add the OpenSuSE Build Service repository release key using the following command:
@@ -294,7 +294,7 @@ Read and understand the [known issues](#known-issues-with-installing-from-the-ab
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
-❌|✔|✔|✔| |
+|❌|✔|✔|✔|
 
 #### Step 1: Add the OpenSuSE Build Service repository release key
 Add the OpenSuSE Build Service repository release key using the following command:
@@ -321,7 +321,7 @@ Read and understand the [known issues](#known-issues-with-installing-from-the-ab
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
-❌|✔|✔|✔| |
+|❌|✔|✔|✔|
 
 #### Step 1: Add the OpenSuSE Build Service repository release key
 Add the OpenSuSE Build Service repository release key using the following command:
@@ -348,7 +348,7 @@ Read and understand the [known issues](#known-issues-with-installing-from-the-ab
 The packages support the following platform architectures:
 | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
 |:----:|:------:|:-----:|:-------:|
-❌|✔|✔|✔| |
+|❌|✔|✔|✔|
 
 #### Step 1: Add the OpenSuSE Build Service repository release key
 Add the OpenSuSE Build Service repository release key using the following command:
@@ -370,6 +370,34 @@ Run: `sudo apt install --no-install-recommends --no-install-suggests onedrive`
 
 #### Step 5: Read 'Known Issues' with these packages
 Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
+
+### Distribution: Ubuntu 23.10
+The packages support the following platform architectures:
+| &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 |
+|:----:|:------:|:-----:|:-------:|
+|❌|✔|❌|✔|
+
+#### Step 1: Add the OpenSuSE Build Service repository release key
+Add the OpenSuSE Build Service repository release key using the following command:
+```text
+wget -qO - https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_23.10/Release.key | gpg --dearmor | sudo tee /usr/share/keyrings/obs-onedrive.gpg > /dev/null
+```
+
+#### Step 2: Add the OpenSuSE Build Service repository
+Add the OpenSuSE Build Service repository using the following command:
+```text
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/obs-onedrive.gpg] https://download.opensuse.org/repositories/home:/npreining:/debian-ubuntu-onedrive/xUbuntu_23.10/ ./" | sudo tee /etc/apt/sources.list.d/onedrive.list
+```
+
+#### Step 3: Update your apt package cache
+Run: `sudo apt-get update`
+
+#### Step 4: Install 'onedrive'
+Run: `sudo apt install --no-install-recommends --no-install-suggests onedrive`
+
+#### Step 5: Read 'Known Issues' with these packages
+Read and understand the [known issues](#known-issues-with-installing-from-the-above-packages) with these packages below, taking any action that is needed.
+
 
 ## Known Issues with Installing from the above packages
 
