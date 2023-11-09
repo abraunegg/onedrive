@@ -7260,8 +7260,28 @@ class SyncEngine {
 			// Was the response from the OneDrive API a valid JSON item?
 			if (uploadResponse.type() == JSONType.object) {
 				// A valid JSON object was returned - session resumption upload sucessful
-				// Save JSON item in database
-				saveItem(uploadResponse);
+				
+				// Are we in an --upload-only & --remove-source-files scenario?
+				// Use actual config values as we are doing an upload session recovery
+				if (localDeleteAfterUpload) {
+					// Log that we are deleting a local item
+					log.log("Removing local file as --upload-only & --remove-source-files configured");
+					// are we in a --dry-run scenario?
+					if (!dryRun) {
+						// No --dry-run ... process local file delete
+						// Only perform the delete if we have a valid file path
+						if (exists(jsonItemToResume["localPath"].str)) {
+							// file exists
+							log.vdebug("Removing local file: ", jsonItemToResume["localPath"].str);
+							safeRemove(jsonItemToResume["localPath"].str);
+						}
+					}
+					// as file is removed, we have nothing to add to the local database
+					log.vdebug("Skipping adding to database as --upload-only & --remove-source-files configured");
+				} else {
+					// Save JSON item in database
+					saveItem(uploadResponse);
+				}
 			} else {
 				// No valid response was returned
 				writeln("CODING TO DO: what to do when session upload resumption JSON data is not valid ... nothing ? error message ?");
