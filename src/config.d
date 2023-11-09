@@ -127,7 +127,7 @@ class ApplicationConfig {
 	// - What is the home path of the actual 'user' that is running the application
 	string defaultHomePath = "";
 	// - What is the config path for the application. By default, this is ~/.config/onedrive but can be overridden by using --confdir
-	private string configDirName = defaultConfigDirName;
+	string configDirName = defaultConfigDirName;
 	// - In case we have to use a system config directory such as '/etc/onedrive' or similar, store that path in this variable
 	private string systemConfigDirName = "";
 	// - Store the configured converted octal value for directory permissions

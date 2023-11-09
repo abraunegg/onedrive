@@ -23,6 +23,10 @@ import core.stdc.stdlib;
 import core.thread;
 import std.math;
 import std.format;
+import std.random;
+import std.array;
+import std.ascii;
+import std.range;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -52,11 +56,13 @@ void safeBackup(const(char)[] path, bool dryRun) {
 	}
 	newPath ~= ext;
 	
-	// Perform the backup
+	// Log that we are perform the backup by renaming the file
 	log.log("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: ", path, " -> ", newPath);
 	
 	// Are we in a --dry-run scenario?
 	if (!dryRun) {
+		// Not a --dry-run scenario - do the file rename
+		//
 		// There are 2 options to rename a file
 		// rename() - https://dlang.org/library/std/file/rename.html
 		// std.file.copy() - https://dlang.org/library/std/file/copy.html
@@ -67,7 +73,7 @@ void safeBackup(const(char)[] path, bool dryRun) {
 		// std.file.copy
 		//   Copy file from to file to. File timestamps are preserved. File attributes are preserved, if preserve equals Yes.preserveAttributes
 		//
-		// Use rename() as it Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
+		// Use rename() as Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
 		rename(path, newPath);
 	} else {
 		log.vdebug("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: ", path, " -> ", newPath);
@@ -77,16 +83,6 @@ void safeBackup(const(char)[] path, bool dryRun) {
 // deletes the specified file without throwing an exception if it does not exists
 void safeRemove(const(char)[] path) {
 	if (exists(path)) remove(path);
-}
-
-// returns the CRC32 hex string of a file
-string computeCRC32(string path) {
-	CRC32 crc;
-	auto file = File(path, "rb");
-	foreach (ubyte[] data; chunks(file, 4096)) {
-		crc.put(data);
-	}
-	return crc.finish().toHexString().dup;
 }
 
 // returns the SHA1 hash hex string of a file
@@ -809,3 +805,13 @@ bool entrypointExists() {
 	// return if path exists
 	return exists(entrypointPath);
 }
+
+// Generate a random alphanumeric string
+string generateAlphanumericString() {
+	auto asciiLetters = to!(dchar[])(letters);
+	auto asciiDigits = to!(dchar[])(digits);
+	dchar[16] randomString;
+	fill(randomString[], randomCover(chain(asciiLetters, asciiDigits), rndGen));
+	return to!string(randomString);
+}
+

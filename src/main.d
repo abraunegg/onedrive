@@ -285,7 +285,7 @@ int main(string[] cliArgs) {
 	// Force a synchronization of a specific folder, only when using --synchronize --single-directory and ignoring all non-default skip_dir and skip_file rules
 	if (appConfig.getValueBool("force_sync")) {
 		// appConfig.checkForBasicOptionConflicts() has already checked for the basic requirements for --force-sync
-		log.log("\nWARNING: Overriding application configuration to use application defaults for skip_dir and skip_file due to --synch --single-directory --force-sync being used");
+		log.log("\nWARNING: Overriding application configuration to use application defaults for skip_dir and skip_file due to --sync --single-directory --force-sync being used");
 		bool forceSyncRiskAcceptance = appConfig.displayForceSyncRiskForAcceptance();
 		log.vdebug("Returned --force-sync risk acceptance: ", forceSyncRiskAcceptance);
 		// Action based on user response
@@ -515,6 +515,14 @@ int main(string[] cliArgs) {
 		string singleDirectoryPath;
 		string localPath = ".";
 		string remotePath = "/";
+		
+		// Check if there are interrupted upload session(s)
+		if (syncEngineInstance.checkForInterruptedSessionUploads) {
+			// Need to re-process the session upload files to resume the failed session uploads
+			log.log("There are interrupted session uploads that need to be resumed ...");
+			// Process the session upload files
+			syncEngineInstance.processForInterruptedSessionUploads();
+		}
 		
 		// Are we doing a single directory operation (--single-directory) ?
 		if (!appConfig.getValueString("single_directory").empty) {
@@ -915,6 +923,7 @@ void performStandardExitProcess(string scopeCaller) {
 	// Shutdown the client side filtering objects
 	if (selectiveSync !is null) {
 		log.vdebug("Shutdown Client Side Filtering instance");
+		selectiveSync.shutdown();
 		object.destroy(selectiveSync);
 	}
 	

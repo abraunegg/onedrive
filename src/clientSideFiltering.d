@@ -84,6 +84,15 @@ class ClientSideFiltering {
 		return true;
 	}
 	
+	// Shutdown components
+	void shutdown() {
+		object.destroy(appConfig);
+		object.destroy(paths);
+		object.destroy(businessSharedItemsList);
+		object.destroy(fileMask);
+		object.destroy(directoryMask);
+	}
+	
 	// Load sync_list file if it exists
 	void loadSyncList(string filepath) {
 		// open file as read only

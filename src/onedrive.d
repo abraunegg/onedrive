@@ -796,6 +796,12 @@ class OneDriveApi {
 		return response;
 	}
 	
+	// https://dev.onedrive.com/items/upload_large_files.htm
+	JSONValue requestUploadStatus(string uploadUrl) {
+		checkAccessTokenExpired();
+		return get(uploadUrl, true);
+	}
+	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/site_search?view=odsp-graph-online
 	JSONValue o365SiteSearch(string nextLink) {
 		checkAccessTokenExpired();
