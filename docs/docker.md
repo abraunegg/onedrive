@@ -131,7 +131,7 @@ This will create a docker volume labeled `onedrive_data` and will map to a path 
 *   The owner of this specified folder must have permissions for its parent directory
 *   Docker will attempt to change the permissions of the volume to the user the container is configured to run as
 
-**NOTE:** Issues occur when this target folder is a mounted folder of an external system (NAS, SMB mount, USB Drive etc) as the 'mount' itself is owed by 'root'. If this is your use case, you *must* ensure your normal user can mount your desired target without having the target mounted by 'root'. If you do not fix this, your Podman container will fail to start with the following error message:
+**NOTE:** Issues occur when this target folder is a mounted folder of an external system (NAS, SMB mount, USB Drive etc) as the 'mount' itself is owed by 'root'. If this is your use case, you *must* ensure your normal user can mount your desired target without having the target mounted by 'root'. If you do not fix this, your Docker container will fail to start with the following error message:
 ```bash
 ROOT level privileges prohibited!
 ```
