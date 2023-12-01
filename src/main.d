@@ -102,7 +102,7 @@ int main(string[] cliArgs) {
 		// Print the version and exit
 		if (printVersion) {
 			//writeln("onedrive ", strip(import("version")));
-			string tempVersion = "v2.5.0-alpha-3" ~ " GitHub version: " ~ strip(import("version"));
+			string tempVersion = "v2.5.0-alpha-4" ~ " GitHub version: " ~ strip(import("version"));
 			writeln(tempVersion);
 			return EXIT_SUCCESS;
 		}
