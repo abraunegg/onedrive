@@ -283,16 +283,30 @@ However, in some circumstances, it may be desirable to clean up local files that
 onedrive --sync --download-only --cleanup-local-files
 ```
 
+
+
+
+
 ### Performing a 'one-way' upload synchronisation with Microsoft OneDrive
-In some cases, it may be desirable to 'upload only' to Microsoft OneDrive. To do this, use the following command:
+In certain scenarios, you might need to perform an 'upload only' operation to Microsoft OneDrive. This means that you'll be uploading data to OneDrive, but not synchronising any changes or additions made elsewhere. Use this command to initiate an upload-only synchronisation:
+
 ```text
 onedrive --sync --upload-only
 ```
-**Note:** If a file or folder is present on Microsoft OneDrive, which was previously synchronised and now does not exist locally, that item will be removed from Microsoft OneDrive online. If the data on Microsoft OneDrive should be kept, the following should be used:
+
+**Important Points:**
+- The 'upload only' mode operates independently of OneDrive's online content. It doesn't check or sync with what's already stored on OneDrive. It only uploads data from the local client.
+- If a local file or folder that was previously synchronised with Microsoft OneDrive is now missing locally, it will be deleted from OneDrive during this operation.
+
+To ensure that all data on Microsoft OneDrive remains intact (e.g., preventing deletion of items on OneDrive if they're deleted locally), use this command instead:
+
 ```text
 onedrive --sync --upload-only --no-remote-delete
 ```
-**Note:** The operation of 'upload only' does not request data from Microsoft OneDrive about what 'other' data exists online. The client only knows about the data that 'this' client uploaded, thus any files or folders created or uploaded outside of this client will remain untouched online.
+
+**Understanding both Commands:**
+- `--upload-only`: This command will only upload local changes to OneDrive. These changes can include additions, modifications, moves, and deletions of files and folders.
+- `--no-remote-delete`: Adding this command prevents the deletion of any items on OneDrive, even if they're deleted locally. This creates a one-way archive on OneDrive where files are only added and never removed.
 
 ### Performing a selective synchronisation via 'sync_list' file
 Selective synchronisation allows you to sync only specific files and directories.
