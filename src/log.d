@@ -5,248 +5,213 @@ module log;
 import std.stdio;
 import std.file;
 import std.datetime;
-import std.process;
-import std.conv;
-import std.path;
+import std.concurrency;
+import std.typecons;
+import core.sync.mutex;
+import core.thread;
+import std.format;
 import std.string;
-import core.memory;
-import core.sys.posix.pwd;
-import core.sys.posix.unistd;
-import core.stdc.string : strlen;
-import std.algorithm : splitter;
 
 version(Notifications) {
 	import dnotify;
 }
 
-// module variables
-// verbose logging count
-long verbose;
-// do we write a log file? ... this should be a config falue
-bool writeLogFile = false;
-// did the log file write fail?
-bool logFileWriteFailFlag = false;
-private bool triggerNotification;
+// Shared module object
+shared LogBuffer logBuffer;
 
-// shared string variable for username
-string username;
-string logFilePath;
-string logFileName;
-string logFileFullPath;
+class LogBuffer {
+    private:
+        string[3][] buffer;
+        Mutex bufferLock;
+        string logFilePath;
+        bool writeToFile;
+        bool verboseLogging;
+        bool debugLogging;
+        Thread flushThread;
+        bool isRunning;
+		bool sendGUINotification;
 
-void initialise(string logDir) {
-	writeLogFile = true;
-	
-	// Configure various variables
-	username = getUserName();
-	logFilePath = logDir;
-	logFileName = username ~ ".onedrive.log";
-	logFileFullPath = buildPath(logFilePath, logFileName);
-	
-	if (!exists(logFilePath)){
-		// logfile path does not exist
-		try {
-			mkdirRecurse(logFilePath);
-		} 
-		catch (std.file.FileException e) {
-			// we got an error ..
-			writeln();
-			writeln("ERROR: Unable to access ", logFilePath);
-			writeln("ERROR: Please manually create '",logFilePath, "' and set appropriate permissions to allow write access");
-			writeln("ERROR: The requested client activity log will instead be located in your users home directory");
-			writeln();
+    public:
+        this(bool verboseLogging, bool debugLogging) {
+			// Initialise the mutex
+            bufferLock = new Mutex();
+			// Initialise other items
+            this.logFilePath = logFilePath;
+            this.writeToFile = writeToFile;
+            this.verboseLogging = verboseLogging;
+            this.debugLogging = debugLogging;
+            this.isRunning = true;
+			this.sendGUINotification = true;
+            this.flushThread = new Thread(&flushBuffer);
+			flushThread.isDaemon(true);
+			flushThread.start();
+        }
+
+        ~this() {
+            isRunning = false;
+            flushThread.join();
+            flush();
+        }
+
+        shared void logThisMessage(string message, string[] levels = ["info"]) {
+			// Generate the timestamp for this log entry
+			auto timeStamp = leftJustify(Clock.currTime().toString(), 28, '0');
 			
-			// set the flag so we dont keep printing this sort of message
-			logFileWriteFailFlag = true;
-		}
-	}
+			synchronized(bufferLock) {
+				foreach (level; levels) {
+					// Normal application output
+					if (!debugLogging) {
+						if ((level == "info") || ((verboseLogging) && (level == "verbose")) || (level == "logFileOnly") || (level == "consoleOnlyNoNewLine")) {
+							// Add this message to the buffer, with this format
+							buffer ~= [timeStamp, level, format("%s", message)];
+						}
+					} else {
+						// Debug Logging (--verbose --verbose | -v -v | -vv) output
+						// Add this message, regardless of 'level' to the buffer, with this format
+						buffer ~= [timeStamp, level, format("DEBUG: %s", message)];
+						// If there are multiple 'levels' configured, ignore this and break as we are doing debug logging
+						break;
+                    }
+					
+					// Submit the message to the dbus / notification daemon for display within the GUI being used
+					// Will not send GUI notifications when running in debug mode
+					if ((!debugLogging) && (level == "notify")) {
+						version(Notifications) {
+							if (sendGUINotification) {
+								notify(message);
+							}
+						}
+                    }
+                }
+            }
+        }
+		
+		shared void notify(string message) {
+            // Use dnotify's functionality for GUI notifications, if GUI notifications is enabled
+			version(Notifications) {
+				auto n = new Notification("Log Notification", message, "IGNORED");
+				n.show();
+			}
+        }
+
+        private void flushBuffer() {
+            while (isRunning) {
+                Thread.sleep(dur!("msecs")(200));
+                flush();
+            }
+        }
+
+        private void flush() {
+            string[3][] messages;
+            synchronized(bufferLock) {
+                messages = buffer;
+                buffer.length = 0;
+            }
+
+            foreach (msg; messages) {
+                // timestamp, logLevel, message
+				// Always write the log line to the console, if level != logFileOnly
+				if (msg[1] != "logFileOnly") {
+					// Console output .. what sort of output
+					if (msg[1] == "consoleOnlyNoNewLine") {
+						// This is used in non-verbose mode to indicate something is happening when downloading JSON data from OneDrive
+						write(msg[2]);
+					} else {
+						// write this to the console with a new line
+						writeln(msg[2]);
+					}
+				}
+                
+				// Was this just console only output?
+				if (msg[1] != "consoleOnlyNoNewLine") {
+					// Write to the logfile only if configured to do so
+					if (writeToFile) {
+						string logFileLine = format("[%s] %s", msg[0], msg[2]);
+						std.file.append(logFilePath, logFileLine ~ "\n");
+					}
+				}
+            }
+        }
 }
 
-void enableNotifications(bool value) {
-	version(Notifications) {
-		// if we try to enable notifications, check for server availability
-		// and disable in case dbus server is not reachable
-		if (value) {
-			auto serverAvailable = dnotify.check_availability();
-			if (!serverAvailable) {
-				log("Notification (dbus) server not available, disabling");
-				value = false;
-			}
-		}
-	}
-	triggerNotification = value;
+// Function to initialize the logging system
+void initialiseLogging(bool verboseLogging = false, bool debugLogging = false) {
+    logBuffer = cast(shared) new LogBuffer(verboseLogging, debugLogging);
 }
+
+// Function to add a log entry with multiple levels
+void addLogEntry(string message = "", string[] levels = ["info"]) {
+	logBuffer.logThisMessage(message, levels);
+}
+
+// Function to set logFilePath and enable logging to a file
+void enableLogFileOutput(string configuredLogFilePath) {
+	logBuffer.logFilePath = configuredLogFilePath;
+	logBuffer.writeToFile = true;
+}
+
+void disableGUINotifications(bool userConfigDisableNotifications) {
+	logBuffer.sendGUINotification = userConfigDisableNotifications;
+}
+
+
+
+
+// OLD CODE ... TO REMOVE
+// ####################################################################################################################
+
+/**
 
 void log(T...)(T args) {
+	// old log
 	writeln(args);
-	if(writeLogFile){
-		// Write to log file
-		logfileWriteLine(args);
-	}
 }
 
-void logAndNotify(T...)(T args) {
-	notify(args);
-	log(args);
-}
-
-void fileOnly(T...)(T args) {
-	if(writeLogFile){
-		// Write to log file
-		logfileWriteLine(args);
-	}
-}
+**/
 
 void vlog(T...)(T args) {
-	if (verbose >= 1) {
-		writeln(args);
-		if(writeLogFile){
-			// Write to log file
-			logfileWriteLine(args);
-		}
-	}
+	// old verbose
+	//writeln("[VERBOSE] ", args);
 }
 
 void vdebug(T...)(T args) {
-	if (verbose >= 2) {
-		writeln("[DEBUG] ", args);
-		if(writeLogFile){
-			// Write to log file
-			logfileWriteLine("[DEBUG] ", args);
-		}
-	}
+	// old log
+	//writeln("[DEBUG] ", args);
 }
 
 void vdebugNewLine(T...)(T args) {
-	if (verbose >= 2) {
-		writeln("\n[DEBUG] ", args);
-		if(writeLogFile){
-			// Write to log file
-			logfileWriteLine("\n[DEBUG] ", args);
-		}
-	}
+	// old code
+	writeln("old vdebugNewLine");
 }
 
+/**
+
 void error(T...)(T args) {
-	stderr.writeln(args);
-	if(writeLogFile){
-		// Write to log file
-		logfileWriteLine(args);
-	}
+	// old log
+	writeln("old error");
+}
+
+void logAndNotify(T...)(T args) {
+	// old log
+	writeln("old logAndNotify");
 }
 
 void errorAndNotify(T...)(T args) {
-	notify(args);
-	error(args);
+	// old log
+	writeln("old errorAndNotify");
 }
 
-void notify(T...)(T args) {
-	version(Notifications) {
-		if (triggerNotification) {
-			string result;
-			foreach (index, arg; args) {
-				result ~= to!string(arg);
-				if (index != args.length - 1)
-					result ~= " ";
-			}
-			auto n = new Notification("OneDrive", result, "IGNORED");
-			try {
-				n.show();
-				// Sent message to notification daemon
-				if (verbose >= 2) {
-					writeln("[DEBUG] Sent notification to notification service. If notification is not displayed, check dbus or notification-daemon for errors");
-				}
-				
-			} catch (Throwable e) {
-				vlog("Got exception from showing notification: ", e);
-			}
-		}
-	}
+void fileOnly(T...)(T args) {
+	// old code
+	writeln("old fileOnly");
 }
 
-private void logfileWriteLine(T...)(T args) {
-	static import std.exception;
-	// Write to log file
-	auto currentTime = Clock.currTime();
-	auto timeString = leftJustify(currentTime.toString(), 28, '0');
-	File logFile;
-	
-	// Resolve: std.exception.ErrnoException@std/stdio.d(423): Cannot open file `/var/log/onedrive/xxxxx.onedrive.log' in mode `a' (Permission denied)
-	try {
-		logFile = File(logFileFullPath, "a");
-		} 
-	catch (std.exception.ErrnoException e) {
-		// We cannot open the log file logFileFullPath for writing
-		// The user is not part of the standard 'users' group (GID 100)
-		// Change logfile to ~/onedrive.log putting the log file in the users home directory
-		
-		if (!logFileWriteFailFlag) {
-			// write out error message that we cant log to the requested file
-			writeln();
-			writeln("ERROR: Unable to write activity log to ", logFileFullPath);
-			writeln("ERROR: Please set appropriate permissions to allow write access to the logging directory for your user account");
-			writeln("ERROR: The requested client activity log will instead be located in your users home directory");
-			writeln();
-		
-			// set the flag so we dont keep printing this error message
-			logFileWriteFailFlag = true;
-		}
-		
-		string homePath = environment.get("HOME");
-		string logFileFullPathAlternate = homePath ~ "/onedrive.log";
-		logFile = File(logFileFullPathAlternate, "a");
-	} 
-	// Write to the log file
-	logFile.writeln(timeString, "\t", args);
-	logFile.close();
-}
+**/
 
-private string getUserName() {
-	auto pw = getpwuid(getuid);
-	
-	// get required details
-	auto runtime_pw_name = pw.pw_name[0 .. strlen(pw.pw_name)].splitter(',');
-	auto runtime_pw_uid = pw.pw_uid;
-	auto runtime_pw_gid = pw.pw_gid;
-	
-	// user identifiers from process
-	vdebug("Process ID: ", pw);
-	vdebug("User UID:   ", runtime_pw_uid);
-	vdebug("User GID:   ", runtime_pw_gid);
-	
-	// What should be returned as username?
-	if (!runtime_pw_name.empty && runtime_pw_name.front.length){
-		// user resolved
-		vdebug("User Name:  ", runtime_pw_name.front.idup);
-		return runtime_pw_name.front.idup;
-	} else {
-		// Unknown user?
-		vdebug("User Name:  unknown");
-		return "unknown";
-	}
-}
 
-void displayMemoryUsagePreGC() {
-	// Display memory usage
-	writeln();
-	writeln("Memory Usage pre GC (KB)");
-	writeln("------------------------");
-	writeMemoryStats();
-	writeln();
-}
 
-void displayMemoryUsagePostGC() {
-	// Display memory usage
-	writeln();
-	writeln("Memory Usage post GC (KB)");
-	writeln("-------------------------");
-	writeMemoryStats();
-	writeln();
-}
 
-void writeMemoryStats() {
-	// write memory stats
-	writeln("memory usedSize                 = ", (GC.stats.usedSize/1024));
-	writeln("memory freeSize                 = ", (GC.stats.freeSize/1024));
-	writeln("memory allocatedInCurrentThread = ", (GC.stats.allocatedInCurrentThread/1024));
-}
+
+
+
+

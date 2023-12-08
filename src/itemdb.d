@@ -88,21 +88,21 @@ Item makeDatabaseItem(JSONValue driveItem) {
 	bool typeSet = false;
 	if (isItemFile(driveItem)) {
 		// 'file' object exists in the JSON
-		log.vdebug("Flagging object as a file");
+		addLogEntry("Flagging object as a file", ["debug"]);
 		typeSet = true;
 		item.type = ItemType.file;
 	}
 	
 	if (isItemFolder(driveItem)) {
 		// 'folder' object exists in the JSON
-		log.vdebug("Flagging object as a directory");
+		addLogEntry("Flagging object as a directory", ["debug"]);
 		typeSet = true;
 		item.type = ItemType.dir;
 	}
 	
 	if (isItemRemote(driveItem)) {
 		// 'remote' object exists in the JSON
-		log.vdebug("Flagging object as a remote");
+		addLogEntry("Flagging object as a remote", ["debug"]);
 		typeSet = true;
 		item.type = ItemType.remote;
 	}
@@ -124,7 +124,7 @@ Item makeDatabaseItem(JSONValue driveItem) {
 			if ("quickXorHash" in driveItem["file"]["hashes"]) {
 				item.quickXorHash = driveItem["file"]["hashes"]["quickXorHash"].str;
 			} else {
-				log.vdebug("quickXorHash is missing from ", driveItem["id"].str);
+				addLogEntry("quickXorHash is missing from " ~ driveItem["id"].str, ["debug"]);
 			}
 			
 			// If quickXorHash is empty ..
@@ -133,7 +133,7 @@ Item makeDatabaseItem(JSONValue driveItem) {
 				if ("sha256Hash" in driveItem["file"]["hashes"]) {
 					item.sha256Hash = driveItem["file"]["hashes"]["sha256Hash"].str;
 				} else {
-					log.vdebug("sha256Hash is missing from ", driveItem["id"].str);
+					addLogEntry("sha256Hash is missing from " ~ driveItem["id"].str, ["debug"]);
 				}
 			}
 		} else {
@@ -184,14 +184,14 @@ final class ItemDatabase {
 		} catch (SqliteException e) {
 			// An error was generated - what was the error?
 			if (e.msg == "database is locked") {
-				writeln();
-				log.error("ERROR: onedrive application is already running - check system process list for active application instances");
-				log.vlog(" - Use 'sudo ps aufxw | grep onedrive' to potentially determine acive running process");
-				writeln();
+				addLogEntry();
+				addLogEntry("ERROR: onedrive application is already running - check system process list for active application instances");
+				addLogEntry(" - Use 'sudo ps aufxw | grep onedrive' to potentially determine acive running process", ["verbose"]);
+				addLogEntry();
 			} else {
-				writeln();
-				log.error("ERROR: An internal database error occurred: " ~ e.msg);
-				writeln();
+				addLogEntry();
+				addLogEntry("ERROR: An internal database error occurred: " ~ e.msg);
+				addLogEntry();
 			}
 			return;
 		}
@@ -199,14 +199,14 @@ final class ItemDatabase {
 		if (dbVersion == 0) {
 			createTable();
 		} else if (db.getVersion() != itemDatabaseVersion) {
-			log.log("The item database is incompatible, re-creating database table structures");
+			addLogEntry("The item database is incompatible, re-creating database table structures");
 			db.exec("DROP TABLE item");
 			createTable();
 		}
 		
 		// What is the threadsafe value
 		auto threadsafeValue = db.getThreadsafeValue();
-		log.vdebug("Threadsafe database value: ", threadsafeValue);
+		addLogEntry("Threadsafe database value: " ~ to!string(threadsafeValue), ["debug"]);
 		
 		// Set the enforcement of foreign key constraints.
 		// https://www.sqlite.org/pragma.html#pragma_foreign_keys
@@ -572,9 +572,9 @@ final class ItemDatabase {
 					}
 				} else {
 					// broken tree
-					log.vdebug("The following generated a broken tree query:");
-					log.vdebug("Drive ID: ", driveId);
-					log.vdebug("Item ID: ", id);
+					addLogEntry("The following generated a broken tree query:", ["debug"]);
+					addLogEntry("Drive ID: " ~ to!string(driveId), ["debug"]);
+					addLogEntry("Item ID: " ~ to!string(id), ["debug"]);
 					assert(0);
 				}
 			}
@@ -595,9 +595,9 @@ final class ItemDatabase {
 
 	string getDeltaLink(const(char)[] driveId, const(char)[] id) {
 		// Log what we received
-		log.vdebug("DeltaLink Query (driveId): ", driveId);
-		log.vdebug("DeltaLink Query (id):      ", id);
-	
+		addLogEntry("DeltaLink Query (driveId): " ~ to!string(driveId), ["debug"]);
+		addLogEntry("DeltaLink Query (id):      " ~ to!string(id), ["debug"]);
+			
 		assert(driveId && id);
 		auto stmt = db.prepare("SELECT deltaLink FROM item WHERE driveId = ?1 AND id = ?2");
 		stmt.bind(1, driveId);
@@ -676,15 +676,16 @@ final class ItemDatabase {
 	
 	// Perform a vacuum on the database, commit WAL / SHM to file
 	void performVacuum() {
-		log.vdebug("Attempting to perform a database vacuum to merge any temporary data");
+		addLogEntry("Attempting to perform a database vacuum to merge any temporary data", ["debug"]);
+		
 		try {
 			auto stmt = db.prepare("VACUUM;");
 			stmt.exec();
-			log.vdebug("Database vacuum is complete");
+			addLogEntry("Database vacuum is complete", ["debug"]);
 		} catch (SqliteException e) {
-			writeln();
-			log.error("ERROR: Unable to perform a database vacuum: " ~ e.msg);
-			writeln();
+			addLogEntry();
+			addLogEntry("ERROR: Unable to perform a database vacuum: " ~ e.msg);
+			addLogEntry();
 		}
 	}
 	

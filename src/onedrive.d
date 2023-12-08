@@ -103,7 +103,7 @@ class OneDriveWebhook {
 	void serve() {
 		spawn(&serveStatic);
 		this.started = true;
-		log.log("Started webhook server");
+		addLogEntry("Started webhook server");
 	}
 
 	void stop() {
@@ -111,7 +111,7 @@ class OneDriveWebhook {
 			server.stop();
 			this.started = false;
 		}
-		log.log("Stopped webhook server");
+		addLogEntry("Stopped webhook server");
 		object.destroy(server);
 	}
 
@@ -136,9 +136,9 @@ class OneDriveWebhook {
 
 	private void handleImpl(Cgi cgi) {
 		if (debugHTTPResponseOutput) {
-			log.log("Webhook request: ", cgi.requestMethod, " ", cgi.requestUri);
+			addLogEntry("Webhook request: " ~ to!string(cgi.requestMethod) ~ " " ~ to!string(cgi.requestUri));
 			if (!cgi.postBody.empty) {
-				log.log("Webhook post body: ", cgi.postBody);
+				addLogEntry("Webhook post body: " ~ to!string(cgi.postBody));
 			}
 		}
 
@@ -148,7 +148,7 @@ class OneDriveWebhook {
 			// For validation requests, respond with the validation token passed in the query string
 			// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/concepts/webhook-receiver-validation-request
 			cgi.write(cgi.get["validationToken"]);
-			log.log("Webhook: handled validation request");
+			addLogEntry("Webhook: handled validation request");
 		} else {
 			// Notifications don't include any information about the changes that triggered them.
 			// Put a refresh signal in the queue and let the main monitor loop process it.
@@ -156,7 +156,7 @@ class OneDriveWebhook {
 			count.atomicOp!"+="(1);
 			send(parentTid, to!ulong(count));
 			cgi.write("OK");
-			log.log("Webhook: sent refresh signal #", count);
+			addLogEntry("Webhook: sent refresh signal #" ~ to!string(count));
 		}
 	}
 }
@@ -279,9 +279,9 @@ class OneDriveApi {
 		switch(azureConfigValue) {
 			case "":
 				if (tenantId == "common") {
-					if (!appConfig.apiWasInitialised) log.log("Configuring Global Azure AD Endpoints");
+					if (!appConfig.apiWasInitialised) addLogEntry("Configuring Global Azure AD Endpoints");
 				} else {
-					if (!appConfig.apiWasInitialised) log.log("Configuring Global Azure AD Endpoints - Single Tenant Application");
+					if (!appConfig.apiWasInitialised) addLogEntry("Configuring Global Azure AD Endpoints - Single Tenant Application");
 				}
 				// Authentication
 				authUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
@@ -289,13 +289,13 @@ class OneDriveApi {
 				tokenUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				break;
 			case "USL4":
-				if (!appConfig.apiWasInitialised) log.log("Configuring Azure AD for US Government Endpoints");
+				if (!appConfig.apiWasInitialised) addLogEntry("Configuring Azure AD for US Government Endpoints");
 				// Authentication
 				authUrl = appConfig.usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
 				tokenUrl = appConfig.usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				if (clientId == appConfig.defaultApplicationId) {
 					// application_id == default
-					log.vdebug("USL4 AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint");
+					addLogEntry("USL4 AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint", ["debug"]);
 					redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				} else {
 					// custom application_id
@@ -317,13 +317,13 @@ class OneDriveApi {
 				subscriptionUrl = appConfig.usl4GraphEndpoint ~ "/v1.0/subscriptions";
 				break;
 			case "USL5":
-				if (!appConfig.apiWasInitialised) log.log("Configuring Azure AD for US Government Endpoints (DOD)");
+				if (!appConfig.apiWasInitialised) addLogEntry("Configuring Azure AD for US Government Endpoints (DOD)");
 				// Authentication
 				authUrl = appConfig.usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
 				tokenUrl = appConfig.usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				if (clientId == appConfig.defaultApplicationId) {
 					// application_id == default
-					log.vdebug("USL5 AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint");
+					addLogEntry("USL5 AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint", ["debug"]);
 					redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				} else {
 					// custom application_id
@@ -345,13 +345,13 @@ class OneDriveApi {
 				subscriptionUrl = appConfig.usl5GraphEndpoint ~ "/v1.0/subscriptions";
 				break;
 			case "DE":
-				if (!appConfig.apiWasInitialised) log.log("Configuring Azure AD Germany");
+				if (!appConfig.apiWasInitialised) addLogEntry("Configuring Azure AD Germany");
 				// Authentication
 				authUrl = appConfig.deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
 				tokenUrl = appConfig.deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				if (clientId == appConfig.defaultApplicationId) {
 					// application_id == default
-					log.vdebug("DE AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint");
+					addLogEntry("DE AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint", ["debug"]);
 					redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				} else {
 					// custom application_id
@@ -373,13 +373,13 @@ class OneDriveApi {
 				subscriptionUrl = appConfig.deGraphEndpoint ~ "/v1.0/subscriptions";
 				break;
 			case "CN":
-				if (!appConfig.apiWasInitialised) log.log("Configuring AD China operated by 21Vianet");
+				if (!appConfig.apiWasInitialised) addLogEntry("Configuring AD China operated by 21Vianet");
 				// Authentication
 				authUrl = appConfig.cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
 				tokenUrl = appConfig.cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				if (clientId == appConfig.defaultApplicationId) {
 					// application_id == default
-					log.vdebug("CN AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint");
+					addLogEntry("CN AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint", ["debug"]);
 					redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				} else {
 					// custom application_id
@@ -402,17 +402,17 @@ class OneDriveApi {
 				break;
 			// Default - all other entries
 			default:
-				if (!appConfig.apiWasInitialised) log.log("Unknown Azure AD Endpoint request - using Global Azure AD Endpoints");
+				if (!appConfig.apiWasInitialised) addLogEntry("Unknown Azure AD Endpoint request - using Global Azure AD Endpoints");
 		}
 		
 		// Has the application been authenticated?
 		if (!exists(appConfig.refreshTokenFilePath)) {
-			log.vdebug("Application has no 'refresh_token' thus needs to be authenticated");
+			addLogEntry("Application has no 'refresh_token' thus needs to be authenticated", ["debug"]);
 			authorised = authorise();
 		} else {
 			// Try and read the value from the appConfig if it is set, rather than trying to read the value from disk
 			if (!appConfig.refreshToken.empty) {
-				log.vdebug("Read token from appConfig");
+				addLogEntry("Read token from appConfig", ["debug"]);
 				refreshToken = strip(appConfig.refreshToken);
 				authorised = true;
 			} else {
@@ -421,7 +421,7 @@ class OneDriveApi {
 					refreshToken = strip(readText(appConfig.refreshTokenFilePath));
 					// is the refresh_token empty?
 					if (refreshToken.empty) {
-						log.error("refreshToken exists but is empty: ", appConfig.refreshTokenFilePath);
+						addLogEntry("RefreshToken exists but is empty: " ~ appConfig.refreshTokenFilePath);
 						authorised = authorise();
 					} else {
 						// existing token not empty
@@ -433,19 +433,19 @@ class OneDriveApi {
 					authorised = authorise();
 				} catch (std.utf.UTFException e) {
 					// path contains characters which generate a UTF exception
-					log.error("Cannot read refreshToken from: ", appConfig.refreshTokenFilePath);
-					log.error("  Error Reason:", e.msg);
+					addLogEntry("Cannot read refreshToken from: " ~ appConfig.refreshTokenFilePath);
+					addLogEntry("  Error Reason:" ~ e.msg);
 					authorised = false;
 				}
 			}
 			
 			if (refreshToken.empty) {
-				// PROBLEM
-				writeln("refreshToken is empty !!!!!!!!!! will cause 4xx errors");
+				// PROBLEM ... CODING TO DO ??????????
+				addLogEntry("refreshToken is empty !!!!!!!!!! This will cause 4xx errors ... CODING TO DO TO HANDLE ?????");
 			}
 		}
 		// Return if we are authorised
-		log.vdebug("Authorised State: ", authorised);
+		addLogEntry("Authorised State: " ~ to!string(authorised), ["debug"]);
 		return authorised;
 	}
 	
@@ -453,24 +453,24 @@ class OneDriveApi {
 	void debugOutputConfiguredAPIItems() {
 		// Debug output of configured URL's
 		// Application Identification
-		log.vdebug("Configured clientId          ", clientId);
-		log.vdebug("Configured userAgent         ", appConfig.getValueString("user_agent"));
+		addLogEntry("Configured clientId          " ~ clientId, ["debug"]);
+		addLogEntry("Configured userAgent         " ~ appConfig.getValueString("user_agent"), ["debug"]);
 		// Authentication
-		log.vdebug("Configured authScope:        ", authScope);
-		log.vdebug("Configured authUrl:          ", authUrl);
-		log.vdebug("Configured redirectUrl:      ", redirectUrl);
-		log.vdebug("Configured tokenUrl:         ", tokenUrl);
+		addLogEntry("Configured authScope:        " ~ authScope, ["debug"]);
+		addLogEntry("Configured authUrl:          " ~ authUrl, ["debug"]);
+		addLogEntry("Configured redirectUrl:      " ~ redirectUrl, ["debug"]);
+		addLogEntry("Configured tokenUrl:         " ~ tokenUrl, ["debug"]);
 		// Drive Queries
-		log.vdebug("Configured driveUrl:         ", driveUrl);
-		log.vdebug("Configured driveByIdUrl:     ", driveByIdUrl);
+		addLogEntry("Configured driveUrl:         " ~ driveUrl, ["debug"]);
+		addLogEntry("Configured driveByIdUrl:     " ~ driveByIdUrl, ["debug"]);
 		// Shared With Me
-		log.vdebug("Configured sharedWithMeUrl:  ", sharedWithMeUrl);
+		addLogEntry("Configured sharedWithMeUrl:  " ~ sharedWithMeUrl, ["debug"]);
 		// Item Queries
-		log.vdebug("Configured itemByIdUrl:      ", itemByIdUrl);
-		log.vdebug("Configured itemByPathUrl:    ", itemByPathUrl);
+		addLogEntry("Configured itemByIdUrl:      " ~ itemByIdUrl, ["debug"]);
+		addLogEntry("Configured itemByPathUrl:    " ~ itemByPathUrl, ["debug"]);
 		// SharePoint Queries
-		log.vdebug("Configured siteSearchUrl:    ", siteSearchUrl);
-		log.vdebug("Configured siteDriveUrl:     ", siteDriveUrl);
+		addLogEntry("Configured siteSearchUrl:    " ~ siteSearchUrl, ["debug"]);
+		addLogEntry("Configured siteDriveUrl:     " ~ siteDriveUrl, ["debug"]);
 	}
 	
 	// Shutdown OneDrive API Curl Engine
@@ -536,7 +536,7 @@ class OneDriveApi {
 				exit(-1);
 			}
 	
-			log.log("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
+			addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
 			
 			while (!exists(responseUrl)) {
 				Thread.sleep(dur!("msecs")(100));
@@ -556,11 +556,11 @@ class OneDriveApi {
 				std.file.remove(authUrl);
 				std.file.remove(responseUrl);
 			} catch (FileException e) {
-				log.error("Cannot remove files ", authUrl, " ", responseUrl);
+				addLogEntry("Cannot remove files " ~ authUrl ~ " " ~ responseUrl);
 				return false;
 			}
 		} else {
-			log.log("Authorise this application by visiting:\n");
+			addLogEntry("Authorise this application by visiting:\n");
 			write(url, "\n\n", "Enter the response uri from your browser: ");
 			readln(response);
 			appConfig.applicationAuthorizeResponseUri = true;
@@ -568,7 +568,7 @@ class OneDriveApi {
 		// match the authorization code
 		auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
 		if (c.empty) {
-			log.log("An empty or invalid response uri was entered");
+			addLogEntry("An empty or invalid response uri was entered");
 			return false;
 		}
 		c.popFront(); // skip the whole match
@@ -769,8 +769,9 @@ class OneDriveApi {
 		auto file = File(filepath, "rb");
 		file.seek(offset);
 		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
-		log.vdebugNewLine("contentRange: ", contentRange);
-
+		addLogEntry("", ["debug"]); // Add an empty newline before log output
+		addLogEntry("contentRange: " ~ contentRange, ["debug"]);
+		
 		// function scopes
 		scope(exit) {
 			curlEngine.http.clearRequestHeaders();
@@ -844,10 +845,10 @@ class OneDriveApi {
 		// Does the path exist locally?
 		if (!exists(newPath)) {
 			try {
-				log.vdebug("Requested path does not exist, creating directory structure: ", newPath);
+				addLogEntry("Requested local path does not exist, creating directory structure: " ~ newPath, ["debug"]);
 				mkdirRecurse(newPath);
 				// Configure the applicable permissions for the folder
-				log.vdebug("Setting directory permissions for: ", newPath);
+				addLogEntry("Setting directory permissions for: " ~ newPath, ["debug"]);
 				newPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
 			} catch (FileException e) {
 				// display the error message
@@ -861,7 +862,7 @@ class OneDriveApi {
 		// Does path exist?
 		if (exists(saveToPath)) {
 			// File was downloaded successfully - configure the applicable permissions for the file
-			log.vdebug("Setting file permissions for: ", saveToPath);
+			addLogEntry("Setting file permissions for: " ~ saveToPath, ["debug"]);
 			saveToPath.setAttributes(appConfig.returnRequiredFilePermisions());
 		}
 	}
@@ -909,11 +910,11 @@ class OneDriveApi {
 		} catch (OneDriveException e) {
 			logSubscriptionError(e);
 			subscriptionLastErrorAt = Clock.currTime(UTC());
-			log.log("Will retry creating or renewing subscription in ", subscriptionRetryInterval);
+			addLogEntry("Will retry creating or renewing subscription in " ~ to!string(subscriptionRetryInterval));
 		} catch (JSONException e) {
-			log.error("ERROR: Unexpected JSON error: ", e.msg);
+			addLogEntry("ERROR: Unexpected JSON error when attempting to validate subscription: " ~ e.msg);
 			subscriptionLastErrorAt = Clock.currTime(UTC());
-			log.log("Will retry creating or renewing subscription in ", subscriptionRetryInterval);
+			addLogEntry("Will retry creating or renewing subscription in " ~ to!string(subscriptionRetryInterval));
 		}
 	}
 		
@@ -927,7 +928,7 @@ class OneDriveApi {
 	}
 	
 	private void createSubscription() {
-		log.log("Initializing subscription for updates ...");
+		addLogEntry("Initializing subscription for updates ...");
 
 		auto expirationDateTime = Clock.currTime(UTC()) + subscriptionExpirationInterval;
 		string driveId = appConfig.getValueString("drive_id");
@@ -957,7 +958,7 @@ class OneDriveApi {
 			// Save important subscription metadata including id and expiration
 			subscriptionId = response["id"].str;
 			subscriptionExpiration = SysTime.fromISOExtString(response["expirationDateTime"].str);
-			log.log("Created new subscription ", subscriptionId, " with expiration: ", subscriptionExpiration.toISOExtString());
+			addLogEntry("Created new subscription " ~ subscriptionId ~ " with expiration: " ~ to!string(subscriptionExpiration.toISOExtString()));
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 409) {
 				// Take over an existing subscription on HTTP 409.
@@ -994,7 +995,7 @@ class OneDriveApi {
 
 				// Save the subscription id and renew it immediately since we don't know the expiration timestamp
 				subscriptionId = m[0];
-				log.log("Found existing subscription ", subscriptionId);
+				addLogEntry("Found existing subscription " ~ subscriptionId);
 				renewSubscription();
 			} else {
 				throw e;
@@ -1003,7 +1004,7 @@ class OneDriveApi {
 	}
 	
 	private void renewSubscription() {
-		log.log("Renewing subscription for updates ...");
+		addLogEntry("Renewing subscription for updates ...");
 
 		auto expirationDateTime = Clock.currTime(UTC()) + subscriptionExpirationInterval;
 		string url;
@@ -1018,10 +1019,10 @@ class OneDriveApi {
 
 			// Update subscription expiration from the response
 			subscriptionExpiration = SysTime.fromISOExtString(response["expirationDateTime"].str);
-			log.log("Renewed subscription ", subscriptionId, " with expiration: ", subscriptionExpiration.toISOExtString());
+			addLogEntry("Renewed subscription " ~ subscriptionId ~ " with expiration: " ~ to!string(subscriptionExpiration.toISOExtString()));
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 404) {
-				log.log("The subscription is not found on the server. Recreating subscription ...");
+				addLogEntry("The subscription is not found on the server. Recreating subscription ...");
 				subscriptionId = null;
 				subscriptionExpiration = Clock.currTime(UTC());
 				createSubscription();
@@ -1033,14 +1034,14 @@ class OneDriveApi {
 	
 	private void deleteSubscription() {
 		if (!hasValidSubscription()) {
-			log.vdebug("No valid Microsoft OneDrive webhook subscription to delete");
+			addLogEntry("No valid Microsoft OneDrive webhook subscription to delete", ["debug"]);
 			return;
 		}
 
 		string url;
 		url = subscriptionUrl ~ "/" ~ subscriptionId;
 		performDelete(url);
-		log.vdebug("Deleted Microsoft OneDrive webhook subscription");
+		addLogEntry("Deleted Microsoft OneDrive webhook subscription", ["debug"]);
 	}
 	
 	private void logSubscriptionError(OneDriveException e) {
@@ -1066,7 +1067,7 @@ class OneDriveApi {
 					auto msgReg = ctRegex!(r"Subscription validation request failed", "i");
 					auto m = matchFirst(e.error["error"]["message"].str, msgReg);
 					if (m) {
-						log.error("ERROR: Cannot create or renew subscription: Microsoft did not get 200 OK from the webhook endpoint.");
+						addLogEntry("ERROR: Cannot create or renew subscription: Microsoft did not get 200 OK from the webhook endpoint.");
 						return;
 					}
 				}
@@ -1095,7 +1096,7 @@ class OneDriveApi {
 					auto msgReg = ctRegex!(r"Authentication failed", "i");
 					auto m = matchFirst(e.error["error"]["message"].str, msgReg);
 					if (m) {
-						log.error("ERROR: Cannot create or renew subscription: Authentication failed.");
+						addLogEntry("ERROR: Cannot create or renew subscription: Authentication failed.");
 						return;
 					}
 				}
@@ -1123,7 +1124,7 @@ class OneDriveApi {
 					auto msgReg = ctRegex!(r"Number of subscriptions on item has exceeded limit", "i");
 					auto m = matchFirst(e.error["error"]["message"].str, msgReg);
 					if (m) {
-						log.error("ERROR: Cannot create or renew subscription: Number of subscriptions has exceeded limit.");
+						addLogEntry("ERROR: Cannot create or renew subscription: Number of subscriptions has exceeded limit.");
 						return;
 					}
 				}
@@ -1133,7 +1134,7 @@ class OneDriveApi {
 		}
 
 		// Log detailed message for unknown errors
-		log.error("ERROR: Cannot create or renew subscription.");
+		addLogEntry("ERROR: Cannot create or renew subscription.");
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 	}
 	
@@ -1142,7 +1143,7 @@ class OneDriveApi {
 	}
 	
 	private void addIncludeFeatureRequestHeader() {
-		log.vdebug("Adding 'Include-Feature=AddToOneDrive' API request header as 'sync_business_shared_items' config option is enabled");
+		addLogEntry("Adding 'Include-Feature=AddToOneDrive' API request header as 'sync_business_shared_items' config option is enabled", ["debug"]);
 		curlEngine.http.addRequestHeader("Prefer", "Include-Feature=AddToOneDrive");
 	}
 	
@@ -1173,16 +1174,17 @@ class OneDriveApi {
 				if ("scope" in response){
 					string effectiveScopes = response["scope"].str();
 					// Display the effective authentication scopes
-					writeln();
-					writeln("Effective API Authentication Scopes: ", effectiveScopes);
+					addLogEntry();
+					addLogEntry("Effective API Authentication Scopes: " ~ effectiveScopes, ["verbose"]);
+					
 					// if we have any write scopes, we need to tell the user to update an remove online prior authentication and exit application
 					if (canFind(effectiveScopes, "Write")) {
 						// effective scopes contain write scopes .. so not a read-only configuration
-						writeln();
-						writeln("ERROR: You have authentication scopes that allow write operations. You need to remove your existing application access consent");
-						writeln();
-						writeln("Please login to https://account.live.com/consent/Manage and remove your existing application access consent");
-						writeln();
+						addLogEntry();
+						addLogEntry("ERROR: You have authentication scopes that allow write operations. You need to remove your existing application access consent");
+						addLogEntry();
+						addLogEntry("Please login to https://account.live.com/consent/Manage and remove your existing application access consent");
+						addLogEntry();
 						// force exit
 						shutdown();
 						exit(-1);
@@ -1194,11 +1196,11 @@ class OneDriveApi {
 				appConfig.accessToken = "bearer " ~ strip(response["access_token"].str);
 				
 				// Do we print the current access token
-				if (log.verbose > 1) {
+				if (appConfig.verbosityCount > 1) {
 					if (appConfig.getValueBool("debug_https")) {
 						if (appConfig.getValueBool("print_token")) {
 							// This needs to be highly restricted in output .... 
-							log.vdebug("CAUTION - KEEP THIS SAFE: Current access token: ", appConfig.accessToken);
+							addLogEntry("CAUTION - KEEP THIS SAFE: Current access token: " ~ appConfig.accessToken, ["debug"]);
 						}
 					}
 				}
@@ -1209,22 +1211,22 @@ class OneDriveApi {
 					// Update the refreshToken in appConfig so that we can reuse it
 					if (appConfig.refreshToken.empty) {
 						// The access token is empty
-						log.vdebug("Updating appConfig.refreshToken with new refreshToken as appConfig.refreshToken is empty");
+						addLogEntry("Updating appConfig.refreshToken with new refreshToken as appConfig.refreshToken is empty", ["debug"]);
 						appConfig.refreshToken = refreshToken;
 					} else {
 						// Is the access token different?
 						if (appConfig.refreshToken != refreshToken) {
 							// Update the memory version
-							log.vdebug("Updating appConfig.refreshToken with updated refreshToken");
+							addLogEntry("Updating appConfig.refreshToken with updated refreshToken", ["debug"]);
 							appConfig.refreshToken = refreshToken;
 						}
 					}
 					
 					// try and update the refresh_token file on disk
 					try {
-						log.vdebug("Updating refreshToken on disk");
+						addLogEntry("Updating refreshToken on disk", ["debug"]);
 						std.file.write(appConfig.refreshTokenFilePath, refreshToken);
-						log.vdebug("Setting file permissions for: ", appConfig.refreshTokenFilePath);
+						addLogEntry("Setting file permissions for: " ~ appConfig.refreshTokenFilePath, ["debug"]);
 						appConfig.refreshTokenFilePath.setAttributes(appConfig.returnRequiredFilePermisions());
 					} catch (FileException e) {
 						// display the error message
@@ -1232,12 +1234,12 @@ class OneDriveApi {
 					}
 				}
 			} else {
-				log.error("\nInvalid authentication response from OneDrive. Please check the response uri\n");
+				addLogEntry("\nInvalid authentication response from OneDrive. Please check the response uri\n");
 				// re-authorize
 				authorise();
 			}
 		} else {
-			log.log("Invalid response from the OneDrive API. Unable to initialise OneDrive API instance.");
+			addLogEntry("Invalid response from the OneDrive API. Unable to initialise OneDrive API instance.");
 			exit(-1);
 		}
 	}
@@ -1245,17 +1247,17 @@ class OneDriveApi {
 	private void checkAccessTokenExpired() {
 		try {
 			if (Clock.currTime() >= appConfig.accessTokenExpiration) {
-				log.vdebug("Microsoft OneDrive Access Token has EXPIRED. Must generate a new Microsoft OneDrive Access Token");
+				addLogEntry("Microsoft OneDrive Access Token has EXPIRED. Must generate a new Microsoft OneDrive Access Token", ["debug"]);
 				newToken();
 			} else {
-				log.vdebug("Existing Microsoft OneDrive Access Token Expires: ", appConfig.accessTokenExpiration);
+				addLogEntry("Existing Microsoft OneDrive Access Token Expires: " ~ to!string(appConfig.accessTokenExpiration), ["debug"]);
 			}
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
 				// flag error and notify
-				writeln();
-				log.errorAndNotify("ERROR: Refresh token invalid, use --reauth to authorize the client again.");
-				writeln();
+				addLogEntry();
+				addLogEntry("ERROR: Refresh token invalid, use --reauth to authorize the client again.", ["info", "notify"]);
+				addLogEntry();
 				// set error message
 				e.msg ~= "\nRefresh token invalid, use --reauth to authorize the client again";
 			}
@@ -1314,7 +1316,7 @@ class OneDriveApi {
 			size_t iteration = 20;
 			Progress p = new Progress(iteration);
 			p.title = "Downloading";
-			writeln();
+			addLogEntry();
 			bool barInit = false;
 			real previousProgressPercent = -1.0;
 			real percentCheck = 5.0;
@@ -1328,9 +1330,11 @@ class OneDriveApi {
 				// Have we started downloading?
 				if (currentDLPercent > 0){
 					// We have started downloading
-					log.vdebugNewLine("Data Received    = ", dlnow);
-					log.vdebug("Expected Total   = ", dltotal);
-					log.vdebug("Percent Complete = ", currentDLPercent);
+					addLogEntry("", ["debug"]); // Debug new line only
+					addLogEntry("Data Received    = " ~ to!string(dlnow), ["debug"]);
+					addLogEntry("Expected Total   = " ~ to!string(dltotal), ["debug"]);
+					addLogEntry("Percent Complete = " ~ to!string(currentDLPercent), ["debug"]);
+					
 					// Every 5% download we need to increment the download bar
 
 					// Has the user set a data rate limit?
@@ -1356,21 +1360,22 @@ class OneDriveApi {
 						// Has the data that has been received in a 5% window that we need to increment the progress bar at
 						if ((dlnow > thisSegmentData) && (dlnow < nextSegmentData) && (previousProgressPercent != currentDLPercent) || (dlnow == dltotal)) {
 							// Downloaded data equals approx 5%
-							log.vdebug("Incrementing Progress Bar using calculated 5% of data received");
+							addLogEntry("Incrementing Progress Bar using calculated 5% of data received", ["debug"]);
+							
 							// Downloading  50% |oooooooooooooooooooo                    |   ETA   00:01:40  
 							// increment progress bar
 							p.next();
 							// update values
-							log.vdebug("Setting previousProgressPercent to ", currentDLPercent);
+							addLogEntry("Setting previousProgressPercent to " ~ to!string(currentDLPercent), ["debug"]);
 							previousProgressPercent = currentDLPercent;
-							log.vdebug("Incrementing segmentCount");
+							addLogEntry("Incrementing segmentCount", ["debug"]);
 							segmentCount++;
 						}
 					} else {
 						// Is currentDLPercent divisible by 5 leaving remainder 0 and does previousProgressPercent not equal currentDLPercent
 						if ((isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) && (previousProgressPercent != currentDLPercent)) {
 							// currentDLPercent matches a new increment
-							log.vdebug("Incrementing Progress Bar using fmod match");
+							addLogEntry("Incrementing Progress Bar using fmod match", ["debug"]);
 							// Downloading  50% |oooooooooooooooooooo                    |   ETA   00:01:40  
 							// increment progress bar
 							p.next();
@@ -1395,7 +1400,7 @@ class OneDriveApi {
 				curlEngine.http.perform();
 				// Check the HTTP Response headers - needed for correct 429 handling
 				// check will be performed in checkHttpCode()
-				writeln();
+				addLogEntry();
 				// Reset onProgress to not display anything for next download done using exit scope
 			} catch (CurlException e) {
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
@@ -1423,7 +1428,7 @@ class OneDriveApi {
 
 	private JSONValue get(string url, bool skipToken = false) {
 		scope(exit) curlEngine.http.clearRequestHeaders();
-		log.vdebug("Request URL = ", url);
+		addLogEntry("Request URL = " ~ url, ["debug"]);
 		curlEngine.connect(HTTP.Method.get, url);
 		if (!skipToken) addAccessTokenHeader(); // HACK: requestUploadStatus
 		JSONValue response;
@@ -1431,13 +1436,13 @@ class OneDriveApi {
 		checkHttpResponseCode(response);
 		// OneDrive API Response Debugging if --https-debug is being used
 		if (debugResponse){
-			log.vdebug("OneDrive API Response: ", response);
+			addLogEntry("OneDrive API Response: " ~ to!string(response), ["debug"]);
         }
 		return response;
 	}
 	
 	private void newToken() {
-		log.vdebug("Need to generate a new access token for Microsoft OneDrive");
+		addLogEntry("Need to generate a new access token for Microsoft OneDrive", ["debug"]);
 		string postData =
 			"client_id=" ~ clientId ~
 			"&redirect_uri=" ~ redirectUrl ~
@@ -1496,7 +1501,7 @@ class OneDriveApi {
 			content ~= data;
 			// HTTP Server Response Code Debugging if --https-debug is being used
 			if (debugResponse){
-				log.vdebug("onedrive.performHTTPOperation() => OneDrive HTTP Server Response: ", curlEngine.http.statusLine.code);
+				addLogEntry("onedrive.performHTTPOperation() => OneDrive HTTP Server Response: " ~ to!string(curlEngine.http.statusLine.code), ["debug"]);
 			}
 			return data.length;
 		};
@@ -1507,7 +1512,7 @@ class OneDriveApi {
 			checkHTTPResponseHeaders();
 		} catch (CurlException e) {
 			// Parse and display error message received from OneDrive
-			log.vdebug("onedrive.performHTTPOperation() Generated a OneDrive CurlException");
+			addLogEntry("onedrive.performHTTPOperation() Generated a OneDrive CurlException", ["debug"]);
 			auto errorArray = splitLines(e.msg);
 			string errorMessage = errorArray[0];
 			
@@ -1525,24 +1530,27 @@ class OneDriveApi {
 				bool retrySuccess = false;
 				SysTime currentTime;
 				
+				// Connectivity to Microsoft OneDrive was lost
+				addLogEntry("Internet connectivity to Microsoft OneDrive service has been lost");
+				
 				// what caused the initial curl exception?
-				if (canFind(errorMessage, "Couldn't connect to server on handle")) log.vdebug("Unable to connect to server - HTTPS access blocked?");
-				if (canFind(errorMessage, "Couldn't resolve host name on handle")) log.vdebug("Unable to resolve server - DNS access blocked?");
-				if (canFind(errorMessage, "Timeout was reached on handle")) log.vdebug("A timeout was triggered - data too slow, no response ... use --debug-https to diagnose further");
+				if (canFind(errorMessage, "Couldn't connect to server on handle")) addLogEntry("Unable to connect to server - HTTPS access blocked?", ["debug"]);
+				if (canFind(errorMessage, "Couldn't resolve host name on handle")) addLogEntry("Unable to resolve server - DNS access blocked?", ["debug"]);
+				if (canFind(errorMessage, "Timeout was reached on handle")) addLogEntry("A timeout was triggered - data too slow, no response ... use --debug-https to diagnose further", ["debug"]);
 				
 				while (!retrySuccess){
 					try {
 						// configure libcurl to perform a fresh connection
-						log.vdebug("Configuring libcurl to use a fresh connection for re-try");
+						addLogEntry("Configuring libcurl to use a fresh connection for re-try", ["debug"]);
 						curlEngine.http.handle.set(CurlOption.fresh_connect,1);
 						// try the access
 						curlEngine.http.perform();
 						// Check the HTTP Response headers - needed for correct 429 handling
 						checkHTTPResponseHeaders();
 						// no error from http.perform() on re-try
-						log.log("Internet connectivity to Microsoft OneDrive service has been restored");
+						addLogEntry("Internet connectivity to Microsoft OneDrive service has been restored");
 						// unset the fresh connect option as this then creates performance issues if left enabled
-						log.vdebug("Unsetting libcurl to use a fresh connection as this causes a performance impact if left enabled");
+						addLogEntry("Unsetting libcurl to use a fresh connection as this causes a performance impact if left enabled", ["debug"]);
 						curlEngine.http.handle.set(CurlOption.fresh_connect,0);
 						// connectivity restored
 						retrySuccess = true;
@@ -1553,15 +1561,15 @@ class OneDriveApi {
 						retryAttempts++;
 						if (canFind(e.msg, "Couldn't connect to server on handle") || canFind(e.msg, "Couldn't resolve host name on handle") || canFind(errorMessage, "Timeout was reached on handle")) {
 							// no access to Internet
-							writeln();
-							log.error("ERROR: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
+							addLogEntry();
+							addLogEntry("ERROR: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
 							// what is the error reason to assis the user as what to check
 							if (canFind(e.msg, "Couldn't connect to server on handle")) {
-								log.log("  - Check HTTPS access or Firewall Rules");
+								addLogEntry("  - Check HTTPS access or Firewall Rules");
 								timestampAlign = 9;
 							}	
 							if (canFind(e.msg, "Couldn't resolve host name on handle")) {
-								log.log("  - Check DNS resolution or Firewall Rules");
+								addLogEntry("  - Check DNS resolution or Firewall Rules");
 								timestampAlign = 0;
 							}
 							
@@ -1572,8 +1580,8 @@ class OneDriveApi {
 							// display retry information
 							currentTime.fracSecs = Duration.zero;
 							auto timeString = currentTime.toString();
-							log.vlog("  Retry attempt:          ", retryAttempts);
-							log.vlog("  This attempt timestamp: ", timeString);
+							addLogEntry("  Retry attempt:          " ~ to!string(retryAttempts), ["verbose"]);
+							addLogEntry("  This attempt timestamp: " ~ timeString, ["verbose"]);
 							if (thisBackOffInterval > maxBackoffInterval) {
 								thisBackOffInterval = maxBackoffInterval;
 							}
@@ -1581,9 +1589,8 @@ class OneDriveApi {
 							// detail when the next attempt will be tried
 							// factor in the delay for curl to generate the exception - otherwise the next timestamp appears to be 'out' even though technically correct
 							auto nextRetry = currentTime + dur!"seconds"(thisBackOffInterval) + dur!"seconds"(timestampAlign);
-							log.vlog("  Next retry in approx:   ", (thisBackOffInterval + timestampAlign), " seconds");
-							log.vlog("  Next retry approx:      ", nextRetry);
-							
+							addLogEntry("  Next retry in approx:   " ~ to!string((thisBackOffInterval + timestampAlign)) ~ " seconds", ["verbose"]);
+							addLogEntry("  Next retry approx:      " ~ to!string(nextRetry), ["verbose"]);
 							// thread sleep
 							Thread.sleep(dur!"seconds"(thisBackOffInterval));
 						}
@@ -1595,7 +1602,7 @@ class OneDriveApi {
 					}
 				}
 				if (retryAttempts >= retryCount) {
-					log.error("  ERROR: Unable to reconnect to the Microsoft OneDrive service after ", retryCount, " attempts lasting over 1.2 years!");
+					addLogEntry("  ERROR: Unable to reconnect to the Microsoft OneDrive service after " ~ to!string(retryCount) ~ " attempts lasting over 1.2 years!");
 					throw new OneDriveException(408, "Request Timeout - HTTP 408 or Internet down?");
 				}
 			} else {
@@ -1613,16 +1620,16 @@ class OneDriveApi {
 					//  https://stackoverflow.com/questions/45829588/brew-install-fails-curl77-error-setting-certificate-verify
 					//  https://forum.dlang.org/post/vwvkbubufexgeuaxhqfl@forum.dlang.org
 					
-					log.vdebug("Problem with reading the SSL CA cert via libcurl - attempting work around");
+					addLogEntry("Problem with reading the SSL CA cert via libcurl - attempting work around", ["debug"]);
 					curlEngine.setDisableSSLVerifyPeer();
 					// retry origional call
 					performHTTPOperation();
 				} else {
 					// Log that an error was returned
-					log.error("ERROR: OneDrive returned an error with the following message:");
+					addLogEntry("ERROR: OneDrive returned an error with the following message:");
 					// Some other error was returned
-					log.error("  Error Message: ", errorMessage);
-					log.error("  Calling Function: ", getFunctionName!({}));
+					addLogEntry("  Error Message: " ~ errorMessage);
+					addLogEntry("  Calling Function: " ~ getFunctionName!({}));
 				
 					// Was this a curl initialization error?
 					if (canFind(errorMessage, "Failed initialization on handle")) {
@@ -1644,7 +1651,7 @@ class OneDriveApi {
 			json = content.parseJSON();
 		} catch (JSONException e) {
 			// Log that a JSON Exception was caught, dont output the HTML response from OneDrive
-			log.vdebug("JSON Exception caught when performing HTTP operations - use --debug-https to diagnose further");
+			addLogEntry("JSON Exception caught when performing HTTP operations - use --debug-https to diagnose further", ["debug"]);
 		}
 		return json;
 	}
@@ -1692,14 +1699,14 @@ class OneDriveApi {
 		// Get the HTTP Response headers - needed for correct 429 handling
 		auto responseHeaders = curlEngine.http.responseHeaders();
 		if (debugResponse){
-			log.vdebug("curlEngine.http.perform() => HTTP Response Headers: ", responseHeaders);
+			addLogEntry("curlEngine.http.perform() => HTTP Response Headers: " ~ to!string(responseHeaders), ["debug"]);
 		}
 
 		// is retry-after in the response headers
 		if ("retry-after" in curlEngine.http.responseHeaders) {
 			// Set the retry-after value
-			log.vdebug("curlEngine.http.perform() => Received a 'Retry-After' Header Response with the following value: ", curlEngine.http.responseHeaders["retry-after"]);
-			log.vdebug("curlEngine.http.perform() => Setting retryAfterValue to: ", curlEngine.http.responseHeaders["retry-after"]);
+			addLogEntry("curlEngine.http.perform() => Received a 'Retry-After' Header Response with the following value: " ~ to!string(curlEngine.http.responseHeaders["retry-after"]), ["debug"]);
+			addLogEntry("curlEngine.http.perform() => Setting retryAfterValue to: " ~ to!string(curlEngine.http.responseHeaders["retry-after"]), ["debug"]);
 			retryAfterValue = to!ulong(curlEngine.http.responseHeaders["retry-after"]);
 		}
 	}
@@ -1720,12 +1727,18 @@ class OneDriveApi {
 			//  202 - Accepted
 			//	204 - Deleted OK
 			case 201,202,204:
-				// No actions, but log if verbose logging
-				//log.vlog("OneDrive Response: '", curlEngine.http.statusLine.code, " - ", curlEngine.http.statusLine.reason, "'");
+				// Log if --debug-https logging is used
+				if (debugHTTPResponseOutput) {
+					addLogEntry("OneDrive Response: '" ~ to!string(curlEngine.http.statusLine.code) ~ " - " ~ to!string(curlEngine.http.statusLine.reason) ~ "'", ["debug"]);
+				}
 				break;
 
 			// 302 - resource found and available at another location, redirect
 			case 302:
+				// Log if --debug-https logging is used
+				if (debugHTTPResponseOutput) {
+					addLogEntry("OneDrive Response: '" ~ to!string(curlEngine.http.statusLine.code) ~ " - " ~ to!string(curlEngine.http.statusLine.reason) ~ "'", ["debug"]);
+				}
 				break;
 
 			// 400 - Bad Request
@@ -1737,7 +1750,8 @@ class OneDriveApi {
 			// 403 - Forbidden
 			case 403:
 				// OneDrive responded that the user is forbidden
-				log.vlog("OneDrive returned a 'HTTP 403 - Forbidden' - gracefully handling error");
+				addLogEntry("OneDrive returned a 'HTTP 403 - Forbidden' - gracefully handling error", ["verbose"]);
+				
 				// Throw this as a specific exception so this is caught when performing 'siteQuery = onedrive.o365SiteSearch(nextLink);' call
 				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
 
@@ -1836,54 +1850,60 @@ class OneDriveApi {
 			//  202 - Accepted
 			//	204 - Deleted OK
 			case 201,202,204:
-				// No actions, but log if verbose logging
-				//log.vlog("OneDrive Response: '", http.statusLine.code, " - ", http.statusLine.reason, "'");
+				// Log if --debug-https logging is used
+				if (debugHTTPResponseOutput) {
+					addLogEntry("OneDrive Response: '" ~ to!string(curlEngine.http.statusLine.code) ~ " - " ~ to!string(curlEngine.http.statusLine.reason) ~ "'", ["debug"]);
+				}
 				break;
 
 			// 302 - resource found and available at another location, redirect
 			case 302:
+				// Log if --debug-https logging is used
+				if (debugHTTPResponseOutput) {
+					addLogEntry("OneDrive Response: '" ~ to!string(curlEngine.http.statusLine.code) ~ " - " ~ to!string(curlEngine.http.statusLine.reason) ~ "'", ["debug"]);
+				}
 				break;
 
 			// 400 - Bad Request
 			case 400:
 				// Bad Request .. how should we act?
-				log.vlog("OneDrive returned a 'HTTP 400 - Bad Request' - gracefully handling error");
+				addLogEntry("OneDrive returned a 'HTTP 400 - Bad Request' - gracefully handling error", ["verbose"]);
 				break;
-
+				
 			// 403 - Forbidden
 			case 403:
 				// OneDrive responded that the user is forbidden
-				log.vlog("OneDrive returned a 'HTTP 403 - Forbidden' - gracefully handling error");
+				addLogEntry("OneDrive returned a 'HTTP 403 - Forbidden' - gracefully handling error", ["verbose"]);
 				break;
 
 			// 404 - Item not found
 			case 404:
 				// Item was not found - do not throw an exception
-				log.vlog("OneDrive returned a 'HTTP 404 - Item not found' - gracefully handling error");
+				addLogEntry("OneDrive returned a 'HTTP 404 - Item not found' - gracefully handling error", ["verbose"]);
 				break;
 
 			//	408 - Request Timeout
 			case 408:
 				// Request to connect to OneDrive service timed out
-				log.vlog("Request Timeout - gracefully handling error");
+				addLogEntry("Request Timeout - gracefully handling error", ["verbose"]);
 				throw new OneDriveException(408, "Request Timeout - HTTP 408 or Internet down?");
 
 			//	409 - Conflict
 			case 409:
 				// Conflict handling .. how should we act? This only really gets triggered if we are using --local-first & we remove items.db as the DB thinks the file is not uploaded but it is
-				log.vlog("OneDrive returned a 'HTTP 409 - Conflict' - gracefully handling error");
+				addLogEntry("OneDrive returned a 'HTTP 409 - Conflict' - gracefully handling error", ["verbose"]);
 				break;
 
 			//	412 - Precondition Failed
 			case 412:
 				// A precondition provided in the request (such as an if-match header) does not match the resource's current state.
-				log.vlog("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error");
+				addLogEntry("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error", ["verbose"]);
 				break;
 
 			//  415 - Unsupported Media Type
 			case 415:
 				// Unsupported Media Type ... sometimes triggered on image files, especially PNG
-				log.vlog("OneDrive returned a 'HTTP 415 - Unsupported Media Type' - gracefully handling error");
+				addLogEntry("OneDrive returned a 'HTTP 415 - Unsupported Media Type' - gracefully handling error", ["verbose"]);
 				break;
 
 			//  429 - Too Many Requests
@@ -1892,7 +1912,7 @@ class OneDriveApi {
 				// Check the HTTP Response headers - needed for correct 429 handling
 				checkHTTPResponseHeaders();
 				// https://docs.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
-				log.vlog("OneDrive returned a 'HTTP 429 - Too Many Requests' - gracefully handling error");
+				addLogEntry("OneDrive returned a 'HTTP 429 - Too Many Requests' - gracefully handling error", ["verbose"]);
 				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason);
 
 			// Server side (OneDrive) Errors
@@ -1902,22 +1922,22 @@ class OneDriveApi {
 			//  504 - Gateway Timeout (Issue #320)
 			case 500:
 				// No actions
-				log.vlog("OneDrive returned a 'HTTP 500 Internal Server Error' - gracefully handling error");
+				addLogEntry("OneDrive returned a 'HTTP 500 Internal Server Error' - gracefully handling error", ["verbose"]);
 				break;
 
 			case 502:
 				// No actions
-				log.vlog("OneDrive returned a 'HTTP 502 Bad Gateway Error' - gracefully handling error");
+				addLogEntry("OneDrive returned a 'HTTP 502 Bad Gateway Error' - gracefully handling error", ["verbose"]);
 				break;
 
 			case 503:
 				// No actions
-				log.vlog("OneDrive returned a 'HTTP 503 Service Unavailable Error' - gracefully handling error");
+				addLogEntry("OneDrive returned a 'HTTP 503 Service Unavailable Error' - gracefully handling error", ["verbose"]);
 				break;
 
 			case 504:
 				// No actions
-				log.vlog("OneDrive returned a 'HTTP 504 Gateway Timeout Error' - gracefully handling error");
+				addLogEntry("OneDrive returned a 'HTTP 504 Gateway Timeout Error' - gracefully handling error", ["verbose"]);
 				break;
 
 			// "else"

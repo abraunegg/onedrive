@@ -21,12 +21,16 @@ import std.json;
 import std.traits;
 import core.stdc.stdlib;
 import core.thread;
+import core.memory;
 import std.math;
 import std.format;
 import std.random;
 import std.array;
 import std.ascii;
 import std.range;
+import core.sys.posix.pwd;
+import core.sys.posix.unistd;
+import core.stdc.string : strlen;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -57,7 +61,7 @@ void safeBackup(const(char)[] path, bool dryRun) {
 	newPath ~= ext;
 	
 	// Log that we are perform the backup by renaming the file
-	log.log("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: ", path, " -> ", newPath);
+	addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath));
 	
 	// Are we in a --dry-run scenario?
 	if (!dryRun) {
@@ -76,7 +80,7 @@ void safeBackup(const(char)[] path, bool dryRun) {
 		// Use rename() as Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
 		rename(path, newPath);
 	} else {
-		log.vdebug("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: ", path, " -> ", newPath);
+		addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["debug"]);
 	}
 }
 
@@ -170,23 +174,23 @@ bool testInternetReachability(ApplicationConfig appConfig) {
 	curlEngine.connect(HTTP.Method.head, "https://login.microsoftonline.com");
 	// Attempt to contact the Microsoft Online Service
 	try {
-		log.vdebug("Attempting to contact Microsoft OneDrive Login Service");
+		addLogEntry("Attempting to contact Microsoft OneDrive Login Service", ["debug"]);
 		curlEngine.http.perform();
-		log.vdebug("Shutting down HTTP engine as successfully reached OneDrive Login Service");
+		addLogEntry("Shutting down HTTP engine as successfully reached OneDrive Login Service", ["debug"]);
 		curlEngine.http.shutdown();
 		// Free object and memory
 		object.destroy(curlEngine);
 		return true;
 	} catch (SocketException e) {
 		// Socket issue
-		log.vdebug("HTTP Socket Issue");
-		log.error("Cannot connect to Microsoft OneDrive Login Service - Socket Issue");
+		addLogEntry("HTTP Socket Issue", ["debug"]);
+		addLogEntry("Cannot connect to Microsoft OneDrive Login Service - Socket Issue");
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 		return false;
 	} catch (CurlException e) {
 		// No network connection to OneDrive Service
-		log.vdebug("No Network Connection");
-		log.error("Cannot connect to Microsoft OneDrive Login Service - Network Connection Issue");
+		addLogEntry("No Network Connection", ["debug"]);
+		addLogEntry("Cannot connect to Microsoft OneDrive Login Service - Network Connection Issue");
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 		return false;
 	}
@@ -207,19 +211,20 @@ bool retryInternetConnectivtyTest(ApplicationConfig appConfig) {
 		// retry to access OneDrive API
 		backoffInterval++;
 		int thisBackOffInterval = retryAttempts*backoffInterval;
-		log.vdebug("  Retry Attempt:      ", retryAttempts);
+		addLogEntry("  Retry Attempt:      " ~ to!string(retryAttempts), ["debug"]);
+		
 		if (thisBackOffInterval <= maxBackoffInterval) {
-			log.vdebug("  Retry In (seconds): ", thisBackOffInterval);
+			addLogEntry("  Retry In (seconds): " ~ to!string(thisBackOffInterval), ["debug"]);
 			Thread.sleep(dur!"seconds"(thisBackOffInterval));
 		} else {
-			log.vdebug("  Retry In (seconds): ", maxBackoffInterval);
+			addLogEntry("  Retry In (seconds): " ~ to!string(maxBackoffInterval), ["debug"]);
 			Thread.sleep(dur!"seconds"(maxBackoffInterval));
 		}
 		// perform the re-rty
 		onlineRetry = testInternetReachability(appConfig);
 		if (onlineRetry) {
 			// We are now online
-			log.log("Internet connectivity to Microsoft OneDrive service has been restored");
+			addLogEntry("Internet connectivity to Microsoft OneDrive service has been restored");
 			retrySuccess = true;
 		} else {
 			// We are still offline
@@ -234,13 +239,13 @@ bool retryInternetConnectivtyTest(ApplicationConfig appConfig) {
 	}
 	if (!onlineRetry) {
 		// Not online after 1.2 years of trying
-		log.error("ERROR: Was unable to reconnect to the Microsoft OneDrive service after 10000 attempts lasting over 1.2 years!");
+		addLogEntry("ERROR: Was unable to reconnect to the Microsoft OneDrive service after 10000 attempts lasting over 1.2 years!");
 	}
 	// return the state
 	return onlineRetry;
 }
 
-// Can we read the file - as a permissions issue or file corruption will cause a failure
+// Can we read the local file - as a permissions issue or file corruption will cause a failure
 // https://github.com/abraunegg/onedrive/issues/113
 // returns true if file can be accessed
 bool readLocalFile(string path) {
@@ -344,10 +349,10 @@ bool containsASCIIHTMLCodes(string path) {
 
 // Parse and display error message received from OneDrive
 void displayOneDriveErrorMessage(string message, string callingFunction) {
-	writeln();
-	log.error("ERROR: Microsoft OneDrive API returned an error with the following message:");
+	addLogEntry();
+	addLogEntry("ERROR: Microsoft OneDrive API returned an error with the following message:");
 	auto errorArray = splitLines(message);
-	log.error("  Error Message:    ", errorArray[0]);
+	addLogEntry("  Error Message:    " ~ to!string(errorArray[0]));
 	// Extract 'message' as the reason
 	JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
 	
@@ -378,11 +383,12 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 		// Display the error reason
 		if (errorReason.startsWith("<!DOCTYPE")) {
 			// a HTML Error Reason was given
-			log.error("  Error Reason:  A HTML Error response was provided. Use debug logging (--verbose --verbose) to view this error");
-			log.vdebug(errorReason);
+			addLogEntry("  Error Reason:  A HTML Error response was provided. Use debug logging (--verbose --verbose) to view this error");
+			addLogEntry(errorReason, ["debug"]);
+			
 		} else {
 			// a non HTML Error Reason was given
-			log.error("  Error Reason:     ", errorReason);
+			addLogEntry("  Error Reason:     " ~ errorReason);
 		}
 		
 		// Get the error code if available
@@ -410,17 +416,17 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 		}
 		
 		// Display the error code, date and request id if available
-		if (errorCode != "")   log.error("  Error Code:       ", errorCode);
-		if (requestDate != "") log.error("  Error Timestamp:  ", requestDate);
-		if (requestId != "")   log.error("  API Request ID:   ", requestId);
+		if (errorCode != "")   addLogEntry("  Error Code:       " ~ errorCode);
+		if (requestDate != "") addLogEntry("  Error Timestamp:  " ~ requestDate);
+		if (requestId != "")   addLogEntry("  API Request ID:   " ~ requestId);
 	}
 	
 	// Where in the code was this error generated
-	log.log("  Calling Function: ", callingFunction);
+	addLogEntry("  Calling Function: " ~ callingFunction, ["verbose"]);
 	
 	// Extra Debug if we are using --verbose --verbose
-	log.vdebug("Raw Error Data: ", message);
-	log.vdebug("JSON Message: ", errorMessage);
+	addLogEntry("Raw Error Data: " ~ message, ["debug"]);
+	addLogEntry("JSON Message: " ~ to!string(errorMessage), ["debug"]);
 }
 
 // Common code for handling when a client is unauthorised
@@ -429,27 +435,24 @@ void handleClientUnauthorised(int httpStatusCode, string message) {
 	auto errorArray = splitLines(message);
 	// Extract 'message' as the reason
 	JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
-	log.vdebug("errorMessage: ", errorMessage);
+	addLogEntry("errorMessage: " ~ to!string(errorMessage), ["debug"]);
 	
 	if (httpStatusCode == 400) {
 		// bad request or a new auth token is needed
 		// configure the error reason
-		writeln();
+		addLogEntry();
 		string[] errorReason = splitLines(errorMessage["error_description"].str);
-		log.errorAndNotify(errorReason[0]);
-		writeln();
-		log.errorAndNotify("ERROR: You will need to issue a --reauth and re-authorise this client to obtain a fresh auth token.");
-		writeln();
+		addLogEntry(to!string(errorReason[0]), ["info", "notify"]);
+		addLogEntry();
+		addLogEntry("ERROR: You will need to issue a --reauth and re-authorise this client to obtain a fresh auth token.", ["info", "notify"]);
+		addLogEntry();
 	}
 	
 	if (httpStatusCode == 401) {
-	
 		writeln("CODING TO DO: Triggered a 401 HTTP unauthorised response when client was unauthorised");
-		
-		writeln();
-		log.errorAndNotify("ERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.");
-		writeln();
-		
+		addLogEntry();
+		addLogEntry("ERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.", ["info", "notify"]);
+		addLogEntry();
 	}
 	
 	// Must exit here
@@ -458,13 +461,13 @@ void handleClientUnauthorised(int httpStatusCode, string message) {
 
 // Parse and display error message received from the local file system
 void displayFileSystemErrorMessage(string message, string callingFunction) {
-	writeln();
-	log.error("ERROR: The local file system returned an error with the following message:");
+	addLogEntry(); // used rather than writeln
+	addLogEntry("ERROR: The local file system returned an error with the following message:");
 	auto errorArray = splitLines(message);
 	// What was the error message
-	log.error("  Error Message:    ", errorArray[0]);
+	addLogEntry("  Error Message:    " ~ to!string(errorArray[0]));
 	// Where in the code was this error generated
-	log.vlog("  Calling Function: ", callingFunction);
+	addLogEntry("  Calling Function: " ~ callingFunction, ["verbose"]);
 	// If we are out of disk space (despite download reservations) we need to exit the application
 	ulong localActualFreeSpace = to!ulong(getAvailableDiskSpace("."));
 	if (localActualFreeSpace == 0) {
@@ -475,9 +478,9 @@ void displayFileSystemErrorMessage(string message, string callingFunction) {
 
 // Display the POSIX Error Message
 void displayPosixErrorMessage(string message) {
-	writeln();
-	log.error("ERROR: Microsoft OneDrive API returned data that highlights a POSIX compliance issue:");
-	log.error("  Error Message:    ", message);
+	addLogEntry(); // used rather than writeln
+	addLogEntry("ERROR: Microsoft OneDrive API returned data that highlights a POSIX compliance issue:");
+	addLogEntry("  Error Message:    " ~ message);
 }
 
 // Get the function name that is being called to assist with identifying where an error is being generated
@@ -499,14 +502,14 @@ JSONValue getLatestReleaseDetails() {
 		content = get("https://api.github.com/repos/abraunegg/onedrive/releases/latest");
 	} catch (CurlException e) {
 		// curl generated an error - meaning we could not query GitHub
-		log.vdebug("Unable to query GitHub for latest release");
+		addLogEntry("Unable to query GitHub for latest release", ["debug"]);
 	}
 	
 	try {
 		githubLatest = content.parseJSON();
 	} catch (JSONException e) {
 		// unable to parse the content JSON, set to blank JSON
-		log.vdebug("Unable to parse GitHub JSON response");
+		addLogEntry("Unable to parse GitHub JSON response", ["debug"]);
 		githubLatest = parseJSON("{}");
 	}
 	
@@ -519,7 +522,7 @@ JSONValue getLatestReleaseDetails() {
 			latestTag = strip(githubLatest["tag_name"].str, "v");
 		} else {
 			// set to latestTag zeros
-			log.vdebug("'tag_name' unavailable in JSON response. Setting GitHub 'tag_name' release version to 0.0.0");
+			addLogEntry("'tag_name' unavailable in JSON response. Setting GitHub 'tag_name' release version to 0.0.0", ["debug"]);
 			latestTag = "0.0.0";
 		}
 		// use the returned published_at date
@@ -528,15 +531,15 @@ JSONValue getLatestReleaseDetails() {
 			publishedDate = githubLatest["published_at"].str;
 		} else {
 			// set to v2.0.0 release date
-			log.vdebug("'published_at' unavailable in JSON response. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z");
+			addLogEntry("'published_at' unavailable in JSON response. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);
 			publishedDate = "2018-07-18T18:00:00Z";
 		}
 	} else {
 		// JSONValue is not an object
-		log.vdebug("Invalid JSON Object. Setting GitHub 'tag_name' release version to 0.0.0");
+		addLogEntry("Invalid JSON Object response from GitHub. Setting GitHub 'tag_name' release version to 0.0.0", ["debug"]);
 		latestTag = "0.0.0";
-		log.vdebug("Invalid JSON Object. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z");
-		publishedDate = "2018-07-18T18:00:00Z";	
+		addLogEntry("Invalid JSON Object. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);
+		publishedDate = "2018-07-18T18:00:00Z";
 	}
 		
 	// return the latest github version and published date as our own JSON
@@ -563,14 +566,14 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 		content = get("https://api.github.com/repos/abraunegg/onedrive/releases");
 	} catch (CurlException e) {
 		// curl generated an error - meaning we could not query GitHub
-		log.vdebug("Unable to query GitHub for release details");
+		addLogEntry("Unable to query GitHub for release details", ["debug"]);
 	}
 	
 	try {
 		githubDetails = content.parseJSON();
 	} catch (JSONException e) {
 		// unable to parse the content JSON, set to blank JSON
-		log.vdebug("Unable to parse GitHub JSON response");
+		addLogEntry("Unable to parse GitHub JSON response", ["debug"]);
 		githubDetails = parseJSON("{}");
 	}
 	
@@ -579,9 +582,9 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 		foreach (searchResult; githubDetails.array) {
 			// searchResult["tag_name"].str;
 			if (searchResult["tag_name"].str == versionTag) {
-				log.vdebug("MATCHED version");
-				log.vdebug("tag_name: ", searchResult["tag_name"].str);
-				log.vdebug("published_at: ", searchResult["published_at"].str);
+				addLogEntry("MATCHED version", ["debug"]);
+				addLogEntry("tag_name: " ~ searchResult["tag_name"].str, ["debug"]);
+				addLogEntry("published_at: " ~ searchResult["published_at"].str, ["debug"]);
 				publishedDate = searchResult["published_at"].str;
 			}
 		}
@@ -589,13 +592,13 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 		if (publishedDate.empty) {
 			// empty .. no version match ?
 			// set to v2.0.0 release date
-			log.vdebug("'published_at' unavailable in JSON response. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z");
+			addLogEntry("'published_at' unavailable in JSON response. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);
 			publishedDate = "2018-07-18T18:00:00Z";
 		}
 	} else {
 		// JSONValue is not an Array
-		log.vdebug("Invalid JSON Array. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z");
-		publishedDate = "2018-07-18T18:00:00Z";	
+		addLogEntry("Invalid JSON Array. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);
+		publishedDate = "2018-07-18T18:00:00Z";
 	}
 		
 	// return the latest github version and published date as our own JSON
@@ -629,11 +632,11 @@ void checkApplicationVersion() {
 	string applicationVersion = currentVersionArray[0];
 	
 	// debug output
-	log.vdebug("applicationVersion:       ", applicationVersion);
-	log.vdebug("latestVersion:            ", latestVersion);
-	log.vdebug("publishedDate:            ", publishedDate);
-	log.vdebug("currentTime:              ", currentTime);
-	log.vdebug("releaseGracePeriod:       ", releaseGracePeriod);
+	addLogEntry("applicationVersion:       " ~ applicationVersion, ["debug"]);
+	addLogEntry("latestVersion:            " ~ latestVersion, ["debug"]);
+	addLogEntry("publishedDate:            " ~ to!string(publishedDate), ["debug"]);
+	addLogEntry("currentTime:              " ~ to!string(currentTime), ["debug"]);
+	addLogEntry("releaseGracePeriod:       " ~ to!string(releaseGracePeriod), ["debug"]);
 	
 	// display details if not current
 	// is application version is older than available on GitHub
@@ -647,12 +650,12 @@ void checkApplicationVersion() {
 			JSONValue thisVersionDetails = getCurrentVersionDetails(applicationVersion);
 			SysTime thisVersionPublishedDate = SysTime.fromISOExtString(thisVersionDetails["publishedDate"].str).toUTC();
 			thisVersionPublishedDate.fracSecs = Duration.zero;
-			log.vdebug("thisVersionPublishedDate: ", thisVersionPublishedDate);
+			addLogEntry("thisVersionPublishedDate: " ~ to!string(thisVersionPublishedDate), ["debug"]);
 			
 			// the running version grace period is its release date + 1 month
 			SysTime thisVersionReleaseGracePeriod = thisVersionPublishedDate;
 			thisVersionReleaseGracePeriod = thisVersionReleaseGracePeriod.add!"months"(1);
-			log.vdebug("thisVersionReleaseGracePeriod: ", thisVersionReleaseGracePeriod);
+			addLogEntry("thisVersionReleaseGracePeriod: " ~ to!string(thisVersionReleaseGracePeriod), ["debug"]);
 			
 			// Is this running version obsolete ?
 			if (!displayObsolete) {
@@ -668,17 +671,17 @@ void checkApplicationVersion() {
 			}
 			
 			// display version response
-			writeln();
+			addLogEntry();
 			if (!displayObsolete) {
 				// display the new version is available message
-				log.logAndNotify("INFO: A new onedrive client version is available. Please upgrade your client version when possible.");
+				addLogEntry("INFO: A new onedrive client version is available. Please upgrade your client version when possible.", ["info", "notify"]);
 			} else {
 				// display the obsolete message
-				log.logAndNotify("WARNING: Your onedrive client version is now obsolete and unsupported. Please upgrade your client version.");
+				addLogEntry("WARNING: Your onedrive client version is now obsolete and unsupported. Please upgrade your client version.", ["info", "notify"]);
 			}
-			log.log("Current Application Version: ", applicationVersion);
-			log.log("Version Available:           ", latestVersion);
-			writeln();
+			addLogEntry("Current Application Version: " ~ applicationVersion);
+			addLogEntry("Version Available:           " ~ latestVersion);
+			addLogEntry();
 		}
 	}
 }
@@ -815,3 +818,52 @@ string generateAlphanumericString() {
 	return to!string(randomString);
 }
 
+void displayMemoryUsagePreGC() {
+	// Display memory usage
+	writeln();
+	writeln("Memory Usage pre GC (KB)");
+	writeln("------------------------");
+	writeMemoryStats();
+	writeln();
+}
+
+void displayMemoryUsagePostGC() {
+	// Display memory usage
+	writeln();
+	writeln("Memory Usage post GC (KB)");
+	writeln("-------------------------");
+	writeMemoryStats();
+	writeln();
+}
+
+void writeMemoryStats() {
+	// write memory stats
+	writeln("memory usedSize                 = ", (GC.stats.usedSize/1024));
+	writeln("memory freeSize                 = ", (GC.stats.freeSize/1024));
+	writeln("memory allocatedInCurrentThread = ", (GC.stats.allocatedInCurrentThread/1024));
+}
+
+string getUserName() {
+	auto pw = getpwuid(getuid);
+	
+	// get required details
+	auto runtime_pw_name = pw.pw_name[0 .. strlen(pw.pw_name)].splitter(',');
+	auto runtime_pw_uid = pw.pw_uid;
+	auto runtime_pw_gid = pw.pw_gid;
+	
+	// User identifiers from process
+	addLogEntry("Process ID: " ~ to!string(pw), ["debug"]);
+	addLogEntry("User UID:   " ~ to!string(runtime_pw_uid), ["debug"]);
+	addLogEntry("User GID:   " ~ to!string(runtime_pw_gid), ["debug"]);
+	
+	// What should be returned as username?
+	if (!runtime_pw_name.empty && runtime_pw_name.front.length){
+		// user resolved
+		addLogEntry("User Name:  " ~ runtime_pw_name.front.idup, ["debug"]);
+		return runtime_pw_name.front.idup;
+	} else {
+		// Unknown user?
+		addLogEntry("User Name:  unknown", ["debug"]);
+		return "unknown";
+	}
+}

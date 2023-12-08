@@ -51,10 +51,10 @@ struct Database {
 	}
 
 	void dump_open_statements() {
-		log.log("Dumping open statements: \n");
+		addLogEntry("Dumping open statements:", ["debug"]);
 		auto p = sqlite3_next_stmt(pDb, null);
 		while (p != null) {
-			log.log (" - " ~ ifromStringz(sqlite3_sql(p)) ~ "\n");
+			addLogEntry(" - " ~ to!string(ifromStringz(sqlite3_sql(p))));
 			p = sqlite3_next_stmt(pDb, p);
 		}
 	}
@@ -65,12 +65,16 @@ struct Database {
 		int rc = sqlite3_open(toStringz(filename), &pDb);
 		if (rc == SQLITE_CANTOPEN) {
 			// Database cannot be opened
-			log.error("\nThe database cannot be opened. Please check the permissions of " ~ filename ~ "\n");
+			addLogEntry();
+			addLogEntry("The database cannot be opened. Please check the permissions of " ~ to!string(filename));
+			addLogEntry();
 			close();
 			exit(-1);
 		}
 		if (rc != SQLITE_OK) {
-			log.error("\nA database access error occurred: " ~ getErrorMessage() ~ "\n");
+			addLogEntry();
+			addLogEntry("A database access error occurred: " ~ getErrorMessage());
+			addLogEntry();
 			close();
 			exit(-1);
 		}
@@ -81,8 +85,11 @@ struct Database {
 		// https://www.sqlite.org/c3ref/exec.html
 		int rc = sqlite3_exec(pDb, toStringz(sql), null, null, null);
 		if (rc != SQLITE_OK) {
-			log.error("\nA database execution error occurred: "~ getErrorMessage() ~ "\n");
-			log.error("Please retry your command with --resync to fix any local database corruption issues.\n");
+			addLogEntry();
+			addLogEntry("A database execution error occurred: "~ getErrorMessage());
+			addLogEntry();
+			addLogEntry("Please retry your command with --resync to fix any local database corruption issues.");
+			addLogEntry();
 			close();
 			exit(-1);
 		}
@@ -159,7 +166,7 @@ struct Statement {
 			int rc = sqlite3_step(pStmt);
 			if (rc == SQLITE_BUSY) {
 				// Database is locked by another onedrive process
-				log.error("The database is currently locked by another process - cannot sync");
+				addLogEntry("The database is currently locked by another process - cannot sync");
 				return;
 			}
 			if (rc == SQLITE_DONE) {
@@ -175,8 +182,11 @@ struct Statement {
 				}
 			} else {
 				string errorMessage = ifromStringz(sqlite3_errmsg(sqlite3_db_handle(pStmt)));
-				log.error("\nA database statement execution error occurred: "~ errorMessage ~ "\n");
-				log.error("Please retry your command with --resync to fix any local database corruption issues.\n");
+				addLogEntry();
+				addLogEntry("A database statement execution error occurred: "~ errorMessage);
+				addLogEntry();
+				addLogEntry("Please retry your command with --resync to fix any local database corruption issues.");
+				addLogEntry();
 				exit(-1);
 			}
 		}

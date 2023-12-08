@@ -35,8 +35,7 @@ class Progress
 	  column = ws.ws_col;
 	}
       }
-
-      return column;
+		return column;
     }
 
 

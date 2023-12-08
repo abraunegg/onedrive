@@ -9,6 +9,7 @@ import std.path;
 import std.regex;
 import std.stdio;
 import std.string;
+import std.conv;
 
 // What other modules that we have created do we need to import?
 import config;
@@ -32,8 +33,9 @@ class ClientSideFiltering {
 	
 	// Initialise the required items
 	bool initialise() {
-		//
-		log.vdebug("Configuring Client Side Filtering (Selective Sync)");
+		// Log what is being done
+		addLogEntry("Configuring Client Side Filtering (Selective Sync)", ["debug"]);
+		
 		// Load the sync_list file if it exists
 		if (exists(appConfig.syncListFilePath)){
 			loadSyncList(appConfig.syncListFilePath);
@@ -46,38 +48,39 @@ class ClientSideFiltering {
 
 		// Configure skip_dir, skip_file, skip-dir-strict-match & skip_dotfiles from config entries
 		// Handle skip_dir configuration in config file
-		log.vdebug("Configuring skip_dir ...");
-		log.vdebug("skip_dir: ", appConfig.getValueString("skip_dir"));
+		addLogEntry("Configuring skip_dir ...", ["debug"]);
+		addLogEntry("skip_dir: " ~ to!string(appConfig.getValueString("skip_dir")), ["debug"]);
 		setDirMask(appConfig.getValueString("skip_dir"));
 		
 		// Was --skip-dir-strict-match configured?
-		log.vdebug("Configuring skip_dir_strict_match ...");
-		log.vdebug("skip_dir_strict_match: ", appConfig.getValueBool("skip_dir_strict_match"));
+		addLogEntry("Configuring skip_dir_strict_match ...", ["debug"]);
+		addLogEntry("skip_dir_strict_match: " ~ to!string(appConfig.getValueBool("skip_dir_strict_match")), ["debug"]);
 		if (appConfig.getValueBool("skip_dir_strict_match")) {
 			setSkipDirStrictMatch();
 		}
 		
 		// Was --skip-dot-files configured?
-		log.vdebug("Configuring skip_dotfiles ...");
-		log.vdebug("skip_dotfiles: ", appConfig.getValueBool("skip_dotfiles"));
+		addLogEntry("Configuring skip_dotfiles ...", ["debug"]);
+		addLogEntry("skip_dotfiles: " ~ to!string(appConfig.getValueBool("skip_dotfiles")), ["debug"]);
 		if (appConfig.getValueBool("skip_dotfiles")) {
 			setSkipDotfiles();
 		}
 		
 		// Handle skip_file configuration in config file
-		log.vdebug("Configuring skip_file ...");
+		addLogEntry("Configuring skip_file ...", ["debug"]);
+		
 		// Validate skip_file to ensure that this does not contain an invalid configuration
 		// Do not use a skip_file entry of .* as this will prevent correct searching of local changes to process.
 		foreach(entry; appConfig.getValueString("skip_file").split("|")){
 			if (entry == ".*") {
 				// invalid entry element detected
-				log.error("ERROR: Invalid skip_file entry '.*' detected");
+				addLogEntry("ERROR: Invalid skip_file entry '.*' detected");
 				return false;
 			}
 		}
 		
 		// All skip_file entries are valid
-		log.vdebug("skip_file: ", appConfig.getValueString("skip_file"));
+		addLogEntry("skip_file: " ~ appConfig.getValueString("skip_file"), ["debug"]);
 		setFileMask(appConfig.getValueString("skip_file"));
 		
 		// All configured OK
@@ -122,13 +125,13 @@ class ClientSideFiltering {
 	// Configure the regex that will be used for 'skip_file'
 	void setFileMask(const(char)[] mask) {
 		fileMask = wild2regex(mask);
-		log.vdebug("Selective Sync File Mask: ", fileMask);
+		addLogEntry("Selective Sync File Mask: " ~ to!string(fileMask), ["debug"]);
 	}
 
 	// Configure the regex that will be used for 'skip_dir'
 	void setDirMask(const(char)[] dirmask) {
 		directoryMask = wild2regex(dirmask);
-		log.vdebug("Selective Sync Directory Mask: ", directoryMask);
+		addLogEntry("Selective Sync Directory Mask: " ~ to!string(directoryMask), ["debug"]);
 	}
 	
 	// Configure skipDirStrictMatch if function is called
@@ -159,16 +162,16 @@ class ClientSideFiltering {
 		// Does the directory name match skip_dir config entry?
 		// Returns true if the name matches a skip_dir config entry
 		// Returns false if no match
-		log.vdebug("skip_dir evaluation for: ", name);
+		addLogEntry("skip_dir evaluation for: " ~ name, ["debug"]);
 		
 		// Try full path match first
 		if (!name.matchFirst(directoryMask).empty) {
-			log.vdebug("'!name.matchFirst(directoryMask).empty' returned true = matched");
+			addLogEntry("'!name.matchFirst(directoryMask).empty' returned true = matched", ["debug"]);
 			return true;
 		} else {
 			// Do we check the base name as well?
 			if (!skipDirStrictMatch) {
-				log.vdebug("No Strict Matching Enforced");
+				addLogEntry("No Strict Matching Enforced", ["debug"]);
 				
 				// Test the entire path working backwards from child
 				string path = buildNormalizedPath(name);
@@ -180,13 +183,14 @@ class ClientSideFiltering {
 						// This will add a leading '/' but that needs to be stripped to check
 						checkPath = "/" ~ directory ~ checkPath;
 						if(!checkPath.strip('/').matchFirst(directoryMask).empty) {
-							log.vdebug("'!checkPath.matchFirst(directoryMask).empty' returned true = matched");
+							addLogEntry("'!checkPath.matchFirst(directoryMask).empty' returned true = matched", ["debug"]);
 							return true;
 						}
 					}
 				}
 			} else {
-				log.vdebug("Strict Matching Enforced - No Match");
+				// No match
+				addLogEntry("Strict Matching Enforced - No Match", ["debug"]);
 			}
 		}
 		// no match
@@ -198,7 +202,7 @@ class ClientSideFiltering {
 		// Does the file name match skip_file config entry?
 		// Returns true if the name matches a skip_file config entry
 		// Returns false if no match
-		log.vdebug("skip_file evaluation for: ", name);
+		addLogEntry("skip_file evaluation for: " ~ name, ["debug"]);
 	
 		// Try full path match first
 		if (!name.matchFirst(fileMask).empty) {
@@ -230,10 +234,10 @@ class ClientSideFiltering {
 		// if there are no allowed paths always return false
 		if (allowedPaths.empty) return false;
 		path = buildNormalizedPath(path);
-		log.vdebug("Evaluation against 'sync_list' for this path: ", path);
-		log.vdebug("[S]exclude           = ", exclude);
-		log.vdebug("[S]exludeDirectMatch = ", exludeDirectMatch);
-		log.vdebug("[S]excludeMatched    = ", excludeMatched);
+		addLogEntry("Evaluation against 'sync_list' for this path: " ~ path, ["debug"]);
+		addLogEntry("[S]exclude           = " ~  to!string(exclude), ["debug"]);
+		addLogEntry("[S]exludeDirectMatch = " ~ to!string(exludeDirectMatch), ["debug"]);
+		addLogEntry("[S]excludeMatched    = " ~ to!string(excludeMatched), ["debug"]);
 		
 		// unless path is an exact match, entire sync_list entries need to be processed to ensure
 		// negative matches are also correctly detected
@@ -278,7 +282,7 @@ class ClientSideFiltering {
 			}
 			
 			// What are we comparing against?
-			log.vdebug("Evaluation against 'sync_list' entry: ", allowedPath);
+			addLogEntry("Evaluation against 'sync_list' entry: " ~ allowedPath, ["debug"]);
 			
 			// Generate the common prefix from the path vs the allowed path
 			auto comm = commonPrefix(path, allowedPath[offset..$]);
@@ -291,14 +295,16 @@ class ClientSideFiltering {
 				
 				if (path == strippedAllowedPath) {
 					// we have an exact path match
-					log.vdebug("exact path match");
+					addLogEntry("Exact path match with 'sync_list' entry", ["debug"]);
+					
 					if (!exclude) {
-						log.vdebug("Evaluation against 'sync_list' result: direct match");
+						addLogEntry("Evaluation against 'sync_list' result: direct match", ["debug"]);
 						finalResult = false;
 						// direct match, break and go sync
 						break;
 					} else {
-						log.vdebug("Evaluation against 'sync_list' result: direct match - path to be excluded");
+						addLogEntry("Evaluation against 'sync_list' result: direct match - path to be excluded", ["debug"]);
+						
 						// do not set excludeMatched = true here, otherwise parental path also gets excluded
 						// flag exludeDirectMatch so that a 'wildcard match' will not override this exclude
 						exludeDirectMatch = true;
@@ -307,7 +313,8 @@ class ClientSideFiltering {
 					}	
 				} else {
 					// no exact path match, but something common does match
-					log.vdebug("something 'common' matches the input path");
+					addLogEntry("Something 'common' matches the 'sync_list' input path", ["debug"]);
+					
 					auto splitAllowedPaths = pathSplitter(strippedAllowedPath);
 					string pathToEvaluate = "";
 					foreach(base; splitAllowedPaths) {
@@ -315,12 +322,12 @@ class ClientSideFiltering {
 						if (path == pathToEvaluate) {
 							// The input path matches what we want to evaluate against as a direct match
 							if (!exclude) {
-								log.vdebug("Evaluation against 'sync_list' result: direct match for parental path item");
+								addLogEntry("Evaluation against 'sync_list' result: direct match for parental path item", ["debug"]);
 								finalResult = false;
 								// direct match, break and go sync
 								break;
 							} else {
-								log.vdebug("Evaluation against 'sync_list' result: direct match for parental path item but to be excluded");
+								addLogEntry("Evaluation against 'sync_list' result: direct match for parental path item but to be excluded", ["debug"]);
 								finalResult = true;
 								// do not set excludeMatched = true here, otherwise parental path also gets excluded
 							}					
@@ -339,12 +346,12 @@ class ClientSideFiltering {
 				if (canFind(path, subItemPathCheck)) {
 					// The 'path' includes the allowed path, and is 'most likely' a sub-path item
 					if (!exclude) {
-						log.vdebug("Evaluation against 'sync_list' result: parental path match");
+						addLogEntry("Evaluation against 'sync_list' result: parental path match", ["debug"]);
 						finalResult = false;
 						// parental path matches, break and go sync
 						break;
 					} else {
-						log.vdebug("Evaluation against 'sync_list' result: parental path match but must be excluded");
+						addLogEntry("Evaluation against 'sync_list' result: parental path match but must be excluded", ["debug"]);
 						finalResult = true;
 						excludeMatched = true;
 					}
@@ -362,10 +369,10 @@ class ClientSideFiltering {
 					// if we have a prior pattern match for an exclude, excludeMatched = true
 					if (!exclude && !excludeMatched && !exludeDirectMatch) {
 						// nothing triggered an exclusion before evaluation against wildcard match attempt
-						log.vdebug("Evaluation against 'sync_list' result: wildcard pattern match");
+						addLogEntry("Evaluation against 'sync_list' result: wildcard pattern match", ["debug"]);
 						finalResult = false;
 					} else {
-						log.vdebug("Evaluation against 'sync_list' result: wildcard pattern matched but must be excluded");
+						addLogEntry("Evaluation against 'sync_list' result: wildcard pattern matched but must be excluded", ["debug"]);
 						finalResult = true;
 						excludeMatched = true;
 					}
@@ -373,9 +380,9 @@ class ClientSideFiltering {
 			}
 		}
 		// Interim results
-		log.vdebug("[F]exclude           = ", exclude);
-		log.vdebug("[F]exludeDirectMatch = ", exludeDirectMatch);
-		log.vdebug("[F]excludeMatched    = ", excludeMatched);
+		addLogEntry("[F]exclude           = " ~ to!string(exclude), ["debug"]);
+		addLogEntry("[F]exludeDirectMatch = " ~ to!string(exludeDirectMatch), ["debug"]);
+		addLogEntry("[F]excludeMatched    = " ~ to!string(excludeMatched), ["debug"]);
 		
 		// If exclude or excludeMatched is true, then finalResult has to be true
 		if ((exclude) || (excludeMatched) || (exludeDirectMatch)) {
@@ -384,9 +391,9 @@ class ClientSideFiltering {
 		
 		// results
 		if (finalResult) {
-			log.vdebug("Evaluation against 'sync_list' final result: EXCLUDED");
+			addLogEntry("Evaluation against 'sync_list' final result: EXCLUDED", ["debug"]);
 		} else {
-			log.vdebug("Evaluation against 'sync_list' final result: included for sync");
+			addLogEntry("Evaluation against 'sync_list' final result: included for sync", ["debug"]);
 		}
 		return finalResult;
 	}

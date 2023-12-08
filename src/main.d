@@ -43,13 +43,19 @@ ItemDatabase itemDB;
 ClientSideFiltering selectiveSync;
 Monitor filesystemMonitor;
 
+
 int main(string[] cliArgs) {
-	// Disable buffering on stdout - this is needed so that when we are using plain write() it will go to the terminal
+	// Application Start Time - used during monitor loop to detail how long it has been running for
+	auto applicationStartTime = Clock.currTime();
+	// Disable buffering on stdout - this is needed so that when we are using plain write() it will go to the terminal without flushing
 	stdout.setvbuf(0, _IONBF);
+	
 	// Required main function variables
 	string genericHelpMessage = "Try 'onedrive --help' for more information";
 	// If the user passes in --confdir we need to store this as a variable
 	string confdirOption = "";
+	// running as what user?
+	string runtimeUserName = "";
 	// Are we online?
 	bool online = false;
 	// Does the operating environment have shell environment variables set
@@ -59,9 +65,11 @@ int main(string[] cliArgs) {
 	string runtimeSyncDirectory = "";
 	// Configure the runtime database file path. Typically this will be the default, but in a --dry-run scenario, we use a separate database file
 	string runtimeDatabaseFile = "";
-	
-	// Application Start Time - used during monitor loop to detail how long it has been running for
-	auto applicationStartTime = Clock.currTime();
+	// Verbosity Logging Count - this defines if verbose or debug logging is being used
+	long verbosityCount = 0;
+	// Application Logging Level
+	bool verboseLogging = false;
+	bool debugLogging = false;
 	
 	// DEVELOPER OPTIONS OUTPUT VARIABLES
 	bool displayMemoryUsage = false;
@@ -70,14 +78,14 @@ int main(string[] cliArgs) {
 	// Define 'exit' and 'failure' scopes
 	scope(exit) {
 		// Detail what scope was called
-		log.vdebug("Exit scope was called");
+		addLogEntry("Exit scope was called", ["debug"]);
 		// Perform exit tasks
 		performStandardExitProcess("exitScope");
 	}
 	
 	scope(failure) {
 		// Detail what scope was called
-		log.vdebug("Failure scope was called");
+		addLogEntry("Failure scope was called", ["debug"]);
 		// Perform exit tasks
 		performStandardExitProcess("failureScope");
 	}
@@ -91,7 +99,7 @@ int main(string[] cliArgs) {
 			std.getopt.config.bundling,
 			std.getopt.config.caseSensitive,
 			"confdir", "Set the directory used to store the configuration files", &confdirOption,
-			"verbose|v+", "Print more details, useful for debugging (repeat for extra debugging)", &log.verbose,
+			"verbose|v+", "Print more details, useful for debugging (repeat for extra debugging)", &verbosityCount,
 			"version", "Print the version and exit", &printVersion
 		);
 		
@@ -108,22 +116,61 @@ int main(string[] cliArgs) {
 		}
 	} catch (GetOptException e) {
 		// Option errors
-		log.error(e.msg);
-		log.error(genericHelpMessage);
+		writeln(e.msg);
+		writeln(genericHelpMessage);
 		return EXIT_FAILURE;
 	} catch (Exception e) {
 		// Generic error
-		log.error(e.msg);
-		log.error(genericHelpMessage);
+		writeln(e.msg);
+		writeln(genericHelpMessage);
 		return EXIT_FAILURE;
 	}
 	
+	// Determine the application logging verbosity
+	if (verbosityCount == 1) { verboseLogging = true;}
+	if (verbosityCount >= 2) { debugLogging = true;}
+	
+	// Initialize the application logging class, as we know the application verbosity level
+	// If we need to enable logging to a file, we can only do this once we know the application configuration which is done slightly later on
+    initialiseLogging(verboseLogging, debugLogging);
+	
+	/**
+	// most used
+	addLogEntry("Basic 'info' message", ["info"]); .... or just use addLogEntry("Basic 'info' message");
+	addLogEntry("Basic 'verbose' message", ["verbose"]);
+	addLogEntry("Basic 'debug' message", ["debug"]);
+	// GUI notify only
+	addLogEntry("Basic 'notify' ONLY message and displayed in GUI if notifications are enabled", ["notify"]);
+	// info and notify
+	addLogEntry("Basic 'info and notify' message and displayed in GUI if notifications are enabled", ["info", "notify"]);
+	// log file only
+	addLogEntry("Information sent to the log file only, and only if logging to a file is enabled", ["logFileOnly"]);
+	// Console only with no new line
+	addLogEntry("Basic 'log file only' message", ["consoleOnlyNoNewLine"]);
+	**/
+	
+	// Log application start time
+	addLogEntry("Application started", ["debug"]);
+	
+	// Who are we running as? This will print the ProcessID, UID, GID and username the application is running as
+	runtimeUserName = getUserName();
+	
+	// Print in debug the application version as soon as possible
+	// addLogEntry("Application Version: " ~ strip(import("version")), ["debug"]);
+	string tempVersion = "v2.5.0-alpha-4" ~ " GitHub version: " ~ strip(import("version"));
+	addLogEntry("Application Version: " ~ tempVersion, ["debug"]);
+	
 	// How was this application started - what options were passed in
-	log.vdebug("passed in options: ", cliArgs);
-	log.vdebug("note --confdir and --verbose not listed in 'cliArgs'");
-
+	addLogEntry("Passed in 'cliArgs': " ~ to!string(cliArgs), ["debug"]);
+	addLogEntry("Note: --confdir and --verbose are not listed in 'cliArgs' array", ["debug"]);
+	addLogEntry("Passed in --confdir if present: " ~ confdirOption, ["debug"]);
+	addLogEntry("Passed in --verbose count if present: " ~ to!string(verbosityCount), ["debug"]);
+	
 	// Create a new AppConfig object with default values, 
 	appConfig = new ApplicationConfig();
+	// Update the default application configuration with the logging level so these can be used as a config option throughout the application
+	appConfig.setConfigLoggingLevels(verboseLogging, debugLogging, verbosityCount);
+	
 	// Initialise the application configuration, utilising --confdir if it was passed in
 	// Otherwise application defaults will be used to configure the application
 	if (!appConfig.initialise(confdirOption)) {
@@ -132,31 +179,46 @@ int main(string[] cliArgs) {
 		return EXIT_FAILURE;
 	}
 	
-	// Update the existing application configuration (default or 'config' file) from any passed in command line arguments
+	// Update the current runtime application configuration (default or 'config' fileread-in options) from any passed in command line arguments
 	appConfig.updateFromArgs(cliArgs);
 	
-	// Depreciated options check now that the config file (if present) and CLI options have all been parsed
-	appConfig.checkDepreciatedOptions(cliArgs);
+	// As early as possible, now re-configure the logging class, given that we have read in any applicable 'config' file and updated the application running config from CLI input:
+	// - Enable logging to a file if this is required
+	// - Disable GUI notifications if this has been configured
 	
-	// Configure GUI Notifications
-	// - This option is reverse action. If 'disable_notifications' is 'true', we need to send 'false'
-	if (appConfig.getValueBool("disable_notifications")){
-		// disable_notifications is true, initialise with false
-		log.enableNotifications(false);
-	} else {
-		log.enableNotifications(true);
-	}
-	
-	// Configure application logging to a log file only if enabled
-	// This is the earliest point to do so as the client configuration has been read in, CLI arguments have been processed. 
-	// Either of those could be enabling logging
-	if (appConfig.getValueBool("enable_logging")){
-		// configure the application logging directory
-		string initialisedLogDirPath = appConfig.initialiseLogDirectory();
+	// Configure application logging to a log file only if this has been enabled
+	// This is the earliest point that this can be done, as the client configuration has been read in, and any CLI arguments have been processed.
+	// Either of those ('confif' file, CPU arguments) could be enabling logging, thus this is the earliest point at which this can be validated and enabled.
+	// The buffered logging also ensures that all 'output' to this point is also captured and written out to the log file
+	if (appConfig.getValueBool("enable_logging")) {
+		// Calculate the application logging directory
+		string calculatedLogDirPath = appConfig.calculateLogDirectory();
+		string calculatedLogFilePath;
 		// Initialise using the configured logging directory
-		log.vlog("Using the following path to store the runtime application log: ", initialisedLogDirPath);
-		log.initialise(initialisedLogDirPath);
+		addLogEntry("Using the following path to store the runtime application log: " ~ calculatedLogDirPath, ["verbose"]);
+		// Calculate the logfile name
+		if (calculatedLogDirPath != appConfig.defaultHomePath) {
+			// Log file is not going to the home directory
+			string logfileName = runtimeUserName ~ ".onedrive.log";
+			calculatedLogFilePath = buildNormalizedPath(buildPath(calculatedLogDirPath, logfileName));
+		} else {
+			// Log file is going to the users home directory
+			calculatedLogFilePath = buildNormalizedPath(buildPath(calculatedLogDirPath, "onedrive.log"));
+		}
+		// Update the logging class to use 'calculatedLogFilePath' for the application log file now that this has been determined
+		enableLogFileOutput(calculatedLogFilePath);
 	}
+	
+	// Disable GUI Notifications if configured to do so
+	// - This option is reverse action. If 'disable_notifications' is 'true', we need to send 'false'
+	if (appConfig.getValueBool("disable_notifications")) {
+		// disable_notifications is true, ensure GUI notifications is initialised with false so that NO GUI notification is sent
+		disableGUINotifications(false);
+		addLogEntry("Disabling GUI notifications as per user configuration");
+	}
+	
+	// Perform a depreciated options check now that the config file (if present) and CLI options have all been parsed to advise the user that their option usage might change
+	appConfig.checkDepreciatedOptions(cliArgs);
 	
 	// Configure Client Side Filtering (selective sync) by parsing and getting a usable regex for skip_file, skip_dir and sync_list config components
 	selectiveSync = new ClientSideFiltering(appConfig);
@@ -189,7 +251,7 @@ int main(string[] cliArgs) {
 	
 	// Check for basic application option conflicts - flags that should not be used together and/or flag combinations that conflict with each other, values that should be present and are not
 	if (appConfig.checkForBasicOptionConflicts) {
-		// Any error will have been printed by the function itself
+		// Any error will have been printed by the function itself, but we need a small delay here to allow the buffered logging to output any error
 		return EXIT_FAILURE;
 	}
 	
@@ -198,7 +260,7 @@ int main(string[] cliArgs) {
 	// no actual action takes place - such as deleting files if deleted online, moving files if moved online or local, downloading new & changed files, uploading new & changed files
 	if (appConfig.getValueBool("dry_run")) {
 		// this is a --dry-run operation
-		log.log("DRY-RUN Configured. Output below shows what 'would' have occurred.");
+		addLogEntry("DRY-RUN Configured. Output below shows what 'would' have occurred.");
 		
 		// Cleanup any existing dry-run elements ... these should never be left hanging around
 		cleanupDryRunDatabaseFiles(appConfig.databaseFilePathDryRun);
@@ -208,11 +270,11 @@ int main(string[] cliArgs) {
 			// In a --dry-run --resync scenario, we should not copy the existing database file
 			if (!appConfig.getValueBool("resync")) {
 				// Copy the existing DB file to the dry-run copy
-				log.log("DRY-RUN: Copying items.sqlite3 to items-dryrun.sqlite3 to use for dry run operations");
+				addLogEntry("DRY-RUN: Copying items.sqlite3 to items-dryrun.sqlite3 to use for dry run operations");
 				copy(appConfig.databaseFilePath,appConfig.databaseFilePathDryRun);
 			} else {
 				// No database copy due to --resync
-				log.log("DRY-RUN: No database copy created for --dry-run due to --resync also being used");
+				addLogEntry("DRY-RUN: No database copy created for --dry-run due to --resync also being used");
 			}
 		}
 		// update runtimeDatabaseFile now that we are using the dry run path
@@ -221,13 +283,13 @@ int main(string[] cliArgs) {
 	
 	// Handle --logout as separate item, do not 'resync' on a --logout
 	if (appConfig.getValueBool("logout")) {
-		log.vdebug("--logout requested");
-		log.log("Deleting the saved authentication status ...");
+		addLogEntry("--logout requested", ["debug"]);
+		addLogEntry("Deleting the saved authentication status ...");
 		if (!appConfig.getValueBool("dry_run")) {
 			safeRemove(appConfig.refreshTokenFilePath);
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
-			log.log("DRY RUN: Not removing the saved authentication status");
+			addLogEntry("DRY RUN: Not removing the saved authentication status");
 		}
 		// Exit
 		return EXIT_SUCCESS;
@@ -235,13 +297,13 @@ int main(string[] cliArgs) {
 	
 	// Handle --reauth to re-authenticate the client
 	if (appConfig.getValueBool("reauth")) {
-		log.vdebug("--reauth requested");
-		log.log("Deleting the saved authentication status ... re-authentication requested");
+		addLogEntry("--reauth requested", ["debug"]);
+		addLogEntry("Deleting the saved authentication status ... re-authentication requested");
 		if (!appConfig.getValueBool("dry_run")) {
 			safeRemove(appConfig.refreshTokenFilePath);
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
-			log.log("DRY RUN: Not removing the saved authentication status");
+			addLogEntry("DRY RUN: Not removing the saved authentication status");
 		}
 	}
 	
@@ -250,13 +312,14 @@ int main(string[] cliArgs) {
 	if (appConfig.getValueBool("resync")) {
 		// what is the risk acceptance for --resync?
 		bool resyncRiskAcceptance = appConfig.displayResyncRiskForAcceptance();
-		log.vdebug("Returned --resync risk acceptance: ", resyncRiskAcceptance);
+		addLogEntry("Returned --resync risk acceptance: " ~ resyncRiskAcceptance, ["debug"]);
+		
 		// Action based on user response
 		if (!resyncRiskAcceptance){
 			// --resync risk not accepted
 			return EXIT_FAILURE;
 		} else {
-			log.vdebug("--resync issued and risk accepted");
+			addLogEntry("--resync issued and risk accepted", ["debug"]);
 			// --resync risk accepted, perform a cleanup of items that require a cleanup
 			appConfig.cleanupHashFilesDueToResync();
 			// Make a backup of the applicable configuration file
@@ -270,7 +333,9 @@ int main(string[] cliArgs) {
 		// Has any of our application configuration that would require a --resync been changed?
 		if (appConfig.applicationChangeWhereResyncRequired()) {
 			// Application configuration has changed however --resync not issued, fail fast
-			log.error("\nAn application configuration change has been detected where a --resync is required\n");
+			addLogEntry();
+			addLogEntry("An application configuration change has been detected where a --resync is required");
+			addLogEntry();
 			return EXIT_RESYNC_REQUIRED;
 		} else {
 			// No configuration change that requires a --resync to be issued
@@ -285,9 +350,12 @@ int main(string[] cliArgs) {
 	// Force a synchronization of a specific folder, only when using --synchronize --single-directory and ignoring all non-default skip_dir and skip_file rules
 	if (appConfig.getValueBool("force_sync")) {
 		// appConfig.checkForBasicOptionConflicts() has already checked for the basic requirements for --force-sync
-		log.log("\nWARNING: Overriding application configuration to use application defaults for skip_dir and skip_file due to --sync --single-directory --force-sync being used");
+		addLogEntry();
+		addLogEntry("WARNING: Overriding application configuration to use application defaults for skip_dir and skip_file due to --sync --single-directory --force-sync being used");
+		addLogEntry();
 		bool forceSyncRiskAcceptance = appConfig.displayForceSyncRiskForAcceptance();
-		log.vdebug("Returned --force-sync risk acceptance: ", forceSyncRiskAcceptance);
+		addLogEntry("Returned --force-sync risk acceptance: " ~ forceSyncRiskAcceptance, ["debug"]);
+		
 		// Action based on user response
 		if (!forceSyncRiskAcceptance){
 			// --force-sync risk not accepted
@@ -303,7 +371,7 @@ int main(string[] cliArgs) {
 	}
 	
 	// Test if OneDrive service can be reached, exit if it cant be reached
-	log.vdebug("Testing network to ensure network connectivity to Microsoft OneDrive Service");
+	addLogEntry("Testing network to ensure network connectivity to Microsoft OneDrive Service", ["debug"]);
 	online = testInternetReachability(appConfig);
 	
 	// If we are not 'online' - how do we handle this situation?
@@ -311,11 +379,15 @@ int main(string[] cliArgs) {
 		// We are unable to initialise the OneDrive API as we are not online
 		if (!appConfig.getValueBool("monitor")) {
 			// Running as --synchronize
-			log.error("Unable to reach Microsoft OneDrive API service, unable to initialise application\n");
+			addLogEntry();
+			addLogEntry("ERROR: Unable to reach Microsoft OneDrive API service, unable to initialise application");
+			addLogEntry();
 			return EXIT_FAILURE;
 		} else {
 			// Running as --monitor
-			log.error("Unable to reach the Microsoft OneDrive API service at this point in time, re-trying network tests based on applicable intervals\n");
+			addLogEntry();
+			addLogEntry("Unable to reach the Microsoft OneDrive API service at this point in time, re-trying network tests based on applicable intervals");
+			addLogEntry();
 			if (!retryInternetConnectivtyTest(appConfig)) {
 				return EXIT_FAILURE;
 			}
@@ -325,19 +397,22 @@ int main(string[] cliArgs) {
 	// This needs to be a separate 'if' statement, as, if this was an 'if-else' from above, if we were originally offline and using --monitor, we would never get to this point
 	if (online) {
 		// Check Application Version
-		log.vlog("Checking Application Version ...");
+		addLogEntry("Checking Application Version ...", ["verbose"]);
 		checkApplicationVersion();
+		
 		// Initialise the OneDrive API
-		log.vlog("Attempting to initialise the OneDrive API ...");
+		addLogEntry("Attempting to initialise the OneDrive API ...", ["verbose"]);
 		oneDriveApiInstance = new OneDriveApi(appConfig);
 		appConfig.apiWasInitialised = oneDriveApiInstance.initialise();
 		if (appConfig.apiWasInitialised) {
-			log.vlog("The OneDrive API was initialised successfully");
+			addLogEntry("The OneDrive API was initialised successfully", ["verbose"]);
+			
 			// Flag that we were able to initalise the API in the application config
 			oneDriveApiInstance.debugOutputConfiguredAPIItems();
 			
 			// Need to configure the itemDB and syncEngineInstance for 'sync' and 'non-sync' operations
-			log.vlog("Opening the item database ...");
+			addLogEntry("Opening the item database ...", ["verbose"]);
+			
 			// Configure the Item Database
 			itemDB = new ItemDatabase(runtimeDatabaseFile);
 			// Was the database successfully initialised?
@@ -462,40 +537,45 @@ int main(string[] cliArgs) {
 				}
 				
 				// If we get to this point, we have not performed a 'no-sync' task ..
-				log.error("\nYour command line input is missing either the '--sync' or '--monitor' switches. Please include one (but not both) of these switches in your command line, or refer to 'onedrive --help' for additional guidance.\n");
-				log.error("It is important to note that you must include one of these two arguments in your command line for the application to perform a synchronisation with Microsoft OneDrive\n");
+				addLogEntry();
+				addLogEntry("Your command line input is missing either the '--sync' or '--monitor' switches. Please include one (but not both) of these switches in your command line, or refer to 'onedrive --help' for additional guidance.");
+				addLogEntry();
+				addLogEntry("It is important to note that you must include one of these two arguments in your command line for the application to perform a synchronisation with Microsoft OneDrive");
+				addLogEntry();
 				// Use exit scopes to shutdown API
 				// invalidSyncExit = true;
 				return EXIT_FAILURE;
 			}
 		} else {
 			// API could not be initialised
-			log.error("The OneDrive API could not be initialised");
+			addLogEntry("The OneDrive API could not be initialised");
 			return EXIT_FAILURE;
 		}
 	}
 	
 	// Configure the sync direcory based on the runtimeSyncDirectory configured directory
-	log.vlog("All application operations will be performed in the configured local 'sync_dir' directory: ", runtimeSyncDirectory);
+	addLogEntry("All application operations will be performed in the configured local 'sync_dir' directory: " ~ runtimeSyncDirectory, ["verbose"]);
+	
 	try {
 		if (!exists(runtimeSyncDirectory)) {
-			log.vdebug("runtimeSyncDirectory: Configured 'sync_dir' is missing locally. Creating: ", runtimeSyncDirectory);
+			addLogEntry("runtimeSyncDirectory: Configured 'sync_dir' is missing locally. Creating: " ~ runtimeSyncDirectory, ["debug"]);
+			
 			try {
 				// Attempt to create the sync dir we have been configured with
 				mkdirRecurse(runtimeSyncDirectory);
 				// Configure the applicable permissions for the folder
-				log.vdebug("Setting directory permissions for: ", runtimeSyncDirectory);
+				addLogEntry("Setting directory permissions for: " ~ runtimeSyncDirectory, ["debug"]);
 				runtimeSyncDirectory.setAttributes(appConfig.returnRequiredDirectoryPermisions());
 			} catch (std.file.FileException e) {
 				// Creating the sync directory failed
-				log.error("ERROR: Unable to create the configured local 'sync_dir' directory: ", e.msg);
+				addLogEntry("ERROR: Unable to create the configured local 'sync_dir' directory: " ~ e.msg);
 				// Use exit scopes to shutdown API
 				return EXIT_FAILURE;
 			}
 		}
 	} catch (std.file.FileException e) {
 		// Creating the sync directory failed
-		log.error("ERROR: Unable to test for the existence of the configured local 'sync_dir' directory: ", e.msg);
+		addLogEntry("ERROR: Unable to test for the existence of the configured local 'sync_dir' directory: " ~ e.msg);
 		// Use exit scopes to shutdown API
 		return EXIT_FAILURE;
 	}
@@ -519,7 +599,7 @@ int main(string[] cliArgs) {
 		// Check if there are interrupted upload session(s)
 		if (syncEngineInstance.checkForInterruptedSessionUploads) {
 			// Need to re-process the session upload files to resume the failed session uploads
-			log.log("There are interrupted session uploads that need to be resumed ...");
+			addLogEntry("There are interrupted session uploads that need to be resumed ...");
 			// Process the session upload files
 			syncEngineInstance.processForInterruptedSessionUploads();
 		}
@@ -539,11 +619,11 @@ int main(string[] cliArgs) {
 			// Does the directory we want to sync actually exist locally?
 			if (!exists(singleDirectoryPath)) {
 				// The requested path to use with --single-directory does not exist locally within the configured 'sync_dir'
-				log.logAndNotify("WARNING: The requested path for --single-directory does not exist locally. Creating requested path within ", runtimeSyncDirectory);
+				addLogEntry("WARNING: The requested path for --single-directory does not exist locally. Creating requested path within " ~ runtimeSyncDirectory, ["info", "notify"]);
 				// Make the required --single-directory path locally
 				mkdirRecurse(singleDirectoryPath);
 				// Configure the applicable permissions for the folder
-				log.vdebug("Setting directory permissions for: ", singleDirectoryPath);
+				addLogEntry("Setting directory permissions for: " ~ singleDirectoryPath, ["debug"]);
 				singleDirectoryPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
 			}
 			
@@ -552,7 +632,7 @@ int main(string[] cliArgs) {
 			remotePath = singleDirectoryPath;
 			
 			// Display that we are syncing from a specific path due to --single-directory
-			log.vlog("Syncing changes from this selected path: ", singleDirectoryPath);
+			addLogEntry("Syncing changes from this selected path: " ~ singleDirectoryPath, ["verbose"]);
 		}
 
 		// Are we doing a --sync operation? This includes doing any --single-directory operations
@@ -600,12 +680,12 @@ int main(string[] cliArgs) {
 			string maxInotifyWatches = strip(readText("/proc/sys/fs/inotify/max_user_watches"));
 			
 			// Start the monitor process
-			log.log("OneDrive synchronisation interval (seconds): ", appConfig.getValueLong("monitor_interval"));
+			addLogEntry("OneDrive synchronisation interval (seconds): " ~ to!string(appConfig.getValueLong("monitor_interval")));
 			
 			// If we are in a --download-only method of operation, the output of these is not required
 			if (!appConfig.getValueBool("download_only")) {
-				log.vlog("Maximum allowed open files:                  ", maxOpenFiles);
-				log.vlog("Maximum allowed inotify user watches:        ", maxInotifyWatches);
+				addLogEntry("Maximum allowed open files:                  " ~ maxOpenFiles, ["verbose"]);
+				addLogEntry("Maximum allowed inotify user watches:        " ~ maxInotifyWatches, ["verbose"]);
 			}
 			
 			// Configure the monitor class
@@ -615,53 +695,54 @@ int main(string[] cliArgs) {
 			filesystemMonitor.onDirCreated = delegate(string path) {
 				// Handle .folder creation if skip_dotfiles is enabled
 				if ((appConfig.getValueBool("skip_dotfiles")) && (isDotFile(path))) {
-					log.vlog("[M] Skipping watching local path - .folder found & --skip-dot-files enabled: ", path);
+					addLogEntry("[M] Skipping watching local path - .folder found & --skip-dot-files enabled: " ~ path, ["verbose"]);
 				} else {
-					log.vlog("[M] Local directory created: ", path);
+					addLogEntry("[M] Local directory created: " ~ path, ["verbose"]);
 					try {
 						syncEngineInstance.scanLocalFilesystemPathForNewData(path);
 					} catch (CurlException e) {
-						log.vlog("Offline, cannot create remote dir!");
+						addLogEntry("Offline, cannot create remote dir: " ~ path, ["verbose"]);
 					} catch(Exception e) {
-						log.logAndNotify("Cannot create remote directory: ", e.msg);
+						addLogEntry("Cannot create remote directory: " ~ e.msg, ["info", "notify"]);
 					}
 				}
 			};
 			
 			// Delegated function for when inotify detects a local file has been changed
 			filesystemMonitor.onFileChanged = delegate(string path) {
-				log.vlog("[M] Local file changed: ", path);
+				// Handle a changed file
+				addLogEntry("[M] Local file changed: " ~ path, ["verbose"]);
 				try {
 					syncEngineInstance.handleLocalFileTrigger(path);
 				} catch (CurlException e) {
-					log.vlog("Offline, cannot upload changed item!");
+					addLogEntry("Offline, cannot upload changed item: " ~ path, ["verbose"]);
 				} catch(Exception e) {
-					log.logAndNotify("Cannot upload file changes/creation: ", e.msg);
+					addLogEntry("Cannot upload file changes/creation: " ~ e.msg, ["info", "notify"]);
 				}
 			};
 			
 			// Delegated function for when inotify detects a delete event
 			filesystemMonitor.onDelete = delegate(string path) {
-				log.vlog("[M] Local item deleted: ", path);
+				addLogEntry("[M] Local item deleted: " ~ path, ["verbose"]);
 				try {
-					log.log("The operating system sent a deletion notification. Trying to delete the item as requested");
+					addLogEntry("The operating system sent a deletion notification. Trying to delete the item as requested");
 					syncEngineInstance.deleteByPath(path);
 				} catch (CurlException e) {
-					log.vlog("Offline, cannot delete item!");
+					addLogEntry("Offline, cannot delete item: " ~ path, ["verbose"]);
 				} catch(SyncException e) {
 					if (e.msg == "The item to delete is not in the local database") {
-						log.vlog("Item cannot be deleted from Microsoft OneDrive because it was not found in the local database");
+						addLogEntry("Item cannot be deleted from Microsoft OneDrive because it was not found in the local database", ["verbose"]);
 					} else {
-						log.logAndNotify("Cannot delete remote item: ", e.msg);
+						addLogEntry("Cannot delete remote item: " ~ e.msg, ["info", "notify"]);
 					}
 				} catch(Exception e) {
-					log.logAndNotify("Cannot delete remote item: ", e.msg);
+					addLogEntry("Cannot delete remote item: " ~ e.msg, ["info", "notify"]);
 				}
 			};
 			
 			// Delegated function for when inotify detects a move event
 			filesystemMonitor.onMove = delegate(string from, string to) {
-				log.vlog("[M] Local item moved: ", from, " -> ", to);
+				addLogEntry("[M] Local item moved: " ~ from ~ " -> " ~ to, ["verbose"]);
 				try {
 					// Handle .folder -> folder if skip_dotfiles is enabled
 					if ((appConfig.getValueBool("skip_dotfiles")) && (isDotFile(from))) {
@@ -671,9 +752,9 @@ int main(string[] cliArgs) {
 						syncEngineInstance.uploadMoveItem(from, to);
 					}
 				} catch (CurlException e) {
-					log.vlog("Offline, cannot move item!");
+					addLogEntry("Offline, cannot move item !", ["verbose"]);
 				} catch(Exception e) {
-					log.logAndNotify("Cannot move item: ", e.msg);
+					addLogEntry("Cannot move item: " ~ e.msg, ["info", "notify"]);
 				}
 			};
 			
@@ -686,12 +767,12 @@ int main(string[] cliArgs) {
 			if (!appConfig.getValueBool("download_only")) {
 				// Not using --download-only
 				try {
-					log.log("Initialising filesystem inotify monitoring ...");
+					addLogEntry("Initialising filesystem inotify monitoring ...");
 					filesystemMonitor.initialise();
-					log.log("Performing initial syncronisation to ensure consistent local state ...");
+					addLogEntry("Performing initial syncronisation to ensure consistent local state ...");
 				} catch (MonitorException e) {	
 					// monitor class initialisation failed
-					log.error("ERROR: ", e.msg);
+					addLogEntry("ERROR: " ~ e.msg);
 					return EXIT_FAILURE;
 				}
 			}
@@ -724,7 +805,7 @@ int main(string[] cliArgs) {
 						filesystemMonitor.update(true);
 					} catch (MonitorException e) {
 						// Catch any exceptions thrown by inotify / monitor engine
-						log.error("ERROR: The following inotify error was generated: ", e.msg);
+						addLogEntry("ERROR: The following inotify error was generated: " ~ e.msg);
 					}
 				}
 			
@@ -751,7 +832,7 @@ int main(string[] cliArgs) {
 							notificationReceived = true;
 						} else {
 							if (notificationReceived) {
-								log.log("Received ", signalCount," refresh signals from the webhook");
+								addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signals from the webhook");
 							}
 							break;
 						}
@@ -773,12 +854,12 @@ int main(string[] cliArgs) {
 						// Full Scan set for some 'frequency' - do we flag to perform a full scan of the online data?
 						if (fullScanFrequencyLoopCount > fullScanFrequency) {
 							// set full scan trigger for true up
-							log.vdebug("Enabling Full Scan True Up (fullScanFrequencyLoopCount > fullScanFrequency), resetting fullScanFrequencyLoopCount = 1");
+							addLogEntry("Enabling Full Scan True Up (fullScanFrequencyLoopCount > fullScanFrequency), resetting fullScanFrequencyLoopCount = 1", ["debug"]);
 							fullScanFrequencyLoopCount = 1;
 							appConfig.fullScanTrueUpRequired = true;
 						} else {
 							// unset full scan trigger for true up
-							log.vdebug("Disabling Full Scan True Up");
+							addLogEntry("Disabling Full Scan True Up", ["debug"]);
 							appConfig.fullScanTrueUpRequired = false;
 						}
 					} else {
@@ -786,11 +867,12 @@ int main(string[] cliArgs) {
 						appConfig.fullScanTrueUpRequired = false;
 					}
 					
-					log.vdebug(loopStartOutputMessage);
-					log.vdebug("Total Run-Time Loop Number:     ", monitorLoopFullCount);
-					log.vdebug("Full Scan Freqency Loop Number: ", fullScanFrequencyLoopCount);
+					// Loop Start
+					addLogEntry(loopStartOutputMessage, ["debug"]);
+					addLogEntry("Total Run-Time Loop Number:     " ~ to!string(monitorLoopFullCount), ["debug"]);
+					addLogEntry("Full Scan Freqency Loop Number: " ~ to!string(fullScanFrequencyLoopCount), ["debug"]);
 					SysTime startFunctionProcessingTime = Clock.currTime();
-					log.vdebug("Start Monitor Loop Time:              ", startFunctionProcessingTime);
+					addLogEntry("Start Monitor Loop Time:        " ~ to!string(startFunctionProcessingTime), ["debug"]);
 					
 					// Do we perform any monitor console logging output surpression?
 					// 'monitor_log_frequency' controls how often, in a non-verbose application output mode, how often 
@@ -799,21 +881,21 @@ int main(string[] cliArgs) {
 					if (monitorLogOutputLoopCount > logOutputSupressionInterval) {
 						// unsurpress the logging output
 						monitorLogOutputLoopCount = 1;
-						log.vdebug("Unsuppressing log output");
+						addLogEntry("Unsuppressing log output", ["debug"]);
 						appConfig.surpressLoggingOutput = false;
 					} else {
 						// do we surpress the logging output to absolute minimal
 						if (monitorLoopFullCount == 1) {
 							// application startup with --monitor
-							log.vdebug("Unsuppressing initial sync log output");
+							addLogEntry("Unsuppressing initial sync log output", ["debug"]);
 							appConfig.surpressLoggingOutput = false;
 						} else {
 							// only surpress if we are not doing --verbose or higher
-							if (log.verbose == 0) {
-								log.vdebug("Suppressing --monitor log output");
+							if (appConfig.verbosityCount == 0) {
+								addLogEntry("Suppressing --monitor log output", ["debug"]);
 								appConfig.surpressLoggingOutput = true;
 							} else {
-								log.vdebug("Unsuppressing log output");
+								addLogEntry("Unsuppressing log output", ["debug"]);
 								appConfig.surpressLoggingOutput = false;
 							}
 						}
@@ -821,12 +903,12 @@ int main(string[] cliArgs) {
 					
 					// How long has the application been running for?
 					auto elapsedTime = Clock.currTime() - applicationStartTime;
-					log.vdebug("Application run-time thus far: ", elapsedTime);
+					addLogEntry("Application run-time thus far: " ~ to!string(elapsedTime), ["debug"]);
 					
 					// Need to re-validate that the client is still online for this loop
 					if (testInternetReachability(appConfig)) {
 						// Starting a sync 
-						log.log("Starting a sync with Microsoft OneDrive");
+						addLogEntry("Starting a sync with Microsoft OneDrive");
 						
 						// Attempt to reset syncFailures
 						syncEngineInstance.resetSyncFailures();
@@ -848,30 +930,31 @@ int main(string[] cliArgs) {
 						
 						if (appConfig.fullScanTrueUpRequired) {
 							// Write WAL and SHM data to file for this loop
-							log.vdebug("Merge contents of WAL and SHM files into main database file");
+							addLogEntry("Merge contents of WAL and SHM files into main database file", ["debug"]);
 							itemDB.performVacuum();
 						}
 					} else {
 						// Not online
-						log.log("Microsoft OneDrive service is not reachable at this time. Will re-try on next loop attempt.");
+						addLogEntry("Microsoft OneDrive service is not reachable at this time. Will re-try on next loop attempt.");
 					}
 					
 					// Output end of loop processing times
 					SysTime endFunctionProcessingTime = Clock.currTime();
-					log.vdebug("End Monitor Loop Time:                ", endFunctionProcessingTime);
-					log.vdebug("Elapsed Monitor Loop Processing Time: ", (endFunctionProcessingTime - startFunctionProcessingTime));
+					addLogEntry("End Monitor Loop Time:                " ~ to!string(endFunctionProcessingTime), ["debug"]);
+					addLogEntry("Elapsed Monitor Loop Processing Time: " ~ to!string((endFunctionProcessingTime - startFunctionProcessingTime)), ["debug"]);
 					
 					// Display memory details before cleanup
-					if (displayMemoryUsage) log.displayMemoryUsagePreGC();
+					if (displayMemoryUsage) displayMemoryUsagePreGC();
 					// Perform Garbage Cleanup
 					GC.collect();
 					// Return free memory to the OS
 					GC.minimize();
 					// Display memory details after cleanup
-					if (displayMemoryUsage) log.displayMemoryUsagePostGC();
+					if (displayMemoryUsage) displayMemoryUsagePostGC();
 					
 					// Log that this loop is complete
-					log.vdebug(loopStopOutputMessage);
+					addLogEntry(loopStopOutputMessage, ["debug"]);
+					
 					// performSync complete, set lastCheckTime to current time
 					lastCheckTime = MonoTime.currTime();
 					
@@ -880,7 +963,7 @@ int main(string[] cliArgs) {
 						// developer set option to limit --monitor loops
 						if (monitorLoopFullCount == (appConfig.getValueLong("monitor_max_loop"))) {
 							performMonitor = false;
-							log.log("Exiting after ", monitorLoopFullCount, " loops due to developer set option");
+							addLogEntry("Exiting after " ~ to!string(monitorLoopFullCount) ~ " loops due to developer set option");
 						}
 					}
 				}
@@ -890,7 +973,7 @@ int main(string[] cliArgs) {
 		}
 	} else {
 		// Exit application as the sync engine could not be initialised
-		log.error("Application Sync Engine could not be initialised correctly");
+		addLogEntry("Application Sync Engine could not be initialised correctly");
 		// Use exit scope
 		return EXIT_FAILURE;
 	}
@@ -903,33 +986,35 @@ int main(string[] cliArgs) {
 	}
 }
 
-void performStandardExitProcess(string scopeCaller) {
+void performStandardExitProcess(string scopeCaller = null) {
 	// Who called this function
-	log.vdebug("Running performStandardExitProcess due to: ", scopeCaller);
-	
+	if (!scopeCaller.empty) {
+		addLogEntry("Running performStandardExitProcess due to: " ~ scopeCaller, ["debug"]);
+	}
+		
 	// Shutdown the OneDrive API instance
 	if (oneDriveApiInstance !is null) {
-		log.vdebug("Shutdown OneDrive API instance");
+		addLogEntry("Shutdown OneDrive API instance", ["debug"]);
 		oneDriveApiInstance.shutdown();
 		object.destroy(oneDriveApiInstance);
 	}
 	
 	// Shutdown the sync engine
 	if (syncEngineInstance !is null) {
-		log.vdebug("Shutdown Sync Engine instance");
+		addLogEntry("Shutdown Sync Engine instance", ["debug"]);
 		object.destroy(syncEngineInstance);
 	}
 	
 	// Shutdown the client side filtering objects
 	if (selectiveSync !is null) {
-		log.vdebug("Shutdown Client Side Filtering instance");
+		addLogEntry("Shutdown Client Side Filtering instance", ["debug"]);
 		selectiveSync.shutdown();
 		object.destroy(selectiveSync);
 	}
 	
 	// Shutdown the application configuration objects
 	if (appConfig !is null) {
-		log.vdebug("Shutdown Application Configuration instance");
+		addLogEntry("Shutdown Application Configuration instance", ["debug"]);
 		// Cleanup any existing dry-run elements ... these should never be left hanging around
 		cleanupDryRunDatabaseFiles(appConfig.databaseFilePathDryRun);
 		object.destroy(appConfig);
@@ -937,14 +1022,14 @@ void performStandardExitProcess(string scopeCaller) {
 	
 	// Shutdown any local filesystem monitoring
 	if (filesystemMonitor !is null) {
-		log.vdebug("Shutdown Filesystem Monitoring instance");
+		addLogEntry("Shutdown Filesystem Monitoring instance", ["debug"]);
 		filesystemMonitor.shutdown();
 		object.destroy(filesystemMonitor);
 	}
 	
 	// Shutdown the database
 	if (itemDB !is null) {
-		log.vdebug("Shutdown Database instance");
+		addLogEntry("Shutdown Database instance", ["debug"]);
 		// Make sure the .wal file is incorporated into the main db before we exit
 		if (itemDB.isDatabaseInitialised()) {
 			itemDB.performVacuum();
@@ -955,12 +1040,19 @@ void performStandardExitProcess(string scopeCaller) {
 	// Set all objects to null
 	if (scopeCaller == "failureScope") {
 		// Set these to be null due to failure scope - prevent 'ERROR: Unable to perform a database vacuum: out of memory' when the exit scope is then called
-		log.vdebug("Setting Class Objects to null due to failure scope");
+		addLogEntry("Setting ALL Class Objects to null due to failure scope", ["debug"]);
 		itemDB = null;
 		appConfig = null;
 		oneDriveApiInstance = null;
 		selectiveSync = null;
 		syncEngineInstance = null;
+	} else {
+		addLogEntry("Application exit", ["debug"]);
+		addLogEntry("---------------------------------------------------------------------------------------------------------------------------------------", ["logFileOnly"]);
+		// Sleep to allow any final logging output to be printed - this is needed as we are using buffered logging output
+		Thread.sleep(dur!("msecs")(500));
+		// Destroy the shared logging buffer
+		object.destroy(logBuffer);
 	}
 }
 
@@ -984,7 +1076,7 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 
 	// If we are performing log supression, output this message so the user knows what is happening
 	if (appConfig.surpressLoggingOutput) {
-		log.log("Syncing changes from Microsoft OneDrive ...");
+		addLogEntry("Syncing changes from Microsoft OneDrive ...");
 	}
 	
 	// Zero out these arrays
@@ -1026,7 +1118,6 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 		}
 		
 		
-		
 		// Perform the local database consistency check, picking up locally modified data and uploading this to OneDrive
 		syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 		if (appConfig.getValueBool("monitor")) {
@@ -1052,7 +1143,7 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 			
 			// Perform the final true up scan to ensure we have correctly replicated the current online state locally
 			if (!appConfig.surpressLoggingOutput) {
-				log.log("Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process");
+				addLogEntry("Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process");
 			}
 			// We pass in the 'appConfig.fullScanTrueUpRequired' value which then flags do we use the configured 'deltaLink'
 			// If 'appConfig.fullScanTrueUpRequired' is true, we do not use the 'deltaLink' if we are in --monitor mode, thus forcing a full scan true up
@@ -1073,25 +1164,27 @@ void displaySyncOutcome() {
 	// Sync is either complete or partially complete
 	if (!syncEngineInstance.syncFailures) {
 		// No download or upload issues
-		if (!appConfig.getValueBool("monitor")) writeln(); // Add an additional line break so that this is clear when using --sync
-		log.log("Sync with Microsoft OneDrive is complete");
+		if (!appConfig.getValueBool("monitor")) addLogEntry(); // Add an additional line break so that this is clear when using --sync
+		addLogEntry("Sync with Microsoft OneDrive is complete");
 	} else {
-		log.log("\nSync with Microsoft OneDrive has completed, however there are items that failed to sync.");
+		addLogEntry();
+		addLogEntry("Sync with Microsoft OneDrive has completed, however there are items that failed to sync.");
 		// Due to how the OneDrive API works 'changes' such as add new files online, rename files online, delete files online are only sent once when using the /delta API call.
 		// That we failed to download it, we need to track that, and then issue a --resync to download any of these failed files .. unfortunate, but there is no easy way here
 		if (!syncEngineInstance.fileDownloadFailures.empty) {
-			log.log("To fix any download failures you may need to perform a --resync to ensure this system is correctly synced with your Microsoft OneDrive Account");
+			addLogEntry("To fix any download failures you may need to perform a --resync to ensure this system is correctly synced with your Microsoft OneDrive Account");
 		}
 		if (!syncEngineInstance.fileUploadFailures.empty) {
-			log.log("To fix any upload failures you may need to perform a --resync to ensure this system is correctly synced with your Microsoft OneDrive Account");
+			addLogEntry("To fix any upload failures you may need to perform a --resync to ensure this system is correctly synced with your Microsoft OneDrive Account");
 		}
 		// So that from a logging perspective these messages are clear, add a line break in
-		writeln();
+		addLogEntry();
 	}
 }
 
 void processResyncDatabaseRemoval(string databaseFilePathToRemove) {
-	log.vdebug("Testing if we have exclusive access to local database file");
+	addLogEntry("Testing if we have exclusive access to local database file", ["debug"]);
+	
 	// Are we the only running instance? Test that we can open the database file path
 	itemDB = new ItemDatabase(databaseFilePathToRemove);
 	
@@ -1107,12 +1200,12 @@ void processResyncDatabaseRemoval(string databaseFilePathToRemove) {
 	// destroy access test
 	destroy(itemDB);
 	// delete application sync state
-	log.log("Deleting the saved application sync status ...");
+	addLogEntry("Deleting the saved application sync status ...");
 	if (!appConfig.getValueBool("dry_run")) {
 		safeRemove(databaseFilePathToRemove);
 	} else {
 		// --dry-run scenario ... technically we should not be making any local file changes .......
-		log.log("DRY RUN: Not removing the saved application sync status");
+		addLogEntry("DRY RUN: Not removing the saved application sync status");
 	}
 }
 
@@ -1124,21 +1217,21 @@ void cleanupDryRunDatabaseFiles(string dryRunDatabaseFile) {
 	// If the dry run database exists, clean this up
 	if (exists(dryRunDatabaseFile)) {
 		// remove the existing file
-		log.vdebug("DRY-RUN: Removing items-dryrun.sqlite3 as it still exists for some reason");
+		addLogEntry("DRY-RUN: Removing items-dryrun.sqlite3 as it still exists for some reason", ["debug"]);
 		safeRemove(dryRunDatabaseFile);
 	}
 	
 	// silent cleanup of shm files if it exists
 	if (exists(dryRunShmFile)) {
 		// remove items-dryrun.sqlite3-shm
-		log.vdebug("DRY-RUN: Removing items-dryrun.sqlite3-shm as it still exists for some reason");
+		addLogEntry("DRY-RUN: Removing items-dryrun.sqlite3-shm as it still exists for some reason", ["debug"]);
 		safeRemove(dryRunShmFile);
 	}
 	
 	// silent cleanup of wal files if it exists
 	if (exists(dryRunWalFile)) {
 		// remove items-dryrun.sqlite3-wal
-		log.vdebug("DRY-RUN: Removing items-dryrun.sqlite3-wal as it still exists for some reason");
+		addLogEntry("DRY-RUN: Removing items-dryrun.sqlite3-wal as it still exists for some reason", ["debug"]);
 		safeRemove(dryRunWalFile);
 	}
 }
@@ -1148,7 +1241,7 @@ void checkForNoMountScenario() {
 	if (appConfig.getValueBool("check_nomount")) {
 		// we were asked to check the mount point for the presence of a '.nosync' file
 		if (exists(".nosync")) {
-			log.logAndNotify("ERROR: .nosync file found in directory mount point. Aborting application startup process to safeguard data.");
+			addLogEntry("ERROR: .nosync file found in directory mount point. Aborting application startup process to safeguard data.", ["info", "notify"]);
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -1165,16 +1258,17 @@ auto assumeNoGC(T) (T t) if (isFunctionPointer!T || isDelegate!T) {
 extern(C) nothrow @nogc @system void exitHandler(int value) {
 	try {
 		assumeNoGC ( () {
-			log.log("Got termination signal, performing clean up");
+			addLogEntry("Got termination signal, performing clean up");
 			// Wait for all parallel jobs that depend on the database to complete
 			taskPool.finish(true);
 			// Was itemDb initialised?
 			if (itemDB.isDatabaseInitialised()) {
 				// Make sure the .wal file is incorporated into the main db before we exit
-				log.log("Shutting down DB connection and merging temporary data");
+				addLogEntry("Shutting down DB connection and merging temporary data");
 				itemDB.performVacuum();
 				object.destroy(itemDB);
 			}
+			performStandardExitProcess();
 		})();
 	} catch(Exception e) {}
 	exit(0);

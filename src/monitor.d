@@ -101,7 +101,7 @@ final class Monitor {
 	private void addRecursive(string dirname) {
 		// skip non existing/disappeared items
 		if (!exists(dirname)) {
-			log.vlog("Not adding non-existing/disappeared directory: ", dirname);
+			addLogEntry("Not adding non-existing/disappeared directory: " ~ dirname, ["verbose"]);
 			return;
 		}
 
@@ -113,7 +113,7 @@ final class Monitor {
 			if (isDir(dirname)) {
 				if (selectiveSync.isDirNameExcluded(dirname.strip('.'))) {
 					// dont add a watch for this item
-					log.vdebug("Skipping monitoring due to skip_dir match: ", dirname);
+					addLogEntry("Skipping monitoring due to skip_dir match: " ~ dirname, ["debug"]);
 					return;
 				}
 			}
@@ -123,14 +123,14 @@ final class Monitor {
 				// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
 				if (selectiveSync.isFileNameExcluded(dirname.strip('.'))) {
 					// dont add a watch for this item
-					log.vdebug("Skipping monitoring due to skip_file match: ", dirname);
+					addLogEntry("Skipping monitoring due to skip_file match: " ~ dirname, ["debug"]);
 					return;
 				}
 			}
 			// is the path exluded by sync_list?
 			if (selectiveSync.isPathExcludedViaSyncList(buildNormalizedPath(dirname))) {
 				// dont add a watch for this item
-				log.vdebug("Skipping monitoring due to sync_list match: ", dirname);
+				addLogEntry("Skipping monitoring due to sync_list match: " ~ dirname, ["debug"]);
 				return;
 			}
 		}
@@ -147,15 +147,15 @@ final class Monitor {
 		// Do we need to check for .nosync? Only if check_nosync is true
 		if (check_nosync) {
 			if (exists(buildNormalizedPath(dirname) ~ "/.nosync")) {
-				log.vlog("Skipping watching path - .nosync found & --check-for-nosync enabled: ", buildNormalizedPath(dirname));
+				addLogEntry("Skipping watching path - .nosync found & --check-for-nosync enabled: " ~ buildNormalizedPath(dirname), ["verbose"]);
 				return;
 			}
 		}
 		
 		// passed all potential exclusions
 		// add inotify watch for this path / directory / file
-		log.vdebug("Calling add() for this dirname: ", dirname);
-		add(dirname);
+		addLogEntry("Calling addInotifyWatch() for this dirname: " ~ dirname, ["debug"]);
+		addInotifyWatch(dirname);
 		
 		// if this is a directory, recursivly add this path
 		if (isDir(dirname)) {
@@ -164,7 +164,7 @@ final class Monitor {
 				auto pathList = dirEntries(dirname, SpanMode.shallow, false);
 				foreach(DirEntry entry; pathList) {
 					if (entry.isDir) {
-						log.vdebug("Calling addRecursive() for this directory: ", entry.name);
+						addLogEntry("Calling addRecursive() for this directory: " ~ entry.name, ["debug"]);
 						addRecursive(entry.name);
 					}
 				}
@@ -178,10 +178,10 @@ final class Monitor {
 				// Need to check for: Failed to stat file in error message
 				if (canFind(e.msg, "Failed to stat file")) {
 					// File system access issue
-					log.error("ERROR: The local file system returned an error with the following message:");
-					log.error("  Error Message: ", e.msg);
-					log.error("ACCESS ERROR: Please check your UID and GID access to this file, as the permissions on this file is preventing this application to read it");
-					log.error("\nFATAL: Exiting application to avoid deleting data due to local file system access issues\n");
+					addLogEntry("ERROR: The local file system returned an error with the following message:");
+					addLogEntry("  Error Message: " ~ e.msg);
+					addLogEntry("ACCESS ERROR: Please check your UID and GID access to this file, as the permissions on this file is preventing this application to read it");
+					addLogEntry("\nFATAL: Forcing exiting application to avoid deleting data due to local file system access issues\n");
 					// Must exit here
 					exit(-1);
 				} else {
@@ -194,35 +194,35 @@ final class Monitor {
 	}
 
 	// Add this path to be monitored
-	private void add(string pathname) {
+	private void addInotifyWatch(string pathname) {
 		int wd = inotify_add_watch(fd, toStringz(pathname), mask);
 		if (wd < 0) {
 			if (errno() == ENOSPC) {
 				// Get the current value
 				ulong maxInotifyWatches = to!int(strip(readText("/proc/sys/fs/inotify/max_user_watches")));
-				log.log("The user limit on the total number of inotify watches has been reached.");
-				log.log("Your current limit of inotify watches is: ", maxInotifyWatches);
-				log.log("It is recommended that you change the max number of inotify watches to at least double your existing value.");
-				log.log("To change the current max number of watches to " , (maxInotifyWatches * 2) , " run:");
-				log.log("EXAMPLE: sudo sysctl fs.inotify.max_user_watches=", (maxInotifyWatches * 2));
+				addLogEntry("The user limit on the total number of inotify watches has been reached.");
+				addLogEntry("Your current limit of inotify watches is: " ~ to!string(maxInotifyWatches));
+				addLogEntry("It is recommended that you change the max number of inotify watches to at least double your existing value.");
+				addLogEntry("To change the current max number of watches to " ~ to!string((maxInotifyWatches * 2)) ~ " run:");
+				addLogEntry("EXAMPLE: sudo sysctl fs.inotify.max_user_watches=" ~ to!string((maxInotifyWatches * 2)));
 			}
 			if (errno() == 13) {
 				if ((selectiveSync.getSkipDotfiles()) && (isDotFile(pathname))) {
 					// no misleading output that we could not add a watch due to permission denied
 					return;
 				} else {
-					log.vlog("WARNING: inotify_add_watch failed - permission denied: ", pathname);
+					addLogEntry("WARNING: inotify_add_watch failed - permission denied: " ~ pathname, ["verbose"]);
 					return;
 				}
 			}
 			// Flag any other errors
-			log.error("ERROR: inotify_add_watch failed: ", pathname);
+			addLogEntry("ERROR: inotify_add_watch failed: " ~ pathname);
 			return;
 		}
 		
 		// Add path to inotify watch - required regardless if a '.folder' or 'folder'
 		wdToDirName[wd] = buildNormalizedPath(pathname) ~ "/";
-		log.vdebug("inotify_add_watch successfully added for: ", pathname);
+		addLogEntry("inotify_add_watch successfully added for: " ~ pathname, ["debug"]);
 		
 		// Do we log that we are monitoring this directory?
 		if (isDir(pathname)) {
@@ -233,7 +233,7 @@ final class Monitor {
 				return;
 			}
 			// Log that this is directory is being monitored
-			log.vlog("Monitoring directory: ", pathname);
+			addLogEntry("Monitoring directory: " ~ pathname, ["verbose"]);
 		}
 	}
 
@@ -242,8 +242,8 @@ final class Monitor {
 		assert(wd in wdToDirName);
 		int ret = inotify_rm_watch(fd, wd);
 		if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
-		log.vlog("Monitored directory removed: ", wdToDirName[wd]);
 		wdToDirName.remove(wd);
+		addLogEntry("Monitored directory has been removed: " ~ wdToDirName[wd], ["verbose"]);
 	}
 
 	// Remove the watch descriptors associated to the given path
@@ -254,7 +254,7 @@ final class Monitor {
 				int ret = inotify_rm_watch(fd, wd);
 				if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
 				wdToDirName.remove(wd);
-				log.vlog("Monitored directory removed: ", dirname);
+				addLogEntry("Monitored directory has been removed: " ~ dirname, ["verbose"]);
 			}
 		}
 	}
@@ -263,7 +263,7 @@ final class Monitor {
 	private string getPath(const(inotify_event)* event) {
 		string path = wdToDirName[event.wd];
 		if (event.len > 0) path ~= fromStringz(event.name.ptr);
-		log.vdebug("inotify path event for: ", path);
+		addLogEntry("inotify path event for: " ~ path, ["debug"]);
 		return path;
 	}
 
@@ -289,42 +289,44 @@ final class Monitor {
 				string path;
 				string evalPath;
 				// inotify event debug
-				log.vdebug("inotify event wd: ", event.wd);
-				log.vdebug("inotify event mask: ", event.mask);
-				log.vdebug("inotify event cookie: ", event.cookie);
-				log.vdebug("inotify event len: ", event.len);
-				log.vdebug("inotify event name: ", event.name);
-				if (event.mask & IN_ACCESS) log.vdebug("inotify event flag: IN_ACCESS");
-				if (event.mask & IN_MODIFY) log.vdebug("inotify event flag: IN_MODIFY");
-				if (event.mask & IN_ATTRIB) log.vdebug("inotify event flag: IN_ATTRIB");
-				if (event.mask & IN_CLOSE_WRITE) log.vdebug("inotify event flag: IN_CLOSE_WRITE");
-				if (event.mask & IN_CLOSE_NOWRITE) log.vdebug("inotify event flag: IN_CLOSE_NOWRITE");
-				if (event.mask & IN_MOVED_FROM) log.vdebug("inotify event flag: IN_MOVED_FROM");
-				if (event.mask & IN_MOVED_TO) log.vdebug("inotify event flag: IN_MOVED_TO");
-				if (event.mask & IN_CREATE) log.vdebug("inotify event flag: IN_CREATE");
-				if (event.mask & IN_DELETE) log.vdebug("inotify event flag: IN_DELETE");
-				if (event.mask & IN_DELETE_SELF) log.vdebug("inotify event flag: IN_DELETE_SELF");
-				if (event.mask & IN_MOVE_SELF) log.vdebug("inotify event flag: IN_MOVE_SELF");
-				if (event.mask & IN_UNMOUNT) log.vdebug("inotify event flag: IN_UNMOUNT");
-				if (event.mask & IN_Q_OVERFLOW) log.vdebug("inotify event flag: IN_Q_OVERFLOW");
-				if (event.mask & IN_IGNORED) log.vdebug("inotify event flag: IN_IGNORED");
-				if (event.mask & IN_CLOSE) log.vdebug("inotify event flag: IN_CLOSE");
-				if (event.mask & IN_MOVE) log.vdebug("inotify event flag: IN_MOVE");
-				if (event.mask & IN_ONLYDIR) log.vdebug("inotify event flag: IN_ONLYDIR");
-				if (event.mask & IN_DONT_FOLLOW) log.vdebug("inotify event flag: IN_DONT_FOLLOW");
-				if (event.mask & IN_EXCL_UNLINK) log.vdebug("inotify event flag: IN_EXCL_UNLINK");
-				if (event.mask & IN_MASK_ADD) log.vdebug("inotify event flag: IN_MASK_ADD");
-				if (event.mask & IN_ISDIR) log.vdebug("inotify event flag: IN_ISDIR");
-				if (event.mask & IN_ONESHOT) log.vdebug("inotify event flag: IN_ONESHOT");
-				if (event.mask & IN_ALL_EVENTS) log.vdebug("inotify event flag: IN_ALL_EVENTS");
+				addLogEntry("inotify event wd: " ~ to!string(event.wd), ["debug"]);
+				addLogEntry("inotify event mask: " ~ to!string(event.mask), ["debug"]);
+				addLogEntry("inotify event cookie: " ~ to!string(event.cookie), ["debug"]);
+				addLogEntry("inotify event len: " ~ to!string(event.len), ["debug"]);
+				addLogEntry("inotify event name: " ~ to!string(event.name), ["debug"]);
 				
+				// inotify event handling
+				if (event.mask & IN_ACCESS) addLogEntry("inotify event flag: IN_ACCESS", ["debug"]);
+				if (event.mask & IN_MODIFY) addLogEntry("inotify event flag: IN_MODIFY", ["debug"]);
+				if (event.mask & IN_ATTRIB) addLogEntry("inotify event flag: IN_ATTRIB", ["debug"]);
+				if (event.mask & IN_CLOSE_WRITE) addLogEntry("inotify event flag: IN_CLOSE_WRITE", ["debug"]);
+				if (event.mask & IN_CLOSE_NOWRITE) addLogEntry("inotify event flag: IN_CLOSE_NOWRITE", ["debug"]);
+				if (event.mask & IN_MOVED_FROM) addLogEntry("inotify event flag: IN_MOVED_FROM", ["debug"]);
+				if (event.mask & IN_MOVED_TO) addLogEntry("inotify event flag: IN_MOVED_TO", ["debug"]);
+				if (event.mask & IN_CREATE) addLogEntry("inotify event flag: IN_CREATE", ["debug"]);
+				if (event.mask & IN_DELETE) addLogEntry("inotify event flag: IN_DELETE", ["debug"]);
+				if (event.mask & IN_DELETE_SELF) addLogEntry("inotify event flag: IN_DELETE_SELF", ["debug"]);
+				if (event.mask & IN_MOVE_SELF) addLogEntry("inotify event flag: IN_MOVE_SELF", ["debug"]);
+				if (event.mask & IN_UNMOUNT) addLogEntry("inotify event flag: IN_UNMOUNT", ["debug"]);
+				if (event.mask & IN_Q_OVERFLOW) addLogEntry("inotify event flag: IN_Q_OVERFLOW", ["debug"]);
+				if (event.mask & IN_IGNORED) addLogEntry("inotify event flag: IN_IGNORED", ["debug"]);
+				if (event.mask & IN_CLOSE) addLogEntry("inotify event flag: IN_CLOSE", ["debug"]);
+				if (event.mask & IN_MOVE) addLogEntry("inotify event flag: IN_MOVE", ["debug"]);
+				if (event.mask & IN_ONLYDIR) addLogEntry("inotify event flag: IN_ONLYDIR", ["debug"]);
+				if (event.mask & IN_DONT_FOLLOW) addLogEntry("inotify event flag: IN_DONT_FOLLOW", ["debug"]);
+				if (event.mask & IN_EXCL_UNLINK) addLogEntry("inotify event flag: IN_EXCL_UNLINK", ["debug"]);
+				if (event.mask & IN_MASK_ADD) addLogEntry("inotify event flag: IN_MASK_ADD", ["debug"]);
+				if (event.mask & IN_ISDIR) addLogEntry("inotify event flag: IN_ISDIR", ["debug"]);
+				if (event.mask & IN_ONESHOT) addLogEntry("inotify event flag: IN_ONESHOT", ["debug"]);
+				if (event.mask & IN_ALL_EVENTS) addLogEntry("inotify event flag: IN_ALL_EVENTS", ["debug"]);
+								
 				// skip events that need to be ignored
 				if (event.mask & IN_IGNORED) {
 					// forget the directory associated to the watch descriptor
 					wdToDirName.remove(event.wd);
 					goto skip;
 				} else if (event.mask & IN_Q_OVERFLOW) {
-					throw new MonitorException("Inotify overflow, events missing");
+					throw new MonitorException("inotify overflow, inotify events will be missing");
 				}
 
 				// if the event is not to be ignored, obtain path
@@ -362,10 +364,10 @@ final class Monitor {
 				
 				// handle the inotify events
 				if (event.mask & IN_MOVED_FROM) {
-					log.vdebug("event IN_MOVED_FROM: ", path);
+					addLogEntry("event IN_MOVED_FROM: " ~ path, ["debug"]);
 					cookieToPath[event.cookie] = path;
 				} else if (event.mask & IN_MOVED_TO) {
-					log.vdebug("event IN_MOVED_TO: ", path);
+					addLogEntry("event IN_MOVED_TO: " ~ path, ["debug"]);
 					if (event.mask & IN_ISDIR) addRecursive(path);
 					auto from = event.cookie in cookieToPath;
 					if (from) {
@@ -380,19 +382,19 @@ final class Monitor {
 						}
 					}
 				} else if (event.mask & IN_CREATE) {
-					log.vdebug("event IN_CREATE: ", path);
+					addLogEntry("event IN_CREATE: " ~ path, ["debug"]);
 					if (event.mask & IN_ISDIR) {
 						addRecursive(path);
 						if (useCallbacks) onDirCreated(path);
 					}
 				} else if (event.mask & IN_DELETE) {
-					log.vdebug("event IN_DELETE: ", path);
+					addLogEntry("event IN_DELETE: " ~ path, ["debug"]);
 					if (useCallbacks) onDelete(path);
 				} else if ((event.mask & IN_CLOSE_WRITE) && !(event.mask & IN_ISDIR)) {
-					log.vdebug("event IN_CLOSE_WRITE and ...: ", path);
+					addLogEntry("event IN_CLOSE_WRITE and ...: " ~ path, ["debug"]);
 					if (useCallbacks) onFileChanged(path);
 				} else {
-					log.vdebug("event unhandled: ", path);
+					addLogEntry("event unhandled: " ~ path, ["debug"]);
 					assert(0);
 				}
 
@@ -401,13 +403,13 @@ final class Monitor {
 			}
 			// assume that the items moved outside the watched directory have been deleted
 			foreach (cookie, path; cookieToPath) {
-				log.vdebug("deleting (post loop): ", path);
+				addLogEntry("deleting (post loop): " ~ path, ["debug"]);
 				if (useCallbacks) onDelete(path);
 				remove(path);
 				cookieToPath.remove(cookie);
 			}
 			// Debug Log that all inotify events are flushed
-			log.vdebug("inotify events flushed");
+			addLogEntry("inotify events flushed", ["debug"]);
 		}
 	}
 }

@@ -5,24 +5,26 @@ module curlEngine;
 import std.net.curl;
 import etc.c.curl: CurlOption;
 import std.datetime;
+import std.conv;
+import std.stdio;
 
 // What other modules that we have created do we need to import?
 import log;
 
-import std.stdio;
-
 class CurlEngine {
 	HTTP http;
 	bool keepAlive;
+	ulong dnsTimeout;
 	
 	this() {	
 		http = HTTP();
 	}
 	
-	void initialise(long dnsTimeout, long connectTimeout, long dataTimeout, long operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, long userRateLimit, long protocolVersion, bool keepAlive=false) {
+	void initialise(ulong dnsTimeout, ulong connectTimeout, ulong dataTimeout, ulong operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, ulong userRateLimit, ulong protocolVersion, bool keepAlive=false) {
 		//   Setting this to false ensures that when we close the curl instance, any open sockets are closed - which we need to do when running 
 		//   multiple threads and API instances at the same time otherwise we run out of local files | sockets pretty quickly
 		this.keepAlive = keepAlive;
+		this.dnsTimeout = dnsTimeout;
 
 		// Curl Timeout Handling
 		
@@ -84,13 +86,13 @@ class CurlEngine {
 		
 		if (httpsDebug) {
 			// Output what options we are using so that in the debug log this can be tracked
-			log.vdebug("http.dnsTimeout = ", dnsTimeout);
-			log.vdebug("http.connectTimeout = ", connectTimeout);
-			log.vdebug("http.dataTimeout = ", dataTimeout);
-			log.vdebug("http.operationTimeout = ", operationTimeout);
-			log.vdebug("http.maxRedirects = ", maxRedirects);
-			log.vdebug("http.CurlOption.ipresolve = ", protocolVersion);
-			log.vdebug("http.header.Connection.keepAlive = ", keepAlive);
+			addLogEntry("http.dnsTimeout = " ~ to!string(dnsTimeout), ["debug"]);
+			addLogEntry("http.connectTimeout = " ~ to!string(connectTimeout), ["debug"]);
+			addLogEntry("http.dataTimeout = " ~ to!string(dataTimeout), ["debug"]);
+			addLogEntry("http.operationTimeout = " ~ to!string(operationTimeout), ["debug"]);
+			addLogEntry("http.maxRedirects = " ~ to!string(maxRedirects), ["debug"]);
+			addLogEntry("http.CurlOption.ipresolve = " ~ to!string(protocolVersion), ["debug"]);
+			addLogEntry("http.header.Connection.keepAlive = " ~ to!string(keepAlive), ["debug"]);
 		}
 	}
 
@@ -102,7 +104,7 @@ class CurlEngine {
 	}
 	
 	void setDisableSSLVerifyPeer() {
-		log.vdebug("Switching off CurlOption.ssl_verifypeer");
+		addLogEntry("CAUTION: Switching off CurlOption.ssl_verifypeer ... this makes the application insecure.", ["debug"]);
 		http.handle.set(CurlOption.ssl_verifypeer, 0);
 	}
 }
