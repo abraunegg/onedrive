@@ -2318,7 +2318,6 @@ void outputLongHelp(Option[] opt) {
 			"--monitor-interval",
 			"--monitor-log-frequency",
 			"--monitor-fullscan-frequency",
-			"--operation-timeout",
 			"--remove-directory",
 			"--single-directory",
 			"--skip-dir",
