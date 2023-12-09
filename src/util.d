@@ -275,36 +275,50 @@ bool isValidName(string path) {
 	// Restriction and limitations about windows naming files
 	// https://msdn.microsoft.com/en-us/library/aa365247
 	// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
-	
+
 	// allow root item
 	if (path == ".") {
 		return true;
 	}
 
-	bool matched = true;
 	string itemName = baseName(path);
 
+	// Check for explicitly disallowed names
+	// https://support.microsoft.com/en-us/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa?ui=en-us&rs=en-us&ad=us#invalidfilefoldernames
+	string[] disallowedNames = [
+		".lock", "desktop.ini", "CON", "PRN", "AUX", "NUL",
+		"COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+		"LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9", "_vti_"
+	];
+
+	if (canFind(disallowedNames, itemName) || itemName.startsWith("~$")) {
+		return false;
+	}
+
+	// Regular expression for invalid patterns
 	auto invalidNameReg =
 		ctRegex!(
+			// https://support.microsoft.com/en-us/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa?ui=en-us&rs=en-us&ad=us#invalidcharacters
 			// Leading whitespace and trailing whitespace/dot
 			`^\s.*|^.*[\s\.]$|` ~
-			// Invalid characters
-			`.*[<>:"\|\?*/\\].*|` ~
-			// Reserved device name and trailing .~
-			`(?:^CON|^PRN|^AUX|^NUL|^COM[0-9]|^LPT[0-9])(?:[.].+)?$`
+			// Invalid characters - 
+			`.*[<>:"\|\?*/\\].*`
 		);
+
 	auto m = match(itemName, invalidNameReg);
-	matched = m.empty;
-	
-	// Additional explicit validation checks
-	if (itemName == ".lock") {matched = false;}
-	if (itemName == "desktop.ini") {matched = false;}
-	// _vti_ cannot appear anywhere in a file or folder name
-	if(canFind(itemName, "_vti_")){matched = false;}
-	// Item name cannot equal '~'
-	if (itemName == "~") {matched = false;}
-	
-	// return response
+	bool matched = m.empty;
+
+	// Check if "_vti_" appears anywhere in a file name
+	if (canFind(itemName, "_vti_")) {
+		matched = false;
+	}
+
+	// Determine if the path is at the root level
+	auto segments = pathSplitter(path).array;
+	if (segments.length <= 2 && itemName.toLower() == "forms") { // Convert to lower as OneDrive is not POSIX compliant
+		matched = false;
+	}
+
 	return matched;
 }
 
