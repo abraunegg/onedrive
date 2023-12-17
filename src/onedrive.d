@@ -1531,7 +1531,7 @@ class OneDriveApi {
 				SysTime currentTime;
 				
 				// Connectivity to Microsoft OneDrive was lost
-				addLogEntry("Internet connectivity to Microsoft OneDrive service has been lost");
+				addLogEntry("Internet connectivity to Microsoft OneDrive service has been lost .. re-trying in the background");
 				
 				// what caused the initial curl exception?
 				if (canFind(errorMessage, "Couldn't connect to server on handle")) addLogEntry("Unable to connect to server - HTTPS access blocked?", ["debug"]);

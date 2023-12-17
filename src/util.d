@@ -313,9 +313,9 @@ bool isValidName(string path) {
 		matched = false;
 	}
 
-	// Determine if the path is at the root level
+	// Determine if the path is at the root level, if yes, check that 'forms' is not the first folder
 	auto segments = pathSplitter(path).array;
-	if (segments.length <= 2 && itemName.toLower() == "forms") { // Convert to lower as OneDrive is not POSIX compliant
+	if (segments.length <= 2 && itemName.toLower() == "forms") { // Convert to lower as OneDrive is not POSIX compliant, easier to compare
 		matched = false;
 	}
 

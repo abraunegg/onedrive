@@ -836,7 +836,7 @@ class ApplicationConfig {
 							string tempApplicationId = strip(c.front.dup);
 							if (tempApplicationId.empty) {
 								addLogEntry("Invalid value for key in config file: " ~ key);
-								addLogEntry("drive_id in config file cannot be empty - this is a fatal error and must be corrected", ["debug"]);
+								addLogEntry("drive_id in config file cannot be empty - this is a fatal error and must be corrected by removing this entry from your config file", ["debug"]);
 								exit(EXIT_FAILURE);
 							} else {
 								setValueString("drive_id", tempApplicationId);

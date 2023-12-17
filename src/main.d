@@ -1048,7 +1048,7 @@ void performStandardExitProcess(string scopeCaller = null) {
 		syncEngineInstance = null;
 	} else {
 		addLogEntry("Application exit", ["debug"]);
-		addLogEntry("---------------------------------------------------------------------------------------------------------------------------------------", ["logFileOnly"]);
+		addLogEntry("#######################################################################################################################################", ["logFileOnly"]);
 		// Sleep to allow any final logging output to be printed - this is needed as we are using buffered logging output
 		Thread.sleep(dur!("msecs")(500));
 		// Destroy the shared logging buffer

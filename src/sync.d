@@ -178,25 +178,25 @@ class SyncEngine {
 		
 		// Configure the uploadOnly flag to capture if --upload-only was used
 		if (appConfig.getValueBool("upload_only")) {
-			log.vdebug("Configuring uploadOnly flag to TRUE as --upload-only passed in or configured");
+			addLogEntry("Configuring uploadOnly flag to TRUE as --upload-only passed in or configured", ["debug"]);
 			this.uploadOnly = true;
 		}
 		
 		// Configure the localDeleteAfterUpload flag
 		if (appConfig.getValueBool("remove_source_files")) {
-			log.vdebug("Configuring localDeleteAfterUpload flag to TRUE as --remove-source-files passed in or configured");
+			addLogEntry("Configuring localDeleteAfterUpload flag to TRUE as --remove-source-files passed in or configured", ["debug"]);
 			this.localDeleteAfterUpload = true;
 		}
 		
 		// Configure the disableDownloadValidation flag
 		if (appConfig.getValueBool("disable_download_validation")) {
-			log.vdebug("Configuring disableDownloadValidation flag to TRUE as --disable-download-validation passed in or configured");
+			addLogEntry("Configuring disableDownloadValidation flag to TRUE as --disable-download-validation passed in or configured", ["debug"]);
 			this.disableDownloadValidation = true;
 		}
 		
 		// Configure the disableUploadValidation flag
 		if (appConfig.getValueBool("disable_upload_validation")) {
-			log.vdebug("Configuring disableUploadValidation flag to TRUE as --disable-upload-validation passed in or configured");
+			addLogEntry("Configuring disableUploadValidation flag to TRUE as --disable-upload-validation passed in or configured", ["debug"]);
 			this.disableUploadValidation = true;
 		}
 		
@@ -250,7 +250,7 @@ class SyncEngine {
 			addLogEntry("Downgrading all HTTP operations to HTTP/1.1 due to user configuration", ["verbose"]);
 		} else {
 			// Use curl defaults
-			log.vdebug("Using Curl defaults for HTTP operational protocol version (potentially HTTP/2)");
+			addLogEntry("Using Curl defaults for HTTP operational protocol version (potentially HTTP/2)", ["debug"]);
 		}
 	}
 	
@@ -326,11 +326,10 @@ class SyncEngine {
 		
 		// Get Default Drive Details for this Account
 		try {
-			log.vdebug("Getting Account Default Drive Details");
+			addLogEntry("Getting Account Default Drive Details", ["debug"]);
 			defaultOneDriveDriveDetails = oneDriveApiInstance.getDefaultDriveDetails();
 		} catch (OneDriveException exception) {
-			log.vdebug("defaultOneDriveDriveDetails = oneDriveApiInstance.getDefaultDriveDetails() generated a OneDriveException");
-			
+			addLogEntry("defaultOneDriveDriveDetails = oneDriveApiInstance.getDefaultDriveDetails() generated a OneDriveException", ["debug"]);
 			string thisFunctionName = getFunctionName!({});
 			
 			if ((exception.httpStatusCode == 400) || (exception.httpStatusCode == 401)) {
@@ -344,7 +343,7 @@ class SyncEngine {
 				if (exception.httpStatusCode == 429) {
 					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 					handleOneDriveThrottleRequest(oneDriveApiInstance);
-					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+					addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 				}
 				// re-try the specific changes queries
 				if ((exception.httpStatusCode == 408) ||(exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -354,13 +353,13 @@ class SyncEngine {
 					// Transient error - try again in 30 seconds
 					auto errorArray = splitLines(exception.msg);
 					addLogEntry(to!string(errorArray[0]) ~ " when attempting to query Account Default Drive Details - retrying applicable request in 30 seconds");
-					log.vdebug("defaultOneDriveDriveDetails = oneDriveApiInstance.getDefaultDriveDetails() previously threw an error - retrying");
+					addLogEntry("defaultOneDriveDriveDetails = oneDriveApiInstance.getDefaultDriveDetails() previously threw an error - retrying", ["debug"]);
 					// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-					log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+					addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 					Thread.sleep(dur!"seconds"(30));
 				}
 				// re-try original request - retried for 429 and 504 - but loop back calling this function 
-				log.vdebug("Retrying Function: getDefaultDriveDetails()");
+				addLogEntry("Retrying Function: getDefaultDriveDetails()", ["debug"]);
 				getDefaultDriveDetails();
 			} else {
 				// Default operation if not 408,429,503,504 errors
@@ -371,7 +370,7 @@ class SyncEngine {
 		
 		// If the JSON response is a correct JSON object, and has an 'id' we can set these details
 		if ((defaultOneDriveDriveDetails.type() == JSONType.object) && (hasId(defaultOneDriveDriveDetails))) {
-			log.vdebug("OneDrive Account Default Drive Details:      ", defaultOneDriveDriveDetails);
+			addLogEntry("OneDrive Account Default Drive Details:      " ~ to!string(defaultOneDriveDriveDetails), ["debug"]);
 			appConfig.accountType = defaultOneDriveDriveDetails["driveType"].str;
 			appConfig.defaultDriveId = defaultOneDriveDriveDetails["id"].str;
 			
@@ -410,11 +409,11 @@ class SyncEngine {
 				}
 			}
 			// What did we set based on the data from the JSON
-			log.vdebug("appConfig.accountType        = ", appConfig.accountType);
-			log.vdebug("appConfig.defaultDriveId     = ", appConfig.defaultDriveId);
-			log.vdebug("appConfig.remainingFreeSpace = ", appConfig.remainingFreeSpace);
-			log.vdebug("appConfig.quotaAvailable     = ", appConfig.quotaAvailable);
-			log.vdebug("appConfig.quotaRestricted    = ", appConfig.quotaRestricted);
+			addLogEntry("appConfig.accountType        = " ~ appConfig.accountType, ["debug"]);
+			addLogEntry("appConfig.defaultDriveId     = " ~ appConfig.defaultDriveId, ["debug"]);
+			addLogEntry("appConfig.remainingFreeSpace = " ~ to!string(appConfig.remainingFreeSpace), ["debug"]);
+			addLogEntry("appConfig.quotaAvailable     = " ~ appConfig.quotaAvailable, ["debug"]);
+			addLogEntry("appConfig.quotaRestricted    = " ~ appConfig.quotaRestricted, ["debug"]);
 			
 			// Make sure that appConfig.defaultDriveId is in our driveIDs array to use when checking if item is in database
 			// Keep the driveIDsArray with unique entries only
@@ -436,11 +435,10 @@ class SyncEngine {
 		
 		// Get Default Root Details for this Account
 		try {
-			log.vdebug("Getting Account Default Root Details");
+			addLogEntry("Getting Account Default Root Details", ["debug"]);
 			defaultOneDriveRootDetails = oneDriveApiInstance.getDefaultRootDetails();
 		} catch (OneDriveException exception) {
-			log.vdebug("defaultOneDriveRootDetails = oneDriveApiInstance.getDefaultRootDetails() generated a OneDriveException");
-
+			addLogEntry("defaultOneDriveRootDetails = oneDriveApiInstance.getDefaultRootDetails() generated a OneDriveException", ["debug"]);
 			string thisFunctionName = getFunctionName!({});
 
 			if ((exception.httpStatusCode == 400) || (exception.httpStatusCode == 401)) {
@@ -454,7 +452,7 @@ class SyncEngine {
 				if (exception.httpStatusCode == 429) {
 					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 					handleOneDriveThrottleRequest(oneDriveApiInstance);
-					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+					addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 				}
 				// re-try the specific changes queries
 				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -463,13 +461,14 @@ class SyncEngine {
 					// Transient error - try again in 30 seconds
 					auto errorArray = splitLines(exception.msg);
 					addLogEntry(to!string(errorArray[0]) ~ " when attempting to query Account Default Root Details - retrying applicable request in 30 seconds");
-					log.vdebug("defaultOneDriveRootDetails = oneDriveApiInstance.getDefaultRootDetails() previously threw an error - retrying");
+					addLogEntry("defaultOneDriveRootDetails = oneDriveApiInstance.getDefaultRootDetails() previously threw an error - retrying", ["debug"]);
+					
 					// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-					log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+					addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 					Thread.sleep(dur!"seconds"(30));
 				}
 				// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-				log.vdebug("Retrying Function: getDefaultRootDetails()");
+				addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
 				getDefaultRootDetails();
 			} else {
 				// Default operation if not 408,429,503,504 errors
@@ -480,9 +479,10 @@ class SyncEngine {
 		
 		// If the JSON response is a correct JSON object, and has an 'id' we can set these details
 		if ((defaultOneDriveRootDetails.type() == JSONType.object) && (hasId(defaultOneDriveRootDetails))) {
-			log.vdebug("OneDrive Account Default Root Details:       ", defaultOneDriveRootDetails);
+			addLogEntry("OneDrive Account Default Root Details:       " ~ to!string(defaultOneDriveRootDetails), ["debug"]);
 			appConfig.defaultRootId = defaultOneDriveRootDetails["id"].str;
-			log.vdebug("appConfig.defaultRootId      = ", appConfig.defaultRootId);
+			addLogEntry("appConfig.defaultRootId      = " ~ appConfig.defaultRootId, ["debug"]);
+			
 			// Save the item to the database, so the account root drive is is always going to be present in the DB
 			saveItem(defaultOneDriveRootDetails);
 		} else {
@@ -514,7 +514,8 @@ class SyncEngine {
 	void syncOneDriveAccountToLocalDisk() {
 	
 		// performFullScanTrueUp value
-		log.vdebug("Perform a Full Scan True-Up: ", appConfig.fullScanTrueUpRequired);
+		addLogEntry("Perform a Full Scan True-Up: " ~ appConfig.fullScanTrueUpRequired, ["debug"]);
+		
 		// Fetch the API response of /delta to track changes on OneDrive
 		fetchOneDriveDeltaAPIResponse(null, null, null);
 		// Process any download activities or cleanup actions
@@ -580,9 +581,10 @@ class SyncEngine {
 							addLogEntry("Syncing this OneDrive Business Shared Folder: " ~ remoteItem.name);
 						}
 						
-						log.vdebug("Fetching /delta API response for:");
-						log.vdebug("    remoteItem.remoteDriveId: ", remoteItem.remoteDriveId);
-						log.vdebug("    remoteItem.remoteId:      ", remoteItem.remoteId);
+						// Debug log output
+						addLogEntry("Fetching /delta API response for:", ["debug"]);
+						addLogEntry("    remoteItem.remoteDriveId: " ~ remoteItem.remoteDriveId, ["debug"]);
+						addLogEntry("    remoteItem.remoteId:      " ~ remoteItem.remoteId, ["debug"]);
 						
 						// Check this OneDrive Personal Shared Folder for changes
 						fetchOneDriveDeltaAPIResponse(remoteItem.remoteDriveId, remoteItem.remoteId, remoteItem.name);
@@ -627,7 +629,7 @@ class SyncEngine {
 		if (onlinePathData.type() == JSONType.object) {
 			// Valid JSON item was returned
 			searchItem = makeItem(onlinePathData);
-			log.vdebug("searchItem: ", searchItem);
+			addLogEntry("searchItem: " ~ to!string(searchItem), ["debug"]);
 			
 			// Is this item a potential Shared Folder?
 			// Is this JSON a remote object
@@ -666,18 +668,18 @@ class SyncEngine {
 		//if (driveIdToQuery == "") {
 		if (strip(driveIdToQuery).empty) {
 			// No provided driveId to query, use the account default
-			log.vdebug("driveIdToQuery was empty, setting to appConfig.defaultDriveId");
+			addLogEntry("driveIdToQuery was empty, setting to appConfig.defaultDriveId", ["debug"]);
 			driveIdToQuery = appConfig.defaultDriveId;
-			log.vdebug("driveIdToQuery: ", driveIdToQuery);
+			addLogEntry("driveIdToQuery: " ~ driveIdToQuery, ["debug"]);
 		}
 		
 		// Was an itemId provided as an input
 		//if (itemIdToQuery == "") {
 		if (strip(itemIdToQuery).empty) {
 			// No provided itemId to query, use the account default
-			log.vdebug("itemIdToQuery was empty, setting to appConfig.defaultRootId");
+			addLogEntry("itemIdToQuery was empty, setting to appConfig.defaultRootId", ["debug"]);
 			itemIdToQuery = appConfig.defaultRootId;
-			log.vdebug("itemIdToQuery: ", itemIdToQuery);
+			addLogEntry("itemIdToQuery: " ~ itemIdToQuery, ["debug"]);
 		}
 		
 		// What OneDrive API query do we use?
@@ -702,14 +704,14 @@ class SyncEngine {
 			// Get the current delta link from the database for this DriveID and RootID
 			deltaLinkAvailable = itemDB.getDeltaLink(driveIdToQuery, itemIdToQuery);
 			if (!deltaLinkAvailable.empty) {
-				log.vdebug("Using database stored deltaLink");
+				addLogEntry("Using database stored deltaLink", ["debug"]);
 				currentDeltaLink = deltaLinkAvailable;
 			}
 			
 			// Do we need to perform a Full Scan True Up? Is 'appConfig.fullScanTrueUpRequired' set to 'true'?
 			if (appConfig.fullScanTrueUpRequired) {
 				addLogEntry("Performing a full scan of online data to ensure consistent local state");
-				log.vdebug("Setting currentDeltaLink = null");
+				addLogEntry("Setting currentDeltaLink = null", ["debug"]);
 				currentDeltaLink = null;
 			}
 			
@@ -742,7 +744,7 @@ class SyncEngine {
 				if (deltaChanges.type() != JSONType.object) {
 					while (deltaChanges.type() != JSONType.object) {
 						// Handle the invalid JSON response adn retry
-						log.vdebug("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response");
+						addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response", ["debug"]);
 						deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink, getDeltaQueryOneDriveApiInstance);
 					}
 				}
@@ -773,7 +775,7 @@ class SyncEngine {
 				// The response may contain either @odata.deltaLink or @odata.nextLink
 				if ("@odata.deltaLink" in deltaChanges) {
 					// Log action
-					log.vdebug("Setting next currentDeltaLink to (@odata.deltaLink): ", deltaChanges["@odata.deltaLink"].str);
+					addLogEntry("Setting next currentDeltaLink to (@odata.deltaLink): " ~ deltaChanges["@odata.deltaLink"].str, ["debug"]);
 					// Update currentDeltaLink
 					currentDeltaLink = deltaChanges["@odata.deltaLink"].str;
 					// Store this for later use post processing jsonItemsToProcess items
@@ -783,7 +785,7 @@ class SyncEngine {
 				// Update deltaLink to next changeSet bundle
 				if ("@odata.nextLink" in deltaChanges) {	
 					// Log action
-					log.vdebug("Setting next currentDeltaLink & deltaLinkAvailable to (@odata.nextLink): ", deltaChanges["@odata.nextLink"].str);
+					addLogEntry("Setting next currentDeltaLink & deltaLinkAvailable to (@odata.nextLink): " ~ deltaChanges["@odata.nextLink"].str, ["debug"]);
 					// Update currentDeltaLink
 					currentDeltaLink = deltaChanges["@odata.nextLink"].str;
 					// Update deltaLinkAvailable to next changeSet bundle to quantify how many changes we have to process
@@ -795,7 +797,7 @@ class SyncEngine {
 			}
 			
 			// To finish off the JSON processing items, this is needed to reflect this in the log
-			log.vdebug("------------------------------------------------------------------");
+			addLogEntry("------------------------------------------------------------------", ["debug"]);
 			
 			// Shutdown the API
 			getDeltaQueryOneDriveApiInstance.shutdown();
@@ -814,15 +816,15 @@ class SyncEngine {
 			
 			// If this was set, now unset it, as this will have been completed, so that for a true up, we dont do a double full scan
 			if (appConfig.fullScanTrueUpRequired) {
-				log.vdebug("Unsetting fullScanTrueUpRequired as this has been performed");
+				addLogEntry("Unsetting fullScanTrueUpRequired as this has been performed", ["debug"]);
 				appConfig.fullScanTrueUpRequired = false;
 			}
 		} else {
 			// Why are are generating a /delta response
-			log.vdebug("Why are we generating a /delta response:");
-			log.vdebug(" singleDirectoryScope:    ", singleDirectoryScope);
-			log.vdebug(" nationalCloudDeployment: ", nationalCloudDeployment);
-			log.vdebug(" cleanupLocalFiles:       ", cleanupLocalFiles);
+			addLogEntry("Why are we generating a /delta response:", ["debug"]);
+			addLogEntry(" singleDirectoryScope:    " ~ to!string(singleDirectoryScope), ["debug"]);
+			addLogEntry(" nationalCloudDeployment: " ~ to!string(nationalCloudDeployment), ["debug"]);
+			addLogEntry(" cleanupLocalFiles:       " ~ to!string(cleanupLocalFiles), ["debug"]);
 			
 			// What 'path' are we going to start generating the response for
 			string pathToQuery;
@@ -851,7 +853,7 @@ class SyncEngine {
 			
 			ulong nrChanges = count(deltaChanges["value"].array);
 			int changeCount = 0;
-			log.vdebug("API Response Bundle: ", responseBundleCount, " - Quantity of 'changes|items' in this bundle to process: ", nrChanges);
+			addLogEntry("API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["debug"]);
 			jsonItemsReceived = jsonItemsReceived + nrChanges;
 			
 			// The API response however cannot be run in parallel as the OneDrive API sends the JSON items in the order in which they must be processed
@@ -863,7 +865,7 @@ class SyncEngine {
 			}
 			
 			// To finish off the JSON processing items, this is needed to reflect this in the log
-			log.vdebug("------------------------------------------------------------------");
+			addLogEntry("------------------------------------------------------------------", ["debug"]);
 			
 			// Log that we have finished generating our self generated /delta response
 			if (!appConfig.surpressLoggingOutput) {
@@ -875,12 +877,12 @@ class SyncEngine {
 		object.destroy(deltaChanges);
 		
 		// We have JSON items received from the OneDrive API
-		log.vdebug("Number of JSON Objects received from OneDrive API:                 ", jsonItemsReceived);
-		log.vdebug("Number of JSON Objects already processed (root and deleted items): ", (jsonItemsReceived - jsonItemsToProcess.length));
+		addLogEntry("Number of JSON Objects received from OneDrive API:                 " ~ to!string(jsonItemsReceived), ["debug"]);
+		addLogEntry("Number of JSON Objects already processed (root and deleted items): " ~ to!string((jsonItemsReceived - jsonItemsToProcess.length)), ["debug"]);
 		
 		// We should have now at least processed all the JSON items as returned by the /delta call
 		// Additionally, we should have a new array, that now contains all the JSON items we need to process that are non 'root' or deleted items
-		log.vdebug("Number of JSON items to process is: ", jsonItemsToProcess.length);
+		addLogEntry("Number of JSON items to process is: " ~ to!string(jsonItemsToProcess.length), ["debug"]);
 		
 		// Are there items to process?
 		if (jsonItemsToProcess.length > 0) {
@@ -921,7 +923,7 @@ class SyncEngine {
 				processJSONItemsInBatch(batchOfJSONItems, batchesProcessed, batchCount);
 				
 				// To finish off the JSON processing items, this is needed to reflect this in the log
-				log.vdebug("------------------------------------------------------------------");
+				addLogEntry("------------------------------------------------------------------", ["debug"]);
 			}
 			
 			if (appConfig.verbosityCount == 0) {
@@ -935,8 +937,8 @@ class SyncEngine {
 			jsonItemsToProcess = [];
 			
 			// Debug output - what was processed
-			log.vdebug("Number of JSON items to process is: ", jsonItemsToProcess.length);
-			log.vdebug("Number of JSON items processed was: ", processedCount);	
+			addLogEntry("Number of JSON items to process is: " ~ to!string(jsonItemsToProcess.length), ["debug"]);
+			addLogEntry("Number of JSON items processed was: " ~ to!string(processedCount), ["debug"]);
 		} else {
 			if (!appConfig.surpressLoggingOutput) {
 				addLogEntry("No additional changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive");
@@ -945,7 +947,7 @@ class SyncEngine {
 		
 		// Update the deltaLink in the database so that we can reuse this now that jsonItemsToProcess has been processed
 		if (!latestDeltaLink.empty) {
-			log.vdebug("Updating completed deltaLink in DB to: ", latestDeltaLink);
+			addLogEntry("Updating completed deltaLink in DB to: " ~ latestDeltaLink, ["debug"]);
 			itemDB.setDeltaLink(driveIdToQuery, itemIdToQuery, latestDeltaLink);
 		}
 		
@@ -970,9 +972,10 @@ class SyncEngine {
 		bool itemNameExplicitMatchRoot = false;
 		string objectParentDriveId;
 		
-		log.vdebug("------------------------------------------------------------------");
-		log.vdebug("Processing OneDrive Item ", changeCount, " of ", nrChanges, " from API Response Bundle ", responseBundleCount);
-		log.vdebug("Raw JSON OneDrive Item: ", onedriveJSONItem);
+		addLogEntry("------------------------------------------------------------------", ["debug"]);
+		addLogEntry("Processing OneDrive Item " ~ to!string(changeCount) ~ " of " ~ to!string(nrChanges) ~ " from API Response Bundle " ~ to!string(responseBundleCount), ["debug"]);
+		addLogEntry("Raw JSON OneDrive Item: " ~ to!string(onedriveJSONItem), ["debug"]);
+		
 		// What is this item's id
 		thisItemId = onedriveJSONItem["id"].str;
 		// Is this a deleted item - only calculate this once
@@ -980,7 +983,8 @@ class SyncEngine {
 		
 		if(!itemIsDeletedOnline){
 			// This is not a deleted item
-			log.vdebug("This item is not a OneDrive deletion change");
+			addLogEntry("This item is not a OneDrive deletion change", ["debug"]);
+			
 			// Only calculate this once
 			itemIsRoot = isItemRoot(onedriveJSONItem);
 			itemHasParentReferenceId = hasParentReferenceId(onedriveJSONItem);
@@ -988,22 +992,18 @@ class SyncEngine {
 			itemNameExplicitMatchRoot = (onedriveJSONItem["name"].str == "root");
 			objectParentDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
 			
-			// Shared Folder Items
-			// !hasParentReferenceId(id)
-			// !hasParentReferenceId(path)
-			
 			// Test is this is the OneDrive Users Root?
 			// Debug output of change evaluation items
-			log.vdebug("defaultRootId                                        = ", appConfig.defaultRootId);
-			log.vdebug("'search id'                                          = ", thisItemId);
-			log.vdebug("id == defaultRootId                                  = ", itemIdMatchesDefaultRootId);
-			log.vdebug("isItemRoot(onedriveJSONItem)                         = ", itemIsRoot);
-			log.vdebug("onedriveJSONItem['name'].str == 'root'               = ", itemNameExplicitMatchRoot);
-			log.vdebug("itemHasParentReferenceId                             = ", itemHasParentReferenceId);
+			addLogEntry("defaultRootId                                        = " ~ appConfig.defaultRootId, ["debug"]);
+			addLogEntry("'search id'                                          = " ~ thisItemId, ["debug"]);
+			addLogEntry("id == defaultRootId                                  = " ~ to!string(itemIdMatchesDefaultRootId), ["debug"]);
+			addLogEntry("isItemRoot(onedriveJSONItem)                         = " ~ to!string(itemIsRoot), ["debug"]);
+			addLogEntry("onedriveJSONItem['name'].str == 'root'               = " ~ to!string(itemNameExplicitMatchRoot), ["debug"]);
+			addLogEntry("itemHasParentReferenceId                             = " ~ to!string(itemHasParentReferenceId), ["debug"]);
 			
 			if ( (itemIdMatchesDefaultRootId || singleDirectoryScope) && itemIsRoot && itemNameExplicitMatchRoot) {
 				// This IS a OneDrive Root item or should be classified as such in the case of 'singleDirectoryScope'
-				log.vdebug("JSON item will flagged as a 'root' item");
+				addLogEntry("JSON item will flagged as a 'root' item", ["debug"]);
 				handleItemAsRootObject = true;
 			}
 		}
@@ -1012,18 +1012,19 @@ class SyncEngine {
 		// Is this a confirmed 'root' item, has no Parent ID, or is a Deleted Item
 		if (handleItemAsRootObject || !itemHasParentReferenceId || itemIsDeletedOnline){
 			// Is a root item, has no id in parentReference or is a OneDrive deleted item
-			log.vdebug("objectParentDriveId                                  = ", objectParentDriveId);
-			log.vdebug("handleItemAsRootObject                               = ", handleItemAsRootObject);
-			log.vdebug("itemHasParentReferenceId                             = ", itemHasParentReferenceId);
-			log.vdebug("itemIsDeletedOnline                                  = ", itemIsDeletedOnline);
-			log.vdebug("Handling change immediately as 'root item', or has no parent reference id or is a deleted item");
+			addLogEntry("objectParentDriveId                                  = " ~ objectParentDriveId, ["debug"]);
+			addLogEntry("handleItemAsRootObject                               = " ~ to!string(handleItemAsRootObject), ["debug"]);
+			addLogEntry("itemHasParentReferenceId                             = " ~ to!string(itemHasParentReferenceId), ["debug"]);
+			addLogEntry("itemIsDeletedOnline                                  = " ~ to!string(itemIsDeletedOnline), ["debug"]);
+			addLogEntry("Handling change immediately as 'root item', or has no parent reference id or is a deleted item", ["debug"]);
+			
 			// OK ... do something with this JSON post here ....
 			processRootAndDeletedJSONItems(onedriveJSONItem, objectParentDriveId, handleItemAsRootObject, itemIsDeletedOnline, itemHasParentReferenceId);
 		} else {
 			// Do we need to update this RAW JSON from OneDrive?
 			if ( (objectParentDriveId != appConfig.defaultDriveId) && (appConfig.accountType == "business") && (appConfig.getValueBool("sync_business_shared_items")) ) {
 				// Potentially need to update this JSON data
-				log.vdebug("Potentially need to update this source JSON .... need to check the database");
+				addLogEntry("Potentially need to update this source JSON .... need to check the database", ["debug"]);
 				
 				// Check the DB for 'remote' objects, searching 'remoteDriveId' and 'remoteId' items for this remoteItem.driveId and remoteItem.id
 				Item remoteDBItem;
@@ -1032,18 +1033,18 @@ class SyncEngine {
 				// Is the data that was returned from the database what we are looking for?
 				if ((remoteDBItem.remoteDriveId == objectParentDriveId) && (remoteDBItem.remoteId == thisItemId)) {
 					// Yes, this is the record we are looking for
-					log.vdebug("DB Item response for remoteDBItem: ", remoteDBItem);
+					addLogEntry("DB Item response for remoteDBItem: " ~ to!string(remoteDBItem), ["debug"]);
 				
 					// Must compare remoteDBItem.name with remoteItem.name
 					if (remoteDBItem.name != onedriveJSONItem["name"].str) {
 						// Update JSON Item
 						string actualOnlineName = onedriveJSONItem["name"].str;
-						log.vdebug("Updating source JSON 'name' to that which is the actual local directory");
-						log.vdebug("onedriveJSONItem['name'] was:         ", onedriveJSONItem["name"].str);
-						log.vdebug("Updating onedriveJSONItem['name'] to: ", remoteDBItem.name);
+						addLogEntry("Updating source JSON 'name' to that which is the actual local directory", ["debug"]);
+						addLogEntry("onedriveJSONItem['name'] was:         " ~ onedriveJSONItem["name"].str, ["debug"]);
+						addLogEntry("Updating onedriveJSONItem['name'] to: " ~ remoteDBItem.name, ["debug"]);
 						onedriveJSONItem["name"] = remoteDBItem.name;
-						log.vdebug("onedriveJSONItem['name'] now:         ", onedriveJSONItem["name"].str);
-						// Add the original name to the JSON 
+						addLogEntry("onedriveJSONItem['name'] now:         " ~ onedriveJSONItem["name"].str, ["debug"]);
+						// Add the original name to the JSON
 						onedriveJSONItem["actualOnlineName"] = actualOnlineName;
 					}
 				}
@@ -1062,7 +1063,7 @@ class SyncEngine {
 			
 			// Add this JSON item for further processing if this is not being discarded
 			if (!discardDeltaJSONItem) {
-				log.vdebug("Adding this Raw JSON OneDrive Item to jsonItemsToProcess array for further processing");
+				addLogEntry("Adding this Raw JSON OneDrive Item to jsonItemsToProcess array for further processing", ["debug"]);
 				jsonItemsToProcess ~= onedriveJSONItem;
 			}
 		}
@@ -1091,7 +1092,7 @@ class SyncEngine {
 			// 3. Was detected by an input flag as to be handled as a root item regardless of actual status
 			
 			if ((handleItemAsRootObject) || (!itemHasParentReferenceId)) {
-				log.vdebug("Handing JSON object as OneDrive 'root' object");
+				addLogEntry("Handing JSON object as OneDrive 'root' object", ["debug"]);
 				if (!existingDBEntry) {
 					// we have not seen this item before
 					saveItem(onedriveJSONItem);
@@ -1099,14 +1100,14 @@ class SyncEngine {
 			}
 		} else {
 			// Change is to delete an item
-			log.vdebug("Handing a OneDrive Deleted Item");
+			addLogEntry("Handing a OneDrive Deleted Item", ["debug"]);
 			if (existingDBEntry) {
 				// Flag to delete
-				log.vdebug("Flagging to delete item locally: ", onedriveJSONItem);
+				addLogEntry("Flagging to delete item locally: " ~ to!string(onedriveJSONItem), ["debug"]);
 				idsToDelete ~= [thisItemDriveId, thisItemId];
 			} else {
 				// Flag to ignore
-				log.vdebug("Flagging item to skip: ", onedriveJSONItem);
+				addLogEntry("Flagging item to skip: " ~ to!string(onedriveJSONItem), ["debug"]);
 				skippedItems.insert(thisItemId);
 			}
 		}
@@ -1122,9 +1123,9 @@ class SyncEngine {
 			ulong elementCount = i +1;
 			
 			// To show this is the processing for this particular item, start off with this breaker line
-			log.vdebug("------------------------------------------------------------------");
-			log.vdebug("Processing OneDrive JSON item ", elementCount, " of ", batchElementCount, " as part of JSON Item Batch ", batchGroup, " of ", batchCount);
-			log.vdebug("Raw JSON OneDrive Item: ", onedriveJSONItem);
+			addLogEntry("------------------------------------------------------------------", ["debug"]);
+			addLogEntry("Processing OneDrive JSON item " ~ to!string(elementCount) ~ " of " ~ to!string(batchElementCount) ~ " as part of JSON Item Batch " ~ to!string(batchGroup) ~ " of " ~ to!string(batchCount), ["debug"]);
+			addLogEntry("Raw JSON OneDrive Item: " ~ to!string(onedriveJSONItem), ["debug"]);
 			
 			string thisItemId = onedriveJSONItem["id"].str;
 			string thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
@@ -1154,37 +1155,40 @@ class SyncEngine {
 			if (parentInDatabase) {
 				// Calculate this items path
 				newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
-				log.vdebug("New Item calculated full path is: ", newItemPath);
+				addLogEntry("New Item calculated full path is: " ~ newItemPath, ["debug"]);
 			} else {
 				// Parent not in the database
 				// Is the parent a 'folder' from another user? ie - is this a 'shared folder' that has been shared with us?
-				log.vdebug("Parent ID is not in DB .. ");
+				addLogEntry("Parent ID is not in DB .. ", ["debug"]);
+				
 				// Why?
 				if (thisItemDriveId == appConfig.defaultDriveId) {
 					// Flagging as unwanted
-					log.vdebug("Flagging as unwanted: thisItemDriveId (", thisItemDriveId,"), thisItemParentId (", thisItemParentId,") not in local database");
+					addLogEntry("Flagging as unwanted: thisItemDriveId (" ~ thisItemDriveId ~ "), thisItemParentId (" ~ thisItemParentId ~ ") not in local database", ["debug"]);
+					
 					if (thisItemParentId in skippedItems) {
-						log.vdebug("Reason: thisItemParentId listed within skippedItems");
+						addLogEntry("Reason: thisItemParentId listed within skippedItems", ["debug"]);
 					}
 					unwanted = true;
 				} else {
 					// Edge case as the parent (from another users OneDrive account) will never be in the database - potentially a shared object?
-					log.vdebug("Potential Shared Object Item: ", onedriveJSONItem);
+					addLogEntry("Potential Shared Object Item: " ~ to!string(onedriveJSONItem), ["debug"]);
+					
 					// Format the OneDrive change into a consumable object for the database
 					remoteItem = makeItem(onedriveJSONItem);
-					log.vdebug("The reported parentId is not in the database. This potentially is a shared folder as 'remoteItem.driveId' != 'appConfig.defaultDriveId'. Relevant Details: remoteItem.driveId (", remoteItem.driveId,"), remoteItem.parentId (", remoteItem.parentId,")");
+					addLogEntry("The reported parentId is not in the database. This potentially is a shared folder as 'remoteItem.driveId' != 'appConfig.defaultDriveId'. Relevant Details: remoteItem.driveId (" ~ remoteItem.driveId ~ "), remoteItem.parentId (" ~ remoteItem.parentId ~ ")", ["debug"]);
 					
 					if (appConfig.accountType == "personal") {
 						// Personal Account Handling
 						// Ensure that this item has no parent
-						log.vdebug("Setting remoteItem.parentId to be null");
+						addLogEntry("Setting remoteItem.parentId to be null", ["debug"]);
 						remoteItem.parentId = null;
 						// Add this record to the local database
-						log.vdebug("Update/Insert local database with remoteItem details with remoteItem.parentId as null: ", remoteItem);
+						addLogEntry("Update/Insert local database with remoteItem details with remoteItem.parentId as null: " ~ to!string(remoteItem), ["debug"]);
 						itemDB.upsert(remoteItem);
 					} else {
 						// Business or SharePoint Account Handling
-						log.vdebug("Handling a Business or SharePoint Shared Item JSON object");
+						addLogEntry("Handling a Business or SharePoint Shared Item JSON object", ["debug"]);
 						
 						if (appConfig.accountType == "business") {
 							// Create a DB Tie Record for this parent object
@@ -1197,11 +1201,11 @@ class SyncEngine {
 							parentItem.parentId = null;
 							
 							// Add this parent record to the local database
-							log.vdebug("Insert local database with remoteItem parent details: ", parentItem);
+							addLogEntry("Insert local database with remoteItem parent details: " ~ to!string(parentItem), ["debug"]);
 							itemDB.upsert(parentItem);
 							
 							// Ensure that this item has no parent
-							log.vdebug("Setting remoteItem.parentId to be null");
+							addLogEntry("Setting remoteItem.parentId to be null", ["debug"]);
 							remoteItem.parentId = null;
 							
 							// Check the DB for 'remote' objects, searching 'remoteDriveId' and 'remoteId' items for this remoteItem.driveId and remoteItem.id
@@ -1211,28 +1215,28 @@ class SyncEngine {
 							// Must compare remoteDBItem.name with remoteItem.name
 							if ((!remoteDBItem.name.empty) && (remoteDBItem.name != remoteItem.name)) {
 								// Update DB Item
-								log.vdebug("The shared item stored in OneDrive, has a different name to the actual name on the remote drive");
-								log.vdebug("Updating remoteItem.name JSON data with the actual name being used on account drive and local folder");
-								log.vdebug("remoteItem.name was:              ", remoteItem.name);
-								log.vdebug("Updating remoteItem.name to:      ", remoteDBItem.name);
+								addLogEntry("The shared item stored in OneDrive, has a different name to the actual name on the remote drive", ["debug"]);
+								addLogEntry("Updating remoteItem.name JSON data with the actual name being used on account drive and local folder", ["debug"]);
+								addLogEntry("remoteItem.name was:              " ~ remoteItem.name, ["debug"]);
+								addLogEntry("Updating remoteItem.name to:      " ~ remoteDBItem.name, ["debug"]);
 								remoteItem.name = remoteDBItem.name;
-								log.vdebug("Setting remoteItem.remoteName to: ", onedriveJSONItem["name"].str);
+								addLogEntry("Setting remoteItem.remoteName to: " ~ onedriveJSONItem["name"].str, ["debug"]);
 								
 								// Update JSON Item
 								remoteItem.remoteName = onedriveJSONItem["name"].str;
-								log.vdebug("Updating source JSON 'name' to that which is the actual local directory");
-								log.vdebug("onedriveJSONItem['name'] was:         ", onedriveJSONItem["name"].str);
-								log.vdebug("Updating onedriveJSONItem['name'] to: ", remoteDBItem.name);
+								addLogEntry("Updating source JSON 'name' to that which is the actual local directory", ["debug"]);
+								addLogEntry("onedriveJSONItem['name'] was:         " ~ onedriveJSONItem["name"].str, ["debug"]);
+								addLogEntry("Updating onedriveJSONItem['name'] to: " ~ remoteDBItem.name, ["debug"]);
 								onedriveJSONItem["name"] = remoteDBItem.name;
-								log.vdebug("onedriveJSONItem['name'] now:         ", onedriveJSONItem["name"].str);
+								addLogEntry("onedriveJSONItem['name'] now:         " ~ onedriveJSONItem["name"].str, ["debug"]);
 								
 								// Update newItemPath value
 								newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ remoteDBItem.name;
-								log.vdebug("New Item updated calculated full path is: ", newItemPath);
+								addLogEntry("New Item updated calculated full path is: " ~ newItemPath, ["debug"]);
 							}
 								
 							// Add this record to the local database
-							log.vdebug("Update/Insert local database with remoteItem details: ", remoteItem);
+							addLogEntry("Update/Insert local database with remoteItem details: " ~ to!string(remoteItem), ["debug"]);
 							itemDB.upsert(remoteItem);
 						}
 					}
@@ -1243,13 +1247,14 @@ class SyncEngine {
 			if (!unwanted) {
 				if (thisItemParentId in skippedItems) {
 					// Flag this JSON item as unwanted
-					log.vdebug("Flagging as unwanted: find(thisItemParentId).length != 0");
+					addLogEntry("Flagging as unwanted: find(thisItemParentId).length != 0", ["debug"]);
 					unwanted = true;
 					
 					// Is this item id in the database?
 					if (existingDBEntry) {
 						// item exists in database, most likely moved out of scope for current client configuration
-						log.vdebug("This item was previously synced / seen by the client");
+						addLogEntry("This item was previously synced / seen by the client", ["debug"]);
+						
 						if (("name" in onedriveJSONItem["parentReference"]) != null) {
 							
 							// How is this out of scope?
@@ -1258,11 +1263,11 @@ class SyncEngine {
 								// sync_list configured and in use
 								if (selectiveSync.isPathExcludedViaSyncList(onedriveJSONItem["parentReference"]["name"].str)) {
 									// Previously synced item is now out of scope as it has been moved out of what is included in sync_list
-									log.vdebug("This previously synced item is now excluded from being synced due to sync_list exclusion");
+									addLogEntry("This previously synced item is now excluded from being synced due to sync_list exclusion", ["debug"]);
 								}
 							}
 							// flag to delete local file as it now is no longer in sync with OneDrive
-							log.vdebug("Flagging to delete item locally: ", onedriveJSONItem);
+							addLogEntry("Flagging to delete item locally: ", ["debug"]);
 							idsToDelete ~= [thisItemDriveId, thisItemId];
 						}
 					}	
@@ -1272,17 +1277,17 @@ class SyncEngine {
 			// Check the item type - if it not an item type that we support, we cant process the JSON item
 			if (!unwanted) {
 				if (isItemFile(onedriveJSONItem)) {
-					log.vdebug("The item we are syncing is a file");
+					addLogEntry("The item we are syncing is a file", ["debug"]);
 				} else if (isItemFolder(onedriveJSONItem)) {
-					log.vdebug("The item we are syncing is a folder");
+					addLogEntry("The item we are syncing is a folder", ["debug"]);
 				} else if (isItemRemote(onedriveJSONItem)) {
-					log.vdebug("The item we are syncing is a remote item");
+					addLogEntry("The item we are syncing is a remote item", ["debug"]);
 				} else {
 					// Why was this unwanted?
 					if (newItemPath.empty) {
 						// Compute this item path & need the full path for this file
 						newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
-						log.vdebug("New Item calculated full path is: ", newItemPath);
+						addLogEntry("New Item calculated full path is: " ~ newItemPath, ["debug"]);
 					}
 					// Microsoft OneNote container objects present as neither folder or file but has file size
 					if ((!isItemFile(onedriveJSONItem)) && (!isItemFolder(onedriveJSONItem)) && (hasFileSize(onedriveJSONItem))) {
@@ -1293,7 +1298,7 @@ class SyncEngine {
 						addLogEntry("The OneDrive item '" ~ newItemPath ~ "' is not supported by this client", ["verbose"]);
 					}
 					unwanted = true;
-					log.vdebug("Flagging as unwanted: item type is not supported");
+					addLogEntry("Flagging as unwanted: item type is not supported", ["debug"]);
 				}
 			}
 			
@@ -1316,17 +1321,17 @@ class SyncEngine {
 							} else {
 								simplePathToCheck = onedriveJSONItem["name"].str;
 							}
-							log.vdebug("skip_dir path to check (simple):  ", simplePathToCheck);
+							addLogEntry("skip_dir path to check (simple):  " ~ simplePathToCheck, ["debug"]);
 							
 							// complex path
 							if (parentInDatabase) {
 								// build up complexPathToCheck
 								complexPathToCheck = buildNormalizedPath(newItemPath);
 							} else {
-								log.vdebug("Parent details not in database - unable to compute complex path to check");
+								addLogEntry("Parent details not in database - unable to compute complex path to check", ["debug"]);
 							}
 							if (!complexPathToCheck.empty) {
-								log.vdebug("skip_dir path to check (complex): ", complexPathToCheck);
+								addLogEntry("skip_dir path to check (complex): " ~ complexPathToCheck, ["debug"]);
 							}
 						} else {
 							simplePathToCheck = onedriveJSONItem["name"].str;
@@ -1336,35 +1341,36 @@ class SyncEngine {
 						// then isDirNameExcluded matching will not work
 						// Clean up 'root:' if present
 						if (startsWith(simplePathToCheck, "root:")){
-							log.vdebug("Updating simplePathToCheck to remove 'root:'");
+							addLogEntry("Updating simplePathToCheck to remove 'root:'", ["debug"]);
 							simplePathToCheck = strip(simplePathToCheck, "root:");
 						}
 						if (startsWith(complexPathToCheck, "root:")){
-							log.vdebug("Updating complexPathToCheck to remove 'root:'");
+							addLogEntry("Updating complexPathToCheck to remove 'root:'", ["debug"]);
 							complexPathToCheck = strip(complexPathToCheck, "root:");
 						}
 						
 						// OK .. what checks are we doing?
 						if ((!simplePathToCheck.empty) && (complexPathToCheck.empty)) {
 							// just a simple check
-							log.vdebug("Performing a simple check only");
+							addLogEntry("Performing a simple check only", ["debug"]);
 							unwanted = selectiveSync.isDirNameExcluded(simplePathToCheck);
 						} else {
 							// simple and complex
-							log.vdebug("Performing a simple then complex path match if required");
+							addLogEntry("Performing a simple then complex path match if required", ["debug"]);
+							
 							// simple first
-							log.vdebug("Performing a simple check first");
+							addLogEntry("Performing a simple check first", ["debug"]);
 							unwanted = selectiveSync.isDirNameExcluded(simplePathToCheck);
 							matchDisplay = simplePathToCheck;
 							if (!unwanted) {
-								log.vdebug("Simple match was false, attempting complex match");
 								// simple didnt match, perform a complex check
+								addLogEntry("Simple match was false, attempting complex match", ["debug"]);
 								unwanted = selectiveSync.isDirNameExcluded(complexPathToCheck);
 								matchDisplay = complexPathToCheck;
 							}
 						}
 						// result
-						log.vdebug("skip_dir exclude result (directory based): ", unwanted);
+						addLogEntry("skip_dir exclude result (directory based): " ~ to!string(unwanted), ["debug"]);
 						if (unwanted) {
 							// This path should be skipped
 							addLogEntry("Skipping item - excluded by skip_dir config: " ~ matchDisplay, ["verbose"]);
@@ -1387,7 +1393,7 @@ class SyncEngine {
 						// perform the check
 						unwanted = selectiveSync.isDirNameExcluded(pathToCheck);
 						// result
-						log.vdebug("skip_dir exclude result (file based): ", unwanted);
+						addLogEntry("skip_dir exclude result (file based): " ~ to!string(unwanted), ["debug"]);
 						if (unwanted) {
 							// this files path should be skipped
 							addLogEntry("Skipping item - file path is excluded by skip_dir config: " ~ newItemPath, ["verbose"]);
@@ -1411,7 +1417,7 @@ class SyncEngine {
 						// Compute this item path & need the full path for this file
 						if (newItemPath.empty) {
 							newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
-							log.vdebug("New Item calculated full path is: ", newItemPath);
+							addLogEntry("New Item calculated full path is: " ~ newItemPath, ["debug"]);
 						}
 						
 						// The path that needs to be checked needs to include the '/'
@@ -1423,9 +1429,9 @@ class SyncEngine {
 							exclusionTestPath = '/' ~ newItemPath;
 						}
 						
-						log.vdebug("skip_file item to check: ", exclusionTestPath);
+						addLogEntry("skip_file item to check: " ~ exclusionTestPath, ["debug"]);
 						unwanted = selectiveSync.isFileNameExcluded(exclusionTestPath);
-						log.vdebug("Result: ", unwanted);
+						addLogEntry("Result: " ~ to!string(unwanted), ["debug"]);
 						if (unwanted) addLogEntry("Skipping item - excluded by skip_file config: " ~ thisItemName, ["verbose"]);
 					} else {
 						// parent id is not in the database
@@ -1443,11 +1449,11 @@ class SyncEngine {
 					if (newItemPath.empty) {
 						// Calculate this items path
 						newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
-						log.vdebug("New Item calculated full path is: ", newItemPath);
+						addLogEntry("New Item calculated full path is: " ~ newItemPath, ["debug"]);
 					}
 					
 					// What path are we checking?
-					log.vdebug("sync_list item to check: ", newItemPath);
+					addLogEntry("sync_list item to check: " ~ newItemPath, ["debug"]);
 					
 					// Unfortunatly there is no avoiding this call to check if the path is excluded|included via sync_list
 					if (selectiveSync.isPathExcludedViaSyncList(newItemPath)) {
@@ -1518,7 +1524,8 @@ class SyncEngine {
 			// We know if this JSON item is unwanted or not
 			if (unwanted) {
 				// This JSON item is NOT wanted - it is excluded
-				log.vdebug("Skipping OneDrive change as this is determined to be unwanted");
+				addLogEntry("Skipping OneDrive change as this is determined to be unwanted", ["debug"]);
+				
 				// Add to the skippedItems array, but only if it is a directory ... pointless adding 'files' here, as it is the 'id' we check as the parent path which can only be a directory
 				if (!isItemFile(onedriveJSONItem)) {
 					skippedItems.insert(thisItemId);
@@ -1531,7 +1538,8 @@ class SyncEngine {
 				if (existingDBEntry) {
 					// The details of this JSON item are already in the DB
 					// Is the item in the DB the same as the JSON data provided - or is the JSON data advising this is an updated file?
-					log.vdebug("OneDrive change is an update to an existing local item");
+					addLogEntry("OneDrive change is an update to an existing local item", ["debug"]);
+					
 					// Compute the existing item path
 					// NOTE:
 					//		string existingItemPath = computeItemPath(existingDatabaseItem.driveId, existingDatabaseItem.id);
@@ -1556,7 +1564,7 @@ class SyncEngine {
 					// Action this JSON item as a new item as we have no DB record of it
 					// The actual item may actually exist locally already, meaning that just the database is out-of-date or missing the data due to --resync
 					// But we also cannot compute the newItemPath as the parental objects may not exist as well
-					log.vdebug("OneDrive change is potentially a new local item");
+					addLogEntry("OneDrive change is potentially a new local item", ["debug"]);
 					
 					// Attempt to apply this potentially new item
 					applyPotentiallyNewLocalItem(newDatabaseItem, onedriveJSONItem, newItemPath);
@@ -1626,10 +1634,10 @@ class SyncEngine {
 		if (exists(newItemPath)) {
 			// Issue #2209 fix - test if path is a bad symbolic link
 			if (isSymlink(newItemPath)) {
-				log.vdebug("Path on local disk is a symbolic link ........");
+				addLogEntry("Path on local disk is a symbolic link ........", ["debug"]);
 				if (!exists(readLink(newItemPath))) {
 					// reading the symbolic link failed	
-					log.vdebug("Reading the symbolic link target failed ........ ");
+					addLogEntry("Reading the symbolic link target failed ........ ", ["debug"]);
 					addLogEntry("Skipping item - invalid symbolic link: " ~ newItemPath, ["info", "notify"]);
 					return;
 				}
@@ -1641,14 +1649,13 @@ class SyncEngine {
 			string itemSource = "remote";
 			if (isItemSynced(newDatabaseItem, newItemPath, itemSource)) {
 				// Item details from OneDrive and local item details in database are in-sync
-				log.vdebug("The item to sync is already present on the local filesystem and is in-sync with what is reported online");
-				log.vdebug("Update/Insert local database with item details");
-				log.vdebug("item details to update/insert: ", newDatabaseItem);
+				addLogEntry("The item to sync is already present on the local filesystem and is in-sync with what is reported online", ["debug"]);
+				addLogEntry("Update/Insert local database with item details: " ~ to!string(newDatabaseItem), ["debug"]);
 				itemDB.upsert(newDatabaseItem);
 				return;
 			} else {
 				// Item details from OneDrive and local item details in database are NOT in-sync
-				log.vdebug("The item to sync exists locally but is NOT in the local database - otherwise this would be handled as changed item");
+				addLogEntry("The item to sync exists locally but is NOT in the local database - otherwise this would be handled as changed item", ["debug"]);
 				
 				// Which object is newer? The local file or the remote file?
 				SysTime localModifiedTime = timeLastModified(newItemPath).toUTC();
@@ -1666,7 +1673,7 @@ class SyncEngine {
 						// no local rename
 						// no download needed
 						addLogEntry("Local item modified time is newer based on UTC time conversion - keeping local item as this exists in the local database", ["verbose"]);
-						log.vdebug("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer than OneDrive item and present in the sqlite database");
+						addLogEntry("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer than OneDrive item and present in the sqlite database", ["debug"]);
 					} else {
 						// item id is not in the database .. maybe a --resync ?
 						// file exists locally but is not in the sqlite database - maybe a failed download?
@@ -1691,8 +1698,8 @@ class SyncEngine {
 				} else {
 					// Remote file is newer than the existing local item
 					addLogEntry("Remote item modified time is newer based on UTC time conversion", ["verbose"]); // correct message, remote item is newer
-					log.vdebug("localModifiedTime (local file):   ", localModifiedTime);
-					log.vdebug("itemModifiedTime (OneDrive item): ", itemModifiedTime);
+					addLogEntry("localModifiedTime (local file):   " ~ to!string(localModifiedTime), ["debug"]);
+					addLogEntry("itemModifiedTime (OneDrive item): " ~ to!string(itemModifiedTime), ["debug"]);
 					
 					// Has the user configured to IGNORE local data protection rules?
 					if (bypassDataPreservation) {
@@ -1719,17 +1726,17 @@ class SyncEngine {
 				if (!dryRun) {
 					try {
 						// Create the new directory
-						log.vdebug("Requested path does not exist, creating directory structure: ", newItemPath);
+						addLogEntry("Requested path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);
 						mkdirRecurse(newItemPath);
 						// Configure the applicable permissions for the folder
-						log.vdebug("Setting directory permissions for: ", newItemPath);
+						addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);
 						newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
 						// Update the time of the folder to match the last modified time as is provided by OneDrive
 						// If there are any files then downloaded into this folder, the last modified time will get 
 						// updated by the local Operating System with the latest timestamp - as this is normal operation
 						// as the directory has been modified
-						log.vdebug("Setting directory lastModifiedDateTime for: ", newItemPath , " to ", newDatabaseItem.mtime);
-						log.vdebug("Calling setTimes() for this file: ", newItemPath);
+						addLogEntry("Setting directory lastModifiedDateTime for: " ~ newItemPath ~ " to " ~ to!string(newDatabaseItem.mtime), ["debug"]);
+						addLogEntry("Calling setTimes() for this file: " ~ newItemPath, ["debug"]);
 						setTimes(newItemPath, newDatabaseItem.mtime, newDatabaseItem.mtime);
 						// Save the item to the database
 						saveItem(onedriveJSONItem);
@@ -1841,7 +1848,7 @@ class SyncEngine {
 					if ((existingItemModifiedTime != changedOneDriveItemModifiedTime) || (generateSimulatedDeltaResponse)) {
 					// Save this item in the database
 						// Add to the local database
-						log.vdebug("Adding changed OneDrive Item to database: ", changedOneDriveItem);
+						addLogEntry("Adding changed OneDrive Item to database: " ~ to!string(changedOneDriveItem), ["debug"]);
 						itemDB.upsert(changedOneDriveItem);
 					}
 				}
@@ -1875,7 +1882,7 @@ class SyncEngine {
 			if ((existingItemModifiedTime != changedOneDriveItemModifiedTime) || (generateSimulatedDeltaResponse)) {
 				// Database update needed for this item because our local record is out-of-date
 				// Add to the local database
-				log.vdebug("Adding changed OneDrive Item to database: ", changedOneDriveItem);
+				addLogEntry("Adding changed OneDrive Item to database: " ~ to!string(changedOneDriveItem), ["debug"]);
 				itemDB.upsert(changedOneDriveItem);
 			}
 		}
@@ -1919,7 +1926,7 @@ class SyncEngine {
 	
 		// Calculate this items path
 		string newItemPath = computeItemPath(downloadDriveId, downloadParentId) ~ "/" ~ downloadItemName;
-		log.vdebug("New Item calculated full path is: ", newItemPath);
+		addLogEntry("New Item calculated full path is: " ~ newItemPath, ["debug"]);
 		
 		// Is the item reported as Malware ?
 		if (isMalware(onedriveJSONItem)){
@@ -1933,7 +1940,7 @@ class SyncEngine {
 				jsonFileSize = onedriveJSONItem["size"].integer;
 			} else {
 				// filesize missing
-				log.vdebug("WARNING: onedriveJSONItem['size'] is missing");
+				addLogEntry("ERROR: onedriveJSONItem['size'] is missing", ["debug"]);
 			}
 			
 			// Configure the hashes for comparison post download
@@ -1956,7 +1963,7 @@ class SyncEngine {
 				}
 			} else {
 				// file hash data missing
-				log.vdebug("WARNING: onedriveJSONItem['file']['hashes'] is missing - unable to compare file hash after download");
+				addLogEntry("ERROR: onedriveJSONItem['file']['hashes'] is missing - unable to compare file hash after download", ["debug"]);
 			}
 		
 			// Is this a --download-only scenario?
@@ -1974,7 +1981,7 @@ class SyncEngine {
 					}
 					
 					// Log the DB details
-					log.vdebug("File to download exists locally and this is the DB record: ", databaseItem);
+					addLogEntry("File to download exists locally and this is the DB record: " ~ to!string(databaseItem), ["debug"]);
 					
 					// Does the DB (what we think is in sync) hash match the existing local file hash?
 					if (!testFileHash(newItemPath, databaseItem)) {
@@ -1994,9 +2001,9 @@ class SyncEngine {
 			// The reservation value is user configurable in the config file, 50MB by default
 			ulong freeSpaceReservation = appConfig.getValueLong("space_reservation");
 			// debug output
-			log.vdebug("Local Disk Space Actual: ", localActualFreeSpace);
-			log.vdebug("Free Space Reservation:  ", freeSpaceReservation);
-			log.vdebug("File Size to Download:   ", jsonFileSize);
+			addLogEntry("Local Disk Space Actual: " ~ to!string(localActualFreeSpace), ["debug"]);
+			addLogEntry("Free Space Reservation:  " ~ to!string(freeSpaceReservation), ["debug"]);
+			addLogEntry("File Size to Download:   " ~ to!string(jsonFileSize), ["debug"]);
 			
 			// Calculate if we can actually download file - is there enough free space?
 			if ((localActualFreeSpace < freeSpaceReservation) || (jsonFileSize > localActualFreeSpace)) {
@@ -2018,16 +2025,16 @@ class SyncEngine {
 						// Free object and memory
 						object.destroy(downloadFileOneDriveApiInstance);
 					} catch (OneDriveException exception) {
-						log.vdebug("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize); generated a OneDriveException");
-						
+						addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize); generated a OneDriveException", ["debug"]);
 						string thisFunctionName = getFunctionName!({});
+						
 						// HTTP request returned status code 408,429,503,504
 						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
 							// Handle the 429
 							if (exception.httpStatusCode == 429) {
 								// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 								handleOneDriveThrottleRequest(downloadFileOneDriveApiInstance);
-								log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+								addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 							}
 							// re-try the specific changes queries
 							if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -2037,13 +2044,14 @@ class SyncEngine {
 								// Transient error - try again in 30 seconds
 								auto errorArray = splitLines(exception.msg);
 								addLogEntry(to!string(errorArray[0]) ~ " when attempting to download an item from OneDrive - retrying applicable request in 30 seconds");
-								log.vdebug(thisFunctionName, " previously threw an error - retrying");
+								addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+								
 								// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-								log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+								addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 								Thread.sleep(dur!"seconds"(30));
 							}
 							// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-							log.vdebug("Retrying Function: ", thisFunctionName);
+							addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
 							downloadFileItem(onedriveJSONItem);
 						} else {
 							// Default operation if not 408,429,503,504 errors
@@ -2088,7 +2096,8 @@ class SyncEngine {
 							
 							if ((downloadFileSize == jsonFileSize) && (downloadedFileHash == onlineFileHash)) {
 								// Downloaded file matches size and hash
-								log.vdebug("Downloaded file matches reported size and reported file hash");
+								addLogEntry("Downloaded file matches reported size and reported file hash", ["debug"]);
+								
 								try {
 									// get the mtime from the JSON data
 									SysTime itemModifiedTime;
@@ -2101,7 +2110,7 @@ class SyncEngine {
 									}
 									
 									// set the correct time on the downloaded file
-									log.vdebug("Calling setTimes() for this file: ", newItemPath);
+									addLogEntry("Calling setTimes() for this file: " ~ newItemPath, ["debug"]);
 									setTimes(newItemPath, itemModifiedTime, itemModifiedTime);
 								} catch (FileException e) {
 									// display the error message
@@ -2114,16 +2123,16 @@ class SyncEngine {
 								if (downloadFileSize != jsonFileSize) {
 									// downloaded file size does not match
 									downloadValueMismatch = true;
-									log.vdebug("Actual file size on disk:   ", downloadFileSize);
-									log.vdebug("OneDrive API reported size: ", jsonFileSize);
+									addLogEntry("Actual file size on disk:   " ~ to!string(downloadFileSize), ["debug"]);
+									addLogEntry("OneDrive API reported size: " ~ to!string(jsonFileSize), ["debug"]);
 									addLogEntry("ERROR: File download size mis-match. Increase logging verbosity to determine why.");
 								}
 								// Hash Error
 								if (downloadedFileHash != onlineFileHash) {
 									// downloaded file hash does not match
 									downloadValueMismatch = true;
-									log.vdebug("Actual local file hash:     ", downloadedFileHash);
-									log.vdebug("OneDrive API reported hash: ", onlineFileHash);
+									addLogEntry("Actual local file hash:     " ~ downloadedFileHash, ["debug"]);
+									addLogEntry("OneDrive API reported hash: " ~ onlineFileHash, ["debug"]);
 									addLogEntry("ERROR: File download hash mis-match. Increase logging verbosity to determine why.");
 								}
 								// .heic data loss check
@@ -2157,7 +2166,7 @@ class SyncEngine {
 							}
 						} else {
 							// Download validation checks were disabled
-							log.vdebug("Downloaded file validation disabled due to --disable-download-validation");
+							addLogEntry("Downloaded file validation disabled due to --disable-download-validation", ["debug"]);
 							addLogEntry("WARNING: Skipping download integrity check for: " ~ newItemPath, ["verbose"]);
 						}	 // end of (!disableDownloadValidation)
 					} else {
@@ -2227,7 +2236,7 @@ class SyncEngine {
 								// The source of the out-of-date timestamp was the local file and this needs to be corrected to avoid always generating a hash test if timestamp is different
 								addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally", ["verbose"]);
 								if (!dryRun) {
-									log.vdebug("Calling setTimes() for this file: ", path);
+									addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);
 									setTimes(path, item.mtime, item.mtime);
 								}
 							}
@@ -2269,17 +2278,17 @@ class SyncEngine {
 		JSONValue deltaChangesBundle;
 		
 		// Get the /delta data for this account | driveId | deltaLink combination
-		log.vdebug("------------------------------------------------------------------");
-		log.vdebug("selectedDriveId:   ", selectedDriveId);
-		log.vdebug("selectedItemId:    ", selectedItemId);
-		log.vdebug("providedDeltaLink: ", providedDeltaLink);
-		log.vdebug("------------------------------------------------------------------");
+		addLogEntry("------------------------------------------------------------------", ["debug"]);
+		addLogEntry("selectedDriveId:   " ~ selectedDriveId, ["debug"]);
+		addLogEntry("selectedItemId:    " ~ selectedItemId, ["debug"]);
+		addLogEntry("providedDeltaLink: " ~ providedDeltaLink, ["debug"]);
+		addLogEntry("------------------------------------------------------------------", ["debug"]);
 		
 		try {
 			deltaChangesBundle = getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink);
 		} catch (OneDriveException exception) {
 			// caught an exception
-			log.vdebug("getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink) generated a OneDriveException");
+			addLogEntry("getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink) generated a OneDriveException", ["debug"]);
 			
 			auto errorArray = splitLines(exception.msg);
 			string thisFunctionName = getFunctionName!({});
@@ -2289,7 +2298,7 @@ class SyncEngine {
 				if (exception.httpStatusCode == 429) {
 					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 					handleOneDriveThrottleRequest(getDeltaQueryOneDriveApiInstance);
-					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+					addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 				}
 				// re-try the specific changes queries
 				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -2298,13 +2307,14 @@ class SyncEngine {
 					// 504 - Gateway Timeout
 					// Transient error - try again in 30 seconds
 					addLogEntry(to!string(errorArray[0]) ~ " when attempting to query OneDrive API for Delta Changes - retrying applicable request in 30 seconds");
-					log.vdebug(thisFunctionName, " previously threw an error - retrying");
+					addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+					
 					// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-					log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+					addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 					Thread.sleep(dur!"seconds"(30));
 				}
 				// dont retry request, loop back to calling function
-				log.vdebug("Looping back after failure");
+				addLogEntry("Looping back after failure", ["debug"]);
 				deltaChangesBundle = null;
 			} else {
 				// Default operation if not 408,429,503,504 errors
@@ -2314,7 +2324,7 @@ class SyncEngine {
 					// Essentially the 'providedDeltaLink' that we have stored is no longer available ... re-try without the stored deltaLink
 					addLogEntry("WARNING: Retrying OneDrive API call without using the locally stored deltaLink value");
 					// Configure an empty deltaLink
-					log.vdebug("Delta link expired for 'getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink)', setting 'deltaLink = null'");
+					addLogEntry("Delta link expired for 'getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink)', setting 'deltaLink = null'", ["debug"]);
 					string emptyDeltaLink = "";
 					// retry with empty deltaLink
 					deltaChangesBundle = getDeltaQueryOneDriveApiInstance.viewChangesByItemId(selectedDriveId, selectedItemId, emptyDeltaLink);
@@ -2334,10 +2344,11 @@ class SyncEngine {
 	void handleOneDriveThrottleRequest(OneDriveApi activeOneDriveApiInstance) {
 		
 		// If OneDrive sends a status code 429 then this function will be used to process the Retry-After response header which contains the value by which we need to wait
-		log.vdebug("Handling a OneDrive HTTP 429 Response Code (Too Many Requests)");
+		addLogEntry("Handling a OneDrive HTTP 429 Response Code (Too Many Requests)", ["debug"]);
+		
 		// Read in the Retry-After HTTP header as set and delay as per this value before retrying the request
 		auto retryAfterValue = activeOneDriveApiInstance.getRetryAfterValue();
-		log.vdebug("Using Retry-After Value = ", retryAfterValue);
+		addLogEntry("Using Retry-After Value = " ~ to!string(retryAfterValue), ["debug"]);
 		
 		// HTTP request returned status code 429 (Too Many Requests)
 		// https://github.com/abraunegg/onedrive/issues/133
@@ -2352,7 +2363,7 @@ class SyncEngine {
 			// This value is based on log files and data when determining correct process for 429 response handling
 			delayBeforeRetry = 120;
 			// Update that we are over-riding the provided value with a default
-			log.vdebug("HTTP Response Header retry-after value was 0 - Using a preconfigured default of: ", delayBeforeRetry);
+			addLogEntry("HTTP Response Header retry-after value was 0 - Using a preconfigured default of: " ~ to!string(delayBeforeRetry), ["debug"]);
 		}
 		
 		// Sleep thread as per request
@@ -2407,7 +2418,8 @@ class SyncEngine {
 		// static declare this for this function
 		static import core.exception;
 		string calculatedPath;
-		log.vdebug("Attempting to calculate local filesystem path for ", thisDriveId, " and ", thisItemId);
+		addLogEntry("Attempting to calculate local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);
+		
 		try {
 			calculatedPath = itemDB.computePath(thisDriveId, thisItemId);
 		} catch (core.exception.AssertError) {
@@ -2563,7 +2575,7 @@ class SyncEngine {
 				if (exception.httpStatusCode == 429) {
 					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 					handleOneDriveThrottleRequest(uploadLastModifiedTimeApiInstance);
-					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+					addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 				}
 				// re-try the specific changes queries
 				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -2573,20 +2585,21 @@ class SyncEngine {
 					// Transient error - try again in 30 seconds
 					auto errorArray = splitLines(exception.msg);
 					addLogEntry(to!string(errorArray[0]) ~ " when attempting to update the timestamp on an item on OneDrive - retrying applicable request in 30 seconds");
-					log.vdebug(thisFunctionName, " previously threw an error - retrying");
+					addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+					
 					// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-					log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+					addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 					Thread.sleep(dur!"seconds"(30));
 				}
 				// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-				log.vdebug("Retrying Function: ", thisFunctionName);
+				addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
 				uploadLastModifiedTime(driveId, id, mtime, eTag);
 				return;
 			} else {
 				// Default operation if not 408,429,503,504 errors
 				if (exception.httpStatusCode == 409) {
 					// ETag does not match current item's value - use a null eTag
-					log.vdebug("Retrying Function: ", thisFunctionName);
+					addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
 					uploadLastModifiedTime(driveId, id, mtime, null);
 				} else {
 					// display what the error is
@@ -2645,9 +2658,9 @@ class SyncEngine {
 						idsToDelete.length = 0;
 						assumeSafeAppend(idsToDelete);
 						// flag to delete local file as it now is no longer in sync with OneDrive
-						log.vdebug("Flagging to delete local item as it now is no longer in sync with OneDrive");
-						log.vdebug("outOfSyncItem: ", outOfSyncItem);
-						idsToDelete ~= [outOfSyncItem.driveId, outOfSyncItem.id];	
+						addLogEntry("Flagging to delete local item as it now is no longer in sync with OneDrive", ["debug"]);
+						addLogEntry("outOfSyncItem: " ~ to!string(outOfSyncItem), ["debug"]);
+						idsToDelete ~= [outOfSyncItem.driveId, outOfSyncItem.id];
 						// delete items in idsToDelete
 						if (idsToDelete.length > 0) processDeleteItems();
 					}
@@ -2661,12 +2674,14 @@ class SyncEngine {
 					driveItems = getChildren(singleDirectoryScopeDriveId, singleDirectoryScopeItemId);
 				} else {
 					// Check everything associated with each driveId we know about
-					log.vdebug("Selecting DB items via itemDB.selectByDriveId(driveId)");
+					addLogEntry("Selecting DB items via itemDB.selectByDriveId(driveId)", ["debug"]);
 					// Query database
 					driveItems = itemDB.selectByDriveId(driveId);
 				}
 				
-				log.vdebug("Database items to process for this driveId: ", driveItems.count);
+				// Log DB items to process
+				addLogEntry("Database items to process for this driveId: " ~ to!string(driveItems.count), ["debug"]);
+				
 				// Process each database database item associated with the driveId
 				foreach(dbItem; driveItems) {
 					// Does it still exist on disk in the location the DB thinks it is
@@ -2674,10 +2689,12 @@ class SyncEngine {
 				}
 			} else {
 				// Check everything associated with each driveId we know about
-				log.vdebug("Selecting DB items via itemDB.selectByDriveId(driveId)");
+				addLogEntry("Selecting DB items via itemDB.selectByDriveId(driveId)", ["debug"]);
+				
 				// Query database
 				auto driveItems = itemDB.selectByDriveId(driveId);
-				log.vdebug("Database items to process for this driveId: ", driveItems.count);
+				addLogEntry("Database items to process for this driveId: " ~ to!string(driveItems.count), ["debug"]);
+				
 				// Process each database database item associated with the driveId
 				foreach(dbItem; driveItems) {
 					// Does it still exist on disk in the location the DB thinks it is
@@ -2763,7 +2780,8 @@ class SyncEngine {
 					
 					if (localModifiedTime != itemModifiedTime) {
 						// The modified dates are different
-						log.vdebug("The local item has a different modified time ", localModifiedTime, " when compared to ", itemSource, " modified time ", itemModifiedTime);
+						addLogEntry("The local item has a different modified time " ~ to!string(localModifiedTime) ~ " when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime), ["debug"]);
+						
 						// Test the file hash
 						if (!testFileHash(localFilePath, dbItem)) {
 							// Is the local file 'newer' or 'older' (ie was an old file 'restored locally' by a different backup / replacement process?)
@@ -2821,7 +2839,7 @@ class SyncEngine {
 				bool idsFakedMatch = false;
 				foreach (i; idsFaked) {
 					if (i[1] == dbItem.id) {
-						log.vdebug("Matched faked file which is 'supposed' to exist but not created due to --dry-run use");
+						addLogEntry("Matched faked file which is 'supposed' to exist but not created due to --dry-run use", ["debug"]);
 						addLogEntry("The file has not changed", ["verbose"]);
 						idsFakedMatch = true;
 					}
@@ -2877,7 +2895,7 @@ class SyncEngine {
 				} else {
 					// Appropriate message as we are in --monitor mode
 					addLogEntry("The directory appears to have been deleted locally .. but we are running in --monitor mode. This may have been 'moved' on the local filesystem rather than being 'deleted'", ["verbose"]);
-					log.vdebug("Most likely cause - 'inotify' event was missing for whatever action was taken locally or action taken when application was stopped");
+					addLogEntry("Most likely cause - 'inotify' event was missing for whatever action was taken locally or action taken when application was stopped", ["debug"]);
 				}
 				// A moved directory will be uploaded as 'new', delete the old directory and database reference
 				// Upload to OneDrive the instruction to delete this item. This will handle the 'noRemoteDelete' flag if set
@@ -2888,7 +2906,7 @@ class SyncEngine {
 				bool idsFakedMatch = false;
 				foreach (i; idsFaked) {
 					if (i[1] == dbItem.id) {
-						log.vdebug("Matched faked dir which is 'supposed' to exist but not created due to --dry-run use");
+						addLogEntry("Matched faked dir which is 'supposed' to exist but not created due to --dry-run use", ["debug"]);
 						addLogEntry("The directory has not changed", ["verbose"]);
 						idsFakedMatch = true;
 					}
@@ -3019,7 +3037,7 @@ class SyncEngine {
 					chdir(currentSyncDir);
 					// results
 					if (relativeLinkTest) {
-						log.vdebug("Not skipping item - symbolic link is a 'relative link' to target ('", relativeLink, "') which can be supported: ", localFilePath);
+						addLogEntry("Not skipping item - symbolic link is a 'relative link' to target ('" ~ relativeLink ~ "') which can be supported: " ~ localFilePath, ["debug"]);
 					} else {
 						addLogEntry("Skipping item - invalid symbolic link: "~ localFilePath, ["info", "notify"]);
 						clientSideRuleExcludesPath = true;
@@ -3033,7 +3051,8 @@ class SyncEngine {
 			if (localFilePath != ".") {
 				// skip_dir handling
 				if (isDir(localFilePath)) {
-					log.vdebug("Checking local path: ", localFilePath);
+					addLogEntry("Checking local path: " ~ localFilePath, ["debug"]);
+					
 					// Only check path if config is != ""
 					if (appConfig.getValueString("skip_dir") != "") {
 						// The path that needs to be checked needs to include the '/'
@@ -3047,7 +3066,8 @@ class SyncEngine {
 				
 				// skip_file handling
 				if (isFile(localFilePath)) {
-					log.vdebug("Checking file: ", localFilePath);
+					addLogEntry("Checking file: " ~ localFilePath, ["debug"]);
+					
 					// The path that needs to be checked needs to include the '/'
 					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
 					if (selectiveSync.isFileNameExcluded(localFilePath.strip('.'))) {
@@ -3065,7 +3085,7 @@ class SyncEngine {
 					// sync_list configured and in use
 					if (selectiveSync.isPathExcludedViaSyncList(localFilePath)) {
 						if ((isFile(localFilePath)) && (appConfig.getValueBool("sync_root_files")) && (rootName(localFilePath.strip('.').strip('/')) == "")) {
-							log.vdebug("Not skipping path due to sync_root_files inclusion: ", localFilePath);
+							addLogEntry("Not skipping path due to sync_root_files inclusion: " ~ localFilePath, ["debug"]);
 						} else {
 							if (exists(appConfig.syncListFilePath)){
 								// skipped most likely due to inclusion in sync_list
@@ -3145,7 +3165,7 @@ class SyncEngine {
 						} else {
 							simplePathToCheck = onedriveJSONItem["name"].str;
 						}
-						log.vdebug("skip_dir path to check (simple):  ", simplePathToCheck);
+						addLogEntry("skip_dir path to check (simple):  " ~ simplePathToCheck, ["debug"]);
 						
 						// complex path
 						if (parentInDatabase) {
@@ -3153,10 +3173,10 @@ class SyncEngine {
 							//complexPathToCheck = buildNormalizedPath(newItemPath);
 							complexPathToCheck = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
 						} else {
-							log.vdebug("Parent details not in database - unable to compute complex path to check");
+							addLogEntry("Parent details not in database - unable to compute complex path to check", ["debug"]);
 						}
 						if (!complexPathToCheck.empty) {
-							log.vdebug("skip_dir path to check (complex): ", complexPathToCheck);
+							addLogEntry("skip_dir path to check (complex): " ~ complexPathToCheck, ["debug"]);
 						}
 					} else {
 						simplePathToCheck = onedriveJSONItem["name"].str;
@@ -3166,35 +3186,36 @@ class SyncEngine {
 					// then isDirNameExcluded matching will not work
 					// Clean up 'root:' if present
 					if (startsWith(simplePathToCheck, "root:")){
-						log.vdebug("Updating simplePathToCheck to remove 'root:'");
+						addLogEntry("Updating simplePathToCheck to remove 'root:'", ["debug"]);
 						simplePathToCheck = strip(simplePathToCheck, "root:");
 					}
 					if (startsWith(complexPathToCheck, "root:")){
-						log.vdebug("Updating complexPathToCheck to remove 'root:'");
+						addLogEntry("Updating complexPathToCheck to remove 'root:'", ["debug"]);
 						complexPathToCheck = strip(complexPathToCheck, "root:");
 					}
 					
 					// OK .. what checks are we doing?
 					if ((!simplePathToCheck.empty) && (complexPathToCheck.empty)) {
 						// just a simple check
-						log.vdebug("Performing a simple check only");
+						addLogEntry("Performing a simple check only", ["debug"]);
 						clientSideRuleExcludesPath = selectiveSync.isDirNameExcluded(simplePathToCheck);
 					} else {
 						// simple and complex
-						log.vdebug("Performing a simple then complex path match if required");
+						addLogEntry("Performing a simple then complex path match if required", ["debug"]);
+												
 						// simple first
-						log.vdebug("Performing a simple check first");
+						addLogEntry("Performing a simple check first", ["debug"]);
 						clientSideRuleExcludesPath = selectiveSync.isDirNameExcluded(simplePathToCheck);
 						matchDisplay = simplePathToCheck;
 						if (!clientSideRuleExcludesPath) {
-							log.vdebug("Simple match was false, attempting complex match");
+							addLogEntry("Simple match was false, attempting complex match", ["debug"]);
 							// simple didnt match, perform a complex check
 							clientSideRuleExcludesPath = selectiveSync.isDirNameExcluded(complexPathToCheck);
 							matchDisplay = complexPathToCheck;
 						}
 					}
-					// result
-					log.vdebug("skip_dir exclude result (directory based): ", clientSideRuleExcludesPath);
+					// End Result
+					addLogEntry("skip_dir exclude result (directory based): " ~ clientSideRuleExcludesPath, ["debug"]);
 					if (clientSideRuleExcludesPath) {
 						// This path should be skipped
 						addLogEntry("Skipping item - excluded by skip_dir config: " ~ matchDisplay, ["verbose"]);
@@ -3225,7 +3246,7 @@ class SyncEngine {
 					// Compute this item path & need the full path for this file
 					jsonItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
 					// Log the calculation
-					log.vdebug("New Item calculated full path is: ", jsonItemPath);
+					addLogEntry("New Item calculated full path is: " ~ jsonItemPath, ["debug"]);
 					
 					// The path that needs to be checked needs to include the '/'
 					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
@@ -3236,7 +3257,7 @@ class SyncEngine {
 					}
 					
 					// what are we checking
-					log.vdebug("skip_file item to check (full calculated path): ", exclusionTestPath);
+					addLogEntry("skip_file item to check (full calculated path): " ~ exclusionTestPath, ["debug"]);
 				} else {
 					// parent not in database, we can only check using this JSON item's name
 					if (!startsWith(thisItemName, "/")){
@@ -3245,13 +3266,14 @@ class SyncEngine {
 					}
 					
 					// what are we checking
-					log.vdebug("skip_file item to check (file name only - parent path not in database): ", exclusionTestPath);
+					addLogEntry("skip_file item to check (file name only - parent path not in database): " ~ exclusionTestPath, ["debug"]);
 					clientSideRuleExcludesPath = selectiveSync.isFileNameExcluded(exclusionTestPath);
 				}
 				
 				// Perform the 'skip_file' evaluation
 				clientSideRuleExcludesPath = selectiveSync.isFileNameExcluded(exclusionTestPath);
-				log.vdebug("Result: ", clientSideRuleExcludesPath);
+				addLogEntry("Result: " ~ to!string(clientSideRuleExcludesPath), ["debug"]);
+				
 				if (clientSideRuleExcludesPath) {
 					// This path should be skipped
 					addLogEntry("Skipping item - excluded by skip_file config: " ~ exclusionTestPath, ["verbose"]);
@@ -3292,7 +3314,7 @@ class SyncEngine {
 				}
 				
 				// What path are we checking?
-				log.vdebug("sync_list item to check: ", newItemPath);
+				addLogEntry("sync_list item to check: " ~ newItemPath, ["debug"]);
 				
 				// Unfortunatly there is no avoiding this call to check if the path is excluded|included via sync_list
 				if (selectiveSync.isPathExcludedViaSyncList(newItemPath)) {
@@ -3334,7 +3356,7 @@ class SyncEngine {
 			
 		foreach (i, localItemDetails; taskPool.parallel(array)) {
 		
-			log.vdebug("Thread ", i, " Starting: ", Clock.currTime());
+			addLogEntry("Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);
 		
 			// These are the details of the item we need to upload
 			string changedItemParentId = localItemDetails[0];
@@ -3368,8 +3390,8 @@ class SyncEngine {
 			ulong calculatedSpaceOnlinePostUpload = (remainingFreeSpace + thisFileSizeFromDB) - thisFileSizeLocal;
 			
 			// Based on what we know, for this thread - can we safely upload this modified local file?
-			log.vdebug("This Thread Current Free Space Online:                ", remainingFreeSpace);
-			log.vdebug("This Thread Calculated Free Space Online Post Upload: ", calculatedSpaceOnlinePostUpload);
+			addLogEntry("This Thread Current Free Space Online:                " ~ to!string(remainingFreeSpace), ["debug"]);
+			addLogEntry("This Thread Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
 		
 			JSONValue uploadResponse;
 			
@@ -3455,9 +3477,9 @@ class SyncEngine {
 					uploadLastModifiedTime(dbItem.driveId, dbItem.id, localModifiedTime, etagFromUploadResponse);
 				}
 			}
-			
-			log.vdebug("Thread ", i, " Finished: ", Clock.currTime());
-		
+
+			addLogEntry("Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);
+
 		} // end of 'foreach (i, localItemDetails; array.enumerate)'
 	}
 	
@@ -3497,7 +3519,7 @@ class SyncEngine {
 						if (exception.httpStatusCode == 429) {
 							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 							handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
-							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+							addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 						}
 						// re-try the specific changes queries
 						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -3507,14 +3529,15 @@ class SyncEngine {
 							// Transient error - try again in 30 seconds
 							auto errorArray = splitLines(exception.msg);
 							addLogEntry(to!string(errorArray[0]) ~ " when attempting to upload a modified file to OneDrive - retrying applicable request in 30 seconds");
-							log.vdebug(thisFunctionName, " previously threw an error - retrying");
+							addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+							
 							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+							addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 							Thread.sleep(dur!"seconds"(30));
 						}
 						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						log.vdebug("Retrying Function: ", thisFunctionName);
-						performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);	
+						addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
+						performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
 					} else {
 						// Default operation if not 408,429,503,504 errors
 						// display what the error is
@@ -3547,7 +3570,7 @@ class SyncEngine {
 						if (exception.httpStatusCode == 429) {
 							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 							handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
-							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+							addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 						}
 						// re-try the specific changes queries
 						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -3557,13 +3580,14 @@ class SyncEngine {
 							// Transient error - try again in 30 seconds
 							auto errorArray = splitLines(exception.msg);
 							addLogEntry(to!string(errorArray[0]) ~ " when attempting to obtain latest file details from OneDrive - retrying applicable request in 30 seconds");
-							log.vdebug(thisFunctionName, " previously threw an error - retrying");
-							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+							addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+							
+							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request.
+							addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 							Thread.sleep(dur!"seconds"(30));
 						}
 						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						log.vdebug("Retrying Function: ", thisFunctionName);
+						addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
 						performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
 					} else {
 						// Default operation if not 408,429,503,504 errors
@@ -3600,7 +3624,7 @@ class SyncEngine {
 						if (exception.httpStatusCode == 429) {
 							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 							handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
-							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+							addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 						}
 						// re-try the specific changes queries
 						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -3610,14 +3634,15 @@ class SyncEngine {
 							// Transient error - try again in 30 seconds
 							auto errorArray = splitLines(exception.msg);
 							addLogEntry(to!string(errorArray[0]) ~ " when attempting to create an upload session on OneDrive - retrying applicable request in 30 seconds");
-							log.vdebug(thisFunctionName, " previously threw an error - retrying");
+							addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+							
 							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+							addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 							Thread.sleep(dur!"seconds"(30));
 						}
 						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						log.vdebug("Retrying Function: ", thisFunctionName);
-						performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);	
+						addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
+						performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
 					} else {
 						// Default operation if not 408,429,503,504 errors
 						// display what the error is
@@ -3641,7 +3666,7 @@ class SyncEngine {
 						if (exception.httpStatusCode == 429) {
 							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 							handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
-							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+							addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 						}
 						// re-try the specific changes queries
 						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -3651,13 +3676,13 @@ class SyncEngine {
 							// Transient error - try again in 30 seconds
 							auto errorArray = splitLines(exception.msg);
 							addLogEntry(to!string(errorArray[0]) ~ " when attempting to upload a file via a session to OneDrive - retrying applicable request in 30 seconds");
-							log.vdebug(thisFunctionName, " previously threw an error - retrying");
+							addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
 							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+							addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 							Thread.sleep(dur!"seconds"(30));
 						}
 						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						log.vdebug("Retrying Function: ", thisFunctionName);
+						addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
 						performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
 					} else {
 						// Default operation if not 408,429,503,504 errors
@@ -3677,7 +3702,7 @@ class SyncEngine {
 		}
 		
 		// Debug Log the modified upload response
-		log.vdebug("Modified File Upload Response: ", uploadResponse);
+		addLogEntry("Modified File Upload Response: " ~ to!string(uploadResponse), ["debug"]);
 		
 		// Shutdown the API instance
 		uploadFileOneDriveApiInstance.shutdown();
@@ -3701,14 +3726,14 @@ class SyncEngine {
 			OneDriveApi getCurrentDriveQuotaApiInstance;
 			getCurrentDriveQuotaApiInstance = new OneDriveApi(appConfig);
 			getCurrentDriveQuotaApiInstance.initialise();
-			log.vdebug("Seeking available quota for this drive id: ", driveId);
+			addLogEntry("Seeking available quota for this drive id: " ~ driveId, ["debug"]);
 			currentDriveQuota = getCurrentDriveQuotaApiInstance.getDriveQuota(driveId);
 			// Shut this API instance down
 			getCurrentDriveQuotaApiInstance.shutdown();
 			// Free object and memory
 			object.destroy(getCurrentDriveQuotaApiInstance);
 		} catch (OneDriveException e) {
-			log.vdebug("currentDriveQuota = onedrive.getDriveQuota(driveId) generated a OneDriveException");
+			addLogEntry("currentDriveQuota = onedrive.getDriveQuota(driveId) generated a OneDriveException", ["debug"]);
 		}
 		
 		// validate that currentDriveQuota is a JSON value
@@ -3762,7 +3787,7 @@ class SyncEngine {
 					appConfig.quotaRestricted = true;
 				} else {
 					// quota details not available
-					log.vdebug("WARNING: OneDrive quota information is being restricted as this is not our drive id.");
+					addLogEntry("WARNING: OneDrive quota information is being restricted as this is not our drive id.", ["debug"]);
 					remainingQuota = 0;
 					appConfig.quotaRestricted = true;
 				}
@@ -3770,7 +3795,7 @@ class SyncEngine {
 		}
 		
 		// what was the determined available quota?
-		log.vdebug("Available quota: ", remainingQuota);
+		addLogEntry("Available quota: " ~ to!string(remainingQuota), ["debug"]);
 		return remainingQuota;
 	}
 	
@@ -3803,20 +3828,20 @@ class SyncEngine {
 		}
 		
 		auto startTime = Clock.currTime();
-		log.vdebug("Starting Filesystem Walk:     ", startTime);
+		addLogEntry("Starting Filesystem Walk:     " ~ to!string(startTime), ["debug"]);
 	
 		// Perform the filesystem walk of this path, building an array of new items to upload
 		scanPathForNewData(path);
 		
 		// To finish off the processing items, this is needed to reflect this in the log
-		log.vdebug("------------------------------------------------------------------");
+		addLogEntry("------------------------------------------------------------------", ["debug"]);
 		
 		auto finishTime = Clock.currTime();
-		log.vdebug("Finished Filesystem Walk:     ", finishTime);
+		addLogEntry("Finished Filesystem Walk:     " ~ to!string(finishTime), ["debug"]);
 		
 		auto elapsedTime = finishTime - startTime;
-		log.vdebug("Elapsed Time Filesystem Walk: ", elapsedTime);
-		
+		addLogEntry("Elapsed Time Filesystem Walk: " ~ to!string(elapsedTime), ["debug"]);
+				
 		// Upload new data that has been identified
 		// Are there any items to download post fetching the /delta data?
 		if (!newLocalFilesToUploadToOneDrive.empty) {
@@ -3847,7 +3872,7 @@ class SyncEngine {
 			
 			// How much space is available (Account Drive ID)
 			// The file, could be uploaded to a shared folder, which, we are not tracking how much free space is available there ... 
-			log.vdebug("Current Available Space Online (Account Drive ID): ", (appConfig.remainingFreeSpace / 1024 / 1024), " MB");
+			addLogEntry("Current Available Space Online (Account Drive ID): " ~ to!string((appConfig.remainingFreeSpace / 1024 / 1024)) ~ " MB", ["debug"]);
 			
 			// Perform the upload
 			uploadNewLocalFileItems();
@@ -3865,7 +3890,7 @@ class SyncEngine {
 		
 		// Add this logging break to assist with what was checked for each path
 		if (path != ".") {
-			log.vdebug("------------------------------------------------------------------");
+			addLogEntry("------------------------------------------------------------------", ["debug"]);
 		}
 		
 		// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
@@ -3898,7 +3923,7 @@ class SyncEngine {
 		} catch (std.utf.UTFException e) {
 			// Path contains characters which generate a UTF exception
 			addLogEntry("Skipping item - invalid UTF sequence: " ~ path, ["info", "notify"]);
-			log.vdebug("  Error Reason:", e.msg);
+			addLogEntry("  Error Reason:" ~ e.msg, ["debug"]);
 			return;
 		}
 		
@@ -4048,7 +4073,7 @@ class SyncEngine {
 							if (!cleanupLocalFiles) {
 								// --download-only --cleanup-local-files not used
 								// Add this path as a file we need to upload
-								log.vdebug("OneDrive Client flagging to upload this file to OneDrive: ", path);
+								addLogEntry("OneDrive Client flagging to upload this file to OneDrive: " ~ path, ["debug"]);
 								newLocalFilesToUploadToOneDrive ~= path;
 							} else {
 								// we need to clean up this file
@@ -4138,7 +4163,7 @@ class SyncEngine {
 			parentItem.id = appConfig.defaultRootId;  		// Should give something like 12345ABCDE1234A1!101
 		} else {
 			// Query the parent path online
-			log.vdebug("Attempting to query Local Database for this parent path: ", parentPath);
+			addLogEntry("Attempting to query Local Database for this parent path: " ~ parentPath, ["debug"]);
 			
 			// Attempt a 2 step process to work out where to create the directory
 			// Step 1: Query the DB first
@@ -4150,8 +4175,8 @@ class SyncEngine {
 			foreach (driveId; driveIDsArray) {
 				if (itemDB.selectByPath(parentPath, driveId, databaseItem)) {
 					pathFoundInDB = true;
-					log.vdebug("databaseItem: ", databaseItem);
-					log.vdebug("pathFoundInDB: ", pathFoundInDB);
+					addLogEntry("databaseItem: " ~ to!string(databaseItem), ["debug"]);
+					addLogEntry("pathFoundInDB: " ~ to!string(pathFoundInDB), ["debug"]);
 				}
 			}
 			
@@ -4159,7 +4184,7 @@ class SyncEngine {
 			if (!pathFoundInDB) {
 				// path not found in database
 				try {
-					log.vdebug("Attempting to query OneDrive Online for this parent path as path not found in local database: ", parentPath);
+					addLogEntry("Attempting to query OneDrive Online for this parent path as path not found in local database: " ~ parentPath, ["debug"]);
 					onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetails(parentPath);
 					// Save item to the database
 					saveItem(onlinePathData);
@@ -4167,7 +4192,7 @@ class SyncEngine {
 				} catch (OneDriveException exception) {
 					if (exception.httpStatusCode == 404) {
 						// Parent does not exist ... need to create parent
-						log.vdebug("Parent path does not exist online: ", parentPath);
+						addLogEntry("Parent path does not exist online: " ~ parentPath, ["debug"]);
 						createDirectoryOnline(parentPath);
 						// no return here as we need to continue, but need to re-query the OneDrive API to get the right parental details now that they exist
 						onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetails(parentPath);
@@ -4180,7 +4205,7 @@ class SyncEngine {
 							if (exception.httpStatusCode == 429) {
 								// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 								handleOneDriveThrottleRequest(createDirectoryOnlineOneDriveApiInstance);
-								log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+								addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 							}
 							// re-try the specific changes queries
 							if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -4190,13 +4215,14 @@ class SyncEngine {
 								// Transient error - try again in 30 seconds
 								auto errorArray = splitLines(exception.msg);
 								addLogEntry(to!string(errorArray[0]) ~ " when attempting to create a remote directory on OneDrive - retrying applicable request in 30 seconds");
-								log.vdebug(thisFunctionName, " previously threw an error - retrying");
+								addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+								
 								// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-								log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+								addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 								Thread.sleep(dur!"seconds"(30));
 							}
 							// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-							log.vdebug("Retrying Function: ", thisFunctionName);
+							addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
 							createDirectoryOnline(thisNewPathToCreate);
 						} else {
 							// Default operation if not 408,429,503,504 errors
@@ -4214,7 +4240,7 @@ class SyncEngine {
 		// Make sure the full path does not exist online, this should generate a 404 response, to which then the folder will be created online
 		try {
 			// Try and query the OneDrive API for the path we need to create
-			log.vdebug("Attempting to query OneDrive for this path: ", thisNewPathToCreate);
+			addLogEntry("Attempting to query OneDrive for this path: " ~ thisNewPathToCreate, ["debug"]);
 			
 			if (parentItem.driveId == appConfig.defaultDriveId) {
 				// Use getPathDetailsByDriveId
@@ -4240,8 +4266,8 @@ class SyncEngine {
 							// Direct Match Check
 							if ((parentItem.id == thisChildItem.parentId) && (baseName(thisNewPathToCreate) == thisChildItem.name)) {
 								// High confidence that this child folder is a direct match we are trying to create and it already exists online
-								log.vdebug("Path we are searching for exists online: ", baseName(thisNewPathToCreate));
-								log.vdebug("childJSON: ", childJSON);
+								addLogEntry("Path we are searching for exists online (Direct Match): " ~ baseName(thisNewPathToCreate), ["debug"]);
+								addLogEntry("childJSON: " ~ to!string(childJSON), ["debug"]);
 								foundDirectoryOnline = true;
 								foundDirectoryJSONItem = childJSON;
 								break;
@@ -4253,6 +4279,8 @@ class SyncEngine {
 							if (childAsLower == thisFolderNameAsLower) {	
 								// This is a POSIX 'case in-sensitive match' ..... 
 								// Local item name has a 'case-insensitive match' to an existing item on OneDrive
+								addLogEntry("Path we are searching for exists online (POSIX 'case in-sensitive match'): " ~ baseName(thisNewPathToCreate), ["debug"]);
+								addLogEntry("childJSON: " ~ to!string(childJSON), ["debug"]);
 								foundDirectoryOnline = true;
 								foundDirectoryJSONItem = childJSON;
 								break;
@@ -4332,7 +4360,7 @@ class SyncEngine {
 					if (exception.httpStatusCode == 429) {
 						// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 						handleOneDriveThrottleRequest(createDirectoryOnlineOneDriveApiInstance);
-						log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+						addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 					}
 					// re-try the specific changes queries
 					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -4342,13 +4370,14 @@ class SyncEngine {
 						// Transient error - try again in 30 seconds
 						auto errorArray = splitLines(exception.msg);
 						addLogEntry(to!string(errorArray[0]) ~ " when attempting to create a remote directory on OneDrive - retrying applicable request in 30 seconds");
-						log.vdebug(thisFunctionName, " previously threw an error - retrying");
+						addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+						
 						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+						addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 						Thread.sleep(dur!"seconds"(30));
 					}
 					// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-					log.vdebug("Retrying Function: ", thisFunctionName);
+					addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
 					createDirectoryOnline(thisNewPathToCreate);
 				} else {
 					// Re-Try
@@ -4365,11 +4394,13 @@ class SyncEngine {
 				// OneDrive 'name' matches local path name
 				if (appConfig.accountType == "business") {
 					// We are a business account, this existing online folder, could be a Shared Online Folder and is the 'Add shortcut to My files' item
-					log.vdebug("onlinePathData: ", onlinePathData);
+					addLogEntry("onlinePathData: " ~ to!string(onlinePathData), ["debug"]);
+					
 					if (isItemRemote(onlinePathData)) {
 						// The folder is a remote item ... we do not want to create this ...
-						log.vdebug("Remote Existing Online Folder is most likely a OneDrive Shared Business Folder Link added by 'Add shortcut to My files'");
-						log.vdebug("We need to skip this path: ", thisNewPathToCreate);
+						addLogEntry("Remote Existing Online Folder is most likely a OneDrive Shared Business Folder Link added by 'Add shortcut to My files'", ["debug"]);
+						addLogEntry("We need to skip this path: " ~ thisNewPathToCreate, ["debug"]);
+						
 						// Add this path to businessSharedFoldersOnlineToSkip
 						businessSharedFoldersOnlineToSkip ~= [thisNewPathToCreate];
 						// no save to database, no online create
@@ -4419,7 +4450,6 @@ class SyncEngine {
 	
 	// Upload new file items as identified
 	void uploadNewLocalFileItems() {
-		
 		// Lets deal with the new local items in a batch process
 		ulong batchSize = appConfig.concurrentThreads;
 		ulong batchCount = (newLocalFilesToUploadToOneDrive.length + batchSize - 1) / batchSize;
@@ -4432,19 +4462,17 @@ class SyncEngine {
 	
 	// Upload the file batches in parallel
 	void uploadNewLocalFileItemsInParallel(string[] array) {
-		
 		foreach (i, fileToUpload; taskPool.parallel(array)) {
-			log.vdebug("Upload Thread ", i, " Starting: ", Clock.currTime());
+			addLogEntry("Upload Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);
 			uploadNewFile(fileToUpload);
-			log.vdebug("Upload Thread ", i, " Finished: ", Clock.currTime());
+			addLogEntry("Upload Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);
 		}
 	}
 	
 	// Upload a new file to OneDrive
 	void uploadNewFile(string fileToUpload) {
-			
 		// Debug for the moment
-		log.vdebug("fileToUpload: ", fileToUpload);
+		addLogEntry("fileToUpload: " ~ fileToUpload, ["debug"]);
 		
 		// These are the details of the item we need to upload
 		// How much space is remaining on OneDrive
@@ -4504,7 +4532,7 @@ class SyncEngine {
 				if (thisFileSize <= maxUploadFileSize) {
 					// Is there enough free space on OneDrive when we started this thread, to upload the file to OneDrive?
 					remainingFreeSpaceOnline = getRemainingFreeSpace(parentItem.driveId);
-					log.vdebug("Current Available Space Online (Upload Target Drive ID): ", (remainingFreeSpaceOnline / 1024 / 1024), " MB");
+					addLogEntry("Current Available Space Online (Upload Target Drive ID): " ~ to!string((remainingFreeSpaceOnline / 1024 / 1024)) ~ " MB", ["debug"]);
 					
 					// When we compare the space online to the total we are trying to upload - is there space online?
 					ulong calculatedSpaceOnlinePostUpload = remainingFreeSpaceOnline - thisFileSize;
@@ -4575,7 +4603,8 @@ class SyncEngine {
 							performPosixTest(baseName(fileToUpload), fileDetailsFromOneDrive["name"].str);
 							
 							// No 404 or otherwise was triggered, meaning that the file already exists online and passes the POSIX test ...
-							log.vdebug("fileDetailsFromOneDrive after exist online check: ", fileDetailsFromOneDrive);
+							addLogEntry("fileDetailsFromOneDrive after exist online check: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);
+							
 							// Does the data from online match our local file?
 							if (performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize)) {
 								// Save item to the database
@@ -4585,7 +4614,7 @@ class SyncEngine {
 							// If we get a 404 .. the file is not online .. this is what we want .. file does not exist online
 							if (exception.httpStatusCode == 404) {
 								// The file has been checked, client side filtering checked, does not exist online - we need to upload it
-								log.vdebug("fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload); generated a 404 - file does not exist online - must upload it");
+								addLogEntry("fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload); generated a 404 - file does not exist online - must upload it", ["debug"]);
 								uploadFailed = performNewFileUpload(parentItem, fileToUpload, thisFileSize);
 							} else {
 								
@@ -4596,7 +4625,7 @@ class SyncEngine {
 									if (exception.httpStatusCode == 429) {
 										// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 										handleOneDriveThrottleRequest(checkFileOneDriveApiInstance);
-										log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+										addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 									}
 									// re-try the specific changes queries
 									if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -4606,13 +4635,14 @@ class SyncEngine {
 										// Transient error - try again in 30 seconds
 										auto errorArray = splitLines(exception.msg);
 										addLogEntry(to!string(errorArray[0]) ~ " when attempting to validate file details on OneDrive - retrying applicable request in 30 seconds");
-										log.vdebug(thisFunctionName, " previously threw an error - retrying");
+										addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+										
 										// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-										log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+										addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 										Thread.sleep(dur!"seconds"(30));
 									}
 									// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-									log.vdebug("Retrying Function: ", thisFunctionName);
+									addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
 									uploadNewFile(fileToUpload);
 								} else {
 									// Default operation if not 408,429,503,504 errors
@@ -4712,7 +4742,7 @@ class SyncEngine {
 						if (exception.httpStatusCode == 429) {
 							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 							handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
-							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+							addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 						}
 						// re-try the specific changes queries
 						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -4722,9 +4752,10 @@ class SyncEngine {
 							// Transient error - try again in 30 seconds
 							auto errorArray = splitLines(exception.msg);
 							addLogEntry(to!string(errorArray[0]) ~ " when attempting to upload a new file to OneDrive - retrying applicable request in 30 seconds");
-							log.vdebug(thisFunctionName, " previously threw an error - retrying");
+							addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+							
 							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+							addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 							Thread.sleep(dur!"seconds"(30));
 						}
 						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
@@ -4766,7 +4797,7 @@ class SyncEngine {
 						if (exception.httpStatusCode == 429) {
 							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 							handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
-							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+							addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 						}
 						// re-try the specific changes queries
 						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -4776,13 +4807,14 @@ class SyncEngine {
 							// Transient error - try again in 30 seconds
 							auto errorArray = splitLines(exception.msg);
 							addLogEntry(to!string(errorArray[0]) ~ " when attempting to create an upload session on OneDrive - retrying applicable request in 30 seconds");
-							log.vdebug(thisFunctionName, " previously threw an error - retrying");
+							addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+							
 							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+							addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 							Thread.sleep(dur!"seconds"(30));
 						}
 						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						log.vdebug("Retrying Function: ", thisFunctionName);
+						addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
 						performNewFileUpload(parentItem, fileToUpload, thisFileSize);
 					} else {
 						// Default operation if not 408,429,503,504 errors
@@ -4805,17 +4837,17 @@ class SyncEngine {
 					// Validate that we have the following items which we need
 					if (!hasUploadURL(uploadSessionData)) {
 						sessionDataValid = false;
-						log.vdebug("Session data missing 'uploadUrl'");
+						addLogEntry("Session data missing 'uploadUrl'", ["debug"]);
 					}
 					
 					if (!hasNextExpectedRanges(uploadSessionData)) {
 						sessionDataValid = false;
-						log.vdebug("Session data missing 'nextExpectedRanges'");
+						addLogEntry("Session data missing 'nextExpectedRanges'", ["debug"]);
 					}
 					
 					if (!hasLocalPath(uploadSessionData)) {
 						sessionDataValid = false;
-						log.vdebug("Session data missing 'localPath'");
+						addLogEntry("Session data missing 'localPath'", ["debug"]);
 					}
 								
 					if (sessionDataValid) {
@@ -4841,7 +4873,7 @@ class SyncEngine {
 								if (exception.httpStatusCode == 429) {
 									// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 									handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
-									log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+									addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 								}
 								// re-try the specific changes queries
 								if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -4851,13 +4883,14 @@ class SyncEngine {
 									// Transient error - try again in 30 seconds
 									auto errorArray = splitLines(exception.msg);
 									addLogEntry(to!string(errorArray[0]) ~ " when attempting to upload a new file via a session to OneDrive - retrying applicable request in 30 seconds");
-									log.vdebug(thisFunctionName, " previously threw an error - retrying");
+									addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+									
 									// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-									log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+									addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 									Thread.sleep(dur!"seconds"(30));
 								}
 								// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-								log.vdebug("Retrying Function: ", thisFunctionName);
+								addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
 								performNewFileUpload(parentItem, fileToUpload, thisFileSize);
 							} else {
 								// Default operation if not 408,429,503,504 errors
@@ -4889,11 +4922,11 @@ class SyncEngine {
 		if (!uploadFailed) {
 			// Upload did not fail ...
 			auto uploadDuration = uploadFinishTime - uploadStartTime;
-			log.vdebug("File Size: ", thisFileSize, " Bytes");
-			log.vdebug("Upload Duration: ", (uploadDuration.total!"msecs"/1e3), " Seconds");
+			addLogEntry("File Size: " ~ to!string(thisFileSize) ~ " Bytes", ["debug"]);
+			addLogEntry("Upload Duration: " ~ to!string((uploadDuration.total!"msecs"/1e3)) ~ " Seconds", ["debug"]);
 			auto uploadSpeed = (thisFileSize / (uploadDuration.total!"msecs"/1e3)/ 1024 / 1024);
-			log.vdebug("Upload Speed: ", uploadSpeed, " Mbps (approx)");
-		
+			addLogEntry("Upload Speed: " ~ to!string(uploadSpeed) ~ " Mbps (approx)", ["debug"]);
+			
 			// OK as the upload did not fail, we need to save the response from OneDrive, but it has to be a valid JSON response
 			if (uploadResponse.type() == JSONType.object) {
 				// check if the path still exists locally before we try to set the file times online - as short lived files, whilst we uploaded it - it may not exist locally aready
@@ -4917,7 +4950,7 @@ class SyncEngine {
 				}
 			} else {
 				// Log that an invalid JSON object was returned
-				log.vdebug("uploadFileOneDriveApiInstance.simpleUpload or session.upload call returned an invalid JSON Object from the OneDrive API");
+				addLogEntry("uploadFileOneDriveApiInstance.simpleUpload or session.upload call returned an invalid JSON Object from the OneDrive API", ["debug"]);
 			}
 		}
 		
@@ -4999,11 +5032,11 @@ class SyncEngine {
 		// Start the session upload using the active API instance for this thread
 		while (true) {
 			fragmentCount++;
-			log.vdebugNewLine("Fragment: ", fragmentCount, " of ", iteration);
+			addLogEntry("Fragment: " ~ to!string(fragmentCount) ~ " of " ~ to!string(iteration), ["debug"]);
 			p.next();
-			log.vdebugNewLine("fragmentSize: ", fragmentSize, "offset: ", offset, " thisFileSize: ", thisFileSize );
+			addLogEntry("fragmentSize: " ~ to!string(fragmentSize) ~ "offset: " ~ to!string(offset) ~ " thisFileSize: " ~ to!string(thisFileSize), ["debug"]);
 			fragSize = fragmentSize < thisFileSize - offset ? fragmentSize : thisFileSize - offset;
-			log.vdebugNewLine("Using fragSize: ", fragSize);
+			addLogEntry("Using fragSize: " ~ to!string(fragSize), ["debug"]);
 			
 			// fragSize must not be a negative value
 			if (fragSize < 0) {
@@ -5043,10 +5076,12 @@ class SyncEngine {
 				// HTTP request returned status code 408,429,503,504
 				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
 					// Handle 'HTTP request returned status code 429 (Too Many Requests)' first
-					log.vdebug("Fragment upload failed - received throttle request uploadResponse from OneDrive");
+					addLogEntry("Fragment upload failed - received throttle request uploadResponse from OneDrive", ["debug"]);
+					
 					if (exception.httpStatusCode == 429) {
 						auto retryAfterValue = activeOneDriveApiInstance.getRetryAfterValue();
-						log.vdebug("Using Retry-After Value = ", retryAfterValue);
+						addLogEntry("Using Retry-After Value = " ~ to!string(retryAfterValue), ["debug"]);
+						
 						// Sleep thread as per request
 						addLogEntry();
 						addLogEntry("Thread sleeping due to 'HTTP request returned status code 429' - The request has been throttled");
@@ -5155,7 +5190,7 @@ class SyncEngine {
 					children = getChildren(itemToDelete.driveId, itemToDelete.id);
 					// Count the returned items + the original item (1)
 					itemsToDelete = count(children) + 1;
-					log.vdebug("Number of items online to delete: ", itemsToDelete);
+					addLogEntry("Number of items online to delete: " ~ to!string(itemsToDelete), ["debug"]);
 				} else {
 					itemsToDelete = 1;
 				}
@@ -5176,7 +5211,7 @@ class SyncEngine {
 				// Are we in a --dry-run scenario?
 				if (!dryRun) {
 					// We are not in a dry run scenario
-					log.vdebug("itemToDelete: ", itemToDelete);
+					addLogEntry("itemToDelete: " ~ to!string(itemToDelete), ["debug"]);
 					
 					// Create new OneDrive API Instance
 					OneDriveApi uploadDeletedItemOneDriveApiInstance;
@@ -5184,7 +5219,8 @@ class SyncEngine {
 					uploadDeletedItemOneDriveApiInstance.initialise();
 				
 					// what item are we trying to delete?
-					log.vdebug("Attempting to delete this single item id: ", itemToDelete.id, " from drive: ", itemToDelete.driveId);
+					addLogEntry("Attempting to delete this single item id: " ~ itemToDelete.id ~ " from drive: " ~ itemToDelete.driveId, ["debug"]);
+					
 					try {
 						// perform the delete via the default OneDrive API instance
 						uploadDeletedItemOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id);
@@ -5211,7 +5247,7 @@ class SyncEngine {
 				}
 			} else {
 				// --download-only operation, we are not uploading any delete event to OneDrive
-				log.vdebug("Not pushing local delete to Microsoft OneDrive due to --download-only being used");
+				addLogEntry("Not pushing local delete to Microsoft OneDrive due to --download-only being used", ["debug"]);
 			}
 		}
 	}
@@ -5234,7 +5270,7 @@ class SyncEngine {
 	void performReverseDeletionOfOneDriveItems(Item[] children, Item itemToDelete) {
 		
 		// Log what is happening
-		log.vdebug("Attempting a reverse delete of all child objects from OneDrive");
+		addLogEntry("Attempting a reverse delete of all child objects from OneDrive", ["debug"]);
 		
 		// Create a new API Instance for this thread and initialise it
 		OneDriveApi performReverseDeletionOneDriveApiInstance;
@@ -5243,14 +5279,16 @@ class SyncEngine {
 		
 		foreach_reverse (Item child; children) {
 			// Log the action
-			log.vdebug("Attempting to delete this child item id: ", child.id, " from drive: ", child.driveId);
+			addLogEntry("Attempting to delete this child item id: " ~ child.id ~ " from drive: " ~ child.driveId, ["debug"]);
+			
 			// perform the delete via the default OneDrive API instance
 			performReverseDeletionOneDriveApiInstance.deleteById(child.driveId, child.id, child.eTag);
 			// delete the child reference in the local database
 			itemDB.deleteById(child.driveId, child.id);
 		}
 		// Log the action
-		log.vdebug("Attempting to delete this parent item id: ", itemToDelete.id, " from drive: ", itemToDelete.driveId);
+		addLogEntry("Attempting to delete this parent item id: " ~ itemToDelete.id ~ " from drive: " ~ itemToDelete.driveId, ["debug"]);
+		
 		// Perform the delete via the default OneDrive API instance
 		performReverseDeletionOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id, itemToDelete.eTag);
 		// Shutdown API instance
@@ -5286,9 +5324,10 @@ class SyncEngine {
 			// Not a 'root' parent
 			// For each driveid in the existing driveIDsArray 
 			foreach (searchDriveId; driveIDsArray) {
-				log.vdebug("FakeResponse: searching database for: ", searchDriveId, " ", parentPath);
+				addLogEntry("FakeResponse: searching database for: " ~ searchDriveId ~ " " ~ parentPath, ["debug"]);
+				
 				if (itemDB.selectByPath(parentPath, searchDriveId, databaseItem)) {
-					log.vdebug("FakeResponse: Found Database Item: ", databaseItem);
+					addLogEntry("FakeResponse: Found Database Item: " ~ to!string(databaseItem), ["debug"]);
 					fakeDriveId = databaseItem.driveId;
 					fakeRootId = databaseItem.id;
 				}
@@ -5347,7 +5386,7 @@ class SyncEngine {
 							];
 		}
 						
-		log.vdebug("Generated Fake OneDrive Response: ", fakeResponse);
+		addLogEntry("Generated Fake OneDrive Response: " ~ to!string(fakeResponse), ["debug"]);
 		return fakeResponse;
 	}
 	
@@ -5363,34 +5402,35 @@ class SyncEngine {
 				// If the item is a directory, we need to add this to the DB, if this is a file, we dont add this, the parent path is not in DB, thus any new files in this directory are not added
 				if ((uploadOnly) && (localDeleteAfterUpload) && (isItemFile(jsonItem))) {
 					// Log that we skipping adding item to the local DB and the reason why
-					log.vdebug("Skipping adding to database as --upload-only & --remove-source-files configured");
+					addLogEntry("Skipping adding to database as --upload-only & --remove-source-files configured", ["debug"]);
 				} else {
 					// What is the JSON item we are trying to create a DB record with?
-					log.vdebug("saveItem - creating DB item from this JSON: ", jsonItem);
+					addLogEntry("saveItem - creating DB item from this JSON: " ~ to!string(jsonItem), ["debug"]);
+					
 					// Takes a JSON input and formats to an item which can be used by the database
 					Item item = makeItem(jsonItem);
 					
 					// Is this JSON item a 'root' item?
 					if ((isItemRoot(jsonItem)) && (item.name == "root")) {
-						log.vdebug("Updating DB Item object with correct values as this is a 'root' object");
+						addLogEntry("Updating DB Item object with correct values as this is a 'root' object", ["debug"]);
 						item.parentId = null; 	// ensures that this database entry has no parent
 						// Check for parentReference
 						if (hasParentReference(jsonItem)) {
 							// Set the correct item.driveId
-							log.vdebug("ROOT JSON Item HAS parentReference .... setting item.driveId = jsonItem['parentReference']['driveId'].str");
+							addLogEntry("ROOT JSON Item HAS parentReference .... setting item.driveId = jsonItem['parentReference']['driveId'].str", ["debug"]);
 							item.driveId = jsonItem["parentReference"]["driveId"].str;
 						}
 						
 						// We only should be adding our account 'root' to the database, not shared folder 'root' items
 						if (item.driveId != appConfig.defaultDriveId) {
 							// Shared Folder drive 'root' object .. we dont want this item
-							log.vdebug("NOT adding 'remote root' object to database: ", item);
+							addLogEntry("NOT adding 'remote root' object to database: " ~ to!string(item), ["debug"]);
 							return;
 						}
 					}
 					
 					// Add to the local database
-					log.vdebug("Adding to database: ", item);
+					addLogEntry("Adding to database: " ~ to!string(item), ["debug"]);
 					itemDB.upsert(item);
 					
 					// If we have a remote drive ID, add this to our list of known drive id's
@@ -5434,7 +5474,7 @@ class SyncEngine {
 							// Microsoft OneDrive OneNote objects will report as files but have 'application/msonenote' and 'application/octet-stream' as mime types
 							if ((isMicrosoftOneNoteMimeType1(onedriveJSONItem)) || (isMicrosoftOneNoteMimeType2(onedriveJSONItem))) {
 								// Debug log output that this is a potential OneNote object
-								log.vdebug("This item is potentially an associated Microsoft OneNote Object Item");
+								addLogEntry("This item is potentially an associated Microsoft OneNote Object Item", ["debug"]);
 							} else {
 								// Not a Microsoft OneNote Mime Type Object ..
 								string apiWarningMessage = "WARNING: OneDrive API inconsistency - this file does not have any hash: ";
@@ -5449,7 +5489,7 @@ class SyncEngine {
 									// Parent is not in the database .. why?
 									// Check if the parent item had been skipped .. 
 									if (newDatabaseItem.parentId in skippedItems) {
-										log.vdebug(apiWarningMessage, "newDatabaseItem.parentId listed within skippedItems");
+										addLogEntry(apiWarningMessage ~ "newDatabaseItem.parentId listed within skippedItems", ["debug"]);
 									} else {
 										// Use the item ID .. there is no other reference available, parent is not being skipped, so we should have been able to calculate this - but we could not
 										addLogEntry(apiWarningMessage ~ newDatabaseItem.id);
@@ -5460,7 +5500,7 @@ class SyncEngine {
 					}
 				} else {
 					// zero file size
-					log.vdebug("This item file is zero size - potentially no hash provided by the OneDrive API");
+					addLogEntry("This item file is zero size - potentially no hash provided by the OneDrive API", ["debug"]);
 				}
 			}
 		}
@@ -5596,13 +5636,14 @@ class SyncEngine {
 		
 		// Before we get any data from the OneDrive API, flag any child object in the database as out-of-sync for this driveId & and object id
 		// Downgrade ONLY files associated with this driveId and idToQuery
-		log.vdebug("Downgrading all children for this searchItem.driveId (" ~ searchItem.driveId ~ ") and searchItem.id (" ~ searchItem.id ~ ") to an out-of-sync state");
+		addLogEntry("Downgrading all children for this searchItem.driveId (" ~ searchItem.driveId ~ ") and searchItem.id (" ~ searchItem.id ~ ") to an out-of-sync state", ["debug"]);
+		
 		auto drivePathChildren = getChildren(searchItem.driveId, searchItem.id);
 		if (count(drivePathChildren) > 0) {
 			// Children to process and flag as out-of-sync	
 			foreach (drivePathChild; drivePathChildren) {
 				// Flag any object in the database as out-of-sync for this driveId & and object id
-				log.vdebug("Downgrading item as out-of-sync: ", drivePathChild.id);
+				addLogEntry("Downgrading item as out-of-sync: " ~ drivePathChild.id, ["debug"]);
 				itemDB.downgradeSyncStatusFlag(drivePathChild.driveId, drivePathChild.id);
 			}
 		}
@@ -5611,7 +5652,7 @@ class SyncEngine {
 		try {
 			driveData = generateDeltaResponseOneDriveApiInstance.getPathDetailsById(searchItem.driveId, searchItem.id);
 		} catch (OneDriveException exception) {
-			log.vdebug("driveData = generateDeltaResponseOneDriveApiInstance.getPathDetailsById(searchItem.driveId, searchItem.id) generated a OneDriveException");
+			addLogEntry("driveData = generateDeltaResponseOneDriveApiInstance.getPathDetailsById(searchItem.driveId, searchItem.id) generated a OneDriveException", ["debug"]);
 			
 			string thisFunctionName = getFunctionName!({});
 			// HTTP request returned status code 408,429,503,504
@@ -5620,7 +5661,7 @@ class SyncEngine {
 				if (exception.httpStatusCode == 429) {
 					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 					handleOneDriveThrottleRequest(generateDeltaResponseOneDriveApiInstance);
-					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+					addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 				}
 				// re-try the specific changes queries
 				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -5630,13 +5671,14 @@ class SyncEngine {
 					// Transient error - try again in 30 seconds
 					auto errorArray = splitLines(exception.msg);
 					addLogEntry(to!string(errorArray[0]) ~ " when attempting to query path details on OneDrive - retrying applicable request in 30 seconds");
-					log.vdebug(thisFunctionName, " previously threw an error - retrying");
+					addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+					
 					// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-					log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+					addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 					Thread.sleep(dur!"seconds"(30));
 				}
 				// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-				log.vdebug("Retrying Function: ", thisFunctionName);
+				addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
 				generateDeltaResponse(pathToQuery);
 			} else {
 				// Default operation if not 408,429,503,504 errors
@@ -5666,7 +5708,7 @@ class SyncEngine {
 				try {
 					rootData = generateDeltaResponseOneDriveApiInstance.getDriveIdRoot(searchItem.driveId);
 				} catch (OneDriveException exception) {
-					log.vdebug("rootData = onedrive.getDriveIdRoot(searchItem.driveId) generated a OneDriveException");
+					addLogEntry("rootData = onedrive.getDriveIdRoot(searchItem.driveId) generated a OneDriveException", ["debug"]);
 					
 					string thisFunctionName = getFunctionName!({});
 					// HTTP request returned status code 408,429,503,504
@@ -5675,7 +5717,7 @@ class SyncEngine {
 						if (exception.httpStatusCode == 429) {
 							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 							handleOneDriveThrottleRequest(generateDeltaResponseOneDriveApiInstance);
-							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+							addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 						}
 						// re-try the specific changes queries
 						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -5685,9 +5727,10 @@ class SyncEngine {
 							// Transient error - try again in 30 seconds
 							auto errorArray = splitLines(exception.msg);
 							addLogEntry(to!string(errorArray[0]) ~ " when attempting to query drive root details on OneDrive - retrying applicable request in 30 seconds");
-							log.vdebug(thisFunctionName, " previously threw an error - retrying");
+							addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+							
 							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+							addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 							Thread.sleep(dur!"seconds"(30));
 						}
 						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
@@ -5724,11 +5767,11 @@ class SyncEngine {
 				topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink);
 			} catch (OneDriveException exception) {
 				// OneDrive threw an error
-				log.vdebug("------------------------------------------------------------------");
-				log.vdebug("Query Error: topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink)");
-				log.vdebug("driveId:   ", searchItem.driveId);
-				log.vdebug("idToQuery: ", searchItem.id);
-				log.vdebug("nextLink:  ", nextLink);
+				addLogEntry("------------------------------------------------------------------", ["debug"]);
+				addLogEntry("Query Error: topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink)", ["debug"]);
+				addLogEntry("driveId:   " ~ searchItem.driveId, ["debug"]);
+				addLogEntry("idToQuery: " ~ searchItem.id, ["debug"]);
+				addLogEntry("nextLink:  " ~ nextLink, ["debug"]);
 				
 				string thisFunctionName = getFunctionName!({});
 				// HTTP request returned status code 408,429,503,504
@@ -5737,7 +5780,7 @@ class SyncEngine {
 					if (exception.httpStatusCode == 429) {
 						// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 						handleOneDriveThrottleRequest(generateDeltaResponseOneDriveApiInstance);
-						log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink)");
+						addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink)", ["debug"]);
 					}
 					// re-try the specific changes queries
 					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -5747,18 +5790,15 @@ class SyncEngine {
 						// Transient error - try again in 30 seconds
 						auto errorArray = splitLines(exception.msg);
 						addLogEntry(to!string(errorArray[0]) ~ " when attempting to query OneDrive top level drive children on OneDrive - retrying applicable request in 30 seconds");
-						log.vdebug("generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink) previously threw an error - retrying");
+						addLogEntry("generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink) previously threw an error - retrying", ["debug"]);
+						
 						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+						addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 						Thread.sleep(dur!"seconds"(30));
 					}
 					// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-					//log.vdebug("Retrying Query: generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink)");
-					//topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink);
-					
-					log.vdebug("Retrying Function: ", thisFunctionName);
+					addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
 					generateDeltaResponse(pathToQuery);
-					
 				} else {
 					// Default operation if not 408,429,503,504 errors
 					// display what the error is
@@ -5807,7 +5847,7 @@ class SyncEngine {
 			// to indicate more items are available and provide the request URL for the next page of items.
 			if ("@odata.nextLink" in topLevelChildren) {
 				// Update nextLink to next changeSet bundle
-				log.vdebug("Setting nextLink to (@odata.nextLink): ", nextLink);
+				addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
 				nextLink = topLevelChildren["@odata.nextLink"].str;
 			} else break;
 		}
@@ -5905,16 +5945,17 @@ class SyncEngine {
 				if ("@odata.nextLink" in thisLevelChildren) {
 					// Update nextLink to next changeSet bundle
 					nextLink = thisLevelChildren["@odata.nextLink"].str;
-					log.vdebug("Setting nextLink to (@odata.nextLink): ", nextLink);
+					addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
 				} else break;
 			
 			} else {
 				// Invalid JSON response when querying this level children
-				log.vdebug("INVALID JSON response when attempting a retry of parent function - queryForChildren(driveId, idToQuery, childParentPath, pathForLogging)");
+				addLogEntry("INVALID JSON response when attempting a retry of parent function - queryForChildren(driveId, idToQuery, childParentPath, pathForLogging)", ["debug"]);
+				
 				// retry thisLevelChildren = queryThisLevelChildren
-				log.vdebug("Thread sleeping for an additional 30 seconds");
+				addLogEntry("Thread sleeping for an additional 30 seconds", ["debug"]);
 				Thread.sleep(dur!"seconds"(30));
-				log.vdebug("Retry this call thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance)");
+				addLogEntry("Retry this call thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance)", ["debug"]);
 				thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance);
 			}
 		}
@@ -5937,16 +5978,16 @@ class SyncEngine {
 		// query children
 		try {
 			// attempt API call
-			log.vdebug("Attempting Query: thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink)");
+			addLogEntry("Attempting Query: thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink)", ["debug"]);
 			thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink);
-			log.vdebug("Query 'thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink)' performed successfully");
+			addLogEntry("Query 'thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink)' performed successfully", ["debug"]);
 		} catch (OneDriveException exception) {
 			// OneDrive threw an error
-			log.vdebug("------------------------------------------------------------------");
-			log.vdebug("Query Error: thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink)");
-			log.vdebug("driveId: ", driveId);
-			log.vdebug("idToQuery: ", idToQuery);
-			log.vdebug("nextLink: ", nextLink);
+			addLogEntry("------------------------------------------------------------------", ["debug"]);
+			addLogEntry("Query Error: thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink)", ["debug"]);
+			addLogEntry("driveId: " ~ driveId, ["debug"]);
+			addLogEntry("idToQuery: " ~ idToQuery, ["debug"]);
+			addLogEntry("nextLink: " ~ nextLink, ["debug"]);
 			
 			string thisFunctionName = getFunctionName!({});
 			// HTTP request returned status code 408,429,503,504
@@ -5955,7 +5996,7 @@ class SyncEngine {
 				if (exception.httpStatusCode == 429) {
 					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 					handleOneDriveThrottleRequest(queryChildrenOneDriveApiInstance);
-					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+					addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 				}
 				// re-try the specific changes queries
 				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -5965,15 +6006,15 @@ class SyncEngine {
 					// Transient error - try again in 30 seconds
 					auto errorArray = splitLines(exception.msg);
 					addLogEntry(to!string(errorArray[0]) ~ " when attempting to query OneDrive drive item children - retrying applicable request in 30 seconds");
-					log.vdebug("thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink) previously threw an error - retrying");
+					addLogEntry("thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink) previously threw an error - retrying", ["debug"]);
+					
 					// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-					log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+					addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 					Thread.sleep(dur!"seconds"(30));
 				}
 				// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-				log.vdebug("Retrying Function: ", thisFunctionName);
+				addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
 				queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance);
-				
 			} else {
 				// Default operation if not 408,429,503,504 errors
 				// display what the error is
@@ -6011,7 +6052,7 @@ class SyncEngine {
 		queryOneDriveForSpecificPath.initialise();
 		
 		foreach (thisFolderName; pathSplitter(thisNewPathToSearch)) {
-			log.vdebug("Testing for the existance online of this folder path: ", thisFolderName);
+			addLogEntry("Testing for the existance online of this folder path: " ~ thisFolderName, ["debug"]);
 			directoryFoundOnline = false;
 			
 			// If this is '.' this is the account root
@@ -6021,7 +6062,7 @@ class SyncEngine {
 				currentPathTree = currentPathTree ~ "/" ~ thisFolderName;
 			}
 			
-			log.vdebug("Attempting to query OneDrive for this path: ", currentPathTree);
+			addLogEntry("Attempting to query OneDrive for this path: " ~ currentPathTree, ["debug"]);
 			
 			// What query do we use?
 			if (thisFolderName == ".") {
@@ -6041,7 +6082,7 @@ class SyncEngine {
 						if (exception.httpStatusCode == 429) {
 							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 							handleOneDriveThrottleRequest(queryOneDriveForSpecificPath);
-							log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+							addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 						}
 						// re-try the specific changes queries
 						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -6051,14 +6092,15 @@ class SyncEngine {
 							// Transient error - try again in 30 seconds
 							auto errorArray = splitLines(exception.msg);
 							addLogEntry(to!string(errorArray[0]) ~ " when attempting to query path on OneDrive - retrying applicable request in 30 seconds");
-							log.vdebug(thisFunctionName, " previously threw an error - retrying");
+							addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+							
 							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+							addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 							Thread.sleep(dur!"seconds"(30));
 						}
 						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						log.vdebug("Retrying Function: ", thisFunctionName);
-						queryOneDriveForSpecificPathAndCreateIfMissing(thisNewPathToSearch, createPathIfMissing);	
+						addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
+						queryOneDriveForSpecificPathAndCreateIfMissing(thisNewPathToSearch, createPathIfMissing);
 					} else {
 						// Default operation if not 408,429,503,504 errors
 						// display what the error is
@@ -6088,7 +6130,8 @@ class SyncEngine {
 						// Is this JSON a remote object
 						if (isItemRemote(getPathDetailsAPIResponse)) {
 							// Remote Directory .. need a DB Tie Item
-							log.vdebug("Creating a DB TIE for this Shared Folder");
+							addLogEntry("Creating a DB TIE for this Shared Folder", ["debug"]);
+							
 							// New DB Tie Item to bind the 'remote' path to our parent path
 							Item tieDBItem;
 							// Set the name
@@ -6101,7 +6144,8 @@ class SyncEngine {
 							// Set the correct mtime
 							tieDBItem.mtime = parentDetails.mtime;
 							// Add tie DB record to the local database
-							log.vdebug("Adding tie DB record to database: ", tieDBItem);
+							addLogEntry("Adding tie DB record to database: " ~ to!string(tieDBItem), ["debug"]);
+							
 							itemDB.upsert(tieDBItem);
 							// Update parentDetails to use the DB Tie record
 							parentDetails = tieDBItem;
@@ -6119,7 +6163,7 @@ class SyncEngine {
 								if (exception.httpStatusCode == 429) {
 									// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 									handleOneDriveThrottleRequest(queryOneDriveForSpecificPath);
-									log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry ", thisFunctionName);
+									addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
 								}
 								// re-try the specific changes queries
 								if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -6129,13 +6173,14 @@ class SyncEngine {
 									// Transient error - try again in 30 seconds
 									auto errorArray = splitLines(exception.msg);
 									addLogEntry(to!string(errorArray[0]) ~ " when attempting to query path on OneDrive - retrying applicable request in 30 seconds");
-									log.vdebug(thisFunctionName, " previously threw an error - retrying");
+									addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+									
 									// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-									log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+									addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 									Thread.sleep(dur!"seconds"(30));
 								}
 								// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-								log.vdebug("Retrying Function: ", thisFunctionName);
+								addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
 								queryOneDriveForSpecificPathAndCreateIfMissing(thisNewPathToSearch, createPathIfMissing);
 							} else {
 								// Default operation if not 408,429,503,504 errors
@@ -6146,7 +6191,8 @@ class SyncEngine {
 					}
 				} else {
 					// parentDetails.driveId is not the account drive id - thus will be a remote shared item
-					log.vdebug("This parent directory is a remote object this next path will be on a remote drive");
+					addLogEntry("This parent directory is a remote object this next path will be on a remote drive", ["debug"]);
+					
 					// For this parentDetails.driveId, parentDetails.id object, query the OneDrive API for it's children
 					for (;;) {
 						// Query this remote object for its children
@@ -6188,7 +6234,7 @@ class SyncEngine {
 						// to indicate more items are available and provide the request URL for the next page of items.
 						if ("@odata.nextLink" in topLevelChildren) {
 							// Update nextLink to next changeSet bundle
-							log.vdebug("Setting nextLink to (@odata.nextLink): ", nextLink);
+							addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
 							nextLink = topLevelChildren["@odata.nextLink"].str;
 						} else break;
 					}
@@ -6205,11 +6251,12 @@ class SyncEngine {
 					// No POSIX issue
 					if (createPathIfMissing) {
 						// Create this path as it is missing on OneDrive online and there is no POSIX issue with a 'case-insensitive match'
-						log.vdebug("FOLDER NOT FOUND ONLINE AND WE ARE REQUESTED TO CREATE IT");
-						log.vdebug("Create folder on this drive:             ", parentDetails.driveId);
-						log.vdebug("Create folder as a child on this object: ", parentDetails.id);
-						log.vdebug("Create this folder name:                 ", thisFolderName);
+						addLogEntry("FOLDER NOT FOUND ONLINE AND WE ARE REQUESTED TO CREATE IT", ["debug"]);
+						addLogEntry("Create folder on this drive:             " ~ parentDetails.driveId, ["debug"]);
+						addLogEntry("Create folder as a child on this object: " ~ parentDetails.id, ["debug"]);
+						addLogEntry("Create this folder name:                 " ~ thisFolderName, ["debug"]);
 						
+						// Generate the JSON needed to create the folder online
 						JSONValue newDriveItem = [
 								"name": JSONValue(thisFolderName),
 								"folder": parseJSON("{}")
@@ -6255,7 +6302,7 @@ class SyncEngine {
 		object.destroy(queryOneDriveForSpecificPath);
 		
 		// Output our search results
-		log.vdebug("queryOneDriveForSpecificPathAndCreateIfMissing.getPathDetailsAPIResponse = ", getPathDetailsAPIResponse);
+		addLogEntry("queryOneDriveForSpecificPathAndCreateIfMissing.getPathDetailsAPIResponse = " ~ to!string(getPathDetailsAPIResponse), ["debug"]);
 		return getPathDetailsAPIResponse;
 	}
 	
@@ -6432,7 +6479,7 @@ class SyncEngine {
 					if (e.httpStatusCode == 412) {
 						// OneDrive threw a 412 error, most likely: ETag does not match current item's value
 						// Retry without eTag
-						log.vdebug("File Move Failed - OneDrive eTag / cTag match issue");
+						addLogEntry("File Move Failed - OneDrive eTag / cTag match issue", ["debug"]);
 						addLogEntry("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting to move the file - gracefully handling error", ["verbose"]);
 						string nullTag = null;
 						// move the file but without the eTag
@@ -6470,7 +6517,7 @@ class SyncEngine {
 				
 				if ((localFileSize == uploadFileSize) && (localFileHash == uploadFileHash)) {
 					// Uploaded file integrity intact
-					log.vdebug("Uploaded local file matches reported online size and hash values");
+					addLogEntry("Uploaded local file matches reported online size and hash values", ["debug"]);
 					integrityValid = true;
 				} else {
 					// Upload integrity failure .. what failed?
@@ -6503,7 +6550,7 @@ class SyncEngine {
 			}
 		} else {
 			// We are bypassing integrity checks due to --disable-upload-validation
-			log.vdebug("Upload file validation disabled due to --disable-upload-validation");
+			addLogEntry("Upload file validation disabled due to --disable-upload-validation", ["debug"]);
 			addLogEntry("WARNING: Skipping upload integrity check for: " ~ localFilePath, ["info", "notify"]);
 		}
 		
@@ -6569,26 +6616,27 @@ class SyncEngine {
 				if (e.httpStatusCode == 429) {
 					// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
 					handleOneDriveThrottleRequest(querySharePointLibraryNameApiInstance);
-					log.vdebug("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query OneDrive drive children");
+					addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to query OneDrive drive children", ["debug"]);
 				}
 				// HTTP request returned status code 504 (Gateway Timeout) or 429 retry
 				if ((e.httpStatusCode == 429) || (e.httpStatusCode == 504)) {
 					// re-try the specific changes queries	
 					if (e.httpStatusCode == 504) {
 						addLogEntry("OneDrive returned a 'HTTP 504 - Gateway Timeout' when attempting to query Sharepoint Sites - retrying applicable request");
-						log.vdebug("siteQuery = onedrive.o365SiteSearch(nextLink) previously threw an error - retrying");
+						addLogEntry("siteQuery = onedrive.o365SiteSearch(nextLink) previously threw an error - retrying", ["debug"]);
+						
 						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-						log.vdebug("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request");
+						addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 						Thread.sleep(dur!"seconds"(30));
 					}
 					// re-try original request - retried for 429 and 504
 					try {
-						log.vdebug("Retrying Query: siteQuery = onedrive.o365SiteSearch(nextLink)");
+						addLogEntry("Retrying Query: siteQuery = onedrive.o365SiteSearch(nextLink)", ["debug"]);
 						siteQuery = querySharePointLibraryNameApiInstance.o365SiteSearch(nextLink);
-						log.vdebug("Query 'siteQuery = onedrive.o365SiteSearch(nextLink)' performed successfully on re-try");
+						addLogEntry("Query 'siteQuery = onedrive.o365SiteSearch(nextLink)' performed successfully on re-try", ["debug"]);
 					} catch (OneDriveException e) {
 						// display what the error is
-						log.vdebug("Query Error: siteQuery = onedrive.o365SiteSearch(nextLink) on re-try after delay");
+						addLogEntry("Query Error: siteQuery = onedrive.o365SiteSearch(nextLink) on re-try after delay", ["debug"]);
 						// error was not a 504 this time
 						displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 						return;
@@ -6603,11 +6651,11 @@ class SyncEngine {
 			// is siteQuery a valid JSON object & contain data we can use?
 			if ((siteQuery.type() == JSONType.object) && ("value" in siteQuery)) {
 				// valid JSON object
-				log.vdebug("O365 Query Response: ", siteQuery);
+				addLogEntry("O365 Query Response: " ~ to!string(siteQuery), ["debug"]);
 				
 				foreach (searchResult; siteQuery["value"].array) {
 					// Need an 'exclusive' match here with sharepointLibraryNameToQuery as entered
-					log.vdebug("Found O365 Site: ", searchResult);
+					addLogEntry("Found O365 Site: " ~ to!string(searchResult), ["debug"]);
 					
 					// 'displayName' and 'id' have to be present in the search result record in order to query the site
 					if (("displayName" in searchResult) && ("id" in searchResult)) {
@@ -6631,7 +6679,7 @@ class SyncEngine {
 								foreach (driveResult; siteDriveQuery["value"].array) {
 									// Display results
 									writeln("-----------------------------------------------");
-									log.vdebug("Site Details: ", driveResult);
+									addLogEntry("Site Details: " ~ to!string(driveResult), ["debug"]);
 									found = true;
 									writeln("Site Name:    ", searchResult["displayName"].str);
 									writeln("Library Name: ", driveResult["name"].str);
@@ -6684,7 +6732,7 @@ class SyncEngine {
 								siteSearchResults ~= siteSearchResultsEntry;
 							} else {
 								// displayName and id unavailable, display in debug log the entry
-								log.vdebug("Bad SharePoint Data for site: ", searchResult);
+								addLogEntry("Bad SharePoint Data for site: " ~ to!string(searchResult), ["debug"]);
 							}
 						}
 					}
@@ -6701,7 +6749,7 @@ class SyncEngine {
 			if ("@odata.nextLink" in siteQuery) {
 				// Update nextLink to next set of SharePoint library names
 				nextLink = siteQuery["@odata.nextLink"].str;
-				log.vdebug("Setting nextLink to (@odata.nextLink): ", nextLink);
+				addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
 			} else break;
 		}
 		
@@ -6769,7 +6817,7 @@ class SyncEngine {
 			if (deltaChanges.type() != JSONType.object) {
 				while (deltaChanges.type() != JSONType.object) {
 					// Handle the invalid JSON response adn retry
-					log.vdebug("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response");
+					addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response", ["debug"]);
 					deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink, getDeltaQueryOneDriveApiInstance);
 				}
 			}
@@ -6815,13 +6863,13 @@ class SyncEngine {
 			// The response may contain either @odata.deltaLink or @odata.nextLink
 			if ("@odata.deltaLink" in deltaChanges) {
 				deltaLink = deltaChanges["@odata.deltaLink"].str;
-				log.vdebug("Setting next deltaLink to (@odata.deltaLink): ", deltaLink);
+				addLogEntry("Setting next deltaLink to (@odata.deltaLink): " ~ deltaLink, ["debug"]);
 			}
 			
 			// Update deltaLink to next changeSet bundle
 			if ("@odata.nextLink" in deltaChanges) {	
 				deltaLink = deltaChanges["@odata.nextLink"].str;
-				log.vdebug("Setting next deltaLink to (@odata.nextLink): ", deltaLink);
+				addLogEntry("Setting next deltaLink to (@odata.nextLink): " ~ deltaLink, ["debug"]);
 			}
 			else break;
 		}
@@ -6923,7 +6971,7 @@ class SyncEngine {
 					if (fileDetailsFromOneDrive.type() == JSONType.object) {
 					
 						// debug output of response
-						log.vdebug("API Response: ", fileDetailsFromOneDrive);
+						addLogEntry("API Response: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);
 						
 						// What sort of response to we generate
 						// --get-file-link response
@@ -7030,14 +7078,14 @@ class SyncEngine {
 			OneDriveApi getCurrentDriveQuotaApiInstance;
 			getCurrentDriveQuotaApiInstance = new OneDriveApi(appConfig);
 			getCurrentDriveQuotaApiInstance.initialise();
-			log.vdebug("Seeking available quota for this drive id: ", driveId);
+			addLogEntry("Seeking available quota for this drive id: " ~ driveId, ["debug"]);
 			currentDriveQuota = getCurrentDriveQuotaApiInstance.getDriveQuota(driveId);
 			// Shut this API instance down
 			getCurrentDriveQuotaApiInstance.shutdown();
 			// Free object and memory
 			object.destroy(getCurrentDriveQuotaApiInstance);
 		} catch (OneDriveException e) {
-			log.vdebug("currentDriveQuota = onedrive.getDriveQuota(driveId) generated a OneDriveException");
+			addLogEntry("currentDriveQuota = onedrive.getDriveQuota(driveId) generated a OneDriveException", ["debug"]);
 		}
 		
 		// validate that currentDriveQuota is a JSON value
@@ -7046,7 +7094,7 @@ class SyncEngine {
 			if ("quota" in currentDriveQuota) {
 		
 				// debug output of response
-				log.vdebug("currentDriveQuota: ", currentDriveQuota);
+				addLogEntry("currentDriveQuota: " ~ to!string(currentDriveQuota), ["debug"]);
 				
 				// human readable output of response
 				string deletedValue = "Not Provided";
@@ -7158,15 +7206,15 @@ class SyncEngine {
 		try {
 			sessionFileData = readText(sessionFilePath).parseJSON();
 		} catch (JSONException e) {
-			log.vdebug("SESSION-RESUME: Invalid JSON data in: ", sessionFilePath);
+			addLogEntry("SESSION-RESUME: Invalid JSON data in: " ~ sessionFilePath, ["debug"]);
 			return false;
 		}
 		
 		// Does the file we wish to resume uploading exist locally still?
 		if ("localPath" in sessionFileData) {
 			string sessionLocalFilePath = sessionFileData["localPath"].str;
-			log.vdebug("SESSION-RESUME: sessionLocalFilePath: ", sessionLocalFilePath);
-		
+			addLogEntry("SESSION-RESUME: sessionLocalFilePath: " ~ sessionLocalFilePath, ["debug"]);
+			
 			// Does the file exist?
 			if (!exists(sessionLocalFilePath)) {
 				addLogEntry("The local file to upload does not exist locally anymore", ["verbose"]);
@@ -7180,7 +7228,7 @@ class SyncEngine {
 			}
 			
 		} else {
-			log.vdebug("SESSION-RESUME: No localPath data in: ", sessionFilePath);
+			addLogEntry("SESSION-RESUME: No localPath data in: " ~ sessionFilePath, ["debug"]);
 			return false;
 		}
 		
@@ -7192,7 +7240,7 @@ class SyncEngine {
 				return false;
 			}
 		} else {
-			log.vdebug("SESSION-RESUME: No expirationDateTime data in: ", sessionFilePath);
+			addLogEntry("SESSION-RESUME: No expirationDateTime data in: " ~ sessionFilePath, ["debug"]);
 			return false;
 		}
 		
@@ -7209,7 +7257,7 @@ class SyncEngine {
 				response = validateUploadSessionFileDataApiInstance.requestUploadStatus(sessionFileData["uploadUrl"].str);
 			} catch (OneDriveException e) {
 				// handle any onedrive error response as invalid
-				log.vdebug("SESSION-RESUME: Invalid response when using uploadUrl in: ", sessionFilePath);
+				addLogEntry("SESSION-RESUME: Invalid response when using uploadUrl in: " ~ sessionFilePath, ["debug"]);
 				return false;
 			}
 			
@@ -7231,7 +7279,7 @@ class SyncEngine {
 						return false;
 					}
 				} else {
-					log.vdebug("SESSION-RESUME: No expirationDateTime & nextExpectedRanges data in Microsoft OneDrive API response: ", response);
+					addLogEntry("SESSION-RESUME: No expirationDateTime & nextExpectedRanges data in Microsoft OneDrive API response: " ~ to!string(response), ["debug"]);
 					return false;
 				}
 			} else {
@@ -7240,7 +7288,7 @@ class SyncEngine {
 				return false;
 			}
 		} else {
-			log.vdebug("SESSION-RESUME: No uploadUrl data in: ", sessionFilePath);
+			addLogEntry("SESSION-RESUME: No uploadUrl data in: " ~ sessionFilePath, ["debug"]);
 			return false;
 		}
 		
@@ -7288,19 +7336,19 @@ class SyncEngine {
 						// Only perform the delete if we have a valid file path
 						if (exists(jsonItemToResume["localPath"].str)) {
 							// file exists
-							log.vdebug("Removing local file: ", jsonItemToResume["localPath"].str);
+							addLogEntry("Removing local file: " ~ jsonItemToResume["localPath"].str, ["debug"]);
 							safeRemove(jsonItemToResume["localPath"].str);
 						}
 					}
 					// as file is removed, we have nothing to add to the local database
-					log.vdebug("Skipping adding to database as --upload-only & --remove-source-files configured");
+					addLogEntry("Skipping adding to database as --upload-only & --remove-source-files configured", ["debug"]);
 				} else {
 					// Save JSON item in database
 					saveItem(uploadResponse);
 				}
 			} else {
 				// No valid response was returned
-				writeln("CODING TO DO: what to do when session upload resumption JSON data is not valid ... nothing ? error message ?");
+				addLogEntry("CODING TO DO: what to do when session upload resumption JSON data is not valid ... nothing ? error message ?");
 			}
 			
 			// Shutdown API instance
