@@ -3283,6 +3283,12 @@ class SyncEngine {
 							selfBuiltPath = selfBuiltPath[splitIndex + 1 .. $];
 						}
 						
+						// Check for HTML entities (e.g., '%20' for space) in source JSON
+						if (onedriveJSONItem["parentReference"]["path"].str.canFind("%")) {
+							log.error("CAUTION: Microsoft OneDrive API sent a JSON element containing HTML entities. This will cause issues performing pattern matching and potentially cause this path not to sync.");
+							log.error("See: https://github.com/OneDrive/onedrive-api-docs/issues/1765 for further details");
+						}
+						
 						// Set newItemPath to the self built path
 						newItemPath = selfBuiltPath;
 					} else {
@@ -6791,6 +6797,12 @@ class SyncEngine {
 									if (splitIndex != -1) {
 										// Keep only the part after ':'
 										selfBuiltPath = selfBuiltPath[splitIndex + 1 .. $];
+									}
+									
+									// Check for HTML entities (e.g., '%20' for space) in source JSON
+									if (onedriveJSONItem["parentReference"]["path"].str.canFind("%")) {
+										log.error("CAUTION: Microsoft OneDrive API sent a JSON element containing HTML entities. This will cause issues performing pattern matching and potentially cause this path not to sync.");
+										log.error("See: https://github.com/OneDrive/onedrive-api-docs/issues/1765 for further details");
 									}
 									
 									// Set thisItemPath to the self built path
