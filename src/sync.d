@@ -3276,11 +3276,11 @@ class SyncEngine {
 						// If there is a parent reference path, try and use it
 						string selfBuiltPath = onedriveJSONItem["parentReference"]["path"].str ~ "/" ~ onedriveJSONItem["name"].str;
 						
-						// Check for and remove 'root:' prefix if present
-						auto indexOfRoot = selfBuiltPath.indexOf("root:");
-						if (indexOfRoot != -1) {
-							// Remove 'root:' and everything before it
-							selfBuiltPath = selfBuiltPath[indexOfRoot + 5 .. $];
+						// Check for ':' and split if present
+						auto splitIndex = selfBuiltPath.indexOf(":");
+						if (splitIndex != -1) {
+							// Keep only the part after ':'
+							selfBuiltPath = selfBuiltPath[splitIndex + 1 .. $];
 						}
 						
 						// Set newItemPath to the self built path
@@ -6786,11 +6786,11 @@ class SyncEngine {
 									// If there is a parent reference path, try and use it
 									string selfBuiltPath = onedriveJSONItem["parentReference"]["path"].str ~ "/" ~ onedriveJSONItem["name"].str;
 									
-									// Check for and remove 'root:' prefix if present
-									auto indexOfRoot = selfBuiltPath.indexOf("root:");
-									if (indexOfRoot != -1) {
-										// Remove 'root:' and everything before it
-										selfBuiltPath = selfBuiltPath[indexOfRoot + 5 .. $];
+									// Check for ':' and split if present
+									auto splitIndex = selfBuiltPath.indexOf(":");
+									if (splitIndex != -1) {
+										// Keep only the part after ':'
+										selfBuiltPath = selfBuiltPath[splitIndex + 1 .. $];
 									}
 									
 									// Set thisItemPath to the self built path
