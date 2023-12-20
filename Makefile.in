@@ -77,7 +77,6 @@ SOURCES = \
 	src/itemdb.d \
 	src/sqlite.d \
 	src/clientSideFiltering.d \
-	src/progress.d \
 	src/monitor.d \
 	src/arsd/cgi.d
 
