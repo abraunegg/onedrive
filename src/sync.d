@@ -3284,8 +3284,9 @@ class SyncEngine {
 						}
 						
 						// Check for HTML entities (e.g., '%20' for space) in source JSON
-						if (onedriveJSONItem["parentReference"]["path"].str.canFind("%")) {
-							log.error("CAUTION: Microsoft OneDrive API sent a JSON element containing HTML entities. This will cause issues performing pattern matching and potentially cause this path not to sync.");
+						if (selfBuiltPath.canFind("%")) {
+							log.error("CAUTION:    Microsoft OneDrive API sent a JSON element containing HTML entities. This will cause issues performing pattern matching and potentially cause this path not to sync.");
+							log.error("WORKAROUND: A possible workaround is to rename this item online: " ~ selfBuiltPath);
 							log.error("See: https://github.com/OneDrive/onedrive-api-docs/issues/1765 for further details");
 						}
 						
@@ -6800,8 +6801,9 @@ class SyncEngine {
 									}
 									
 									// Check for HTML entities (e.g., '%20' for space) in source JSON
-									if (onedriveJSONItem["parentReference"]["path"].str.canFind("%")) {
-										log.error("CAUTION: Microsoft OneDrive API sent a JSON element containing HTML entities. This will cause issues performing pattern matching and potentially cause this path not to sync.");
+									if (selfBuiltPath.canFind("%")) {
+										log.error("CAUTION:    Microsoft OneDrive API sent a JSON element containing HTML entities. This will cause issues performing pattern matching and potentially cause this path not to sync.");
+										log.error("WORKAROUND: A possible workaround is to rename this item online: " ~ selfBuiltPath);
 										log.error("See: https://github.com/OneDrive/onedrive-api-docs/issues/1765 for further details");
 									}
 									
