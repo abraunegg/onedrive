@@ -112,18 +112,18 @@ int main(string[] cliArgs) {
 			//writeln("onedrive ", strip(import("version")));
 			string tempVersion = "v2.5.0-alpha-4" ~ " GitHub version: " ~ strip(import("version"));
 			writeln(tempVersion);
-			exit(EXIT_SUCCESS);
+			return EXIT_SUCCESS;
 		}
 	} catch (GetOptException e) {
 		// Option errors
 		writeln(e.msg);
 		writeln(genericHelpMessage);
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	} catch (Exception e) {
 		// Generic error
 		writeln(e.msg);
 		writeln(genericHelpMessage);
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 	
 	// Determine the application logging verbosity
@@ -178,7 +178,7 @@ int main(string[] cliArgs) {
 	if (!appConfig.initialise(confdirOption)) {
 		// There was an error loading the user specified application configuration
 		// Error message already printed
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 	
 	// Update the current runtime application configuration (default or 'config' fileread-in options) from any passed in command line arguments
@@ -226,7 +226,7 @@ int main(string[] cliArgs) {
 	selectiveSync = new ClientSideFiltering(appConfig);
 	if (!selectiveSync.initialise()) {
 		// exit here as something triggered a selective sync configuration failure
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 	
 	// Set runtimeDatabaseFile, this will get updated if we are using --dry-run
@@ -247,14 +247,14 @@ int main(string[] cliArgs) {
 		appConfig.displayApplicationConfiguration();
 		// Do we exit? We exit only if '--display-config' has been used
 		if (appConfig.getValueBool("display_config")) {
-			exit(EXIT_SUCCESS);
+			return EXIT_SUCCESS;
 		}
 	}
 	
 	// Check for basic application option conflicts - flags that should not be used together and/or flag combinations that conflict with each other, values that should be present and are not
 	if (appConfig.checkForBasicOptionConflicts) {
 		// Any error will have been printed by the function itself, but we need a small delay here to allow the buffered logging to output any error
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 	
 	// Check for --dry-run operation
@@ -294,7 +294,7 @@ int main(string[] cliArgs) {
 			addLogEntry("DRY RUN: Not removing the saved authentication status");
 		}
 		// Exit
-		exit(EXIT_SUCCESS);
+		return EXIT_SUCCESS;
 	}
 	
 	// Handle --reauth to re-authenticate the client
@@ -319,7 +319,7 @@ int main(string[] cliArgs) {
 		// Action based on user response
 		if (!resyncRiskAcceptance){
 			// --resync risk not accepted
-			exit(EXIT_FAILURE);
+			return EXIT_FAILURE;
 		} else {
 			addLogEntry("--resync issued and risk accepted", ["debug"]);
 			// --resync risk accepted, perform a cleanup of items that require a cleanup
@@ -361,7 +361,7 @@ int main(string[] cliArgs) {
 		// Action based on user response
 		if (!forceSyncRiskAcceptance){
 			// --force-sync risk not accepted
-			exit(EXIT_FAILURE);
+			return EXIT_FAILURE;
 		} else {
 			// --force-sync risk accepted
 			// reset set config using function to use application defaults
@@ -384,14 +384,14 @@ int main(string[] cliArgs) {
 			addLogEntry();
 			addLogEntry("ERROR: Unable to reach Microsoft OneDrive API service, unable to initialise application");
 			addLogEntry();
-			exit(EXIT_FAILURE);
+			return EXIT_FAILURE;
 		} else {
 			// Running as --monitor
 			addLogEntry();
 			addLogEntry("Unable to reach the Microsoft OneDrive API service at this point in time, re-trying network tests based on applicable intervals");
 			addLogEntry();
 			if (!retryInternetConnectivtyTest(appConfig)) {
-				exit(EXIT_FAILURE);
+				return EXIT_FAILURE;
 			}
 		}
 	}
@@ -422,7 +422,7 @@ int main(string[] cliArgs) {
 				// no .. destroy class
 				itemDB = null;
 				// exit application
-				exit(EXIT_FAILURE);
+				return EXIT_FAILURE;
 			}
 			
 			// Initialise the syncEngine
@@ -449,7 +449,7 @@ int main(string[] cliArgs) {
 					syncEngineInstance.querySiteCollectionForDriveID(appConfig.getValueString("sharepoint_library_name"));
 					// Exit application
 					// Use exit scopes to shutdown API and cleanup data
-					exit(EXIT_SUCCESS);
+					return EXIT_SUCCESS;
 				}
 				
 				// --display-sync-status - Query the sync status
@@ -466,7 +466,7 @@ int main(string[] cliArgs) {
 					syncEngineInstance.queryOneDriveForSyncStatus(pathToQueryStatusOn);
 					// Exit application
 					// Use exit scopes to shutdown API and cleanup data
-					exit(EXIT_SUCCESS);
+					return EXIT_SUCCESS;
 				}
 				
 				// --get-file-link - Get the URL path for a synced file?
@@ -475,7 +475,7 @@ int main(string[] cliArgs) {
 					syncEngineInstance.queryOneDriveForFileDetails(appConfig.getValueString("get_file_link"), runtimeSyncDirectory, "URL");
 					// Exit application
 					// Use exit scopes to shutdown API and cleanup data
-					exit(EXIT_SUCCESS);
+					return EXIT_SUCCESS;
 				}
 				
 				// --modified-by - Are we listing the modified-by details of a provided path?
@@ -484,7 +484,7 @@ int main(string[] cliArgs) {
 					syncEngineInstance.queryOneDriveForFileDetails(appConfig.getValueString("modified_by"), runtimeSyncDirectory, "ModifiedBy");
 					// Exit application
 					// Use exit scopes to shutdown API and cleanup data
-					exit(EXIT_SUCCESS);
+					return EXIT_SUCCESS;
 				}
 				
 				// --create-share-link - Are we createing a shareable link for an existing file on OneDrive?
@@ -498,7 +498,7 @@ int main(string[] cliArgs) {
 					syncEngineInstance.queryOneDriveForFileDetails(appConfig.getValueString("create_share_link"), runtimeSyncDirectory, "ShareableLink");
 					// Exit application
 					// Use exit scopes to shutdown API
-					exit(EXIT_SUCCESS);
+					return EXIT_SUCCESS;
 				}
 				
 				// --create-directory - Are we just creating a directory online, without any sync being performed?
@@ -507,7 +507,7 @@ int main(string[] cliArgs) {
 					syncEngineInstance.createDirectoryOnline(appConfig.getValueString("create_directory"));
 					// Exit application
 					// Use exit scopes to shutdown API
-					exit(EXIT_SUCCESS);
+					return EXIT_SUCCESS;
 				}
 				
 				// --remove-directory - Are we just deleting a directory online, without any sync being performed?
@@ -516,7 +516,7 @@ int main(string[] cliArgs) {
 					syncEngineInstance.deleteByPath(appConfig.getValueString("remove_directory"));
 					// Exit application
 					// Use exit scopes to shutdown API
-					exit(EXIT_SUCCESS);
+					return EXIT_SUCCESS;
 				}
 				
 				// Are we renaming or moving a directory?
@@ -526,7 +526,7 @@ int main(string[] cliArgs) {
 					syncEngineInstance.uploadMoveItem(appConfig.getValueString("source_directory"), appConfig.getValueString("destination_directory"));
 					// Exit application
 					// Use exit scopes to shutdown API
-					exit(EXIT_SUCCESS);
+					return EXIT_SUCCESS;
 				}
 				
 				// Are we displaying the quota information?
@@ -535,7 +535,7 @@ int main(string[] cliArgs) {
 					syncEngineInstance.queryOneDriveForQuotaDetails();
 					// Exit application
 					// Use exit scopes to shutdown API
-					exit(EXIT_SUCCESS);
+					return EXIT_SUCCESS;
 				}
 				
 				// If we get to this point, we have not performed a 'no-sync' task ..
@@ -546,12 +546,12 @@ int main(string[] cliArgs) {
 				addLogEntry();
 				// Use exit scopes to shutdown API
 				// invalidSyncExit = true;
-				exit(EXIT_FAILURE);
+				return EXIT_FAILURE;
 			}
 		} else {
 			// API could not be initialised
 			addLogEntry("The OneDrive API could not be initialised");
-			exit(EXIT_FAILURE);
+			return EXIT_FAILURE;
 		}
 	}
 	
@@ -572,14 +572,14 @@ int main(string[] cliArgs) {
 				// Creating the sync directory failed
 				addLogEntry("ERROR: Unable to create the configured local 'sync_dir' directory: " ~ e.msg);
 				// Use exit scopes to shutdown API
-				exit(EXIT_FAILURE);
+				return EXIT_FAILURE;
 			}
 		}
 	} catch (std.file.FileException e) {
 		// Creating the sync directory failed
 		addLogEntry("ERROR: Unable to test for the existence of the configured local 'sync_dir' directory: " ~ e.msg);
 		// Use exit scopes to shutdown API
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 	
 	// Change the working directory to the 'sync_dir' as configured
@@ -775,7 +775,7 @@ int main(string[] cliArgs) {
 				} catch (MonitorException e) {	
 					// monitor class initialisation failed
 					addLogEntry("ERROR: " ~ e.msg);
-					exit(EXIT_FAILURE);
+					return EXIT_FAILURE;
 				}
 			}
 		
@@ -977,14 +977,14 @@ int main(string[] cliArgs) {
 		// Exit application as the sync engine could not be initialised
 		addLogEntry("Application Sync Engine could not be initialised correctly");
 		// Use exit scope
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 	
 	// Exit application using exit scope
 	if (!syncEngineInstance.syncFailures) {
-		exit(EXIT_SUCCESS);
+		return EXIT_SUCCESS;
 	} else {
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 }
 
