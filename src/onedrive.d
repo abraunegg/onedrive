@@ -559,8 +559,9 @@ class OneDriveApi {
 				return false;
 			}
 		} else {
-			addLogEntry("Authorise this application by visiting:\n");
-			write(url, "\n\n", "Enter the response uri from your browser: ");
+			addLogEntry("Authorise this application by visiting:\n", ["consoleOnly"]);
+			addLogEntry(url ~ "\n\n", ["consoleOnly"]);
+			addLogEntry("Enter the response uri from your browser: ", ["consoleOnlyNoNewLine"]);
 			readln(response);
 			appConfig.applicationAuthorizeResponseUri = true;
 		}

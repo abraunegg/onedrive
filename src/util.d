@@ -445,6 +445,7 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 
 // Common code for handling when a client is unauthorised
 void handleClientUnauthorised(int httpStatusCode, string message) {
+
 	// Split the lines of the error message
 	auto errorArray = splitLines(message);
 	// Extract 'message' as the reason
@@ -454,9 +455,13 @@ void handleClientUnauthorised(int httpStatusCode, string message) {
 	if (httpStatusCode == 400) {
 		// bad request or a new auth token is needed
 		// configure the error reason
-		addLogEntry();
-		string[] errorReason = splitLines(errorMessage["error_description"].str);
-		addLogEntry(to!string(errorReason[0]), ["info", "notify"]);
+		// Is there an error description?
+		if ("error_description" in errorMessage) {
+			// error_description to process
+			addLogEntry();
+			string[] errorReason = splitLines(errorMessage["error_description"].str);
+			addLogEntry(to!string(errorReason[0]), ["info", "notify"]);
+		}
 		addLogEntry();
 		addLogEntry("ERROR: You will need to issue a --reauth and re-authorise this client to obtain a fresh auth token.", ["info", "notify"]);
 		addLogEntry();
@@ -469,7 +474,8 @@ void handleClientUnauthorised(int httpStatusCode, string message) {
 		addLogEntry();
 	}
 	
-	// Must exit here
+	// Must force exit here, allow logging to be done
+	Thread.sleep(dur!("msecs")(500));
 	exit(EXIT_FAILURE);
 }
 
@@ -485,7 +491,8 @@ void displayFileSystemErrorMessage(string message, string callingFunction) {
 	// If we are out of disk space (despite download reservations) we need to exit the application
 	ulong localActualFreeSpace = to!ulong(getAvailableDiskSpace("."));
 	if (localActualFreeSpace == 0) {
-		// force exit
+		// Must force exit here, allow logging to be done
+		Thread.sleep(dur!("msecs")(500));
 		exit(EXIT_FAILURE);
 	}
 }
