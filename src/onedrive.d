@@ -527,11 +527,15 @@ class OneDriveApi {
 				// There was a file system error
 				// display the error message
 				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				// Must force exit here, allow logging to be done
+				Thread.sleep(dur!("msecs")(500));
 				exit(-1);
 			} catch (ErrnoException e) {
 				// There was a file system error
 				// display the error message
 				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				// Must force exit here, allow logging to be done
+				Thread.sleep(dur!("msecs")(500));
 				exit(-1);
 			}
 	
@@ -1187,6 +1191,8 @@ class OneDriveApi {
 						addLogEntry();
 						// force exit
 						shutdown();
+						// Must force exit here, allow logging to be done
+						Thread.sleep(dur!("msecs")(500));
 						exit(-1);
 					}
 				}
@@ -1240,6 +1246,8 @@ class OneDriveApi {
 			}
 		} else {
 			addLogEntry("Invalid response from the OneDrive API. Unable to initialise OneDrive API instance.");
+			// Must force exit here, allow logging to be done
+			Thread.sleep(dur!("msecs")(500));
 			exit(-1);
 		}
 	}
@@ -1675,6 +1683,8 @@ class OneDriveApi {
 						if (localActualFreeSpace == 0) {
 							// force exit
 							shutdown();
+							// Must force exit here, allow logging to be done
+							Thread.sleep(dur!("msecs")(500));
 							exit(-1);
 						}
 					}

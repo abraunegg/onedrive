@@ -1244,6 +1244,7 @@ void checkForNoMountScenario() {
 		// we were asked to check the mount point for the presence of a '.nosync' file
 		if (exists(".nosync")) {
 			addLogEntry("ERROR: .nosync file found in directory mount point. Aborting application startup process to safeguard data.", ["info", "notify"]);
+			Thread.sleep(dur!("msecs")(500));
 			exit(EXIT_FAILURE);
 		}
 	}

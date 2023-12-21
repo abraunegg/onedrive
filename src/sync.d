@@ -276,6 +276,8 @@ class SyncEngine {
 				oneDriveApiInstance.shutdown();
 				// Free object and memory
 				object.destroy(oneDriveApiInstance);
+				// Must force exit here, allow logging to be done
+				Thread.sleep(dur!("msecs")(500));
 				exit(-1);
 			}
 			
@@ -289,6 +291,8 @@ class SyncEngine {
 				oneDriveApiInstance.shutdown();
 				// Free object and memory
 				object.destroy(oneDriveApiInstance);
+				// Must force exit here, allow logging to be done
+				Thread.sleep(dur!("msecs")(500));
 				exit(-1);
 			}
 			
@@ -302,6 +306,8 @@ class SyncEngine {
 				oneDriveApiInstance.shutdown();
 				// Free object and memory
 				object.destroy(oneDriveApiInstance);
+				// Must force exit here, allow logging to be done
+				Thread.sleep(dur!("msecs")(500));
 				exit(-1);
 			}
 		} else {
@@ -311,6 +317,8 @@ class SyncEngine {
 			oneDriveApiInstance.shutdown();
 			// Free object and memory
 			object.destroy(oneDriveApiInstance);
+			// Must force exit here, allow logging to be done
+			Thread.sleep(dur!("msecs")(500));
 			exit(-1);
 		}
 		
@@ -652,6 +660,7 @@ class SyncEngine {
 			addLogEntry();
 			addLogEntry("The requested --single-directory path to sync has generated an error. Please correct this error and try again.");
 			addLogEntry();
+			Thread.sleep(dur!("msecs")(500));
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -1180,7 +1189,7 @@ class SyncEngine {
 					// Edge case as the parent (from another users OneDrive account) will never be in the database - potentially a shared object?
 					addLogEntry("The reported parentId is not in the database. This potentially is a shared folder as 'remoteItem.driveId' != 'appConfig.defaultDriveId'. Relevant Details: remoteItem.driveId (" ~ remoteItem.driveId ~ "), remoteItem.parentId (" ~ remoteItem.parentId ~ ")", ["debug"]);
 					addLogEntry("Potential Shared Object JSON: " ~ to!string(onedriveJSONItem), ["debug"]);
-					
+
 					// Format the OneDrive change into a consumable object for the database
 					remoteItem = makeItem(onedriveJSONItem);
 										
@@ -1191,9 +1200,23 @@ class SyncEngine {
 						if (hasSharedElement(onedriveJSONItem)) {
 							// Has the Shared JSON structure
 							addLogEntry("Personal Shared Item JSON object has the 'shared' JSON structure", ["debug"]);
+						
+							// Create a DB Tie Record for this parent object
+							addLogEntry("Creating a DB Tie for this Personal Shared Folder", ["debug"]);
+							
+							// DB Tie
+							Item parentItem;
+							parentItem.driveId = onedriveJSONItem["parentReference"]["driveId"].str;
+							parentItem.id = onedriveJSONItem["parentReference"]["id"].str;
+							parentItem.name = "root";
+							parentItem.type = ItemType.dir;
+							parentItem.mtime = remoteItem.mtime;
+							parentItem.parentId = null;
+							
+							// Add this DB Tie parent record to the local database
+							addLogEntry("Insert local database with remoteItem parent details: " ~ to!string(parentItem), ["debug"]);
+							itemDB.upsert(parentItem);
 						}
-						
-						
 						
 						// Ensure that this item has no parent
 						addLogEntry("Setting remoteItem.parentId to be null", ["debug"]);
@@ -2400,7 +2423,8 @@ class SyncEngine {
 	// If the JSON response is not correct JSON object, exit
 	void invalidJSONResponseFromOneDriveAPI() {
 		addLogEntry("ERROR: Query of the OneDrive API returned an invalid JSON response");
-		// Must exit here
+		// Must force exit here, allow logging to be done
+		Thread.sleep(dur!("msecs")(500));
 		exit(-1);
 	}
 	
@@ -2408,7 +2432,8 @@ class SyncEngine {
 	void defaultUnhandledHTTPErrorCode(OneDriveException exception) {
 		// display error
 		displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-		// Must exit here
+		// Must force exit here, allow logging to be done
+		Thread.sleep(dur!("msecs")(500));
 		exit(-1);
 	}
 	
@@ -2447,7 +2472,8 @@ class SyncEngine {
 		} catch (core.exception.AssertError) {
 			// broken tree in the database, we cant compute the path for this item id, exit
 			addLogEntry("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
-			// Must exit here to preserve data
+			// Must force exit here, allow logging to be done
+			Thread.sleep(dur!("msecs")(500));
 			exit(-1);
 		}
 		
@@ -5271,7 +5297,8 @@ class SyncEngine {
 					if (!appConfig.getValueBool("force")) {
 						addLogEntry("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on Microsoft OneDrive");
 						addLogEntry("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
-						// Must exit here to preserve data on online 
+						// Must exit here to preserve data on online , allow logging to be done
+						Thread.sleep(dur!("msecs")(500));
 						exit(-1);
 					}
 				}
@@ -5691,6 +5718,8 @@ class SyncEngine {
 				generateDeltaResponseOneDriveApiInstance.shutdown();
 				// Free object and memory
 				object.destroy(generateDeltaResponseOneDriveApiInstance);
+				// Must force exit here, allow logging to be done
+				Thread.sleep(dur!("msecs")(500));
 				exit(-1);
 			}
 		} else {
@@ -5825,6 +5854,8 @@ class SyncEngine {
 			generateDeltaResponseOneDriveApiInstance.shutdown();
 			// Free object and memory
 			object.destroy(generateDeltaResponseOneDriveApiInstance);
+			// Must force exit here, allow logging to be done
+			Thread.sleep(dur!("msecs")(500));
 			exit(-1);
 		}
 		
