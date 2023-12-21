@@ -61,7 +61,7 @@ class LogBuffer {
 				foreach (level; levels) {
 					// Normal application output
 					if (!debugLogging) {
-						if ((level == "info") || ((verboseLogging) && (level == "verbose")) || (level == "logFileOnly") || (level == "consoleOnlyNoNewLine")) {
+						if ((level == "info") || ((verboseLogging) && (level == "verbose")) || (level == "logFileOnly") || (level == "consoleOnly") || (level == "consoleOnlyNoNewLine")) {
 							// Add this message to the buffer, with this format
 							buffer ~= [timeStamp, level, format("%s", message)];
 						}
@@ -114,7 +114,8 @@ class LogBuffer {
 				if (msg[1] != "logFileOnly") {
 					// Console output .. what sort of output
 					if (msg[1] == "consoleOnlyNoNewLine") {
-						// This is used in non-verbose mode to indicate something is happening when downloading JSON data from OneDrive
+						// This is used write out a message to the console only, without a new line 
+						// This is used in non-verbose mode to indicate something is happening when downloading JSON data from OneDrive or when we need user input from --resync
 						write(msg[2]);
 					} else {
 						// write this to the console with a new line
@@ -123,8 +124,8 @@ class LogBuffer {
 				}
                 
 				// Was this just console only output?
-				if (msg[1] != "consoleOnlyNoNewLine") {
-					// Write to the logfile only if configured to do so
+				if ((msg[1] != "consoleOnlyNoNewLine") && (msg[1] != "consoleOnly")) {
+					// Write to the logfile only if configured to do so - console only items should not be written out
 					if (writeToFile) {
 						string logFileLine = format("[%s] %s", msg[0], msg[2]);
 						std.file.append(logFilePath, logFileLine ~ "\n");

@@ -1504,11 +1504,13 @@ class ApplicationConfig {
 			char response;
 			
 			// --resync warning message
-			writeln("\nThe usage of --resync will delete your local 'onedrive' client state, thus no record of your current 'sync status' will exist.");
-			writeln("This has the potential to overwrite local versions of files with perhaps older versions of documents downloaded from OneDrive, resulting in local data loss.");
-			writeln("If in doubt, backup your local data before using --resync");
-			write("\nAre you sure you wish to proceed with --resync? [Y/N] ");
-			
+			addLogEntry("", ["consoleOnly"]); // new line, console only
+			addLogEntry("The usage of --resync will delete your local 'onedrive' client state, thus no record of your current 'sync status' will exist.", ["consoleOnly"]);
+			addLogEntry("This has the potential to overwrite local versions of files with perhaps older versions of documents downloaded from OneDrive, resulting in local data loss.", ["consoleOnly"]);
+			addLogEntry("If in doubt, backup your local data before using --resync", ["consoleOnly"]);
+			addLogEntry("", ["consoleOnly"]); // new line, console only
+			addLogEntry("Are you sure you wish to proceed with --resync? [Y/N] ", ["consoleOnlyNoNewLine"]);
+						
 			try {
 				// Attempt to read user response
 				string input = readln().strip;
@@ -1549,10 +1551,12 @@ class ApplicationConfig {
 		char response;
 		
 		// --force-sync warning message
-		writeln("\nThe use of --force-sync will reconfigure the application to use defaults. This may have untold and unknown future impacts.");
-		writeln("By proceeding in using this option you accept any impacts including any data loss that may occur as a result of using --force-sync.");
-		write("\nAre you sure you wish to proceed with --force-sync [Y/N] ");
-		
+		addLogEntry("", ["consoleOnly"]); // new line, console only
+		addLogEntry("The use of --force-sync will reconfigure the application to use defaults. This may have untold and unknown future impacts.", ["consoleOnly"]);
+		addLogEntry("By proceeding in using this option you accept any impacts including any data loss that may occur as a result of using --force-sync.", ["consoleOnly"]);
+		addLogEntry("", ["consoleOnly"]); // new line, console only
+		addLogEntry("Are you sure you wish to proceed with --force-sync [Y/N] ", ["consoleOnlyNoNewLine"]);
+				
 		try {
 			// Attempt to read user response
 			string input = readln().strip;

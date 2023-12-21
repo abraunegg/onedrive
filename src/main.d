@@ -145,8 +145,10 @@ int main(string[] cliArgs) {
 	addLogEntry("Basic 'info and notify' message and displayed in GUI if notifications are enabled", ["info", "notify"]);
 	// log file only
 	addLogEntry("Information sent to the log file only, and only if logging to a file is enabled", ["logFileOnly"]);
+	// Console only (session based upload|download)
+	addLogEntry("Basic 'Console only with new line' message", ["consoleOnly"]);
 	// Console only with no new line
-	addLogEntry("Basic 'log file only' message", ["consoleOnlyNoNewLine"]);
+	addLogEntry("Basic 'Console only with no new line' message", ["consoleOnlyNoNewLine"]);
 	**/
 	
 	// Log application start time

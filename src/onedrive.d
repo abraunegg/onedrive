@@ -31,7 +31,6 @@ import config;
 import log;
 import util;
 import curlEngine;
-import progress;
 
 // Shared variables between classes
 shared bool debugHTTPResponseOutput = false;
@@ -1312,21 +1311,23 @@ class OneDriveApi {
 		};
 
 		if (fileSize >= thresholdFileSize){
-			// Download Progress Bar
-			size_t iteration = 20;
-			Progress p = new Progress(iteration);
-			p.title = "Downloading";
-			addLogEntry();
+			// Download Progress variables
+			size_t expected_total_segments = 20;
+			ulong start_unix_time = Clock.currTime.toUnixTime();
+			int h, m, s;
+			string etaString;
 			bool barInit = false;
 			real previousProgressPercent = -1.0;
 			real percentCheck = 5.0;
-			long segmentCount = 1;
+			long segmentCount = -1;
+			
 			// Setup progress bar to display
-			curlEngine.http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
-			{
+			curlEngine.http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow) {
 				// For each onProgress, what is the % of dlnow to dltotal
 				// floor - rounds down to nearest whole number
 				real currentDLPercent = floor(double(dlnow)/dltotal*100);
+				string downloadLogEntry = leftJustify("Downloading: " ~ baseName(filename) ~ " ", 77, '.');
+				
 				// Have we started downloading?
 				if (currentDLPercent > 0){
 					// We have started downloading
@@ -1353,18 +1354,36 @@ class OneDriveApi {
 					if (appConfig.getValueLong("rate_limit") > 0) {
 						// User configured rate limit
 						// How much data should be in each segment to qualify for 5%
-						ulong dataPerSegment = to!ulong(floor(double(dltotal)/iteration));
+						ulong dataPerSegment = to!ulong(floor(double(dltotal)/expected_total_segments));
 						// How much data received do we need to validate against
 						ulong thisSegmentData = dataPerSegment * segmentCount;
 						ulong nextSegmentData = dataPerSegment * (segmentCount + 1);
+						
 						// Has the data that has been received in a 5% window that we need to increment the progress bar at
 						if ((dlnow > thisSegmentData) && (dlnow < nextSegmentData) && (previousProgressPercent != currentDLPercent) || (dlnow == dltotal)) {
 							// Downloaded data equals approx 5%
 							addLogEntry("Incrementing Progress Bar using calculated 5% of data received", ["debug"]);
 							
-							// Downloading  50% |oooooooooooooooooooo                    |   ETA   00:01:40  
-							// increment progress bar
-							p.next();
+							// 100% check
+							if (currentDLPercent != 100) {
+								// Not 100% yet
+								// Calculate the output
+								segmentCount++;
+								auto eta = calc_eta(segmentCount, expected_total_segments, start_unix_time);
+								dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
+								etaString = format!"|  ETA   %02d:%02d:%02d"( h, m, s);
+								string percentage = " " ~ leftJustify(to!string(currentDLPercent) ~ "%", 6, ' ');
+								addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+							} else {
+								// 100% done
+								ulong end_unix_time = Clock.currTime.toUnixTime();
+								auto upload_duration = cast(int)(end_unix_time - start_unix_time);
+								dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
+								etaString = format!"| DONE in %02d:%02d:%02d"( h, m, s);
+								string percentage = " " ~ leftJustify(to!string(currentDLPercent) ~ "%", 6, ' ');
+								addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+							}
+							
 							// update values
 							addLogEntry("Setting previousProgressPercent to " ~ to!string(currentDLPercent), ["debug"]);
 							previousProgressPercent = currentDLPercent;
@@ -1376,37 +1395,54 @@ class OneDriveApi {
 						if ((isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) && (previousProgressPercent != currentDLPercent)) {
 							// currentDLPercent matches a new increment
 							addLogEntry("Incrementing Progress Bar using fmod match", ["debug"]);
-							// Downloading  50% |oooooooooooooooooooo                    |   ETA   00:01:40  
-							// increment progress bar
-							p.next();
+							
+							// 100% check
+							if (currentDLPercent != 100) {
+								// Not 100% yet
+								// Calculate the output
+								segmentCount++;
+								auto eta = calc_eta(segmentCount, expected_total_segments, start_unix_time);
+								dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
+								etaString = format!"|  ETA   %02d:%02d:%02d"( h, m, s);
+								string percentage = " " ~ leftJustify(to!string(currentDLPercent) ~ "%", 6, ' ');
+								addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+							} else {
+								// 100% done
+								ulong end_unix_time = Clock.currTime.toUnixTime();
+								auto upload_duration = cast(int)(end_unix_time - start_unix_time);
+								dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
+								etaString = format!"| DONE in %02d:%02d:%02d"( h, m, s);
+								string percentage = " " ~ leftJustify(to!string(currentDLPercent) ~ "%", 6, ' ');
+								addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+							}
+							
 							// update values
 							previousProgressPercent = currentDLPercent;
 						}
 					}
 				} else {
 					if ((currentDLPercent == 0) && (!barInit)) {
-						// Initialise the download bar at 0%
-						// Downloading   0% |                                        |   ETA   --:--:--:
-						p.next();
+						// Calculate the output
+						segmentCount++;
+						etaString = "|  ETA   --:--:--";
+						string percentage = " " ~ leftJustify(to!string(currentDLPercent) ~ "%", 6, ' ');
+						addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 						barInit = true;
 					}
 				}
 				return 0;
 			};
 
-			// Perform download & display progress bar
+			// Perform download
 			try {
 				// try and catch any curl error
 				curlEngine.http.perform();
 				// Check the HTTP Response headers - needed for correct 429 handling
 				// check will be performed in checkHttpCode()
-				addLogEntry();
 				// Reset onProgress to not display anything for next download done using exit scope
 			} catch (CurlException e) {
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 			}
-			// free progress bar memory
-			p = null;
 		} else {
 			// No progress bar
 			try {

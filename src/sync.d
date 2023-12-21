@@ -32,7 +32,13 @@ import util;
 import onedrive;
 import itemdb;
 import clientSideFiltering;
-import progress;
+
+class jsonResponseException: Exception {
+	@safe pure this(string inputMessage) {
+		string msg = format(inputMessage);
+		super(msg);
+	}	
+}
 
 class posixException: Exception {
 	@safe pure this(string localTargetName, string remoteTargetName) {
@@ -60,7 +66,7 @@ class SyncEngine {
 	OneDriveApi oneDriveApiInstance;
 	ItemDatabase itemDB;
 	ClientSideFiltering selectiveSync;
-
+	
 	// Array of directory databaseItem.id to skip while applying the changes.
 	// These are the 'parent path' id's that are being excluded, so if the parent id is in here, the child needs to be skipped as well
 	RedBlackTree!string skippedItems = redBlackTree!string();
@@ -1172,14 +1178,23 @@ class SyncEngine {
 					unwanted = true;
 				} else {
 					// Edge case as the parent (from another users OneDrive account) will never be in the database - potentially a shared object?
-					addLogEntry("Potential Shared Object Item: " ~ to!string(onedriveJSONItem), ["debug"]);
+					addLogEntry("The reported parentId is not in the database. This potentially is a shared folder as 'remoteItem.driveId' != 'appConfig.defaultDriveId'. Relevant Details: remoteItem.driveId (" ~ remoteItem.driveId ~ "), remoteItem.parentId (" ~ remoteItem.parentId ~ ")", ["debug"]);
+					addLogEntry("Potential Shared Object JSON: " ~ to!string(onedriveJSONItem), ["debug"]);
 					
 					// Format the OneDrive change into a consumable object for the database
 					remoteItem = makeItem(onedriveJSONItem);
-					addLogEntry("The reported parentId is not in the database. This potentially is a shared folder as 'remoteItem.driveId' != 'appConfig.defaultDriveId'. Relevant Details: remoteItem.driveId (" ~ remoteItem.driveId ~ "), remoteItem.parentId (" ~ remoteItem.parentId ~ ")", ["debug"]);
-					
+										
 					if (appConfig.accountType == "personal") {
 						// Personal Account Handling
+						addLogEntry("Handling a Personal Shared Item JSON object", ["debug"]);
+						
+						if (hasSharedElement(onedriveJSONItem)) {
+							// Has the Shared JSON structure
+							addLogEntry("Personal Shared Item JSON object has the 'shared' JSON structure", ["debug"]);
+						}
+						
+						
+						
 						// Ensure that this item has no parent
 						addLogEntry("Setting remoteItem.parentId to be null", ["debug"]);
 						remoteItem.parentId = null;
@@ -1192,6 +1207,9 @@ class SyncEngine {
 						
 						if (appConfig.accountType == "business") {
 							// Create a DB Tie Record for this parent object
+							addLogEntry("Creating a DB Tie for this Business Shared Folder", ["debug"]);
+							
+							// DB Tie
 							Item parentItem;
 							parentItem.driveId = onedriveJSONItem["parentReference"]["driveId"].str;
 							parentItem.id = onedriveJSONItem["parentReference"]["id"].str;
@@ -1200,7 +1218,7 @@ class SyncEngine {
 							parentItem.mtime = remoteItem.mtime;
 							parentItem.parentId = null;
 							
-							// Add this parent record to the local database
+							// Add this DB Tie parent record to the local database
 							addLogEntry("Insert local database with remoteItem parent details: " ~ to!string(parentItem), ["debug"]);
 							itemDB.upsert(parentItem);
 							
@@ -1238,6 +1256,10 @@ class SyncEngine {
 							// Add this record to the local database
 							addLogEntry("Update/Insert local database with remoteItem details: " ~ to!string(remoteItem), ["debug"]);
 							itemDB.upsert(remoteItem);
+						} else {
+							// Sharepoint account type
+							addLogEntry("Handling a SharePoint Shared Item JSON object - NOT IMPLEMENTED ........ ", ["debug"]);
+	
 						}
 					}
 				}
@@ -3300,8 +3322,23 @@ class SyncEngine {
 					if (("path" in onedriveJSONItem["parentReference"]) != null) {
 						// If there is a parent reference path, try and use it
 						string selfBuiltPath = onedriveJSONItem["parentReference"]["path"].str ~ "/" ~ onedriveJSONItem["name"].str;
-						auto splitPath = selfBuiltPath.split("root:");
-						newItemPath = splitPath[1];
+						
+						// Check for ':' and split if present
+						auto splitIndex = selfBuiltPath.indexOf(":");
+						if (splitIndex != -1) {
+							// Keep only the part after ':'
+							selfBuiltPath = selfBuiltPath[splitIndex + 1 .. $];
+						}
+						
+						// Check for HTML entities (e.g., '%20' for space) in selfBuiltPath
+						if (selfBuiltPath.canFind("%")) {
+							addLogEntry("CAUTION:    Microsoft OneDrive API sent a JSON element containing HTML entities. This will cause issues performing pattern matching and potentially cause this path not to sync.");
+							addLogEntry("WORKAROUND: A possible workaround is to rename this item online: " ~ selfBuiltPath, ["verbose"]);
+							addLogEntry("See: https://github.com/OneDrive/onedrive-api-docs/issues/1765 for further details", ["verbose"]);
+						}
+
+						// Set newItemPath to the self built path
+						newItemPath = selfBuiltPath;
 					} else {
 						// no parent reference path available
 						newItemPath = thisItemName;
@@ -4600,7 +4637,11 @@ class SyncEngine {
 						try {
 							fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload);
 							// Portable Operating System Interface (POSIX) testing of JSON response from OneDrive API
-							performPosixTest(baseName(fileToUpload), fileDetailsFromOneDrive["name"].str);
+							if (hasName(fileDetailsFromOneDrive)) {
+								performPosixTest(baseName(fileToUpload), fileDetailsFromOneDrive["name"].str);
+							} else {
+								throw new jsonResponseException("Unable to perform POSIX test as the OneDrive API request generated an invalid JSON response");
+							}
 							
 							// No 404 or otherwise was triggered, meaning that the file already exists online and passes the POSIX test ...
 							addLogEntry("fileDetailsFromOneDrive after exist online check: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);
@@ -4652,6 +4693,9 @@ class SyncEngine {
 							}
 						} catch (posixException e) {
 							displayPosixErrorMessage(e.msg);
+							uploadFailed = true;
+						} catch (jsonResponseException e) {
+							addLogEntry(e.msg, ["debug"]);
 							uploadFailed = true;
 						}
 						
@@ -5022,22 +5066,39 @@ class SyncEngine {
 		ulong fragmentCount = 0;
 		ulong fragSize = 0;
 		ulong offset = uploadSessionData["nextExpectedRanges"][0].str.splitter('-').front.to!ulong;
-		size_t iteration = (roundTo!int(double(thisFileSize)/double(fragmentSize)))+1;
-		Progress p = new Progress(iteration);
-		p.title = "Uploading";
-		
-		// Initialise the download bar at 0%
-		p.next();
-		
+		size_t expected_total_fragments = (roundTo!int(double(thisFileSize)/double(fragmentSize)));
+		ulong start_unix_time = Clock.currTime.toUnixTime();
+		int h, m, s;
+		string etaString;
+		string uploadLogEntry = leftJustify("Uploading: " ~ baseName(uploadSessionData["localPath"].str) ~ " ", 76, '.');
+
 		// Start the session upload using the active API instance for this thread
 		while (true) {
 			fragmentCount++;
-			addLogEntry("Fragment: " ~ to!string(fragmentCount) ~ " of " ~ to!string(iteration), ["debug"]);
-			p.next();
-			addLogEntry("fragmentSize: " ~ to!string(fragmentSize) ~ "offset: " ~ to!string(offset) ~ " thisFileSize: " ~ to!string(thisFileSize), ["debug"]);
+			addLogEntry("Fragment: " ~ to!string(fragmentCount) ~ " of " ~ to!string(expected_total_fragments), ["debug"]);
+			
+			// What ETA string do we use?
+			auto eta = calc_eta((fragmentCount -1), expected_total_fragments, start_unix_time);
+			if (eta == 0) {
+				// Initial calculation ... 
+				etaString = format!"|  ETA   --:--:--";
+			} else {
+				// we have at least an ETA provided
+				dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
+				etaString = format!"|  ETA   %02d:%02d:%02d"( h, m, s);
+			}
+			
+			// Calculate this progress output
+			auto ratio = cast(double)(fragmentCount -1) / expected_total_fragments;
+			// Convert the ratio to a percentage and format it to two decimal places
+			string percentage = leftJustify(format(" %05.2f%%", ratio * 100), 8, ' ');
+			addLogEntry(uploadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+			
+			// What fragment size will be used?
+			addLogEntry("fragmentSize: " ~ to!string(fragmentSize) ~ " offset: " ~ to!string(offset) ~ " thisFileSize: " ~ to!string(thisFileSize), ["debug"]);
 			fragSize = fragmentSize < thisFileSize - offset ? fragmentSize : thisFileSize - offset;
 			addLogEntry("Using fragSize: " ~ to!string(fragSize), ["debug"]);
-			
+						
 			// fragSize must not be a negative value
 			if (fragSize < 0) {
 				// Session upload will fail
@@ -5132,7 +5193,9 @@ class SyncEngine {
 			// was the fragment uploaded without issue?
 			if (uploadResponse.type() == JSONType.object){
 				offset += fragmentSize;
-				if (offset >= thisFileSize) break;
+				if (offset >= thisFileSize) {
+					break;
+				}
 				// update the uploadSessionData details
 				uploadSessionData["expirationDateTime"] = uploadResponse["expirationDateTime"];
 				uploadSessionData["nextExpectedRanges"] = uploadResponse["nextExpectedRanges"];
@@ -5152,8 +5215,13 @@ class SyncEngine {
 		}
 		
 		// upload complete
-		p.next();
-		addLogEntry();
+		ulong end_unix_time = Clock.currTime.toUnixTime();
+		auto upload_duration = cast(int)(end_unix_time - start_unix_time);
+		dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
+		etaString = format!"  | DONE in %02d:%02d:%02d"( h, m, s);
+		addLogEntry(uploadLogEntry ~ "100%  " ~ etaString, ["consoleOnly"]);
+		
+		// Remove session file if it exists		
 		if (exists(threadUploadSessionFilePath)) {
 			remove(threadUploadSessionFilePath);
 		}
@@ -6119,8 +6187,14 @@ class SyncEngine {
 					try {
 						// Query OneDrive API for this path
 						getPathDetailsAPIResponse = queryOneDriveForSpecificPath.getPathDetails(currentPathTree);
+						
 						// Portable Operating System Interface (POSIX) testing of JSON response from OneDrive API
-						performPosixTest(thisFolderName, getPathDetailsAPIResponse["name"].str);
+						if (hasName(getPathDetailsAPIResponse)) {
+							performPosixTest(thisFolderName, getPathDetailsAPIResponse["name"].str);
+						} else {
+							throw new jsonResponseException("Unable to perform POSIX test as the OneDrive API request generated an invalid JSON response");
+						}
+						
 						// No POSIX issue with requested path element
 						parentDetails = makeItem(getPathDetailsAPIResponse);
 						// Save item to the database
@@ -6128,9 +6202,10 @@ class SyncEngine {
 						directoryFoundOnline = true;
 						
 						// Is this JSON a remote object
+						addLogEntry("Testing if this is a remote Shared Folder", ["debug"]);
 						if (isItemRemote(getPathDetailsAPIResponse)) {
 							// Remote Directory .. need a DB Tie Item
-							addLogEntry("Creating a DB TIE for this Shared Folder", ["debug"]);
+							addLogEntry("Creating a DB Tie for this Shared Folder", ["debug"]);
 							
 							// New DB Tie Item to bind the 'remote' path to our parent path
 							Item tieDBItem;
@@ -6144,13 +6219,11 @@ class SyncEngine {
 							// Set the correct mtime
 							tieDBItem.mtime = parentDetails.mtime;
 							// Add tie DB record to the local database
-							addLogEntry("Adding tie DB record to database: " ~ to!string(tieDBItem), ["debug"]);
-							
+							addLogEntry("Adding DB Tie record to database: " ~ to!string(tieDBItem), ["debug"]);
 							itemDB.upsert(tieDBItem);
 							// Update parentDetails to use the DB Tie record
 							parentDetails = tieDBItem;
 						}
-						
 					} catch (OneDriveException exception) {
 						if (exception.httpStatusCode == 404) {
 							directoryFoundOnline = false;
@@ -6188,6 +6261,8 @@ class SyncEngine {
 								displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 							}
 						}
+					} catch (jsonResponseException e) {
+							addLogEntry(e.msg, ["debug"]);
 					}
 				} else {
 					// parentDetails.driveId is not the account drive id - thus will be a remote shared item
@@ -6839,8 +6914,28 @@ class SyncEngine {
 								if (("path" in onedriveJSONItem["parentReference"]) != null) {
 									// If there is a parent reference path, try and use it
 									string selfBuiltPath = onedriveJSONItem["parentReference"]["path"].str ~ "/" ~ onedriveJSONItem["name"].str;
-									auto splitPath = selfBuiltPath.split("root:");
-									thisItemPath = splitPath[1];
+									
+									// Check for ':' and split if present
+									auto splitIndex = selfBuiltPath.indexOf(":");
+									if (splitIndex != -1) {
+										// Keep only the part after ':'
+										selfBuiltPath = selfBuiltPath[splitIndex + 1 .. $];
+									}
+									
+									/**
+									
+									Potentially not required ???
+									
+									// Check for HTML entities (e.g., '%20' for space) in source JSON
+									if (selfBuiltPath.canFind("%")) {
+										addLogEntry("CAUTION:    Microsoft OneDrive API sent a JSON element containing HTML entities. This will cause issues performing pattern matching and potentially cause this path not to sync.");
+										addLogEntry("WORKAROUND: A possible workaround is to rename this item online: " ~ selfBuiltPath, ["verbose"]);
+										addLogEntry("See: https://github.com/OneDrive/onedrive-api-docs/issues/1765 for further details", ["verbose"]);
+									}
+									**/
+
+									// Set thisItemPath to the self built path
+									thisItemPath = selfBuiltPath;
 								} else {
 									// no parent reference path available
 									thisItemPath = onedriveJSONItem["name"].str;

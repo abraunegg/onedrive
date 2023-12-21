@@ -805,7 +805,11 @@ bool hasETag(const ref JSONValue item) {
 }
 
 bool hasSharedElement(const ref JSONValue item) {
-	return ("eTag" in item) != null;
+	return ("shared" in item) != null;
+}
+
+bool hasName(const ref JSONValue item) {
+	return ("name" in item) != null;
 }
 
 // Convert bytes to GB
@@ -879,5 +883,62 @@ string getUserName() {
 		// Unknown user?
 		addLogEntry("User Name:  unknown", ["debug"]);
 		return "unknown";
+	}
+}
+
+int calc_eta(size_t counter, size_t iterations, ulong start_time) {
+	auto ratio = cast(double)counter / iterations;
+	auto current_time = Clock.currTime.toUnixTime();
+	auto duration = cast(int)(current_time - start_time);
+
+	// Segments left to download
+	auto segments_remaining = (iterations - counter);
+	if (segments_remaining == 0) segments_remaining = iterations;
+	
+	// Calculate the average time per iteration so far
+	auto avg_time_per_iteration = cast(int)(duration / cast(double)counter);
+
+	// Estimate total time for all iterations
+	auto estimated_total_time = avg_time_per_iteration * iterations;
+	
+	// Calculate ETA as estimated total time minus elapsed time
+	auto eta_sec = cast(int)(avg_time_per_iteration * segments_remaining);
+	
+	/**
+	addLogEntry("counter: " ~ to!string(counter));
+	addLogEntry("iterations: " ~ to!string(iterations));
+	addLogEntry("segments_remaining: " ~ to!string(segments_remaining));
+	addLogEntry("ratio: " ~ to!string(ratio));
+	addLogEntry("start_time:   " ~ to!string(start_time));
+	addLogEntry("current_time: " ~ to!string(current_time));
+	addLogEntry("duration: " ~ to!string(duration));
+	addLogEntry("avg_time_per_iteration: " ~ to!string(avg_time_per_iteration));
+	addLogEntry("eta_sec: " ~ to!string(eta_sec));
+	addLogEntry("estimated_total_time: " ~ to!string(estimated_total_time));
+	**/
+
+	
+	// Return the ETA or duration
+	// - If 'counter' != 'iterations', this means we are doing 1 .. n and this is not the last iteration of calculating the ETA
+	if (counter != iterations) {
+				
+		// Return the ETA
+		return eta_sec;
+		
+		/**
+		// First iteration to second last
+		if (counter == 2) {
+			// On the second iteration, return estimated time
+			return cast(int)estimated_total_time;
+		} else {
+			// Return the ETA
+			return eta_sec;
+		}
+		**/
+		
+		
+	} else {
+		// Last iteration, which is done before we actually start the last iteration, so sending this as the remaining ETA is as close as we will get to an actual value
+		return avg_time_per_iteration;
 	}
 }
