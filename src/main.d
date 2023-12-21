@@ -112,7 +112,7 @@ int main(string[] cliArgs) {
 			//writeln("onedrive ", strip(import("version")));
 			string tempVersion = "v2.5.0-alpha-4" ~ " GitHub version: " ~ strip(import("version"));
 			writeln(tempVersion);
-			return EXIT_SUCCESS;
+			exit(EXIT_SUCCESS);
 		}
 	} catch (GetOptException e) {
 		// Option errors
