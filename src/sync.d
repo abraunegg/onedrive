@@ -4235,6 +4235,11 @@ class SyncEngine {
 			// Step 1: Check if this path in the database
 			Item databaseItem;
 			bool pathFoundInDB = false;
+			
+			/**
+			
+			THIS IS NOT WORKING ....... NO IDEA WHY 
+			
 			foreach (driveId; driveIDsArray) {
 				if (itemDB.selectByPath(parentPath, driveId, databaseItem)) {
 					pathFoundInDB = true;
@@ -4242,13 +4247,16 @@ class SyncEngine {
 					addLogEntry("pathFoundInDB: " ~ to!string(pathFoundInDB), ["debug"]);
 				}
 			}
-			
-			// Step 2: Query for the path online
+			**/
+						
+			// Step 2: Query for the path online if not found in the local database
 			if (!pathFoundInDB) {
 				// path not found in database
 				try {
 					addLogEntry("Attempting to query OneDrive Online for this parent path as path not found in local database: " ~ parentPath, ["debug"]);
 					onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetails(parentPath);
+					addLogEntry("Online Parent Path Query Response: " ~ to!string(onlinePathData), ["debug"]);
+					
 					// Save item to the database
 					saveItem(onlinePathData);
 					parentItem = makeItem(onlinePathData);
@@ -4294,16 +4302,14 @@ class SyncEngine {
 						}
 					}
 				}
-			} else {
-				// parent path found in database ... use those details ...
-				parentItem = databaseItem;
 			}
 		}
 		
 		// Make sure the full path does not exist online, this should generate a 404 response, to which then the folder will be created online
 		try {
 			// Try and query the OneDrive API for the path we need to create
-			addLogEntry("Attempting to query OneDrive for this path: " ~ thisNewPathToCreate, ["debug"]);
+			addLogEntry("Attempting to query OneDrive API for this path: " ~ thisNewPathToCreate, ["debug"]);
+			addLogEntry("parentItem details: " ~ to!string(parentItem), ["debug"]);
 			
 			if (parentItem.driveId == appConfig.defaultDriveId) {
 				// Use getPathDetailsByDriveId
@@ -4380,8 +4386,29 @@ class SyncEngine {
 				// Fix for https://github.com/skilion/onedrive/issues/356
 				if (!dryRun) {
 					try {
-						// Attempt to create a new folder on the configured parent driveId & parent id
-						createDirectoryOnlineAPIResponse = createDirectoryOnlineOneDriveApiInstance.createById(parentItem.driveId, parentItem.id, newDriveItem);
+						// Attempt to create a new folder on the required driveId and parent item id
+						string requiredDriveId;
+						string requiredParentItemId;
+						
+						// Is this a Personal Account and is the item a Remote Object (Shared Folder) ?
+						if ((appConfig.accountType == "personal") && (parentItem.type == ItemType.remote)) {
+							// Yes .. Shared Folder
+							addLogEntry("parentItem data: " ~ to!string(parentItem), ["debug"]);
+							requiredDriveId = parentItem.remoteDriveId;
+							requiredParentItemId = parentItem.remoteId;
+						} else {
+							// Not a personal account + Shared Folder
+							requiredDriveId = parentItem.driveId;
+							requiredParentItemId = parentItem.id;
+						}
+						
+						// Where are we creating this new folder?
+						addLogEntry("requiredDriveId:      " ~ requiredDriveId, ["debug"]);
+						addLogEntry("requiredParentItemId: " ~ requiredParentItemId, ["debug"]);
+						addLogEntry("newDriveItem JSON:    " ~ to!string(newDriveItem), ["debug"]);
+					
+						// Create the new folder
+						createDirectoryOnlineAPIResponse = createDirectoryOnlineOneDriveApiInstance.createById(requiredDriveId, requiredParentItemId, newDriveItem);
 						// Is the response a valid JSON object - validation checking done in saveItem
 						saveItem(createDirectoryOnlineAPIResponse);
 						// Log that the directory was created
