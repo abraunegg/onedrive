@@ -383,13 +383,7 @@ final class ItemDatabase {
 		Item currItem = { driveId: rootDriveId };
 		
 		// Issue https://github.com/abraunegg/onedrive/issues/578
-		if (startsWith(path, "./") || path == ".") {
-			// Need to remove the . from the path prefix
-			path = "root/" ~ path.chompPrefix(".");
-		} else {
-			// Leave path as it is
-			path = "root/" ~ path;
-		}
+		path = "root/" ~ (startsWith(path, "./") || path == "." ? path.chompPrefix(".") : path);
 		
 		auto s = db.prepare("SELECT * FROM item WHERE name = ?1 AND driveId IS ?2 AND parentId IS ?3");
 		foreach (name; pathSplitter(path)) {
@@ -400,12 +394,14 @@ final class ItemDatabase {
 			if (r.empty) return false;
 			currItem = buildItem(r);
 			
-			// if the item is of type remote substitute it with the child
+			// If the item is of type remote substitute it with the child
 			if (currItem.type == ItemType.remote) {
+				addLogEntry("Record is a Remote Object: " ~  to!string(currItem), ["debug"]);
 				Item child;
 				if (selectById(currItem.remoteDriveId, currItem.remoteId, child)) {
 					assert(child.type != ItemType.remote, "The type of the child cannot be remote");
 					currItem = child;
+					addLogEntry("Selecting Record that is NOT Remote Object: " ~  to!string(currItem), ["debug"]);
 				}
 			}
 		}
@@ -413,18 +409,12 @@ final class ItemDatabase {
 		return true;
 	}
 
-	// same as selectByPath() but it does not traverse remote folders
-	bool selectByPathWithoutRemote(const(char)[] path, string rootDriveId, out Item item) {
+	// same as selectByPath() but it does not traverse remote folders, returns the remote element if that is what is required
+	bool selectByPathIncludingRemoteItems(const(char)[] path, string rootDriveId, out Item item) {
 		Item currItem = { driveId: rootDriveId };
 		
 		// Issue https://github.com/abraunegg/onedrive/issues/578
-		if (startsWith(path, "./") || path == ".") {
-			// Need to remove the . from the path prefix
-			path = "root/" ~ path.chompPrefix(".");
-		} else {
-			// Leave path as it is
-			path = "root/" ~ path;
-		}
+		path = "root/" ~ (startsWith(path, "./") || path == "." ? path.chompPrefix(".") : path);
 		
 		auto s = db.prepare("SELECT * FROM item WHERE name IS ?1 AND driveId IS ?2 AND parentId IS ?3");
 		foreach (name; pathSplitter(path)) {
@@ -435,6 +425,11 @@ final class ItemDatabase {
 			if (r.empty) return false;
 			currItem = buildItem(r);
 		}
+		
+		if (currItem.type == ItemType.remote) {
+			addLogEntry("Record selected is a Remote Object: " ~  to!string(currItem), ["debug"]);
+		}
+		
 		item = currItem;
 		return true;
 	}

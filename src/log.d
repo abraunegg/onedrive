@@ -100,8 +100,8 @@ class LogBuffer {
                 flush();
             }
         }
-
-        private void flush() {
+		
+		private void flush() {
             string[3][] messages;
             synchronized(bufferLock) {
                 messages = buffer;

@@ -60,6 +60,13 @@ class SyncException: Exception {
     }
 }
 
+void forceExit() {
+	// Allow logging to flush and complete
+	Thread.sleep(dur!("msecs")(500));
+	// Force Exit
+	exit(EXIT_FAILURE);
+}
+
 class SyncEngine {
 	// Class Variables
 	ApplicationConfig appConfig;
@@ -277,8 +284,7 @@ class SyncEngine {
 				// Free object and memory
 				object.destroy(oneDriveApiInstance);
 				// Must force exit here, allow logging to be done
-				Thread.sleep(dur!("msecs")(500));
-				exit(-1);
+				forceExit();
 			}
 			
 			try {
@@ -292,8 +298,7 @@ class SyncEngine {
 				// Free object and memory
 				object.destroy(oneDriveApiInstance);
 				// Must force exit here, allow logging to be done
-				Thread.sleep(dur!("msecs")(500));
-				exit(-1);
+				forceExit();
 			}
 			
 			try {
@@ -307,8 +312,7 @@ class SyncEngine {
 				// Free object and memory
 				object.destroy(oneDriveApiInstance);
 				// Must force exit here, allow logging to be done
-				Thread.sleep(dur!("msecs")(500));
-				exit(-1);
+				forceExit();
 			}
 		} else {
 			// API could not be initialised
@@ -318,8 +322,7 @@ class SyncEngine {
 			// Free object and memory
 			object.destroy(oneDriveApiInstance);
 			// Must force exit here, allow logging to be done
-			Thread.sleep(dur!("msecs")(500));
-			exit(-1);
+			forceExit();
 		}
 		
 		// API was initialised
@@ -2424,8 +2427,7 @@ class SyncEngine {
 	void invalidJSONResponseFromOneDriveAPI() {
 		addLogEntry("ERROR: Query of the OneDrive API returned an invalid JSON response");
 		// Must force exit here, allow logging to be done
-		Thread.sleep(dur!("msecs")(500));
-		exit(-1);
+		forceExit();
 	}
 	
 	// Handle an unhandled API error
@@ -2433,8 +2435,7 @@ class SyncEngine {
 		// display error
 		displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 		// Must force exit here, allow logging to be done
-		Thread.sleep(dur!("msecs")(500));
-		exit(-1);
+		forceExit();
 	}
 	
 	// Display the pertinant details of the sync engine
@@ -2473,8 +2474,7 @@ class SyncEngine {
 			// broken tree in the database, we cant compute the path for this item id, exit
 			addLogEntry("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
 			// Must force exit here, allow logging to be done
-			Thread.sleep(dur!("msecs")(500));
-			exit(-1);
+			forceExit();
 		}
 		
 		// return calculated path as string
@@ -4229,29 +4229,30 @@ class SyncEngine {
 			addLogEntry("Attempting to query Local Database for this parent path: " ~ parentPath, ["debug"]);
 			
 			// Attempt a 2 step process to work out where to create the directory
-			// Step 1: Query the DB first
+			// Step 1: Query the DB first for the parent path, to try and avoid an API call
 			// Step 2: Query online as last resort
 			
-			// Step 1: Check if this path in the database
+			// Step 1: Check if this parent path in the database
 			Item databaseItem;
-			bool pathFoundInDB = false;
-			
-			/**
-			
-			THIS IS NOT WORKING ....... NO IDEA WHY 
+			bool parentPathFoundInDB = false;
 			
 			foreach (driveId; driveIDsArray) {
+				addLogEntry("Query DB with this driveID for the Parent Path: " ~ driveId, ["debug"]);
+				// Query the database for this parent path using each driveId that we know about
 				if (itemDB.selectByPath(parentPath, driveId, databaseItem)) {
-					pathFoundInDB = true;
-					addLogEntry("databaseItem: " ~ to!string(databaseItem), ["debug"]);
-					addLogEntry("pathFoundInDB: " ~ to!string(pathFoundInDB), ["debug"]);
+					parentPathFoundInDB = true;
+					addLogEntry("Parent databaseItem: " ~ to!string(databaseItem), ["debug"]);
+					addLogEntry("parentPathFoundInDB: " ~ to!string(parentPathFoundInDB), ["debug"]);
+					parentItem = databaseItem;
 				}
 			}
-			**/
+			
+			// After querying all DB entries for each driveID for the parent path, what are the details in parentItem?
+			addLogEntry("Parent parentItem after DB Query exhausted: " ~ to!string(parentItem), ["debug"]);
 						
 			// Step 2: Query for the path online if not found in the local database
-			if (!pathFoundInDB) {
-				// path not found in database
+			if (!parentPathFoundInDB) {
+				// parent path not found in database
 				try {
 					addLogEntry("Attempting to query OneDrive Online for this parent path as path not found in local database: " ~ parentPath, ["debug"]);
 					onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetails(parentPath);
@@ -5325,8 +5326,7 @@ class SyncEngine {
 						addLogEntry("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on Microsoft OneDrive");
 						addLogEntry("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
 						// Must exit here to preserve data on online , allow logging to be done
-						Thread.sleep(dur!("msecs")(500));
-						exit(-1);
+						forceExit();
 					}
 				}
 				
@@ -5746,8 +5746,7 @@ class SyncEngine {
 				// Free object and memory
 				object.destroy(generateDeltaResponseOneDriveApiInstance);
 				// Must force exit here, allow logging to be done
-				Thread.sleep(dur!("msecs")(500));
-				exit(-1);
+				forceExit();
 			}
 		} else {
 			// When setSingleDirectoryScope() was called, the following were set to the correct items, even if the path was remote:
@@ -5882,8 +5881,7 @@ class SyncEngine {
 			// Free object and memory
 			object.destroy(generateDeltaResponseOneDriveApiInstance);
 			// Must force exit here, allow logging to be done
-			Thread.sleep(dur!("msecs")(500));
-			exit(-1);
+			forceExit();
 		}
 		
 		// For each child object, query the OneDrive API
@@ -6473,7 +6471,7 @@ class SyncEngine {
 		// This needs to be enforced as we have to know the parent id of the object being deleted
 		if (dbItem.parentId == null) {
 			// the item is a remote folder, need to do the operation on the parent
-			enforce(itemDB.selectByPathWithoutRemote(path, appConfig.defaultDriveId, dbItem));
+			enforce(itemDB.selectByPathIncludingRemoteItems(path, appConfig.defaultDriveId, dbItem));
 		}
 		
 		try {
@@ -6543,7 +6541,7 @@ class SyncEngine {
 		
 			if (oldItem.parentId == null) {
 				// the item is a remote folder, need to do the operation on the parent
-				enforce(itemDB.selectByPathWithoutRemote(oldPath, appConfig.defaultDriveId, oldItem));
+				enforce(itemDB.selectByPathIncludingRemoteItems(oldPath, appConfig.defaultDriveId, oldItem));
 			}
 		
 			if (itemDB.selectByPath(newPath, appConfig.defaultDriveId, newItem)) {
