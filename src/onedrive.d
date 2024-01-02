@@ -1335,7 +1335,7 @@ class OneDriveApi {
 				// For each onProgress, what is the % of dlnow to dltotal
 				// floor - rounds down to nearest whole number
 				real currentDLPercent = floor(double(dlnow)/dltotal*100);
-				string downloadLogEntry = leftJustify("Downloading: " ~ baseName(filename) ~ " ", 77, '.');
+				string downloadLogEntry = leftJustify("Downloading: " ~ filename ~ " ", 77, '.');
 				
 				// Have we started downloading?
 				if (currentDLPercent > 0){

@@ -2978,36 +2978,46 @@ class SyncEngine {
 		}
 	}
 	
-	// Does this local path (directory or file) conform with the Microsoft Naming Restrictions?
+	// Does this local path (directory or file) conform with the Microsoft Naming Restrictions? It needs to conform otherwise we cannot create the directory or upload the file.
 	bool checkPathAgainstMicrosoftNamingRestrictions(string localFilePath) {
 			
 		// Check if the given path violates certain Microsoft restrictions and limitations
 		// Return a true|false response
 		bool invalidPath = false;
 		
-		// Check against Microsoft OneDrive restriction and limitations about Windows naming files
+		// Check path against Microsoft OneDrive restriction and limitations about Windows naming files
 		if (!invalidPath) {
-			if (!isValidName(localFilePath)) {
+			if (!isValidName(localFilePath)) { // This will return false if this is not a valid name according to the OneDrive API specifications
 				addLogEntry("Skipping item - invalid name (Microsoft Naming Convention): " ~ localFilePath, ["info", "notify"]);
 				invalidPath = true;
 			}
 		}
 		
-		// Check for bad whitespace items
+		// Check path for bad whitespace items
 		if (!invalidPath) {
-			if (!containsBadWhiteSpace(localFilePath)) {
+			if (containsBadWhiteSpace(localFilePath)) {
 				addLogEntry("Skipping item - invalid name (Contains an invalid whitespace item): " ~ localFilePath, ["info", "notify"]);
 				invalidPath = true;
 			}
 		}
 		
-		// Check for HTML ASCII Codes as part of file name
+		// Check path for HTML ASCII Codes 
 		if (!invalidPath) {
-			if (!containsASCIIHTMLCodes(localFilePath)) {
+			if (containsASCIIHTMLCodes(localFilePath)) {
 				addLogEntry("Skipping item - invalid name (Contains HTML ASCII Code): " ~ localFilePath, ["info", "notify"]);
 				invalidPath = true;
 			}
 		}
+		
+		
+		// Check path for ASCII Control Codes
+		if (!invalidPath) {
+			if (containsASCIIControlCodes(localFilePath)) {
+				addLogEntry("Skipping item - invalid name (Contains ASCII Control Codes): " ~ localFilePath, ["info", "notify"]);
+				invalidPath = true;
+			}
+		}
+		
 		// Return if this is a valid path
 		return invalidPath;
 	}
@@ -4471,8 +4481,15 @@ class SyncEngine {
 					addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
 					createDirectoryOnline(thisNewPathToCreate);
 				} else {
-					// Re-Try
-					createDirectoryOnline(thisNewPathToCreate);
+					// If we get a 400 error, there is an issue creating this folder on Microsoft OneDrive for some reason
+					// If the error is not 400, re-try, else fail
+					if (exception.httpStatusCode != 400) {
+						// Attempt a re-try
+						createDirectoryOnline(thisNewPathToCreate);
+					} else {
+						// We cant create this directory online
+						addLogEntry("This folder cannot be created online: " ~ buildNormalizedPath(absolutePath(thisNewPathToCreate)), ["debug"]);
+					}
 				}
 			}
 		}
@@ -5124,7 +5141,7 @@ class SyncEngine {
 		ulong start_unix_time = Clock.currTime.toUnixTime();
 		int h, m, s;
 		string etaString;
-		string uploadLogEntry = leftJustify("Uploading: " ~ baseName(uploadSessionData["localPath"].str) ~ " ", 76, '.');
+		string uploadLogEntry = leftJustify("Uploading: " ~ uploadSessionData["localPath"].str ~ " ", 76, '.');
 
 		// Start the session upload using the active API instance for this thread
 		while (true) {
@@ -5273,7 +5290,7 @@ class SyncEngine {
 		auto upload_duration = cast(int)(end_unix_time - start_unix_time);
 		dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
 		etaString = format!"  | DONE in %02d:%02d:%02d"( h, m, s);
-		addLogEntry(uploadLogEntry ~ "100%  " ~ etaString, ["consoleOnly"]);
+		addLogEntry(uploadLogEntry ~ " 100% " ~ etaString, ["consoleOnly"]);
 		
 		// Remove session file if it exists		
 		if (exists(threadUploadSessionFilePath)) {
@@ -6978,18 +6995,6 @@ class SyncEngine {
 										selfBuiltPath = selfBuiltPath[splitIndex + 1 .. $];
 									}
 									
-									/**
-									
-									Potentially not required ???
-									
-									// Check for HTML entities (e.g., '%20' for space) in source JSON
-									if (selfBuiltPath.canFind("%")) {
-										addLogEntry("CAUTION:    Microsoft OneDrive API sent a JSON element containing HTML entities. This will cause issues performing pattern matching and potentially cause this path not to sync.");
-										addLogEntry("WORKAROUND: A possible workaround is to rename this item online: " ~ selfBuiltPath, ["verbose"]);
-										addLogEntry("See: https://github.com/OneDrive/onedrive-api-docs/issues/1765 for further details", ["verbose"]);
-									}
-									**/
-
 									// Set thisItemPath to the self built path
 									thisItemPath = selfBuiltPath;
 								} else {
@@ -7050,22 +7055,25 @@ class SyncEngine {
 				}
 				
 				// Get the file hash
-				thisItemHash = onedriveJSONItem["file"]["hashes"]["quickXorHash"].str;
-				
-				// Check if the item has been seen before
-				Item existingDatabaseItem;
-				existingDBEntry = itemDB.selectById(thisItemParentDriveId, thisItemId, existingDatabaseItem);
-				
-				if (existingDBEntry) {
-					// item exists in database .. do the database details match the JSON record?
-					if (existingDatabaseItem.quickXorHash != thisItemHash) {
-						// file hash is different, will trigger a download event
+				if (hasHashes(onedriveJSONItem)) {
+					thisItemHash = onedriveJSONItem["file"]["hashes"]["quickXorHash"].str;
+					
+					// Check if the item has been seen before
+					Item existingDatabaseItem;
+					existingDBEntry = itemDB.selectById(thisItemParentDriveId, thisItemId, existingDatabaseItem);
+					
+					if (existingDBEntry) {
+						// item exists in database .. do the database details match the JSON record?
+						if (existingDatabaseItem.quickXorHash != thisItemHash) {
+							// file hash is different, this will trigger a download event
+							downloadSize = downloadSize + onedriveJSONItem["size"].integer;
+						} 
+					} else {
+						// item does not exist in the database
+						// this item has already passed client side filtering rules (skip_dir, skip_file, sync_list)
+						// this will trigger a download event
 						downloadSize = downloadSize + onedriveJSONItem["size"].integer;
-					} 
-				} else {
-					// item does not exist in the database
-					// this item has already passed client side filtering rules (skip_dir, skip_file, sync_list)
-					downloadSize = downloadSize + onedriveJSONItem["size"].integer;
+					}
 				}
 			}
 		}

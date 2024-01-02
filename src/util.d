@@ -28,9 +28,10 @@ import std.random;
 import std.array;
 import std.ascii;
 import std.range;
+import std.exception;
 import core.sys.posix.pwd;
 import core.sys.posix.unistd;
-import core.stdc.string : strlen;
+import core.stdc.string;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -275,58 +276,54 @@ bool isValidName(string path) {
 	// Restriction and limitations about windows naming files
 	// https://msdn.microsoft.com/en-us/library/aa365247
 	// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
+	
+    if (path == ".") {
+        return true;
+    }
 
-	// allow root item
-	if (path == ".") {
-		return true;
-	}
+    string itemName = baseName(path).toLower(); // Ensure case-insensitivity
 
-	string itemName = baseName(path);
+    string[] disallowedNames = [
+        ".lock", "desktop.ini", "CON", "PRN", "AUX", "NUL",
+        "COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+    ];
 
-	// Check for explicitly disallowed names
-	// https://support.microsoft.com/en-us/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa?ui=en-us&rs=en-us&ad=us#invalidfilefoldernames
-	string[] disallowedNames = [
-		".lock", "desktop.ini", "CON", "PRN", "AUX", "NUL",
-		"COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-		"LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9", "_vti_"
-	];
+    // Creating an associative array for faster lookup
+    bool[string] disallowedSet;
+    foreach (name; disallowedNames) {
+        disallowedSet[name.toLower()] = true; // Normalize to lowercase
+    }
 
-	if (canFind(disallowedNames, itemName) || itemName.startsWith("~$")) {
-		return false;
-	}
+    if (disallowedSet.get(itemName, false) || itemName.startsWith("~$") || canFind(itemName, "_vti_")) {
+        return false;
+    }
 
-	// Regular expression for invalid patterns
-	auto invalidNameReg =
-		ctRegex!(
-			// https://support.microsoft.com/en-us/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa?ui=en-us&rs=en-us&ad=us#invalidcharacters
-			// Leading whitespace and trailing whitespace/dot
-			`^\s.*|^.*[\s\.]$|` ~
-			// Invalid characters - 
-			`.*[<>:"\|\?*/\\].*`
-		);
+    auto invalidNameReg = ctRegex!(`^\s.*|^.*[\s\.]$|.*[<>:"\|\?*/\\].*`);
+	
+    auto matchResult = match(itemName, invalidNameReg);
+    if (!matchResult.empty) {
+        return false;
+    }
 
-	auto m = match(itemName, invalidNameReg);
-	bool matched = m.empty;
+    auto segments = pathSplitter(path).array;
+    if (segments.length <= 2 && segments.back.toLower() == "forms") { // Check only the last segment
+        return false;
+    }
 
-	// Check if "_vti_" appears anywhere in a file name
-	if (canFind(itemName, "_vti_")) {
-		matched = false;
-	}
-
-	// Determine if the path is at the root level, if yes, check that 'forms' is not the first folder
-	auto segments = pathSplitter(path).array;
-	if (segments.length <= 2 && itemName.toLower() == "forms") { // Convert to lower as OneDrive is not POSIX compliant, easier to compare
-		matched = false;
-	}
-
-	return matched;
+    return true;
 }
 
 bool containsBadWhiteSpace(string path) {
-	// allow root item
-	if (path == ".") {
-		return true;
-	}
+    // Check for null or empty string
+    if (path.length == 0) {
+        return false;
+    }
+
+    // Check for root item
+    if (path == ".") {
+        return false;
+    }
 	
 	// https://github.com/abraunegg/onedrive/issues/35
 	// Issue #35 presented an interesting issue where the filename contained a newline item
@@ -335,30 +332,57 @@ bool containsBadWhiteSpace(string path) {
 	//		/v1.0/me/drive/root:/.%2FState-of-the-art%2C%20challenges%2C%20and%20open%20issues%20in%20the%20integration%20of%20Internet%20of%0AThings%20and%20Cloud%20Computing.pdf
 	// The '$'\n'' is translated to %0A which causes the OneDrive query to fail
 	// Check for the presence of '%0A' via regex
-	
-	string itemName = encodeComponent(baseName(path));
-	auto invalidWhitespaceReg =
-		ctRegex!(
-			// Check for \n which is %0A when encoded
-			`%0A`
-		);
-	auto m = match(itemName, invalidWhitespaceReg);
-	return m.empty;
+
+    string itemName = encodeComponent(baseName(path));
+    // Check for encoded newline character
+    return itemName.indexOf("%0A") != -1;
 }
 
 bool containsASCIIHTMLCodes(string path) {
-	// https://github.com/abraunegg/onedrive/issues/151
-	// If a filename contains ASCII HTML codes, regardless of if it gets encoded, it generates an error
-	// Check if the filename contains an ASCII HTML code sequence
+	// Check for null or empty string
+    if (path.length == 0) {
+        return false;
+    }
 
-	auto invalidASCIICode = 
-		ctRegex!(
-			// Check to see if &#XXXX is in the filename
-			`(?:&#|&#[0-9][0-9]|&#[0-9][0-9][0-9]|&#[0-9][0-9][0-9][0-9])`
-		);
+    // Check for root item
+    if (path == ".") {
+        return false;
+    }
+
+	// https://github.com/abraunegg/onedrive/issues/151
+    // If a filename contains ASCII HTML codes, it generates an error
+    // Check if the filename contains an ASCII HTML code sequence
+
+	// Check for the pattern &# followed by 1 to 4 digits and a semicolon
+    auto invalidASCIICode = ctRegex!(`&#[0-9]{1,4};`);
+    
+	// Use match to search for ASCII HTML codes in the path
+	auto matchResult = match(path, invalidASCIICode);
 	
-	auto m = match(path, invalidASCIICode);
-	return m.empty;
+    // Return true if ASCII HTML codes are found
+	return !matchResult.empty;  
+}
+
+bool containsASCIIControlCodes(string path) {
+	// Check for null or empty string
+    if (path.length == 0) {
+        return false;
+    }
+
+    // Check for root item
+    if (path == ".") {
+        return false;
+    }
+
+	// https://github.com/abraunegg/onedrive/discussions/2553#discussioncomment-7995254
+    // Define a ctRegex pattern for ASCII control codes
+    auto controlCodePattern = ctRegex!(`[^\x20-\x7E./]`);
+
+    // Use match to search for ASCII control codes in the path
+    auto matchResult = match(path, controlCodePattern);
+
+    // Return true if matchResult is not empty (indicating a control code was found)
+    return !matchResult.empty; 
 }
 
 // Parse and display error message received from OneDrive
@@ -481,20 +505,29 @@ void handleClientUnauthorised(int httpStatusCode, string message) {
 
 // Parse and display error message received from the local file system
 void displayFileSystemErrorMessage(string message, string callingFunction) {
-	addLogEntry(); // used rather than writeln
-	addLogEntry("ERROR: The local file system returned an error with the following message:");
-	auto errorArray = splitLines(message);
-	// What was the error message
-	addLogEntry("  Error Message:    " ~ to!string(errorArray[0]));
-	// Where in the code was this error generated
-	addLogEntry("  Calling Function: " ~ callingFunction, ["verbose"]);
-	// If we are out of disk space (despite download reservations) we need to exit the application
-	ulong localActualFreeSpace = to!ulong(getAvailableDiskSpace("."));
-	if (localActualFreeSpace == 0) {
-		// Must force exit here, allow logging to be done
-		Thread.sleep(dur!("msecs")(500));
-		exit(EXIT_FAILURE);
-	}
+    addLogEntry(); // used rather than writeln
+    addLogEntry("ERROR: The local file system returned an error with the following message:");
+
+    auto errorArray = splitLines(message);
+    // Safely get the error message
+    string errorMessage = errorArray.length > 0 ? to!string(errorArray[0]) : "No error message available";
+    addLogEntry("  Error Message:    " ~ errorMessage);
+    
+    // Log the calling function
+    addLogEntry("  Calling Function: " ~ callingFunction, ["verbose"]);
+
+    try {
+        // Safely check for disk space
+        ulong localActualFreeSpace = to!ulong(getAvailableDiskSpace("."));
+        if (localActualFreeSpace == 0) {
+            // Must force exit here, allow logging to be done
+			Thread.sleep(dur!("msecs")(500));
+            exit(EXIT_FAILURE);
+        }
+    } catch (Exception e) {
+        // Handle exceptions from disk space check or type conversion
+        addLogEntry("  Exception in disk space check: " ~ e.msg);
+    }
 }
 
 // Display the POSIX Error Message
@@ -519,20 +552,18 @@ JSONValue getLatestReleaseDetails() {
 	string latestTag;
 	string publishedDate;
 	
+	// Query GitHub for the 'latest' release details
 	try {
-		content = get("https://api.github.com/repos/abraunegg/onedrive/releases/latest");
-	} catch (CurlException e) {
-		// curl generated an error - meaning we could not query GitHub
-		addLogEntry("Unable to query GitHub for latest release", ["debug"]);
-	}
+        content = get("https://api.github.com/repos/abraunegg/onedrive/releases/latest");
+        githubLatest = content.parseJSON();
+    } catch (CurlException e) {
+        addLogEntry("CurlException: Unable to query GitHub for latest release - " ~ e.msg, ["debug"]);
+        return parseJSON(`{"Error": "CurlException", "message": "` ~ e.msg ~ `"}`);
+    } catch (JSONException e) {
+        addLogEntry("JSONException: Unable to parse GitHub JSON response - " ~ e.msg, ["debug"]);
+        return parseJSON(`{"Error": "JSONException", "message": "` ~ e.msg ~ `"}`);
+    }
 	
-	try {
-		githubLatest = content.parseJSON();
-	} catch (JSONException e) {
-		// unable to parse the content JSON, set to blank JSON
-		addLogEntry("Unable to parse GitHub JSON response", ["debug"]);
-		githubLatest = parseJSON("{}");
-	}
 	
 	// githubLatest has to be a valid JSON object
 	if (githubLatest.type() == JSONType.object){
@@ -583,20 +614,17 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 	string versionTag = "v" ~ thisVersion;
 	string publishedDate;
 	
+	// Query GitHub for the release details to match the running version
 	try {
-		content = get("https://api.github.com/repos/abraunegg/onedrive/releases");
-	} catch (CurlException e) {
-		// curl generated an error - meaning we could not query GitHub
-		addLogEntry("Unable to query GitHub for release details", ["debug"]);
-	}
-	
-	try {
-		githubDetails = content.parseJSON();
-	} catch (JSONException e) {
-		// unable to parse the content JSON, set to blank JSON
-		addLogEntry("Unable to parse GitHub JSON response", ["debug"]);
-		githubDetails = parseJSON("{}");
-	}
+        content = get("https://api.github.com/repos/abraunegg/onedrive/releases");
+        githubDetails = content.parseJSON();
+    } catch (CurlException e) {
+        addLogEntry("CurlException: Unable to query GitHub for release details - " ~ e.msg, ["debug"]);
+        return parseJSON(`{"Error": "CurlException", "message": "` ~ e.msg ~ `"}`);
+    } catch (JSONException e) {
+        addLogEntry("JSONException: Unable to parse GitHub JSON response - " ~ e.msg, ["debug"]);
+        return parseJSON(`{"Error": "JSONException", "message": "` ~ e.msg ~ `"}`);
+    }
 	
 	// githubDetails has to be a valid JSON array
 	if (githubDetails.type() == JSONType.array){
@@ -759,16 +787,27 @@ bool hasFileSize(const ref JSONValue item) {
 	return ("size" in item) != null;
 }
 
+// Function to determine if the final component of the provided path is a .file or .folder
 bool isDotFile(const(string) path) {
-	// always allow the root
-	if (path == ".") return false;
-	auto paths = pathSplitter(buildNormalizedPath(path));
-	foreach(base; paths) {
-		if (startsWith(base, ".")){
-			return true;
-		}
-	}
-	return false;
+    // Check for null or empty path
+    if (path.length == 0 || path is null) {
+        return false;
+    }
+
+    // Special case for root
+    if (path == ".") {
+        return false;
+    }
+
+    // Extract the last component of the path
+    auto paths = pathSplitter(buildNormalizedPath(path));
+    string lastComponent;
+    foreach (base; paths) {
+        lastComponent = base;
+    }
+
+    // Check if the last component starts with a dot
+    return startsWith(lastComponent, ".");
 }
 
 bool isMalware(const ref JSONValue item) {
@@ -821,26 +860,48 @@ bool hasName(const ref JSONValue item) {
 
 // Convert bytes to GB
 string byteToGibiByte(ulong bytes) {
-	double gib = bytes / pow(1024.0,3);
-	double roundedGib = round(gib * 100) / 100;
-	return to!string(format("%.2f", roundedGib)); // Format to ensure two decimal places
+    if (bytes == 0) {
+        return "0.00"; // or handle the zero case as needed
+    }
+
+    double gib = bytes / 1073741824.0; // 1024^3 for direct conversion
+    return format("%.2f", gib); // Format to ensure two decimal places
 }
 
 // Test if entrypoint.sh exists on the root filesystem
-bool entrypointExists() {
-	// build the path
-	string entrypointPath = buildNormalizedPath(buildPath("/", "entrypoint.sh"));
-	// return if path exists
-	return exists(entrypointPath);
+bool entrypointExists(string basePath = "/") {
+    try {
+        // Build the path to the entrypoint.sh file
+        string entrypointPath = buildNormalizedPath(buildPath(basePath, "entrypoint.sh"));
+
+        // Check if the path exists and return the result
+        return exists(entrypointPath);
+    } catch (Exception e) {
+        // Handle any exceptions (e.g., permission issues, invalid path)
+        writeln("An error occurred: ", e.msg);
+        return false;
+    }
 }
 
-// Generate a random alphanumeric string
-string generateAlphanumericString() {
-	auto asciiLetters = to!(dchar[])(letters);
-	auto asciiDigits = to!(dchar[])(digits);
-	dchar[16] randomString;
-	fill(randomString[], randomCover(chain(asciiLetters, asciiDigits), rndGen));
-	return to!string(randomString);
+// Generate a random alphanumeric string with specified length
+string generateAlphanumericString(size_t length = 16) {
+    // Ensure length is not zero
+    if (length == 0) {
+        throw new Exception("Length must be greater than 0");
+    }
+
+    auto asciiLetters = to!(dchar[])(letters);
+    auto asciiDigits = to!(dchar[])(digits);
+    dchar[] randomString;
+    randomString.length = length;
+
+    // Create a random number generator
+    auto rndGen = Random(unpredictableSeed);
+
+    // Fill the string with random alphanumeric characters
+    fill(randomString[], randomCover(chain(asciiLetters, asciiDigits), rndGen));
+
+    return to!string(randomString);
 }
 
 void displayMemoryUsagePreGC() {
@@ -868,84 +929,71 @@ void writeMemoryStats() {
 	writeln("memory allocatedInCurrentThread = ", (GC.stats.allocatedInCurrentThread/1024));
 }
 
+// Return the username of the UID running the 'onedrive' process
 string getUserName() {
-	auto pw = getpwuid(getuid);
-	
-	// get required details
-	auto runtime_pw_name = pw.pw_name[0 .. strlen(pw.pw_name)].splitter(',');
-	auto runtime_pw_uid = pw.pw_uid;
-	auto runtime_pw_gid = pw.pw_gid;
-	
-	// User identifiers from process
-	addLogEntry("Process ID: " ~ to!string(pw), ["debug"]);
-	addLogEntry("User UID:   " ~ to!string(runtime_pw_uid), ["debug"]);
-	addLogEntry("User GID:   " ~ to!string(runtime_pw_gid), ["debug"]);
-	
-	// What should be returned as username?
-	if (!runtime_pw_name.empty && runtime_pw_name.front.length){
-		// user resolved
-		addLogEntry("User Name:  " ~ runtime_pw_name.front.idup, ["debug"]);
-		return runtime_pw_name.front.idup;
-	} else {
-		// Unknown user?
-		addLogEntry("User Name:  unknown", ["debug"]);
-		return "unknown";
-	}
+    // Retrieve the UID of the current user
+    auto uid = getuid();
+
+    // Retrieve password file entry for the user
+    auto pw = getpwuid(uid);
+    enforce(pw !is null, "Failed to retrieve user information for UID: " ~ to!string(uid));
+
+    // Extract username and convert to immutable string
+    string userName = to!string(fromStringz(pw.pw_name));
+
+    // Log User identifiers from process
+    addLogEntry("Process ID: " ~ to!string(pw), ["debug"]);
+    addLogEntry("User UID:   " ~ to!string(pw.pw_uid), ["debug"]);
+    addLogEntry("User GID:   " ~ to!string(pw.pw_gid), ["debug"]);
+
+    // Check if username is valid
+    if (!userName.empty) {
+        addLogEntry("User Name:  " ~ userName, ["debug"]);
+        return userName;
+    } else {
+        // Log and return unknown user
+        addLogEntry("User Name:  unknown", ["debug"]);
+        return "unknown";
+    }
 }
 
+
+// Calculate the ETA for when a 'large file' will be completed (upload & download operations)
 int calc_eta(size_t counter, size_t iterations, ulong start_time) {
-	auto ratio = cast(double)counter / iterations;
-	auto current_time = Clock.currTime.toUnixTime();
-	auto duration = cast(int)(current_time - start_time);
+    if (counter == 0) {
+        return 0; // Avoid division by zero
+    }
 
-	// Segments left to download
-	auto segments_remaining = (iterations - counter);
-	if (segments_remaining == 0) segments_remaining = iterations;
-	
-	// Calculate the average time per iteration so far
-	auto avg_time_per_iteration = cast(int)(duration / cast(double)counter);
+    double ratio = cast(double) counter / iterations;
+    auto current_time = Clock.currTime.toUnixTime();
+    ulong duration = (current_time - start_time);
 
-	// Estimate total time for all iterations
-	auto estimated_total_time = avg_time_per_iteration * iterations;
-	
-	// Calculate ETA as estimated total time minus elapsed time
-	auto eta_sec = cast(int)(avg_time_per_iteration * segments_remaining);
-	
-	/**
-	addLogEntry("counter: " ~ to!string(counter));
-	addLogEntry("iterations: " ~ to!string(iterations));
-	addLogEntry("segments_remaining: " ~ to!string(segments_remaining));
-	addLogEntry("ratio: " ~ to!string(ratio));
-	addLogEntry("start_time:   " ~ to!string(start_time));
-	addLogEntry("current_time: " ~ to!string(current_time));
-	addLogEntry("duration: " ~ to!string(duration));
-	addLogEntry("avg_time_per_iteration: " ~ to!string(avg_time_per_iteration));
-	addLogEntry("eta_sec: " ~ to!string(eta_sec));
-	addLogEntry("estimated_total_time: " ~ to!string(estimated_total_time));
-	**/
+    // Segments left to download
+    auto segments_remaining = (iterations > counter) ? (iterations - counter) : 0;
+    
+    // Calculate the average time per iteration so far
+    double avg_time_per_iteration = cast(double) duration / counter;
 
+    // Debug output for the ETA calculation
+    addLogEntry("counter: " ~ to!string(counter), ["debug"]);
+	addLogEntry("iterations: " ~ to!string(iterations), ["debug"]);
+	addLogEntry("segments_remaining: " ~ to!string(segments_remaining), ["debug"]);
+	addLogEntry("ratio: " ~ format("%.2f", ratio), ["debug"]);
+	addLogEntry("start_time:   " ~ to!string(start_time), ["debug"]);
+	addLogEntry("current_time: " ~ to!string(current_time), ["debug"]);
+	addLogEntry("duration: " ~ to!string(duration), ["debug"]);
+	addLogEntry("avg_time_per_iteration: " ~ format("%.2f", avg_time_per_iteration), ["debug"]);
 	
 	// Return the ETA or duration
-	// - If 'counter' != 'iterations', this means we are doing 1 .. n and this is not the last iteration of calculating the ETA
-	if (counter != iterations) {
-				
-		// Return the ETA
-		return eta_sec;
-		
-		/**
-		// First iteration to second last
-		if (counter == 2) {
-			// On the second iteration, return estimated time
-			return cast(int)estimated_total_time;
-		} else {
-			// Return the ETA
-			return eta_sec;
-		}
-		**/
-		
-		
-	} else {
-		// Last iteration, which is done before we actually start the last iteration, so sending this as the remaining ETA is as close as we will get to an actual value
-		return avg_time_per_iteration;
-	}
+    if (counter != iterations) {
+        auto eta_sec = avg_time_per_iteration * segments_remaining;
+		// ETA Debug
+		addLogEntry("eta_sec: " ~ to!string(eta_sec), ["debug"]);
+		addLogEntry("estimated_total_time: " ~ to!string(avg_time_per_iteration * iterations), ["debug"]);
+		// Return ETA
+        return eta_sec > 0 ? cast(int) ceil(eta_sec) : 0;
+    } else {
+		// Return the average time per iteration for the last iteration
+        return cast(int) ceil(avg_time_per_iteration); 
+    }
 }
