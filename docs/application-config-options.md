@@ -531,7 +531,12 @@ _**CLI Option Use:**_ `--resync-auth`
 _**Additional Usage Notes:**_ In certain automated environments (assuming you know what you're doing due to automation), to avoid the 'proceed with acknowledgement' resync requirement, this option allows you to automatically acknowledge the resync prompt.
 
 ### skip_dir
-_**Description:**_ This configuration option controls whether the application skips certain directories from being synced.
+_**Description:**_ This configuration option controls whether the application skips certain directories from being synced. Directories can be specified in 2 ways:
+
+* As a single entry. This will search the respective path for this entry and skip all instances where this directory is present, where ever it may exist.
+* As a full path entry. This will skip the explicit path as set.
+
+**Important:** Entries for 'skip_dir' are *relative* to your 'sync_dir' path.
 
 _**Value Type:**_ String
 
@@ -539,31 +544,26 @@ _**Default Value:**_ *Empty* - not required for normal operation
 
 _**Config Example:**_ 
 
-Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns. Entries for 'skip_dir' are *relative* to your 'sync_dir' path.
+Patterns are case insensitive. `*` and `?` [wildcards characters](https://technet.microsoft.com/en-us/library/bb490639.aspx) are supported. Use `|` to separate multiple patterns. 
+
 ```text
-# When changing a config option below, remove the '#' from the start of the line
-# For explanations of all config options below see docs/USAGE.md or the man page.
-#
-# sync_dir = "~/OneDrive"
-# skip_file = "~*|.~*|*.tmp"
-# monitor_interval = "300"
-skip_dir = "Desktop|Documents/IISExpress|Documents/SQL Server Management Studio|Documents/Visual Studio*|Documents/WindowsPowerShell"
-# log_dir = "/var/log/onedrive/"
+skip_dir = "Desktop|Documents/IISExpress|Documents/SQL Server Management Studio|Documents/Visual Studio*|Documents/WindowsPowerShell|.Rproj-user"
 ```
 
-The 'skip_dir' option can be specified multiple times within your config file, for example:
+The 'skip_dir' option can also be specified multiple times within your config file, for example:
 ```text
-skip_dir = "SomeDir|OtherDir|ThisDir|ThatDir"
-skip_dir = "/Path/To/A/Directory"
-skip_dir = "/Another/Path/To/Different/Directory"
+skip_dir = "SkipThisDirectoryAnywhere"
+skip_dir = ".SkipThisOtherDirectoryAnywhere"
+skip_dir = "/Explicit/Path/To/A/Directory"
+skip_dir = "/Another/Explicit/Path/To/Different/Directory"
 ```
 
 This will be interpreted the same as:
 ```text
-skip_dir = "SomeDir|OtherDir|ThisDir|ThatDir|/Path/To/A/Directory|/Another/Path/To/Different/Directory"
+skip_dir = "SkipThisDirectoryAnywhere|.SkipThisOtherDirectoryAnywhere|/Explicit/Path/To/A/Directory|/Another/Explicit/Path/To/Different/Directory"
 ```
 
-_**CLI Option Use:**_ `--skip-dir 'SomeDir|OtherDir|ThisDir|ThatDir|/Path/To/A/Directory|/Another/Path/To/Different/Directory'`
+_**CLI Option Use:**_ `--skip-dir 'SkipThisDirectoryAnywhere|.SkipThisOtherDirectoryAnywhere|/Explicit/Path/To/A/Directory|/Another/Explicit/Path/To/Different/Directory'`
 
 _**Additional Usage Notes:**_ This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. If using the config file and CLI option is used, the CLI option will *replace* the config file entries. After changing or modifying this option, you will be required to perform a resync.
 

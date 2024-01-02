@@ -36,7 +36,7 @@ Before reading this document, please ensure you are running application version 
   - [How to only sync a specific directory?](#how-to-only-sync-a-specific-directory)
   - [How to 'skip' files from syncing?](#how-to-skip-files-from-syncing)
   - [How to 'skip' directories from syncing?](#how-to-skip-directories-from-syncing)
-  - [How to 'skip' dot files and folders from syncing?](#how-to-skip-dot-files-and-folders-from-syncing)
+  - [How to 'skip' .files and .folders from syncing?](#how-to-skip-.files-and-.folders-from-syncing)
   - [How to 'skip' files larger than a certain size from syncing?](#how-to-skip-files-larger-than-a-certain-size-from-syncing)
   - [How to 'rate limit' the application to control bandwidth consumed for upload & download operations?](#how-to-rate-limit-the-application-to-control-bandwidth-consumed-for-upload--download-operations)
   - [How can I prevent my local disk from filling up?](#how-can-i-prevent-my-local-disk-from-filling-up)
@@ -643,7 +643,7 @@ There are three methods available to 'skip' a directory from the sync process:
 *   Employ 'sync_list' to configure what files and directories to sync, and what should be excluded
 *   Employ 'check_nosync' as part of your 'config' file and a '.nosync' empty file within the directory to exclude to skip that directory
 
-### How to 'skip' dot files and folders from syncing?
+### How to 'skip' .files and .folders from syncing?
 There are three methods to achieve this:
 *   Employ 'skip_file' or 'skip_dir' to configure what files or folders to skip
 *   Employ 'sync_list' to configure what files and directories to sync, and what should be excluded
