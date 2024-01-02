@@ -36,7 +36,7 @@ Before reading this document, please ensure you are running application version 
   - [How to only sync a specific directory?](#how-to-only-sync-a-specific-directory)
   - [How to 'skip' files from syncing?](#how-to-skip-files-from-syncing)
   - [How to 'skip' directories from syncing?](#how-to-skip-directories-from-syncing)
-  - [How to 'skip' .files and .folders from syncing?](#how-to-skip-.files-and-.folders-from-syncing)
+  - [How to 'skip' .files and .folders from syncing?](#how-to-skip-files-and-folders-from-syncing)
   - [How to 'skip' files larger than a certain size from syncing?](#how-to-skip-files-larger-than-a-certain-size-from-syncing)
   - [How to 'rate limit' the application to control bandwidth consumed for upload & download operations?](#how-to-rate-limit-the-application-to-control-bandwidth-consumed-for-upload--download-operations)
   - [How can I prevent my local disk from filling up?](#how-can-i-prevent-my-local-disk-from-filling-up)
