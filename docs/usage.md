@@ -16,6 +16,7 @@ Before reading this document, please ensure you are running application version 
     - [Ongoing Synchronisation Operational Mode (Monitor Mode)](#ongoing-synchronisation-operational-mode-monitor-mode)
   - [Increasing application logging level](#increasing-application-logging-level)
   - [Testing your configuration](#testing-your-configuration)
+  - [Using 'Client Side Filtering' rules to determine what should be synced with Microsoft OneDrive](#using-client-side-filtering-rules-to-determine-what-should-be-synced-with-microsoft-onedrive)
   - [Performing a sync with Microsoft OneDrive](#performing-a-sync-with-microsoft-onedrive)
   - [Performing a single directory synchronisation with Microsoft OneDrive](#performing-a-single-directory-synchronisation-with-microsoft-onedrive)
   - [Performing a 'one-way' download synchronisation with Microsoft OneDrive](#performing-a-one-way-download-synchronisation-with-microsoft-onedrive)
@@ -262,6 +263,8 @@ Client Side Filtering in the context of the OneDrive Client for Linux refers to 
 Additionally, the OneDrive Client for Linux allows the implementation of Client Side Filtering rules through a 'sync_list' file. This file explicitly states which directories or files should be included in the synchronisation. By default, any item not listed in the 'sync_list' file is excluded. This method offers a more granular approach to synchronisation, ensuring that only the necessary data is transferred to and from Microsoft OneDrive.
 
 These configurable options and the 'sync_list' file provide users with the flexibility to tailor the synchronisation process to their specific needs, conserving bandwidth and storage space while ensuring that important files are always backed up and accessible.
+
+**Note:** After changing any Client Side Filtering rule, you must perform a full re-synchronisation.
 
 ### Performing a sync with Microsoft OneDrive
 By default, all files are downloaded in `~/OneDrive`. This download location is controlled by the 'sync_dir' config option.
