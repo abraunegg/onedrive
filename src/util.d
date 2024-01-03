@@ -48,24 +48,30 @@ static this() {
 
 // Creates a safe backup of the given item, and only performs the function if not in a --dry-run scenario
 void safeBackup(const(char)[] path, bool dryRun) {
-	auto ext = extension(path);
-	auto newPath = path.chomp(ext) ~ "-" ~ deviceName;
+    auto ext = extension(path);
+    auto newPath = path.chomp(ext) ~ "-" ~ deviceName;
+    int n = 2;
+	
+	// Limit to 1000 iterations .. 1000 file backups
+    while (exists(newPath ~ ext) && n < 1000) { 
+        newPath = newPath.chomp("-" ~ (n - 1).to!string) ~ "-" ~ n.to!string;
+        n++;
+    }
+	
+	// Check if unique file name was found
 	if (exists(newPath ~ ext)) {
-		int n = 2;
-		char[] newPath2;
-		do {
-			newPath2 = newPath ~ "-" ~ n.to!string;
-			n++;
-		} while (exists(newPath2 ~ ext));
-		newPath = newPath2;
+		// On the 1000th backup of this file, this should be triggered
+		addLogEntry("Failed to backup " ~ to!string(path) ~ ": Unique file name could not be found after 1000 attempts", ["error"]);
+		return; // Exit function as a unique file name could not be found
 	}
+	
+    // Configure the new name
 	newPath ~= ext;
-	
-	// Log that we are perform the backup by renaming the file
+
+    // Log that we are perform the backup by renaming the file
 	addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath));
-	
-	// Are we in a --dry-run scenario?
-	if (!dryRun) {
+
+    if (!dryRun) {
 		// Not a --dry-run scenario - do the file rename
 		//
 		// There are 2 options to rename a file
@@ -79,10 +85,15 @@ void safeBackup(const(char)[] path, bool dryRun) {
 		//   Copy file from to file to. File timestamps are preserved. File attributes are preserved, if preserve equals Yes.preserveAttributes
 		//
 		// Use rename() as Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
-		rename(path, newPath);
-	} else {
-		addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["debug"]);
-	}
+		try {
+            rename(path, newPath);
+        } catch (Exception e) {
+            // Handle exceptions, e.g., log error
+            addLogEntry("Renaming of local file failed for " ~ to!string(path) ~ ": " ~ e.msg, ["error"]);
+        }
+    } else {
+        addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["debug"]);
+    }
 }
 
 // deletes the specified file without throwing an exception if it does not exists
@@ -94,182 +105,196 @@ void safeRemove(const(char)[] path) {
 string computeSha1Hash(string path) {
 	SHA1 sha;
 	auto file = File(path, "rb");
+	scope(exit) file.close(); // Ensure file is closed post read
 	foreach (ubyte[] data; chunks(file, 4096)) {
 		sha.put(data);
 	}
-	return sha.finish().toHexString().dup;
+	
+	// Store the hash in a local variable before converting to string
+	auto hashResult = sha.finish();
+	return toHexString(hashResult).idup; // Convert the hash to a hex string
 }
 
 // returns the quickXorHash base64 string of a file
 string computeQuickXorHash(string path) {
 	QuickXor qxor;
 	auto file = File(path, "rb");
+	scope(exit) file.close(); // Ensure file is closed post read
 	foreach (ubyte[] data; chunks(file, 4096)) {
 		qxor.put(data);
 	}
-	return Base64.encode(qxor.finish());
+	
+	// Store the hash in a local variable before converting to string
+	auto hashResult = qxor.finish();
+	return Base64.encode(hashResult).idup; // Convert the hash to a base64 string
 }
 
 // returns the SHA256 hex string of a file
 string computeSHA256Hash(string path) {
 	SHA256 sha256;
     auto file = File(path, "rb");
+	scope(exit) file.close(); // Ensure file is closed post read
     foreach (ubyte[] data; chunks(file, 4096)) {
         sha256.put(data);
     }
-    return sha256.finish().toHexString().dup;
+	
+	// Store the hash in a local variable before converting to string
+	auto hashResult = sha256.finish();
+	return toHexString(hashResult).idup; // Convert the hash to a hex string
 }
 
-// converts wildcards (*, ?) to regex
+// Converts wildcards (*, ?) to regex
+// The changes here need to be 100% regression tested before full release
 Regex!char wild2regex(const(char)[] pattern) {
-	string str;
-	str.reserve(pattern.length + 2);
-	str ~= "^";
-	foreach (c; pattern) {
-		switch (c) {
-		case '*':
-			str ~= "[^/]*";
-			break;
-		case '.':
-			str ~= "\\.";
-			break;
-		case '?':
-			str ~= "[^/]";
-			break;
-		case '|':
-			str ~= "$|^";
-			break;
-		case '+':
-			str ~= "\\+";
-			break;
-		case ' ':
-			str ~= "\\s+";
-			break;	
-		case '/':
-			str ~= "\\/";
-			break;
-		case '(':
-			str ~= "\\(";
-			break;
-		case ')':
-			str ~= "\\)";
-			break;
-		default:
-			str ~= c;
-			break;
-		}
-	}
-	str ~= "$";
-	return regex(str, "i");
+    string str;
+    str.reserve(pattern.length + 2);
+    str ~= "^";
+    foreach (c; pattern) {
+        switch (c) {
+        case '*':
+            str ~= ".*";  // Changed to match any character. Was:      str ~= "[^/]*";
+            break;
+        case '.':
+            str ~= "\\.";
+            break;
+        case '?':
+            str ~= ".";  // Changed to match any single character. Was:    str ~= "[^/]";
+            break;
+        case '|':
+            str ~= "$|^";
+            break;
+        case '+':
+            str ~= "\\+";
+            break;
+        case ' ':
+            str ~= "\\s";  // Changed to match exactly one whitespace.    str ~= "\\s+";
+            break;  
+        case '/':
+            str ~= "\\/";
+            break;
+        case '(':
+            str ~= "\\(";
+            break;
+        case ')':
+            str ~= "\\)";
+            break;
+        default:
+            str ~= c;
+            break;
+        }
+    }
+    str ~= "$";
+    return regex(str, "i");
 }
 
 // Test Internet access to Microsoft OneDrive
 bool testInternetReachability(ApplicationConfig appConfig) {
-	// Use preconfigured object with all the correct http values assigned
-	auto curlEngine = new CurlEngine();
-	curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"));
-	
-	// Configure the remaining items required
-	// URL to use
-	// HTTP connection test method
-	curlEngine.connect(HTTP.Method.head, "https://login.microsoftonline.com");
-	// Attempt to contact the Microsoft Online Service
-	try {
+    CurlEngine curlEngine;
+    bool result = false;
+    try {
+		// Use preconfigured object with all the correct http values assigned
+		curlEngine = new CurlEngine();
+		curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"));
+
+		// Configure the remaining items required
+		// URL to use
+		// HTTP connection test method
+
+		curlEngine.connect(HTTP.Method.head, "https://login.microsoftonline.com");
 		addLogEntry("Attempting to contact Microsoft OneDrive Login Service", ["debug"]);
 		curlEngine.http.perform();
 		addLogEntry("Shutting down HTTP engine as successfully reached OneDrive Login Service", ["debug"]);
-		curlEngine.http.shutdown();
-		// Free object and memory
-		object.destroy(curlEngine);
-		return true;
-	} catch (SocketException e) {
-		// Socket issue
-		addLogEntry("HTTP Socket Issue", ["debug"]);
-		addLogEntry("Cannot connect to Microsoft OneDrive Login Service - Socket Issue");
-		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-		return false;
-	} catch (CurlException e) {
-		// No network connection to OneDrive Service
-		addLogEntry("No Network Connection", ["debug"]);
-		addLogEntry("Cannot connect to Microsoft OneDrive Login Service - Network Connection Issue");
-		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-		return false;
-	}
+		result = true;
+    } catch (SocketException e) {
+        addLogEntry("HTTP Socket Issue", ["debug"]);
+        addLogEntry("Cannot connect to Microsoft OneDrive Login Service - Socket Issue");
+        displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+    } catch (CurlException e) {
+        addLogEntry("No Network Connection", ["debug"]);
+        addLogEntry("Cannot connect to Microsoft OneDrive Login Service - Network Connection Issue");
+        displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+    } finally {
+        if (curlEngine) {
+            curlEngine.http.shutdown();
+            object.destroy(curlEngine);
+        }
+    }
+	
+	// Return test result
+    return result;
 }
 
 // Retry Internet access test to Microsoft OneDrive
 bool retryInternetConnectivtyTest(ApplicationConfig appConfig) {
-	// re-try network connection to OneDrive
-	// https://github.com/abraunegg/onedrive/issues/1184
-	// Back off & retry with incremental delay
-	int retryCount = 10000;
-	int retryAttempts = 1;
-	int backoffInterval = 1;
-	int maxBackoffInterval = 3600;
-	bool onlineRetry = false;
-	bool retrySuccess = false;
-	while (!retrySuccess){
-		// retry to access OneDrive API
-		backoffInterval++;
-		int thisBackOffInterval = retryAttempts*backoffInterval;
-		addLogEntry("  Retry Attempt:      " ~ to!string(retryAttempts), ["debug"]);
-		
-		if (thisBackOffInterval <= maxBackoffInterval) {
-			addLogEntry("  Retry In (seconds): " ~ to!string(thisBackOffInterval), ["debug"]);
-			Thread.sleep(dur!"seconds"(thisBackOffInterval));
-		} else {
-			addLogEntry("  Retry In (seconds): " ~ to!string(maxBackoffInterval), ["debug"]);
-			Thread.sleep(dur!"seconds"(maxBackoffInterval));
-		}
-		// perform the re-rty
-		onlineRetry = testInternetReachability(appConfig);
-		if (onlineRetry) {
-			// We are now online
-			addLogEntry("Internet connectivity to Microsoft OneDrive service has been restored");
-			retrySuccess = true;
-		} else {
-			// We are still offline
-			if (retryAttempts == retryCount) {
-				// we have attempted to re-connect X number of times
-				// false set this to true to break out of while loop
-				retrySuccess = true;
-			}
-		}
-		// Increment & loop around
-		retryAttempts++;
-	}
-	if (!onlineRetry) {
-		// Not online after 1.2 years of trying
-		addLogEntry("ERROR: Was unable to reconnect to the Microsoft OneDrive service after 10000 attempts lasting over 1.2 years!");
-	}
-	// return the state
-	return onlineRetry;
+    int retryAttempts = 0;
+    int backoffInterval = 1; // initial backoff interval in seconds
+    int maxBackoffInterval = 3600; // maximum backoff interval in seconds
+    int maxRetryCount = 100; // max retry attempts, reduced for practicality
+    bool isOnline = false;
+
+    while (retryAttempts < maxRetryCount && !isOnline) {
+        if (backoffInterval < maxBackoffInterval) {
+            backoffInterval = min(backoffInterval * 2, maxBackoffInterval); // exponential increase
+        }
+
+        addLogEntry("  Retry Attempt:      " ~ to!string(retryAttempts + 1), ["debug"]);
+        addLogEntry("  Retry In (seconds): " ~ to!string(backoffInterval), ["debug"]);
+
+        Thread.sleep(dur!"seconds"(backoffInterval));
+        isOnline = testInternetReachability(appConfig); // assuming this function is defined elsewhere
+
+        if (isOnline) {
+            addLogEntry("Internet connectivity to Microsoft OneDrive service has been restored");
+        }
+
+        retryAttempts++;
+    }
+
+    if (!isOnline) {
+        addLogEntry("ERROR: Was unable to reconnect to the Microsoft OneDrive service after " ~ to!string(maxRetryCount) ~ " attempts!");
+    }
+	
+	// Return state
+    return isOnline;
 }
 
 // Can we read the local file - as a permissions issue or file corruption will cause a failure
 // https://github.com/abraunegg/onedrive/issues/113
 // returns true if file can be accessed
 bool readLocalFile(string path) {
-	try {
-		// attempt to read up to the first 1 byte of the file
-		// validates we can 'read' the file based on file permissions
-		read(path,1);
-	} catch (std.file.FileException e) {
-		// unable to read the new local file
-		displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-		return false;
-	}
-	return true;
+    try {
+        // Attempt to read up to the first 1 byte of the file
+        auto data = read(path, 1);
+
+        // Check if the read operation was successful
+        if (data.length != 1) {
+            addLogEntry("Failed to read the required amount from the file: " ~ path);
+            return false;
+        }
+    } catch (std.file.FileException e) {
+        // Unable to read the file, log the error message
+        displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+        return false;
+    }
+    return true;
 }
 
 // calls globMatch for each string in pattern separated by '|'
 bool multiGlobMatch(const(char)[] path, const(char)[] pattern) {
-	foreach (glob; pattern.split('|')) {
-		if (globMatch!(std.path.CaseSensitive.yes)(path, glob)) {
-			return true;
-		}
-	}
-	return false;
+    if (path.length == 0 || pattern.length == 0) {
+        return false;
+    }
+
+    if (!pattern.canFind('|')) {
+        return globMatch!(std.path.CaseSensitive.yes)(path, pattern);
+    }
+
+    foreach (glob; pattern.split('|')) {
+        if (globMatch!(std.path.CaseSensitive.yes)(path, glob)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool isValidName(string path) {
@@ -790,7 +815,7 @@ bool hasFileSize(const ref JSONValue item) {
 // Function to determine if the final component of the provided path is a .file or .folder
 bool isDotFile(const(string) path) {
     // Check for null or empty path
-    if (path.length == 0 || path is null) {
+    if (path is null || path.length == 0) {
         return false;
     }
 
@@ -801,10 +826,9 @@ bool isDotFile(const(string) path) {
 
     // Extract the last component of the path
     auto paths = pathSplitter(buildNormalizedPath(path));
-    string lastComponent;
-    foreach (base; paths) {
-        lastComponent = base;
-    }
+    
+    // Optimised way to fetch the last component
+    string lastComponent = paths.empty ? "" : paths.back;
 
     // Check if the last component starts with a dot
     return startsWith(lastComponent, ".");
