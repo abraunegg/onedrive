@@ -248,6 +248,21 @@ Fetching items from the OneDrive API for Drive ID: <drive-id> ..
 Sync with Microsoft OneDrive is complete
 ```
 
+### Using 'Client Side Filtering' rules to determine what should be synced with Microsoft OneDrive
+Client Side Filtering in the context of the OneDrive Client for Linux refers to user-configured rules that determine what files and directories the client should upload or download from Microsoft OneDrive. These rules are crucial for optimising synchronisation, especially when dealing with large numbers of files or specific file types. The OneDrive Client for Linux offers several configuration options to facilitate this:
+
+* **skip_dir:** This option allows the user to specify directories that should not be synchronised with OneDrive. It's particularly useful for omitting large or irrelevant directories from the sync process.
+
+* **skip_dotfiles:** Dotfiles, usually configuration files or scripts, can be excluded from the sync. This is useful for users who prefer to keep these files local.
+
+* **skip_file:** Specific files can be excluded from synchronisation using this option. It provides flexibility in selecting which files are essential for cloud storage.
+
+* **skip_symlinks:** Symlinks often point to files outside the OneDrive directory or to locations that are not relevant for cloud storage. This option prevents them from being included in the sync.
+
+Additionally, the OneDrive Client for Linux allows the implementation of Client Side Filtering rules through a 'sync_list' file. This file explicitly states which directories or files should be included in the synchronisation. By default, any item not listed in the 'sync_list' file is excluded. This method offers a more granular approach to synchronisation, ensuring that only the necessary data is transferred to and from Microsoft OneDrive.
+
+These configurable options and the 'sync_list' file provide users with the flexibility to tailor the synchronisation process to their specific needs, conserving bandwidth and storage space while ensuring that important files are always backed up and accessible.
+
 ### Performing a sync with Microsoft OneDrive
 By default, all files are downloaded in `~/OneDrive`. This download location is controlled by the 'sync_dir' config option.
 
@@ -282,10 +297,6 @@ However, in some circumstances, it may be desirable to clean up local files that
 ```text
 onedrive --sync --download-only --cleanup-local-files
 ```
-
-
-
-
 
 ### Performing a 'one-way' upload synchronisation with Microsoft OneDrive
 In certain scenarios, you might need to perform an 'upload only' operation to Microsoft OneDrive. This means that you'll be uploading data to OneDrive, but not synchronising any changes or additions made elsewhere. Use this command to initiate an upload-only synchronisation:
