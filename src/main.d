@@ -51,7 +51,7 @@ int main(string[] cliArgs) {
 	stdout.setvbuf(0, _IONBF);
 	
 	// Required main function variables
-	string genericHelpMessage = "Try 'onedrive --help' for more information";
+	string genericHelpMessage = "Please use 'onedrive --help' for further assistance in regards to running this application.";
 	// If the user passes in --confdir we need to store this as a variable
 	string confdirOption = "";
 	// running as what user?
@@ -442,6 +442,7 @@ int main(string[] cliArgs) {
 				// - Are we just deleting a directory online, without any sync being performed?
 				// - Are we renaming or moving a directory?
 				// - Are we displaying the quota information?
+				// - Did we just authorise the client?
 								
 				// --get-sharepoint-drive-id - Get the SharePoint Library drive_id
 				if (appConfig.getValueString("sharepoint_library_name") != "") {
@@ -539,14 +540,37 @@ int main(string[] cliArgs) {
 				}
 				
 				// If we get to this point, we have not performed a 'no-sync' task ..
-				addLogEntry();
-				addLogEntry("Your command line input is missing either the '--sync' or '--monitor' switches. Please include one (but not both) of these switches in your command line, or refer to 'onedrive --help' for additional guidance.");
-				addLogEntry();
-				addLogEntry("It is important to note that you must include one of these two arguments in your command line for the application to perform a synchronisation with Microsoft OneDrive");
-				addLogEntry();
-				// Use exit scopes to shutdown API
-				// invalidSyncExit = true;
-				return EXIT_FAILURE;
+				// Did we just authorise the client?
+				if (appConfig.applicationAuthorizeResponseUri) {
+					// Authorisation activity
+					if (exists(appConfig.refreshTokenFilePath)) {
+						// OneDrive refresh token exists
+						addLogEntry();
+						addLogEntry("The application has been successfully authorised, but no extra command options have been specified.");
+						addLogEntry();
+						addLogEntry(genericHelpMessage);
+						addLogEntry();
+						// Use exit scopes to shutdown API
+						return EXIT_SUCCESS;
+					} else {
+						// We just authorised, but refresh_token does not exist .. probably an auth error?
+						addLogEntry();
+						addLogEntry("Your application's authorisation was unsuccessful. Please review your URI response entry, then attempt authorisation again with a new URI response.");
+						addLogEntry();
+						// Use exit scopes to shutdown API
+						return EXIT_FAILURE;
+					}
+				} else {
+					// No authorisation activity
+					addLogEntry();
+					addLogEntry("Your command line input is missing either the '--sync' or '--monitor' switches. Please include one (but not both) of these switches in your command line, or refer to 'onedrive --help' for additional guidance.");
+					addLogEntry();
+					addLogEntry("It is important to note that you must include one of these two arguments in your command line for the application to perform a synchronisation with Microsoft OneDrive");
+					addLogEntry();
+					// Use exit scopes to shutdown API
+					// invalidSyncExit = true;
+					return EXIT_FAILURE;
+				}
 			}
 		} else {
 			// API could not be initialised

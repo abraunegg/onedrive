@@ -385,7 +385,7 @@ bool containsASCIIHTMLCodes(string path) {
     }
 
 	// https://github.com/abraunegg/onedrive/issues/151
-	// If a filename contains ASCII HTML codes, it generates an error
+	// If a filename contains ASCII HTML codes, it generates an error when attempting to upload this to Microsoft OneDrive
 	// Check if the filename contains an ASCII HTML code sequence
 
 	// Check for the pattern &# followed by 1 to 4 digits and a semicolon
