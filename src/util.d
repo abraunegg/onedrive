@@ -96,12 +96,12 @@ void safeBackup(const(char)[] path, bool dryRun) {
     }
 }
 
-// deletes the specified file without throwing an exception if it does not exists
+// Deletes the specified file without throwing an exception if it does not exists
 void safeRemove(const(char)[] path) {
 	if (exists(path)) remove(path);
 }
 
-// returns the SHA1 hash hex string of a file
+// Returns the SHA1 hash hex string of a file
 string computeSha1Hash(string path) {
 	SHA1 sha;
 	auto file = File(path, "rb");
@@ -115,7 +115,7 @@ string computeSha1Hash(string path) {
 	return toHexString(hashResult).idup; // Convert the hash to a hex string
 }
 
-// returns the quickXorHash base64 string of a file
+// Returns the quickXorHash base64 string of a file
 string computeQuickXorHash(string path) {
 	QuickXor qxor;
 	auto file = File(path, "rb");
@@ -129,7 +129,7 @@ string computeQuickXorHash(string path) {
 	return Base64.encode(hashResult).idup; // Convert the hash to a base64 string
 }
 
-// returns the SHA256 hex string of a file
+// Returns the SHA256 hex string of a file
 string computeSHA256Hash(string path) {
 	SHA256 sha256;
     auto file = File(path, "rb");
@@ -279,7 +279,7 @@ bool readLocalFile(string path) {
     return true;
 }
 
-// calls globMatch for each string in pattern separated by '|'
+// Calls globMatch for each string in pattern separated by '|'
 bool multiGlobMatch(const(char)[] path, const(char)[] pattern) {
     if (path.length == 0 || pattern.length == 0) {
         return false;
@@ -297,8 +297,9 @@ bool multiGlobMatch(const(char)[] path, const(char)[] pattern) {
     return false;
 }
 
+// Does the path pass the Microsoft restriction and limitations about naming files and folders
 bool isValidName(string path) {
-	// Restriction and limitations about windows naming files
+	// Restriction and limitations about windows naming files and folders
 	// https://msdn.microsoft.com/en-us/library/aa365247
 	// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
 	
@@ -308,7 +309,9 @@ bool isValidName(string path) {
 
     string itemName = baseName(path).toLower(); // Ensure case-insensitivity
 
-    string[] disallowedNames = [
+    // Check for explicitly disallowed names
+	// https://support.microsoft.com/en-us/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa?ui=en-us&rs=en-us&ad=us#invalidfilefoldernames
+	string[] disallowedNames = [
         ".lock", "desktop.ini", "CON", "PRN", "AUX", "NUL",
         "COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
         "LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
@@ -317,13 +320,17 @@ bool isValidName(string path) {
     // Creating an associative array for faster lookup
     bool[string] disallowedSet;
     foreach (name; disallowedNames) {
-        disallowedSet[name.toLower()] = true; // Normalize to lowercase
+        disallowedSet[name.toLower()] = true; // Normalise to lowercase
     }
 
     if (disallowedSet.get(itemName, false) || itemName.startsWith("~$") || canFind(itemName, "_vti_")) {
         return false;
     }
 
+	// Regular expression for invalid patterns
+	// https://support.microsoft.com/en-us/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa?ui=en-us&rs=en-us&ad=us#invalidcharacters
+	// Leading whitespace and trailing whitespace/dot
+	// Invalid characters
     auto invalidNameReg = ctRegex!(`^\s.*|^.*[\s\.]$|.*[<>:"\|\?*/\\].*`);
 	
     auto matchResult = match(itemName, invalidNameReg);
@@ -331,14 +338,16 @@ bool isValidName(string path) {
         return false;
     }
 
-    auto segments = pathSplitter(path).array;
-    if (segments.length <= 2 && segments.back.toLower() == "forms") { // Check only the last segment
+    // Determine if the path is at the root level, if yes, check that 'forms' is not the first folder
+	auto segments = pathSplitter(path).array;
+    if (segments.length <= 2 && segments.back.toLower() == "forms") { // Check only the last segment, convert to lower as OneDrive is not POSIX compliant, easier to compare
         return false;
     }
 
     return true;
 }
 
+// Does the path contain any bad whitespace characters
 bool containsBadWhiteSpace(string path) {
     // Check for null or empty string
     if (path.length == 0) {
@@ -363,6 +372,7 @@ bool containsBadWhiteSpace(string path) {
     return itemName.indexOf("%0A") != -1;
 }
 
+// Does the path contain any ASCII HTML Codes
 bool containsASCIIHTMLCodes(string path) {
 	// Check for null or empty string
     if (path.length == 0) {
@@ -375,19 +385,20 @@ bool containsASCIIHTMLCodes(string path) {
     }
 
 	// https://github.com/abraunegg/onedrive/issues/151
-    // If a filename contains ASCII HTML codes, it generates an error
-    // Check if the filename contains an ASCII HTML code sequence
+	// If a filename contains ASCII HTML codes, it generates an error
+	// Check if the filename contains an ASCII HTML code sequence
 
 	// Check for the pattern &# followed by 1 to 4 digits and a semicolon
-    auto invalidASCIICode = ctRegex!(`&#[0-9]{1,4};`);
-    
+	auto invalidASCIICode = ctRegex!(`&#[0-9]{1,4};`);
+
 	// Use match to search for ASCII HTML codes in the path
 	auto matchResult = match(path, invalidASCIICode);
-	
-    // Return true if ASCII HTML codes are found
-	return !matchResult.empty;  
+
+	// Return true if ASCII HTML codes are found
+	return !matchResult.empty;
 }
 
+// Does the path contain any ASCII Control Codes
 bool containsASCIIControlCodes(string path) {
 	// Check for null or empty string
     if (path.length == 0) {
@@ -400,14 +411,31 @@ bool containsASCIIControlCodes(string path) {
     }
 
 	// https://github.com/abraunegg/onedrive/discussions/2553#discussioncomment-7995254
-    // Define a ctRegex pattern for ASCII control codes
-    auto controlCodePattern = ctRegex!(`[^\x20-\x7E./]`);
+	// Define a ctRegex pattern for ASCII control codes
+	auto controlCodePattern = ctRegex!(`[^\x20-\x7E./]`);
 
-    // Use match to search for ASCII control codes in the path
-    auto matchResult = match(path, controlCodePattern);
+	// Use match to search for ASCII control codes in the path
+	auto matchResult = match(path, controlCodePattern);
 
-    // Return true if matchResult is not empty (indicating a control code was found)
-    return !matchResult.empty; 
+	// Return true if matchResult is not empty (indicating a control code was found)
+	return !matchResult.empty;
+}
+
+// Does the path contain any HTML URL encoded items (e.g., '%20' for space)
+bool containsURLEncodedItems(string path) {
+    // Check for null or empty string
+    if (path.length == 0) {
+        return false;
+    }
+
+    // Pattern for percent encoding: % followed by two hexadecimal digits
+    auto urlEncodedPattern = ctRegex!(`%[0-9a-fA-F]{2}`);
+
+    // Search for URL encoded items in the string
+    auto matchResult = match(path, urlEncodedPattern);
+
+    // Return true if URL encoded items are found
+    return !matchResult.empty;
 }
 
 // Parse and display error message received from OneDrive
@@ -980,7 +1008,6 @@ string getUserName() {
         return "unknown";
     }
 }
-
 
 // Calculate the ETA for when a 'large file' will be completed (upload & download operations)
 int calc_eta(size_t counter, size_t iterations, ulong start_time) {

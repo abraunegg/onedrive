@@ -2995,7 +2995,7 @@ class SyncEngine {
 		
 		// Check path for bad whitespace items
 		if (!invalidPath) {
-			if (containsBadWhiteSpace(localFilePath)) {
+			if (containsBadWhiteSpace(localFilePath)) { // This will return true if this contains a bad whitespace item
 				addLogEntry("Skipping item - invalid name (Contains an invalid whitespace item): " ~ localFilePath, ["info", "notify"]);
 				invalidPath = true;
 			}
@@ -3003,16 +3003,15 @@ class SyncEngine {
 		
 		// Check path for HTML ASCII Codes 
 		if (!invalidPath) {
-			if (containsASCIIHTMLCodes(localFilePath)) {
+			if (containsASCIIHTMLCodes(localFilePath)) { // This will return true if this contains HTML ASCII Codes
 				addLogEntry("Skipping item - invalid name (Contains HTML ASCII Code): " ~ localFilePath, ["info", "notify"]);
 				invalidPath = true;
 			}
 		}
 		
-		
 		// Check path for ASCII Control Codes
 		if (!invalidPath) {
-			if (containsASCIIControlCodes(localFilePath)) {
+			if (containsASCIIControlCodes(localFilePath)) { // This will return true if this contains ASCII Control Codes
 				addLogEntry("Skipping item - invalid name (Contains ASCII Control Codes): " ~ localFilePath, ["info", "notify"]);
 				invalidPath = true;
 			}
@@ -3366,19 +3365,19 @@ class SyncEngine {
 							selfBuiltPath = selfBuiltPath[splitIndex + 1 .. $];
 						}
 						
-						// Check for HTML entities (e.g., '%20' for space) in selfBuiltPath
-						if (selfBuiltPath.canFind("%")) {
-							addLogEntry("CAUTION:    Microsoft OneDrive API sent a JSON element containing HTML entities. This will cause issues performing pattern matching and potentially cause this path not to sync.");
-							addLogEntry("WORKAROUND: A possible workaround is to rename this item online: " ~ selfBuiltPath, ["verbose"]);
-							addLogEntry("See: https://github.com/OneDrive/onedrive-api-docs/issues/1765 for further details", ["verbose"]);
-						}
-
 						// Set newItemPath to the self built path
 						newItemPath = selfBuiltPath;
 					} else {
-						// no parent reference path available
+						// no parent reference path available in provided JSON
 						newItemPath = thisItemName;
 					}
+				}
+				
+				// Check for HTML entities (e.g., '%20' for space) in newItemPath
+				if (containsURLEncodedItems(newItemPath)) {
+					addLogEntry("CAUTION:    The JSON element transmitted by the Microsoft OneDrive API includes HTML URL encoded items, which may complicate pattern matching and potentially lead to synchronization problems for this item.");
+					addLogEntry("WORKAROUND: An alternative solution could be to change the name of this item through the online platform: " ~ newItemPath, ["verbose"]);
+					addLogEntry("See: https://github.com/OneDrive/onedrive-api-docs/issues/1765 for further details", ["verbose"]);
 				}
 				
 				// Update newItemPath
