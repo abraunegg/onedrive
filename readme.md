@@ -14,7 +14,8 @@ Originally derived as a 'fork' from the [skilion](https://github.com/skilion/one
 This client represents a 100% re-imagining of the original work, addressing numerous notable bugs and issues while incorporating a significant array of new features. This client has been under active development since mid-2018.
 
 ## Features
-*   State caching
+*   Supports 'Client Side Filtering' rules to determine what should be synced with Microsoft OneDrive
+*   Sync State Caching
 *   Real-Time local file monitoring with inotify
 *   Real-Time syncing of remote updates via webhooks
 *   File upload / download validation to ensure data integrity
