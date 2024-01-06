@@ -146,14 +146,14 @@ There are two modes of operation when using the client:
 1. Standalone sync mode that performs a single sync action against Microsoft OneDrive.
 2. Ongoing sync mode that continuously syncs your data with Microsoft OneDrive.
 
-**Important Information:** The default setting for the OneDrive Client on Linux will sync all data from your Microsoft OneDrive account to your local device. To avoid this and select specific items for synchronisation, you should explore setting up 'Client Side Filtering' rules. This will help you manage and specify what exactly gets synced with your Microsoft OneDrive.
+**Important Information:** The default setting for the OneDrive Client on Linux will sync all data from your Microsoft OneDrive account to your local device. To avoid this and select specific items for synchronisation, you should explore setting up 'Client Side Filtering' rules. This will help you manage and specify what exactly gets synced with your Microsoft OneDrive account.
 
 #### Standalone Synchronisation Operational Mode (Standalone Mode)
 This method of use can be employed by issuing the following option to the client:
 ```text
 onedrive --sync
 ```
-For simplicity, this can be reduced to the following:
+For simplicity, this can be shortened to the following:
 ```text
 onedrive -s
 ```
@@ -187,8 +187,8 @@ Alternatively, when running the client with increased verbosity (see below), the
 ...
 All application operations will be performed in: /home/user/OneDrive
 OneDrive synchronisation interval (seconds): 300
-Maximum allowed open files:                 393370   <-- This is the fs.file-max value
-Maximum allowed inotify watches:            29374    <-- This is the fs.inotify.max_user_watches value
+Maximum allowed open files:                 393370   <-- This is the current operating system fs.file-max value
+Maximum allowed inotify watches:            29374    <-- This is the current operating system fs.inotify.max_user_watches value
 Initialising filesystem inotify monitoring ...
 ...
 ```
