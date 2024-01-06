@@ -6,7 +6,7 @@ Before reading this document, please ensure you are running application version 
 
 - [Important Notes](#important-notes)
   - [Upgrading from the 'skilion' Client](#upgrading-from-the-sklion-client)
-  - [Naming Conventions for Local Files and Folders](#naming-conventions-for-local-files-and-folders)
+  - [Guidelines for Naming Local Files and Folders in the Synchronisation Directory](#guidelines-for-naming-local-files-and-folders-in-the-synchronisation-directory)
   - [Compatibility with curl](#compatibility-with-curl)
 - [First Steps](#first-steps)
   - [Authorise the Application with Your Microsoft OneDrive Account](#authorise-the-application-with-your-microsoft-onedrive-account)
@@ -15,8 +15,8 @@ Before reading this document, please ensure you are running application version 
     - [Standalone Synchronisation Operational Mode (Standalone Mode)](#standalone-synchronisation-operational-mode-standalone-mode)
     - [Ongoing Synchronisation Operational Mode (Monitor Mode)](#ongoing-synchronisation-operational-mode-monitor-mode)
   - [Increasing application logging level](#increasing-application-logging-level)
-  - [Testing your configuration](#testing-your-configuration)
   - [Using 'Client Side Filtering' rules to determine what should be synced with Microsoft OneDrive](#using-client-side-filtering-rules-to-determine-what-should-be-synced-with-microsoft-onedrive)
+  - [Testing your configuration](#testing-your-configuration)
   - [Performing a sync with Microsoft OneDrive](#performing-a-sync-with-microsoft-onedrive)
   - [Performing a single directory synchronisation with Microsoft OneDrive](#performing-a-single-directory-synchronisation-with-microsoft-onedrive)
   - [Performing a 'one-way' download synchronisation with Microsoft OneDrive](#performing-a-one-way-download-synchronisation-with-microsoft-onedrive)
@@ -82,10 +82,10 @@ Avoid using a 'skip_file' entry of `.*` as it may prevent the correct detection 
 ERROR: Invalid skip_file entry '.*' detected
 ```
 
-### Naming Conventions for Local Files and Folders
-In the synchronisation directory, it's crucial to adhere to the [Windows naming conventions](https://docs.microsoft.com/windows/win32/fileio/naming-a-file) for your files and folders. 
+### Guidelines for Naming Local Files and Folders in the Synchronisation Directory
+When naming your files and folders in the synchronisation directory, it is important to follow the [Windows naming conventions](https://docs.microsoft.com/windows/win32/fileio/naming-a-file) for your files and folders.
 
-If you happen to have two files with the same names but different capitalisation, our application will make an effort to handle it. However, when there's a clash within the namespace, the file causing the conflict won't be synchronised. Please note that this behaviour is intentional and won't be addressed.
+Moreover, Microsoft OneDrive does not adhere to POSIX standards. As a result, if you have two files with identical names differing only in capitalisation, the OneDrive Client for Linux will try to manage this. However, in cases of naming conflicts, the conflicting file or folder will not synchronise. This is a deliberate design choice and will not be modified. To avoid such issues, you should rename any conflicting local files or folders.
 
 ### Compatibility with curl
 If your system uses curl < 7.47.0, curl will default to HTTP/1.1 for HTTPS operations, and the client will follow suit, using HTTP/1.1.
@@ -118,6 +118,9 @@ The application has been successfully authorised, but no additional command swit
 Please use 'onedrive --help' for further assistance on how to run this application.
 ```
 
+**Please Note:** Without additional input or configuration, the OneDrive Client for Linux will automatically adhere to default application settings during synchronisation processes with Microsoft OneDrive.
+
+
 ### Display Your Applicable Runtime Configuration
 To verify the configuration that the application will use, use the following command:
 ```text
@@ -136,10 +139,14 @@ Config option 'sync_dir'                     = ~/OneDrive
 Config option 'webhook_enabled'              = false
 ```
 
+**Important Reminder:** When using multiple OneDrive accounts, it's essential to always use the `--confdir` command followed by the appropriate configuration directory. This ensures that the specific configuration you intend to view is correctly displayed.
+
 ### Understanding OneDrive Client for Linux Operational Modes
 There are two modes of operation when using the client:
 1. Standalone sync mode that performs a single sync action against Microsoft OneDrive.
 2. Ongoing sync mode that continuously syncs your data with Microsoft OneDrive.
+
+**Important Information:** The default setting for the OneDrive Client on Linux will sync all data from your Microsoft OneDrive account to your local device. To avoid this and select specific items for synchronisation, you should explore setting up 'Client Side Filtering' rules. This will help you manage and specify what exactly gets synced with your Microsoft OneDrive.
 
 #### Standalone Synchronisation Operational Mode (Standalone Mode)
 This method of use can be employed by issuing the following option to the client:
@@ -211,6 +218,23 @@ onedrive -s -v
 ```
 Adding `--verbose` twice will enable debug logging output. This is generally required when raising a bug report or needing to understand a problem.
 
+### Using 'Client Side Filtering' rules to determine what should be synced with Microsoft OneDrive
+Client Side Filtering in the context of the OneDrive Client for Linux refers to user-configured rules that determine what files and directories the client should upload or download from Microsoft OneDrive. These rules are crucial for optimising synchronisation, especially when dealing with large numbers of files or specific file types. The OneDrive Client for Linux offers several configuration options to facilitate this:
+
+* **skip_dir:** This option allows the user to specify directories that should not be synchronised with OneDrive. It's particularly useful for omitting large or irrelevant directories from the sync process.
+
+* **skip_dotfiles:** Dotfiles, usually configuration files or scripts, can be excluded from the sync. This is useful for users who prefer to keep these files local.
+
+* **skip_file:** Specific files can be excluded from synchronisation using this option. It provides flexibility in selecting which files are essential for cloud storage.
+
+* **skip_symlinks:** Symlinks often point to files outside the OneDrive directory or to locations that are not relevant for cloud storage. This option prevents them from being included in the sync.
+
+Additionally, the OneDrive Client for Linux allows the implementation of Client Side Filtering rules through a 'sync_list' file. This file explicitly states which directories or files should be included in the synchronisation. By default, any item not listed in the 'sync_list' file is excluded. This method offers a more granular approach to synchronisation, ensuring that only the necessary data is transferred to and from Microsoft OneDrive.
+
+These configurable options and the 'sync_list' file provide users with the flexibility to tailor the synchronisation process to their specific needs, conserving bandwidth and storage space while ensuring that important files are always backed up and accessible.
+
+**Note:** After changing any Client Side Filtering rule, you must perform a full re-synchronisation.
+
 ### Testing your configuration
 You can test your configuration by utilising the `--dry-run` CLI option. No files will be downloaded, uploaded, or removed; however, the application will display what 'would' have occurred. For example:
 ```text
@@ -248,23 +272,6 @@ Fetching items from the OneDrive API for Drive ID: <drive-id> ..
 
 Sync with Microsoft OneDrive is complete
 ```
-
-### Using 'Client Side Filtering' rules to determine what should be synced with Microsoft OneDrive
-Client Side Filtering in the context of the OneDrive Client for Linux refers to user-configured rules that determine what files and directories the client should upload or download from Microsoft OneDrive. These rules are crucial for optimising synchronisation, especially when dealing with large numbers of files or specific file types. The OneDrive Client for Linux offers several configuration options to facilitate this:
-
-* **skip_dir:** This option allows the user to specify directories that should not be synchronised with OneDrive. It's particularly useful for omitting large or irrelevant directories from the sync process.
-
-* **skip_dotfiles:** Dotfiles, usually configuration files or scripts, can be excluded from the sync. This is useful for users who prefer to keep these files local.
-
-* **skip_file:** Specific files can be excluded from synchronisation using this option. It provides flexibility in selecting which files are essential for cloud storage.
-
-* **skip_symlinks:** Symlinks often point to files outside the OneDrive directory or to locations that are not relevant for cloud storage. This option prevents them from being included in the sync.
-
-Additionally, the OneDrive Client for Linux allows the implementation of Client Side Filtering rules through a 'sync_list' file. This file explicitly states which directories or files should be included in the synchronisation. By default, any item not listed in the 'sync_list' file is excluded. This method offers a more granular approach to synchronisation, ensuring that only the necessary data is transferred to and from Microsoft OneDrive.
-
-These configurable options and the 'sync_list' file provide users with the flexibility to tailor the synchronisation process to their specific needs, conserving bandwidth and storage space while ensuring that important files are always backed up and accessible.
-
-**Note:** After changing any Client Side Filtering rule, you must perform a full re-synchronisation.
 
 ### Performing a sync with Microsoft OneDrive
 By default, all files are downloaded in `~/OneDrive`. This download location is controlled by the 'sync_dir' config option.
