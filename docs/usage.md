@@ -686,7 +686,7 @@ By default, 'rate_limit' is set to '0', indicating that the application will uti
 
 To check the current 'rate_limit' value, use the `--display-config` command.
 
-**Note:** Since downloads and uploads are processed through multiple threads, the 'rate_limit' value applies to each thread separately. For instance, setting 'rate_limit' to 1048576 (1MB) means that during data transfers, the total bandwidth consumption might reach around 16MB, not just the 1MB per thread.
+**Note:** Since downloads and uploads are processed through multiple threads, the 'rate_limit' value applies to each thread separately. For instance, setting 'rate_limit' to 1048576 (1MB) means that during data transfers, the total bandwidth consumption might reach around 16MB, not just the 1MB configured due to the number of threads being used.
 
 ### How can I prevent my local disk from filling up?
 By default, the application will reserve 50MB of disk space to prevent your filesystem from running out of disk space.
