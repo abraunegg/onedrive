@@ -2782,7 +2782,7 @@ class SyncEngine {
 			// get the configured sync_dir
 			logOutputPath = buildNormalizedPath(appConfig.getValueString("sync_dir"));
 		} else {
-			// use what was computed
+			// Use the path that was computed
 			logOutputPath = localFilePath;
 		}
 		
@@ -2986,7 +2986,7 @@ class SyncEngine {
 		// Return a true|false response
 		bool invalidPath = false;
 		
-		// Check path against Microsoft OneDrive restriction and limitations about Windows naming files
+		// Check path against Microsoft OneDrive restriction and limitations about Windows naming for files and folders
 		if (!invalidPath) {
 			if (!isValidName(localFilePath)) { // This will return false if this is not a valid name according to the OneDrive API specifications
 				addLogEntry("Skipping item - invalid name (Microsoft Naming Convention): " ~ localFilePath, ["info", "notify"]);
@@ -3002,7 +3002,7 @@ class SyncEngine {
 			}
 		}
 		
-		// Check path for HTML ASCII Codes 
+		// Check path for HTML ASCII Codes
 		if (!invalidPath) {
 			if (containsASCIIHTMLCodes(localFilePath)) { // This will return true if this contains HTML ASCII Codes
 				addLogEntry("Skipping item - invalid name (Contains HTML ASCII Code): " ~ localFilePath, ["info", "notify"]);
@@ -4036,9 +4036,10 @@ class SyncEngine {
 			}
 			
 			// Check this path against the Microsoft Naming Conventions & Restristions
-			// - Microsoft OneDrive restriction and limitations about Windows naming files
-			// - Bad whitespace items
-			// - HTML ASCII Codes as part of file name
+			// - Check path against Microsoft OneDrive restriction and limitations about Windows naming for files and folders
+			// - Check path for bad whitespace items
+			// - Check path for HTML ASCII Codes
+			// - Check path for ASCII Control Codes
 			if (!unwanted) {
 				unwanted = checkPathAgainstMicrosoftNamingRestrictions(path);
 			}
@@ -6547,7 +6548,11 @@ class SyncEngine {
 			unwanted = checkPathAgainstClientSideFiltering(newPath);
 		}
 		
-		// Check against Microsoft OneDrive restriction and limitations about Windows naming files
+		// Check this path against the Microsoft Naming Conventions & Restristions
+		// - Check path against Microsoft OneDrive restriction and limitations about Windows naming for files and folders
+		// - Check path for bad whitespace items
+		// - Check path for HTML ASCII Codes
+		// - Check path for ASCII Control Codes
 		if (!unwanted) {
 			unwanted = checkPathAgainstMicrosoftNamingRestrictions(newPath);
 		}
