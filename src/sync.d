@@ -5259,6 +5259,12 @@ class SyncEngine {
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 					return uploadResponse;
 				}
+			} catch (ErrnoException e) {
+				// There was a file system error
+				// display the error message
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				uploadResponse = null;
+				return uploadResponse;
 			}
 			
 			// was the fragment uploaded without issue?
