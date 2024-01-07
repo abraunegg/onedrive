@@ -1335,7 +1335,7 @@ class OneDriveApi {
 				// For each onProgress, what is the % of dlnow to dltotal
 				// floor - rounds down to nearest whole number
 				real currentDLPercent = floor(double(dlnow)/dltotal*100);
-				string downloadLogEntry = leftJustify("Downloading: " ~ filename ~ " ", 77, '.');
+				string downloadLogEntry = "Downloading: " ~ filename ~ " ... ";
 				
 				// Have we started downloading?
 				if (currentDLPercent > 0){
@@ -1380,8 +1380,8 @@ class OneDriveApi {
 								segmentCount++;
 								auto eta = calc_eta(segmentCount, expected_total_segments, start_unix_time);
 								dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
-								etaString = format!"|  ETA   %02d:%02d:%02d"( h, m, s);
-								string percentage = " " ~ leftJustify(to!string(currentDLPercent) ~ "%", 6, ' ');
+								etaString = format!"|  ETA    %02d:%02d:%02d"( h, m, s);
+								string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
 								addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 							} else {
 								// 100% done
@@ -1389,7 +1389,7 @@ class OneDriveApi {
 								auto upload_duration = cast(int)(end_unix_time - start_unix_time);
 								dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
 								etaString = format!"| DONE in %02d:%02d:%02d"( h, m, s);
-								string percentage = " " ~ leftJustify(to!string(currentDLPercent) ~ "%", 6, ' ');
+								string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
 								addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 							}
 							
@@ -1412,8 +1412,8 @@ class OneDriveApi {
 								segmentCount++;
 								auto eta = calc_eta(segmentCount, expected_total_segments, start_unix_time);
 								dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
-								etaString = format!"|  ETA   %02d:%02d:%02d"( h, m, s);
-								string percentage = " " ~ leftJustify(to!string(currentDLPercent) ~ "%", 6, ' ');
+								etaString = format!"|  ETA    %02d:%02d:%02d"( h, m, s);
+								string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
 								addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 							} else {
 								// 100% done
@@ -1421,7 +1421,7 @@ class OneDriveApi {
 								auto upload_duration = cast(int)(end_unix_time - start_unix_time);
 								dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
 								etaString = format!"| DONE in %02d:%02d:%02d"( h, m, s);
-								string percentage = " " ~ leftJustify(to!string(currentDLPercent) ~ "%", 6, ' ');
+								string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
 								addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 							}
 							
@@ -1433,8 +1433,8 @@ class OneDriveApi {
 					if ((currentDLPercent == 0) && (!barInit)) {
 						// Calculate the output
 						segmentCount++;
-						etaString = "|  ETA   --:--:--";
-						string percentage = " " ~ leftJustify(to!string(currentDLPercent) ~ "%", 6, ' ');
+						etaString = "|  ETA    --:--:--";
+						string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
 						addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 						barInit = true;
 					}

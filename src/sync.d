@@ -24,6 +24,7 @@ import std.string;
 import std.uni;
 import std.uri;
 import std.utf;
+import std.math;
 
 // What other modules that we have created do we need to import?
 import config;
@@ -5136,11 +5137,11 @@ class SyncEngine {
 		ulong fragmentCount = 0;
 		ulong fragSize = 0;
 		ulong offset = uploadSessionData["nextExpectedRanges"][0].str.splitter('-').front.to!ulong;
-		size_t expected_total_fragments = (roundTo!int(double(thisFileSize)/double(fragmentSize)));
+		size_t expected_total_fragments = cast(ulong) ceil(double(thisFileSize) / double(fragmentSize));
 		ulong start_unix_time = Clock.currTime.toUnixTime();
 		int h, m, s;
 		string etaString;
-		string uploadLogEntry = leftJustify("Uploading: " ~ uploadSessionData["localPath"].str ~ " ", 76, '.');
+		string uploadLogEntry = "Uploading: " ~ uploadSessionData["localPath"].str ~ " ... ";
 
 		// Start the session upload using the active API instance for this thread
 		while (true) {
@@ -5151,17 +5152,17 @@ class SyncEngine {
 			auto eta = calc_eta((fragmentCount -1), expected_total_fragments, start_unix_time);
 			if (eta == 0) {
 				// Initial calculation ... 
-				etaString = format!"|  ETA   --:--:--";
+				etaString = format!"|  ETA    --:--:--";
 			} else {
 				// we have at least an ETA provided
 				dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
-				etaString = format!"|  ETA   %02d:%02d:%02d"( h, m, s);
+				etaString = format!"|  ETA    %02d:%02d:%02d"( h, m, s);
 			}
 			
 			// Calculate this progress output
 			auto ratio = cast(double)(fragmentCount -1) / expected_total_fragments;
 			// Convert the ratio to a percentage and format it to two decimal places
-			string percentage = leftJustify(format(" %05.2f%%", ratio * 100), 8, ' ');
+			string percentage = leftJustify(format("%d%%", cast(int)(ratio * 100)), 5, ' ');
 			addLogEntry(uploadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 			
 			// What fragment size will be used?
@@ -5288,8 +5289,8 @@ class SyncEngine {
 		ulong end_unix_time = Clock.currTime.toUnixTime();
 		auto upload_duration = cast(int)(end_unix_time - start_unix_time);
 		dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
-		etaString = format!"  | DONE in %02d:%02d:%02d"( h, m, s);
-		addLogEntry(uploadLogEntry ~ " 100% " ~ etaString, ["consoleOnly"]);
+		etaString = format!"| DONE in %02d:%02d:%02d"( h, m, s);
+		addLogEntry(uploadLogEntry ~ "100% " ~ etaString, ["consoleOnly"]);
 		
 		// Remove session file if it exists		
 		if (exists(threadUploadSessionFilePath)) {
