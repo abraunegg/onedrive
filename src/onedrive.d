@@ -1665,10 +1665,10 @@ class OneDriveApi {
 					//  https://stackoverflow.com/questions/45829588/brew-install-fails-curl77-error-setting-certificate-verify
 					//  https://forum.dlang.org/post/vwvkbubufexgeuaxhqfl@forum.dlang.org
 					
-					addLogEntry("Problem with reading the SSL CA cert via libcurl - attempting work around", ["debug"]);
-					curlEngine.setDisableSSLVerifyPeer();
-					// retry origional call
-					performHTTPOperation();
+					addLogEntry("Problem with reading the SSL CA cert via libcurl - please repair your system SSL CA Certificates");
+					// Must force exit here, allow logging to be done. If needed later, we could re-use setDisableSSLVerifyPeer()
+					Thread.sleep(dur!("msecs")(500));
+					exit(-1);
 				} else {
 					// Log that an error was returned
 					addLogEntry("ERROR: OneDrive returned an error with the following message:");

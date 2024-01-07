@@ -1287,6 +1287,7 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 		assumeNoGC ( () {
 			addLogEntry("Got termination signal, performing clean up");
 			// Wait for all parallel jobs that depend on the database to complete
+			addLogEntry("Waiting for any existing upload|download process to complete");
 			taskPool.finish(true);
 			// Was itemDb initialised?
 			if (itemDB.isDatabaseInitialised()) {
