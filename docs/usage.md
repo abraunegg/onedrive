@@ -34,6 +34,7 @@ Before reading this document, please ensure you are running application version 
   - [How to change the default configuration of the client?](#how-to-change-the-default-configuration-of-the-client)
   - [How to change where my data from Microsoft OneDrive is stored?](#how-to-change-where-my-data-from-microsoft-onedrive-is-stored)
   - [How to change what file and directory permissions are assigned to data that is downloaded from Microsoft OneDrive?](#how-to-change-what-file-and-directory-permissions-are-assigned-to-data-that-is-downloaded-from-microsoft-onedrive)
+  - [How are uploads and downloads managed?](#how-are-uploads-and-downloads-managed)
   - [How to only sync a specific directory?](#how-to-only-sync-a-specific-directory)
   - [How to 'skip' files from syncing?](#how-to-skip-files-from-syncing)
   - [How to 'skip' directories from syncing?](#how-to-skip-directories-from-syncing)
@@ -600,9 +601,11 @@ If any items failed to sync, the following will be displayed:
 ```
 Sync with Microsoft OneDrive has completed, however there are items that failed to sync.
 ```
-A file list of either upload or download items will be then listed to allow you to determine your next steps.
+A file list of failed upload or download items will also be listed to allow you to determine your next steps.
 
-In order to fix the upload or download failures, you may need to re-try your command and perform a resync to ensure your system is correctly synced with your Microsoft OneDrive Account.
+In order to fix the upload or download failures, you may need to:
+*   Review the application output to determine what happened
+*   Re-try your command utilising a resync to ensure your system is correctly synced with your Microsoft OneDrive Account
 
 ## Frequently Asked Configuration Questions
 
@@ -648,6 +651,9 @@ sync_file_permissions = "600"
 
 **Important:** Please note that special permission bits such as setuid, setgid, and the sticky bit are not supported. Valid permission values range from `000` to `777` only.
 
+### How are uploads and downloads managed?
+The system manages downloads and uploads using a multi-threaded approach. Specifically, the application utilises 16 threads for these processes. This thread count is preset and cannot be modified by users. This design ensures efficient handling of data transfers but does not allow for customisation of thread allocation.
+
 ### How to only sync a specific directory?
 There are two methods to achieve this:
 *   Employ the '--single-directory' option to only sync this specific path
@@ -674,11 +680,13 @@ There are three methods to achieve this:
 Use `skip_size = "value"` as part of your 'config' file where files larger than this size (in MB) will be skipped.
 
 ### How to 'rate limit' the application to control bandwidth consumed for upload & download operations?
-To minimise the Internet bandwidth for upload and download operations, you can add the 'rate_limit' configuration option as part of your 'config' file.
+To optimise Internet bandwidth usage during upload and download processes, include the 'rate_limit' setting in your configuration file. This setting controls the bandwidth allocated to each thread.
 
-The default value is '0' which means use all available bandwidth for the application.
+By default, 'rate_limit' is set to '0', indicating that the application will utilise the maximum available bandwidth across all threads.
 
-The value being used can be reviewed when using `--display-config`.
+To check the current 'rate_limit' value, use the `--display-config` command.
+
+**Note:** Since downloads and uploads are processed through multiple threads, the 'rate_limit' value applies to each thread separately. For instance, setting 'rate_limit' to 1048576 (1MB) means that during data transfers, the total bandwidth consumption might reach around 16MB, not just the 1MB per thread.
 
 ### How can I prevent my local disk from filling up?
 By default, the application will reserve 50MB of disk space to prevent your filesystem from running out of disk space.
