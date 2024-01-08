@@ -3454,8 +3454,9 @@ class SyncEngine {
 			// This will update appConfig.quotaAvailable & appConfig.quotaRestricted values
 			remainingFreeSpace = getRemainingFreeSpace(dbItem.driveId);
 			
-			// Get the file size
+			// Get the file size from the actual file
 			ulong thisFileSizeLocal = getSize(localFilePath);
+			// Get the file size from the DB data
 			ulong thisFileSizeFromDB = to!ulong(dbItem.size);
 			
 			// remainingFreeSpace online includes the current file online
@@ -3921,6 +3922,9 @@ class SyncEngine {
 			// There are elements to upload
 			addLogEntry("New items to upload to OneDrive: " ~ to!string(newLocalFilesToUploadToOneDrive.length), ["verbose"]);
 			
+			// Reset totalDataToUpload
+			totalDataToUpload = 0;
+			
 			// How much data do we need to upload? This is important, as, we need to know how much data to determine if all the files can be uploaded
 			foreach (uploadFilePath; newLocalFilesToUploadToOneDrive) {
 				// validate that the path actually exists so that it can be counted
@@ -4183,17 +4187,25 @@ class SyncEngine {
 		foreach (driveId; driveIDsArray) {
 			if (itemDB.selectByPath(localFilePath, driveId, databaseItem)) {
 				fileFoundInDB = true;
+				break;
 			}
 		}
 		
 		// Was the file found in the database?
 		if (!fileFoundInDB) {
-			// This is a new file
-			scanLocalFilesystemPathForNewData(localFilePath);
+			// This is a new file as it is not in the database
+			// Scan the parent path for any new data, not just this this item
+			scanLocalFilesystemPathForNewData(dirName(localFilePath));
 		} else {
-			// This is a modified file, needs to be handled as such
-			modifiedItemToUpload ~= [databaseItem.driveId, databaseItem.id, localFilePath];
-			uploadChangedLocalFileToOneDrive(modifiedItemToUpload);
+			// This is a potentially modified file, needs to be handled as such. Is the item truly modified?
+			if (!testFileHash(localFilePath, databaseItem)) {
+				// The local file failed the hash comparison test - there is a data difference
+				// Log that the file has changed locally
+				addLogEntry("[M] Local file changed: " ~ localFilePath, ["verbose"]);
+				// Add the modified item to the array to upload
+				modifiedItemToUpload ~= [databaseItem.driveId, databaseItem.id, localFilePath];
+				uploadChangedLocalFileToOneDrive(modifiedItemToUpload);
+			}
 		}
 	}
 	

@@ -484,7 +484,7 @@ final class Monitor {
 					addLogEntry("event IN_DELETE: " ~ path, ["debug"]);
 					if (useCallbacks) onDelete(path);
 				} else if ((event.mask & IN_CLOSE_WRITE) && !(event.mask & IN_ISDIR)) {
-					addLogEntry("event IN_CLOSE_WRITE and IN_ISDIR: " ~ path, ["debug"]);
+					addLogEntry("event IN_CLOSE_WRITE and not IN_ISDIR: " ~ path, ["debug"]);
 					if (useCallbacks) onFileChanged(path);
 				} else {
 					addLogEntry("event unhandled: " ~ path, ["debug"]);
