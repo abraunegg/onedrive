@@ -1,0 +1,82 @@
+#!/bin/sh
+#
+# chkconfig: 2345 20 80
+# description: Starts and stops OneDrive Free Client
+#
+
+# Source function library.
+if [ -f /etc/init.d/functions ] ; then
+  . /etc/init.d/functions
+elif [ -f /etc/rc.d/init.d/functions ] ; then
+  . /etc/rc.d/init.d/functions
+else
+  exit 1
+fi
+
+# Source networking configuration.
+. /etc/sysconfig/network
+
+# Check that networking is up.
+[ ${NETWORKING} = "no" ] && exit 1
+
+APP_NAME="OneDrive Free Client"
+STOP_TIMEOUT=${STOP_TIMEOUT-5}
+RETVAL=0
+
+start() {
+	export PATH=/usr/local/bin/:$PATH
+        echo -n "Starting $APP_NAME: "
+        daemon --user root onedrive_service.sh
+        RETVAL=$?
+        echo
+        [ $RETVAL -eq 0 ] && touch /var/lock/subsys/onedrive || \
+           RETVAL=1
+        return $RETVAL
+}
+
+stop() {
+        echo -n "Shutting down $APP_NAME: "
+        killproc onedrive
+        RETVAL=$?
+        echo
+        [ $RETVAL = 0 ] && rm -f /var/lock/subsys/onedrive ${pidfile}
+}
+
+restart() {
+        stop
+        start
+}
+
+rhstatus() {
+        status onedrive
+        return $?
+}
+
+# Allow status as non-root.
+if [ "$1" = status ]; then
+       rhstatus
+       exit $?
+fi
+
+case "$1" in
+  start)
+        start
+        ;;
+  stop)
+        stop
+        ;;
+  restart)
+        restart
+        ;;
+  reload)
+        reload
+        ;;
+  status)
+        rhstatus
+        ;;
+  *)
+        echo "Usage: $0 {start|stop|restart|reload|status}"
+        exit 2
+esac
+
+exit $?

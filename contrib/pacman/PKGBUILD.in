@@ -1,0 +1,30 @@
+pkgname=onedrive
+pkgver=@PACKAGE_VERSION@
+pkgrel=1 #patch-level (Increment this when patch is applied)
+pkgdesc="A free OneDrive Client for Linux. This is a fork of the https://github.com/skilion/onedrive repository"
+license=("unknown")
+url="https://github.com/abraunegg/onedrive/"
+arch=("i686" "x86_64")
+
+depends=("curl" "gcc-libs" "glibc" "sqlite")
+makedepends=("dmd" "git" "tar")
+
+prepare() {
+	cd "$srcdir"
+	wget "https://github.com/abraunegg/onedrive/archive/v$pkgver.tar.gz" -O "$pkgname-$pkgver-patch-$pkgrel.tar.gz" #Pull last commit release
+	tar -xzf "$pkgname-$pkgver-patch-$pkgrel.tar.gz" --one-top-level="$pkgname-$pkgver-patch-$pkgrel" --strip-components 1
+}
+
+build() {
+	cd "$pkgname-$pkgver-patch-$pkgrel"
+	git init #Create .git folder required from Makefile
+	git add * #Create .git/index
+	git commit --allow-empty-message -m "" #Create .git/refs/heads/master
+	git tag v$pkgver #Add version tag
+	make PREFIX=/usr onedrive
+}
+
+package() {
+	cd "$pkgname-$pkgver-patch-$pkgrel"
+	make PREFIX=/usr DESTDIR="$pkgdir" install
+}

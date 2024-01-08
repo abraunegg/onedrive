@@ -1,0 +1,159 @@
+package = @PACKAGE_NAME@
+version = @PACKAGE_VERSION@
+prefix = @prefix@
+# we don't use @exec_prefix@ because it usually contains '${prefix}' literally
+# but we use @prefix@/bin/onedrive in the systemd unit files which are generated
+# from the configure script.
+# Thus, set exec_prefix unconditionally to prefix
+# Alternative approach would be add dep on sed, and do manual generation in the Makefile.
+# exec_prefix = @exec_prefix@
+exec_prefix = @prefix@
+datarootdir = @datarootdir@
+datadir = @datadir@
+srcdir = @srcdir@
+bindir = @bindir@
+mandir = @mandir@
+sysconfdir = @sysconfdir@
+docdir = $(datadir)/doc/$(package)
+VPATH = @srcdir@
+INSTALL = @INSTALL@
+
+NOTIFICATIONS = @NOTIFICATIONS@
+HAVE_SYSTEMD = @HAVE_SYSTEMD@
+systemduserunitdir = @systemduserunitdir@
+systemdsystemunitdir = @systemdsystemunitdir@
+curl_LIBS = @curl_LIBS@
+sqlite_LIBS = @sqlite_LIBS@
+notify_LIBS = @notify_LIBS@
+COMPLETIONS = @COMPLETIONS@
+BASH_COMPLETION_DIR = @BASH_COMPLETION_DIR@
+ZSH_COMPLETION_DIR = @ZSH_COMPLETION_DIR@
+FISH_COMPLETION_DIR = @FISH_COMPLETION_DIR@
+DEBUG = @DEBUG@
+
+DC = @DC@
+DC_TYPE = @DC_TYPE@
+DCFLAGS = @DCFLAGS@
+DCFLAGS += -w -g -O -J.
+ifeq ($(DEBUG),yes)
+ifeq ($(DC_TYPE),dmd)
+DCFLAGS += -debug -gs
+else
+DCFLAGS += -d-debug -gc
+endif
+endif
+
+ifeq ($(NOTIFICATIONS),yes)
+NOTIF_VERSIONS=-version=NoPragma -version=NoGdk -version=Notifications
+# support ldc2 which needs -d prefix for version specification
+ifeq ($(DC_TYPE),ldc)
+        NOTIF_VERSIONS := $(addprefix -d,$(NOTIF_VERSIONS))
+endif
+DCFLAGS += $(NOTIF_VERSIONS)
+endif
+
+system_unit_files = contrib/systemd/onedrive@.service
+user_unit_files = contrib/systemd/onedrive.service
+
+DOCFILES = readme.md config LICENSE changelog.md docs/advanced-usage.md docs/application-config-options.md docs/application-security.md docs/business-shared-folders.md docs/docker.md docs/install.md docs/national-cloud-deployments.md docs/podman.md docs/privacy-policy.md docs/sharepoint-libraries.md docs/terms-of-service.md docs/ubuntu-package-install.md docs/usage.md 
+
+ifneq ("$(wildcard /etc/redhat-release)","")
+RHEL = $(shell cat /etc/redhat-release | grep -E "(Red Hat Enterprise Linux|CentOS)" | wc -l)
+RHEL_VERSION = $(shell rpm --eval "%{rhel}")
+else
+RHEL = 0
+RHEL_VERSION = 0
+endif
+
+SOURCES = \
+	src/main.d \
+	src/config.d \
+	src/log.d \
+	src/util.d \
+	src/qxor.d \
+	src/curlEngine.d \
+	src/onedrive.d \
+	src/sync.d \
+	src/itemdb.d \
+	src/sqlite.d \
+	src/clientSideFiltering.d \
+	src/monitor.d \
+	src/arsd/cgi.d
+
+ifeq ($(NOTIFICATIONS),yes)
+SOURCES += src/notifications/notify.d src/notifications/dnotify.d
+endif
+
+all: onedrive
+
+clean:
+	rm -f onedrive onedrive.o version
+	rm -rf autom4te.cache
+	rm -f config.log config.status
+
+# also remove files generated via ./configure
+distclean: clean
+	rm -f Makefile contrib/pacman/PKGBUILD contrib/spec/onedrive.spec onedrive.1 \
+	      $(system_unit_files) $(user_unit_files)
+
+onedrive: $(SOURCES)
+	if [ -f .git/HEAD ] ; then \
+		git describe --tags > version ; \
+	else \
+		echo $(version) > version ; \
+	fi
+	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) -L-ldl $(SOURCES) -of$@
+
+install: all
+	$(INSTALL) -D onedrive $(DESTDIR)$(bindir)/onedrive
+	$(INSTALL) -D -m 0644 onedrive.1 $(DESTDIR)$(mandir)/man1/onedrive.1
+	$(INSTALL) -D -m 0644 contrib/logrotate/onedrive.logrotate $(DESTDIR)$(sysconfdir)/logrotate.d/onedrive
+	mkdir -p $(DESTDIR)$(docdir)
+	$(INSTALL) -D -m 0644 $(DOCFILES) $(DESTDIR)$(docdir)
+ifeq ($(HAVE_SYSTEMD),yes)
+	$(INSTALL) -d -m 0755 $(DESTDIR)$(systemduserunitdir) $(DESTDIR)$(systemdsystemunitdir)
+ifeq ($(RHEL),1)
+	$(INSTALL) -m 0644 $(system_unit_files) $(DESTDIR)$(systemdsystemunitdir)
+	$(INSTALL) -m 0644 $(user_unit_files) $(DESTDIR)$(systemdsystemunitdir)
+else
+	$(INSTALL) -m 0644 $(system_unit_files) $(DESTDIR)$(systemdsystemunitdir)
+	$(INSTALL) -m 0644 $(user_unit_files) $(DESTDIR)$(systemduserunitdir)
+endif
+else
+ifeq ($(RHEL_VERSION),6)
+	install -D contrib/init.d/onedrive.init $(DESTDIR)/etc/init.d/onedrive
+	install -D contrib/init.d/onedrive_service.sh $(DESTDIR)$(bindir)/onedrive_service.sh
+endif
+endif
+ifeq ($(COMPLETIONS),yes)
+	$(INSTALL) -D -m 0644 contrib/completions/complete.zsh $(DESTDIR)$(ZSH_COMPLETION_DIR)/_onedrive
+	$(INSTALL) -D -m 0644 contrib/completions/complete.bash $(DESTDIR)$(BASH_COMPLETION_DIR)/onedrive
+	$(INSTALL) -D -m 0644 contrib/completions/complete.fish $(DESTDIR)$(FISH_COMPLETION_DIR)/onedrive.fish
+endif
+
+
+uninstall:
+	rm -f $(DESTDIR)$(bindir)/onedrive
+	rm -f $(DESTDIR)$(mandir)/man1/onedrive.1
+	rm -f $(DESTDIR)$(sysconfdir)/logrotate.d/onedrive
+ifeq ($(HAVE_SYSTEMD),yes)
+ifeq ($(RHEL),1)
+	rm -f $(DESTDIR)$(systemdsystemunitdir)/onedrive*.service
+else
+	rm -f $(DESTDIR)$(systemdsystemunitdir)/onedrive*.service
+	rm -f $(DESTDIR)$(systemduserunitdir)/onedrive*.service
+endif
+else
+ifeq ($(RHEL_VERSION),6)
+	rm -f $(DESTDIR)/etc/init.d/onedrive
+	rm -f $(DESTDIR)$(bindir)/onedrive_service.sh
+endif
+endif
+	for i in $(DOCFILES) ; do rm -f $(DESTDIR)$(docdir)/$$i ; done
+ifeq ($(COMPLETIONS),yes)
+	rm -f $(DESTDIR)$(ZSH_COMPLETION_DIR)/_onedrive
+	rm -f $(DESTDIR)$(BASH_COMPLETION_DIR)/onedrive
+	rm -f $(DESTDIR)$(FISH_COMPLETION_DIR)/onedrive.fish
+endif
+
+
