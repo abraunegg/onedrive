@@ -589,7 +589,7 @@ class OneDriveApi {
 		checkAccessTokenExpired();
 		string url;
 		url = driveUrl;
-		return get(driveUrl);
+		return get(url);
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
