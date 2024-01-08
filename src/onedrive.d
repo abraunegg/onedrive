@@ -19,6 +19,7 @@ import std.path;
 import std.conv;
 import std.math;
 import std.uri;
+import std.array;
 
 // Required for webhooks
 import arsd.cgi;
@@ -180,7 +181,7 @@ class OneDriveApi {
 	string siteDriveUrl = "";
 	string tenantId = "";
 	string authScope = "";
-	string refreshToken = "";
+	const(char)[] refreshToken = "";
 	bool dryRun = false;
 	bool debugResponse = false;
 	ulong retryAfterValue = 0;
@@ -1206,7 +1207,7 @@ class OneDriveApi {
 					if (appConfig.getValueBool("debug_https")) {
 						if (appConfig.getValueBool("print_token")) {
 							// This needs to be highly restricted in output .... 
-							addLogEntry("CAUTION - KEEP THIS SAFE: Current access token: " ~ appConfig.accessToken, ["debug"]);
+							addLogEntry("CAUTION - KEEP THIS SAFE: Current access token: " ~ to!string(appConfig.accessToken), ["debug"]);
 						}
 					}
 				}
@@ -1488,15 +1489,14 @@ class OneDriveApi {
 	
 	private void newToken() {
 		addLogEntry("Need to generate a new access token for Microsoft OneDrive", ["debug"]);
-		string postData =
-			"client_id=" ~ clientId ~
-			"&redirect_uri=" ~ redirectUrl ~
-			"&refresh_token=" ~ refreshToken ~
-			"&grant_type=refresh_token";
-		char[] strArr = postData.dup;
-		acquireToken(strArr);
+		auto postData = appender!(string)();
+		postData ~= "client_id=" ~ clientId;
+		postData ~= "&redirect_uri=" ~ redirectUrl;
+		postData ~= "&refresh_token=" ~ to!string(refreshToken);
+		postData ~= "&grant_type=refresh_token";
+		acquireToken(postData.data.dup);
 	}
-	
+
 	private auto patch(T)(const(char)[] url, const(T)[] patchData) {
 		scope(exit) curlEngine.http.clearRequestHeaders();
 		curlEngine.connect(HTTP.Method.patch, url);

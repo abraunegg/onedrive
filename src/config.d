@@ -107,15 +107,15 @@ class ApplicationConfig {
 	
 	// Was the application just authorised - paste of response uri
 	bool applicationAuthorizeResponseUri = false;
+	
+	// Store the refreshToken for use within the application
+	const(char)[] refreshToken;
+	// Store the current accessToken for use within the application
+	const(char)[] accessToken;
 	// Store the 'refresh_token' file path
 	string refreshTokenFilePath = "";
-	// Store the refreshToken for use within the application
-	string refreshToken;
 	// Store the accessTokenExpiration for use within the application
 	SysTime accessTokenExpiration;
-	// Store the current accessToken for use within the application
-	string accessToken;
-	
 	// Store the 'session_upload.CRC32-HASH' file path
 	string uploadSessionFilePath = "";
 	

@@ -736,8 +736,8 @@ int main(string[] cliArgs) {
 			
 			// Delegated function for when inotify detects a local file has been changed
 			filesystemMonitor.onFileChanged = delegate(string path) {
-				// Handle a changed file
-				addLogEntry("[M] Local file changed: " ~ path, ["verbose"]);
+				// Handle a potentially locally changed file
+				// Logging for this event moved to handleLocalFileTrigger() due to threading and false triggers from scanLocalFilesystemPathForNewData() above
 				try {
 					syncEngineInstance.handleLocalFileTrigger(path);
 				} catch (CurlException e) {
