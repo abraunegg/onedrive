@@ -75,6 +75,9 @@ int main(string[] cliArgs) {
 	bool displayMemoryUsage = false;
 	bool displaySyncOptions = false;
 	
+	// JC #2519
+	bool monitorFailures = false;
+	
 	// Define 'exit' and 'failure' scopes
 	scope(exit) {
 		// Detail what scope was called
@@ -715,6 +718,7 @@ int main(string[] cliArgs) {
 			}
 			
 			// Configure the monitor class
+			Tid workerTid;
 			filesystemMonitor = new Monitor(appConfig, selectiveSync);
 			
 			// Delegated function for when inotify detects a new local directory has been created
@@ -795,6 +799,7 @@ int main(string[] cliArgs) {
 				try {
 					addLogEntry("Initialising filesystem inotify monitoring ...");
 					filesystemMonitor.initialise();
+					workerTid = filesystemMonitor.watch();
 					addLogEntry("Performing initial syncronisation to ensure consistent local state ...");
 				} catch (MonitorException e) {	
 					// monitor class initialisation failed
@@ -804,21 +809,25 @@ int main(string[] cliArgs) {
 			}
 		
 			// Filesystem monitor loop variables
-			// immutables
+			// Immutables
 			immutable auto checkOnlineInterval = dur!"seconds"(appConfig.getValueLong("monitor_interval"));
 			immutable auto githubCheckInterval = dur!"seconds"(86400);
 			immutable ulong fullScanFrequency = appConfig.getValueLong("monitor_fullscan_frequency");
 			immutable ulong logOutputSupressionInterval = appConfig.getValueLong("monitor_log_frequency");
 			immutable bool webhookEnabled = appConfig.getValueBool("webhook_enabled");
-			// changables
+			immutable string loopStartOutputMessage = "################################################## NEW LOOP ##################################################";
+			immutable string loopStopOutputMessage = "################################################ LOOP COMPLETE ###############################################";
+			
+			// Changables
 			bool performMonitor = true;
 			ulong monitorLoopFullCount = 0;
 			ulong fullScanFrequencyLoopCount = 0;
 			ulong monitorLogOutputLoopCount = 0;
 			MonoTime lastCheckTime = MonoTime.currTime();
 			MonoTime lastGitHubCheckTime = MonoTime.currTime();
-			string loopStartOutputMessage = "################################################## NEW LOOP ##################################################";
-			string loopStopOutputMessage = "################################################ LOOP COMPLETE ###############################################";
+			
+			// Webhook Notification Handling
+			bool notificationReceived = false;
 			
 			while (performMonitor) {
 				// Do we need to validate the runtimeSyncDirectory to check for the presence of a '.nosync' file - the disk may have been ejected ..
@@ -835,41 +844,21 @@ int main(string[] cliArgs) {
 					}
 				}
 			
-				// Webhook Notification Handling
-				bool notificationReceived = false;
+				// Webhook Notification reset to false for this loop
+				notificationReceived = false;
 				
 				// Check for notifications pushed from Microsoft to the webhook
 				if (webhookEnabled) {
 					// Create a subscription on the first run, or renew the subscription
 					// on subsequent runs when it is about to expire.
 					oneDriveApiInstance.createOrRenewSubscription();
-
-					// Process incoming notifications if any.
-
-					// Empirical evidence shows that Microsoft often sends multiple
-					// notifications for one single change, so we need a loop to exhaust
-					// all signals that were queued up by the webhook. The notifications
-					// do not contain any actual changes, and we will always rely do the
-					// delta endpoint to sync to latest. Therefore, only one sync run is
-					// good enough to catch up for multiple notifications.
-					for (int signalCount = 0;; signalCount++) {
-						const auto signalExists = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
-						if (signalExists) {
-							notificationReceived = true;
-						} else {
-							if (notificationReceived) {
-								addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signals from the webhook");
-							}
-							break;
-						}
-					}
 				}
 				
 				// Get the current time this loop is starting
 				auto currentTime = MonoTime.currTime();
 				
 				// Do we perform a sync with OneDrive?
-				if (notificationReceived || (currentTime - lastCheckTime > checkOnlineInterval) || (monitorLoopFullCount == 0)) {
+				if ((currentTime - lastCheckTime >= checkOnlineInterval) || (monitorLoopFullCount == 0)) {
 					// Increment relevant counters
 					monitorLoopFullCount++;
 					fullScanFrequencyLoopCount++;
@@ -907,7 +896,7 @@ int main(string[] cliArgs) {
 					if (monitorLogOutputLoopCount > logOutputSupressionInterval) {
 						// unsurpress the logging output
 						monitorLogOutputLoopCount = 1;
-						addLogEntry("Unsuppressing log output", ["debug"]);
+						addLogEntry("Unsuppressing initial sync log output", ["debug"]);
 						appConfig.surpressLoggingOutput = false;
 					} else {
 						// do we surpress the logging output to absolute minimal
@@ -948,8 +937,8 @@ int main(string[] cliArgs) {
 							performStandardSyncProcess(localPath, filesystemMonitor);
 						}
 						
-						// Discard any inotify events generated as part of any sync operation
-						filesystemMonitor.update(false);
+						// Handle any new inotify events
+						filesystemMonitor.update(true);
 						
 						// Detail the outcome of the sync process
 						displaySyncOutcome();
@@ -961,7 +950,7 @@ int main(string[] cliArgs) {
 						}
 					} else {
 						// Not online
-						addLogEntry("Microsoft OneDrive service is not reachable at this time. Will re-try on next loop attempt.");
+						addLogEntry("Microsoft OneDrive service is not reachable at this time. Will re-try on next sync attempt.");
 					}
 					
 					// Output end of loop processing times
@@ -993,8 +982,79 @@ int main(string[] cliArgs) {
 						}
 					}
 				}
-				// Sleep the monitor thread for 1 second, loop around and pick up any inotify changes
-				Thread.sleep(dur!"seconds"(1));
+
+				if (performMonitor) {
+					auto nextCheckTime = lastCheckTime + checkOnlineInterval;
+					currentTime = MonoTime.currTime();
+					auto sleepTime = nextCheckTime - currentTime;
+					addLogEntry("Sleep for " ~ to!string(sleepTime), ["debug"]);
+
+					if(filesystemMonitor.initialised || webhookEnabled) {
+						if(filesystemMonitor.initialised) {
+							// If local monitor is on
+							// start the worker and wait for event
+							if(!filesystemMonitor.isWorking()) {
+								workerTid.send(1);
+							}
+						}
+
+						if(webhookEnabled) {
+							// if onedrive webhook is enabled
+							// update sleep time based on renew interval
+							Duration nextWebhookCheckDuration = oneDriveApiInstance.getNextExpirationCheckDuration();
+							if (nextWebhookCheckDuration < sleepTime) {
+								sleepTime = nextWebhookCheckDuration;
+								addLogEntry("Update sleeping time to " ~ to!string(sleepTime), ["debug"]);
+							}
+							notificationReceived = false;
+						}
+
+						int res = 1;
+						// Process incoming notifications if any.
+						auto signalExists = receiveTimeout(sleepTime, 
+							(int msg) {
+								res = msg;
+							},
+							(ulong _) {
+								notificationReceived = true;
+							}
+						);
+						
+						// Debug values
+						addLogEntry("signalExists = " ~ to!string(signalExists), ["debug"]);
+						addLogEntry("worker status = " ~ to!string(res), ["debug"]);
+						addLogEntry("notificationReceived = " ~ to!string(notificationReceived), ["debug"]);
+						
+						// Empirical evidence shows that Microsoft often sends multiple
+						// notifications for one single change, so we need a loop to exhaust
+						// all signals that were queued up by the webhook. The notifications
+						// do not contain any actual changes, and we will always rely do the
+						// delta endpoint to sync to latest. Therefore, only one sync run is
+						// good enough to catch up for multiple notifications.
+						int signalCount = notificationReceived ? 1 : 0;
+						for (;; signalCount++) {
+							signalExists = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
+							if (signalExists) {
+								notificationReceived = true;
+							} else {
+								if (notificationReceived) {
+									addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signals from the webhook");
+									oneDriveWebhookCallback();
+								}
+								break;
+							}
+						}
+
+						if(res == -1) {
+							addLogEntry("ERROR: Monitor worker failed.");
+							monitorFailures = true;
+							performMonitor = false;
+						}
+					} else {
+						// no hooks available, nothing to check
+						Thread.sleep(sleepTime);
+					}
+				}
 			}
 		}
 	} else {
@@ -1005,7 +1065,7 @@ int main(string[] cliArgs) {
 	}
 	
 	// Exit application using exit scope
-	if (!syncEngineInstance.syncFailures) {
+	if (!syncEngineInstance.syncFailures && !monitorFailures) {
 		return EXIT_SUCCESS;
 	} else {
 		return EXIT_FAILURE;
@@ -1079,6 +1139,26 @@ void performStandardExitProcess(string scopeCaller = null) {
 		Thread.sleep(dur!("msecs")(500));
 		// Destroy the shared logging buffer
 		object.destroy(logBuffer);
+	}
+}
+
+void oneDriveWebhookCallback() {
+	// If we are in a --download-only method of operation, there is no filesystem monitoring, so no inotify events to check
+	if (!appConfig.getValueBool("download_only")) {
+		try {
+			// Process any inotify events
+			filesystemMonitor.update(true);
+		} catch (MonitorException e) {
+			// Catch any exceptions thrown by inotify / monitor engine
+			addLogEntry("ERROR: The following inotify error was generated: " ~ e.msg);
+		}
+	}
+
+	// Download data from OneDrive last
+	syncEngineInstance.syncOneDriveAccountToLocalDisk();
+	if (appConfig.getValueBool("monitor")) {
+	// Handle any new inotify events
+		filesystemMonitor.update(true);
 	}
 }
 

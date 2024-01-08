@@ -7,7 +7,10 @@ import core.stdc.stdlib;
 import core.sys.linux.sys.inotify;
 import core.sys.posix.poll;
 import core.sys.posix.unistd;
+import core.sys.posix.sys.select;
+import core.time;
 import std.algorithm;
+import std.concurrency;
 import std.exception;
 import std.file;
 import std.path;
@@ -31,6 +34,118 @@ class MonitorException: ErrnoException {
     }
 }
 
+shared class MonitorBackgroundWorker {
+	// inotify file descriptor
+	int fd;
+	private bool working;
+
+	void initialise() {
+		fd = inotify_init();
+		working = false;
+		if (fd < 0) throw new MonitorException("inotify_init failed");
+	}
+
+	// Add this path to be monitored
+	private int addInotifyWatch(string pathname) {
+		int wd = inotify_add_watch(fd, toStringz(pathname), mask);
+		if (wd < 0) {
+			if (errno() == ENOSPC) {
+				// Get the current value
+				ulong maxInotifyWatches = to!int(strip(readText("/proc/sys/fs/inotify/max_user_watches")));
+				addLogEntry("The user limit on the total number of inotify watches has been reached.");
+				addLogEntry("Your current limit of inotify watches is: " ~ to!string(maxInotifyWatches));
+				addLogEntry("It is recommended that you change the max number of inotify watches to at least double your existing value.");
+				addLogEntry("To change the current max number of watches to " ~ to!string((maxInotifyWatches * 2)) ~ " run:");
+				addLogEntry("EXAMPLE: sudo sysctl fs.inotify.max_user_watches=" ~ to!string((maxInotifyWatches * 2)));
+			}
+			if (errno() == 13) {
+				addLogEntry("WARNING: inotify_add_watch failed - permission denied: " ~ pathname, ["verbose"]);
+			}
+			// Flag any other errors
+			addLogEntry("ERROR: inotify_add_watch failed: " ~ pathname);
+			return wd;
+		}
+		
+		// Add path to inotify watch - required regardless if a '.folder' or 'folder'
+		addLogEntry("inotify_add_watch successfully added for: " ~ pathname, ["debug"]);
+		
+		// Do we log that we are monitoring this directory?
+		if (isDir(pathname)) {
+			// Log that this is directory is being monitored
+			addLogEntry("Monitoring directory: " ~ pathname, ["verbose"]);
+		}
+		return wd;
+	}
+
+	int remove(int wd) {
+		return inotify_rm_watch(fd, wd);
+	}
+
+	bool isWorking() {
+		return working;
+	}
+
+	void watch(Tid callerTid) {
+		// On failure, send -1 to caller
+		int res;
+
+		// wait for the caller to be ready
+		int isAlive = receiveOnly!int();
+
+		while (isAlive) {
+			fd_set fds;
+			FD_ZERO (&fds);
+			FD_SET(fd, &fds);
+			
+			working = true;
+			res = select(FD_SETSIZE, &fds, null, null, null);
+
+			if(res == -1) {
+				if(errno() == EINTR) {
+					// Received an interrupt signal but no events are available
+					// try update work staus and directly watch again
+					receiveTimeout(dur!"seconds"(1), (int msg) {
+						isAlive = msg;
+					});
+				} else {
+					// Error occurred, tell caller to terminate.
+					callCaller(callerTid, -1);
+					working = false;
+					break;
+				}
+			} else {
+				// Wake up caller
+				callCaller(callerTid, 1);
+				// Wait for the caller to be ready
+				isAlive = receiveOnly!int();
+			}
+		}
+	}
+
+	void callCaller(Tid callerTid, int msg) {
+		working = false;
+		callerTid.send(msg);
+	}
+
+	void shutdown() {
+		if (fd > 0) {
+			close(fd);
+			fd = 0;
+		}
+	}
+}
+
+
+void startMonitorJob(shared(MonitorBackgroundWorker) worker, Tid callerTid)
+{
+	try {
+    	worker.watch(callerTid);
+	} catch (OwnerTerminated error) {
+		// caller is terminated
+	}
+	worker.shutdown();
+}
+
 final class Monitor {
 	// Class variables
 	ApplicationConfig appConfig;
@@ -42,17 +157,18 @@ final class Monitor {
 	bool skip_symlinks = false;
 	// check for .nosync if enabled
 	bool check_nosync = false;
+	// check if initialised
+	bool initialised = false;
 	
 	// Configure Private Class Variables
-	// inotify file descriptor
-	private int fd;
+	shared(MonitorBackgroundWorker) worker;
 	// map every inotify watch descriptor to its directory
 	private string[int] wdToDirName;
 	// map the inotify cookies of move_from events to their path
 	private string[int] cookieToPath;
 	// buffer to receive the inotify events
 	private void[] buffer;
-	
+
 	// Configure function delegates
 	void delegate(string path) onDirCreated;
 	void delegate(string path) onFileChanged;
@@ -75,10 +191,10 @@ final class Monitor {
 		}
 		
 		assert(onDirCreated && onFileChanged && onDelete && onMove);
-		fd = inotify_init();
-		if (fd < 0) throw new MonitorException("inotify_init failed");
 		if (!buffer) buffer = new void[4096];
-		
+		worker = new shared(MonitorBackgroundWorker);
+		worker.initialise();
+
 		// from which point do we start watching for changes?
 		string monitorPath;
 		if (appConfig.getValueString("single_directory") != ""){
@@ -93,7 +209,9 @@ final class Monitor {
 
 	// Shutdown the monitor class
 	void shutdown() {
-		if (fd > 0) close(fd);
+		if(!initialised)
+			return;
+		worker.shutdown();
 		wdToDirName = null;
 	}
 
@@ -151,11 +269,23 @@ final class Monitor {
 				return;
 			}
 		}
+
+		if (isDir(dirname)) {
+			// This is a directory			
+			// is the path exluded if skip_dotfiles configured and path is a .folder?
+			if ((selectiveSync.getSkipDotfiles()) && (isDotFile(dirname))) {
+				// dont add a watch for this directory
+				return;
+			}
+		}
 		
 		// passed all potential exclusions
 		// add inotify watch for this path / directory / file
-		addLogEntry("Calling addInotifyWatch() for this dirname: " ~ dirname, ["debug"]);
-		addInotifyWatch(dirname);
+		addLogEntry("Calling worker.addInotifyWatch() for this dirname: " ~ dirname, ["debug"]);
+		int wd = worker.addInotifyWatch(dirname);
+		if (wd > 0) {
+			wdToDirName[wd] = buildNormalizedPath(dirname) ~ "/";
+		}
 		
 		// if this is a directory, recursivly add this path
 		if (isDir(dirname)) {
@@ -193,57 +323,13 @@ final class Monitor {
 		}
 	}
 
-	// Add this path to be monitored
-	private void addInotifyWatch(string pathname) {
-		int wd = inotify_add_watch(fd, toStringz(pathname), mask);
-		if (wd < 0) {
-			if (errno() == ENOSPC) {
-				// Get the current value
-				ulong maxInotifyWatches = to!int(strip(readText("/proc/sys/fs/inotify/max_user_watches")));
-				addLogEntry("The user limit on the total number of inotify watches has been reached.");
-				addLogEntry("Your current limit of inotify watches is: " ~ to!string(maxInotifyWatches));
-				addLogEntry("It is recommended that you change the max number of inotify watches to at least double your existing value.");
-				addLogEntry("To change the current max number of watches to " ~ to!string((maxInotifyWatches * 2)) ~ " run:");
-				addLogEntry("EXAMPLE: sudo sysctl fs.inotify.max_user_watches=" ~ to!string((maxInotifyWatches * 2)));
-			}
-			if (errno() == 13) {
-				if ((selectiveSync.getSkipDotfiles()) && (isDotFile(pathname))) {
-					// no misleading output that we could not add a watch due to permission denied
-					return;
-				} else {
-					addLogEntry("WARNING: inotify_add_watch failed - permission denied: " ~ pathname, ["verbose"]);
-					return;
-				}
-			}
-			// Flag any other errors
-			addLogEntry("ERROR: inotify_add_watch failed: " ~ pathname);
-			return;
-		}
-		
-		// Add path to inotify watch - required regardless if a '.folder' or 'folder'
-		wdToDirName[wd] = buildNormalizedPath(pathname) ~ "/";
-		addLogEntry("inotify_add_watch successfully added for: " ~ pathname, ["debug"]);
-		
-		// Do we log that we are monitoring this directory?
-		if (isDir(pathname)) {
-			// This is a directory			
-			// is the path exluded if skip_dotfiles configured and path is a .folder?
-			if ((selectiveSync.getSkipDotfiles()) && (isDotFile(pathname))) {
-				// no misleading output that we are monitoring this directory
-				return;
-			}
-			// Log that this is directory is being monitored
-			addLogEntry("Monitoring directory: " ~ pathname, ["verbose"]);
-		}
-	}
-
 	// Remove a watch descriptor
 	private void remove(int wd) {
 		assert(wd in wdToDirName);
-		int ret = inotify_rm_watch(fd, wd);
+		int ret = worker.remove(wd);
 		if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
+		addLogEntry("Monitored directory removed: " ~ to!string(wdToDirName[wd]), ["verbose"]);
 		wdToDirName.remove(wd);
-		addLogEntry("Monitored directory has been removed: " ~ wdToDirName[wd], ["verbose"]);
 	}
 
 	// Remove the watch descriptors associated to the given path
@@ -251,10 +337,10 @@ final class Monitor {
 		path ~= "/";
 		foreach (wd, dirname; wdToDirName) {
 			if (dirname.startsWith(path)) {
-				int ret = inotify_rm_watch(fd, wd);
+				int ret = worker.remove(wd);
 				if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
 				wdToDirName.remove(wd);
-				addLogEntry("Monitored directory has been removed: " ~ dirname, ["verbose"]);
+				addLogEntry("Monitored directory removed: " ~ dirname, ["verbose"]);
 			}
 		}
 	}
@@ -267,11 +353,17 @@ final class Monitor {
 		return path;
 	}
 
+	shared(MonitorBackgroundWorker) getWorker() {
+		return worker;
+	}
+
 	// Update
 	void update(bool useCallbacks = true) {
+		if(!initialised)
+			return;
 	
 		pollfd fds = {
-			fd: fd,
+			fd: worker.fd,
 			events: POLLIN
 		};
 
@@ -280,7 +372,7 @@ final class Monitor {
 			if (ret == -1) throw new MonitorException("poll failed");
 			else if (ret == 0) break; // no events available
 
-			size_t length = read(fd, buffer.ptr, buffer.length);
+			size_t length = read(worker.fd, buffer.ptr, buffer.length);
 			if (length == -1) throw new MonitorException("read failed");
 
 			int i = 0;
@@ -288,6 +380,7 @@ final class Monitor {
 				inotify_event *event = cast(inotify_event*) &buffer[i];
 				string path;
 				string evalPath;
+				
 				// inotify event debug
 				addLogEntry("inotify event wd: " ~ to!string(event.wd), ["debug"]);
 				addLogEntry("inotify event mask: " ~ to!string(event.mask), ["debug"]);
@@ -319,7 +412,7 @@ final class Monitor {
 				if (event.mask & IN_ISDIR) addLogEntry("inotify event flag: IN_ISDIR", ["debug"]);
 				if (event.mask & IN_ONESHOT) addLogEntry("inotify event flag: IN_ONESHOT", ["debug"]);
 				if (event.mask & IN_ALL_EVENTS) addLogEntry("inotify event flag: IN_ALL_EVENTS", ["debug"]);
-								
+				
 				// skip events that need to be ignored
 				if (event.mask & IN_IGNORED) {
 					// forget the directory associated to the watch descriptor
@@ -391,7 +484,7 @@ final class Monitor {
 					addLogEntry("event IN_DELETE: " ~ path, ["debug"]);
 					if (useCallbacks) onDelete(path);
 				} else if ((event.mask & IN_CLOSE_WRITE) && !(event.mask & IN_ISDIR)) {
-					addLogEntry("event IN_CLOSE_WRITE and ...: " ~ path, ["debug"]);
+					addLogEntry("event IN_CLOSE_WRITE and IN_ISDIR: " ~ path, ["debug"]);
 					if (useCallbacks) onFileChanged(path);
 				} else {
 					addLogEntry("event unhandled: " ~ path, ["debug"]);
@@ -401,9 +494,9 @@ final class Monitor {
 				skip:
 				i += inotify_event.sizeof + event.len;
 			}
-			// assume that the items moved outside the watched directory have been deleted
+			// Assume that the items moved outside the watched directory have been deleted
 			foreach (cookie, path; cookieToPath) {
-				addLogEntry("deleting (post loop): " ~ path, ["debug"]);
+				addLogEntry("Deleting cookie|watch (post loop): " ~ path, ["debug"]);
 				if (useCallbacks) onDelete(path);
 				remove(path);
 				cookieToPath.remove(cookie);
@@ -411,5 +504,14 @@ final class Monitor {
 			// Debug Log that all inotify events are flushed
 			addLogEntry("inotify events flushed", ["debug"]);
 		}
+	}
+
+	Tid watch() {
+		initialised = true;
+		return spawn(&startMonitorJob, worker, thisTid);
+	}
+
+	bool isWorking() {
+		return worker.isWorking();
 	}
 }

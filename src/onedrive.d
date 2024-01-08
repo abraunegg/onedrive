@@ -922,6 +922,21 @@ class OneDriveApi {
 		}
 	}
 		
+	// Return the duration to next subscriptionExpiration check
+	Duration getNextExpirationCheckDuration() {
+		SysTime now = Clock.currTime(UTC());
+		if (hasValidSubscription()) {
+			Duration elapsed = Clock.currTime(UTC()) - subscriptionLastErrorAt;
+			// Check if we are waiting for the next retry
+			if (elapsed < subscriptionRetryInterval)
+				return subscriptionRetryInterval - elapsed;
+			else 
+				return subscriptionExpiration - now - subscriptionRenewalInterval;
+		}
+		else
+			return subscriptionRetryInterval;
+	}
+	
 	// Private functions
 	private bool hasValidSubscription() {
 		return !subscriptionId.empty && subscriptionExpiration > Clock.currTime(UTC());
