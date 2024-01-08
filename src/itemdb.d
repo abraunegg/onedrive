@@ -1,3 +1,7 @@
+// What is this module called?
+module itemdb;
+
+// What does this module require to function?
 import std.datetime;
 import std.exception;
 import std.path;
@@ -5,19 +9,26 @@ import std.string;
 import std.stdio;
 import std.algorithm.searching;
 import core.stdc.stdlib;
+import std.json;
+import std.conv;
+
+// What other modules that we have created do we need to import?
 import sqlite;
-static import log;
+import util;
+import log;
 
 enum ItemType {
 	file,
 	dir,
-	remote
+	remote,
+	unknown
 }
 
 struct Item {
 	string   driveId;
 	string   id;
 	string   name;
+	string   remoteName;
 	ItemType type;
 	string   eTag;
 	string   cTag;
@@ -28,23 +39,144 @@ struct Item {
 	string   remoteDriveId;
 	string   remoteId;
 	string   syncStatus;
+	string   size;
 }
 
-final class ItemDatabase
-{
+// Construct an Item struct from a JSON driveItem
+Item makeDatabaseItem(JSONValue driveItem) {
+	
+	Item item = {
+		id: driveItem["id"].str,
+		name: "name" in driveItem ? driveItem["name"].str : null, // name may be missing for deleted files in OneDrive Business
+		eTag: "eTag" in driveItem ? driveItem["eTag"].str : null, // eTag is not returned for the root in OneDrive Business
+		cTag: "cTag" in driveItem ? driveItem["cTag"].str : null, // cTag is missing in old files (and all folders in OneDrive Business)
+		remoteName: "actualOnlineName" in driveItem ? driveItem["actualOnlineName"].str : null, // actualOnlineName is only used with OneDrive Business Shared Folders
+	};
+
+	// OneDrive API Change: https://github.com/OneDrive/onedrive-api-docs/issues/834
+	// OneDrive no longer returns lastModifiedDateTime if the item is deleted by OneDrive
+	if(isItemDeleted(driveItem)) {
+		// Set mtime to SysTime(0)
+		item.mtime = SysTime(0);
+	} else {
+		// Item is not in a deleted state
+		// Resolve 'Key not found: fileSystemInfo' when then item is a remote item
+		// https://github.com/abraunegg/onedrive/issues/11
+		if (isItemRemote(driveItem)) {
+			// remoteItem is a OneDrive object that exists on a 'different' OneDrive drive id, when compared to account default
+			// Normally, the 'remoteItem' field will contain 'fileSystemInfo' however, if the user uses the 'Add Shortcut ..' option in OneDrive WebUI
+			// to create a 'link', this object, whilst remote, does not have 'fileSystemInfo' in the expected place, thus leading to a application crash
+			// See: https://github.com/abraunegg/onedrive/issues/1533
+			if ("fileSystemInfo" in driveItem["remoteItem"]) {
+				// 'fileSystemInfo' is in 'remoteItem' which will be the majority of cases
+				item.mtime = SysTime.fromISOExtString(driveItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
+			} else {
+				// is a remote item, but 'fileSystemInfo' is missing from 'remoteItem'
+				if ("fileSystemInfo" in driveItem) {
+					item.mtime = SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+				}
+			}
+		} else {
+			// Does fileSystemInfo exist at all ?
+			if ("fileSystemInfo" in driveItem) {
+				item.mtime = SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+			}
+		}
+	}
+		
+	// Set this item object type
+	bool typeSet = false;
+	if (isItemFile(driveItem)) {
+		// 'file' object exists in the JSON
+		addLogEntry("Flagging object as a file", ["debug"]);
+		typeSet = true;
+		item.type = ItemType.file;
+	}
+	
+	if (isItemFolder(driveItem)) {
+		// 'folder' object exists in the JSON
+		addLogEntry("Flagging object as a directory", ["debug"]);
+		typeSet = true;
+		item.type = ItemType.dir;
+	}
+	
+	if (isItemRemote(driveItem)) {
+		// 'remote' object exists in the JSON
+		addLogEntry("Flagging object as a remote", ["debug"]);
+		typeSet = true;
+		item.type = ItemType.remote;
+	}
+
+	// root and remote items do not have parentReference
+	if (!isItemRoot(driveItem) && ("parentReference" in driveItem) != null) {
+		item.driveId = driveItem["parentReference"]["driveId"].str;
+		if (hasParentReferenceId(driveItem)) {
+			item.parentId = driveItem["parentReference"]["id"].str;
+		}
+	}
+	
+	// extract the file hash and file size
+	if (isItemFile(driveItem) && ("hashes" in driveItem["file"])) {
+		// Get file size
+		if (hasFileSize(driveItem)) {
+			item.size = to!string(driveItem["size"].integer);	
+			// Get quickXorHash as default
+			if ("quickXorHash" in driveItem["file"]["hashes"]) {
+				item.quickXorHash = driveItem["file"]["hashes"]["quickXorHash"].str;
+			} else {
+				addLogEntry("quickXorHash is missing from " ~ driveItem["id"].str, ["debug"]);
+			}
+			
+			// If quickXorHash is empty ..
+			if (item.quickXorHash.empty) {
+				// Is there a sha256Hash?
+				if ("sha256Hash" in driveItem["file"]["hashes"]) {
+					item.sha256Hash = driveItem["file"]["hashes"]["sha256Hash"].str;
+				} else {
+					addLogEntry("sha256Hash is missing from " ~ driveItem["id"].str, ["debug"]);
+				}
+			}
+		} else {
+			// So that we have at least a zero value here as the API provided no 'size' data for this file item
+			item.size = "0";
+		}
+	}
+	
+	// Is the object a remote drive item - living on another driveId ?
+	if (isItemRemote(driveItem)) {
+		item.remoteDriveId = driveItem["remoteItem"]["parentReference"]["driveId"].str;
+		item.remoteId = driveItem["remoteItem"]["id"].str;
+	}
+	
+	// We have 3 different operational modes where 'item.syncStatus' is used to flag if an item is synced or not:
+	// - National Cloud Deployments do not support /delta as a query
+	// - When using --single-directory
+	// - When using --download-only --cleanup-local-files
+	//
+	// Thus we need to track in the database that this item is in sync
+	// As we are making an item, set the syncStatus to Y
+	// ONLY when either of the three modes above are being used, all the existing DB entries will get set to N
+	// so when processing /children, it can be identified what the 'deleted' difference is
+	item.syncStatus = "Y";
+
+	// Return the created item
+	return item;
+}
+
+final class ItemDatabase {
 	// increment this for every change in the db schema
-	immutable int itemDatabaseVersion = 11;
+	immutable int itemDatabaseVersion = 12;
 
 	Database db;
 	string insertItemStmt;
 	string updateItemStmt;
 	string selectItemByIdStmt;
+	string selectItemByRemoteIdStmt;
 	string selectItemByParentIdStmt;
 	string deleteItemByIdStmt;
 	bool databaseInitialised = false;
 
-	this(const(char)[] filename)
-	{
+	this(const(char)[] filename) {
 		db = Database(filename);
 		int dbVersion;
 		try {
@@ -52,14 +184,14 @@ final class ItemDatabase
 		} catch (SqliteException e) {
 			// An error was generated - what was the error?
 			if (e.msg == "database is locked") {
-				writeln();
-				log.error("ERROR: onedrive application is already running - check system process list for active application instances");
-				log.vlog(" - Use 'sudo ps aufxw | grep onedrive' to potentially determine acive running process");
-				writeln();
+				addLogEntry();
+				addLogEntry("ERROR: onedrive application is already running - check system process list for active application instances");
+				addLogEntry(" - Use 'sudo ps aufxw | grep onedrive' to potentially determine acive running process", ["verbose"]);
+				addLogEntry();
 			} else {
-				writeln();
-				log.error("ERROR: An internal database error occurred: " ~ e.msg);
-				writeln();
+				addLogEntry();
+				addLogEntry("ERROR: An internal database error occurred: " ~ e.msg);
+				addLogEntry();
 			}
 			return;
 		}
@@ -67,10 +199,15 @@ final class ItemDatabase
 		if (dbVersion == 0) {
 			createTable();
 		} else if (db.getVersion() != itemDatabaseVersion) {
-			log.log("The item database is incompatible, re-creating database table structures");
+			addLogEntry("The item database is incompatible, re-creating database table structures");
 			db.exec("DROP TABLE item");
 			createTable();
 		}
+		
+		// What is the threadsafe value
+		auto threadsafeValue = db.getThreadsafeValue();
+		addLogEntry("Threadsafe database value: " ~ to!string(threadsafeValue), ["debug"]);
+		
 		// Set the enforcement of foreign key constraints.
 		// https://www.sqlite.org/pragma.html#pragma_foreign_keys
 		// PRAGMA foreign_keys = boolean;
@@ -99,18 +236,23 @@ final class ItemDatabase
 		db.exec("PRAGMA locking_mode = EXCLUSIVE");
 		
 		insertItemStmt = "
-			INSERT OR REPLACE INTO item (driveId, id, name, type, eTag, cTag, mtime, parentId, quickXorHash, sha256Hash, remoteDriveId, remoteId, syncStatus)
-			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+			INSERT OR REPLACE INTO item (driveId, id, name, remoteName, type, eTag, cTag, mtime, parentId, quickXorHash, sha256Hash, remoteDriveId, remoteId, syncStatus, size)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
 		";
 		updateItemStmt = "
 			UPDATE item
-			SET name = ?3, type = ?4, eTag = ?5, cTag = ?6, mtime = ?7, parentId = ?8, quickXorHash = ?9, sha256Hash = ?10, remoteDriveId = ?11, remoteId = ?12, syncStatus = ?13
+			SET name = ?3, remoteName = ?4, type = ?5, eTag = ?6, cTag = ?7, mtime = ?8, parentId = ?9, quickXorHash = ?10, sha256Hash = ?11, remoteDriveId = ?12, remoteId = ?13, syncStatus = ?14, size = ?15
 			WHERE driveId = ?1 AND id = ?2
 		";
 		selectItemByIdStmt = "
 			SELECT *
 			FROM item
 			WHERE driveId = ?1 AND id = ?2
+		";
+		selectItemByRemoteIdStmt = "
+			SELECT *
+			FROM item
+			WHERE remoteDriveId = ?1 AND remoteId = ?2
 		";
 		selectItemByParentIdStmt = "SELECT * FROM item WHERE driveId = ? AND parentId = ?";
 		deleteItemByIdStmt = "DELETE FROM item WHERE driveId = ? AND id = ?";
@@ -119,17 +261,16 @@ final class ItemDatabase
 		databaseInitialised = true;
 	}
 
-	bool isDatabaseInitialised()
-	{
+	bool isDatabaseInitialised() {
 		return databaseInitialised;
 	}
 
-	void createTable()
-	{
+	void createTable() {
 		db.exec("CREATE TABLE item (
 				driveId          TEXT NOT NULL,
 				id               TEXT NOT NULL,
 				name             TEXT NOT NULL,
+				remoteName       TEXT,
 				type             TEXT NOT NULL,
 				eTag             TEXT,
 				cTag             TEXT,
@@ -141,6 +282,7 @@ final class ItemDatabase
 				remoteId         TEXT,
 				deltaLink        TEXT,
 				syncStatus       TEXT,
+				size             TEXT,
 				PRIMARY KEY (driveId, id),
 				FOREIGN KEY (driveId, parentId)
 				REFERENCES item (driveId, id)
@@ -154,32 +296,27 @@ final class ItemDatabase
 		db.setVersion(itemDatabaseVersion);
 	}
 	
-	void insert(const ref Item item)
-	{
+	void insert(const ref Item item) {
 		auto p = db.prepare(insertItemStmt);
 		bindItem(item, p);
 		p.exec();
 	}
 
-	void update(const ref Item item)
-	{
+	void update(const ref Item item) {
 		auto p = db.prepare(updateItemStmt);
 		bindItem(item, p);
 		p.exec();
 	}
 
-	void dump_open_statements()
-	{
+	void dump_open_statements() {
 		db.dump_open_statements();
 	}
 
-	int db_checkpoint()
-	{
+	int db_checkpoint() {
 		return db.db_checkpoint();
 	}
 
-	void upsert(const ref Item item)
-	{
+	void upsert(const ref Item item) {
 		auto s = db.prepare("SELECT COUNT(*) FROM item WHERE driveId = ? AND id = ?");
 		s.bind(1, item.driveId);
 		s.bind(2, item.id);
@@ -191,8 +328,7 @@ final class ItemDatabase
 		stmt.exec();
 	}
 
-	Item[] selectChildren(const(char)[] driveId, const(char)[] id)
-	{
+	Item[] selectChildren(const(char)[] driveId, const(char)[] id) {
 		auto p = db.prepare(selectItemByParentIdStmt);
 		p.bind(1, driveId);
 		p.bind(2, id);
@@ -205,8 +341,7 @@ final class ItemDatabase
 		return items;
 	}
 
-	bool selectById(const(char)[] driveId, const(char)[] id, out Item item)
-	{
+	bool selectById(const(char)[] driveId, const(char)[] id, out Item item) {
 		auto p = db.prepare(selectItemByIdStmt);
 		p.bind(1, driveId);
 		p.bind(2, id);
@@ -218,9 +353,20 @@ final class ItemDatabase
 		return false;
 	}
 
+	bool selectByRemoteId(const(char)[] remoteDriveId, const(char)[] remoteId, out Item item) {
+		auto p = db.prepare(selectItemByRemoteIdStmt);
+		p.bind(1, remoteDriveId);
+		p.bind(2, remoteId);
+		auto r = p.exec();
+		if (!r.empty) {
+			item = buildItem(r);
+			return true;
+		}
+		return false;
+	}
+	
 	// returns true if an item id is in the database
-	bool idInLocalDatabase(const(string) driveId, const(string)id)
-	{
+	bool idInLocalDatabase(const(string) driveId, const(string)id) {
 		auto p = db.prepare(selectItemByIdStmt);
 		p.bind(1, driveId);
 		p.bind(2, id);
@@ -233,18 +379,11 @@ final class ItemDatabase
 	
 	// returns the item with the given path
 	// the path is relative to the sync directory ex: "./Music/Turbo Killer.mp3"
-	bool selectByPath(const(char)[] path, string rootDriveId, out Item item)
-	{
+	bool selectByPath(const(char)[] path, string rootDriveId, out Item item) {
 		Item currItem = { driveId: rootDriveId };
 		
 		// Issue https://github.com/abraunegg/onedrive/issues/578
-		if (startsWith(path, "./") || path == ".") {
-			// Need to remove the . from the path prefix
-			path = "root/" ~ path.chompPrefix(".");
-		} else {
-			// Leave path as it is
-			path = "root/" ~ path;
-		}
+		path = "root/" ~ (startsWith(path, "./") || path == "." ? path.chompPrefix(".") : path);
 		
 		auto s = db.prepare("SELECT * FROM item WHERE name = ?1 AND driveId IS ?2 AND parentId IS ?3");
 		foreach (name; pathSplitter(path)) {
@@ -254,12 +393,15 @@ final class ItemDatabase
 			auto r = s.exec();
 			if (r.empty) return false;
 			currItem = buildItem(r);
-			// if the item is of type remote substitute it with the child
+			
+			// If the item is of type remote substitute it with the child
 			if (currItem.type == ItemType.remote) {
+				addLogEntry("Record is a Remote Object: " ~  to!string(currItem), ["debug"]);
 				Item child;
 				if (selectById(currItem.remoteDriveId, currItem.remoteId, child)) {
 					assert(child.type != ItemType.remote, "The type of the child cannot be remote");
 					currItem = child;
+					addLogEntry("Selecting Record that is NOT Remote Object: " ~  to!string(currItem), ["debug"]);
 				}
 			}
 		}
@@ -267,19 +409,12 @@ final class ItemDatabase
 		return true;
 	}
 
-	// same as selectByPath() but it does not traverse remote folders
-	bool selectByPathWithoutRemote(const(char)[] path, string rootDriveId, out Item item)
-	{
+	// same as selectByPath() but it does not traverse remote folders, returns the remote element if that is what is required
+	bool selectByPathIncludingRemoteItems(const(char)[] path, string rootDriveId, out Item item) {
 		Item currItem = { driveId: rootDriveId };
 		
 		// Issue https://github.com/abraunegg/onedrive/issues/578
-		if (startsWith(path, "./") || path == ".") {
-			// Need to remove the . from the path prefix
-			path = "root/" ~ path.chompPrefix(".");
-		} else {
-			// Leave path as it is
-			path = "root/" ~ path;
-		}
+		path = "root/" ~ (startsWith(path, "./") || path == "." ? path.chompPrefix(".") : path);
 		
 		auto s = db.prepare("SELECT * FROM item WHERE name IS ?1 AND driveId IS ?2 AND parentId IS ?3");
 		foreach (name; pathSplitter(path)) {
@@ -290,62 +425,89 @@ final class ItemDatabase
 			if (r.empty) return false;
 			currItem = buildItem(r);
 		}
+		
+		if (currItem.type == ItemType.remote) {
+			addLogEntry("Record selected is a Remote Object: " ~  to!string(currItem), ["debug"]);
+		}
+		
 		item = currItem;
 		return true;
 	}
 
-	void deleteById(const(char)[] driveId, const(char)[] id)
-	{
+	void deleteById(const(char)[] driveId, const(char)[] id) {
 		auto p = db.prepare(deleteItemByIdStmt);
 		p.bind(1, driveId);
 		p.bind(2, id);
 		p.exec();
 	}
 
-	private void bindItem(const ref Item item, ref Statement stmt)
-	{
+	private void bindItem(const ref Item item, ref Statement stmt) {
 		with (stmt) with (item) {
 			bind(1, driveId);
 			bind(2, id);
 			bind(3, name);
+			bind(4, remoteName);
 			string typeStr = null;
 			final switch (type) with (ItemType) {
 				case file:    typeStr = "file";    break;
 				case dir:     typeStr = "dir";     break;
 				case remote:  typeStr = "remote";  break;
+				case unknown: typeStr = "unknown"; break;
 			}
-			bind(4, typeStr);
-			bind(5, eTag);
-			bind(6, cTag);
-			bind(7, mtime.toISOExtString());
-			bind(8, parentId);
-			bind(9, quickXorHash);
-			bind(10, sha256Hash);
-			bind(11, remoteDriveId);
-			bind(12, remoteId);
-			bind(13, syncStatus);
+			bind(5, typeStr);
+			bind(6, eTag);
+			bind(7, cTag);
+			bind(8, mtime.toISOExtString());
+			bind(9, parentId);
+			bind(10, quickXorHash);
+			bind(11, sha256Hash);
+			bind(12, remoteDriveId);
+			bind(13, remoteId);
+			bind(14, syncStatus);
+			bind(15, size);
 		}
 	}
 
-	private Item buildItem(Statement.Result result)
-	{
+	private Item buildItem(Statement.Result result) {
 		assert(!result.empty, "The result must not be empty");
-		assert(result.front.length == 14, "The result must have 14 columns");
+		assert(result.front.length == 16, "The result must have 16 columns");
 		Item item = {
+		
+			// column 0: driveId
+			// column 1: id
+			// column 2: name
+			// column 3: remoteName - only used when there is a difference in the local name & remote shared folder name
+			// column 4: type
+			// column 5: eTag
+			// column 6: cTag
+			// column 7: mtime
+			// column 8: parentId
+			// column 9: quickXorHash
+			// column 10: sha256Hash
+			// column 11: remoteDriveId
+			// column 12: remoteId
+			// column 13: deltaLink
+			// column 14: syncStatus
+			// column 15: size
+				
 			driveId: result.front[0].dup,
 			id: result.front[1].dup,
 			name: result.front[2].dup,
-			eTag: result.front[4].dup,
-			cTag: result.front[5].dup,
-			mtime: SysTime.fromISOExtString(result.front[6]),
-			parentId: result.front[7].dup,
-			quickXorHash: result.front[8].dup,
-			sha256Hash: result.front[9].dup,
-			remoteDriveId: result.front[10].dup,
-			remoteId: result.front[11].dup,
-			syncStatus: result.front[12].dup
+			remoteName: result.front[3].dup,
+			// Column 4 is type - not set here
+			eTag: result.front[5].dup,
+			cTag: result.front[6].dup,
+			mtime: SysTime.fromISOExtString(result.front[7]),
+			parentId: result.front[8].dup,
+			quickXorHash: result.front[9].dup,
+			sha256Hash: result.front[10].dup,
+			remoteDriveId: result.front[11].dup,
+			remoteId: result.front[12].dup,
+			// Column 13 is deltaLink - not set here
+			syncStatus: result.front[14].dup,
+			size: result.front[15].dup
 		};
-		switch (result.front[3]) {
+		switch (result.front[4]) {
 			case "file":    item.type = ItemType.file;    break;
 			case "dir":     item.type = ItemType.dir;     break;
 			case "remote":  item.type = ItemType.remote;  break;
@@ -357,8 +519,7 @@ final class ItemDatabase
 	// computes the path of the given item id
 	// the path is relative to the sync directory ex: "Music/Turbo Killer.mp3"
 	// the trailing slash is not added even if the item is a directory
-	string computePath(const(char)[] driveId, const(char)[] id)
-	{
+	string computePath(const(char)[] driveId, const(char)[] id) {
 		assert(driveId && id);
 		string path;
 		Item item;
@@ -406,9 +567,9 @@ final class ItemDatabase
 					}
 				} else {
 					// broken tree
-					log.vdebug("The following generated a broken tree query:");
-					log.vdebug("Drive ID: ", driveId);
-					log.vdebug("Item ID: ", id);
+					addLogEntry("The following generated a broken tree query:", ["debug"]);
+					addLogEntry("Drive ID: " ~ to!string(driveId), ["debug"]);
+					addLogEntry("Item ID: " ~ to!string(id), ["debug"]);
 					assert(0);
 				}
 			}
@@ -416,8 +577,7 @@ final class ItemDatabase
 		return path;
 	}
 
-	Item[] selectRemoteItems()
-	{
+	Item[] selectRemoteItems() {
 		Item[] items;
 		auto stmt = db.prepare("SELECT * FROM item WHERE remoteDriveId IS NOT NULL");
 		auto res = stmt.exec();
@@ -428,8 +588,11 @@ final class ItemDatabase
 		return items;
 	}
 
-	string getDeltaLink(const(char)[] driveId, const(char)[] id)
-	{
+	string getDeltaLink(const(char)[] driveId, const(char)[] id) {
+		// Log what we received
+		addLogEntry("DeltaLink Query (driveId): " ~ to!string(driveId), ["debug"]);
+		addLogEntry("DeltaLink Query (id):      " ~ to!string(id), ["debug"]);
+			
 		assert(driveId && id);
 		auto stmt = db.prepare("SELECT deltaLink FROM item WHERE driveId = ?1 AND id = ?2");
 		stmt.bind(1, driveId);
@@ -439,8 +602,7 @@ final class ItemDatabase
 		return res.front[0].dup;
 	}
 
-	void setDeltaLink(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink)
-	{
+	void setDeltaLink(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink) {
 		assert(driveId && id);
 		assert(deltaLink);
 		auto stmt = db.prepare("UPDATE item SET deltaLink = ?3 WHERE driveId = ?1 AND id = ?2");
@@ -455,8 +617,7 @@ final class ItemDatabase
 	// As we query /children to get all children from OneDrive, update anything in the database 
 	// to be flagged as not-in-sync, thus, we can use that flag to determing what was previously
 	// in-sync, but now deleted on OneDrive
-	void downgradeSyncStatusFlag(const(char)[] driveId, const(char)[] id)
-	{
+	void downgradeSyncStatusFlag(const(char)[] driveId, const(char)[] id) {
 		assert(driveId);
 		auto stmt = db.prepare("UPDATE item SET syncStatus = 'N' WHERE driveId = ?1 AND id = ?2");
 		stmt.bind(1, driveId);
@@ -466,8 +627,7 @@ final class ItemDatabase
 	
 	// National Cloud Deployments (US and DE) do not support /delta as a query
 	// Select items that have a out-of-sync flag set
-	Item[] selectOutOfSyncItems(const(char)[] driveId)
-	{
+	Item[] selectOutOfSyncItems(const(char)[] driveId) {
 		assert(driveId);
 		Item[] items;
 		auto stmt = db.prepare("SELECT * FROM item WHERE syncStatus = 'N' AND driveId = ?1");
@@ -482,8 +642,7 @@ final class ItemDatabase
 	
 	// OneDrive Business Folders are stored in the database potentially without a root | parentRoot link
 	// Select items associated with the provided driveId
-	Item[] selectByDriveId(const(char)[] driveId)
-	{
+	Item[] selectByDriveId(const(char)[] driveId) {
 		assert(driveId);
 		Item[] items;
 		auto stmt = db.prepare("SELECT * FROM item WHERE driveId = ?1 AND parentId IS NULL");
@@ -496,22 +655,37 @@ final class ItemDatabase
 		return items;
 	}
 	
+	// Select all items associated with the provided driveId
+	Item[] selectAllItemsByDriveId(const(char)[] driveId) {
+		assert(driveId);
+		Item[] items;
+		auto stmt = db.prepare("SELECT * FROM item WHERE driveId = ?1");
+		stmt.bind(1, driveId);
+		auto res = stmt.exec();
+		while (!res.empty) {
+			items ~= buildItem(res);
+			res.step();
+		}
+		return items;
+	}
+	
 	// Perform a vacuum on the database, commit WAL / SHM to file
-	void performVacuum()
-	{
+	void performVacuum() {
+		addLogEntry("Attempting to perform a database vacuum to merge any temporary data", ["debug"]);
+		
 		try {
 			auto stmt = db.prepare("VACUUM;");
 			stmt.exec();
+			addLogEntry("Database vacuum is complete", ["debug"]);
 		} catch (SqliteException e) {
-			writeln();
-			log.error("ERROR: Unable to perform a database vacuum: " ~ e.msg);
-			writeln();
+			addLogEntry();
+			addLogEntry("ERROR: Unable to perform a database vacuum: " ~ e.msg);
+			addLogEntry();
 		}
 	}
 	
 	// Select distinct driveId items from database
-	string[] selectDistinctDriveIds()
-	{
+	string[] selectDistinctDriveIds() {
 		string[] driveIdArray;
 		auto stmt = db.prepare("SELECT DISTINCT driveId FROM item;");
 		auto res = stmt.exec();

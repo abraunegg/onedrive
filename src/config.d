@@ -1,130 +1,219 @@
-import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
-import std.file, std.string, std.regex, std.stdio, std.process, std.algorithm.searching, std.getopt, std.conv, std.path;
-import std.algorithm.sorting: sort;
-import selective;
-static import log;
+// What is this module called?
+module config;
 
-final class Config
-{
-	// application defaults
-	public string defaultSyncDir = "~/OneDrive";
-	public string defaultSkipFile = "~*|.~*|*.tmp";
-	public string defaultSkipDir = "";
-	public string defaultLogFileDir = "/var/log/onedrive/";
-	// application set items
-	public string refreshTokenFilePath = "";
-	public string deltaLinkFilePath = "";
-	public string databaseFilePath = "";
-	public string databaseFilePathDryRun = "";
-	public string uploadStateFilePath = "";
-	public string syncListFilePath = "";
-	public string homePath = "";
-	public string configDirName = "";
-	public string systemConfigDirName = "";
-	public string configFileSyncDir = "";
-	public string configFileSkipFile = "";
-	public string configFileSkipDir = "";
-	public string businessSharedFolderFilePath = "";
-	private string userConfigFilePath = "";
-	private string systemConfigFilePath = "";
-	// was the application just authorised - paste of response uri
-	public bool applicationAuthorizeResponseUri = false;
-	// hashmap for the values found in the user config file
-	// ARGGGG D is stupid and cannot make hashmap initializations!!!
-	// private string[string] foobar = [ "aa": "bb" ] does NOT work!!!
-	private string[string] stringValues;
-	private bool[string] boolValues;
-	private long[string] longValues;
-	// Compile time regex - this does not change
-	public auto configRegex = ctRegex!(`^(\w+)\s*=\s*"(.*)"\s*$`);
-	// Default directory permission mode
-	public long defaultDirectoryPermissionMode = 700;
-	public int configuredDirectoryPermissionMode;
-	// Default file permission mode
-	public long defaultFilePermissionMode = 600;
-	public int configuredFilePermissionMode;
+// What does this module require to function?
+import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
+import std.stdio;
+import std.process;
+import std.regex;
+import std.string;
+import std.algorithm.searching;
+import std.algorithm.sorting: sort;
+import std.file;
+import std.conv;
+import std.path;
+import std.getopt;
+import std.format;
+import std.ascii;
+import std.datetime;
+
+// What other modules that we have created do we need to import?
+import log;
+import util;
+
+class ApplicationConfig {
+	// Application default values - these do not change
+	// - Compile time regex
+	immutable auto configRegex = ctRegex!(`^(\w+)\s*=\s*"(.*)"\s*$`);
+	// - Default directory to store data
+	immutable string defaultSyncDir = "~/OneDrive";
+	// - Default Directory Permissions
+	immutable long defaultDirectoryPermissionMode = 700;
+	// - Default File Permissions
+	immutable long defaultFilePermissionMode = 600;
+	// - Default types of files to skip
+	// v2.0.x - 2.4.x: ~*|.~*|*.tmp
+	// v2.5.x  		 : ~*|.~*|*.tmp|*.swp|*.partial
+	immutable string defaultSkipFile = "~*|.~*|*.tmp|*.swp|*.partial";
+	// - Default directories to skip (default is skip none)
+	immutable string defaultSkipDir = "";
+	// - Default application logging directory
+	immutable string defaultLogFileDir = "/var/log/onedrive";
+	// - Default configuration directory
+	immutable string defaultConfigDirName = "~/.config/onedrive";
 	
-	// Bring in v2.5.0 config items
+	// Microsoft Requirements 
+	// - Default Application ID (abraunegg)
+	immutable string defaultApplicationId = "d50ca740-c83f-4d1b-b616-12c519384f0c";
+	// - Microsoft User Agent ISV Tag
+	immutable string isvTag = "ISV";
+	// - Microsoft User Agent Company name
+	immutable string companyName = "abraunegg";
+	// - Microsoft Application name as per Microsoft Azure application registration
+	immutable string appTitle = "OneDrive Client for Linux";
+	// Comply with OneDrive traffic decoration requirements
+	// https://docs.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
+	// - Identify as ISV and include Company Name, App Name separated by a pipe character and then adding Version number separated with a slash character
+	
+	//immutable string defaultUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ strip(import("version"));
+	immutable string defaultUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ "v2.5.0-alpha-5";
 	
 	// HTTP Struct items, used for configuring HTTP()
 	// Curl Timeout Handling
 	// libcurl dns_cache_timeout timeout
 	immutable int defaultDnsTimeout = 60;
 	// Connect timeout for HTTP|HTTPS connections
-	immutable int defaultConnectTimeout = 10;
-	// With the following settings we force
-	// - if there is no data flow for 10min, abort
-	// - if the download time for one item exceeds 1h, abort
-	//
-	// Timeout for activity on connection
-	//  this translates into Curl's CURLOPT_LOW_SPEED_TIME
-	//  which says:
-	//   It contains the time in number seconds that the
-	//   transfer speed should be below the CURLOPT_LOW_SPEED_LIMIT
-	//   for the library to consider it too slow and abort.
-	immutable int defaultDataTimeout = 600;
+	immutable int defaultConnectTimeout = 30;
+	// Default data timeout for HTTP
+	// curl.d has a default of: _defaultDataTimeout = dur!"minutes"(2);
+	immutable int defaultDataTimeout = 240;
 	// Maximum time any operation is allowed to take
 	// This includes dns resolution, connecting, data transfer, etc.
 	immutable int defaultOperationTimeout = 3600;
-	// Specify how many redirects should be allowed
-	immutable int defaultMaxRedirects = 5;
 	// Specify what IP protocol version should be used when communicating with OneDrive
 	immutable int defaultIpProtocol = 0; // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
+	// Specify how many redirects should be allowed
+	immutable int defaultMaxRedirects = 5;
+		
+	// Azure Active Directory & Graph Explorer Endpoints
+	// - Global & Default
+	immutable string globalAuthEndpoint = "https://login.microsoftonline.com";
+	immutable string globalGraphEndpoint = "https://graph.microsoft.com";
+	// - US Government L4
+	immutable string usl4AuthEndpoint = "https://login.microsoftonline.us";
+	immutable string usl4GraphEndpoint = "https://graph.microsoft.us";
+	// - US Government L5
+	immutable string usl5AuthEndpoint = "https://login.microsoftonline.us";
+	immutable string usl5GraphEndpoint = "https://dod-graph.microsoft.us";
+	// - Germany
+	immutable string deAuthEndpoint = "https://login.microsoftonline.de";
+	immutable string deGraphEndpoint = "https://graph.microsoft.de";
+	// - China
+	immutable string cnAuthEndpoint = "https://login.chinacloudapi.cn";
+	immutable string cnGraphEndpoint = "https://microsoftgraph.chinacloudapi.cn";
+	
+	// Application Version
+	//immutable string applicationVersion = "onedrive " ~ strip(import("version"));
+	immutable string applicationVersion = "v2.5.0-alpha-5" ~ " GitHub version: " ~ strip(import("version"));
+	
+	// Application items that depend on application run-time environment, thus cannot be immutable
+	// Public variables
+	
+	// Logging output 
+	bool verboseLogging = false;
+	bool debugLogging = false;
+	long verbosityCount = 0;
 	
 	
-
-	this(string confdirOption)
-	{
-		// default configuration - entries in config file ~/.config/onedrive/config
-		// an entry here means it can be set via the config file if there is a coresponding entry, read from config and set via update_from_args()
-		stringValues["sync_dir"] = defaultSyncDir;
-		stringValues["skip_file"] = defaultSkipFile;
-		stringValues["skip_dir"] = defaultSkipDir;
+	// Was the application just authorised - paste of response uri
+	bool applicationAuthorizeResponseUri = false;
+	
+	// Store the refreshToken for use within the application
+	const(char)[] refreshToken;
+	// Store the current accessToken for use within the application
+	const(char)[] accessToken;
+	// Store the 'refresh_token' file path
+	string refreshTokenFilePath = "";
+	// Store the accessTokenExpiration for use within the application
+	SysTime accessTokenExpiration;
+	// Store the 'session_upload.CRC32-HASH' file path
+	string uploadSessionFilePath = "";
+	
+	bool apiWasInitialised = false;
+	bool syncEngineWasInitialised = false;
+	string accountType;
+	string defaultDriveId;
+	string defaultRootId;
+	ulong remainingFreeSpace = 0;
+	bool quotaAvailable = true;
+	bool quotaRestricted = false;
+	
+	bool fullScanTrueUpRequired = false;
+	bool surpressLoggingOutput = false;
+	
+	// This is the value that needs testing when we are actually downloading and uploading data
+	ulong concurrentThreads = 16;
+		
+	// All application run-time paths are formulated from this as a set of defaults
+	// - What is the home path of the actual 'user' that is running the application
+	string defaultHomePath = "";
+	// - What is the config path for the application. By default, this is ~/.config/onedrive but can be overridden by using --confdir
+	string configDirName = defaultConfigDirName;
+	// - In case we have to use a system config directory such as '/etc/onedrive' or similar, store that path in this variable
+	private string systemConfigDirName = "";
+	// - Store the configured converted octal value for directory permissions
+	private int configuredDirectoryPermissionMode;
+	// - Store the configured converted octal value for file permissions
+	private int configuredFilePermissionMode;
+	// - Store the 'delta_link' file path
+	private string deltaLinkFilePath = "";
+	// - Store the 'items.sqlite3' file path
+	string databaseFilePath = "";
+	// - Store the 'items-dryrun.sqlite3' file path
+	string databaseFilePathDryRun = "";
+	// - Store the user 'config' file path
+	private string userConfigFilePath = "";
+	// - Store the system 'config' file path
+	private string systemConfigFilePath = "";
+	// - What is the 'config' file path that will be used?
+	private string applicableConfigFilePath = "";
+	// - Store the 'sync_list' file path
+	string syncListFilePath = "";
+	// - Store the 'business_shared_items' file path
+	string businessSharedItemsFilePath = "";
+	
+	// Hash files so that we can detect when the configuration has changed, in items that will require a --resync
+	private string configHashFile = "";
+	private string configBackupFile = "";
+	private string syncListHashFile = "";
+	private string businessSharedItemsHashFile = "";
+	
+	// Store the actual 'runtime' hash
+	private string currentConfigHash = "";
+	private string currentSyncListHash = "";
+	private string currentBusinessSharedItemsHash = "";
+	
+	// Store the previous config files hash values (file contents)
+	private string previousConfigHash = "";
+	private string previousSyncListHash = "";
+	private string previousBusinessSharedItemsHash = "";
+	
+	// Store items that come in from the 'config' file, otherwise these need to be set the the defaults
+	private string configFileSyncDir = defaultSyncDir;
+	private string configFileSkipFile = defaultSkipFile;
+	private string configFileSkipDir = ""; // Default here is no directories are skipped
+	private string configFileDriveId = ""; // Default here is that no drive id is specified
+	private bool configFileSkipDotfiles = false;
+	private bool configFileSkipSymbolicLinks = false;
+	private bool configFileSyncBusinessSharedItems = false;
+	
+	// File permission values (set via initialise function)
+	private int convertedPermissionValue;
+	
+	// Array of values that are the actual application runtime configuration
+	// The values stored in these array's are the actual application configuration which can then be accessed by getValue & setValue
+	string[string] stringValues;
+	long[string] longValues;
+	bool[string] boolValues;
+	
+	bool shellEnvironmentSet = false;
+	
+	// Initialise the application configuration
+	bool initialise(string confdirOption) {
+		
+		// Default runtime configuration - entries in config file ~/.config/onedrive/config or derived from variables above
+		// An entry here means it can be set via the config file if there is a coresponding entry, read from config and set via update_from_args()
+		// The below becomes the 'default' application configuration before config file and/or cli options are overlayed on top
+		
+		// - Set the required default values
+		stringValues["application_id"] = defaultApplicationId;
 		stringValues["log_dir"] = defaultLogFileDir;
+		stringValues["skip_dir"] = defaultSkipDir;
+		stringValues["skip_file"] = defaultSkipFile;
+		stringValues["sync_dir"] = defaultSyncDir;
+		stringValues["user_agent"] = defaultUserAgent;
+		// - The 'drive_id' is used when we specify a specific OneDrive ID when attempting to sync Shared Folders and SharePoint items
 		stringValues["drive_id"] = "";
-		stringValues["user_agent"] = "";
-		boolValues["upload_only"] = false;
-		boolValues["check_nomount"] = false;
-		boolValues["check_nosync"] = false;
-		boolValues["download_only"] = false;
-		boolValues["disable_notifications"] = false;
-		boolValues["disable_download_validation"] = false;
-		boolValues["disable_upload_validation"] = false;
-		boolValues["enable_logging"] = false;
-		boolValues["force_http_11"] = false;
-		boolValues["local_first"] = false;
-		boolValues["no_remote_delete"] = false;
-		boolValues["skip_symlinks"] = false;
-		boolValues["debug_https"] = false;
-		boolValues["skip_dotfiles"] = false;
-		boolValues["dry_run"] = false;
-		boolValues["sync_root_files"] = false;
-		longValues["verbose"] = log.verbose; // might be initialized by the first getopt call!
-		// The amount of time (seconds) between monitor sync loops
-		longValues["monitor_interval"] = 300;
-		longValues["skip_size"] = 0;
-		longValues["min_notify_changes"] = 5;
-		longValues["monitor_log_frequency"] = 6;
-		// Number of N sync runs before performing a full local scan of sync_dir
-		// By default 12 which means every ~60 minutes a full disk scan of sync_dir will occur 
-		// 'monitor_interval' * 'monitor_fullscan_frequency' = 3600 = 1 hour
-		longValues["monitor_fullscan_frequency"] = 12;
-		// Number of children in a path that is locally removed which will be classified as a 'big data delete'
-		longValues["classify_as_big_delete"] = 1000;
-		// Delete source after successful transfer
-		boolValues["remove_source_files"] = false;
-		// Strict matching for skip_dir
-		boolValues["skip_dir_strict_match"] = false;
-		// Allow for a custom Client ID / Application ID to be used to replace the inbuilt default
-		// This is a config file option ONLY
-		stringValues["application_id"] = "";
-		// allow for resync to be set via config file
-		boolValues["resync"] = false;
-		// resync now needs to be acknowledged based on the 'risk' of using it
-		boolValues["resync_auth"] = false;
-		// Ignore data safety checks and overwrite local data rather than preserve & rename
-		// This is a config file option ONLY
-		boolValues["bypass_data_preservation"] = false;
 		// Support National Azure AD endpoints as per https://docs.microsoft.com/en-us/graph/deployments
 		// By default, if empty, use standard Azure AD URL's
 		// Will support the following options:
@@ -141,32 +230,134 @@ final class Config
 		//     AD Endpoint:    https://login.chinacloudapi.cn
 		//     Graph Endpoint: 	https://microsoftgraph.chinacloudapi.cn
 		stringValues["azure_ad_endpoint"] = "";
+		
 		// Support single-tenant applications that are not able to use the "common" multiplexer
-		stringValues["azure_tenant_id"] = "common";
-		// Allow enable / disable of the syncing of OneDrive Business Shared Folders via configuration file
-		boolValues["sync_business_shared_folders"] = false;
-		// Configure the default folder permission attributes for newly created folders
+		stringValues["azure_tenant_id"] = "";
+		// - Store how many times was --verbose added
+		longValues["verbose"] = verbosityCount; 
+		// - The amount of time (seconds) between monitor sync loops
+		longValues["monitor_interval"] = 300;
+		// - What size of file should be skipped?
+		longValues["skip_size"] = 0;
+		// - How many 'loops' when using --monitor, before we print out high frequency recurring items?
+		longValues["monitor_log_frequency"] = 12;
+		// - Number of N sync runs before performing a full local scan of sync_dir
+		//   By default 12 which means every ~60 minutes a full disk scan of sync_dir will occur 
+		//   'monitor_interval' * 'monitor_fullscan_frequency' = 3600 = 1 hour
+		longValues["monitor_fullscan_frequency"] = 12;
+		// - Number of children in a path that is locally removed which will be classified as a 'big data delete'
+		longValues["classify_as_big_delete"] = 1000;
+		// - Configure the default folder permission attributes for newly created folders
 		longValues["sync_dir_permissions"] = defaultDirectoryPermissionMode;
-		// Configure the default file permission attributes for newly created file
+		// - Configure the default file permission attributes for newly created file
 		longValues["sync_file_permissions"] = defaultFilePermissionMode;
-		// Configure download / upload rate limits
+		// - Configure download / upload rate limits
 		longValues["rate_limit"] = 0;
-		// To ensure we do not fill up the load disk, how much disk space should be reserved by default
+		// - To ensure we do not fill up the load disk, how much disk space should be reserved by default
 		longValues["space_reservation"] = 50 * 2^^20; // 50 MB as Bytes
-		// Webhook options
+		
+		// HTTPS & CURL Operation Settings
+		// - Maximum time an operation is allowed to take
+		//   This includes dns resolution, connecting, data transfer, etc.
+		longValues["operation_timeout"] = defaultOperationTimeout;
+		// libcurl dns_cache_timeout timeout
+		longValues["dns_timeout"] = defaultDnsTimeout;
+		// Timeout for HTTPS connections
+		longValues["connect_timeout"] = defaultConnectTimeout;
+		// Timeout for activity on a HTTPS connection
+		longValues["data_timeout"] = defaultDataTimeout;
+		// What IP protocol version should be used when communicating with OneDrive
+		longValues["ip_protocol_version"] = defaultIpProtocol; // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
+		
+		// - Do we wish to upload only?
+		boolValues["upload_only"] = false;
+		// - Do we need to check for the .nomount file on the mount point?
+		boolValues["check_nomount"] = false;
+		// - Do we need to check for the .nosync file anywhere?
+		boolValues["check_nosync"] = false;
+		// - Do we wish to download only?
+		boolValues["download_only"] = false;
+		// - Do we disable notifications?
+		boolValues["disable_notifications"] = false;
+		// - Do we bypass all the download validation? 
+		//   This is critically important not to disable, but because of SharePoint 'feature' can be highly desirable to enable
+		boolValues["disable_download_validation"] = false;
+		// - Do we bypass all the upload validation? 
+		//   This is critically important not to disable, but because of SharePoint 'feature' can be highly desirable to enable
+		boolValues["disable_upload_validation"] = false;
+		// - Do we enable logging?
+		boolValues["enable_logging"] = false;
+		// - Do we force HTTP 1.1 for connections to the OneDrive API
+		//   By default we use the curl library default, which should be HTTP2 for most operations governed by the OneDrive API
+		boolValues["force_http_11"] = false;
+		// - Do we treat the local file system as the source of truth for our data?
+		boolValues["local_first"] = false;
+		// - Do we ignore local file deletes, so that all files are retained online?
+		boolValues["no_remote_delete"] = false;
+		// - Do we skip symbolic links?
+		boolValues["skip_symlinks"] = false;
+		// - Do we enable debugging for all HTTPS flows. Critically important for debugging API issues.
+		boolValues["debug_https"] = false;
+		// - Do we skip .files and .folders?
+		boolValues["skip_dotfiles"] = false;
+		// - Do we perform a 'dry-run' with no local or remote changes actually being performed?
+		boolValues["dry_run"] = false;
+		// - Do we sync all the files in the 'sync_dir' root?
+		boolValues["sync_root_files"] = false;
+		// - Do we delete source after successful transfer?
+		boolValues["remove_source_files"] = false;
+		// - Do we perform strict matching for skip_dir?
+		boolValues["skip_dir_strict_match"] = false;
+		// - Do we perform a --resync?
+		boolValues["resync"] = false;
+		// - resync now needs to be acknowledged based on the 'risk' of using it
+		boolValues["resync_auth"] = false;
+		// - Ignore data safety checks and overwrite local data rather than preserve & rename
+		//   This is a config file option ONLY
+		boolValues["bypass_data_preservation"] = false;
+		// - Allow enable / disable of the syncing of OneDrive Business Shared items (files & folders) via configuration file
+		boolValues["sync_business_shared_items"] = false;
+		// - Log to application output running configuration values
+		boolValues["display_running_config"] = false;
+		// - Configure read-only authentication scope
+		boolValues["read_only_auth_scope"] = false;
+		// - Flag to cleanup local files when using --download-only
+		boolValues["cleanup_local_files"] = false;
+		
+		// Webhook Feature Options
 		boolValues["webhook_enabled"] = false;
 		stringValues["webhook_public_url"] = "";
 		stringValues["webhook_listening_host"] = "";
 		longValues["webhook_listening_port"] = 8888;
-		longValues["webhook_expiration_interval"] = 3600 * 24;
-		longValues["webhook_renewal_interval"] = 3600 * 12;
-		// Log to application output running configuration values
-		boolValues["display_running_config"] = false;
-		// Configure read-only authentication scope
-		boolValues["read_only_auth_scope"] = false;
-		// Flag to cleanup local files when using --download-only
-		boolValues["cleanup_local_files"] = false;
-
+		longValues["webhook_expiration_interval"] = 600;
+		longValues["webhook_renewal_interval"] = 300;
+		longValues["webhook_retry_interval"] = 60;
+		
+		// EXPAND USERS HOME DIRECTORY
+		// Determine the users home directory.
+		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
+		// Check for HOME environment variable
+		if (environment.get("HOME") != ""){
+			// Use HOME environment variable
+			addLogEntry("runtime_environment: HOME environment variable detected, expansion of '~' should be possible", ["debug"]);
+			defaultHomePath = environment.get("HOME");
+			shellEnvironmentSet = true;
+		} else {
+			if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
+				// No shell is set or username - observed case when running as systemd service under CentOS 7.x
+				addLogEntry("runtime_environment: No HOME, SHELL or USER environment variable configuration detected. Expansion of '~' not possible", ["debug"]);
+				defaultHomePath = "/root";
+				shellEnvironmentSet = false;
+			} else {
+				// A shell & valid user is set, but no HOME is set, use ~ which can be expanded
+				addLogEntry("runtime_environment: SHELL and USER environment variable detected, expansion of '~' should be possible", ["debug"]);
+				defaultHomePath = "~";
+				shellEnvironmentSet = true;
+			}
+		}
+		// outcome of setting defaultHomePath
+		addLogEntry("runtime_environment: Calculated defaultHomePath: " ~ defaultHomePath, ["debug"]);
+		
 		// DEVELOPER OPTIONS
 		// display_memory = true | false
 		//  - It may be desirable to display the memory usage of the application to assist with diagnosing memory issues with the application
@@ -181,90 +372,56 @@ final class Config
 		boolValues["display_sync_options"] = false;
 		// force_children_scan = true | false
 		// - Force client to use /children rather than /delta to query changes on OneDrive
-		// - This option flags nationalCloudDeployment as true, forcing the client to act like it is using a National Cloud Deployment
+		// - This option flags nationalCloudDeployment as true, forcing the client to act like it is using a National Cloud Deployment model
 		boolValues["force_children_scan"] = false;
 		// display_processing_time = true | false
 		// - Enabling this option will add function processing times to the console output
 		// - This then enables tracking of where the application is spending most amount of time when processing data when users have questions re performance
 		boolValues["display_processing_time"] = false;
 		
-		// HTTPS & CURL Operation Settings
-		// - Maximum time an operation is allowed to take
-		//   This includes dns resolution, connecting, data transfer, etc.
-		longValues["operation_timeout"] = defaultOperationTimeout;
-		// libcurl dns_cache_timeout timeout
-		longValues["dns_timeout"] = defaultDnsTimeout;
-		// Timeout for HTTPS connections
-		longValues["connect_timeout"] = defaultConnectTimeout;
-		// Timeout for activity on a HTTPS connection
-		longValues["data_timeout"] = defaultDataTimeout;
-		// What IP protocol version should be used when communicating with OneDrive
-		longValues["ip_protocol_version"] = defaultIpProtocol; // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
-				
-		// EXPAND USERS HOME DIRECTORY
-		// Determine the users home directory.
-		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
-		// Check for HOME environment variable
-		if (environment.get("HOME") != ""){
-			// Use HOME environment variable
-			log.vdebug("homePath: HOME environment variable set");
-			homePath = environment.get("HOME");
-		} else {
-			if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
-				// No shell is set or username - observed case when running as systemd service under CentOS 7.x
-				log.vdebug("homePath: WARNING - no HOME environment variable set");
-				log.vdebug("homePath: WARNING - no SHELL environment variable set");
-				log.vdebug("homePath: WARNING - no USER environment variable set");
-				homePath = "/root";
-			} else {
-				// A shell & valid user is set, but no HOME is set, use ~ which can be expanded
-				log.vdebug("homePath: WARNING - no HOME environment variable set");
-				homePath = "~";
-			}
-		}
-
-		// Output homePath calculation
-		log.vdebug("homePath: ", homePath);
-
-		// Determine the correct configuration directory to use
+		// Function variables
 		string configDirBase;
 		string systemConfigDirBase;
-		if (confdirOption != "") {
+		bool configurationInitialised = false;
+		
+		// Initialise the application configuration, using the provided --confdir option was passed in
+		if (!confdirOption.empty) {
 			// A CLI 'confdir' was passed in
-			// Clean up any stray " .. these should not be there ...
+			// Clean up any stray " .. these should not be there for correct process handling of the configuration option
 			confdirOption = strip(confdirOption,"\"");
-			log.vdebug("configDirName: CLI override to set configDirName to: ", confdirOption);
+			addLogEntry("configDirName: CLI override to set configDirName to: " ~ confdirOption, ["debug"]);
+			
 			if (canFind(confdirOption,"~")) {
 				// A ~ was found
-				log.vdebug("configDirName: A '~' was found in configDirName, using the calculated 'homePath' to replace '~'");
-				configDirName = homePath ~ strip(confdirOption,"~","~");
+				addLogEntry("configDirName: A '~' was found in configDirName, using the calculated 'defaultHomePath' to replace '~'", ["debug"]);
+				configDirName = defaultHomePath ~ strip(confdirOption,"~","~");
 			} else {
 				configDirName = confdirOption;
 			}
 		} else {
-			// Determine the base directory relative to which user specific configuration files should be stored.
+			// Determine the base directory relative to which user specific configuration files should be stored
 			if (environment.get("XDG_CONFIG_HOME") != ""){
-				log.vdebug("configDirBase: XDG_CONFIG_HOME environment variable set");
+				addLogEntry("configDirBase: XDG_CONFIG_HOME environment variable set", ["debug"]);
 				configDirBase = environment.get("XDG_CONFIG_HOME");
 			} else {
 				// XDG_CONFIG_HOME does not exist on systems where X11 is not present - ie - headless systems / servers
-				log.vdebug("configDirBase: WARNING - no XDG_CONFIG_HOME environment variable set");
-				configDirBase = homePath ~ "/.config";
+				addLogEntry("configDirBase: WARNING - no XDG_CONFIG_HOME environment variable set", ["debug"]);
+				configDirBase = buildNormalizedPath(buildPath(defaultHomePath, ".config"));
 				// Also set up a path to pre-shipped shared configs (which can be overridden by supplying a config file in userspace)
 				systemConfigDirBase = "/etc";
 			}
-
+			
 			// Output configDirBase calculation
-			log.vdebug("configDirBase: ", configDirBase);
-			// Set the default application configuration directory
-			log.vdebug("configDirName: Configuring application to use default config path");
+			addLogEntry("configDirBase: " ~ configDirBase, ["debug"]);
+			// Set the calculated application configuration directory
+			addLogEntry("configDirName: Configuring application to use calculated config path", ["debug"]);
 			// configDirBase contains the correct path so we do not need to check for presence of '~'
-			configDirName = configDirBase ~ "/onedrive";
+			configDirName = buildNormalizedPath(buildPath(configDirBase, "onedrive"));
 			// systemConfigDirBase contains the correct path so we do not need to check for presence of '~'
-			systemConfigDirName = systemConfigDirBase ~ "/onedrive";
+			systemConfigDirName = buildNormalizedPath(buildPath(systemConfigDirBase, "onedrive"));
 		}
-
-		// Config directory options all determined
+		
+		// Configuration directory should now have been correctly identified
 		if (!exists(configDirName)) {
 			// create the directory
 			mkdirRecurse(configDirName);
@@ -276,107 +433,580 @@ final class Config
 			if (!isDir(configDirName)) {
 				if (!confdirOption.empty) {
 					// the configuration path was passed in by the user .. user error
-					writeln("ERROR: --confdir entered value is an existing file instead of an existing directory");
+					addLogEntry("ERROR: --confdir entered value is an existing file instead of an existing directory");
 				} else {
 					// other error
-					writeln("ERROR: ~/.config/onedrive is a file rather than a directory");
+					addLogEntry("ERROR: " ~ confdirOption ~ " is a file rather than a directory");
 				}
 				// Must exit
 				exit(EXIT_FAILURE);	
 			}
 		}
-
-		// configDirName has a trailing /
-		if (!configDirName.empty) log.vlog("Using 'user' Config Dir: ", configDirName);
-		if (!systemConfigDirName.empty) log.vlog("Using 'system' Config Dir: ", systemConfigDirName);
-
+		
 		// Update application set variables based on configDirName
-		refreshTokenFilePath = buildNormalizedPath(configDirName ~ "/refresh_token");
-		deltaLinkFilePath = buildNormalizedPath(configDirName ~ "/delta_link");
-		databaseFilePath = buildNormalizedPath(configDirName ~ "/items.sqlite3");
-		databaseFilePathDryRun = buildNormalizedPath(configDirName ~ "/items-dryrun.sqlite3");
-		uploadStateFilePath = buildNormalizedPath(configDirName ~ "/resume_upload");
-		userConfigFilePath = buildNormalizedPath(configDirName ~ "/config");
-		syncListFilePath = buildNormalizedPath(configDirName ~ "/sync_list");
-		systemConfigFilePath = buildNormalizedPath(systemConfigDirName ~ "/config");
-		businessSharedFolderFilePath = buildNormalizedPath(configDirName ~ "/business_shared_folders");
-
+		// - What is the full path for the 'refresh_token'
+		refreshTokenFilePath = buildNormalizedPath(buildPath(configDirName, "refresh_token"));
+		// - What is the full path for the 'delta_link'
+		deltaLinkFilePath = buildNormalizedPath(buildPath(configDirName, "delta_link"));
+		// - What is the full path for the 'items.sqlite3' - the database cache file
+		databaseFilePath = buildNormalizedPath(buildPath(configDirName, "items.sqlite3"));
+		// - What is the full path for the 'items-dryrun.sqlite3' - the dry-run database cache file
+		databaseFilePathDryRun = buildNormalizedPath(buildPath(configDirName, "items-dryrun.sqlite3"));
+		// - What is the full path for the 'resume_upload'
+		uploadSessionFilePath = buildNormalizedPath(buildPath(configDirName, "session_upload"));
+		// - What is the full path for the 'sync_list' file
+		syncListFilePath = buildNormalizedPath(buildPath(configDirName, "sync_list"));
+		// - What is the full path for the 'config' - the user file to configure the application
+		userConfigFilePath = buildNormalizedPath(buildPath(configDirName, "config"));
+		// - What is the full path for the system 'config' file if it is required
+		systemConfigFilePath = buildNormalizedPath(buildPath(systemConfigDirName, "config"));
+		
+		// - What is the full path for the 'business_shared_items'
+		businessSharedItemsFilePath = buildNormalizedPath(buildPath(configDirName, "business_shared_items"));
+				
+		// To determine if any configuration items has changed, where a --resync would be required, we need to have a hash file for the following items
+		// - 'config.backup' file
+		// - applicable 'config' file
+		// - 'sync_list' file
+		// - 'business_shared_items' file
+		configBackupFile = buildNormalizedPath(buildPath(configDirName, ".config.backup"));
+		configHashFile = buildNormalizedPath(buildPath(configDirName, ".config.hash"));
+		syncListHashFile = buildNormalizedPath(buildPath(configDirName, ".sync_list.hash"));
+		businessSharedItemsHashFile = buildNormalizedPath(buildPath(configDirName, ".business_shared_items.hash"));
+				
 		// Debug Output for application set variables based on configDirName
-		log.vdebug("refreshTokenFilePath = ", refreshTokenFilePath);
-		log.vdebug("deltaLinkFilePath = ", deltaLinkFilePath);
-		log.vdebug("databaseFilePath = ", databaseFilePath);
-		log.vdebug("databaseFilePathDryRun = ", databaseFilePathDryRun);
-		log.vdebug("uploadStateFilePath = ", uploadStateFilePath);
-		log.vdebug("userConfigFilePath = ", userConfigFilePath);
-		log.vdebug("syncListFilePath = ", syncListFilePath);
-		log.vdebug("systemConfigFilePath = ", systemConfigFilePath);
-		log.vdebug("businessSharedFolderFilePath = ", businessSharedFolderFilePath);
-	}
-
-	bool initialize()
-	{
-		// Initialise the application
+		addLogEntry("refreshTokenFilePath =   " ~ refreshTokenFilePath, ["debug"]);
+		addLogEntry("deltaLinkFilePath =      " ~ deltaLinkFilePath, ["debug"]);
+		addLogEntry("databaseFilePath =       " ~ databaseFilePath, ["debug"]);
+		addLogEntry("databaseFilePathDryRun = " ~ databaseFilePathDryRun, ["debug"]);
+		addLogEntry("uploadSessionFilePath =  " ~ uploadSessionFilePath, ["debug"]);
+		addLogEntry("userConfigFilePath =     " ~ userConfigFilePath, ["debug"]);
+		addLogEntry("syncListFilePath =       " ~ syncListFilePath, ["debug"]);
+		addLogEntry("systemConfigFilePath =   " ~ systemConfigFilePath, ["debug"]);
+		addLogEntry("configBackupFile =       " ~ configBackupFile, ["debug"]);
+		addLogEntry("configHashFile =         " ~ configHashFile, ["debug"]);
+		addLogEntry("syncListHashFile =       " ~ syncListHashFile, ["debug"]);
+		addLogEntry("businessSharedItemsFilePath = " ~ businessSharedItemsFilePath, ["debug"]);
+		addLogEntry("businessSharedItemsHashFile = " ~ businessSharedItemsHashFile, ["debug"]);
+		
+		// Configure the Hash and Backup File Permission Value
+		string valueToConvert = to!string(defaultFilePermissionMode);
+		auto convertedValue = parse!long(valueToConvert, 8);
+		convertedPermissionValue = to!int(convertedValue);
+		
+		// Initialise the application using the configuration file if it exists
 		if (!exists(userConfigFilePath)) {
 			// 'user' configuration file does not exist
 			// Is there a system configuration file?
 			if (!exists(systemConfigFilePath)) {
 				// 'system' configuration file does not exist
-				log.vlog("No user or system config file found, using application defaults");
-				return true;
+				addLogEntry("No user or system config file found, using application defaults", ["verbose"]);
+				applicableConfigFilePath = userConfigFilePath;
+				configurationInitialised = true;
 			} else {
 				// 'system' configuration file exists
 				// can we load the configuration file without error?
-				if (load(systemConfigFilePath)) {
+				if (loadConfigFile(systemConfigFilePath)) {
 					// configuration file loaded without error
-					log.log("System configuration file successfully loaded");
-					return true;
+					addLogEntry("System configuration file successfully loaded");
+					
+					// Set 'applicableConfigFilePath' to equal the 'config' we loaded
+					applicableConfigFilePath = systemConfigFilePath;
+					// Update the configHashFile path value to ensure we are using the system 'config' file for the hash
+					configHashFile = buildNormalizedPath(buildPath(systemConfigDirName, ".config.hash"));
+					configurationInitialised = true;
 				} else {
 					// there was a problem loading the configuration file
-					log.log("System configuration file has errors - please check your configuration");
-					return false;
+					addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
+					addLogEntry("System configuration file has errors - please check your configuration");
 				}
-			}
+			}						
 		} else {
 			// 'user' configuration file exists
 			// can we load the configuration file without error?
-			if (load(userConfigFilePath)) {
+			if (loadConfigFile(userConfigFilePath)) {
 				// configuration file loaded without error
-				log.log("Configuration file successfully loaded");
-				return true;
+				addLogEntry("Configuration file successfully loaded");
+				
+				// Set 'applicableConfigFilePath' to equal the 'config' we loaded
+				applicableConfigFilePath = userConfigFilePath;
+				configurationInitialised = true;
 			} else {
 				// there was a problem loading the configuration file
-				log.log("Configuration file has errors - please check your configuration");
-				return false;
+				addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
+				addLogEntry("Configuration file has errors - please check your configuration");
 			}
+		}
+		
+		// Advise the user path that we will use for the application state data
+		if (canFind(applicableConfigFilePath, configDirName)) {
+			addLogEntry("Using 'user' configuration path for application state data: " ~ configDirName, ["verbose"]);
+		} else {
+			if (canFind(applicableConfigFilePath, systemConfigDirName)) {
+				addLogEntry("Using 'system' configuration path for application state data: " ~ systemConfigDirName, ["verbose"]);
+			}
+		}
+		
+		// return if the configuration was initialised
+		return configurationInitialised;
+	}
+	
+	// Create a backup of the 'config' file if it does not exist
+	void createBackupConfigFile() {
+		if (!getValueBool("dry_run")) {
+			// Is there a backup of the config file if the config file exists?
+			if (exists(applicableConfigFilePath)) {
+				addLogEntry("Creating a backup of the applicable config file", ["debug"]);
+				// create backup copy of current config file
+				std.file.copy(applicableConfigFilePath, configBackupFile);
+				// File Copy should only be readable by the user who created it - 0600 permissions needed
+				configBackupFile.setAttributes(convertedPermissionValue);
+			}
+		} else {
+			// --dry-run scenario ... technically we should not be making any local file changes .......
+			addLogEntry("DRY RUN: Not creating backup config file as --dry-run has been used");
+		}
+	}
+	
+	// Return a given string value based on the provided key
+	string getValueString(string key) {
+		auto p = key in stringValues;
+		if (p) {
+			return *p;
+		} else {
+			throw new Exception("Missing config value: " ~ key);
 		}
 	}
 
-	void update_from_args(string[] args)
-	{
+	// Return a given long value based on the provided key
+	long getValueLong(string key) {
+		auto p = key in longValues;
+		if (p) {
+			return *p;
+		} else {
+			throw new Exception("Missing config value: " ~ key);
+		}
+	}
+
+	// Return a given bool value based on the provided key
+	bool getValueBool(string key) {
+		auto p = key in boolValues;
+		if (p) {
+			return *p;
+		} else {
+			throw new Exception("Missing config value: " ~ key);
+		}
+	}
+	
+	// Set a given string value based on the provided key
+	void setValueString(string key, string value) {
+		stringValues[key] = value;
+	}
+
+	// Set a given long value based on the provided key
+	void setValueLong(string key, long value) {
+		longValues[key] = value;
+	}
+
+	// Set a given long value based on the provided key
+	void setValueBool(string key, bool value) {
+		boolValues[key] = value;
+	}
+	
+	// Configure the directory octal permission value
+	void configureRequiredDirectoryPermisions() {
+		// return the directory permission mode required
+		// - return octal!defaultDirectoryPermissionMode; ... cant be used .. which is odd
+		// Error: variable defaultDirectoryPermissionMode cannot be read at compile time
+		if (getValueLong("sync_dir_permissions") != defaultDirectoryPermissionMode) {
+			// return user configured permissions as octal integer
+			string valueToConvert = to!string(getValueLong("sync_dir_permissions"));
+			auto convertedValue = parse!long(valueToConvert, 8);
+			configuredDirectoryPermissionMode = to!int(convertedValue);
+		} else {
+			// return default as octal integer
+			string valueToConvert = to!string(defaultDirectoryPermissionMode);
+			auto convertedValue = parse!long(valueToConvert, 8);
+			configuredDirectoryPermissionMode = to!int(convertedValue);
+		}
+	}
+
+	// Configure the file octal permission value
+	void configureRequiredFilePermisions() {
+		// return the file permission mode required
+		// - return octal!defaultFilePermissionMode; ... cant be used .. which is odd
+		// Error: variable defaultFilePermissionMode cannot be read at compile time
+		if (getValueLong("sync_file_permissions") != defaultFilePermissionMode) {
+			// return user configured permissions as octal integer
+			string valueToConvert = to!string(getValueLong("sync_file_permissions"));
+			auto convertedValue = parse!long(valueToConvert, 8);
+			configuredFilePermissionMode = to!int(convertedValue);
+		} else {
+			// return default as octal integer
+			string valueToConvert = to!string(defaultFilePermissionMode);
+			auto convertedValue = parse!long(valueToConvert, 8);
+			configuredFilePermissionMode = to!int(convertedValue);
+		}
+	}
+
+	// Read the configuredDirectoryPermissionMode and return
+	int returnRequiredDirectoryPermisions() {
+		if (configuredDirectoryPermissionMode == 0) {
+			// the configured value is zero, this means that directories would get
+			// values of d---------
+			configureRequiredDirectoryPermisions();
+		}
+		return configuredDirectoryPermissionMode;
+	}
+
+	// Read the configuredFilePermissionMode and return
+	int returnRequiredFilePermisions() {
+		if (configuredFilePermissionMode == 0) {
+			// the configured value is zero
+			configureRequiredFilePermisions();
+		}
+		return configuredFilePermissionMode;
+	}
+	
+	// Load a configuration file from the provided filename
+	private bool loadConfigFile(string filename) {
+		// configure function variables
+		try {
+			addLogEntry("Reading configuration file: " ~ filename);
+			readText(filename);
+		} catch (std.file.FileException e) {
+			// Unable to access required file
+			addLogEntry("ERROR: Unable to access " ~ e.msg);
+			// Use exit scopes to shutdown API
+			return false;
+		}
+		
+		// We were able to readText the config file - so, we should be able to open and read it
+		auto file = File(filename, "r");
+		string lineBuffer;
+		
+		// configure scopes
+		// - failure
+		scope(failure) {
+			// close file if open
+			if (file.isOpen()){
+				// close open file
+				file.close();
+			}
+		}
+		// - exit
+		scope(exit) {
+			// close file if open
+			if (file.isOpen()){
+				// close open file
+				file.close();
+			}
+		}
+
+		// read file line by line
+		auto range = file.byLine();
+		foreach (line; range) {
+			lineBuffer = stripLeft(line).to!string;
+			if (lineBuffer.length == 0 || lineBuffer[0] == ';' || lineBuffer[0] == '#') continue;
+			auto c = lineBuffer.matchFirst(configRegex);
+			if (!c.empty) {
+				c.popFront(); // skip the whole match
+				string key = c.front.dup;
+				auto p = key in boolValues;
+				if (p) {
+					c.popFront();
+					// only accept "true" as true value. TODO Should we support other formats?
+					setValueBool(key, c.front.dup == "true" ? true : false);
+					
+					// skip_dotfiles tracking for change
+					if (key == "skip_dotfiles") {
+						configFileSkipDotfiles = true;
+					}
+					
+					// skip_symlinks tracking for change
+					if (key == "skip_symlinks") {
+						configFileSkipSymbolicLinks = true;
+					}
+					
+					// sync_business_shared_items tracking for change
+					if (key == "sync_business_shared_items") {
+						configFileSyncBusinessSharedItems = true;
+					}
+					
+				} else {
+					auto pp = key in stringValues;
+					if (pp) {
+						c.popFront();
+						setValueString(key, c.front.dup);
+						// detect need for --resync for these:
+						//  --syncdir ARG
+						//  --skip-file ARG
+						//  --skip-dir ARG
+						
+						// sync_dir
+						if (key == "sync_dir") {
+							// configure a temp variable
+							string tempSyncDirValue = c.front.dup;
+							// is this empty ?
+							if (!strip(tempSyncDirValue).empty) {
+								configFileSyncDir = tempSyncDirValue;
+							} else {
+								// sync_dir cannot be empty
+								addLogEntry("Invalid value for key in config file: " ~ key);
+								addLogEntry("ERROR: sync_dir in config file cannot be empty - this is a fatal error and must be corrected");
+								exit(EXIT_FAILURE);
+							}
+						}
+						
+						// skip_file
+						if (key == "skip_file") {
+							// Handle multiple entries of skip_file
+							if (configFileSkipFile.empty) {
+								// currently no entry exists
+								configFileSkipFile = c.front.dup;
+							} else {
+								// add to existing entry
+								configFileSkipFile = configFileSkipFile ~ "|" ~ to!string(c.front.dup);
+								setValueString("skip_file", configFileSkipFile);
+							}
+						}
+						
+						// skip_dir
+						if (key == "skip_dir") {
+							// Handle multiple entries of skip_dir
+							if (configFileSkipDir.empty) {
+								// currently no entry exists
+								configFileSkipDir = c.front.dup;
+							} else {
+								// add to existing entry
+								configFileSkipDir = configFileSkipDir ~ "|" ~ to!string(c.front.dup);
+								setValueString("skip_dir", configFileSkipDir);
+							}
+						}
+						
+						// --single-directory Strip quotation marks from path 
+						// This is an issue when using ONEDRIVE_SINGLE_DIRECTORY with Docker
+						if (key == "single_directory") {
+							// Strip quotation marks from provided path
+							string configSingleDirectory = strip(to!string(c.front.dup), "\"");
+							setValueString("single_directory", configSingleDirectory);
+						}
+						
+						// Azure AD Configuration
+						if (key == "azure_ad_endpoint") {
+							string azureConfigValue = strip(c.front.dup);
+							switch(azureConfigValue) {
+								case "":
+									addLogEntry("Using detault config option for Global Azure AD Endpoints");
+									break;
+								case "USL4":
+									addLogEntry("Using config option for Azure AD for US Government Endpoints");
+									break;
+								case "USL5":
+									addLogEntry("Using config option for Azure AD for US Government Endpoints (DOD)");
+									break;
+								case "DE":
+									addLogEntry("Using config option for Azure AD Germany");
+									break;
+								case "CN":
+									addLogEntry("Using config option for Azure AD China operated by 21Vianet");
+									break;
+								// Default - all other entries
+								default:
+									addLogEntry("Unknown Azure AD Endpoint - using Global Azure AD Endpoints");
+							}
+						}
+						
+						// Application ID
+						if (key == "application_id") {
+							// This key cannot be empty
+							string tempApplicationId = strip(c.front.dup);
+							if (tempApplicationId.empty) {
+								addLogEntry("Invalid value for key in config file - using default value: " ~ key);
+								addLogEntry("application_id in config file cannot be empty - using default application_id", ["debug"]);
+								setValueString("application_id", defaultApplicationId);
+							} else {
+								setValueString("application_id", tempApplicationId);
+							}
+						}
+						
+						// Drive ID
+						if (key == "drive_id") {
+							// This key cannot be empty
+							string tempApplicationId = strip(c.front.dup);
+							if (tempApplicationId.empty) {
+								addLogEntry("Invalid value for key in config file: " ~ key);
+								addLogEntry("drive_id in config file cannot be empty - this is a fatal error and must be corrected by removing this entry from your config file", ["debug"]);
+								exit(EXIT_FAILURE);
+							} else {
+								setValueString("drive_id", tempApplicationId);
+								configFileDriveId = tempApplicationId;
+							}
+						}
+						
+						// Log Directory
+						if (key == "log_dir") {
+							// This key cannot be empty
+							string tempLogDir = strip(c.front.dup);
+							if (tempLogDir.empty) {
+								addLogEntry("Invalid value for key in config file - using default value: " ~ key);
+								addLogEntry("log_dir in config file cannot be empty - using default log_dir", ["debug"]);
+								setValueString("log_dir", defaultLogFileDir);
+							} else {
+								setValueString("log_dir", tempLogDir);
+							}
+						}
+						
+					} else {
+						auto ppp = key in longValues;
+						if (ppp) {
+							c.popFront();
+							ulong thisConfigValue;
+							
+							// Can this value actually be converted to an integer?
+							try {
+								thisConfigValue = to!long(c.front.dup);
+							} catch (std.conv.ConvException) {
+								addLogEntry("Invalid value for key in config file: " ~ key);
+								return false;
+							}
+							
+							setValueLong(key, thisConfigValue);
+							
+							// if key is 'monitor_interval' the value must be 300 or greater
+							if (key == "monitor_interval") {
+								// temp value
+								ulong tempValue = thisConfigValue;
+								// the temp value needs to be greater than 300 
+								if (tempValue < 300) {
+									addLogEntry("Invalid value for key in config file - using default value: " ~ key);
+									tempValue = 300;
+								}
+								setValueLong("monitor_interval", to!long(tempValue));
+							}
+							
+							// if key is 'monitor_fullscan_frequency' the value must be 12 or greater
+							if (key == "monitor_fullscan_frequency") {
+								// temp value
+								ulong tempValue = thisConfigValue;
+								// the temp value needs to be greater than 12 
+								if (tempValue < 12) {
+									// If this is not set to zero (0) then we are not disabling 'monitor_fullscan_frequency'
+									if (tempValue != 0) {
+										// invalid value
+										addLogEntry("Invalid value for key in config file - using default value: " ~ key);
+										tempValue = 12;
+									}
+								}
+								setValueLong("monitor_fullscan_frequency", to!long(tempValue));
+							}
+							
+							// if key is 'space_reservation' we have to calculate MB -> bytes
+							if (key == "space_reservation") {
+								// temp value
+								ulong tempValue = thisConfigValue;
+								// a value of 0 needs to be made at least 1MB .. 
+								if (tempValue == 0) {
+									addLogEntry("Invalid value for key in config file - using 1MB: " ~ key);
+									tempValue = 1;
+								}
+								setValueLong("space_reservation", to!long(tempValue * 2^^20));
+							}
+							
+							// if key is 'ip_protocol_version' this has to be a value of 0 or 1 or 2 .. nothing else
+							if (key == "ip_protocol_version") {
+								// temp value
+								ulong tempValue = thisConfigValue;
+								// If greater than 2, set to default
+								if (tempValue > 2) {
+									addLogEntry("Invalid value for key in config file - using default value: " ~ key);
+									// Set to default of 0
+									tempValue = 0;
+								}
+								setValueLong("ip_protocol_version", to!long(tempValue));
+							}
+							
+						} else {
+							// unknown key
+							addLogEntry("Unknown key in config file: " ~ key);
+							
+							// handle depreciation
+							bool ignore_depreciation = false;
+							
+							// min_notify_changes has been depreciated
+							if (key == "min_notify_changes") {
+								addLogEntry();
+								addLogEntry("The option 'min_notify_changes' has been depreciated and will be ignored. Please read the updated documentation and update your client configuration.");
+								addLogEntry();
+								ignore_depreciation = true;
+							}
+							
+							// force_http_2 has been depreciated
+							if (key == "force_http_2") {
+								addLogEntry();
+								addLogEntry("The option 'force_http_2' has been depreciated and will be ignored. Please read the updated documentation and update your client configuration.");
+								addLogEntry();
+								ignore_depreciation = true;
+							}
+							
+							// Application configuration update required for Business Shared Folders
+							if (key == "sync_business_shared_folders") {
+								addLogEntry();
+								addLogEntry("The process for synchronising Microsoft OneDrive Business Shared Folders has changed.");
+								addLogEntry("Please review the revised documentation on how to configure this application feature. You must update your client configuration and make any necessary online adjustments accordingly.");
+								addLogEntry();
+							}
+							// Return false
+							return ignore_depreciation;
+						}
+					}
+				}
+			} else {
+				// malformed config line
+				addLogEntry("Malformed config line: " ~ lineBuffer);
+				return false;
+			}
+		}
+		
+		// Close the file access
+		file.close();
+		// Free object and memory
+		object.destroy(file);
+		object.destroy(range);
+		object.destroy(lineBuffer);
+		return true;
+	}
+	
+	// Update the application configuration based on CLI passed in parameters
+	void updateFromArgs(string[] cliArgs) {
 		// Add additional options that are NOT configurable via config file
-		stringValues["create_directory"]  = "";
+		stringValues["create_directory"] = "";
 		stringValues["create_share_link"] = "";
 		stringValues["destination_directory"] = "";
-		stringValues["get_file_link"]     = "";
-		stringValues["modified_by"]       = "";
-		stringValues["get_o365_drive_id"] = "";
-		stringValues["remove_directory"]  = "";
-		stringValues["single_directory"]  = "";
-		stringValues["source_directory"]  = "";
-		stringValues["auth_files"]        = "";
-		stringValues["auth_response"]     = "";
-		boolValues["display_config"]      = false;
+		stringValues["get_file_link"] = "";
+		stringValues["modified_by"] = "";
+		stringValues["sharepoint_library_name"] = "";
+		stringValues["remove_directory"] = "";
+		stringValues["single_directory"] = "";
+		stringValues["source_directory"] = "";
+		stringValues["auth_files"] = "";
+		stringValues["auth_response"] = "";
+		boolValues["display_config"] = false;
 		boolValues["display_sync_status"] = false;
-		boolValues["print_token"]         = false;
-		boolValues["logout"]              = false;
-		boolValues["reauth"]              = false;
-		boolValues["monitor"]             = false;
-		boolValues["synchronize"]         = false;
-		boolValues["force"]               = false;
-		boolValues["list_business_shared_folders"] = false;
-		boolValues["force_sync"]          = false;
-		boolValues["with_editing_perms"]  = false;
-
+		boolValues["display_quota"] = false;
+		boolValues["print_token"] = false;
+		boolValues["logout"] = false;
+		boolValues["reauth"] = false;
+		boolValues["monitor"] = false;
+		boolValues["synchronize"] = false;
+		boolValues["force"] = false;
+		boolValues["list_business_shared_items"] = false;
+		boolValues["force_sync"] = false;
+		boolValues["with_editing_perms"] = false;
+		
+		// Specific options for CLI input handling
+		stringValues["sync_dir_cli"] = "";
+		
 		// Application Startup option validation
 		try {
 			string tmpStr;
@@ -385,7 +1015,7 @@ final class Config
 			// duplicated from main.d to get full help output!
 			auto opt = getopt(
 
-				args,
+				cliArgs,
 				std.getopt.config.bundling,
 				std.getopt.config.caseSensitive,
 				"auth-files",
@@ -436,6 +1066,9 @@ final class Config
 				"display-sync-status",
 					"Display the sync status of the client - no sync will be performed.",
 					&boolValues["display_sync_status"],
+				"display-quota",
+					"Display the quota status of the client - no sync will be performed.",
+					&boolValues["display_quota"],
 				"download-only",
 					"Replicate the OneDrive online state locally, by only downloading changes from OneDrive. Do not upload local changes to OneDrive.",
 					&boolValues["download_only"],
@@ -452,14 +1085,17 @@ final class Config
 					"Force the deletion of data when a 'big delete' is detected",
 					&boolValues["force"],
 				"force-sync",
-					"Force a synchronization of a specific folder, only when using --synchronize --single-directory and ignore all non-default skip_dir and skip_file rules",
+					"Force a synchronization of a specific folder, only when using --sync --single-directory and ignore all non-default skip_dir and skip_file rules",
 					&boolValues["force_sync"],
 				"get-file-link",
 					"Display the file link of a synced file",
 					&stringValues["get_file_link"],
-				"get-O365-drive-id",
+				"get-sharepoint-drive-id",
 					"Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library",
-					&stringValues["get_o365_drive_id"],
+					&stringValues["sharepoint_library_name"],
+				"get-O365-drive-id",
+					"Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library (DEPRECIATED)",
+					&stringValues["sharepoint_library_name"],
 				"local-first",
 					"Synchronize from the local directory source first, before downloading changes from OneDrive.",
 					&boolValues["local_first"],
@@ -469,9 +1105,6 @@ final class Config
 				"logout",
 					"Logout the current user",
 					&boolValues["logout"],
-				"min-notify-changes",
-					"Minimum number of pending incoming changes necessary to trigger a desktop notification",
-					&longValues["min_notify_changes"],
 				"modified-by",
 					"Display the last modified by details of a given path",
 					&stringValues["modified_by"],
@@ -490,7 +1123,7 @@ final class Config
 				"no-remote-delete",
 					"Do not delete local file 'deletes' from OneDrive when using --upload-only",
 					&boolValues["no_remote_delete"],
-				"print-token",
+				"print-access-token",
 					"Print the access token, useful for debugging",
 					&boolValues["print_token"],
 				"reauth",
@@ -536,10 +1169,13 @@ final class Config
 					"The amount of disk space to reserve (in MB) to avoid 100% disk space utilisation",
 					&longValues["space_reservation"],
 				"syncdir",
-					"Specify the local directory used for synchronization to OneDrive",
-					&stringValues["sync_dir"],
+					"Specify the local directory used for synchronisation to OneDrive",
+					&stringValues["sync_dir_cli"],
+				"sync|s",
+					"Perform a synchronisation with Microsoft OneDrive",
+					&boolValues["synchronize"],
 				"synchronize",
-					"Perform a synchronization",
+					"Perform a synchronisation with Microsoft OneDrive (DEPRECIATED)",
 					&boolValues["synchronize"],
 				"sync-root-files",
 					"Sync all files in sync_dir root when using sync_list.",
@@ -547,9 +1183,6 @@ final class Config
 				"upload-only",
 					"Replicate the locally configured sync_dir state to OneDrive, by only uploading local changes to OneDrive. Do not download changes from OneDrive.",
 					&boolValues["upload_only"],
-				"user-agent",
-					"Specify a User Agent string to the http client",
-					&stringValues["user_agent"],
 				"confdir",
 					"Set the directory used to store the configuration files",
 					&tmpStr,
@@ -559,343 +1192,1220 @@ final class Config
 				"version",
 					"Print the version and exit",
 					&tmpBol,
-				"list-shared-folders",
-					"List OneDrive Business Shared Folders",
-					&boolValues["list_business_shared_folders"],
-				"sync-shared-folders",
-					"Sync OneDrive Business Shared Folders",
-					&boolValues["sync_business_shared_folders"],
 				"with-editing-perms",
 					"Create a read-write shareable link for an existing file on OneDrive when used with --create-share-link <file>",
 					&boolValues["with_editing_perms"]
 			);
+			
+			// Was --syncdir used?
+			if (!getValueString("sync_dir_cli").empty) {
+				// Build the line we need to update and/or write out
+				string newConfigOptionSyncDirLine = "sync_dir = \"" ~ getValueString("sync_dir_cli") ~ "\"";
+				
+				// Does a 'config' file exist?
+				if (!exists(applicableConfigFilePath)) {
+					// No existing 'config' file exists, create it, and write the 'sync_dir' configuration to it
+					if (!getValueBool("dry_run")) {
+						std.file.write(applicableConfigFilePath, newConfigOptionSyncDirLine);
+						// Config file should only be readable by the user who created it - 0600 permissions needed
+						applicableConfigFilePath.setAttributes(convertedPermissionValue);
+					}
+				} else {
+					// an existing config file exists .. so this now becomes tricky
+					// string replace 'sync_dir' if it exists, in the existing 'config' file, but only if 'sync_dir' (already read in) is different from 'sync_dir_cli'
+					if ( (getValueString("sync_dir")) != (getValueString("sync_dir_cli")) ) {
+						// values are different
+						File applicableConfigFilePathFileHandle = File(applicableConfigFilePath, "r");
+						string lineBuffer;
+						string[] newConfigFileEntries;
+						
+						// read applicableConfigFilePath line by line
+						auto range = applicableConfigFilePathFileHandle.byLine();
+						
+						// for each 'config' file line
+						foreach (line; range) {
+							lineBuffer = stripLeft(line).to!string;
+							if (lineBuffer.length == 0 || lineBuffer[0] == ';' || lineBuffer[0] == '#') {
+								newConfigFileEntries ~= [lineBuffer];
+							} else {
+								auto c = lineBuffer.matchFirst(configRegex);
+								if (!c.empty) {
+									c.popFront(); // skip the whole match
+									string key = c.front.dup;
+									if (key == "sync_dir") {
+										// lineBuffer is the line we want to keep
+										newConfigFileEntries ~= [newConfigOptionSyncDirLine];
+									} else {
+										newConfigFileEntries ~= [lineBuffer];
+									}
+								}
+							}
+						}
+						
+						// close original 'config' file if still open
+						if (applicableConfigFilePathFileHandle.isOpen()) {
+							// close open file
+							applicableConfigFilePathFileHandle.close();
+						}
+						
+						// free memory from file open
+						object.destroy(applicableConfigFilePathFileHandle);
+						
+						// Update the existing item in the file line array
+						if (!getValueBool("dry_run")) {
+							// Open the file with write access using 'w' mode to overwrite existing content
+							File applicableConfigFilePathFileHandleWrite = File(applicableConfigFilePath, "w");
+							
+							// Write each line from the 'newConfigFileEntries' array to the file
+							foreach (line; newConfigFileEntries) {
+								applicableConfigFilePathFileHandleWrite.writeln(line);
+							}
+
+							// Flush and close the file handle to ensure all data is written
+							if (applicableConfigFilePathFileHandleWrite.isOpen()) {
+							applicableConfigFilePathFileHandleWrite.flush();
+								applicableConfigFilePathFileHandleWrite.close();
+							}
+							
+							// free memory from file open
+							object.destroy(applicableConfigFilePathFileHandleWrite);
+						}
+					}
+				}
+				
+				// Final - configure sync_dir with the value of sync_dir_cli so that it can be used as part of the application configuration and detect change
+				setValueString("sync_dir", getValueString("sync_dir_cli"));
+			}
+			
+			// Was --auth-files used?
+			if (!getValueString("auth_files").empty) {
+				// --auth-files used, need to validate that '~' was not used as a path identifier, and if yes, perform the correct expansion
+				string[] tempAuthFiles = getValueString("auth_files").split(":");
+				string tempAuthUrl = tempAuthFiles[0];
+				string tempResponseUrl = tempAuthFiles[1];
+				string newAuthFilesString;
+				
+				// shell expansion if required
+				if (!shellEnvironmentSet){
+					// No shell environment is set, no automatic expansion of '~' if present is possible
+					// Does the 'currently configured' tempAuthUrl include a ~
+					if (canFind(tempAuthUrl, "~")) {	
+						// A ~ was found in auth_files(authURL)
+						addLogEntry("auth_files: A '~' was found in 'auth_files(authURL)', using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set", ["debug"]);
+						tempAuthUrl = buildNormalizedPath(buildPath(defaultHomePath, strip(tempAuthUrl, "~")));
+					}
+					
+					// Does the 'currently configured' tempAuthUrl include a ~
+					if (canFind(tempResponseUrl, "~")) {
+						// A ~ was found in auth_files(authURL)
+						addLogEntry("auth_files: A '~' was found in 'auth_files(tempResponseUrl)', using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set", ["debug"]);
+						tempResponseUrl = buildNormalizedPath(buildPath(defaultHomePath, strip(tempResponseUrl, "~")));
+					}
+				} else {
+					// Shell environment is set, automatic expansion of '~' if present is possible
+					// Does the 'currently configured' tempAuthUrl include a ~
+					if (canFind(tempAuthUrl, "~")) {
+						// A ~ was found in auth_files(authURL)
+						addLogEntry("auth_files: A '~' was found in the configured 'auth_files(authURL)', automatically expanding as SHELL and USER environment variable is set", ["debug"]);
+						tempAuthUrl = expandTilde(tempAuthUrl);
+					}
+					
+					// Does the 'currently configured' tempAuthUrl include a ~
+					if (canFind(tempResponseUrl, "~")) {
+						// A ~ was found in auth_files(authURL)
+						addLogEntry("auth_files: A '~' was found in the configured 'auth_files(tempResponseUrl)', automatically expanding as SHELL and USER environment variable is set", ["debug"]);
+						tempResponseUrl = expandTilde(tempResponseUrl);
+					}
+				}
+				
+				// Build new string
+				newAuthFilesString = tempAuthUrl ~ ":" ~ tempResponseUrl;
+				addLogEntry("auth_files - updated value: " ~ newAuthFilesString, ["debug"]);
+				setValueString("auth_files", newAuthFilesString);
+			}
+			
 			if (opt.helpWanted) {
 				outputLongHelp(opt.options);
 				exit(EXIT_SUCCESS);
 			}
 		} catch (GetOptException e) {
-			log.error(e.msg);
-			log.error("Try 'onedrive -h' for more information");
+			// getOpt error - must use writeln() here
+			writeln(e.msg);
+			writeln("Try 'onedrive -h' for more information");
 			exit(EXIT_FAILURE);
 		} catch (Exception e) {
-			// error
-			log.error(e.msg);
-			log.error("Try 'onedrive -h' for more information");
+			// general error - must use writeln() here
+			writeln(e.msg);
+			writeln("Try 'onedrive -h' for more information");
 			exit(EXIT_FAILURE);
 		}
 	}
-
-	string getValueString(string key)
-	{
-		auto p = key in stringValues;
-		if (p) {
-			return *p;
-		} else {
-			throw new Exception("Missing config value: " ~ key);
+	
+	// Check the arguments passed in for any that will be depreciated
+	void checkDepreciatedOptions(string[] cliArgs) {
+	
+		bool depreciatedCommandsFound = false;
+	
+		foreach (cliArg; cliArgs) {
+			// Check each CLI arg for items that have been depreciated
+			
+			// --synchronize depreciated in v2.5.0, will be removed in future version
+			if (cliArg == "--synchronize") {
+				addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
+				addLogEntry("DEPRECIATION WARNING: --synchronize has been depreciated in favour of --sync or -s");
+				depreciatedCommandsFound = true;
+			}
+			
+			// --get-O365-drive-id depreciated in v2.5.0, will be removed in future version
+			if (cliArg == "--get-O365-drive-id") {
+				addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
+				addLogEntry("DEPRECIATION WARNING: --get-O365-drive-id has been depreciated in favour of --get-sharepoint-drive-id");
+				depreciatedCommandsFound = true;
+			}
+		}
+	
+		if (depreciatedCommandsFound) {
+			addLogEntry("DEPRECIATION WARNING: Depreciated commands will be removed in a future release.");
+			addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
 		}
 	}
+	
+	// Display the applicable application configuration
+	void displayApplicationConfiguration() {
+		if (getValueBool("display_running_config")) {
+			addLogEntry("--------------- Application Runtime Configuration ---------------");
+		}
+		
+		// Display application version
+		addLogEntry("onedrive version                             = " ~ applicationVersion);
+		
+		// Display all of the pertinent configuration options
+		addLogEntry("Config path                                  = " ~ configDirName);
+		// Does a config file exist or are we using application defaults
+		addLogEntry("Config file found in config path             = " ~ to!string(exists(applicableConfigFilePath)));
+		
+		// Is config option drive_id configured?
+		addLogEntry("Config option 'drive_id'                     = " ~ getValueString("drive_id"));
+		
+		// Config Options as per 'config' file
+		addLogEntry("Config option 'sync_dir'                     = " ~ getValueString("sync_dir"));
+		
+		// logging and notifications
+		addLogEntry("Config option 'enable_logging'               = " ~ to!string(getValueBool("enable_logging")));
+		addLogEntry("Config option 'log_dir'                      = " ~ getValueString("log_dir"));
+		addLogEntry("Config option 'disable_notifications'        = " ~ to!string(getValueBool("disable_notifications")));
+		
+		// skip files and directory and 'matching' policy
+		addLogEntry("Config option 'skip_dir'                     = " ~ getValueString("skip_dir"));
+		addLogEntry("Config option 'skip_dir_strict_match'        = " ~ to!string(getValueBool("skip_dir_strict_match")));
+		addLogEntry("Config option 'skip_file'                    = " ~ getValueString("skip_file"));
+		addLogEntry("Config option 'skip_dotfiles'                = " ~ to!string(getValueBool("skip_dotfiles")));
+		addLogEntry("Config option 'skip_symlinks'                = " ~ to!string(getValueBool("skip_symlinks")));
+		
+		// --monitor sync process options
+		addLogEntry("Config option 'monitor_interval'             = " ~ to!string(getValueLong("monitor_interval")));
+		addLogEntry("Config option 'monitor_log_frequency'        = " ~ to!string(getValueLong("monitor_log_frequency")));
+		addLogEntry("Config option 'monitor_fullscan_frequency'   = " ~ to!string(getValueLong("monitor_fullscan_frequency")));
+		
+		// sync process and method
+		addLogEntry("Config option 'read_only_auth_scope'         = " ~ to!string(getValueBool("read_only_auth_scope")));
+		addLogEntry("Config option 'dry_run'                      = " ~ to!string(getValueBool("dry_run")));
+		addLogEntry("Config option 'upload_only'                  = " ~ to!string(getValueBool("upload_only")));
+		addLogEntry("Config option 'download_only'                = " ~ to!string(getValueBool("download_only")));
+		addLogEntry("Config option 'local_first'                  = " ~ to!string(getValueBool("local_first")));
+		addLogEntry("Config option 'check_nosync'                 = " ~ to!string(getValueBool("check_nosync")));
+		addLogEntry("Config option 'check_nomount'                = " ~ to!string(getValueBool("check_nomount")));
+		addLogEntry("Config option 'resync'                       = " ~ to!string(getValueBool("resync")));
+		addLogEntry("Config option 'resync_auth'                  = " ~ to!string(getValueBool("resync_auth")));
+		addLogEntry("Config option 'cleanup_local_files'          = " ~ to!string(getValueBool("cleanup_local_files")));
 
-	long getValueLong(string key)
-	{
-		auto p = key in longValues;
-		if (p) {
-			return *p;
+		// data integrity
+		addLogEntry("Config option 'classify_as_big_delete'       = " ~ to!string(getValueLong("classify_as_big_delete")));
+		addLogEntry("Config option 'disable_upload_validation'    = " ~ to!string(getValueBool("disable_upload_validation")));
+		addLogEntry("Config option 'disable_download_validation'  = " ~ to!string(getValueBool("disable_download_validation")));
+		addLogEntry("Config option 'bypass_data_preservation'     = " ~ to!string(getValueBool("bypass_data_preservation")));
+		addLogEntry("Config option 'no_remote_delete'             = " ~ to!string(getValueBool("no_remote_delete")));
+		addLogEntry("Config option 'remove_source_files'          = " ~ to!string(getValueBool("remove_source_files")));
+		addLogEntry("Config option 'sync_dir_permissions'         = " ~ to!string(getValueLong("sync_dir_permissions")));
+		addLogEntry("Config option 'sync_file_permissions'        = " ~ to!string(getValueLong("sync_file_permissions")));
+		addLogEntry("Config option 'space_reservation'            = " ~ to!string(getValueLong("space_reservation")));
+		
+		// curl operations
+		addLogEntry("Config option 'application_id'               = " ~ getValueString("application_id"));
+		addLogEntry("Config option 'azure_ad_endpoint'            = " ~ getValueString("azure_ad_endpoint"));
+		addLogEntry("Config option 'azure_tenant_id'              = " ~ getValueString("azure_tenant_id"));
+		addLogEntry("Config option 'user_agent'                   = " ~ getValueString("user_agent"));
+		addLogEntry("Config option 'force_http_11'                = " ~ to!string(getValueBool("force_http_11")));
+		addLogEntry("Config option 'debug_https'                  = " ~ to!string(getValueBool("debug_https")));
+		addLogEntry("Config option 'rate_limit'                   = " ~ to!string(getValueLong("rate_limit")));
+		addLogEntry("Config option 'operation_timeout'            = " ~ to!string(getValueLong("operation_timeout")));
+		addLogEntry("Config option 'dns_timeout'                  = " ~ to!string(getValueLong("dns_timeout")));
+		addLogEntry("Config option 'connect_timeout'              = " ~ to!string(getValueLong("connect_timeout")));
+		addLogEntry("Config option 'data_timeout'                 = " ~ to!string(getValueLong("data_timeout")));
+		addLogEntry("Config option 'ip_protocol_version'          = " ~ to!string(getValueLong("ip_protocol_version")));
+		
+		// Is sync_list configured ?
+		if (exists(syncListFilePath)){
+			addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
+			addLogEntry("Selective sync 'sync_list' configured        = true");
+			addLogEntry("sync_list config option 'sync_root_files'    = " ~ to!string(getValueBool("sync_root_files")));
+			addLogEntry("sync_list contents:");
+			// Output the sync_list contents
+			auto syncListFile = File(syncListFilePath, "r");
+			auto range = syncListFile.byLine();
+			foreach (line; range)
+			{
+				addLogEntry(to!string(line));
+			}
 		} else {
-			throw new Exception("Missing config value: " ~ key);
+			addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
+			addLogEntry("Selective sync 'sync_list' configured        = false");
+		}
+		
+		// Is sync_business_shared_items enabled and configured ?
+		addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
+		addLogEntry("Config option 'sync_business_shared_items'   = " ~ to!string(getValueBool("sync_business_shared_items")));
+		
+		if (exists(businessSharedItemsFilePath)){
+			addLogEntry("Selective Business Shared Items configured   = true");
+			addLogEntry("sync_business_shared_items contents:");
+			// Output the sync_business_shared_items contents
+			auto businessSharedItemsFileList = File(businessSharedItemsFilePath, "r");
+			auto range = businessSharedItemsFileList.byLine();
+			foreach (line; range)
+			{
+				addLogEntry(to!string(line));
+			}
+		} else {
+			addLogEntry("Selective Business Shared Items configured   = false");
+		}
+		
+		// Are webhooks enabled?
+		addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
+		addLogEntry("Config option 'webhook_enabled'              = " ~ to!string(getValueBool("webhook_enabled")));
+		if (getValueBool("webhook_enabled")) {
+			addLogEntry("Config option 'webhook_public_url'           = " ~ getValueString("webhook_public_url"));
+			addLogEntry("Config option 'webhook_listening_host'       = " ~ getValueString("webhook_listening_host"));
+			addLogEntry("Config option 'webhook_listening_port'       = " ~ to!string(getValueLong("webhook_listening_port")));
+			addLogEntry("Config option 'webhook_expiration_interval'  = " ~ to!string(getValueLong("webhook_expiration_interval")));
+			addLogEntry("Config option 'webhook_renewal_interval'     = " ~ to!string(getValueLong("webhook_renewal_interval")));
+			addLogEntry("Config option 'webhook_retry_interval'       = " ~ to!string(getValueLong("webhook_retry_interval")));
+		}
+		
+		if (getValueBool("display_running_config")) {
+			addLogEntry("-----------------------------------------------------------------");
 		}
 	}
-
-	bool getValueBool(string key)
-	{
-		auto p = key in boolValues;
-		if (p) {
-			return *p;
+	
+	// Prompt the user to accept the risk of using --resync
+	bool displayResyncRiskForAcceptance() {
+		// what is the user risk acceptance?
+		bool userRiskAcceptance = false;
+		
+		// Did the user use --resync-auth or 'resync_auth' in the config file to negate presenting this message?
+		if (!getValueBool("resync_auth")) {
+			// need to prompt user
+			char response;
+			
+			// --resync warning message
+			addLogEntry("", ["consoleOnly"]); // new line, console only
+			addLogEntry("The usage of --resync will delete your local 'onedrive' client state, thus no record of your current 'sync status' will exist.", ["consoleOnly"]);
+			addLogEntry("This has the potential to overwrite local versions of files with perhaps older versions of documents downloaded from OneDrive, resulting in local data loss.", ["consoleOnly"]);
+			addLogEntry("If in doubt, backup your local data before using --resync", ["consoleOnly"]);
+			addLogEntry("", ["consoleOnly"]); // new line, console only
+			addLogEntry("Are you sure you wish to proceed with --resync? [Y/N] ", ["consoleOnlyNoNewLine"]);
+						
+			try {
+				// Attempt to read user response
+				string input = readln().strip;
+				if (input.length > 0) {
+					response = std.ascii.toUpper(input[0]);
+				}
+			} catch (std.format.FormatException e) {
+				userRiskAcceptance = false;
+				// Caught an error
+				return EXIT_FAILURE;
+			}
+			
+			// What did the user enter?
+			addLogEntry("--resync warning User Response Entered: " ~ to!string(response), ["debug"]);
+			
+			// Evaluate user repsonse
+			if ((to!string(response) == "y") || (to!string(response) == "Y")) {
+				// User has accepted --resync risk to proceed
+				userRiskAcceptance = true;
+				// Are you sure you wish .. does not use writeln();
+				write("\n");
+			}
 		} else {
-			throw new Exception("Missing config value: " ~ key);
+			// resync_auth is true
+			userRiskAcceptance = true;
 		}
+		
+		// Return the --resync acceptance or not
+		return userRiskAcceptance;
 	}
-
-	void setValueBool(string key, bool value)
-	{
-		boolValues[key] = value;
-	}
-
-	void setValueString(string key, string value)
-	{
-		stringValues[key] = value;
-	}
-
-	void setValueLong(string key, long value)
-	{
-		longValues[key] = value;
-	}
-
-	// load a configuration file
-	private bool load(string filename)
-	{
-		// configure function variables
+	
+	// Prompt the user to accept the risk of using --force-sync
+	bool displayForceSyncRiskForAcceptance() {
+		// what is the user risk acceptance?
+		bool userRiskAcceptance = false;
+		
+		// need to prompt user
+		char response;
+		
+		// --force-sync warning message
+		addLogEntry("", ["consoleOnly"]); // new line, console only
+		addLogEntry("The use of --force-sync will reconfigure the application to use defaults. This may have untold and unknown future impacts.", ["consoleOnly"]);
+		addLogEntry("By proceeding in using this option you accept any impacts including any data loss that may occur as a result of using --force-sync.", ["consoleOnly"]);
+		addLogEntry("", ["consoleOnly"]); // new line, console only
+		addLogEntry("Are you sure you wish to proceed with --force-sync [Y/N] ", ["consoleOnlyNoNewLine"]);
+				
 		try {
-			readText(filename);
-		} catch (std.file.FileException e) {
-			// Unable to access required file
-			log.error("ERROR: Unable to access ", e.msg);
-			// Use exit scopes to shutdown API
-			return false;
+			// Attempt to read user response
+			string input = readln().strip;
+			if (input.length > 0) {
+				response = std.ascii.toUpper(input[0]);
+			}
+		} catch (std.format.FormatException e) {
+			userRiskAcceptance = false;
+			// Caught an error
+			return EXIT_FAILURE;
 		}
 		
-		// We were able to readText the config file - so, we should be able to open and read it
-		auto file = File(filename, "r");
-		string lineBuffer;
+		// What did the user enter?
+		addLogEntry("--force-sync warning User Response Entered: " ~ to!string(response), ["debug"]);
 		
-		// configure scopes
-		// - failure
-		scope(failure) {
-			// close file if open
-			if (file.isOpen()){
-				// close open file
-				file.close();
-			}
+		// Evaluate user repsonse
+		if ((to!string(response) == "y") || (to!string(response) == "Y")) {
+			// User has accepted --force-sync risk to proceed
+			userRiskAcceptance = true;
+			// Are you sure you wish .. does not use writeln();
+			write("\n");
 		}
-		// - exit
-		scope(exit) {
-			// close file if open
-			if (file.isOpen()){
-				// close open file
-				file.close();
-			}
+		
+		// Return the --resync acceptance or not
+		return userRiskAcceptance;
+	}
+	
+	// Check the application configuration for any changes that need to trigger a --resync
+	// This function is only called if --resync is not present
+	bool applicationChangeWhereResyncRequired() {
+		// Default is that no resync is required
+		bool resyncRequired = false;
+		
+		// Configuration File Flags
+		bool configFileOptionsDifferent = false;
+		bool syncListFileDifferent = false;
+		bool syncDirDifferent = false;
+		bool skipFileDifferent = false;
+		bool skipDirDifferent = false;
+		bool skipDotFilesDifferent = false;
+		bool skipSymbolicLinksDifferent = false;
+		bool driveIdDifferent = false;
+		bool syncBusinessSharedItemsDifferent = false;
+		bool businessSharedItemsFileDifferent = false;
+		
+		// Create the required initial hash files
+		createRequiredInitialConfigurationHashFiles();
+		
+		// Read in the existing hash file values
+		readExistingConfigurationHashFiles();
+		
+		// Was the 'sync_list' file updated?
+		if (currentSyncListHash != previousSyncListHash) {
+			// Debugging output to assist what changed
+			addLogEntry("sync_list file has been updated, --resync needed", ["debug"]);
+			syncListFileDifferent = true;
 		}
-
-		// read file line by line
-		auto range = file.byLine();
-		foreach (line; range) {
-			lineBuffer = stripLeft(line).to!string;
-			if (lineBuffer.length == 0 || lineBuffer[0] == ';' || lineBuffer[0] == '#') continue;
-			auto c = lineBuffer.matchFirst(configRegex);
-			if (!c.empty) {
-				c.popFront(); // skip the whole match
-				string key = c.front.dup;
-				auto p = key in boolValues;
-				if (p) {
-					c.popFront();
-					// only accept "true" as true value. TODO Should we support other formats?
-					setValueBool(key, c.front.dup == "true" ? true : false);
-				} else {
-					auto pp = key in stringValues;
-					if (pp) {
-						c.popFront();
-						setValueString(key, c.front.dup);
-						// detect need for --resync for these:
-						//  --syncdir ARG
-						//  --skip-file ARG
-						//  --skip-dir ARG
-						if (key == "sync_dir") configFileSyncDir = c.front.dup;
-						if (key == "skip_file") {
-							// Handle multiple entries of skip_file
-							if (configFileSkipFile.empty) {
-								// currently no entry exists
-								configFileSkipFile = c.front.dup;
-							} else {
-								// add to existing entry
-								configFileSkipFile = configFileSkipFile ~ "|" ~ to!string(c.front.dup);
-								setValueString("skip_file", configFileSkipFile);
-							}
-						}
-						if (key == "skip_dir") {
-							// Handle multiple entries of skip_dir
-							if (configFileSkipDir.empty) {
-								// currently no entry exists
-								configFileSkipDir = c.front.dup;
-							} else {
-								// add to existing entry
-								configFileSkipDir = configFileSkipDir ~ "|" ~ to!string(c.front.dup);
-								setValueString("skip_dir", configFileSkipDir);
-							}
-						}
-						// --single-directory Strip quotation marks from path 
-						// This is an issue when using ONEDRIVE_SINGLE_DIRECTORY with Docker
-						if (key == "single_directory") {
-							// Strip quotation marks from provided path
-							string configSingleDirectory = strip(to!string(c.front.dup), "\"");
-							setValueString("single_directory", configSingleDirectory);
-						}
-						// Azure AD Configuration
-						if (key == "azure_ad_endpoint") {
-							string azureConfigValue = c.front.dup;
-							switch(azureConfigValue) {
-								case "":
-									log.log("Using config option for Global Azure AD Endpoints");
-									break;
-								case "USL4":
-									log.log("Using config option for Azure AD for US Government Endpoints");
-									break;
-								case "USL5":
-									log.log("Using config option for Azure AD for US Government Endpoints (DOD)");
-									break;
-								case "DE":
-									log.log("Using config option for Azure AD Germany");
-									break;
-								case "CN":
-									log.log("Using config option for Azure AD China operated by 21Vianet");
-									break;
-								// Default - all other entries
-								default:
-									log.log("Unknown Azure AD Endpoint - using Global Azure AD Endpoints");
-							}
-						}
-					} else {
-						auto ppp = key in longValues;
-						if (ppp) {
+		
+		// Was the 'business_shared_items' file updated?
+		if (currentBusinessSharedItemsHash != previousBusinessSharedItemsHash) {
+			// Debugging output to assist what changed
+			addLogEntry("business_shared_folders file has been updated, --resync needed", ["debug"]);
+			businessSharedItemsFileDifferent = true;
+		}
+		
+		// Was the 'config' file updated between last execution and this execution?
+		if (currentConfigHash != previousConfigHash) {
+			// config file was updated, however we only want to trigger a --resync requirement if sync_dir, skip_dir, skip_file or drive_id was modified
+			addLogEntry("Application configuration file has been updated, checking if --resync needed");
+			addLogEntry("Using this configBackupFile: " ~ configBackupFile, ["debug"]);
+			
+			if (exists(configBackupFile)) {
+				// check backup config what has changed for these configuration options if anything
+				// # drive_id = ""
+				// # sync_dir = "~/OneDrive"
+				// # skip_file = "~*|.~*|*.tmp|*.swp|*.partial"
+				// # skip_dir = ""
+				// # skip_dotfiles = ""
+				// # skip_symlinks = ""
+				// # sync_business_shared_items  = ""
+				string[string] backupConfigStringValues;
+				backupConfigStringValues["drive_id"] = "";
+				backupConfigStringValues["sync_dir"] = "";
+				backupConfigStringValues["skip_file"] = "";
+				backupConfigStringValues["skip_dir"] = "";
+				backupConfigStringValues["skip_dotfiles"] = "";
+				backupConfigStringValues["skip_symlinks"] = "";
+				backupConfigStringValues["sync_business_shared_items"] = "";
+				
+				// bool flags to trigger if the entries that trigger a --resync were found in the backup config file
+				// if these were not in the backup file, they may have been added ... thus new, thus we need to double check the existing
+				// config file to see if this was a newly added config option
+				bool drive_id_present = false;
+				bool sync_dir_present = false;
+				bool skip_file_present = false;
+				bool skip_dir_present = false;
+				bool skip_dotfiles_present = false;
+				bool skip_symlinks_present = false;
+				bool sync_business_shared_items_present = false;
+				
+				// Common debug message if an element is different
+				string configOptionModifiedMessage = " was modified since the last time the application was successfully run, --resync required";
+				
+				auto configBackupFileHandle = File(configBackupFile, "r");
+				string lineBuffer;
+				
+				// read configBackupFile line by line
+				auto range = configBackupFileHandle.byLine();
+				// for each line
+				foreach (line; range) {
+					addLogEntry("Backup Config Line: " ~ lineBuffer, ["debug"]);
+					
+					lineBuffer = stripLeft(line).to!string;
+					if (lineBuffer.length == 0 || lineBuffer[0] == ';' || lineBuffer[0] == '#') continue;
+					auto c = lineBuffer.matchFirst(configRegex);
+					if (!c.empty) {
+						c.popFront(); // skip the whole match
+						string key = c.front.dup;
+						addLogEntry("Backup Config Key: " ~ key, ["debug"]);
+						
+						auto p = key in backupConfigStringValues;
+						if (p) {
 							c.popFront();
-							setValueLong(key, to!long(c.front.dup));
-							// if key is space_reservation we have to calculate MB -> bytes
-							if (key == "space_reservation") {
-								// temp value
-								ulong tempValue = to!long(c.front.dup);
-								// a value of 0 needs to be made at least 1MB .. 
-								if (tempValue == 0) {
-									tempValue = 1;
+							// compare this key
+							if (key == "drive_id") {
+								drive_id_present = true;
+								if (c.front.dup != getValueString("drive_id")) {
+									addLogEntry(key ~ configOptionModifiedMessage, ["debug"]);
+									configFileOptionsDifferent = true;
 								}
-								setValueLong("space_reservation", to!long(tempValue * 2^^20));
 							}
-						} else {
-							log.log("Unknown key in config file: ", key);
-							return false;
+							
+							if (key == "sync_dir") {
+								sync_dir_present = true;
+								if (c.front.dup != getValueString("sync_dir")) {
+									addLogEntry(key ~ configOptionModifiedMessage, ["debug"]);
+									configFileOptionsDifferent = true;
+								}
+							}
+							
+							if (key == "skip_file") {
+								skip_file_present = true;
+								string computedBackupSkipFile = defaultSkipFile ~ "|" ~ to!string(c.front.dup);
+								if (computedBackupSkipFile != getValueString("skip_file")) {
+									addLogEntry(key ~ configOptionModifiedMessage, ["debug"]);
+									configFileOptionsDifferent = true;
+								}
+							}
+							
+							if (key == "skip_dir") {
+								skip_dir_present = true;
+								if (c.front.dup != getValueString("skip_dir")) {
+									addLogEntry(key ~ configOptionModifiedMessage, ["debug"]);
+									configFileOptionsDifferent = true;
+								}
+							}
+							
+							if (key == "skip_dotfiles") {
+								skip_dotfiles_present = true;
+								if (c.front.dup != to!string(getValueBool("skip_dotfiles"))) {
+									addLogEntry(key ~ configOptionModifiedMessage, ["debug"]);
+									configFileOptionsDifferent = true;
+								}
+							}
+							
+							if (key == "skip_symlinks") {
+								skip_symlinks_present = true;
+								if (c.front.dup != to!string(getValueBool("skip_symlinks"))) {
+									addLogEntry(key ~ configOptionModifiedMessage, ["debug"]);
+									configFileOptionsDifferent = true;
+								}
+							}
+							
+							if (key == "sync_business_shared_items") {
+								sync_business_shared_items_present = true;
+								if (c.front.dup != to!string(getValueBool("sync_business_shared_items"))) {
+									addLogEntry(key ~ configOptionModifiedMessage, ["debug"]);
+									configFileOptionsDifferent = true;
+								}
+							}
 						}
 					}
 				}
+				
+				// close file if open
+				if (configBackupFileHandle.isOpen()) {
+					// close open file
+					configBackupFileHandle.close();
+				}
+				
+				// Were any of the items that trigger a --resync not in the existing backup 'config' file .. thus newly added?
+				if ((!drive_id_present) || (!sync_dir_present) || (! skip_file_present) || (!skip_dir_present) || (!skip_dotfiles_present) || (!skip_symlinks_present)) {
+					addLogEntry("drive_id present in config backup:                   " ~ drive_id_present, ["debug"]);
+					addLogEntry("sync_dir present in config backup:                   " ~ sync_dir_present, ["debug"]);
+					addLogEntry("skip_file present in config backup:                  " ~ skip_file_present, ["debug"]);
+					addLogEntry("skip_dir present in config backup:                   " ~ skip_dir_present, ["debug"]);
+					addLogEntry("skip_dotfiles present in config backup:              " ~ skip_dotfiles_present, ["debug"]);
+					addLogEntry("skip_symlinks present in config backup:              " ~ skip_symlinks_present, ["debug"]);
+					addLogEntry("sync_business_shared_items present in config backup: " ~ sync_business_shared_items_present, ["debug"]);
+										
+					if ((!drive_id_present) && (configFileDriveId != "")) {
+						addLogEntry("drive_id newly added ... --resync needed");
+						configFileOptionsDifferent = true;
+						driveIdDifferent = true;
+					}
+					
+					if ((!sync_dir_present) && (configFileSyncDir != defaultSyncDir)) {
+						addLogEntry("sync_dir newly added ... --resync needed");
+						configFileOptionsDifferent = true;
+						syncDirDifferent = true;
+					}
+					
+					if ((!skip_file_present) && (configFileSkipFile != defaultSkipFile)) {
+						addLogEntry("skip_file newly added ... --resync needed");
+						configFileOptionsDifferent = true;
+						skipFileDifferent = true;
+					}
+					
+					if ((!skip_dir_present) && (configFileSkipDir != "")) {
+						addLogEntry("skip_dir newly added ... --resync needed");
+						configFileOptionsDifferent = true;
+						skipFileDifferent = true;
+					}
+					
+					if ((!skip_dotfiles_present) && (configFileSkipDotfiles)) {
+						addLogEntry("skip_dotfiles newly added ... --resync needed");
+						configFileOptionsDifferent = true;
+						skipDotFilesDifferent = true;
+					}
+					
+					if ((!skip_symlinks_present) && (configFileSkipSymbolicLinks)) {
+						addLogEntry("skip_symlinks newly added ... --resync needed");
+						configFileOptionsDifferent = true;
+						skipSymbolicLinksDifferent = true;
+					}
+					
+					if ((!sync_business_shared_items_present) && (configFileSyncBusinessSharedItems)) {
+						addLogEntry("sync_business_shared_items newly added ... --resync needed");
+						configFileOptionsDifferent = true;
+						syncBusinessSharedItemsDifferent = true;
+					}
+				}
+				
+				object.destroy(configBackupFileHandle);
+				object.destroy(range);
+				object.destroy(lineBuffer);
+				
 			} else {
-				log.log("Malformed config line: ", lineBuffer);
-				return false;
+				// no backup to check
+				addLogEntry("WARNING: no backup config file was found, unable to validate if any changes made");
 			}
 		}
-		return true;
-	}
+		
+		// config file set options can be changed via CLI input, specifically these will impact sync and a --resync will be needed:
+		//  --syncdir ARG
+		//  --skip-file ARG
+		//  --skip-dir ARG
+		//  --skip-dot-files
+		//  --skip-symlinks
+		
+		if (exists(applicableConfigFilePath)) {
+			// config file exists
+			// was the sync_dir updated by CLI?
+			if (configFileSyncDir != "") {
+				// sync_dir was set in config file
+				if (configFileSyncDir != getValueString("sync_dir")) {
+					// config file was set and CLI input changed this
+					
+					// Is this potentially running as a Docker container?
+					if (entrypointExists) {
+						// entrypoint.sh exists
+						addLogEntry("sync_dir: CLI override of config file option, however entrypoint.sh exists, thus most likely first run of Docker container", ["debug"]);
+					} else {
+						// entrypoint.sh does not exist
+						addLogEntry("sync_dir: CLI override of config file option, --resync needed", ["debug"]);
+						syncDirDifferent = true;
+					}
+				}
+			}
+			
+			// was the skip_file updated by CLI?
+			if (configFileSkipFile != "") {
+				// skip_file was set in config file
+				if (configFileSkipFile != getValueString("skip_file")) {
+					// config file was set and CLI input changed this
+					addLogEntry("skip_file: CLI override of config file option, --resync needed", ["debug"]);
+					skipFileDifferent = true;
+				}
+			}
 
-	void configureRequiredDirectoryPermisions() {
-		// return the directory permission mode required
-		// - return octal!defaultDirectoryPermissionMode; ... cant be used .. which is odd
-		// Error: variable defaultDirectoryPermissionMode cannot be read at compile time
-		if (getValueLong("sync_dir_permissions") != defaultDirectoryPermissionMode) {
-			// return user configured permissions as octal integer
-			string valueToConvert = to!string(getValueLong("sync_dir_permissions"));
-			auto convertedValue = parse!long(valueToConvert, 8);
-			configuredDirectoryPermissionMode = to!int(convertedValue);
-		} else {
-			// return default as octal integer
-			string valueToConvert = to!string(defaultDirectoryPermissionMode);
-			auto convertedValue = parse!long(valueToConvert, 8);
-			configuredDirectoryPermissionMode = to!int(convertedValue);
+			// was the skip_dir updated by CLI?
+			if (configFileSkipDir != "") {
+				// skip_dir was set in config file
+				if (configFileSkipDir != getValueString("skip_dir")) {
+					// config file was set and CLI input changed this
+					addLogEntry("skip_dir: CLI override of config file option, --resync needed", ["debug"]);
+					skipDirDifferent = true;
+				}
+			}
+			
+			// was skip_dotfiles updated by --skip-dot-files ?
+			if (!configFileSkipDotfiles) {
+				// was not set in config file
+				if (getValueBool("skip_dotfiles")) {
+					// --skip-dot-files passed in
+					addLogEntry("skip_dotfiles: CLI override of config file option, --resync needed", ["debug"]);
+					skipDotFilesDifferent = true;
+				}
+			}
+			
+			// was skip_symlinks updated by --skip-symlinks ?
+			if (!configFileSkipSymbolicLinks) {
+				// was not set in config file
+				if (getValueBool("skip_symlinks")) {
+					// --skip-symlinks passed in
+					addLogEntry("skip_symlinks: CLI override of config file option, --resync needed", ["debug"]);
+					skipSymbolicLinksDifferent = true;
+				}
+			}
 		}
-	}
-
-	void configureRequiredFilePermisions() {
-		// return the file permission mode required
-		// - return octal!defaultFilePermissionMode; ... cant be used .. which is odd
-		// Error: variable defaultFilePermissionMode cannot be read at compile time
-		if (getValueLong("sync_file_permissions") != defaultFilePermissionMode) {
-			// return user configured permissions as octal integer
-			string valueToConvert = to!string(getValueLong("sync_file_permissions"));
-			auto convertedValue = parse!long(valueToConvert, 8);
-			configuredFilePermissionMode = to!int(convertedValue);
-		} else {
-			// return default as octal integer
-			string valueToConvert = to!string(defaultFilePermissionMode);
-			auto convertedValue = parse!long(valueToConvert, 8);
-			configuredFilePermissionMode = to!int(convertedValue);
+		
+		// Did any of the config files or CLI options trigger a --resync requirement?
+		addLogEntry("configFileOptionsDifferent:       " ~ to!string(configFileOptionsDifferent), ["debug"]);
+		
+		// Options
+		addLogEntry("driveIdDifferent:                 " ~ to!string(driveIdDifferent), ["debug"]);
+		addLogEntry("syncDirDifferent:                 " ~ to!string(syncDirDifferent), ["debug"]);
+		addLogEntry("skipFileDifferent:                " ~ to!string(skipFileDifferent), ["debug"]);
+		addLogEntry("skipDirDifferent:                 " ~ to!string(skipDirDifferent), ["debug"]);
+		addLogEntry("skipDotFilesDifferent:            " ~ to!string(skipDotFilesDifferent), ["debug"]);
+		addLogEntry("skipSymbolicLinksDifferent:       " ~ to!string(skipSymbolicLinksDifferent), ["debug"]);
+		addLogEntry("syncBusinessSharedItemsDifferent: " ~ to!string(syncBusinessSharedItemsDifferent), ["debug"]);
+		
+		// Files with change
+		addLogEntry("syncListFileDifferent:            " ~ to!string(syncListFileDifferent), ["debug"]);
+		addLogEntry("businessSharedItemsFileDifferent: " ~ to!string(businessSharedItemsFileDifferent), ["debug"]);
+		
+		if ((configFileOptionsDifferent) || (syncListFileDifferent) || (businessSharedItemsFileDifferent) || (syncDirDifferent) || (skipFileDifferent) || (skipDirDifferent) || (driveIdDifferent) || (skipDotFilesDifferent) || (skipSymbolicLinksDifferent) || (syncBusinessSharedItemsDifferent) ) {
+			// set the flag
+			resyncRequired = true;
 		}
-	}
-
-	int returnRequiredDirectoryPermisions() {
-		// read the configuredDirectoryPermissionMode and return
-		if (configuredDirectoryPermissionMode == 0) {
-			// the configured value is zero, this means that directories would get
-			// values of d---------
-			configureRequiredDirectoryPermisions();
-		}
-		return configuredDirectoryPermissionMode;
-	}
-
-	int returnRequiredFilePermisions() {
-		// read the configuredFilePermissionMode and return
-		if (configuredFilePermissionMode == 0) {
-			// the configured value is zero
-			configureRequiredFilePermisions();
-		}
-		return configuredFilePermissionMode;
+		return resyncRequired;
 	}
 	
+	// Cleanup hash files that require to be cleaned up when a --resync is issued
+	void cleanupHashFilesDueToResync() {
+		if (!getValueBool("dry_run")) {
+			// cleanup hash files
+			addLogEntry("Cleaning up configuration hash files", ["debug"]);
+			safeRemove(configHashFile);
+			safeRemove(syncListHashFile);
+			safeRemove(businessSharedItemsHashFile);
+		} else {
+			// --dry-run scenario ... technically we should not be making any local file changes .......
+			addLogEntry("DRY RUN: Not removing hash files as --dry-run has been used");
+		}
+	}
+	
+	// For each of the config files, update the hash data in the hash files
+	void updateHashContentsForConfigFiles() {
+		// Are we in a --dry-run scenario?
+		if (!getValueBool("dry_run")) {
+			// Not a dry-run scenario, update the applicable files
+			// Update applicable 'config' files
+			if (exists(applicableConfigFilePath)) {
+				// Update the hash of the applicable config file
+				addLogEntry("Updating applicable config file hash", ["debug"]);
+				std.file.write(configHashFile, computeQuickXorHash(applicableConfigFilePath));
+				// Hash file should only be readable by the user who created it - 0600 permissions needed
+				configHashFile.setAttributes(convertedPermissionValue);
+			}
+			// Update 'sync_list' files
+			if (exists(syncListFilePath)) {
+				// update sync_list hash
+				addLogEntry("Updating sync_list hash", ["debug"]);
+				std.file.write(syncListHashFile, computeQuickXorHash(syncListFilePath));
+				// Hash file should only be readable by the user who created it - 0600 permissions needed
+				syncListHashFile.setAttributes(convertedPermissionValue);
+			}
+			
+			
+			// Update 'update business_shared_items' files
+			if (exists(businessSharedItemsFilePath)) {
+				// update business_shared_folders hash
+				addLogEntry("Updating business_shared_items hash", ["debug"]);
+				std.file.write(businessSharedItemsHashFile, computeQuickXorHash(businessSharedItemsFilePath));
+				// Hash file should only be readable by the user who created it - 0600 permissions needed
+				businessSharedItemsHashFile.setAttributes(convertedPermissionValue);
+			}
+			
+		} else {
+			// --dry-run scenario ... technically we should not be making any local file changes .......
+			addLogEntry("DRY RUN: Not updating hash files as --dry-run has been used");
+		}
+	}
+	
+	// Create any required hash files for files that help us determine if the configuration has changed since last run
+	void createRequiredInitialConfigurationHashFiles() {
+		// Does a 'config' file exist with a valid hash file
+		if (exists(applicableConfigFilePath)) {
+			if (!exists(configHashFile)) {
+				// no existing hash file exists
+				std.file.write(configHashFile, "initial-hash");
+				// Hash file should only be readable by the user who created it - 0600 permissions needed
+				configHashFile.setAttributes(convertedPermissionValue);
+			}
+			// Generate the runtime hash for the 'config' file
+			currentConfigHash = computeQuickXorHash(applicableConfigFilePath);
+		}
+		
+		// Does a 'sync_list' file exist with a valid hash file
+		if (exists(syncListFilePath)) {
+			if (!exists(syncListHashFile)) {
+				// no existing hash file exists
+				std.file.write(syncListHashFile, "initial-hash");
+				// Hash file should only be readable by the user who created it - 0600 permissions needed
+				syncListHashFile.setAttributes(convertedPermissionValue);
+			}
+			// Generate the runtime hash for the 'sync_list' file
+			currentSyncListHash = computeQuickXorHash(syncListFilePath);
+		}
+		
+		// Does a 'business_shared_items' file exist with a valid hash file
+		if (exists(businessSharedItemsFilePath)) {
+			if (!exists(businessSharedItemsHashFile)) {
+				// no existing hash file exists
+				std.file.write(businessSharedItemsHashFile, "initial-hash");
+				// Hash file should only be readable by the user who created it - 0600 permissions needed
+				businessSharedItemsHashFile.setAttributes(convertedPermissionValue);
+			}
+			// Generate the runtime hash for the 'sync_list' file
+			currentBusinessSharedItemsHash = computeQuickXorHash(businessSharedItemsFilePath);
+		}
+	}
+	
+	// Read in the text values of the previous configurations
+	int readExistingConfigurationHashFiles() {
+		if (exists(configHashFile)) {
+			try {
+				previousConfigHash = readText(configHashFile);
+			} catch (std.file.FileException e) {
+				// Unable to access required hash file
+				addLogEntry("ERROR: Unable to access " ~ e.msg);
+				// Use exit scopes to shutdown API
+				return EXIT_FAILURE;
+			}
+		}
+		
+		if (exists(syncListHashFile)) {
+			try {
+				previousSyncListHash = readText(syncListHashFile);
+			} catch (std.file.FileException e) {
+				// Unable to access required hash file
+				addLogEntry("ERROR: Unable to access " ~ e.msg);
+				// Use exit scopes to shutdown API
+				return EXIT_FAILURE;
+			}
+		}
+		if (exists(businessSharedItemsHashFile)) {
+			try {
+				previousBusinessSharedItemsHash = readText(businessSharedItemsHashFile);
+			} catch (std.file.FileException e) {
+				// Unable to access required hash file
+				addLogEntry("ERROR: Unable to access " ~ e.msg);
+				// Use exit scopes to shutdown API
+				return EXIT_FAILURE;
+			}
+		}
+		return 0;
+	}
+	
+	// Check for basic option conflicts - flags that should not be used together and/or flag combinations that conflict with each other
+	bool checkForBasicOptionConflicts() {
+	
+		bool operationalConflictDetected = false;
+		
+		// What are the permission that have been set for the application?
+		// These are relevant for:
+		// - The ~/OneDrive parent folder or 'sync_dir' configured item
+		// - Any new folder created under ~/OneDrive or 'sync_dir'
+		// - Any new file created under ~/OneDrive or 'sync_dir'
+		// valid permissions are 000 -> 777 - anything else is invalid
+		if ((getValueLong("sync_dir_permissions") < 0) || (getValueLong("sync_file_permissions") < 0) || (getValueLong("sync_dir_permissions") > 777) || (getValueLong("sync_file_permissions") > 777)) {
+			addLogEntry("ERROR: Invalid 'User|Group|Other' permissions set within config file. Please check your configuration");
+			operationalConflictDetected = true;
+		} else {
+			// Debug log output what permissions are being set to
+			addLogEntry("Configuring default new folder permissions as: " ~ to!string(getValueLong("sync_dir_permissions")), ["debug"]);
+			configureRequiredDirectoryPermisions();
+			addLogEntry("Configuring default new file permissions as: " ~ to!string(getValueLong("sync_file_permissions")), ["debug"]);
+			configureRequiredFilePermisions();
+		}
+		
+		// --upload-only and --download-only cannot be used together
+		if ((getValueBool("upload_only")) && (getValueBool("download_only"))) {
+			addLogEntry("ERROR: --upload-only and --download-only cannot be used together. Use one, not both at the same time");
+			operationalConflictDetected = true;
+		}
+		
+		// --sync and --monitor cannot be used together
+		if ((getValueBool("synchronize")) && (getValueBool("monitor"))) {
+			addLogEntry("ERROR: --sync and --monitor cannot be used together. Only use one of these options, not both at the same time");
+			operationalConflictDetected = true;
+		}
+		
+		// --no-remote-delete can ONLY be enabled when --upload-only is used
+		if ((getValueBool("no_remote_delete")) && (!getValueBool("upload_only"))) {
+			addLogEntry("ERROR: --no-remote-delete can only be used with --upload-only");
+			operationalConflictDetected = true;
+		}
+		
+		// --remove-source-files can ONLY be enabled when --upload-only is used
+		if ((getValueBool("remove_source_files")) && (!getValueBool("upload_only"))) {
+			addLogEntry("ERROR: --remove-source-files can only be used with --upload-only");
+			operationalConflictDetected = true;
+		}
+		
+		// --cleanup-local-files can ONLY be enabled when --download-only is used
+		if ((getValueBool("cleanup_local_files")) && (!getValueBool("download_only"))) {
+			addLogEntry("ERROR: --cleanup-local-files can only be used with --download-only");
+			operationalConflictDetected = true;
+		}
+		
+		// --list-shared-folders cannot be used with --resync and/or --resync-auth
+		if ((getValueBool("list_business_shared_items")) && ((getValueBool("resync")) || (getValueBool("resync_auth")))) {
+			addLogEntry("ERROR: --list-shared-folders cannot be used with --resync or --resync-auth");
+			operationalConflictDetected = true;
+		}
+		
+		// --display-sync-status cannot be used with --resync and/or --resync-auth
+		if ((getValueBool("display_sync_status")) && ((getValueBool("resync")) || (getValueBool("resync_auth")))) {
+			addLogEntry("ERROR: --display-sync-status cannot be used with --resync or --resync-auth");
+			operationalConflictDetected = true;
+		}
+		
+		// --modified-by cannot be used with --resync and/or --resync-auth
+		if ((!getValueString("modified_by").empty) && ((getValueBool("resync")) || (getValueBool("resync_auth")))) {
+			addLogEntry("ERROR: --modified-by cannot be used with --resync or --resync-auth");
+			operationalConflictDetected = true;
+		}
+		
+		// --get-file-link cannot be used with --resync and/or --resync-auth
+		if ((!getValueString("get_file_link").empty) && ((getValueBool("resync")) || (getValueBool("resync_auth")))) {
+			addLogEntry("ERROR: --get-file-link cannot be used with --resync or --resync-auth");
+			operationalConflictDetected = true;
+		}
+		
+		// --create-share-link cannot be used with --resync and/or --resync-auth
+		if ((!getValueString("create_share_link").empty) && ((getValueBool("resync")) || (getValueBool("resync_auth")))) {
+			addLogEntry("ERROR: --create-share-link cannot be used with --resync or --resync-auth");
+			
+			operationalConflictDetected = true;
+		}
+		
+		// --get-sharepoint-drive-id cannot be used with --resync and/or --resync-auth
+		if ((!getValueString("sharepoint_library_name").empty) && ((getValueBool("resync")) || (getValueBool("resync_auth")))) {
+			addLogEntry("ERROR: --get-sharepoint-drive-id cannot be used with --resync or --resync-auth");
+			operationalConflictDetected = true;
+		}
+		
+		// --monitor and --display-sync-status cannot be used together
+		if ((getValueBool("monitor")) && (getValueBool("display_sync_status"))) {
+			addLogEntry("ERROR: --monitor and --display-sync-status cannot be used together");
+			operationalConflictDetected = true;
+		}
+		
+		// --sync and and --display-sync-status cannot be used together
+		if ((getValueBool("synchronize")) && (getValueBool("display_sync_status"))) {
+			addLogEntry("ERROR: --sync and and --display-sync-status cannot be used together");
+			operationalConflictDetected = true;
+		}
+		
+		// --monitor and --display-quota cannot be used together
+		if ((getValueBool("monitor")) && (getValueBool("display_quota"))) {
+			addLogEntry("ERROR: --monitor and --display-quota cannot be used together");
+			operationalConflictDetected = true;
+		}
+		
+		// --sync and and --display-quota cannot be used together
+		if ((getValueBool("synchronize")) && (getValueBool("display_quota"))) {
+			addLogEntry("ERROR: --sync and and --display-quota cannot be used together");
+			operationalConflictDetected = true;
+		}
+				
+		// --force-sync can only be used when using --sync --single-directory
+		if (getValueBool("force_sync")) {
+		
+			bool conflict = false;
+			// Should not be used with --monitor
+			if (getValueBool("monitor")) conflict = true;
+			// single_directory must not be empty
+			if (getValueString("single_directory").empty) conflict = true;
+			if (conflict) {
+				addLogEntry("ERROR: --force-sync can only be used with --sync --single-directory");
+				operationalConflictDetected = true;
+			}
+		}
+		
+		// When using 'azure_ad_endpoint', 'azure_tenant_id' cannot be empty
+		if ((!getValueString("azure_ad_endpoint").empty) && (getValueString("azure_tenant_id").empty)) {
+			addLogEntry("ERROR: config option 'azure_tenant_id' cannot be empty when 'azure_ad_endpoint' is configured");
+			operationalConflictDetected = true;
+		}
+		
+		// When using --enable-logging the 'log_dir' cannot be empty
+		if ((getValueBool("enable_logging")) && (getValueString("log_dir").empty)) {
+			addLogEntry("ERROR: config option 'log_dir' cannot be empty when 'enable_logging' is configured");
+			operationalConflictDetected = true;
+		}
+		
+		// When using --syncdir, the value cannot be empty.
+		if (strip(getValueString("sync_dir")).empty) {
+			addLogEntry("ERROR: --syncdir value cannot be empty");
+			operationalConflictDetected = true;
+		}
+		
+		// --monitor and --create-directory cannot be used together
+		if ((getValueBool("monitor")) && (!getValueString("create_directory").empty)) {
+			addLogEntry("ERROR: --monitor and --create-directory cannot be used together");
+			operationalConflictDetected = true;
+		}
+		
+		// --sync and --create-directory cannot be used together
+		if ((getValueBool("synchronize")) && (!getValueString("create_directory").empty)) {
+			addLogEntry("ERROR: --sync and --create-directory cannot be used together");
+			operationalConflictDetected = true;
+		}
+		
+		// --monitor and --remove-directory cannot be used together
+		if ((getValueBool("monitor")) && (!getValueString("remove_directory").empty)) {
+			addLogEntry("ERROR: --monitor and --remove-directory cannot be used together");
+			operationalConflictDetected = true;
+		}
+		
+		// --sync and --remove-directory cannot be used together
+		if ((getValueBool("synchronize")) && (!getValueString("remove_directory").empty)) {
+			addLogEntry("ERROR: --sync and --remove-directory cannot be used together");
+			operationalConflictDetected = true;
+		}
+		
+		// --monitor and --source-directory cannot be used together
+		if ((getValueBool("monitor")) && (!getValueString("source_directory").empty)) {
+			addLogEntry("ERROR: --monitor and --source-directory cannot be used together");
+			operationalConflictDetected = true;
+		}
+		
+		// --sync and --source-directory cannot be used together
+		if ((getValueBool("synchronize")) && (!getValueString("source_directory").empty)) {
+			addLogEntry("ERROR: --sync and --source-directory cannot be used together");
+			operationalConflictDetected = true;
+		}
+		
+		// --monitor and --destination-directory cannot be used together
+		if ((getValueBool("monitor")) && (!getValueString("destination_directory").empty)) {
+			addLogEntry("ERROR: --monitor and --destination-directory cannot be used together");
+			operationalConflictDetected = true;
+		}
+		
+		// --sync and --destination-directory cannot be used together
+		if ((getValueBool("synchronize")) && (!getValueString("destination_directory").empty)) {
+			addLogEntry("ERROR: --sync and --destination-directory cannot be used together");
+			operationalConflictDetected = true;
+		}
+		
+		// --download-only and --local-first cannot be used together
+		if ((getValueBool("download_only")) && (getValueBool("local_first"))) {
+			addLogEntry("ERROR: --download-only cannot be used with --local-first");
+			operationalConflictDetected = true;
+		}
+				
+		// Return bool value indicating if we have an operational conflict
+		return operationalConflictDetected;
+	}
+	
+	// Reset skip_file and skip_dir to application defaults when --force-sync is used
 	void resetSkipToDefaults() {
-		// reset skip_file and skip_dir to application defaults
 		// skip_file
-		log.vdebug("original skip_file: ", getValueString("skip_file"));
-		log.vdebug("resetting skip_file");
+		addLogEntry("original skip_file: " ~ getValueString("skip_file"), ["debug"]);
+		addLogEntry("resetting skip_file to application defaults", ["debug"]);
 		setValueString("skip_file", defaultSkipFile);
-		log.vdebug("reset skip_file: ", getValueString("skip_file"));
+		addLogEntry("reset skip_file: " ~ getValueString("skip_file"), ["debug"]);
+		
 		// skip_dir
-		log.vdebug("original skip_dir: ", getValueString("skip_dir"));
-		log.vdebug("resetting skip_dir");
+		addLogEntry("original skip_dir: " ~ getValueString("skip_dir"), ["debug"]);
+		addLogEntry("resetting skip_dir to application defaults", ["debug"]);
 		setValueString("skip_dir", defaultSkipDir);
-		log.vdebug("reset skip_dir: ", getValueString("skip_dir"));
+		addLogEntry("reset skip_dir: " ~ getValueString("skip_dir"), ["debug"]);
+	}
+	
+	// Initialise the correct 'sync_dir' expanding any '~' if present
+	string initialiseRuntimeSyncDirectory() {
+	
+		string runtimeSyncDirectory;
+		
+		addLogEntry("sync_dir: Setting runtimeSyncDirectory from config value 'sync_dir'", ["debug"]);
+		
+		if (!shellEnvironmentSet){
+			addLogEntry("sync_dir: No SHELL or USER environment variable configuration detected", ["debug"]);
+			
+			// No shell or user set, so expandTilde() will fail - usually headless system running under init.d / systemd or potentially Docker
+			// Does the 'currently configured' sync_dir include a ~
+			if (canFind(getValueString("sync_dir"), "~")) {
+				// A ~ was found in sync_dir
+				addLogEntry("sync_dir: A '~' was found in 'sync_dir', using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set", ["debug"]);
+				runtimeSyncDirectory = buildNormalizedPath(buildPath(defaultHomePath, strip(getValueString("sync_dir"), "~")));
+			} else {
+				// No ~ found in sync_dir, use as is
+				addLogEntry("sync_dir: Using configured 'sync_dir' path as-is as no SHELL or USER environment variable configuration detected", ["debug"]);
+				runtimeSyncDirectory = getValueString("sync_dir");
+			}
+		} else {
+			// A shell and user environment variable is set, expand any ~ as this will be expanded correctly if present
+			if (canFind(getValueString("sync_dir"), "~")) {
+				addLogEntry("sync_dir: A '~' was found in the configured 'sync_dir', automatically expanding as SHELL and USER environment variable is set", ["debug"]);
+				runtimeSyncDirectory = expandTilde(getValueString("sync_dir"));
+			} else {
+				// No ~ found in sync_dir, does the path begin with a '/' ?
+				addLogEntry("sync_dir: Using configured 'sync_dir' path as-is as however SHELL or USER environment variable configuration detected - should be placed in USER home directory", ["debug"]);
+				if (!startsWith(getValueString("sync_dir"), "/")) {
+					addLogEntry("Configured 'sync_dir' does not start with a '/' or '~/' - adjusting configured 'sync_dir' to use User Home Directory as base for 'sync_dir' path", ["debug"]);
+					string updatedPathWithHome = "~/" ~ getValueString("sync_dir");
+					runtimeSyncDirectory = expandTilde(updatedPathWithHome);
+				} else {
+					addLogEntry("use 'sync_dir' as is - no touch", ["debug"]);
+					runtimeSyncDirectory = getValueString("sync_dir");
+				}
+			}
+		}
+		
+		// What will runtimeSyncDirectory be actually set to?
+		addLogEntry("sync_dir: runtimeSyncDirectory set to: " ~ runtimeSyncDirectory, ["debug"]);
+		
+		return runtimeSyncDirectory;
+	}
+	
+	// Initialise the correct 'log_dir' when application logging to a separate file is enabled with 'enable_logging' and expanding any '~' if present
+	string calculateLogDirectory() {
+		
+		string configuredLogDirPath;
+		
+		addLogEntry("log_dir: Setting runtime application log from config value 'log_dir'", ["debug"]);
+				
+		if (getValueString("log_dir") != defaultLogFileDir) {
+			// User modified 'log_dir' to be used with 'enable_logging'
+			// if 'log_dir' contains a '~' this needs to be expanded correctly
+			if (canFind(getValueString("log_dir"), "~")) {
+				// ~ needs to be expanded correctly
+				if (!shellEnvironmentSet) {
+					// No shell or user environment variable set, so expandTilde() will fail - usually headless system running under init.d / systemd or potentially Docker
+					addLogEntry("log_dir: A '~' was found in log_dir, using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set", ["debug"]);
+					configuredLogDirPath = buildNormalizedPath(buildPath(defaultHomePath, strip(getValueString("log_dir"), "~")));
+				} else {
+					// A shell and user environment variable is set, expand any ~ as this will be expanded correctly if present
+					addLogEntry("log_dir: A '~' was found in the configured 'log_dir', automatically expanding as SHELL and USER environment variable is set", ["debug"]);
+					configuredLogDirPath = expandTilde(getValueString("log_dir"));
+				}		
+			} else {
+				// '~' not found in log_dir entry, use as is
+				configuredLogDirPath = getValueString("log_dir");
+			}
+		} else {
+			// Default 'log_dir' to be used with 'enable_logging'
+			configuredLogDirPath = defaultLogFileDir;
+		}
+		
+		// Attempt to create 'configuredLogDirPath' otherwise we need to fall back to the users home directory
+		if (!exists(configuredLogDirPath)) {
+			// 'configuredLogDirPath' path does not exist - try and create it
+			try {
+				mkdirRecurse(configuredLogDirPath);
+			} catch (std.file.FileException e) {
+				// We got an error when attempting to create the directory ..
+				addLogEntry();
+				addLogEntry("ERROR: Unable to create " ~ configuredLogDirPath);
+				addLogEntry("ERROR: Please manually create '" ~ configuredLogDirPath ~ "' and set appropriate permissions to allow write access for your user to this location.");
+				addLogEntry("ERROR: The requested client activity log will instead be located in your users home directory");
+				addLogEntry();
+				
+				// Reconfigure 'configuredLogDirPath' to use environment.get("HOME") value, which we have already calculated
+				configuredLogDirPath = defaultHomePath;
+			}
+		}
+		
+		// Return the initialised application log path
+		return configuredLogDirPath;
+	}
+	
+	void setConfigLoggingLevels(bool verboseLoggingInput, bool debugLoggingInput, long verbosityCountInput) {
+		// set the appConfig logging values
+		verboseLogging = verboseLoggingInput;
+		debugLogging = debugLoggingInput;
+		verbosityCount = verbosityCountInput;
 	}
 }
 
-void outputLongHelp(Option[] opt)
-{
-	auto argsNeedingOptions = [
-		"--auth-files",
-		"--auth-response",
-		"--confdir",
-		"--create-directory",
-		"--create-share-link",
-		"--destination-directory",
-		"--get-file-link",
-		"--get-O365-drive-id",
-		"--log-dir",
-		"--min-notify-changes",
-		"--modified-by",
-		"--monitor-interval",
-		"--monitor-log-frequency",
-		"--monitor-fullscan-frequency",
-		"--operation-timeout",
-		"--remove-directory",
-		"--single-directory",
-		"--skip-dir",
-		"--skip-file",
-		"--skip-size",
-		"--source-directory",
-		"--space-reservation",
-		"--syncdir",
-		"--user-agent" ];
-	writeln(`OneDrive - a client for OneDrive Cloud Services
+// Output the full application help when --help is passed in
+void outputLongHelp(Option[] opt) {
+		auto argsNeedingOptions = [
+			"--auth-files",
+			"--auth-response",
+			"--confdir",
+			"--create-directory",
+			"--classify-as-big-delete",
+			"--create-share-link",
+			"--destination-directory",
+			"--get-file-link",
+			"--get-O365-drive-id",
+			"--log-dir",
+			"--min-notify-changes",
+			"--modified-by",
+			"--monitor-interval",
+			"--monitor-log-frequency",
+			"--monitor-fullscan-frequency",
+			"--remove-directory",
+			"--single-directory",
+			"--skip-dir",
+			"--skip-file",
+			"--skip-size",
+			"--source-directory",
+			"--space-reservation",
+			"--syncdir",
+			"--user-agent" ];
+		writeln(`onedrive - A client for the Microsoft OneDrive Cloud Service
 
-Usage:
-  onedrive [options] --synchronize
+  Usage:
+    onedrive [options] --sync
       Do a one time synchronization
-  onedrive [options] --monitor
+    onedrive [options] --monitor
       Monitor filesystem and sync regularly
-  onedrive [options] --display-config
+    onedrive [options] --display-config
       Display the currently used configuration
-  onedrive [options] --display-sync-status
+    onedrive [options] --display-sync-status
       Query OneDrive service and report on pending changes
-  onedrive -h | --help
+    onedrive -h | --help
       Show this help screen
-  onedrive --version
+    onedrive --version
       Show version
 
-Options:
-`);
-	foreach (it; opt.sort!("a.optLong < b.optLong")) {
-		writefln("  %s%s%s%s\n      %s",
-				it.optLong,
-				it.optShort == "" ? "" : " " ~ it.optShort,
-				argsNeedingOptions.canFind(it.optLong) ? " ARG" : "",
-				it.required ? " (required)" : "", it.help);
-	}
-}
-
-unittest
-{
-	auto cfg = new Config("");
-	cfg.load("config");
-	assert(cfg.getValueString("sync_dir") == "~/OneDrive");
+  Options:
+	`);
+		foreach (it; opt.sort!("a.optLong < b.optLong")) {
+			writefln("  %s%s%s%s\n      %s",
+					it.optLong,
+					it.optShort == "" ? "" : " " ~ it.optShort,
+					argsNeedingOptions.canFind(it.optLong) ? " ARG" : "",
+					it.required ? " (required)" : "", it.help);
+		}
 }

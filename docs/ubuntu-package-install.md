@@ -141,6 +141,7 @@ If required, review the table below based on your 'lsb_release' information to p
 | Debian 10                 | You must build from source or upgrade your Operating System to Debian 12 |
 | Debian 11                 | Use [Debian 11](#distribution-debian-11) instructions below |
 | Debian 12                 | Use [Debian 12](#distribution-debian-12) instructions below |
+| Debian Sid                | Refer to https://packages.debian.org/sid/onedrive for assistance |
 | Raspbian GNU/Linux 10     | You must build from source or upgrade your Operating System to Raspbian GNU/Linux 12 |
 | Raspbian GNU/Linux 11     | Use [Debian 11](#distribution-debian-11) instructions below |
 | Raspbian GNU/Linux 12     | Use [Debian 12](#distribution-debian-12) instructions below |
@@ -152,6 +153,11 @@ If required, review the table below based on your 'lsb_release' information to p
 | Ubuntu 22.10 / Kinetic    | Use [Ubuntu 22.10](#distribution-ubuntu-2210) instructions below |
 | Ubuntu 23.04 / Lunar      | Use [Ubuntu 23.04](#distribution-ubuntu-2304) instructions below |
 | Ubuntu 23.10 / Mantic     | Use [Ubuntu 23.10](#distribution-ubuntu-2310) instructions below |
+
+**Note:** If your Linux distribution and release is not in the table above, you have 2 options:
+
+1. Compile the application from source. Refer to install.md (Compilation & Installation) for assistance.
+2. Raise a support case with your Linux Distribution to provide you with an applicable package you can use.
 
 ## Distribution Package Install Instructions
 
