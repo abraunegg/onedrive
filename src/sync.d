@@ -4194,6 +4194,8 @@ class SyncEngine {
 		// Was the file found in the database?
 		if (!fileFoundInDB) {
 			// This is a new file as it is not in the database
+			// Log that the file has been added locally
+			addLogEntry("[M] New local file added: " ~ localFilePath, ["verbose"]);
 			// Scan the parent path for any new data, not just this this item
 			scanLocalFilesystemPathForNewData(dirName(localFilePath));
 		} else {
