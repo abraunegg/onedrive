@@ -149,9 +149,6 @@ class SyncEngine {
 	bool generateSimulatedDeltaResponse = false;
 	// Store the latest DeltaLink
 	string latestDeltaLink;
-
-	// cache
-	int[string] isDatabaseWalkVisited;
 	
 	// Configure this class instance
 	this(ApplicationConfig appConfig, ItemDatabase itemDB, ClientSideFiltering selectiveSync) {
@@ -2615,6 +2612,7 @@ class SyncEngine {
 	
 	// Perform a database integrity check - checking all the items that are in-sync at the moment, validating what we know should be on disk, to what is actually on disk
 	void performDatabaseConsistencyAndIntegrityCheck() {
+		
 		// Log what we are doing
 		if (!appConfig.surpressLoggingOutput) {
 			log.log("Performing a database consistency and integrity check on locally stored data ... ");
@@ -2627,15 +2625,13 @@ class SyncEngine {
 		} else {
 			consistencyCheckDriveIdsArray = driveIDsArray;
 		}
-
+		
 		// Create a new DB blank item
 		Item item;
 		// Use the array we populate, rather than selecting all distinct driveId's from the database
 		foreach (driveId; consistencyCheckDriveIdsArray) {
 			// Make the logging more accurate - we cant update driveId as this then breaks the below queries
 			log.vlog("Processing DB entries for this Drive ID: ", driveId);
-			// Clear visited items
-			isDatabaseWalkVisited = null;
 			
 			// What OneDrive API query do we use?
 			// - Are we running against a National Cloud Deployments that does not support /delta ?
@@ -2737,12 +2733,6 @@ class SyncEngine {
 			// use what was computed
 			logOutputPath = localFilePath;
 		}
-
-		if (logOutputPath in isDatabaseWalkVisited) {
-			log.vdebug("Skipped already processed item: ", logOutputPath);
-			return;
-		}
-		isDatabaseWalkVisited[logOutputPath] = 1;
 		
 		// Log what we are doing
 		log.vlog("Processing ", logOutputPath);
