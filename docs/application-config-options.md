@@ -613,14 +613,7 @@ Files can be skipped in the following fashion:
 *   Explicitly specify the filename only and skip every instance of this filename, eg: 'filename.ext'
 
 ```text
-# When changing a config option below, remove the '#' from the start of the line
-# For explanations of all config options below see docs/USAGE.md or the man page.
-#
-# sync_dir = "~/OneDrive"
 skip_file = "~*|/Documents/OneNote*|/Documents/config.xlaunch|myfile.ext|/Documents/keepass.kdbx"
-# monitor_interval = "300"
-# skip_dir = ""
-# log_dir = "/var/log/onedrive/"
 ```
 The 'skip_file' option can be specified multiple times within your config file, for example:
 ```text
