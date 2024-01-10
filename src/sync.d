@@ -4643,13 +4643,18 @@ class SyncEngine {
 			parentItem.driveId = appConfig.defaultDriveId;
 		}
 		
+		// Get the new file size
+		// Even if the permissions on the file are: -rw-------.  1 root root    8 Jan 11 09:42
+		// We can obtain the file size
+		thisFileSize = getSize(fileToUpload);
+		
 		// Can we read the file - as a permissions issue or actual file corruption will cause a failure
 		// Resolves: https://github.com/abraunegg/onedrive/issues/113
-		if (readLocalFile(fileToUpload)) {
+		// readLocalFile cannot 'read' 1 byte of data from a zero byte file size ..
+		if (readLocalFile(fileToUpload) || (thisFileSize == 0)) {
 			if (parentPathFoundInDB) {
 				// The local file can be read - so we can read it to attemtp to upload it in this thread
-				// Get the file size
-				thisFileSize = getSize(fileToUpload);
+				
 				// Does this file exceed the maximum filesize for OneDrive
 				// Resolves: https://github.com/skilion/onedrive/issues/121 , https://github.com/skilion/onedrive/issues/294 , https://github.com/skilion/onedrive/issues/329
 				if (thisFileSize <= maxUploadFileSize) {

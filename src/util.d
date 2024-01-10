@@ -268,7 +268,10 @@ bool readLocalFile(string path) {
 
         // Check if the read operation was successful
         if (data.length != 1) {
-            addLogEntry("Failed to read the required amount from the file: " ~ path);
+			// What is the file size?
+			if (getSize(path) != 0) {
+				addLogEntry("Failed to read the required amount from the file: " ~ path);
+			}
             return false;
         }
     } catch (std.file.FileException e) {
