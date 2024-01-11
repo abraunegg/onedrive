@@ -547,6 +547,11 @@ class ApplicationConfig {
 			}
 		}
 		
+		// What IP protocol is going to be used to access Microsoft OneDrive
+		if (getValueLong("ip_protocol_version") == 0) addLogEntry("Using IPv4 and IPv6 (if configured) to access Microsoft OneDrive");
+		if (getValueLong("ip_protocol_version") == 1) addLogEntry("Forcing client to use IPv4 connections only");
+		if (getValueLong("ip_protocol_version") == 2) addLogEntry("Forcing client to use IPv6 connections only");
+		
 		// return if the configuration was initialised
 		return configurationInitialised;
 	}
@@ -1633,7 +1638,7 @@ class ApplicationConfig {
 			addLogEntry("Using this configBackupFile: " ~ configBackupFile, ["debug"]);
 			
 			if (exists(configBackupFile)) {
-				// check backup config what has changed for these configuration options if anything
+				// Check backup config what has changed for these configuration options if anything
 				// # drive_id = ""
 				// # sync_dir = "~/OneDrive"
 				// # skip_file = "~*|.~*|*.tmp|*.swp|*.partial"
