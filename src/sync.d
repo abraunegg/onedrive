@@ -4196,8 +4196,7 @@ class SyncEngine {
 			// This is a new file as it is not in the database
 			// Log that the file has been added locally
 			addLogEntry("[M] New local file added: " ~ localFilePath, ["verbose"]);
-			// Scan the parent path for any new data, not just this this item
-			scanLocalFilesystemPathForNewData(dirName(localFilePath));
+			scanLocalFilesystemPathForNewData(localFilePath);
 		} else {
 			// This is a potentially modified file, needs to be handled as such. Is the item truly modified?
 			if (!testFileHash(localFilePath, databaseItem)) {
