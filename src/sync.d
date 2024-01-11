@@ -3875,6 +3875,9 @@ class SyncEngine {
 	
 	// Perform a filesystem walk to uncover new data to upload to OneDrive
 	void scanLocalFilesystemPathForNewData(string path) {
+	
+		// Cleanup array memory before we start adding files
+		newLocalFilesToUploadToOneDrive = [];
 		
 		// To improve logging output for this function, what is the 'logical path' we are scanning for file & folder differences?
 		string logPath;
@@ -3954,7 +3957,7 @@ class SyncEngine {
 			// Perform the upload
 			uploadNewLocalFileItems();
 			
-			// Cleanup array memory
+			// Cleanup array memory after uploading all files
 			newLocalFilesToUploadToOneDrive = [];
 		}
 	}
