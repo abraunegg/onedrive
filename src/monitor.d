@@ -175,6 +175,9 @@ final class Monitor {
 	void delegate(string path) onDelete;
 	void delegate(string from, string to) onMove;
 	
+	// List of paths that were moved, not deleted
+	bool[string] movedNotDeleted;
+	
 	// Configure the class varaible to consume the application configuration including selective sync
 	this(ApplicationConfig appConfig, ClientSideFiltering selectiveSync) {
 		this.appConfig = appConfig;
@@ -459,6 +462,7 @@ final class Monitor {
 				if (event.mask & IN_MOVED_FROM) {
 					addLogEntry("event IN_MOVED_FROM: " ~ path, ["debug"]);
 					cookieToPath[event.cookie] = path;
+					movedNotDeleted[path] = true; // Mark as moved, not deleted
 				} else if (event.mask & IN_MOVED_TO) {
 					addLogEntry("event IN_MOVED_TO: " ~ path, ["debug"]);
 					if (event.mask & IN_ISDIR) addRecursive(path);
@@ -466,8 +470,9 @@ final class Monitor {
 					if (from) {
 						cookieToPath.remove(event.cookie);
 						if (useCallbacks) onMove(*from, path);
+						movedNotDeleted.remove(*from); // Clear moved status
 					} else {
-						// item moved from the outside
+						// Handle file moved in from outside
 						if (event.mask & IN_ISDIR) {
 							if (useCallbacks) onDirCreated(path);
 						} else {
@@ -481,8 +486,12 @@ final class Monitor {
 						if (useCallbacks) onDirCreated(path);
 					}
 				} else if (event.mask & IN_DELETE) {
-					addLogEntry("event IN_DELETE: " ~ path, ["debug"]);
-					if (useCallbacks) onDelete(path);
+					if (path in movedNotDeleted) {
+						movedNotDeleted.remove(path); // Ignore delete for moved files
+					} else {
+						addLogEntry("event IN_DELETE: " ~ path, ["debug"]);
+						if (useCallbacks) onDelete(path);
+					}
 				} else if ((event.mask & IN_CLOSE_WRITE) && !(event.mask & IN_ISDIR)) {
 					addLogEntry("event IN_CLOSE_WRITE and not IN_ISDIR: " ~ path, ["debug"]);
 					if (useCallbacks) onFileChanged(path);
