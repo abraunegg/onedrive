@@ -84,6 +84,14 @@ class CurlEngine {
 		//   Ensure that TCP_NODELAY is set to 0 to ensure that TCP NAGLE is enabled
 		http.handle.set(CurlOption.tcp_nodelay,0);
 		
+		//   https://curl.se/libcurl/c/CURLOPT_FORBID_REUSE.html
+		//   CURLOPT_FORBID_REUSE - make connection get closed at once after use
+		//   Ensure that we ARE NOT reusing TCP sockets connections - setting to 0 ensures that we ARE reusing connections (we did this in v2.4.xx) to ensure connections remained open and usable
+		//   Setting this to 1 ensures that when we close the curl instance, any open sockets are closed - which we need to do when running 
+		//   multiple threads and API instances at the same time otherwise we run out of local files | sockets pretty quickly
+		//   The libcurl default is 1 - ensure we are configuring not to reuse connections and leave unused sockets open
+		http.handle.set(CurlOption.forbid_reuse,1);
+		
 		if (httpsDebug) {
 			// Output what options we are using so that in the debug log this can be tracked
 			addLogEntry("http.dnsTimeout = " ~ to!string(dnsTimeout), ["debug"]);
