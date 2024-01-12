@@ -961,7 +961,7 @@ class ApplicationConfig {
 								addLogEntry("Please review the revised documentation on how to configure this application feature. You must update your client configuration and make any necessary online adjustments accordingly.");
 								addLogEntry();
 							}
-							// Return false
+							// Return ignore_depreciation
 							return ignore_depreciation;
 						}
 					}
@@ -1598,54 +1598,40 @@ class ApplicationConfig {
 	bool applicationChangeWhereResyncRequired() {
 		// Default is that no resync is required
 		bool resyncRequired = false;
+
+		// Consolidate the flags for different configuration changes
+		bool[9] configOptionsDifferent;
+
+		// Handle multiple entries of skip_file
+		string backupConfigFileSkipFile;
 		
-		// Configuration File Flags
-		bool configFileOptionsDifferent = false;
-		bool syncListFileDifferent = false;
-		bool syncDirDifferent = false;
-		bool skipFileDifferent = false;
-		bool skipDirDifferent = false;
-		bool skipDotFilesDifferent = false;
-		bool skipSymbolicLinksDifferent = false;
-		bool driveIdDifferent = false;
-		bool syncBusinessSharedItemsDifferent = false;
-		bool businessSharedItemsFileDifferent = false;
+		// Handle multiple entries of skip_dir
+		string backupConfigFileSkipDir;
 		
-		// Create the required initial hash files
+		// Create and read the required initial hash files
 		createRequiredInitialConfigurationHashFiles();
-		
 		// Read in the existing hash file values
 		readExistingConfigurationHashFiles();
-		
-		// Was the 'sync_list' file updated?
-		if (currentSyncListHash != previousSyncListHash) {
-			// Debugging output to assist what changed
-			addLogEntry("sync_list file has been updated, --resync needed", ["debug"]);
-			syncListFileDifferent = true;
-		}
-		
-		// Was the 'business_shared_items' file updated?
-		if (currentBusinessSharedItemsHash != previousBusinessSharedItemsHash) {
-			// Debugging output to assist what changed
-			addLogEntry("business_shared_folders file has been updated, --resync needed", ["debug"]);
-			businessSharedItemsFileDifferent = true;
-		}
-		
-		// Was the 'config' file updated between last execution and this execution?
+
+		// Helper lambda for logging and setting the difference flag
+		auto logAndSetDifference = (string message, size_t index) {
+			addLogEntry(message, ["debug"]);
+			configOptionsDifferent[index] = true;
+		};
+
+		// Check for changes in the sync_list and business_shared_items files
+		if (currentSyncListHash != previousSyncListHash)
+			logAndSetDifference("sync_list file has been updated, --resync needed", 0);
+
+		if (currentBusinessSharedItemsHash != previousBusinessSharedItemsHash)
+			logAndSetDifference("business_shared_folders file has been updated, --resync needed", 1);
+
+		// Check for updates in the config file
 		if (currentConfigHash != previousConfigHash) {
-			// config file was updated, however we only want to trigger a --resync requirement if sync_dir, skip_dir, skip_file or drive_id was modified
 			addLogEntry("Application configuration file has been updated, checking if --resync needed");
 			addLogEntry("Using this configBackupFile: " ~ configBackupFile, ["debug"]);
-			
+
 			if (exists(configBackupFile)) {
-				// Check backup config what has changed for these configuration options if anything
-				// # drive_id = ""
-				// # sync_dir = "~/OneDrive"
-				// # skip_file = "~*|.~*|*.tmp|*.swp|*.partial"
-				// # skip_dir = ""
-				// # skip_dotfiles = ""
-				// # skip_symlinks = ""
-				// # sync_business_shared_items  = ""
 				string[string] backupConfigStringValues;
 				backupConfigStringValues["drive_id"] = "";
 				backupConfigStringValues["sync_dir"] = "";
@@ -1654,10 +1640,7 @@ class ApplicationConfig {
 				backupConfigStringValues["skip_dotfiles"] = "";
 				backupConfigStringValues["skip_symlinks"] = "";
 				backupConfigStringValues["sync_business_shared_items"] = "";
-				
-				// bool flags to trigger if the entries that trigger a --resync were found in the backup config file
-				// if these were not in the backup file, they may have been added ... thus new, thus we need to double check the existing
-				// config file to see if this was a newly added config option
+
 				bool drive_id_present = false;
 				bool sync_dir_present = false;
 				bool skip_file_present = false;
@@ -1665,19 +1648,19 @@ class ApplicationConfig {
 				bool skip_dotfiles_present = false;
 				bool skip_symlinks_present = false;
 				bool sync_business_shared_items_present = false;
-				
-				// Common debug message if an element is different
+
 				string configOptionModifiedMessage = " was modified since the last time the application was successfully run, --resync required";
 				
 				auto configBackupFileHandle = File(configBackupFile, "r");
+				scope(exit) {
+					if (configBackupFileHandle.isOpen()) {
+						configBackupFileHandle.close();
+					}
+				}
+
 				string lineBuffer;
-				
-				// read configBackupFile line by line
 				auto range = configBackupFileHandle.byLine();
-				// for each line
 				foreach (line; range) {
-					addLogEntry("Backup Config Line: " ~ lineBuffer, ["debug"]);
-					
 					lineBuffer = stripLeft(line).to!string;
 					if (lineBuffer.length == 0 || lineBuffer[0] == ';' || lineBuffer[0] == '#') continue;
 					auto c = lineBuffer.matchFirst(configRegex);
@@ -1685,228 +1668,109 @@ class ApplicationConfig {
 						c.popFront(); // skip the whole match
 						string key = c.front.dup;
 						addLogEntry("Backup Config Key: " ~ key, ["debug"]);
-						
+
 						auto p = key in backupConfigStringValues;
 						if (p) {
 							c.popFront();
-							// compare this key
+							string value = c.front.dup;
+							// Compare each key value with current config
 							if (key == "drive_id") {
 								drive_id_present = true;
-								if (c.front.dup != getValueString("drive_id")) {
-									addLogEntry(key ~ configOptionModifiedMessage, ["debug"]);
-									configFileOptionsDifferent = true;
+								if (value != getValueString("drive_id")) {
+									logAndSetDifference(key ~ configOptionModifiedMessage, 2);
 								}
 							}
-							
 							if (key == "sync_dir") {
 								sync_dir_present = true;
-								if (c.front.dup != getValueString("sync_dir")) {
-									addLogEntry(key ~ configOptionModifiedMessage, ["debug"]);
-									configFileOptionsDifferent = true;
+								if (value != getValueString("sync_dir")) {
+									logAndSetDifference(key ~ configOptionModifiedMessage, 3);
 								}
 							}
 							
+							// skip_file handling
 							if (key == "skip_file") {
 								skip_file_present = true;
-								string computedBackupSkipFile = defaultSkipFile ~ "|" ~ to!string(c.front.dup);
-								if (computedBackupSkipFile != getValueString("skip_file")) {
-									addLogEntry(key ~ configOptionModifiedMessage, ["debug"]);
-									configFileOptionsDifferent = true;
+								// Handle multiple entries of skip_file
+								if (backupConfigFileSkipFile.empty) {
+									// currently no entry exists
+									backupConfigFileSkipFile = c.front.dup;
+								} else {
+									// add to existing backupConfigFileSkipFile entry
+									backupConfigFileSkipFile = backupConfigFileSkipFile ~ "|" ~ to!string(c.front.dup);
 								}
 							}
 							
+							// skip_dir handling
 							if (key == "skip_dir") {
 								skip_dir_present = true;
-								if (c.front.dup != getValueString("skip_dir")) {
-									addLogEntry(key ~ configOptionModifiedMessage, ["debug"]);
-									configFileOptionsDifferent = true;
+								// Handle multiple entries of skip_dir
+								if (backupConfigFileSkipDir.empty) {
+									// currently no entry exists
+									backupConfigFileSkipDir = c.front.dup;
+								} else {
+									// add to existing backupConfigFileSkipDir entry
+									backupConfigFileSkipDir = backupConfigFileSkipDir ~ "|" ~ to!string(c.front.dup);
 								}
 							}
 							
 							if (key == "skip_dotfiles") {
 								skip_dotfiles_present = true;
-								if (c.front.dup != to!string(getValueBool("skip_dotfiles"))) {
-									addLogEntry(key ~ configOptionModifiedMessage, ["debug"]);
-									configFileOptionsDifferent = true;
+								if (value != to!string(getValueBool("skip_dotfiles"))) {
+									logAndSetDifference(key ~ configOptionModifiedMessage, 6);
 								}
 							}
-							
 							if (key == "skip_symlinks") {
 								skip_symlinks_present = true;
-								if (c.front.dup != to!string(getValueBool("skip_symlinks"))) {
-									addLogEntry(key ~ configOptionModifiedMessage, ["debug"]);
-									configFileOptionsDifferent = true;
+								if (value != to!string(getValueBool("skip_symlinks"))) {
+									logAndSetDifference(key ~ configOptionModifiedMessage, 7);
 								}
 							}
-							
 							if (key == "sync_business_shared_items") {
 								sync_business_shared_items_present = true;
-								if (c.front.dup != to!string(getValueBool("sync_business_shared_items"))) {
-									addLogEntry(key ~ configOptionModifiedMessage, ["debug"]);
-									configFileOptionsDifferent = true;
+								if (value != to!string(getValueBool("sync_business_shared_items"))) {
+									logAndSetDifference(key ~ configOptionModifiedMessage, 8);
 								}
 							}
 						}
 					}
 				}
 				
-				// close file if open
-				if (configBackupFileHandle.isOpen()) {
-					// close open file
-					configBackupFileHandle.close();
-				}
+				// skip_file can be specified multiple times
+				if (skip_file_present && backupConfigFileSkipFile != configFileSkipFile) logAndSetDifference("skip_file" ~ configOptionModifiedMessage, 4);
 				
-				// Were any of the items that trigger a --resync not in the existing backup 'config' file .. thus newly added?
-				if ((!drive_id_present) || (!sync_dir_present) || (! skip_file_present) || (!skip_dir_present) || (!skip_dotfiles_present) || (!skip_symlinks_present)) {
-					addLogEntry("drive_id present in config backup:                   " ~ drive_id_present, ["debug"]);
-					addLogEntry("sync_dir present in config backup:                   " ~ sync_dir_present, ["debug"]);
-					addLogEntry("skip_file present in config backup:                  " ~ skip_file_present, ["debug"]);
-					addLogEntry("skip_dir present in config backup:                   " ~ skip_dir_present, ["debug"]);
-					addLogEntry("skip_dotfiles present in config backup:              " ~ skip_dotfiles_present, ["debug"]);
-					addLogEntry("skip_symlinks present in config backup:              " ~ skip_symlinks_present, ["debug"]);
-					addLogEntry("sync_business_shared_items present in config backup: " ~ sync_business_shared_items_present, ["debug"]);
-										
-					if ((!drive_id_present) && (configFileDriveId != "")) {
-						addLogEntry("drive_id newly added ... --resync needed");
-						configFileOptionsDifferent = true;
-						driveIdDifferent = true;
-					}
-					
-					if ((!sync_dir_present) && (configFileSyncDir != defaultSyncDir)) {
-						addLogEntry("sync_dir newly added ... --resync needed");
-						configFileOptionsDifferent = true;
-						syncDirDifferent = true;
-					}
-					
-					if ((!skip_file_present) && (configFileSkipFile != defaultSkipFile)) {
-						addLogEntry("skip_file newly added ... --resync needed");
-						configFileOptionsDifferent = true;
-						skipFileDifferent = true;
-					}
-					
-					if ((!skip_dir_present) && (configFileSkipDir != "")) {
-						addLogEntry("skip_dir newly added ... --resync needed");
-						configFileOptionsDifferent = true;
-						skipFileDifferent = true;
-					}
-					
-					if ((!skip_dotfiles_present) && (configFileSkipDotfiles)) {
-						addLogEntry("skip_dotfiles newly added ... --resync needed");
-						configFileOptionsDifferent = true;
-						skipDotFilesDifferent = true;
-					}
-					
-					if ((!skip_symlinks_present) && (configFileSkipSymbolicLinks)) {
-						addLogEntry("skip_symlinks newly added ... --resync needed");
-						configFileOptionsDifferent = true;
-						skipSymbolicLinksDifferent = true;
-					}
-					
-					if ((!sync_business_shared_items_present) && (configFileSyncBusinessSharedItems)) {
-						addLogEntry("sync_business_shared_items newly added ... --resync needed");
-						configFileOptionsDifferent = true;
-						syncBusinessSharedItemsDifferent = true;
-					}
-				}
+				// skip_dir can be specified multiple times
+				if (skip_dir_present && backupConfigFileSkipDir != configFileSkipDir) logAndSetDifference("skip_dir" ~ configOptionModifiedMessage, 5);
 				
-				object.destroy(configBackupFileHandle);
-				object.destroy(range);
-				object.destroy(lineBuffer);
-				
+				// Check for newly added configuration options
+				if (!drive_id_present && configFileDriveId != "") logAndSetDifference("drive_id newly added ... --resync needed", 2);
+				if (!sync_dir_present && configFileSyncDir != defaultSyncDir) logAndSetDifference("sync_dir newly added ... --resync needed", 3);
+				if (!skip_file_present && configFileSkipFile != defaultSkipFile) logAndSetDifference("skip_file newly added ... --resync needed", 4);
+				if (!skip_dir_present && configFileSkipDir != "") logAndSetDifference("skip_dir newly added ... --resync needed", 5);
+				if (!skip_dotfiles_present && configFileSkipDotfiles) logAndSetDifference("skip_dotfiles newly added ... --resync needed", 6);
+				if (!skip_symlinks_present && configFileSkipSymbolicLinks) logAndSetDifference("skip_symlinks newly added ... --resync needed", 7);
+				if (!sync_business_shared_items_present && configFileSyncBusinessSharedItems) logAndSetDifference("sync_business_shared_items newly added ... --resync needed", 8);
 			} else {
-				// no backup to check
 				addLogEntry("WARNING: no backup config file was found, unable to validate if any changes made");
 			}
 		}
-		
-		// config file set options can be changed via CLI input, specifically these will impact sync and a --resync will be needed:
-		//  --syncdir ARG
-		//  --skip-file ARG
-		//  --skip-dir ARG
-		//  --skip-dot-files
-		//  --skip-symlinks
-		
-		if (exists(applicableConfigFilePath)) {
-			// config file exists
-			// was the sync_dir updated by CLI?
-			if (configFileSyncDir != "") {
-				// sync_dir was set in config file
-				if (configFileSyncDir != getValueString("sync_dir")) {
-					// config file was set and CLI input changed this
-					
-					// Is this potentially running as a Docker container?
-					if (entrypointExists) {
-						// entrypoint.sh exists
-						addLogEntry("sync_dir: CLI override of config file option, however entrypoint.sh exists, thus most likely first run of Docker container", ["debug"]);
-					} else {
-						// entrypoint.sh does not exist
-						addLogEntry("sync_dir: CLI override of config file option, --resync needed", ["debug"]);
-						syncDirDifferent = true;
-					}
-				}
-			}
-			
-			// was the skip_file updated by CLI?
-			if (configFileSkipFile != "") {
-				// skip_file was set in config file
-				if (configFileSkipFile != getValueString("skip_file")) {
-					// config file was set and CLI input changed this
-					addLogEntry("skip_file: CLI override of config file option, --resync needed", ["debug"]);
-					skipFileDifferent = true;
-				}
-			}
 
-			// was the skip_dir updated by CLI?
-			if (configFileSkipDir != "") {
-				// skip_dir was set in config file
-				if (configFileSkipDir != getValueString("skip_dir")) {
-					// config file was set and CLI input changed this
-					addLogEntry("skip_dir: CLI override of config file option, --resync needed", ["debug"]);
-					skipDirDifferent = true;
-				}
-			}
-			
-			// was skip_dotfiles updated by --skip-dot-files ?
-			if (!configFileSkipDotfiles) {
-				// was not set in config file
-				if (getValueBool("skip_dotfiles")) {
-					// --skip-dot-files passed in
-					addLogEntry("skip_dotfiles: CLI override of config file option, --resync needed", ["debug"]);
-					skipDotFilesDifferent = true;
-				}
-			}
-			
-			// was skip_symlinks updated by --skip-symlinks ?
-			if (!configFileSkipSymbolicLinks) {
-				// was not set in config file
-				if (getValueBool("skip_symlinks")) {
-					// --skip-symlinks passed in
-					addLogEntry("skip_symlinks: CLI override of config file option, --resync needed", ["debug"]);
-					skipSymbolicLinksDifferent = true;
-				}
+		// Check CLI options
+		if (exists(applicableConfigFilePath)) {
+			if (configFileSyncDir != "" && configFileSyncDir != getValueString("sync_dir")) logAndSetDifference("sync_dir: CLI override of config file option, --resync needed", 3);
+			if (configFileSkipFile != "" && configFileSkipFile != getValueString("skip_file")) logAndSetDifference("skip_file: CLI override of config file option, --resync needed", 4);
+			if (configFileSkipDir != "" && configFileSkipDir != getValueString("skip_dir")) logAndSetDifference("skip_dir: CLI override of config file option, --resync needed", 5);
+			if (!configFileSkipDotfiles && getValueBool("skip_dotfiles")) logAndSetDifference("skip_dotfiles: CLI override of config file option, --resync needed", 6);
+			if (!configFileSkipSymbolicLinks && getValueBool("skip_symlinks")) logAndSetDifference("skip_symlinks: CLI override of config file option, --resync needed", 7);
+		}
+
+		// Aggregate the result to determine if a resync is required
+		foreach (optionDifferent; configOptionsDifferent) {
+			if (optionDifferent) {
+				resyncRequired = true;
+				break;
 			}
 		}
-		
-		// Did any of the config files or CLI options trigger a --resync requirement?
-		addLogEntry("configFileOptionsDifferent:       " ~ to!string(configFileOptionsDifferent), ["debug"]);
-		
-		// Options
-		addLogEntry("driveIdDifferent:                 " ~ to!string(driveIdDifferent), ["debug"]);
-		addLogEntry("syncDirDifferent:                 " ~ to!string(syncDirDifferent), ["debug"]);
-		addLogEntry("skipFileDifferent:                " ~ to!string(skipFileDifferent), ["debug"]);
-		addLogEntry("skipDirDifferent:                 " ~ to!string(skipDirDifferent), ["debug"]);
-		addLogEntry("skipDotFilesDifferent:            " ~ to!string(skipDotFilesDifferent), ["debug"]);
-		addLogEntry("skipSymbolicLinksDifferent:       " ~ to!string(skipSymbolicLinksDifferent), ["debug"]);
-		addLogEntry("syncBusinessSharedItemsDifferent: " ~ to!string(syncBusinessSharedItemsDifferent), ["debug"]);
-		
-		// Files with change
-		addLogEntry("syncListFileDifferent:            " ~ to!string(syncListFileDifferent), ["debug"]);
-		addLogEntry("businessSharedItemsFileDifferent: " ~ to!string(businessSharedItemsFileDifferent), ["debug"]);
-		
-		if ((configFileOptionsDifferent) || (syncListFileDifferent) || (businessSharedItemsFileDifferent) || (syncDirDifferent) || (skipFileDifferent) || (skipDirDifferent) || (driveIdDifferent) || (skipDotFilesDifferent) || (skipSymbolicLinksDifferent) || (syncBusinessSharedItemsDifferent) ) {
-			// set the flag
-			resyncRequired = true;
-		}
+
 		return resyncRequired;
 	}
 	
