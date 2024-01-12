@@ -1051,3 +1051,10 @@ int calc_eta(size_t counter, size_t iterations, ulong start_time) {
         return cast(int) ceil(avg_time_per_iteration); 
     }
 }
+
+void forceExit() {
+	// Allow logging to flush and complete
+	Thread.sleep(dur!("msecs")(500));
+	// Force Exit
+	exit(EXIT_FAILURE);
+}

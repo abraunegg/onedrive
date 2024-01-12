@@ -61,13 +61,6 @@ class SyncException: Exception {
     }
 }
 
-void forceExit() {
-	// Allow logging to flush and complete
-	Thread.sleep(dur!("msecs")(500));
-	// Force Exit
-	exit(EXIT_FAILURE);
-}
-
 class SyncEngine {
 	// Class Variables
 	ApplicationConfig appConfig;

@@ -373,6 +373,9 @@ int main(string[] cliArgs) {
 		}
 	}
 	
+	// What IP Protocol are we going to use to access the network with
+	appConfig.displayIPProtocol();
+	
 	// Test if OneDrive service can be reached, exit if it cant be reached
 	addLogEntry("Testing network to ensure network connectivity to Microsoft OneDrive Service", ["debug"]);
 	online = testInternetReachability(appConfig);

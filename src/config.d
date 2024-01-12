@@ -547,11 +547,6 @@ class ApplicationConfig {
 			}
 		}
 		
-		// What IP protocol is going to be used to access Microsoft OneDrive
-		if (getValueLong("ip_protocol_version") == 0) addLogEntry("Using IPv4 and IPv6 (if configured) to access Microsoft OneDrive");
-		if (getValueLong("ip_protocol_version") == 1) addLogEntry("Forcing client to use IPv4 connections only");
-		if (getValueLong("ip_protocol_version") == 2) addLogEntry("Forcing client to use IPv6 connections only");
-		
 		// return if the configuration was initialised
 		return configurationInitialised;
 	}
@@ -675,313 +670,190 @@ class ApplicationConfig {
 	
 	// Load a configuration file from the provided filename
 	private bool loadConfigFile(string filename) {
-		// configure function variables
 		try {
 			addLogEntry("Reading configuration file: " ~ filename);
 			readText(filename);
 		} catch (std.file.FileException e) {
-			// Unable to access required file
 			addLogEntry("ERROR: Unable to access " ~ e.msg);
-			// Use exit scopes to shutdown API
 			return false;
 		}
 		
-		// We were able to readText the config file - so, we should be able to open and read it
 		auto file = File(filename, "r");
-		string lineBuffer;
-		
-		// configure scopes
-		// - failure
-		scope(failure) {
-			// close file if open
-			if (file.isOpen()){
-				// close open file
-				file.close();
-			}
-		}
-		// - exit
-		scope(exit) {
-			// close file if open
-			if (file.isOpen()){
-				// close open file
-				file.close();
-			}
-		}
+		scope(exit) file.close();
+		scope(failure) file.close();
 
-		// read file line by line
-		auto range = file.byLine();
-		foreach (line; range) {
-			lineBuffer = stripLeft(line).to!string;
-			if (lineBuffer.length == 0 || lineBuffer[0] == ';' || lineBuffer[0] == '#') continue;
+		foreach (line; file.byLine()) {
+			string lineBuffer = stripLeft(line).to!string;
+			if (lineBuffer.empty || lineBuffer[0] == ';' || lineBuffer[0] == '#') continue;
 			auto c = lineBuffer.matchFirst(configRegex);
-			if (!c.empty) {
-				c.popFront(); // skip the whole match
-				string key = c.front.dup;
-				auto p = key in boolValues;
-				if (p) {
-					c.popFront();
-					// only accept "true" as true value. TODO Should we support other formats?
-					setValueBool(key, c.front.dup == "true" ? true : false);
-					
-					// skip_dotfiles tracking for change
-					if (key == "skip_dotfiles") {
-						configFileSkipDotfiles = true;
-					}
-					
-					// skip_symlinks tracking for change
-					if (key == "skip_symlinks") {
-						configFileSkipSymbolicLinks = true;
-					}
-					
-					// sync_business_shared_items tracking for change
-					if (key == "sync_business_shared_items") {
-						configFileSyncBusinessSharedItems = true;
-					}
-					
-				} else {
-					auto pp = key in stringValues;
-					if (pp) {
-						c.popFront();
-						setValueString(key, c.front.dup);
-						// detect need for --resync for these:
-						//  --syncdir ARG
-						//  --skip-file ARG
-						//  --skip-dir ARG
-						
-						// sync_dir
-						if (key == "sync_dir") {
-							// configure a temp variable
-							string tempSyncDirValue = c.front.dup;
-							// is this empty ?
-							if (!strip(tempSyncDirValue).empty) {
-								configFileSyncDir = tempSyncDirValue;
-							} else {
-								// sync_dir cannot be empty
-								addLogEntry("Invalid value for key in config file: " ~ key);
-								addLogEntry("ERROR: sync_dir in config file cannot be empty - this is a fatal error and must be corrected");
-								exit(EXIT_FAILURE);
-							}
-						}
-						
-						// skip_file
-						if (key == "skip_file") {
-							// Handle multiple entries of skip_file
-							if (configFileSkipFile.empty) {
-								// currently no entry exists
-								configFileSkipFile = c.front.dup;
-							} else {
-								// add to existing entry
-								configFileSkipFile = configFileSkipFile ~ "|" ~ to!string(c.front.dup);
-								setValueString("skip_file", configFileSkipFile);
-							}
-						}
-						
-						// skip_dir
-						if (key == "skip_dir") {
-							// Handle multiple entries of skip_dir
-							if (configFileSkipDir.empty) {
-								// currently no entry exists
-								configFileSkipDir = c.front.dup;
-							} else {
-								// add to existing entry
-								configFileSkipDir = configFileSkipDir ~ "|" ~ to!string(c.front.dup);
-								setValueString("skip_dir", configFileSkipDir);
-							}
-						}
-						
-						// --single-directory Strip quotation marks from path 
-						// This is an issue when using ONEDRIVE_SINGLE_DIRECTORY with Docker
-						if (key == "single_directory") {
-							// Strip quotation marks from provided path
-							string configSingleDirectory = strip(to!string(c.front.dup), "\"");
-							setValueString("single_directory", configSingleDirectory);
-						}
-						
-						// Azure AD Configuration
-						if (key == "azure_ad_endpoint") {
-							string azureConfigValue = strip(c.front.dup);
-							switch(azureConfigValue) {
-								case "":
-									addLogEntry("Using detault config option for Global Azure AD Endpoints");
-									break;
-								case "USL4":
-									addLogEntry("Using config option for Azure AD for US Government Endpoints");
-									break;
-								case "USL5":
-									addLogEntry("Using config option for Azure AD for US Government Endpoints (DOD)");
-									break;
-								case "DE":
-									addLogEntry("Using config option for Azure AD Germany");
-									break;
-								case "CN":
-									addLogEntry("Using config option for Azure AD China operated by 21Vianet");
-									break;
-								// Default - all other entries
-								default:
-									addLogEntry("Unknown Azure AD Endpoint - using Global Azure AD Endpoints");
-							}
-						}
-						
-						// Application ID
-						if (key == "application_id") {
-							// This key cannot be empty
-							string tempApplicationId = strip(c.front.dup);
-							if (tempApplicationId.empty) {
-								addLogEntry("Invalid value for key in config file - using default value: " ~ key);
-								addLogEntry("application_id in config file cannot be empty - using default application_id", ["debug"]);
-								setValueString("application_id", defaultApplicationId);
-							} else {
-								setValueString("application_id", tempApplicationId);
-							}
-						}
-						
-						// Drive ID
-						if (key == "drive_id") {
-							// This key cannot be empty
-							string tempApplicationId = strip(c.front.dup);
-							if (tempApplicationId.empty) {
-								addLogEntry("Invalid value for key in config file: " ~ key);
-								addLogEntry("drive_id in config file cannot be empty - this is a fatal error and must be corrected by removing this entry from your config file", ["debug"]);
-								exit(EXIT_FAILURE);
-							} else {
-								setValueString("drive_id", tempApplicationId);
-								configFileDriveId = tempApplicationId;
-							}
-						}
-						
-						// Log Directory
-						if (key == "log_dir") {
-							// This key cannot be empty
-							string tempLogDir = strip(c.front.dup);
-							if (tempLogDir.empty) {
-								addLogEntry("Invalid value for key in config file - using default value: " ~ key);
-								addLogEntry("log_dir in config file cannot be empty - using default log_dir", ["debug"]);
-								setValueString("log_dir", defaultLogFileDir);
-							} else {
-								setValueString("log_dir", tempLogDir);
-							}
-						}
-						
+			if (c.empty) {
+				addLogEntry("Malformed config line: " ~ lineBuffer);
+				continue;
+			}
+
+			c.popFront(); // skip the whole match
+			string key = c.front.dup;
+			c.popFront();
+
+			// Handle deprecated keys
+			switch (key) {
+				case "min_notify_changes":
+				case "force_http_2":
+					addLogEntry("The option '" ~ key ~ "' has been depreciated and will be ignored. Please read the updated documentation and update your client configuration to remove this option.");
+					continue;
+				case "sync_business_shared_folders":
+					addLogEntry();
+					addLogEntry("The option 'sync_business_shared_folders' has been depreciated and the process for synchronising Microsoft OneDrive Business Shared Folders has changed.");
+					addLogEntry("Please review the revised documentation on how to correctly configure this application feature.");
+					addLogEntry("You must update your client configuration and make changes to your local filesystem and online data to use this capability.");
+					return false;
+				default:
+					break;
+			}
+
+			// Process other keys
+			if (key in boolValues) {
+				// Only accept "true" as true value.
+				setValueBool(key, c.front.dup == "true" ? true : false);
+				if (key == "skip_dotfiles") configFileSkipDotfiles = true;
+				if (key == "skip_symlinks") configFileSkipSymbolicLinks = true;
+				if (key == "sync_business_shared_items") configFileSyncBusinessSharedItems = true;
+			} else if (key in stringValues) {
+				string value = c.front.dup;
+				setValueString(key, value);
+				if (key == "sync_dir") {
+					if (!strip(value).empty) {
+						configFileSyncDir = value;
 					} else {
-						auto ppp = key in longValues;
-						if (ppp) {
-							c.popFront();
-							ulong thisConfigValue;
-							
-							// Can this value actually be converted to an integer?
-							try {
-								thisConfigValue = to!long(c.front.dup);
-							} catch (std.conv.ConvException) {
-								addLogEntry("Invalid value for key in config file: " ~ key);
-								return false;
-							}
-							
-							setValueLong(key, thisConfigValue);
-							
-							// if key is 'monitor_interval' the value must be 300 or greater
-							if (key == "monitor_interval") {
-								// temp value
-								ulong tempValue = thisConfigValue;
-								// the temp value needs to be greater than 300 
-								if (tempValue < 300) {
-									addLogEntry("Invalid value for key in config file - using default value: " ~ key);
-									tempValue = 300;
-								}
-								setValueLong("monitor_interval", to!long(tempValue));
-							}
-							
-							// if key is 'monitor_fullscan_frequency' the value must be 12 or greater
-							if (key == "monitor_fullscan_frequency") {
-								// temp value
-								ulong tempValue = thisConfigValue;
-								// the temp value needs to be greater than 12 
-								if (tempValue < 12) {
-									// If this is not set to zero (0) then we are not disabling 'monitor_fullscan_frequency'
-									if (tempValue != 0) {
-										// invalid value
-										addLogEntry("Invalid value for key in config file - using default value: " ~ key);
-										tempValue = 12;
-									}
-								}
-								setValueLong("monitor_fullscan_frequency", to!long(tempValue));
-							}
-							
-							// if key is 'space_reservation' we have to calculate MB -> bytes
-							if (key == "space_reservation") {
-								// temp value
-								ulong tempValue = thisConfigValue;
-								// a value of 0 needs to be made at least 1MB .. 
-								if (tempValue == 0) {
-									addLogEntry("Invalid value for key in config file - using 1MB: " ~ key);
-									tempValue = 1;
-								}
-								setValueLong("space_reservation", to!long(tempValue * 2^^20));
-							}
-							
-							// if key is 'ip_protocol_version' this has to be a value of 0 or 1 or 2 .. nothing else
-							if (key == "ip_protocol_version") {
-								// temp value
-								ulong tempValue = thisConfigValue;
-								// If greater than 2, set to default
-								if (tempValue > 2) {
-									addLogEntry("Invalid value for key in config file - using default value: " ~ key);
-									// Set to default of 0
-									tempValue = 0;
-								}
-								setValueLong("ip_protocol_version", to!long(tempValue));
-							}
-							
-						} else {
-							// unknown key
-							addLogEntry("Unknown key in config file: " ~ key);
-							
-							// handle depreciation
-							bool ignore_depreciation = false;
-							
-							// min_notify_changes has been depreciated
-							if (key == "min_notify_changes") {
-								addLogEntry();
-								addLogEntry("The option 'min_notify_changes' has been depreciated and will be ignored. Please read the updated documentation and update your client configuration.");
-								addLogEntry();
-								ignore_depreciation = true;
-							}
-							
-							// force_http_2 has been depreciated
-							if (key == "force_http_2") {
-								addLogEntry();
-								addLogEntry("The option 'force_http_2' has been depreciated and will be ignored. Please read the updated documentation and update your client configuration.");
-								addLogEntry();
-								ignore_depreciation = true;
-							}
-							
-							// Application configuration update required for Business Shared Folders
-							if (key == "sync_business_shared_folders") {
-								addLogEntry();
-								addLogEntry("The process for synchronising Microsoft OneDrive Business Shared Folders has changed.");
-								addLogEntry("Please review the revised documentation on how to configure this application feature. You must update your client configuration and make any necessary online adjustments accordingly.");
-								addLogEntry();
-							}
-							// Return ignore_depreciation
-							return ignore_depreciation;
-						}
+						addLogEntry();
+						addLogEntry("Invalid value for key in config file: " ~ key);
+						addLogEntry("ERROR: sync_dir in config file cannot be empty - this is a fatal error and must be corrected");
+						addLogEntry();
+						forceExit();
+					}
+				} else if (key == "skip_file") {
+					// Handle multiple 'config' file entries of skip_file
+					if (configFileSkipFile.empty) {
+						// currently no entry exists
+						configFileSkipFile = c.front.dup;
+					} else {
+						// add to existing entry
+						configFileSkipFile = configFileSkipFile ~ "|" ~ to!string(c.front.dup);
+						setValueString("skip_file", configFileSkipFile);
+					}
+				} else if (key == "skip_dir") {
+					// Handle multiple entries of skip_dir
+					if (configFileSkipDir.empty) {
+						// currently no entry exists
+						configFileSkipDir = c.front.dup;
+					} else {
+						// add to existing entry
+						configFileSkipDir = configFileSkipDir ~ "|" ~ to!string(c.front.dup);
+						setValueString("skip_dir", configFileSkipDir);
+					}
+				} else if (key == "single_directory") {
+					string configFileSingleDirectory = strip(value, "\"");
+					setValueString("single_directory", configFileSingleDirectory);
+				} else if (key == "azure_ad_endpoint") {
+					switch (value) {
+						case "":
+							addLogEntry("Using default config option for Global Azure AD Endpoints");
+							break;
+						case "USL4":
+							addLogEntry("Using config option for Azure AD for US Government Endpoints");
+							break;
+						case "USL5":
+							addLogEntry("Using config option for Azure AD for US Government Endpoints (DOD)");
+							break;
+						case "DE":
+							addLogEntry("Using config option for Azure AD Germany");
+							break;
+						case "CN":
+							addLogEntry("Using config option for Azure AD China operated by 21Vianet");
+							break;
+						default:
+							addLogEntry("Unknown Azure AD Endpoint - using Global Azure AD Endpoints");
+					}
+				} else if (key == "application_id") {
+					string tempApplicationId = strip(value);
+					if (tempApplicationId.empty) {
+						addLogEntry("Invalid value for key in config file - using default value: " ~ key);
+						addLogEntry("application_id in config file cannot be empty - using default application_id", ["debug"]);
+						setValueString("application_id", defaultApplicationId);
+					}
+				} else if (key == "drive_id") {
+					string tempDriveId = strip(value);
+					if (tempDriveId.empty) {
+						addLogEntry();
+						addLogEntry("Invalid value for key in config file: " ~ key);
+						addLogEntry("drive_id in config file cannot be empty - this is a fatal error and must be corrected by removing this entry from your config file.", ["debug"]);
+						addLogEntry();
+						forceExit();
+					} else {
+						configFileDriveId = tempDriveId;
+					}
+				} else if (key == "log_dir") {
+					string tempLogDir = strip(value);
+					if (tempLogDir.empty) {
+						addLogEntry("Invalid value for key in config file - using default value: " ~ key);
+						addLogEntry("log_dir in config file cannot be empty - using default log_dir", ["debug"]);
+						setValueString("log_dir", defaultLogFileDir);
 					}
 				}
+			} else if (key in longValues) {
+				ulong thisConfigValue;
+				try {
+					thisConfigValue = to!ulong(c.front.dup);
+				} catch (std.conv.ConvException) {
+					addLogEntry("Invalid value for key in config file: " ~ key);
+					return false;
+				}
+				setValueLong(key, thisConfigValue);
+				if (key == "monitor_interval") { // if key is 'monitor_interval' the value must be 300 or greater
+					ulong tempValue = thisConfigValue;
+					// the temp value needs to be 300 or greater
+					if (tempValue < 300) {
+						addLogEntry("Invalid value for key in config file - using default value: " ~ key);
+						tempValue = 300;
+					}
+					setValueLong("monitor_interval", tempValue);
+				} else if (key == "monitor_fullscan_frequency") { // if key is 'monitor_fullscan_frequency' the value must be 12 or greater
+					ulong tempValue = thisConfigValue;
+					// the temp value needs to be 12 or greater
+					if (tempValue < 12) {
+						// If this is not set to zero (0) then we are not disabling 'monitor_fullscan_frequency'
+						if (tempValue != 0) {
+							// invalid value
+							addLogEntry("Invalid value for key in config file - using default value: " ~ key);
+							tempValue = 12;
+						}
+					}
+					setValueLong("monitor_fullscan_frequency", tempValue);
+				} else if (key == "space_reservation") { // if key is 'space_reservation' we have to calculate MB -> bytes
+					ulong tempValue = thisConfigValue;
+					// a value of 0 needs to be made at least 1MB .. 
+					if (tempValue == 0) {
+						addLogEntry("Invalid value for key in config file - using 1MB: " ~ key);
+						tempValue = 1;
+					}
+					setValueLong("space_reservation", tempValue * 2^^20);
+				} else if (key == "ip_protocol_version") {
+					ulong tempValue = thisConfigValue;
+					if (tempValue > 2) {
+						addLogEntry("Invalid value for key in config file - using default value: " ~ key);
+						tempValue = 0;
+					}
+					setValueLong("ip_protocol_version", tempValue);
+				}
 			} else {
-				// malformed config line
-				addLogEntry("Malformed config line: " ~ lineBuffer);
+				addLogEntry("Unknown key in config file: " ~ key);
 				return false;
 			}
 		}
-		
-		// Close the file access
-		file.close();
-		// Free object and memory
-		object.destroy(file);
-		object.destroy(range);
-		object.destroy(lineBuffer);
+		// Return that we were able to read in the config file and parse the options without issue
 		return true;
 	}
-	
+
 	// Update the application configuration based on CLI passed in parameters
 	void updateFromArgs(string[] cliArgs) {
 		// Add additional options that are NOT configurable via config file
@@ -2222,6 +2094,13 @@ class ApplicationConfig {
 		verboseLogging = verboseLoggingInput;
 		debugLogging = debugLoggingInput;
 		verbosityCount = verbosityCountInput;
+	}
+	
+	// What IP protocol is going to be used to access Microsoft OneDrive
+	void displayIPProtocol() {
+		if (getValueLong("ip_protocol_version") == 0) addLogEntry("Using IPv4 and IPv6 (if configured) for all network operations");
+		if (getValueLong("ip_protocol_version") == 1) addLogEntry("Forcing client to use IPv4 connections only");
+		if (getValueLong("ip_protocol_version") == 2) addLogEntry("Forcing client to use IPv6 connections only");
 	}
 }
 
