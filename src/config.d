@@ -199,7 +199,7 @@ class ApplicationConfig {
 	bool shellEnvironmentSet = false;
 	
 	// Initialise the application configuration
-	bool initialise(string confdirOption) {
+	bool initialise(string confdirOption, bool helpRequested) {
 		
 		// Default runtime configuration - entries in config file ~/.config/onedrive/config or derived from variables above
 		// An entry here means it can be set via the config file if there is a coresponding entry, read from config and set via update_from_args()
@@ -494,56 +494,61 @@ class ApplicationConfig {
 		auto convertedValue = parse!long(valueToConvert, 8);
 		convertedPermissionValue = to!int(convertedValue);
 		
-		// Initialise the application using the configuration file if it exists
-		if (!exists(userConfigFilePath)) {
-			// 'user' configuration file does not exist
-			// Is there a system configuration file?
-			if (!exists(systemConfigFilePath)) {
-				// 'system' configuration file does not exist
-				addLogEntry("No user or system config file found, using application defaults", ["verbose"]);
-				applicableConfigFilePath = userConfigFilePath;
-				configurationInitialised = true;
+		// Do not try and load any user configuration file if --help was used
+		if (helpRequested) {
+			return true;
+		} else {
+			// Initialise the application using the configuration file if it exists
+			if (!exists(userConfigFilePath)) {
+				// 'user' configuration file does not exist
+				// Is there a system configuration file?
+				if (!exists(systemConfigFilePath)) {
+					// 'system' configuration file does not exist
+					addLogEntry("No user or system config file found, using application defaults", ["verbose"]);
+					applicableConfigFilePath = userConfigFilePath;
+					configurationInitialised = true;
+				} else {
+					// 'system' configuration file exists
+					// can we load the configuration file without error?
+					if (loadConfigFile(systemConfigFilePath)) {
+						// configuration file loaded without error
+						addLogEntry("System configuration file successfully loaded");
+						
+						// Set 'applicableConfigFilePath' to equal the 'config' we loaded
+						applicableConfigFilePath = systemConfigFilePath;
+						// Update the configHashFile path value to ensure we are using the system 'config' file for the hash
+						configHashFile = buildNormalizedPath(buildPath(systemConfigDirName, ".config.hash"));
+						configurationInitialised = true;
+					} else {
+						// there was a problem loading the configuration file
+						addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
+						addLogEntry("System configuration file has errors - please check your configuration");
+					}
+				}						
 			} else {
-				// 'system' configuration file exists
+				// 'user' configuration file exists
 				// can we load the configuration file without error?
-				if (loadConfigFile(systemConfigFilePath)) {
+				if (loadConfigFile(userConfigFilePath)) {
 					// configuration file loaded without error
-					addLogEntry("System configuration file successfully loaded");
+					addLogEntry("Configuration file successfully loaded");
 					
 					// Set 'applicableConfigFilePath' to equal the 'config' we loaded
-					applicableConfigFilePath = systemConfigFilePath;
-					// Update the configHashFile path value to ensure we are using the system 'config' file for the hash
-					configHashFile = buildNormalizedPath(buildPath(systemConfigDirName, ".config.hash"));
+					applicableConfigFilePath = userConfigFilePath;
 					configurationInitialised = true;
 				} else {
 					// there was a problem loading the configuration file
 					addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
-					addLogEntry("System configuration file has errors - please check your configuration");
+					addLogEntry("Configuration file has errors - please check your configuration");
 				}
-			}						
-		} else {
-			// 'user' configuration file exists
-			// can we load the configuration file without error?
-			if (loadConfigFile(userConfigFilePath)) {
-				// configuration file loaded without error
-				addLogEntry("Configuration file successfully loaded");
-				
-				// Set 'applicableConfigFilePath' to equal the 'config' we loaded
-				applicableConfigFilePath = userConfigFilePath;
-				configurationInitialised = true;
-			} else {
-				// there was a problem loading the configuration file
-				addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
-				addLogEntry("Configuration file has errors - please check your configuration");
 			}
-		}
-		
-		// Advise the user path that we will use for the application state data
-		if (canFind(applicableConfigFilePath, configDirName)) {
-			addLogEntry("Using 'user' configuration path for application state data: " ~ configDirName, ["verbose"]);
-		} else {
-			if (canFind(applicableConfigFilePath, systemConfigDirName)) {
-				addLogEntry("Using 'system' configuration path for application state data: " ~ systemConfigDirName, ["verbose"]);
+			
+			// Advise the user path that we will use for the application state data
+			if (canFind(applicableConfigFilePath, configDirName)) {
+				addLogEntry("Using 'user' configuration path for application state data: " ~ configDirName, ["verbose"]);
+			} else {
+				if (canFind(applicableConfigFilePath, systemConfigDirName)) {
+					addLogEntry("Using 'system' configuration path for application state data: " ~ systemConfigDirName, ["verbose"]);
+				}
 			}
 		}
 		

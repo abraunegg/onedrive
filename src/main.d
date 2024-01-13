@@ -71,6 +71,8 @@ int main(string[] cliArgs) {
 	bool debugLogging = false;
 	// Monitor loop failures
 	bool monitorFailures = false;
+	// Help requested
+	bool helpRequested = false;
 	
 	// DEVELOPER OPTIONS OUTPUT VARIABLES
 	bool displayMemoryUsage = false;
@@ -111,6 +113,7 @@ int main(string[] cliArgs) {
 		// Print help and exit
 		if (cliOptions.helpWanted) {
 			cliArgs ~= "--help";
+			helpRequested = true;
 		}
 		// Print the version and exit
 		if (printVersion) {
@@ -176,7 +179,7 @@ int main(string[] cliArgs) {
 	
 	// Initialise the application configuration, utilising --confdir if it was passed in
 	// Otherwise application defaults will be used to configure the application
-	if (!appConfig.initialise(confdirOption)) {
+	if (!appConfig.initialise(confdirOption, helpRequested)) {
 		// There was an error loading the user specified application configuration
 		// Error message already printed
 		return EXIT_FAILURE;
