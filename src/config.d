@@ -1571,8 +1571,8 @@ class ApplicationConfig {
 								skip_file_present = true;
 								// Handle multiple entries of skip_file
 								if (backupConfigFileSkipFile.empty) {
-									// currently no entry exists
-									backupConfigFileSkipFile = c.front.dup;
+									// currently no entry exists, include 'defaultSkipFile' entries
+									backupConfigFileSkipFile = defaultSkipFile ~ "|" ~ to!string(c.front.dup);
 								} else {
 									// add to existing backupConfigFileSkipFile entry
 									backupConfigFileSkipFile = backupConfigFileSkipFile ~ "|" ~ to!string(c.front.dup);
