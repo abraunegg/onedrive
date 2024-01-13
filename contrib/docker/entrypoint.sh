@@ -125,6 +125,20 @@ if [ "${ONEDRIVE_DRYRUN:=0}" == "1" ]; then
    ARGS=(--dry-run ${ARGS[@]})
 fi
 
+# Tell client to disable download validation
+if [ "${ONEDRIVE_DISABLE_DOWNLOAD_VALIDATION:=0}" == "1" ]; then
+   echo "# We are disabling the download integrity checks performed by this client"
+   echo "# Adding --disable-download-validation"
+   ARGS=(--disable-download-validation ${ARGS[@]})
+fi
+
+# Tell client to disable upload validation
+if [ "${ONEDRIVE_DISABLE_UPLOAD_VALIDATION:=0}" == "1" ]; then
+   echo "# We are disabling the upload integrity checks performed by this client"
+   echo "# Adding --disable-upload-validation"
+   ARGS=(--disable-upload-validation ${ARGS[@]})
+fi
+
 if [ ${#} -gt 0 ]; then
   ARGS=("${@}")
 fi
