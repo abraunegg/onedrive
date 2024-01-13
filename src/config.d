@@ -688,7 +688,9 @@ class ApplicationConfig {
 			auto c = lineBuffer.matchFirst(configRegex);
 			if (c.empty) {
 				addLogEntry("Malformed config line: " ~ lineBuffer);
-				continue;
+				addLogEntry();
+				addLogEntry("Please review the documentation on how to correctly configure this application.");
+				forceExit();
 			}
 
 			c.popFront(); // skip the whole match
