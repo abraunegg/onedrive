@@ -167,7 +167,7 @@ Regex!char wild2regex(const(char)[] pattern) {
             str ~= "\\+";
             break;
         case ' ':
-            str ~= "\\s";  // Changed to match exactly one whitespace.    str ~= "\\s+";
+            str ~= "\\s";  // Changed to match exactly one whitespace. Was:   str ~= "\\s+";
             break;  
         case '/':
             str ~= "\\/";

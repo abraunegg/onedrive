@@ -1379,16 +1379,15 @@ class SyncEngine {
 							simplePathToCheck = onedriveJSONItem["name"].str;
 						}
 						
-						// If 'simplePathToCheck' or 'complexPathToCheck'  is of the following format:  root:/folder
+						// If 'simplePathToCheck' or 'complexPathToCheck' is of the following format:  root:/folder
 						// then isDirNameExcluded matching will not work
-						// Clean up 'root:' if present
-						if (startsWith(simplePathToCheck, "root:")){
+						if (simplePathToCheck.canFind(":")) {
 							addLogEntry("Updating simplePathToCheck to remove 'root:'", ["debug"]);
-							simplePathToCheck = strip(simplePathToCheck, "root:");
+							simplePathToCheck = processPathToRemoveRootReference(simplePathToCheck);
 						}
-						if (startsWith(complexPathToCheck, "root:")){
+						if (complexPathToCheck.canFind(":")) {
 							addLogEntry("Updating complexPathToCheck to remove 'root:'", ["debug"]);
-							complexPathToCheck = strip(complexPathToCheck, "root:");
+							complexPathToCheck = processPathToRemoveRootReference(complexPathToCheck);
 						}
 						
 						// OK .. what checks are we doing?
@@ -3233,16 +3232,15 @@ class SyncEngine {
 						simplePathToCheck = onedriveJSONItem["name"].str;
 					}
 					
-					// If 'simplePathToCheck' or 'complexPathToCheck'  is of the following format:  root:/folder
+					// If 'simplePathToCheck' or 'complexPathToCheck' is of the following format:  root:/folder
 					// then isDirNameExcluded matching will not work
-					// Clean up 'root:' if present
-					if (startsWith(simplePathToCheck, "root:")){
+					if (simplePathToCheck.canFind(":")) {
 						addLogEntry("Updating simplePathToCheck to remove 'root:'", ["debug"]);
-						simplePathToCheck = strip(simplePathToCheck, "root:");
+						simplePathToCheck = processPathToRemoveRootReference(simplePathToCheck);
 					}
-					if (startsWith(complexPathToCheck, "root:")){
+					if (complexPathToCheck.canFind(":")) {
 						addLogEntry("Updating complexPathToCheck to remove 'root:'", ["debug"]);
-						complexPathToCheck = strip(complexPathToCheck, "root:");
+						complexPathToCheck = processPathToRemoveRootReference(complexPathToCheck);
 					}
 					
 					// OK .. what checks are we doing?
@@ -3266,7 +3264,7 @@ class SyncEngine {
 						}
 					}
 					// End Result
-					addLogEntry("skip_dir exclude result (directory based): " ~ clientSideRuleExcludesPath, ["debug"]);
+					addLogEntry("skip_dir exclude result (directory based): " ~ to!string(clientSideRuleExcludesPath), ["debug"]);
 					if (clientSideRuleExcludesPath) {
 						// This path should be skipped
 						addLogEntry("Skipping item - excluded by skip_dir config: " ~ matchDisplay, ["verbose"]);
@@ -7540,5 +7538,16 @@ class SyncEngine {
 			// Free object and memory
 			object.destroy(uploadFileOneDriveApiInstance);
 		}
+	}
+	
+	// Function to process the path by removing prefix up to ':' - remove '/drive/root:' from a path string
+	string processPathToRemoveRootReference(ref string pathToCheck) {
+		long colonIndex = pathToCheck.indexOf(":");
+		if (colonIndex != -1) {
+			addLogEntry("Updating " ~ pathToCheck ~ " to remove prefix up to ':'", ["debug"]);
+			pathToCheck = pathToCheck[colonIndex + 1 .. $];
+			addLogEntry("Updated path for 'skip_dir' check: " ~ pathToCheck, ["debug"]);
+		}
+		return pathToCheck;
 	}
 }
