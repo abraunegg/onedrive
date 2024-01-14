@@ -89,7 +89,7 @@ class CurlEngine {
 		//   Ensure that we ARE NOT reusing TCP sockets connections - setting to 0 ensures that we ARE reusing connections (we did this in v2.4.xx) to ensure connections remained open and usable
 		//   Setting this to 1 ensures that when we close the curl instance, any open sockets are closed - which we need to do when running 
 		//   multiple threads and API instances at the same time otherwise we run out of local files | sockets pretty quickly
-		//   The libcurl default is 1 - ensure we are configuring not to reuse connections and leave unused sockets open
+		//   The libcurl default is 0 as per the documentation (to REUSE connections) - ensure we are configuring NOT to reuse connections and leave unused sockets needlessly open which will lead to local socket exhaustion
 		http.handle.set(CurlOption.forbid_reuse,1);
 		
 		if (httpsDebug) {
