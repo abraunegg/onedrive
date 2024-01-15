@@ -2259,19 +2259,30 @@ class SyncEngine {
 						addLogEntry("Local item time discrepancy detected: " ~ path, ["verbose"]);
 						addLogEntry("This local item has a different modified time " ~ to!string(localModifiedTime) ~ " when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime), ["verbose"]);
 						
-						// The file has been modified ... is the hash the same?
+						// The file has a different timestamp ... is the hash the same meaning no file modification?
 						// Test the file hash as the date / time stamp is different
 						// Generating a hash is computationally expensive - we only generate the hash if timestamp was different
 						if (testFileHash(path, item)) {
 							// The hash is the same .. so we need to fix-up the timestamp depending on where it is wrong
-							addLogEntry("Local item has the same hash value as the item online - correcting timestamp", ["verbose"]);
+							addLogEntry("Local item has the same hash value as the item online - correcting the applicable file timestamp", ["verbose"]);
 							// Test if the local timestamp is newer
 							if (localModifiedTime > itemModifiedTime) {
-								// The source of the out-of-date timestamp was OneDrive and this needs to be corrected to avoid always generating a hash test if timestamp is different
-								addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);
-								if (!dryRun) {
-									// Attempt to update the online date time stamp
-									uploadLastModifiedTime(item.driveId, item.id, localModifiedTime.toUTC(), item.eTag);
+								// Local file is newer .. are we in a --download-only situation?
+								if (!appConfig.getValueBool("download_only")) {
+									// --download-only not being used
+									// The source of the out-of-date timestamp was OneDrive and this needs to be corrected to avoid always generating a hash test if timestamp is different
+									addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);
+									if (!dryRun) {
+										// Attempt to update the online date time stamp
+										uploadLastModifiedTime(item.driveId, item.id, localModifiedTime.toUTC(), item.eTag);
+									}									
+								} else {	
+									// --download-only is being used ... local file needs to be corrected ... but why is it newer - indexing application potentially changing the timestamp ?
+									addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --download-only", ["verbose"]);
+										if (!dryRun) {
+										addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);
+										setTimes(path, item.mtime, item.mtime);
+									}
 								}
 							} else {
 								// The source of the out-of-date timestamp was the local file and this needs to be corrected to avoid always generating a hash test if timestamp is different
