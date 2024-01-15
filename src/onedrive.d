@@ -564,11 +564,23 @@ class OneDriveApi {
 				return false;
 			}
 		} else {
-			addLogEntry("Authorise this application by visiting:\n", ["consoleOnly"]);
-			addLogEntry(url ~ "\n\n", ["consoleOnly"]);
-			addLogEntry("Enter the response uri from your browser: ", ["consoleOnlyNoNewLine"]);
-			readln(response);
-			appConfig.applicationAuthorizeResponseUri = true;
+			// Are we in a --dry-run scenario?
+			if (!appConfig.getValueBool("dry_run")) {
+				// No --dry-run is being used
+				addLogEntry("Authorise this application by visiting:\n", ["consoleOnly"]);
+				addLogEntry(url ~ "\n", ["consoleOnly"]);
+				addLogEntry("Enter the response uri from your browser: ", ["consoleOnlyNoNewLine"]);
+				readln(response);
+				appConfig.applicationAuthorizeResponseUri = true;
+			} else {
+				// The application cannot be authorised when using --dry-run as we have to write out the authentication data, which negates the whole 'dry-run' process
+				addLogEntry();
+				addLogEntry("The application requires authorisation, which involves saving authentication data on your system. Note that authorisation cannot be completed with the '--dry-run' option.");
+				addLogEntry();
+				addLogEntry("To exclusively authorise the application without performing any additional actions, use this command: onedrive");
+				addLogEntry();
+				forceExit();
+			}
 		}
 		// match the authorization code
 		auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
