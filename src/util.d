@@ -96,6 +96,18 @@ void safeBackup(const(char)[] path, bool dryRun) {
     }
 }
 
+// Rename the given item, and only performs the function if not in a --dry-run scenario
+void safeRename(const(char)[] oldPath, const(char)[] newPath, bool dryRun) {
+	// Perform the rename
+	if (!dryRun) {
+		addLogEntry("Calling rename(oldPath, newPath)", ["debug"]);
+		// Use rename() as Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
+		rename(oldPath, newPath);
+	} else {
+		addLogEntry("DRY-RUN: Skipping local file rename", ["debug"]);
+	}
+}
+
 // Deletes the specified file without throwing an exception if it does not exists
 void safeRemove(const(char)[] path) {
 	if (exists(path)) remove(path);

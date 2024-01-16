@@ -1749,10 +1749,10 @@ class SyncEngine {
 						
 						// Has the user configured to IGNORE local data protection rules?
 						if (bypassDataPreservation) {
-							// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
+							// The user has configured to ignore data safety checks and overwrite local data rather than preserve & safeBackup
 							addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ newItemPath, ["info", "notify"]);
 						} else {
-							// local data protection is configured, rename the local file, passing in if we are performing a --dry-run or not
+							// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
 							safeBackup(newItemPath, dryRun);
 						}
 					}
@@ -1764,10 +1764,10 @@ class SyncEngine {
 					
 					// Has the user configured to IGNORE local data protection rules?
 					if (bypassDataPreservation) {
-						// The user has configured to ignore data safety checks and overwrite local data rather than preserve & rename
+						// The user has configured to ignore data safety checks and overwrite local data rather than preserve & safeBackup
 						addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ newItemPath, ["info", "notify"]);
 					} else {
-						// local data protection is configured, rename the local file, passing in if we are performing a --dry-run or not
+						// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
 						safeBackup(newItemPath, dryRun);							
 					}
 				}
@@ -1863,11 +1863,11 @@ class SyncEngine {
 				
 				// Try and rename path, catch any exception generated
 				try {
-					// Rename this item, passing in if we are performing a --dry-run or not
-					safeBackup(changedItemPath, dryRun);
-					
 					// If we are in a --dry-run situation? , the actual rename did not occur - but we need to track like it did
 					if(!dryRun) {
+						// Rename this item, passing in if we are performing a --dry-run or not
+						safeRename(existingItemPath, changedItemPath, dryRun);
+					
 						// Flag that the item was moved | renamed
 						itemWasMoved = true;
 					
@@ -1875,6 +1875,7 @@ class SyncEngine {
 						// Otherwise when we do the DB check, the move on the file system, the file technically has a newer timestamp
 						// which is 'correct' .. but we need to report locally the online timestamp here as the move was made online
 						if (changedOneDriveItem.type == ItemType.file) {
+							// Set the timestamp
 							addLogEntry("Calling setTimes() for this file: " ~ changedItemPath, ["debug"]);
 							setTimes(changedItemPath, changedOneDriveItem.mtime, changedOneDriveItem.mtime);
 						}
