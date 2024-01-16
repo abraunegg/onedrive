@@ -1673,6 +1673,7 @@ class SyncEngine {
 		// As such, we should not be doing any other checks here to determine if the JSON item is wanted .. it is
 		
 		if (exists(newItemPath)) {
+			addLogEntry("Path on local disk already exists", ["debug"]);
 			// Issue #2209 fix - test if path is a bad symbolic link
 			if (isSymlink(newItemPath)) {
 				addLogEntry("Path on local disk is a symbolic link ........", ["debug"]);
@@ -1696,7 +1697,7 @@ class SyncEngine {
 				return;
 			} else {
 				// Item details from OneDrive and local item details in database are NOT in-sync
-				addLogEntry("The item to sync exists locally but is NOT in the local database - otherwise this would be handled as changed item", ["debug"]);
+				addLogEntry("The item to sync exists locally but is potentially not in the local database - otherwise this would be handled as changed item", ["debug"]);
 				
 				// Which object is newer? The local file or the remote file?
 				SysTime localModifiedTime = timeLastModified(newItemPath).toUTC();
@@ -1713,8 +1714,27 @@ class SyncEngine {
 						// item id is in the database
 						// no local rename
 						// no download needed
-						addLogEntry("Local item modified time is newer based on UTC time conversion - keeping local item as this exists in the local database", ["verbose"]);
-						addLogEntry("Skipping OneDrive change as this is determined to be unwanted due to local item modified time being newer than OneDrive item and present in the sqlite database", ["debug"]);
+						
+						// Fetch the latest DB record - as this could have been updated by the isItemSynced if the date online was being corrected, then the DB updated as a result
+						Item latestDatabaseItem;
+						itemDB.selectById(newDatabaseItem.driveId, newDatabaseItem.id, latestDatabaseItem);
+						addLogEntry("latestDatabaseItem: " ~ to!string(latestDatabaseItem), ["debug"]);
+						
+						SysTime latestItemModifiedTime = latestDatabaseItem.mtime;
+						// Reduce time resolution to seconds before comparing
+						latestItemModifiedTime.fracSecs = Duration.zero;
+						
+						if (localModifiedTime == latestItemModifiedTime) {
+							// Log action
+							addLogEntry("Local file modified time matches existing database record - keeping local file", ["verbose"]);
+							addLogEntry("Skipping OneDrive change as this is determined to be unwanted due to local file modified time matching database data", ["debug"]);
+						} else {
+							// Log action
+							addLogEntry("Local file modified time is newer based on UTC time conversion - keeping local file as this exists in the local database", ["verbose"]);
+							addLogEntry("Skipping OneDrive change as this is determined to be unwanted due to local file modified time being newer than OneDrive file and present in the sqlite database", ["debug"]);
+						}
+						// Return as no further action needed
+						return;
 					} else {
 						// item id is not in the database .. maybe a --resync ?
 						// file exists locally but is not in the sqlite database - maybe a failed download?
@@ -1846,18 +1866,20 @@ class SyncEngine {
 					// Rename this item, passing in if we are performing a --dry-run or not
 					safeBackup(changedItemPath, dryRun);
 					
-					// If the item is a file, make sure that the local timestamp now is the same as the timestamp online
-					// Otherwise when we do the DB check, the move on the file system, the file technically has a newer timestamp
-					// which is 'correct' .. but we need to report locally the online timestamp here as the move was made online
-					if (changedOneDriveItem.type == ItemType.file) {
-						setTimes(changedItemPath, changedOneDriveItem.mtime, changedOneDriveItem.mtime);
-					}
+					// If we are in a --dry-run situation? , the actual rename did not occur - but we need to track like it did
+					if(!dryRun) {
+						// Flag that the item was moved | renamed
+						itemWasMoved = true;
 					
-					// Flag that the item was moved | renamed
-					itemWasMoved = true;
-										
-					// If we are in a --dry-run situation, the actual rename did not occur - but we need to track like it did
-					if (dryRun) {
+						// If the item is a file, make sure that the local timestamp now is the same as the timestamp online
+						// Otherwise when we do the DB check, the move on the file system, the file technically has a newer timestamp
+						// which is 'correct' .. but we need to report locally the online timestamp here as the move was made online
+						if (changedOneDriveItem.type == ItemType.file) {
+							addLogEntry("Calling setTimes() for this file: " ~ changedItemPath, ["debug"]);
+							setTimes(changedItemPath, changedOneDriveItem.mtime, changedOneDriveItem.mtime);
+						}
+					} else {
+						// --dry-run situation - the actual rename did not occur - but we need to track like it did
 						// Track this as a faked id item
 						idsFaked ~= [changedOneDriveItem.driveId, changedOneDriveItem.id];
 						// We also need to track that we did not rename this path
@@ -2151,8 +2173,10 @@ class SyncEngine {
 									}
 									
 									// set the correct time on the downloaded file
-									addLogEntry("Calling setTimes() for this file: " ~ newItemPath, ["debug"]);
-									setTimes(newItemPath, itemModifiedTime, itemModifiedTime);
+									if (!dryRun) {
+										addLogEntry("Calling setTimes() for this file: " ~ newItemPath, ["debug"]);
+										setTimes(newItemPath, itemModifiedTime, itemModifiedTime);
+									}
 								} catch (FileException e) {
 									// display the error message
 									displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
@@ -2240,6 +2264,9 @@ class SyncEngine {
 	
 	// Test if the given item is in-sync. Returns true if the given item corresponds to the local one
 	bool isItemSynced(Item item, string path, string itemSource) {
+	
+		// This function is typically called when we are processing JSON objects from 'online'
+		// This function is not used in an --upload-only scenario
 		
 		if (!exists(path)) return false;
 		final switch (item.type) {
@@ -2256,8 +2283,9 @@ class SyncEngine {
 					if (localModifiedTime == itemModifiedTime) {
 						return true;
 					} else {
-						addLogEntry("Local item time discrepancy detected: " ~ path, ["verbose"]);
-						addLogEntry("This local item has a different modified time " ~ to!string(localModifiedTime) ~ " when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime), ["verbose"]);
+						// The file has a different timestamp ... is the hash the same meaning no file modification?
+						addLogEntry("Local file time discrepancy detected: " ~ path, ["verbose"]);
+						addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime), ["verbose"]);
 						
 						// The file has a different timestamp ... is the hash the same meaning no file modification?
 						// Test the file hash as the date / time stamp is different
@@ -2275,13 +2303,15 @@ class SyncEngine {
 									if (!dryRun) {
 										// Attempt to update the online date time stamp
 										uploadLastModifiedTime(item.driveId, item.id, localModifiedTime.toUTC(), item.eTag);
+										return false;
 									}									
 								} else {	
 									// --download-only is being used ... local file needs to be corrected ... but why is it newer - indexing application potentially changing the timestamp ?
 									addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --download-only", ["verbose"]);
-										if (!dryRun) {
+									if (!dryRun) {
 										addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);
 										setTimes(path, item.mtime, item.mtime);
+										return false;
 									}
 								}
 							} else {
@@ -2290,12 +2320,12 @@ class SyncEngine {
 								if (!dryRun) {
 									addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);
 									setTimes(path, item.mtime, item.mtime);
+									return false;
 								}
 							}
-							return true;
 						} else {
 							// The hash is different so the content of the file has to be different as to what is stored online
-							addLogEntry("The local item has a different hash when compared to " ~ itemSource ~ " item hash", ["verbose"]);
+							addLogEntry("The local file has a different hash when compared to " ~ itemSource ~ " file hash", ["verbose"]);
 							return false;
 						}
 					}
@@ -2859,10 +2889,22 @@ class SyncEngine {
 						} else {
 							// The file contents have not changed, but the modified timestamp has
 							addLogEntry("The last modified timestamp has changed however the file content has not changed", ["verbose"]);
-							addLogEntry("The local item has the same hash value as the item online - correcting timestamp online", ["verbose"]);
-							if (!dryRun) {
-								// Attempt to update the online date time stamp
-								uploadLastModifiedTime(dbItem.driveId, dbItem.id, localModifiedTime.toUTC(), dbItem.eTag);
+							
+							// Local file is newer .. are we in a --download-only situation?
+							if (!appConfig.getValueBool("download_only")) {
+								// Not a --download-only scenario
+								addLogEntry("The local item has the same hash value as the item online - correcting timestamp online", ["verbose"]);
+								if (!dryRun) {
+									// Attempt to update the online date time stamp
+									uploadLastModifiedTime(dbItem.driveId, dbItem.id, localModifiedTime.toUTC(), dbItem.eTag);
+								}
+							} else {
+								// --download-only being used
+								addLogEntry("The local item has the same hash value as the item online - correcting local timestamp due to --download-only being used to ensure local file matches timestamp online", ["verbose"]);
+								if (!dryRun) {
+									addLogEntry("Calling setTimes() for this file: " ~ localFilePath, ["debug"]);
+									setTimes(localFilePath, dbItem.mtime, dbItem.mtime);
+								}
 							}
 						}
 					} else {
