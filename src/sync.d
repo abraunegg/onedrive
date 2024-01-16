@@ -423,8 +423,8 @@ class SyncEngine {
 			addLogEntry("appConfig.accountType        = " ~ appConfig.accountType, ["debug"]);
 			addLogEntry("appConfig.defaultDriveId     = " ~ appConfig.defaultDriveId, ["debug"]);
 			addLogEntry("appConfig.remainingFreeSpace = " ~ to!string(appConfig.remainingFreeSpace), ["debug"]);
-			addLogEntry("appConfig.quotaAvailable     = " ~ appConfig.quotaAvailable, ["debug"]);
-			addLogEntry("appConfig.quotaRestricted    = " ~ appConfig.quotaRestricted, ["debug"]);
+			addLogEntry("appConfig.quotaAvailable     = " ~ to!string(appConfig.quotaAvailable), ["debug"]);
+			addLogEntry("appConfig.quotaRestricted    = " ~ to!string(appConfig.quotaRestricted), ["debug"]);
 			
 			// Make sure that appConfig.defaultDriveId is in our driveIDs array to use when checking if item is in database
 			// Keep the driveIDsArray with unique entries only

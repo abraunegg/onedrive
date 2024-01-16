@@ -318,7 +318,7 @@ int main(string[] cliArgs) {
 	if (appConfig.getValueBool("resync")) {
 		// what is the risk acceptance for --resync?
 		bool resyncRiskAcceptance = appConfig.displayResyncRiskForAcceptance();
-		addLogEntry("Returned --resync risk acceptance: " ~ resyncRiskAcceptance, ["debug"]);
+		addLogEntry("Returned --resync risk acceptance: " ~ to!string(resyncRiskAcceptance), ["debug"]);
 		
 		// Action based on user response
 		if (!resyncRiskAcceptance){
