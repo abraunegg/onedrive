@@ -3457,7 +3457,6 @@ class SyncEngine {
 	
 	// Process the list of local changes to upload to OneDrive
 	void processChangedLocalItemsToUpload() {
-		
 		// Each element in this array 'databaseItemsWhereContentHasChanged' is an Database Item ID that has been modified locally
 		ulong batchSize = appConfig.concurrentThreads;
 		ulong batchCount = (databaseItemsWhereContentHasChanged.length + batchSize - 1) / batchSize;
@@ -3471,7 +3470,7 @@ class SyncEngine {
 	
 	// Upload changed local files to OneDrive in parallel
 	void uploadChangedLocalFileToOneDrive(string[3][] array) {
-			
+	
 		foreach (i, localItemDetails; taskPool.parallel(array)) {
 		
 			addLogEntry("Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);
@@ -3502,7 +3501,12 @@ class SyncEngine {
 			// Get the file size from the actual file
 			ulong thisFileSizeLocal = getSize(localFilePath);
 			// Get the file size from the DB data
-			ulong thisFileSizeFromDB = to!ulong(dbItem.size);
+			ulong thisFileSizeFromDB;
+			if (!dbItem.size.empty) {
+				thisFileSizeFromDB = to!ulong(dbItem.size);
+			} else {
+				thisFileSizeFromDB = 0;
+			}
 			
 			// remainingFreeSpace online includes the current file online
 			// we need to remove the online file (add back the existing file size) then take away the new local file size to get a new approximate value
@@ -3840,6 +3844,13 @@ class SyncEngine {
 		JSONValue currentDriveQuota;
 		ulong remainingQuota;
 		
+		// Ensure that we have a valid driveId
+		if (driveId.empty) {
+			// no driveId was provided, use the application default
+			driveId = appConfig.defaultDriveId;
+		}
+		
+		// Try and query the quota for the provided driveId
 		try {
 			// Create a new OneDrive API instance
 			OneDriveApi getCurrentDriveQuotaApiInstance;
@@ -4782,13 +4793,32 @@ class SyncEngine {
 								throw new jsonResponseException("Unable to perform POSIX test as the OneDrive API request generated an invalid JSON response");
 							}
 							
+							// If we get to this point, the OneDrive API returned a 200 OK with valid JSON data that indicates a 'file' exists at this location already
+							// and that it matches the POSIX filename of the local item we are trying to upload as a new file
+							addLogEntry("The file we are attemtping to upload as a new file already exists on Microsoft OneDrive: " ~ fileToUpload, ["verbose"]);
+							
 							// No 404 or otherwise was triggered, meaning that the file already exists online and passes the POSIX test ...
 							addLogEntry("fileDetailsFromOneDrive after exist online check: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);
 							
-							// Does the data from online match our local file?
-							if (performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize)) {
-								// Save item to the database
+							// Does the data from online match our local file that we are attempting to upload as a new file?
+							if (!disableUploadValidation && performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize)) {
+								// Save online item details to the database
 								saveItem(fileDetailsFromOneDrive);
+							} else {
+								// The local file we are attempting to upload as a new file is different to the existing file online
+								addLogEntry("Triggering newfile upload target already exists edge case, where the online item does not match what we are trying to upload", ["debug"]);
+								
+								// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - consituting online data loss
+								// The file 'version history' online will have to be used to 'recover' the prior online file
+								string changedItemParentId = fileDetailsFromOneDrive["parentReference"]["driveId"].str;
+								string changedItemId = fileDetailsFromOneDrive["id"].str;
+								databaseItemsWhereContentHasChanged ~= [changedItemParentId, changedItemId, fileToUpload];
+								
+								// In order for the processing of the local item as a 'changed' item, unfortunatly we need to save the online data to the local DB
+								saveItem(fileDetailsFromOneDrive);
+								
+								// Attempt the processing of the different local file
+								processChangedLocalItemsToUpload();
 							}
 						} catch (OneDriveException exception) {
 							// If we get a 404 .. the file is not online .. this is what we want .. file does not exist online
@@ -6692,26 +6722,38 @@ class SyncEngine {
 				];
 				
 				// Perform the move operation on OneDrive
+				bool isMoveSuccess = false;
 				JSONValue response;
+				string eTag = oldItem.eTag;
 				
 				// Create a new API Instance for this thread and initialise it
 				OneDriveApi movePathOnlineApiInstance;
 				movePathOnlineApiInstance = new OneDriveApi(appConfig);
 				movePathOnlineApiInstance.initialise();
 				
-				try {
-					response = movePathOnlineApiInstance.updateById(oldItem.driveId, oldItem.id, data, oldItem.eTag);
-				} catch (OneDriveException e) {
-					if (e.httpStatusCode == 412) {
-						// OneDrive threw a 412 error, most likely: ETag does not match current item's value
-						// Retry without eTag
-						addLogEntry("File Move Failed - OneDrive eTag / cTag match issue", ["debug"]);
-						addLogEntry("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting to move the file - gracefully handling error", ["verbose"]);
-						string nullTag = null;
-						// move the file but without the eTag
-						response = movePathOnlineApiInstance.updateById(oldItem.driveId, oldItem.id, data, nullTag);
+				// Try the online move
+				for (int i = 0; i < 3; i++) {
+					try {
+						response = movePathOnlineApiInstance.updateById(oldItem.driveId, oldItem.id, data, oldItem.eTag);
+						isMoveSuccess = true;
+						break;
+					} catch (OneDriveException e) {
+						if (e.httpStatusCode == 412) {
+							// OneDrive threw a 412 error, most likely: ETag does not match current item's value
+							// Retry without eTag
+							addLogEntry("File Move Failed - OneDrive eTag / cTag match issue", ["debug"]);
+							addLogEntry("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting to move the file - gracefully handling error", ["verbose"]);
+							eTag = null;
+							// Retry to move the file but without the eTag, via the for() loop
+						} else if (e.httpStatusCode == 409) {
+							// Destination item already exists, delete it first
+							addLogEntry("Moved local item overwrote an existing item - deleting old online item");
+							uploadDeletedItem(newItem, newPath);
+						} else
+							break;
 					}
-				} 
+				}
+				
 				// Shutdown API instance
 				movePathOnlineApiInstance.shutdown();
 				// Free object and memory
