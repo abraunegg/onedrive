@@ -1757,18 +1757,28 @@ class SyncEngine {
 						}
 					}
 				} else {
-					// Remote file is newer than the existing local item
-					addLogEntry("Remote item modified time is newer based on UTC time conversion", ["verbose"]); // correct message, remote item is newer
-					addLogEntry("localModifiedTime (local file):   " ~ to!string(localModifiedTime), ["debug"]);
-					addLogEntry("itemModifiedTime (OneDrive item): " ~ to!string(itemModifiedTime), ["debug"]);
+					// Is the remote newer?
+					if (localModifiedTime < itemModifiedTime) {
+						// Remote file is newer than the existing local item
+						addLogEntry("Remote item modified time is newer based on UTC time conversion", ["verbose"]); // correct message, remote item is newer
+						addLogEntry("localModifiedTime (local file):   " ~ to!string(localModifiedTime), ["debug"]);
+						addLogEntry("itemModifiedTime (OneDrive item): " ~ to!string(itemModifiedTime), ["debug"]);
+						
+						// Has the user configured to IGNORE local data protection rules?
+						if (bypassDataPreservation) {
+							// The user has configured to ignore data safety checks and overwrite local data rather than preserve & safeBackup
+							addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ newItemPath, ["info", "notify"]);
+						} else {
+							// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
+							safeBackup(newItemPath, dryRun);							
+						}
+					}
 					
-					// Has the user configured to IGNORE local data protection rules?
-					if (bypassDataPreservation) {
-						// The user has configured to ignore data safety checks and overwrite local data rather than preserve & safeBackup
-						addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ newItemPath, ["info", "notify"]);
-					} else {
-						// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
-						safeBackup(newItemPath, dryRun);							
+					// Are the timestamps equal?
+					if (localModifiedTime == itemModifiedTime) {
+						// yes they are equal
+						addLogEntry("File timestamps are equal, no further action required", ["verbose"]); // correct message as timestamps are equal
+						return;
 					}
 				}
 			}
@@ -2052,7 +2062,7 @@ class SyncEngine {
 						// local file is different to what we know to be true
 						addLogEntry("The local file to replace (" ~ newItemPath ~ ") has been modified locally since the last download. Renaming it to avoid potential local data loss.");
 						
-						// Perform the local rename of the existing local file, passing in if we are performing a --dry-run or not
+						// Perform the local safeBackup of the existing local file, passing in if we are performing a --dry-run or not
 						safeBackup(newItemPath, dryRun);
 					}
 				}
