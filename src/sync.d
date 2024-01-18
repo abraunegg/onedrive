@@ -2296,7 +2296,7 @@ class SyncEngine {
 					} else {
 						// The file has a different timestamp ... is the hash the same meaning no file modification?
 						addLogEntry("Local file time discrepancy detected: " ~ path, ["verbose"]);
-						addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime), ["verbose"]);
+						addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " (UTC) when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime) ~ " (UTC)", ["verbose"]);
 						
 						// The file has a different timestamp ... is the hash the same meaning no file modification?
 						// Test the file hash as the date / time stamp is different
