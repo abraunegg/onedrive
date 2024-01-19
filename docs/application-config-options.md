@@ -86,6 +86,7 @@ Before reading this document, please ensure you are running application version 
   - [CLI Option: --verbose | -v+](#cli-option---verbose--v)
   - [CLI Option: --with-editing-perms](#cli-option---with-editing-perms)
 - [Depreciated Configuration File and CLI Options](#depreciated-configuration-file-and-cli-options)
+  - [force_http_2](#force_http_2)
   - [min_notify_changes](#min_notify_changes)
   - [CLI Option: --synchronize](#cli-option---synchronize)
 
@@ -1063,7 +1064,16 @@ _**Usage Example:**_ `onedrive --create-share-link 'relative/path/to/your/file.t
 _**Additional Usage Notes:**_ Placement of `--with-editing-perms` is critical. It *must* be placed after the file path as per the example above.
 
 ## Depreciated Configuration File and CLI Options
-The following configuration options are no longer supported
+The following configuration options are no longer supported:
+
+### force_http_2
+_**Description:**_ Force the use of HTTP/2 for all operations where applicable
+
+_**Depreciated Config Example:**_ `force_http_2 = "true"`
+
+_**Depreciated CLI Option:**_ `--force-http-2`
+
+_**Reason for depreciation:**_ HTTP/2 will be used by default where possible, when the OneDrive API platform does not downgrade the connection to HTTP/1.1, thus this confuguration option is no longer required.
 
 ### min_notify_changes
 _**Description:**_ Minimum number of pending incoming changes necessary to trigger a GUI desktop notification.
