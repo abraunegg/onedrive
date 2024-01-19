@@ -51,6 +51,7 @@ Before reading this document, please ensure you are running application version 
   - [sync_dir_permissions](#sync_dir_permissions)
   - [sync_file_permissions](#sync_file_permissions)
   - [sync_root_files](#sync_root_files)
+  - [threads](#threads)
   - [upload_only](#upload_only)
   - [user_agent](#user_agent)
   - [webhook_enabled](#webhook_enabled)
@@ -184,13 +185,13 @@ _**CLI Option Use:**_ `--cleanup-local-files`
 _**Additional Usage Requirement:**_ This configuration option can only be used with 'download_only'. It cannot be used with any other application option.
 
 ### connect_timeout
-_**Description:**_ This configuration setting manages the TCP connection timeout duration in seconds for HTTPS connections to Microsoft OneDrive when using the curl library.
+_**Description:**_ This configuration setting manages the TCP connection timeout duration in seconds for HTTPS connections to Microsoft OneDrive when using the curl library (CURLOPT_CONNECTTIMEOUT).
 
 _**Value Type:**_ Integer
 
-_**Default Value:**_ 30
+_**Default Value:**_ 10
 
-_**Config Example:**_ `connect_timeout = "20"`
+_**Config Example:**_ `connect_timeout = "15"`
 
 ### data_timeout
 _**Description:**_ This setting controls the timeout duration, in seconds, for when data is not received on an active connection to Microsoft OneDrive over HTTPS when using the curl library, before that connection is timeout out.
@@ -446,7 +447,7 @@ _**CLI Option Use:**_ `--no-remote-delete`
 _**Additional Usage Notes:**_ This configuration option can *only* be used in conjunction with `--upload-only`
 
 ### operation_timeout
-_**Description:**_ This configuration option controls the maximum amount of time (seconds) a file operation is allowed to take. This includes DNS resolution, connecting, data transfer, etc. We recommend users not to tamper with this option unless strictly necessary.
+_**Description:**_ This configuration option controls the maximum amount of time (seconds) a file operation is allowed to take. This includes DNS resolution, connecting, data transfer, etc. We recommend users not to tamper with this option unless strictly necessary. This option controls the CURLOPT_TIMEOUT setting of libcurl.
 
 _**Value Type:**_ Integer
 
@@ -726,6 +727,19 @@ _**Config Example:**_ `sync_root_files = "false"` or `sync_root_files = "true"`
 _**CLI Option Use:**_ `--sync-root-files`
 
 _**Additional Usage Notes:**_ Although it's not mandatory, it's recommended that after enabling this option, you perform a `--resync`. This ensures that any previously excluded content is now included in your sync process.
+
+### threads
+_**Description:**_ This configuration option controls the number of 'threads' for upload and download operations when files need to be transfered between your local system and Microsoft OneDrive.
+
+_**Value Type:**_ Integer
+
+_**Default Value:**_ `8`
+
+_**Maximum Value:**_ `16`
+
+_**Config Example:**_ `threads = "16"`
+
+_**Additional Usage Notes:**_ Increasing the threads beyond the default will lead to increased system utilisation and local TCP port use, which may lead to unpredictable behaviour and/or application stability issues.
 
 ### upload_only
 _**Description:**_ This setting forces the client to only upload data to Microsoft OneDrive and replicate the locate state online. By default, this will also remove content online, that has been removed locally.

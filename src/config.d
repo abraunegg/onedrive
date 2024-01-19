@@ -63,12 +63,14 @@ class ApplicationConfig {
 	// libcurl dns_cache_timeout timeout
 	immutable int defaultDnsTimeout = 60;
 	// Connect timeout for HTTP|HTTPS connections
-	immutable int defaultConnectTimeout = 30;
+	// Controls CURLOPT_CONNECTTIMEOUT
+	immutable int defaultConnectTimeout = 10;
 	// Default data timeout for HTTP
 	// curl.d has a default of: _defaultDataTimeout = dur!"minutes"(2);
 	immutable int defaultDataTimeout = 240;
 	// Maximum time any operation is allowed to take
 	// This includes dns resolution, connecting, data transfer, etc.
+	// Controls CURLOPT_TIMEOUT
 	immutable int defaultOperationTimeout = 3600;
 	// Specify what IP protocol version should be used when communicating with OneDrive
 	immutable int defaultIpProtocol = 0; // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
@@ -131,8 +133,8 @@ class ApplicationConfig {
 	bool fullScanTrueUpRequired = false;
 	bool surpressLoggingOutput = false;
 	
-	// This is the value that needs testing when we are actually downloading and uploading data
-	ulong concurrentThreads = 16;
+	// Number of concurrent threads when downloading and uploading data
+	ulong defaultConcurrentThreads = 8;
 		
 	// All application run-time paths are formulated from this as a set of defaults
 	// - What is the home path of the actual 'user' that is running the application
@@ -258,16 +260,22 @@ class ApplicationConfig {
 		
 		// HTTPS & CURL Operation Settings
 		// - Maximum time an operation is allowed to take
-		//   This includes dns resolution, connecting, data transfer, etc.
+		//   This includes dns resolution, connecting, data transfer, etc - controls CURLOPT_TIMEOUT
+		// CURLOPT_TIMEOUT: This option sets the maximum time in seconds that you allow the libcurl transfer operation to take. 
+		// This is useful for controlling how long a specific transfer should take before it is considered too slow and aborted. However, it does not directly control the keep-alive time of a socket.
 		longValues["operation_timeout"] = defaultOperationTimeout;
 		// libcurl dns_cache_timeout timeout
 		longValues["dns_timeout"] = defaultDnsTimeout;
-		// Timeout for HTTPS connections
+		// Timeout for HTTPS connections - controls CURLOPT_CONNECTTIMEOUT
+		// CURLOPT_CONNECTTIMEOUT: This option sets the timeout, in seconds, for the connection phase. It is the maximum time allowed for the connection to be established.
 		longValues["connect_timeout"] = defaultConnectTimeout;
 		// Timeout for activity on a HTTPS connection
 		longValues["data_timeout"] = defaultDataTimeout;
 		// What IP protocol version should be used when communicating with OneDrive
 		longValues["ip_protocol_version"] = defaultIpProtocol; // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
+		
+		// Number of concurrent threads
+		longValues["threads"] = defaultConcurrentThreads; // Default is 8, user can increase or decrease
 		
 		// - Do we wish to upload only?
 		boolValues["upload_only"] = false;
@@ -848,9 +856,16 @@ class ApplicationConfig {
 					ulong tempValue = thisConfigValue;
 					if (tempValue > 2) {
 						addLogEntry("Invalid value for key in config file - using default value: " ~ key);
-						tempValue = 0;
+						tempValue = defaultIpProtocol;
 					}
 					setValueLong("ip_protocol_version", tempValue);
+				} else if (key == "threads") {
+					ulong tempValue = thisConfigValue;
+					if (tempValue > 16) {
+						addLogEntry("Invalid value for key in config file - using default value: " ~ key);
+						tempValue = defaultConcurrentThreads;
+					}
+					setValueLong("threads", tempValue);
 				}
 			} else {
 				addLogEntry("Unknown key in config file: " ~ key);
@@ -863,7 +878,7 @@ class ApplicationConfig {
 
 	// Update the application configuration based on CLI passed in parameters
 	void updateFromArgs(string[] cliArgs) {
-		// Add additional options that are NOT configurable via config file
+		// Add additional CLI options that are NOT configurable via config file
 		stringValues["create_directory"] = "";
 		stringValues["create_share_link"] = "";
 		stringValues["destination_directory"] = "";
@@ -1327,6 +1342,7 @@ class ApplicationConfig {
 		addLogEntry("Config option 'connect_timeout'              = " ~ to!string(getValueLong("connect_timeout")));
 		addLogEntry("Config option 'data_timeout'                 = " ~ to!string(getValueLong("data_timeout")));
 		addLogEntry("Config option 'ip_protocol_version'          = " ~ to!string(getValueLong("ip_protocol_version")));
+		addLogEntry("Config option 'threads'                      = " ~ to!string(getValueLong("threads")));
 		
 		// Is sync_list configured ?
 		if (exists(syncListFilePath)){

@@ -619,8 +619,8 @@ int main(string[] cliArgs) {
 	// Do we need to validate the runtimeSyncDirectory to check for the presence of a '.nosync' file
 	checkForNoMountScenario();
 	
-	// Set the default thread pool value - hard coded to 16
-	defaultPoolThreads(to!int(appConfig.concurrentThreads));
+	// Set the default thread pool value
+	defaultPoolThreads(to!int(appConfig.getValueLong("threads")));
 	
 	// Is the sync engine initiallised correctly?
 	if (appConfig.syncEngineWasInitialised) {

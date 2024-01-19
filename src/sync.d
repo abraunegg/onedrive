@@ -1965,12 +1965,12 @@ class SyncEngine {
 	// Download new file items as identified
 	void downloadOneDriveItems() {
 		// Lets deal with all the JSON items that need to be downloaded in a batch process
-		ulong batchSize = appConfig.concurrentThreads;
+		ulong batchSize = appConfig.getValueLong("threads");
 		ulong batchCount = (fileJSONItemsToDownload.length + batchSize - 1) / batchSize;
 		ulong batchesProcessed = 0;
 		
 		foreach (chunk; fileJSONItemsToDownload.chunks(batchSize)) {
-			// send an array containing 'appConfig.concurrentThreads' (16) JSON items to download
+			// send an array containing 'appConfig.getValueLong("threads")' JSON items to download
 			downloadOneDriveItemsInParallel(chunk);
 		}
 	}
@@ -3469,7 +3469,7 @@ class SyncEngine {
 	void processChangedLocalItemsToUpload() {
 		
 		// Each element in this array 'databaseItemsWhereContentHasChanged' is an Database Item ID that has been modified locally
-		ulong batchSize = appConfig.concurrentThreads;
+		ulong batchSize = appConfig.getValueLong("threads");
 		ulong batchCount = (databaseItemsWhereContentHasChanged.length + batchSize - 1) / batchSize;
 		ulong batchesProcessed = 0;
 		
@@ -4644,7 +4644,7 @@ class SyncEngine {
 	// Upload new file items as identified
 	void uploadNewLocalFileItems() {
 		// Lets deal with the new local items in a batch process
-		ulong batchSize = appConfig.concurrentThreads;
+		ulong batchSize = appConfig.getValueLong("threads");
 		ulong batchCount = (newLocalFilesToUploadToOneDrive.length + batchSize - 1) / batchSize;
 		ulong batchesProcessed = 0;
 		
@@ -7477,12 +7477,12 @@ class SyncEngine {
 			// there are valid items to resume upload
 		
 			// Lets deal with all the JSON items that need to be reumed for upload in a batch process
-			ulong batchSize = appConfig.concurrentThreads;
+			ulong batchSize = appConfig.getValueLong("threads");
 			ulong batchCount = (jsonItemsToResumeUpload.length + batchSize - 1) / batchSize;
 			ulong batchesProcessed = 0;
 			
 			foreach (chunk; jsonItemsToResumeUpload.chunks(batchSize)) {
-				// send an array containing 'appConfig.concurrentThreads' (16) JSON items to resume upload
+				// send an array containing 'appConfig.getValueLong("threads")' JSON items to resume upload
 				resumeSessionUploadsInParallel(chunk);
 			}
 		}
