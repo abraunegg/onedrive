@@ -5703,7 +5703,7 @@ class SyncEngine {
 			}
 		} else {
 			// log error
-			addLogEntry("ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object");
+			addLogEntry("ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object that can be processed.");
 			addLogEntry("ERROR: Increase logging verbosity to assist determining why.");
 		}
 	}

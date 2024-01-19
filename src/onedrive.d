@@ -1579,6 +1579,7 @@ class OneDriveApi {
 		};
 
 		try {
+			// Attempt to perform the action
 			curlEngine.http.perform();
 			// Check the HTTP Response headers - needed for correct 429 handling
 			checkHTTPResponseHeaders();
@@ -1603,12 +1604,16 @@ class OneDriveApi {
 				SysTime currentTime;
 				
 				// Connectivity to Microsoft OneDrive was lost
-				addLogEntry("Internet connectivity to Microsoft OneDrive service has been lost .. re-trying in the background");
+				addLogEntry("Internet connectivity to Microsoft OneDrive service has been interrupted .. re-trying in the background");
 				
 				// what caused the initial curl exception?
 				if (canFind(errorMessage, "Couldn't connect to server on handle")) addLogEntry("Unable to connect to server - HTTPS access blocked?", ["debug"]);
 				if (canFind(errorMessage, "Couldn't resolve host name on handle")) addLogEntry("Unable to resolve server - DNS access blocked?", ["debug"]);
-				if (canFind(errorMessage, "Timeout was reached on handle")) addLogEntry("A timeout was triggered - data too slow, no response ... use --debug-https to diagnose further", ["debug"]);
+				if (canFind(errorMessage, "Timeout was reached on handle")) {
+					// Common cause is libcurl trying IPv6 DNS resolution when there are only IPv4 DNS servers available
+					addLogEntry("A libcurl timeout was triggered - data too slow, no DNS resolution response, no server response ... use --debug-https to diagnose this issue further.", ["verbose"]);
+					addLogEntry("A common cause is IPv6 DNS resolution. Investigate 'ip_protocol_version' to only use IPv4 network communication to potentially resolve this issue.", ["verbose"]);
+				}
 				
 				while (!retrySuccess){
 					try {
