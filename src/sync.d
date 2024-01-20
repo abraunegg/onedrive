@@ -210,8 +210,10 @@ class SyncEngine {
 		// Do we configure to clean up local files if using --download-only ?
 		if ((appConfig.getValueBool("download_only")) && (appConfig.getValueBool("cleanup_local_files"))) {
 			// --download-only and --cleanup-local-files were passed in
+			addLogEntry();
 			addLogEntry("WARNING: Application has been configured to cleanup local files that are not present online.");
 			addLogEntry("WARNING: Local data loss MAY occur in this scenario if you are expecting data to remain archived locally.");
+			addLogEntry();
 			// Set the flag
 			this.cleanupLocalFiles = true;
 		}
@@ -525,7 +527,7 @@ class SyncEngine {
 	void syncOneDriveAccountToLocalDisk() {
 	
 		// performFullScanTrueUp value
-		addLogEntry("Perform a Full Scan True-Up: " ~ appConfig.fullScanTrueUpRequired, ["debug"]);
+		addLogEntry("Perform a Full Scan True-Up: " ~ to!string(appConfig.fullScanTrueUpRequired), ["debug"]);
 		
 		// Fetch the API response of /delta to track changes on OneDrive
 		fetchOneDriveDeltaAPIResponse(null, null, null);
@@ -1807,7 +1809,7 @@ class SyncEngine {
 						// updated by the local Operating System with the latest timestamp - as this is normal operation
 						// as the directory has been modified
 						addLogEntry("Setting directory lastModifiedDateTime for: " ~ newItemPath ~ " to " ~ to!string(newDatabaseItem.mtime), ["debug"]);
-						addLogEntry("Calling setTimes() for this file: " ~ newItemPath, ["debug"]);
+						addLogEntry("Calling setTimes() for this directory: " ~ newItemPath, ["debug"]);
 						setTimes(newItemPath, newDatabaseItem.mtime, newDatabaseItem.mtime);
 						// Save the item to the database
 						saveItem(onedriveJSONItem);
@@ -4286,13 +4288,14 @@ class SyncEngine {
 		
 		// Check if this path in the database
 		Item databaseItem;
-		bool pathFoundInDB = false;
+		addLogEntry("Search DB for this path: " ~ searchPath, ["debug"]);
 		foreach (driveId; driveIDsArray) {
 			if (itemDB.selectByPath(searchPath, driveId, databaseItem)) {
-				pathFoundInDB = true;
+				addLogEntry("DB Record for search path: " ~ to!string(databaseItem), ["debug"]);
+				return true; // Early exit on finding the path in the DB
 			}
 		}
-		return pathFoundInDB;
+		return false; // Return false if path is not found in any drive
 	}
 	
 	// Create a new directory online on OneDrive
