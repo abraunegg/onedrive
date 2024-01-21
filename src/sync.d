@@ -3068,6 +3068,14 @@ class SyncEngine {
 			}
 		}
 		
+		// Validate that the path is a valid UTF-16 encoded path
+		if (!invalidPath) {
+			if (!isValidUTF16(localFilePath)) { // This will return true if this is a valid UTF-16 encoded path, so we are checking for 'false' as response
+				addLogEntry("Skipping item - invalid name (Invalid UTF-16 encoded item): " ~ localFilePath, ["info", "notify"]);
+				invalidPath = true;
+			}
+		}
+		
 		// Check path for ASCII Control Codes
 		if (!invalidPath) {
 			if (containsASCIIControlCodes(localFilePath)) { // This will return true if this contains ASCII Control Codes

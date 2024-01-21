@@ -19,6 +19,7 @@ import std.algorithm;
 import std.uri;
 import std.json;
 import std.traits;
+import std.utf;
 import core.stdc.stdlib;
 import core.thread;
 import core.memory;
@@ -415,7 +416,7 @@ bool containsASCIIHTMLCodes(string path) {
 
 // Does the path contain any ASCII Control Codes
 bool containsASCIIControlCodes(string path) {
-	// Check for null or empty string
+    // Check for null or empty string
     if (path.length == 0) {
         return false;
     }
@@ -425,16 +426,56 @@ bool containsASCIIControlCodes(string path) {
         return false;
     }
 
-	// https://github.com/abraunegg/onedrive/discussions/2553#discussioncomment-7995254
-	// Define a ctRegex pattern for ASCII control codes
-	auto controlCodePattern = ctRegex!(`[^\x20-\x7E./]`);
+    // https://github.com/abraunegg/onedrive/discussions/2553#discussioncomment-7995254
+	//  Define a ctRegex pattern for ASCII control codes and specific non-ASCII control characters
+    //  This pattern includes the ASCII control range and common non-ASCII control characters
+    //  Adjust the pattern as needed to include specific characters of concern
+	auto controlCodePattern = ctRegex!(`[\x00-\x1F\x7F]|\p{Cc}`); // Blocks ƒ†¯~‰ (#2553) , allows α (#2598)
 
-	// Use match to search for ASCII control codes in the path
-	auto matchResult = match(path, controlCodePattern);
+    // Use match to search for ASCII control codes in the path
+    auto matchResult = match(path, controlCodePattern);
 
-	// Return true if matchResult is not empty (indicating a control code was found)
-	return !matchResult.empty;
+    // Return true if matchResult is not empty (indicating a control code was found)
+    return !matchResult.empty;
 }
+
+// Is the path a valid UTF-16 encoded path?
+bool isValidUTF16(string path) {
+    // Check for null or empty string
+    if (path.length == 0) {
+        return true;
+    }
+
+    // Check for root item
+    if (path == ".") {
+        return true;
+    }
+
+    auto wpath = toUTF16(path); // Convert to UTF-16 encoding
+    auto it = wpath.byCodeUnit;
+
+    while (!it.empty) {
+        ushort current = it.front;
+        
+        // Check for valid single unit
+        if (current <= 0xD7FF || (current >= 0xE000 && current <= 0xFFFF)) {
+            it.popFront();
+        }
+        // Check for valid surrogate pair
+        else if (current >= 0xD800 && current <= 0xDBFF) {
+            it.popFront();
+            if (it.empty || it.front < 0xDC00 || it.front > 0xDFFF) {
+                return false; // Invalid surrogate pair
+            }
+            it.popFront();
+        } else {
+            return false; // Invalid code unit
+        }
+    }
+
+    return true;
+}
+
 
 // Does the path contain any HTML URL encoded items (e.g., '%20' for space)
 bool containsURLEncodedItems(string path) {
