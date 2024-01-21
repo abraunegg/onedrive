@@ -4525,11 +4525,19 @@ class SyncEngine {
 							// OneDrive API returned a 404 (above) to say the directory did not exist
 							// but when we attempted to create it, OneDrive responded that it now already exists
 							addLogEntry("OneDrive reported that " ~ thisNewPathToCreate ~ " already exists .. OneDrive API race condition", ["verbose"]);
+							// Shutdown API instance
+							createDirectoryOnlineOneDriveApiInstance.shutdown();
+							// Free object and memory
+							object.destroy(createDirectoryOnlineOneDriveApiInstance);
 							return;
 						} else {
 							// some other error from OneDrive was returned - display what it is
 							addLogEntry("OneDrive generated an error when creating this path: " ~ thisNewPathToCreate);
 							displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+							// Shutdown API instance
+							createDirectoryOnlineOneDriveApiInstance.shutdown();
+							// Free object and memory
+							object.destroy(createDirectoryOnlineOneDriveApiInstance);
 							return;
 						}
 					}
@@ -4608,6 +4616,10 @@ class SyncEngine {
 						// Add this path to businessSharedFoldersOnlineToSkip
 						businessSharedFoldersOnlineToSkip ~= [thisNewPathToCreate];
 						// no save to database, no online create
+						// Shutdown API instance
+						createDirectoryOnlineOneDriveApiInstance.shutdown();
+						// Free object and memory
+						object.destroy(createDirectoryOnlineOneDriveApiInstance);
 						return;
 					}
 				}
@@ -4617,6 +4629,10 @@ class SyncEngine {
 				
 				// Is the response a valid JSON object - validation checking done in saveItem
 				saveItem(onlinePathData);
+				// Shutdown API instance
+				createDirectoryOnlineOneDriveApiInstance.shutdown();
+				// Free object and memory
+				object.destroy(createDirectoryOnlineOneDriveApiInstance);
 				return;
 			} else {
 				// Normally this would throw an error, however we cant use throw new posixException()
@@ -4627,6 +4643,10 @@ class SyncEngine {
 				addLogEntry("Skipping creating this directory online due to 'case-insensitive match': " ~ thisNewPathToCreate);
 				// Add this path to posixViolationPaths
 				posixViolationPaths ~= [thisNewPathToCreate];
+				// Shutdown API instance
+				createDirectoryOnlineOneDriveApiInstance.shutdown();
+				// Free object and memory
+				object.destroy(createDirectoryOnlineOneDriveApiInstance);
 				return;
 			}
 		} else {
@@ -4634,6 +4654,10 @@ class SyncEngine {
 			addLogEntry("ERROR: There was an error performing this operation on Microsoft OneDrive");
 			addLogEntry("ERROR: Increase logging verbosity to assist determining why.");
 			addLogEntry("Skipping: " ~ buildNormalizedPath(absolutePath(thisNewPathToCreate)));
+			// Shutdown API instance
+			createDirectoryOnlineOneDriveApiInstance.shutdown();
+			// Free object and memory
+			object.destroy(createDirectoryOnlineOneDriveApiInstance);
 			return;
 		}
 	}
