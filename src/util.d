@@ -275,24 +275,28 @@ bool retryInternetConnectivtyTest(ApplicationConfig appConfig) {
 // https://github.com/abraunegg/onedrive/issues/113
 // returns true if file can be accessed
 bool readLocalFile(string path) {
-    try {
-        // Attempt to read up to the first 1 byte of the file
-        auto data = read(path, 1);
+    // What is the file size
+	if (getSize(path) != 0) {
+		try {
+			// Attempt to read up to the first 1 byte of the file
+			auto data = read(path, 1);
 
-        // Check if the read operation was successful
-        if (data.length != 1) {
-			// What is the file size?
-			if (getSize(path) != 0) {
+			// Check if the read operation was successful
+			if (data.length != 1) {
+				// Read operation not sucessful
 				addLogEntry("Failed to read the required amount from the file: " ~ path);
+				return false;
 			}
-            return false;
-        }
-    } catch (std.file.FileException e) {
-        // Unable to read the file, log the error message
-        displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-        return false;
-    }
-    return true;
+		} catch (std.file.FileException e) {
+			// Unable to read the file, log the error message
+			displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+			return false;
+		}
+		return true;
+	} else {
+		// zero byte files cannot be read, return true
+		return true;
+	}
 }
 
 // Calls globMatch for each string in pattern separated by '|'
