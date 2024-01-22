@@ -4000,7 +4000,7 @@ class SyncEngine {
 		// Are there any items to download post fetching the /delta data?
 		if (!newLocalFilesToUploadToOneDrive.empty) {
 			// There are elements to upload
-			addLogEntry("New items to upload to OneDrive: " ~ to!string(newLocalFilesToUploadToOneDrive.length), ["verbose"]);
+			addLogEntry("New items to upload to OneDrive: " ~ to!string(newLocalFilesToUploadToOneDrive.length));
 			
 			// Reset totalDataToUpload
 			totalDataToUpload = 0;
@@ -4036,6 +4036,14 @@ class SyncEngine {
 			
 			// Cleanup array memory after uploading all files
 			newLocalFilesToUploadToOneDrive = [];
+		}
+
+		if (!databaseItemsWhereContentHasChanged.empty) {
+			// There are changed local files that were in the DB to upload
+			addLogEntry("Changed local items to upload to OneDrive: " ~ to!string(databaseItemsWhereContentHasChanged.length));
+			processChangedLocalItemsToUpload();
+			// Cleanup array memory
+			databaseItemsWhereContentHasChanged = [];
 		}
 	}
 	
@@ -4847,7 +4855,8 @@ class SyncEngine {
 							addLogEntry("fileDetailsFromOneDrive after exist online check: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);
 							
 							// Does the data from online match our local file that we are attempting to upload as a new file?
-							if (!disableUploadValidation && performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize)) {
+							bool raiseWarning = false;
+							if (!disableUploadValidation && performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize, raiseWarning)) {
 								// Save online item details to the database
 								saveItem(fileDetailsFromOneDrive);
 							} else {
@@ -4858,13 +4867,11 @@ class SyncEngine {
 								// The file 'version history' online will have to be used to 'recover' the prior online file
 								string changedItemParentId = fileDetailsFromOneDrive["parentReference"]["driveId"].str;
 								string changedItemId = fileDetailsFromOneDrive["id"].str;
+								addLogEntry("Skipping uploading this file as moving it to upload as a modified file (online item already exists): " ~ fileToUpload);
 								databaseItemsWhereContentHasChanged ~= [changedItemParentId, changedItemId, fileToUpload];
 								
 								// In order for the processing of the local item as a 'changed' item, unfortunatly we need to save the online data to the local DB
 								saveItem(fileDetailsFromOneDrive);
-								
-								// Attempt the processing of the different local file
-								processChangedLocalItemsToUpload();
 							}
 						} catch (OneDriveException exception) {
 							// If we get a 404 .. the file is not online .. this is what we want .. file does not exist online
@@ -6817,7 +6824,7 @@ class SyncEngine {
 	}
 	
 	// Perform integrity validation of the file that was uploaded
-	bool performUploadIntegrityValidationChecks(JSONValue uploadResponse, string localFilePath, ulong localFileSize) {
+	bool performUploadIntegrityValidationChecks(JSONValue uploadResponse, string localFilePath, ulong localFileSize, bool raiseWarning=true) {
 	
 		bool integrityValid = false;
 	
@@ -6833,7 +6840,7 @@ class SyncEngine {
 					// Uploaded file integrity intact
 					addLogEntry("Uploaded local file matches reported online size and hash values", ["debug"]);
 					integrityValid = true;
-				} else {
+				} else if (raiseWarning) {
 					// Upload integrity failure .. what failed?
 					// There are 2 scenarios where this happens:
 					// 1. Failed Transfer
