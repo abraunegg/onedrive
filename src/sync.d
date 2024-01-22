@@ -3986,6 +3986,7 @@ class SyncEngine {
 	
 		// Perform the filesystem walk of this path, building an array of new items to upload
 		scanPathForNewData(path);
+		addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 		
 		// To finish off the processing items, this is needed to reflect this in the log
 		addLogEntry("------------------------------------------------------------------", ["debug"]);
@@ -4049,7 +4050,7 @@ class SyncEngine {
 	
 	// Scan this path for new data
 	void scanPathForNewData(string path) {
-			
+
 		ulong maxPathLength;
 		ulong pathWalkLength;
 		
@@ -4319,7 +4320,7 @@ class SyncEngine {
 	//   for the path flow and create the folder that way
 	void createDirectoryOnline(string thisNewPathToCreate) {
 		// Log what we are doing
-		addLogEntry("OneDrive Client requested to create this directory online: " ~ thisNewPathToCreate);
+		addLogEntry("OneDrive Client requested to create this directory online: " ~ thisNewPathToCreate, ["verbose"]);
 		
 		Item parentItem;
 		JSONValue onlinePathData;
@@ -4429,6 +4430,8 @@ class SyncEngine {
 			if (parentItem.driveId == appConfig.defaultDriveId) {
 				// Use getPathDetailsByDriveId
 				onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, thisNewPathToCreate);
+				// Add a processing '.'
+				addLogEntry(".", ["consoleOnlyNoNewLine"]);
 			} else {
 				// If the parentItem.driveId is not our driveId - the path we are looking for will not be at the logical location that getPathDetailsByDriveId 
 				// can use - as it will always return a 404 .. even if the path actually exists (which is the whole point of this test)
@@ -4694,6 +4697,7 @@ class SyncEngine {
 		foreach (chunk; newLocalFilesToUploadToOneDrive.chunks(batchSize)) {
 			uploadNewLocalFileItemsInParallel(chunk);
 		}
+		addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 	}
 	
 	// Upload the file batches in parallel
@@ -4853,12 +4857,14 @@ class SyncEngine {
 							
 							// No 404 or otherwise was triggered, meaning that the file already exists online and passes the POSIX test ...
 							addLogEntry("fileDetailsFromOneDrive after exist online check: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);
-							
+
 							// Does the data from online match our local file that we are attempting to upload as a new file?
 							bool raiseWarning = false;
 							if (!disableUploadValidation && performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize, raiseWarning)) {
 								// Save online item details to the database
 								saveItem(fileDetailsFromOneDrive);
+								// Add a processing '.'
+								addLogEntry(".", ["consoleOnlyNoNewLine"]);
 							} else {
 								// The local file we are attempting to upload as a new file is different to the existing file online
 								addLogEntry("Triggering newfile upload target already exists edge case, where the online item does not match what we are trying to upload", ["debug"]);
