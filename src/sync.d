@@ -2442,7 +2442,7 @@ class SyncEngine {
 		addLogEntry("Handling a OneDrive HTTP 429 Response Code (Too Many Requests)", ["debug"]);
 		
 		// Read in the Retry-After HTTP header as set and delay as per this value before retrying the request
-		auto retryAfterValue = activeOneDriveApiInstance.getRetryAfterValue();
+		auto retryAfterValue = 300;
 		addLogEntry("Using Retry-After Value = " ~ to!string(retryAfterValue), ["debug"]);
 		
 		// HTTP request returned status code 429 (Too Many Requests)
@@ -2465,9 +2465,6 @@ class SyncEngine {
 		addLogEntry("Thread sleeping due to 'HTTP request returned status code 429' - The request has been throttled");
 		addLogEntry("Sleeping for " ~ to!string(delayBeforeRetry) ~ " seconds");
 		Thread.sleep(dur!"seconds"(delayBeforeRetry));
-		
-		// Reset retry-after value to zero as we have used this value now and it may be changed in the future to a different value
-		activeOneDriveApiInstance.resetRetryAfterValue();
 	}
 	
 	// If the JSON response is not correct JSON object, exit
@@ -5560,7 +5557,7 @@ class SyncEngine {
 					addLogEntry("Fragment upload failed - received throttle request uploadResponse from OneDrive", ["debug"]);
 					
 					if (exception.httpStatusCode == 429) {
-						auto retryAfterValue = activeOneDriveApiInstance.getRetryAfterValue();
+						auto retryAfterValue = 300;
 						addLogEntry("Using Retry-After Value = " ~ to!string(retryAfterValue), ["debug"]);
 						
 						// Sleep thread as per request
