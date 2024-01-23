@@ -4319,7 +4319,7 @@ class SyncEngine {
 	//   for the path flow and create the folder that way
 	void createDirectoryOnline(string thisNewPathToCreate) {
 		// Log what we are doing
-		addLogEntry("OneDrive Client requested to create this directory online: " ~ thisNewPathToCreate);
+		addLogEntry("OneDrive Client requested to create this directory online: " ~ thisNewPathToCreate, ["verbose"]);
 		
 		Item parentItem;
 		JSONValue onlinePathData;
@@ -4756,201 +4756,208 @@ class SyncEngine {
 			parentItem.driveId = appConfig.defaultDriveId;
 		}
 		
-		// Get the new file size
-		// Even if the permissions on the file are: -rw-------.  1 root root    8 Jan 11 09:42
-		// We can obtain the file size
-		thisFileSize = getSize(fileToUpload);
-		
-		// Can we read the file - as a permissions issue or actual file corruption will cause a failure
-		// Resolves: https://github.com/abraunegg/onedrive/issues/113
-		// readLocalFile cannot 'read' 1 byte of data from a zero byte file size ..
-		if (readLocalFile(fileToUpload) || (thisFileSize == 0)) {
-			if (parentPathFoundInDB) {
+		// Check if the path still exists locally before we try to upload
+		if (exists(fileToUpload)) {
+			// Can we read the file - as a permissions issue or actual file corruption will cause a failure
+			// Resolves: https://github.com/abraunegg/onedrive/issues/113
+			if (readLocalFile(fileToUpload)) {
 				// The local file can be read - so we can read it to attemtp to upload it in this thread
-				
-				// Does this file exceed the maximum filesize for OneDrive
-				// Resolves: https://github.com/skilion/onedrive/issues/121 , https://github.com/skilion/onedrive/issues/294 , https://github.com/skilion/onedrive/issues/329
-				if (thisFileSize <= maxUploadFileSize) {
-					// Is there enough free space on OneDrive when we started this thread, to upload the file to OneDrive?
-					remainingFreeSpaceOnline = getRemainingFreeSpace(parentItem.driveId);
-					addLogEntry("Current Available Space Online (Upload Target Drive ID): " ~ to!string((remainingFreeSpaceOnline / 1024 / 1024)) ~ " MB", ["debug"]);
+				// Is the path parent in the DB?
+				if (parentPathFoundInDB) {
+					// Parent path is in the database
+					// Get the new file size
+					// Even if the permissions on the file are: -rw-------.  1 root root    8 Jan 11 09:42
+					// we can still obtain the file size, however readLocalFile() also tests if the file can be read (permission check)
+					thisFileSize = getSize(fileToUpload);
 					
-					// When we compare the space online to the total we are trying to upload - is there space online?
-					ulong calculatedSpaceOnlinePostUpload = remainingFreeSpaceOnline - thisFileSize;
-					
-					// If 'personal' accounts, if driveId == defaultDriveId, then we will have data - appConfig.quotaAvailable will be updated
-					// If 'personal' accounts, if driveId != defaultDriveId, then we will not have quota data - appConfig.quotaRestricted will be set as true
-					// If 'business' accounts, if driveId == defaultDriveId, then we will have data
-					// If 'business' accounts, if driveId != defaultDriveId, then we will have data, but it will be a 0 value - appConfig.quotaRestricted will be set as true
-					
-					if (remainingFreeSpaceOnline > totalDataToUpload) {
-						// Space available
-						spaceAvailableOnline = true;
-					} else {
-						// we need to look more granular
-						// What was the latest getRemainingFreeSpace() value?
-						if (appConfig.quotaAvailable) {
-							// Our query told us we have free space online .. if we upload this file, will we exceed space online - thus upload will fail during upload?
-							if (calculatedSpaceOnlinePostUpload > 0) {
-								// Based on this thread action, we beleive that there is space available online to upload - proceed
-								spaceAvailableOnline = true;
-							}
-						}
-					}
-					
-					// Is quota being restricted?
-					if (appConfig.quotaRestricted) {
-						// If the upload target drive is not our drive id, then it is a shared folder .. we need to print a space warning message
-						if (parentItem.driveId != appConfig.defaultDriveId) {
-							// Different message depending on account type
-							if (appConfig.accountType == "personal") {
-								addLogEntry("WARNING: Shared Folder OneDrive quota information is being restricted or providing a zero value. Space available online cannot be guaranteed.", ["verbose"]);
-							} else {
-								addLogEntry("WARNING: Shared Folder OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);
-							}
+					// Does this file exceed the maximum filesize for OneDrive
+					// Resolves: https://github.com/skilion/onedrive/issues/121 , https://github.com/skilion/onedrive/issues/294 , https://github.com/skilion/onedrive/issues/329
+					if (thisFileSize <= maxUploadFileSize) {
+						// Is there enough free space on OneDrive when we started this thread, to upload the file to OneDrive?
+						remainingFreeSpaceOnline = getRemainingFreeSpace(parentItem.driveId);
+						addLogEntry("Current Available Space Online (Upload Target Drive ID): " ~ to!string((remainingFreeSpaceOnline / 1024 / 1024)) ~ " MB", ["debug"]);
+						
+						// When we compare the space online to the total we are trying to upload - is there space online?
+						ulong calculatedSpaceOnlinePostUpload = remainingFreeSpaceOnline - thisFileSize;
+						
+						// If 'personal' accounts, if driveId == defaultDriveId, then we will have data - appConfig.quotaAvailable will be updated
+						// If 'personal' accounts, if driveId != defaultDriveId, then we will not have quota data - appConfig.quotaRestricted will be set as true
+						// If 'business' accounts, if driveId == defaultDriveId, then we will have data
+						// If 'business' accounts, if driveId != defaultDriveId, then we will have data, but it will be a 0 value - appConfig.quotaRestricted will be set as true
+						
+						if (remainingFreeSpaceOnline > totalDataToUpload) {
+							// Space available
+							spaceAvailableOnline = true;
 						} else {
-							if (appConfig.accountType == "personal") {
-								addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Space available online cannot be guaranteed.", ["verbose"]);
-							} else {
-								addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);
-							}
-						}
-						// Space available online is being restricted - so we have no way to really know if there is space available online
-						spaceAvailableOnline = true;
-					}
-					
-					// Do we have space available or is space available being restricted (so we make the blind assumption that there is space available)
-					if (spaceAvailableOnline) {
-						// We need to check that this new local file does not exist on OneDrive
-						
-						// Create a new API Instance for this thread and initialise it
-						OneDriveApi checkFileOneDriveApiInstance;
-						checkFileOneDriveApiInstance = new OneDriveApi(appConfig);
-						checkFileOneDriveApiInstance.initialise();
-						
-						JSONValue fileDetailsFromOneDrive;
-
-						// https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
-						// Do not assume case sensitivity. For example, consider the names OSCAR, Oscar, and oscar to be the same, 
-						// even though some file systems (such as a POSIX-compliant file systems that Linux use) may consider them as different.
-						// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior, OneDrive does not use this.
-						
-						// In order to upload this file - this query HAS to respond as a 404 - Not Found
-						
-						// Does this 'file' already exist on OneDrive?
-						try {
-							fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload);
-							// Portable Operating System Interface (POSIX) testing of JSON response from OneDrive API
-							if (hasName(fileDetailsFromOneDrive)) {
-								performPosixTest(baseName(fileToUpload), fileDetailsFromOneDrive["name"].str);
-							} else {
-								throw new jsonResponseException("Unable to perform POSIX test as the OneDrive API request generated an invalid JSON response");
-							}
-							
-							// If we get to this point, the OneDrive API returned a 200 OK with valid JSON data that indicates a 'file' exists at this location already
-							// and that it matches the POSIX filename of the local item we are trying to upload as a new file
-							addLogEntry("The file we are attemtping to upload as a new file already exists on Microsoft OneDrive: " ~ fileToUpload, ["verbose"]);
-							
-							// No 404 or otherwise was triggered, meaning that the file already exists online and passes the POSIX test ...
-							addLogEntry("fileDetailsFromOneDrive after exist online check: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);
-							
-							// Does the data from online match our local file that we are attempting to upload as a new file?
-							bool raiseWarning = false;
-							if (!disableUploadValidation && performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize, raiseWarning)) {
-								// Save online item details to the database
-								saveItem(fileDetailsFromOneDrive);
-							} else {
-								// The local file we are attempting to upload as a new file is different to the existing file online
-								addLogEntry("Triggering newfile upload target already exists edge case, where the online item does not match what we are trying to upload", ["debug"]);
-								
-								// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - consituting online data loss
-								// The file 'version history' online will have to be used to 'recover' the prior online file
-								string changedItemParentId = fileDetailsFromOneDrive["parentReference"]["driveId"].str;
-								string changedItemId = fileDetailsFromOneDrive["id"].str;
-								addLogEntry("Skipping uploading this file as moving it to upload as a modified file (online item already exists): " ~ fileToUpload);
-								databaseItemsWhereContentHasChanged ~= [changedItemParentId, changedItemId, fileToUpload];
-								
-								// In order for the processing of the local item as a 'changed' item, unfortunatly we need to save the online data to the local DB
-								saveItem(fileDetailsFromOneDrive);
-							}
-						} catch (OneDriveException exception) {
-							// If we get a 404 .. the file is not online .. this is what we want .. file does not exist online
-							if (exception.httpStatusCode == 404) {
-								// The file has been checked, client side filtering checked, does not exist online - we need to upload it
-								addLogEntry("fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload); generated a 404 - file does not exist online - must upload it", ["debug"]);
-								uploadFailed = performNewFileUpload(parentItem, fileToUpload, thisFileSize);
-							} else {
-								
-								string thisFunctionName = getFunctionName!({});
-								// HTTP request returned status code 408,429,503,504
-								if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-									// Handle the 429
-									if (exception.httpStatusCode == 429) {
-										// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-										handleOneDriveThrottleRequest(checkFileOneDriveApiInstance);
-										addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
-									}
-									// re-try the specific changes queries
-									if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-										// 408 - Request Time Out
-										// 503 - Service Unavailable
-										// 504 - Gateway Timeout
-										// Transient error - try again in 30 seconds
-										auto errorArray = splitLines(exception.msg);
-										addLogEntry(to!string(errorArray[0]) ~ " when attempting to validate file details on OneDrive - retrying applicable request in 30 seconds");
-										addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
-										
-										// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-										addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
-										Thread.sleep(dur!"seconds"(30));
-									}
-									// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-									addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
-									uploadNewFile(fileToUpload);
-								} else {
-									// Default operation if not 408,429,503,504 errors
-									// display what the error is
-									displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+							// we need to look more granular
+							// What was the latest getRemainingFreeSpace() value?
+							if (appConfig.quotaAvailable) {
+								// Our query told us we have free space online .. if we upload this file, will we exceed space online - thus upload will fail during upload?
+								if (calculatedSpaceOnlinePostUpload > 0) {
+									// Based on this thread action, we beleive that there is space available online to upload - proceed
+									spaceAvailableOnline = true;
 								}
 							}
-						} catch (posixException e) {
-							displayPosixErrorMessage(e.msg);
-							uploadFailed = true;
-						} catch (jsonResponseException e) {
-							addLogEntry(e.msg, ["debug"]);
-							uploadFailed = true;
 						}
 						
-						// Operations in this thread are done / complete - either upload was done or it failed
-						checkFileOneDriveApiInstance.shutdown();
-						// Free object and memory
-						object.destroy(checkFileOneDriveApiInstance);
+						// Is quota being restricted?
+						if (appConfig.quotaRestricted) {
+							// If the upload target drive is not our drive id, then it is a shared folder .. we need to print a space warning message
+							if (parentItem.driveId != appConfig.defaultDriveId) {
+								// Different message depending on account type
+								if (appConfig.accountType == "personal") {
+									addLogEntry("WARNING: Shared Folder OneDrive quota information is being restricted or providing a zero value. Space available online cannot be guaranteed.", ["verbose"]);
+								} else {
+									addLogEntry("WARNING: Shared Folder OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);
+								}
+							} else {
+								if (appConfig.accountType == "personal") {
+									addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Space available online cannot be guaranteed.", ["verbose"]);
+								} else {
+									addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);
+								}
+							}
+							// Space available online is being restricted - so we have no way to really know if there is space available online
+							spaceAvailableOnline = true;
+						}
+						
+						// Do we have space available or is space available being restricted (so we make the blind assumption that there is space available)
+						if (spaceAvailableOnline) {
+							// We need to check that this new local file does not exist on OneDrive
+							
+							// Create a new API Instance for this thread and initialise it
+							OneDriveApi checkFileOneDriveApiInstance;
+							checkFileOneDriveApiInstance = new OneDriveApi(appConfig);
+							checkFileOneDriveApiInstance.initialise();
+							
+							JSONValue fileDetailsFromOneDrive;
+
+							// https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
+							// Do not assume case sensitivity. For example, consider the names OSCAR, Oscar, and oscar to be the same, 
+							// even though some file systems (such as a POSIX-compliant file systems that Linux use) may consider them as different.
+							// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior, OneDrive does not use this.
+							
+							// In order to upload this file - this query HAS to respond as a 404 - Not Found
+							
+							// Does this 'file' already exist on OneDrive?
+							try {
+								fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload);
+								// Portable Operating System Interface (POSIX) testing of JSON response from OneDrive API
+								if (hasName(fileDetailsFromOneDrive)) {
+									performPosixTest(baseName(fileToUpload), fileDetailsFromOneDrive["name"].str);
+								} else {
+									throw new jsonResponseException("Unable to perform POSIX test as the OneDrive API request generated an invalid JSON response");
+								}
+								
+								// If we get to this point, the OneDrive API returned a 200 OK with valid JSON data that indicates a 'file' exists at this location already
+								// and that it matches the POSIX filename of the local item we are trying to upload as a new file
+								addLogEntry("The file we are attemtping to upload as a new file already exists on Microsoft OneDrive: " ~ fileToUpload, ["verbose"]);
+								
+								// No 404 or otherwise was triggered, meaning that the file already exists online and passes the POSIX test ...
+								addLogEntry("fileDetailsFromOneDrive after exist online check: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);
+								
+								// Does the data from online match our local file that we are attempting to upload as a new file?
+								bool raiseWarning = false;
+								if (!disableUploadValidation && performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize, raiseWarning)) {
+									// Save online item details to the database
+									saveItem(fileDetailsFromOneDrive);
+								} else {
+									// The local file we are attempting to upload as a new file is different to the existing file online
+									addLogEntry("Triggering newfile upload target already exists edge case, where the online item does not match what we are trying to upload", ["debug"]);
+									
+									// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - consituting online data loss
+									// The file 'version history' online will have to be used to 'recover' the prior online file
+									string changedItemParentId = fileDetailsFromOneDrive["parentReference"]["driveId"].str;
+									string changedItemId = fileDetailsFromOneDrive["id"].str;
+									addLogEntry("Skipping uploading this file as moving it to upload as a modified file (online item already exists): " ~ fileToUpload);
+									databaseItemsWhereContentHasChanged ~= [changedItemParentId, changedItemId, fileToUpload];
+									
+									// In order for the processing of the local item as a 'changed' item, unfortunatly we need to save the online data to the local DB
+									saveItem(fileDetailsFromOneDrive);
+								}
+							} catch (OneDriveException exception) {
+								// If we get a 404 .. the file is not online .. this is what we want .. file does not exist online
+								if (exception.httpStatusCode == 404) {
+									// The file has been checked, client side filtering checked, does not exist online - we need to upload it
+									addLogEntry("fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload); generated a 404 - file does not exist online - must upload it", ["debug"]);
+									uploadFailed = performNewFileUpload(parentItem, fileToUpload, thisFileSize);
+								} else {
+									
+									string thisFunctionName = getFunctionName!({});
+									// HTTP request returned status code 408,429,503,504
+									if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+										// Handle the 429
+										if (exception.httpStatusCode == 429) {
+											// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+											handleOneDriveThrottleRequest(checkFileOneDriveApiInstance);
+											addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
+										}
+										// re-try the specific changes queries
+										if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+											// 408 - Request Time Out
+											// 503 - Service Unavailable
+											// 504 - Gateway Timeout
+											// Transient error - try again in 30 seconds
+											auto errorArray = splitLines(exception.msg);
+											addLogEntry(to!string(errorArray[0]) ~ " when attempting to validate file details on OneDrive - retrying applicable request in 30 seconds");
+											addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+											
+											// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+											addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
+											Thread.sleep(dur!"seconds"(30));
+										}
+										// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
+										addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
+										uploadNewFile(fileToUpload);
+									} else {
+										// Default operation if not 408,429,503,504 errors
+										// display what the error is
+										displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+									}
+								}
+							} catch (posixException e) {
+								displayPosixErrorMessage(e.msg);
+								uploadFailed = true;
+							} catch (jsonResponseException e) {
+								addLogEntry(e.msg, ["debug"]);
+								uploadFailed = true;
+							}
+							
+							// Operations in this thread are done / complete - either upload was done or it failed
+							checkFileOneDriveApiInstance.shutdown();
+							// Free object and memory
+							object.destroy(checkFileOneDriveApiInstance);
+						} else {
+							// skip file upload - insufficent space to upload
+							addLogEntry("Skipping uploading this new file as it exceeds the available free space on OneDrive: " ~ fileToUpload);
+							uploadFailed = true;
+						}
 					} else {
-						// skip file upload - insufficent space to upload
-						addLogEntry("Skipping uploading this new file as it exceeds the available free space on OneDrive: " ~ fileToUpload);
+						// Skip file upload - too large
+						addLogEntry("Skipping uploading this new file as it exceeds the maximum size allowed by OneDrive: " ~ fileToUpload);
 						uploadFailed = true;
 					}
 				} else {
-					// Skip file upload - too large
-					addLogEntry("Skipping uploading this new file as it exceeds the maximum size allowed by OneDrive: " ~ fileToUpload);
+					// why was the parent path not in the database?
+					if (canFind(posixViolationPaths, parentPath)) {
+						addLogEntry("ERROR: POSIX 'case-insensitive match' for the parent path which violates the Microsoft OneDrive API namespace convention.");
+					} else {
+						addLogEntry("ERROR: Parent path is not in the database or online.");
+					}
+					addLogEntry("ERROR: Unable to upload this file: " ~ fileToUpload);
 					uploadFailed = true;
 				}
 			} else {
-				// why was the parent path not in the database?
-				if (canFind(posixViolationPaths, parentPath)) {
-					addLogEntry("ERROR: POSIX 'case-insensitive match' for the parent path which violates the Microsoft OneDrive API namespace convention.");
-				} else {
-					addLogEntry("ERROR: Parent path is not in the database or online.");
-				}
-				addLogEntry("ERROR: Unable to upload this file: " ~ fileToUpload);
+				// Unable to read local file
+				addLogEntry("Skipping uploading this file as it cannot be read (file permissions or file corruption): " ~ fileToUpload);
 				uploadFailed = true;
 			}
 		} else {
-			// Unable to read local file
-			addLogEntry("Skipping uploading this file as it cannot be read (file permissions or file corruption): " ~ fileToUpload);
-			uploadFailed = true;
+			// File disappeared before upload
+			addLogEntry("File disappeared locally before upload: " ~ fileToUpload);
+			// dont set uploadFailed = true; as the file disappeared before upload, thus nothing here failed
 		}
-		
+
 		// Upload success or failure?
 		if (uploadFailed) {
 			// Need to add this to fileUploadFailures to capture at the end
