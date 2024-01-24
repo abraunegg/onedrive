@@ -659,8 +659,7 @@ class SyncEngine {
 			addLogEntry();
 			addLogEntry("The requested --single-directory path to sync has generated an error. Please correct this error and try again.");
 			addLogEntry();
-			Thread.sleep(dur!("msecs")(500));
-			exit(EXIT_FAILURE);
+			forceExit();
 		}
 	}
 	
@@ -4418,20 +4417,58 @@ class SyncEngine {
 			addLogEntry("Attempting to query OneDrive API for this path: " ~ thisNewPathToCreate, ["debug"]);
 			addLogEntry("parentItem details: " ~ to!string(parentItem), ["debug"]);
 			
-			if (parentItem.driveId == appConfig.defaultDriveId) {
-				// Use getPathDetailsByDriveId
-				onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, thisNewPathToCreate);
+			// Depending on the data within parentItem, will depend on what method we are using to search
+			// In a --local-first scenario, a Shared Folder will be 'remote' so we need to check the remote parent id, rather than parentItem details
+			Item queryItem;
+			
+			if ((appConfig.getValueBool("local_first")) &&  (parentItem.type == ItemType.remote)) {
+				// We are --local-first scenario and this folder is a potential shared object
+				addLogEntry("--localfirst & parentItem is a remote item object", ["debug"]);
+			
+				queryItem.driveId = parentItem.remoteDriveId;
+				queryItem.id = parentItem.remoteId;
+				
+				// Need to create the DB Tie for this object
+				addLogEntry("Creating a DB Tie for this Shared Folder", ["debug"]);
+				// New DB Tie Item to bind the 'remote' path to our parent path
+				Item tieDBItem;
+				// Set the name
+				tieDBItem.name = parentItem.name;
+				// Set the correct item type
+				tieDBItem.type = ItemType.dir;
+				// Set the right elements using the 'remote' of the parent as the 'actual' for this DB Tie
+				tieDBItem.driveId = parentItem.remoteDriveId;
+				tieDBItem.id = parentItem.remoteId;
+				// Set the correct mtime
+				tieDBItem.mtime = parentItem.mtime;
+				// Add tie DB record to the local database
+				addLogEntry("Adding DB Tie record to database: " ~ to!string(tieDBItem), ["debug"]);
+				itemDB.upsert(tieDBItem);
+				
 			} else {
-				// If the parentItem.driveId is not our driveId - the path we are looking for will not be at the logical location that getPathDetailsByDriveId 
+				// Use parent item for the query item
+				addLogEntry("Standard Query, use parentItem", ["debug"]);
+				queryItem = parentItem;
+			}
+			
+			if (queryItem.driveId == appConfig.defaultDriveId) {
+				// Use getPathDetailsByDriveId
+				addLogEntry("Selecting getPathDetailsByDriveId to query OneDrive API for path data", ["debug"]);
+				onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetailsByDriveId(queryItem.driveId, thisNewPathToCreate);
+			} else {
+				// Use searchDriveForPath to query OneDrive
+				addLogEntry("Selecting searchDriveForPath to query OneDrive API for path data", ["debug"]);
+				// If the queryItem.driveId is not our driveId - the path we are looking for will not be at the logical location that getPathDetailsByDriveId 
 				// can use - as it will always return a 404 .. even if the path actually exists (which is the whole point of this test)
-				// Search the parentItem.driveId for any folder name match that we are going to create, then compare response JSON items with parentItem.id
+				// Search the queryItem.driveId for any folder name match that we are going to create, then compare response JSON items with queryItem.id
 				// If no match, the folder we want to create does not exist at the location we are seeking to create it at, thus generate a 404
-				onlinePathData = createDirectoryOnlineOneDriveApiInstance.searchDriveForPath(parentItem.driveId, baseName(thisNewPathToCreate));
+				onlinePathData = createDirectoryOnlineOneDriveApiInstance.searchDriveForPath(queryItem.driveId, baseName(thisNewPathToCreate));
+				addLogEntry("onlinePathData: " ~to!string(onlinePathData), ["debug"]);
 				
 				// Process the response from searching the drive
 				ulong responseCount = count(onlinePathData["value"].array);
 				if (responseCount > 0) {
-					// Search 'name' matches were found .. need to match these against parentItem.id
+					// Search 'name' matches were found .. need to match these against queryItem.id
 					bool foundDirectoryOnline = false;
 					JSONValue foundDirectoryJSONItem;
 					// Items were returned .. but is one of these what we are looking for?
@@ -4440,7 +4477,7 @@ class SyncEngine {
 						if (!isFileItem(childJSON)) {
 							Item thisChildItem = makeItem(childJSON);
 							// Direct Match Check
-							if ((parentItem.id == thisChildItem.parentId) && (baseName(thisNewPathToCreate) == thisChildItem.name)) {
+							if ((queryItem.id == thisChildItem.parentId) && (baseName(thisNewPathToCreate) == thisChildItem.name)) {
 								// High confidence that this child folder is a direct match we are trying to create and it already exists online
 								addLogEntry("Path we are searching for exists online (Direct Match): " ~ baseName(thisNewPathToCreate), ["debug"]);
 								addLogEntry("childJSON: " ~ to!string(childJSON), ["debug"]);
@@ -4448,6 +4485,7 @@ class SyncEngine {
 								foundDirectoryJSONItem = childJSON;
 								break;
 							}
+							
 							// Full Lower Case POSIX Match Check
 							string childAsLower = toLower(childJSON["name"].str);
 							string thisFolderNameAsLower = toLower(baseName(thisNewPathToCreate));
@@ -4465,7 +4503,8 @@ class SyncEngine {
 					}
 					
 					if (foundDirectoryOnline) {
-						// Directory we are seeking was found online ... 
+						// Directory we are seeking was found online ...
+						addLogEntry("The directory we are seeking was found online by using searchDriveForPath ...", ["debug"]);
 						onlinePathData = foundDirectoryJSONItem;
 					} else {
 						// No 'search item matches found' - raise a 404 so that the exception handling will take over to create the folder
@@ -4629,6 +4668,7 @@ class SyncEngine {
 				
 				// Is the response a valid JSON object - validation checking done in saveItem
 				saveItem(onlinePathData);
+				
 				// Shutdown API instance
 				createDirectoryOnlineOneDriveApiInstance.shutdown();
 				// Free object and memory
@@ -5688,7 +5728,6 @@ class SyncEngine {
 	
 	// Save JSON item details into the item database
 	void saveItem(JSONValue jsonItem) {
-			
 		// jsonItem has to be a valid object
 		if (jsonItem.type() == JSONType.object) {
 			// Check if the response JSON has an 'id', otherwise makeItem() fails with 'Key not found: id'
@@ -6436,7 +6475,6 @@ class SyncEngine {
 						if (isItemRemote(getPathDetailsAPIResponse)) {
 							// Remote Directory .. need a DB Tie Item
 							addLogEntry("Creating a DB Tie for this Shared Folder", ["debug"]);
-							
 							// New DB Tie Item to bind the 'remote' path to our parent path
 							Item tieDBItem;
 							// Set the name
