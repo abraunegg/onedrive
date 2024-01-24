@@ -206,7 +206,7 @@ bool testInternetReachability(ApplicationConfig appConfig) {
     bool result = false;
     try {
 		// Use preconfigured object with all the correct http values assigned
-		curlEngine = new CurlEngine();
+		curlEngine = CurlEngine.get();
 		curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"));
 
 		// Configure the remaining items required
@@ -228,8 +228,8 @@ bool testInternetReachability(ApplicationConfig appConfig) {
         displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
     } finally {
         if (curlEngine) {
-            curlEngine.http.shutdown();
-            object.destroy(curlEngine);
+            curlEngine.release();
+			curlEngine = null;
         }
     }
 	

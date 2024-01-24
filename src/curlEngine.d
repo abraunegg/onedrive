@@ -9,6 +9,7 @@ import std.conv;
 import std.file;
 import std.json;
 import std.stdio;
+import std.range;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -156,6 +157,37 @@ class CurlResponse {
 }
 
 class CurlEngine {
+
+	__gshared CurlEngine[] curlSockets;
+
+	static CurlEngine get() {
+		synchronized(CurlEngine.classinfo) {
+			if (curlSockets.empty) {
+				return new CurlEngine;
+			} else {
+				CurlEngine instance = curlSockets[$-1];
+				curlSockets.popBack();
+				return instance;
+			}
+		}
+	}
+
+	static releaseAll() {
+		synchronized(CurlEngine.classinfo) {
+			foreach(socket; curlSockets) {
+				object.destroy(socket);
+			}
+			curlSockets = null;
+		}
+	}
+
+	void release() {
+		cleanUp();
+		synchronized(CurlEngine.classinfo) {
+			curlSockets ~= this;
+		}
+	}
+
 	HTTP http;
 	bool keepAlive;
 	ulong dnsTimeout;
@@ -163,18 +195,18 @@ class CurlEngine {
 
 	this() {	
 		http = HTTP();
+		response = new CurlResponse();
 	}
 
 	~this() {
 		shutdown();
 	}
 	
-	void initialise(ulong dnsTimeout, ulong connectTimeout, ulong dataTimeout, ulong operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, ulong userRateLimit, ulong protocolVersion, bool keepAlive=false) {
+	void initialise(ulong dnsTimeout, ulong connectTimeout, ulong dataTimeout, ulong operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, ulong userRateLimit, ulong protocolVersion, bool keepAlive=true) {
 		//   Setting this to false ensures that when we close the curl instance, any open sockets are closed - which we need to do when running 
 		//   multiple threads and API instances at the same time otherwise we run out of local files | sockets pretty quickly
 		this.keepAlive = keepAlive;
 		this.dnsTimeout = dnsTimeout;
-		this.response = new CurlResponse();
 
 		// Curl Timeout Handling
 		
