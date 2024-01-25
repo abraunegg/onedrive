@@ -801,13 +801,18 @@ class OneDriveApi {
 	}
 	
 	// Private functions
-	private void addAccessTokenHeader() {
-		curlEngine.http.addRequestHeader("Authorization", appConfig.accessToken);
-	}
-	
 	private void addIncludeFeatureRequestHeader() {
 		addLogEntry("Adding 'Include-Feature=AddToOneDrive' API request header as 'sync_business_shared_items' config option is enabled", ["debug"]);
 		curlEngine.http.addRequestHeader("Prefer", "Include-Feature=AddToOneDrive");
+	}
+
+	private void redeemToken(char[] authCode){
+		char[] postData =
+			"client_id=" ~ clientId ~
+			"&redirect_uri=" ~ redirectUrl ~
+			"&code=" ~ authCode ~
+			"&grant_type=authorization_code";
+		acquireToken(postData);
 	}
 	
 	private void acquireToken(char[] postData) {
@@ -911,6 +916,16 @@ class OneDriveApi {
 		}
 	}
 	
+	private void newToken() {
+		addLogEntry("Need to generate a new access token for Microsoft OneDrive", ["debug"]);
+		auto postData = appender!(string)();
+		postData ~= "client_id=" ~ clientId;
+		postData ~= "&redirect_uri=" ~ redirectUrl;
+		postData ~= "&refresh_token=" ~ to!string(refreshToken);
+		postData ~= "&grant_type=refresh_token";
+		acquireToken(postData.data.dup);
+	}
+	
 	private void checkAccessTokenExpired() {
 		try {
 			if (Clock.currTime() >= appConfig.accessTokenExpiration) {
@@ -929,6 +944,10 @@ class OneDriveApi {
 				e.msg ~= "\nRefresh token invalid, use --reauth to authorize the client again";
 			}
 		}
+	}
+
+	private void addAccessTokenHeader() {
+		curlEngine.http.addRequestHeader("Authorization", appConfig.accessToken);
 	}
 	
 	private void performDelete(const(char)[] url) {
@@ -1144,16 +1163,6 @@ class OneDriveApi {
         }
 		return response;
 	}
-	
-	private void newToken() {
-		addLogEntry("Need to generate a new access token for Microsoft OneDrive", ["debug"]);
-		auto postData = appender!(string)();
-		postData ~= "client_id=" ~ clientId;
-		postData ~= "&redirect_uri=" ~ redirectUrl;
-		postData ~= "&refresh_token=" ~ to!string(refreshToken);
-		postData ~= "&grant_type=refresh_token";
-		acquireToken(postData.data.dup);
-	}
 
 	private auto patch(T)(const(char)[] url, const(T)[] patchData) {
 		scope(exit) curlEngine.http.clearRequestHeaders();
@@ -1365,21 +1374,12 @@ class OneDriveApi {
 		}
 		return json;
 	}
-	
-	private void redeemToken(char[] authCode){
-		char[] postData =
-			"client_id=" ~ clientId ~
-			"&redirect_uri=" ~ redirectUrl ~
-			"&code=" ~ authCode ~
-			"&grant_type=authorization_code";
-		acquireToken(postData);
-	}
-	
+
 	private JSONValue upload(string filepath, string url) {
 		checkAccessTokenExpired();
 		// open file as read-only in binary mode
 		auto file = File(filepath, "rb");
-
+		
 		// function scopes
 		scope(exit) {
 			curlEngine.http.clearRequestHeaders();
