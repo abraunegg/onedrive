@@ -1,4 +1,4 @@
-module dnotify;
+module notifications.dnotify;
 
 private {
     import std.string : toStringz;
@@ -7,10 +7,10 @@ private {
     import std.variant : Variant;
     import std.array : appender;
     
-    import deimos.notify.notify;
+    import notifications.notify;
 }
 
-public import deimos.notify.notify : NOTIFY_EXPIRES_DEFAULT, NOTIFY_EXPIRES_NEVER,
+public import notifications.notify : NOTIFY_EXPIRES_DEFAULT, NOTIFY_EXPIRES_NEVER,
                                      NotifyUrgency;
 
 

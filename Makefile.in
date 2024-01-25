@@ -34,7 +34,7 @@ DEBUG = @DEBUG@
 DC = @DC@
 DC_TYPE = @DC_TYPE@
 DCFLAGS = @DCFLAGS@
-DCFLAGS += -w -g -O -J.
+DCFLAGS += -w -g -O -J. -Isrc -Isrc/notifications
 ifeq ($(DEBUG),yes)
 ifeq ($(DC_TYPE),dmd)
 DCFLAGS += -debug -gs
@@ -73,7 +73,7 @@ SOURCES = \
 	src/qxor.d \
 	src/curlEngine.d \
 	src/onedrive.d \
-	src/sync.d \
+	src/syncEngine.d \
 	src/itemdb.d \
 	src/sqlite.d \
 	src/clientSideFiltering.d \
@@ -84,10 +84,16 @@ ifeq ($(NOTIFICATIONS),yes)
 SOURCES += src/notifications/notify.d src/notifications/dnotify.d
 endif
 
-all: onedrive
+# Object file
+OBJ = $(SOURCES:.d=.o)
+
+# Executable
+EXE = onedrive
+
+all: version $(EXE)
 
 clean:
-	rm -f onedrive onedrive.o version
+	rm -f $(EXE) $(OBJ) version
 	rm -rf autom4te.cache
 	rm -f config.log config.status
 
@@ -95,13 +101,18 @@ clean:
 distclean: clean
 	rm -f Makefile contrib/pacman/PKGBUILD contrib/spec/onedrive.spec onedrive.1 $(system_unit_files) $(user_unit_files)
 
-onedrive: $(SOURCES)
+version:
 	if [ -f .git/HEAD ] ; then \
 		git describe --tags > version ; \
 	else \
 		echo $(version) > version ; \
 	fi
-	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) -L-ldl $(SOURCES) -of$@
+
+$(EXE): $(OBJ)
+	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) -L-ldl -of$@ $^
+
+%.o: %.d
+	$(DC) $(DCFLAGS) -c $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) -L-ldl -of=$@ $< 
 
 install: all
 	$(INSTALL) -D onedrive $(DESTDIR)$(bindir)/onedrive

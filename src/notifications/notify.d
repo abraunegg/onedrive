@@ -18,7 +18,7 @@
  * Boston, MA  02111-1307, USA.
  */
 
-module deimos.notify.notify;
+module notifications.notify;
 
 
 enum NOTIFY_VERSION_MAJOR = 0;
