@@ -3968,9 +3968,9 @@ class SyncEngine {
 		if (isDir(path)) {
 			if (!appConfig.surpressLoggingOutput) {
 				if (!cleanupLocalFiles) {
-					addLogEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload ...");
+					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload");
 				} else {
-					addLogEntry("Scanning the local file system '" ~ logPath ~ "' for data to cleanup ...");
+					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for data to cleanup");
 				}
 			}
 		}
@@ -3980,6 +3980,7 @@ class SyncEngine {
 	
 		// Perform the filesystem walk of this path, building an array of new items to upload
 		scanPathForNewData(path);
+		addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 		
 		// To finish off the processing items, this is needed to reflect this in the log
 		addLogEntry("------------------------------------------------------------------", ["debug"]);
@@ -4043,7 +4044,7 @@ class SyncEngine {
 	
 	// Scan this path for new data
 	void scanPathForNewData(string path) {
-			
+
 		ulong maxPathLength;
 		ulong pathWalkLength;
 		
@@ -4729,6 +4730,7 @@ class SyncEngine {
 		foreach (chunk; newLocalFilesToUploadToOneDrive.chunks(batchSize)) {
 			uploadNewLocalFileItemsInParallel(chunk);
 		}
+		addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 	}
 	
 	// Upload the file batches in parallel
