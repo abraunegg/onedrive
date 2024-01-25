@@ -3910,7 +3910,7 @@ struct RequestServer {
 
 		If you want the forking worker process server, you do need to compile with the embedded_httpd_processes config though.
 	+/
-	void serveEmbeddedHttp(alias fun, CustomCgi = Cgi, long maxContentLength = defaultMaxContentLength)(ThisFor!fun _this) {
+	shared void serveEmbeddedHttp(alias fun, CustomCgi = Cgi, long maxContentLength = defaultMaxContentLength)(shared(ThisFor!fun) _this) {
 		globalStopFlag = false;
 		static if(__traits(isStaticFunction, fun))
 			alias funToUse = fun;

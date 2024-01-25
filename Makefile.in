@@ -73,6 +73,7 @@ SOURCES = \
 	src/qxor.d \
 	src/curlEngine.d \
 	src/onedrive.d \
+	src/webhook.d \
 	src/sync.d \
 	src/itemdb.d \
 	src/sqlite.d \

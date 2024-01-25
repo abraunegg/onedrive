@@ -31,13 +31,14 @@ import syncEngine;
 import itemdb;
 import clientSideFiltering;
 import monitor;
+import webhook;
 
 // What other constant variables do we require?
 const int EXIT_RESYNC_REQUIRED = 126;
 
 // Class objects
 ApplicationConfig appConfig;
-OneDriveApi oneDriveApiInstance;
+OneDriveWebhook oneDriveWebhook;
 SyncEngine syncEngineInstance;
 ItemDatabase itemDB;
 ClientSideFiltering selectiveSync;
@@ -411,13 +412,16 @@ int main(string[] cliArgs) {
 		
 		// Initialise the OneDrive API
 		addLogEntry("Attempting to initialise the OneDrive API ...", ["verbose"]);
-		oneDriveApiInstance = new OneDriveApi(appConfig);
+		OneDriveApi oneDriveApiInstance = new OneDriveApi(appConfig);
 		appConfig.apiWasInitialised = oneDriveApiInstance.initialise();
 		if (appConfig.apiWasInitialised) {
 			addLogEntry("The OneDrive API was initialised successfully", ["verbose"]);
 			
 			// Flag that we were able to initalise the API in the application config
 			oneDriveApiInstance.debugOutputConfiguredAPIItems();
+
+			oneDriveApiInstance.shutdown();
+			object.destroy(oneDriveApiInstance);
 			
 			// Need to configure the itemDB and syncEngineInstance for 'sync' and 'non-sync' operations
 			addLogEntry("Opening the item database ...", ["verbose"]);
@@ -855,7 +859,11 @@ int main(string[] cliArgs) {
 				if (webhookEnabled) {
 					// Create a subscription on the first run, or renew the subscription
 					// on subsequent runs when it is about to expire.
-					oneDriveApiInstance.createOrRenewSubscription();
+					if (oneDriveWebhook is null) {
+						oneDriveWebhook = new OneDriveWebhook(thisTid, appConfig);
+						oneDriveWebhook.serve();
+					} else 
+						oneDriveWebhook.createOrRenewSubscription();
 				}
 				
 				// Get the current time this loop is starting
@@ -1005,7 +1013,7 @@ int main(string[] cliArgs) {
 						if(webhookEnabled) {
 							// if onedrive webhook is enabled
 							// update sleep time based on renew interval
-							Duration nextWebhookCheckDuration = oneDriveApiInstance.getNextExpirationCheckDuration();
+							Duration nextWebhookCheckDuration = oneDriveWebhook.getNextExpirationCheckDuration();
 							if (nextWebhookCheckDuration < sleepTime) {
 								sleepTime = nextWebhookCheckDuration;
 								addLogEntry("Update sleeping time to " ~ to!string(sleepTime), ["debug"]);
@@ -1082,11 +1090,10 @@ void performStandardExitProcess(string scopeCaller = null) {
 		addLogEntry("Running performStandardExitProcess due to: " ~ scopeCaller, ["debug"]);
 	}
 		
-	// Shutdown the OneDrive API instance
-	if (oneDriveApiInstance !is null) {
-		addLogEntry("Shutdown OneDrive API instance", ["debug"]);
-		oneDriveApiInstance.shutdown();
-		object.destroy(oneDriveApiInstance);
+	// Shutdown the OneDrive Webhook instance
+	if (oneDriveWebhook !is null) {
+		oneDriveWebhook.stop();
+		object.destroy(oneDriveWebhook);
 	}
 	
 	// Shutdown the sync engine
@@ -1136,7 +1143,7 @@ void performStandardExitProcess(string scopeCaller = null) {
 		addLogEntry("Setting ALL Class Objects to null due to failure scope", ["debug"]);
 		itemDB = null;
 		appConfig = null;
-		oneDriveApiInstance = null;
+		oneDriveWebhook = null;
 		selectiveSync = null;
 		syncEngineInstance = null;
 	} else {
