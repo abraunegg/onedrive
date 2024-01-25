@@ -65,6 +65,12 @@ RHEL = 0
 RHEL_VERSION = 0
 endif
 
+ifneq ($(wildcard .git/HEAD),"")
+VERSION = $(shell git describe --tags)
+else
+VERSION = $(version)
+endif
+
 SOURCES = \
 	src/main.d \
 	src/config.d \
@@ -101,18 +107,17 @@ clean:
 distclean: clean
 	rm -f Makefile contrib/pacman/PKGBUILD contrib/spec/onedrive.spec onedrive.1 $(system_unit_files) $(user_unit_files)
 
-version:
-	if [ -f .git/HEAD ] ; then \
-		git describe --tags > version ; \
-	else \
-		echo $(version) > version ; \
-	fi
+version: $(SOURCES)
+	echo "$(VERSION)" > version;
 
 $(EXE): $(OBJ)
 	$(DC) $(DCFLAGS) $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) -L-ldl -of$@ $^
 
 %.o: %.d
 	$(DC) $(DCFLAGS) -c $(addprefix -L,$(curl_LIBS)) $(addprefix -L,$(sqlite_LIBS)) $(addprefix -L,$(notify_LIBS)) -L-ldl -of=$@ $< 
+
+# ensure that version is ready
+src/main.o: src/main.d version
 
 install: all
 	$(INSTALL) -D onedrive $(DESTDIR)$(bindir)/onedrive
