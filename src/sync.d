@@ -731,10 +731,7 @@ class SyncEngine {
 			// Dynamic output for non-verbose and verbose run so that the user knows something is being retreived from the OneDrive API
 			if (appConfig.verbosityCount == 0) {
 				if (!appConfig.surpressLoggingOutput) {
-					addLogEntry("Fetching items from the OneDrive API for Drive ID: " ~ driveIdToQuery, ["logFileOnly"]);
-					
-					// Use the dots to show the application is 'doing something'
-					addLogEntry("Fetching items from the OneDrive API for Drive ID: " ~ driveIdToQuery ~ " .", ["consoleOnlyNoNewLine"]);
+					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ driveIdToQuery);
 				}
 			} else {
 				addLogEntry("Fetching /delta response from the OneDrive API for Drive ID: " ~  driveIdToQuery, ["verbose"]);
@@ -768,7 +765,7 @@ class SyncEngine {
 				if (appConfig.verbosityCount == 0) {
 					// Dynamic output for a non-verbose run so that the user knows something is happening
 					if (!appConfig.surpressLoggingOutput) {
-						addLogEntry(".", ["consoleOnlyNoNewLine"]);
+						addProcessingDotEntry();
 					}
 				} else {
 					addLogEntry("Processing API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["verbose"]);
@@ -907,9 +904,7 @@ class SyncEngine {
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (!appConfig.surpressLoggingOutput) {
 				// Logfile entry
-				addLogEntry("Processing " ~ to!string(jsonItemsToProcess.length) ~ " applicable changes and items received from Microsoft OneDrive", ["logFileOnly"]);
-				// Console only output
-				addLogEntry("Processing " ~ to!string(jsonItemsToProcess.length) ~ " applicable changes and items received from Microsoft OneDrive ", ["consoleOnlyNoNewLine"]);
+				addProcessingLogHeaderEntry("Processing " ~ to!string(jsonItemsToProcess.length) ~ " applicable changes and items received from Microsoft OneDrive");
 				
 				if (appConfig.verbosityCount != 0) {
 					// Close out the console only processing line above, if we are doing verbose or above logging
@@ -926,7 +921,7 @@ class SyncEngine {
 				if (appConfig.verbosityCount == 0) {
 					// Dynamic output for a non-verbose run so that the user knows something is happening
 					if (!appConfig.surpressLoggingOutput) {
-						addLogEntry(".", ["consoleOnlyNoNewLine"]);
+						addProcessingDotEntry();
 					}
 				} else {
 					addLogEntry("Processing OneDrive JSON item batch [" ~ to!string(batchesProcessed) ~ "/" ~ to!string(batchCount) ~ "] to ensure consistent local state", ["verbose"]);
@@ -6036,10 +6031,7 @@ class SyncEngine {
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (appConfig.verbosityCount == 0) {
 				if (!appConfig.surpressLoggingOutput) {
-					addLogEntry("Fetching items from the OneDrive API for Drive ID: " ~ searchItem.driveId, ["logFileOnly"]);
-					
-					// Use the dots to show the application is 'doing something'
-					addLogEntry("Fetching items from the OneDrive API for Drive ID: " ~ searchItem.driveId ~ " .", ["consoleOnlyNoNewLine"]);
+					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ searchItem.driveId);
 				}
 			} else {
 				addLogEntry("Generating a /delta response from the OneDrive API for Drive ID: " ~ searchItem.driveId, ["verbose"]);
@@ -6244,7 +6236,7 @@ class SyncEngine {
 			if (appConfig.verbosityCount == 0) {
 				// Dynamic output for a non-verbose run so that the user knows something is happening
 				if (!appConfig.surpressLoggingOutput) {
-					addLogEntry(".", ["consoleOnlyNoNewLine"]);
+					addProcessingDotEntry();
 				}
 			}
 			
@@ -7163,7 +7155,7 @@ class SyncEngine {
 		deltaLink = itemDB.getDeltaLink(driveIdToQuery, itemIdToQuery);
 		
 		// Log what we are doing
-		addLogEntry("Querying the change status of Drive ID: " ~ driveIdToQuery ~ " .", ["consoleOnlyNoNewLine"]);
+		addProcessingLogHeaderEntry("Querying the change status of Drive ID: " ~ driveIdToQuery);
 		
 		// Query the OenDrive API using the applicable details, following nextLink if applicable
 		// Create a new API Instance for querying /delta and initialise it
@@ -7173,7 +7165,7 @@ class SyncEngine {
 		
 		for (;;) {
 			// Add a processing '.'
-			addLogEntry(".", ["consoleOnlyNoNewLine"]);
+			addProcessingDotEntry();
 		
 			// Get the /delta changes via the OneDrive API
 			// getDeltaChangesByItemId has the re-try logic for transient errors
