@@ -2703,7 +2703,7 @@ class SyncEngine {
 		
 		// Log what we are doing
 		if (!appConfig.surpressLoggingOutput) {
-			addLogEntry("Performing a database consistency and integrity check on locally stored data ... ");
+			addProcessingLogHeaderEntry("Performing a database consistency and integrity check on locally stored data");
 		}
 		
 		// What driveIDsArray do we use? If we are doing a --single-directory we need to use just the drive id associated with that operation
@@ -2791,6 +2791,9 @@ class SyncEngine {
 				}
 			}
 		}
+
+		// Close out the '....' being printed to the console
+		addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 		
 		// Are we doing a --download-only sync?
 		if (!appConfig.getValueBool("download_only")) {
@@ -2828,6 +2831,8 @@ class SyncEngine {
 		
 		// Log what we are doing
 		addLogEntry("Processing " ~ logOutputPath, ["verbose"]);
+		// Add a processing '.'
+		addProcessingDotEntry();
 		
 		// Determine which action to take
 		final switch (dbItem.type) {
@@ -3980,7 +3985,7 @@ class SyncEngine {
 	
 		// Perform the filesystem walk of this path, building an array of new items to upload
 		scanPathForNewData(path);
-		addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+		addProcessingDotEntry();
 		
 		// To finish off the processing items, this is needed to reflect this in the log
 		addLogEntry("------------------------------------------------------------------", ["debug"]);
@@ -3995,7 +4000,7 @@ class SyncEngine {
 		// Are there any items to download post fetching the /delta data?
 		if (!newLocalFilesToUploadToOneDrive.empty) {
 			// There are elements to upload
-			addLogEntry("New items to upload to OneDrive: " ~ to!string(newLocalFilesToUploadToOneDrive.length));
+			addProcessingLogHeaderEntry("New items to upload to OneDrive: " ~ to!string(newLocalFilesToUploadToOneDrive.length));
 			
 			// Reset totalDataToUpload
 			totalDataToUpload = 0;
@@ -4044,6 +4049,8 @@ class SyncEngine {
 	
 	// Scan this path for new data
 	void scanPathForNewData(string path) {
+		// Add a processing '.'
+		addProcessingDotEntry();
 
 		ulong maxPathLength;
 		ulong pathWalkLength;
@@ -4736,6 +4743,8 @@ class SyncEngine {
 	// Upload the file batches in parallel
 	void uploadNewLocalFileItemsInParallel(string[] array) {
 		foreach (i, fileToUpload; taskPool.parallel(array)) {
+			// Add a processing '.'
+			addProcessingDotEntry();
 			addLogEntry("Upload Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);
 			uploadNewFile(fileToUpload);
 			addLogEntry("Upload Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);
