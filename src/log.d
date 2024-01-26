@@ -19,6 +19,9 @@ version(Notifications) {
 // Shared module object
 shared LogBuffer logBuffer;
 
+// Timer for logging
+shared MonoTime lastInsertedTime;
+
 class LogBuffer {
     private:
         string[3][] buffer;
@@ -138,11 +141,27 @@ class LogBuffer {
 // Function to initialize the logging system
 void initialiseLogging(bool verboseLogging = false, bool debugLogging = false) {
     logBuffer = cast(shared) new LogBuffer(verboseLogging, debugLogging);
+	lastInsertedTime = MonoTime.currTime();
 }
 
 // Function to add a log entry with multiple levels
 void addLogEntry(string message = "", string[] levels = ["info"]) {
 	logBuffer.logThisMessage(message, levels);
+}
+
+void addProcessingLogHeaderEntry(string message = "") {
+	addLogEntry(message, ["logFileOnly"]);					
+	// Use the dots to show the application is 'doing something'
+	addLogEntry(message ~ " .", ["consoleOnlyNoNewLine"]);
+}
+
+void addProcessingDotEntry() {
+	if (MonoTime.currTime() - lastInsertedTime < dur!"seconds"(1)) {
+		// Don't flood the log buffer
+		return;
+	}
+	lastInsertedTime = MonoTime.currTime();
+	addLogEntry(".", ["consoleOnlyNoNewLine"]);
 }
 
 // Function to set logFilePath and enable logging to a file
