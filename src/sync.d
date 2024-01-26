@@ -3985,7 +3985,7 @@ class SyncEngine {
 	
 		// Perform the filesystem walk of this path, building an array of new items to upload
 		scanPathForNewData(path);
-		addProcessingDotEntry();
+		addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 		
 		// To finish off the processing items, this is needed to reflect this in the log
 		addLogEntry("------------------------------------------------------------------", ["debug"]);
