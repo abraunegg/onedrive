@@ -158,33 +158,33 @@ class CurlResponse {
 
 class CurlEngine {
 
-	__gshared CurlEngine[] curlSockets;
+	__gshared CurlEngine[] curlEnginePool;
 
 	static CurlEngine get() {
 		synchronized(CurlEngine.classinfo) {
-			if (curlSockets.empty) {
+			if (curlEnginePool.empty) {
 				return new CurlEngine;
 			} else {
-				CurlEngine instance = curlSockets[$-1];
-				curlSockets.popBack();
-				return instance;
+				CurlEngine curlEngine = curlEnginePool[$-1];
+				curlEnginePool.popBack();
+				return curlEngine;
 			}
 		}
 	}
 
 	static releaseAll() {
 		synchronized(CurlEngine.classinfo) {
-			foreach(socket; curlSockets) {
-				object.destroy(socket);
+			foreach(curlEngine; curlEnginePool) {
+				curlEngine.shutdown();
 			}
-			curlSockets = null;
+			curlEnginePool = null;
 		}
 	}
 
 	void release() {
 		cleanUp();
 		synchronized(CurlEngine.classinfo) {
-			curlSockets ~= this;
+			curlEnginePool ~= this;
 		}
 	}
 
@@ -199,7 +199,8 @@ class CurlEngine {
 	}
 
 	~this() {
-		shutdown();
+		object.destroy(http);
+		object.destroy(response);
 	}
 	
 	void initialise(ulong dnsTimeout, ulong connectTimeout, ulong dataTimeout, ulong operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, ulong userRateLimit, ulong protocolVersion, bool keepAlive=true) {
@@ -382,8 +383,7 @@ class CurlEngine {
 
 	void shutdown() {
 		// Shut down the curl instance & close any open sockets
-		object.destroy(http);
-		object.destroy(response);
+		http.shutdown();
 	}
 	
 	void setDisableSSLVerifyPeer() {

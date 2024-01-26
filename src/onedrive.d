@@ -488,15 +488,9 @@ class OneDriveApi {
 			webhook.stop();
 			object.destroy(webhook);
 		}
-		if (curlEngine !is null) { 
-			// Reset any values to defaults, freeing any set objects
-			curlEngine.http.clearRequestHeaders();
-			curlEngine.http.onSend = null;
-			curlEngine.http.onReceive = null;
-			curlEngine.http.onReceiveHeader = null;
-			curlEngine.http.onReceiveStatusLine = null;
-			curlEngine.http.contentLength = 0;
-			// Release curl instance
+		
+		// Release curl instance
+		if (curlEngine !is null) {
 			curlEngine.release();
 			curlEngine = null;
 		}
