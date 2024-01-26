@@ -225,9 +225,9 @@ class OneDriveApi {
 	}
 	
 	// Initialise the OneDrive API class
-	bool initialise(bool keepAlive=false) {
+	bool initialise(bool keepAlive=true) {
 		// Initialise the curl engine
-		curlEngine = new CurlEngine();
+		curlEngine = CurlEngine.get();
 		curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"), keepAlive);
 
 		// Authorised value to return
@@ -489,17 +489,11 @@ class OneDriveApi {
 			object.destroy(webhook);
 		}
 		
-		// Reset any values to defaults, freeing any set objects
-		curlEngine.http.clearRequestHeaders();
-		curlEngine.http.onSend = null;
-		curlEngine.http.onReceive = null;
-		curlEngine.http.onReceiveHeader = null;
-		curlEngine.http.onReceiveStatusLine = null;
-		curlEngine.http.contentLength = 0;
-		// Shut down the curl instance & close any open sockets
-		curlEngine.http.shutdown();
-		// Free object and memory
-		object.destroy(curlEngine);
+		// Release curl instance
+		if (curlEngine !is null) {
+			curlEngine.release();
+			curlEngine = null;
+		}
 	}
 	
 	// Authenticate this client against Microsoft OneDrive API

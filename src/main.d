@@ -1126,6 +1126,9 @@ void performStandardExitProcess(string scopeCaller = null) {
 		}
 		object.destroy(itemDB);
 	}
+
+	// Shutdown cached sockets
+	CurlEngine.releaseAll();
 	
 	// Set all objects to null
 	if (scopeCaller == "failureScope") {
