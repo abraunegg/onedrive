@@ -651,6 +651,13 @@ void displayPosixErrorMessage(string message) {
 	addLogEntry("  Error Message:    " ~ message);
 }
 
+// Display the Error Message
+void displayGeneralErrorMessage(Exception e) {
+	addLogEntry(); // used rather than writeln
+	addLogEntry("ERROR: Encounter " ~ e.classinfo.name ~ ":");
+	addLogEntry("  Error Message:    " ~ e.msg);
+}
+
 // Get the function name that is being called to assist with identifying where an error is being generated
 string getFunctionName(alias func)() {
     return __traits(identifier, __traits(parent, func)) ~ "()\n";
