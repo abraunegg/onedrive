@@ -3951,10 +3951,17 @@ class SyncEngine {
 	
 	// Perform a filesystem walk to uncover new data to upload to OneDrive
 	void scanLocalFilesystemPathForNewData(string path) {
-	
 		// Cleanup array memory before we start adding files
 		newLocalFilesToUploadToOneDrive = [];
 		
+		// Perform a filesystem walk to uncover new data
+		scanLocalFilesystemPathForNewDataToUpload(path);
+		
+		// Upload new data that has been identified
+		processNewLocalItemsToUpload();
+	}
+
+	void scanLocalFilesystemPathForNewDataToUpload(string path) {
 		// To improve logging output for this function, what is the 'logical path' we are scanning for file & folder differences?
 		string logPath;
 		if (path == ".") {
@@ -3995,7 +4002,10 @@ class SyncEngine {
 		
 		auto elapsedTime = finishTime - startTime;
 		addLogEntry("Elapsed Time Filesystem Walk: " ~ to!string(elapsedTime), ["debug"]);
-				
+	}
+	
+	// Perform a filesystem walk to uncover new data to upload to OneDrive
+	void processNewLocalItemsToUpload() {
 		// Upload new data that has been identified
 		// Are there any items to download post fetching the /delta data?
 		if (!newLocalFilesToUploadToOneDrive.empty) {
@@ -4268,37 +4278,40 @@ class SyncEngine {
 	}
 	
 	// Handle a single file inotify trigger when using --monitor
-	void handleLocalFileTrigger(string localFilePath) {
+	void handleLocalFileTrigger(string[] changedLocalFilesToUploadToOneDrive) {
 		// Is this path a new file or an existing one?
 		// Normally we would use pathFoundInDatabase() to calculate, but we need 'databaseItem' as well if the item is in the database
-		Item databaseItem;
-		bool fileFoundInDB = false;
 		string[3][] modifiedItemToUpload; 
-		
-		foreach (driveId; driveIDsArray) {
-			if (itemDB.selectByPath(localFilePath, driveId, databaseItem)) {
-				fileFoundInDB = true;
-				break;
+		foreach (localFilePath; changedLocalFilesToUploadToOneDrive) {
+			Item databaseItem;
+			bool fileFoundInDB = false;
+			
+			foreach (driveId; driveIDsArray) {
+				if (itemDB.selectByPath(localFilePath, driveId, databaseItem)) {
+					fileFoundInDB = true;
+					break;
+				}
+			}
+			
+			// Was the file found in the database?
+			if (!fileFoundInDB) {
+				// This is a new file as it is not in the database
+				// Log that the file has been added locally
+				addLogEntry("[M] New local file added: " ~ localFilePath, ["verbose"]);
+				scanLocalFilesystemPathForNewDataToUpload(localFilePath);
+			} else {
+				// This is a potentially modified file, needs to be handled as such. Is the item truly modified?
+				if (!testFileHash(localFilePath, databaseItem)) {
+					// The local file failed the hash comparison test - there is a data difference
+					// Log that the file has changed locally
+					addLogEntry("[M] Local file changed: " ~ localFilePath, ["verbose"]);
+					// Add the modified item to the array to upload
+					modifiedItemToUpload ~= [databaseItem.driveId, databaseItem.id, localFilePath];
+				}
 			}
 		}
-		
-		// Was the file found in the database?
-		if (!fileFoundInDB) {
-			// This is a new file as it is not in the database
-			// Log that the file has been added locally
-			addLogEntry("[M] New local file added: " ~ localFilePath, ["verbose"]);
-			scanLocalFilesystemPathForNewData(localFilePath);
-		} else {
-			// This is a potentially modified file, needs to be handled as such. Is the item truly modified?
-			if (!testFileHash(localFilePath, databaseItem)) {
-				// The local file failed the hash comparison test - there is a data difference
-				// Log that the file has changed locally
-				addLogEntry("[M] Local file changed: " ~ localFilePath, ["verbose"]);
-				// Add the modified item to the array to upload
-				modifiedItemToUpload ~= [databaseItem.driveId, databaseItem.id, localFilePath];
-				uploadChangedLocalFileToOneDrive(modifiedItemToUpload);
-			}
-		}
+		processNewLocalItemsToUpload();
+		uploadChangedLocalFileToOneDrive(modifiedItemToUpload);
 	}
 	
 	// Query the database to determine if this path is within the existing database
@@ -6761,7 +6774,7 @@ class SyncEngine {
 			if (!itemDB.selectByPath(oldPath, appConfig.defaultDriveId, oldItem)) {
 				// The old path|item is not synced with the database, upload as a new file
 				addLogEntry("Moved local item was not in-sync with local databse - uploading as new item");
-				uploadNewFile(newPath);
+				scanLocalFilesystemPathForNewData(newPath);
 				return;
 			}
 		

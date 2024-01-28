@@ -8,6 +8,7 @@ import core.sys.linux.sys.inotify;
 import core.sys.posix.poll;
 import core.sys.posix.unistd;
 import core.sys.posix.sys.select;
+import core.thread;
 import core.time;
 import std.algorithm;
 import std.concurrency;
@@ -135,7 +136,6 @@ shared class MonitorBackgroundWorker {
 	}
 }
 
-
 void startMonitorJob(shared(MonitorBackgroundWorker) worker, Tid callerTid)
 {
 	try {
@@ -144,6 +144,82 @@ void startMonitorJob(shared(MonitorBackgroundWorker) worker, Tid callerTid)
 		// caller is terminated
 	}
 	worker.shutdown();
+}
+
+enum ActionType {
+	moved,
+	deleted, 
+	changed,
+	createDir
+}
+
+struct Action {
+	ActionType type;
+	bool skipped;
+	string src;
+	string dst;
+}
+
+struct ActionHolder {
+	Action[] actions;
+	ulong[string] srcMap;
+	
+	void append(ActionType type, string src, string dst=null) {
+		ulong pendingTarget = 0;
+		bool appendPending = false;
+		switch (type) {
+			case ActionType.changed:
+				if (src in srcMap && actions[srcMap[src]].type == ActionType.changed) {
+					// skip duplicate operations
+					return;
+				}
+				break;
+			case ActionType.createDir:
+				break;
+			case ActionType.deleted:
+				if (src in srcMap) {
+					pendingTarget = srcMap[src];
+					// Skip operations require reading local file that is gone
+					switch (actions[pendingTarget].type) {
+						case ActionType.changed:
+						case ActionType.createDir:
+							actions[srcMap[src]].skipped = true;
+							srcMap.remove(src);
+							break;
+						default:
+							break;
+					}
+				}
+				break;
+			case ActionType.moved:
+				if (src in srcMap) {
+					pendingTarget = srcMap[src];
+					// Hold operations require reading local file that is moved after the target is moved online
+					switch (actions[pendingTarget].type) {
+						case ActionType.changed:
+						case ActionType.createDir:
+							appendPending = true;
+							actions[pendingTarget].skipped = true;
+							actions[pendingTarget].src = dst;
+							srcMap.remove(src);
+							break;
+						default:
+							break;
+					}
+				}
+				break;
+			default:
+				break;
+		}
+		actions ~= Action(type, false, src, dst);
+		srcMap[src] = actions.length - 1;
+		
+		if (appendPending) {
+			actions ~= actions[pendingTarget];
+			actions[$-1].skipped = false;
+			srcMap[actions[$-1].src] = actions.length - 1;
+		}
+	}
 }
 
 final class Monitor {
@@ -171,12 +247,14 @@ final class Monitor {
 
 	// Configure function delegates
 	void delegate(string path) onDirCreated;
-	void delegate(string path) onFileChanged;
+	void delegate(string[] path) onFileChanged;
 	void delegate(string path) onDelete;
 	void delegate(string from, string to) onMove;
 	
 	// List of paths that were moved, not deleted
 	bool[string] movedNotDeleted;
+
+	ActionHolder actionHolder;
 	
 	// Configure the class varaible to consume the application configuration including selective sync
 	this(ApplicationConfig appConfig, ClientSideFiltering selectiveSync) {
@@ -371,138 +449,145 @@ final class Monitor {
 		};
 
 		while (true) {
-			int ret = poll(&fds, 1, 0);
-			if (ret == -1) throw new MonitorException("poll failed");
-			else if (ret == 0) break; // no events available
+			bool hasNotification = false;
+			while (true) {
+				int ret = poll(&fds, 1, 0);
+				if (ret == -1) throw new MonitorException("poll failed");
+				else if (ret == 0) break; // no events available
+				hasNotification = true;
+				size_t length = read(worker.fd, buffer.ptr, buffer.length);
+				if (length == -1) throw new MonitorException("read failed");
 
-			size_t length = read(worker.fd, buffer.ptr, buffer.length);
-			if (length == -1) throw new MonitorException("read failed");
-
-			int i = 0;
-			while (i < length) {
-				inotify_event *event = cast(inotify_event*) &buffer[i];
-				string path;
-				string evalPath;
-				
-				// inotify event debug
-				addLogEntry("inotify event wd: " ~ to!string(event.wd), ["debug"]);
-				addLogEntry("inotify event mask: " ~ to!string(event.mask), ["debug"]);
-				addLogEntry("inotify event cookie: " ~ to!string(event.cookie), ["debug"]);
-				addLogEntry("inotify event len: " ~ to!string(event.len), ["debug"]);
-				addLogEntry("inotify event name: " ~ to!string(event.name), ["debug"]);
-				
-				// inotify event handling
-				if (event.mask & IN_ACCESS) addLogEntry("inotify event flag: IN_ACCESS", ["debug"]);
-				if (event.mask & IN_MODIFY) addLogEntry("inotify event flag: IN_MODIFY", ["debug"]);
-				if (event.mask & IN_ATTRIB) addLogEntry("inotify event flag: IN_ATTRIB", ["debug"]);
-				if (event.mask & IN_CLOSE_WRITE) addLogEntry("inotify event flag: IN_CLOSE_WRITE", ["debug"]);
-				if (event.mask & IN_CLOSE_NOWRITE) addLogEntry("inotify event flag: IN_CLOSE_NOWRITE", ["debug"]);
-				if (event.mask & IN_MOVED_FROM) addLogEntry("inotify event flag: IN_MOVED_FROM", ["debug"]);
-				if (event.mask & IN_MOVED_TO) addLogEntry("inotify event flag: IN_MOVED_TO", ["debug"]);
-				if (event.mask & IN_CREATE) addLogEntry("inotify event flag: IN_CREATE", ["debug"]);
-				if (event.mask & IN_DELETE) addLogEntry("inotify event flag: IN_DELETE", ["debug"]);
-				if (event.mask & IN_DELETE_SELF) addLogEntry("inotify event flag: IN_DELETE_SELF", ["debug"]);
-				if (event.mask & IN_MOVE_SELF) addLogEntry("inotify event flag: IN_MOVE_SELF", ["debug"]);
-				if (event.mask & IN_UNMOUNT) addLogEntry("inotify event flag: IN_UNMOUNT", ["debug"]);
-				if (event.mask & IN_Q_OVERFLOW) addLogEntry("inotify event flag: IN_Q_OVERFLOW", ["debug"]);
-				if (event.mask & IN_IGNORED) addLogEntry("inotify event flag: IN_IGNORED", ["debug"]);
-				if (event.mask & IN_CLOSE) addLogEntry("inotify event flag: IN_CLOSE", ["debug"]);
-				if (event.mask & IN_MOVE) addLogEntry("inotify event flag: IN_MOVE", ["debug"]);
-				if (event.mask & IN_ONLYDIR) addLogEntry("inotify event flag: IN_ONLYDIR", ["debug"]);
-				if (event.mask & IN_DONT_FOLLOW) addLogEntry("inotify event flag: IN_DONT_FOLLOW", ["debug"]);
-				if (event.mask & IN_EXCL_UNLINK) addLogEntry("inotify event flag: IN_EXCL_UNLINK", ["debug"]);
-				if (event.mask & IN_MASK_ADD) addLogEntry("inotify event flag: IN_MASK_ADD", ["debug"]);
-				if (event.mask & IN_ISDIR) addLogEntry("inotify event flag: IN_ISDIR", ["debug"]);
-				if (event.mask & IN_ONESHOT) addLogEntry("inotify event flag: IN_ONESHOT", ["debug"]);
-				if (event.mask & IN_ALL_EVENTS) addLogEntry("inotify event flag: IN_ALL_EVENTS", ["debug"]);
-				
-				// skip events that need to be ignored
-				if (event.mask & IN_IGNORED) {
-					// forget the directory associated to the watch descriptor
-					wdToDirName.remove(event.wd);
-					goto skip;
-				} else if (event.mask & IN_Q_OVERFLOW) {
-					throw new MonitorException("inotify overflow, inotify events will be missing");
-				}
-
-				// if the event is not to be ignored, obtain path
-				path = getPath(event);
-				// configure the skip_dir & skip skip_file comparison item
-				evalPath = path.strip('.');
-				
-				// Skip events that should be excluded based on application configuration
-				// We cant use isDir or isFile as this information is missing from the inotify event itself
-				// Thus this causes a segfault when attempting to query this - https://github.com/abraunegg/onedrive/issues/995
-				
-				// Based on the 'type' of event & object type (directory or file) check that path against the 'right' user exclusions
-				// Directory events should only be compared against skip_dir and file events should only be compared against skip_file
-				if (event.mask & IN_ISDIR) {
-					// The event in question contains IN_ISDIR event mask, thus highly likely this is an event on a directory
-					// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
-					if (selectiveSync.isDirNameExcluded(evalPath)) {
-						// The path to evaluate matches a path that the user has configured to skip
+				int i = 0;
+				while (i < length) {
+					inotify_event *event = cast(inotify_event*) &buffer[i];
+					string path;
+					string evalPath;
+					
+					// inotify event debug
+					addLogEntry("inotify event wd: " ~ to!string(event.wd), ["debug"]);
+					addLogEntry("inotify event mask: " ~ to!string(event.mask), ["debug"]);
+					addLogEntry("inotify event cookie: " ~ to!string(event.cookie), ["debug"]);
+					addLogEntry("inotify event len: " ~ to!string(event.len), ["debug"]);
+					addLogEntry("inotify event name: " ~ to!string(event.name), ["debug"]);
+					
+					// inotify event handling
+					if (event.mask & IN_ACCESS) addLogEntry("inotify event flag: IN_ACCESS", ["debug"]);
+					if (event.mask & IN_MODIFY) addLogEntry("inotify event flag: IN_MODIFY", ["debug"]);
+					if (event.mask & IN_ATTRIB) addLogEntry("inotify event flag: IN_ATTRIB", ["debug"]);
+					if (event.mask & IN_CLOSE_WRITE) addLogEntry("inotify event flag: IN_CLOSE_WRITE", ["debug"]);
+					if (event.mask & IN_CLOSE_NOWRITE) addLogEntry("inotify event flag: IN_CLOSE_NOWRITE", ["debug"]);
+					if (event.mask & IN_MOVED_FROM) addLogEntry("inotify event flag: IN_MOVED_FROM", ["debug"]);
+					if (event.mask & IN_MOVED_TO) addLogEntry("inotify event flag: IN_MOVED_TO", ["debug"]);
+					if (event.mask & IN_CREATE) addLogEntry("inotify event flag: IN_CREATE", ["debug"]);
+					if (event.mask & IN_DELETE) addLogEntry("inotify event flag: IN_DELETE", ["debug"]);
+					if (event.mask & IN_DELETE_SELF) addLogEntry("inotify event flag: IN_DELETE_SELF", ["debug"]);
+					if (event.mask & IN_MOVE_SELF) addLogEntry("inotify event flag: IN_MOVE_SELF", ["debug"]);
+					if (event.mask & IN_UNMOUNT) addLogEntry("inotify event flag: IN_UNMOUNT", ["debug"]);
+					if (event.mask & IN_Q_OVERFLOW) addLogEntry("inotify event flag: IN_Q_OVERFLOW", ["debug"]);
+					if (event.mask & IN_IGNORED) addLogEntry("inotify event flag: IN_IGNORED", ["debug"]);
+					if (event.mask & IN_CLOSE) addLogEntry("inotify event flag: IN_CLOSE", ["debug"]);
+					if (event.mask & IN_MOVE) addLogEntry("inotify event flag: IN_MOVE", ["debug"]);
+					if (event.mask & IN_ONLYDIR) addLogEntry("inotify event flag: IN_ONLYDIR", ["debug"]);
+					if (event.mask & IN_DONT_FOLLOW) addLogEntry("inotify event flag: IN_DONT_FOLLOW", ["debug"]);
+					if (event.mask & IN_EXCL_UNLINK) addLogEntry("inotify event flag: IN_EXCL_UNLINK", ["debug"]);
+					if (event.mask & IN_MASK_ADD) addLogEntry("inotify event flag: IN_MASK_ADD", ["debug"]);
+					if (event.mask & IN_ISDIR) addLogEntry("inotify event flag: IN_ISDIR", ["debug"]);
+					if (event.mask & IN_ONESHOT) addLogEntry("inotify event flag: IN_ONESHOT", ["debug"]);
+					if (event.mask & IN_ALL_EVENTS) addLogEntry("inotify event flag: IN_ALL_EVENTS", ["debug"]);
+					
+					// skip events that need to be ignored
+					if (event.mask & IN_IGNORED) {
+						// forget the directory associated to the watch descriptor
+						wdToDirName.remove(event.wd);
 						goto skip;
+					} else if (event.mask & IN_Q_OVERFLOW) {
+						throw new MonitorException("inotify overflow, inotify events will be missing");
 					}
-				} else {
-					// The event in question missing the IN_ISDIR event mask, thus highly likely this is an event on a file
-					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
-					if (selectiveSync.isFileNameExcluded(evalPath)) {
-						// The path to evaluate matches a file that the user has configured to skip
-						goto skip;
-					}
-				}
-				
-				// is the path, excluded via sync_list
-				if (selectiveSync.isPathExcludedViaSyncList(path)) {
-					// The path to evaluate matches a directory or file that the user has configured not to include in the sync
-					goto skip;
-				}
-				
-				// handle the inotify events
-				if (event.mask & IN_MOVED_FROM) {
-					addLogEntry("event IN_MOVED_FROM: " ~ path, ["debug"]);
-					cookieToPath[event.cookie] = path;
-					movedNotDeleted[path] = true; // Mark as moved, not deleted
-				} else if (event.mask & IN_MOVED_TO) {
-					addLogEntry("event IN_MOVED_TO: " ~ path, ["debug"]);
-					if (event.mask & IN_ISDIR) addRecursive(path);
-					auto from = event.cookie in cookieToPath;
-					if (from) {
-						cookieToPath.remove(event.cookie);
-						if (useCallbacks) onMove(*from, path);
-						movedNotDeleted.remove(*from); // Clear moved status
+
+					// if the event is not to be ignored, obtain path
+					path = getPath(event);
+					// configure the skip_dir & skip skip_file comparison item
+					evalPath = path.strip('.');
+					
+					// Skip events that should be excluded based on application configuration
+					// We cant use isDir or isFile as this information is missing from the inotify event itself
+					// Thus this causes a segfault when attempting to query this - https://github.com/abraunegg/onedrive/issues/995
+					
+					// Based on the 'type' of event & object type (directory or file) check that path against the 'right' user exclusions
+					// Directory events should only be compared against skip_dir and file events should only be compared against skip_file
+					if (event.mask & IN_ISDIR) {
+						// The event in question contains IN_ISDIR event mask, thus highly likely this is an event on a directory
+						// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
+						if (selectiveSync.isDirNameExcluded(evalPath)) {
+							// The path to evaluate matches a path that the user has configured to skip
+							goto skip;
+						}
 					} else {
-						// Handle file moved in from outside
-						if (event.mask & IN_ISDIR) {
-							if (useCallbacks) onDirCreated(path);
-						} else {
-							if (useCallbacks) onFileChanged(path);
+						// The event in question missing the IN_ISDIR event mask, thus highly likely this is an event on a file
+						// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
+						if (selectiveSync.isFileNameExcluded(evalPath)) {
+							// The path to evaluate matches a file that the user has configured to skip
+							goto skip;
 						}
 					}
-				} else if (event.mask & IN_CREATE) {
-					addLogEntry("event IN_CREATE: " ~ path, ["debug"]);
-					if (event.mask & IN_ISDIR) {
-						addRecursive(path);
-						if (useCallbacks) onDirCreated(path);
+					
+					// is the path, excluded via sync_list
+					if (selectiveSync.isPathExcludedViaSyncList(path)) {
+						// The path to evaluate matches a directory or file that the user has configured not to include in the sync
+						goto skip;
 					}
-				} else if (event.mask & IN_DELETE) {
-					if (path in movedNotDeleted) {
-						movedNotDeleted.remove(path); // Ignore delete for moved files
+					
+					// handle the inotify events
+					if (event.mask & IN_MOVED_FROM) {
+						addLogEntry("event IN_MOVED_FROM: " ~ path, ["debug"]);
+						cookieToPath[event.cookie] = path;
+						movedNotDeleted[path] = true; // Mark as moved, not deleted
+					} else if (event.mask & IN_MOVED_TO) {
+						addLogEntry("event IN_MOVED_TO: " ~ path, ["debug"]);
+						if (event.mask & IN_ISDIR) addRecursive(path);
+						auto from = event.cookie in cookieToPath;
+						if (from) {
+							cookieToPath.remove(event.cookie);
+							if (useCallbacks) actionHolder.append(ActionType.moved, *from, path);
+							movedNotDeleted.remove(*from); // Clear moved status
+						} else {
+							// Handle file moved in from outside
+							if (event.mask & IN_ISDIR) {
+								if (useCallbacks) actionHolder.append(ActionType.createDir, path);
+							} else {
+								if (useCallbacks) actionHolder.append(ActionType.changed, path);
+							}
+						}
+					} else if (event.mask & IN_CREATE) {
+						addLogEntry("event IN_CREATE: " ~ path, ["debug"]);
+						if (event.mask & IN_ISDIR) {
+							addRecursive(path);
+							if (useCallbacks) actionHolder.append(ActionType.createDir, path);
+						}
+					} else if (event.mask & IN_DELETE) {
+						if (path in movedNotDeleted) {
+							movedNotDeleted.remove(path); // Ignore delete for moved files
+						} else {
+							addLogEntry("event IN_DELETE: " ~ path, ["debug"]);
+							if (useCallbacks) actionHolder.append(ActionType.deleted, path);
+						}
+					} else if ((event.mask & IN_CLOSE_WRITE) && !(event.mask & IN_ISDIR)) {
+						addLogEntry("event IN_CLOSE_WRITE and not IN_ISDIR: " ~ path, ["debug"]);
+						if (useCallbacks) actionHolder.append(ActionType.changed, path);
 					} else {
-						addLogEntry("event IN_DELETE: " ~ path, ["debug"]);
-						if (useCallbacks) onDelete(path);
+						addLogEntry("event unhandled: " ~ path, ["debug"]);
+						assert(0);
 					}
-				} else if ((event.mask & IN_CLOSE_WRITE) && !(event.mask & IN_ISDIR)) {
-					addLogEntry("event IN_CLOSE_WRITE and not IN_ISDIR: " ~ path, ["debug"]);
-					if (useCallbacks) onFileChanged(path);
-				} else {
-					addLogEntry("event unhandled: " ~ path, ["debug"]);
-					assert(0);
-				}
 
-				skip:
-				i += inotify_event.sizeof + event.len;
+					skip:
+					i += inotify_event.sizeof + event.len;
+				}
+				Thread.sleep(dur!"seconds"(1));
 			}
+			if (!hasNotification) break;
+			processChanges();
+
 			// Assume that the items moved outside the watched directory have been deleted
 			foreach (cookie, path; cookieToPath) {
 				addLogEntry("Deleting cookie|watch (post loop): " ~ path, ["debug"]);
@@ -513,6 +598,35 @@ final class Monitor {
 			// Debug Log that all inotify events are flushed
 			addLogEntry("inotify events flushed", ["debug"]);
 		}
+	}
+
+	private void processChanges() {
+		string[] changes;
+
+		foreach(action; actionHolder.actions) {
+			if (action.skipped)
+				continue;
+			switch (action.type) {
+				case ActionType.changed:
+					changes ~= action.src;
+					break;
+				case ActionType.deleted:
+					onDelete(action.src);
+					break;
+				case ActionType.createDir:
+					onDirCreated(action.src);
+					break;
+				case ActionType.moved:
+					onMove(action.src, action.dst);
+					break;
+				default:
+					break;
+			}
+		}
+		if (!changes.empty)
+			onFileChanged(changes);
+
+		object.destroy(actionHolder);
 	}
 
 	Tid watch() {
