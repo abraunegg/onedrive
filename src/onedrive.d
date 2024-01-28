@@ -896,14 +896,20 @@ class OneDriveApi {
 		curlEngine.connect(method, url);
 	}
 
-	private void performDelete(const(char)[] url, string[string] requestHeaders=null) {
+	private void performDelete(
+		const(char)[] url, string[string] requestHeaders=null,
+		string callingFunction=__FUNCTION__, int lineno=__LINE__
+	) {
 		oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.del, url, false, response, requestHeaders);
 			return curlEngine.execute();
-		});
+		}, callingFunction, lineno);
 	}
 	
-	private void downloadFile(const(char)[] url, string filename, long fileSize) {
+	private void downloadFile(
+		const(char)[] url, string filename, long fileSize,
+		string callingFunction=__FUNCTION__, int lineno=__LINE__
+	) {
 		// Threshold for displaying download bar
 		long thresholdFileSize = 4 * 2^^20; // 4 MiB
 		
@@ -1040,41 +1046,49 @@ class OneDriveApi {
 			}
 			
 			return curlEngine.download(originalFilename, downloadFilename);
-		});
+		}, callingFunction, lineno);
 	}
 
-	private JSONValue get(string url, bool skipToken = false, string[string] requestHeaders=null) {
+	private JSONValue get(
+		string url, bool skipToken = false, string[string] requestHeaders=null,
+		string callingFunction=__FUNCTION__, int lineno=__LINE__
+	) {
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.get, url, skipToken, response, requestHeaders);
 			return curlEngine.execute();
-		});
+		}, callingFunction, lineno);
 	}
 
 	private JSONValue patch(
 		const(char)[] url, const(char)[] patchData, 
 		string[string] requestHeaders=null, 
-		const(char)[] contentType = "application/json"
+		const(char)[] contentType = "application/json",
+		string callingFunction=__FUNCTION__, int lineno=__LINE__
 	) {
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.patch, url, false, response, requestHeaders);
 			curlEngine.setContent(contentType, patchData);
 			return curlEngine.execute();
-		});
+		}, callingFunction, lineno);
 	}
 
 	private JSONValue post(
 		const(char)[] url, const(char)[] postData, 
 		bool skipToken = false, 
-		const(char)[] contentType = "application/json"
+		const(char)[] contentType = "application/json",
+		string callingFunction=__FUNCTION__, int lineno=__LINE__
 	) {
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.post, url, skipToken, response);
 			curlEngine.setContent(contentType, postData);
 			return curlEngine.execute();
-		});
+		}, callingFunction, lineno);
 	}
 	
-	private JSONValue put(const(char)[] url, string filepath, bool skipToken=false, string contentRange=null, ulong offset=0, ulong offsetSize=0) {
+	private JSONValue put(
+		const(char)[] url, string filepath, bool skipToken=false, string contentRange=null, ulong offset=0, ulong offsetSize=0,
+		string callingFunction=__FUNCTION__, int lineno=__LINE__
+	) {
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			string[string] requestHeaders;
 			// open file as read-only in binary mode
@@ -1096,12 +1110,15 @@ class OneDriveApi {
 			connect(HTTP.Method.put, url, skipToken, response, requestHeaders);
 			curlEngine.setFile(&file, offsetSize);
 			return curlEngine.execute();
-		});
+		}, callingFunction, lineno);
 	}
 
 	// Wrapper function for all requests to OneDrive API
 	// throws OneDriveException
-	private JSONValue oneDriveErrorHandlerWrapper(CurlResponse delegate(CurlResponse response) executer) {
+	private JSONValue oneDriveErrorHandlerWrapper(
+		CurlResponse delegate(CurlResponse response) executer,
+		string callingFunction, int lineno
+	) {
 		int maxRetryCount = 10;
 		int retryAttempts = 0;
 		int backoffInterval = 0;
@@ -1187,7 +1204,7 @@ class OneDriveApi {
 							}
 						} else {
 							// Unknown error
-							displayGeneralErrorMessage(e);
+							displayGeneralErrorMessage(e, callingFunction, lineno);
 						}
 					}
 				}
@@ -1252,10 +1269,22 @@ class OneDriveApi {
 
 				*/
 				// an error was generated
+				// Dump curl connection
 				switch(exception.httpStatusCode) {
 					case 400:
+					case 401:
+					case 408:
+					case 503:
+					case 504:
 						addLogEntry("Handling OneDrive expection");
 						addLogEntry(to!string(response));
+						break;
+					default:
+						break;
+
+				}
+				switch(exception.httpStatusCode) {
+					case 400:
 						// Try one more time, as OneDrive occasionally returns 400 errors.
 						if (retryAttempts < maxRetryCount) {
 							retryAttempts = maxRetryCount - 1;
@@ -1277,9 +1306,6 @@ class OneDriveApi {
 					case 408:
 					case 503:
 					case 504:
-						addLogEntry("Handling OneDrive expection");
-						addLogEntry(to!string(response));
-
 						auto errorArray = splitLines(exception.msg);
 						addLogEntry(to!string(errorArray[0]) ~ " when attempting to query - retrying applicable request in 30 seconds");
 						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 

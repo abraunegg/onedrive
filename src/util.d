@@ -652,10 +652,12 @@ void displayPosixErrorMessage(string message) {
 }
 
 // Display the Error Message
-void displayGeneralErrorMessage(Exception e) {
+void displayGeneralErrorMessage(Exception e, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 	addLogEntry(); // used rather than writeln
 	addLogEntry("ERROR: Encounter " ~ e.classinfo.name ~ ":");
 	addLogEntry("  Error Message:    " ~ e.msg);
+	addLogEntry("  Calling Function:    " ~ callingFunction);
+	addLogEntry("  Line number:    " ~ to!string(lineno));
 }
 
 // Get the function name that is being called to assist with identifying where an error is being generated
