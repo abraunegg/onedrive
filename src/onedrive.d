@@ -48,6 +48,12 @@ class OneDriveException: Exception {
 	}
 }
 
+class OneDriveError: Error {
+	this(string msg) {
+		super(msg);
+	}
+}
+
 class OneDriveApi {
 	// Class variables
 	ApplicationConfig appConfig;
@@ -1193,14 +1199,14 @@ class OneDriveApi {
 						//  https://forum.dlang.org/post/vwvkbubufexgeuaxhqfl@forum.dlang.org
 						
 						addLogEntry("Problem with reading the SSL CA cert via libcurl - please repair your system SSL CA Certificates");
-						throw new OneDriveException(0, "OneDrive operation encounter curl lib issue", response);
+						throw new OneDriveError("OneDrive operation encounter curl lib issue");
 					} else {
 						// Was this a curl initialization error?
 						if (canFind(errorMessage, "Failed initialization on handle")) {
 							// initialization error ... prevent a run-away process if we have zero disk space
 							ulong localActualFreeSpace = getAvailableDiskSpace(".");
 							if (localActualFreeSpace == 0) {
-								throw new OneDriveException(0, "Zero disk space detected", response);
+								throw new OneDriveError("Zero disk space detected");
 							}
 						} else {
 							// Unknown error
