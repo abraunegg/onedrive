@@ -163,10 +163,9 @@ struct Action {
 struct ActionHolder {
 	Action[] actions;
 	ulong[string] srcMap;
-	
+
 	void append(ActionType type, string src, string dst=null) {
-		ulong pendingTarget = 0;
-		bool appendPending = false;
+		ulong[] pendingTargets;
 		switch (type) {
 			case ActionType.changed:
 				if (src in srcMap && actions[srcMap[src]].type == ActionType.changed) {
@@ -178,7 +177,7 @@ struct ActionHolder {
 				break;
 			case ActionType.deleted:
 				if (src in srcMap) {
-					pendingTarget = srcMap[src];
+					ulong pendingTarget = srcMap[src];
 					// Skip operations require reading local file that is gone
 					switch (actions[pendingTarget].type) {
 						case ActionType.changed:
@@ -192,19 +191,34 @@ struct ActionHolder {
 				}
 				break;
 			case ActionType.moved:
-				if (src in srcMap) {
-					pendingTarget = srcMap[src];
-					// Hold operations require reading local file that is moved after the target is moved online
-					switch (actions[pendingTarget].type) {
-						case ActionType.changed:
-						case ActionType.createDir:
-							appendPending = true;
-							actions[pendingTarget].skipped = true;
-							actions[pendingTarget].src = dst;
-							srcMap.remove(src);
-							break;
-						default:
-							break;
+				for(int i = 0; i < actions.length; i++) {
+					// Only match for latest operation
+					if (actions[i].src in srcMap) {
+						switch (actions[i].type) {
+							case ActionType.changed:
+							case ActionType.createDir:
+								// check if the source is the prefix of the target
+								string prefix = src ~ "/";
+								string target = actions[i].src;
+								if (prefix[0] != '.')
+									prefix = "./" ~ prefix;
+								if (target[0] != '.')
+									target = "./" ~ target;
+								string comm = commonPrefix(prefix, target);
+								if (src == actions[i].src || comm.length == prefix.length) {
+									// Hold operations require reading local file that is moved after the target is moved online
+									pendingTargets ~= i;
+									actions[i].skipped = true;
+									srcMap.remove(actions[i].src);
+									if (comm.length == target.length)
+										actions[i].src = dst;
+									else
+										actions[i].src = dst ~ target[comm.length - 1 .. target.length];
+								}
+								break;
+							default:
+								break;
+						}
 					}
 				}
 				break;
@@ -214,7 +228,7 @@ struct ActionHolder {
 		actions ~= Action(type, false, src, dst);
 		srcMap[src] = actions.length - 1;
 		
-		if (appendPending) {
+		foreach (pendingTarget; pendingTargets) {
 			actions ~= actions[pendingTarget];
 			actions[$-1].skipped = false;
 			srcMap[actions[$-1].src] = actions.length - 1;
