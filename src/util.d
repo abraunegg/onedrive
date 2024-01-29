@@ -628,7 +628,7 @@ void displayFileSystemErrorMessage(string message, string callingFunction) {
     addLogEntry("  Error Message:    " ~ errorMessage);
     
     // Log the calling function
-    addLogEntry("  Calling Function: " ~ callingFunction, ["verbose"]);
+    addLogEntry("  Calling Function: " ~ callingFunction);
 
     try {
         // Safely check for disk space

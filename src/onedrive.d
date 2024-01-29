@@ -1326,6 +1326,11 @@ class OneDriveApi {
 					addLogEntry("  ERROR: Unable to reconnect to the Microsoft OneDrive service after " ~ to!string(maxRetryCount));
 					throw exception;
 				}
+			} catch (ErrnoException e) {
+				// There was a file system error
+				// display the error message
+				displayFileSystemErrorMessage(e.msg, callingFunction);
+				throw new OneDriveException(0, "There was a file system error during OneDrive request: " ~ e.msg, response);
 			}
 
 			// Back off & retry with incremental delay
