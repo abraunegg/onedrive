@@ -906,10 +906,11 @@ class OneDriveApi {
 		const(char)[] url, string[string] requestHeaders=null,
 		string callingFunction=__FUNCTION__, int lineno=__LINE__
 	) {
+		bool validateJSONResponse = false;
 		oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.del, url, false, response, requestHeaders);
 			return curlEngine.execute();
-		}, callingFunction, lineno);
+		}, validateJSONResponse, callingFunction, lineno);
 	}
 	
 	private void downloadFile(
@@ -922,6 +923,7 @@ class OneDriveApi {
 		// To support marking of partially-downloaded files, 
 		string originalFilename = filename;
 		string downloadFilename = filename ~ ".partial";
+		bool validateJSONResponse = false;
 		oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.get, url, false, response);
 
@@ -1052,17 +1054,18 @@ class OneDriveApi {
 			}
 			
 			return curlEngine.download(originalFilename, downloadFilename);
-		}, callingFunction, lineno);
+		}, validateJSONResponse, callingFunction, lineno);
 	}
 
 	private JSONValue get(
 		string url, bool skipToken = false, string[string] requestHeaders=null,
 		string callingFunction=__FUNCTION__, int lineno=__LINE__
 	) {
+		bool validateJSONResponse = true;
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.get, url, skipToken, response, requestHeaders);
 			return curlEngine.execute();
-		}, callingFunction, lineno);
+		}, validateJSONResponse, callingFunction, lineno);
 	}
 
 	private JSONValue patch(
@@ -1071,11 +1074,12 @@ class OneDriveApi {
 		const(char)[] contentType = "application/json",
 		string callingFunction=__FUNCTION__, int lineno=__LINE__
 	) {
+		bool validateJSONResponse = true;
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.patch, url, false, response, requestHeaders);
 			curlEngine.setContent(contentType, patchData);
 			return curlEngine.execute();
-		}, callingFunction, lineno);
+		}, validateJSONResponse, callingFunction, lineno);
 	}
 
 	private JSONValue post(
@@ -1084,28 +1088,31 @@ class OneDriveApi {
 		const(char)[] contentType = "application/json",
 		string callingFunction=__FUNCTION__, int lineno=__LINE__
 	) {
+		bool validateJSONResponse = true;
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.post, url, skipToken, response);
 			curlEngine.setContent(contentType, postData);
 			return curlEngine.execute();
-		}, callingFunction, lineno);
+		}, validateJSONResponse, callingFunction, lineno);
 	}
 	
 	private JSONValue put(
 		const(char)[] url, string filepath, bool skipToken=false, string contentRange=null, ulong offset=0, ulong offsetSize=0,
 		string callingFunction=__FUNCTION__, int lineno=__LINE__
 	) {
+		bool validateJSONResponse = true;
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.put, url, skipToken, response);
 			curlEngine.setFile(filepath, contentRange, offset, offsetSize);
 			return curlEngine.execute();
-		}, callingFunction, lineno);
+		}, validateJSONResponse, callingFunction, lineno);
 	}
 
 	// Wrapper function for all requests to OneDrive API
 	// throws OneDriveException
 	private JSONValue oneDriveErrorHandlerWrapper(
 		CurlResponse delegate(CurlResponse response) executer,
+		bool validateJSONResponse,
 		string callingFunction, int lineno
 	) {
 		int maxRetryCount = 10;
@@ -1131,6 +1138,11 @@ class OneDriveApi {
 					// Check http response code, raise an error if the operation fails
 					if (response.statusLine.code / 100 != 2 && response.statusLine.code != 302) {
 						throw new OneDriveException(response.statusLine.code, response.statusLine.reason, response);
+					}
+					if (validateJSONResponse) {
+						if (result.type() != JSONType.object) {
+							throw new OneDriveException(0, "Caller request a non null JSON response, get null instead", response);
+						}
 					}
 				} else {
 					// No valid response is returned
