@@ -932,6 +932,9 @@ int main(string[] cliArgs) {
 						// Attempt to reset syncFailures
 						syncEngineInstance.resetSyncFailures();
 						
+						// Update cached quota details from online as this may have changed online in the background outside of this application
+						syncEngineInstance.freshenCachedDriveQuotaDetails();
+						
 						// Did the user specify --upload-only?
 						if (appConfig.getValueBool("upload_only")) {
 							// Perform the --upload-only sync process
