@@ -1,0 +1,47 @@
+@startuml
+participant "OneDrive Client for Linux"
+participant "Microsoft OneDrive\nAuthentication Service\n(login.microsoftonline.com)" as AuthServer
+participant "User's Device (for MFA)" as UserDevice
+participant "Microsoft Graph API\n(graph.microsoft.com)" as GraphAPI
+participant "Microsoft OneDrive"
+
+"OneDrive Client for Linux" -> AuthServer: Request Authorization\n(Client Credentials, Scopes)
+AuthServer -> "OneDrive Client for Linux": Provide Authorization Code
+
+"OneDrive Client for Linux" -> AuthServer: Request Access Token\n(Authorization Code, Client Credentials)
+
+alt MFA Enabled
+    AuthServer -> UserDevice: Trigger MFA Challenge
+    UserDevice -> AuthServer: Provide MFA Verification
+    AuthServer -> "OneDrive Client for Linux": Return Access Token\n(and Refresh Token)
+    "OneDrive Client for Linux" -> GraphAPI: Request Microsoft OneDrive Data\n(Access Token)
+    loop Token Expiry Check
+        "OneDrive Client for Linux" -> AuthServer: Is Access Token Expired?
+        alt Token Expired
+            "OneDrive Client for Linux" -> AuthServer: Request New Access Token\n(Refresh Token)
+            AuthServer -> "OneDrive Client for Linux": Return New Access Token
+        else Token Valid
+            GraphAPI -> "Microsoft OneDrive": Retrieve Data
+            "Microsoft OneDrive" -> GraphAPI: Return Data
+            GraphAPI -> "OneDrive Client for Linux": Provide Data
+        end
+    end
+else MFA Not Required
+    AuthServer -> "OneDrive Client for Linux": Return Access Token\n(and Refresh Token)
+    "OneDrive Client for Linux" -> GraphAPI: Request Microsoft OneDrive Data\n(Access Token)
+    loop Token Expiry Check
+        "OneDrive Client for Linux" -> AuthServer: Is Access Token Expired?
+        alt Token Expired
+            "OneDrive Client for Linux" -> AuthServer: Request New Access Token\n(Refresh Token)
+            AuthServer -> "OneDrive Client for Linux": Return New Access Token
+        else Token Valid
+            GraphAPI -> "Microsoft OneDrive": Retrieve Data
+            "Microsoft OneDrive" -> GraphAPI: Return Data
+            GraphAPI -> "OneDrive Client for Linux": Provide Data
+        end
+    end
+else MFA Failed or Other Auth Error
+    AuthServer -> "OneDrive Client for Linux": Error Message (e.g., Invalid Credentials, MFA Failure)
+end
+
+@enduml
