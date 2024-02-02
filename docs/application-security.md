@@ -67,8 +67,7 @@ These 'default' permissions will allow the OneDrive Client for Linux to read, wr
 
 When using the OneDrive Client for Linux, the above authentication scopes will be presented to the Microsoft Authentication Service (login.microsoftonline.com), where the service will validate the request and provide an applicable token to access Microsoft OneDrive with. This can be illustrated as the following:
 
-![Linux Authentication to Microsoft OneDrive](http://www.plantuml.com/plantuml/proxy?src=https://raw.githubusercontent.com/abraunegg/onedrive/onedrive-v2.5.0-alpha-5/docs/puml/onedrive_linux_authentication.puml)
-
+![Linux Authentication to Microsoft OneDrive](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/abraunegg/onedrive/onedrive-v2.5.0-alpha-5/docs/puml/onedrive_linux_authentication.puml)
 
 ## Configuring read-only access to your OneDrive data
 In some situations, it may be desirable to configure the OneDrive Client for Linux totally in read-only operation.
