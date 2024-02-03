@@ -1784,6 +1784,8 @@ class SyncEngine {
 					if (localModifiedTime == itemModifiedTime) {
 						// yes they are equal
 						addLogEntry("File timestamps are equal, no further action required", ["verbose"]); // correct message as timestamps are equal
+						addLogEntry("Update/Insert local database with item details: " ~ to!string(newDatabaseItem), ["debug"]);
+						itemDB.upsert(newDatabaseItem);
 						return;
 					}
 				}
