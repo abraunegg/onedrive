@@ -671,10 +671,8 @@ JSONValue getLatestReleaseDetails() {
         githubLatest = content.parseJSON();
     } catch (CurlException e) {
         addLogEntry("CurlException: Unable to query GitHub for latest release - " ~ e.msg, ["debug"]);
-        return parseJSON(`{"Error": "CurlException", "message": "` ~ e.msg ~ `"}`);
     } catch (JSONException e) {
         addLogEntry("JSONException: Unable to parse GitHub JSON response - " ~ e.msg, ["debug"]);
-        return parseJSON(`{"Error": "JSONException", "message": "` ~ e.msg ~ `"}`);
     }
 	
 	
