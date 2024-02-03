@@ -950,12 +950,12 @@ class SyncEngine {
 				}
 			}
 			
-			// Free up memory and items processed as it is pointless now having this data around
-			jsonItemsToProcess = [];
-			
 			// Debug output - what was processed
 			addLogEntry("Number of JSON items to process is: " ~ to!string(jsonItemsToProcess.length), ["debug"]);
 			addLogEntry("Number of JSON items processed was: " ~ to!string(processedCount), ["debug"]);
+			
+			// Free up memory and items processed as it is pointless now having this data around
+			jsonItemsToProcess = [];
 		} else {
 			if (!appConfig.surpressLoggingOutput) {
 				addLogEntry("No additional changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive");
@@ -1173,7 +1173,7 @@ class SyncEngine {
 			if (parentInDatabase) {
 				// Calculate this items path
 				newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
-				addLogEntry("New Item calculated full path is: " ~ newItemPath, ["debug"]);
+				addLogEntry("JSON Item calculated full path is: " ~ newItemPath, ["debug"]);
 			} else {
 				// Parent not in the database
 				// Is the parent a 'folder' from another user? ie - is this a 'shared folder' that has been shared with us?
@@ -2006,7 +2006,7 @@ class SyncEngine {
 	
 		// Calculate this items path
 		string newItemPath = computeItemPath(downloadDriveId, downloadParentId) ~ "/" ~ downloadItemName;
-		addLogEntry("New Item calculated full path is: " ~ newItemPath, ["debug"]);
+		addLogEntry("JSON Item calculated full path for download is: " ~ newItemPath, ["debug"]);
 		
 		// Is the item reported as Malware ?
 		if (isMalware(onedriveJSONItem)){
@@ -2046,30 +2046,28 @@ class SyncEngine {
 				addLogEntry("ERROR: onedriveJSONItem['file']['hashes'] is missing - unable to compare file hash after download", ["debug"]);
 			}
 		
-			// Is this a --download-only scenario?
-			if (appConfig.getValueBool("download_only")) {
-				if (exists(newItemPath)) {
-					// file exists locally already
-					Item databaseItem;
-					bool fileFoundInDB = false;
-					foreach (driveId; onlineDriveDetails.keys) {
-						if (itemDB.selectByPath(newItemPath, driveId, databaseItem)) {
-							fileFoundInDB = true;
-							break;
-						}
+			// Does the file already exist in the path locally?
+			if (exists(newItemPath)) {
+				// file exists locally already
+				Item databaseItem;
+				bool fileFoundInDB = false;
+				foreach (driveId; onlineDriveDetails.keys) {
+					if (itemDB.selectByPath(newItemPath, driveId, databaseItem)) {
+						fileFoundInDB = true;
+						break;
 					}
+				}
+				
+				// Log the DB details
+				addLogEntry("File to download exists locally and this is the DB record: " ~ to!string(databaseItem), ["debug"]);
+				
+				// Does the DB (what we think is in sync) hash match the existing local file hash?
+				if (!testFileHash(newItemPath, databaseItem)) {
+					// local file is different to what we know to be true
+					addLogEntry("The local file to replace (" ~ newItemPath ~ ") has been modified locally since the last download. Renaming it to avoid potential local data loss.");
 					
-					// Log the DB details
-					addLogEntry("File to download exists locally and this is the DB record: " ~ to!string(databaseItem), ["debug"]);
-					
-					// Does the DB (what we think is in sync) hash match the existing local file hash?
-					if (!testFileHash(newItemPath, databaseItem)) {
-						// local file is different to what we know to be true
-						addLogEntry("The local file to replace (" ~ newItemPath ~ ") has been modified locally since the last download. Renaming it to avoid potential local data loss.");
-						
-						// Perform the local safeBackup of the existing local file, passing in if we are performing a --dry-run or not
-						safeBackup(newItemPath, dryRun);
-					}
+					// Perform the local safeBackup of the existing local file, passing in if we are performing a --dry-run or not
+					safeBackup(newItemPath, dryRun);
 				}
 			}
 			
