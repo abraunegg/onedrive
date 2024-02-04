@@ -740,7 +740,7 @@ class SyncEngine {
 			// Dynamic output for non-verbose and verbose run so that the user knows something is being retreived from the OneDrive API
 			if (appConfig.verbosityCount == 0) {
 				if (!appConfig.surpressLoggingOutput) {
-					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ driveIdToQuery);
+					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ driveIdToQuery, appConfig.verbosityCount);
 				}
 			} else {
 				addLogEntry("Fetching /delta response from the OneDrive API for Drive ID: " ~  driveIdToQuery, ["verbose"]);
@@ -912,13 +912,7 @@ class SyncEngine {
 			
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (!appConfig.surpressLoggingOutput) {
-				// Logfile entry
-				addProcessingLogHeaderEntry("Processing " ~ to!string(jsonItemsToProcess.length) ~ " applicable changes and items received from Microsoft OneDrive");
-				
-				if (appConfig.verbosityCount != 0) {
-					// Close out the console only processing line above, if we are doing verbose or above logging
-					addLogEntry("\n", ["consoleOnlyNoNewLine"]);
-				}
+				addProcessingLogHeaderEntry("Processing " ~ to!string(jsonItemsToProcess.length) ~ " applicable changes and items received from Microsoft OneDrive", appConfig.verbosityCount);
 			}
 			
 			// For each batch, process the JSON items that need to be now processed.
@@ -2716,7 +2710,7 @@ class SyncEngine {
 		
 		// Log what we are doing
 		if (!appConfig.surpressLoggingOutput) {
-			addProcessingLogHeaderEntry("Performing a database consistency and integrity check on locally stored data");
+			addProcessingLogHeaderEntry("Performing a database consistency and integrity check on locally stored data", appConfig.verbosityCount);
 		}
 		
 		// What driveIDsArray do we use? If we are doing a --single-directory we need to use just the drive id associated with that operation
@@ -2810,7 +2804,10 @@ class SyncEngine {
 		}
 
 		// Close out the '....' being printed to the console
-		addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+		if (!appConfig.surpressLoggingOutput) {
+			if (appConfig.verbosityCount == 0)
+				addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+		}
 		
 		// Are we doing a --download-only sync?
 		if (!appConfig.getValueBool("download_only")) {
@@ -2849,7 +2846,10 @@ class SyncEngine {
 		// Log what we are doing
 		addLogEntry("Processing " ~ logOutputPath, ["verbose"]);
 		// Add a processing '.'
-		addProcessingDotEntry();
+		if (!appConfig.surpressLoggingOutput) {
+			if (appConfig.verbosityCount == 0)
+				addProcessingDotEntry();
+		}
 		
 		// Determine which action to take
 		final switch (dbItem.type) {
@@ -3981,9 +3981,9 @@ class SyncEngine {
 		if (isDir(path)) {
 			if (!appConfig.surpressLoggingOutput) {
 				if (!cleanupLocalFiles) {
-					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload");
+					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload", appConfig.verbosityCount);
 				} else {
-					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for data to cleanup");
+					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for data to cleanup", appConfig.verbosityCount);
 				}
 			}
 		}
@@ -3993,7 +3993,10 @@ class SyncEngine {
 	
 		// Perform the filesystem walk of this path, building an array of new items to upload
 		scanPathForNewData(path);
-		addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+		if (!appConfig.surpressLoggingOutput) {
+			if (appConfig.verbosityCount == 0)
+				addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+		}
 		
 		// To finish off the processing items, this is needed to reflect this in the log
 		addLogEntry("------------------------------------------------------------------", ["debug"]);
@@ -4008,7 +4011,7 @@ class SyncEngine {
 		// Are there any items to download post fetching the /delta data?
 		if (!newLocalFilesToUploadToOneDrive.empty) {
 			// There are elements to upload
-			addProcessingLogHeaderEntry("New items to upload to OneDrive: " ~ to!string(newLocalFilesToUploadToOneDrive.length));
+			addProcessingLogHeaderEntry("New items to upload to OneDrive: " ~ to!string(newLocalFilesToUploadToOneDrive.length), appConfig.verbosityCount);
 			
 			// Reset totalDataToUpload
 			totalDataToUpload = 0;
@@ -4062,7 +4065,10 @@ class SyncEngine {
 	// Scan this path for new data
 	void scanPathForNewData(string path) {
 		// Add a processing '.'
-		addProcessingDotEntry();
+		if (!appConfig.surpressLoggingOutput) {
+			if (appConfig.verbosityCount == 0)
+				addProcessingDotEntry();
+		}
 
 		ulong maxPathLength;
 		ulong pathWalkLength;
@@ -4751,14 +4757,16 @@ class SyncEngine {
 		foreach (chunk; newLocalFilesToUploadToOneDrive.chunks(batchSize)) {
 			uploadNewLocalFileItemsInParallel(chunk);
 		}
-		addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+		if (appConfig.verbosityCount == 0)
+			addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 	}
 	
 	// Upload the file batches in parallel
 	void uploadNewLocalFileItemsInParallel(string[] array) {
 		foreach (i, fileToUpload; taskPool.parallel(array)) {
 			// Add a processing '.'
-			addProcessingDotEntry();
+			if (appConfig.verbosityCount == 0)
+				addProcessingDotEntry();
 			addLogEntry("Upload Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);
 			uploadNewFile(fileToUpload);
 			addLogEntry("Upload Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);
@@ -6088,7 +6096,7 @@ class SyncEngine {
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (appConfig.verbosityCount == 0) {
 				if (!appConfig.surpressLoggingOutput) {
-					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ searchItem.driveId);
+					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ searchItem.driveId, appConfig.verbosityCount);
 				}
 			} else {
 				addLogEntry("Generating a /delta response from the OneDrive API for Drive ID: " ~ searchItem.driveId, ["verbose"]);
@@ -7212,7 +7220,7 @@ class SyncEngine {
 		deltaLink = itemDB.getDeltaLink(driveIdToQuery, itemIdToQuery);
 		
 		// Log what we are doing
-		addProcessingLogHeaderEntry("Querying the change status of Drive ID: " ~ driveIdToQuery);
+		addProcessingLogHeaderEntry("Querying the change status of Drive ID: " ~ driveIdToQuery, appConfig.verbosityCount);
 		
 		// Query the OenDrive API using the applicable details, following nextLink if applicable
 		// Create a new API Instance for querying /delta and initialise it
@@ -7222,7 +7230,8 @@ class SyncEngine {
 		
 		for (;;) {
 			// Add a processing '.'
-			addProcessingDotEntry();
+			if (appConfig.verbosityCount == 0)
+				addProcessingDotEntry();
 		
 			// Get the /delta changes via the OneDrive API
 			// getDeltaChangesByItemId has the re-try logic for transient errors
@@ -7297,7 +7306,8 @@ class SyncEngine {
 			else break;
 		}
 		// Needed after printing out '....' when fetching changes from OneDrive API
-		addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+		if (appConfig.verbosityCount == 0)
+			addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 		
 		// Are there any JSON items to process?
 		if (count(jsonItemsArray) != 0) {
