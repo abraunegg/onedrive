@@ -740,10 +740,7 @@ class SyncEngine {
 			// Dynamic output for non-verbose and verbose run so that the user knows something is being retreived from the OneDrive API
 			if (appConfig.verbosityCount == 0) {
 				if (!appConfig.surpressLoggingOutput) {
-					addProcessingLogHeaderEntry(
-						"Fetching items from the OneDrive API for Drive ID: " ~ driveIdToQuery,
-						appConfig.verbosityCount
-					);
+					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ driveIdToQuery, appConfig.verbosityCount);
 				}
 			} else {
 				addLogEntry("Fetching /delta response from the OneDrive API for Drive ID: " ~  driveIdToQuery, ["verbose"]);
@@ -915,10 +912,7 @@ class SyncEngine {
 			
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (!appConfig.surpressLoggingOutput) {
-				addProcessingLogHeaderEntry(
-					"Processing " ~ to!string(jsonItemsToProcess.length) ~ " applicable changes and items received from Microsoft OneDrive",
-					appConfig.verbosityCount
-				);
+				addProcessingLogHeaderEntry("Processing " ~ to!string(jsonItemsToProcess.length) ~ " applicable changes and items received from Microsoft OneDrive", appConfig.verbosityCount);
 			}
 			
 			// For each batch, process the JSON items that need to be now processed.
@@ -2716,10 +2710,7 @@ class SyncEngine {
 		
 		// Log what we are doing
 		if (!appConfig.surpressLoggingOutput) {
-			addProcessingLogHeaderEntry(
-				"Performing a database consistency and integrity check on locally stored data",
-				appConfig.verbosityCount
-			);
+			addProcessingLogHeaderEntry("Performing a database consistency and integrity check on locally stored data", appConfig.verbosityCount);
 		}
 		
 		// What driveIDsArray do we use? If we are doing a --single-directory we need to use just the drive id associated with that operation
@@ -4021,15 +4012,9 @@ class SyncEngine {
 		if (isDir(path)) {
 			if (!appConfig.surpressLoggingOutput) {
 				if (!cleanupLocalFiles) {
-					addProcessingLogHeaderEntry(
-						"Scanning the local file system '" ~ logPath ~ "' for new data to upload",
-						appConfig.verbosityCount
-					);
+					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload", appConfig.verbosityCount);
 				} else {
-					addProcessingLogHeaderEntry(
-						"Scanning the local file system '" ~ logPath ~ "' for data to cleanup",
-						appConfig.verbosityCount,
-					);
+					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for data to cleanup", appConfig.verbosityCount);
 				}
 			}
 		}
@@ -4057,10 +4042,7 @@ class SyncEngine {
 		// Are there any items to download post fetching the /delta data?
 		if (!newLocalFilesToUploadToOneDrive.empty) {
 			// There are elements to upload
-			addProcessingLogHeaderEntry(
-				"New items to upload to OneDrive: " ~ to!string(newLocalFilesToUploadToOneDrive.length),
-				appConfig.verbosityCount
-			);
+			addProcessingLogHeaderEntry("New items to upload to OneDrive: " ~ to!string(newLocalFilesToUploadToOneDrive.length), appConfig.verbosityCount);
 			
 			// Reset totalDataToUpload
 			totalDataToUpload = 0;
@@ -6133,10 +6115,7 @@ class SyncEngine {
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (appConfig.verbosityCount == 0) {
 				if (!appConfig.surpressLoggingOutput) {
-					addProcessingLogHeaderEntry(
-						"Fetching items from the OneDrive API for Drive ID: " ~ searchItem.driveId,
-						appConfig.verbosityCount
-					);
+					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ searchItem.driveId, appConfig.verbosityCount);
 				}
 			} else {
 				addLogEntry("Generating a /delta response from the OneDrive API for Drive ID: " ~ searchItem.driveId, ["verbose"]);
@@ -7260,10 +7239,7 @@ class SyncEngine {
 		deltaLink = itemDB.getDeltaLink(driveIdToQuery, itemIdToQuery);
 		
 		// Log what we are doing
-		addProcessingLogHeaderEntry(
-			"Querying the change status of Drive ID: " ~ driveIdToQuery,
-			appConfig.verbosityCount
-		);
+		addProcessingLogHeaderEntry("Querying the change status of Drive ID: " ~ driveIdToQuery, appConfig.verbosityCount);
 		
 		// Query the OenDrive API using the applicable details, following nextLink if applicable
 		// Create a new API Instance for querying /delta and initialise it
