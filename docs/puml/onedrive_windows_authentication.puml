@@ -1,0 +1,47 @@
+@startuml
+participant "Microsoft Windows OneDrive Client"
+participant "Microsoft OneDrive\nAuthentication Service\n(login.microsoftonline.com)" as AuthServer
+participant "User's Device (for MFA)" as UserDevice
+participant "Microsoft Graph API\n(graph.microsoft.com)" as GraphAPI
+participant "Microsoft OneDrive"
+
+"Microsoft Windows OneDrive Client" -> AuthServer: Request Authorization\n(Client Credentials, Scopes)
+AuthServer -> "Microsoft Windows OneDrive Client": Provide Authorization Code
+
+"Microsoft Windows OneDrive Client" -> AuthServer: Request Access Token\n(Authorization Code, Client Credentials)
+
+alt MFA Enabled
+    AuthServer -> UserDevice: Trigger MFA Challenge
+    UserDevice -> AuthServer: Provide MFA Verification
+    AuthServer -> "Microsoft Windows OneDrive Client": Return Access Token\n(and Refresh Token)
+    "Microsoft Windows OneDrive Client" -> GraphAPI: Request Microsoft OneDrive Data\n(Access Token)
+    loop Token Expiry Check
+        "Microsoft Windows OneDrive Client" -> AuthServer: Is Access Token Expired?
+        alt Token Expired
+            "Microsoft Windows OneDrive Client" -> AuthServer: Request New Access Token\n(Refresh Token)
+            AuthServer -> "Microsoft Windows OneDrive Client": Return New Access Token
+        else Token Valid
+            GraphAPI -> "Microsoft OneDrive": Retrieve Data
+            "Microsoft OneDrive" -> GraphAPI: Return Data
+            GraphAPI -> "Microsoft Windows OneDrive Client": Provide Data
+        end
+    end
+else MFA Not Required
+    AuthServer -> "Microsoft Windows OneDrive Client": Return Access Token\n(and Refresh Token)
+    "Microsoft Windows OneDrive Client" -> GraphAPI: Request Microsoft OneDrive Data\n(Access Token)
+    loop Token Expiry Check
+        "Microsoft Windows OneDrive Client" -> AuthServer: Is Access Token Expired?
+        alt Token Expired
+            "Microsoft Windows OneDrive Client" -> AuthServer: Request New Access Token\n(Refresh Token)
+            AuthServer -> "Microsoft Windows OneDrive Client": Return New Access Token
+        else Token Valid
+            GraphAPI -> "Microsoft OneDrive": Retrieve Data
+            "Microsoft OneDrive" -> GraphAPI: Return Data
+            GraphAPI -> "Microsoft Windows OneDrive Client": Provide Data
+        end
+    end
+else MFA Failed or Other Auth Error
+    AuthServer -> "Microsoft Windows OneDrive Client": Error Message (e.g., Invalid Credentials, MFA Failure)
+end
+
+@enduml
