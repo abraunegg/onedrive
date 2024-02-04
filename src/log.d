@@ -149,10 +149,15 @@ void addLogEntry(string message = "", string[] levels = ["info"]) {
 	logBuffer.logThisMessage(message, levels);
 }
 
-void addProcessingLogHeaderEntry(string message = "") {
-	addLogEntry(message, ["logFileOnly"]);					
-	// Use the dots to show the application is 'doing something'
-	addLogEntry(message ~ " .", ["consoleOnlyNoNewLine"]);
+void addProcessingLogHeaderEntry(string message, long verbosityCount) {
+	if (verbosityCount == 0) {
+		addLogEntry(message, ["logFileOnly"]);					
+		// Use the dots to show the application is 'doing something' if verbosityCount == 0
+		addLogEntry(message ~ " .", ["consoleOnlyNoNewLine"]);
+	} else {
+		// Fallback to normal logging if in verbose or above level
+		addLogEntry(message);
+	}
 }
 
 void addProcessingDotEntry() {
