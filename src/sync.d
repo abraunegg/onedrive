@@ -4003,9 +4003,11 @@ class SyncEngine {
 	
 		// Perform the filesystem walk of this path, building an array of new items to upload
 		scanPathForNewData(path);
-		if (!appConfig.surpressLoggingOutput) {
-			if (appConfig.verbosityCount == 0)
-				addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+		if (isDir(path)) {
+			if (!appConfig.surpressLoggingOutput) {
+				if (appConfig.verbosityCount == 0)
+					addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+			}
 		}
 		
 		// To finish off the processing items, this is needed to reflect this in the log
@@ -4070,9 +4072,11 @@ class SyncEngine {
 	// Scan this path for new data
 	void scanPathForNewData(string path) {
 		// Add a processing '.'
-		if (!appConfig.surpressLoggingOutput) {
-			if (appConfig.verbosityCount == 0)
-				addProcessingDotEntry();
+		if (isDir(path)) {
+			if (!appConfig.surpressLoggingOutput) {
+				if (appConfig.verbosityCount == 0)
+					addProcessingDotEntry();
+			}
 		}
 
 		ulong maxPathLength;
