@@ -1783,7 +1783,7 @@ class SyncEngine {
 					// Are the timestamps equal?
 					if (localModifiedTime == itemModifiedTime) {
 						// yes they are equal
-						addLogEntry("File timestamps are equal, no further action required", ["verbose"]); // correct message as timestamps are equal
+						addLogEntry("File timestamps are equal, no further action required", ["debug"]); // correct message as timestamps are equal
 						addLogEntry("Update/Insert local database with item details: " ~ to!string(newDatabaseItem), ["debug"]);
 						itemDB.upsert(newDatabaseItem);
 						return;
@@ -2318,7 +2318,7 @@ class SyncEngine {
 									addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);
 									if (!dryRun) {
 										// Attempt to update the online date time stamp
-										uploadLastModifiedTime(item.driveId, item.id, localModifiedTime.toUTC(), item.eTag);
+										uploadLastModifiedTime(item.driveId, item.id, localModifiedTime, item.eTag);
 										return false;
 									}									
 								} else {	
@@ -2724,10 +2724,8 @@ class SyncEngine {
 		if (singleDirectoryScope) {
 			consistencyCheckDriveIdsArray ~= singleDirectoryScopeDriveId;
 		} else {
-			foreach (driveId; onlineDriveDetails.keys) {
-				// For each key, add this to consistencyCheckDriveIdsArray
-				consistencyCheckDriveIdsArray ~= driveId;
-			}
+			// Query the DB for all unique DriveID's
+			consistencyCheckDriveIdsArray = itemDB.selectDistinctDriveIds();
 		}
 		
 		// Create a new DB blank item
@@ -2736,6 +2734,9 @@ class SyncEngine {
 		foreach (driveId; consistencyCheckDriveIdsArray) {
 			// Make the logging more accurate - we cant update driveId as this then breaks the below queries
 			addLogEntry("Processing DB entries for this Drive ID: " ~ driveId, ["verbose"]);
+			
+			// Freshen the cached quota details for this driveID
+			addOrUpdateOneDriveOnlineDetails(driveId);
 			
 			// What OneDrive API query do we use?
 			// - Are we running against a National Cloud Deployments that does not support /delta ?
@@ -2890,7 +2891,8 @@ class SyncEngine {
 					
 					if (localModifiedTime != itemModifiedTime) {
 						// The modified dates are different
-						addLogEntry("The local item has a different modified time " ~ to!string(localModifiedTime) ~ " when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime), ["debug"]);
+						addLogEntry("Local file time discrepancy detected: " ~ localFilePath, ["verbose"]);
+						addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " (UTC) when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime) ~ " (UTC)", ["debug"]);
 						
 						// Test the file hash
 						if (!testFileHash(localFilePath, dbItem)) {
@@ -3881,27 +3883,24 @@ class SyncEngine {
 		
 	// Query the OneDrive API using the provided driveId to get the latest quota details
 	string[3][] getRemainingFreeSpaceOnline(string driveId) {
-				
 		// Get the quota details for this driveId
 		// Quota details are ONLY available for the main default driveId, as the OneDrive API does not provide quota details for shared folders
 		JSONValue currentDriveQuota;
-		
-		// Assume that quota is being restricted, there is no quota available and zero space online as a default
-		bool quotaRestricted = true;
+		bool quotaRestricted = false; // Assume quota is not restricted unless "remaining" is missing
 		bool quotaAvailable = false;
 		ulong quotaRemainingOnline = 0;
-		
+		string[3][] result;
+
 		// Ensure that we have a valid driveId to query
 		if (driveId.empty) {
 			// No 'driveId' was provided, use the application default
 			driveId = appConfig.defaultDriveId;
 		}
-		
+
 		// Try and query the quota for the provided driveId
 		try {
 			// Create a new OneDrive API instance
-			OneDriveApi getCurrentDriveQuotaApiInstance;
-			getCurrentDriveQuotaApiInstance = new OneDriveApi(appConfig);
+			OneDriveApi getCurrentDriveQuotaApiInstance = new OneDriveApi(appConfig);
 			getCurrentDriveQuotaApiInstance.initialise();
 			addLogEntry("Seeking available quota for this drive id: " ~ driveId, ["debug"]);
 			currentDriveQuota = getCurrentDriveQuotaApiInstance.getDriveQuota(driveId);
@@ -3911,10 +3910,15 @@ class SyncEngine {
 			object.destroy(getCurrentDriveQuotaApiInstance);
 		} catch (OneDriveException e) {
 			addLogEntry("currentDriveQuota = onedrive.getDriveQuota(driveId) generated a OneDriveException", ["debug"]);
+			// If an exception occurs, it's unclear if quota is restricted, but quota details are not available
+			quotaRestricted = true; // Considering restricted due to failure to access
+			// Return result
+			result ~= [to!string(quotaRestricted), to!string(quotaAvailable), to!string(quotaRemainingOnline)];
+			return result;
 		}
 		
 		// Validate that currentDriveQuota is a JSON value
-		if (currentDriveQuota.type() == JSONType.object) {
+		if (currentDriveQuota.type() == JSONType.object && "quota" in currentDriveQuota) {
 			// Response from API contains valid data
 			// If 'personal' accounts, if driveId == defaultDriveId, then we will have data
 			// If 'personal' accounts, if driveId != defaultDriveId, then we will not have quota data
@@ -3922,72 +3926,37 @@ class SyncEngine {
 			// If 'business' accounts, if driveId != defaultDriveId, then we will have data, but it will be a 0 value
 			addLogEntry("Quota Details: " ~ to!string(currentDriveQuota), ["debug"]);
 			
-			// Was 'quota' returned in the JSON data?
-			if ("quota" in currentDriveQuota){
-				if (driveId == appConfig.defaultDriveId) {
-					// We potentially have updated quota remaining details available
-					// However in some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
-					if ("remaining" in currentDriveQuota["quota"]){
-						// We have valid quota remaining details returned for the provided drive id
-						quotaRemainingOnline = currentDriveQuota["quota"]["remaining"].integer;
-						// Quota is not being restricted
-						quotaRestricted = false;
-						
-						if (quotaRemainingOnline <= 0) {
-							if (appConfig.accountType == "personal"){
-								// zero space available
-								addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional space.");
-								quotaRemainingOnline = 0;
-								quotaAvailable = false;
-							} else {
-								// zero space available is being reported, maybe being restricted?
-								addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
-								quotaRemainingOnline = 0;
-								quotaAvailable = true; // technically unknown
-								quotaRestricted = true;
-							}
-						}
-					}
-				} else {
-					// quota details returned, but for a drive id that is not ours
-					if ("remaining" in currentDriveQuota["quota"]){
-						// remaining is in the quota JSON response					
-						if (currentDriveQuota["quota"]["remaining"].integer <= 0) {
-							// value returned is 0 or less than 0
-							addLogEntry("OneDrive quota information is set at zero, as this is not our drive id, ignoring", ["verbose"]);
-							quotaRemainingOnline = 0;
-							quotaRestricted = true;
-							quotaAvailable = true;
-						}
+			auto quota = currentDriveQuota["quota"];
+			if ("remaining" in quota) {
+				quotaRemainingOnline = quota["remaining"].integer;
+				quotaAvailable = quotaRemainingOnline > 0;
+				// If "remaining" is present but its value is <= 0, it's not restricted but exhausted
+				if (quotaRemainingOnline <= 0) {
+					if (appConfig.accountType == "personal") {
+						addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional capacity.");
+					} else { // Assuming 'business' or 'sharedLibrary'
+						addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
 					}
 				}
 			} else {
-				// No quota details returned
-				if (driveId == appConfig.defaultDriveId) {
-					// no quota details returned for current drive id
-					addLogEntry("ERROR: OneDrive quota information is missing. Potentially your OneDrive account currently has zero space available. Please free up some space online or purchase additional space.");
-					quotaRemainingOnline = 0;
-					quotaRestricted = true;
-					quotaAvailable = true;
-				} else {
-					// quota details not available
-					addLogEntry("WARNING: OneDrive quota information is being restricted as this is not our drive id.", ["debug"]);
-					quotaRemainingOnline = 0;
-					quotaRestricted = true;
-					quotaAvailable = true;
-				}
+				// "remaining" not present, indicating restricted quota information
+				quotaRestricted = true;
+				addLogEntry("Quota information is restricted or not available for this drive.", ["verbose"]);
 			}
+		} else {
+			// When valid quota details are not fetched
+			addLogEntry("Failed to fetch or interpret quota details from the API response.", ["verbose"]);
+			quotaRestricted = true; // Considering restricted due to failure to interpret
 		}
-		
+
 		// What was the determined available quota?
 		addLogEntry("Reported Available Online Quota for driveID '" ~ driveId ~ "': " ~ to!string(quotaRemainingOnline), ["debug"]);
 		
 		// Return result
-		string[3][] result;
 		result ~= [to!string(quotaRestricted), to!string(quotaAvailable), to!string(quotaRemainingOnline)];
 		return result;
 	}
-	
+
 	// Perform a filesystem walk to uncover new data to upload to OneDrive
 	void scanLocalFilesystemPathForNewData(string path) {
 	
@@ -4869,11 +4838,23 @@ class SyncEngine {
 					// Resolves: https://github.com/skilion/onedrive/issues/121 , https://github.com/skilion/onedrive/issues/294 , https://github.com/skilion/onedrive/issues/329
 					if (thisFileSize <= maxUploadFileSize) {
 						// Is there enough free space on OneDrive as compared to when we started this thread, to safely upload the file to OneDrive?
+						
+						// Make sure that parentItem.driveId is in our driveIDs array to use when checking if item is in database
+						// Keep the driveDetailsCache array with unique entries only
+						if (!canFindDriveId(parentItem.driveId, cachedOnlineDriveData)) {
+							// Add this driveId to the drive cache, which then also sets for the defaultDriveId:
+							// - quotaRestricted;
+							// - quotaAvailable;
+							// - quotaRemaining;
+							addOrUpdateOneDriveOnlineDetails(parentItem.driveId);
+							// Fetch the details from cachedOnlineDriveData
+							cachedOnlineDriveData = getDriveDetails(parentItem.driveId);
+						} 
+						
 						// Fetch the details from cachedOnlineDriveData
 						// - cachedOnlineDriveData.quotaRestricted;
 						// - cachedOnlineDriveData.quotaAvailable;
 						// - cachedOnlineDriveData.quotaRemaining;
-						cachedOnlineDriveData = getDriveDetails(parentItem.driveId);
 						remainingFreeSpaceOnline = cachedOnlineDriveData.quotaRemaining;
 						
 						// When we compare the space online to the total we are trying to upload - is there space online?
