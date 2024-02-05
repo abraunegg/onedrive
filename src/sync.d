@@ -4299,31 +4299,35 @@ class SyncEngine {
 		// Is this path a new file or an existing one?
 		// Normally we would use pathFoundInDatabase() to calculate, but we need 'databaseItem' as well if the item is in the database
 		foreach (localFilePath; changedLocalFilesToUploadToOneDrive) {
-			Item databaseItem;
-			bool fileFoundInDB = false;
-			
-			foreach (driveId; onlineDriveDetails.keys) {
-				if (itemDB.selectByPath(localFilePath, driveId, databaseItem)) {
-					fileFoundInDB = true;
-					break;
+			try {
+				Item databaseItem;
+				bool fileFoundInDB = false;
+				
+				foreach (driveId; onlineDriveDetails.keys) {
+					if (itemDB.selectByPath(localFilePath, driveId, databaseItem)) {
+						fileFoundInDB = true;
+						break;
+					}
 				}
-			}
-			
-			// Was the file found in the database?
-			if (!fileFoundInDB) {
-				// This is a new file as it is not in the database
-				// Log that the file has been added locally
-				addLogEntry("[M] New local file added: " ~ localFilePath, ["verbose"]);
-				scanLocalFilesystemPathForNewDataToUpload(localFilePath);
-			} else {
-				// This is a potentially modified file, needs to be handled as such. Is the item truly modified?
-				if (!testFileHash(localFilePath, databaseItem)) {
-					// The local file failed the hash comparison test - there is a data difference
-					// Log that the file has changed locally
-					addLogEntry("[M] Local file changed: " ~ localFilePath, ["verbose"]);
-					// Add the modified item to the array to upload
-					uploadChangedLocalFileToOneDrive([databaseItem.driveId, databaseItem.id, localFilePath]);
+				
+				// Was the file found in the database?
+				if (!fileFoundInDB) {
+					// This is a new file as it is not in the database
+					// Log that the file has been added locally
+					addLogEntry("[M] New local file added: " ~ localFilePath, ["verbose"]);
+					scanLocalFilesystemPathForNewDataToUpload(localFilePath);
+				} else {
+					// This is a potentially modified file, needs to be handled as such. Is the item truly modified?
+					if (!testFileHash(localFilePath, databaseItem)) {
+						// The local file failed the hash comparison test - there is a data difference
+						// Log that the file has changed locally
+						addLogEntry("[M] Local file changed: " ~ localFilePath, ["verbose"]);
+						// Add the modified item to the array to upload
+						uploadChangedLocalFileToOneDrive([databaseItem.driveId, databaseItem.id, localFilePath]);
+					}
 				}
+			} catch(Exception e) {
+				addLogEntry("Cannot upload file changes/creation: " ~ e.msg, ["info", "notify"]);
 			}
 		}
 		processNewLocalItemsToUpload();
