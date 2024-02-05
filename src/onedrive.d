@@ -1096,25 +1096,8 @@ class OneDriveApi {
 		string callingFunction=__FUNCTION__, int lineno=__LINE__
 	) {
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
-			string[string] requestHeaders;
-			// open file as read-only in binary mode
-			auto file = File(filepath, "rb");
-			if (!contentRange.empty)
-				file.seek(offset);
-			// function scopes
-			scope(exit) {
-				// close file if open
-				if (file.isOpen()){
-					// close open file
-					file.close();
-				}
-			}
-			if (!contentRange.empty)
-				requestHeaders["Content-Range"] = contentRange;
-			else
-				offsetSize = file.size;
-			connect(HTTP.Method.put, url, skipToken, response, requestHeaders);
-			curlEngine.setFile(&file, offsetSize);
+			connect(HTTP.Method.put, url, skipToken, response);
+			curlEngine.setFile(filepath, contentRange, offset, offsetSize);
 			return curlEngine.execute();
 		}, callingFunction, lineno);
 	}
