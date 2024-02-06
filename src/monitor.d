@@ -37,11 +37,14 @@ class MonitorException: ErrnoException {
 shared class MonitorBackgroundWorker {
 	// inotify file descriptor
 	int fd;
-	private bool working;
+	bool isAlive;
+
+	this() {
+		isAlive = true;
+	}
 
 	void initialise() {
 		fd = inotify_init();
-		working = false;
 		if (fd < 0) throw new MonitorException("inotify_init failed");
 	}
 
@@ -77,12 +80,8 @@ shared class MonitorBackgroundWorker {
 		return wd;
 	}
 
-	int remove(int wd) {
+	int removeInotifyWatch(int wd) {
 		return inotify_rm_watch(fd, wd);
-	}
-
-	bool isWorking() {
-		return working;
 	}
 
 	void watch(Tid callerTid) {
@@ -90,44 +89,36 @@ shared class MonitorBackgroundWorker {
 		int res;
 
 		// wait for the caller to be ready
-		int isAlive = receiveOnly!int();
+		receiveOnly!int();
 
 		while (isAlive) {
 			fd_set fds;
 			FD_ZERO (&fds);
 			FD_SET(fd, &fds);
 			
-			working = true;
 			res = select(FD_SETSIZE, &fds, null, null, null);
 
 			if(res == -1) {
 				if(errno() == EINTR) {
 					// Received an interrupt signal but no events are available
-					// try update work staus and directly watch again
-					receiveTimeout(dur!"seconds"(1), (int msg) {
-						isAlive = msg;
-					});
+					// directly watch again
 				} else {
 					// Error occurred, tell caller to terminate.
-					callCaller(callerTid, -1);
-					working = false;
+					callerTid.send(-1);
 					break;
 				}
 			} else {
 				// Wake up caller
-				callCaller(callerTid, 1);
-				// Wait for the caller to be ready
-				isAlive = receiveOnly!int();
+				callerTid.send(1);
+
+				// wait for the caller to be ready
+				receiveOnly!int();
 			}
 		}
 	}
 
-	void callCaller(Tid callerTid, int msg) {
-		working = false;
-		callerTid.send(msg);
-	}
-
 	void shutdown() {
+		isAlive = false;
 		if (fd > 0) {
 			close(fd);
 			fd = 0;
@@ -142,8 +133,8 @@ void startMonitorJob(shared(MonitorBackgroundWorker) worker, Tid callerTid)
     	worker.watch(callerTid);
 	} catch (OwnerTerminated error) {
 		// caller is terminated
+		worker.shutdown();
 	}
-	worker.shutdown();
 }
 
 final class Monitor {
@@ -185,7 +176,7 @@ final class Monitor {
 	}
 	
 	// Initialise the monitor class
-	void initialise() {
+	Tid initialise() {
 		// Configure the variables
 		skip_symlinks = appConfig.getValueBool("skip_symlinks");
 		check_nosync = appConfig.getValueBool("check_nosync");
@@ -208,12 +199,17 @@ final class Monitor {
 			monitorPath = ".";
 		}
 		addRecursive(monitorPath);
+		initialised = true;
+		
+		// Start monitoring
+		return spawn(&startMonitorJob, worker, thisTid);
 	}
 
 	// Shutdown the monitor class
 	void shutdown() {
 		if(!initialised)
 			return;
+		initialised = false;
 		worker.shutdown();
 		wdToDirName = null;
 	}
@@ -329,7 +325,7 @@ final class Monitor {
 	// Remove a watch descriptor
 	private void remove(int wd) {
 		assert(wd in wdToDirName);
-		int ret = worker.remove(wd);
+		int ret = worker.removeInotifyWatch(wd);
 		if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
 		addLogEntry("Monitored directory removed: " ~ to!string(wdToDirName[wd]), ["verbose"]);
 		wdToDirName.remove(wd);
@@ -340,7 +336,7 @@ final class Monitor {
 		path ~= "/";
 		foreach (wd, dirname; wdToDirName) {
 			if (dirname.startsWith(path)) {
-				int ret = worker.remove(wd);
+				int ret = worker.removeInotifyWatch(wd);
 				if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
 				wdToDirName.remove(wd);
 				addLogEntry("Monitored directory removed: " ~ dirname, ["verbose"]);
@@ -354,10 +350,6 @@ final class Monitor {
 		if (event.len > 0) path ~= fromStringz(event.name.ptr);
 		addLogEntry("inotify path event for: " ~ path, ["debug"]);
 		return path;
-	}
-
-	shared(MonitorBackgroundWorker) getWorker() {
-		return worker;
 	}
 
 	// Update
@@ -513,14 +505,5 @@ final class Monitor {
 			// Debug Log that all inotify events are flushed
 			addLogEntry("inotify events flushed", ["debug"]);
 		}
-	}
-
-	Tid watch() {
-		initialised = true;
-		return spawn(&startMonitorJob, worker, thisTid);
-	}
-
-	bool isWorking() {
-		return worker.isWorking();
 	}
 }
