@@ -14,6 +14,7 @@ import std.concurrency;
 import std.exception;
 import std.file;
 import std.path;
+import std.process;
 import std.regex;
 import std.stdio;
 import std.string;
@@ -37,10 +38,12 @@ class MonitorException: ErrnoException {
 shared class MonitorBackgroundWorker {
 	// inotify file descriptor
 	int fd;
+	Pipe p;
 	bool isAlive;
 
 	this() {
 		isAlive = true;
+		p = cast(shared) pipe();
 	}
 
 	void initialise() {
@@ -95,9 +98,11 @@ shared class MonitorBackgroundWorker {
 			fd_set fds;
 			FD_ZERO (&fds);
 			FD_SET(fd, &fds);
+			// Listen for messages from the caller
+			FD_SET((cast()p).readEnd.fileno, &fds);
 			
 			res = select(FD_SETSIZE, &fds, null, null, null);
-
+			
 			if(res == -1) {
 				if(errno() == EINTR) {
 					// Received an interrupt signal but no events are available
@@ -112,9 +117,17 @@ shared class MonitorBackgroundWorker {
 				callerTid.send(1);
 
 				// wait for the caller to be ready
-				receiveOnly!int();
+				if (isAlive)
+					isAlive = receiveOnly!bool();
 			}
 		}
+		callerTid.send(0);
+	}
+
+	void interrupt() {
+		isAlive = false;
+		(cast()p).writeEnd.writeln("done");
+		(cast()p).writeEnd.flush();
 	}
 
 	void shutdown() {
@@ -122,6 +135,7 @@ shared class MonitorBackgroundWorker {
 		if (fd > 0) {
 			close(fd);
 			fd = 0;
+			(cast()p).close();
 		}
 	}
 }
@@ -150,6 +164,8 @@ final class Monitor {
 	bool check_nosync = false;
 	// check if initialised
 	bool initialised = false;
+	// Worker Tid
+	Tid workerTid;
 	
 	// Configure Private Class Variables
 	shared(MonitorBackgroundWorker) worker;
@@ -176,7 +192,7 @@ final class Monitor {
 	}
 	
 	// Initialise the monitor class
-	Tid initialise() {
+	void initialise() {
 		// Configure the variables
 		skip_symlinks = appConfig.getValueBool("skip_symlinks");
 		check_nosync = appConfig.getValueBool("check_nosync");
@@ -199,10 +215,16 @@ final class Monitor {
 			monitorPath = ".";
 		}
 		addRecursive(monitorPath);
-		initialised = true;
 		
 		// Start monitoring
-		return spawn(&startMonitorJob, worker, thisTid);
+		workerTid = spawn(&startMonitorJob, worker, thisTid);
+
+		initialised = true;
+	}
+
+	// Communication with worker
+	void send(bool isAlive) {
+		workerTid.send(isAlive);
 	}
 
 	// Shutdown the monitor class
@@ -210,6 +232,17 @@ final class Monitor {
 		if(!initialised)
 			return;
 		initialised = false;
+		// Release all resources
+		removeAll();
+		worker.interrupt();
+		// Notify the worker that the monitor has been shutdown
+		receiveTimeout(dur!"seconds"(-1), (int _) {});
+		send(false);
+		// Wait for the worker to terminate
+		int result = 1;
+		while(result == 1) {
+			result = receiveOnly!int();
+		}
 		worker.shutdown();
 		wdToDirName = null;
 	}
@@ -323,6 +356,13 @@ final class Monitor {
 	}
 
 	// Remove a watch descriptor
+	private void removeAll() {
+		string[int] copy = wdToDirName.dup;
+		foreach (wd, path; copy) {
+			remove(wd);
+		}
+	}
+
 	private void remove(int wd) {
 		assert(wd in wdToDirName);
 		int ret = worker.removeInotifyWatch(wd);
@@ -506,4 +546,5 @@ final class Monitor {
 			addLogEntry("inotify events flushed", ["debug"]);
 		}
 	}
+
 }

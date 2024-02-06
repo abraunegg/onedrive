@@ -722,7 +722,6 @@ int main(string[] cliArgs) {
 			}
 			
 			// Configure the monitor class
-			Tid workerTid;
 			filesystemMonitor = new Monitor(appConfig, selectiveSync);
 			
 			// Delegated function for when inotify detects a new local directory has been created
@@ -802,7 +801,7 @@ int main(string[] cliArgs) {
 				// Not using --download-only
 				try {
 					addLogEntry("Initialising filesystem inotify monitoring ...");
-					workerTid = filesystemMonitor.initialise();
+					filesystemMonitor.initialise();
 					addLogEntry("Performing initial syncronisation to ensure consistent local state ...");
 				} catch (MonitorException e) {	
 					// monitor class initialisation failed
@@ -999,7 +998,7 @@ int main(string[] cliArgs) {
 						if(filesystemMonitor.initialised) {
 							// If local monitor is on
 							// start the worker and wait for event
-							workerTid.send(1);
+							filesystemMonitor.send(true);
 						}
 
 						if(webhookEnabled) {
@@ -1047,13 +1046,6 @@ int main(string[] cliArgs) {
 								}
 								break;
 							}
-						}
-						while (res != -1) {
-							signalExists = receiveTimeout(dur!"seconds"(-1), (int msg) {
-								res = msg;
-							});
-							if (!signalExists)
-								break;
 						}
 
 						if(res == -1) {
