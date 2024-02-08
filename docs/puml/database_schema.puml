@@ -1,0 +1,37 @@
+@startuml
+
+class item {
+    driveId: TEXT
+    id: TEXT
+    name: TEXT
+    remoteName: TEXT
+    type: TEXT
+    eTag: TEXT
+    cTag: TEXT
+    mtime: TEXT
+    parentId: TEXT
+    quickXorHash: TEXT
+    sha256Hash: TEXT
+    remoteDriveId: TEXT
+    remoteId: TEXT
+    deltaLink: TEXT
+    syncStatus: TEXT
+    size: TEXT
+}
+
+note right of item::driveId
+  PRIMARY KEY (driveId, id)
+  FOREIGN KEY (driveId, parentId) REFERENCES item
+end note
+
+item --|> item : parentId
+
+note "Indexes" as N1
+note left of N1
+  name_idx ON item (name)
+  remote_idx ON item (remoteDriveId, remoteId)
+  item_children_idx ON item (driveId, parentId)
+  selectByPath_idx ON item (name, driveId, parentId)
+end note
+
+@enduml
