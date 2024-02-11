@@ -576,7 +576,7 @@ class SyncEngine {
 				}
 			} else {
 				// Is this a Business Account with Sync Business Shared Items enabled?
-				if ((appConfig.accountType == "business") && ( appConfig.getValueBool("sync_business_shared_items"))) {
+				if ((appConfig.accountType == "business") && (appConfig.getValueBool("sync_business_shared_items"))) {
 				
 					// Business Account Shared Items Handling
 					// - OneDrive Business Shared Folder
@@ -1197,22 +1197,8 @@ class SyncEngine {
 						if (hasSharedElement(onedriveJSONItem)) {
 							// Has the Shared JSON structure
 							addLogEntry("Personal Shared Item JSON object has the 'shared' JSON structure", ["debug"]);
-						
-							// Create a DB Tie Record for this parent object
-							addLogEntry("Creating a DB Tie for this Personal Shared Folder", ["debug"]);
-							
-							// DB Tie
-							Item parentItem;
-							parentItem.driveId = onedriveJSONItem["parentReference"]["driveId"].str;
-							parentItem.id = onedriveJSONItem["parentReference"]["id"].str;
-							parentItem.name = "root";
-							parentItem.type = ItemType.dir;
-							parentItem.mtime = remoteItem.mtime;
-							parentItem.parentId = null;
-							
-							// Add this DB Tie parent record to the local database
-							addLogEntry("Insert local database with remoteItem parent details: " ~ to!string(parentItem), ["debug"]);
-							itemDB.upsert(parentItem);
+							// Create a 'root' DB Tie Record for this JSON object
+							createDatabaseRootTieRecordForOnlineSharedFolder(onedriveJSONItem);
 						}
 						
 						// Ensure that this item has no parent
@@ -1226,21 +1212,8 @@ class SyncEngine {
 						addLogEntry("Handling a Business or SharePoint Shared Item JSON object", ["debug"]);
 						
 						if (appConfig.accountType == "business") {
-							// Create a DB Tie Record for this parent object
-							addLogEntry("Creating a DB Tie for this Business Shared Folder", ["debug"]);
-							
-							// DB Tie
-							Item parentItem;
-							parentItem.driveId = onedriveJSONItem["parentReference"]["driveId"].str;
-							parentItem.id = onedriveJSONItem["parentReference"]["id"].str;
-							parentItem.name = "root";
-							parentItem.type = ItemType.dir;
-							parentItem.mtime = remoteItem.mtime;
-							parentItem.parentId = null;
-							
-							// Add this DB Tie parent record to the local database
-							addLogEntry("Insert local database with remoteItem parent details: " ~ to!string(parentItem), ["debug"]);
-							itemDB.upsert(parentItem);
+							// Create a 'root' DB Tie Record for this JSON object
+							createDatabaseRootTieRecordForOnlineSharedFolder(onedriveJSONItem);
 							
 							// Ensure that this item has no parent
 							addLogEntry("Setting remoteItem.parentId to be null", ["debug"]);
@@ -1278,8 +1251,7 @@ class SyncEngine {
 							itemDB.upsert(remoteItem);
 						} else {
 							// Sharepoint account type
-							addLogEntry("Handling a SharePoint Shared Item JSON object - NOT IMPLEMENTED ........ ", ["debug"]);
-	
+							addLogEntry("Handling a SharePoint Shared Item JSON object - NOT IMPLEMENTED YET ........ ", ["info"]);
 						}
 					}
 				}
@@ -4228,6 +4200,7 @@ class SyncEngine {
 						if (canFind(businessSharedFoldersOnlineToSkip, path)) {
 							// This path was skipped - why?
 							addLogEntry("Skipping item '" ~ path ~ "' due to this path matching an existing online Business Shared Folder name", ["info", "notify"]);
+							addLogEntry("To sync this Business Shared Folder, consider enabling 'sync_business_shared_folders' within your application configuration.", ["info"]);
 							skipFolderTraverse = true;
 						}
 					}
@@ -4389,6 +4362,9 @@ class SyncEngine {
 			// Step 2: Query for the path online if not found in the local database
 			if (!parentPathFoundInDB) {
 				// parent path not found in database
+				
+				addLogEntry("PARENT NOT FOUND IN DATABASE - QUERY ONLINE", ["info"]);
+				
 				try {
 					addLogEntry("Attempting to query OneDrive Online for this parent path as path not found in local database: " ~ parentPath, ["debug"]);
 					onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetails(parentPath);
@@ -4449,33 +4425,17 @@ class SyncEngine {
 			addLogEntry("parentItem details: " ~ to!string(parentItem), ["debug"]);
 			
 			// Depending on the data within parentItem, will depend on what method we are using to search
-			// In a --local-first scenario, a Shared Folder will be 'remote' so we need to check the remote parent id, rather than parentItem details
+			// A Shared Folder will be 'remote' so we need to check the remote parent id, rather than parentItem details
 			Item queryItem;
 			
-			if ((appConfig.getValueBool("local_first")) &&  (parentItem.type == ItemType.remote)) {
-				// We are --local-first scenario and this folder is a potential shared object
-				addLogEntry("--localfirst & parentItem is a remote item object", ["debug"]);
-			
+			if (parentItem.type == ItemType.remote) {
+				// This folder is a potential shared object
+				addLogEntry("ParentItem is a remote item object", ["debug"]);
+				// Need to create the DB Tie for this shared object to ensure this exists in the database
+				createDatabaseTieRecordForOnlineSharedFolder(parentItem);
+				// Update the queryItem values
 				queryItem.driveId = parentItem.remoteDriveId;
 				queryItem.id = parentItem.remoteId;
-				
-				// Need to create the DB Tie for this object
-				addLogEntry("Creating a DB Tie for this Shared Folder", ["debug"]);
-				// New DB Tie Item to bind the 'remote' path to our parent path
-				Item tieDBItem;
-				// Set the name
-				tieDBItem.name = parentItem.name;
-				// Set the correct item type
-				tieDBItem.type = ItemType.dir;
-				// Set the right elements using the 'remote' of the parent as the 'actual' for this DB Tie
-				tieDBItem.driveId = parentItem.remoteDriveId;
-				tieDBItem.id = parentItem.remoteId;
-				// Set the correct mtime
-				tieDBItem.mtime = parentItem.mtime;
-				// Add tie DB record to the local database
-				addLogEntry("Adding DB Tie record to database: " ~ to!string(tieDBItem), ["debug"]);
-				itemDB.upsert(tieDBItem);
-				
 			} else {
 				// Use parent item for the query item
 				addLogEntry("Standard Query, use parentItem", ["debug"]);
@@ -4567,14 +4527,14 @@ class SyncEngine {
 						string requiredDriveId;
 						string requiredParentItemId;
 						
-						// Is this a Personal Account and is the item a Remote Object (Shared Folder) ?
-						if ((appConfig.accountType == "personal") && (parentItem.type == ItemType.remote)) {
+						// Is the item a Remote Object (Shared Folder) ?
+						if (parentItem.type == ItemType.remote) {
 							// Yes .. Shared Folder
 							addLogEntry("parentItem data: " ~ to!string(parentItem), ["debug"]);
 							requiredDriveId = parentItem.remoteDriveId;
 							requiredParentItemId = parentItem.remoteId;
 						} else {
-							// Not a personal account + Shared Folder
+							// Not a Shared Folder
 							requiredDriveId = parentItem.driveId;
 							requiredParentItemId = parentItem.id;
 						}
@@ -4675,22 +4635,37 @@ class SyncEngine {
 			if (onlinePathData["name"].str == baseName(thisNewPathToCreate)) {
 				// OneDrive 'name' matches local path name
 				if (appConfig.accountType == "business") {
-					// We are a business account, this existing online folder, could be a Shared Online Folder and is the 'Add shortcut to My files' item
+					// We are a business account, this existing online folder, could be a Shared Online Folder could be a 'Add shortcut to My files' item
 					addLogEntry("onlinePathData: " ~ to!string(onlinePathData), ["debug"]);
 					
+					// Is this a remote folder
 					if (isItemRemote(onlinePathData)) {
 						// The folder is a remote item ... we do not want to create this ...
-						addLogEntry("Remote Existing Online Folder is most likely a OneDrive Shared Business Folder Link added by 'Add shortcut to My files'", ["debug"]);
-						addLogEntry("We need to skip this path: " ~ thisNewPathToCreate, ["debug"]);
+						addLogEntry("Existing Remote Online Folder is most likely a OneDrive Shared Business Folder Link added by 'Add shortcut to My files'", ["debug"]);
 						
-						// Add this path to businessSharedFoldersOnlineToSkip
-						businessSharedFoldersOnlineToSkip ~= [thisNewPathToCreate];
-						// no save to database, no online create
-						// Shutdown API instance
-						createDirectoryOnlineOneDriveApiInstance.shutdown();
-						// Free object and memory
-						object.destroy(createDirectoryOnlineOneDriveApiInstance);
-						return;
+						// Is Shared Business Folder Syncing enabled ?
+						if (!appConfig.getValueBool("sync_business_shared_items")) {
+							// Shared Business Folder Syncing is NOT enabled
+							addLogEntry("We need to skip this path: " ~ thisNewPathToCreate, ["debug"]);
+							// Add this path to businessSharedFoldersOnlineToSkip
+							businessSharedFoldersOnlineToSkip ~= [thisNewPathToCreate];
+							// no save to database, no online create
+							// Shutdown API instance
+							createDirectoryOnlineOneDriveApiInstance.shutdown();
+							// Free object and memory
+							object.destroy(createDirectoryOnlineOneDriveApiInstance);
+							return;
+						} else {
+							// As the 'onlinePathData' is potentially missing the actual correct parent folder id in the 'remoteItem' JSON response, we have to perform a further query to get the correct answer
+							// Failure to do this, means the 'root' DB Tie Record has a different parent reference id to that what this folder's parent reference id actually is
+							JSONValue sharedFolderParentPathData;
+							string remoteDriveId = onlinePathData["remoteItem"]["parentReference"]["driveId"].str;
+							string remoteItemId = onlinePathData["remoteItem"]["id"].str;
+							sharedFolderParentPathData = createDirectoryOnlineOneDriveApiInstance.getPathDetailsById(remoteDriveId, remoteItemId);
+							
+							// A 'root' DB Tie Record needed for this folder using the correct parent data
+							createDatabaseRootTieRecordForOnlineSharedFolder(sharedFolderParentPathData);
+						}
 					}
 				}
 				
@@ -4824,7 +4799,7 @@ class SyncEngine {
 		// If the parent path was found in the DB, to ensure we are uploading the the right location 'parentItem.driveId' must not be empty
 		if ((parentPathFoundInDB) && (parentItem.driveId.empty)) {
 			// switch to using defaultDriveId
-			addLogEntry("parentItem.driveId is empty - using defaultDriveId for upload API calls");
+			addLogEntry("parentItem.driveId is empty - using defaultDriveId for upload API calls", ["debug"]);
 			parentItem.driveId = appConfig.defaultDriveId;
 		}
 		
@@ -4929,11 +4904,24 @@ class SyncEngine {
 							// even though some file systems (such as a POSIX-compliant file systems that Linux use) may consider them as different.
 							// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior, OneDrive does not use this.
 							
-							// In order to upload this file - this query HAS to respond as a 404 - Not Found
+							// In order to upload this file - this query HAS to respond with a '404 - Not Found' so that the upload is triggered
 							
 							// Does this 'file' already exist on OneDrive?
 							try {
-								fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload);
+								if (parentItem.driveId == appConfig.defaultDriveId) {
+									// getPathDetailsByDriveId is only reliable when the driveId is our driveId
+									fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload);
+								} else {
+									// We need to curate a response by listing the children of this parentItem.driveId and parentItem.id , without traversing directories
+									// So that IF the file is on a Shared Folder, it can be found, and, if it exists, checked correctly
+									fileDetailsFromOneDrive = searchDriveItemForFile(parentItem.driveId, parentItem.id, fileToUpload);
+									// Was the file found?
+									if (fileDetailsFromOneDrive.type() != JSONType.object) {
+										// No ....
+										throw new OneDriveException(404, "Name not found via searchDriveItemForFile");
+									}
+								}
+								
 								// Portable Operating System Interface (POSIX) testing of JSON response from OneDrive API
 								if (hasName(fileDetailsFromOneDrive)) {
 									performPosixTest(baseName(fileToUpload), fileDetailsFromOneDrive["name"].str);
@@ -6537,24 +6525,23 @@ class SyncEngine {
 						// Is this JSON a remote object
 						addLogEntry("Testing if this is a remote Shared Folder", ["debug"]);
 						if (isItemRemote(getPathDetailsAPIResponse)) {
-							// Remote Directory .. need a DB Tie Item
-							addLogEntry("Creating a DB Tie for this Shared Folder", ["debug"]);
-							// New DB Tie Item to bind the 'remote' path to our parent path
-							Item tieDBItem;
+							// Remote Directory .. need a DB Tie Record
+							createDatabaseTieRecordForOnlineSharedFolder(parentDetails);
+							
+							// Temp DB Item to bind the 'remote' path to our parent path
+							Item tempDBItem;
 							// Set the name
-							tieDBItem.name = parentDetails.name;
+							tempDBItem.name = parentDetails.name;
 							// Set the correct item type
-							tieDBItem.type = ItemType.dir;
+							tempDBItem.type = ItemType.dir;
 							// Set the right elements using the 'remote' of the parent as the 'actual' for this DB Tie
-							tieDBItem.driveId = parentDetails.remoteDriveId;
-							tieDBItem.id = parentDetails.remoteId;
+							tempDBItem.driveId = parentDetails.remoteDriveId;
+							tempDBItem.id = parentDetails.remoteId;
 							// Set the correct mtime
-							tieDBItem.mtime = parentDetails.mtime;
-							// Add tie DB record to the local database
-							addLogEntry("Adding DB Tie record to database: " ~ to!string(tieDBItem), ["debug"]);
-							itemDB.upsert(tieDBItem);
-							// Update parentDetails to use the DB Tie record
-							parentDetails = tieDBItem;
+							tempDBItem.mtime = parentDetails.mtime;
+							
+							// Update parentDetails to use this temp record
+							parentDetails = tempDBItem;
 						}
 					} catch (OneDriveException exception) {
 						if (exception.httpStatusCode == 404) {
@@ -6961,8 +6948,9 @@ class SyncEngine {
 					// What account type is this?
 					if (appConfig.accountType != "personal") {
 						// Not a personal account, thus the integrity failure is most likely due to SharePoint
-						addLogEntry("CAUTION: Microsoft OneDrive when using SharePoint as a backend enhances files after you upload them, which means this file may now have technical differences from your local copy, resulting in a data integrity issue.", ["verbose"]);
-						addLogEntry("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details", ["verbose"]);
+						addLogEntry("CAUTION: When you upload files to Microsoft OneDrive that uses SharePoint as its backend, Microsoft OneDrive will alter your files post upload.", ["verbose"]);
+						addLogEntry("CAUTION: This will lead to technical differences between the version stored online and your local original file, potentially causing issues with the accuracy or consistency of your data.", ["verbose"]);
+						addLogEntry("CAUTION: Please read https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.", ["verbose"]);
 					}
 					// How can this be disabled?
 					addLogEntry("To disable the integrity checking of uploaded files use --disable-upload-validation");
@@ -7847,6 +7835,96 @@ class SyncEngine {
 		}
 	}
 	
+	// Search a given Drive ID, Item ID and filename to see if this exists in the location specified
+	JSONValue searchDriveItemForFile(string parentItemDriveId, string parentItemId, string fileToUpload) {
+	
+		JSONValue onedriveJSONItem;
+		string searchName = baseName(fileToUpload);
+		JSONValue thisLevelChildren;
+		
+		string nextLink;
+		
+		// Create a new API Instance for this thread and initialise it
+		OneDriveApi checkFileOneDriveApiInstance;
+		checkFileOneDriveApiInstance = new OneDriveApi(appConfig);
+		checkFileOneDriveApiInstance.initialise();
+		
+		for (;;) {
+			// query top level children
+			try {
+				thisLevelChildren = checkFileOneDriveApiInstance.listChildren(parentItemDriveId, parentItemId, nextLink);
+			} catch (OneDriveException exception) {
+				// OneDrive threw an error
+				addLogEntry("------------------------------------------------------------------", ["debug"]);
+				addLogEntry("Query Error: thisLevelChildren = checkFileOneDriveApiInstance.listChildren(parentItemDriveId, parentItemId, nextLink)", ["debug"]);
+				addLogEntry("driveId:   " ~ parentItemDriveId, ["debug"]);
+				addLogEntry("idToQuery: " ~ parentItemId, ["debug"]);
+				addLogEntry("nextLink:  " ~ nextLink, ["debug"]);
+				
+				string thisFunctionName = getFunctionName!({});
+				// HTTP request returned status code 408,429,503,504
+				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+					// Handle the 429
+					if (exception.httpStatusCode == 429) {
+						// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+						handleOneDriveThrottleRequest(checkFileOneDriveApiInstance);
+						addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry thisLevelChildren = checkFileOneDriveApiInstance.listChildren(parentItemDriveId, parentItemId, nextLink)", ["debug"]);
+					}
+					// re-try the specific changes queries
+					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+						// 408 - Request Time Out
+						// 503 - Service Unavailable
+						// 504 - Gateway Timeout
+						// Transient error - try again in 30 seconds
+						auto errorArray = splitLines(exception.msg);
+						addLogEntry(to!string(errorArray[0]) ~ " when attempting to query OneDrive top level drive children on OneDrive - retrying applicable request in 30 seconds");
+						addLogEntry("checkFileOneDriveApiInstance.listChildren(parentItemDriveId, parentItemId, nextLink) previously threw an error - retrying", ["debug"]);
+						
+						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+						addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
+						Thread.sleep(dur!"seconds"(30));
+					}
+					// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
+					addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
+					searchDriveItemForFile(parentItemDriveId, parentItemId, fileToUpload);
+				} else {
+					// Default operation if not 408,429,503,504 errors
+					// display what the error is
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+				}
+			}
+			
+			// process thisLevelChildren response
+			foreach (child; thisLevelChildren["value"].array) {
+                // Only looking at files
+				if ((child["name"].str == searchName) && (("file" in child) != null)) {
+					// Found the matching file, return its JSON representation
+					// Operations in this thread are done / complete
+					checkFileOneDriveApiInstance.shutdown();
+					// Free object and memory
+					object.destroy(checkFileOneDriveApiInstance);
+					// Return child
+                    return child;
+                }
+            }
+			
+			// If a collection exceeds the default page size (200 items), the @odata.nextLink property is returned in the response 
+			// to indicate more items are available and provide the request URL for the next page of items.
+			if ("@odata.nextLink" in thisLevelChildren) {
+				// Update nextLink to next changeSet bundle
+				addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
+				nextLink = thisLevelChildren["@odata.nextLink"].str;
+			} else break;
+		}
+		
+		// Operations in this thread are done / complete
+		checkFileOneDriveApiInstance.shutdown();
+		// Free object and memory
+		object.destroy(checkFileOneDriveApiInstance);
+		// return an empty JSON item
+		return onedriveJSONItem;
+	}
+	
 	// Update 'onlineDriveDetails' with the latest data about this drive
 	void updateDriveDetailsCache(string driveId, bool quotaRestricted, bool quotaAvailable, ulong localFileSize) {
 	
@@ -7885,5 +7963,73 @@ class SyncEngine {
 			addLogEntry("Freshen Quota Details: " ~ driveId, ["debug"]);
 			addOrUpdateOneDriveOnlineDetails(driveId);
 		}
+	}
+	
+	// Create a 'root' DB Tie Record for a Shared Folder from the JSON data
+	void createDatabaseRootTieRecordForOnlineSharedFolder(JSONValue onedriveJSONItem) {
+		// Creating|Updating a DB Tie
+		addLogEntry("Creating|Updating a 'root' DB Tie Record for this Shared Folder: " ~ onedriveJSONItem["name"].str, ["debug"]);
+		addLogEntry("Raw JSON for 'root' DB Tie Record: " ~ to!string(onedriveJSONItem), ["debug"]);
+		
+		// New DB Tie Item to detail the 'root' of the Shared Folder
+		Item tieDBItem;
+		tieDBItem.name = "root";
+		
+		// Get the right parentReference details
+		if (isItemRemote(onedriveJSONItem)) {
+			tieDBItem.driveId = onedriveJSONItem["remoteItem"]["parentReference"]["driveId"].str;
+			tieDBItem.id = onedriveJSONItem["remoteItem"]["id"].str;
+		} else {
+			if (onedriveJSONItem["name"].str != "root") {
+				tieDBItem.driveId = onedriveJSONItem["parentReference"]["driveId"].str;
+				tieDBItem.id = onedriveJSONItem["parentReference"]["id"].str;
+			} else {
+				tieDBItem.driveId = onedriveJSONItem["parentReference"]["driveId"].str;
+				tieDBItem.id = onedriveJSONItem["id"].str;
+			}
+		}
+		
+		tieDBItem.type = ItemType.dir;
+		tieDBItem.mtime = SysTime.fromISOExtString(onedriveJSONItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+		tieDBItem.parentId = null;
+		
+		// Add this DB Tie parent record to the local database
+		addLogEntry("Creating|Updating into local database a 'root' DB Tie record: " ~ to!string(tieDBItem), ["debug"]);
+		itemDB.upsert(tieDBItem);
+	}
+	
+	// Create a DB Tie Record for a Shared Folder 
+	void createDatabaseTieRecordForOnlineSharedFolder(Item parentItem) {
+		// Creating|Updating a DB Tie
+		addLogEntry("Creating|Updating a DB Tie Record for this Shared Folder: " ~ parentItem.name, ["debug"]);
+		addLogEntry("Parent Item Record: " ~ to!string(parentItem), ["debug"]);
+		
+		// New DB Tie Item to bind the 'remote' path to our parent path
+		Item tieDBItem;
+		tieDBItem.name = parentItem.name;
+		tieDBItem.driveId = parentItem.remoteDriveId;
+		tieDBItem.id = parentItem.remoteId;
+		tieDBItem.type = ItemType.dir;
+		tieDBItem.mtime = parentItem.mtime;
+		
+		// What account type is this as this determines what 'tieDBItem.parentId' should be set to
+		// There is a difference in the JSON responses between 'personal' and 'business' account types for Shared Folders
+		// Essentially an API inconsistency
+		if (appConfig.accountType == "personal") {
+			// Set tieDBItem.parentId to null
+			tieDBItem.parentId = null;
+		} else {
+			// The tieDBItem.parentId needs to be the correct driveId id reference
+			// Query the DB 
+			Item[] rootDriveItems;
+			Item dbRecord;
+			rootDriveItems = itemDB.selectByDriveId(parentItem.remoteDriveId);
+			dbRecord = rootDriveItems[0];
+			tieDBItem.parentId = dbRecord.id;
+		}
+		
+		// Add tie DB record to the local database
+		addLogEntry("Creating|Updating into local database a DB Tie record: " ~ to!string(tieDBItem), ["debug"]);
+		itemDB.upsert(tieDBItem);
 	}
 }
