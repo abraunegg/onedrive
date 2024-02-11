@@ -629,12 +629,17 @@ int main(string[] cliArgs) {
 		string localPath = ".";
 		string remotePath = "/";
 		
-		// Check if there are interrupted upload session(s)
-		if (syncEngineInstance.checkForInterruptedSessionUploads) {
-			// Need to re-process the session upload files to resume the failed session uploads
-			addLogEntry("There are interrupted session uploads that need to be resumed ...");
-			// Process the session upload files
-			syncEngineInstance.processForInterruptedSessionUploads();
+		if (!appConfig.getValueBool("resync")) {
+			// Check if there are interrupted upload session(s)
+			if (syncEngineInstance.checkForInterruptedSessionUploads) {
+				// Need to re-process the session upload files to resume the failed session uploads
+				addLogEntry("There are interrupted session uploads that need to be resumed ...");
+				// Process the session upload files
+				syncEngineInstance.processForInterruptedSessionUploads();
+			}
+		} else {
+			// Clean up any upload session files due to --resync being used
+			syncEngineInstance.clearInterruptedSessionUploads();
 		}
 		
 		// Are we doing a single directory operation (--single-directory) ?

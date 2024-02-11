@@ -7588,6 +7588,22 @@ class SyncEngine {
 		return interruptedUploads;
 	}
 	
+	// Clear any session_upload.* files
+	void clearInterruptedSessionUploads() {
+		// Scan the filesystem for the files we are interested in, build up interruptedUploadsSessionFiles array
+		foreach (sessionFile; dirEntries(appConfig.configDirName, "session_upload.*", SpanMode.shallow)) {
+			// calculate the full path
+			string tempPath = buildNormalizedPath(buildPath(appConfig.configDirName, sessionFile));
+			JSONValue sessionFileData = readText(tempPath).parseJSON();
+			addLogEntry("Removing interrupted session upload file due to --resync for: " ~ sessionFileData["localPath"].str, ["info"]);
+			
+			// Process removal
+			if (!dryRun) {
+				safeRemove(tempPath);
+			}
+		}
+	}
+	
 	// Process interrupted 'session_upload' files
 	void processForInterruptedSessionUploads() {
 		// For each upload_session file that has been found, process the data to ensure it is still valid
