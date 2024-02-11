@@ -82,7 +82,7 @@ class OneDriveWebhook {
         object.destroy(oneDriveApiInstance);
 	}
 
-	shared void handle(Cgi cgi) {
+	private static void handle(shared OneDriveWebhook _this, Cgi cgi) {
 		if (debugHTTPResponseOutput) {
 			addLogEntry("Webhook request: " ~ to!string(cgi.requestMethod) ~ " " ~ to!string(cgi.requestUri));
 			if (!cgi.postBody.empty) {
@@ -101,15 +101,15 @@ class OneDriveWebhook {
 			// Notifications don't include any information about the changes that triggered them.
 			// Put a refresh signal in the queue and let the main monitor loop process it.
 			// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/concepts/using-webhooks
-			count.atomicOp!"+="(1);
-			send(cast(Tid) parentTid, to!ulong(count));
+			_this.count.atomicOp!"+="(1);
+			send(cast()_this.parentTid, to!ulong(_this.count));
 			cgi.write("OK");
-			addLogEntry("Webhook: sent refresh signal #" ~ to!string(count));
+			addLogEntry("Webhook: sent refresh signal #" ~ to!string(_this.count));
 		}
 	}
 
     private static void serveImpl(shared OneDriveWebhook _this) {
-		_this.server.serveEmbeddedHttp!handle(_this);
+		_this.server.serveEmbeddedHttp!(handle, OneDriveWebhook)(_this);
 	}
 
 	// Create a new subscription or renew the existing subscription
