@@ -1114,9 +1114,21 @@ class SyncEngine {
 			// Change is to delete an item
 			addLogEntry("Handing a OneDrive Deleted Item", ["debug"]);
 			if (existingDBEntry) {
-				// Flag to delete
-				addLogEntry("Flagging to delete item locally: " ~ to!string(onedriveJSONItem), ["debug"]);
-				idsToDelete ~= [thisItemDriveId, thisItemId];
+				// Is the item to delete locally actually in sync with OneDrive currently?
+				// What is the source of this item data?
+				string itemSource = "online";
+				
+				// Compute this deleted items path based on the database entries
+				string localPathToDelete = computeItemPath(existingDatabaseItem.driveId, existingDatabaseItem.parentId) ~ "/" ~ existingDatabaseItem.name;
+				
+				if (isItemSynced(existingDatabaseItem, localPathToDelete, itemSource)) {
+					// Flag to delete
+					addLogEntry("Flagging to delete item locally: " ~ to!string(onedriveJSONItem), ["debug"]);
+					idsToDelete ~= [thisItemDriveId, thisItemId];
+				} else {
+					// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
+					safeBackup(localPathToDelete, dryRun);
+				}
 			} else {
 				// Flag to ignore
 				addLogEntry("Flagging item to skip: " ~ to!string(onedriveJSONItem), ["debug"]);
@@ -2540,7 +2552,7 @@ class SyncEngine {
 			}
 			
 			// Add to pathFakeDeletedArray
-			// We dont want to try and upload this item again, so we need to track this object
+			// We dont want to try and upload this item again, so we need to track this objects removal
 			if (dryRun) {
 				// We need to add './' here so that it can be correctly searched to ensure it is not uploaded
 				string pathToAdd = "./" ~ path;
@@ -4362,9 +4374,6 @@ class SyncEngine {
 			// Step 2: Query for the path online if not found in the local database
 			if (!parentPathFoundInDB) {
 				// parent path not found in database
-				
-				addLogEntry("PARENT NOT FOUND IN DATABASE - QUERY ONLINE", ["info"]);
-				
 				try {
 					addLogEntry("Attempting to query OneDrive Online for this parent path as path not found in local database: " ~ parentPath, ["debug"]);
 					onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetails(parentPath);
