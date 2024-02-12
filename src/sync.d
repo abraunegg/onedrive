@@ -3486,154 +3486,157 @@ class SyncEngine {
 		
 		// For each batch of files to upload, upload the changed data to OneDrive
 		foreach (chunk; databaseItemsWhereContentHasChanged.chunks(batchSize)) {
-			uploadChangedLocalFileToOneDrive(chunk);
+			processChangedLocalItemsToUploadInParallel(chunk);
+		}
+	}
+
+	// Upload the changed file batches in parallel
+	void processChangedLocalItemsToUploadInParallel(string[3][] array) {
+		foreach (i, localItemDetails; taskPool.parallel(array)) {
+			addLogEntry("Upload Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);
+			uploadChangedLocalFileToOneDrive(localItemDetails);
+			addLogEntry("Upload Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);
 		}
 	}
 	
 	// Upload changed local files to OneDrive in parallel
-	void uploadChangedLocalFileToOneDrive(string[3][] array) {
-			
-		foreach (i, localItemDetails; taskPool.parallel(array)) {
+	void uploadChangedLocalFileToOneDrive(string[3] localItemDetails) {
 		
-			addLogEntry("Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);
+		// These are the details of the item we need to upload
+		string changedItemParentId = localItemDetails[0];
+		string changedItemId = localItemDetails[1];
+		string localFilePath = localItemDetails[2];
 		
-			// These are the details of the item we need to upload
-			string changedItemParentId = localItemDetails[0];
-			string changedItemId = localItemDetails[1];
-			string localFilePath = localItemDetails[2];
-			
-			// How much space is remaining on OneDrive
-			ulong remainingFreeSpace;
-			// Did the upload fail?
-			bool uploadFailed = false;
-			// Did we skip due to exceeding maximum allowed size?
-			bool skippedMaxSize = false;
-			// Did we skip to an exception error?
-			bool skippedExceptionError = false;
-			
-			// Unfortunatly, we cant store an array of Item's ... so we have to re-query the DB again - unavoidable extra processing here
-			// This is because the Item[] has no other functions to allow is to parallel process those elements, so we have to use a string array as input to this function
-			Item dbItem;
-			itemDB.selectById(changedItemParentId, changedItemId, dbItem);
+		addLogEntry("uploadChangedLocalFileToOneDrive: " ~ localFilePath, ["debug"]);
 		
-			// Fetch the details from cachedOnlineDriveData
-			// - cachedOnlineDriveData.quotaRestricted;
-			// - cachedOnlineDriveData.quotaAvailable;
-			// - cachedOnlineDriveData.quotaRemaining;
-			driveDetailsCache cachedOnlineDriveData;
-			cachedOnlineDriveData = getDriveDetails(dbItem.driveId);
-			remainingFreeSpace = cachedOnlineDriveData.quotaRemaining;
-			
-			// Get the file size from the actual file
-			ulong thisFileSizeLocal = getSize(localFilePath);
-			// Get the file size from the DB data
-			ulong thisFileSizeFromDB;
-			if (!dbItem.size.empty) {
-				thisFileSizeFromDB = to!ulong(dbItem.size);
-			} else {
-				thisFileSizeFromDB = 0;
-			}
-			
-			// 'remainingFreeSpace' online includes the current file online
-			// We need to remove the online file (add back the existing file size) then take away the new local file size to get a new approximate value
-			ulong calculatedSpaceOnlinePostUpload = (remainingFreeSpace + thisFileSizeFromDB) - thisFileSizeLocal;
-			
-			// Based on what we know, for this thread - can we safely upload this modified local file?
-			addLogEntry("This Thread Estimated Free Space Online:              " ~ to!string(remainingFreeSpace), ["debug"]);
-			addLogEntry("This Thread Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
-			JSONValue uploadResponse;
-			
-			bool spaceAvailableOnline = false;
-			// If 'personal' accounts, if driveId == defaultDriveId, then we will have quota data - cachedOnlineDriveData.quotaRemaining will be updated so it can be reused
-			// If 'personal' accounts, if driveId != defaultDriveId, then we will not have quota data - cachedOnlineDriveData.quotaRestricted will be set as true
-			// If 'business' accounts, if driveId == defaultDriveId, then we will potentially have quota data - cachedOnlineDriveData.quotaRemaining will be updated so it can be reused
-			// If 'business' accounts, if driveId != defaultDriveId, then we will potentially have quota data, but it most likely will be a 0 value - cachedOnlineDriveData.quotaRestricted will be set as true
-			
-			// Is there quota available for the given drive where we are uploading to?
-			if (cachedOnlineDriveData.quotaAvailable) {
-				// Our query told us we have free space online .. if we upload this file, will we exceed space online - thus upload will fail during upload?
-				if (calculatedSpaceOnlinePostUpload > 0) {
-					// Based on this thread action, we beleive that there is space available online to upload - proceed
-					spaceAvailableOnline = true;
-				}
-			}
-			
-			// Is quota being restricted?
-			if (cachedOnlineDriveData.quotaRestricted) {
-				// Space available online is being restricted - so we have no way to really know if there is space available online
+		// How much space is remaining on OneDrive
+		ulong remainingFreeSpace;
+		// Did the upload fail?
+		bool uploadFailed = false;
+		// Did we skip due to exceeding maximum allowed size?
+		bool skippedMaxSize = false;
+		// Did we skip to an exception error?
+		bool skippedExceptionError = false;
+		
+		// Unfortunatly, we cant store an array of Item's ... so we have to re-query the DB again - unavoidable extra processing here
+		// This is because the Item[] has no other functions to allow is to parallel process those elements, so we have to use a string array as input to this function
+		Item dbItem;
+		itemDB.selectById(changedItemParentId, changedItemId, dbItem);
+	
+		// Fetch the details from cachedOnlineDriveData
+		// - cachedOnlineDriveData.quotaRestricted;
+		// - cachedOnlineDriveData.quotaAvailable;
+		// - cachedOnlineDriveData.quotaRemaining;
+		driveDetailsCache cachedOnlineDriveData;
+		cachedOnlineDriveData = getDriveDetails(dbItem.driveId);
+		remainingFreeSpace = cachedOnlineDriveData.quotaRemaining;
+		
+		// Get the file size from the actual file
+		ulong thisFileSizeLocal = getSize(localFilePath);
+		// Get the file size from the DB data
+		ulong thisFileSizeFromDB;
+		if (!dbItem.size.empty) {
+			thisFileSizeFromDB = to!ulong(dbItem.size);
+		} else {
+			thisFileSizeFromDB = 0;
+		}
+		
+		// 'remainingFreeSpace' online includes the current file online
+		// We need to remove the online file (add back the existing file size) then take away the new local file size to get a new approximate value
+		ulong calculatedSpaceOnlinePostUpload = (remainingFreeSpace + thisFileSizeFromDB) - thisFileSizeLocal;
+		
+		// Based on what we know, for this thread - can we safely upload this modified local file?
+		addLogEntry("This Thread Estimated Free Space Online:              " ~ to!string(remainingFreeSpace), ["debug"]);
+		addLogEntry("This Thread Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
+		JSONValue uploadResponse;
+		
+		bool spaceAvailableOnline = false;
+		// If 'personal' accounts, if driveId == defaultDriveId, then we will have quota data - cachedOnlineDriveData.quotaRemaining will be updated so it can be reused
+		// If 'personal' accounts, if driveId != defaultDriveId, then we will not have quota data - cachedOnlineDriveData.quotaRestricted will be set as true
+		// If 'business' accounts, if driveId == defaultDriveId, then we will potentially have quota data - cachedOnlineDriveData.quotaRemaining will be updated so it can be reused
+		// If 'business' accounts, if driveId != defaultDriveId, then we will potentially have quota data, but it most likely will be a 0 value - cachedOnlineDriveData.quotaRestricted will be set as true
+		
+		// Is there quota available for the given drive where we are uploading to?
+		if (cachedOnlineDriveData.quotaAvailable) {
+			// Our query told us we have free space online .. if we upload this file, will we exceed space online - thus upload will fail during upload?
+			if (calculatedSpaceOnlinePostUpload > 0) {
+				// Based on this thread action, we beleive that there is space available online to upload - proceed
 				spaceAvailableOnline = true;
 			}
-				
-			// Do we have space available or is space available being restricted (so we make the blind assumption that there is space available)
-			if (spaceAvailableOnline) {
-				// Does this file exceed the maximum file size to upload to OneDrive?
-				if (thisFileSizeLocal <= maxUploadFileSize) {
-					// Attempt to upload the modified file
-					// Error handling is in performModifiedFileUpload(), and the JSON that is responded with - will either be null or a valid JSON object containing the upload result
-					uploadResponse = performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
-					
-					// Evaluate the returned JSON uploadResponse
-					// If there was an error uploading the file, uploadResponse should be empty and invalid
-					if (uploadResponse.type() != JSONType.object) {
-						uploadFailed = true;
-						skippedExceptionError = true;
-					}
-					
-				} else {
-					// Skip file - too large
-					uploadFailed = true;
-					skippedMaxSize = true;
-				}
-			} else {
-				// Cant upload this file - no space available
-				uploadFailed = true;
-			}
+		}
+		
+		// Is quota being restricted?
+		if (cachedOnlineDriveData.quotaRestricted) {
+			// Space available online is being restricted - so we have no way to really know if there is space available online
+			spaceAvailableOnline = true;
+		}
 			
-			// Did the upload fail?
-			if (uploadFailed) {
-				// Upload failed .. why?
-				// No space available online
-				if (!spaceAvailableOnline) {
-					addLogEntry("Skipping uploading modified file " ~ localFilePath ~ " due to insufficient free space available on Microsoft OneDrive", ["info", "notify"]);
+		// Do we have space available or is space available being restricted (so we make the blind assumption that there is space available)
+		if (spaceAvailableOnline) {
+			// Does this file exceed the maximum file size to upload to OneDrive?
+			if (thisFileSizeLocal <= maxUploadFileSize) {
+				// Attempt to upload the modified file
+				// Error handling is in performModifiedFileUpload(), and the JSON that is responded with - will either be null or a valid JSON object containing the upload result
+				uploadResponse = performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
+				
+				// Evaluate the returned JSON uploadResponse
+				// If there was an error uploading the file, uploadResponse should be empty and invalid
+				if (uploadResponse.type() != JSONType.object) {
+					uploadFailed = true;
+					skippedExceptionError = true;
 				}
-				// File exceeds max allowed size
-				if (skippedMaxSize) {
-					addLogEntry("Skipping uploading this modified file as it exceeds the maximum size allowed by OneDrive: " ~ localFilePath, ["info", "notify"]);
-				}
-				// Generic message
-				if (skippedExceptionError) {
-					// normal failure message if API or exception error generated
-					addLogEntry("Uploading modified file " ~ localFilePath ~ " ... failed!", ["info", "notify"]);
-				}
+				
 			} else {
-				// Upload was successful
-				addLogEntry("Uploading modified file " ~ localFilePath ~ " ... done.", ["info", "notify"]);
-				
-				// Save JSON item in database
-				saveItem(uploadResponse);
-				
-				// Update the 'cachedOnlineDriveData' record for this 'dbItem.driveId' so that this is tracked as accuratly as possible for other threads
-				updateDriveDetailsCache(dbItem.driveId, cachedOnlineDriveData.quotaRestricted, cachedOnlineDriveData.quotaAvailable, thisFileSizeLocal);
-				
-				// Check the integrity of the uploaded modified file if not in a --dry-run scenario
-				if (!dryRun) {
-					// Perform the integrity of the uploaded modified file
-					performUploadIntegrityValidationChecks(uploadResponse, localFilePath, thisFileSizeLocal);
-					
-					// Update the date / time of the file online to match the local item
-					// Get the local file last modified time
-					SysTime localModifiedTime = timeLastModified(localFilePath).toUTC();
-					localModifiedTime.fracSecs = Duration.zero;
-					// Get the latest eTag, and use that
-					string etagFromUploadResponse = uploadResponse["eTag"].str;
-					// Attempt to update the online date time stamp based on our local data
-					uploadLastModifiedTime(dbItem.driveId, dbItem.id, localModifiedTime, etagFromUploadResponse);
-				}
+				// Skip file - too large
+				uploadFailed = true;
+				skippedMaxSize = true;
 			}
-
-			addLogEntry("Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);
-
-		} // end of 'foreach (i, localItemDetails; array.enumerate)'
+		} else {
+			// Cant upload this file - no space available
+			uploadFailed = true;
+		}
+		
+		// Did the upload fail?
+		if (uploadFailed) {
+			// Upload failed .. why?
+			// No space available online
+			if (!spaceAvailableOnline) {
+				addLogEntry("Skipping uploading modified file " ~ localFilePath ~ " due to insufficient free space available on Microsoft OneDrive", ["info", "notify"]);
+			}
+			// File exceeds max allowed size
+			if (skippedMaxSize) {
+				addLogEntry("Skipping uploading this modified file as it exceeds the maximum size allowed by OneDrive: " ~ localFilePath, ["info", "notify"]);
+			}
+			// Generic message
+			if (skippedExceptionError) {
+				// normal failure message if API or exception error generated
+				addLogEntry("Uploading modified file " ~ localFilePath ~ " ... failed!", ["info", "notify"]);
+			}
+		} else {
+			// Upload was successful
+			addLogEntry("Uploading modified file " ~ localFilePath ~ " ... done.", ["info", "notify"]);
+			
+			// Save JSON item in database
+			saveItem(uploadResponse);
+			
+			// Update the 'cachedOnlineDriveData' record for this 'dbItem.driveId' so that this is tracked as accuratly as possible for other threads
+			updateDriveDetailsCache(dbItem.driveId, cachedOnlineDriveData.quotaRestricted, cachedOnlineDriveData.quotaAvailable, thisFileSizeLocal);
+			
+			// Check the integrity of the uploaded modified file if not in a --dry-run scenario
+			if (!dryRun) {
+				// Perform the integrity of the uploaded modified file
+				performUploadIntegrityValidationChecks(uploadResponse, localFilePath, thisFileSizeLocal);
+				
+				// Update the date / time of the file online to match the local item
+				// Get the local file last modified time
+				SysTime localModifiedTime = timeLastModified(localFilePath).toUTC();
+				localModifiedTime.fracSecs = Duration.zero;
+				// Get the latest eTag, and use that
+				string etagFromUploadResponse = uploadResponse["eTag"].str;
+				// Attempt to update the online date time stamp based on our local data
+				uploadLastModifiedTime(dbItem.driveId, dbItem.id, localModifiedTime, etagFromUploadResponse);
+			}
+		}
 	}
 	
 	// Perform the upload of a locally modified file to OneDrive
@@ -3943,10 +3946,17 @@ class SyncEngine {
 
 	// Perform a filesystem walk to uncover new data to upload to OneDrive
 	void scanLocalFilesystemPathForNewData(string path) {
-	
 		// Cleanup array memory before we start adding files
 		newLocalFilesToUploadToOneDrive = [];
 		
+		// Perform a filesystem walk to uncover new data
+		scanLocalFilesystemPathForNewDataToUpload(path);
+		
+		// Upload new data that has been identified
+		processNewLocalItemsToUpload();
+	}
+
+	void scanLocalFilesystemPathForNewDataToUpload(string path) {
 		// To improve logging output for this function, what is the 'logical path' we are scanning for file & folder differences?
 		string logPath;
 		if (path == ".") {
@@ -3977,9 +3987,11 @@ class SyncEngine {
 	
 		// Perform the filesystem walk of this path, building an array of new items to upload
 		scanPathForNewData(path);
-		if (!appConfig.surpressLoggingOutput) {
-			if (appConfig.verbosityCount == 0)
-				addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+		if (isDir(path)) {
+			if (!appConfig.surpressLoggingOutput) {
+				if (appConfig.verbosityCount == 0)
+					addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+			}
 		}
 		
 		// To finish off the processing items, this is needed to reflect this in the log
@@ -3990,7 +4002,10 @@ class SyncEngine {
 		
 		auto elapsedTime = finishTime - startTime;
 		addLogEntry("Elapsed Time Filesystem Walk: " ~ to!string(elapsedTime), ["debug"]);
-				
+	}
+	
+	// Perform a filesystem walk to uncover new data to upload to OneDrive
+	void processNewLocalItemsToUpload() {
 		// Upload new data that has been identified
 		// Are there any items to download post fetching the /delta data?
 		if (!newLocalFilesToUploadToOneDrive.empty) {
@@ -4036,22 +4051,16 @@ class SyncEngine {
 			// Cleanup array memory after uploading all files
 			newLocalFilesToUploadToOneDrive = [];
 		}
-
-		if (!databaseItemsWhereContentHasChanged.empty) {
-			// There are changed local files that were in the DB to upload
-			addLogEntry("Changed local items to upload to OneDrive: " ~ to!string(databaseItemsWhereContentHasChanged.length));
-			processChangedLocalItemsToUpload();
-			// Cleanup array memory
-			databaseItemsWhereContentHasChanged = [];
-		}
 	}
 	
 	// Scan this path for new data
 	void scanPathForNewData(string path) {
 		// Add a processing '.'
-		if (!appConfig.surpressLoggingOutput) {
-			if (appConfig.verbosityCount == 0)
-				addProcessingDotEntry();
+		if (isDir(path)) {
+			if (!appConfig.surpressLoggingOutput) {
+				if (appConfig.verbosityCount == 0)
+					addProcessingDotEntry();
+			}
 		}
 
 		ulong maxPathLength;
@@ -4271,37 +4280,42 @@ class SyncEngine {
 	}
 	
 	// Handle a single file inotify trigger when using --monitor
-	void handleLocalFileTrigger(string localFilePath) {
+	void handleLocalFileTrigger(string[] changedLocalFilesToUploadToOneDrive) {
 		// Is this path a new file or an existing one?
 		// Normally we would use pathFoundInDatabase() to calculate, but we need 'databaseItem' as well if the item is in the database
-		Item databaseItem;
-		bool fileFoundInDB = false;
-		string[3][] modifiedItemToUpload; 
-		
-		foreach (driveId; onlineDriveDetails.keys) {
-			if (itemDB.selectByPath(localFilePath, driveId, databaseItem)) {
-				fileFoundInDB = true;
-				break;
+		foreach (localFilePath; changedLocalFilesToUploadToOneDrive) {
+			try {
+				Item databaseItem;
+				bool fileFoundInDB = false;
+				
+				foreach (driveId; onlineDriveDetails.keys) {
+					if (itemDB.selectByPath(localFilePath, driveId, databaseItem)) {
+						fileFoundInDB = true;
+						break;
+					}
+				}
+				
+				// Was the file found in the database?
+				if (!fileFoundInDB) {
+					// This is a new file as it is not in the database
+					// Log that the file has been added locally
+					addLogEntry("[M] New local file added: " ~ localFilePath, ["verbose"]);
+					scanLocalFilesystemPathForNewDataToUpload(localFilePath);
+				} else {
+					// This is a potentially modified file, needs to be handled as such. Is the item truly modified?
+					if (!testFileHash(localFilePath, databaseItem)) {
+						// The local file failed the hash comparison test - there is a data difference
+						// Log that the file has changed locally
+						addLogEntry("[M] Local file changed: " ~ localFilePath, ["verbose"]);
+						// Add the modified item to the array to upload
+						uploadChangedLocalFileToOneDrive([databaseItem.driveId, databaseItem.id, localFilePath]);
+					}
+				}
+			} catch(Exception e) {
+				addLogEntry("Cannot upload file changes/creation: " ~ e.msg, ["info", "notify"]);
 			}
 		}
-		
-		// Was the file found in the database?
-		if (!fileFoundInDB) {
-			// This is a new file as it is not in the database
-			// Log that the file has been added locally
-			addLogEntry("[M] New local file added: " ~ localFilePath, ["verbose"]);
-			scanLocalFilesystemPathForNewData(localFilePath);
-		} else {
-			// This is a potentially modified file, needs to be handled as such. Is the item truly modified?
-			if (!testFileHash(localFilePath, databaseItem)) {
-				// The local file failed the hash comparison test - there is a data difference
-				// Log that the file has changed locally
-				addLogEntry("[M] Local file changed: " ~ localFilePath, ["verbose"]);
-				// Add the modified item to the array to upload
-				modifiedItemToUpload ~= [databaseItem.driveId, databaseItem.id, localFilePath];
-				uploadChangedLocalFileToOneDrive(modifiedItemToUpload);
-			}
-		}
+		processNewLocalItemsToUpload();
 	}
 	
 	// Query the database to determine if this path is within the existing database
@@ -4959,10 +4973,10 @@ class SyncEngine {
 									string changedItemParentId = fileDetailsFromOneDrive["parentReference"]["driveId"].str;
 									string changedItemId = fileDetailsFromOneDrive["id"].str;
 									addLogEntry("Skipping uploading this file as moving it to upload as a modified file (online item already exists): " ~ fileToUpload);
-									databaseItemsWhereContentHasChanged ~= [changedItemParentId, changedItemId, fileToUpload];
 									
 									// In order for the processing of the local item as a 'changed' item, unfortunatly we need to save the online data to the local DB
 									saveItem(fileDetailsFromOneDrive);
+									uploadChangedLocalFileToOneDrive([changedItemParentId, changedItemId, fileToUpload]);
 								}
 							} catch (OneDriveException exception) {
 								// If we get a 404 .. the file is not online .. this is what we want .. file does not exist online
@@ -6811,7 +6825,7 @@ class SyncEngine {
 			if (!itemDB.selectByPath(oldPath, appConfig.defaultDriveId, oldItem)) {
 				// The old path|item is not synced with the database, upload as a new file
 				addLogEntry("Moved local item was not in-sync with local databse - uploading as new item");
-				uploadNewFile(newPath);
+				scanLocalFilesystemPathForNewData(newPath);
 				return;
 			}
 		

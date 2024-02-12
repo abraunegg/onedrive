@@ -748,16 +748,11 @@ int main(string[] cliArgs) {
 			};
 			
 			// Delegated function for when inotify detects a local file has been changed
-			filesystemMonitor.onFileChanged = delegate(string path) {
+			filesystemMonitor.onFileChanged = delegate(string[] changedLocalFilesToUploadToOneDrive) {
 				// Handle a potentially locally changed file
 				// Logging for this event moved to handleLocalFileTrigger() due to threading and false triggers from scanLocalFilesystemPathForNewData() above
-				try {
-					syncEngineInstance.handleLocalFileTrigger(path);
-				} catch (CurlException e) {
-					addLogEntry("Offline, cannot upload changed item: " ~ path, ["verbose"]);
-				} catch(Exception e) {
-					addLogEntry("Cannot upload file changes/creation: " ~ e.msg, ["info", "notify"]);
-				}
+				addLogEntry("[M] Total number of local file changed: " ~ to!string(changedLocalFilesToUploadToOneDrive.length));
+				syncEngineInstance.handleLocalFileTrigger(changedLocalFilesToUploadToOneDrive);
 			};
 			
 			// Delegated function for when inotify detects a delete event
