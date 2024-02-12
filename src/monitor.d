@@ -35,7 +35,7 @@ class MonitorException: ErrnoException {
     }
 }
 
-shared class MonitorBackgroundWorker {
+class MonitorBackgroundWorker {
 	// inotify file descriptor
 	int fd;
 	Pipe p;
@@ -43,16 +43,16 @@ shared class MonitorBackgroundWorker {
 
 	this() {
 		isAlive = true;
-		p = cast(shared) pipe();
+		p = pipe();
 	}
 
-	void initialise() {
+	shared void initialise() {
 		fd = inotify_init();
 		if (fd < 0) throw new MonitorException("inotify_init failed");
 	}
 
 	// Add this path to be monitored
-	private int addInotifyWatch(string pathname) {
+	shared int addInotifyWatch(string pathname) {
 		int wd = inotify_add_watch(fd, toStringz(pathname), mask);
 		if (wd < 0) {
 			if (errno() == ENOSPC) {
@@ -83,11 +83,11 @@ shared class MonitorBackgroundWorker {
 		return wd;
 	}
 
-	int removeInotifyWatch(int wd) {
+	shared int removeInotifyWatch(int wd) {
 		return inotify_rm_watch(fd, wd);
 	}
 
-	void watch(Tid callerTid) {
+	shared void watch(Tid callerTid) {
 		// On failure, send -1 to caller
 		int res;
 
@@ -124,13 +124,13 @@ shared class MonitorBackgroundWorker {
 		callerTid.send(0);
 	}
 
-	void interrupt() {
+	shared void interrupt() {
 		isAlive = false;
 		(cast()p).writeEnd.writeln("done");
 		(cast()p).writeEnd.flush();
 	}
 
-	void shutdown() {
+	shared void shutdown() {
 		isAlive = false;
 		if (fd > 0) {
 			close(fd);
@@ -202,7 +202,7 @@ final class Monitor {
 		
 		assert(onDirCreated && onFileChanged && onDelete && onMove);
 		if (!buffer) buffer = new void[4096];
-		worker = new shared(MonitorBackgroundWorker);
+		worker = cast(shared) new MonitorBackgroundWorker;
 		worker.initialise();
 
 		// from which point do we start watching for changes?
@@ -546,5 +546,4 @@ final class Monitor {
 			addLogEntry("inotify events flushed", ["debug"]);
 		}
 	}
-
 }
