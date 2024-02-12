@@ -25,15 +25,15 @@ shared MonoTime lastInsertedTime;
 
 class LogBuffer {
     private:
-        string[3][] buffer;
-        Mutex bufferLock;
+		string[3][] buffer;
+		Mutex bufferLock;
 		Condition condReady;
-        string logFilePath;
-        bool writeToFile;
-        bool verboseLogging;
-        bool debugLogging;
-        Thread flushThread;
-        bool isRunning;
+		string logFilePath;
+		bool writeToFile;
+		bool verboseLogging;
+		bool debugLogging;
+		Thread flushThread;
+		bool isRunning;
 		bool sendGUINotification;
 
     public:
