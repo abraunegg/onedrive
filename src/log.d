@@ -92,7 +92,7 @@ class LogBuffer {
 						}
                     }
                 }
-				condReady.notify();
+				(cast()condReady).notify();
             }
         }
 		
