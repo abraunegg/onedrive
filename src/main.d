@@ -629,12 +629,17 @@ int main(string[] cliArgs) {
 		string localPath = ".";
 		string remotePath = "/";
 		
-		// Check if there are interrupted upload session(s)
-		if (syncEngineInstance.checkForInterruptedSessionUploads) {
-			// Need to re-process the session upload files to resume the failed session uploads
-			addLogEntry("There are interrupted session uploads that need to be resumed ...");
-			// Process the session upload files
-			syncEngineInstance.processForInterruptedSessionUploads();
+		if (!appConfig.getValueBool("resync")) {
+			// Check if there are interrupted upload session(s)
+			if (syncEngineInstance.checkForInterruptedSessionUploads) {
+				// Need to re-process the session upload files to resume the failed session uploads
+				addLogEntry("There are interrupted session uploads that need to be resumed ...");
+				// Process the session upload files
+				syncEngineInstance.processForInterruptedSessionUploads();
+			}
+		} else {
+			// Clean up any upload session files due to --resync being used
+			syncEngineInstance.clearInterruptedSessionUploads();
 		}
 		
 		// Are we doing a single directory operation (--single-directory) ?
@@ -742,16 +747,11 @@ int main(string[] cliArgs) {
 			};
 			
 			// Delegated function for when inotify detects a local file has been changed
-			filesystemMonitor.onFileChanged = delegate(string path) {
+			filesystemMonitor.onFileChanged = delegate(string[] changedLocalFilesToUploadToOneDrive) {
 				// Handle a potentially locally changed file
 				// Logging for this event moved to handleLocalFileTrigger() due to threading and false triggers from scanLocalFilesystemPathForNewData() above
-				try {
-					syncEngineInstance.handleLocalFileTrigger(path);
-				} catch (CurlException e) {
-					addLogEntry("Offline, cannot upload changed item: " ~ path, ["verbose"]);
-				} catch(Exception e) {
-					addLogEntry("Cannot upload file changes/creation: " ~ e.msg, ["info", "notify"]);
-				}
+				addLogEntry("[M] Total number of local file changed: " ~ to!string(changedLocalFilesToUploadToOneDrive.length));
+				syncEngineInstance.handleLocalFileTrigger(changedLocalFilesToUploadToOneDrive);
 			};
 			
 			// Delegated function for when inotify detects a delete event
@@ -1143,9 +1143,8 @@ void performStandardExitProcess(string scopeCaller = null) {
 		thread_joinAll();
 		addLogEntry("Application exit");
 		addLogEntry("#######################################################################################################################################", ["logFileOnly"]);
-		// Sleep to allow any final logging output to be printed - this is needed as we are using buffered logging output
-		Thread.sleep(dur!("msecs")(500));
 		// Destroy the shared logging buffer
+		(cast() logBuffer).shutdown();
 		object.destroy(logBuffer);
 	}
 }
