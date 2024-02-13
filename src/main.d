@@ -1139,7 +1139,7 @@ void performStandardExitProcess(string scopeCaller = null) {
 		selectiveSync = null;
 		syncEngineInstance = null;
 	} else {
-		addLogEntry("Waiting for all internal threads to complete before exiting application");
+		addLogEntry("Waiting for all internal threads to complete before exiting application", ["verbose"]);
 		thread_joinAll();
 		addLogEntry("Application exit", ["debug"]);
 		addLogEntry("#######################################################################################################################################", ["logFileOnly"]);
