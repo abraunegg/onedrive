@@ -15,6 +15,7 @@ import std.concurrency;
 import std.exception;
 import std.file;
 import std.path;
+import std.process;
 import std.regex;
 import std.stdio;
 import std.string;
@@ -35,19 +36,24 @@ class MonitorException: ErrnoException {
     }
 }
 
-shared class MonitorBackgroundWorker {
+class MonitorBackgroundWorker {
 	// inotify file descriptor
 	int fd;
-	private bool working;
+	Pipe p;
+	bool isAlive;
 
-	void initialise() {
+	this() {
+		isAlive = true;
+		p = pipe();
+	}
+
+	shared void initialise() {
 		fd = inotify_init();
-		working = false;
 		if (fd < 0) throw new MonitorException("inotify_init failed");
 	}
 
 	// Add this path to be monitored
-	private int addInotifyWatch(string pathname) {
+	shared int addInotifyWatch(string pathname) {
 		int wd = inotify_add_watch(fd, toStringz(pathname), mask);
 		if (wd < 0) {
 			if (errno() == ENOSPC) {
@@ -78,60 +84,58 @@ shared class MonitorBackgroundWorker {
 		return wd;
 	}
 
-	int remove(int wd) {
+	shared int removeInotifyWatch(int wd) {
 		return inotify_rm_watch(fd, wd);
 	}
 
-	bool isWorking() {
-		return working;
-	}
-
-	void watch(Tid callerTid) {
+	shared void watch(Tid callerTid) {
 		// On failure, send -1 to caller
 		int res;
 
 		// wait for the caller to be ready
-		int isAlive = receiveOnly!int();
+		receiveOnly!int();
 
 		while (isAlive) {
 			fd_set fds;
 			FD_ZERO (&fds);
 			FD_SET(fd, &fds);
+			// Listen for messages from the caller
+			FD_SET((cast()p).readEnd.fileno, &fds);
 			
-			working = true;
 			res = select(FD_SETSIZE, &fds, null, null, null);
 
 			if(res == -1) {
 				if(errno() == EINTR) {
 					// Received an interrupt signal but no events are available
-					// try update work staus and directly watch again
-					receiveTimeout(dur!"seconds"(1), (int msg) {
-						isAlive = msg;
-					});
+					// directly watch again
 				} else {
 					// Error occurred, tell caller to terminate.
-					callCaller(callerTid, -1);
-					working = false;
+					callerTid.send(-1);
 					break;
 				}
 			} else {
 				// Wake up caller
-				callCaller(callerTid, 1);
-				// Wait for the caller to be ready
-				isAlive = receiveOnly!int();
+				callerTid.send(1);
+
+				// wait for the caller to be ready
+				if (isAlive)
+					isAlive = receiveOnly!bool();
 			}
 		}
 	}
 
-	void callCaller(Tid callerTid, int msg) {
-		working = false;
-		callerTid.send(msg);
+	shared void interrupt() {
+		isAlive = false;
+		(cast()p).writeEnd.writeln("done");
+		(cast()p).writeEnd.flush();
 	}
 
-	void shutdown() {
+	shared void shutdown() {
+		isAlive = false;
 		if (fd > 0) {
 			close(fd);
 			fd = 0;
+			(cast()p).close();
 		}
 	}
 }
@@ -142,8 +146,8 @@ void startMonitorJob(shared(MonitorBackgroundWorker) worker, Tid callerTid)
     	worker.watch(callerTid);
 	} catch (OwnerTerminated error) {
 		// caller is terminated
+		worker.shutdown();
 	}
-	worker.shutdown();
 }
 
 enum ActionType {
@@ -249,6 +253,8 @@ final class Monitor {
 	bool check_nosync = false;
 	// check if initialised
 	bool initialised = false;
+	// Worker Tid
+	Tid workerTid;
 	
 	// Configure Private Class Variables
 	shared(MonitorBackgroundWorker) worker;
@@ -287,7 +293,7 @@ final class Monitor {
 		
 		assert(onDirCreated && onFileChanged && onDelete && onMove);
 		if (!buffer) buffer = new void[4096];
-		worker = new shared(MonitorBackgroundWorker);
+		worker = cast(shared) new MonitorBackgroundWorker;
 		worker.initialise();
 
 		// from which point do we start watching for changes?
@@ -300,13 +306,28 @@ final class Monitor {
 			monitorPath = ".";
 		}
 		addRecursive(monitorPath);
+		
+		// Start monitoring
+		workerTid = spawn(&startMonitorJob, worker, thisTid);
+
+		initialised = true;
+	}
+
+	// Communication with worker
+	void send(bool isAlive) {
+		workerTid.send(isAlive);
 	}
 
 	// Shutdown the monitor class
 	void shutdown() {
 		if(!initialised)
 			return;
-		worker.shutdown();
+		initialised = false;
+		// Release all resources
+		removeAll();
+		// Notify the worker that the monitor has been shutdown
+		worker.interrupt();
+		send(false);
 		wdToDirName = null;
 	}
 
@@ -419,9 +440,16 @@ final class Monitor {
 	}
 
 	// Remove a watch descriptor
+	private void removeAll() {
+		string[int] copy = wdToDirName.dup;
+		foreach (wd, path; copy) {
+			remove(wd);
+		}
+	}
+
 	private void remove(int wd) {
 		assert(wd in wdToDirName);
-		int ret = worker.remove(wd);
+		int ret = worker.removeInotifyWatch(wd);
 		if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
 		addLogEntry("Monitored directory removed: " ~ to!string(wdToDirName[wd]), ["verbose"]);
 		wdToDirName.remove(wd);
@@ -432,7 +460,7 @@ final class Monitor {
 		path ~= "/";
 		foreach (wd, dirname; wdToDirName) {
 			if (dirname.startsWith(path)) {
-				int ret = worker.remove(wd);
+				int ret = worker.removeInotifyWatch(wd);
 				if (ret < 0) throw new MonitorException("inotify_rm_watch failed");
 				wdToDirName.remove(wd);
 				addLogEntry("Monitored directory removed: " ~ dirname, ["verbose"]);
@@ -446,10 +474,6 @@ final class Monitor {
 		if (event.len > 0) path ~= fromStringz(event.name.ptr);
 		addLogEntry("inotify path event for: " ~ path, ["debug"]);
 		return path;
-	}
-
-	shared(MonitorBackgroundWorker) getWorker() {
-		return worker;
 	}
 
 	// Update
@@ -613,7 +637,7 @@ final class Monitor {
 			addLogEntry("inotify events flushed", ["debug"]);
 		}
 	}
-
+  
 	private void processChanges() {
 		string[] changes;
 
@@ -641,14 +665,5 @@ final class Monitor {
 			onFileChanged(changes);
 
 		object.destroy(actionHolder);
-	}
-
-	Tid watch() {
-		initialised = true;
-		return spawn(&startMonitorJob, worker, thisTid);
-	}
-
-	bool isWorking() {
-		return worker.isWorking();
 	}
 }

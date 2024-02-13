@@ -727,7 +727,6 @@ int main(string[] cliArgs) {
 			}
 			
 			// Configure the monitor class
-			Tid workerTid;
 			filesystemMonitor = new Monitor(appConfig, selectiveSync);
 			
 			// Delegated function for when inotify detects a new local directory has been created
@@ -803,7 +802,6 @@ int main(string[] cliArgs) {
 				try {
 					addLogEntry("Initialising filesystem inotify monitoring ...");
 					filesystemMonitor.initialise();
-					workerTid = filesystemMonitor.watch();
 					addLogEntry("Performing initial syncronisation to ensure consistent local state ...");
 				} catch (MonitorException e) {	
 					// monitor class initialisation failed
@@ -1000,9 +998,7 @@ int main(string[] cliArgs) {
 						if(filesystemMonitor.initialised) {
 							// If local monitor is on
 							// start the worker and wait for event
-							if(!filesystemMonitor.isWorking()) {
-								workerTid.send(1);
-							}
+							filesystemMonitor.send(true);
 						}
 
 						if(webhookEnabled) {
@@ -1143,6 +1139,8 @@ void performStandardExitProcess(string scopeCaller = null) {
 		selectiveSync = null;
 		syncEngineInstance = null;
 	} else {
+		addLogEntry("Waiting for all internal threads to complete before exiting application", ["verbose"]);
+		thread_joinAll();
 		addLogEntry("Application exit", ["debug"]);
 		addLogEntry("#######################################################################################################################################", ["logFileOnly"]);
 		// Destroy the shared logging buffer
