@@ -1139,10 +1139,8 @@ void performStandardExitProcess(string scopeCaller = null) {
 		selectiveSync = null;
 		syncEngineInstance = null;
 	} else {
-		if (appConfig.getValueBool("monitor")) {
-			addLogEntry("Waiting for all servicecs to shutdown");
-			thread_joinAll();
-		}
+		addLogEntry("Waiting for all internal threads to complete before exiting application");
+		thread_joinAll();
 		addLogEntry("Application exit", ["debug"]);
 		addLogEntry("#######################################################################################################################################", ["logFileOnly"]);
 		// Destroy the shared logging buffer
