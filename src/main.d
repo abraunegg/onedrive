@@ -1139,7 +1139,9 @@ void performStandardExitProcess(string scopeCaller = null) {
 		selectiveSync = null;
 		syncEngineInstance = null;
 	} else {
-		addLogEntry("Application exit", ["debug"]);
+		addLogEntry("Waiting for all servicecs to shutdown");
+		thread_joinAll();
+		addLogEntry("Application exit");
 		addLogEntry("#######################################################################################################################################", ["logFileOnly"]);
 		// Sleep to allow any final logging output to be printed - this is needed as we are using buffered logging output
 		Thread.sleep(dur!("msecs")(500));

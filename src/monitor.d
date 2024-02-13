@@ -102,7 +102,7 @@ class MonitorBackgroundWorker {
 			FD_SET((cast()p).readEnd.fileno, &fds);
 			
 			res = select(FD_SETSIZE, &fds, null, null, null);
-			
+
 			if(res == -1) {
 				if(errno() == EINTR) {
 					// Received an interrupt signal but no events are available
@@ -121,7 +121,6 @@ class MonitorBackgroundWorker {
 					isAlive = receiveOnly!bool();
 			}
 		}
-		callerTid.send(0);
 	}
 
 	shared void interrupt() {
@@ -234,16 +233,9 @@ final class Monitor {
 		initialised = false;
 		// Release all resources
 		removeAll();
-		worker.interrupt();
 		// Notify the worker that the monitor has been shutdown
-		receiveTimeout(dur!"seconds"(-1), (int _) {});
+		worker.interrupt();
 		send(false);
-		// Wait for the worker to terminate
-		int result = 1;
-		while(result == 1) {
-			result = receiveOnly!int();
-		}
-		worker.shutdown();
 		wdToDirName = null;
 	}
 
