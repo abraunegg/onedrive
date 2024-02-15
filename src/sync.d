@@ -540,8 +540,6 @@ class SyncEngine {
 		
 		// Fetch the API response of /delta to track changes that were performed online
 		fetchOneDriveDeltaAPIResponse(null, null, null);
-		// Process any download activities or cleanup actions
-		processDownloadActivities();
 		
 		// If singleDirectoryScope is false, we are not targeting a single directory
 		// but if true, the target 'could' be a shared folder - so dont try and scan it again
@@ -571,8 +569,6 @@ class SyncEngine {
 					}
 					// Check this OneDrive Personal Shared Folder for changes
 					fetchOneDriveDeltaAPIResponse(remoteItem.remoteDriveId, remoteItem.remoteId, remoteItem.name);
-					// Process any download activities or cleanup actions for this OneDrive Personal Shared Folder
-					processDownloadActivities();
 				}
 			} else {
 				// Is this a Business Account with Sync Business Shared Items enabled?
@@ -610,9 +606,6 @@ class SyncEngine {
 						
 						// Check this OneDrive Personal Shared Folder for changes
 						fetchOneDriveDeltaAPIResponse(remoteItem.remoteDriveId, remoteItem.remoteId, remoteItem.name);
-						
-						// Process any download activities or cleanup actions for this OneDrive Personal Shared Folder
-						processDownloadActivities();
 					}
 				}
 			}
@@ -955,6 +948,9 @@ class SyncEngine {
 				addLogEntry("No additional changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive");
 			}
 		}
+		
+		// Process any download activities or cleanup actions
+		processDownloadActivities();
 		
 		// Update the deltaLink in the database so that we can reuse this now that jsonItemsToProcess has been processed
 		if (!latestDeltaLink.empty) {
