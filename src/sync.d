@@ -61,6 +61,16 @@ class SyncException: Exception {
     }
 }
 
+struct driveDetailsCache {
+	// - driveId is the drive for the operations were items need to be stored
+	// - quotaRestricted details a bool value as to if that drive is restricting our ability to understand if there is space available. Some 'Business' and 'SharePoint' restrict, and most (if not all) shared folders it cant be determined if there is free space
+	// - quotaAvailable is a ulong value that stores the value of what the current free space is available online
+	string driveId;
+	bool quotaRestricted;
+	bool quotaAvailable;
+	ulong quotaRemaining;
+}
+
 class SyncEngine {
 	// Class Variables
 	ApplicationConfig appConfig;
@@ -79,8 +89,8 @@ class SyncEngine {
 	JSONValue[] fileJSONItemsToDownload;
 	// Array of paths that failed to download
 	string[] fileDownloadFailures;
-	// Array of all OneDrive driveId's that have been seen
-	string[] driveIDsArray;
+	// Associative array mapping of all OneDrive driveId's that have been seen, mapped with driveDetailsCache data for reference
+	driveDetailsCache[string] onlineDriveDetails;
 	// List of items we fake created when using --dry-run
 	string[2][] idsFaked;
 	// List of paths we fake deleted when using --dry-run
@@ -387,53 +397,52 @@ class SyncEngine {
 			appConfig.accountType = defaultOneDriveDriveDetails["driveType"].str;
 			appConfig.defaultDriveId = defaultOneDriveDriveDetails["id"].str;
 			
-			// Get the initial remaining size from OneDrive API response JSON
-			// This will be updated as we upload data to OneDrive
-			if (hasQuota(defaultOneDriveDriveDetails)) {
-				if ("remaining" in defaultOneDriveDriveDetails["quota"]){
-					// use the value provided
-					appConfig.remainingFreeSpace = defaultOneDriveDriveDetails["quota"]["remaining"].integer;
-				}
-			}
+			// Make sure that appConfig.defaultDriveId is in our driveIDs array to use when checking if item is in database
+			// Keep the driveDetailsCache array with unique entries only
+			driveDetailsCache cachedOnlineDriveData;
+			if (!canFindDriveId(appConfig.defaultDriveId, cachedOnlineDriveData)) {
+				// Add this driveId to the drive cache, which then also sets for the defaultDriveId:
+				// - quotaRestricted;
+				// - quotaAvailable;
+				// - quotaRemaining;
+				addOrUpdateOneDriveOnlineDetails(appConfig.defaultDriveId);
+			} 
+			
+			// Fetch the details from cachedOnlineDriveData
+			cachedOnlineDriveData = getDriveDetails(appConfig.defaultDriveId);
+			// - cachedOnlineDriveData.quotaRestricted;
+			// - cachedOnlineDriveData.quotaAvailable;
+			// - cachedOnlineDriveData.quotaRemaining;
 			
 			// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
-			if (appConfig.remainingFreeSpace <= 0) {
+			if (cachedOnlineDriveData.quotaRemaining <= 0) {
 				// free space is <= 0  .. why ?
 				if ("remaining" in defaultOneDriveDriveDetails["quota"]) {
 					if (appConfig.accountType == "personal") {
 						// zero space available
 						addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online.");
-						appConfig.quotaAvailable = false;
 					} else {
 						// zero space available is being reported, maybe being restricted?
 						addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
-						appConfig.quotaRestricted = true;
 					}
 				} else {
 					// json response was missing a 'remaining' value
 					if (appConfig.accountType == "personal") {
 						addLogEntry("ERROR: OneDrive quota information is missing. Potentially your OneDrive account currently has zero space available. Please free up some space online.");
-						appConfig.quotaAvailable = false;
 					} else {
 						// quota details not available
 						addLogEntry("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
-						appConfig.quotaRestricted = true;
 					}
 				}
 			}
-			// What did we set based on the data from the JSON
-			addLogEntry("appConfig.accountType        = " ~ appConfig.accountType, ["debug"]);
-			addLogEntry("appConfig.defaultDriveId     = " ~ appConfig.defaultDriveId, ["debug"]);
-			addLogEntry("appConfig.remainingFreeSpace = " ~ to!string(appConfig.remainingFreeSpace), ["debug"]);
-			addLogEntry("appConfig.quotaAvailable     = " ~ to!string(appConfig.quotaAvailable), ["debug"]);
-			addLogEntry("appConfig.quotaRestricted    = " ~ to!string(appConfig.quotaRestricted), ["debug"]);
 			
-			// Make sure that appConfig.defaultDriveId is in our driveIDs array to use when checking if item is in database
-			// Keep the driveIDsArray with unique entries only
-			if (!canFind(driveIDsArray, appConfig.defaultDriveId)) {
-				// Add this drive id to the array to search with
-				driveIDsArray ~= appConfig.defaultDriveId;
-			}
+			// What did we set based on the data from the JSON
+			addLogEntry("appConfig.accountType                 = " ~ appConfig.accountType, ["debug"]);
+			addLogEntry("appConfig.defaultDriveId              = " ~ appConfig.defaultDriveId, ["debug"]);
+			addLogEntry("cachedOnlineDriveData.quotaRemaining  = " ~ to!string(cachedOnlineDriveData.quotaRemaining), ["debug"]);
+			addLogEntry("cachedOnlineDriveData.quotaAvailable  = " ~ to!string(cachedOnlineDriveData.quotaAvailable), ["debug"]);
+			addLogEntry("cachedOnlineDriveData.quotaRestricted = " ~ to!string(cachedOnlineDriveData.quotaRestricted), ["debug"]);
+			
 		} else {
 			// Handle the invalid JSON response
 			throw new accountDetailsException();
@@ -529,7 +538,7 @@ class SyncEngine {
 		// performFullScanTrueUp value
 		addLogEntry("Perform a Full Scan True-Up: " ~ to!string(appConfig.fullScanTrueUpRequired), ["debug"]);
 		
-		// Fetch the API response of /delta to track changes on OneDrive
+		// Fetch the API response of /delta to track changes that were performed online
 		fetchOneDriveDeltaAPIResponse(null, null, null);
 		// Process any download activities or cleanup actions
 		processDownloadActivities();
@@ -567,7 +576,7 @@ class SyncEngine {
 				}
 			} else {
 				// Is this a Business Account with Sync Business Shared Items enabled?
-				if ((appConfig.accountType == "business") && ( appConfig.getValueBool("sync_business_shared_items"))) {
+				if ((appConfig.accountType == "business") && (appConfig.getValueBool("sync_business_shared_items"))) {
 				
 					// Business Account Shared Items Handling
 					// - OneDrive Business Shared Folder
@@ -731,7 +740,7 @@ class SyncEngine {
 			// Dynamic output for non-verbose and verbose run so that the user knows something is being retreived from the OneDrive API
 			if (appConfig.verbosityCount == 0) {
 				if (!appConfig.surpressLoggingOutput) {
-					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ driveIdToQuery);
+					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ driveIdToQuery, appConfig.verbosityCount);
 				}
 			} else {
 				addLogEntry("Fetching /delta response from the OneDrive API for Drive ID: " ~  driveIdToQuery, ["verbose"]);
@@ -903,13 +912,7 @@ class SyncEngine {
 			
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (!appConfig.surpressLoggingOutput) {
-				// Logfile entry
-				addProcessingLogHeaderEntry("Processing " ~ to!string(jsonItemsToProcess.length) ~ " applicable changes and items received from Microsoft OneDrive");
-				
-				if (appConfig.verbosityCount != 0) {
-					// Close out the console only processing line above, if we are doing verbose or above logging
-					addLogEntry("\n", ["consoleOnlyNoNewLine"]);
-				}
+				addProcessingLogHeaderEntry("Processing " ~ to!string(jsonItemsToProcess.length) ~ " applicable changes and items received from Microsoft OneDrive", appConfig.verbosityCount);
 			}
 			
 			// For each batch, process the JSON items that need to be now processed.
@@ -941,12 +944,12 @@ class SyncEngine {
 				}
 			}
 			
-			// Free up memory and items processed as it is pointless now having this data around
-			jsonItemsToProcess = [];
-			
 			// Debug output - what was processed
 			addLogEntry("Number of JSON items to process is: " ~ to!string(jsonItemsToProcess.length), ["debug"]);
 			addLogEntry("Number of JSON items processed was: " ~ to!string(processedCount), ["debug"]);
+			
+			// Free up memory and items processed as it is pointless now having this data around
+			jsonItemsToProcess = [];
 		} else {
 			if (!appConfig.surpressLoggingOutput) {
 				addLogEntry("No additional changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive");
@@ -959,11 +962,12 @@ class SyncEngine {
 			itemDB.setDeltaLink(driveIdToQuery, itemIdToQuery, latestDeltaLink);
 		}
 		
-		// Keep the driveIDsArray with unique entries only
-		if (!canFind(driveIDsArray, driveIdToQuery)) {
-			// Add this driveId to the array of driveId's we know about
-			driveIDsArray ~= driveIdToQuery;
-		}		
+		// Keep the driveDetailsCache array with unique entries only
+		driveDetailsCache cachedOnlineDriveData;
+		if (!canFindDriveId(driveIdToQuery, cachedOnlineDriveData)) {
+			// Add this driveId to the drive cache
+			addOrUpdateOneDriveOnlineDetails(driveIdToQuery);
+		}
 	}
 	
 	// Process the /delta API JSON response items
@@ -1110,9 +1114,21 @@ class SyncEngine {
 			// Change is to delete an item
 			addLogEntry("Handing a OneDrive Deleted Item", ["debug"]);
 			if (existingDBEntry) {
-				// Flag to delete
-				addLogEntry("Flagging to delete item locally: " ~ to!string(onedriveJSONItem), ["debug"]);
-				idsToDelete ~= [thisItemDriveId, thisItemId];
+				// Is the item to delete locally actually in sync with OneDrive currently?
+				// What is the source of this item data?
+				string itemSource = "online";
+				
+				// Compute this deleted items path based on the database entries
+				string localPathToDelete = computeItemPath(existingDatabaseItem.driveId, existingDatabaseItem.parentId) ~ "/" ~ existingDatabaseItem.name;
+				
+				if (isItemSynced(existingDatabaseItem, localPathToDelete, itemSource)) {
+					// Flag to delete
+					addLogEntry("Flagging to delete item locally: " ~ to!string(onedriveJSONItem), ["debug"]);
+					idsToDelete ~= [thisItemDriveId, thisItemId];
+				} else {
+					// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
+					safeBackup(localPathToDelete, dryRun);
+				}
 			} else {
 				// Flag to ignore
 				addLogEntry("Flagging item to skip: " ~ to!string(onedriveJSONItem), ["debug"]);
@@ -1163,7 +1179,7 @@ class SyncEngine {
 			if (parentInDatabase) {
 				// Calculate this items path
 				newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
-				addLogEntry("New Item calculated full path is: " ~ newItemPath, ["debug"]);
+				addLogEntry("JSON Item calculated full path is: " ~ newItemPath, ["debug"]);
 			} else {
 				// Parent not in the database
 				// Is the parent a 'folder' from another user? ie - is this a 'shared folder' that has been shared with us?
@@ -1193,22 +1209,8 @@ class SyncEngine {
 						if (hasSharedElement(onedriveJSONItem)) {
 							// Has the Shared JSON structure
 							addLogEntry("Personal Shared Item JSON object has the 'shared' JSON structure", ["debug"]);
-						
-							// Create a DB Tie Record for this parent object
-							addLogEntry("Creating a DB Tie for this Personal Shared Folder", ["debug"]);
-							
-							// DB Tie
-							Item parentItem;
-							parentItem.driveId = onedriveJSONItem["parentReference"]["driveId"].str;
-							parentItem.id = onedriveJSONItem["parentReference"]["id"].str;
-							parentItem.name = "root";
-							parentItem.type = ItemType.dir;
-							parentItem.mtime = remoteItem.mtime;
-							parentItem.parentId = null;
-							
-							// Add this DB Tie parent record to the local database
-							addLogEntry("Insert local database with remoteItem parent details: " ~ to!string(parentItem), ["debug"]);
-							itemDB.upsert(parentItem);
+							// Create a 'root' DB Tie Record for this JSON object
+							createDatabaseRootTieRecordForOnlineSharedFolder(onedriveJSONItem);
 						}
 						
 						// Ensure that this item has no parent
@@ -1222,21 +1224,8 @@ class SyncEngine {
 						addLogEntry("Handling a Business or SharePoint Shared Item JSON object", ["debug"]);
 						
 						if (appConfig.accountType == "business") {
-							// Create a DB Tie Record for this parent object
-							addLogEntry("Creating a DB Tie for this Business Shared Folder", ["debug"]);
-							
-							// DB Tie
-							Item parentItem;
-							parentItem.driveId = onedriveJSONItem["parentReference"]["driveId"].str;
-							parentItem.id = onedriveJSONItem["parentReference"]["id"].str;
-							parentItem.name = "root";
-							parentItem.type = ItemType.dir;
-							parentItem.mtime = remoteItem.mtime;
-							parentItem.parentId = null;
-							
-							// Add this DB Tie parent record to the local database
-							addLogEntry("Insert local database with remoteItem parent details: " ~ to!string(parentItem), ["debug"]);
-							itemDB.upsert(parentItem);
+							// Create a 'root' DB Tie Record for this JSON object
+							createDatabaseRootTieRecordForOnlineSharedFolder(onedriveJSONItem);
 							
 							// Ensure that this item has no parent
 							addLogEntry("Setting remoteItem.parentId to be null", ["debug"]);
@@ -1274,8 +1263,7 @@ class SyncEngine {
 							itemDB.upsert(remoteItem);
 						} else {
 							// Sharepoint account type
-							addLogEntry("Handling a SharePoint Shared Item JSON object - NOT IMPLEMENTED ........ ", ["debug"]);
-	
+							addLogEntry("Handling a SharePoint Shared Item JSON object - NOT IMPLEMENTED YET ........ ", ["info"]);
 						}
 					}
 				}
@@ -1773,7 +1761,9 @@ class SyncEngine {
 					// Are the timestamps equal?
 					if (localModifiedTime == itemModifiedTime) {
 						// yes they are equal
-						addLogEntry("File timestamps are equal, no further action required", ["verbose"]); // correct message as timestamps are equal
+						addLogEntry("File timestamps are equal, no further action required", ["debug"]); // correct message as timestamps are equal
+						addLogEntry("Update/Insert local database with item details: " ~ to!string(newDatabaseItem), ["debug"]);
+						itemDB.upsert(newDatabaseItem);
 						return;
 					}
 				}
@@ -1996,7 +1986,7 @@ class SyncEngine {
 	
 		// Calculate this items path
 		string newItemPath = computeItemPath(downloadDriveId, downloadParentId) ~ "/" ~ downloadItemName;
-		addLogEntry("New Item calculated full path is: " ~ newItemPath, ["debug"]);
+		addLogEntry("JSON Item calculated full path for download is: " ~ newItemPath, ["debug"]);
 		
 		// Is the item reported as Malware ?
 		if (isMalware(onedriveJSONItem)){
@@ -2036,31 +2026,28 @@ class SyncEngine {
 				addLogEntry("ERROR: onedriveJSONItem['file']['hashes'] is missing - unable to compare file hash after download", ["debug"]);
 			}
 		
-			// Is this a --download-only scenario?
-			if (appConfig.getValueBool("download_only")) {
-				if (exists(newItemPath)) {
-					// file exists locally already
-					Item databaseItem;
-					bool fileFoundInDB = false;
-					
-					foreach (driveId; driveIDsArray) {
-						if (itemDB.selectByPath(newItemPath, driveId, databaseItem)) {
-							fileFoundInDB = true;
-							break;
-						}
+			// Does the file already exist in the path locally?
+			if (exists(newItemPath)) {
+				// file exists locally already
+				Item databaseItem;
+				bool fileFoundInDB = false;
+				foreach (driveId; onlineDriveDetails.keys) {
+					if (itemDB.selectByPath(newItemPath, driveId, databaseItem)) {
+						fileFoundInDB = true;
+						break;
 					}
+				}
+				
+				// Log the DB details
+				addLogEntry("File to download exists locally and this is the DB record: " ~ to!string(databaseItem), ["debug"]);
+				
+				// Does the DB (what we think is in sync) hash match the existing local file hash?
+				if (!testFileHash(newItemPath, databaseItem)) {
+					// local file is different to what we know to be true
+					addLogEntry("The local file to replace (" ~ newItemPath ~ ") has been modified locally since the last download. Renaming it to avoid potential local data loss.");
 					
-					// Log the DB details
-					addLogEntry("File to download exists locally and this is the DB record: " ~ to!string(databaseItem), ["debug"]);
-					
-					// Does the DB (what we think is in sync) hash match the existing local file hash?
-					if (!testFileHash(newItemPath, databaseItem)) {
-						// local file is different to what we know to be true
-						addLogEntry("The local file to replace (" ~ newItemPath ~ ") has been modified locally since the last download. Renaming it to avoid potential local data loss.");
-						
-						// Perform the local safeBackup of the existing local file, passing in if we are performing a --dry-run or not
-						safeBackup(newItemPath, dryRun);
-					}
+					// Perform the local safeBackup of the existing local file, passing in if we are performing a --dry-run or not
+					safeBackup(newItemPath, dryRun);
 				}
 			}
 			
@@ -2309,7 +2296,7 @@ class SyncEngine {
 									addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);
 									if (!dryRun) {
 										// Attempt to update the online date time stamp
-										uploadLastModifiedTime(item.driveId, item.id, localModifiedTime.toUTC(), item.eTag);
+										uploadLastModifiedTime(item.driveId, item.id, localModifiedTime, item.eTag);
 										return false;
 									}									
 								} else {	
@@ -2487,13 +2474,17 @@ class SyncEngine {
 		addLogEntry("Default Drive ID:     " ~ appConfig.defaultDriveId, ["verbose"]);
 		addLogEntry("Default Root ID:      " ~ appConfig.defaultRootId, ["verbose"]);
 
+		// Fetch the details from cachedOnlineDriveData
+		driveDetailsCache cachedOnlineDriveData;
+		cachedOnlineDriveData = getDriveDetails(appConfig.defaultDriveId);
+		
 		// What do we display here for space remaining
-		if (appConfig.remainingFreeSpace > 0) {
+		if (cachedOnlineDriveData.quotaRemaining > 0) {
 			// Display the actual value
-			addLogEntry("Remaining Free Space: " ~ to!string(byteToGibiByte(appConfig.remainingFreeSpace)) ~ " GB (" ~ to!string(appConfig.remainingFreeSpace) ~ " bytes)", ["verbose"]);
+			addLogEntry("Remaining Free Space: " ~ to!string(byteToGibiByte(cachedOnlineDriveData.quotaRemaining)) ~ " GB (" ~ to!string(cachedOnlineDriveData.quotaRemaining) ~ " bytes)", ["verbose"]);
 		} else {
 			// zero or non-zero value or restricted
-			if (!appConfig.quotaRestricted){
+			if (!cachedOnlineDriveData.quotaRestricted){
 				addLogEntry("Remaining Free Space:       0 KB", ["verbose"]);
 			} else {
 				addLogEntry("Remaining Free Space:       Not Available", ["verbose"]);
@@ -2561,7 +2552,7 @@ class SyncEngine {
 			}
 			
 			// Add to pathFakeDeletedArray
-			// We dont want to try and upload this item again, so we need to track this object
+			// We dont want to try and upload this item again, so we need to track this objects removal
 			if (dryRun) {
 				// We need to add './' here so that it can be correctly searched to ensure it is not uploaded
 				string pathToAdd = "./" ~ path;
@@ -2703,7 +2694,7 @@ class SyncEngine {
 		
 		// Log what we are doing
 		if (!appConfig.surpressLoggingOutput) {
-			addProcessingLogHeaderEntry("Performing a database consistency and integrity check on locally stored data");
+			addProcessingLogHeaderEntry("Performing a database consistency and integrity check on locally stored data", appConfig.verbosityCount);
 		}
 		
 		// What driveIDsArray do we use? If we are doing a --single-directory we need to use just the drive id associated with that operation
@@ -2711,7 +2702,8 @@ class SyncEngine {
 		if (singleDirectoryScope) {
 			consistencyCheckDriveIdsArray ~= singleDirectoryScopeDriveId;
 		} else {
-			consistencyCheckDriveIdsArray = driveIDsArray;
+			// Query the DB for all unique DriveID's
+			consistencyCheckDriveIdsArray = itemDB.selectDistinctDriveIds();
 		}
 		
 		// Create a new DB blank item
@@ -2720,6 +2712,9 @@ class SyncEngine {
 		foreach (driveId; consistencyCheckDriveIdsArray) {
 			// Make the logging more accurate - we cant update driveId as this then breaks the below queries
 			addLogEntry("Processing DB entries for this Drive ID: " ~ driveId, ["verbose"]);
+			
+			// Freshen the cached quota details for this driveID
+			addOrUpdateOneDriveOnlineDetails(driveId);
 			
 			// What OneDrive API query do we use?
 			// - Are we running against a National Cloud Deployments that does not support /delta ?
@@ -2793,7 +2788,10 @@ class SyncEngine {
 		}
 
 		// Close out the '....' being printed to the console
-		addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+		if (!appConfig.surpressLoggingOutput) {
+			if (appConfig.verbosityCount == 0)
+				addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+		}
 		
 		// Are we doing a --download-only sync?
 		if (!appConfig.getValueBool("download_only")) {
@@ -2832,7 +2830,10 @@ class SyncEngine {
 		// Log what we are doing
 		addLogEntry("Processing " ~ logOutputPath, ["verbose"]);
 		// Add a processing '.'
-		addProcessingDotEntry();
+		if (!appConfig.surpressLoggingOutput) {
+			if (appConfig.verbosityCount == 0)
+				addProcessingDotEntry();
+		}
 		
 		// Determine which action to take
 		final switch (dbItem.type) {
@@ -2874,7 +2875,8 @@ class SyncEngine {
 					
 					if (localModifiedTime != itemModifiedTime) {
 						// The modified dates are different
-						addLogEntry("The local item has a different modified time " ~ to!string(localModifiedTime) ~ " when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime), ["debug"]);
+						addLogEntry("Local file time discrepancy detected: " ~ localFilePath, ["verbose"]);
+						addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " (UTC) when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime) ~ " (UTC)", ["debug"]);
 						
 						// Test the file hash
 						if (!testFileHash(localFilePath, dbItem)) {
@@ -3484,146 +3486,157 @@ class SyncEngine {
 		
 		// For each batch of files to upload, upload the changed data to OneDrive
 		foreach (chunk; databaseItemsWhereContentHasChanged.chunks(batchSize)) {
-			uploadChangedLocalFileToOneDrive(chunk);
+			processChangedLocalItemsToUploadInParallel(chunk);
+		}
+	}
+
+	// Upload the changed file batches in parallel
+	void processChangedLocalItemsToUploadInParallel(string[3][] array) {
+		foreach (i, localItemDetails; taskPool.parallel(array)) {
+			addLogEntry("Upload Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);
+			uploadChangedLocalFileToOneDrive(localItemDetails);
+			addLogEntry("Upload Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);
 		}
 	}
 	
 	// Upload changed local files to OneDrive in parallel
-	void uploadChangedLocalFileToOneDrive(string[3][] array) {
-			
-		foreach (i, localItemDetails; taskPool.parallel(array)) {
+	void uploadChangedLocalFileToOneDrive(string[3] localItemDetails) {
 		
-			addLogEntry("Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);
+		// These are the details of the item we need to upload
+		string changedItemParentId = localItemDetails[0];
+		string changedItemId = localItemDetails[1];
+		string localFilePath = localItemDetails[2];
 		
-			// These are the details of the item we need to upload
-			string changedItemParentId = localItemDetails[0];
-			string changedItemId = localItemDetails[1];
-			string localFilePath = localItemDetails[2];
-			
-			// How much space is remaining on OneDrive
-			ulong remainingFreeSpace;
-			// Did the upload fail?
-			bool uploadFailed = false;
-			// Did we skip due to exceeding maximum allowed size?
-			bool skippedMaxSize = false;
-			// Did we skip to an exception error?
-			bool skippedExceptionError = false;
-			
-			// Unfortunatly, we cant store an array of Item's ... so we have to re-query the DB again - unavoidable extra processing here
-			// This is because the Item[] has no other functions to allow is to parallel process those elements, so we have to use a string array as input to this function
-			Item dbItem;
-			itemDB.selectById(changedItemParentId, changedItemId, dbItem);
+		addLogEntry("uploadChangedLocalFileToOneDrive: " ~ localFilePath, ["debug"]);
 		
-			// Query the available space online
-			// This will update appConfig.quotaAvailable & appConfig.quotaRestricted values
-			remainingFreeSpace = getRemainingFreeSpace(dbItem.driveId);
-			
-			// Get the file size from the actual file
-			ulong thisFileSizeLocal = getSize(localFilePath);
-			// Get the file size from the DB data
-			ulong thisFileSizeFromDB;
-			if (!dbItem.size.empty) {
-				thisFileSizeFromDB = to!ulong(dbItem.size);
-			} else {
-				thisFileSizeFromDB = 0;
-			}
-			
-			// remainingFreeSpace online includes the current file online
-			// we need to remove the online file (add back the existing file size) then take away the new local file size to get a new approximate value
-			ulong calculatedSpaceOnlinePostUpload = (remainingFreeSpace + thisFileSizeFromDB) - thisFileSizeLocal;
-			
-			// Based on what we know, for this thread - can we safely upload this modified local file?
-			addLogEntry("This Thread Current Free Space Online:                " ~ to!string(remainingFreeSpace), ["debug"]);
-			addLogEntry("This Thread Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
+		// How much space is remaining on OneDrive
+		ulong remainingFreeSpace;
+		// Did the upload fail?
+		bool uploadFailed = false;
+		// Did we skip due to exceeding maximum allowed size?
+		bool skippedMaxSize = false;
+		// Did we skip to an exception error?
+		bool skippedExceptionError = false;
 		
-			JSONValue uploadResponse;
-			
-			bool spaceAvailableOnline = false;
-			// If 'personal' accounts, if driveId == defaultDriveId, then we will have data - appConfig.quotaAvailable will be updated
-			// If 'personal' accounts, if driveId != defaultDriveId, then we will not have quota data - appConfig.quotaRestricted will be set as true
-			// If 'business' accounts, if driveId == defaultDriveId, then we will have data
-			// If 'business' accounts, if driveId != defaultDriveId, then we will have data, but it will be a 0 value - appConfig.quotaRestricted will be set as true
-			
-			// What was the latest getRemainingFreeSpace() value?
-			if (appConfig.quotaAvailable) {
-				// Our query told us we have free space online .. if we upload this file, will we exceed space online - thus upload will fail during upload?
-				if (calculatedSpaceOnlinePostUpload > 0) {
-					// Based on this thread action, we beleive that there is space available online to upload - proceed
-					spaceAvailableOnline = true;
-				}
-			}
-			// Is quota being restricted?
-			if (appConfig.quotaRestricted) {
-				// Space available online is being restricted - so we have no way to really know if there is space available online
+		// Unfortunatly, we cant store an array of Item's ... so we have to re-query the DB again - unavoidable extra processing here
+		// This is because the Item[] has no other functions to allow is to parallel process those elements, so we have to use a string array as input to this function
+		Item dbItem;
+		itemDB.selectById(changedItemParentId, changedItemId, dbItem);
+	
+		// Fetch the details from cachedOnlineDriveData
+		// - cachedOnlineDriveData.quotaRestricted;
+		// - cachedOnlineDriveData.quotaAvailable;
+		// - cachedOnlineDriveData.quotaRemaining;
+		driveDetailsCache cachedOnlineDriveData;
+		cachedOnlineDriveData = getDriveDetails(dbItem.driveId);
+		remainingFreeSpace = cachedOnlineDriveData.quotaRemaining;
+		
+		// Get the file size from the actual file
+		ulong thisFileSizeLocal = getSize(localFilePath);
+		// Get the file size from the DB data
+		ulong thisFileSizeFromDB;
+		if (!dbItem.size.empty) {
+			thisFileSizeFromDB = to!ulong(dbItem.size);
+		} else {
+			thisFileSizeFromDB = 0;
+		}
+		
+		// 'remainingFreeSpace' online includes the current file online
+		// We need to remove the online file (add back the existing file size) then take away the new local file size to get a new approximate value
+		ulong calculatedSpaceOnlinePostUpload = (remainingFreeSpace + thisFileSizeFromDB) - thisFileSizeLocal;
+		
+		// Based on what we know, for this thread - can we safely upload this modified local file?
+		addLogEntry("This Thread Estimated Free Space Online:              " ~ to!string(remainingFreeSpace), ["debug"]);
+		addLogEntry("This Thread Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
+		JSONValue uploadResponse;
+		
+		bool spaceAvailableOnline = false;
+		// If 'personal' accounts, if driveId == defaultDriveId, then we will have quota data - cachedOnlineDriveData.quotaRemaining will be updated so it can be reused
+		// If 'personal' accounts, if driveId != defaultDriveId, then we will not have quota data - cachedOnlineDriveData.quotaRestricted will be set as true
+		// If 'business' accounts, if driveId == defaultDriveId, then we will potentially have quota data - cachedOnlineDriveData.quotaRemaining will be updated so it can be reused
+		// If 'business' accounts, if driveId != defaultDriveId, then we will potentially have quota data, but it most likely will be a 0 value - cachedOnlineDriveData.quotaRestricted will be set as true
+		
+		// Is there quota available for the given drive where we are uploading to?
+		if (cachedOnlineDriveData.quotaAvailable) {
+			// Our query told us we have free space online .. if we upload this file, will we exceed space online - thus upload will fail during upload?
+			if (calculatedSpaceOnlinePostUpload > 0) {
+				// Based on this thread action, we beleive that there is space available online to upload - proceed
 				spaceAvailableOnline = true;
 			}
-				
-			// Do we have space available or is space available being restricted (so we make the blind assumption that there is space available)
-			if (spaceAvailableOnline) {
-				// Does this file exceed the maximum file size to upload to OneDrive?
-				if (thisFileSizeLocal <= maxUploadFileSize) {
-					// Attempt to upload the modified file
-					// Error handling is in performModifiedFileUpload(), and the JSON that is responded with - will either be null or a valid JSON object containing the upload result
-					uploadResponse = performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
-					
-					// Evaluate the returned JSON uploadResponse
-					// If there was an error uploading the file, uploadResponse should be empty and invalid
-					if (uploadResponse.type() != JSONType.object) {
-						uploadFailed = true;
-						skippedExceptionError = true;
-					}
-					
-				} else {
-					// Skip file - too large
-					uploadFailed = true;
-					skippedMaxSize = true;
-				}
-			} else {
-				// Cant upload this file - no space available
-				uploadFailed = true;
-			}
+		}
+		
+		// Is quota being restricted?
+		if (cachedOnlineDriveData.quotaRestricted) {
+			// Space available online is being restricted - so we have no way to really know if there is space available online
+			spaceAvailableOnline = true;
+		}
 			
-			// Did the upload fail?
-			if (uploadFailed) {
-				// Upload failed .. why?
-				// No space available online
-				if (!spaceAvailableOnline) {
-					addLogEntry("Skipping uploading modified file " ~ localFilePath ~ " due to insufficient free space available on Microsoft OneDrive", ["info", "notify"]);
+		// Do we have space available or is space available being restricted (so we make the blind assumption that there is space available)
+		if (spaceAvailableOnline) {
+			// Does this file exceed the maximum file size to upload to OneDrive?
+			if (thisFileSizeLocal <= maxUploadFileSize) {
+				// Attempt to upload the modified file
+				// Error handling is in performModifiedFileUpload(), and the JSON that is responded with - will either be null or a valid JSON object containing the upload result
+				uploadResponse = performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
+				
+				// Evaluate the returned JSON uploadResponse
+				// If there was an error uploading the file, uploadResponse should be empty and invalid
+				if (uploadResponse.type() != JSONType.object) {
+					uploadFailed = true;
+					skippedExceptionError = true;
 				}
-				// File exceeds max allowed size
-				if (skippedMaxSize) {
-					addLogEntry("Skipping uploading this modified file as it exceeds the maximum size allowed by OneDrive: " ~ localFilePath, ["info", "notify"]);
-				}
-				// Generic message
-				if (skippedExceptionError) {
-					// normal failure message if API or exception error generated
-					addLogEntry("Uploading modified file " ~ localFilePath ~ " ... failed!", ["info", "notify"]);
-				}
+				
 			} else {
-				// Upload was successful
-				addLogEntry("Uploading modified file " ~ localFilePath ~ " ... done.", ["info", "notify"]);
-				
-				// Save JSON item in database
-				saveItem(uploadResponse);
-				
-				if (!dryRun) {
-					// Check the integrity of the uploaded modified file
-					performUploadIntegrityValidationChecks(uploadResponse, localFilePath, thisFileSizeLocal);
-					
-					// Update the date / time of the file online to match the local item
-					// Get the local file last modified time
-					SysTime localModifiedTime = timeLastModified(localFilePath).toUTC();
-					localModifiedTime.fracSecs = Duration.zero;
-					// Get the latest eTag, and use that
-					string etagFromUploadResponse = uploadResponse["eTag"].str;
-					// Attempt to update the online date time stamp based on our local data
-					uploadLastModifiedTime(dbItem.driveId, dbItem.id, localModifiedTime, etagFromUploadResponse);
-				}
+				// Skip file - too large
+				uploadFailed = true;
+				skippedMaxSize = true;
 			}
-
-			addLogEntry("Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);
-
-		} // end of 'foreach (i, localItemDetails; array.enumerate)'
+		} else {
+			// Cant upload this file - no space available
+			uploadFailed = true;
+		}
+		
+		// Did the upload fail?
+		if (uploadFailed) {
+			// Upload failed .. why?
+			// No space available online
+			if (!spaceAvailableOnline) {
+				addLogEntry("Skipping uploading modified file " ~ localFilePath ~ " due to insufficient free space available on Microsoft OneDrive", ["info", "notify"]);
+			}
+			// File exceeds max allowed size
+			if (skippedMaxSize) {
+				addLogEntry("Skipping uploading this modified file as it exceeds the maximum size allowed by OneDrive: " ~ localFilePath, ["info", "notify"]);
+			}
+			// Generic message
+			if (skippedExceptionError) {
+				// normal failure message if API or exception error generated
+				addLogEntry("Uploading modified file " ~ localFilePath ~ " ... failed!", ["info", "notify"]);
+			}
+		} else {
+			// Upload was successful
+			addLogEntry("Uploading modified file " ~ localFilePath ~ " ... done.", ["info", "notify"]);
+			
+			// Save JSON item in database
+			saveItem(uploadResponse);
+			
+			// Update the 'cachedOnlineDriveData' record for this 'dbItem.driveId' so that this is tracked as accuratly as possible for other threads
+			updateDriveDetailsCache(dbItem.driveId, cachedOnlineDriveData.quotaRestricted, cachedOnlineDriveData.quotaAvailable, thisFileSizeLocal);
+			
+			// Check the integrity of the uploaded modified file if not in a --dry-run scenario
+			if (!dryRun) {
+				// Perform the integrity of the uploaded modified file
+				performUploadIntegrityValidationChecks(uploadResponse, localFilePath, thisFileSizeLocal);
+				
+				// Update the date / time of the file online to match the local item
+				// Get the local file last modified time
+				SysTime localModifiedTime = timeLastModified(localFilePath).toUTC();
+				localModifiedTime.fracSecs = Duration.zero;
+				// Get the latest eTag, and use that
+				string etagFromUploadResponse = uploadResponse["eTag"].str;
+				// Attempt to update the online date time stamp based on our local data
+				uploadLastModifiedTime(dbItem.driveId, dbItem.id, localModifiedTime, etagFromUploadResponse);
+			}
+		}
 	}
 	
 	// Perform the upload of a locally modified file to OneDrive
@@ -3856,25 +3869,25 @@ class SyncEngine {
 	}
 		
 	// Query the OneDrive API using the provided driveId to get the latest quota details
-	ulong getRemainingFreeSpace(string driveId) {
-				
-		// Get the quota details for this driveId, as this could have changed since we started the application - the user could have added / deleted data online, or purchased additional storage
+	string[3][] getRemainingFreeSpaceOnline(string driveId) {
+		// Get the quota details for this driveId
 		// Quota details are ONLY available for the main default driveId, as the OneDrive API does not provide quota details for shared folders
-		
 		JSONValue currentDriveQuota;
-		ulong remainingQuota;
-		
-		// Ensure that we have a valid driveId
+		bool quotaRestricted = false; // Assume quota is not restricted unless "remaining" is missing
+		bool quotaAvailable = false;
+		ulong quotaRemainingOnline = 0;
+		string[3][] result;
+
+		// Ensure that we have a valid driveId to query
 		if (driveId.empty) {
-			// no driveId was provided, use the application default
+			// No 'driveId' was provided, use the application default
 			driveId = appConfig.defaultDriveId;
 		}
-		
+
 		// Try and query the quota for the provided driveId
 		try {
 			// Create a new OneDrive API instance
-			OneDriveApi getCurrentDriveQuotaApiInstance;
-			getCurrentDriveQuotaApiInstance = new OneDriveApi(appConfig);
+			OneDriveApi getCurrentDriveQuotaApiInstance = new OneDriveApi(appConfig);
 			getCurrentDriveQuotaApiInstance.initialise();
 			addLogEntry("Seeking available quota for this drive id: " ~ driveId, ["debug"]);
 			currentDriveQuota = getCurrentDriveQuotaApiInstance.getDriveQuota(driveId);
@@ -3884,77 +3897,66 @@ class SyncEngine {
 			object.destroy(getCurrentDriveQuotaApiInstance);
 		} catch (OneDriveException e) {
 			addLogEntry("currentDriveQuota = onedrive.getDriveQuota(driveId) generated a OneDriveException", ["debug"]);
+			// If an exception occurs, it's unclear if quota is restricted, but quota details are not available
+			quotaRestricted = true; // Considering restricted due to failure to access
+			// Return result
+			result ~= [to!string(quotaRestricted), to!string(quotaAvailable), to!string(quotaRemainingOnline)];
+			return result;
 		}
 		
-		// validate that currentDriveQuota is a JSON value
-		if (currentDriveQuota.type() == JSONType.object) {
+		// Validate that currentDriveQuota is a JSON value
+		if (currentDriveQuota.type() == JSONType.object && "quota" in currentDriveQuota) {
 			// Response from API contains valid data
 			// If 'personal' accounts, if driveId == defaultDriveId, then we will have data
 			// If 'personal' accounts, if driveId != defaultDriveId, then we will not have quota data
 			// If 'business' accounts, if driveId == defaultDriveId, then we will have data
 			// If 'business' accounts, if driveId != defaultDriveId, then we will have data, but it will be a 0 value
+			addLogEntry("Quota Details: " ~ to!string(currentDriveQuota), ["debug"]);
 			
-			if ("quota" in currentDriveQuota){
-				if (driveId == appConfig.defaultDriveId) {
-					// We potentially have updated quota remaining details available
-					// However in some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
-					if ("remaining" in currentDriveQuota["quota"]){
-						// We have valid quota remaining details returned for the provided drive id
-						remainingQuota = currentDriveQuota["quota"]["remaining"].integer;
-						
-						if (remainingQuota <= 0) {
-							if (appConfig.accountType == "personal"){
-								// zero space available
-								addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional space.");
-								remainingQuota = 0;
-								appConfig.quotaAvailable = false;
-							} else {
-								// zero space available is being reported, maybe being restricted?
-								addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
-								remainingQuota = 0;
-								appConfig.quotaRestricted = true;
-							}
-						}
-					}
-				} else {
-					// quota details returned, but for a drive id that is not ours
-					if ("remaining" in currentDriveQuota["quota"]){
-						// remaining is in the quota JSON response					
-						if (currentDriveQuota["quota"]["remaining"].integer <= 0) {
-							// value returned is 0 or less than 0
-							addLogEntry("OneDrive quota information is set at zero, as this is not our drive id, ignoring", ["verbose"]);
-							remainingQuota = 0;
-							appConfig.quotaRestricted = true;
-						}
+			auto quota = currentDriveQuota["quota"];
+			if ("remaining" in quota) {
+				quotaRemainingOnline = quota["remaining"].integer;
+				quotaAvailable = quotaRemainingOnline > 0;
+				// If "remaining" is present but its value is <= 0, it's not restricted but exhausted
+				if (quotaRemainingOnline <= 0) {
+					if (appConfig.accountType == "personal") {
+						addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional capacity.");
+					} else { // Assuming 'business' or 'sharedLibrary'
+						addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
 					}
 				}
 			} else {
-				// No quota details returned
-				if (driveId == appConfig.defaultDriveId) {
-					// no quota details returned for current drive id
-					addLogEntry("ERROR: OneDrive quota information is missing. Potentially your OneDrive account currently has zero space available. Please free up some space online or purchase additional space.");
-					remainingQuota = 0;
-					appConfig.quotaRestricted = true;
-				} else {
-					// quota details not available
-					addLogEntry("WARNING: OneDrive quota information is being restricted as this is not our drive id.", ["debug"]);
-					remainingQuota = 0;
-					appConfig.quotaRestricted = true;
-				}
+				// "remaining" not present, indicating restricted quota information
+				quotaRestricted = true;
+				addLogEntry("Quota information is restricted or not available for this drive.", ["verbose"]);
 			}
+		} else {
+			// When valid quota details are not fetched
+			addLogEntry("Failed to fetch or interpret quota details from the API response.", ["verbose"]);
+			quotaRestricted = true; // Considering restricted due to failure to interpret
 		}
+
+		// What was the determined available quota?
+		addLogEntry("Reported Available Online Quota for driveID '" ~ driveId ~ "': " ~ to!string(quotaRemainingOnline), ["debug"]);
 		
-		// what was the determined available quota?
-		addLogEntry("Available quota: " ~ to!string(remainingQuota), ["debug"]);
-		return remainingQuota;
+		// Return result
+		result ~= [to!string(quotaRestricted), to!string(quotaAvailable), to!string(quotaRemainingOnline)];
+		return result;
 	}
-	
+
 	// Perform a filesystem walk to uncover new data to upload to OneDrive
 	void scanLocalFilesystemPathForNewData(string path) {
-	
 		// Cleanup array memory before we start adding files
 		newLocalFilesToUploadToOneDrive = [];
 		
+		// Perform a filesystem walk to uncover new data
+		scanLocalFilesystemPathForNewDataToUpload(path);
+		
+		// Upload new data that has been identified
+		processNewLocalItemsToUpload();
+	}
+
+	void scanLocalFilesystemPathForNewDataToUpload(string path) {
 		// To improve logging output for this function, what is the 'logical path' we are scanning for file & folder differences?
 		string logPath;
 		if (path == ".") {
@@ -3973,9 +3975,9 @@ class SyncEngine {
 		if (isDir(path)) {
 			if (!appConfig.surpressLoggingOutput) {
 				if (!cleanupLocalFiles) {
-					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload");
+					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload", appConfig.verbosityCount);
 				} else {
-					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for data to cleanup");
+					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for data to cleanup", appConfig.verbosityCount);
 				}
 			}
 		}
@@ -3985,7 +3987,12 @@ class SyncEngine {
 	
 		// Perform the filesystem walk of this path, building an array of new items to upload
 		scanPathForNewData(path);
-		addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+		if (isDir(path)) {
+			if (!appConfig.surpressLoggingOutput) {
+				if (appConfig.verbosityCount == 0)
+					addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+			}
+		}
 		
 		// To finish off the processing items, this is needed to reflect this in the log
 		addLogEntry("------------------------------------------------------------------", ["debug"]);
@@ -3995,12 +4002,15 @@ class SyncEngine {
 		
 		auto elapsedTime = finishTime - startTime;
 		addLogEntry("Elapsed Time Filesystem Walk: " ~ to!string(elapsedTime), ["debug"]);
-				
+	}
+	
+	// Perform a filesystem walk to uncover new data to upload to OneDrive
+	void processNewLocalItemsToUpload() {
 		// Upload new data that has been identified
 		// Are there any items to download post fetching the /delta data?
 		if (!newLocalFilesToUploadToOneDrive.empty) {
 			// There are elements to upload
-			addProcessingLogHeaderEntry("New items to upload to OneDrive: " ~ to!string(newLocalFilesToUploadToOneDrive.length));
+			addProcessingLogHeaderEntry("New items to upload to OneDrive: " ~ to!string(newLocalFilesToUploadToOneDrive.length), appConfig.verbosityCount);
 			
 			// Reset totalDataToUpload
 			totalDataToUpload = 0;
@@ -4027,9 +4037,13 @@ class SyncEngine {
 				}
 			}
 			
-			// How much space is available (Account Drive ID)
+			// How much space is available 
 			// The file, could be uploaded to a shared folder, which, we are not tracking how much free space is available there ... 
-			addLogEntry("Current Available Space Online (Account Drive ID): " ~ to!string((appConfig.remainingFreeSpace / 1024 / 1024)) ~ " MB", ["debug"]);
+			// Iterate through all the drives we have cached thus far, that we know about
+			foreach (driveId, driveDetails; onlineDriveDetails) {
+				// Log how much space is available for each driveId
+				addLogEntry("Current Available Space Online (" ~ driveId ~ "): " ~ to!string((driveDetails.quotaRemaining / 1024 / 1024)) ~ " MB", ["debug"]);
+			}
 			
 			// Perform the upload
 			uploadNewLocalFileItems();
@@ -4037,20 +4051,17 @@ class SyncEngine {
 			// Cleanup array memory after uploading all files
 			newLocalFilesToUploadToOneDrive = [];
 		}
-
-		if (!databaseItemsWhereContentHasChanged.empty) {
-			// There are changed local files that were in the DB to upload
-			addLogEntry("Changed local items to upload to OneDrive: " ~ to!string(databaseItemsWhereContentHasChanged.length));
-			processChangedLocalItemsToUpload();
-			// Cleanup array memory
-			databaseItemsWhereContentHasChanged = [];
-		}
 	}
 	
 	// Scan this path for new data
 	void scanPathForNewData(string path) {
 		// Add a processing '.'
-		addProcessingDotEntry();
+		if (isDir(path)) {
+			if (!appConfig.surpressLoggingOutput) {
+				if (appConfig.verbosityCount == 0)
+					addProcessingDotEntry();
+			}
+		}
 
 		ulong maxPathLength;
 		ulong pathWalkLength;
@@ -4210,6 +4221,7 @@ class SyncEngine {
 						if (canFind(businessSharedFoldersOnlineToSkip, path)) {
 							// This path was skipped - why?
 							addLogEntry("Skipping item '" ~ path ~ "' due to this path matching an existing online Business Shared Folder name", ["info", "notify"]);
+							addLogEntry("To sync this Business Shared Folder, consider enabling 'sync_business_shared_folders' within your application configuration.", ["info"]);
 							skipFolderTraverse = true;
 						}
 					}
@@ -4268,37 +4280,42 @@ class SyncEngine {
 	}
 	
 	// Handle a single file inotify trigger when using --monitor
-	void handleLocalFileTrigger(string localFilePath) {
+	void handleLocalFileTrigger(string[] changedLocalFilesToUploadToOneDrive) {
 		// Is this path a new file or an existing one?
 		// Normally we would use pathFoundInDatabase() to calculate, but we need 'databaseItem' as well if the item is in the database
-		Item databaseItem;
-		bool fileFoundInDB = false;
-		string[3][] modifiedItemToUpload; 
-		
-		foreach (driveId; driveIDsArray) {
-			if (itemDB.selectByPath(localFilePath, driveId, databaseItem)) {
-				fileFoundInDB = true;
-				break;
+		foreach (localFilePath; changedLocalFilesToUploadToOneDrive) {
+			try {
+				Item databaseItem;
+				bool fileFoundInDB = false;
+				
+				foreach (driveId; onlineDriveDetails.keys) {
+					if (itemDB.selectByPath(localFilePath, driveId, databaseItem)) {
+						fileFoundInDB = true;
+						break;
+					}
+				}
+				
+				// Was the file found in the database?
+				if (!fileFoundInDB) {
+					// This is a new file as it is not in the database
+					// Log that the file has been added locally
+					addLogEntry("[M] New local file added: " ~ localFilePath, ["verbose"]);
+					scanLocalFilesystemPathForNewDataToUpload(localFilePath);
+				} else {
+					// This is a potentially modified file, needs to be handled as such. Is the item truly modified?
+					if (!testFileHash(localFilePath, databaseItem)) {
+						// The local file failed the hash comparison test - there is a data difference
+						// Log that the file has changed locally
+						addLogEntry("[M] Local file changed: " ~ localFilePath, ["verbose"]);
+						// Add the modified item to the array to upload
+						uploadChangedLocalFileToOneDrive([databaseItem.driveId, databaseItem.id, localFilePath]);
+					}
+				}
+			} catch(Exception e) {
+				addLogEntry("Cannot upload file changes/creation: " ~ e.msg, ["info", "notify"]);
 			}
 		}
-		
-		// Was the file found in the database?
-		if (!fileFoundInDB) {
-			// This is a new file as it is not in the database
-			// Log that the file has been added locally
-			addLogEntry("[M] New local file added: " ~ localFilePath, ["verbose"]);
-			scanLocalFilesystemPathForNewData(localFilePath);
-		} else {
-			// This is a potentially modified file, needs to be handled as such. Is the item truly modified?
-			if (!testFileHash(localFilePath, databaseItem)) {
-				// The local file failed the hash comparison test - there is a data difference
-				// Log that the file has changed locally
-				addLogEntry("[M] Local file changed: " ~ localFilePath, ["verbose"]);
-				// Add the modified item to the array to upload
-				modifiedItemToUpload ~= [databaseItem.driveId, databaseItem.id, localFilePath];
-				uploadChangedLocalFileToOneDrive(modifiedItemToUpload);
-			}
-		}
+		processNewLocalItemsToUpload();
 	}
 	
 	// Query the database to determine if this path is within the existing database
@@ -4307,12 +4324,14 @@ class SyncEngine {
 		// Check if this path in the database
 		Item databaseItem;
 		addLogEntry("Search DB for this path: " ~ searchPath, ["debug"]);
-		foreach (driveId; driveIDsArray) {
+		
+		foreach (driveId; onlineDriveDetails.keys) {
 			if (itemDB.selectByPath(searchPath, driveId, databaseItem)) {
 				addLogEntry("DB Record for search path: " ~ to!string(databaseItem), ["debug"]);
 				return true; // Early exit on finding the path in the DB
 			}
 		}
+		
 		return false; // Return false if path is not found in any drive
 	}
 	
@@ -4352,7 +4371,7 @@ class SyncEngine {
 			Item databaseItem;
 			bool parentPathFoundInDB = false;
 			
-			foreach (driveId; driveIDsArray) {
+			foreach (driveId; onlineDriveDetails.keys) {
 				addLogEntry("Query DB with this driveID for the Parent Path: " ~ driveId, ["debug"]);
 				// Query the database for this parent path using each driveId that we know about
 				if (itemDB.selectByPath(parentPath, driveId, databaseItem)) {
@@ -4429,33 +4448,17 @@ class SyncEngine {
 			addLogEntry("parentItem details: " ~ to!string(parentItem), ["debug"]);
 			
 			// Depending on the data within parentItem, will depend on what method we are using to search
-			// In a --local-first scenario, a Shared Folder will be 'remote' so we need to check the remote parent id, rather than parentItem details
+			// A Shared Folder will be 'remote' so we need to check the remote parent id, rather than parentItem details
 			Item queryItem;
 			
-			if ((appConfig.getValueBool("local_first")) &&  (parentItem.type == ItemType.remote)) {
-				// We are --local-first scenario and this folder is a potential shared object
-				addLogEntry("--localfirst & parentItem is a remote item object", ["debug"]);
-			
+			if (parentItem.type == ItemType.remote) {
+				// This folder is a potential shared object
+				addLogEntry("ParentItem is a remote item object", ["debug"]);
+				// Need to create the DB Tie for this shared object to ensure this exists in the database
+				createDatabaseTieRecordForOnlineSharedFolder(parentItem);
+				// Update the queryItem values
 				queryItem.driveId = parentItem.remoteDriveId;
 				queryItem.id = parentItem.remoteId;
-				
-				// Need to create the DB Tie for this object
-				addLogEntry("Creating a DB Tie for this Shared Folder", ["debug"]);
-				// New DB Tie Item to bind the 'remote' path to our parent path
-				Item tieDBItem;
-				// Set the name
-				tieDBItem.name = parentItem.name;
-				// Set the correct item type
-				tieDBItem.type = ItemType.dir;
-				// Set the right elements using the 'remote' of the parent as the 'actual' for this DB Tie
-				tieDBItem.driveId = parentItem.remoteDriveId;
-				tieDBItem.id = parentItem.remoteId;
-				// Set the correct mtime
-				tieDBItem.mtime = parentItem.mtime;
-				// Add tie DB record to the local database
-				addLogEntry("Adding DB Tie record to database: " ~ to!string(tieDBItem), ["debug"]);
-				itemDB.upsert(tieDBItem);
-				
 			} else {
 				// Use parent item for the query item
 				addLogEntry("Standard Query, use parentItem", ["debug"]);
@@ -4547,14 +4550,14 @@ class SyncEngine {
 						string requiredDriveId;
 						string requiredParentItemId;
 						
-						// Is this a Personal Account and is the item a Remote Object (Shared Folder) ?
-						if ((appConfig.accountType == "personal") && (parentItem.type == ItemType.remote)) {
+						// Is the item a Remote Object (Shared Folder) ?
+						if (parentItem.type == ItemType.remote) {
 							// Yes .. Shared Folder
 							addLogEntry("parentItem data: " ~ to!string(parentItem), ["debug"]);
 							requiredDriveId = parentItem.remoteDriveId;
 							requiredParentItemId = parentItem.remoteId;
 						} else {
-							// Not a personal account + Shared Folder
+							// Not a Shared Folder
 							requiredDriveId = parentItem.driveId;
 							requiredParentItemId = parentItem.id;
 						}
@@ -4655,22 +4658,37 @@ class SyncEngine {
 			if (onlinePathData["name"].str == baseName(thisNewPathToCreate)) {
 				// OneDrive 'name' matches local path name
 				if (appConfig.accountType == "business") {
-					// We are a business account, this existing online folder, could be a Shared Online Folder and is the 'Add shortcut to My files' item
+					// We are a business account, this existing online folder, could be a Shared Online Folder could be a 'Add shortcut to My files' item
 					addLogEntry("onlinePathData: " ~ to!string(onlinePathData), ["debug"]);
 					
+					// Is this a remote folder
 					if (isItemRemote(onlinePathData)) {
 						// The folder is a remote item ... we do not want to create this ...
-						addLogEntry("Remote Existing Online Folder is most likely a OneDrive Shared Business Folder Link added by 'Add shortcut to My files'", ["debug"]);
-						addLogEntry("We need to skip this path: " ~ thisNewPathToCreate, ["debug"]);
+						addLogEntry("Existing Remote Online Folder is most likely a OneDrive Shared Business Folder Link added by 'Add shortcut to My files'", ["debug"]);
 						
-						// Add this path to businessSharedFoldersOnlineToSkip
-						businessSharedFoldersOnlineToSkip ~= [thisNewPathToCreate];
-						// no save to database, no online create
-						// Shutdown API instance
-						createDirectoryOnlineOneDriveApiInstance.shutdown();
-						// Free object and memory
-						object.destroy(createDirectoryOnlineOneDriveApiInstance);
-						return;
+						// Is Shared Business Folder Syncing enabled ?
+						if (!appConfig.getValueBool("sync_business_shared_items")) {
+							// Shared Business Folder Syncing is NOT enabled
+							addLogEntry("We need to skip this path: " ~ thisNewPathToCreate, ["debug"]);
+							// Add this path to businessSharedFoldersOnlineToSkip
+							businessSharedFoldersOnlineToSkip ~= [thisNewPathToCreate];
+							// no save to database, no online create
+							// Shutdown API instance
+							createDirectoryOnlineOneDriveApiInstance.shutdown();
+							// Free object and memory
+							object.destroy(createDirectoryOnlineOneDriveApiInstance);
+							return;
+						} else {
+							// As the 'onlinePathData' is potentially missing the actual correct parent folder id in the 'remoteItem' JSON response, we have to perform a further query to get the correct answer
+							// Failure to do this, means the 'root' DB Tie Record has a different parent reference id to that what this folder's parent reference id actually is
+							JSONValue sharedFolderParentPathData;
+							string remoteDriveId = onlinePathData["remoteItem"]["parentReference"]["driveId"].str;
+							string remoteItemId = onlinePathData["remoteItem"]["id"].str;
+							sharedFolderParentPathData = createDirectoryOnlineOneDriveApiInstance.getPathDetailsById(remoteDriveId, remoteItemId);
+							
+							// A 'root' DB Tie Record needed for this folder using the correct parent data
+							createDatabaseRootTieRecordForOnlineSharedFolder(sharedFolderParentPathData);
+						}
 					}
 				}
 				
@@ -4737,14 +4755,16 @@ class SyncEngine {
 		foreach (chunk; newLocalFilesToUploadToOneDrive.chunks(batchSize)) {
 			uploadNewLocalFileItemsInParallel(chunk);
 		}
-		addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+		if (appConfig.verbosityCount == 0)
+			addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 	}
 	
 	// Upload the file batches in parallel
 	void uploadNewLocalFileItemsInParallel(string[] array) {
 		foreach (i, fileToUpload; taskPool.parallel(array)) {
 			// Add a processing '.'
-			addProcessingDotEntry();
+			if (appConfig.verbosityCount == 0)
+				addProcessingDotEntry();
 			addLogEntry("Upload Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);
 			uploadNewFile(fileToUpload);
 			addLogEntry("Upload Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);
@@ -4772,6 +4792,9 @@ class SyncEngine {
 		// Is there space available online
 		bool spaceAvailableOnline = false;
 		
+		driveDetailsCache cachedOnlineDriveData;
+		ulong calculatedSpaceOnlinePostUpload;
+		
 		// Check the database for the parent path of fileToUpload
 		Item parentItem;
 		// What parent path to use?
@@ -4784,7 +4807,7 @@ class SyncEngine {
 			parentPathFoundInDB = true;
 		} else {
 			// Query the database using each of the driveId's we are using
-			foreach (driveId; driveIDsArray) {
+			foreach (driveId; onlineDriveDetails.keys) {
 				// Query the database for this parent path using each driveId
 				Item dbResponse;
 				if(itemDB.selectByPath(parentPath, driveId, dbResponse)){
@@ -4793,12 +4816,13 @@ class SyncEngine {
 					parentPathFoundInDB = true;
 				}
 			}
+			
 		}
 		
 		// If the parent path was found in the DB, to ensure we are uploading the the right location 'parentItem.driveId' must not be empty
 		if ((parentPathFoundInDB) && (parentItem.driveId.empty)) {
 			// switch to using defaultDriveId
-			addLogEntry("parentItem.driveId is empty - using defaultDriveId for upload API calls");
+			addLogEntry("parentItem.driveId is empty - using defaultDriveId for upload API calls", ["debug"]);
 			parentItem.driveId = appConfig.defaultDriveId;
 		}
 		
@@ -4819,13 +4843,33 @@ class SyncEngine {
 					// Does this file exceed the maximum filesize for OneDrive
 					// Resolves: https://github.com/skilion/onedrive/issues/121 , https://github.com/skilion/onedrive/issues/294 , https://github.com/skilion/onedrive/issues/329
 					if (thisFileSize <= maxUploadFileSize) {
-						// Is there enough free space on OneDrive when we started this thread, to upload the file to OneDrive?
-						remainingFreeSpaceOnline = getRemainingFreeSpace(parentItem.driveId);
-						addLogEntry("Current Available Space Online (Upload Target Drive ID): " ~ to!string((remainingFreeSpaceOnline / 1024 / 1024)) ~ " MB", ["debug"]);
+						// Is there enough free space on OneDrive as compared to when we started this thread, to safely upload the file to OneDrive?
+						
+						// Make sure that parentItem.driveId is in our driveIDs array to use when checking if item is in database
+						// Keep the driveDetailsCache array with unique entries only
+						if (!canFindDriveId(parentItem.driveId, cachedOnlineDriveData)) {
+							// Add this driveId to the drive cache, which then also sets for the defaultDriveId:
+							// - quotaRestricted;
+							// - quotaAvailable;
+							// - quotaRemaining;
+							addOrUpdateOneDriveOnlineDetails(parentItem.driveId);
+							// Fetch the details from cachedOnlineDriveData
+							cachedOnlineDriveData = getDriveDetails(parentItem.driveId);
+						} 
+						
+						// Fetch the details from cachedOnlineDriveData
+						// - cachedOnlineDriveData.quotaRestricted;
+						// - cachedOnlineDriveData.quotaAvailable;
+						// - cachedOnlineDriveData.quotaRemaining;
+						remainingFreeSpaceOnline = cachedOnlineDriveData.quotaRemaining;
 						
 						// When we compare the space online to the total we are trying to upload - is there space online?
-						ulong calculatedSpaceOnlinePostUpload = remainingFreeSpaceOnline - thisFileSize;
+						calculatedSpaceOnlinePostUpload = remainingFreeSpaceOnline - thisFileSize;
 						
+						// Based on what we know, for this thread - can we safely upload this modified local file?
+						addLogEntry("This Thread Estimated Free Space Online:              " ~ to!string(remainingFreeSpaceOnline), ["debug"]);
+						addLogEntry("This Thread Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
+			
 						// If 'personal' accounts, if driveId == defaultDriveId, then we will have data - appConfig.quotaAvailable will be updated
 						// If 'personal' accounts, if driveId != defaultDriveId, then we will not have quota data - appConfig.quotaRestricted will be set as true
 						// If 'business' accounts, if driveId == defaultDriveId, then we will have data
@@ -4837,7 +4881,7 @@ class SyncEngine {
 						} else {
 							// we need to look more granular
 							// What was the latest getRemainingFreeSpace() value?
-							if (appConfig.quotaAvailable) {
+							if (cachedOnlineDriveData.quotaAvailable) {
 								// Our query told us we have free space online .. if we upload this file, will we exceed space online - thus upload will fail during upload?
 								if (calculatedSpaceOnlinePostUpload > 0) {
 									// Based on this thread action, we beleive that there is space available online to upload - proceed
@@ -4847,7 +4891,7 @@ class SyncEngine {
 						}
 						
 						// Is quota being restricted?
-						if (appConfig.quotaRestricted) {
+						if (cachedOnlineDriveData.quotaRestricted) {
 							// If the upload target drive is not our drive id, then it is a shared folder .. we need to print a space warning message
 							if (parentItem.driveId != appConfig.defaultDriveId) {
 								// Different message depending on account type
@@ -4883,11 +4927,24 @@ class SyncEngine {
 							// even though some file systems (such as a POSIX-compliant file systems that Linux use) may consider them as different.
 							// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior, OneDrive does not use this.
 							
-							// In order to upload this file - this query HAS to respond as a 404 - Not Found
+							// In order to upload this file - this query HAS to respond with a '404 - Not Found' so that the upload is triggered
 							
 							// Does this 'file' already exist on OneDrive?
 							try {
-								fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload);
+								if (parentItem.driveId == appConfig.defaultDriveId) {
+									// getPathDetailsByDriveId is only reliable when the driveId is our driveId
+									fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload);
+								} else {
+									// We need to curate a response by listing the children of this parentItem.driveId and parentItem.id , without traversing directories
+									// So that IF the file is on a Shared Folder, it can be found, and, if it exists, checked correctly
+									fileDetailsFromOneDrive = searchDriveItemForFile(parentItem.driveId, parentItem.id, fileToUpload);
+									// Was the file found?
+									if (fileDetailsFromOneDrive.type() != JSONType.object) {
+										// No ....
+										throw new OneDriveException(404, "Name not found via searchDriveItemForFile");
+									}
+								}
+								
 								// Portable Operating System Interface (POSIX) testing of JSON response from OneDrive API
 								if (hasName(fileDetailsFromOneDrive)) {
 									performPosixTest(baseName(fileToUpload), fileDetailsFromOneDrive["name"].str);
@@ -4916,10 +4973,10 @@ class SyncEngine {
 									string changedItemParentId = fileDetailsFromOneDrive["parentReference"]["driveId"].str;
 									string changedItemId = fileDetailsFromOneDrive["id"].str;
 									addLogEntry("Skipping uploading this file as moving it to upload as a modified file (online item already exists): " ~ fileToUpload);
-									databaseItemsWhereContentHasChanged ~= [changedItemParentId, changedItemId, fileToUpload];
 									
 									// In order for the processing of the local item as a 'changed' item, unfortunatly we need to save the online data to the local DB
 									saveItem(fileDetailsFromOneDrive);
+									uploadChangedLocalFileToOneDrive([changedItemParentId, changedItemId, fileToUpload]);
 								}
 							} catch (OneDriveException exception) {
 								// If we get a 404 .. the file is not online .. this is what we want .. file does not exist online
@@ -5005,7 +5062,11 @@ class SyncEngine {
 		}
 
 		// Upload success or failure?
-		if (uploadFailed) {
+		if (!uploadFailed) {
+			// Update the 'cachedOnlineDriveData' record for this 'dbItem.driveId' so that this is tracked as accuratly as possible for other threads
+			updateDriveDetailsCache(parentItem.driveId, cachedOnlineDriveData.quotaRestricted, cachedOnlineDriveData.quotaAvailable, thisFileSize);
+			
+		} else {
 			// Need to add this to fileUploadFailures to capture at the end
 			fileUploadFailures ~= fileToUpload;
 		}
@@ -5671,8 +5732,7 @@ class SyncEngine {
 		
 		if (parentPath != ".") {
 			// Not a 'root' parent
-			// For each driveid in the existing driveIDsArray 
-			foreach (searchDriveId; driveIDsArray) {
+			foreach (searchDriveId; onlineDriveDetails.keys) {
 				addLogEntry("FakeResponse: searching database for: " ~ searchDriveId ~ " " ~ parentPath, ["debug"]);
 				
 				if (itemDB.selectByPath(parentPath, searchDriveId, databaseItem)) {
@@ -5681,6 +5741,10 @@ class SyncEngine {
 					fakeRootId = databaseItem.id;
 				}
 			}
+			
+			
+			
+			
 		}
 		
 		// real id / eTag / cTag are different format for personal / business account
@@ -5783,10 +5847,11 @@ class SyncEngine {
 					
 					// If we have a remote drive ID, add this to our list of known drive id's
 					if (!item.remoteDriveId.empty) {
-						// Keep the driveIDsArray with unique entries only
-						if (!canFind(driveIDsArray, item.remoteDriveId)) {
-							// Add this drive id to the array to search with
-							driveIDsArray ~= item.remoteDriveId;
+						// Keep the driveDetailsCache array with unique entries only
+						driveDetailsCache cachedOnlineDriveData;
+						if (!canFindDriveId(item.remoteDriveId, cachedOnlineDriveData)) {
+							// Add this driveId to the drive cache
+							addOrUpdateOneDriveOnlineDetails(item.remoteDriveId);
 						}
 					}
 				}
@@ -5872,7 +5937,7 @@ class SyncEngine {
 				// Is this failed item in the DB? It should not be ..
 				Item downloadDBItem;
 				// Need to check all driveid's we know about, not just the defaultDriveId
-				foreach (searchDriveId; driveIDsArray) {
+				foreach (searchDriveId; onlineDriveDetails.keys) {
 					if (itemDB.selectByPath(failedFileToDownload, searchDriveId, downloadDBItem)) {
 						// item was found in the DB
 						addLogEntry("ERROR: Failed Download Path found in database, must delete this item from the database .. it should not be in there if it failed to download");
@@ -5901,7 +5966,7 @@ class SyncEngine {
 				// Is this failed item in the DB? It should not be ..
 				Item uploadDBItem;
 				// Need to check all driveid's we know about, not just the defaultDriveId
-				foreach (searchDriveId; driveIDsArray) {
+				foreach (searchDriveId; onlineDriveDetails.keys) {
 					if (itemDB.selectByPath(failedFileToUpload, searchDriveId, uploadDBItem)) {
 						// item was found in the DB
 						addLogEntry("ERROR: Failed Upload Path found in database, must delete this item from the database .. it should not be in there if it failed to upload");
@@ -6042,7 +6107,7 @@ class SyncEngine {
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (appConfig.verbosityCount == 0) {
 				if (!appConfig.surpressLoggingOutput) {
-					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ searchItem.driveId);
+					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ searchItem.driveId, appConfig.verbosityCount);
 				}
 			} else {
 				addLogEntry("Generating a /delta response from the OneDrive API for Drive ID: " ~ searchItem.driveId, ["verbose"]);
@@ -6483,24 +6548,23 @@ class SyncEngine {
 						// Is this JSON a remote object
 						addLogEntry("Testing if this is a remote Shared Folder", ["debug"]);
 						if (isItemRemote(getPathDetailsAPIResponse)) {
-							// Remote Directory .. need a DB Tie Item
-							addLogEntry("Creating a DB Tie for this Shared Folder", ["debug"]);
-							// New DB Tie Item to bind the 'remote' path to our parent path
-							Item tieDBItem;
+							// Remote Directory .. need a DB Tie Record
+							createDatabaseTieRecordForOnlineSharedFolder(parentDetails);
+							
+							// Temp DB Item to bind the 'remote' path to our parent path
+							Item tempDBItem;
 							// Set the name
-							tieDBItem.name = parentDetails.name;
+							tempDBItem.name = parentDetails.name;
 							// Set the correct item type
-							tieDBItem.type = ItemType.dir;
+							tempDBItem.type = ItemType.dir;
 							// Set the right elements using the 'remote' of the parent as the 'actual' for this DB Tie
-							tieDBItem.driveId = parentDetails.remoteDriveId;
-							tieDBItem.id = parentDetails.remoteId;
+							tempDBItem.driveId = parentDetails.remoteDriveId;
+							tempDBItem.id = parentDetails.remoteId;
 							// Set the correct mtime
-							tieDBItem.mtime = parentDetails.mtime;
-							// Add tie DB record to the local database
-							addLogEntry("Adding DB Tie record to database: " ~ to!string(tieDBItem), ["debug"]);
-							itemDB.upsert(tieDBItem);
-							// Update parentDetails to use the DB Tie record
-							parentDetails = tieDBItem;
+							tempDBItem.mtime = parentDetails.mtime;
+							
+							// Update parentDetails to use this temp record
+							parentDetails = tempDBItem;
 						}
 					} catch (OneDriveException exception) {
 						if (exception.httpStatusCode == 404) {
@@ -6668,7 +6732,7 @@ class SyncEngine {
 		
 		// Need to check all driveid's we know about, not just the defaultDriveId
 		bool itemInDB = false;
-		foreach (searchDriveId; driveIDsArray) {
+		foreach (searchDriveId; onlineDriveDetails.keys) {
 			if (itemDB.selectByPath(path, searchDriveId, dbItem)) {
 				// item was found in the DB
 				itemInDB = true;
@@ -6761,7 +6825,7 @@ class SyncEngine {
 			if (!itemDB.selectByPath(oldPath, appConfig.defaultDriveId, oldItem)) {
 				// The old path|item is not synced with the database, upload as a new file
 				addLogEntry("Moved local item was not in-sync with local databse - uploading as new item");
-				uploadNewFile(newPath);
+				scanLocalFilesystemPathForNewData(newPath);
 				return;
 			}
 		
@@ -6907,8 +6971,9 @@ class SyncEngine {
 					// What account type is this?
 					if (appConfig.accountType != "personal") {
 						// Not a personal account, thus the integrity failure is most likely due to SharePoint
-						addLogEntry("CAUTION: Microsoft OneDrive when using SharePoint as a backend enhances files after you upload them, which means this file may now have technical differences from your local copy, resulting in a data integrity issue.", ["verbose"]);
-						addLogEntry("See: https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details", ["verbose"]);
+						addLogEntry("CAUTION: When you upload files to Microsoft OneDrive that uses SharePoint as its backend, Microsoft OneDrive will alter your files post upload.", ["verbose"]);
+						addLogEntry("CAUTION: This will lead to technical differences between the version stored online and your local original file, potentially causing issues with the accuracy or consistency of your data.", ["verbose"]);
+						addLogEntry("CAUTION: Please read https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.", ["verbose"]);
 					}
 					// How can this be disabled?
 					addLogEntry("To disable the integrity checking of uploaded files use --disable-upload-validation");
@@ -7166,7 +7231,7 @@ class SyncEngine {
 		deltaLink = itemDB.getDeltaLink(driveIdToQuery, itemIdToQuery);
 		
 		// Log what we are doing
-		addProcessingLogHeaderEntry("Querying the change status of Drive ID: " ~ driveIdToQuery);
+		addProcessingLogHeaderEntry("Querying the change status of Drive ID: " ~ driveIdToQuery, appConfig.verbosityCount);
 		
 		// Query the OenDrive API using the applicable details, following nextLink if applicable
 		// Create a new API Instance for querying /delta and initialise it
@@ -7176,7 +7241,8 @@ class SyncEngine {
 		
 		for (;;) {
 			// Add a processing '.'
-			addProcessingDotEntry();
+			if (appConfig.verbosityCount == 0)
+				addProcessingDotEntry();
 		
 			// Get the /delta changes via the OneDrive API
 			// getDeltaChangesByItemId has the re-try logic for transient errors
@@ -7251,7 +7317,8 @@ class SyncEngine {
 			else break;
 		}
 		// Needed after printing out '....' when fetching changes from OneDrive API
-		addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+		if (appConfig.verbosityCount == 0)
+			addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 		
 		// Are there any JSON items to process?
 		if (count(jsonItemsArray) != 0) {
@@ -7544,6 +7611,22 @@ class SyncEngine {
 		return interruptedUploads;
 	}
 	
+	// Clear any session_upload.* files
+	void clearInterruptedSessionUploads() {
+		// Scan the filesystem for the files we are interested in, build up interruptedUploadsSessionFiles array
+		foreach (sessionFile; dirEntries(appConfig.configDirName, "session_upload.*", SpanMode.shallow)) {
+			// calculate the full path
+			string tempPath = buildNormalizedPath(buildPath(appConfig.configDirName, sessionFile));
+			JSONValue sessionFileData = readText(tempPath).parseJSON();
+			addLogEntry("Removing interrupted session upload file due to --resync for: " ~ sessionFileData["localPath"].str, ["info"]);
+			
+			// Process removal
+			if (!dryRun) {
+				safeRemove(tempPath);
+			}
+		}
+	}
+	
 	// Process interrupted 'session_upload' files
 	void processForInterruptedSessionUploads() {
 		// For each upload_session file that has been found, process the data to ensure it is still valid
@@ -7747,5 +7830,245 @@ class SyncEngine {
 			addLogEntry("Updated path for 'skip_dir' check: " ~ pathToCheck, ["debug"]);
 		}
 		return pathToCheck;
+	}
+	
+	// Function to find a given DriveId in the onlineDriveDetails associative array that maps driveId to driveDetailsCache
+	// If 'true' will return 'driveDetails' containing the struct data 'driveDetailsCache'
+	bool canFindDriveId(string driveId, out driveDetailsCache driveDetails) {
+		auto ptr = driveId in onlineDriveDetails;
+		if (ptr !is null) {
+			driveDetails = *ptr; // Dereference the pointer to get the value
+			return true;
+		} else {
+			return false;
+		}
+	}
+	
+	// Add this driveId plus relevant details for future reference and use
+	void addOrUpdateOneDriveOnlineDetails(string driveId) {
+	
+		bool quotaRestricted;
+		bool quotaAvailable;
+		ulong quotaRemaining;
+		
+		// Get the data from online
+		auto onlineDriveData = getRemainingFreeSpaceOnline(driveId);
+		quotaRestricted = to!bool(onlineDriveData[0][0]);
+		quotaAvailable = to!bool(onlineDriveData[0][1]);
+		quotaRemaining = to!long(onlineDriveData[0][2]);
+		onlineDriveDetails[driveId] = driveDetailsCache(driveId, quotaRestricted, quotaAvailable, quotaRemaining);
+		
+		// Debug log what the cached array now contains
+		addLogEntry("onlineDriveDetails: " ~ to!string(onlineDriveDetails), ["debug"]);
+	}
+
+	
+	// Return a specific 'driveId' details from 'onlineDriveDetails'
+	driveDetailsCache getDriveDetails(string driveId) {
+		auto ptr = driveId in onlineDriveDetails;
+		if (ptr !is null) {
+			return *ptr;  // Dereference the pointer to get the value
+		} else {
+			// Return a default driveDetailsCache or handle the case where the driveId is not found
+			return driveDetailsCache.init; // Return default-initialized struct
+		}
+	}
+	
+	// Search a given Drive ID, Item ID and filename to see if this exists in the location specified
+	JSONValue searchDriveItemForFile(string parentItemDriveId, string parentItemId, string fileToUpload) {
+	
+		JSONValue onedriveJSONItem;
+		string searchName = baseName(fileToUpload);
+		JSONValue thisLevelChildren;
+		
+		string nextLink;
+		
+		// Create a new API Instance for this thread and initialise it
+		OneDriveApi checkFileOneDriveApiInstance;
+		checkFileOneDriveApiInstance = new OneDriveApi(appConfig);
+		checkFileOneDriveApiInstance.initialise();
+		
+		for (;;) {
+			// query top level children
+			try {
+				thisLevelChildren = checkFileOneDriveApiInstance.listChildren(parentItemDriveId, parentItemId, nextLink);
+			} catch (OneDriveException exception) {
+				// OneDrive threw an error
+				addLogEntry("------------------------------------------------------------------", ["debug"]);
+				addLogEntry("Query Error: thisLevelChildren = checkFileOneDriveApiInstance.listChildren(parentItemDriveId, parentItemId, nextLink)", ["debug"]);
+				addLogEntry("driveId:   " ~ parentItemDriveId, ["debug"]);
+				addLogEntry("idToQuery: " ~ parentItemId, ["debug"]);
+				addLogEntry("nextLink:  " ~ nextLink, ["debug"]);
+				
+				string thisFunctionName = getFunctionName!({});
+				// HTTP request returned status code 408,429,503,504
+				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+					// Handle the 429
+					if (exception.httpStatusCode == 429) {
+						// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+						handleOneDriveThrottleRequest(checkFileOneDriveApiInstance);
+						addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry thisLevelChildren = checkFileOneDriveApiInstance.listChildren(parentItemDriveId, parentItemId, nextLink)", ["debug"]);
+					}
+					// re-try the specific changes queries
+					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+						// 408 - Request Time Out
+						// 503 - Service Unavailable
+						// 504 - Gateway Timeout
+						// Transient error - try again in 30 seconds
+						auto errorArray = splitLines(exception.msg);
+						addLogEntry(to!string(errorArray[0]) ~ " when attempting to query OneDrive top level drive children on OneDrive - retrying applicable request in 30 seconds");
+						addLogEntry("checkFileOneDriveApiInstance.listChildren(parentItemDriveId, parentItemId, nextLink) previously threw an error - retrying", ["debug"]);
+						
+						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+						addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
+						Thread.sleep(dur!"seconds"(30));
+					}
+					// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
+					addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
+					searchDriveItemForFile(parentItemDriveId, parentItemId, fileToUpload);
+				} else {
+					// Default operation if not 408,429,503,504 errors
+					// display what the error is
+					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+				}
+			}
+			
+			// process thisLevelChildren response
+			foreach (child; thisLevelChildren["value"].array) {
+                // Only looking at files
+				if ((child["name"].str == searchName) && (("file" in child) != null)) {
+					// Found the matching file, return its JSON representation
+					// Operations in this thread are done / complete
+					checkFileOneDriveApiInstance.shutdown();
+					// Free object and memory
+					object.destroy(checkFileOneDriveApiInstance);
+					// Return child
+                    return child;
+                }
+            }
+			
+			// If a collection exceeds the default page size (200 items), the @odata.nextLink property is returned in the response 
+			// to indicate more items are available and provide the request URL for the next page of items.
+			if ("@odata.nextLink" in thisLevelChildren) {
+				// Update nextLink to next changeSet bundle
+				addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
+				nextLink = thisLevelChildren["@odata.nextLink"].str;
+			} else break;
+		}
+		
+		// Operations in this thread are done / complete
+		checkFileOneDriveApiInstance.shutdown();
+		// Free object and memory
+		object.destroy(checkFileOneDriveApiInstance);
+		// return an empty JSON item
+		return onedriveJSONItem;
+	}
+	
+	// Update 'onlineDriveDetails' with the latest data about this drive
+	void updateDriveDetailsCache(string driveId, bool quotaRestricted, bool quotaAvailable, ulong localFileSize) {
+	
+		// As each thread is running differently, what is the current 'quotaRemaining' for 'driveId' ?
+		ulong quotaRemaining;
+		driveDetailsCache cachedOnlineDriveData;
+		cachedOnlineDriveData = getDriveDetails(driveId);
+		quotaRemaining = cachedOnlineDriveData.quotaRemaining;
+		
+		// Update 'quotaRemaining'
+		quotaRemaining = quotaRemaining - localFileSize;
+		
+		// Do the flags get updated?
+		if (quotaRemaining <= 0) {
+			if (appConfig.accountType == "personal"){
+				// zero space available
+				addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional space.");
+				quotaRemaining = 0;
+				quotaAvailable = false;
+			} else {
+				// zero space available is being reported, maybe being restricted?
+				addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);
+				quotaRemaining = 0;
+				quotaRestricted = true;
+			}
+		}
+		
+		// Updated the details
+		onlineDriveDetails[driveId] = driveDetailsCache(driveId, quotaRestricted, quotaAvailable, quotaRemaining);
+	}
+	
+	// Update all of the known cached driveId quota details
+	void freshenCachedDriveQuotaDetails() {
+		foreach (driveId; onlineDriveDetails.keys) {
+			// Update this driveid quota details
+			addLogEntry("Freshen Quota Details: " ~ driveId, ["debug"]);
+			addOrUpdateOneDriveOnlineDetails(driveId);
+		}
+	}
+	
+	// Create a 'root' DB Tie Record for a Shared Folder from the JSON data
+	void createDatabaseRootTieRecordForOnlineSharedFolder(JSONValue onedriveJSONItem) {
+		// Creating|Updating a DB Tie
+		addLogEntry("Creating|Updating a 'root' DB Tie Record for this Shared Folder: " ~ onedriveJSONItem["name"].str, ["debug"]);
+		addLogEntry("Raw JSON for 'root' DB Tie Record: " ~ to!string(onedriveJSONItem), ["debug"]);
+		
+		// New DB Tie Item to detail the 'root' of the Shared Folder
+		Item tieDBItem;
+		tieDBItem.name = "root";
+		
+		// Get the right parentReference details
+		if (isItemRemote(onedriveJSONItem)) {
+			tieDBItem.driveId = onedriveJSONItem["remoteItem"]["parentReference"]["driveId"].str;
+			tieDBItem.id = onedriveJSONItem["remoteItem"]["id"].str;
+		} else {
+			if (onedriveJSONItem["name"].str != "root") {
+				tieDBItem.driveId = onedriveJSONItem["parentReference"]["driveId"].str;
+				tieDBItem.id = onedriveJSONItem["parentReference"]["id"].str;
+			} else {
+				tieDBItem.driveId = onedriveJSONItem["parentReference"]["driveId"].str;
+				tieDBItem.id = onedriveJSONItem["id"].str;
+			}
+		}
+		
+		tieDBItem.type = ItemType.dir;
+		tieDBItem.mtime = SysTime.fromISOExtString(onedriveJSONItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+		tieDBItem.parentId = null;
+		
+		// Add this DB Tie parent record to the local database
+		addLogEntry("Creating|Updating into local database a 'root' DB Tie record: " ~ to!string(tieDBItem), ["debug"]);
+		itemDB.upsert(tieDBItem);
+	}
+	
+	// Create a DB Tie Record for a Shared Folder 
+	void createDatabaseTieRecordForOnlineSharedFolder(Item parentItem) {
+		// Creating|Updating a DB Tie
+		addLogEntry("Creating|Updating a DB Tie Record for this Shared Folder: " ~ parentItem.name, ["debug"]);
+		addLogEntry("Parent Item Record: " ~ to!string(parentItem), ["debug"]);
+		
+		// New DB Tie Item to bind the 'remote' path to our parent path
+		Item tieDBItem;
+		tieDBItem.name = parentItem.name;
+		tieDBItem.driveId = parentItem.remoteDriveId;
+		tieDBItem.id = parentItem.remoteId;
+		tieDBItem.type = ItemType.dir;
+		tieDBItem.mtime = parentItem.mtime;
+		
+		// What account type is this as this determines what 'tieDBItem.parentId' should be set to
+		// There is a difference in the JSON responses between 'personal' and 'business' account types for Shared Folders
+		// Essentially an API inconsistency
+		if (appConfig.accountType == "personal") {
+			// Set tieDBItem.parentId to null
+			tieDBItem.parentId = null;
+		} else {
+			// The tieDBItem.parentId needs to be the correct driveId id reference
+			// Query the DB 
+			Item[] rootDriveItems;
+			Item dbRecord;
+			rootDriveItems = itemDB.selectByDriveId(parentItem.remoteDriveId);
+			dbRecord = rootDriveItems[0];
+			tieDBItem.parentId = dbRecord.id;
+		}
+		
+		// Add tie DB record to the local database
+		addLogEntry("Creating|Updating into local database a DB Tie record: " ~ to!string(tieDBItem), ["debug"]);
+		itemDB.upsert(tieDBItem);
 	}
 }

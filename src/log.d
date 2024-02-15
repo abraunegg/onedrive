@@ -7,6 +7,7 @@ import std.file;
 import std.datetime;
 import std.concurrency;
 import std.typecons;
+import core.sync.condition;
 import core.sync.mutex;
 import core.thread;
 import std.format;
@@ -24,20 +25,22 @@ shared MonoTime lastInsertedTime;
 
 class LogBuffer {
     private:
-        string[3][] buffer;
-        Mutex bufferLock;
-        string logFilePath;
-        bool writeToFile;
-        bool verboseLogging;
-        bool debugLogging;
-        Thread flushThread;
-        bool isRunning;
+		string[3][] buffer;
+		Mutex bufferLock;
+		Condition condReady;
+		string logFilePath;
+		bool writeToFile;
+		bool verboseLogging;
+		bool debugLogging;
+		Thread flushThread;
+		bool isRunning;
 		bool sendGUINotification;
 
     public:
         this(bool verboseLogging, bool debugLogging) {
 			// Initialise the mutex
             bufferLock = new Mutex();
+			condReady = new Condition(bufferLock);
 			// Initialise other items
             this.logFilePath = logFilePath;
             this.writeToFile = writeToFile;
@@ -50,11 +53,14 @@ class LogBuffer {
 			flushThread.start();
         }
 
-        ~this() {
-            isRunning = false;
+		void shutdown() {
+			synchronized(bufferLock) {
+				isRunning = false;
+				condReady.notify();
+			}
             flushThread.join();
             flush();
-        }
+		}
 
         shared void logThisMessage(string message, string[] levels = ["info"]) {
 			// Generate the timestamp for this log entry
@@ -86,6 +92,7 @@ class LogBuffer {
 						}
                     }
                 }
+				(cast()condReady).notify();
             }
         }
 		
@@ -99,14 +106,17 @@ class LogBuffer {
 
         private void flushBuffer() {
             while (isRunning) {
-                Thread.sleep(dur!("msecs")(200));
                 flush();
             }
+			stdout.flush();
         }
 		
 		private void flush() {
             string[3][] messages;
             synchronized(bufferLock) {
+				while (buffer.empty && isRunning) {
+					condReady.wait();
+				}
                 messages = buffer;
                 buffer.length = 0;
             }
@@ -149,10 +159,15 @@ void addLogEntry(string message = "", string[] levels = ["info"]) {
 	logBuffer.logThisMessage(message, levels);
 }
 
-void addProcessingLogHeaderEntry(string message = "") {
-	addLogEntry(message, ["logFileOnly"]);					
-	// Use the dots to show the application is 'doing something'
-	addLogEntry(message ~ " .", ["consoleOnlyNoNewLine"]);
+void addProcessingLogHeaderEntry(string message, long verbosityCount) {
+	if (verbosityCount == 0) {
+		addLogEntry(message, ["logFileOnly"]);					
+		// Use the dots to show the application is 'doing something' if verbosityCount == 0
+		addLogEntry(message ~ " .", ["consoleOnlyNoNewLine"]);
+	} else {
+		// Fallback to normal logging if in verbose or above level
+		addLogEntry(message);
+	}
 }
 
 void addProcessingDotEntry() {

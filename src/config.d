@@ -123,13 +123,13 @@ class ApplicationConfig {
 	
 	bool apiWasInitialised = false;
 	bool syncEngineWasInitialised = false;
+	
+	// Important Account Details
 	string accountType;
 	string defaultDriveId;
 	string defaultRootId;
-	ulong remainingFreeSpace = 0;
-	bool quotaAvailable = true;
-	bool quotaRestricted = false;
-	
+		
+	// Sync Operations
 	bool fullScanTrueUpRequired = false;
 	bool surpressLoggingOutput = false;
 	

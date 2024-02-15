@@ -633,12 +633,17 @@ int main(string[] cliArgs) {
 		string localPath = ".";
 		string remotePath = "/";
 		
-		// Check if there are interrupted upload session(s)
-		if (syncEngineInstance.checkForInterruptedSessionUploads) {
-			// Need to re-process the session upload files to resume the failed session uploads
-			addLogEntry("There are interrupted session uploads that need to be resumed ...");
-			// Process the session upload files
-			syncEngineInstance.processForInterruptedSessionUploads();
+		if (!appConfig.getValueBool("resync")) {
+			// Check if there are interrupted upload session(s)
+			if (syncEngineInstance.checkForInterruptedSessionUploads) {
+				// Need to re-process the session upload files to resume the failed session uploads
+				addLogEntry("There are interrupted session uploads that need to be resumed ...");
+				// Process the session upload files
+				syncEngineInstance.processForInterruptedSessionUploads();
+			}
+		} else {
+			// Clean up any upload session files due to --resync being used
+			syncEngineInstance.clearInterruptedSessionUploads();
 		}
 		
 		// Are we doing a single directory operation (--single-directory) ?
@@ -726,7 +731,6 @@ int main(string[] cliArgs) {
 			}
 			
 			// Configure the monitor class
-			Tid workerTid;
 			filesystemMonitor = new Monitor(appConfig, selectiveSync);
 			
 			// Delegated function for when inotify detects a new local directory has been created
@@ -747,16 +751,11 @@ int main(string[] cliArgs) {
 			};
 			
 			// Delegated function for when inotify detects a local file has been changed
-			filesystemMonitor.onFileChanged = delegate(string path) {
+			filesystemMonitor.onFileChanged = delegate(string[] changedLocalFilesToUploadToOneDrive) {
 				// Handle a potentially locally changed file
 				// Logging for this event moved to handleLocalFileTrigger() due to threading and false triggers from scanLocalFilesystemPathForNewData() above
-				try {
-					syncEngineInstance.handleLocalFileTrigger(path);
-				} catch (CurlException e) {
-					addLogEntry("Offline, cannot upload changed item: " ~ path, ["verbose"]);
-				} catch(Exception e) {
-					addLogEntry("Cannot upload file changes/creation: " ~ e.msg, ["info", "notify"]);
-				}
+				addLogEntry("[M] Total number of local file changed: " ~ to!string(changedLocalFilesToUploadToOneDrive.length));
+				syncEngineInstance.handleLocalFileTrigger(changedLocalFilesToUploadToOneDrive);
 			};
 			
 			// Delegated function for when inotify detects a delete event
@@ -807,7 +806,6 @@ int main(string[] cliArgs) {
 				try {
 					addLogEntry("Initialising filesystem inotify monitoring ...");
 					filesystemMonitor.initialise();
-					workerTid = filesystemMonitor.watch();
 					addLogEntry("Performing initial syncronisation to ensure consistent local state ...");
 				} catch (MonitorException e) {	
 					// monitor class initialisation failed
@@ -940,6 +938,9 @@ int main(string[] cliArgs) {
 						// Attempt to reset syncFailures
 						syncEngineInstance.resetSyncFailures();
 						
+						// Update cached quota details from online as this may have changed online in the background outside of this application
+						syncEngineInstance.freshenCachedDriveQuotaDetails();
+						
 						// Did the user specify --upload-only?
 						if (appConfig.getValueBool("upload_only")) {
 							// Perform the --upload-only sync process
@@ -1005,9 +1006,7 @@ int main(string[] cliArgs) {
 						if(filesystemMonitor.initialised) {
 							// If local monitor is on
 							// start the worker and wait for event
-							if(!filesystemMonitor.isWorking()) {
-								workerTid.send(1);
-							}
+							filesystemMonitor.send(true);
 						}
 
 						if(webhookEnabled) {
@@ -1147,11 +1146,12 @@ void performStandardExitProcess(string scopeCaller = null) {
 		selectiveSync = null;
 		syncEngineInstance = null;
 	} else {
+		addLogEntry("Waiting for all internal threads to complete before exiting application", ["verbose"]);
+		thread_joinAll();
 		addLogEntry("Application exit", ["debug"]);
 		addLogEntry("#######################################################################################################################################", ["logFileOnly"]);
-		// Sleep to allow any final logging output to be printed - this is needed as we are using buffered logging output
-		Thread.sleep(dur!("msecs")(500));
 		// Destroy the shared logging buffer
+		(cast() logBuffer).shutdown();
 		object.destroy(logBuffer);
 	}
 }

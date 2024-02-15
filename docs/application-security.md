@@ -63,6 +63,18 @@ When these delegated API permissions are combined, these provide the effective a
 
 These 'default' permissions will allow the OneDrive Client for Linux to read, write and delete data associated with your OneDrive Account.
 
+## How are the Authentication Scopes used?
+
+When using the OneDrive Client for Linux, the above authentication scopes will be presented to the Microsoft Authentication Service (login.microsoftonline.com), where the service will validate the request and provide an applicable token to access Microsoft OneDrive with. This can be illustrated as the following:
+
+![Linux Authentication to Microsoft OneDrive](./puml/onedrive_linux_authentication.png)
+
+This is similar to the Microsoft Windows OneDrive Client:
+
+![Linux Authentication to Microsoft OneDrive](./puml/onedrive_windows_authentication.png)
+
+In a business environment, where IT Staff need to 'approve' the OneDrive Client for Linux, can do so knowing that the client is safe to use. The only concernt that the IT Staff should have is how is the client device, where the OneDrive Client for Linux is running, is being secured, as in a corporate setting, Windows would be controlled by Active Directory and applicable Group Policy Objects (GPO's) to ensure the security of corporate data on the client device. It is out of scope for this client to handle how Linux devices are being secure.
+
 ## Configuring read-only access to your OneDrive data
 In some situations, it may be desirable to configure the OneDrive Client for Linux totally in read-only operation.
 
