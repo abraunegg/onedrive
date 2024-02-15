@@ -3984,7 +3984,7 @@ class SyncEngine {
 		// Are there any items to download post fetching the /delta data?
 		if (!newLocalFilesToUploadToOneDrive.empty) {
 			// There are elements to upload
-			addProcessingLogHeaderEntry("New items to upload to OneDrive: " ~ to!string(newLocalFilesToUploadToOneDrive.length), appConfig.verbosityCount);
+			addLogEntry("New items to upload to OneDrive: " ~ to!string(newLocalFilesToUploadToOneDrive.length));
 			
 			// Reset totalDataToUpload
 			totalDataToUpload = 0;
@@ -4715,28 +4715,16 @@ class SyncEngine {
 	
 	// Upload new file items as identified
 	void uploadNewLocalFileItems() {
-		// Lets deal with the new local items in a batch process
-		ulong batchSize = appConfig.getValueLong("threads");
-		ulong batchCount = (newLocalFilesToUploadToOneDrive.length + batchSize - 1) / batchSize;
-		ulong batchesProcessed = 0;
-		
-		foreach (chunk; newLocalFilesToUploadToOneDrive.chunks(batchSize)) {
-			uploadNewLocalFileItemsInParallel(chunk);
-		}
-		if (appConfig.verbosityCount == 0)
-			addLogEntry("\n", ["consoleOnlyNoNewLine"]);
-	}
-	
-	// Upload the file batches in parallel
-	void uploadNewLocalFileItemsInParallel(string[] array) {
-		foreach (i, fileToUpload; taskPool.parallel(array)) {
-			// Add a processing '.'
-			if (appConfig.verbosityCount == 0)
-				addProcessingDotEntry();
+		Progress progress = progressManager.createProgress(Progress.Type.sync, "Upload new local file");
+		progress.add(newLocalFilesToUploadToOneDrive.length);
+
+		foreach (i, fileToUpload; taskPool.parallel(newLocalFilesToUploadToOneDrive)) {
 			addLogEntry("Upload Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);
 			uploadNewFile(fileToUpload);
 			addLogEntry("Upload Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);
+			progress.next(1);
 		}
+		progress.done();
 	}
 	
 	// Upload a new file to OneDrive
