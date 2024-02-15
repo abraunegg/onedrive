@@ -12,6 +12,10 @@ import core.sync.mutex;
 import core.thread;
 import std.format;
 import std.string;
+import std.process;
+import std.conv;
+
+import progress;
 
 version(Notifications) {
 	import dnotify;
@@ -26,6 +30,7 @@ shared MonoTime lastInsertedTime;
 class LogBuffer {
     private:
 		string[3][] buffer;
+		bool progressUpdated;
 		Mutex bufferLock;
 		Condition condReady;
 		string logFilePath;
@@ -37,10 +42,12 @@ class LogBuffer {
 		bool sendGUINotification;
 
     public:
+		int terminalCols;
         this(bool verboseLogging, bool debugLogging) {
 			// Initialise the mutex
             bufferLock = new Mutex();
 			condReady = new Condition(bufferLock);
+			progressUpdated = false;
 			// Initialise other items
             this.logFilePath = logFilePath;
             this.writeToFile = writeToFile;
@@ -48,6 +55,7 @@ class LogBuffer {
             this.debugLogging = debugLogging;
             this.isRunning = true;
 			this.sendGUINotification = true;
+			this.terminalCols = 120;
             this.flushThread = new Thread(&flushBuffer);
 			flushThread.isDaemon(true);
 			flushThread.start();
@@ -95,6 +103,13 @@ class LogBuffer {
 				(cast()condReady).notify();
             }
         }
+
+		void wakeUpFlushJob() {
+			synchronized (bufferLock) {
+				progressUpdated = true;
+			}
+			(cast()condReady).notify();
+		}
 		
 		shared void notify(string message) {
             // Use dnotify's functionality for GUI notifications, if GUI notifications is enabled
@@ -103,6 +118,10 @@ class LogBuffer {
 				n.show();
 			}
         }
+
+		shared void setTerminalCols(int cols) {
+			this.terminalCols = cols;
+		}
 
         private void flushBuffer() {
             while (isRunning) {
@@ -114,11 +133,15 @@ class LogBuffer {
 		private void flush() {
             string[3][] messages;
             synchronized(bufferLock) {
-				while (buffer.empty && isRunning) {
-					condReady.wait();
+				if (buffer.empty && !progressUpdated && isRunning) {
+					if (progressManager.isEmpty())
+						condReady.wait();
+					else
+						condReady.wait(1.seconds);
 				}
                 messages = buffer;
                 buffer.length = 0;
+				progressUpdated = false;
             }
 
             foreach (msg; messages) {
@@ -132,7 +155,8 @@ class LogBuffer {
 						write(msg[2]);
 					} else {
 						// write this to the console with a new line
-						writeln(msg[2]);
+						write(msg[2]);
+						progressManager.closeAndClearLine();
 					}
 				}
                 
@@ -145,12 +169,23 @@ class LogBuffer {
 					}
 				}
             }
+
+			// Dump progress information
+			progressManager.dump();
         }
 }
 
 // Function to initialize the logging system
 void initialiseLogging(bool verboseLogging = false, bool debugLogging = false) {
     logBuffer = cast(shared) new LogBuffer(verboseLogging, debugLogging);
+	try {
+		auto askCols = execute(["tput", "cols"]);
+		if (askCols.status == 0) 
+			logBuffer.setTerminalCols(parse!int(askCols.output));
+	} catch (Exception e) { 
+		// pass 
+	}
+
 	lastInsertedTime = MonoTime.currTime();
 }
 

@@ -68,6 +68,7 @@ endif
 SOURCES = \
 	src/main.d \
 	src/config.d \
+	src/progress.d \
 	src/log.d \
 	src/util.d \
 	src/qxor.d \
