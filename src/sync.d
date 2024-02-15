@@ -3453,25 +3453,17 @@ class SyncEngine {
 	
 	// Process the list of local changes to upload to OneDrive
 	void processChangedLocalItemsToUpload() {
-		
-		// Each element in this array 'databaseItemsWhereContentHasChanged' is an Database Item ID that has been modified locally
-		ulong batchSize = appConfig.getValueLong("threads");
-		ulong batchCount = (databaseItemsWhereContentHasChanged.length + batchSize - 1) / batchSize;
-		ulong batchesProcessed = 0;
-		
-		// For each batch of files to upload, upload the changed data to OneDrive
-		foreach (chunk; databaseItemsWhereContentHasChanged.chunks(batchSize)) {
-			processChangedLocalItemsToUploadInParallel(chunk);
-		}
-	}
+		Progress progress = progressManager.createProgress(Progress.Type.sync, "Upload changed local file");
+		progress.add(databaseItemsWhereContentHasChanged.length);
 
-	// Upload the changed file batches in parallel
-	void processChangedLocalItemsToUploadInParallel(string[3][] array) {
-		foreach (i, localItemDetails; taskPool.parallel(array)) {
+		foreach (i, localItemDetails; taskPool.parallel(databaseItemsWhereContentHasChanged)) {
 			addLogEntry("Upload Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);
 			uploadChangedLocalFileToOneDrive(localItemDetails);
 			addLogEntry("Upload Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);
+			progress.next(1);
 		}
+		
+		progress.done();
 	}
 	
 	// Upload changed local files to OneDrive in parallel
