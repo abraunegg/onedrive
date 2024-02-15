@@ -849,9 +849,6 @@ int main(string[] cliArgs) {
 						addLogEntry("ERROR: The following inotify error was generated: " ~ e.msg);
 					}
 				}
-			
-				// Webhook Notification reset to false for this loop
-				notificationReceived = false;
 				
 				// Check for notifications pushed from Microsoft to the webhook
 				if (webhookEnabled) {
@@ -1004,9 +1001,10 @@ int main(string[] cliArgs) {
 
 					if(filesystemMonitor.initialised || webhookEnabled) {
 						if(filesystemMonitor.initialised) {
-							// If local monitor is on
+							// If local monitor is on and is waiting (previous event was not from webhook)
 							// start the worker and wait for event
-							filesystemMonitor.send(true);
+							if (!notificationReceived)
+								filesystemMonitor.send(true);
 						}
 
 						if(webhookEnabled) {
@@ -1017,6 +1015,7 @@ int main(string[] cliArgs) {
 								sleepTime = nextWebhookCheckDuration;
 								addLogEntry("Update sleeping time to " ~ to!string(sleepTime), ["debug"]);
 							}
+							// Webhook Notification reset to false for this loop
 							notificationReceived = false;
 						}
 
@@ -1042,17 +1041,17 @@ int main(string[] cliArgs) {
 						// do not contain any actual changes, and we will always rely do the
 						// delta endpoint to sync to latest. Therefore, only one sync run is
 						// good enough to catch up for multiple notifications.
-						int signalCount = notificationReceived ? 1 : 0;
-						for (;; signalCount++) {
-							signalExists = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
-							if (signalExists) {
-								notificationReceived = true;
-							} else {
-								if (notificationReceived) {
+						if (notificationReceived) {
+							int signalCount = 1;
+							while (true) {
+								signalExists = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
+								if (signalExists) {
+									signalCount++;
+								} else {
 									addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signals from the webhook");
 									oneDriveWebhookCallback();
+									break;
 								}
-								break;
 							}
 						}
 
