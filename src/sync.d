@@ -738,15 +738,13 @@ class SyncEngine {
 				currentDeltaLink = null;
 			}
 			
-			// Dynamic output for non-verbose and verbose run so that the user knows something is being retreived from the OneDrive API
-			if (appConfig.verbosityCount == 0) {
-				if (!appConfig.surpressLoggingOutput) {
-					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ driveIdToQuery, appConfig.verbosityCount);
-				}
-			} else {
-				addLogEntry("Fetching /delta response from the OneDrive API for Drive ID: " ~  driveIdToQuery, ["verbose"]);
+			if (appConfig.verbosityCount != 0 || !appConfig.surpressLoggingOutput) {
+				addLogEntry("Fetching /delta response from the OneDrive API for Drive ID: " ~  driveIdToQuery);
 			}
-							
+			
+			// Progress
+			Progress progress = progressManager.createProgress(Progress.Type.sync, "Fetching /delta response");
+
 			// Create a new API Instance for querying /delta and initialise it
 			// Reuse the socket to speed up
 			bool keepAlive = true;
@@ -772,14 +770,8 @@ class SyncEngine {
 				ulong nrChanges = count(deltaChanges["value"].array);
 				int changeCount = 0;
 				
-				if (appConfig.verbosityCount == 0) {
-					// Dynamic output for a non-verbose run so that the user knows something is happening
-					if (!appConfig.surpressLoggingOutput) {
-						addProcessingDotEntry();
-					}
-				} else {
-					addLogEntry("Processing API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["verbose"]);
-				}
+				progress.next(1);
+				addLogEntry("Processing API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["verbose"]);
 				
 				jsonItemsReceived = jsonItemsReceived + nrChanges;
 				
@@ -825,14 +817,8 @@ class SyncEngine {
 			object.destroy(getDeltaQueryOneDriveApiInstance);
 			
 			// Log that we have finished querying the /delta API
-			if (appConfig.verbosityCount == 0) {
-				if (!appConfig.surpressLoggingOutput) {
-					// Close out the '....' being printed to the console
-					addLogEntry("\n", ["consoleOnlyNoNewLine"]);
-				}
-			} else {
-				addLogEntry("Finished processing /delta JSON response from the OneDrive API", ["verbose"]);
-			}
+			addLogEntry("Finished processing /delta JSON response from the OneDrive API", ["verbose"]);
+			progress.done();
 			
 			// If this was set, now unset it, as this will have been completed, so that for a true up, we dont do a double full scan
 			if (appConfig.fullScanTrueUpRequired) {
@@ -911,9 +897,13 @@ class SyncEngine {
 			ulong batchCount = (jsonItemsToProcess.length + batchSize - 1) / batchSize;
 			ulong batchesProcessed = 0;
 			
+			Progress progress = progressManager.createProgress(Progress.Type.sync, "Processing /delta changes");
+			progress.add(jsonItemsToProcess.length);
+
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (!appConfig.surpressLoggingOutput) {
-				addProcessingLogHeaderEntry("Processing " ~ to!string(jsonItemsToProcess.length) ~ " applicable changes and items received from Microsoft OneDrive", appConfig.verbosityCount);
+				// Logfile entry
+				addLogEntry("Processing " ~ to!string(jsonItemsToProcess.length) ~ " applicable changes and items received from Microsoft OneDrive");
 			}
 			
 			// For each batch, process the JSON items that need to be now processed.
@@ -922,29 +912,17 @@ class SyncEngine {
 				// Chunk the total items to process into 500 lot items
 				batchesProcessed++;
 				
-				if (appConfig.verbosityCount == 0) {
-					// Dynamic output for a non-verbose run so that the user knows something is happening
-					if (!appConfig.surpressLoggingOutput) {
-						addProcessingDotEntry();
-					}
-				} else {
-					addLogEntry("Processing OneDrive JSON item batch [" ~ to!string(batchesProcessed) ~ "/" ~ to!string(batchCount) ~ "] to ensure consistent local state", ["verbose"]);
-				}	
+				addLogEntry("Processing OneDrive JSON item batch [" ~ to!string(batchesProcessed) ~ "/" ~ to!string(batchCount) ~ "] to ensure consistent local state", ["verbose"]);	
 					
 				// Process the batch
-				processJSONItemsInBatch(batchOfJSONItems, batchesProcessed, batchCount);
+				processJSONItemsInBatch(batchOfJSONItems, batchesProcessed, batchCount, progress);
 				
 				// To finish off the JSON processing items, this is needed to reflect this in the log
 				addLogEntry("------------------------------------------------------------------", ["debug"]);
 			}
 			
-			if (appConfig.verbosityCount == 0) {
-				// close off '.' output
-				if (!appConfig.surpressLoggingOutput) {
-					addLogEntry("\n", ["consoleOnlyNoNewLine"]);
-				}
-			}
-			
+			progress.done();
+
 			// Debug output - what was processed
 			addLogEntry("Number of JSON items to process is: " ~ to!string(jsonItemsToProcess.length), ["debug"]);
 			addLogEntry("Number of JSON items processed was: " ~ to!string(processedCount), ["debug"]);
@@ -1139,13 +1117,14 @@ class SyncEngine {
 	}
 	
 	// Process each of the elements contained in jsonItemsToProcess[]
-	void processJSONItemsInBatch(JSONValue[] array, ulong batchGroup, ulong batchCount) {
+	void processJSONItemsInBatch(JSONValue[] array, ulong batchGroup, ulong batchCount, Progress progress) {
 	
 		ulong batchElementCount = array.length;
 
 		foreach (i, onedriveJSONItem; array.enumerate) {
 			// Use the JSON elements rather can computing a DB struct via makeItem()
 			ulong elementCount = i +1;
+			progress.next(1);
 			
 			// To show this is the processing for this particular item, start off with this breaker line
 			addLogEntry("------------------------------------------------------------------", ["debug"]);
