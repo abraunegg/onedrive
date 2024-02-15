@@ -1931,23 +1931,16 @@ class SyncEngine {
 	// Download new file items as identified
 	void downloadOneDriveItems() {
 		// Lets deal with all the JSON items that need to be downloaded in a batch process
-		ulong batchSize = appConfig.getValueLong("threads");
-		ulong batchCount = (fileJSONItemsToDownload.length + batchSize - 1) / batchSize;
-		ulong batchesProcessed = 0;
+		Progress progress = progressManager.createProgress(Progress.Type.sync, "Downloading drive items");
+		progress.add(fileJSONItemsToDownload.length);
 		
-		foreach (chunk; fileJSONItemsToDownload.chunks(batchSize)) {
-			// send an array containing 'appConfig.getValueLong("threads")' JSON items to download
-			downloadOneDriveItemsInParallel(chunk);
-		}
-	}
-	
-	// Download items in parallel
-	void downloadOneDriveItemsInParallel(JSONValue[] array) {
-		// This function recieved an array of 16 JSON items to download
-		foreach (i, onedriveJSONItem; taskPool.parallel(array)) {
+		foreach (i, onedriveJSONItem; taskPool.parallel(fileJSONItemsToDownload)) {
 			// Take each JSON item and 
 			downloadFileItem(onedriveJSONItem);
+			progress.next(1);
 		}
+
+		progress.done();
 	}
 	
 	// Perform the actual download of an object from OneDrive
