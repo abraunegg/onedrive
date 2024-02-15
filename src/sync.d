@@ -4236,6 +4236,9 @@ class SyncEngine {
 	void handleLocalFileTrigger(string[] changedLocalFilesToUploadToOneDrive) {
 		// Is this path a new file or an existing one?
 		// Normally we would use pathFoundInDatabase() to calculate, but we need 'databaseItem' as well if the item is in the database
+		Progress progress = progressManager.createProgress(Progress.Type.sync, "Upload changed local file");
+		progress.add(changedLocalFilesToUploadToOneDrive.length);
+
 		foreach (localFilePath; changedLocalFilesToUploadToOneDrive) {
 			try {
 				Item databaseItem;
@@ -4267,7 +4270,9 @@ class SyncEngine {
 			} catch(Exception e) {
 				addLogEntry("Cannot upload file changes/creation: " ~ e.msg, ["info", "notify"]);
 			}
+			progress.next(1);
 		}
+		progress.done();
 		processNewLocalItemsToUpload();
 	}
 	
