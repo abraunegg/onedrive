@@ -655,6 +655,19 @@ final class ItemDatabase {
 		return items;
 	}
 	
+	// Select number of items associated with the provided driveId
+	ulong selectCountByDriveId(const(char)[] driveId) {
+		assert(driveId);
+		Item[] items;
+		auto stmt = db.prepare("SELECT COUNT(*) FROM item WHERE driveId = ?1");
+		stmt.bind(1, driveId);
+		auto res = stmt.exec();
+		if (!res.empty) {
+			return parse!ulong(res.front[0]);
+		}
+		return 0;
+	}
+	
 	// Select all items associated with the provided driveId
 	Item[] selectAllItemsByDriveId(const(char)[] driveId) {
 		assert(driveId);

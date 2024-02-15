@@ -33,6 +33,7 @@ import util;
 import onedrive;
 import itemdb;
 import clientSideFiltering;
+import progress;
 
 class jsonResponseException: Exception {
 	@safe pure this(string inputMessage) {
@@ -2694,7 +2695,7 @@ class SyncEngine {
 		
 		// Log what we are doing
 		if (!appConfig.surpressLoggingOutput) {
-			addProcessingLogHeaderEntry("Performing a database consistency and integrity check on locally stored data", appConfig.verbosityCount);
+			addLogEntry("Performing a database consistency and integrity check on locally stored data");
 		}
 		
 		// What driveIDsArray do we use? If we are doing a --single-directory we need to use just the drive id associated with that operation
@@ -2712,6 +2713,10 @@ class SyncEngine {
 		foreach (driveId; consistencyCheckDriveIdsArray) {
 			// Make the logging more accurate - we cant update driveId as this then breaks the below queries
 			addLogEntry("Processing DB entries for this Drive ID: " ~ driveId, ["verbose"]);
+
+			// Progress
+			Progress progress = progressManager.createProgress(Progress.Type.sync, "DB consistency check");
+			progress.add(itemDB.selectCountByDriveId(driveId));
 			
 			// Freshen the cached quota details for this driveID
 			addOrUpdateOneDriveOnlineDetails(driveId);
@@ -2769,7 +2774,7 @@ class SyncEngine {
 				// Process each database database item associated with the driveId
 				foreach(dbItem; driveItems) {
 					// Does it still exist on disk in the location the DB thinks it is
-					checkDatabaseItemForConsistency(dbItem);
+					checkDatabaseItemForConsistency(dbItem, progress);
 				}
 			} else {
 				// Check everything associated with each driveId we know about
@@ -2782,15 +2787,10 @@ class SyncEngine {
 				// Process each database database item associated with the driveId
 				foreach(dbItem; driveItems) {
 					// Does it still exist on disk in the location the DB thinks it is
-					checkDatabaseItemForConsistency(dbItem);
+					checkDatabaseItemForConsistency(dbItem, progress);
 				}
 			}
-		}
-
-		// Close out the '....' being printed to the console
-		if (!appConfig.surpressLoggingOutput) {
-			if (appConfig.verbosityCount == 0)
-				addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+			progress.done();
 		}
 		
 		// Are we doing a --download-only sync?
@@ -2807,7 +2807,7 @@ class SyncEngine {
 	}
 	
 	// Check this Database Item for its consistency on disk
-	void checkDatabaseItemForConsistency(Item dbItem) {
+	void checkDatabaseItemForConsistency(Item dbItem, Progress progress) {
 			
 		// What is the local path item
 		string localFilePath;
@@ -2829,11 +2829,6 @@ class SyncEngine {
 		
 		// Log what we are doing
 		addLogEntry("Processing " ~ logOutputPath, ["verbose"]);
-		// Add a processing '.'
-		if (!appConfig.surpressLoggingOutput) {
-			if (appConfig.verbosityCount == 0)
-				addProcessingDotEntry();
-		}
 		
 		// Determine which action to take
 		final switch (dbItem.type) {
@@ -2843,7 +2838,7 @@ class SyncEngine {
 			break;
 		case ItemType.dir:
 			// Logging output
-			checkDirectoryDatabaseItemForConsistency(dbItem, localFilePath);
+			checkDirectoryDatabaseItemForConsistency(dbItem, localFilePath, progress);
 			break;
 		case ItemType.remote:
 			// checkRemoteDirectoryDatabaseItemForConsistency(dbItem, localFilePath);
@@ -2852,6 +2847,7 @@ class SyncEngine {
 			// Unknown type - we dont action these items
 			break;
 		}
+		progress.next(1);
 	}
 	
 	// Perform the database consistency check on this file item
@@ -2963,7 +2959,7 @@ class SyncEngine {
 	}
 	
 	// Perform the database consistency check on this directory item
-	void checkDirectoryDatabaseItemForConsistency(Item dbItem, string localFilePath) {
+	void checkDirectoryDatabaseItemForConsistency(Item dbItem, string localFilePath, Progress progress) {
 			
 		// What is the source of this item data?
 		string itemSource = "database";
@@ -2984,7 +2980,7 @@ class SyncEngine {
 					if (!singleDirectoryScope) {
 						// loop through the children
 						foreach (Item child; itemDB.selectChildren(dbItem.driveId, dbItem.id)) {
-							checkDatabaseItemForConsistency(child);
+							checkDatabaseItemForConsistency(child, progress);
 						}
 					}
 				}
@@ -3030,7 +3026,7 @@ class SyncEngine {
 					if (!singleDirectoryScope) {
 						// loop through the children
 						foreach (Item child; itemDB.selectChildren(dbItem.driveId, dbItem.id)) {
-							checkDatabaseItemForConsistency(child);
+							checkDatabaseItemForConsistency(child, progress);
 						}
 					}
 				}
