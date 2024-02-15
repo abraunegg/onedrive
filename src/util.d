@@ -11,6 +11,7 @@ import std.net.curl;
 import std.datetime;
 import std.file;
 import std.path;
+import std.process;
 import std.regex;
 import std.socket;
 import std.stdio;
@@ -1105,6 +1106,17 @@ int calc_eta(size_t counter, size_t iterations, ulong start_time) {
 		// Return the average time per iteration for the last iteration
         return cast(int) ceil(avg_time_per_iteration); 
     }
+}
+
+ulong preview_localfile_count(string path) {
+	try {
+		auto askFSCount = executeShell("find -L " ~ path ~ " | wc -l");
+		if (askFSCount.status == 0) 
+			return parse!ulong(askFSCount.output);
+	} catch (Exception e) { 
+		// pass 
+	}
+	return 0;
 }
 
 void forceExit() {

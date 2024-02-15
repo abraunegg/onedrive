@@ -3971,24 +3971,23 @@ class SyncEngine {
 		if (isDir(path)) {
 			if (!appConfig.surpressLoggingOutput) {
 				if (!cleanupLocalFiles) {
-					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload", appConfig.verbosityCount);
+					addLogEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload");
 				} else {
-					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for data to cleanup", appConfig.verbosityCount);
+					addLogEntry("Scanning the local file system '" ~ logPath ~ "' for data to cleanup");
 				}
 			}
 		}
+
+		// Progress
+		Progress progress = progressManager.createProgress(Progress.Type.sync, "Filesystem Walk");
+		progress.add(preview_localfile_count(path));
 		
 		auto startTime = Clock.currTime();
 		addLogEntry("Starting Filesystem Walk:     " ~ to!string(startTime), ["debug"]);
 	
 		// Perform the filesystem walk of this path, building an array of new items to upload
-		scanPathForNewData(path);
-		if (isDir(path)) {
-			if (!appConfig.surpressLoggingOutput) {
-				if (appConfig.verbosityCount == 0)
-					addLogEntry("\n", ["consoleOnlyNoNewLine"]);
-			}
-		}
+		scanPathForNewData(path, progress);
+		progress.done();
 		
 		// To finish off the processing items, this is needed to reflect this in the log
 		addLogEntry("------------------------------------------------------------------", ["debug"]);
@@ -4050,15 +4049,9 @@ class SyncEngine {
 	}
 	
 	// Scan this path for new data
-	void scanPathForNewData(string path) {
-		// Add a processing '.'
-		if (isDir(path)) {
-			if (!appConfig.surpressLoggingOutput) {
-				if (appConfig.verbosityCount == 0)
-					addProcessingDotEntry();
-			}
-		}
-
+	void scanPathForNewData(string path, Progress progress) {
+		progress.next(1);
+		
 		ulong maxPathLength;
 		ulong pathWalkLength;
 		
@@ -4229,7 +4222,7 @@ class SyncEngine {
 							auto entries = dirEntries(path, SpanMode.shallow, false);
 							foreach (DirEntry entry; entries) {
 								string thisPath = entry.name;
-								scanPathForNewData(thisPath);
+								scanPathForNewData(thisPath, progress);
 							}
 						} catch (FileException e) {
 							// display the error message
