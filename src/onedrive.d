@@ -46,6 +46,11 @@ class OneDriveException: Exception {
 		string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(error, true));
 		super(msg, file, line);
 	}
+
+	this(ushort httpStatusCode, string reason, string file = __FILE__, size_t line = __LINE__) {
+		this.response = null;
+		super(msg, file, line, null);
+	}
 }
 
 class OneDriveError: Error {

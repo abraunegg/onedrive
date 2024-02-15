@@ -4577,11 +4577,11 @@ class SyncEngine {
 						onlinePathData = foundDirectoryJSONItem;
 					} else {
 						// No 'search item matches found' - raise a 404 so that the exception handling will take over to create the folder
-						throw new OneDriveException(404, "Name not found via search", null);
+						throw new OneDriveException(404, "Name not found via search");
 					}
 				} else {
 					// No 'search item matches found' - raise a 404 so that the exception handling will take over to create the folder
-					throw new OneDriveException(404, "Name not found via search", null);
+					throw new OneDriveException(404, "Name not found via search");
 				}
 			}
 		} catch (OneDriveException exception) {
