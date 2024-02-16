@@ -213,12 +213,12 @@ public:
         // Calculate ETA if total number of progress available
         // rate format: ETA XX:XX:XX
         // rate format: XXX items/sec
-        if (!completed && index > 0 && total > 0) {
+        if (!completed && index > 0) {
             Duration collectedTime = last_update_time - start_time;
-            float sec_per_item = 1.0 * collectedTime.total!"msecs" / index;
+            float msec_per_item = 1.0 * collectedTime.total!"msecs" / index;
             if (total > 0) {
                 // Calculate ETA if total number of progress available
-                long expected = to!long(sec_per_item * (total - index));
+                long expected = to!long(msec_per_item * (total - index));
                 long eta = expected + collectedTime.total!"msecs" - elapsed.total!"msecs";
                 if (eta < 0)
                     eta = 1000;
@@ -226,8 +226,8 @@ public:
                 rate = format("ETA %02d:%02d:%02d", h, m, s);
             } else {
                 // Calculate processing rate if total number of progress not available
-                float items_per_sec = 1.0 / sec_per_item;
-                rate = format("%02 items/sec", items_per_sec);
+                float items_per_sec = 1.0 / msec_per_item * 1000;
+                rate = format("%0.2f items/sec", items_per_sec);
             }
         }
 
