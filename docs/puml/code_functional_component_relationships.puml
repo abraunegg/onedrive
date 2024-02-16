@@ -1,4 +1,5 @@
 @startuml
+!define DATABASE_ENTITY(x) entity x
 component main {
 }
 component config {
@@ -23,6 +24,8 @@ component sqlite {
 }
 component qxor {
 }
+
+DATABASE_ENTITY("Database")
 
 main --> config
 main --> log
@@ -54,6 +57,7 @@ util --> qxor
 util --> curlEngine
 
 sqlite --> log
+sqlite -> "Database" : uses
 
 onedrive --> config
 onedrive --> log
