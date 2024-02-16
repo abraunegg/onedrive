@@ -1,5 +1,7 @@
 # OneDrive Client for Linux Client Architecture
-## How does the client work?
+
+## How does the client work (high level)?
+
 The diagram below outlines at a high level the operational workflow of the OneDrive Client for Linux, demonstrating how it interacts with the OneDrive API to maintain synchronisation, manage local and cloud data integrity, and ensure that user data is accurately mirrored between the local filesystem and OneDrive cloud storage.
 
 ![High Level Application Sequence](./puml/high_level_operational_process.png)
@@ -18,3 +20,25 @@ The above process involves several high level key stages:
 
 6. **Final Data True-Up:** Lastly, the client queries the /delta link for a final true-up, processing any further online JSON changes if required. This ensures that the local and OneDrive storages are fully synchronised.
 
+## What are the operational modes of the client?
+
+There are 2 main operational modes that the client can utilise:
+
+1. Standalone sync mode that performs a single sync action against Microsoft OneDrive. This method is used when you utilise `--sync`.
+2. Ongoing sync mode that continuously syncs your data with Microsoft OneDrive. This method is used when you utilise `--monitor`.
+
+By default, both modes consider all data stored online within Microsoft OneDrive as the 'source-of-truth' - that is, what is online, is the correct data (file version, file content, file timestamp, folder structure and so on). This consideration also matches how the Microsoft OneDrive Client for Windows operates.
+
+However, in standalone mode (`--sync`), you can *change* what reference the client will use as the 'source-of-truth' for your data by using the `--local-first` option so that the application will look at your local files *first* and consider your local files as your 'source-of-truth' to replicate that directory structure to Microsoft OneDrive.
+
+## File conflict handling - default operational modes
+
+
+## File conflict handling - local-first operational modes
+
+
+## Client Functional Component Architecture
+
+The diagram below shows the functional relationship of application code components, and how these relate to each relevant code module within this application:
+
+![Functional Code Components](./puml/code_functional_component_relationships.png)
