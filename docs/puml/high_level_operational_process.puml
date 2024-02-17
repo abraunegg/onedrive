@@ -1,5 +1,4 @@
 @startuml
-!theme plain
 
 participant "OneDrive Client\nfor Linux" as Client
 participant "Microsoft OneDrive\nAPI" as API
