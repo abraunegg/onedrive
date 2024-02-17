@@ -9,7 +9,7 @@ note right: Query Microsoft OneDrive /delta API
 :Receive JSON responses;
 
 :Process JSON Responses;
-partition "Process JSON Responses" {
+partition "Process /delta JSON Responses" {
     while (for each JSON response) is (yes)
         :Determine if JSON is 'root'\nor 'deleted' item;
         if ('root' or 'deleted') then (yes)
@@ -30,7 +30,6 @@ partition "Process JSON Responses" {
                 :Discard JSON;
             else (no)
                 :Process JSON (create dir/download file);
-                
                 if (Is the 'JSON' item in the local cache) then (yes)
                   :Process JSON as a potentially changed local item;
                   note left: Run 'applyPotentiallyChangedItem' function
@@ -38,25 +37,28 @@ partition "Process JSON Responses" {
                   :Process JSON as potentially new local item;
                   note right:  Run 'applyPotentiallyNewLocalItem' function
                 endif
-                
                 :Process objects in download queue;
+                :Download File;
+                note left: Download file from Microsoft OneDrive (Multi Threaded Download)
                 :Save in local database cache;
             endif
         endif
     endwhile
 }
 
-:Process local cache database\nto check local data integrity and for differences;
-if (difference found) then (yes)
-    :Upload file/folder change including deletion;
-    note right: Upload to Microsoft OneDrive
-    :Receive response with item metadata;
-    :Save response to local cache database;
-else (no)
-endif
+partition "Perform data integrity check based on local cache database" {
+  :Process local cache database\nto check local data integrity and for differences;
+  if (difference found) then (yes)
+      :Upload file/folder change including deletion;
+      note right: Upload local change to Microsoft OneDrive
+      :Receive response with item metadata;
+      :Save response to local cache database;
+  else (no)
+  endif
+}
 
-:Scan local filesystem\nfor new files/folders;
 partition "Local Filesystem Scanning" {
+  :Scan local filesystem\nfor new files/folders;
     while (for each new item) is (yes)
         :Check item against 'Client Side Filtering' rules;
         if (item passes filtering) then (yes)
@@ -70,9 +72,10 @@ partition "Local Filesystem Scanning" {
     endwhile
 }
 
-:Query /delta link for true-up;
-note right: Final Data True-Up
-:Process further online JSON changes if required;
-
+partition "Final True-Up" {
+  :Query /delta link for true-up;
+  note right: Final Data True-Up
+  :Process further online JSON changes if required;
+}
 stop
 @enduml

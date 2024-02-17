@@ -46,6 +46,9 @@ The diagrams below show the high level process flow and decision making when run
 ### Processing a potentially changed local item
 ![applyPotentiallyChangedItem](./puml/applyPotentiallyChangedItem.png)
 
+### Download a file
+![downloadFile](./puml/downloadFile.png)
+
 ### Determining if an 'item' is syncronised between Microsoft OneDrive and the local file system
 ![Item Sync Determination](./puml/is_item_in_sync.png)
 
@@ -93,7 +96,7 @@ Due to this factor, when using `--resync` the online source is always going to b
 
 ## Client Functional Component Architecture Relationships
 
-The diagram below shows the functional relationship of application code components, and how these relate to each relevant code module within this application:
+The diagram below shows the main functional relationship of application code components, and how these relate to each relevant code module within this application:
 
 ![Functional Code Components](./puml/code_functional_component_relationships.png)
 
