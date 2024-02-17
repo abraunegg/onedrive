@@ -33,11 +33,16 @@ However, in standalone mode (`--sync`), you can *change* what reference the clie
 
 **Critical Advisory:** Please be aware that if you designate a network mount point (such as NFS, Windows Network Share, or Samba Network Share) as your `sync_dir`, this setup inherently lacks 'inotify' support. Support for 'inotify' is essential for real-time tracking of file changes, which means that the client's 'Monitor Mode' cannot immediately detect changes in files located on these network shares. Instead, synchronisation between your local filesystem and Microsoft OneDrive will occur at intervals specified by the `monitor_interval` setting. This limitation regarding 'inotify' support on network mount points like NFS or Samba is beyond the control of this client.
 
+## Determining if an 'item' is syncronised between Microsoft OneDrive and the local file system
+
+The following activity diagram details the function within the application which determines wether an item is syncronised between Microsoft OneDrive and the local file system:
+
+![Item Sync Determination](./puml/is_item_in_sync.png)
 
 ## File conflict handling - default operational modes
 
 
-## File conflict handling - local-first operational modes
+## File conflict handling - local-first operational mode
 
 
 ## Client Functional Component Architecture
