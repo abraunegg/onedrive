@@ -1,0 +1,48 @@
+@startuml
+start
+partition "applyPotentiallyChangedItem" {
+  :Check if existing item path differs from changed item path;
+  if (itemWasMoved) then (yes)
+    :Log moving item;
+    if (destination exists) then (yes)
+      if (item in database) then (yes)
+        :Check if item is synced;
+        if (item is synced) then (yes)
+          :Log destination is in sync;
+        else (no)
+          :Log destination occupied with a different item;
+          :Backup conflicting file;
+          note right: Local data loss prevention
+        endif
+      else (no)
+        :Log destination occupied by an un-synced file;
+        :Backup conflicting file;
+        note right: Local data loss prevention
+      endif
+    endif
+    :Try to rename path;
+    if (dry run) then (yes)
+      :Track as faked id item;
+      :Track path not renamed;
+    else (no)
+      :Rename item;
+      :Flag item as moved;
+      if (item is a file) then (yes)
+        :Set local timestamp to match online;
+      endif
+    endif
+  else (no)
+  endif
+  :Check if eTag changed;
+  if (eTag changed) then (yes)
+    if (item is a file and not moved) then (yes)
+      :Decide if to download based on hash;
+    else (no)
+      :Update database;
+    endif
+  else (no)
+    :Update database if timestamp differs or in specific operational mode;
+  endif
+}
+stop
+@enduml

@@ -44,11 +44,9 @@ The diagrams below show the high level process flow and decision making when run
 ![applyPotentiallyNewLocalItem](./puml/applyPotentiallyNewLocalItem.png)
 
 ### Processing a potentially changed local item
+![applyPotentiallyChangedItem](./puml/applyPotentiallyChangedItem.png)
 
 ### Determining if an 'item' is syncronised between Microsoft OneDrive and the local file system
-
-The following activity diagram details the function within the application which determines wether an item is syncronised between Microsoft OneDrive and the local file system:
-
 ![Item Sync Determination](./puml/is_item_in_sync.png)
 
 ### Determining if an 'item' is excluded due to 'Client Side Filtering' rules
