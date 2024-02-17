@@ -39,6 +39,24 @@ The following activity diagram details the function within the application which
 
 ![Item Sync Determination](./puml/is_item_in_sync.png)
 
+## Determining if an 'item' is excluded due to 'Client Side Filtering' rules
+
+By default, the OneDrive Client for Linux will sync all files and folders between Microsoft OneDrive and the local filesystem.
+
+Client Side Filtering in the context of this client refers to user-configured rules that determine what files and directories the client should upload or download from Microsoft OneDrive. These rules are crucial for optimising synchronisation, especially when dealing with large numbers of files or specific file types. The OneDrive Client for Linux offers several configuration options to facilitate this:
+
+* **skip_dir:** This option allows the user to specify directories that should not be synchronised with OneDrive. It's particularly useful for omitting large or irrelevant directories from the sync process.
+
+* **skip_dotfiles:** Dotfiles, usually configuration files or scripts, can be excluded from the sync. This is useful for users who prefer to keep these files local.
+
+* **skip_file:** Specific files can be excluded from synchronisation using this option. It provides flexibility in selecting which files are essential for cloud storage.
+
+* **skip_symlinks:** Symlinks often point to files outside the OneDrive directory or to locations that are not relevant for cloud storage. This option prevents them from being included in the sync.
+
+This exclusion process can be illustrated by the following activity diagram. A 'true' return value means that the path being evaluated needs to be excluded:
+
+![Client Side Filtering Determination](./puml/client_side_filtering_rules.png)
+
 ## File conflict handling - default operational modes
 
 
