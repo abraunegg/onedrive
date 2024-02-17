@@ -1,79 +1,79 @@
 @startuml
 start
-
-:Check if path exists;
-if (path does not exist) then (no)
-  :Return false;
-  stop
-else (yes)
-endif
-
-:Identify item type;
-switch (item type)
-case (file)
-
-  :Check if path is a file;
-  if (path is not a file) then (no)
-    :Log "item is a directory but should be a file";
+partition "Is item in sync" {
+  :Check if path exists;
+  if (path does not exist) then (no)
     :Return false;
     stop
   else (yes)
   endif
   
-  :Attempt to read local file;
-  if (file is unreadable) then (no)
-    :Log "file cannot be read";
-    :Return false;
-    stop
-  else (yes)
-  endif
+  :Identify item type;
+  switch (item type)
+  case (file)
   
-  :Get local and input item modified time;
-  note right: The 'input item' could be a database reference object, or the online JSON object\nas provided by the Microsoft OneDrive API
-  :Reduce time resolution to seconds;
-  
-  if (localModifiedTime == itemModifiedTime) then (yes)
-    :Return true;
-    stop
-  else (no)
-    :Log time discrepancy;
-  endif
-  
-  :Check if file hash is the same;
-  if (hash is the same) then (yes)
-    :Log "hash match, correcting timestamp";
-    if (local time > item time) then (yes)
-      if (download only mode) then (no)
-        :Correct timestamp online if not dryRun;
-      else (yes)
+    :Check if path is a file;
+    if (path is not a file) then (no)
+      :Log "item is a directory but should be a file";
+      :Return false;
+      stop
+    else (yes)
+    endif
+    
+    :Attempt to read local file;
+    if (file is unreadable) then (no)
+      :Log "file cannot be read";
+      :Return false;
+      stop
+    else (yes)
+    endif
+    
+    :Get local and input item modified time;
+    note right: The 'input item' could be a database reference object, or the online JSON object\nas provided by the Microsoft OneDrive API
+    :Reduce time resolution to seconds;
+    
+    if (localModifiedTime == itemModifiedTime) then (yes)
+      :Return true;
+      stop
+    else (no)
+      :Log time discrepancy;
+    endif
+    
+    :Check if file hash is the same;
+    if (hash is the same) then (yes)
+      :Log "hash match, correcting timestamp";
+      if (local time > item time) then (yes)
+        if (download only mode) then (no)
+          :Correct timestamp online if not dryRun;
+        else (yes)
+          :Correct local timestamp if not dryRun;
+        endif
+      else (no)
         :Correct local timestamp if not dryRun;
       endif
+      :Return false;
+      note right: Specifically return false here as we performed a time correction\nApplication logic will then perform additional handling based on this very specific response.
+      stop
     else (no)
-      :Correct local timestamp if not dryRun;
+      :Log "different hash";
+      :Return false;
+      stop
     endif
-    :Return false;
-    note right: Specifically return false here as we performed a time correction\nApplication logic will then perform additional handling based on this very specific response.
+  
+  case (dir or remote)
+    :Check if path is a directory;
+    if (path is a directory) then (yes)
+      :Return true;
+      stop
+    else (no)
+      :Log "item is a file but should be a directory";
+      :Return false;
+      stop
+    endif
+  
+  case (unknown)
+    :Return true but do not sync;
     stop
-  else (no)
-    :Log "different hash";
-    :Return false;
-    stop
-  endif
-
-case (dir or remote)
-  :Check if path is a directory;
-  if (path is a directory) then (yes)
-    :Return true;
-    stop
-  else (no)
-    :Log "item is a file but should be a directory";
-    :Return false;
-    stop
-  endif
-
-case (unknown)
-  :Return true but do not sync;
-  stop
-endswitch
-
+  endswitch
+}
 @enduml

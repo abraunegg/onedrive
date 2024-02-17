@@ -1,4 +1,4 @@
-# OneDrive Client for Linux Client Architecture
+# OneDrive Client for Linux Application Architecture
 
 ## How does the client work at a high level?
 
@@ -33,13 +33,25 @@ However, in standalone mode (`--sync`), you can *change* what reference the clie
 
 **Critical Advisory:** Please be aware that if you designate a network mount point (such as NFS, Windows Network Share, or Samba Network Share) as your `sync_dir`, this setup inherently lacks 'inotify' support. Support for 'inotify' is essential for real-time tracking of file changes, which means that the client's 'Monitor Mode' cannot immediately detect changes in files located on these network shares. Instead, synchronisation between your local filesystem and Microsoft OneDrive will occur at intervals specified by the `monitor_interval` setting. This limitation regarding 'inotify' support on network mount points like NFS or Samba is beyond the control of this client.
 
-## Determining if an 'item' is syncronised between Microsoft OneDrive and the local file system
+## OneDrive Client for Linux High Level Activity Flows
+
+The diagrams below show the high level process flow and decision making when running the application
+
+### Main functional activity flows
+![Main Activity](./puml/main_activity_flows.png)
+
+### Processing a potentially new local item
+![applyPotentiallyNewLocalItem](./puml/applyPotentiallyNewLocalItem.png)
+
+### Processing a potentially changed local item
+
+### Determining if an 'item' is syncronised between Microsoft OneDrive and the local file system
 
 The following activity diagram details the function within the application which determines wether an item is syncronised between Microsoft OneDrive and the local file system:
 
 ![Item Sync Determination](./puml/is_item_in_sync.png)
 
-## Determining if an 'item' is excluded due to 'Client Side Filtering' rules
+### Determining if an 'item' is excluded due to 'Client Side Filtering' rules
 
 By default, the OneDrive Client for Linux will sync all files and folders between Microsoft OneDrive and the local filesystem.
 
@@ -59,12 +71,36 @@ This exclusion process can be illustrated by the following activity diagram. A '
 
 ## File conflict handling - default operational modes
 
+When using the default operational modes (`--sync` or `--monitor`) the client application is conforming to how the Microsoft Windows OneDrive client operates in terms of resolving conflicts for files.
+
+Additionally, when using `--resync` this conflict resolution can differ slightly, as, when using `--resync` you are *deleting* the known application state, thus, the application has zero reference as to what was previously in sync with the local file system.
+
+Due to this factor, when using `--resync` the online source is always going to be considered accurate and the source-of-truth, regardless of the local file state.
+
+### Default Operational Modes - Conflict Handling
+
+
+### Default Operational Modes - Conflict Handling with --resync
+
 
 ## File conflict handling - local-first operational mode
 
 
-## Client Functional Component Architecture
+### Local First Operational Modes - Conflict Handling
+
+### Local First Operational Modes - Conflict Handling with --resync
+
+
+
+
+## Client Functional Component Architecture Relationships
 
 The diagram below shows the functional relationship of application code components, and how these relate to each relevant code module within this application:
 
 ![Functional Code Components](./puml/code_functional_component_relationships.png)
+
+## Database Schema
+
+The diagram below shows the database schema that is used within the application
+
+![Database Schema](./puml/database_schema.png)

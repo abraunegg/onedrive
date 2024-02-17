@@ -1,0 +1,90 @@
+@startuml
+start
+partition "applyPotentiallyNewLocalItem" {
+  :Check if path exists;
+  
+  if (Path exists?) then (yes)
+    :Log "Path on local disk already exists";
+    
+    if (Is symbolic link?) then (yes)
+      :Log "Path is a symbolic link";
+      
+      if (Can read symbolic link?) then (no)
+        :Log "Reading symbolic link failed";
+        :Log "Skipping item - invalid symbolic link";
+        stop
+      endif
+    endif
+    
+    :Determine if item is in-sync;
+    note right: Execute 'isItemSynced()' function
+    if (Is item in-sync?) then (yes)
+      :Log "Item in-sync";
+      :Update/Insert item in DB;
+      stop
+    else (no)
+      :Log "Item not in-sync";
+      :Compare local & remote modification times;
+      
+      if (Local time > Remote time?) then (yes)
+        if (ID in database?) then (yes)
+          :Log "Local file is newer & ID in DB";
+          :Fetch latest DB record;
+          if (Times equal?) then (yes)
+            :Log "Times match, keeping local file";
+          else (no)
+            :Log "Local time newer, keeping file";
+            note right: Online item has an 'older' modified timestamp wise than the local file\nIt is assumed that the local file is the file to keep
+          endif
+          stop
+        else (no)
+          :Log "Local item not in DB";
+          if (Bypass data protection?) then (yes)
+            :Log "WARNING: Data protection disabled";
+          else (no)
+            :Safe backup local file;
+            note right: Local data loss prevention
+          endif
+          stop
+        endif
+      else (no)
+        if (Remote time > Local time?) then (yes)
+          :Log "Remote item is newer";
+          if (Bypass data protection?) then (yes)
+            :Log "WARNING: Data protection disabled";
+          else (no)
+            :Safe backup local file;
+            note right: Local data loss prevention
+          endif
+        endif
+        
+        if (Times equal?) then (yes)
+        note left: Specific handling if timestamp was\nadjusted by isItemSynced()
+          :Log "Times equal, no action required";
+          :Update/Insert item in DB;
+          stop
+        endif
+      endif
+    endif
+    
+  else (no)
+    :Handle as potentially new item;
+    switch (Item type) 
+    case (File)
+      :Add to download queue;
+    case (Directory)
+      :Log "Creating local directory";
+      if (Dry run?) then (no)
+        :Create directory & set attributes;
+        :Save item to DB;
+      else
+        :Log "Dry run, faking directory creation";
+        :Save item to dry-run DB;
+      endif
+    case (Unknown)
+      :Log "Unknown type, no action";
+    endswitch
+  endif
+}
+stop
+@enduml
