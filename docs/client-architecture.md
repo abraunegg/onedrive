@@ -49,6 +49,9 @@ The diagrams below show the high level process flow and decision making when run
 ### Download a file
 ![downloadFile](./puml/downloadFile.png)
 
+### Upload a file
+![uploadFile](./puml/uploadFile.png)
+
 ### Determining if an 'item' is syncronised between Microsoft OneDrive and the local file system
 ![Item Sync Determination](./puml/is_item_in_sync.png)
 
