@@ -1127,7 +1127,9 @@ class SyncEngine {
 					idsToDelete ~= [thisItemDriveId, thisItemId];
 				} else {
 					// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
-					safeBackup(localPathToDelete, dryRun);
+					// In case the renamed path is needed
+					string renamedPath;
+					safeBackup(localPathToDelete, dryRun, renamedPath);
 				}
 			} else {
 				// Flag to ignore
@@ -1737,7 +1739,9 @@ class SyncEngine {
 							addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ newItemPath, ["info", "notify"]);
 						} else {
 							// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
-							safeBackup(newItemPath, dryRun);
+							// In case the renamed path is needed
+							string renamedPath;
+							safeBackup(newItemPath, dryRun, renamedPath);
 						}
 					}
 				} else {
@@ -1754,7 +1758,9 @@ class SyncEngine {
 							addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ newItemPath, ["info", "notify"]);
 						} else {
 							// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
-							safeBackup(newItemPath, dryRun);							
+							// In case the renamed path is needed
+							string renamedPath;
+							safeBackup(newItemPath, dryRun, renamedPath);							
 						}
 					}
 					
@@ -1847,13 +1853,17 @@ class SyncEngine {
 							// The destination item is different
 							addLogEntry("The destination is occupied with a different item, renaming the conflicting file...", ["verbose"]);
 							// Backup this item, passing in if we are performing a --dry-run or not
-							safeBackup(changedItemPath, dryRun);
+							// In case the renamed path is needed
+							string renamedPath;
+							safeBackup(changedItemPath, dryRun, renamedPath);
 						}
 					} else {
 						// The to be overwritten item is not already in the itemdb, so it should saved to avoid data loss
 						addLogEntry("The destination is occupied by an existing un-synced file, renaming the conflicting file...", ["verbose"]);
 						// Backup this item, passing in if we are performing a --dry-run or not
-						safeBackup(changedItemPath, dryRun);
+						// In case the renamed path is needed
+						string renamedPath;
+						safeBackup(changedItemPath, dryRun, renamedPath);
 					}
 				}
 				
@@ -2047,7 +2057,9 @@ class SyncEngine {
 					addLogEntry("The local file to replace (" ~ newItemPath ~ ") has been modified locally since the last download. Renaming it to avoid potential local data loss.");
 					
 					// Perform the local safeBackup of the existing local file, passing in if we are performing a --dry-run or not
-					safeBackup(newItemPath, dryRun);
+					// In case the renamed path is needed
+					string renamedPath;
+					safeBackup(newItemPath, dryRun, renamedPath);
 				}
 			}
 			
@@ -3610,7 +3622,11 @@ class SyncEngine {
 			// Generic message
 			if (skippedExceptionError) {
 				// normal failure message if API or exception error generated
-				addLogEntry("Uploading modified file " ~ localFilePath ~ " ... failed!", ["info", "notify"]);
+				// If Issue #2626 | Case 2-1 is triggered, the file we tried to upload was renamed, then uploaded as a new name
+				if (exists(localFilePath)) {
+					// Issue #2626 | Case 2-1 was not triggered, file still exists on local filesystem
+					addLogEntry("Uploading modified file " ~ localFilePath ~ " ... failed!", ["info", "notify"]);
+				}
 			}
 		} else {
 			// Upload was successful
@@ -3647,21 +3663,116 @@ class SyncEngine {
 		uploadFileOneDriveApiInstance = new OneDriveApi(appConfig);
 		uploadFileOneDriveApiInstance.initialise();
 		
+		// Configure JSONValue variables we use for a session upload
+		JSONValue currentOnlineData;
+		JSONValue uploadSessionData;
+		string currentETag;
+		
 		// Is this a dry-run scenario?
 		if (!dryRun) {
 			// Do we use simpleUpload or create an upload session?
 			bool useSimpleUpload = false;
 			
-			//if ((appConfig.accountType == "personal") && (thisFileSizeLocal <= sessionThresholdFileSize)) {
+			// Try and get the absolute latest object details from online
+			try {
+				currentOnlineData = uploadFileOneDriveApiInstance.getPathDetailsById(dbItem.driveId, dbItem.id);
+			} catch (OneDriveException exception) {
 			
+				string thisFunctionName = getFunctionName!({});
+				// HTTP request returned status code 408,429,503,504
+				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+					// Handle the 429
+					if (exception.httpStatusCode == 429) {
+						// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+						handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
+						addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
+					}
+					// re-try the specific changes queries
+					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+						// 408 - Request Time Out
+						// 503 - Service Unavailable
+						// 504 - Gateway Timeout
+						// Transient error - try again in 30 seconds
+						auto errorArray = splitLines(exception.msg);
+						addLogEntry(to!string(errorArray[0]) ~ " when attempting to obtain latest file details from OneDrive - retrying applicable request in 30 seconds");
+						addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+						
+						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request.
+						addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
+						Thread.sleep(dur!"seconds"(30));
+					}
+					// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
+					addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
+					performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
+				} else {
+					// Default operation if not 408,429,503,504 errors
+					// display what the error is
+					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				}
+			}
+			
+			// Was a valid JSON response provided?
+			if (currentOnlineData.type() == JSONType.object) {
+				// Does the response contain an eTag?
+				if (hasETag(currentOnlineData)) {
+					// Use the value returned from online
+					currentETag = currentOnlineData["eTag"].str;
+				} else {
+					// Use the database value
+					currentETag = dbItem.eTag;
+				}
+			} else {
+				// no valid JSON response
+				currentETag = dbItem.eTag;
+			}
+			
+			// What upload method should be used?
 			if (thisFileSizeLocal <= sessionThresholdFileSize) {
 				useSimpleUpload = true;
 			}
 		
+			// If the filesize is greater than zero , and we have valid 'latest' online data is the online file matching what we think is in the database?
+			if ((thisFileSizeLocal > 0) && (currentOnlineData.type() == JSONType.object)) {
+				// Issue #2626 | Case 2-1 
+				// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - potentially consituting online data loss
+				Item onlineFile = makeItem(currentOnlineData);
+				
+				// Which file is technically newer? The local file or the remote file?
+				SysTime localModifiedTime = timeLastModified(localFilePath).toUTC();
+				SysTime onlineModifiedTime = onlineFile.mtime;
+				
+				// Reduce time resolution to seconds before comparing
+				localModifiedTime.fracSecs = Duration.zero;
+				onlineModifiedTime.fracSecs = Duration.zero;
+				
+				// Which file is newer? If local is newer, it will be uploaded as a modified file in the correct manner
+				if (localModifiedTime < onlineModifiedTime) {
+					// Online File is actually newer than the locally modified file
+					addLogEntry("currentOnlineData: " ~ to!string(currentOnlineData), ["debug"]);
+					addLogEntry("onlineFile:    " ~ to!string(onlineFile), ["debug"]);
+					addLogEntry("database item: " ~ to!string(dbItem), ["debug"]);
+					addLogEntry("Skipping uploading this item as a locally modified file, will upload as a new file (online file already exists and is newer): " ~ localFilePath);
+					
+					// Online is newer, rename local, then upload the renamed file
+					// We need to know the renamed path so we can upload it
+					string renamedPath;
+					// Rename the local path
+					safeBackup(localFilePath, dryRun, renamedPath);
+					// Upload renamed local file as a new file
+					uploadNewFile(renamedPath);
+					
+					// Process the database entry removal for the original file. In a --dry-run scenario, this is being done against a DB copy.
+					// This is done so we can download the newer online file
+					itemDB.deleteById(dbItem.driveId, dbItem.id);
+
+					// This file is now uploaded, return from here, but this will trigger a response that the upload failed (technically for the original filename it did, but we renamed it, then uploaded it
+					return uploadResponse;
+				}
+			}
+			
 			// We can only upload zero size files via simpleFileUpload regardless of account type
 			// Reference: https://github.com/OneDrive/onedrive-api-docs/issues/53
 			// Additionally, all files where file size is < 4MB should be uploaded by simpleUploadReplace - everything else should use a session to upload the modified file
-		
 			if ((thisFileSizeLocal == 0) || (useSimpleUpload)) {
 				// Must use Simple Upload to replace the file online
 				try {
@@ -3705,70 +3816,11 @@ class SyncEngine {
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				}
 			} else {
-				// Configure JSONValue variables we use for a session upload
-				JSONValue currentOnlineData;
-				JSONValue uploadSessionData;
-				string currentETag;
-				
 				// As this is a unique thread, the sessionFilePath for where we save the data needs to be unique
 				// The best way to do this is generate a 10 digit alphanumeric string, and use this as the file extention
 				string threadUploadSessionFilePath = appConfig.uploadSessionFilePath ~ "." ~ generateAlphanumericString();
 				
-				// Get the absolute latest object details from online
-				try {
-					currentOnlineData = uploadFileOneDriveApiInstance.getPathDetailsByDriveId(dbItem.driveId, localFilePath);
-				} catch (OneDriveException exception) {
-				
-					string thisFunctionName = getFunctionName!({});
-					// HTTP request returned status code 408,429,503,504
-					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-						// Handle the 429
-						if (exception.httpStatusCode == 429) {
-							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-							handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
-							addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
-						}
-						// re-try the specific changes queries
-						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-							// 408 - Request Time Out
-							// 503 - Service Unavailable
-							// 504 - Gateway Timeout
-							// Transient error - try again in 30 seconds
-							auto errorArray = splitLines(exception.msg);
-							addLogEntry(to!string(errorArray[0]) ~ " when attempting to obtain latest file details from OneDrive - retrying applicable request in 30 seconds");
-							addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
-							
-							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request.
-							addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
-							Thread.sleep(dur!"seconds"(30));
-						}
-						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
-						performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
-					} else {
-						// Default operation if not 408,429,503,504 errors
-						// display what the error is
-						displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-					}
-					
-				}
-				
-				// Was a valid JSON response provided?
-				if (currentOnlineData.type() == JSONType.object) {
-					// Does the response contain an eTag?
-					if (hasETag(currentOnlineData)) {
-						// Use the value returned from online
-						currentETag = currentOnlineData["eTag"].str;
-					} else {
-						// Use the database value
-						currentETag = dbItem.eTag;
-					}
-				} else {
-					// no valid JSON response
-					currentETag = dbItem.eTag;
-				}
-				
-				// Create the Upload Session
+				// Create the upload session
 				try {
 					uploadSessionData = createSessionFileUpload(uploadFileOneDriveApiInstance, localFilePath, dbItem.driveId, dbItem.parentId, baseName(localFilePath), currentETag, threadUploadSessionFilePath);
 				} catch (OneDriveException exception) {
@@ -3810,7 +3862,7 @@ class SyncEngine {
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				}
 				
-				// Perform the Upload using the session
+				// Perform the upload using the session that has been created
 				try {
 					uploadResponse = performSessionFileUpload(uploadFileOneDriveApiInstance, thisFileSizeLocal, uploadSessionData, threadUploadSessionFilePath);
 				} catch (OneDriveException exception) {
@@ -3851,7 +3903,6 @@ class SyncEngine {
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				}
 			}
-		
 		} else {
 			// We are in a --dry-run scenario
 			uploadResponse = createFakeResponse(localFilePath);
@@ -4816,7 +4867,6 @@ class SyncEngine {
 					parentPathFoundInDB = true;
 				}
 			}
-			
 		}
 		
 		// If the parent path was found in the DB, to ensure we are uploading the the right location 'parentItem.driveId' must not be empty
@@ -4968,15 +5018,42 @@ class SyncEngine {
 									// The local file we are attempting to upload as a new file is different to the existing file online
 									addLogEntry("Triggering newfile upload target already exists edge case, where the online item does not match what we are trying to upload", ["debug"]);
 									
-									// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - consituting online data loss
-									// The file 'version history' online will have to be used to 'recover' the prior online file
-									string changedItemParentId = fileDetailsFromOneDrive["parentReference"]["driveId"].str;
-									string changedItemId = fileDetailsFromOneDrive["id"].str;
-									addLogEntry("Skipping uploading this file as moving it to upload as a modified file (online item already exists): " ~ fileToUpload);
+									// Issue #2626 | Case 2-2 (resync)
 									
-									// In order for the processing of the local item as a 'changed' item, unfortunatly we need to save the online data to the local DB
+									// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - potentially consituting online data loss
+									// The file 'version history' online will have to be used to 'recover' the prior online file
+									string changedItemParentDriveId = fileDetailsFromOneDrive["parentReference"]["driveId"].str;
+									string changedItemId = fileDetailsFromOneDrive["id"].str;
+									addLogEntry("Skipping uploading this item as a new file, will upload as a modified file (online file already exists): " ~ fileToUpload);
+									
+									// In order for the processing of the local item as a 'changed' item, unfortunatly we need to save the online data of the existing online file to the local DB
 									saveItem(fileDetailsFromOneDrive);
-									uploadChangedLocalFileToOneDrive([changedItemParentId, changedItemId, fileToUpload]);
+									
+									// Which file is technically newer? The local file or the remote file?
+									Item onlineFile = makeItem(fileDetailsFromOneDrive);
+									SysTime localModifiedTime = timeLastModified(fileToUpload).toUTC();
+									SysTime onlineModifiedTime = onlineFile.mtime;
+									
+									// Reduce time resolution to seconds before comparing
+									localModifiedTime.fracSecs = Duration.zero;
+									onlineModifiedTime.fracSecs = Duration.zero;
+									
+									// Which file is newer?
+									if (localModifiedTime >= onlineModifiedTime) {
+										// Upload the locally modified file as-is, as it is newer
+										uploadChangedLocalFileToOneDrive([changedItemParentDriveId, changedItemId, fileToUpload]);
+									} else {
+										// Online is newer, rename local, then upload the renamed file
+										// We need to know the renamed path so we can upload it
+										string renamedPath;
+										// Rename the local path
+										safeBackup(fileToUpload, dryRun, renamedPath);
+										// Upload renamed local file as a new file
+										uploadNewFile(renamedPath);
+										// Process the database entry removal for the original file. In a --dry-run scenario, this is being done against a DB copy.
+										// This is done so we can download the newer online file
+										itemDB.deleteById(changedItemParentDriveId, changedItemId);
+									}
 								}
 							} catch (OneDriveException exception) {
 								// If we get a 404 .. the file is not online .. this is what we want .. file does not exist online
