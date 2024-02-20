@@ -2,7 +2,7 @@
 
 start
 
-:Validate access and\nexisting access token\nRefresh if needed;
+:Validate access and existing access token\nRefresh if needed;
 
 :Query /delta API;
 note right: Query Microsoft OneDrive /delta API

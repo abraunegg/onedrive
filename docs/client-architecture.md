@@ -86,6 +86,13 @@ Due to this factor, when using `--resync` the online source is always going to b
 
 ### Default Operational Modes - Conflict Handling
 
+#### Scenario
+1. Create a local file
+2. Perform a sync with Microsoft OneDrive using `onedrive --sync`
+3. Modify file online
+4. Modify file locally with different data|contents
+5. Perform a sync with Microsoft OneDrive using `onedrive --sync`
+
 ![conflict_handling_default](./puml/conflict_handling_default.png)
 
 #### Evidence of Conflict Handling
@@ -127,6 +134,13 @@ Waiting for all internal threads to complete before exiting application
 ```
 
 ### Default Operational Modes - Conflict Handling with --resync
+
+#### Scenario
+1. Create a local file
+2. Perform a sync with Microsoft OneDrive using `onedrive --sync`
+3. Modify file online
+4. Modify file locally with different data|contents
+5. Perform a sync with Microsoft OneDrive using `onedrive --sync --resync`
 
 ![conflict_handling_default_resync](./puml/conflict_handling_default_resync.png)
 
