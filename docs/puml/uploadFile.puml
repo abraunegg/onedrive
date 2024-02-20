@@ -1,0 +1,62 @@
+@startuml
+start
+partition "Upload File" {
+  :Log "fileToUpload";
+  :Check database for parent path;
+  if (parent path found?) then (yes)
+      if (drive ID not empty?) then (yes)
+          :Proceed;
+      else (no)
+          :Use defaultDriveId;
+      endif
+  else (no)
+      stop
+  endif
+  :Check if file exists locally;
+  if (file exists?) then (yes)
+      :Read local file;
+      if (can read file?) then (yes)
+          if (parent path in DB?) then (yes)
+              :Get file size;
+              if (file size <= max?) then (yes)
+                  :Check available space on OneDrive;
+                  if (space available?) then (yes)
+                      :Check if file exists on OneDrive;
+                      if (file exists online?) then (yes)
+                          :Save online metadata only;
+                          if (if local file newer) then (yes)
+                            :Local file is newer;
+                            :Upload file as changed local file;
+                          else (no)
+                            :Remote file is newer;
+                            :Perform safe backup;
+                            note right: Local data loss prevention
+                            :Upload renamed file as new file;
+                          endif
+                      else (no)
+                          :Attempt upload;
+                      endif
+                  else (no)
+                      :Log "Insufficient space";
+                  endif
+              else (no)
+                  :Log "File too large";
+              endif
+          else (no)
+              :Log "Parent path issue";
+          endif
+      else (no)
+          :Log "Cannot read file";
+      endif
+  else (no)
+      :Log "File disappeared locally";
+  endif
+  :Upload success or failure;
+  if (upload failed?) then (yes)
+      :Log failure;
+  else (no)
+      :Update cache;
+  endif
+}  
+stop
+@enduml
