@@ -46,14 +46,14 @@ The diagrams below show the high level process flow and decision making when run
 ### Processing a potentially changed local item
 ![applyPotentiallyChangedItem](./puml/applyPotentiallyChangedItem.png)
 
-### Download a file
+### Download a file from Microsoft OneDrive
 ![downloadFile](./puml/downloadFile.png)
 
-### Upload a new file
-![uploadFile](./puml/uploadFile.png)
-
-### Upload a modified file
+### Upload a modified file to Microsoft OneDrive
 ![uploadModifiedFile](./puml/uploadModifiedFile.png)
+
+### Upload a new local file to Microsoft OneDrive
+![uploadFile](./puml/uploadFile.png)
 
 ### Determining if an 'item' is syncronised between Microsoft OneDrive and the local file system
 ![Item Sync Determination](./puml/is_item_in_sync.png)
@@ -82,15 +82,100 @@ When using the default operational modes (`--sync` or `--monitor`) the client ap
 
 Additionally, when using `--resync` this conflict resolution can differ slightly, as, when using `--resync` you are *deleting* the known application state, thus, the application has zero reference as to what was previously in sync with the local file system.
 
-Due to this factor, when using `--resync` the online source is always going to be considered accurate and the source-of-truth, regardless of the local file state.
+Due to this factor, when using `--resync` the online source is always going to be considered accurate and the source-of-truth, regardless of the local file state, file timestamp or file hash.
 
 ### Default Operational Modes - Conflict Handling
 
+![conflict_handling_default](./puml/conflict_handling_default.png)
+
+#### Evidence of Conflict Handling
+```
+...
+Processing API Response Bundle: 1 - Quantity of 'changes|items' in this bundle to process: 2
+Finished processing /delta JSON response from the OneDrive API
+Processing 1 applicable changes and items received from Microsoft OneDrive
+Processing OneDrive JSON item batch [1/1] to ensure consistent local state
+Number of items to download from OneDrive: 1
+The local file to replace (./1.txt) has been modified locally since the last download. Renaming it to avoid potential local data loss.
+The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: ./1.txt -> ./1-onedrive-client-dev.txt
+Downloading file ./1.txt ... done
+Performing a database consistency and integrity check on locally stored data
+Processing DB entries for this Drive ID: b!bO8V7s9SSk6r7mWHpIjURotN33W1W2tEv3OXV_oFIdQimEdOHR-1So7CqeT1MfHA
+Processing ~/OneDrive
+The directory has not changed
+Processing α
+...
+The file has not changed
+Processing เอกสาร
+The directory has not changed
+Processing 1.txt
+The file has not changed
+Scanning the local file system '~/OneDrive' for new data to upload
+...
+New items to upload to OneDrive: 1
+Total New Data to Upload:        52 Bytes
+Uploading new file ./1-onedrive-client-dev.txt ... done.
+Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process
+Fetching /delta response from the OneDrive API for Drive ID: b!bO8V7s9SSk6r7mWHpIjURotN33W1W2tEv3OXV_oFIdQimEdOHR-1So7CqeT1MfHA
+Processing API Response Bundle: 1 - Quantity of 'changes|items' in this bundle to process: 2
+Finished processing /delta JSON response from the OneDrive API
+Processing 1 applicable changes and items received from Microsoft OneDrive
+Processing OneDrive JSON item batch [1/1] to ensure consistent local state
+
+Sync with Microsoft OneDrive is complete
+Waiting for all internal threads to complete before exiting application
+```
 
 ### Default Operational Modes - Conflict Handling with --resync
 
+![conflict_handling_default_resync](./puml/conflict_handling_default_resync.png)
+
+#### Evidence of Conflict Handling
+```
+...
+Deleting the saved application sync status ...
+Using IPv4 and IPv6 (if configured) for all network operations
+Checking Application Version ...
+...
+Processing API Response Bundle: 1 - Quantity of 'changes|items' in this bundle to process: 14
+Finished processing /delta JSON response from the OneDrive API
+Processing 13 applicable changes and items received from Microsoft OneDrive
+Processing OneDrive JSON item batch [1/1] to ensure consistent local state
+Local file time discrepancy detected: ./1.txt
+This local file has a different modified time 2024-Feb-19 19:32:55Z (UTC) when compared to remote modified time 2024-Feb-19 19:32:36Z (UTC)
+The local file has a different hash when compared to remote file hash
+Local item does not exist in local database - replacing with file from OneDrive - failed download?
+The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: ./1.txt -> ./1-onedrive-client-dev.txt
+Number of items to download from OneDrive: 1
+Downloading file ./1.txt ... done
+Performing a database consistency and integrity check on locally stored data
+Processing DB entries for this Drive ID: b!bO8V7s9SSk6r7mWHpIjURotN33W1W2tEv3OXV_oFIdQimEdOHR-1So7CqeT1MfHA
+Processing ~/OneDrive
+The directory has not changed
+Processing α
+...
+Processing เอกสาร
+The directory has not changed
+Processing 1.txt
+The file has not changed
+Scanning the local file system '~/OneDrive' for new data to upload
+...
+New items to upload to OneDrive: 1
+Total New Data to Upload:        52 Bytes
+Uploading new file ./1-onedrive-client-dev.txt ... done.
+Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process
+Fetching /delta response from the OneDrive API for Drive ID: b!bO8V7s9SSk6r7mWHpIjURotN33W1W2tEv3OXV_oFIdQimEdOHR-1So7CqeT1MfHA
+Processing API Response Bundle: 1 - Quantity of 'changes|items' in this bundle to process: 2
+Finished processing /delta JSON response from the OneDrive API
+Processing 1 applicable changes and items received from Microsoft OneDrive
+Processing OneDrive JSON item batch [1/1] to ensure consistent local state
+
+Sync with Microsoft OneDrive is complete
+Waiting for all internal threads to complete before exiting application
+```
 
 ## File conflict handling - local-first operational mode
+
 
 
 ### Local First Operational Modes - Conflict Handling
