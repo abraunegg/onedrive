@@ -258,6 +258,8 @@ Waiting for all internal threads to complete before exiting application
 4. Modify file online with different data|contents
 5. Perform a sync with Microsoft OneDrive using `onedrive --sync --local-first --resync`
 
+![conflict_handling_local-first_resync](./puml/conflict_handling_local-first_resync.png)
+
 #### Evidence of Conflict Handling
 ```
 ...
