@@ -190,9 +190,65 @@ Waiting for all internal threads to complete before exiting application
 
 ## File conflict handling - local-first operational mode
 
+When using `--local-first` as your operational parameter the client application is now using your local filesystem data as the 'source-of-truth' as to what should be stored online.
+
+However - Microsoft OneDrive itself, has *zero* acknowledgement of this concept, thus, conflict handling needs to be aligned to how Microsoft OneDrive on other platforms operate, that is, rename the local offending file.
+
+Additionally, when using `--resync` you are *deleting* the known application state, thus, the application has zero reference as to what was previously in sync with the local file system.
+
+Due to this factor, when using `--resync` the online source is always going to be considered accurate and the source-of-truth, regardless of the local file state, file timestamp or file hash or use of `--local-first`.
 
 
 ### Local First Operational Modes - Conflict Handling
+
+#### Scenario
+1. Create a local file
+2. Perform a sync with Microsoft OneDrive using `onedrive --sync --local-first`
+3. Modify file locally with different data|contents
+4. Modify file online with different data|contents
+5. Perform a sync with Microsoft OneDrive using `onedrive --sync --local-first`
+
+![conflict_handling_local-first_default](./puml/conflict_handling_local-first_default.png)
+
+#### Evidence of Conflict Handling
+```
+Reading configuration file: /home/alex/.config/onedrive/config
+...
+Using IPv4 and IPv6 (if configured) for all network operations
+Checking Application Version ...
+...
+Sync Engine Initialised with new Onedrive API instance
+All application operations will be performed in the configured local 'sync_dir' directory: /home/alex/OneDrive
+Performing a database consistency and integrity check on locally stored data
+Processing DB entries for this Drive ID: b!bO8V7s9SSk6r7mWHpIjURotN33W1W2tEv3OXV_oFIdQimEdOHR-1So7CqeT1MfHA
+Processing ~/OneDrive
+The directory has not changed
+Processing α
+The directory has not changed
+...
+The file has not changed
+Processing เอกสาร
+The directory has not changed
+Processing 1.txt
+Local file time discrepancy detected: 1.txt
+The file content has changed locally and has a newer timestamp, thus needs to be uploaded to OneDrive
+Changed local items to upload to OneDrive: 1
+The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: 1.txt -> 1-onedrive-client-dev.txt
+Uploading new file 1-onedrive-client-dev.txt ... done.
+Scanning the local file system '~/OneDrive' for new data to upload
+...
+Fetching /delta response from the OneDrive API for Drive ID: b!bO8V7s9SSk6r7mWHpIjURotN33W1W2tEv3OXV_oFIdQimEdOHR-1So7CqeT1MfHA
+Processing API Response Bundle: 1 - Quantity of 'changes|items' in this bundle to process: 3
+Finished processing /delta JSON response from the OneDrive API
+Processing 2 applicable changes and items received from Microsoft OneDrive
+Processing OneDrive JSON item batch [1/1] to ensure consistent local state
+Number of items to download from OneDrive: 1
+Downloading file ./1.txt ... done
+
+Sync with Microsoft OneDrive is complete
+Waiting for all internal threads to complete before exiting application
+```
+
 
 ### Local First Operational Modes - Conflict Handling with --resync
 
