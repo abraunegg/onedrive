@@ -488,7 +488,9 @@ final class Monitor {
 
 		while (true) {
 			bool hasNotification = false;
-			while (true) {
+			int sleep_counter = 0;
+			// Batch events up to 5 seconds
+			while (sleep_counter < 5) {
 				int ret = poll(&fds, 1, 0);
 				if (ret == -1) throw new MonitorException("poll failed");
 				else if (ret == 0) break; // no events available
@@ -621,7 +623,12 @@ final class Monitor {
 					skip:
 					i += inotify_event.sizeof + event.len;
 				}
-				Thread.sleep(dur!"seconds"(1));
+
+				// Sleep for one second to prevent missing fast-changing events.
+				if (poll(&fds, 1, 0) == 0) {
+					sleep_counter += 1;
+					Thread.sleep(dur!"seconds"(1));
+				}
 			}
 			if (!hasNotification) break;
 			processChanges();
