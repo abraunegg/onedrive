@@ -198,7 +198,6 @@ Additionally, when using `--resync` you are *deleting* the known application sta
 
 Due to this factor, when using `--resync` the online source is always going to be considered accurate and the source-of-truth, regardless of the local file state, file timestamp or file hash or use of `--local-first`.
 
-
 ### Local First Operational Modes - Conflict Handling
 
 #### Scenario
@@ -252,8 +251,55 @@ Waiting for all internal threads to complete before exiting application
 
 ### Local First Operational Modes - Conflict Handling with --resync
 
+#### Scenario
+1. Create a local file
+2. Perform a sync with Microsoft OneDrive using `onedrive --sync --local-first`
+3. Modify file locally with different data|contents
+4. Modify file online with different data|contents
+5. Perform a sync with Microsoft OneDrive using `onedrive --sync --local-first --resync`
 
+#### Evidence of Conflict Handling
+```
+...
 
+The usage of --resync will delete your local 'onedrive' client state, thus no record of your current 'sync status' will exist.
+This has the potential to overwrite local versions of files with perhaps older versions of documents downloaded from OneDrive, resulting in local data loss.
+If in doubt, backup your local data before using --resync
+
+Are you sure you wish to proceed with --resync? [Y/N] y
+
+Deleting the saved application sync status ...
+Using IPv4 and IPv6 (if configured) for all network operations
+...
+Sync Engine Initialised with new Onedrive API instance
+All application operations will be performed in the configured local 'sync_dir' directory: /home/alex/OneDrive
+Performing a database consistency and integrity check on locally stored data
+Processing DB entries for this Drive ID: b!bO8V7s9SSk6r7mWHpIjURotN33W1W2tEv3OXV_oFIdQimEdOHR-1So7CqeT1MfHA
+Processing ~/OneDrive
+The directory has not changed
+Scanning the local file system '~/OneDrive' for new data to upload
+Skipping item - excluded by sync_list config: ./random_25k_files
+OneDrive Client requested to create this directory online: ./α
+The requested directory to create was found on OneDrive - skipping creating the directory: ./α
+...
+New items to upload to OneDrive: 9
+Total New Data to Upload:        49 KB
+...
+The file we are attemtping to upload as a new file already exists on Microsoft OneDrive: ./1.txt
+Skipping uploading this item as a new file, will upload as a modified file (online file already exists): ./1.txt
+The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: ./1.txt -> ./1-onedrive-client-dev.txt
+Uploading new file ./1-onedrive-client-dev.txt ... done.
+Fetching /delta response from the OneDrive API for Drive ID: b!bO8V7s9SSk6r7mWHpIjURotN33W1W2tEv3OXV_oFIdQimEdOHR-1So7CqeT1MfHA
+Processing API Response Bundle: 1 - Quantity of 'changes|items' in this bundle to process: 15
+Finished processing /delta JSON response from the OneDrive API
+Processing 14 applicable changes and items received from Microsoft OneDrive
+Processing OneDrive JSON item batch [1/1] to ensure consistent local state
+Number of items to download from OneDrive: 1
+Downloading file ./1.txt ... done
+
+Sync with Microsoft OneDrive is complete
+Waiting for all internal threads to complete before exiting application
+```
 
 ## Client Functional Component Architecture Relationships
 
