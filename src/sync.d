@@ -1785,38 +1785,45 @@ class SyncEngine {
 				break;
 			case ItemType.dir:
 			case ItemType.remote:
-				addLogEntry("Creating local directory: " ~ newItemPath);
-				if (!dryRun) {
-					try {
-						// Create the new directory
-						addLogEntry("Requested path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);
-						mkdirRecurse(newItemPath);
-						// Configure the applicable permissions for the folder
-						addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);
-						newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
-						// Update the time of the folder to match the last modified time as is provided by OneDrive
-						// If there are any files then downloaded into this folder, the last modified time will get 
-						// updated by the local Operating System with the latest timestamp - as this is normal operation
-						// as the directory has been modified
-						addLogEntry("Setting directory lastModifiedDateTime for: " ~ newItemPath ~ " to " ~ to!string(newDatabaseItem.mtime), ["debug"]);
-						addLogEntry("Calling setTimes() for this directory: " ~ newItemPath, ["debug"]);
-						setTimes(newItemPath, newDatabaseItem.mtime, newDatabaseItem.mtime);
-						// Save the item to the database
-						saveItem(onedriveJSONItem);
-					} catch (FileException e) {
-						// display the error message
-						displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-					}
-				} else {
-					// we dont create the directory, but we need to track that we 'faked it'
-					idsFaked ~= [newDatabaseItem.driveId, newDatabaseItem.id];
-					// Save the item to the dry-run database
-					saveItem(onedriveJSONItem);
-				}
+				handleLocalDirectoryCreation(newDatabaseItem, newItemPath, onedriveJSONItem);
 				break;
 			case ItemType.unknown:
 				// Unknown type - we dont action or sync these items
 				break;
+		}
+	}
+	
+	// Handle create local directory
+	void handleLocalDirectoryCreation(Item newDatabaseItem, string newItemPath, JSONValue onedriveJSONItem) {
+	
+		// Update the logging output to be consistent
+		addLogEntry("Creating local directory: " ~ "./" ~ buildNormalizedPath(newItemPath));
+		if (!dryRun) {
+			try {
+				// Create the new directory
+				addLogEntry("Requested path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);
+				mkdirRecurse(newItemPath);
+				// Configure the applicable permissions for the folder
+				addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);
+				newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
+				// Update the time of the folder to match the last modified time as is provided by OneDrive
+				// If there are any files then downloaded into this folder, the last modified time will get 
+				// updated by the local Operating System with the latest timestamp - as this is normal operation
+				// as the directory has been modified
+				addLogEntry("Setting directory lastModifiedDateTime for: " ~ newItemPath ~ " to " ~ to!string(newDatabaseItem.mtime), ["debug"]);
+				addLogEntry("Calling setTimes() for this directory: " ~ newItemPath, ["debug"]);
+				setTimes(newItemPath, newDatabaseItem.mtime, newDatabaseItem.mtime);
+				// Save the item to the database
+				saveItem(onedriveJSONItem);
+			} catch (FileException e) {
+				// display the error message
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+			}
+		} else {
+			// we dont create the directory, but we need to track that we 'faked it'
+			idsFaked ~= [newDatabaseItem.driveId, newDatabaseItem.id];
+			// Save the item to the dry-run database
+			saveItem(onedriveJSONItem);
 		}
 	}
 	
