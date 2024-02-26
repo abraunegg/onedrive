@@ -346,10 +346,13 @@ int main(string[] cliArgs) {
 			return EXIT_RESYNC_REQUIRED;
 		} else {
 			// No configuration change that requires a --resync to be issued
-			// Make a backup of the applicable configuration file
-			appConfig.createBackupConfigFile();
-			// Update hash files and generate a new config backup
-			appConfig.updateHashContentsForConfigFiles();
+			// Special cases need to be checked - if these options were enabled, it creates a false 'Resync Required' flag, so do not create a backup
+			if ((!appConfig.getValueBool("list_business_shared_items"))) {
+				// Make a backup of the applicable configuration file
+				appConfig.createBackupConfigFile();
+				// Update hash files and generate a new config backup
+				appConfig.updateHashContentsForConfigFiles();
+			}
 		}
 	}
 	
@@ -446,8 +449,9 @@ int main(string[] cliArgs) {
 				// Are we performing some sort of 'no-sync' task?
 				// - Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
 				// - Are we displaying the sync satus?
-				// - Are we getting the URL for a file online
-				// - Are we listing who modified a file last online
+				// - Are we getting the URL for a file online?
+				// - Are we listing who modified a file last online?
+				// - Are we listing OneDrive Business Shared Items?
 				// - Are we createing a shareable link for an existing file on OneDrive?
 				// - Are we just creating a directory online, without any sync being performed?
 				// - Are we just deleting a directory online, without any sync being performed?
@@ -496,6 +500,20 @@ int main(string[] cliArgs) {
 					syncEngineInstance.queryOneDriveForFileDetails(appConfig.getValueString("modified_by"), runtimeSyncDirectory, "ModifiedBy");
 					// Exit application
 					// Use exit scopes to shutdown API and cleanup data
+					return EXIT_SUCCESS;
+				}
+				
+				// --list-shared-items - Are we listing OneDrive Business Shared Items
+				if (appConfig.getValueBool("list_business_shared_items")) {
+					// Is this a business account type?
+					if (appConfig.accountType == "business") {
+						// List OneDrive Business Shared Items
+						syncEngineInstance.listBusinessSharedObjects();
+					} else {
+						addLogEntry("ERROR: Unsupported account type for listing OneDrive Business Shared Items");
+					}
+					// Exit application
+					// Use exit scopes to shutdown API
 					return EXIT_SUCCESS;
 				}
 				

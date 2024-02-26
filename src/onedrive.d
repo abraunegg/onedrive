@@ -512,6 +512,13 @@ class OneDriveApi {
 		return get(url);
 	}
 	
+	// Return all the items that are shared with the user
+	// https://docs.microsoft.com/en-us/graph/api/drive-sharedwithme
+	JSONValue getSharedWithMe() {
+		checkAccessTokenExpired();
+		return get(sharedWithMeUrl);
+	}
+	
 	// Create a shareable link for an existing file on OneDrive based on the accessScope JSON permissions
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createlink
 	JSONValue createShareableLink(string driveId, string id, JSONValue accessScope) {

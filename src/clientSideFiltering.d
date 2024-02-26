@@ -20,7 +20,6 @@ class ClientSideFiltering {
 	// Class variables
 	ApplicationConfig appConfig;
 	string[] paths;
-	string[] businessSharedItemsList;
 	Regex!char fileMask;
 	Regex!char directoryMask;
 	bool skipDirStrictMatch = false;
@@ -41,11 +40,6 @@ class ClientSideFiltering {
 			loadSyncList(appConfig.syncListFilePath);
 		}
 		
-		// Load the Business Shared Items file if it exists
-		if (exists(appConfig.businessSharedItemsFilePath)){
-			loadBusinessSharedItems(appConfig.businessSharedItemsFilePath);
-		}
-
 		// Configure skip_dir, skip_file, skip-dir-strict-match & skip_dotfiles from config entries
 		// Handle skip_dir configuration in config file
 		addLogEntry("Configuring skip_dir ...", ["debug"]);
@@ -91,7 +85,6 @@ class ClientSideFiltering {
 	void shutdown() {
 		object.destroy(appConfig);
 		object.destroy(paths);
-		object.destroy(businessSharedItemsList);
 		object.destroy(fileMask);
 		object.destroy(directoryMask);
 	}
@@ -105,19 +98,6 @@ class ClientSideFiltering {
 			// Skip comments in file
 			if (line.length == 0 || line[0] == ';' || line[0] == '#') continue;
 			paths ~= buildNormalizedPath(line);
-		}
-		file.close();
-	}
-	
-	// load business_shared_folders file
-	void loadBusinessSharedItems(string filepath) {
-		// open file as read only
-		auto file = File(filepath, "r");
-		auto range = file.byLine();
-		foreach (line; range) {
-			// Skip comments in file
-			if (line.length == 0 || line[0] == ';' || line[0] == '#') continue;
-			businessSharedItemsList ~= buildNormalizedPath(line);
 		}
 		file.close();
 	}

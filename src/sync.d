@@ -8155,4 +8155,97 @@ class SyncEngine {
 		addLogEntry("Creating|Updating into local database a DB Tie record: " ~ to!string(tieDBItem), ["debug"]);
 		itemDB.upsert(tieDBItem);
 	}
+	
+	void listBusinessSharedObjects() {
+	
+		JSONValue sharedWithMeItems;
+		
+		// Create a new API Instance for this thread and initialise it
+		OneDriveApi sharedWithMeOneDriveApiInstance;
+		sharedWithMeOneDriveApiInstance = new OneDriveApi(appConfig);
+		sharedWithMeOneDriveApiInstance.initialise();
+		
+		try {
+			sharedWithMeItems = sharedWithMeOneDriveApiInstance.getSharedWithMe();
+		} catch (OneDriveException e) {
+			
+			// Display error message
+			displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+			// Must exit here
+			sharedWithMeOneDriveApiInstance.shutdown();
+			// Free object and memory
+			object.destroy(sharedWithMeOneDriveApiInstance);
+		}
+		
+		if (sharedWithMeItems.type() == JSONType.object) {
+		
+			if (count(sharedWithMeItems["value"].array) > 0) {
+				// No shared items
+				addLogEntry();
+				addLogEntry("Listing available OneDrive Business Shared Items:");
+				addLogEntry();
+				
+				// Iterate through the array
+				foreach (searchResult; sharedWithMeItems["value"].array) {
+				
+					// loop variables for each item
+					string sharedByName;
+					string sharedByEmail;
+					
+					// Debug response output
+					addLogEntry("shared folder entry: " ~ to!string(searchResult), ["debug"]);
+					
+					// Configure 'who' this was shared by
+					if ("sharedBy" in searchResult["remoteItem"]["shared"]) {
+						// we have shared by details we can use
+						if ("displayName" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
+							sharedByName = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["displayName"].str;
+						}
+						if ("email" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
+							sharedByEmail = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["email"].str;
+						}
+					}
+					
+					// Output query result
+					addLogEntry("-----------------------------------------------------------------------------------");
+					if (isItemFile(searchResult)) {
+						addLogEntry("Shared File:     " ~ to!string(searchResult["name"].str));
+					} else {
+						addLogEntry("Shared Folder:   " ~ to!string(searchResult["name"].str));
+					}
+					
+					// Detail 'who' shared this
+					if ((sharedByName != "") && (sharedByEmail != "")) {
+						addLogEntry("Shared By:       " ~ sharedByName ~ " (" ~ sharedByEmail ~ ")");
+					} else {
+						if (sharedByName != "") {
+							addLogEntry("Shared By:       " ~ sharedByName);
+						}
+					}
+					
+					// More detail if --verbose is being used
+					addLogEntry("Item Id:         " ~ searchResult["remoteItem"]["id"].str, ["verbose"]);
+					addLogEntry("Parent Drive Id: " ~ searchResult["remoteItem"]["parentReference"]["driveId"].str, ["verbose"]);
+					if ("id" in searchResult["remoteItem"]["parentReference"]) {
+						addLogEntry("Parent Item Id:  " ~ searchResult["remoteItem"]["parentReference"]["id"].str, ["verbose"]);
+					}	
+				}
+				
+				// Close out the loop
+				addLogEntry("-----------------------------------------------------------------------------------");
+				addLogEntry();
+				
+			} else {
+				// No shared items
+				addLogEntry();
+				addLogEntry("No OneDrive Business Shared Folders were returned");
+				addLogEntry();
+			}
+		}
+		
+		// Shutdown API access
+		sharedWithMeOneDriveApiInstance.shutdown();
+		// Free object and memory
+		object.destroy(sharedWithMeOneDriveApiInstance);
+	}
 }
