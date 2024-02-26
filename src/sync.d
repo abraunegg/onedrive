@@ -1788,6 +1788,7 @@ class SyncEngine {
 				handleLocalDirectoryCreation(newDatabaseItem, newItemPath, onedriveJSONItem);
 				break;
 			case ItemType.unknown:
+			case ItemType.none:
 				// Unknown type - we dont action or sync these items
 				break;
 		}
@@ -2360,6 +2361,7 @@ class SyncEngine {
 			}
 			break;
 		case ItemType.unknown:
+		case ItemType.none:
 			// Unknown type - return true but we dont action or sync these items 
 			return true;
 		}
@@ -2868,6 +2870,7 @@ class SyncEngine {
 			// checkRemoteDirectoryDatabaseItemForConsistency(dbItem, localFilePath);
 			break;
 		case ItemType.unknown:
+		case ItemType.none:
 			// Unknown type - we dont action these items
 			break;
 		}
