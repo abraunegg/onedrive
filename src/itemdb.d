@@ -40,6 +40,7 @@ struct Item {
 	string   remoteDriveId;
 	string   remoteParentId;
 	string   remoteId;
+	ItemType remoteType;
 	string   syncStatus;
 	string   size;
 }
@@ -160,6 +161,13 @@ Item makeDatabaseItem(JSONValue driveItem) {
 		if ("id" in driveItem["remoteItem"]) {
 			item.remoteId = driveItem["remoteItem"]["id"].str;
 		}
+		
+		// Check and assign remoteType
+		if ("file" in driveItem["remoteItem"].object) {
+			item.remoteType = ItemType.file;
+		} else {
+			item.remoteType = ItemType.dir;
+		}
 	}
 	
 	// We have 3 different operational modes where 'item.syncStatus' is used to flag if an item is synced or not:
@@ -250,12 +258,12 @@ final class ItemDatabase {
 		db.exec("PRAGMA locking_mode = EXCLUSIVE");
 		
 		insertItemStmt = "
-			INSERT OR REPLACE INTO item (driveId, id, name, remoteName, type, eTag, cTag, mtime, parentId, quickXorHash, sha256Hash, remoteDriveId, remoteParentId, remoteId, syncStatus, size)
-			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+			INSERT OR REPLACE INTO item (driveId, id, name, remoteName, type, eTag, cTag, mtime, parentId, quickXorHash, sha256Hash, remoteDriveId, remoteParentId, remoteId, remoteType, syncStatus, size)
+			VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
 		";
 		updateItemStmt = "
 			UPDATE item
-			SET name = ?3, remoteName = ?4, type = ?5, eTag = ?6, cTag = ?7, mtime = ?8, parentId = ?9, quickXorHash = ?10, sha256Hash = ?11, remoteDriveId = ?12, remoteParentId = ?13, remoteId = ?14, syncStatus = ?15, size = ?16
+			SET name = ?3, remoteName = ?4, type = ?5, eTag = ?6, cTag = ?7, mtime = ?8, parentId = ?9, quickXorHash = ?10, sha256Hash = ?11, remoteDriveId = ?12, remoteParentId = ?13, remoteId = ?14, remoteType = ?15, syncStatus = ?16, size = ?17
 			WHERE driveId = ?1 AND id = ?2
 		";
 		selectItemByIdStmt = "
@@ -295,6 +303,7 @@ final class ItemDatabase {
 				remoteDriveId    TEXT,
 				remoteParentId   TEXT,
 				remoteId         TEXT,
+				remoteType       TEXT,
 				deltaLink        TEXT,
 				syncStatus       TEXT,
 				size             TEXT,
@@ -462,6 +471,7 @@ final class ItemDatabase {
 			bind(2, id);
 			bind(3, name);
 			bind(4, remoteName);
+			// type handling
 			string typeStr = null;
 			final switch (type) with (ItemType) {
 				case file:    typeStr = "file";    break;
@@ -480,14 +490,24 @@ final class ItemDatabase {
 			bind(12, remoteDriveId);
 			bind(13, remoteParentId);
 			bind(14, remoteId);
-			bind(15, syncStatus);
-			bind(16, size);
+			// remoteType handling
+			string remoteTypeStr = null;
+			final switch (remoteType) with (ItemType) {
+				case file:    remoteTypeStr = "file";    break;
+				case dir:     remoteTypeStr = "dir";     break;
+				case remote:  remoteTypeStr = "remote";  break;
+				case unknown: remoteTypeStr = "unknown"; break;
+				case none:    remoteTypeStr = null; break;
+			}
+			bind(15, remoteTypeStr);
+			bind(16, syncStatus);
+			bind(17, size);
 		}
 	}
 
 	private Item buildItem(Statement.Result result) {
 		assert(!result.empty, "The result must not be empty");
-		assert(result.front.length == 17, "The result must have 17 columns");
+		assert(result.front.length == 18, "The result must have 18 columns");
 		Item item = {
 		
 			// column 0: driveId
@@ -504,9 +524,10 @@ final class ItemDatabase {
 			// column 11: remoteDriveId
 			// column 12: remoteParentId
 			// column 13: remoteId
-			// column 14: deltaLink
-			// column 15: syncStatus
-			// column 16: size
+			// column 14: remoteType
+			// column 15: deltaLink
+			// column 16: syncStatus
+			// column 17: size
 				
 			driveId: result.front[0].dup,
 			id: result.front[1].dup,
@@ -522,16 +543,28 @@ final class ItemDatabase {
 			remoteDriveId: result.front[11].dup,
 			remoteParentId: result.front[12].dup,
 			remoteId: result.front[13].dup,
-			// Column 14 is deltaLink - not set here
-			syncStatus: result.front[15].dup,
-			size: result.front[16].dup
+			// Column 14 is remoteType - not set here
+			// Column 15 is deltaLink - not set here
+			syncStatus: result.front[16].dup,
+			size: result.front[17].dup
 		};
+		// Configure item.type
 		switch (result.front[4]) {
 			case "file":    item.type = ItemType.file;    break;
 			case "dir":     item.type = ItemType.dir;     break;
 			case "remote":  item.type = ItemType.remote;  break;
 			default: assert(0, "Invalid item type");
 		}
+		
+		// Configure item.remoteType
+		switch (result.front[14]) {
+			// We only care about 'dir' and 'file' for 'remote' items
+			case "file":    item.remoteType = ItemType.file;    break;
+			case "dir":     item.remoteType = ItemType.dir;     break;
+			default: item.remoteType = ItemType.none;    break; // Default to ItemType.none
+		}
+		
+		// Return item
 		return item;
 	}
 
