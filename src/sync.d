@@ -1586,6 +1586,7 @@ class SyncEngine {
 					if (fileSizeLimit != 0) {
 						if (onedriveJSONItem["size"].integer >= fileSizeLimit) {
 							addLogEntry("Skipping item - excluded by skip_size config: " ~ thisItemName ~ " (" ~ to!string(onedriveJSONItem["size"].integer/2^^20) ~ " MB)", ["verbose"]);
+							unwanted = true;
 						}
 					}
 				}
@@ -3316,7 +3317,7 @@ class SyncEngine {
 	}
 	
 	// Does this JSON item (as received from OneDrive API) get excluded from any operation based on any client side filtering rules?
-	// This function is only used when we are fetching objects from the OneDrive API using a /children query to help speed up what object we query
+	// This function is used when we are fetching objects from the OneDrive API using a /children query to help speed up what object we query or when checking OneDrive Business Shared Files
 	bool checkJSONAgainstClientSideFiltering(JSONValue onedriveJSONItem) {
 			
 		bool clientSideRuleExcludesPath = false;
@@ -3328,7 +3329,7 @@ class SyncEngine {
 		// - skip_file
 		// - skip_dir 
 		// - sync_list
-		// - skip_size (MISSING)
+		// - skip_size
 		// Return a true|false response
 		
 		// Use the JSON elements rather can computing a DB struct via makeItem()
@@ -3543,6 +3544,19 @@ class SyncEngine {
 				}
 			}
 		}
+		
+		// Check if this is excluded by a user set maximum filesize to download
+		if (!clientSideRuleExcludesPath) {
+			if (isItemFile(onedriveJSONItem)) {
+				if (fileSizeLimit != 0) {
+					if (onedriveJSONItem["size"].integer >= fileSizeLimit) {
+						addLogEntry("Skipping item - excluded by skip_size config: " ~ thisItemName ~ " (" ~ to!string(onedriveJSONItem["size"].integer/2^^20) ~ " MB)", ["verbose"]);
+						clientSideRuleExcludesPath = true;
+					}
+				}
+			}
+		}
+		
 		
 		// return if path is excluded
 		return clientSideRuleExcludesPath;
@@ -8328,7 +8342,7 @@ class SyncEngine {
 					JSONValue latestOnlineDetails;
 										
 					// Debug response output
-					addLogEntry("Shared file entry: " ~ to!string(searchResult), ["debug"]);
+					addLogEntry("getSharedWithMe Response Shared File JSON: " ~ to!string(searchResult), ["debug"]);
 					
 					// Configure 'who' this was shared by
 					if ("sharedBy" in searchResult["remoteItem"]["shared"]) {
@@ -8437,28 +8451,16 @@ class SyncEngine {
 					// Is this file in sync?
 					string itemSource = "remote";
 					if (!isItemSynced(downloadSharedFileDbItem, newItemPath, itemSource)) {
-					
-						// Not in sync, is this something we actually want ?
-						
-						// Temp debug logging
-						addLogEntry("File to Download JSON Record: " ~ to!string(fileToDownload));
-						addLogEntry("JSON Item calculated full path is: " ~ newItemPath );
-						addLogEntry("Database Item from Updated JSON: " ~ to!string(downloadSharedFileDbItem));
-					
-					
-						// Ignore client side filtering for the moment ...
-						applyPotentiallyNewLocalItem(downloadSharedFileDbItem, fileToDownload, newItemPath);
-					
-					
+						// Not in sync, is this something we actually want? Check the JSON against Client Side Filtering Rules
+						bool unwanted = checkJSONAgainstClientSideFiltering(fileToDownload);
+						if (!unwanted) {
+							// File has not been excluded via Client Side Filtering
+							applyPotentiallyNewLocalItem(downloadSharedFileDbItem, fileToDownload, newItemPath);
+						}
 					} else {
 						// Item is in sync, ensure the DB record is the same
 						itemDB.upsert(downloadSharedFileDbItem);
 					}
-					
-					
-					
-					
-				
 				}
 			}
 		}
