@@ -580,38 +580,90 @@ class SyncEngine {
 				
 					// Business Account Shared Items Handling
 					// - OneDrive Business Shared Folder
-					// - OneDrive Business Shared Files ??
+					// - OneDrive Business Shared Files
 					// - SharePoint Links
 				
 					// Get the Remote Items from the Database
 					Item[] remoteItems = itemDB.selectRemoteItems();
 					
 					foreach (remoteItem; remoteItems) {
-						// Check if this path is specifically excluded by 'skip_dir', but only if 'skip_dir' is not empty
-						if (appConfig.getValueString("skip_dir") != "") {
-							// The path that needs to be checked needs to include the '/'
-							// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
-							if (selectiveSync.isDirNameExcluded(remoteItem.name)) {
-								// This directory name is excluded
-								addLogEntry("Skipping item - excluded by skip_dir config: " ~ remoteItem.name, ["verbose"]);
-								continue;
+						// As all remote items are returned, including files, we only want to process directories here
+						if (remoteItem.remoteType == ItemType.dir) {
+							// Check if this path is specifically excluded by 'skip_dir', but only if 'skip_dir' is not empty
+							if (appConfig.getValueString("skip_dir") != "") {
+								// The path that needs to be checked needs to include the '/'
+								// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
+								if (selectiveSync.isDirNameExcluded(remoteItem.name)) {
+									// This directory name is excluded
+									addLogEntry("Skipping item - excluded by skip_dir config: " ~ remoteItem.name, ["verbose"]);
+									continue;
+								}
+							}
+							
+							// Directory name is not excluded or skip_dir is not populated
+							if (!appConfig.surpressLoggingOutput) {
+								addLogEntry("Syncing this OneDrive Business Shared Folder: " ~ remoteItem.name);
+							}
+							
+							// Debug log output
+							addLogEntry("Fetching /delta API response for:", ["debug"]);
+							addLogEntry("    remoteItem.remoteDriveId: " ~ remoteItem.remoteDriveId, ["debug"]);
+							addLogEntry("    remoteItem.remoteId:      " ~ remoteItem.remoteId, ["debug"]);
+							
+							// Check this OneDrive Business Shared Folder for changes
+							fetchOneDriveDeltaAPIResponse(remoteItem.remoteDriveId, remoteItem.remoteId, remoteItem.name);
+							
+							// Process any download activities or cleanup actions for this OneDrive Business Shared Folder
+							processDownloadActivities();
+						}
+					}
+					
+					// OneDrive Business Shared File Handling - but only if this option is enabled
+					if (appConfig.getValueBool("sync_business_shared_files")) {
+						// We need to create a 'new' local folder in the 'sync_dir' where these shared files & associated folder structure will reside
+						// Whilst these files are synced locally, the entire folder structure will need to be excluded from syncing back to OneDrive
+						// But file changes , *if any* , will need to be synced back to the original shared file location
+						//  .
+						//	├── Files Shared With Me											-> Directory should not be created online | Not Synced
+						//	│   └── Display Name (email address) (of Account who shared file)	-> Directory should not be created online | Not Synced
+						//	│   │   └── shared file.ext 										-> File synced with original shared file location on remote drive
+						//	│   │   └── shared file.ext 										-> File synced with original shared file location on remote drive
+						//	│   │   └── ......			 										-> File synced with original shared file location on remote drive
+						//	│   └── Display Name (email address) ...
+						//	│		└── shared file.ext ....									-> File synced with original shared file location on remote drive
+						
+						// Does the Local Folder to store the OneDrive Business Shared Files exist?
+						if (!exists(appConfig.configuredBusinessSharedFilesDirectoryName)) {
+							// Folder does not exist locally and needs to be created
+							addLogEntry("Creating the OneDrive Business Shared Files Local Directory: " ~ appConfig.configuredBusinessSharedFilesDirectoryName);
+						
+							// Local folder does not exist, thus needs to be created
+							mkdirRecurse(appConfig.configuredBusinessSharedFilesDirectoryName);
+							// As this will not be created online, generate a response so it can be saved to the database
+							Item sharedFilesPath = makeItem(createFakeResponse(baseName(appConfig.configuredBusinessSharedFilesDirectoryName)));
+							
+							// Add DB record to the local database
+							addLogEntry("Creating|Updating into local database a DB record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);
+							itemDB.upsert(sharedFilesPath);
+						} else {
+							// Folder exists locally, is the folder in the database? 
+							// Query DB for this path
+							Item dbRecord;
+							if (!itemDB.selectByPath(baseName(appConfig.configuredBusinessSharedFilesDirectoryName), appConfig.defaultDriveId, dbRecord)) {
+								// As this will not be created online, generate a response so it can be saved to the database
+								Item sharedFilesPath = makeItem(createFakeResponse(baseName(appConfig.configuredBusinessSharedFilesDirectoryName)));
+								
+								// Add DB record to the local database
+								addLogEntry("Creating|Updating into local database a DB record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);
+								itemDB.upsert(sharedFilesPath);
 							}
 						}
 						
-						// Directory name is not excluded or skip_dir is not populated
-						if (!appConfig.surpressLoggingOutput) {
-							addLogEntry("Syncing this OneDrive Business Shared Folder: " ~ remoteItem.name);
-						}
+						// Query for OneDrive Business Shared Files
+						addLogEntry("Checking for any applicable OneDrive Business Shared Files which need to be synced locally", ["verbose"]);
+						queryBusinessSharedObjects();
 						
-						// Debug log output
-						addLogEntry("Fetching /delta API response for:", ["debug"]);
-						addLogEntry("    remoteItem.remoteDriveId: " ~ remoteItem.remoteDriveId, ["debug"]);
-						addLogEntry("    remoteItem.remoteId:      " ~ remoteItem.remoteId, ["debug"]);
-						
-						// Check this OneDrive Personal Shared Folder for changes
-						fetchOneDriveDeltaAPIResponse(remoteItem.remoteDriveId, remoteItem.remoteId, remoteItem.name);
-						
-						// Process any download activities or cleanup actions for this OneDrive Personal Shared Folder
+						// Download any OneDrive Business Shared Files
 						processDownloadActivities();
 					}
 				}
@@ -1784,8 +1836,16 @@ class SyncEngine {
 				fileJSONItemsToDownload ~= onedriveJSONItem;
 				break;
 			case ItemType.dir:
-			case ItemType.remote:
 				handleLocalDirectoryCreation(newDatabaseItem, newItemPath, onedriveJSONItem);
+				break;
+			case ItemType.remote:
+				// Handle remote directory and files differently
+				if (newDatabaseItem.remoteType == ItemType.dir) {
+					handleLocalDirectoryCreation(newDatabaseItem, newItemPath, onedriveJSONItem);
+				} else {
+					// Add to the items to download array for processing
+					fileJSONItemsToDownload ~= onedriveJSONItem;
+				}
 				break;
 			case ItemType.unknown:
 			case ItemType.none:
@@ -1997,11 +2057,11 @@ class SyncEngine {
 		ulong jsonFileSize = 0;
 		
 		// Download item specifics
+		string downloadItemId = onedriveJSONItem["id"].str;
+		string downloadItemName = onedriveJSONItem["name"].str;
 		string downloadDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
 		string downloadParentId = onedriveJSONItem["parentReference"]["id"].str;
-		string downloadItemName = onedriveJSONItem["name"].str;
-		string downloadItemId = onedriveJSONItem["id"].str;
-	
+		
 		// Calculate this items path
 		string newItemPath = computeItemPath(downloadDriveId, downloadParentId) ~ "/" ~ downloadItemName;
 		addLogEntry("JSON Item calculated full path for download is: " ~ newItemPath, ["debug"]);
@@ -2096,11 +2156,21 @@ class SyncEngine {
 					OneDriveApi downloadFileOneDriveApiInstance;
 					downloadFileOneDriveApiInstance = new OneDriveApi(appConfig);
 					try {	
+						// Initialise API instance
 						downloadFileOneDriveApiInstance.initialise();
+						
+						// OneDrive Business Shared Files - update the driveId where to get the file from
+						if (isItemRemote(onedriveJSONItem)) {
+							downloadDriveId = onedriveJSONItem["remoteItem"]["parentReference"]["driveId"].str;
+						}
+						
+						// Perform the download
 						downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize);
 						downloadFileOneDriveApiInstance.shutdown();
+						
 						// Free object and memory
 						object.destroy(downloadFileOneDriveApiInstance);
+						
 					} catch (OneDriveException exception) {
 						addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize); generated a OneDriveException", ["debug"]);
 						string thisFunctionName = getFunctionName!({});
@@ -2278,94 +2348,74 @@ class SyncEngine {
 	
 	// Test if the given item is in-sync. Returns true if the given item corresponds to the local one
 	bool isItemSynced(Item item, string path, string itemSource) {
-	
-		// This function is typically called when we are processing JSON objects from 'online'
-		// This function is not used in an --upload-only scenario
-		
 		if (!exists(path)) return false;
-		final switch (item.type) {
-		case ItemType.file:
-			if (isFile(path)) {
-				// can we actually read the local file?
-				if (readLocalFile(path)){
-					// local file is readable
-					SysTime localModifiedTime = timeLastModified(path).toUTC();
-					SysTime itemModifiedTime = item.mtime;
-					// Reduce time resolution to seconds before comparing
-					localModifiedTime.fracSecs = Duration.zero;
-					itemModifiedTime.fracSecs = Duration.zero;
-					if (localModifiedTime == itemModifiedTime) {
-						return true;
-					} else {
-						// The file has a different timestamp ... is the hash the same meaning no file modification?
-						addLogEntry("Local file time discrepancy detected: " ~ path, ["verbose"]);
-						addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " (UTC) when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime) ~ " (UTC)", ["verbose"]);
-						
-						// The file has a different timestamp ... is the hash the same meaning no file modification?
-						// Test the file hash as the date / time stamp is different
-						// Generating a hash is computationally expensive - we only generate the hash if timestamp was different
-						if (testFileHash(path, item)) {
-							// The hash is the same .. so we need to fix-up the timestamp depending on where it is wrong
-							addLogEntry("Local item has the same hash value as the item online - correcting the applicable file timestamp", ["verbose"]);
-							// Test if the local timestamp is newer
-							if (localModifiedTime > itemModifiedTime) {
-								// Local file is newer .. are we in a --download-only situation?
-								if (!appConfig.getValueBool("download_only")) {
-									// --download-only not being used
-									// The source of the out-of-date timestamp was OneDrive and this needs to be corrected to avoid always generating a hash test if timestamp is different
-									addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);
-									if (!dryRun) {
-										// Attempt to update the online date time stamp
-										uploadLastModifiedTime(item.driveId, item.id, localModifiedTime, item.eTag);
-										return false;
-									}									
-								} else {	
-									// --download-only is being used ... local file needs to be corrected ... but why is it newer - indexing application potentially changing the timestamp ?
-									addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --download-only", ["verbose"]);
-									if (!dryRun) {
-										addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);
-										setTimes(path, item.mtime, item.mtime);
-										return false;
-									}
-								}
-							} else {
-								// The source of the out-of-date timestamp was the local file and this needs to be corrected to avoid always generating a hash test if timestamp is different
-								addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally", ["verbose"]);
-								if (!dryRun) {
-									addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);
-									setTimes(path, item.mtime, item.mtime);
-									return false;
-								}
-							}
-						} else {
-							// The hash is different so the content of the file has to be different as to what is stored online
-							addLogEntry("The local file has a different hash when compared to " ~ itemSource ~ " file hash", ["verbose"]);
-							return false;
-						}
-					}
-				} else {
-					// Unable to read local file
-					addLogEntry("Unable to determine the sync state of this file as it cannot be read (file permissions or file corruption): " ~ path);
-					return false;
-				}
-			} else {
-				addLogEntry("The local item is a directory but should be a file", ["verbose"]);
+
+		// Combine common logic for readability and file check into a single block
+		if (item.type == ItemType.file || ((item.type == ItemType.remote) && (item.remoteType == ItemType.file))) {
+			// Can we actually read the local file?
+			if (!readLocalFile(path)) {
+				// Unable to read local file
+				addLogEntry("Unable to determine the sync state of this file as it cannot be read (file permissions or file corruption): " ~ path);
+				return false;
 			}
-			break;
-		case ItemType.dir:
-		case ItemType.remote:
-			if (isDir(path)) {
+			
+			// Get time values
+			SysTime localModifiedTime = timeLastModified(path).toUTC();
+			SysTime itemModifiedTime = item.mtime;
+			// Reduce time resolution to seconds before comparing
+			localModifiedTime.fracSecs = Duration.zero;
+			itemModifiedTime.fracSecs = Duration.zero;
+
+			if (localModifiedTime == itemModifiedTime) {
 				return true;
 			} else {
-				addLogEntry("The local item is a file but should be a directory", ["verbose"]);
+				// The file has a different timestamp ... is the hash the same meaning no file modification?
+				addLogEntry("Local file time discrepancy detected: " ~ path, ["verbose"]);
+				addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " (UTC) when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime) ~ " (UTC)", ["verbose"]);
+
+				// The file has a different timestamp ... is the hash the same meaning no file modification?
+				// Test the file hash as the date / time stamp is different
+				// Generating a hash is computationally expensive - we only generate the hash if timestamp was different
+				if (testFileHash(path, item)) {
+					// The hash is the same .. so we need to fix-up the timestamp depending on where it is wrong
+					addLogEntry("Local item has the same hash value as the item online - correcting the applicable file timestamp", ["verbose"]);
+					// Correction logic based on the configuration and the comparison of timestamps
+					if (localModifiedTime > itemModifiedTime) {
+						// Local file is newer .. are we in a --download-only situation?
+						if (!appConfig.getValueBool("download_only") && !dryRun) {
+							// The source of the out-of-date timestamp was OneDrive and this needs to be corrected to avoid always generating a hash test if timestamp is different
+							addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);
+							// Attempt to update the online date time stamp
+							uploadLastModifiedTime(item.driveId, item.id, localModifiedTime, item.eTag);
+						} else if (!dryRun) {
+							// --download-only is being used ... local file needs to be corrected ... but why is it newer - indexing application potentially changing the timestamp ?
+							addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --download-only", ["verbose"]);
+							// Fix the local file timestamp
+							addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);
+							setTimes(path, item.mtime, item.mtime);
+						}
+					} else if (!dryRun) {
+						// The source of the out-of-date timestamp was the local file and this needs to be corrected to avoid always generating a hash test if timestamp is different
+						addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally", ["verbose"]);
+						// Fix the local file timestamp
+						addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);
+						setTimes(path, item.mtime, item.mtime);
+					}
+					return false;
+				} else {
+					// The hash is different so the content of the file has to be different as to what is stored online
+					addLogEntry("The local file has a different hash when compared to " ~ itemSource ~ " file hash", ["verbose"]);
+					return false;
+				}
 			}
-			break;
-		case ItemType.unknown:
-		case ItemType.none:
-			// Unknown type - return true but we dont action or sync these items 
+		} else if (item.type == ItemType.dir || ((item.type == ItemType.remote) && (item.remoteType == ItemType.dir))) {
+			// item is a directory
+			return true;
+		} else {
+			// ItemType.unknown or ItemType.none
+			// Logically, we might not want to sync these items, but a more nuanced approach may be needed based on application context
 			return true;
 		}
-		return false;
 	}
 	
 	// Get the /delta data using the provided details
@@ -5795,9 +5845,10 @@ class SyncEngine {
 	}
 	
 	// Create a fake OneDrive response suitable for use with saveItem
-	JSONValue createFakeResponse(const(string) path) {
-		
+	// Create a fake OneDrive response suitable for use with saveItem
+	JSONValue createFakeResponse(string path) {
 		import std.digest.sha;
+		
 		// Generate a simulated JSON response which can be used
 		// At a minimum we need:
 		// 1. eTag
@@ -5810,86 +5861,57 @@ class SyncEngine {
 		
 		string fakeDriveId = appConfig.defaultDriveId;
 		string fakeRootId = appConfig.defaultRootId;
-		SysTime mtime = timeLastModified(path).toUTC();
-		
-		// Need to update the 'fakeDriveId' & 'fakeRootId' with elements from the --dry-run database
-		// Otherwise some calls to validate objects will fail as the actual driveId being used is invalid
-		string parentPath = dirName(path);
-		Item databaseItem;
-		
-		if (parentPath != ".") {
-			// Not a 'root' parent
-			foreach (searchDriveId; onlineDriveDetails.keys) {
-				addLogEntry("FakeResponse: searching database for: " ~ searchDriveId ~ " " ~ parentPath, ["debug"]);
-				
-				if (itemDB.selectByPath(parentPath, searchDriveId, databaseItem)) {
-					addLogEntry("FakeResponse: Found Database Item: " ~ to!string(databaseItem), ["debug"]);
-					fakeDriveId = databaseItem.driveId;
-					fakeRootId = databaseItem.id;
-				}
-			}
-			
-			
-			
-			
-		}
-		
-		// real id / eTag / cTag are different format for personal / business account
+		SysTime mtime = exists(path) ? timeLastModified(path).toUTC() : Clock.currTime(UTC());
 		auto sha1 = new SHA1Digest();
 		ubyte[] fakedOneDriveItemValues = sha1.digest(path);
-		
 		JSONValue fakeResponse;
-		
-		if (isDir(path)) {
-			// path is a directory
-			fakeResponse = [
-							"id": JSONValue(toHexString(fakedOneDriveItemValues)),
-							"cTag": JSONValue(toHexString(fakedOneDriveItemValues)),
-							"eTag": JSONValue(toHexString(fakedOneDriveItemValues)),
-							"fileSystemInfo": JSONValue([
-														"createdDateTime": mtime.toISOExtString(),
-														"lastModifiedDateTime": mtime.toISOExtString()
-														]),
-							"name": JSONValue(baseName(path)),
-							"parentReference": JSONValue([
-														"driveId": JSONValue(fakeDriveId),
-														"driveType": JSONValue(appConfig.accountType),
-														"id": JSONValue(fakeRootId)
-														]),
-							"folder": JSONValue("")
-							];
-		} else {
-			// path is a file
-			// compute file hash - both business and personal responses use quickXorHash
-			string quickXorHash = computeQuickXorHash(path);
-	
-			fakeResponse = [
-							"id": JSONValue(toHexString(fakedOneDriveItemValues)),
-							"cTag": JSONValue(toHexString(fakedOneDriveItemValues)),
-							"eTag": JSONValue(toHexString(fakedOneDriveItemValues)),
-							"fileSystemInfo": JSONValue([
-														"createdDateTime": mtime.toISOExtString(),
-														"lastModifiedDateTime": mtime.toISOExtString()
-														]),
-							"name": JSONValue(baseName(path)),
-							"parentReference": JSONValue([
-														"driveId": JSONValue(fakeDriveId),
-														"driveType": JSONValue(appConfig.accountType),
-														"id": JSONValue(fakeRootId)
-														]),
-							"file": JSONValue([
-												"hashes":JSONValue([
-																	"quickXorHash": JSONValue(quickXorHash)
-																	])
-												
-												])
-							];
+
+		string parentPath = dirName(path);
+		if (parentPath != "." && exists(path)) {
+			foreach (searchDriveId; onlineDriveDetails.keys) {
+				Item databaseItem;
+				if (itemDB.selectByPath(parentPath, searchDriveId, databaseItem)) {
+					fakeDriveId = databaseItem.driveId;
+					fakeRootId = databaseItem.id;
+					break; // Exit loop after finding the first match
+				}
+			}
 		}
-						
+
+		fakeResponse = [
+			"id": JSONValue(toHexString(fakedOneDriveItemValues)),
+			"cTag": JSONValue(toHexString(fakedOneDriveItemValues)),
+			"eTag": JSONValue(toHexString(fakedOneDriveItemValues)),
+			"fileSystemInfo": JSONValue([
+				"createdDateTime": mtime.toISOExtString(),
+				"lastModifiedDateTime": mtime.toISOExtString()
+			]),
+			"name": JSONValue(baseName(path)),
+			"parentReference": JSONValue([
+				"driveId": JSONValue(fakeDriveId),
+				"driveType": JSONValue(appConfig.accountType),
+				"id": JSONValue(fakeRootId)
+			])
+		];
+
+		if (exists(path)) {
+			if (isDir(path)) {
+				fakeResponse["folder"] = JSONValue("");
+			} else {
+				string quickXorHash = computeQuickXorHash(path);
+				fakeResponse["file"] = JSONValue([
+					"hashes": JSONValue(["quickXorHash": JSONValue(quickXorHash)])
+				]);
+			}
+		} else {
+			// Assume directory if path does not exist
+			fakeResponse["folder"] = JSONValue("");
+		}
+
 		addLogEntry("Generated Fake OneDrive Response: " ~ to!string(fakeResponse), ["debug"]);
 		return fakeResponse;
 	}
-	
+
 	// Save JSON item details into the item database
 	void saveItem(JSONValue jsonItem) {
 		// jsonItem has to be a valid object
@@ -8159,6 +8181,7 @@ class SyncEngine {
 		itemDB.upsert(tieDBItem);
 	}
 	
+	// List all the OneDrive Business Shared Items for the user to see
 	void listBusinessSharedObjects() {
 	
 		JSONValue sharedWithMeItems;
@@ -8251,4 +8274,193 @@ class SyncEngine {
 		// Free object and memory
 		object.destroy(sharedWithMeOneDriveApiInstance);
 	}
+	
+	// Query all the OneDrive Business Shared Objects to sync only Shared Files
+	void queryBusinessSharedObjects() {
+	
+		JSONValue sharedWithMeItems;
+		Item sharedFilesRootDirectoryDatabaseRecord;
+		
+		// Create a new API Instance for this thread and initialise it
+		OneDriveApi sharedWithMeOneDriveApiInstance;
+		sharedWithMeOneDriveApiInstance = new OneDriveApi(appConfig);
+		sharedWithMeOneDriveApiInstance.initialise();
+		
+		try {
+			sharedWithMeItems = sharedWithMeOneDriveApiInstance.getSharedWithMe();
+		} catch (OneDriveException e) {
+			
+			// Add eventual API error handling here
+			
+		}
+		
+		// Valid JSON response
+		if (sharedWithMeItems.type() == JSONType.object) {
+		
+			// Get the configuredBusinessSharedFilesDirectoryName DB item
+			// We need this as we need to 'fake' create all the folders for the shared files
+			// Then fake create the file entries for the database with the correct parent folder that is the local folder
+			itemDB.selectByPath(baseName(appConfig.configuredBusinessSharedFilesDirectoryName), appConfig.defaultDriveId, sharedFilesRootDirectoryDatabaseRecord);
+		
+			// For each item returned, if a file, process it
+			foreach (searchResult; sharedWithMeItems["value"].array) {
+			
+				// Shared Business Folders are added to the account using 'Add shortcut to My files'
+				// We only care here about any remaining 'files' that are shared with the user
+				
+				if (isItemFile(searchResult)) {
+				
+					//addLogEntry("Shared File Original JSON: " ~ to!string(searchResult));
+					
+					Item sharedFileOriginalData = makeItem(searchResult);
+					
+					//addLogEntry("Database Item from Original JSON: " ~ to!string(sharedFileOriginalData));
+					
+					// Variables for each item
+					string sharedByName;
+					string sharedByEmail;
+					string sharedByFolderName;
+					string newLocalSharedFilePath;
+					string newItemPath;
+					Item sharedFilesPath;
+					JSONValue fileToDownload;
+					JSONValue detailsToAdd;
+					JSONValue latestOnlineDetails;
+										
+					// Debug response output
+					addLogEntry("Shared file entry: " ~ to!string(searchResult), ["debug"]);
+					
+					// Configure 'who' this was shared by
+					if ("sharedBy" in searchResult["remoteItem"]["shared"]) {
+						// we have shared by details we can use
+						if ("displayName" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
+							sharedByName = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["displayName"].str;
+						}
+						if ("email" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
+							sharedByEmail = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["email"].str;
+						}
+					}
+					
+					// Configure 'who' shared this, so that we can create the directory for that users shared files with us
+					if ((sharedByName != "") && (sharedByEmail != "")) {
+						sharedByFolderName = sharedByName ~ " (" ~ sharedByEmail ~ ")";
+						
+					} else {
+						if (sharedByName != "") {
+							sharedByFolderName = sharedByName;
+						}
+					}
+					
+					// Create the local path to store this users shared files with us
+					newLocalSharedFilePath = buildNormalizedPath(buildPath(appConfig.configuredBusinessSharedFilesDirectoryName, sharedByFolderName));
+					
+					// Does the Shared File Users Local Directory to store the shared file(s) exist?
+					if (!exists(newLocalSharedFilePath)) {
+						// Folder does not exist locally and needs to be created
+						addLogEntry("Creating the OneDrive Business Shared File Users Local Directory: " ~ newLocalSharedFilePath);
+					
+						// Local folder does not exist, thus needs to be created
+						mkdirRecurse(newLocalSharedFilePath);
+						
+						// As this will not be created online, generate a response so it can be saved to the database
+						sharedFilesPath = makeItem(createFakeResponse(baseName(newLocalSharedFilePath)));
+						
+						// Update sharedFilesPath parent items to that of sharedFilesRootDirectoryDatabaseRecord
+						sharedFilesPath.parentId = sharedFilesRootDirectoryDatabaseRecord.id;
+						
+						// Add DB record to the local database
+						addLogEntry("Creating|Updating into local database a DB record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);
+						itemDB.upsert(sharedFilesPath);
+					} else {
+						// Folder exists locally, is the folder in the database? 
+						// Query DB for this path
+						Item dbRecord;
+						if (!itemDB.selectByPath(baseName(newLocalSharedFilePath), appConfig.defaultDriveId, dbRecord)) {
+							// As this will not be created online, generate a response so it can be saved to the database
+							sharedFilesPath = makeItem(createFakeResponse(baseName(newLocalSharedFilePath)));
+							
+							// Update sharedFilesPath parent items to that of sharedFilesRootDirectoryDatabaseRecord
+							sharedFilesPath.parentId = sharedFilesRootDirectoryDatabaseRecord.id;
+							
+							// Add DB record to the local database
+							addLogEntry("Creating|Updating into local database a DB record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);
+							itemDB.upsert(sharedFilesPath);
+						}
+					}
+					
+					// The file to download JSON details
+					fileToDownload = searchResult;
+					
+					// Get the latest online details
+					latestOnlineDetails = sharedWithMeOneDriveApiInstance.getPathDetailsById(sharedFileOriginalData.remoteDriveId, sharedFileOriginalData.remoteId);
+					Item tempOnlineRecord = makeItem(latestOnlineDetails);
+					
+					// With the local folders created, now update 'fileToDownload' to download the file to our location:
+					//	"parentReference": {
+					//		"driveId": "<account drive id>",
+					//		"driveType": "business",
+					//		"id": "<local users shared folder id>",
+					//	},
+					
+					// The getSharedWithMe() JSON response also contains an API bug where the 'hash' of the file is not provided
+					// Use the 'latestOnlineDetails' response to obtain the hash
+					//	"file": {
+					//		"hashes": {
+					//			"quickXorHash": "<hash value>"
+					//		}
+					//	},
+					//
+					
+					detailsToAdd = [
+								"parentReference": JSONValue([
+															"driveId": JSONValue(appConfig.defaultDriveId),
+															"driveType": JSONValue("business"),
+															"id": JSONValue(sharedFilesPath.id)
+															]),
+								"file": JSONValue([
+													"hashes":JSONValue([
+																		"quickXorHash": JSONValue(tempOnlineRecord.quickXorHash)
+																		])
+													])		
+								];
+					
+					foreach (string key, JSONValue value; detailsToAdd.object) {
+						fileToDownload[key] = value;
+					}
+					
+					// Make the new DB item from the consolidated JSON item
+					Item downloadSharedFileDbItem = makeItem(fileToDownload);
+					
+					// Calculate the full local path for this shared file
+					newItemPath = computeItemPath(downloadSharedFileDbItem.driveId, downloadSharedFileDbItem.parentId) ~ "/" ~ downloadSharedFileDbItem.name;
+					
+					// Is this file in sync?
+					string itemSource = "remote";
+					if (!isItemSynced(downloadSharedFileDbItem, newItemPath, itemSource)) {
+					
+						// Not in sync, is this something we actually want ?
+						
+						// Temp debug logging
+						addLogEntry("File to Download JSON Record: " ~ to!string(fileToDownload));
+						addLogEntry("JSON Item calculated full path is: " ~ newItemPath );
+						addLogEntry("Database Item from Updated JSON: " ~ to!string(downloadSharedFileDbItem));
+					
+					
+						// Ignore client side filtering for the moment ...
+						applyPotentiallyNewLocalItem(downloadSharedFileDbItem, fileToDownload, newItemPath);
+					
+					
+					} else {
+						// Item is in sync, ensure the DB record is the same
+						itemDB.upsert(downloadSharedFileDbItem);
+					}
+					
+					
+					
+					
+				
+				}
+			}
+		}
+	}	
 }

@@ -337,21 +337,24 @@ int main(string[] cliArgs) {
 			processResyncDatabaseRemoval(runtimeDatabaseFile);
 		}
 	} else {
-		// Has any of our application configuration that would require a --resync been changed?
-		if (appConfig.applicationChangeWhereResyncRequired()) {
-			// Application configuration has changed however --resync not issued, fail fast
-			addLogEntry();
-			addLogEntry("An application configuration change has been detected where a --resync is required");
-			addLogEntry();
-			return EXIT_RESYNC_REQUIRED;
-		} else {
-			// No configuration change that requires a --resync to be issued
-			// Special cases need to be checked - if these options were enabled, it creates a false 'Resync Required' flag, so do not create a backup
-			if ((!appConfig.getValueBool("list_business_shared_items"))) {
-				// Make a backup of the applicable configuration file
-				appConfig.createBackupConfigFile();
-				// Update hash files and generate a new config backup
-				appConfig.updateHashContentsForConfigFiles();
+		// Is the application currently authenticated? If not, it is pointless checking if a --resync is required until the application is authenticated
+		if (exists(appConfig.refreshTokenFilePath)) {
+			// Has any of our application configuration that would require a --resync been changed?
+			if (appConfig.applicationChangeWhereResyncRequired()) {
+				// Application configuration has changed however --resync not issued, fail fast
+				addLogEntry();
+				addLogEntry("An application configuration change has been detected where a --resync is required");
+				addLogEntry();
+				return EXIT_RESYNC_REQUIRED;
+			} else {
+				// No configuration change that requires a --resync to be issued
+				// Special cases need to be checked - if these options were enabled, it creates a false 'Resync Required' flag, so do not create a backup
+				if ((!appConfig.getValueBool("list_business_shared_items"))) {
+					// Make a backup of the applicable configuration file
+					appConfig.createBackupConfigFile();
+					// Update hash files and generate a new config backup
+					appConfig.updateHashContentsForConfigFiles();
+				}
 			}
 		}
 	}
