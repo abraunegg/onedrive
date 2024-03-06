@@ -47,6 +47,7 @@ Use the following steps to add a OneDrive Business Shared Folder to your account
 
 When using Microsoft Windows, this shared folder will appear as the following:
 
+![windows_view_shared_folders](./images/windows_view_shared_folders.png)
 
 4. Sync your data using `onedrive --sync --verbose`. If you have just enabled the `sync_business_shared_items = "true"` configuration option, you will be required to perform a resync. During the sync, the selected shared folder will be downloaded:
 
