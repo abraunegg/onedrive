@@ -1591,7 +1591,7 @@ class OneDriveApi {
 			case 403:
 				// OneDrive responded that the user is forbidden
 				addLogEntry("OneDrive returned a 'HTTP 403 - Forbidden' - gracefully handling error", ["verbose"]);
-				break;
+				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason);
 
 			// 404 - Item not found
 			case 404:
