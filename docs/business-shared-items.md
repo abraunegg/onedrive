@@ -41,7 +41,7 @@ Use the following steps to add a OneDrive Business Shared Folder to your account
 
 ![add_shared_folder](./images/add_shared_folder.png)
 
-3. The final result online will look like this
+3. The final result online will look like this:
 
 ![shared_folder_added](./images/shared_folder_added.png)
 
@@ -87,6 +87,50 @@ There are two methods to support the syncing OneDrive Business Shared Files with
 1. Add a 'shortcut' to your 'My Files' for the file, which creates a URL shortcut to the file which can be followed when using a Linux Window Manager (Gnome, KDE etc) and the link will open up in a browser. Microsoft Windows only supports this option.
 2. Use `--sync-shared-files` to sync all files shared with you to your local disk. If you use this method, you can utilise any 'client side filtering' rules that you have created to filter out files you do not want locally. This option will create a new folder locally, with sub-folders named after the person who shared the data with you.
 
+### Syncing OneDrive Business Shared Files using Option 1
+1. As per the above method for adding folders, select the shared file, then select to 'Add shorcut' to the file
+
+![add_shared_file_shortcut](./images/add_shared_file_shortcut.png)
+
+2. The final result online will look like this:
+
+![add_shared_file_shortcut_added](./images/online_shared_file_link.png)
+
+When using Microsoft Windows, this shared file will appear as the following:
+
+![windows_view_shared_file_link](./images/windows_view_shared_file_link.png)
+
+3. Sync your data using `onedrive --sync --verbose`. If you have just enabled the `sync_business_shared_items = "true"` configuration option, you will be required to perform a resync.
+```
+...
+All application operations will be performed in the configured local 'sync_dir' directory: /home/alex/OneDrive
+Fetching /delta response from the OneDrive API for Drive ID: b!bO8V7s9SSk6r7mWHpIjURotN33W1W2tEv3OXV_oFIdQimEdOHR-1So7CqeT1MfHA
+Processing API Response Bundle: 1 - Quantity of 'changes|items' in this bundle to process: 2
+Finished processing /delta JSON response from the OneDrive API
+Processing 1 applicable changes and items received from Microsoft OneDrive
+Processing OneDrive JSON item batch [1/1] to ensure consistent local state
+Number of items to download from OneDrive: 1
+Downloading file: ./file to share.docx.url ... done
+Syncing this OneDrive Business Shared Folder: my_shared_folder
+Fetching /delta response from the OneDrive API for Drive ID: b!BhWyqa7K_kqXqHtSIlsqjR5iJogxpWxDradnpVGTU2VxBOJh82Y6S4he4rdnGPBT
+Processing API Response Bundle: 1 - Quantity of 'changes|items' in this bundle to process: 0
+Finished processing /delta JSON response from the OneDrive API
+No additional changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive
+Quota information is restricted or not available for this drive.
+Performing a database consistency and integrity check on locally stored data
+Processing DB entries for this Drive ID: b!BhWyqa7K_kqXqHtSIlsqjR5iJogxpWxDradnpVGTU2VxBOJh82Y6S4he4rdnGPBT
+Quota information is restricted or not available for this drive.
+...
+```
+
+When this is viewed locally, on Linux, this shared folder is seen as the following:
+
+![linux_view_shared_file_link](./images/linux_view_shared_file_link.png)
+
+Any shared file link you add can utilise any 'client side filtering' rules that you have created.
+
+
+### Syncing OneDrive Business Shared Files using Option 2
 
 
 ## Known Issues
