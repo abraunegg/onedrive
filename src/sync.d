@@ -4331,7 +4331,7 @@ class SyncEngine {
 		// OneDrive Business Shared Files Handling - if we make a 'backup' locally of a file shared with us (because we modified it, and then maybe did a --resync), it will be treated as a new file to upload ...
 		// The issue here is - the 'source' was a shared file - we may not even have permission to upload a 'renamed' file to the shared file's parent folder
 		// In this case, we need to skip adding this new local file - we do not upload it (we cant , and we should not)
-		if (appConfig.getValueBool("sync_business_shared_files")) {
+		if (appConfig.accountType == "business") {
 			// Check appConfig.configuredBusinessSharedFilesDirectoryName against 'path'
 			if (canFind(path, baseName(appConfig.configuredBusinessSharedFilesDirectoryName))) {
 				// Log why this path is being skipped
@@ -4596,8 +4596,18 @@ class SyncEngine {
 		// Log what we are doing
 		addLogEntry("OneDrive Client requested to create this directory online: " ~ thisNewPathToCreate, ["verbose"]);
 		
+		// Function variables
 		Item parentItem;
 		JSONValue onlinePathData;
+		
+		// Special Folder Handling: Do NOT create the folder online if it is being used for OneDrive Business Shared Files
+		// These are local copy files, in a self created directory structure which is not to be replicated online
+		// Check appConfig.configuredBusinessSharedFilesDirectoryName against 'thisNewPathToCreate'
+		if (canFind(thisNewPathToCreate, baseName(appConfig.configuredBusinessSharedFilesDirectoryName))) {
+			// Log why this is being skipped
+			addLogEntry("Skipping creating '" ~ thisNewPathToCreate ~ "' as this path is used for handling OneDrive Business Shared Files", ["info", "notify"]);
+			return;
+		}
 		
 		// Create a new API Instance for this thread and initialise it
 		OneDriveApi createDirectoryOnlineOneDriveApiInstance;
