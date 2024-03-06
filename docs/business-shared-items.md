@@ -21,15 +21,72 @@ Syncing OneDrive Business Shared Folders requires additional configuration for y
 **NOTE:** This documentation will be updated as this feature progresses.
 
 
-### Enable syncing of OneDrive Business Shared Folders via config file
+### Enable syncing of OneDrive Business Shared Items via config file
 ```text
 sync_business_shared_items = "true"
 ```
 
-### Disable syncing of OneDrive Business Shared Folders via config file
+### Disable syncing of OneDrive Business Shared Items via config file
 ```text
 sync_business_shared_items = "false"
 ```
+
+## Syncing OneDrive Business Shared Folders
+Use the following steps to add a OneDrive Business Shared Folder to your account:
+1. Login to Microsoft OneDrive online, and navigate to 'Shared' from the left hand side pane
+
+![objects_shared_with_me](./images/objects_shared_with_me.png)
+
+2. Select the respective folder you wish to sync, and click the 'Add shortcut to My files' at the top of the page
+
+![add_shared_folder](./images/add_shared_folder.png)
+
+3. The final result online will look like this
+
+![shared_folder_added](./images/shared_folder_added.png)
+
+When using Microsoft Windows, this shared folder will appear as the following:
+
+
+4. Sync your data using `onedrive --sync --verbose`. If you have just enabled the `sync_business_shared_items = "true"` configuration option, you will be required to perform a resync. During the sync, the selected shared folder will be downloaded:
+
+```
+...
+Processing API Response Bundle: 1 - Quantity of 'changes|items' in this bundle to process: 4
+Finished processing /delta JSON response from the OneDrive API
+Processing 3 applicable changes and items received from Microsoft OneDrive
+Processing OneDrive JSON item batch [1/1] to ensure consistent local state
+Creating local directory: ./my_shared_folder
+Quota information is restricted or not available for this drive.
+Syncing this OneDrive Business Shared Folder: my_shared_folder
+Fetching /delta response from the OneDrive API for Drive ID: b!BhWyqa7K_kqXqHtSIlsqjR5iJogxpWxDradnpVGTU2VxBOJh82Y6S4he4rdnGPBT
+Processing API Response Bundle: 1 - Quantity of 'changes|items' in this bundle to process: 6
+Finished processing /delta JSON response from the OneDrive API
+Processing 6 applicable changes and items received from Microsoft OneDrive
+Processing OneDrive JSON item batch [1/1] to ensure consistent local state
+Creating local directory: ./my_shared_folder/asdf
+Creating local directory: ./my_shared_folder/original_data
+Number of items to download from OneDrive: 3
+Downloading file: my_shared_folder/asdf/asdfasdfhashdkfasdf.txt ... done
+Downloading file: my_shared_folder/asdf/asdfasdf.txt ... done
+Downloading file: my_shared_folder/original_data/file1.data ... done
+Performing a database consistency and integrity check on locally stored data
+...
+```
+
+When this is viewed locally, on Linux, this shared folder is seen as the following:
+
+![linux_shared_folder_view](./images/linux_shared_folder_view.png)
+
+Any shared folder you add can utilise any 'client side filtering' rules that you have created.
+
+
+## Syncing OneDrive Business Shared Files
+There are two methods to support the syncing OneDrive Business Shared Files with the OneDrive Application
+1. Add a 'shortcut' to your 'My Files' for the file, which creates a URL shortcut to the file which can be followed when using a Linux Window Manager (Gnome, KDE etc) and the link will open up in a browser. Microsoft Windows only supports this option.
+2. Use `--sync-shared-files` to sync all files shared with you to your local disk. If you use this method, you can utilise any 'client side filtering' rules that you have created to filter out files you do not want locally. This option will create a new folder locally, with sub-folders named after the person who shared the data with you.
+
+
 
 ## Known Issues
 Shared folders, shared with you from people outside of your 'organisation' are unable to be synced. This is due to the Microsoft Graph API not presenting these folders.
