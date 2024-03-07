@@ -85,7 +85,7 @@ Any shared folder you add can utilise any 'client side filtering' rules that you
 ## Syncing OneDrive Business Shared Files
 There are two methods to support the syncing OneDrive Business Shared Files with the OneDrive Application
 1. Add a 'shortcut' to your 'My Files' for the file, which creates a URL shortcut to the file which can be followed when using a Linux Window Manager (Gnome, KDE etc) and the link will open up in a browser. Microsoft Windows only supports this option.
-2. Use `--sync-shared-files` to sync all files shared with you to your local disk. If you use this method, you can utilise any 'client side filtering' rules that you have created to filter out files you do not want locally. This option will create a new folder locally, with sub-folders named after the person who shared the data with you.
+2. Use `--sync-shared-files` option to sync all files shared with you to your local disk. If you use this method, you can utilise any 'client side filtering' rules that you have created to filter out files you do not want locally. This option will create a new folder locally, with sub-folders named after the person who shared the data with you.
 
 ### Syncing OneDrive Business Shared Files using Option 1
 1. As per the above method for adding folders, select the shared file, then select to 'Add shorcut' to the file
@@ -132,6 +132,114 @@ Any shared file link you add can utilise any 'client side filtering' rules that 
 
 ### Syncing OneDrive Business Shared Files using Option 2
 
+**NOTE:** When using option 2, all files that have been shared with you will be downloaded by default. To reduce this, first use `--list-shared-items` to list all shared items with your account, then use 'client side filtering' rules such as 'sync_list' configuration to selectivly sync all the files to your local system.
+
+1. Review all items that have been shared with you by using `onedrive --list-shared-items`. This should display output similar to the following:
+```
+...
+Listing available OneDrive Business Shared Items:
+
+-----------------------------------------------------------------------------------
+Shared File:     large_document_shared.docx
+Shared By:       test user (testuser@mynasau3.onmicrosoft.com)
+-----------------------------------------------------------------------------------
+Shared File:     no_download_access.docx
+Shared By:       test user (testuser@mynasau3.onmicrosoft.com)
+-----------------------------------------------------------------------------------
+Shared File:     online_access_only.txt
+Shared By:       test user (testuser@mynasau3.onmicrosoft.com)
+-----------------------------------------------------------------------------------
+Shared File:     read_only.txt
+Shared By:       test user (testuser@mynasau3.onmicrosoft.com)
+-----------------------------------------------------------------------------------
+Shared File:     qewrqwerwqer.txt
+Shared By:       test user (testuser@mynasau3.onmicrosoft.com)
+-----------------------------------------------------------------------------------
+Shared File:     dummy_file_to_share.docx
+Shared By:       testuser2 testuser2 (testuser2@mynasau3.onmicrosoft.com)
+-----------------------------------------------------------------------------------
+Shared Folder:   Sub Folder 2
+Shared By:       test user (testuser@mynasau3.onmicrosoft.com)
+-----------------------------------------------------------------------------------
+Shared File:     file to share.docx
+Shared By:       test user (testuser@mynasau3.onmicrosoft.com)
+-----------------------------------------------------------------------------------
+Shared Folder:   Top Folder
+Shared By:       test user (testuser@mynasau3.onmicrosoft.com)
+-----------------------------------------------------------------------------------
+Shared Folder:   my_shared_folder
+Shared By:       testuser2 testuser2 (testuser2@mynasau3.onmicrosoft.com)
+-----------------------------------------------------------------------------------
+Shared Folder:   Jenkins
+Shared By:       test user (testuser@mynasau3.onmicrosoft.com)
+-----------------------------------------------------------------------------------
+...
+```
+
+2. If applicable, add entries to a 'sync_list' file, to only sync the shared files that are of importance to you.
+
+3. Run the command `onedrive --sync --verbose --sync-shared-files` to sync the shared files to your local file system. This will create a new local folder called 'Files Shared With Me', and will contain sub-directories named after the entity account that has shared the file with you. In that folder will reside the shared file:
+
+```
+...
+Finished processing /delta JSON response from the OneDrive API
+No additional changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive
+Syncing this OneDrive Business Shared Folder: my_shared_folder
+Fetching /delta response from the OneDrive API for Drive ID: b!BhWyqa7K_kqXqHtSIlsqjR5iJogxpWxDradnpVGTU2VxBOJh82Y6S4he4rdnGPBT
+Processing API Response Bundle: 1 - Quantity of 'changes|items' in this bundle to process: 0
+Finished processing /delta JSON response from the OneDrive API
+No additional changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive
+Quota information is restricted or not available for this drive.
+Creating the OneDrive Business Shared Files Local Directory: /home/alex/OneDrive/Files Shared With Me
+Checking for any applicable OneDrive Business Shared Files which need to be synced locally
+Creating the OneDrive Business Shared File Users Local Directory: /home/alex/OneDrive/Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)
+Creating the OneDrive Business Shared File Users Local Directory: /home/alex/OneDrive/Files Shared With Me/testuser2 testuser2 (testuser2@mynasau3.onmicrosoft.com)
+Number of items to download from OneDrive: 7
+Downloading file: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/file to share.docx ... done
+OneDrive returned a 'HTTP 403 - Forbidden' - gracefully handling error
+Unable to download this file as this was shared as read-only without download permission: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/no_download_access.docx
+ERROR: File failed to download. Increase logging verbosity to determine why.
+Downloading file: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/no_download_access.docx ... failed!
+Downloading file: Files Shared With Me/testuser2 testuser2 (testuser2@mynasau3.onmicrosoft.com)/dummy_file_to_share.docx ... done
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 0%   |  ETA    --:--:--
+Downloading file: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/online_access_only.txt ... done
+Downloading file: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/read_only.txt ... done
+Downloading file: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/qewrqwerwqer.txt ... done
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 5%   |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 10%  |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 15%  |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 20%  |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 25%  |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 30%  |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 35%  |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 40%  |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 45%  |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 50%  |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 55%  |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 60%  |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 65%  |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 70%  |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 75%  |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 80%  |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 85%  |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 90%  |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 95%  |  ETA    00:00:00
+Downloading: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... 100% | DONE in 00:00:00
+Quota information is restricted or not available for this drive.
+Downloading file: Files Shared With Me/test user (testuser@mynasau3.onmicrosoft.com)/large_document_shared.docx ... done
+Quota information is restricted or not available for this drive.
+Quota information is restricted or not available for this drive.
+Performing a database consistency and integrity check on locally stored data
+Processing DB entries for this Drive ID: b!BhWyqa7K_kqXqHtSIlsqjR5iJogxpWxDradnpVGTU2VxBOJh82Y6S4he4rdnGPBT
+Quota information is restricted or not available for this drive.
+...
+```
+
+When this is viewed locally, on Linux, this 'Files Shared With Me' and content is seen as the following:
+
+![files_shared_with_me_folder](./images/files_shared_with_me_folder.png)
+
+Unfortunatly there is no Microsoft Windows equivalent for this capability.
 
 ## Known Issues
 Shared folders, shared with you from people outside of your 'organisation' are unable to be synced. This is due to the Microsoft Graph API not presenting these folders.
