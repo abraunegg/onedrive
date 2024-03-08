@@ -41,6 +41,8 @@ class ApplicationConfig {
 	immutable string defaultLogFileDir = "/var/log/onedrive";
 	// - Default configuration directory
 	immutable string defaultConfigDirName = "~/.config/onedrive";
+	// - Default 'OneDrive Business Shared Files' Folder Name
+	immutable string defaultBusinessSharedFilesDirectoryName = "Files Shared With Me";
 	
 	// Microsoft Requirements 
 	// - Default Application ID (abraunegg)
@@ -106,7 +108,6 @@ class ApplicationConfig {
 	bool debugLogging = false;
 	long verbosityCount = 0;
 	
-	
 	// Was the application just authorised - paste of response uri
 	bool applicationAuthorizeResponseUri = false;
 	
@@ -121,6 +122,7 @@ class ApplicationConfig {
 	// Store the 'session_upload.CRC32-HASH' file path
 	string uploadSessionFilePath = "";
 	
+	// API initialisation flags
 	bool apiWasInitialised = false;
 	bool syncEngineWasInitialised = false;
 	
@@ -161,25 +163,23 @@ class ApplicationConfig {
 	private string applicableConfigFilePath = "";
 	// - Store the 'sync_list' file path
 	string syncListFilePath = "";
-	// - Store the 'business_shared_items' file path
-	string businessSharedItemsFilePath = "";
 	
+	// OneDrive Business Shared File handling - what directory will be used?
+	string configuredBusinessSharedFilesDirectoryName = "";
+
 	// Hash files so that we can detect when the configuration has changed, in items that will require a --resync
 	private string configHashFile = "";
 	private string configBackupFile = "";
 	private string syncListHashFile = "";
-	private string businessSharedItemsHashFile = "";
 	
 	// Store the actual 'runtime' hash
 	private string currentConfigHash = "";
 	private string currentSyncListHash = "";
-	private string currentBusinessSharedItemsHash = "";
 	
 	// Store the previous config files hash values (file contents)
 	private string previousConfigHash = "";
 	private string previousSyncListHash = "";
-	private string previousBusinessSharedItemsHash = "";
-	
+		
 	// Store items that come in from the 'config' file, otherwise these need to be set the the defaults
 	private string configFileSyncDir = defaultSyncDir;
 	private string configFileSkipFile = defaultSkipFile;
@@ -197,7 +197,6 @@ class ApplicationConfig {
 	string[string] stringValues;
 	long[string] longValues;
 	bool[string] boolValues;
-	
 	bool shellEnvironmentSet = false;
 	
 	// Initialise the application configuration
@@ -275,7 +274,7 @@ class ApplicationConfig {
 		longValues["ip_protocol_version"] = defaultIpProtocol; // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
 		
 		// Number of concurrent threads
-		longValues["threads"] = defaultConcurrentThreads; // Default is 8, user can increase or decrease
+		longValues["threads"] = defaultConcurrentThreads; // Default is 8, user can increase to max of 16 or decrease
 		
 		// - Do we wish to upload only?
 		boolValues["upload_only"] = false;
@@ -469,9 +468,6 @@ class ApplicationConfig {
 		// - What is the full path for the system 'config' file if it is required
 		systemConfigFilePath = buildNormalizedPath(buildPath(systemConfigDirName, "config"));
 		
-		// - What is the full path for the 'business_shared_items'
-		businessSharedItemsFilePath = buildNormalizedPath(buildPath(configDirName, "business_shared_items"));
-				
 		// To determine if any configuration items has changed, where a --resync would be required, we need to have a hash file for the following items
 		// - 'config.backup' file
 		// - applicable 'config' file
@@ -480,8 +476,7 @@ class ApplicationConfig {
 		configBackupFile = buildNormalizedPath(buildPath(configDirName, ".config.backup"));
 		configHashFile = buildNormalizedPath(buildPath(configDirName, ".config.hash"));
 		syncListHashFile = buildNormalizedPath(buildPath(configDirName, ".sync_list.hash"));
-		businessSharedItemsHashFile = buildNormalizedPath(buildPath(configDirName, ".business_shared_items.hash"));
-				
+						
 		// Debug Output for application set variables based on configDirName
 		addLogEntry("refreshTokenFilePath =   " ~ refreshTokenFilePath, ["debug"]);
 		addLogEntry("deltaLinkFilePath =      " ~ deltaLinkFilePath, ["debug"]);
@@ -494,8 +489,6 @@ class ApplicationConfig {
 		addLogEntry("configBackupFile =       " ~ configBackupFile, ["debug"]);
 		addLogEntry("configHashFile =         " ~ configHashFile, ["debug"]);
 		addLogEntry("syncListHashFile =       " ~ syncListHashFile, ["debug"]);
-		addLogEntry("businessSharedItemsFilePath = " ~ businessSharedItemsFilePath, ["debug"]);
-		addLogEntry("businessSharedItemsHashFile = " ~ businessSharedItemsHashFile, ["debug"]);
 		
 		// Configure the Hash and Backup File Permission Value
 		string valueToConvert = to!string(defaultFilePermissionMode);
@@ -900,6 +893,7 @@ class ApplicationConfig {
 		boolValues["synchronize"] = false;
 		boolValues["force"] = false;
 		boolValues["list_business_shared_items"] = false;
+		boolValues["sync_business_shared_files"] = false;
 		boolValues["force_sync"] = false;
 		boolValues["with_editing_perms"] = false;
 		
@@ -995,6 +989,12 @@ class ApplicationConfig {
 				"get-O365-drive-id",
 					"Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library (DEPRECIATED)",
 					&stringValues["sharepoint_library_name"],
+				"list-shared-items",
+					"List OneDrive Business Shared Items",
+					&boolValues["list_business_shared_items"],
+				"sync-shared-files",
+					"Sync OneDrive Business Shared Files to the local filesystem",
+					&boolValues["sync_business_shared_files"],
 				"local-first",
 					"Synchronize from the local directory source first, before downloading changes from OneDrive.",
 					&boolValues["local_first"],
@@ -1365,20 +1365,7 @@ class ApplicationConfig {
 		// Is sync_business_shared_items enabled and configured ?
 		addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
 		addLogEntry("Config option 'sync_business_shared_items'   = " ~ to!string(getValueBool("sync_business_shared_items")));
-		
-		if (exists(businessSharedItemsFilePath)){
-			addLogEntry("Selective Business Shared Items configured   = true");
-			addLogEntry("sync_business_shared_items contents:");
-			// Output the sync_business_shared_items contents
-			auto businessSharedItemsFileList = File(businessSharedItemsFilePath, "r");
-			auto range = businessSharedItemsFileList.byLine();
-			foreach (line; range)
-			{
-				addLogEntry(to!string(line));
-			}
-		} else {
-			addLogEntry("Selective Business Shared Items configured   = false");
-		}
+		addLogEntry("Config option 'Shared Files Directory'       = " ~ configuredBusinessSharedFilesDirectoryName);
 		
 		// Are webhooks enabled?
 		addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
@@ -1517,9 +1504,6 @@ class ApplicationConfig {
 		// Check for changes in the sync_list and business_shared_items files
 		if (currentSyncListHash != previousSyncListHash)
 			logAndSetDifference("sync_list file has been updated, --resync needed", 0);
-
-		if (currentBusinessSharedItemsHash != previousBusinessSharedItemsHash)
-			logAndSetDifference("business_shared_folders file has been updated, --resync needed", 1);
 
 		// Check for updates in the config file
 		if (currentConfigHash != previousConfigHash) {
@@ -1665,7 +1649,14 @@ class ApplicationConfig {
 				break;
 			}
 		}
-
+		
+		// Final override
+		// In certain situations, regardless of config 'resync' needed status, ignore this so that the application can display 'non-syncable' information
+		// Options that should now be looked at are:
+		// --list-shared-items
+		if (getValueBool("list_business_shared_items")) resyncRequired = false;
+		
+		// Return the calculated boolean
 		return resyncRequired;
 	}
 	
@@ -1676,7 +1667,6 @@ class ApplicationConfig {
 			addLogEntry("Cleaning up configuration hash files", ["debug"]);
 			safeRemove(configHashFile);
 			safeRemove(syncListHashFile);
-			safeRemove(businessSharedItemsHashFile);
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
 			addLogEntry("DRY RUN: Not removing hash files as --dry-run has been used");
@@ -1704,17 +1694,6 @@ class ApplicationConfig {
 				// Hash file should only be readable by the user who created it - 0600 permissions needed
 				syncListHashFile.setAttributes(convertedPermissionValue);
 			}
-			
-			
-			// Update 'update business_shared_items' files
-			if (exists(businessSharedItemsFilePath)) {
-				// update business_shared_folders hash
-				addLogEntry("Updating business_shared_items hash", ["debug"]);
-				std.file.write(businessSharedItemsHashFile, computeQuickXorHash(businessSharedItemsFilePath));
-				// Hash file should only be readable by the user who created it - 0600 permissions needed
-				businessSharedItemsHashFile.setAttributes(convertedPermissionValue);
-			}
-			
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
 			addLogEntry("DRY RUN: Not updating hash files as --dry-run has been used");
@@ -1746,18 +1725,6 @@ class ApplicationConfig {
 			// Generate the runtime hash for the 'sync_list' file
 			currentSyncListHash = computeQuickXorHash(syncListFilePath);
 		}
-		
-		// Does a 'business_shared_items' file exist with a valid hash file
-		if (exists(businessSharedItemsFilePath)) {
-			if (!exists(businessSharedItemsHashFile)) {
-				// no existing hash file exists
-				std.file.write(businessSharedItemsHashFile, "initial-hash");
-				// Hash file should only be readable by the user who created it - 0600 permissions needed
-				businessSharedItemsHashFile.setAttributes(convertedPermissionValue);
-			}
-			// Generate the runtime hash for the 'sync_list' file
-			currentBusinessSharedItemsHash = computeQuickXorHash(businessSharedItemsFilePath);
-		}
 	}
 	
 	// Read in the text values of the previous configurations
@@ -1783,16 +1750,7 @@ class ApplicationConfig {
 				return EXIT_FAILURE;
 			}
 		}
-		if (exists(businessSharedItemsHashFile)) {
-			try {
-				previousBusinessSharedItemsHash = readText(businessSharedItemsHashFile);
-			} catch (std.file.FileException e) {
-				// Unable to access required hash file
-				addLogEntry("ERROR: Unable to access " ~ e.msg);
-				// Use exit scopes to shutdown API
-				return EXIT_FAILURE;
-			}
-		}
+		
 		return 0;
 	}
 	
@@ -1850,10 +1808,22 @@ class ApplicationConfig {
 		
 		// --list-shared-folders cannot be used with --resync and/or --resync-auth
 		if ((getValueBool("list_business_shared_items")) && ((getValueBool("resync")) || (getValueBool("resync_auth")))) {
-			addLogEntry("ERROR: --list-shared-folders cannot be used with --resync or --resync-auth");
+			addLogEntry("ERROR: --list-shared-items cannot be used with --resync or --resync-auth");
 			operationalConflictDetected = true;
 		}
 		
+		// --list-shared-folders cannot be used with --sync or --monitor
+		if ((getValueBool("list_business_shared_items")) && ((getValueBool("synchronize")) || (getValueBool("monitor")))) {
+			addLogEntry("ERROR: --list-shared-items cannot be used with --sync or --monitor");
+			operationalConflictDetected = true;
+		}
+		
+		// --sync-shared-files can ONLY be used with sync_business_shared_items
+		if ((getValueBool("sync_business_shared_files")) && (!getValueBool("sync_business_shared_items"))) {
+			addLogEntry("ERROR: The --sync-shared-files option can only be utilised if the 'sync_business_shared_items' configuration setting is enabled.");
+			operationalConflictDetected = true;
+		}
+				
 		// --display-sync-status cannot be used with --resync and/or --resync-auth
 		if ((getValueBool("display_sync_status")) && ((getValueBool("resync")) || (getValueBool("resync_auth")))) {
 			addLogEntry("ERROR: --display-sync-status cannot be used with --resync or --resync-auth");
@@ -2056,6 +2026,9 @@ class ApplicationConfig {
 		
 		// What will runtimeSyncDirectory be actually set to?
 		addLogEntry("sync_dir: runtimeSyncDirectory set to: " ~ runtimeSyncDirectory, ["debug"]);
+		
+		// Configure configuredBusinessSharedFilesDirectoryName
+		configuredBusinessSharedFilesDirectoryName = buildNormalizedPath(buildPath(runtimeSyncDirectory, defaultBusinessSharedFilesDirectoryName));
 		
 		return runtimeSyncDirectory;
 	}

@@ -1,12 +1,27 @@
 # OneDrive Client for Linux Application Architecture
 
 ## How does the client work at a high level?
+The client utilises the 'libcurl' library to communicate with the Microsoft Authentication Service and the Microsoft Graph API. The diagram below shows this high level interaction with the Microsoft services online:
 
-The diagram below outlines at a high level the operational workflow of the OneDrive Client for Linux, demonstrating how it interacts with the OneDrive API to maintain synchronisation, manage local and cloud data integrity, and ensure that user data is accurately mirrored between the local filesystem and OneDrive cloud storage.
+![client_use_of_libcurl](./puml/client_use_of_libcurl.png)
+
+Depending on your operational environment, it is possible to 'tweak' the following options which will modify how libcurl operates with it's interaction with Microsoft OneDrive services:
+
+*  Downgrade all HTTPS operations to use HTTP1.1 ('force_http_11')
+*  Control how long a specific transfer should take before it is considered too slow and aborted ('operation_timeout')
+*  Control libcurl handling of DNS Cache Timeout ('dns_timeout')
+*  Control the maximum time allowed for the connection to be established ('connect_timeout')
+*  Control the timeout for activity on an established HTTPS connection ('data_timeout')
+*  Control what IP protocol version should be used when communicating with OneDrive ('ip_protocol_version')
+*  Control what User Agent is presented to Microsoft services ('user_agent')
+
+**Note:** The default 'user_agent' value conforms to specific Microsoft requirements to identify as an ISV that complies with OneDrive traffic decoration requirements. Changing this value potentially will impact how Microsoft see's your client, thus your traffic may get throttled. For further information please read: https://learn.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
+
+Diving a little deeper into how the client operates, the diagram below outlines at a high level the operational workflow of the OneDrive Client for Linux, demonstrating how it interacts with the OneDrive API to maintain synchronisation, manage local and cloud data integrity, and ensure that user data is accurately mirrored between the local filesystem and OneDrive cloud storage.
 
 ![High Level Application Sequence](./puml/high_level_operational_process.png)
 
-The above process involves several high level key stages:
+The application operational processes have several high level key stages:
 
 1. **Access Token Validation:** Initially, the client validates its access and the existing access token, refreshing it if necessary. This step ensures that the client has the required permissions to interact with the OneDrive API.
 

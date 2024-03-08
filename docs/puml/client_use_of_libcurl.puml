@@ -1,0 +1,25 @@
+@startuml
+participant "OneDrive Client\nfor Linux" as od
+participant "libcurl" as lc
+participant "Microsoft Authentication Service\n(OAuth 2.0 Endpoint)" as oauth
+participant "Microsoft Graph API" as graph
+
+activate od
+activate lc
+
+od->oauth: Request access token
+activate oauth
+oauth-->od: Access token
+deactivate oauth
+
+loop API Communication
+    od->lc: Construct HTTPS request (with token)
+    activate lc
+    lc->graph: API Request
+    activate graph
+    graph-->lc: API Response
+    deactivate graph
+    lc-->od: Process response
+    deactivate lc
+end
+@enduml
