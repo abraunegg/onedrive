@@ -99,8 +99,13 @@ class LogBuffer {
 		shared void notify(string message) {
             // Use dnotify's functionality for GUI notifications, if GUI notifications is enabled
 			version(Notifications) {
-				auto n = new Notification("Log Notification", message, "IGNORED");
-				n.show();
+				try {
+					auto n = new Notification("Log Notification", message, "IGNORED");
+					n.show();
+				} catch (NotificationError e) {
+					sendGUINotification = false;
+					addLogEntry("Unable to send notification; disabled in the following: " ~ e.message);
+				}
 			}
         }
 
