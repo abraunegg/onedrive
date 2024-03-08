@@ -13,7 +13,9 @@ class item {
     quickXorHash: TEXT
     sha256Hash: TEXT
     remoteDriveId: TEXT
+    remoteParentId: TEXT
     remoteId: TEXT
+    remoteType: TEXT
     deltaLink: TEXT
     syncStatus: TEXT
     size: TEXT
