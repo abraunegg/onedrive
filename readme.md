@@ -14,22 +14,21 @@ Originally derived as a 'fork' from the [skilion](https://github.com/skilion/one
 This client represents a 100% re-imagining of the original work, addressing numerous notable bugs and issues while incorporating a significant array of new features. This client has been under active development since mid-2018.
 
 ## Features
-*   Supports 'Client Side Filtering' rules to determine what should be synced with Microsoft OneDrive
-*   Sync State Caching
-*   Real-Time local file monitoring with inotify
-*   Real-Time syncing of remote updates via webhooks
-*   File upload / download validation to ensure data integrity
-*   Resumable uploads
-*   Support OneDrive for Business (part of Office 365)
-*   Shared Folder support for OneDrive Personal and OneDrive Business accounts
-*   SharePoint / Office365 Shared Libraries
-*   Desktop notifications via libnotify
-*   Dry-run capability to test configuration changes
-*   Prevent major OneDrive accidental data deletion after configuration change
-*   Support for National cloud deployments (Microsoft Cloud for US Government, Microsoft Cloud Germany, Azure and Office 365 operated by 21Vianet in China)
-*   Supports single & multi-tenanted applications
-*   Supports rate limiting of traffic
-*   Supports multi-threaded uploads and downloads
+*   Compatible with OneDrive Personal, OneDrive for Business including accessing Microsoft SharePoint Libraries
+*   Provides rules for client-side filtering to select data for syncing with Microsoft OneDrive accounts
+*   Caches sync state for efficiency
+*   Supports a dry-run option for safe configuration testing
+*   Validates file transfers to ensure data integrity
+*   Monitors local files in real-time using inotify
+*   Supports interrupted uploads for completion at a later time
+*   Capability to sync remote updates immediately via webhooks
+*   Enhanced syncronisation speed with multi-threaded file transfers
+*   Manages traffic bandwidth use with rate limiting
+*   Supports seamless access to shared folders and files across both OneDrive Personal and OneDrive for Business accounts
+*   Supports national cloud deployments including Microsoft Cloud for US Government, Microsoft Cloud Germany and Azure and Office 365 operated by 21Vianet in China
+*   Supports sending desktop alerts using libnotify
+*   Protects against significant data loss on OneDrive after configuration changes
+*   Works with both single and multi-tenant applications
 
 ## What's missing
 *   Ability to encrypt/decrypt files on-the-fly when uploading/downloading files from OneDrive
@@ -68,8 +67,8 @@ Refer to [docs/install.md](https://github.com/abraunegg/onedrive/blob/master/doc
 ### Configuration and Usage
 Refer to [docs/usage.md](https://github.com/abraunegg/onedrive/blob/master/docs/usage.md)
 
-### Configure OneDrive Business Shared Folders
-Refer to [docs/business-shared-folders.md](https://github.com/abraunegg/onedrive/blob/master/docs/business-shared-folders.md)
+### Configure OneDrive Business Shared Items
+Refer to [docs/business-shared-items.md](https://github.com/abraunegg/onedrive/blob/master/docs/business-shared-items.md)
 
 ### Configure SharePoint / Office 365 Shared Libraries (Business or Education)
 Refer to [docs/sharepoint-libraries.md](https://github.com/abraunegg/onedrive/blob/master/docs/sharepoint-libraries.md)

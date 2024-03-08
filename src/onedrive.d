@@ -512,6 +512,13 @@ class OneDriveApi {
 		return get(url);
 	}
 	
+	// Return all the items that are shared with the user
+	// https://docs.microsoft.com/en-us/graph/api/drive-sharedwithme
+	JSONValue getSharedWithMe() {
+		checkAccessTokenExpired();
+		return get(sharedWithMeUrl);
+	}
+	
 	// Create a shareable link for an existing file on OneDrive based on the accessScope JSON permissions
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createlink
 	JSONValue createShareableLink(string driveId, string id, JSONValue accessScope) {
@@ -1584,7 +1591,7 @@ class OneDriveApi {
 			case 403:
 				// OneDrive responded that the user is forbidden
 				addLogEntry("OneDrive returned a 'HTTP 403 - Forbidden' - gracefully handling error", ["verbose"]);
-				break;
+				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason);
 
 			// 404 - Item not found
 			case 404:
