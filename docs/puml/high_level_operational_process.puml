@@ -1,0 +1,55 @@
+@startuml
+
+participant "OneDrive Client\nfor Linux" as Client
+participant "Microsoft OneDrive\nAPI" as API
+
+== Access Token Validation ==
+Client -> Client: Validate access and\nexisting access token\nRefresh if needed
+
+== Query Microsoft OneDrive /delta API ==
+Client -> API: Query /delta API
+API -> Client: JSON responses
+
+== Process JSON Responses ==
+loop for each JSON response
+    Client -> Client: Determine if JSON is 'root'\nor 'deleted' item\nElse, push into temporary array for further processing
+    alt if 'root' or 'deleted'
+        Client -> Client: Process 'root' or 'deleted' items
+    else
+        Client -> Client: Evaluate against 'Client Side Filtering' rules
+        alt if unwanted
+            Client -> Client: Discard JSON
+        else
+            Client -> Client: Process JSON (create dir/download file)
+            Client -> Client: Save in local database cache
+        end
+    end
+end
+
+== Local Cache Database Processing for Data Integrity ==
+Client -> Client: Process local cache database\nto check local data integrity and for differences
+alt if difference found
+    Client -> API: Upload file/folder change including deletion
+    API -> Client: Response with item metadata
+    Client -> Client: Save response to local cache database
+end
+
+== Local Filesystem Scanning ==
+Client -> Client: Scan local filesystem\nfor new files/folders
+
+loop for each new item
+    Client -> Client: Check item against 'Client Side Filtering' rules
+    alt if item passes filtering
+        Client -> API: Upload new file/folder change including deletion
+        API -> Client: Response with item metadata
+        Client -> Client: Save response in local\ncache database
+    else
+        Client -> Client: Discard item\n(Does not meet filtering criteria)
+    end
+end
+
+== Final Data True-Up ==
+Client -> API: Query /delta link for true-up
+API -> Client: Process further online JSON changes if required
+
+@enduml

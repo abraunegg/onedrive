@@ -32,6 +32,7 @@ import syncEngine;
 import itemdb;
 import clientSideFiltering;
 import monitor;
+import webhook;
 
 
 // What other constant variables do we require?
@@ -39,7 +40,7 @@ const int EXIT_RESYNC_REQUIRED = 126;
 
 // Class objects
 ApplicationConfig appConfig;
-OneDriveApi oneDriveApiInstance;
+OneDriveWebhook oneDriveWebhook;
 SyncEngine syncEngineInstance;
 ItemDatabase itemDB;
 ClientSideFiltering selectiveSync;
@@ -341,19 +342,25 @@ int main(string[] cliArgs) {
 			processResyncDatabaseRemoval(runtimeDatabaseFile);
 		}
 	} else {
-		// Has any of our application configuration that would require a --resync been changed?
-		if (appConfig.applicationChangeWhereResyncRequired()) {
-			// Application configuration has changed however --resync not issued, fail fast
-			addLogEntry();
-			addLogEntry("An application configuration change has been detected where a --resync is required");
-			addLogEntry();
-			return EXIT_RESYNC_REQUIRED;
-		} else {
-			// No configuration change that requires a --resync to be issued
-			// Make a backup of the applicable configuration file
-			appConfig.createBackupConfigFile();
-			// Update hash files and generate a new config backup
-			appConfig.updateHashContentsForConfigFiles();
+		// Is the application currently authenticated? If not, it is pointless checking if a --resync is required until the application is authenticated
+		if (exists(appConfig.refreshTokenFilePath)) {
+			// Has any of our application configuration that would require a --resync been changed?
+			if (appConfig.applicationChangeWhereResyncRequired()) {
+				// Application configuration has changed however --resync not issued, fail fast
+				addLogEntry();
+				addLogEntry("An application configuration change has been detected where a --resync is required");
+				addLogEntry();
+				return EXIT_RESYNC_REQUIRED;
+			} else {
+				// No configuration change that requires a --resync to be issued
+				// Special cases need to be checked - if these options were enabled, it creates a false 'Resync Required' flag, so do not create a backup
+				if ((!appConfig.getValueBool("list_business_shared_items"))) {
+					// Make a backup of the applicable configuration file
+					appConfig.createBackupConfigFile();
+					// Update hash files and generate a new config backup
+					appConfig.updateHashContentsForConfigFiles();
+				}
+			}
 		}
 	}
 	
@@ -416,13 +423,16 @@ int main(string[] cliArgs) {
 		
 		// Initialise the OneDrive API
 		addLogEntry("Attempting to initialise the OneDrive API ...", ["verbose"]);
-		oneDriveApiInstance = new OneDriveApi(appConfig);
+		OneDriveApi oneDriveApiInstance = new OneDriveApi(appConfig);
 		appConfig.apiWasInitialised = oneDriveApiInstance.initialise();
 		if (appConfig.apiWasInitialised) {
 			addLogEntry("The OneDrive API was initialised successfully", ["verbose"]);
 			
 			// Flag that we were able to initalise the API in the application config
 			oneDriveApiInstance.debugOutputConfiguredAPIItems();
+
+			oneDriveApiInstance.shutdown();
+			object.destroy(oneDriveApiInstance);
 			
 			// Need to configure the itemDB and syncEngineInstance for 'sync' and 'non-sync' operations
 			addLogEntry("Opening the item database ...", ["verbose"]);
@@ -447,8 +457,9 @@ int main(string[] cliArgs) {
 				// Are we performing some sort of 'no-sync' task?
 				// - Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
 				// - Are we displaying the sync satus?
-				// - Are we getting the URL for a file online
-				// - Are we listing who modified a file last online
+				// - Are we getting the URL for a file online?
+				// - Are we listing who modified a file last online?
+				// - Are we listing OneDrive Business Shared Items?
 				// - Are we createing a shareable link for an existing file on OneDrive?
 				// - Are we just creating a directory online, without any sync being performed?
 				// - Are we just deleting a directory online, without any sync being performed?
@@ -497,6 +508,20 @@ int main(string[] cliArgs) {
 					syncEngineInstance.queryOneDriveForFileDetails(appConfig.getValueString("modified_by"), runtimeSyncDirectory, "ModifiedBy");
 					// Exit application
 					// Use exit scopes to shutdown API and cleanup data
+					return EXIT_SUCCESS;
+				}
+				
+				// --list-shared-items - Are we listing OneDrive Business Shared Items
+				if (appConfig.getValueBool("list_business_shared_items")) {
+					// Is this a business account type?
+					if (appConfig.accountType == "business") {
+						// List OneDrive Business Shared Items
+						syncEngineInstance.listBusinessSharedObjects();
+					} else {
+						addLogEntry("ERROR: Unsupported account type for listing OneDrive Business Shared Items");
+					}
+					// Exit application
+					// Use exit scopes to shutdown API
 					return EXIT_SUCCESS;
 				}
 				
@@ -851,15 +876,16 @@ int main(string[] cliArgs) {
 						addLogEntry("ERROR: The following inotify error was generated: " ~ e.msg);
 					}
 				}
-			
-				// Webhook Notification reset to false for this loop
-				notificationReceived = false;
 				
 				// Check for notifications pushed from Microsoft to the webhook
 				if (webhookEnabled) {
 					// Create a subscription on the first run, or renew the subscription
 					// on subsequent runs when it is about to expire.
-					oneDriveApiInstance.createOrRenewSubscription();
+					if (oneDriveWebhook is null) {
+						oneDriveWebhook = new OneDriveWebhook(thisTid, appConfig);
+						oneDriveWebhook.serve();
+					} else 
+						oneDriveWebhook.createOrRenewSubscription();
 				}
 				
 				// Get the current time this loop is starting
@@ -1004,19 +1030,21 @@ int main(string[] cliArgs) {
 
 					if(filesystemMonitor.initialised || webhookEnabled) {
 						if(filesystemMonitor.initialised) {
-							// If local monitor is on
+							// If local monitor is on and is waiting (previous event was not from webhook)
 							// start the worker and wait for event
-							filesystemMonitor.send(true);
+							if (!notificationReceived)
+								filesystemMonitor.send(true);
 						}
 
 						if(webhookEnabled) {
 							// if onedrive webhook is enabled
 							// update sleep time based on renew interval
-							Duration nextWebhookCheckDuration = oneDriveApiInstance.getNextExpirationCheckDuration();
+							Duration nextWebhookCheckDuration = oneDriveWebhook.getNextExpirationCheckDuration();
 							if (nextWebhookCheckDuration < sleepTime) {
 								sleepTime = nextWebhookCheckDuration;
 								addLogEntry("Update sleeping time to " ~ to!string(sleepTime), ["debug"]);
 							}
+							// Webhook Notification reset to false for this loop
 							notificationReceived = false;
 						}
 
@@ -1042,17 +1070,17 @@ int main(string[] cliArgs) {
 						// do not contain any actual changes, and we will always rely do the
 						// delta endpoint to sync to latest. Therefore, only one sync run is
 						// good enough to catch up for multiple notifications.
-						int signalCount = notificationReceived ? 1 : 0;
-						for (;; signalCount++) {
-							signalExists = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
-							if (signalExists) {
-								notificationReceived = true;
-							} else {
-								if (notificationReceived) {
+						if (notificationReceived) {
+							int signalCount = 1;
+							while (true) {
+								signalExists = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
+								if (signalExists) {
+									signalCount++;
+								} else {
 									addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signals from the webhook");
 									oneDriveWebhookCallback();
+									break;
 								}
-								break;
 							}
 						}
 
@@ -1091,11 +1119,10 @@ void performStandardExitProcess(string scopeCaller = null) {
 		addLogEntry("Running performStandardExitProcess due to: " ~ scopeCaller, ["debug"]);
 	}
 		
-	// Shutdown the OneDrive API instance
-	if (oneDriveApiInstance !is null) {
-		addLogEntry("Shutdown OneDrive API instance", ["debug"]);
-		oneDriveApiInstance.shutdown();
-		object.destroy(oneDriveApiInstance);
+	// Shutdown the OneDrive Webhook instance
+	if (oneDriveWebhook !is null) {
+		oneDriveWebhook.stop();
+		object.destroy(oneDriveWebhook);
 	}
 	
 	// Shutdown the sync engine
@@ -1145,7 +1172,7 @@ void performStandardExitProcess(string scopeCaller = null) {
 		addLogEntry("Setting ALL Class Objects to null due to failure scope", ["debug"]);
 		itemDB = null;
 		appConfig = null;
-		oneDriveApiInstance = null;
+		oneDriveWebhook = null;
 		selectiveSync = null;
 		syncEngineInstance = null;
 	} else {

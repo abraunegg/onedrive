@@ -581,38 +581,90 @@ class SyncEngine {
 				
 					// Business Account Shared Items Handling
 					// - OneDrive Business Shared Folder
-					// - OneDrive Business Shared Files ??
+					// - OneDrive Business Shared Files
 					// - SharePoint Links
 				
 					// Get the Remote Items from the Database
 					Item[] remoteItems = itemDB.selectRemoteItems();
 					
 					foreach (remoteItem; remoteItems) {
-						// Check if this path is specifically excluded by 'skip_dir', but only if 'skip_dir' is not empty
-						if (appConfig.getValueString("skip_dir") != "") {
-							// The path that needs to be checked needs to include the '/'
-							// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
-							if (selectiveSync.isDirNameExcluded(remoteItem.name)) {
-								// This directory name is excluded
-								addLogEntry("Skipping item - excluded by skip_dir config: " ~ remoteItem.name, ["verbose"]);
-								continue;
+						// As all remote items are returned, including files, we only want to process directories here
+						if (remoteItem.remoteType == ItemType.dir) {
+							// Check if this path is specifically excluded by 'skip_dir', but only if 'skip_dir' is not empty
+							if (appConfig.getValueString("skip_dir") != "") {
+								// The path that needs to be checked needs to include the '/'
+								// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
+								if (selectiveSync.isDirNameExcluded(remoteItem.name)) {
+									// This directory name is excluded
+									addLogEntry("Skipping item - excluded by skip_dir config: " ~ remoteItem.name, ["verbose"]);
+									continue;
+								}
+							}
+							
+							// Directory name is not excluded or skip_dir is not populated
+							if (!appConfig.surpressLoggingOutput) {
+								addLogEntry("Syncing this OneDrive Business Shared Folder: " ~ remoteItem.name);
+							}
+							
+							// Debug log output
+							addLogEntry("Fetching /delta API response for:", ["debug"]);
+							addLogEntry("    remoteItem.remoteDriveId: " ~ remoteItem.remoteDriveId, ["debug"]);
+							addLogEntry("    remoteItem.remoteId:      " ~ remoteItem.remoteId, ["debug"]);
+							
+							// Check this OneDrive Business Shared Folder for changes
+							fetchOneDriveDeltaAPIResponse(remoteItem.remoteDriveId, remoteItem.remoteId, remoteItem.name);
+							
+							// Process any download activities or cleanup actions for this OneDrive Business Shared Folder
+							processDownloadActivities();
+						}
+					}
+					
+					// OneDrive Business Shared File Handling - but only if this option is enabled
+					if (appConfig.getValueBool("sync_business_shared_files")) {
+						// We need to create a 'new' local folder in the 'sync_dir' where these shared files & associated folder structure will reside
+						// Whilst these files are synced locally, the entire folder structure will need to be excluded from syncing back to OneDrive
+						// But file changes , *if any* , will need to be synced back to the original shared file location
+						//  .
+						//	├── Files Shared With Me											-> Directory should not be created online | Not Synced
+						//	│   └── Display Name (email address) (of Account who shared file)	-> Directory should not be created online | Not Synced
+						//	│   │   └── shared file.ext 										-> File synced with original shared file location on remote drive
+						//	│   │   └── shared file.ext 										-> File synced with original shared file location on remote drive
+						//	│   │   └── ......			 										-> File synced with original shared file location on remote drive
+						//	│   └── Display Name (email address) ...
+						//	│		└── shared file.ext ....									-> File synced with original shared file location on remote drive
+						
+						// Does the Local Folder to store the OneDrive Business Shared Files exist?
+						if (!exists(appConfig.configuredBusinessSharedFilesDirectoryName)) {
+							// Folder does not exist locally and needs to be created
+							addLogEntry("Creating the OneDrive Business Shared Files Local Directory: " ~ appConfig.configuredBusinessSharedFilesDirectoryName);
+						
+							// Local folder does not exist, thus needs to be created
+							mkdirRecurse(appConfig.configuredBusinessSharedFilesDirectoryName);
+							// As this will not be created online, generate a response so it can be saved to the database
+							Item sharedFilesPath = makeItem(createFakeResponse(baseName(appConfig.configuredBusinessSharedFilesDirectoryName)));
+							
+							// Add DB record to the local database
+							addLogEntry("Creating|Updating into local database a DB record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);
+							itemDB.upsert(sharedFilesPath);
+						} else {
+							// Folder exists locally, is the folder in the database? 
+							// Query DB for this path
+							Item dbRecord;
+							if (!itemDB.selectByPath(baseName(appConfig.configuredBusinessSharedFilesDirectoryName), appConfig.defaultDriveId, dbRecord)) {
+								// As this will not be created online, generate a response so it can be saved to the database
+								Item sharedFilesPath = makeItem(createFakeResponse(baseName(appConfig.configuredBusinessSharedFilesDirectoryName)));
+								
+								// Add DB record to the local database
+								addLogEntry("Creating|Updating into local database a DB record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);
+								itemDB.upsert(sharedFilesPath);
 							}
 						}
 						
-						// Directory name is not excluded or skip_dir is not populated
-						if (!appConfig.surpressLoggingOutput) {
-							addLogEntry("Syncing this OneDrive Business Shared Folder: " ~ remoteItem.name);
-						}
+						// Query for OneDrive Business Shared Files
+						addLogEntry("Checking for any applicable OneDrive Business Shared Files which need to be synced locally", ["verbose"]);
+						queryBusinessSharedObjects();
 						
-						// Debug log output
-						addLogEntry("Fetching /delta API response for:", ["debug"]);
-						addLogEntry("    remoteItem.remoteDriveId: " ~ remoteItem.remoteDriveId, ["debug"]);
-						addLogEntry("    remoteItem.remoteId:      " ~ remoteItem.remoteId, ["debug"]);
-						
-						// Check this OneDrive Personal Shared Folder for changes
-						fetchOneDriveDeltaAPIResponse(remoteItem.remoteDriveId, remoteItem.remoteId, remoteItem.name);
-						
-						// Process any download activities or cleanup actions for this OneDrive Personal Shared Folder
+						// Download any OneDrive Business Shared Files
 						processDownloadActivities();
 					}
 				}
@@ -1099,14 +1151,15 @@ class SyncEngine {
 				
 				// Compute this deleted items path based on the database entries
 				string localPathToDelete = computeItemPath(existingDatabaseItem.driveId, existingDatabaseItem.parentId) ~ "/" ~ existingDatabaseItem.name;
-				
 				if (isItemSynced(existingDatabaseItem, localPathToDelete, itemSource)) {
 					// Flag to delete
 					addLogEntry("Flagging to delete item locally: " ~ to!string(onedriveJSONItem), ["debug"]);
 					idsToDelete ~= [thisItemDriveId, thisItemId];
 				} else {
 					// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
-					safeBackup(localPathToDelete, dryRun);
+					// In case the renamed path is needed
+					string renamedPath;
+					safeBackup(localPathToDelete, dryRun, renamedPath);
 				}
 			} else {
 				// Flag to ignore
@@ -1512,6 +1565,7 @@ class SyncEngine {
 					if (fileSizeLimit != 0) {
 						if (onedriveJSONItem["size"].integer >= fileSizeLimit) {
 							addLogEntry("Skipping item - excluded by skip_size config: " ~ thisItemName ~ " (" ~ to!string(onedriveJSONItem["size"].integer/2^^20) ~ " MB)", ["verbose"]);
+							unwanted = true;
 						}
 					}
 				}
@@ -1717,7 +1771,9 @@ class SyncEngine {
 							addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ newItemPath, ["info", "notify"]);
 						} else {
 							// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
-							safeBackup(newItemPath, dryRun);
+							// In case the renamed path is needed
+							string renamedPath;
+							safeBackup(newItemPath, dryRun, renamedPath);
 						}
 					}
 				} else {
@@ -1734,7 +1790,9 @@ class SyncEngine {
 							addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ newItemPath, ["info", "notify"]);
 						} else {
 							// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
-							safeBackup(newItemPath, dryRun);							
+							// In case the renamed path is needed
+							string renamedPath;
+							safeBackup(newItemPath, dryRun, renamedPath);							
 						}
 					}
 					
@@ -1758,39 +1816,55 @@ class SyncEngine {
 				fileJSONItemsToDownload ~= onedriveJSONItem;
 				break;
 			case ItemType.dir:
+				handleLocalDirectoryCreation(newDatabaseItem, newItemPath, onedriveJSONItem);
+				break;
 			case ItemType.remote:
-				addLogEntry("Creating local directory: " ~ newItemPath);
-				if (!dryRun) {
-					try {
-						// Create the new directory
-						addLogEntry("Requested path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);
-						mkdirRecurse(newItemPath);
-						// Configure the applicable permissions for the folder
-						addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);
-						newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
-						// Update the time of the folder to match the last modified time as is provided by OneDrive
-						// If there are any files then downloaded into this folder, the last modified time will get 
-						// updated by the local Operating System with the latest timestamp - as this is normal operation
-						// as the directory has been modified
-						addLogEntry("Setting directory lastModifiedDateTime for: " ~ newItemPath ~ " to " ~ to!string(newDatabaseItem.mtime), ["debug"]);
-						addLogEntry("Calling setTimes() for this directory: " ~ newItemPath, ["debug"]);
-						setTimes(newItemPath, newDatabaseItem.mtime, newDatabaseItem.mtime);
-						// Save the item to the database
-						saveItem(onedriveJSONItem);
-					} catch (FileException e) {
-						// display the error message
-						displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-					}
+				// Handle remote directory and files differently
+				if (newDatabaseItem.remoteType == ItemType.dir) {
+					handleLocalDirectoryCreation(newDatabaseItem, newItemPath, onedriveJSONItem);
 				} else {
-					// we dont create the directory, but we need to track that we 'faked it'
-					idsFaked ~= [newDatabaseItem.driveId, newDatabaseItem.id];
-					// Save the item to the dry-run database
-					saveItem(onedriveJSONItem);
+					// Add to the items to download array for processing
+					fileJSONItemsToDownload ~= onedriveJSONItem;
 				}
 				break;
 			case ItemType.unknown:
+			case ItemType.none:
 				// Unknown type - we dont action or sync these items
 				break;
+		}
+	}
+	
+	// Handle create local directory
+	void handleLocalDirectoryCreation(Item newDatabaseItem, string newItemPath, JSONValue onedriveJSONItem) {
+	
+		// Update the logging output to be consistent
+		addLogEntry("Creating local directory: " ~ "./" ~ buildNormalizedPath(newItemPath));
+		if (!dryRun) {
+			try {
+				// Create the new directory
+				addLogEntry("Requested path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);
+				mkdirRecurse(newItemPath);
+				// Configure the applicable permissions for the folder
+				addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);
+				newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
+				// Update the time of the folder to match the last modified time as is provided by OneDrive
+				// If there are any files then downloaded into this folder, the last modified time will get 
+				// updated by the local Operating System with the latest timestamp - as this is normal operation
+				// as the directory has been modified
+				addLogEntry("Setting directory lastModifiedDateTime for: " ~ newItemPath ~ " to " ~ to!string(newDatabaseItem.mtime), ["debug"]);
+				addLogEntry("Calling setTimes() for this directory: " ~ newItemPath, ["debug"]);
+				setTimes(newItemPath, newDatabaseItem.mtime, newDatabaseItem.mtime);
+				// Save the item to the database
+				saveItem(onedriveJSONItem);
+			} catch (FileException e) {
+				// display the error message
+				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+			}
+		} else {
+			// we dont create the directory, but we need to track that we 'faked it'
+			idsFaked ~= [newDatabaseItem.driveId, newDatabaseItem.id];
+			// Save the item to the dry-run database
+			saveItem(onedriveJSONItem);
 		}
 	}
 	
@@ -1807,6 +1881,7 @@ class SyncEngine {
 		SysTime changedOneDriveItemModifiedTime = changedOneDriveItem.mtime;
 		changedOneDriveItemModifiedTime.fracSecs = Duration.zero;
 		
+		// Did the eTag change?
 		if (existingDatabaseItem.eTag != changedOneDriveItem.eTag) {
 			// The eTag has changed to what we previously cached
 			if (existingItemPath != changedItemPath) {
@@ -1827,13 +1902,17 @@ class SyncEngine {
 							// The destination item is different
 							addLogEntry("The destination is occupied with a different item, renaming the conflicting file...", ["verbose"]);
 							// Backup this item, passing in if we are performing a --dry-run or not
-							safeBackup(changedItemPath, dryRun);
+							// In case the renamed path is needed
+							string renamedPath;
+							safeBackup(changedItemPath, dryRun, renamedPath);
 						}
 					} else {
 						// The to be overwritten item is not already in the itemdb, so it should saved to avoid data loss
 						addLogEntry("The destination is occupied by an existing un-synced file, renaming the conflicting file...", ["verbose"]);
 						// Backup this item, passing in if we are performing a --dry-run or not
-						safeBackup(changedItemPath, dryRun);
+						// In case the renamed path is needed
+						string renamedPath;
+						safeBackup(changedItemPath, dryRun, renamedPath);
 					}
 				}
 				
@@ -1869,8 +1948,8 @@ class SyncEngine {
 			}
 			
 			// What sort of changed item is this?
-			// Is it a file, and we did not move it ..
-			if ((changedOneDriveItem.type == ItemType.file) && (!itemWasMoved)) {
+			// Is it a file or remote file, and we did not move it ..
+			if (((changedOneDriveItem.type == ItemType.file) && (!itemWasMoved)) || (((changedOneDriveItem.type == ItemType.remote) && (changedOneDriveItem.remoteType == ItemType.file)) && (!itemWasMoved))) {
 				// The eTag is notorious for being 'changed' online by some backend Microsoft process
 				if (existingDatabaseItem.quickXorHash != changedOneDriveItem.quickXorHash) {
 					// Add to the items to download array for processing - the file hash we previously recorded is not the same as online
@@ -1952,11 +2031,11 @@ class SyncEngine {
 		ulong jsonFileSize = 0;
 		
 		// Download item specifics
+		string downloadItemId = onedriveJSONItem["id"].str;
+		string downloadItemName = onedriveJSONItem["name"].str;
 		string downloadDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
 		string downloadParentId = onedriveJSONItem["parentReference"]["id"].str;
-		string downloadItemName = onedriveJSONItem["name"].str;
-		string downloadItemId = onedriveJSONItem["id"].str;
-	
+		
 		// Calculate this items path
 		string newItemPath = computeItemPath(downloadDriveId, downloadParentId) ~ "/" ~ downloadItemName;
 		addLogEntry("JSON Item calculated full path for download is: " ~ newItemPath, ["debug"]);
@@ -2020,7 +2099,9 @@ class SyncEngine {
 					addLogEntry("The local file to replace (" ~ newItemPath ~ ") has been modified locally since the last download. Renaming it to avoid potential local data loss.");
 					
 					// Perform the local safeBackup of the existing local file, passing in if we are performing a --dry-run or not
-					safeBackup(newItemPath, dryRun);
+					// In case the renamed path is needed
+					string renamedPath;
+					safeBackup(newItemPath, dryRun, renamedPath);
 				}
 			}
 			
@@ -2039,7 +2120,7 @@ class SyncEngine {
 			if ((localActualFreeSpace < freeSpaceReservation) || (jsonFileSize > localActualFreeSpace)) {
 				// localActualFreeSpace is less than freeSpaceReservation .. insufficient free space
 				// jsonFileSize is greater than localActualFreeSpace .. insufficient free space
-				addLogEntry("Downloading file " ~ newItemPath ~ " ... failed!");
+				addLogEntry("Downloading file: " ~ newItemPath ~ " ... failed!");
 				addLogEntry("Insufficient local disk space to download file");
 				downloadFailed = true;
 			} else {
@@ -2049,46 +2130,63 @@ class SyncEngine {
 					OneDriveApi downloadFileOneDriveApiInstance;
 					downloadFileOneDriveApiInstance = new OneDriveApi(appConfig);
 					try {	
+						// Initialise API instance
 						downloadFileOneDriveApiInstance.initialise();
+						
+						// OneDrive Business Shared Files - update the driveId where to get the file from
+						if (isItemRemote(onedriveJSONItem)) {
+							downloadDriveId = onedriveJSONItem["remoteItem"]["parentReference"]["driveId"].str;
+						}
+						
+						// Perform the download
 						downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize);
 						downloadFileOneDriveApiInstance.shutdown();
+						
 						// Free object and memory
 						object.destroy(downloadFileOneDriveApiInstance);
+						
 					} catch (OneDriveException exception) {
 						addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize); generated a OneDriveException", ["debug"]);
 						string thisFunctionName = getFunctionName!({});
 						
-						// HTTP request returned status code 408,429,503,504
-						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-							// Handle the 429
-							if (exception.httpStatusCode == 429) {
-								// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-								handleOneDriveThrottleRequest(downloadFileOneDriveApiInstance);
-								addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
-							}
-							// re-try the specific changes queries
-							if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-								// 408 - Request Time Out
-								// 503 - Service Unavailable
-								// 504 - Gateway Timeout
-								// Transient error - try again in 30 seconds
-								auto errorArray = splitLines(exception.msg);
-								addLogEntry(to!string(errorArray[0]) ~ " when attempting to download an item from OneDrive - retrying applicable request in 30 seconds");
-								addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
-								
-								// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-								addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
-								Thread.sleep(dur!"seconds"(30));
-							}
-							// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-							addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
-							downloadFileItem(onedriveJSONItem);
+						// HTTP request returned status code 403
+						if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
+							// We attempted to download a file, that was shared with us, but this was shared with us as read-only and no download permission
+							addLogEntry("Unable to download this file as this was shared as read-only without download permission: " ~ newItemPath);
+							downloadFailed = true;
 						} else {
-							// Default operation if not 408,429,503,504 errors
-							// display what the error is
-							displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-						}
 						
+							// HTTP request returned status code 408,429,503,504
+							if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+								// Handle the 429
+								if (exception.httpStatusCode == 429) {
+									// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+									handleOneDriveThrottleRequest(downloadFileOneDriveApiInstance);
+									addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
+								}
+								// re-try the specific changes queries
+								if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+									// 408 - Request Time Out
+									// 503 - Service Unavailable
+									// 504 - Gateway Timeout
+									// Transient error - try again in 30 seconds
+									auto errorArray = splitLines(exception.msg);
+									addLogEntry(to!string(errorArray[0]) ~ " when attempting to download an item from OneDrive - retrying applicable request in 30 seconds");
+									addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+									
+									// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+									addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
+									Thread.sleep(dur!"seconds"(30));
+								}
+								// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
+								addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
+								downloadFileItem(onedriveJSONItem);
+							} else {
+								// Default operation if not 408,429,503,504 errors
+								// display what the error is
+								displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+							}
+						}
 					} catch (FileException e) {
 						// There was a file system error
 						// display the error message
@@ -2189,12 +2287,16 @@ class SyncEngine {
 									// other account types
 									addLogEntry("INFO: Potentially add --disable-download-validation to work around this issue but downloaded data integrity cannot be guaranteed.");
 								}
-								// We do not want this local file to remain on the local file system as it failed the integrity checks
-								addLogEntry("Removing file " ~ newItemPath ~ " due to failed integrity checks");
-								if (!dryRun) {
-									safeRemove(newItemPath);
+								
+								// If the computed hash does not equal provided online hash, consider this a failed download
+								if (downloadedFileHash != onlineFileHash) {
+									// We do not want this local file to remain on the local file system as it failed the integrity checks
+									addLogEntry("Removing file " ~ newItemPath ~ " due to failed integrity checks");
+									if (!dryRun) {
+										safeRemove(newItemPath);
+									}
+									downloadFailed = true;
 								}
-								downloadFailed = true;
 							}
 						} else {
 							// Download validation checks were disabled
@@ -2211,7 +2313,7 @@ class SyncEngine {
 			// File should have been downloaded
 			if (!downloadFailed) {
 				// Download did not fail
-				addLogEntry("Downloading file " ~ newItemPath ~ " ... done");
+				addLogEntry("Downloading file: " ~ newItemPath ~ " ... done");
 				// Save this item into the database
 				saveItem(onedriveJSONItem);
 				
@@ -2222,102 +2324,92 @@ class SyncEngine {
 				}
 			} else {
 				// Output download failed
-				addLogEntry("Downloading file " ~ newItemPath ~ " ... failed!");
+				addLogEntry("Downloading file: " ~ newItemPath ~ " ... failed!");
 				// Add the path to a list of items that failed to download
-				fileDownloadFailures ~= newItemPath;
+				if (!canFind(fileDownloadFailures, newItemPath)) {
+					fileDownloadFailures ~= newItemPath; // Add newItemPath if it's not already present
+				}
 			}
 		}
 	}
 	
 	// Test if the given item is in-sync. Returns true if the given item corresponds to the local one
 	bool isItemSynced(Item item, string path, string itemSource) {
-	
-		// This function is typically called when we are processing JSON objects from 'online'
-		// This function is not used in an --upload-only scenario
-		
 		if (!exists(path)) return false;
-		final switch (item.type) {
-		case ItemType.file:
-			if (isFile(path)) {
-				// can we actually read the local file?
-				if (readLocalFile(path)){
-					// local file is readable
-					SysTime localModifiedTime = timeLastModified(path).toUTC();
-					SysTime itemModifiedTime = item.mtime;
-					// Reduce time resolution to seconds before comparing
-					localModifiedTime.fracSecs = Duration.zero;
-					itemModifiedTime.fracSecs = Duration.zero;
-					if (localModifiedTime == itemModifiedTime) {
-						return true;
-					} else {
-						// The file has a different timestamp ... is the hash the same meaning no file modification?
-						addLogEntry("Local file time discrepancy detected: " ~ path, ["verbose"]);
-						addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " (UTC) when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime) ~ " (UTC)", ["verbose"]);
-						
-						// The file has a different timestamp ... is the hash the same meaning no file modification?
-						// Test the file hash as the date / time stamp is different
-						// Generating a hash is computationally expensive - we only generate the hash if timestamp was different
-						if (testFileHash(path, item)) {
-							// The hash is the same .. so we need to fix-up the timestamp depending on where it is wrong
-							addLogEntry("Local item has the same hash value as the item online - correcting the applicable file timestamp", ["verbose"]);
-							// Test if the local timestamp is newer
-							if (localModifiedTime > itemModifiedTime) {
-								// Local file is newer .. are we in a --download-only situation?
-								if (!appConfig.getValueBool("download_only")) {
-									// --download-only not being used
-									// The source of the out-of-date timestamp was OneDrive and this needs to be corrected to avoid always generating a hash test if timestamp is different
-									addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);
-									if (!dryRun) {
-										// Attempt to update the online date time stamp
-										uploadLastModifiedTime(item.driveId, item.id, localModifiedTime, item.eTag);
-										return false;
-									}									
-								} else {	
-									// --download-only is being used ... local file needs to be corrected ... but why is it newer - indexing application potentially changing the timestamp ?
-									addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --download-only", ["verbose"]);
-									if (!dryRun) {
-										addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);
-										setTimes(path, item.mtime, item.mtime);
-										return false;
-									}
-								}
-							} else {
-								// The source of the out-of-date timestamp was the local file and this needs to be corrected to avoid always generating a hash test if timestamp is different
-								addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally", ["verbose"]);
-								if (!dryRun) {
-									addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);
-									setTimes(path, item.mtime, item.mtime);
-									return false;
-								}
-							}
-						} else {
-							// The hash is different so the content of the file has to be different as to what is stored online
-							addLogEntry("The local file has a different hash when compared to " ~ itemSource ~ " file hash", ["verbose"]);
-							return false;
-						}
-					}
-				} else {
-					// Unable to read local file
-					addLogEntry("Unable to determine the sync state of this file as it cannot be read (file permissions or file corruption): " ~ path);
-					return false;
-				}
-			} else {
-				addLogEntry("The local item is a directory but should be a file", ["verbose"]);
+
+		// Combine common logic for readability and file check into a single block
+		if (item.type == ItemType.file || ((item.type == ItemType.remote) && (item.remoteType == ItemType.file))) {
+			// Can we actually read the local file?
+			if (!readLocalFile(path)) {
+				// Unable to read local file
+				addLogEntry("Unable to determine the sync state of this file as it cannot be read (file permissions or file corruption): " ~ path);
+				return false;
 			}
-			break;
-		case ItemType.dir:
-		case ItemType.remote:
-			if (isDir(path)) {
+			
+			// Get time values
+			SysTime localModifiedTime = timeLastModified(path).toUTC();
+			SysTime itemModifiedTime = item.mtime;
+			// Reduce time resolution to seconds before comparing
+			localModifiedTime.fracSecs = Duration.zero;
+			itemModifiedTime.fracSecs = Duration.zero;
+
+			if (localModifiedTime == itemModifiedTime) {
 				return true;
 			} else {
-				addLogEntry("The local item is a file but should be a directory", ["verbose"]);
+				// The file has a different timestamp ... is the hash the same meaning no file modification?
+				addLogEntry("Local file time discrepancy detected: " ~ path, ["verbose"]);
+				addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " (UTC) when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime) ~ " (UTC)", ["verbose"]);
+
+				// The file has a different timestamp ... is the hash the same meaning no file modification?
+				// Test the file hash as the date / time stamp is different
+				// Generating a hash is computationally expensive - we only generate the hash if timestamp was different
+				if (testFileHash(path, item)) {
+					// The hash is the same .. so we need to fix-up the timestamp depending on where it is wrong
+					addLogEntry("Local item has the same hash value as the item online - correcting the applicable file timestamp", ["verbose"]);
+					// Correction logic based on the configuration and the comparison of timestamps
+					if (localModifiedTime > itemModifiedTime) {
+						// Local file is newer .. are we in a --download-only situation?
+						if (!appConfig.getValueBool("download_only") && !dryRun) {
+							// The source of the out-of-date timestamp was OneDrive and this needs to be corrected to avoid always generating a hash test if timestamp is different
+							addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);
+							// Attempt to update the online date time stamp
+							// We need to use the correct driveId and itemId, especially if we are updating a OneDrive Business Shared File timestamp
+							if (item.type == ItemType.file) {
+								// Not a remote file
+								uploadLastModifiedTime(item, item.driveId, item.id, localModifiedTime, item.eTag);
+							} else {
+								// Remote file, remote values need to be used
+								uploadLastModifiedTime(item, item.remoteDriveId, item.remoteId, localModifiedTime, item.eTag);
+							}
+						} else if (!dryRun) {
+							// --download-only is being used ... local file needs to be corrected ... but why is it newer - indexing application potentially changing the timestamp ?
+							addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --download-only", ["verbose"]);
+							// Fix the local file timestamp
+							addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);
+							setTimes(path, item.mtime, item.mtime);
+						}
+					} else if (!dryRun) {
+						// The source of the out-of-date timestamp was the local file and this needs to be corrected to avoid always generating a hash test if timestamp is different
+						addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally", ["verbose"]);
+						// Fix the local file timestamp
+						addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);
+						setTimes(path, item.mtime, item.mtime);
+					}
+					return false;
+				} else {
+					// The hash is different so the content of the file has to be different as to what is stored online
+					addLogEntry("The local file has a different hash when compared to " ~ itemSource ~ " file hash", ["verbose"]);
+					return false;
+				}
 			}
-			break;
-		case ItemType.unknown:
-			// Unknown type - return true but we dont action or sync these items 
+		} else if (item.type == ItemType.dir || ((item.type == ItemType.remote) && (item.remoteType == ItemType.dir))) {
+			// item is a directory
+			return true;
+		} else {
+			// ItemType.unknown or ItemType.none
+			// Logically, we might not want to sync these items, but a more nuanced approach may be needed based on application context
 			return true;
 		}
-		return false;
 	}
 	
 	// Get the /delta data using the provided details
@@ -2585,7 +2677,7 @@ class SyncEngine {
 	}
 	
 	// Update the timestamp of an object online
-	void uploadLastModifiedTime(string driveId, string id, SysTime mtime, string eTag) {
+	void uploadLastModifiedTime(Item originItem, string driveId, string id, SysTime mtime, string eTag) {
 		
 		string itemModifiedTime;
 		itemModifiedTime = mtime.toISOExtString();
@@ -2617,8 +2709,22 @@ class SyncEngine {
 			uploadLastModifiedTimeApiInstance.shutdown();
 			// Free object and memory
 			object.destroy(uploadLastModifiedTimeApiInstance);
-			// Is the response a valid JSON object - validation checking done in saveItem
-			saveItem(response);
+			
+			// Do we actually save the response?
+			// Special case here .. if the DB record item (originItem) is a remote object, thus, if we same the 'response' we will have a DB FOREIGN KEY constraint failed problem
+			//  Update 'originItem.mtime' with the correct timestamp
+			//  Update 'originItem.size' with the correct size from the response
+			//  Update 'originItem.eTag' with the correct eTag from the response
+			//  Update 'originItem.cTag' with the correct cTag from the response
+			//  Update 'originItem.quickXorHash' with the correct quickXorHash from the response
+			// Everything else should remain the same .. and then save this DB record to the DB ..
+			// However, we did this, for the local modified file right before calling this function to update the online timestamp ... so .. do we need to do this again, effectivly performing a double DB write for the same data?
+			if ((originItem.type != ItemType.remote) && (originItem.remoteType != ItemType.file)) {
+				// Save the response JSON
+				// Is the response a valid JSON object - validation checking done in saveItem
+				saveItem(response);
+			} 
+			
 		} catch (OneDriveException exception) {
 			
 			string thisFunctionName = getFunctionName!({});
@@ -2646,14 +2752,14 @@ class SyncEngine {
 				}
 				// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
 				addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
-				uploadLastModifiedTime(driveId, id, mtime, eTag);
+				uploadLastModifiedTime(originItem, driveId, id, mtime, eTag);
 				return;
 			} else {
 				// Default operation if not 408,429,503,504 errors
 				if (exception.httpStatusCode == 409) {
 					// ETag does not match current item's value - use a null eTag
 					addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
-					uploadLastModifiedTime(driveId, id, mtime, null);
+					uploadLastModifiedTime(originItem, driveId, id, mtime, null);
 				} else {
 					// display what the error is
 					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
@@ -2786,6 +2892,12 @@ class SyncEngine {
 		// Do we want to onward process this item?
 		bool unwanted = false;
 		
+		// Remote directory items we can 'skip'
+		if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.dir)) {
+			// return .. nothing to check here, no logging needed
+			return;
+		}
+		
 		// Compute this dbItem path early as we we use this path often
 		localFilePath = buildNormalizedPath(computeItemPath(dbItem.driveId, dbItem.id));
 		
@@ -2800,22 +2912,25 @@ class SyncEngine {
 		}
 		
 		// Log what we are doing
-		addLogEntry("Processing " ~ logOutputPath, ["verbose"]);
+		addLogEntry("Processing: " ~ logOutputPath, ["verbose"]);
 		
 		// Determine which action to take
 		final switch (dbItem.type) {
 		case ItemType.file:
-			// Logging output
+			// Logging output result is handled by checkFileDatabaseItemForConsistency
 			checkFileDatabaseItemForConsistency(dbItem, localFilePath);
 			break;
 		case ItemType.dir:
-			// Logging output
+			// Logging output result is handled by checkDirectoryDatabaseItemForConsistency
 			checkDirectoryDatabaseItemForConsistency(dbItem, localFilePath, progress);
 			break;
 		case ItemType.remote:
-			// checkRemoteDirectoryDatabaseItemForConsistency(dbItem, localFilePath);
+			// DB items that match: dbItem.remoteType == ItemType.dir - these should have been skipped above
+			// This means that anything that hits here should be: dbItem.remoteType == ItemType.file
+			checkFileDatabaseItemForConsistency(dbItem, localFilePath);
 			break;
 		case ItemType.unknown:
+		case ItemType.none:
 			// Unknown type - we dont action these items
 			break;
 		}
@@ -2875,10 +2990,21 @@ class SyncEngine {
 							// Local file is newer .. are we in a --download-only situation?
 							if (!appConfig.getValueBool("download_only")) {
 								// Not a --download-only scenario
-								addLogEntry("The local item has the same hash value as the item online - correcting timestamp online", ["verbose"]);
 								if (!dryRun) {
 									// Attempt to update the online date time stamp
-									uploadLastModifiedTime(dbItem.driveId, dbItem.id, localModifiedTime.toUTC(), dbItem.eTag);
+									// We need to use the correct driveId and itemId, especially if we are updating a OneDrive Business Shared File timestamp
+									if (dbItem.type == ItemType.file) {
+										// Not a remote file
+										// Log what is being done
+										addLogEntry("The local item has the same hash value as the item online - correcting timestamp online", ["verbose"]);
+										// Correct timestamp
+										uploadLastModifiedTime(dbItem, dbItem.driveId, dbItem.id, localModifiedTime.toUTC(), dbItem.eTag);
+									} else {
+										// Remote file, remote values need to be used, we may not even have permission to change timestamp, update local file
+										addLogEntry("The local item has the same hash value as the item online, however file is a OneDrive Business Shared File - correcting local timestamp", ["verbose"]);
+										addLogEntry("Calling setTimes() for this file: " ~ localFilePath, ["debug"]);
+										setTimes(localFilePath, dbItem.mtime, dbItem.mtime);
+									}
 								}
 							} else {
 								// --download-only being used
@@ -3212,7 +3338,7 @@ class SyncEngine {
 	}
 	
 	// Does this JSON item (as received from OneDrive API) get excluded from any operation based on any client side filtering rules?
-	// This function is only used when we are fetching objects from the OneDrive API using a /children query to help speed up what object we query
+	// This function is used when we are fetching objects from the OneDrive API using a /children query to help speed up what object we query or when checking OneDrive Business Shared Files
 	bool checkJSONAgainstClientSideFiltering(JSONValue onedriveJSONItem) {
 			
 		bool clientSideRuleExcludesPath = false;
@@ -3224,7 +3350,7 @@ class SyncEngine {
 		// - skip_file
 		// - skip_dir 
 		// - sync_list
-		// - skip_size (MISSING)
+		// - skip_size
 		// Return a true|false response
 		
 		// Use the JSON elements rather can computing a DB struct via makeItem()
@@ -3440,6 +3566,19 @@ class SyncEngine {
 			}
 		}
 		
+		// Check if this is excluded by a user set maximum filesize to download
+		if (!clientSideRuleExcludesPath) {
+			if (isItemFile(onedriveJSONItem)) {
+				if (fileSizeLimit != 0) {
+					if (onedriveJSONItem["size"].integer >= fileSizeLimit) {
+						addLogEntry("Skipping item - excluded by skip_size config: " ~ thisItemName ~ " (" ~ to!string(onedriveJSONItem["size"].integer/2^^20) ~ " MB)", ["verbose"]);
+						clientSideRuleExcludesPath = true;
+					}
+				}
+			}
+		}
+		
+		
 		// return if path is excluded
 		return clientSideRuleExcludesPath;
 	}
@@ -3467,6 +3606,7 @@ class SyncEngine {
 		string changedItemId = localItemDetails[1];
 		string localFilePath = localItemDetails[2];
 		
+		// Log the path that was modified
 		addLogEntry("uploadChangedLocalFileToOneDrive: " ~ localFilePath, ["debug"]);
 		
 		// How much space is remaining on OneDrive
@@ -3477,18 +3617,37 @@ class SyncEngine {
 		bool skippedMaxSize = false;
 		// Did we skip to an exception error?
 		bool skippedExceptionError = false;
+		// Flag for if space is available online
+		bool spaceAvailableOnline = false;
+		
+		// When we are uploading OneDrive Business Shared Files, we need to be targetting the right driveId and itemId
+		string targetDriveId;
+		string targetItemId;
 		
 		// Unfortunatly, we cant store an array of Item's ... so we have to re-query the DB again - unavoidable extra processing here
 		// This is because the Item[] has no other functions to allow is to parallel process those elements, so we have to use a string array as input to this function
 		Item dbItem;
 		itemDB.selectById(changedItemParentId, changedItemId, dbItem);
-	
+		
+		// Is this a remote target?
+		if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file)) {
+			// This is a remote file
+			targetDriveId = dbItem.remoteDriveId;
+			targetItemId = dbItem.remoteId;
+			// we are going to make the assumption here that as this is a OneDrive Business Shared File, that there is space available
+			spaceAvailableOnline = true;
+		} else {
+			// This is not a remote file
+			targetDriveId = dbItem.driveId;
+			targetItemId = dbItem.id;
+		}
+			
 		// Fetch the details from cachedOnlineDriveData
 		// - cachedOnlineDriveData.quotaRestricted;
 		// - cachedOnlineDriveData.quotaAvailable;
 		// - cachedOnlineDriveData.quotaRemaining;
 		driveDetailsCache cachedOnlineDriveData;
-		cachedOnlineDriveData = getDriveDetails(dbItem.driveId);
+		cachedOnlineDriveData = getDriveDetails(targetDriveId);
 		remainingFreeSpace = cachedOnlineDriveData.quotaRemaining;
 		
 		// Get the file size from the actual file
@@ -3510,13 +3669,11 @@ class SyncEngine {
 		addLogEntry("This Thread Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
 		JSONValue uploadResponse;
 		
-		bool spaceAvailableOnline = false;
-		// If 'personal' accounts, if driveId == defaultDriveId, then we will have quota data - cachedOnlineDriveData.quotaRemaining will be updated so it can be reused
-		// If 'personal' accounts, if driveId != defaultDriveId, then we will not have quota data - cachedOnlineDriveData.quotaRestricted will be set as true
-		// If 'business' accounts, if driveId == defaultDriveId, then we will potentially have quota data - cachedOnlineDriveData.quotaRemaining will be updated so it can be reused
-		// If 'business' accounts, if driveId != defaultDriveId, then we will potentially have quota data, but it most likely will be a 0 value - cachedOnlineDriveData.quotaRestricted will be set as true
-		
 		// Is there quota available for the given drive where we are uploading to?
+		// 	If 'personal' accounts, if driveId == defaultDriveId, then we will have quota data - cachedOnlineDriveData.quotaRemaining will be updated so it can be reused
+		// 	If 'personal' accounts, if driveId != defaultDriveId, then we will not have quota data - cachedOnlineDriveData.quotaRestricted will be set as true
+		// 	If 'business' accounts, if driveId == defaultDriveId, then we will potentially have quota data - cachedOnlineDriveData.quotaRemaining will be updated so it can be reused
+		// 	If 'business' accounts, if driveId != defaultDriveId, then we will potentially have quota data, but it most likely will be a 0 value - cachedOnlineDriveData.quotaRestricted will be set as true
 		if (cachedOnlineDriveData.quotaAvailable) {
 			// Our query told us we have free space online .. if we upload this file, will we exceed space online - thus upload will fail during upload?
 			if (calculatedSpaceOnlinePostUpload > 0) {
@@ -3561,7 +3718,7 @@ class SyncEngine {
 			// Upload failed .. why?
 			// No space available online
 			if (!spaceAvailableOnline) {
-				addLogEntry("Skipping uploading modified file " ~ localFilePath ~ " due to insufficient free space available on Microsoft OneDrive", ["info", "notify"]);
+				addLogEntry("Skipping uploading modified file: " ~ localFilePath ~ " due to insufficient free space available on Microsoft OneDrive", ["info", "notify"]);
 			}
 			// File exceeds max allowed size
 			if (skippedMaxSize) {
@@ -3570,17 +3727,34 @@ class SyncEngine {
 			// Generic message
 			if (skippedExceptionError) {
 				// normal failure message if API or exception error generated
-				addLogEntry("Uploading modified file " ~ localFilePath ~ " ... failed!", ["info", "notify"]);
+				// If Issue #2626 | Case 2-1 is triggered, the file we tried to upload was renamed, then uploaded as a new name
+				if (exists(localFilePath)) {
+					// Issue #2626 | Case 2-1 was not triggered, file still exists on local filesystem
+					addLogEntry("Uploading modified file: " ~ localFilePath ~ " ... failed!", ["info", "notify"]);
+				}
 			}
 		} else {
 			// Upload was successful
-			addLogEntry("Uploading modified file " ~ localFilePath ~ " ... done.", ["info", "notify"]);
+			addLogEntry("Uploading modified file: " ~ localFilePath ~ " ... done.", ["info", "notify"]);
 			
-			// Save JSON item in database
-			saveItem(uploadResponse);
+			// What do we save to the DB? Is this a OneDrive Business Shared File?
+			if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file)) {
+				// We need to 'massage' the old DB record, with data from online, as the DB record was specifically crafted for OneDrive Business Shared Files
+				Item tempItem = makeItem(uploadResponse);
+				dbItem.eTag = tempItem.eTag;
+				dbItem.cTag = tempItem.cTag;
+				dbItem.mtime = tempItem.mtime;
+				dbItem.quickXorHash = tempItem.quickXorHash;
+				dbItem.sha256Hash = tempItem.sha256Hash;
+				dbItem.size = tempItem.size;
+				itemDB.upsert(dbItem);
+			} else {
+				// Save the response JSON item in database as is
+				saveItem(uploadResponse);
+			}
 			
-			// Update the 'cachedOnlineDriveData' record for this 'dbItem.driveId' so that this is tracked as accuratly as possible for other threads
-			updateDriveDetailsCache(dbItem.driveId, cachedOnlineDriveData.quotaRestricted, cachedOnlineDriveData.quotaAvailable, thisFileSizeLocal);
+			// Update the 'cachedOnlineDriveData' record for this 'targetDriveId' so that this is tracked as accuratly as possible for other threads
+			updateDriveDetailsCache(targetDriveId, cachedOnlineDriveData.quotaRestricted, cachedOnlineDriveData.quotaAvailable, thisFileSizeLocal);
 			
 			// Check the integrity of the uploaded modified file if not in a --dry-run scenario
 			if (!dryRun) {
@@ -3594,70 +3768,191 @@ class SyncEngine {
 				// Get the latest eTag, and use that
 				string etagFromUploadResponse = uploadResponse["eTag"].str;
 				// Attempt to update the online date time stamp based on our local data
-				uploadLastModifiedTime(dbItem.driveId, dbItem.id, localModifiedTime, etagFromUploadResponse);
+				uploadLastModifiedTime(dbItem, targetDriveId, targetItemId, localModifiedTime, etagFromUploadResponse);
 			}
 		}
 	}
 	
-	// Perform the upload of a locally modified file to OneDrive
+		// Perform the upload of a locally modified file to OneDrive
 	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, ulong thisFileSizeLocal) {
 			
+		// Function variables
 		JSONValue uploadResponse;
 		OneDriveApi uploadFileOneDriveApiInstance;
 		uploadFileOneDriveApiInstance = new OneDriveApi(appConfig);
 		uploadFileOneDriveApiInstance.initialise();
+		
+		// Configure JSONValue variables we use for a session upload
+		JSONValue currentOnlineData;
+		JSONValue uploadSessionData;
+		string currentETag;
+		
+		// When we are uploading OneDrive Business Shared Files, we need to be targetting the right driveId and itemId
+		string targetDriveId;
+		string targetParentId;
+		string targetItemId;
+		
+		// Is this a remote target?
+		if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file)) {
+			// This is a remote file
+			targetDriveId = dbItem.remoteDriveId;
+			targetParentId = dbItem.remoteParentId;
+			targetItemId = dbItem.remoteId;
+		} else {
+			// This is not a remote file
+			targetDriveId = dbItem.driveId;
+			targetParentId = dbItem.parentId;
+			targetItemId = dbItem.id;
+		}
 		
 		// Is this a dry-run scenario?
 		if (!dryRun) {
 			// Do we use simpleUpload or create an upload session?
 			bool useSimpleUpload = false;
 			
-			//if ((appConfig.accountType == "personal") && (thisFileSizeLocal <= sessionThresholdFileSize)) {
+			// Try and get the absolute latest object details from online
+			try {
+				currentOnlineData = uploadFileOneDriveApiInstance.getPathDetailsById(targetDriveId, targetItemId);
+			} catch (OneDriveException exception) {
+				string thisFunctionName = getFunctionName!({});
+				// HTTP request returned status code 408,429,503,504
+				if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+					// Handle the 429
+					if (exception.httpStatusCode == 429) {
+						// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+						handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
+						addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
+					}
+					// re-try the specific changes queries
+					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+						// 408 - Request Time Out
+						// 503 - Service Unavailable
+						// 504 - Gateway Timeout
+						// Transient error - try again in 30 seconds
+						auto errorArray = splitLines(exception.msg);
+						addLogEntry(to!string(errorArray[0]) ~ " when attempting to obtain latest file details from OneDrive - retrying applicable request in 30 seconds");
+						addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+						
+						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request.
+						addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
+						Thread.sleep(dur!"seconds"(30));
+					}
+					// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
+					addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
+					performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
+				} else {
+					// Default operation if not 408,429,503,504 errors
+					// display what the error is
+					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				}
+			}
 			
+			// Was a valid JSON response provided?
+			if (currentOnlineData.type() == JSONType.object) {
+				// Does the response contain an eTag?
+				if (hasETag(currentOnlineData)) {
+					// Use the value returned from online
+					currentETag = currentOnlineData["eTag"].str;
+				} else {
+					// Use the database value
+					currentETag = dbItem.eTag;
+				}
+			} else {
+				// no valid JSON response
+				currentETag = dbItem.eTag;
+			}
+			
+			// What upload method should be used?
 			if (thisFileSizeLocal <= sessionThresholdFileSize) {
 				useSimpleUpload = true;
 			}
 		
+			// If the filesize is greater than zero , and we have valid 'latest' online data is the online file matching what we think is in the database?
+			if ((thisFileSizeLocal > 0) && (currentOnlineData.type() == JSONType.object)) {
+				// Issue #2626 | Case 2-1 
+				// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - potentially consituting online data loss
+				Item onlineFile = makeItem(currentOnlineData);
+				
+				// Which file is technically newer? The local file or the remote file?
+				SysTime localModifiedTime = timeLastModified(localFilePath).toUTC();
+				SysTime onlineModifiedTime = onlineFile.mtime;
+				
+				// Reduce time resolution to seconds before comparing
+				localModifiedTime.fracSecs = Duration.zero;
+				onlineModifiedTime.fracSecs = Duration.zero;
+				
+				// Which file is newer? If local is newer, it will be uploaded as a modified file in the correct manner
+				if (localModifiedTime < onlineModifiedTime) {
+					// Online File is actually newer than the locally modified file
+					addLogEntry("currentOnlineData: " ~ to!string(currentOnlineData), ["debug"]);
+					addLogEntry("onlineFile:    " ~ to!string(onlineFile), ["debug"]);
+					addLogEntry("database item: " ~ to!string(dbItem), ["debug"]);
+					addLogEntry("Skipping uploading this item as a locally modified file, will upload as a new file (online file already exists and is newer): " ~ localFilePath);
+					
+					// Online is newer, rename local, then upload the renamed file
+					// We need to know the renamed path so we can upload it
+					string renamedPath;
+					// Rename the local path
+					safeBackup(localFilePath, dryRun, renamedPath);
+					// Upload renamed local file as a new file
+					uploadNewFile(renamedPath);
+					
+					// Process the database entry removal for the original file. In a --dry-run scenario, this is being done against a DB copy.
+					// This is done so we can download the newer online file
+					itemDB.deleteById(targetDriveId, targetItemId);
+
+					// This file is now uploaded, return from here, but this will trigger a response that the upload failed (technically for the original filename it did, but we renamed it, then uploaded it
+					return uploadResponse;
+				}
+			}
+			
 			// We can only upload zero size files via simpleFileUpload regardless of account type
 			// Reference: https://github.com/OneDrive/onedrive-api-docs/issues/53
 			// Additionally, all files where file size is < 4MB should be uploaded by simpleUploadReplace - everything else should use a session to upload the modified file
-		
 			if ((thisFileSizeLocal == 0) || (useSimpleUpload)) {
 				// Must use Simple Upload to replace the file online
 				try {
-					uploadResponse = uploadFileOneDriveApiInstance.simpleUploadReplace(localFilePath, dbItem.driveId, dbItem.id);
+					uploadResponse = uploadFileOneDriveApiInstance.simpleUploadReplace(localFilePath, targetDriveId, targetItemId);
 				} catch (OneDriveException exception) {
-				
+					// Function name
 					string thisFunctionName = getFunctionName!({});
-					// HTTP request returned status code 408,429,503,504
-					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-						// Handle the 429
-						if (exception.httpStatusCode == 429) {
-							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-							handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
-							addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
-						}
-						// re-try the specific changes queries
-						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-							// 408 - Request Time Out
-							// 503 - Service Unavailable
-							// 504 - Gateway Timeout
-							// Transient error - try again in 30 seconds
-							auto errorArray = splitLines(exception.msg);
-							addLogEntry(to!string(errorArray[0]) ~ " when attempting to upload a modified file to OneDrive - retrying applicable request in 30 seconds");
-							addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
-							
-							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
-							addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
-							Thread.sleep(dur!"seconds"(30));
-						}
-						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
-						performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
+					
+					// HTTP request returned status code 403
+					if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
+						// We attempted to upload a file, that was shared with us, but this was shared with us as read-only
+						addLogEntry("Unable to upload this modified file as this was shared as read-only: " ~ localFilePath);
 					} else {
-						// Default operation if not 408,429,503,504 errors
-						// display what the error is
-						displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+						// Handle all other HTTP status codes
+						// HTTP request returned status code 408,429,503,504
+						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+							// Handle the 429
+							if (exception.httpStatusCode == 429) {
+								// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
+								handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
+								addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
+							}
+							// re-try the specific changes queries
+							if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
+								// 408 - Request Time Out
+								// 503 - Service Unavailable
+								// 504 - Gateway Timeout
+								// Transient error - try again in 30 seconds
+								auto errorArray = splitLines(exception.msg);
+								addLogEntry(to!string(errorArray[0]) ~ " when attempting to upload a modified file to OneDrive - retrying applicable request in 30 seconds");
+								addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
+								
+								// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+								addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
+								Thread.sleep(dur!"seconds"(30));
+							}
+							// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
+							addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
+							performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
+						} else {
+							// Default operation if not 408,429,503,504 errors
+							// display what the error is
+							displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+						}
 					}
 				
 				} catch (FileException e) {
@@ -3665,75 +3960,24 @@ class SyncEngine {
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				}
 			} else {
-				// Configure JSONValue variables we use for a session upload
-				JSONValue currentOnlineData;
-				JSONValue uploadSessionData;
-				string currentETag;
-				
 				// As this is a unique thread, the sessionFilePath for where we save the data needs to be unique
 				// The best way to do this is generate a 10 digit alphanumeric string, and use this as the file extention
 				string threadUploadSessionFilePath = appConfig.uploadSessionFilePath ~ "." ~ generateAlphanumericString();
 				
-				// Get the absolute latest object details from online
+				// Create the upload session
 				try {
-					currentOnlineData = uploadFileOneDriveApiInstance.getPathDetailsByDriveId(dbItem.driveId, localFilePath);
-				} catch (OneDriveException exception) {
-				
-					string thisFunctionName = getFunctionName!({});
-					// HTTP request returned status code 408,429,503,504
-					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-						// Handle the 429
-						if (exception.httpStatusCode == 429) {
-							// HTTP request returned status code 429 (Too Many Requests). We need to leverage the response Retry-After HTTP header to ensure minimum delay until the throttle is removed.
-							handleOneDriveThrottleRequest(uploadFileOneDriveApiInstance);
-							addLogEntry("Retrying original request that generated the OneDrive HTTP 429 Response Code (Too Many Requests) - attempting to retry " ~ thisFunctionName, ["debug"]);
-						}
-						// re-try the specific changes queries
-						if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
-							// 408 - Request Time Out
-							// 503 - Service Unavailable
-							// 504 - Gateway Timeout
-							// Transient error - try again in 30 seconds
-							auto errorArray = splitLines(exception.msg);
-							addLogEntry(to!string(errorArray[0]) ~ " when attempting to obtain latest file details from OneDrive - retrying applicable request in 30 seconds");
-							addLogEntry(thisFunctionName ~ " previously threw an error - retrying", ["debug"]);
-							
-							// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request.
-							addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
-							Thread.sleep(dur!"seconds"(30));
-						}
-						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
-						addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
-						performModifiedFileUpload(dbItem, localFilePath, thisFileSizeLocal);
-					} else {
-						// Default operation if not 408,429,503,504 errors
-						// display what the error is
-						displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-					}
-					
-				}
-				
-				// Was a valid JSON response provided?
-				if (currentOnlineData.type() == JSONType.object) {
-					// Does the response contain an eTag?
-					if (hasETag(currentOnlineData)) {
-						// Use the value returned from online
-						currentETag = currentOnlineData["eTag"].str;
-					} else {
-						// Use the database value
-						currentETag = dbItem.eTag;
-					}
-				} else {
-					// no valid JSON response
-					currentETag = dbItem.eTag;
-				}
-				
-				// Create the Upload Session
-				try {
-					uploadSessionData = createSessionFileUpload(uploadFileOneDriveApiInstance, localFilePath, dbItem.driveId, dbItem.parentId, baseName(localFilePath), currentETag, threadUploadSessionFilePath);
+					uploadSessionData = createSessionFileUpload(uploadFileOneDriveApiInstance, localFilePath, targetDriveId, targetParentId, baseName(localFilePath), currentETag, threadUploadSessionFilePath);
 				} catch (OneDriveException exception) {
 					
 					string thisFunctionName = getFunctionName!({});
+					
+					// HTTP request returned status code 403
+					if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
+						// We attempted to upload a file, that was shared with us, but this was shared with us as read-only
+						addLogEntry("Unable to upload this modified file as this was shared as read-only: " ~ localFilePath);
+						return uploadResponse;
+					}
+					
 					// HTTP request returned status code 408,429,503,504
 					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
 						// Handle the 429
@@ -3770,11 +4014,11 @@ class SyncEngine {
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				}
 				
-				// Perform the Upload using the session
+				// Perform the upload using the session that has been created
 				try {
 					uploadResponse = performSessionFileUpload(uploadFileOneDriveApiInstance, thisFileSizeLocal, uploadSessionData, threadUploadSessionFilePath);
 				} catch (OneDriveException exception) {
-					
+					// Function name
 					string thisFunctionName = getFunctionName!({});
 					// HTTP request returned status code 408,429,503,504
 					if ((exception.httpStatusCode == 408) || (exception.httpStatusCode == 429) || (exception.httpStatusCode == 503) || (exception.httpStatusCode == 504)) {
@@ -3805,13 +4049,11 @@ class SyncEngine {
 						// display what the error is
 						displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 					}
-					
 				} catch (FileException e) {
 					writeln("DEBUG TO REMOVE: Modified file upload FileException Handling (Perform the Upload using the session)");
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				}
 			}
-		
 		} else {
 			// We are in a --dry-run scenario
 			uploadResponse = createFakeResponse(localFilePath);
@@ -4039,6 +4281,18 @@ class SyncEngine {
 			maxPathLength = 400;
 		}
 		
+		// OneDrive Business Shared Files Handling - if we make a 'backup' locally of a file shared with us (because we modified it, and then maybe did a --resync), it will be treated as a new file to upload ...
+		// The issue here is - the 'source' was a shared file - we may not even have permission to upload a 'renamed' file to the shared file's parent folder
+		// In this case, we need to skip adding this new local file - we do not upload it (we cant , and we should not)
+		if (appConfig.accountType == "business") {
+			// Check appConfig.configuredBusinessSharedFilesDirectoryName against 'path'
+			if (canFind(path, baseName(appConfig.configuredBusinessSharedFilesDirectoryName))) {
+				// Log why this path is being skipped
+				addLogEntry("Skipping scanning path for new files as this is reserved for OneDrive Business Shared Files: " ~ path, ["info"]);
+				return;
+			}
+		}
+				
 		// A short lived item that has already disappeared will cause an error - is the path still valid?
 		if (!exists(path)) {
 			addLogEntry("Skipping item - path has disappeared: " ~ path);
@@ -4300,8 +4554,18 @@ class SyncEngine {
 		// Log what we are doing
 		addLogEntry("OneDrive Client requested to create this directory online: " ~ thisNewPathToCreate, ["verbose"]);
 		
+		// Function variables
 		Item parentItem;
 		JSONValue onlinePathData;
+		
+		// Special Folder Handling: Do NOT create the folder online if it is being used for OneDrive Business Shared Files
+		// These are local copy files, in a self created directory structure which is not to be replicated online
+		// Check appConfig.configuredBusinessSharedFilesDirectoryName against 'thisNewPathToCreate'
+		if (canFind(thisNewPathToCreate, baseName(appConfig.configuredBusinessSharedFilesDirectoryName))) {
+			// Log why this is being skipped
+			addLogEntry("Skipping creating '" ~ thisNewPathToCreate ~ "' as this path is used for handling OneDrive Business Shared Files", ["info", "notify"]);
+			return;
+		}
 		
 		// Create a new API Instance for this thread and initialise it
 		OneDriveApi createDirectoryOnlineOneDriveApiInstance;
@@ -4762,7 +5026,6 @@ class SyncEngine {
 					parentPathFoundInDB = true;
 				}
 			}
-			
 		}
 		
 		// If the parent path was found in the DB, to ensure we are uploading the the right location 'parentItem.driveId' must not be empty
@@ -4914,15 +5177,42 @@ class SyncEngine {
 									// The local file we are attempting to upload as a new file is different to the existing file online
 									addLogEntry("Triggering newfile upload target already exists edge case, where the online item does not match what we are trying to upload", ["debug"]);
 									
-									// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - consituting online data loss
-									// The file 'version history' online will have to be used to 'recover' the prior online file
-									string changedItemParentId = fileDetailsFromOneDrive["parentReference"]["driveId"].str;
-									string changedItemId = fileDetailsFromOneDrive["id"].str;
-									addLogEntry("Skipping uploading this file as moving it to upload as a modified file (online item already exists): " ~ fileToUpload);
+									// Issue #2626 | Case 2-2 (resync)
 									
-									// In order for the processing of the local item as a 'changed' item, unfortunatly we need to save the online data to the local DB
+									// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - potentially consituting online data loss
+									// The file 'version history' online will have to be used to 'recover' the prior online file
+									string changedItemParentDriveId = fileDetailsFromOneDrive["parentReference"]["driveId"].str;
+									string changedItemId = fileDetailsFromOneDrive["id"].str;
+									addLogEntry("Skipping uploading this item as a new file, will upload as a modified file (online file already exists): " ~ fileToUpload);
+									
+									// In order for the processing of the local item as a 'changed' item, unfortunatly we need to save the online data of the existing online file to the local DB
 									saveItem(fileDetailsFromOneDrive);
-									uploadChangedLocalFileToOneDrive([changedItemParentId, changedItemId, fileToUpload]);
+									
+									// Which file is technically newer? The local file or the remote file?
+									Item onlineFile = makeItem(fileDetailsFromOneDrive);
+									SysTime localModifiedTime = timeLastModified(fileToUpload).toUTC();
+									SysTime onlineModifiedTime = onlineFile.mtime;
+									
+									// Reduce time resolution to seconds before comparing
+									localModifiedTime.fracSecs = Duration.zero;
+									onlineModifiedTime.fracSecs = Duration.zero;
+									
+									// Which file is newer?
+									if (localModifiedTime >= onlineModifiedTime) {
+										// Upload the locally modified file as-is, as it is newer
+										uploadChangedLocalFileToOneDrive([changedItemParentDriveId, changedItemId, fileToUpload]);
+									} else {
+										// Online is newer, rename local, then upload the renamed file
+										// We need to know the renamed path so we can upload it
+										string renamedPath;
+										// Rename the local path
+										safeBackup(fileToUpload, dryRun, renamedPath);
+										// Upload renamed local file as a new file
+										uploadNewFile(renamedPath);
+										// Process the database entry removal for the original file. In a --dry-run scenario, this is being done against a DB copy.
+										// This is done so we can download the newer online file
+										itemDB.deleteById(changedItemParentDriveId, changedItemId);
+									}
 								}
 							} catch (OneDriveException exception) {
 								// If we get a 404 .. the file is not online .. this is what we want .. file does not exist online
@@ -5268,7 +5558,7 @@ class SyncEngine {
 						string newFileId = uploadResponse["id"].str;
 						string newFileETag = uploadResponse["eTag"].str;
 						// Attempt to update the online date time stamp based on our local data
-						uploadLastModifiedTime(parentItem.driveId, newFileId, mtime, newFileETag);
+						uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
 					}
 				} else {
 					// will be removed in different event!
@@ -5654,9 +5944,10 @@ class SyncEngine {
 	}
 	
 	// Create a fake OneDrive response suitable for use with saveItem
-	JSONValue createFakeResponse(const(string) path) {
-		
+	// Create a fake OneDrive response suitable for use with saveItem
+	JSONValue createFakeResponse(string path) {
 		import std.digest.sha;
+		
 		// Generate a simulated JSON response which can be used
 		// At a minimum we need:
 		// 1. eTag
@@ -5669,86 +5960,57 @@ class SyncEngine {
 		
 		string fakeDriveId = appConfig.defaultDriveId;
 		string fakeRootId = appConfig.defaultRootId;
-		SysTime mtime = timeLastModified(path).toUTC();
-		
-		// Need to update the 'fakeDriveId' & 'fakeRootId' with elements from the --dry-run database
-		// Otherwise some calls to validate objects will fail as the actual driveId being used is invalid
-		string parentPath = dirName(path);
-		Item databaseItem;
-		
-		if (parentPath != ".") {
-			// Not a 'root' parent
-			foreach (searchDriveId; onlineDriveDetails.keys) {
-				addLogEntry("FakeResponse: searching database for: " ~ searchDriveId ~ " " ~ parentPath, ["debug"]);
-				
-				if (itemDB.selectByPath(parentPath, searchDriveId, databaseItem)) {
-					addLogEntry("FakeResponse: Found Database Item: " ~ to!string(databaseItem), ["debug"]);
-					fakeDriveId = databaseItem.driveId;
-					fakeRootId = databaseItem.id;
-				}
-			}
-			
-			
-			
-			
-		}
-		
-		// real id / eTag / cTag are different format for personal / business account
+		SysTime mtime = exists(path) ? timeLastModified(path).toUTC() : Clock.currTime(UTC());
 		auto sha1 = new SHA1Digest();
 		ubyte[] fakedOneDriveItemValues = sha1.digest(path);
-		
 		JSONValue fakeResponse;
-		
-		if (isDir(path)) {
-			// path is a directory
-			fakeResponse = [
-							"id": JSONValue(toHexString(fakedOneDriveItemValues)),
-							"cTag": JSONValue(toHexString(fakedOneDriveItemValues)),
-							"eTag": JSONValue(toHexString(fakedOneDriveItemValues)),
-							"fileSystemInfo": JSONValue([
-														"createdDateTime": mtime.toISOExtString(),
-														"lastModifiedDateTime": mtime.toISOExtString()
-														]),
-							"name": JSONValue(baseName(path)),
-							"parentReference": JSONValue([
-														"driveId": JSONValue(fakeDriveId),
-														"driveType": JSONValue(appConfig.accountType),
-														"id": JSONValue(fakeRootId)
-														]),
-							"folder": JSONValue("")
-							];
-		} else {
-			// path is a file
-			// compute file hash - both business and personal responses use quickXorHash
-			string quickXorHash = computeQuickXorHash(path);
-	
-			fakeResponse = [
-							"id": JSONValue(toHexString(fakedOneDriveItemValues)),
-							"cTag": JSONValue(toHexString(fakedOneDriveItemValues)),
-							"eTag": JSONValue(toHexString(fakedOneDriveItemValues)),
-							"fileSystemInfo": JSONValue([
-														"createdDateTime": mtime.toISOExtString(),
-														"lastModifiedDateTime": mtime.toISOExtString()
-														]),
-							"name": JSONValue(baseName(path)),
-							"parentReference": JSONValue([
-														"driveId": JSONValue(fakeDriveId),
-														"driveType": JSONValue(appConfig.accountType),
-														"id": JSONValue(fakeRootId)
-														]),
-							"file": JSONValue([
-												"hashes":JSONValue([
-																	"quickXorHash": JSONValue(quickXorHash)
-																	])
-												
-												])
-							];
+
+		string parentPath = dirName(path);
+		if (parentPath != "." && exists(path)) {
+			foreach (searchDriveId; onlineDriveDetails.keys) {
+				Item databaseItem;
+				if (itemDB.selectByPath(parentPath, searchDriveId, databaseItem)) {
+					fakeDriveId = databaseItem.driveId;
+					fakeRootId = databaseItem.id;
+					break; // Exit loop after finding the first match
+				}
+			}
 		}
-						
+
+		fakeResponse = [
+			"id": JSONValue(toHexString(fakedOneDriveItemValues)),
+			"cTag": JSONValue(toHexString(fakedOneDriveItemValues)),
+			"eTag": JSONValue(toHexString(fakedOneDriveItemValues)),
+			"fileSystemInfo": JSONValue([
+				"createdDateTime": mtime.toISOExtString(),
+				"lastModifiedDateTime": mtime.toISOExtString()
+			]),
+			"name": JSONValue(baseName(path)),
+			"parentReference": JSONValue([
+				"driveId": JSONValue(fakeDriveId),
+				"driveType": JSONValue(appConfig.accountType),
+				"id": JSONValue(fakeRootId)
+			])
+		];
+
+		if (exists(path)) {
+			if (isDir(path)) {
+				fakeResponse["folder"] = JSONValue("");
+			} else {
+				string quickXorHash = computeQuickXorHash(path);
+				fakeResponse["file"] = JSONValue([
+					"hashes": JSONValue(["quickXorHash": JSONValue(quickXorHash)])
+				]);
+			}
+		} else {
+			// Assume directory if path does not exist
+			fakeResponse["folder"] = JSONValue("");
+		}
+
 		addLogEntry("Generated Fake OneDrive Response: " ~ to!string(fakeResponse), ["debug"]);
 		return fakeResponse;
 	}
-	
+
 	// Save JSON item details into the item database
 	void saveItem(JSONValue jsonItem) {
 		// jsonItem has to be a valid object
@@ -5788,7 +6050,6 @@ class SyncEngine {
 					}
 					
 					// Add to the local database
-					addLogEntry("Adding to database: " ~ to!string(item), ["debug"]);
 					itemDB.upsert(item);
 					
 					// If we have a remote drive ID, add this to our list of known drive id's
@@ -8017,4 +8278,316 @@ class SyncEngine {
 		addLogEntry("Creating|Updating into local database a DB Tie record: " ~ to!string(tieDBItem), ["debug"]);
 		itemDB.upsert(tieDBItem);
 	}
+	
+	// List all the OneDrive Business Shared Items for the user to see
+	void listBusinessSharedObjects() {
+	
+		JSONValue sharedWithMeItems;
+		
+		// Create a new API Instance for this thread and initialise it
+		OneDriveApi sharedWithMeOneDriveApiInstance;
+		sharedWithMeOneDriveApiInstance = new OneDriveApi(appConfig);
+		sharedWithMeOneDriveApiInstance.initialise();
+		
+		try {
+			sharedWithMeItems = sharedWithMeOneDriveApiInstance.getSharedWithMe();
+		} catch (OneDriveException e) {
+			
+			// Display error message
+			displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+			// Must exit here
+			sharedWithMeOneDriveApiInstance.shutdown();
+			// Free object and memory
+			object.destroy(sharedWithMeOneDriveApiInstance);
+		}
+		
+		if (sharedWithMeItems.type() == JSONType.object) {
+		
+			if (count(sharedWithMeItems["value"].array) > 0) {
+				// No shared items
+				addLogEntry();
+				addLogEntry("Listing available OneDrive Business Shared Items:");
+				addLogEntry();
+				
+				// Iterate through the array
+				foreach (searchResult; sharedWithMeItems["value"].array) {
+				
+					// loop variables for each item
+					string sharedByName;
+					string sharedByEmail;
+					
+					// Debug response output
+					addLogEntry("shared folder entry: " ~ to!string(searchResult), ["debug"]);
+					
+					// Configure 'who' this was shared by
+					if ("sharedBy" in searchResult["remoteItem"]["shared"]) {
+						// we have shared by details we can use
+						if ("displayName" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
+							sharedByName = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["displayName"].str;
+						}
+						if ("email" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
+							sharedByEmail = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["email"].str;
+						}
+					}
+					
+					// Output query result
+					addLogEntry("-----------------------------------------------------------------------------------");
+					if (isItemFile(searchResult)) {
+						addLogEntry("Shared File:     " ~ to!string(searchResult["name"].str));
+					} else {
+						addLogEntry("Shared Folder:   " ~ to!string(searchResult["name"].str));
+					}
+					
+					// Detail 'who' shared this
+					if ((sharedByName != "") && (sharedByEmail != "")) {
+						addLogEntry("Shared By:       " ~ sharedByName ~ " (" ~ sharedByEmail ~ ")");
+					} else {
+						if (sharedByName != "") {
+							addLogEntry("Shared By:       " ~ sharedByName);
+						}
+					}
+					
+					// More detail if --verbose is being used
+					addLogEntry("Item Id:         " ~ searchResult["remoteItem"]["id"].str, ["verbose"]);
+					addLogEntry("Parent Drive Id: " ~ searchResult["remoteItem"]["parentReference"]["driveId"].str, ["verbose"]);
+					if ("id" in searchResult["remoteItem"]["parentReference"]) {
+						addLogEntry("Parent Item Id:  " ~ searchResult["remoteItem"]["parentReference"]["id"].str, ["verbose"]);
+					}	
+				}
+				
+				// Close out the loop
+				addLogEntry("-----------------------------------------------------------------------------------");
+				addLogEntry();
+				
+			} else {
+				// No shared items
+				addLogEntry();
+				addLogEntry("No OneDrive Business Shared Folders were returned");
+				addLogEntry();
+			}
+		}
+		
+		// Shutdown API access
+		sharedWithMeOneDriveApiInstance.shutdown();
+		// Free object and memory
+		object.destroy(sharedWithMeOneDriveApiInstance);
+	}
+	
+	// Query all the OneDrive Business Shared Objects to sync only Shared Files
+	void queryBusinessSharedObjects() {
+	
+		JSONValue sharedWithMeItems;
+		Item sharedFilesRootDirectoryDatabaseRecord;
+		
+		// Create a new API Instance for this thread and initialise it
+		OneDriveApi sharedWithMeOneDriveApiInstance;
+		sharedWithMeOneDriveApiInstance = new OneDriveApi(appConfig);
+		sharedWithMeOneDriveApiInstance.initialise();
+		
+		try {
+			sharedWithMeItems = sharedWithMeOneDriveApiInstance.getSharedWithMe();
+		} catch (OneDriveException e) {
+			
+			// Add eventual API error handling here
+			
+		}
+		
+		// Valid JSON response
+		if (sharedWithMeItems.type() == JSONType.object) {
+		
+			// Get the configuredBusinessSharedFilesDirectoryName DB item
+			// We need this as we need to 'fake' create all the folders for the shared files
+			// Then fake create the file entries for the database with the correct parent folder that is the local folder
+			itemDB.selectByPath(baseName(appConfig.configuredBusinessSharedFilesDirectoryName), appConfig.defaultDriveId, sharedFilesRootDirectoryDatabaseRecord);
+		
+			// For each item returned, if a file, process it
+			foreach (searchResult; sharedWithMeItems["value"].array) {
+			
+				// Shared Business Folders are added to the account using 'Add shortcut to My files'
+				// We only care here about any remaining 'files' that are shared with the user
+				
+				if (isItemFile(searchResult)) {
+					// Debug response output
+					addLogEntry("getSharedWithMe Response Shared File JSON: " ~ to!string(searchResult), ["debug"]);
+					
+					// Make a DB item from this JSON
+					Item sharedFileOriginalData = makeItem(searchResult);
+					
+					// Variables for each item
+					string sharedByName;
+					string sharedByEmail;
+					string sharedByFolderName;
+					string newLocalSharedFilePath;
+					string newItemPath;
+					Item sharedFilesPath;
+					JSONValue fileToDownload;
+					JSONValue detailsToUpdate;
+					JSONValue latestOnlineDetails;
+										
+					// Configure 'who' this was shared by
+					if ("sharedBy" in searchResult["remoteItem"]["shared"]) {
+						// we have shared by details we can use
+						if ("displayName" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
+							sharedByName = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["displayName"].str;
+						}
+						if ("email" in searchResult["remoteItem"]["shared"]["sharedBy"]["user"]) {
+							sharedByEmail = searchResult["remoteItem"]["shared"]["sharedBy"]["user"]["email"].str;
+						}
+					}
+					
+					// Configure 'who' shared this, so that we can create the directory for that users shared files with us
+					if ((sharedByName != "") && (sharedByEmail != "")) {
+						sharedByFolderName = sharedByName ~ " (" ~ sharedByEmail ~ ")";
+						
+					} else {
+						if (sharedByName != "") {
+							sharedByFolderName = sharedByName;
+						}
+					}
+					
+					// Create the local path to store this users shared files with us
+					newLocalSharedFilePath = buildNormalizedPath(buildPath(appConfig.configuredBusinessSharedFilesDirectoryName, sharedByFolderName));
+					
+					// Does the Shared File Users Local Directory to store the shared file(s) exist?
+					if (!exists(newLocalSharedFilePath)) {
+						// Folder does not exist locally and needs to be created
+						addLogEntry("Creating the OneDrive Business Shared File Users Local Directory: " ~ newLocalSharedFilePath);
+					
+						// Local folder does not exist, thus needs to be created
+						mkdirRecurse(newLocalSharedFilePath);
+						
+						// As this will not be created online, generate a response so it can be saved to the database
+						sharedFilesPath = makeItem(createFakeResponse(baseName(newLocalSharedFilePath)));
+						
+						// Update sharedFilesPath parent items to that of sharedFilesRootDirectoryDatabaseRecord
+						sharedFilesPath.parentId = sharedFilesRootDirectoryDatabaseRecord.id;
+						
+						// Add DB record to the local database
+						addLogEntry("Creating|Updating into local database a DB record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);
+						itemDB.upsert(sharedFilesPath);
+					} else {
+						// Folder exists locally, is the folder in the database? 
+						// Query DB for this path
+						Item dbRecord;
+						if (!itemDB.selectByPath(baseName(newLocalSharedFilePath), appConfig.defaultDriveId, dbRecord)) {
+							// As this will not be created online, generate a response so it can be saved to the database
+							sharedFilesPath = makeItem(createFakeResponse(baseName(newLocalSharedFilePath)));
+							
+							// Update sharedFilesPath parent items to that of sharedFilesRootDirectoryDatabaseRecord
+							sharedFilesPath.parentId = sharedFilesRootDirectoryDatabaseRecord.id;
+							
+							// Add DB record to the local database
+							addLogEntry("Creating|Updating into local database a DB record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);
+							itemDB.upsert(sharedFilesPath);
+						}
+					}
+					
+					// The file to download JSON details
+					fileToDownload = searchResult;
+					
+					// Get the latest online details
+					latestOnlineDetails = sharedWithMeOneDriveApiInstance.getPathDetailsById(sharedFileOriginalData.remoteDriveId, sharedFileOriginalData.remoteId);
+					Item tempOnlineRecord = makeItem(latestOnlineDetails);
+					
+					// With the local folders created, now update 'fileToDownload' to download the file to our location:
+					//	"parentReference": {
+					//		"driveId": "<account drive id>",
+					//		"driveType": "business",
+					//		"id": "<local users shared folder id>",
+					//	},
+					
+					// The getSharedWithMe() JSON response also contains an API bug where the 'hash' of the file is not provided
+					// Use the 'latestOnlineDetails' response to obtain the hash
+					//	"file": {
+					//		"hashes": {
+					//			"quickXorHash": "<hash value>"
+					//		}
+					//	},
+					//
+					
+					// The getSharedWithMe() JSON response also contains an API bug where the 'size' of the file is not the actual size of the file
+					// The getSharedWithMe() JSON response also contains an API bug where the 'eTag' of the file is not present
+					// The getSharedWithMe() JSON response also contains an API bug where the 'lastModifiedDateTime' of the file is date when the file was shared, not the actual date last modified
+					
+					detailsToUpdate = [
+								"parentReference": JSONValue([
+															"driveId": JSONValue(appConfig.defaultDriveId),
+															"driveType": JSONValue("business"),
+															"id": JSONValue(sharedFilesPath.id)
+															]),
+								"file": JSONValue([
+													"hashes":JSONValue([
+																		"quickXorHash": JSONValue(tempOnlineRecord.quickXorHash)
+																		])
+													]),
+								"eTag": JSONValue(tempOnlineRecord.eTag)
+								];
+					
+					foreach (string key, JSONValue value; detailsToUpdate.object) {
+						fileToDownload[key] = value;
+					}
+					
+					// Update specific items
+					// Update 'size'
+					fileToDownload["size"] = to!int(tempOnlineRecord.size);
+					fileToDownload["remoteItem"]["size"] = to!int(tempOnlineRecord.size);
+					// Update 'lastModifiedDateTime'
+					fileToDownload["lastModifiedDateTime"] = latestOnlineDetails["fileSystemInfo"]["lastModifiedDateTime"].str;
+					fileToDownload["fileSystemInfo"]["lastModifiedDateTime"] = latestOnlineDetails["fileSystemInfo"]["lastModifiedDateTime"].str;
+					fileToDownload["remoteItem"]["lastModifiedDateTime"] = latestOnlineDetails["fileSystemInfo"]["lastModifiedDateTime"].str;
+					fileToDownload["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"] = latestOnlineDetails["fileSystemInfo"]["lastModifiedDateTime"].str;
+					
+					// Final JSON that will be used to download the file
+					addLogEntry("Final fileToDownload: " ~ to!string(fileToDownload), ["debug"]);
+					
+					// Make the new DB item from the consolidated JSON item
+					Item downloadSharedFileDbItem = makeItem(fileToDownload);
+					
+					// Calculate the full local path for this shared file
+					newItemPath = computeItemPath(downloadSharedFileDbItem.driveId, downloadSharedFileDbItem.parentId) ~ "/" ~ downloadSharedFileDbItem.name;
+					
+					// Does this potential file exists on disk?
+					if (!exists(newItemPath)) {
+						// The shared file does not exists locally
+						// Is this something we actually want? Check the JSON against Client Side Filtering Rules
+						bool unwanted = checkJSONAgainstClientSideFiltering(fileToDownload);
+						if (!unwanted) {
+							// File has not been excluded via Client Side Filtering
+							// Submit this shared file to be processed further for downloading
+							applyPotentiallyNewLocalItem(downloadSharedFileDbItem, fileToDownload, newItemPath);
+						}
+					} else {
+						// A file, in the desired local location already exists with the same name
+						// Is this local file in sync?
+						string itemSource = "remote";
+						if (!isItemSynced(downloadSharedFileDbItem, newItemPath, itemSource)) {
+							// Not in sync ....
+							Item existingDatabaseItem;
+							bool existingDBEntry = itemDB.selectById(downloadSharedFileDbItem.driveId, downloadSharedFileDbItem.id, existingDatabaseItem);
+							
+							// Is there a DB entry?
+							if (existingDBEntry) {
+								// Existing DB entry
+								// Need to be consistent here with how 'newItemPath' was calculated
+								string existingItemPath = computeItemPath(existingDatabaseItem.driveId, existingDatabaseItem.parentId) ~ "/" ~ existingDatabaseItem.name;
+								// Attempt to apply this changed item
+								applyPotentiallyChangedItem(existingDatabaseItem, existingItemPath, downloadSharedFileDbItem, newItemPath, fileToDownload);
+							} else {
+								// File exists locally, it is not in sync, there is no record in the DB of this file
+								// In case the renamed path is needed
+								string renamedPath;
+								// Rename the local file
+								safeBackup(newItemPath, dryRun, renamedPath);
+								// Submit this shared file to be processed further for downloading
+								applyPotentiallyNewLocalItem(downloadSharedFileDbItem, fileToDownload, newItemPath);
+							}
+						} else {
+							// Item is in sync, ensure the DB record is the same
+							itemDB.upsert(downloadSharedFileDbItem);
+						}
+					}
+				}
+			}
+		}
+	}	
 }

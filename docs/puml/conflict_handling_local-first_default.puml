@@ -1,0 +1,62 @@
+@startuml
+start
+note left: Operational Mode 'onedrive -sync -local-first'
+:Performing a database consistency and\nintegrity check on locally stored data;
+note left: This data is considered the 'source-of-truth'\nOnline data should be a 'replica' of this data
+repeat
+  :Process each DB record;
+  if (Is the DB record is in sync with local file) then (yes)
+  
+  else (no)
+  
+    :Log reason for discrepancy;
+    :Flag item to be processed as a modified local file;
+  
+  endif
+repeat while
+
+:Process modified items to upload;
+
+if (Does local file DB record match current latest online JSON data) then (yes)
+
+else (no)
+
+  :Log that the local file was modified locally since last sync;
+  :Renaming local file to avoid potential local data loss;
+  note left: Local data loss prevention\nRenamed file will be uploaded as new file
+  :Upload renamed local file as new file;
+
+endif
+
+:Upload modified file;
+
+:Scan file system for any new data to upload;
+
+:Query OneDrive /delta API for online changes;
+
+:Process received JSON data;
+if (JSON item is a file) then (yes)
+  if (Does the file exist locally) then (yes)
+    :Compute relevant file hashes;
+    :Check DB for file record;
+    if (DB record found) then (yes)
+      :Compare file hash with DB hash;
+      if (Is the hash different) then (yes)
+        :Log that the local file was modified locally since last sync;
+        :Renaming local file to avoid potential local data loss;
+        note left: Local data loss prevention\nRenamed file will be uploaded as new file
+      else (no)
+      endif
+    else (no)
+    
+    endif
+  else (no)
+  endif
+
+  :Download file (as per online JSON item) as required;
+  
+else (no)
+  :Other handling for directories | root ojects | deleted items;
+endif
+stop
+@enduml

@@ -1,0 +1,78 @@
+@startuml
+!define DATABASE_ENTITY(x) entity x
+component main {
+}
+component config {
+}
+component log {
+}
+component curlEngine {
+}
+component util {
+}
+component onedrive {
+}
+component syncEngine {
+}
+component itemdb {
+}
+component clientSideFiltering {
+}
+component monitor {
+}
+component sqlite {
+}
+component qxor {
+}
+
+DATABASE_ENTITY("Database")
+
+main --> config
+main --> log
+main --> curlEngine
+main --> util
+main --> onedrive
+main --> syncEngine
+main --> itemdb
+main --> clientSideFiltering
+main --> monitor
+
+config --> log
+config --> util
+
+clientSideFiltering --> config
+clientSideFiltering --> util
+clientSideFiltering --> log
+
+syncEngine --> config
+syncEngine --> log
+syncEngine --> util
+syncEngine --> onedrive
+syncEngine --> itemdb
+syncEngine --> clientSideFiltering
+
+util --> log
+util --> config
+util --> qxor
+util --> curlEngine
+
+sqlite --> log
+sqlite -> "Database" : uses
+
+onedrive --> config
+onedrive --> log
+onedrive --> util
+onedrive --> curlEngine
+
+monitor --> config
+monitor --> util
+monitor --> log
+monitor --> clientSideFiltering
+monitor .> syncEngine : inotify event
+
+itemdb --> sqlite
+itemdb --> util
+itemdb --> log
+
+curlEngine --> log
+@enduml

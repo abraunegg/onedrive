@@ -49,7 +49,7 @@ static this() {
 }
 
 // Creates a safe backup of the given item, and only performs the function if not in a --dry-run scenario
-void safeBackup(const(char)[] path, bool dryRun) {
+void safeBackup(const(char)[] path, bool dryRun, out string renamedPath) {
     auto ext = extension(path);
     auto newPath = path.chomp(ext) ~ "-" ~ deviceName;
     int n = 2;
@@ -88,7 +88,8 @@ void safeBackup(const(char)[] path, bool dryRun) {
 		//
 		// Use rename() as Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
 		try {
-            rename(path, newPath);
+			rename(path, newPath);
+			renamedPath = to!string(newPath);
         } catch (Exception e) {
             // Handle exceptions, e.g., log error
             addLogEntry("Renaming of local file failed for " ~ to!string(path) ~ ": " ~ e.msg, ["error"]);

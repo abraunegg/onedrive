@@ -1,0 +1,56 @@
+@startuml
+start
+partition "Upload Modified File" {
+  :Initialize API Instance;
+  :Check for Dry Run;
+  if (Is Dry Run?) then (yes)
+    :Create Fake Response;
+  else (no)
+    :Get Current Online Data;
+    if (Error Fetching Data) then (yes)
+      :Handle Errors;
+      if (Retryable Error?) then (yes)
+        :Retry Fetching Data;
+        detach
+      else (no)
+        :Log and Display Error;
+      endif
+    endif
+    if (filesize > 0 and valid latest online data) then (yes)
+      if (is online file newer) then (yes)
+        :Log that online is newer; 
+        :Perform safe backup;
+        note left: Local data loss prevention
+        :Upload renamed local file as new file;
+      endif
+    endif
+    :Determine Upload Method;
+    if (Use Simple Upload?) then (yes)
+      :Perform Simple Upload;
+      if (Upload Error) then (yes)
+        :Handle Upload Errors and Retries;
+        if (Retryable Upload Error?) then (yes)
+          :Retry Upload;
+          detach
+        else (no)
+          :Log and Display Upload Error;
+        endif
+      endif
+    else (no)
+      :Create Upload Session;
+      :Perform Upload via Session;
+      if (Session Upload Error) then (yes)
+        :Handle Session Upload Errors and Retries;
+        if (Retryable Session Error?) then (yes)
+          :Retry Session Upload;
+          detach
+        else (no)
+          :Log and Display Session Error;
+        endif
+      endif
+    endif
+  endif
+  :Finalize;
+}
+stop
+@enduml

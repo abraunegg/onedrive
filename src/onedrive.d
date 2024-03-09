@@ -22,9 +22,6 @@ import std.uri;
 import std.array;
 
 // Required for webhooks
-import arsd.cgi;
-import std.concurrency;
-import core.atomic : atomicOp;
 import std.uuid;
 
 // What other modules that we have created do we need to import?
@@ -56,116 +53,10 @@ class OneDriveException: Exception {
 	}
 }
 
-class OneDriveWebhook {
-	// We need OneDriveWebhook.serve to be a static function, otherwise we would hit the member function
-	// "requires a dual-context, which is deprecated" warning. The root cause is described here:
-	//   - https://issues.dlang.org/show_bug.cgi?id=5710
-	//   - https://forum.dlang.org/post/fkyppfxzegenniyzztos@forum.dlang.org
-	// The problem is deemed a bug and should be fixed in the compilers eventually. The singleton stuff
-	// could be undone when it is fixed.
-	//
-	// Following the singleton pattern described here: https://wiki.dlang.org/Low-Lock_Singleton_Pattern
-	// Cache instantiation flag in thread-local bool
-	// Thread local
-	private static bool instantiated_;
-	private RequestServer server;
-
-	// Thread global
-	private __gshared OneDriveWebhook instance_;
-
-	private string host;
-	private ushort port;
-	private Tid parentTid;
-	private shared uint count;
-	private bool started;
-
-	static OneDriveWebhook getOrCreate(string host, ushort port, Tid parentTid) {
-		if (!instantiated_) {
-			synchronized(OneDriveWebhook.classinfo) {
-				if (!instance_) {
-						instance_ = new OneDriveWebhook(host, port, parentTid);
-				}
-
-				instantiated_ = true;
-			}
-		}
-
-		return instance_;
-	}
-
-	private this(string host, ushort port, Tid parentTid) {
-		this.host = host;
-		this.port = port;
-		this.parentTid = parentTid;
-		this.count = 0;
-	}
-	
-	void serve() {
-		spawn(&serveStatic);
-		this.started = true;
-		addLogEntry("Started webhook server");
-	}
-
-	void stop() {
-		if (this.started) {
-			server.stop();
-			this.started = false;
-		}
-		addLogEntry("Stopped webhook server");
-		object.destroy(server);
-	}
-
-	// The static serve() is necessary because spawn() does not like instance methods
-	private static void serveStatic() {
-		// we won't create the singleton instance if it hasn't been created already
-		// such case is a bug which should crash the program and gets fixed
-		instance_.serveImpl();
-	}
-
-	// The static handle() is necessary to work around the dual-context warning mentioned above
-	private static void handle(Cgi cgi) {
-		// we won't create the singleton instance if it hasn't been created already
-		// such case is a bug which should crash the program and gets fixed
-		instance_.handleImpl(cgi);
-	}
-
-	private void serveImpl() {
-		server = RequestServer(host, port);
-		server.serveEmbeddedHttp!handle();
-	}
-
-	private void handleImpl(Cgi cgi) {
-		if (debugHTTPResponseOutput) {
-			addLogEntry("Webhook request: " ~ to!string(cgi.requestMethod) ~ " " ~ to!string(cgi.requestUri));
-			if (!cgi.postBody.empty) {
-				addLogEntry("Webhook post body: " ~ to!string(cgi.postBody));
-			}
-		}
-
-		cgi.setResponseContentType("text/plain");
-
-		if ("validationToken" in cgi.get)	{
-			// For validation requests, respond with the validation token passed in the query string
-			// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/concepts/webhook-receiver-validation-request
-			cgi.write(cgi.get["validationToken"]);
-			addLogEntry("Webhook: handled validation request");
-		} else {
-			// Notifications don't include any information about the changes that triggered them.
-			// Put a refresh signal in the queue and let the main monitor loop process it.
-			// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/concepts/using-webhooks
-			count.atomicOp!"+="(1);
-			send(parentTid, to!ulong(count));
-			cgi.write("OK");
-			addLogEntry("Webhook: sent refresh signal #" ~ to!string(count));
-		}
-	}
-}
-
 class OneDriveApi {
 	// Class variables
 	ApplicationConfig appConfig;
 	CurlEngine curlEngine;
-	OneDriveWebhook webhook;
 	
 	string clientId = "";
 	string companyName = "";
@@ -179,20 +70,14 @@ class OneDriveApi {
 	string itemByPathUrl = "";
 	string siteSearchUrl = "";
 	string siteDriveUrl = "";
+	string subscriptionUrl = "";
 	string tenantId = "";
 	string authScope = "";
 	const(char)[] refreshToken = "";
 	bool dryRun = false;
 	bool debugResponse = false;
 	ulong retryAfterValue = 0;
-	
-	// Webhook Subscriptions
-	string subscriptionUrl = "";
-	string subscriptionId = "";
-	SysTime subscriptionExpiration, subscriptionLastErrorAt;
-	Duration subscriptionExpirationInterval, subscriptionRenewalInterval, subscriptionRetryInterval;
-	string notificationUrl = "";
-	
+
 	this(ApplicationConfig appConfig) {
 		// Configure the class varaible to consume the application configuration
 		this.appConfig = appConfig;
@@ -214,14 +99,9 @@ class OneDriveApi {
 		siteSearchUrl = appConfig.globalGraphEndpoint ~ "/v1.0/sites?search";
 		siteDriveUrl = appConfig.globalGraphEndpoint ~ "/v1.0/sites/";
 
+
 		// Subscriptions
 		subscriptionUrl = appConfig.globalGraphEndpoint ~ "/v1.0/subscriptions";
-		subscriptionExpiration = Clock.currTime(UTC());
-		subscriptionLastErrorAt = SysTime.fromUnixTime(0);
-		subscriptionExpirationInterval = dur!"seconds"(appConfig.getValueLong("webhook_expiration_interval"));
-		subscriptionRenewalInterval = dur!"seconds"(appConfig.getValueLong("webhook_renewal_interval"));
-		subscriptionRetryInterval = dur!"seconds"(appConfig.getValueLong("webhook_retry_interval"));
-		notificationUrl = appConfig.getValueString("webhook_public_url");
 	}
 	
 	// Initialise the OneDrive API class
@@ -475,20 +355,6 @@ class OneDriveApi {
 	
 	// Shutdown OneDrive API Curl Engine
 	void shutdown() {
-		
-		// Delete subscription if there exists any
-		try {
-			deleteSubscription();
-		} catch (OneDriveException e) {
-			logSubscriptionError(e);
-		}
-		
-		// Shutdown webhook server if it is running
-		if (webhook !is null) {
-			webhook.stop();
-			object.destroy(webhook);
-		}
-		
 		// Release curl instance
 		if (curlEngine !is null) {
 			curlEngine.release();
@@ -644,6 +510,13 @@ class OneDriveApi {
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
 		//url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		return get(url);
+	}
+	
+	// Return all the items that are shared with the user
+	// https://docs.microsoft.com/en-us/graph/api/drive-sharedwithme
+	JSONValue getSharedWithMe() {
+		checkAccessTokenExpired();
+		return get(sharedWithMeUrl);
 	}
 	
 	// Create a shareable link for an existing file on OneDrive based on the accessScope JSON permissions
@@ -834,6 +707,47 @@ class OneDriveApi {
 		url = siteDriveUrl ~ site_id ~ "/drives";
 		return get(url);
 	}
+
+	JSONValue createSubscription(string notificationUrl, SysTime expirationDateTime) {
+		checkAccessTokenExpired();
+		string driveId = appConfig.getValueString("drive_id");
+		string url = subscriptionUrl;
+		
+		// Create a resource item based on if we have a driveId
+		string resourceItem;
+		if (driveId.length) {
+				resourceItem = "/drives/" ~ driveId ~ "/root";
+		} else {
+				resourceItem = "/me/drive/root";
+		}
+
+		// create JSON request to create webhook subscription
+		const JSONValue request = [
+			"changeType": "updated",
+			"notificationUrl": notificationUrl,
+			"resource": resourceItem,
+			"expirationDateTime": expirationDateTime.toISOExtString(),
+ 			"clientState": randomUUID().toString()
+		];
+		curlEngine.http.addRequestHeader("Content-Type", "application/json");
+		return post(url, request.toString());
+	}
+	
+	JSONValue renewSubscription(string subscriptionId, SysTime expirationDateTime) {
+		string url;
+		url = subscriptionUrl ~ "/" ~ subscriptionId;
+		const JSONValue request = [
+			"expirationDateTime": expirationDateTime.toISOExtString()
+		];
+		curlEngine.http.addRequestHeader("Content-Type", "application/json");
+		return post(url, request.toString());
+	}
+	
+	void deleteSubscription(string subscriptionId) {
+		string url;
+		url = subscriptionUrl ~ "/" ~ subscriptionId;
+		performDelete(url);
+	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
 	void downloadById(const(char)[] driveId, const(char)[] id, string saveToPath, long fileSize) {
@@ -893,277 +807,7 @@ class OneDriveApi {
 		retryAfterValue = 0;
 	}
 	
-	// Create a new subscription or renew the existing subscription
-	void createOrRenewSubscription() {
-		checkAccessTokenExpired();
-
-		// Kick off the webhook server first
-		if (webhook is null) {
-			webhook = OneDriveWebhook.getOrCreate(
-				appConfig.getValueString("webhook_listening_host"),
-				to!ushort(appConfig.getValueLong("webhook_listening_port")),
-				thisTid
-			);
-			webhook.serve();
-		}
-
-		auto elapsed = Clock.currTime(UTC()) - subscriptionLastErrorAt;
-		if (elapsed < subscriptionRetryInterval) {
-			return;
-		}
-
-		try {
-			if (!hasValidSubscription()) {
-				createSubscription();
-			} else if (isSubscriptionUpForRenewal()) {
-				renewSubscription();
-			}
-		} catch (OneDriveException e) {
-			logSubscriptionError(e);
-			subscriptionLastErrorAt = Clock.currTime(UTC());
-			addLogEntry("Will retry creating or renewing subscription in " ~ to!string(subscriptionRetryInterval));
-		} catch (JSONException e) {
-			addLogEntry("ERROR: Unexpected JSON error when attempting to validate subscription: " ~ e.msg);
-			subscriptionLastErrorAt = Clock.currTime(UTC());
-			addLogEntry("Will retry creating or renewing subscription in " ~ to!string(subscriptionRetryInterval));
-		}
-	}
-		
-	// Return the duration to next subscriptionExpiration check
-	Duration getNextExpirationCheckDuration() {
-		SysTime now = Clock.currTime(UTC());
-		if (hasValidSubscription()) {
-			Duration elapsed = Clock.currTime(UTC()) - subscriptionLastErrorAt;
-			// Check if we are waiting for the next retry
-			if (elapsed < subscriptionRetryInterval)
-				return subscriptionRetryInterval - elapsed;
-			else 
-				return subscriptionExpiration - now - subscriptionRenewalInterval;
-		}
-		else
-			return subscriptionRetryInterval;
-	}
-	
 	// Private functions
-	private bool hasValidSubscription() {
-		return !subscriptionId.empty && subscriptionExpiration > Clock.currTime(UTC());
-	}
-
-	private bool isSubscriptionUpForRenewal() {
-		return subscriptionExpiration < Clock.currTime(UTC()) + subscriptionRenewalInterval;
-	}
-	
-	private void createSubscription() {
-		addLogEntry("Initializing subscription for updates ...");
-
-		auto expirationDateTime = Clock.currTime(UTC()) + subscriptionExpirationInterval;
-		string driveId = appConfig.getValueString("drive_id");
-		string url = subscriptionUrl;
-		
-		// Create a resource item based on if we have a driveId
-		string resourceItem;
-		if (driveId.length) {
-				resourceItem = "/drives/" ~ driveId ~ "/root";
-		} else {
-				resourceItem = "/me/drive/root";
-		}
-
-		// create JSON request to create webhook subscription
-		const JSONValue request = [
-			"changeType": "updated",
-			"notificationUrl": notificationUrl,
-			"resource": resourceItem,
-			"expirationDateTime": expirationDateTime.toISOExtString(),
- 			"clientState": randomUUID().toString()
-		];
-		curlEngine.http.addRequestHeader("Content-Type", "application/json");
-
-		try {
-			JSONValue response = post(url, request.toString());
-
-			// Save important subscription metadata including id and expiration
-			subscriptionId = response["id"].str;
-			subscriptionExpiration = SysTime.fromISOExtString(response["expirationDateTime"].str);
-			addLogEntry("Created new subscription " ~ subscriptionId ~ " with expiration: " ~ to!string(subscriptionExpiration.toISOExtString()));
-		} catch (OneDriveException e) {
-			if (e.httpStatusCode == 409) {
-				// Take over an existing subscription on HTTP 409.
-				//
-				// Sample 409 error:
-				// {
-				// 	"error": {
-				// 			"code": "ObjectIdentifierInUse",
-				// 			"innerError": {
-				// 					"client-request-id": "615af209-467a-4ab7-8eff-27c1d1efbc2d",
-				// 					"date": "2023-09-26T09:27:45",
-				// 					"request-id": "615af209-467a-4ab7-8eff-27c1d1efbc2d"
-				// 			},
-				// 			"message": "Subscription Id c0bba80e-57a3-43a7-bac2-e6f525a76e7c already exists for the requested combination"
-				// 	}
-				// }
-
-				// Make sure the error code is "ObjectIdentifierInUse"
-				try {
-					if (e.error["error"]["code"].str != "ObjectIdentifierInUse") {
-						throw e;
-					}
-				} catch (JSONException jsonEx) {
-					throw e;
-				}
-
-				// Extract the existing subscription id from the error message
-				import std.regex;
-				auto idReg = ctRegex!(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "i");
-				auto m = matchFirst(e.error["error"]["message"].str, idReg);
-				if (!m) {
-					throw e;
-				}
-
-				// Save the subscription id and renew it immediately since we don't know the expiration timestamp
-				subscriptionId = m[0];
-				addLogEntry("Found existing subscription " ~ subscriptionId);
-				renewSubscription();
-			} else {
-				throw e;
-			}
-		}
-	}
-	
-	private void renewSubscription() {
-		addLogEntry("Renewing subscription for updates ...");
-
-		auto expirationDateTime = Clock.currTime(UTC()) + subscriptionExpirationInterval;
-		string url;
-		url = subscriptionUrl ~ "/" ~ subscriptionId;
-		const JSONValue request = [
-			"expirationDateTime": expirationDateTime.toISOExtString()
-		];
-		curlEngine.http.addRequestHeader("Content-Type", "application/json");
-
-		try {
-			JSONValue response = patch(url, request.toString());
-
-			// Update subscription expiration from the response
-			subscriptionExpiration = SysTime.fromISOExtString(response["expirationDateTime"].str);
-			addLogEntry("Renewed subscription " ~ subscriptionId ~ " with expiration: " ~ to!string(subscriptionExpiration.toISOExtString()));
-		} catch (OneDriveException e) {
-			if (e.httpStatusCode == 404) {
-				addLogEntry("The subscription is not found on the server. Recreating subscription ...");
-				subscriptionId = null;
-				subscriptionExpiration = Clock.currTime(UTC());
-				createSubscription();
-			} else {
-				throw e;
-			}
-		}
-	}
-	
-	private void deleteSubscription() {
-		if (!hasValidSubscription()) {
-			addLogEntry("No valid Microsoft OneDrive webhook subscription to delete", ["debug"]);
-			return;
-		}
-
-		string url;
-		url = subscriptionUrl ~ "/" ~ subscriptionId;
-		performDelete(url);
-		addLogEntry("Deleted Microsoft OneDrive webhook subscription", ["debug"]);
-	}
-	
-	private void logSubscriptionError(OneDriveException e) {
-		if (e.httpStatusCode == 400) {
-			// Log known 400 error where Microsoft cannot get a 200 OK from the webhook endpoint
-			//
-			// Sample 400 error:
-			// {
-			// 	"error": {
-			// 			"code": "InvalidRequest",
-			// 			"innerError": {
-			// 					"client-request-id": "<uuid>",
-			// 					"date": "<timestamp>",
-			// 					"request-id": "<uuid>"
-			// 			},
-			// 			"message": "Subscription validation request failed. Notification endpoint must respond with 200 OK to validation request."
-			// 	}
-			// }
-
-			try {
-				if (e.error["error"]["code"].str == "InvalidRequest") {
-					import std.regex;
-					auto msgReg = ctRegex!(r"Subscription validation request failed", "i");
-					auto m = matchFirst(e.error["error"]["message"].str, msgReg);
-					if (m) {
-						addLogEntry("ERROR: Cannot create or renew subscription: Microsoft did not get 200 OK from the webhook endpoint.");
-						return;
-					}
-				}
-			} catch (JSONException) {
-				// fallthrough
-			}
-		} else if (e.httpStatusCode == 401) {
-			// Log known 401 error where authentication failed
-			//
-			// Sample 401 error:
-			// {
-			// 	"error": {
-			// 			"code": "ExtensionError",
-			// 			"innerError": {
-			// 					"client-request-id": "<uuid>",
-			// 					"date": "<timestamp>",
-			// 					"request-id": "<uuid>"
-			// 			},
-			// 			"message": "Operation: Create; Exception: [Status Code: Unauthorized; Reason: Authentication failed]"
-			// 	}
-			// }
-
-			try {
-				if (e.error["error"]["code"].str == "ExtensionError") {
-					import std.regex;
-					auto msgReg = ctRegex!(r"Authentication failed", "i");
-					auto m = matchFirst(e.error["error"]["message"].str, msgReg);
-					if (m) {
-						addLogEntry("ERROR: Cannot create or renew subscription: Authentication failed.");
-						return;
-					}
-				}
-			} catch (JSONException) {
-				// fallthrough
-			}
-		} else if (e.httpStatusCode == 403) {
-			// Log known 403 error where the number of subscriptions on item has exceeded limit
-			//
-			// Sample 403 error:
-			// {
-			// 	"error": {
-			// 			"code": "ExtensionError",
-			// 			"innerError": {
-			// 					"client-request-id": "<uuid>",
-			// 					"date": "<timestamp>",
-			// 					"request-id": "<uuid>"
-			// 			},
-			// 			"message": "Operation: Create; Exception: [Status Code: Forbidden; Reason: Number of subscriptions on item has exceeded limit]"
-			// 	}
-			// }
-			try {
-				if (e.error["error"]["code"].str == "ExtensionError") {
-					import std.regex;
-					auto msgReg = ctRegex!(r"Number of subscriptions on item has exceeded limit", "i");
-					auto m = matchFirst(e.error["error"]["message"].str, msgReg);
-					if (m) {
-						addLogEntry("ERROR: Cannot create or renew subscription: Number of subscriptions has exceeded limit.");
-						return;
-					}
-				}
-			} catch (JSONException) {
-				// fallthrough
-			}
-		}
-
-		// Log detailed message for unknown errors
-		addLogEntry("ERROR: Cannot create or renew subscription.");
-		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-	}
-	
 	private void addAccessTokenHeader() {
 		curlEngine.http.addRequestHeader("Authorization", appConfig.accessToken);
 	}
@@ -1947,7 +1591,7 @@ class OneDriveApi {
 			case 403:
 				// OneDrive responded that the user is forbidden
 				addLogEntry("OneDrive returned a 'HTTP 403 - Forbidden' - gracefully handling error", ["verbose"]);
-				break;
+				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason);
 
 			// 404 - Item not found
 			case 404:
