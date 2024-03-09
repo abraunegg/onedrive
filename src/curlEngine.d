@@ -380,9 +380,6 @@ class CurlEngine {
 
 	CurlResponse download(string originalFilename, string downloadFilename) {
 		setResponseHolder(null);
-		// Threshold for displaying download bar
-		long thresholdFileSize = 4 * 2^^20; // 4 MiB
-		
 		// open downloadFilename as write in binary mode
 		auto file = File(downloadFilename, "wb");
 

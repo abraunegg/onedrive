@@ -525,7 +525,6 @@ class OneDriveApi {
 	// Return all the items that are shared with the user
 	// https://docs.microsoft.com/en-us/graph/api/drive-sharedwithme
 	JSONValue getSharedWithMe() {
-		checkAccessTokenExpired();
 		return get(sharedWithMeUrl);
 	}
 	
@@ -679,7 +678,6 @@ class OneDriveApi {
 	}
 
 	JSONValue createSubscription(string notificationUrl, SysTime expirationDateTime) {
-		checkAccessTokenExpired();
 		string driveId = appConfig.getValueString("drive_id");
 		string url = subscriptionUrl;
 		
