@@ -20,9 +20,14 @@ class CurlResponse {
 	const(char)[][const(char)[]] requestHeaders;
 	const(char)[] postBody;
 
+	bool hasResponse;
 	string[string] responseHeaders;
 	HTTP.StatusLine statusLine;
 	char[] content;
+
+	this() {
+		reset();
+	}
 
 	void reset() {
 		method = HTTP.Method.undefined;
@@ -30,6 +35,7 @@ class CurlResponse {
 		requestHeaders = null;
 		postBody = null;
 		
+		hasResponse = false;
 		responseHeaders = null;
 		object.destroy(statusLine);
 		content = null;
@@ -56,6 +62,7 @@ class CurlResponse {
 	};
 
 	void update(HTTP *http) {
+		hasResponse = true;
 		this.responseHeaders = http.responseHeaders();
 		this.statusLine = http.statusLine;
 	}
@@ -136,8 +143,10 @@ class CurlResponse {
 	override string toString() const {
 		string str = "Curl debugging: \n";
 		str ~= dumpDebug();
-		str ~= "Curl response: \n";
-		str ~= dumpResponse();
+		if (hasResponse) {
+			str ~= "Curl response: \n";
+			str ~= dumpResponse();
+		}
 		return str;
 	}
 
@@ -192,15 +201,18 @@ class CurlEngine {
 	bool keepAlive;
 	ulong dnsTimeout;
 	CurlResponse response;
+	File uploadFile;
 
 	this() {	
 		http = HTTP();
-		response = new CurlResponse();
+		response = null;
 	}
 
 	~this() {
 		object.destroy(http);
 		object.destroy(response);
+		if (uploadFile.isOpen())
+			uploadFile.close();
 	}
 	
 	void initialise(ulong dnsTimeout, ulong connectTimeout, ulong dataTimeout, ulong operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, ulong userRateLimit, ulong protocolVersion, bool keepAlive=true) {
@@ -286,12 +298,24 @@ class CurlEngine {
 		}
 	}
 
+	void setResponseHolder(CurlResponse response) {
+		if (response is null) {
+			// Create a response instance if it doesn't already exist
+			if (this.response is null)
+				this.response = new CurlResponse();
+		} else {
+			this.response = response;
+		}
+	}
+
 	void addRequestHeader(const(char)[] name, const(char)[] value) {
+		setResponseHolder(null);
 		http.addRequestHeader(name, value);
 		response.addRequestHeader(name, value);
 	}
 
 	void connect(HTTP.Method method, const(char)[] url) {
+		setResponseHolder(null);
 		if (!keepAlive)
 			addRequestHeader("Connection", "close");
 		http.method = method;
@@ -300,6 +324,7 @@ class CurlEngine {
 	}
 
 	void setContent(const(char)[] contentType, const(char)[] sendData) {
+		setResponseHolder(null);
 		addRequestHeader("Content-Type", contentType);
 		if (sendData) {
 			http.contentLength = sendData.length;
@@ -315,9 +340,25 @@ class CurlEngine {
 		}
 	}
 
-	void setFile(File* file, ulong offsetSize) {
+	void setFile(string filepath, string contentRange, ulong offset, ulong offsetSize) {
+		setResponseHolder(null);
+		// open file as read-only in binary mode
+		uploadFile = File(filepath, "rb");
+
+		if (contentRange.empty) {
+			offsetSize = uploadFile.size();
+		} else {
+			addRequestHeader("Content-Range", contentRange);
+			uploadFile.seek(offset);
+		}
+
+		// Setup progress bar to display
+		http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow) {
+			return 0;
+		};
+		
 		addRequestHeader("Content-Type", "application/octet-stream");
-		http.onSend = data => file.rawRead(data).length;
+		http.onSend = data => uploadFile.rawRead(data).length;
 		http.contentLength = offsetSize;
 	}
 
@@ -325,6 +366,7 @@ class CurlEngine {
 		scope(exit) {
 			cleanUp();
 		}
+		setResponseHolder(null);
 		http.onReceive = (ubyte[] data) {
 			response.content ~= data;
 			// HTTP Server Response Code Debugging if --https-debug is being used
@@ -333,14 +375,11 @@ class CurlEngine {
 		};
 		http.perform();
 		response.update(&http);
-		return response.dup;
+		return response;
 	}
 
 	CurlResponse download(string originalFilename, string downloadFilename) {
-		// Threshold for displaying download bar
-		long thresholdFileSize = 4 * 2^^20; // 4 MiB
-		
-		CurlResponse response = new CurlResponse();
+		setResponseHolder(null);
 		// open downloadFilename as write in binary mode
 		auto file = File(downloadFilename, "wb");
 
@@ -378,7 +417,13 @@ class CurlEngine {
 			return 0;
 		};
 		http.contentLength = 0;
-		response.reset();
+		response = null;
+
+		// close file if open
+		if (uploadFile.isOpen()){
+			// close open file
+			uploadFile.close();
+		}
 	}
 
 	void shutdown() {
