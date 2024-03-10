@@ -80,8 +80,7 @@ int main(string[] cliArgs) {
 	bool displaySyncOptions = false;
 	
 	// Application Version
-	//immutable string applicationVersion = "onedrive " ~ strip(import("version"));
-	immutable string applicationVersion = "v2.5.0-alpha-5" ~ " GitHub version: " ~ strip(import("version"));
+	immutable string applicationVersion = "onedrive " ~ strip(import("version"));
 	
 	// Define 'exit' and 'failure' scopes
 	scope(exit) {

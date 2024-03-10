@@ -56,9 +56,7 @@ class ApplicationConfig {
 	// Comply with OneDrive traffic decoration requirements
 	// https://docs.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
 	// - Identify as ISV and include Company Name, App Name separated by a pipe character and then adding Version number separated with a slash character
-	
-	//immutable string defaultUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ strip(import("version"));
-	immutable string defaultUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ "v2.5.0-alpha-5";
+	immutable string defaultUserAgent = isvTag ~ "|" ~ companyName ~ "|" ~ appTitle ~ "/" ~ strip(import("version"));
 	
 	// HTTP Struct items, used for configuring HTTP()
 	// Curl Timeout Handling
@@ -97,8 +95,7 @@ class ApplicationConfig {
 	immutable string cnGraphEndpoint = "https://microsoftgraph.chinacloudapi.cn";
 	
 	// Application Version
-	//immutable string applicationVersion = "onedrive " ~ strip(import("version"));
-	immutable string applicationVersion = "v2.5.0-alpha-5" ~ " GitHub version: " ~ strip(import("version"));
+	immutable string applicationVersion = "onedrive " ~ strip(import("version"));
 	
 	// Application items that depend on application run-time environment, thus cannot be immutable
 	// Public variables
