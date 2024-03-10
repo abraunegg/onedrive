@@ -79,11 +79,11 @@ void init(in char[] name) {
 alias notify_is_initted is_initted;
 alias notify_uninit uninit;
 
-static this() {
+shared static this() {
     init(__FILE__);
 }
 
-static ~this() {
+shared static ~this() {
     uninit();
 }
 
