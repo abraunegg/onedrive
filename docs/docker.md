@@ -5,10 +5,10 @@ This client can be run as a Docker container, with 3 available container base op
 |----------------|-------------|----------------------------------------------------------------|:------:|:------:|:-----:|:-------:|
 | Alpine Linux   | edge-alpine | Docker container based on Alpine 3.18 using 'master'           |❌|✔|❌|✔|
 | Alpine Linux   | alpine      | Docker container based on Alpine 3.18 using latest release     |❌|✔|❌|✔|
-| Debian         | debian      | Docker container based on Debian Stable using latest release   |✔|✔|✔|✔|
-| Debian         | edge        | Docker container based on Debian Stable using 'master'         |✔|✔|✔|✔|
-| Debian         | edge-debian | Docker container based on Debian Stable using 'master'         |✔|✔|✔|✔|
-| Debian         | latest      | Docker container based on Debian Stable using latest release   |✔|✔|✔|✔|
+| Debian         | debian      | Docker container based on Debian Stable using latest release   |❌|✔|✔|✔|
+| Debian         | edge        | Docker container based on Debian Stable using 'master'         |❌|✔|✔|✔|
+| Debian         | edge-debian | Docker container based on Debian Stable using 'master'         |❌|✔|✔|✔|
+| Debian         | latest      | Docker container based on Debian Stable using latest release   |❌|✔|✔|✔|
 | Fedora         | edge-fedora | Docker container based on Fedora 38 using 'master'             |❌|✔|❌|✔|
 | Fedora         | fedora      | Docker container based on Fedora 38 using latest release       |❌|✔|❌|✔|
 
