@@ -994,7 +994,7 @@ class OneDriveApi {
 			bool barInit = false;
 			real previousProgressPercent = -1.0;
 			real percentCheck = 5.0;
-			long segmentCount = -1;
+			size_t segmentCount = -1;
 			
 			// Setup progress bar to display
 			curlEngine.http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow) {

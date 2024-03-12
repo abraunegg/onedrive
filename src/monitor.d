@@ -166,10 +166,10 @@ struct Action {
 
 struct ActionHolder {
 	Action[] actions;
-	ulong[string] srcMap;
+	size_t[string] srcMap;
 
 	void append(ActionType type, string src, string dst=null) {
-		ulong[] pendingTargets;
+		size_t[] pendingTargets;
 		switch (type) {
 			case ActionType.changed:
 				if (src in srcMap && actions[srcMap[src]].type == ActionType.changed) {
@@ -181,7 +181,7 @@ struct ActionHolder {
 				break;
 			case ActionType.deleted:
 				if (src in srcMap) {
-					ulong pendingTarget = srcMap[src];
+					size_t pendingTarget = srcMap[src];
 					// Skip operations require reading local file that is gone
 					switch (actions[pendingTarget].type) {
 						case ActionType.changed:

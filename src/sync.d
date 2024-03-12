@@ -958,7 +958,7 @@ class SyncEngine {
 		// Are there items to process?
 		if (jsonItemsToProcess.length > 0) {
 			// Lets deal with the JSON items in a batch process
-			ulong batchSize = 500;
+			size_t batchSize = 500;
 			ulong batchCount = (jsonItemsToProcess.length + batchSize - 1) / batchSize;
 			ulong batchesProcessed = 0;
 			
@@ -2030,7 +2030,7 @@ class SyncEngine {
 	// Download new file items as identified
 	void downloadOneDriveItems() {
 		// Lets deal with all the JSON items that need to be downloaded in a batch process
-		ulong batchSize = appConfig.getValueLong("threads");
+		size_t batchSize = to!int(appConfig.getValueLong("threads"));
 		ulong batchCount = (fileJSONItemsToDownload.length + batchSize - 1) / batchSize;
 		ulong batchesProcessed = 0;
 		
@@ -3619,7 +3619,7 @@ class SyncEngine {
 	void processChangedLocalItemsToUpload() {
 		
 		// Each element in this array 'databaseItemsWhereContentHasChanged' is an Database Item ID that has been modified locally
-		ulong batchSize = appConfig.getValueLong("threads");
+		size_t batchSize = to!int(appConfig.getValueLong("threads"));
 		ulong batchCount = (databaseItemsWhereContentHasChanged.length + batchSize - 1) / batchSize;
 		ulong batchesProcessed = 0;
 		
@@ -5012,7 +5012,7 @@ class SyncEngine {
 	// Upload new file items as identified
 	void uploadNewLocalFileItems() {
 		// Lets deal with the new local items in a batch process
-		ulong batchSize = appConfig.getValueLong("threads");
+		size_t batchSize = to!int(appConfig.getValueLong("threads"));
 		ulong batchCount = (newLocalFilesToUploadToOneDrive.length + batchSize - 1) / batchSize;
 		ulong batchesProcessed = 0;
 		
@@ -5689,10 +5689,10 @@ class SyncEngine {
 		// Session JSON needs to contain valid elements
 		// Get the offset details
 		ulong fragmentSize = 10 * 2^^20; // 10 MiB
-		ulong fragmentCount = 0;
+		size_t fragmentCount = 0;
 		ulong fragSize = 0;
 		ulong offset = uploadSessionData["nextExpectedRanges"][0].str.splitter('-').front.to!ulong;
-		size_t expected_total_fragments = cast(ulong) ceil(double(thisFileSize) / double(fragmentSize));
+		size_t expected_total_fragments = cast(size_t) ceil(double(thisFileSize) / double(fragmentSize));
 		ulong start_unix_time = Clock.currTime.toUnixTime();
 		int h, m, s;
 		string etaString;
@@ -7911,7 +7911,7 @@ class SyncEngine {
 			// there are valid items to resume upload
 		
 			// Lets deal with all the JSON items that need to be reumed for upload in a batch process
-			ulong batchSize = appConfig.getValueLong("threads");
+			size_t batchSize = to!int(appConfig.getValueLong("threads"));
 			ulong batchCount = (jsonItemsToResumeUpload.length + batchSize - 1) / batchSize;
 			ulong batchesProcessed = 0;
 			
@@ -8084,7 +8084,7 @@ class SyncEngine {
 	
 	// Function to process the path by removing prefix up to ':' - remove '/drive/root:' from a path string
 	string processPathToRemoveRootReference(ref string pathToCheck) {
-		long colonIndex = pathToCheck.indexOf(":");
+		size_t colonIndex = pathToCheck.indexOf(":");
 		if (colonIndex != -1) {
 			addLogEntry("Updating " ~ pathToCheck ~ " to remove prefix up to ':'", ["debug"]);
 			pathToCheck = pathToCheck[colonIndex + 1 .. $];
