@@ -68,7 +68,6 @@ Before reading this document, please ensure you are running application version 
   - [CLI Option: --create-share-link](#cli-option---create-share-link)
   - [CLI Option: --destination-directory](#cli-option---destination-directory)
   - [CLI Option: --display-config](#cli-option---display-config)
-  - [CLI Option: --display-running-config](#cli-option---display-running-config)
   - [CLI Option: --display-sync-status](#cli-option---display-sync-status)
   - [CLI Option: --display-quota](#cli-option---display-quota)
   - [CLI Option: --force](#cli-option---force)
@@ -951,11 +950,6 @@ _**Additional Usage Notes:**_ All specified paths are relative to your configure
 _**Description:**_ This CLI option will display the effective application configuration
 
 _**Usage Example:**_ `onedrive --display-config`
-
-### CLI Option: --display-running-config
-_**Description:**_ This CLI option will display the effective application configuration when running the application. This is useful when needing to display what is configuration is actually being applied when diagnosing issues.
-
-_**Usage Example:**_ `onedrive --sync --display-running-config`
 
 ### CLI Option: --display-sync-status
 _**Description:**_ This CLI option will display the sync status of the configured 'sync_dir'
