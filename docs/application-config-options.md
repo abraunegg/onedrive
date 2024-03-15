@@ -68,12 +68,14 @@ Before reading this document, please ensure you are running application version 
   - [CLI Option: --create-share-link](#cli-option---create-share-link)
   - [CLI Option: --destination-directory](#cli-option---destination-directory)
   - [CLI Option: --display-config](#cli-option---display-config)
+  - [CLI Option: --display-running-config](#cli-option---display-running-config)
   - [CLI Option: --display-sync-status](#cli-option---display-sync-status)
   - [CLI Option: --display-quota](#cli-option---display-quota)
   - [CLI Option: --force](#cli-option---force)
   - [CLI Option: --force-sync](#cli-option---force-sync)
   - [CLI Option: --get-file-link](#cli-option---get-file-link)
   - [CLI Option: --get-sharepoint-drive-id](#cli-option---get-sharepoint-drive-id)
+  - [CLI Option: --list-shared-items](#cli-option---list-shared-items)
   - [CLI Option: --logout](#cli-option---logout)
   - [CLI Option: --modified-by](#cli-option---modified-by)
   - [CLI Option: --monitor | -m](#cli-option---monitor--m)
@@ -83,6 +85,7 @@ Before reading this document, please ensure you are running application version 
   - [CLI Option: --single-directory](#cli-option---single-directory)
   - [CLI Option: --source-directory](#cli-option---source-directory)
   - [CLI Option: --sync | -s](#cli-option---sync--s)
+  - [CLI Option: --sync-shared-files](#cli-option---sync-shared-files)
   - [CLI Option: --verbose | -v+](#cli-option---verbose--v)
   - [CLI Option: --with-editing-perms](#cli-option---with-editing-perms)
 - [Depreciated Configuration File and CLI Options](#depreciated-configuration-file-and-cli-options)
@@ -949,6 +952,11 @@ _**Description:**_ This CLI option will display the effective application config
 
 _**Usage Example:**_ `onedrive --display-config`
 
+### CLI Option: --display-running-config
+_**Description:**_ This CLI option will display the effective application configuration when running the application. This is useful when needing to display what is configuration is actually being applied when diagnosing issues.
+
+_**Usage Example:**_ `onedrive --sync --display-running-config`
+
 ### CLI Option: --display-sync-status
 _**Description:**_ This CLI option will display the sync status of the configured 'sync_dir'
 
@@ -995,6 +1003,47 @@ _**Additional Usage Notes:**_ The path that you should use must be relative to y
 _**Description:**_ This CLI option queries the OneDrive API and return's the Office 365 Drive ID for a given Office 365 SharePoint Shared Library that can then be used with 'drive_id' to sync a specific SharePoint Library.
 
 _**Usage Example:**_ `onedrive --get-sharepoint-drive-id '*'` or `onedrive --get-sharepoint-drive-id 'PointPublishing Hub Site'`
+
+### CLI Option: --list-shared-items
+_**Description:**_ This CLI option lists all OneDrive Business Shared items with your account. The resulting list shows shared files and folders that you can configure this client to sync.
+
+_**Usage Example:**_ `onedrive --list-shared-items`
+
+_**Example Output:**_
+```
+...
+Listing available OneDrive Business Shared Items:
+
+-----------------------------------------------------------------------------------
+Shared File:     large_document_shared.docx
+Shared By:       test user (testuser@domain.tld)
+-----------------------------------------------------------------------------------
+Shared File:     no_download_access.docx
+Shared By:       test user (testuser@domain.tld)
+-----------------------------------------------------------------------------------
+Shared File:     online_access_only.txt
+Shared By:       test user (testuser@domain.tld)
+-----------------------------------------------------------------------------------
+Shared File:     read_only.txt
+Shared By:       test user (testuser@domain.tld)
+-----------------------------------------------------------------------------------
+Shared File:     qewrqwerwqer.txt
+Shared By:       test user (testuser@domain.tld)
+-----------------------------------------------------------------------------------
+Shared File:     dummy_file_to_share.docx
+Shared By:       testuser2 testuser2 (testuser2@domain.tld)
+-----------------------------------------------------------------------------------
+Shared Folder:   Sub Folder 2
+Shared By:       test user (testuser@domain.tld)
+-----------------------------------------------------------------------------------
+Shared File:     file to share.docx
+Shared By:       test user (testuser@domain.tld)
+-----------------------------------------------------------------------------------
+Shared Folder:   Top Folder
+Shared By:       test user (testuser@domain.tld)
+-----------------------------------------------------------------------------------
+...
+```
 
 ### CLI Option: --logout
 _**Description:**_ This CLI option removes this clients authentictaion status with Microsoft OneDrive. Any further application use will requrie the application to be re-authenticated with Microsoft OneDrive.
@@ -1050,6 +1099,13 @@ _**Additional Usage Notes:**_ All specified paths are relative to your configure
 _**Description:**_ This CLI option controls the 'Standalone Mode' operational aspect of the client. When this option is used, the client will perform a one-time sync of data between Microsoft OneDrive and your local system.
 
 _**Usage Example:**_ `onedrive --sync` or `onedrive -s`
+
+### CLI Option: --sync-shared-files
+_**Description:**_ Sync OneDrive Business Shared Files to the local filesystem.
+
+_**Usage Example:**_ `onedrive --sync --sync-shared-files`
+
+_**Additional Usage Notes:**_ To use this option you must first enable 'sync_business_shared_items' within your application configuration. Please read 'business-shared-items.md' for more information regarding this option.
 
 ### CLI Option: --verbose | -v+
 _**Description:**_ This CLI option controls the verbosity of the application output. Use the option once, to have normal verbose output, use twice to have debug level application output.
