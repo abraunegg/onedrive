@@ -43,8 +43,8 @@ Before reading this document, please ensure you are running application version 
   - [How to 'rate limit' the application to control bandwidth consumed for upload & download operations?](#how-to-rate-limit-the-application-to-control-bandwidth-consumed-for-upload--download-operations)
   - [How can I prevent my local disk from filling up?](#how-can-i-prevent-my-local-disk-from-filling-up)
   - [How does the client handle symbolic links?](#how-does-the-client-handle-symbolic-links)
-  - [How to synchronise shared folders (OneDrive Personal)?](#how-to-synchronise-shared-folders-onedrive-personal)
-  - [How to synchronise shared folders (OneDrive Business or Office 365)?](#how-to-synchronise-shared-folders-onedrive-business-or-office-365)
+  - [How to synchronise OneDrive Personal Shared Folders?](#how-to-synchronise-onedrive-personal-shared-folders)
+  - [How to synchronise OneDrive Business Shared Items (Files and Folders)?](#how-to-synchronise-onedrive-business-shared-items-files-and-folders)
   - [How to synchronise SharePoint / Office 365 Shared Libraries?](#how-to-synchronise-sharepoint--office-365-shared-libraries)
   - [How to Create a Shareable Link?](#how-to-create-a-shareable-link)
   - [How to Synchronise Both Personal and Business Accounts at once?](#how-to-synchronise-both-personal-and-business-accounts-at-once)
@@ -704,13 +704,17 @@ As such, there are only two methods to support symbolic links with this client:
 
 Use 'skip_symlinks' as part of your 'config' file to configure the skipping of all symbolic links while syncing.
 
-### How to synchronise shared folders (OneDrive Personal)?
+### How to synchronise OneDrive Personal Shared Folders?
 Folders shared with you can be synchronised by adding them to your OneDrive online. To do that, open your OneDrive account online, go to the Shared files list, right-click on the folder you want to synchronise, and then click on "Add to my OneDrive".
 
-### How to synchronise shared folders (OneDrive Business or Office 365)?
+### How to synchronise OneDrive Business Shared Items (Files and Folders)?
 Folders shared with you can be synchronised by adding them to your OneDrive online. To do that, open your OneDrive account online, go to the Shared files list, right-click on the folder you want to synchronise, and then click on "Add to my OneDrive".
 
-Refer to [./business-shared-folders.md](business-shared-folders.md) for further details.
+Files shared with you can be synchronised using two methods:
+1. Add a link to the file
+2. Sync the actual file locally
+
+Refer to [./business-shared-items.md](business-shared-items.md) for further details.
 
 ### How to synchronise SharePoint / Office 365 Shared Libraries?
 There are two methods to achieve this:
