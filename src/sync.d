@@ -5217,7 +5217,7 @@ class SyncEngine {
 								
 								// If we get to this point, the OneDrive API returned a 200 OK with valid JSON data that indicates a 'file' exists at this location already
 								// and that it matches the POSIX filename of the local item we are trying to upload as a new file
-								addLogEntry("The file we are attemtping to upload as a new file already exists on Microsoft OneDrive: " ~ fileToUpload, ["verbose"]);
+								addLogEntry("The file we are attempting to upload as a new file already exists on Microsoft OneDrive: " ~ fileToUpload, ["verbose"]);
 								
 								// No 404 or otherwise was triggered, meaning that the file already exists online and passes the POSIX test ...
 								addLogEntry("fileDetailsFromOneDrive after exist online check: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);
