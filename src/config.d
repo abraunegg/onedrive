@@ -1362,7 +1362,10 @@ class ApplicationConfig {
 		// Is sync_business_shared_items enabled and configured ?
 		addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
 		addLogEntry("Config option 'sync_business_shared_items'   = " ~ to!string(getValueBool("sync_business_shared_items")));
-		addLogEntry("Config option 'Shared Files Directory'       = " ~ configuredBusinessSharedFilesDirectoryName);
+		if (getValueBool("sync_business_shared_items")) {
+			// display what the shared files directory will be
+			addLogEntry("Config option 'Shared Files Directory'       = " ~ configuredBusinessSharedFilesDirectoryName);
+		}
 		
 		// Are webhooks enabled?
 		addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
