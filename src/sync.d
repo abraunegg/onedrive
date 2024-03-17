@@ -5223,7 +5223,7 @@ class SyncEngine {
 								addLogEntry("fileDetailsFromOneDrive after exist online check: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);
 								
 								// Does the data from online match our local file that we are attempting to upload as a new file?
-								bool raiseWarning = false;
+								bool raiseWarning = true;
 								if (!disableUploadValidation && performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize, raiseWarning)) {
 									// Save online item details to the database
 									saveItem(fileDetailsFromOneDrive);
@@ -7218,15 +7218,16 @@ class SyncEngine {
 					// There are 2 scenarios where this happens:
 					// 1. Failed Transfer
 					// 2. Upload file is going to a SharePoint Site, where Microsoft enriches the file with additional metadata with no way to disable
-					addLogEntry("WARNING: Uploaded file integrity failure for: " ~ localFilePath, ["info", "notify"]);
+					addLogEntry("WARNING: Online file integrity failure for: " ~ localFilePath, ["info", "notify"]);
 					
 					// What integrity failed - size?
 					if (localFileSize != uploadFileSize) {
-						addLogEntry("WARNING: Uploaded file integrity failure - Size Mismatch", ["verbose"]);
+						addLogEntry("WARNING: Online file integrity failure - Size Mismatch", ["verbose"]);
 					}
+					
 					// What integrity failed - hash?
 					if (localFileHash != uploadFileHash) {
-						addLogEntry("WARNING: Uploaded file integrity failure - Hash Mismatch", ["verbose"]);
+						addLogEntry("WARNING: Online file integrity failure - Hash Mismatch", ["verbose"]);
 					}
 					
 					// What account type is this?
@@ -7240,12 +7241,12 @@ class SyncEngine {
 					addLogEntry("To disable the integrity checking of uploaded files use --disable-upload-validation");
 				}
 			} else {
-				addLogEntry("Upload file validation unable to be performed: input JSON was invalid");
+				addLogEntry("Online file validation unable to be performed: input JSON was invalid");
 				addLogEntry("WARNING: Skipping upload integrity check for: " ~ localFilePath);
 			}
 		} else {
 			// We are bypassing integrity checks due to --disable-upload-validation
-			addLogEntry("Upload file validation disabled due to --disable-upload-validation", ["debug"]);
+			addLogEntry("Online file validation disabled due to --disable-upload-validation", ["debug"]);
 			addLogEntry("WARNING: Skipping upload integrity check for: " ~ localFilePath, ["info", "notify"]);
 		}
 		
