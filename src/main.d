@@ -261,12 +261,15 @@ int main(string[] cliArgs) {
 		return EXIT_FAILURE;
 	}
 	
-	// Check for --dry-run operation
+	// Check for --dry-run operation or a 'no-sync' operation where the 'dry-run' DB copy should be used
 	// If this has been requested, we need to ensure that all actions are performed against the dry-run database copy, and, 
 	// no actual action takes place - such as deleting files if deleted online, moving files if moved online or local, downloading new & changed files, uploading new & changed files
-	if (appConfig.getValueBool("dry_run")) {
-		// this is a --dry-run operation
-		addLogEntry("DRY-RUN Configured. Output below shows what 'would' have occurred.");
+	if ((appConfig.getValueBool("dry_run")) || (appConfig.hasNoSyncOperationBeenRequested())) {
+		
+		if (appConfig.getValueBool("dry_run")) {
+			// This is a --dry-run operation
+			addLogEntry("DRY-RUN Configured. Output below shows what 'would' have occurred.");
+		} 
 		
 		// Cleanup any existing dry-run elements ... these should never be left hanging around
 		cleanupDryRunDatabaseFiles(appConfig.databaseFilePathDryRun);
@@ -276,11 +279,15 @@ int main(string[] cliArgs) {
 			// In a --dry-run --resync scenario, we should not copy the existing database file
 			if (!appConfig.getValueBool("resync")) {
 				// Copy the existing DB file to the dry-run copy
-				addLogEntry("DRY-RUN: Copying items.sqlite3 to items-dryrun.sqlite3 to use for dry run operations");
+				if (appConfig.getValueBool("dry_run")) {
+					addLogEntry("DRY-RUN: Copying items.sqlite3 to items-dryrun.sqlite3 to use for dry run operations");
+				}
 				copy(appConfig.databaseFilePath,appConfig.databaseFilePathDryRun);
 			} else {
 				// No database copy due to --resync
-				addLogEntry("DRY-RUN: No database copy created for --dry-run due to --resync also being used");
+				if (appConfig.getValueBool("dry_run")) {
+					addLogEntry("DRY-RUN: No database copy created for --dry-run due to --resync also being used");
+				}
 			}
 		}
 		// update runtimeDatabaseFile now that we are using the dry run path
@@ -551,7 +558,7 @@ int main(string[] cliArgs) {
 					return EXIT_SUCCESS;
 				}
 				
-				// Are we renaming or moving a directory?
+				// Are we renaming or moving a directory online?
 				// 	onedrive --source-directory 'path/as/source/' --destination-directory 'path/as/destination'
 				if ((appConfig.getValueString("source_directory") != "") && (appConfig.getValueString("destination_directory") != "")) {
 					// We are renaming or moving a directory

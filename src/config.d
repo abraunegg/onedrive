@@ -2098,6 +2098,90 @@ class ApplicationConfig {
 		if (getValueLong("ip_protocol_version") == 1) addLogEntry("Forcing client to use IPv4 connections only");
 		if (getValueLong("ip_protocol_version") == 2) addLogEntry("Forcing client to use IPv6 connections only");
 	}
+	
+	// Has a 'no-sync' task been requested?
+	bool hasNoSyncOperationBeenRequested() {
+	
+		bool noSyncOperation = false;
+	
+		// Are we performing some sort of 'no-sync' task?
+		// - Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
+		// - Are we displaying the sync satus?
+		// - Are we getting the URL for a file online?
+		// - Are we listing who modified a file last online?
+		// - Are we listing OneDrive Business Shared Items?
+		// - Are we createing a shareable link for an existing file on OneDrive?
+		// - Are we just creating a directory online, without any sync being performed?
+		// - Are we just deleting a directory online, without any sync being performed?
+		// - Are we renaming or moving a directory?
+		// - Are we displaying the quota information?
+		
+		// Return a true|false if any of these have been set, so that we use the 'dry-run' DB copy, to execute these tasks, incase the client is currently operational
+		
+		// --get-sharepoint-drive-id - Get the SharePoint Library drive_id
+		if (getValueString("sharepoint_library_name") != "") {
+			// flag that a no sync operation has been requested
+			noSyncOperation = true;
+		}
+		
+		// --display-sync-status - Query the sync status
+		if (getValueBool("display_sync_status")) {
+			// flag that a no sync operation has been requested
+			noSyncOperation = true;
+		}
+		
+		// --get-file-link - Get the URL path for a synced file?
+		if (getValueString("get_file_link") != "") {
+			// flag that a no sync operation has been requested
+			noSyncOperation = true;
+		}
+		
+		// --modified-by - Are we listing the modified-by details of a provided path?
+		if (getValueString("modified_by") != "") {
+			// flag that a no sync operation has been requested
+			noSyncOperation = true;
+		}
+		
+		// --list-shared-items - Are we listing OneDrive Business Shared Items
+		if (getValueBool("list_business_shared_items")) {
+			// flag that a no sync operation has been requested
+			noSyncOperation = true;
+		}
+		
+		// --create-share-link - Are we createing a shareable link for an existing file on OneDrive?
+		if (getValueString("create_share_link") != "") {
+			// flag that a no sync operation has been requested
+			noSyncOperation = true;
+		}
+		
+		// --create-directory - Are we just creating a directory online, without any sync being performed?
+		if ((getValueString("create_directory") != "")) {
+			// flag that a no sync operation has been requested
+			noSyncOperation = true;
+		}
+		
+		// --remove-directory - Are we just deleting a directory online, without any sync being performed?
+		if ((getValueString("remove_directory") != "")) {
+			// flag that a no sync operation has been requested
+			noSyncOperation = true;
+		}
+		
+		// Are we renaming or moving a directory online?
+		// 	onedrive --source-directory 'path/as/source/' --destination-directory 'path/as/destination'
+		if ((getValueString("source_directory") != "") && (getValueString("destination_directory") != "")) {
+			// flag that a no sync operation has been requested
+			noSyncOperation = true;
+		}
+		
+		// Are we displaying the quota information?
+		if (getValueBool("display_quota")) {
+			// flag that a no sync operation has been requested
+			noSyncOperation = true;
+		}
+		
+		// Return result
+		return noSyncOperation;
+	}
 }
 
 // Output the full application help when --help is passed in
