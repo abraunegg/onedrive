@@ -578,7 +578,7 @@ Using the following path to store the runtime application log: /var/log/onedrive
 ```
 
 ### GUI Notifications
-If notification support has been compiled in (refer to GUI Notification Support in install.md .. ADD LINK LATER), the following events will trigger a GUI notification within the display manager session:
+If notification support has been compiled in (refer to [./install.md#gui-notification-support](GUI Notification Support)), the following events will trigger a GUI notification within the display manager session:
 *   Aborting a sync if .nosync file is found
 *   Skipping a particular item due to an invalid name
 *   Skipping a particular item due to an invalid symbolic link
@@ -645,7 +645,7 @@ If you want to change the application defaults, you can download a copy of the c
 > wget https://raw.githubusercontent.com/abraunegg/onedrive/master/config -O ~/.config/onedrive/config
 > ```
 
-For full configuration options and CLI switches, please refer to application-config-options.md
+For full configuration options and CLI switches, please refer to [./application-config-options.md](application-config-options.md)
 
 ### How to change where my data from Microsoft OneDrive is stored?
 By default, the location where your Microsoft OneDrive data is stored, is within your Home Directory under a directory called 'OneDrive'. This replicates as close as possible where the Microsoft Windows OneDrive client stores data.
