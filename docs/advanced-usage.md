@@ -227,10 +227,9 @@ docker run -it --name onedrive -v onedrive_conf_sharepoint_site3:/onedrive/conf 
 docker run -it --name onedrive -v onedrive_conf_sharepoint_site50:/onedrive/conf -v "/use/full/local/path/no/tilda/SharePointSite50:/onedrive/data" driveone/onedrive:latest
 ```
 
-#### TIP
-To avoid 're-authenticating' and 'authorising' each individual Docker container, if all the Docker containers are using the 'same' OneDrive credentials, you can re-use the 'refresh_token' from one Docker container to another by copying this file to the configuration Docker volume of each Docker container.
-
-If the account credentials are different .. you will need to re-authenticate each Docker container individually.
+> [!TIP]
+> To avoid 're-authenticating' and 'authorising' each individual Docker container, if all the Docker containers are using the 'same' OneDrive credentials, you can re-use the 'refresh_token' from one Docker container to another by copying this file to the configuration Docker volume of each Docker container.
+> If the account credentials are different .. you will need to re-authenticate each Docker container individually.
 
 ## Configuring the client for use in dual-boot (Windows / Linux) situations
 When dual booting Windows and Linux, depending on the Windows OneDrive account configuration, the 'Files On-Demand' option may be enabled when running OneDrive within your Windows environment.
@@ -262,7 +261,8 @@ There are a few options here which you can configure in your 'config' file to as
 2. check_nomount
 3. check_nosync
 
-**Note:** Before making any change to your configuration, stop any sync process & stop any onedrive systemd service from running.
+> [!NOTE] 
+> Before making any change to your configuration, stop any sync process & stop any onedrive systemd service from running.
 
 ### classify_as_big_delete
 By default, this uses a value of 1000 files|folders. An undesirable unmount if you have more than 1000 files, this default level will prevent the client from executing the online delete. Modify this value up or down as desired
