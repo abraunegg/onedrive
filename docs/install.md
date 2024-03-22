@@ -5,8 +5,8 @@ This project has been packaged for the following Linux distributions as per belo
 
 Only the current release version or greater is supported. Earlier versions are not supported and should not be installed or used. 
 
-#### Important Note:
-Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If any package version indicator below is 'red' for your distribution, it is recommended that you build from source. Do not install the software from the available distribution package. If a package is out of date, please contact the package maintainer for resolution.
+> [!CAUTION]
+> Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If any package version indicator below is 'red' for your distribution, it is recommended that you build from source. Do not install the software from the available distribution package. If a package is out of date, please contact the package maintainer for resolution.
 
 | Distribution                    | Package Name & Package Link                                                  | &nbsp;&nbsp;PKG_Version&nbsp;&nbsp; | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 | Extra Details                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 |---------------------------------|------------------------------------------------------------------------------|:---------------:|:----:|:------:|:-----:|:-------:|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -33,17 +33,17 @@ Distribution packages may be of an older release when compared to the latest rel
 | Ubuntu 23.04                    | [onedrive](https://packages.ubuntu.com/lunar/onedrive)                       |<a href="https://packages.ubuntu.com/lunar/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_23_04/onedrive.svg?header=" alt="Ubuntu 23.04 package" width="46" height="20"></a> |❌|✔|✔|✔| **Note:** Do not install from Ubuntu Universe as the package is obsolete and is not supported<br><br>For a supported application version, it is recommended that for Ubuntu that you install from OpenSuSE Build Service using the Ubuntu Package Install [Instructions](ubuntu-package-install.md) |
 | Void Linux                      | [onedrive](https://voidlinux.org/packages/?arch=x86_64&q=onedrive)           |<a href="https://voidlinux.org/packages/?arch=x86_64&q=onedrive"><img src="https://repology.org/badge/version-for-repo/void_x86_64/onedrive.svg?header=" alt="Void Linux x86_64 package" width="46" height="20"></a>|✔|✔|❌|❌| |
 
-#### Important information for all Ubuntu and Ubuntu based distribution users:
-This information is specifically for the following platforms and distributions:
-*   Ubuntu
-*   Lubuntu
-*   Linux Mint
-*   POP OS
-*   Peppermint OS
-
-Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) Universe packages available for Ubuntu, do not install 'onedrive' from these Universe packages. The default Universe packages are out-of-date and are not supported and should not be used. If you wish to use a package, it is highly recommended that you utilise the [OpenSuSE Build Service](ubuntu-package-install.md) to install packages for these platforms. If the OpenSuSE Build Service does not cater for your version, your only option is to build from source.
-
-If you wish to change this situation so that you can just use the Universe packages via 'apt install onedrive', consider becoming the Ubuntu package maintainer and contribute back to your community.
+> [!IMPORTANT]
+> This information is specifically for the following platforms and distributions:
+> *   Ubuntu
+> *   Lubuntu
+> *   Linux Mint
+> *   POP OS
+> *   Peppermint OS
+> 
+> Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) Universe packages available for Ubuntu, do not install 'onedrive' from these Universe packages. The default Universe packages are out-of-date and are not supported and should not be used. If you wish to use a package, it is highly recommended that you utilise the [OpenSuSE Build Service](ubuntu-package-install.md) to install packages for these platforms. If the OpenSuSE Build Service does not cater for your version, your only option is to build from source.
+> 
+> If you wish to change this situation so that you can just use the Universe packages via 'apt install onedrive', consider becoming the Ubuntu package maintainer and contribute back to your community.
 
 ## Building from Source - High Level Requirements
 *   Build environment must have at least 1GB of memory & 1GB swap space
