@@ -475,14 +475,15 @@ When running onedrive, all actions can be logged to a separate log file. This ca
 
 By default, log files will be written to `/var/log/onedrive/` and will be in the format of `%username%.onedrive.log`, where `%username%` represents the user who ran the client to allow easy sorting of user to client activity log.
 
-**Note:** You will need to ensure the existence of this directory and that your user has the applicable permissions to write to this directory; otherwise, the following error message will be printed:
-```text
-ERROR: Unable to access /var/log/onedrive
-ERROR: Please manually create '/var/log/onedrive' and set appropriate permissions to allow write access
-ERROR: The requested client activity log will instead be located in your user's home directory
-```
+> [!NOTE]
+> You will need to ensure the existence of this directory and that your user has the applicable permissions to write to this directory; otherwise, the following error message will be printed:
+> ```text
+> ERROR: Unable to access /var/log/onedrive
+> ERROR: Please manually create '/var/log/onedrive' and set appropriate permissions to allow write access
+> ERROR: The requested client activity log will instead be located in your user's home directory
+> ```
 
-On many systems, this can be achieved by performing the following:
+On many systems, ensuring that the log directory exists can be achieved by performing the following:
 ```text
 sudo mkdir /var/log/onedrive
 sudo chown root:users /var/log/onedrive
@@ -637,11 +638,11 @@ If you want to change the application defaults, you can download a copy of the c
 *   `~/.config/onedrive`
 *   `/etc/onedrive`
 
-**Example:** To download a copy of the config file, use the following:
-```text
-mkdir -p ~/.config/onedrive
-wget https://raw.githubusercontent.com/abraunegg/onedrive/master/config -O ~/.config/onedrive/config
-```
+> [!TIP] To download a copy of the config file, use the following:
+> ```text
+> mkdir -p ~/.config/onedrive
+> wget https://raw.githubusercontent.com/abraunegg/onedrive/master/config -O ~/.config/onedrive/config
+> ```
 
 For full configuration options and CLI switches, please refer to application-config-options.md
 
@@ -650,7 +651,8 @@ By default, the location where your Microsoft OneDrive data is stored, is within
 
 To change this location, the application configuration option 'sync_dir' is used to specify a new local directory where your Microsoft OneDrive data should be stored.
 
-**Critical Advisory:** Please be aware that if you designate a network mount point (such as NFS, Windows Network Share, or Samba Network Share) as your `sync_dir`, this setup inherently lacks 'inotify' support. Support for 'inotify' is essential for real-time tracking of file changes, which means that the client's 'Monitor Mode' cannot immediately detect changes in files located on these network shares. Instead, synchronisation between your local filesystem and Microsoft OneDrive will occur at intervals specified by the `monitor_interval` setting. This limitation regarding 'inotify' support on network mount points like NFS or Samba is beyond the control of this client.
+> [!IMPORTANT]
+>  Please be aware that if you designate a network mount point (such as NFS, Windows Network Share, or Samba Network Share) as your `sync_dir`, this setup inherently lacks 'inotify' support. Support for 'inotify' is essential for real-time tracking of file changes, which means that the client's 'Monitor Mode' cannot immediately detect changes in files located on these network shares. Instead, synchronisation between your local filesystem and Microsoft OneDrive will occur at intervals specified by the `monitor_interval` setting. This limitation regarding 'inotify' support on network mount points like NFS or Samba is beyond the control of this client.
 
 ### How to change what file and directory permissions are assigned to data that is downloaded from Microsoft OneDrive?
 The following are the application default permissions for any new directory or file that is created locally when downloaded from Microsoft OneDrive:
@@ -665,7 +667,8 @@ sync_dir_permissions = "700"
 sync_file_permissions = "600"
 ```
 
-**Important:** Please note that special permission bits such as setuid, setgid, and the sticky bit are not supported. Valid permission values range from `000` to `777` only.
+> [!IMPORTANT]
+> Please note that special permission bits such as setuid, setgid, and the sticky bit are not supported. Valid permission values range from `000` to `777` only.
 
 ### How are uploads and downloads managed?
 The system manages downloads and uploads using a multi-threaded approach. Specifically, the application utilises 16 threads for these processes. This thread count is preset and cannot be modified by users. This design ensures efficient handling of data transfers but does not allow for customisation of thread allocation.
@@ -702,7 +705,8 @@ By default, 'rate_limit' is set to '0', indicating that the application will uti
 
 To check the current 'rate_limit' value, use the `--display-config` command.
 
-**Note:** Since downloads and uploads are processed through multiple threads, the 'rate_limit' value applies to each thread separately. For instance, setting 'rate_limit' to 1048576 (1MB) means that during data transfers, the total bandwidth consumption might reach around 16MB, not just the 1MB configured due to the number of threads being used.
+> [!NOTE]
+> Since downloads and uploads are processed through multiple threads, the 'rate_limit' value applies to each thread separately. For instance, setting 'rate_limit' to 1048576 (1MB) means that during data transfers, the total bandwidth consumption might reach around 16MB, not just the 1MB configured due to the number of threads being used.
 
 ### How can I prevent my local disk from filling up?
 By default, the application will reserve 50MB of disk space to prevent your filesystem from running out of disk space.
@@ -744,13 +748,15 @@ To accomplish this, employ the following command:
 ```text
 onedrive --create-share-link <path/to/file>
 ```
-**Note:** By default, this access permissions for the file link will be read-only.
+> [!NOTE]
+> By default, this access permissions for the file link will be read-only.
 
 To make it a read-write link, execute the following command:
 ```text
 onedrive --create-share-link <path/to/file> --with-editing-perms
 ```
-**Note:** The order of the file path and option flag is crucial.
+> [!IMPORTANT]
+> The order of the file path and option flag is crucial.
 
 ### How to Synchronise Both Personal and Business Accounts at once?
 You need to set up separate instances of the application configuration for each account.
@@ -794,9 +800,11 @@ Initially, switch to the root user with `su - root`, then activate the systemd s
 systemctl --user enable onedrive
 systemctl --user start onedrive
 ```
-**Note:** The `systemctl --user` command is not applicable to Red Hat Enterprise Linux (RHEL) or CentOS Linux platforms - see below.
+> [!IMPORTANT]
+> The `systemctl --user` command is not applicable to Red Hat Enterprise Linux (RHEL) or CentOS Linux platforms - see below.
 
-**Note:** This will execute the 'onedrive' process with a UID/GID of '0', which means any files or folders created will be owned by 'root'.
+> [!IMPORTANT]
+> This will execute the 'onedrive' process with a UID/GID of '0', which means any files or folders created will be owned by 'root'.
 
 To monitor the service's status, use the following:
 ```text
@@ -808,24 +816,26 @@ To observe the systemd application logs, use:
 journalctl --user-unit=onedrive -f
 ```
 
-**Note:** For systemd to function correctly, it requires the presence of XDG environment variables. If you encounter the following error while enabling the systemd service:
-```text
-Failed to connect to bus: No such file or directory
-```
-The most likely cause is missing XDG environment variables. To resolve this, add the following lines to `.bashrc` or another file executed upon user login:
-```text
-export XDG_RUNTIME_DIR="/run/user/$UID"
-export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
-```
+> [!TIP]
+> For systemd to function correctly, it requires the presence of XDG environment variables. If you encounter the following error while enabling the systemd service:
+> ```text
+> Failed to connect to bus: No such file or directory
+> ```
+> The most likely cause is missing XDG environment variables. To resolve this, add the following lines to `.bashrc` or another file executed upon user login:
+> ```text
+> export XDG_RUNTIME_DIR="/run/user/$UID"
+> export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+> ```
+> 
+> To apply this change, you must log out of all user accounts where it has been made.
 
-To apply this change, you must log out of all user accounts where it has been made.
+> [!IMPORTANT]
+> On certain systems (e.g., Raspbian / Ubuntu / Debian on Raspberry Pi), the XDG fix above may not persist after system reboots. An alternative to starting the client via systemd as root is as follows:
+> 1. Create a symbolic link from `/home/root/.config/onedrive` to `/root/.config/onedrive/`.
+> 2. Establish a systemd service using the '@' service file: `systemctl enable onedrive@root.service`.
+> 3. Start the root@service: `systemctl start onedrive@root.service`.
 
-**Note:** On certain systems (e.g., Raspbian / Ubuntu / Debian on Raspberry Pi), the XDG fix above may not persist after system reboots. An alternative to starting the client via systemd as root is as follows:
-1. Create a symbolic link from `/home/root/.config/onedrive` to `/root/.config/onedrive/`.
-2. Establish a systemd service using the '@' service file: `systemctl enable onedrive@root.service`.
-3. Start the root@service: `systemctl start onedrive@root.service`.
-
-This ensures that the service correctly restarts upon system reboot.
+> This ensures that the service correctly restarts upon system reboot.
 
 To examine the systemd application logs, run:
 ```text
