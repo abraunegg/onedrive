@@ -342,13 +342,14 @@ onedrive --sync --upload-only
 Selective synchronisation allows you to sync only specific files and directories.
 To enable selective synchronisation, create a file named `sync_list` in your application configuration directory (default is `~/.config/onedrive`).
 
-Important points to understand before using 'sync_list'.
-*    'sync_list' excludes _everything_ by default on OneDrive.
-*    'sync_list' follows an _"exclude overrides include"_ rule, and requires **explicit inclusion**.
-*    Order exclusions before inclusions, so that anything _specifically included_ is included.
-*    How and where you place your `/` matters for excludes and includes in subdirectories.
+> [!IMPORTANT]
+> Important points to understand before using 'sync_list'.
+> *    'sync_list' excludes _everything_ by default on OneDrive.
+> *    'sync_list' follows an _"exclude overrides include"_ rule, and requires **explicit inclusion**.
+> *    Order exclusions before inclusions, so that anything _specifically included_ is included.
+> *    How and where you place your `/` matters for excludes and includes in subdirectories.
 
-Each line of the file represents a relative path from your `sync_dir`. All files and directories not matching any line of the file will be skipped during all operations. 
+Each line of the 'sync_list' file represents a relative path from your `sync_dir`. All files and directories not matching any line of the file will be skipped during all operations. 
 
 Additionally, the use of `/` is critically important to determine how a rule is interpreted. It is very similar to `**` wildcards, for those that are familiar with globbing patterns.
 Here is an example of `sync_list`:
@@ -404,15 +405,18 @@ The following are supported for pattern matching and exclusion rules:
 *   Use the `*` to wildcard select any characters to match for the item to be included
 *   Use either `!` or `-` characters at the start of the line to exclude an otherwise included item
 
-**Note:** When enabling the use of 'sync_list,' utilise the `--display-config` option to validate that your configuration will be used by the application, and test your configuration by adding `--dry-run` to ensure the client will operate as per your requirement.
+> [!IMPORTANT]
+> After changing the sync_list, you must perform a full re-synchronisation by adding `--resync` to your existing command line - for example: `onedrive --sync --resync`
 
-**Note:** After changing the sync_list, you must perform a full re-synchronisation by adding `--resync` to your existing command line - for example: `onedrive --sync --resync`
+> [!TIP]
+> When enabling the use of 'sync_list,' utilise the `--display-config` option to validate that your configuration will be used by the application, and test your configuration by adding `--dry-run` to ensure the client will operate as per your requirement.
 
-**Note:** In some circumstances, it may be required to sync all the individual files within the 'sync_dir', but due to frequent name change / addition / deletion of these files, it is not desirable to constantly change the 'sync_list' file to include / exclude these files and force a resync. To assist with this, enable the following in your configuration file:
-```text
-sync_root_files = "true"
-```
-This will tell the application to sync any file that it finds in your 'sync_dir' root by default, negating the need to constantly update your 'sync_list' file.
+> [!TIP] 
+> In some circumstances, it may be required to sync all the individual files within the 'sync_dir', but due to frequent name change / addition / deletion of these files, it is not desirable to constantly change the 'sync_list' file to include / exclude these files and force a resync. To assist with this, enable the following in your configuration file:
+> ```text
+> sync_root_files = "true"
+> ```
+> This will tell the application to sync any file that it finds in your 'sync_dir' root by default, negating the need to constantly update your 'sync_list' file.
 
 ### Performing a --resync
 If you alter any of the subsequent configuration items, you will be required to execute a `--resync` to make sure your client is syncing your data with the updated configuration:
