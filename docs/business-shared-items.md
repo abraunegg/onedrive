@@ -1,13 +1,16 @@
 # How to sync OneDrive Business Shared Items
-## Application Version
-Before reading this document, please ensure you are running application version [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases) or greater. Use `onedrive --version` to determine what application version you are using and upgrade your client if required.
 
-## Important Note
-This feature has been 100% re-written from v2.5.0 onwards. A pre-requesite before using this capability in v2.5.0 and above is for you to revert any Shared Business Folder configuration you may be currently using, including, but not limited to:
-* Removing `sync_business_shared_folders = "true|false"` from your 'config' file
-* Removing the 'business_shared_folders' file 
-* Removing any local data | shared folder data from your configured 'sync_dir' to ensure that there are no conflicts or issues.
-* Removing any configuration online that might be related to using this feature prior to v2.5.0
+> [!CAUTION]
+> Before reading this document, please ensure you are running application version [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases) or greater. Use `onedrive --version` to determine what application version you are using and upgrade your client if required.
+
+> [!CAUTION]
+> This feature has been 100% re-written from v2.5.0 onwards and is not backwards compatible with v2.4.x client versions. If enabling this feature, you must upgrade to v2.5.0 or above on all systems that are running this client.
+> 
+> An additional pre-requesite before using this capability in v2.5.0 and above is for you to revert any v2.4.x Shared Business Folder configuration you may be currently using, including, but not limited to:
+> * Removing `sync_business_shared_folders = "true|false"` from your 'config' file
+> * Removing the 'business_shared_folders' file 
+> * Removing any local data | shared folder data from your configured 'sync_dir' to ensure that there are no conflicts or issues.
+> * Removing any configuration online that might be related to using this feature prior to v2.5.0
 
 ## Process Overview
 Syncing OneDrive Business Shared Folders requires additional configuration for your 'onedrive' client:
@@ -16,10 +19,6 @@ Syncing OneDrive Business Shared Folders requires additional configuration for y
 3.  Update your OneDrive Client for Linux 'config' file to enable the feature by adding `sync_business_shared_items = "true"`. Adding this option will trigger a `--resync` requirement.
 4.  Test the configuration using '--dry-run'
 5.  Remove the use of '--dry-run' and sync the OneDrive Business Shared folders as required
-
-
-**NOTE:** This documentation will be updated as this feature progresses.
-
 
 ### Enable syncing of OneDrive Business Shared Items via config file
 ```text
@@ -132,7 +131,8 @@ Any shared file link you add can utilise any 'client side filtering' rules that 
 
 ### Syncing OneDrive Business Shared Files using Option 2
 
-**NOTE:** When using option 2, all files that have been shared with you will be downloaded by default. To reduce this, first use `--list-shared-items` to list all shared items with your account, then use 'client side filtering' rules such as 'sync_list' configuration to selectivly sync all the files to your local system.
+> [!IMPORTANT]
+> When using option 2, all files that have been shared with you will be downloaded by default. To reduce this, first use `--list-shared-items` to list all shared items with your account, then use 'client side filtering' rules such as 'sync_list' configuration to selectivly sync all the files to your local system.
 
 1. Review all items that have been shared with you by using `onedrive --list-shared-items`. This should display output similar to the following:
 ```
