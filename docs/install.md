@@ -36,10 +36,10 @@ Only the current release version or greater is supported. Earlier versions are n
 ## Building from Source - High Level Requirements
 *   For successful compilation of this application, it's crucial that the build environment is equipped with a minimum of 1GB of memory and an additional 1GB of swap space.
 *   Install the required distribution package dependencies coverering the required development tools and development libraries for curl and sqlite
-*   [Digital Mars D Compiler (DMD)](http://dlang.org/download.html) or [LDC – the LLVM-based D Compiler](https://github.com/ldc-developers/ldc)
+*   Install the [Digital Mars D Compiler (DMD)](http://dlang.org/download.html) or [LDC – the LLVM-based D Compiler](https://github.com/ldc-developers/ldc)
 
 > [!IMPORTANT]
-> To compile this application successfully, it is essential to use either DMD version 2.088.0 or higher, or LDC version 1.18.0 or higher. Ensuring compatibility and optimal performance necessitates the use of these specific versions or their more recent updates.
+> To compile this application successfully, it is essential to use either DMD version **2.088.0** or higher, or LDC version **1.18.0** or higher. Ensuring compatibility and optimal performance necessitates the use of these specific versions or their more recent updates.
 
 ### Example for installing DMD Compiler
 ```text
@@ -113,7 +113,7 @@ sudo pacman -S libnotify
 
 ### Dependencies: Raspbian (ARMHF) and Ubuntu 22.x / Debian 11 / Debian 12 / Raspbian (ARM64)
 > [!CAUTION]
-> The minimum LDC compiler version required to compile this application is now 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
+> The minimum LDC compiler version required to compile this application is 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
 
 These instructions were validated using:
 *   `Linux raspberrypi 5.10.92-v8+ #1514 SMP PREEMPT Mon Jan 17 17:39:38 GMT 2022 aarch64` (2022-01-28-raspios-bullseye-armhf-lite) using Raspberry Pi 3B (revision 1.2)
@@ -229,7 +229,7 @@ as far as possible automatically, but can be overridden by passing
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
 #### ARMHF Architecture (Raspbian) and ARM64 Architecture (Ubuntu 22.x / Debian 11 / Raspbian)
 > [!CAUTION]
-> The minimum LDC compiler version required to compile this application is now 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
+> The minimum LDC compiler version required to compile this application is 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
 
 > [!IMPORTANT]
 > For successful compilation of this application, it's crucial that the build environment is equipped with a minimum of 1GB of memory and an additional 1GB of swap space. To verify your system's swap space availability, you can use the `swapon` command. Ensuring these requirements are met is vital for the application's compilation process.
