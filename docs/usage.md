@@ -442,9 +442,11 @@ Are you sure you want to proceed with --resync? [Y/N]
 
 To proceed with `--resync`, you must type 'y' or 'Y' to allow the application to continue.
 
-**Note:** It's highly recommended to use `--resync` only if the application prompts you to do so. Don't blindly set the application to start with `--resync` as the default option.
+> [!CAUTION] 
+> It's highly recommended to use `--resync` only if the application prompts you to do so. Don't blindly set the application to start with `--resync` as your default option.
 
-**Note:** In certain automated environments (assuming you know what you're doing due to automation), to avoid the 'proceed with acknowledgement' requirement, add `--resync-auth` to automatically acknowledge the prompt.
+> [!IMPORTANT]
+> In certain automated environments (assuming you know what you're doing due to automation), to avoid the 'proceed with acknowledgement' requirement, add `--resync-auth` to automatically acknowledge the prompt.
 
 ### Performing a --force-sync without a --resync or changing your configuration
 In some cases and situations, you may have configured the application to skip certain files and folders using 'skip_file' and 'skip_dir' configuration. You then may have a requirement to actually sync one of these items, but do not wish to modify your configuration, nor perform an entire `--resync` twice.
@@ -469,7 +471,9 @@ Are you sure you want to proceed with --force-sync [Y/N]
 To proceed with `--force-sync`, you must type 'y' or 'Y' to allow the application to continue.
 
 ### Enabling the Client Activity Log
-When running onedrive, all actions can be logged to a separate log file. This can be enabled by using the `--enable-logging` flag. By default, log files will be written to `/var/log/onedrive/` and will be in the format of `%username%.onedrive.log`, where `%username%` represents the user who ran the client to allow easy sorting of user to client activity log.
+When running onedrive, all actions can be logged to a separate log file. This can be enabled by using the `--enable-logging` flag. 
+
+By default, log files will be written to `/var/log/onedrive/` and will be in the format of `%username%.onedrive.log`, where `%username%` represents the user who ran the client to allow easy sorting of user to client activity log.
 
 **Note:** You will need to ensure the existence of this directory and that your user has the applicable permissions to write to this directory; otherwise, the following error message will be printed:
 ```text
