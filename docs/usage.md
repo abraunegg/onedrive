@@ -119,8 +119,8 @@ The application has been successfully authorised, but no additional command swit
 Please use 'onedrive --help' for further assistance on how to run this application.
 ```
 
-**Please Note:** Without additional input or configuration, the OneDrive Client for Linux will automatically adhere to default application settings during synchronisation processes with Microsoft OneDrive.
-
+> [!IMPORTANT]
+> Without additional input or configuration, the OneDrive Client for Linux will automatically adhere to default application settings during synchronisation processes with Microsoft OneDrive.
 
 ### Display Your Applicable Runtime Configuration
 To verify the configuration that the application will use, use the following command:
@@ -140,14 +140,16 @@ Config option 'sync_dir'                     = ~/OneDrive
 Config option 'webhook_enabled'              = false
 ```
 
-**Important Reminder:** When using multiple OneDrive accounts, it's essential to always use the `--confdir` command followed by the appropriate configuration directory. This ensures that the specific configuration you intend to view is correctly displayed.
+> [!IMPORTANT]
+> When using multiple OneDrive accounts, it's essential to always use the `--confdir` command followed by the appropriate configuration directory. This ensures that the specific configuration you intend to view is correctly displayed.
 
 ### Understanding OneDrive Client for Linux Operational Modes
 There are two modes of operation when using the client:
 1. Standalone sync mode that performs a single sync action against Microsoft OneDrive.
 2. Ongoing sync mode that continuously syncs your data with Microsoft OneDrive.
 
-**Important Information:** The default setting for the OneDrive Client on Linux will sync all data from your Microsoft OneDrive account to your local device. To avoid this and select specific items for synchronisation, you should explore setting up 'Client Side Filtering' rules. This will help you manage and specify what exactly gets synced with your Microsoft OneDrive account.
+> [!IMPORTANT]
+> The default setting for the OneDrive Client on Linux will sync all data from your Microsoft OneDrive account to your local device. To avoid this and select specific items for synchronisation, you should explore setting up 'Client Side Filtering' rules. This will help you manage and specify what exactly gets synced with your Microsoft OneDrive account.
 
 #### Standalone Synchronisation Operational Mode (Standalone Mode)
 This method of use can be employed by issuing the following option to the client:
@@ -217,7 +219,9 @@ Furthermore, for simplicity, this can be simplified to the following:
 ```
 onedrive -s -v
 ```
-Adding `--verbose` twice will enable debug logging output. This is generally required when raising a bug report or needing to understand a problem.
+
+> [!IMPORTANT]
+> Adding `--verbose` twice will enable debug logging output. This is generally required when raising a bug report or needing to understand a problem.
 
 ### Using 'Client Side Filtering' rules to determine what should be synced with Microsoft OneDrive
 Client Side Filtering in the context of the OneDrive Client for Linux refers to user-configured rules that determine what files and directories the client should upload or download from Microsoft OneDrive. These rules are crucial for optimising synchronisation, especially when dealing with large numbers of files or specific file types. The OneDrive Client for Linux offers several configuration options to facilitate this:
@@ -234,7 +238,8 @@ Additionally, the OneDrive Client for Linux allows the implementation of Client 
 
 These configurable options and the 'sync_list' file provide users with the flexibility to tailor the synchronisation process to their specific needs, conserving bandwidth and storage space while ensuring that important files are always backed up and accessible.
 
-**Note:** After changing any Client Side Filtering rule, you must perform a full re-synchronisation.
+> [!IMPORTANT]
+> After changing any Client Side Filtering rule, you must perform a full re-synchronisation.
 
 ### Testing your configuration
 You can test your configuration by utilising the `--dry-run` CLI option. No files will be downloaded, uploaded, or removed; however, the application will display what 'would' have occurred. For example:
