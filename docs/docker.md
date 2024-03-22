@@ -23,7 +23,8 @@ The 'edge' Docker Container will align closer to all documentation and features,
 
 Additionally there are specific version release tags for each release. Refer to https://hub.docker.com/r/driveone/onedrive/tags for any other Docker tags you may be interested in.
 
-**Note:** The below instructions for docker has been tested and validated when logging into the system as an unprivileged user (non 'root' user).
+> [!NOTE]
+> The below instructions for docker has been tested and validated when logging into the system as an unprivileged user (non 'root' user).
 
 ## High Level Configuration Steps
 1. Install 'docker' as per your distribution platform's instructions if not already installed.
@@ -39,7 +40,8 @@ Additionally there are specific version release tags for each release. Refer to 
 ### 1. Install 'docker' on your platform
 Install 'docker' as per your distribution platform's instructions if not already installed as per the instructions on https://docs.docker.com/engine/install/
 
-**Note:** If you are using Ubuntu, do not install Docker from your distribution platform's repositories. You must install Docker from Docker provided packages.
+> [!CAUTION]
+> If you are using Ubuntu, do not install Docker from your distribution platform's repositories. You *must* install Docker from Docker provided packages.
 
 ### 2. Configure 'docker' to allow non-privileged users to run Docker commands
 Read https://docs.docker.com/engine/install/linux-postinstall/ to configure the 'docker' user group with your user account to allow your non 'root' user to run 'docker' commands.
@@ -133,17 +135,19 @@ This will create a docker volume labeled `onedrive_data` and will map to a path 
 *   The owner of this specified folder must have permissions for its parent directory
 *   Docker will attempt to change the permissions of the volume to the user the container is configured to run as
 
-**NOTE:** Issues occur when this target folder is a mounted folder of an external system (NAS, SMB mount, USB Drive etc) as the 'mount' itself is owed by 'root'. If this is your use case, you *must* ensure your normal user can mount your desired target without having the target mounted by 'root'. If you do not fix this, your Docker container will fail to start with the following error message:
-```bash
-ROOT level privileges prohibited!
-```
+> [!IMPORTANT]
+> Issues occur when this target folder is a mounted folder of an external system (NAS, SMB mount, USB Drive etc) as the 'mount' itself is owed by 'root'. If this is your use case, you *must* ensure your normal user can mount your desired target without having the target mounted by 'root'. If you do not fix this, your Docker container will fail to start with the following error message:
+> ```bash
+> ROOT level privileges prohibited!
+> ```
 
 ### 6. First run of Docker container under docker and performing authorisation
 The 'onedrive' client within the container first needs to be authorised with your Microsoft account. This is achieved by initially running docker in interactive mode.
 
 Run the docker image with the commands below and make sure to change the value of `ONEDRIVE_DATA_DIR` to the actual onedrive data directory on your filesystem that you wish to use (e.g. `export ONEDRIVE_DATA_DIR="/home/abraunegg/OneDrive"`).
 
-**Important:** The 'target' folder of `ONEDRIVE_DATA_DIR` must exist before running the docker container. The script below will create 'ONEDRIVE_DATA_DIR' so that it exists locally for the docker volume mapping to occur.
+> [!IMPORTANT]
+> The 'target' folder of `ONEDRIVE_DATA_DIR` must exist before running the docker container. The script below will create 'ONEDRIVE_DATA_DIR' so that it exists locally for the docker volume mapping to occur.
 
 It is also a requirement that the container be run using a non-root uid and gid, you must insert a non-root UID and GID (e.g.` export ONEDRIVE_UID=1000` and export `ONEDRIVE_GID=1000`). The script below will use `id` to evaluate your system environment to use the correct values.
 ```bash
@@ -339,7 +343,8 @@ If you are running a Raspberry Pi, you will need to edit your system configurati
 
 *   Modify the file `/etc/dphys-swapfile` and edit the `CONF_SWAPSIZE`, for example: `CONF_SWAPSIZE=2048`. 
 
-A reboot of your Raspberry Pi is required to make this change effective.
+> [!IMPORTANT]
+> A reboot of your Raspberry Pi is required to make this change effective.
 
 ### Building and running a custom Docker image
 You can also build your own image instead of pulling the one from [hub.docker.com](https://hub.docker.com/r/driveone/onedrive):
