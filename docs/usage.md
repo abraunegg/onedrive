@@ -645,7 +645,7 @@ If you want to change the application defaults, you can download a copy of the c
 > wget https://raw.githubusercontent.com/abraunegg/onedrive/master/config -O ~/.config/onedrive/config
 > ```
 
-For full configuration options and CLI switches, please refer to [./application-config-options.md](application-config-options.md)
+For full configuration options and CLI switches, please refer to [application-config-options.md](application-config-options.md)
 
 ### How to change where my data from Microsoft OneDrive is stored?
 By default, the location where your Microsoft OneDrive data is stored, is within your Home Directory under a directory called 'OneDrive'. This replicates as close as possible where the Microsoft Windows OneDrive client stores data.
@@ -735,12 +735,12 @@ Files shared with you can be synchronised using two methods:
 1. Add a link to the file
 2. Sync the actual file locally
 
-Refer to [./business-shared-items.md](business-shared-items.md) for further details.
+Refer to [business-shared-items.md](business-shared-items.md) for further details.
 
 ### How to synchronise SharePoint / Office 365 Shared Libraries?
 There are two methods to achieve this:
 * SharePoint library can be directly added to your OneDrive online. To do that, open your OneDrive account online, go to the Shared files list, right-click on the SharePoint Library you want to synchronise, and then click on "Add to my OneDrive".
-* Configure a separate application instance to only synchronise that specific SharePoint Library. Refer to [./sharepoint-libraries.md](sharepoint-libraries.md) for configuration assistance.
+* Configure a separate application instance to only synchronise that specific SharePoint Library. Refer to [sharepoint-libraries.md](sharepoint-libraries.md) for configuration assistance.
 
 ### How to Create a Shareable Link?
 In certain situations, you might want to generate a shareable file link and provide this link to other users for accessing a specific file.
@@ -762,12 +762,12 @@ onedrive --create-share-link <path/to/file> --with-editing-perms
 ### How to Synchronise Both Personal and Business Accounts at once?
 You need to set up separate instances of the application configuration for each account.
 
-Refer to [./advanced-usage.md](advanced-usage.md) for guidance on configuration.
+Refer to [advanced-usage.md](advanced-usage.md) for guidance on configuration.
 
 ### How to Synchronise Multiple SharePoint Libraries simultaneously?
 For each SharePoint Library, configure a separate instance of the application configuration.
 
-Refer to [./advanced-usage.md](advanced-usage.md) for configuration instructions.
+Refer to [advanced-usage.md](advanced-usage.md) for configuration instructions.
 
 ### How to Receive Real-time Changes from Microsoft OneDrive Service, instead of waiting for the next sync period?
 When operating in 'Monitor Mode,' it may be advantageous to receive real-time updates to online data. A 'webhook' is the method to achieve this, so that when in 'Monitor Mode,' the client subscribes to remote updates.
