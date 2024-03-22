@@ -638,7 +638,8 @@ If you want to change the application defaults, you can download a copy of the c
 *   `~/.config/onedrive`
 *   `/etc/onedrive`
 
-> [!TIP] To download a copy of the config file, use the following:
+> [!TIP] 
+> To download a copy of the config file, use the following:
 > ```text
 > mkdir -p ~/.config/onedrive
 > wget https://raw.githubusercontent.com/abraunegg/onedrive/master/config -O ~/.config/onedrive/config
@@ -748,7 +749,7 @@ To accomplish this, employ the following command:
 ```text
 onedrive --create-share-link <path/to/file>
 ```
-> [!NOTE]
+> [!IMPORTANT]
 > By default, this access permissions for the file link will be read-only.
 
 To make it a read-write link, execute the following command:
@@ -800,11 +801,12 @@ Initially, switch to the root user with `su - root`, then activate the systemd s
 systemctl --user enable onedrive
 systemctl --user start onedrive
 ```
-> [!IMPORTANT]
-> The `systemctl --user` command is not applicable to Red Hat Enterprise Linux (RHEL) or CentOS Linux platforms - see below.
 
 > [!IMPORTANT]
 > This will execute the 'onedrive' process with a UID/GID of '0', which means any files or folders created will be owned by 'root'.
+
+> [!IMPORTANT]
+> The `systemctl --user` command is not applicable to Red Hat Enterprise Linux (RHEL) or CentOS Linux platforms - see below.
 
 To monitor the service's status, use the following:
 ```text
@@ -834,7 +836,7 @@ journalctl --user-unit=onedrive -f
 > 1. Create a symbolic link from `/home/root/.config/onedrive` to `/root/.config/onedrive/`.
 > 2. Establish a systemd service using the '@' service file: `systemctl enable onedrive@root.service`.
 > 3. Start the root@service: `systemctl start onedrive@root.service`.
-
+>
 > This ensures that the service correctly restarts upon system reboot.
 
 To examine the systemd application logs, run:
@@ -847,7 +849,8 @@ journalctl --unit=onedrive@<username> -f
 systemctl enable onedrive
 systemctl start onedrive
 ```
-**Note:** This will execute the 'onedrive' process with a UID/GID of '0', meaning any files or folders created will be owned by 'root'.
+> [!IMPORTANT]
+> This will execute the 'onedrive' process with a UID/GID of '0', meaning any files or folders created will be owned by 'root'.
 
 To view the systemd application logs, execute:
 ```text
@@ -901,7 +904,8 @@ To view the systemd application logs, execute:
 journalctl --user-unit=onedrive -f
 ```
 
-**Note:** The `systemctl --user` command is not applicable to Red Hat Enterprise Linux (RHEL) or CentOS Linux platforms.
+> [!IMPORTANT]
+> The `systemctl --user` command is not applicable to Red Hat Enterprise Linux (RHEL) or CentOS Linux platforms.
 
 #### OneDrive service running as a non-root user via runit (antiX, Devuan, Artix, Void)
 
@@ -962,7 +966,8 @@ journalctl --user-unit=onedrive -f
 
   - `$ sv status ~/service/*`
 
-For additional details, you can refer to Void's documentation on [Per-User Services](https://docs.voidlinux.org/config/services/user-services.html).
+> [!NOTE]
+> For additional details, you can refer to Void's documentation on [Per-User Services](https://docs.voidlinux.org/config/services/user-services.html)
 
 ### How to start a user systemd service at boot without user login?
 In some situations, it may be necessary for the systemd service to start without requiring your 'user' to log in.
