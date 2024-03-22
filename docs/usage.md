@@ -578,7 +578,7 @@ Using the following path to store the runtime application log: /var/log/onedrive
 ```
 
 ### GUI Notifications
-If notification support has been compiled in (refer to [./install.md#gui-notification-support](GUI Notification Support)), the following events will trigger a GUI notification within the display manager session:
+If notification support has been compiled in (refer to [GUI Notification Support](install.md#gui-notification-support)), the following events will trigger a GUI notification within the display manager session:
 *   Aborting a sync if .nosync file is found
 *   Skipping a particular item due to an invalid name
 *   Skipping a particular item due to an invalid symbolic link
