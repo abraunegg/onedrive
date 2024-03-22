@@ -229,6 +229,7 @@ docker run -it --name onedrive -v onedrive_conf_sharepoint_site50:/onedrive/conf
 
 > [!TIP]
 > To avoid 're-authenticating' and 'authorising' each individual Docker container, if all the Docker containers are using the 'same' OneDrive credentials, you can re-use the 'refresh_token' from one Docker container to another by copying this file to the configuration Docker volume of each Docker container.
+>
 > If the account credentials are different .. you will need to re-authenticate each Docker container individually.
 
 ## Configuring the client for use in dual-boot (Windows / Linux) situations
