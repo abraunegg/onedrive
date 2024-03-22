@@ -170,7 +170,8 @@ For simplicity, this can be shortened to the following:
 ```text
 onedrive -m
 ```
-**Note:** This method of use is typically employed when enabling a systemd service to run the application in the background.
+> [!NOTE]
+> This method of use is used when enabling a systemd service to run the application in the background.
 
 Two common errors can occur when using monitor mode:
 *   Initialisation failure
@@ -288,10 +289,11 @@ onedrive --sync
 ```
 This will synchronise files from your Microsoft OneDrive account to your `~/OneDrive` local directory or to your specified 'sync_dir' location.
 
-If you prefer to use your local files as stored in `~/OneDrive` as your 'source of truth,' use the following sync command:
-```text
-onedrive --sync --local-first
-```
+> [!TIP]
+> If you prefer to use your local files as stored in `~/OneDrive` as your 'source of truth,' use the following sync command:
+> ```text
+> onedrive --sync --local-first
+> ```
 
 ### Performing a single directory synchronisation with Microsoft OneDrive
 In some cases, it may be desirable to synchronise a single directory under ~/OneDrive without having to change your client configuration. To do this, use the following command:
