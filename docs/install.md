@@ -46,13 +46,12 @@ Only the current release version or greater is supported. Earlier versions are n
 > If you wish to change this situation so that you can just use the Universe packages via 'apt install onedrive', consider becoming the Ubuntu package maintainer and contribute back to your community.
 
 ## Building from Source - High Level Requirements
-*   Build environment must have at least 1GB of memory & 1GB swap space
-*   Install the required distribution package dependencies
-*   [libcurl](http://curl.haxx.se/libcurl/)
-*   [SQLite 3](https://www.sqlite.org/) >= 3.7.15
+*   For successful compilation of this application, it's crucial that the build environment is equipped with a minimum of 1GB of memory and an additional 1GB of swap space.
+*   Install the required distribution package dependencies coverering the required development tools and development libraries for curl and sqlite
 *   [Digital Mars D Compiler (DMD)](http://dlang.org/download.html) or [LDC – the LLVM-based D Compiler](https://github.com/ldc-developers/ldc)
 
-**Note:** DMD version >= 2.088.0 or LDC version >= 1.18.0 is required to compile this application
+> [!IMPORTANT]
+> To compile this application successfully, it is essential to use either DMD version 2.088.0 or higher, or LDC version 1.18.0 or higher. Ensuring compatibility and optimal performance necessitates the use of these specific versions or their more recent updates.
 
 ### Example for installing DMD Compiler
 ```text
@@ -125,14 +124,16 @@ sudo pacman -S libnotify
 ```
 
 ### Dependencies: Raspbian (ARMHF) and Ubuntu 22.x / Debian 11 / Debian 12 / Raspbian (ARM64)
-**Note:** The minimum LDC compiler version required to compile this application is now 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
+> [!CAUTION]
+> The minimum LDC compiler version required to compile this application is now 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
 
 These instructions were validated using:
 *   `Linux raspberrypi 5.10.92-v8+ #1514 SMP PREEMPT Mon Jan 17 17:39:38 GMT 2022 aarch64` (2022-01-28-raspios-bullseye-armhf-lite) using Raspberry Pi 3B (revision 1.2)
 *   `Linux raspberrypi 5.10.92-v8+ #1514 SMP PREEMPT Mon Jan 17 17:39:38 GMT 2022 aarch64` (2022-01-28-raspios-bullseye-arm64-lite) using Raspberry Pi 3B (revision 1.2)
 *   `Linux ubuntu 5.15.0-1005-raspi #5-Ubuntu SMP PREEMPT Mon Apr 4 12:21:48 UTC 2022 aarch64 aarch64 aarch64 GNU/Linux` (ubuntu-22.04-preinstalled-server-arm64+raspi) using Raspberry Pi 3B (revision 1.2)
 
-**Note:** Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon`.
+> [!IMPORTANT]
+> Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon`.
 
 ```text
 sudo apt install build-essential
@@ -203,7 +204,8 @@ Run `deactivate` later on to restore your environment.
 ```
 Without performing this step, the compilation process will fail.
 
-**Note:** Depending on your DMD version, substitute `2.088.0` above with your DMD version that is installed.
+> [!NOTE]
+> Depending on your DMD version, substitute `2.088.0` above with your DMD version that is installed.
 
 ```text
 git clone https://github.com/abraunegg/onedrive.git
@@ -238,9 +240,12 @@ as far as possible automatically, but can be overridden by passing
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
 #### ARMHF Architecture (Raspbian) and ARM64 Architecture (Ubuntu 22.x / Debian 11 / Raspbian)
-**Note:** The minimum LDC compiler version required to compile this application is now 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
+> [!CAUTION]
+> The minimum LDC compiler version required to compile this application is now 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
 
-**Note:** Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon`.
+> [!IMPORTANT]
+> For successful compilation of this application, it's crucial that the build environment is equipped with a minimum of 1GB of memory and an additional 1GB of swap space. To verify your system's swap space availability, you can use the `swapon` command. Ensuring these requirements are met is vital for the application's compilation process.
+
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
@@ -254,11 +259,13 @@ If you have installed the client from a distribution package, the client will be
 
 If you have built the client from source, to upgrade your client, it is recommended that you first uninstall your existing 'onedrive' binary (see below), then re-install the client by re-cloning, re-compiling and re-installing the client again to install the new version.
 
-**Note:** Following the uninstall process will remove all client components including *all* systemd files, including any custom files created for specific access such as SharePoint Libraries.
+> [!NOTE]
+> Following the uninstall process will remove all client components including *all* systemd files, including any custom files created for specific access such as SharePoint Libraries.
 
 You can optionally choose to not perform this uninstallation step, and simply re-install the client by re-cloning, re-compiling and re-installing the client again - however the risk here is that you end up with two onedrive client binaries on your system, and depending on your system search path preferences, this will determine which binary is used.
 
-**Important:** Before performing any upgrade, it is highly recommended for you to stop any running systemd service if applicable to ensure that these services are restarted using the updated client version.
+> [!CAUTION]
+> Before performing any upgrade, it is highly recommended for you to stop any running systemd service if applicable to ensure that these services are restarted using the updated client version.
 
 Post re-install, to confirm that you have the new version of the client installed, use `onedrive --version` to determine the client version that is now installed.
 
@@ -276,7 +283,8 @@ If you are not upgrading your client, to remove your application state and confi
 ```
 rm -rf ~/.config/onedrive
 ```
-**Note:** If you are using the `--confdir option`, substitute `~/.config/onedrive` for the correct directory storing your client configuration.
+> [!IMPORTANT]
+> If you are using the `--confdir option`, substitute `~/.config/onedrive` for the correct directory storing your client configuration.
 
 If you want to just delete the application key, but keep the items database:
 ```text
