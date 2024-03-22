@@ -33,18 +33,6 @@ Only the current release version or greater is supported. Earlier versions are n
 | Ubuntu 23.04                    | [onedrive](https://packages.ubuntu.com/lunar/onedrive)                       |<a href="https://packages.ubuntu.com/lunar/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_23_04/onedrive.svg?header=" alt="Ubuntu 23.04 package" width="46" height="20"></a> |❌|✔|✔|✔| **Note:** Do not install from Ubuntu Universe as the package is obsolete and is not supported<br><br>For a supported application version, it is recommended that for Ubuntu that you install from OpenSuSE Build Service using the Ubuntu Package Install [Instructions](ubuntu-package-install.md) |
 | Void Linux                      | [onedrive](https://voidlinux.org/packages/?arch=x86_64&q=onedrive)           |<a href="https://voidlinux.org/packages/?arch=x86_64&q=onedrive"><img src="https://repology.org/badge/version-for-repo/void_x86_64/onedrive.svg?header=" alt="Void Linux x86_64 package" width="46" height="20"></a>|✔|✔|❌|❌| |
 
-> [!IMPORTANT]
-> This information is specifically for the following platforms and distributions:
-> *   Ubuntu
-> *   Lubuntu
-> *   Linux Mint
-> *   POP OS
-> *   Peppermint OS
-> 
-> Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) Universe packages available for Ubuntu, do not install 'onedrive' from these Universe packages. The default Universe packages are out-of-date and are not supported and should not be used. If you wish to use a package, it is highly recommended that you utilise the [OpenSuSE Build Service](ubuntu-package-install.md) to install packages for these platforms. If the OpenSuSE Build Service does not cater for your version, your only option is to build from source.
-> 
-> If you wish to change this situation so that you can just use the Universe packages via 'apt install onedrive', consider becoming the Ubuntu package maintainer and contribute back to your community.
-
 ## Building from Source - High Level Requirements
 *   For successful compilation of this application, it's crucial that the build environment is equipped with a minimum of 1GB of memory and an additional 1GB of swap space.
 *   Install the required distribution package dependencies coverering the required development tools and development libraries for curl and sqlite
@@ -133,7 +121,7 @@ These instructions were validated using:
 *   `Linux ubuntu 5.15.0-1005-raspi #5-Ubuntu SMP PREEMPT Mon Apr 4 12:21:48 UTC 2022 aarch64 aarch64 aarch64 GNU/Linux` (ubuntu-22.04-preinstalled-server-arm64+raspi) using Raspberry Pi 3B (revision 1.2)
 
 > [!IMPORTANT]
-> Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon`.
+> For successful compilation of this application, it's crucial that the build environment is equipped with a minimum of 1GB of memory and an additional 1GB of swap space. To verify your system's swap space availability, you can use the `swapon` command. Ensuring these requirements are met is vital for the application's compilation process.
 
 ```text
 sudo apt install build-essential
