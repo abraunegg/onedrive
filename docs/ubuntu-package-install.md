@@ -22,7 +22,9 @@ This document outlines the steps for installing the 'onedrive' client on Debian,
 Ubuntu and its clones are based on various different releases, thus, you must use the correct instructions below, otherwise you may run into package dependancy issues and will be unable to install the client.
 
 ### Step 1: Remove any configured PPA and associated 'onedrive' package and systemd service files
-Many Internet 'help' pages provide inconsistent details on how to install the OneDrive Client for Linux. A number of these websites continue to point users to install the client via the yann1ck PPA repository however this PPA no longer exists and should not be used.
+
+#### Step 1a: Remove PPA if configured
+Many Internet 'help' pages provide inconsistent details on how to install the OneDrive Client for Linux. A number of these websites continue to point users to install the client via the yann1ck PPA repository however this PPA no longer exists and should not be used. If you have previously configured, or attempted to add this PPA, this needs to be removed.
 
 To remove the PPA repository and the older client, perform the following actions:
 ```text
@@ -30,10 +32,22 @@ sudo apt remove onedrive
 sudo add-apt-repository --remove ppa:yann1ck/onedrive
 ```
 
-Additionally, Ubuntu and its clones have a bad habit of creating a 'default' systemd service file when installing the 'onedrive' package so that the client will automatically run the client post being authenticated. This systemd entry is erroneous and needs to be removed.
+#### Step 1b; Remove errant systemd service file installed by PPA or distribution package
+
+Additionally, the distributon packages have a bad habit of creating a 'default' systemd service file when installing the 'onedrive' package so that the client will automatically run the client post being authenticated. This systemd entry is erroneous and needs to be removed.
 ```
 Created symlink /etc/systemd/user/default.target.wants/onedrive.service → /usr/lib/systemd/user/onedrive.service.
 ```
+Without removing this erroneous systemd link, this increases your risk of getting the following error message:
+```
+Opening the item database ...
+
+ERROR: onedrive application is already running - check system process list for active application instances
+ - Use 'sudo ps aufxw | grep onedrive' to potentially determine acive running process
+
+Waiting for all internal threads to complete before exiting application
+```
+
 To remove this symbolic link, run the following command:
 ```
 sudo rm /etc/systemd/user/default.target.wants/onedrive.service
@@ -158,10 +172,11 @@ If required, review the table below based on your 'lsb_release' information to p
 | Ubuntu 23.04 / Lunar      | Use [Ubuntu 23.04](#distribution-ubuntu-2304) instructions below |
 | Ubuntu 23.10 / Mantic     | Use [Ubuntu 23.10](#distribution-ubuntu-2310) instructions below |
 
-**Note:** If your Linux distribution and release is not in the table above, you have 2 options:
-
-1. Compile the application from source. Refer to install.md (Compilation & Installation) for assistance.
-2. Raise a support case with your Linux Distribution to provide you with an applicable package you can use.
+> [!IMPORTANT]
+> If your Linux distribution and release is not in the table above, you have 2 options:
+>
+> 1. Compile the application from source. Refer to install.md (Compilation & Installation) for assistance.
+> 2. Raise a support case with your Linux Distribution to provide you with an applicable package you can use.
 
 ## Distribution Package Install Instructions
 
