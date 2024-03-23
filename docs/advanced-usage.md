@@ -124,7 +124,9 @@ Example:
 ExecStart=/usr/local/bin/onedrive --monitor --confdir="/home/myusername/.config/my-new-config"
 ```
 
-**Note:** When running the client manually, `--confdir="~/.config/......` is acceptable. In a systemd configuration file, the full path must be used. The `~` must be expanded.
+> [!IMPORTANT]
+> When running the client manually, `--confdir="~/.config/......` is acceptable. In a systemd configuration file, the full path must be used. The `~` must be manually expanded when editing your systemd file.
+
 
 ### Step 3: Enable the new systemd service
 Once the file is correctly editied, you can enable the new systemd service using the following commands.
