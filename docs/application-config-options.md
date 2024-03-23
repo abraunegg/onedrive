@@ -124,7 +124,8 @@ _**Default Value:**_ *Empty* - not required for normal operation
 
 _**Config Example:**_ `azure_tenant_id = "example.onmicrosoft.us"` or `azure_tenant_id = "0c4be462-a1ab-499b-99e0-da08ce52a2cc"`
 
-_**Additional Usage Requirement:**_ Must be configured if 'azure_ad_endpoint' is configured.
+> [!IMPORTANT]
+> _**Additional Usage Requirement:**_ Must be configured if 'azure_ad_endpoint' is configured.
 
 ### bypass_data_preservation
 _**Description:**_ This config option allows the disabling of preserving local data by renaming the local file in the event of data conflict. If this is enabled, you will experience data loss on your local data as the local file will be over-written with data from OneDrive online. Use with care and caution.
@@ -146,7 +147,8 @@ _**Config Example:**_ `check_nomount = "false"` or `check_nomount = "true"`
 
 _**CLI Option:**_ `--check-for-nomount`
 
-_**Additional Usage Requirement:**_ Create a `.nosync` file in your mount point *before* you mount your disk so that this is visible, in your mount point if your disk is unmounted.
+> [!IMPORTANT]
+> _**Additional Usage Requirement:**_ Create a `.nosync` file in your mount point *before* you mount your disk so that this is visible, in your mount point if your disk is unmounted.
 
 ### check_nosync
 _**Description:**_ This config option is useful to prevent the sync of a *local* directory to Microsoft OneDrive. It will *not* check for this file online to prevent the download of directories to your local system.
@@ -159,7 +161,8 @@ _**Config Example:**_ `check_nosync = "false"` or `check_nosync = "true"`
 
 _**CLI Option Use:**_ `--check-for-nosync`
 
-_**Additional Usage Requirement:**_ Create a `.nosync` file in any *local* directory that you wish to not sync to Microsoft OneDrive when you enable this option.
+> [!IMPORTANT]
+> _**Additional Usage Requirement:**_ Create a `.nosync` file in any *local* directory that you wish to not sync to Microsoft OneDrive when you enable this option.
 
 ### classify_as_big_delete
 _**Description:**_ This config option defines the number of children in a path that is locally removed which will be classified as a 'big data delete' to safeguard large data removals - which are typically accidental local delete events.
@@ -172,7 +175,8 @@ _**Config Example:**_ `classify_as_big_delete = "2000"`
 
 _**CLI Option Use:**_ `--classify-as-big-delete 2000`
 
-_**Additional Usage Requirement:**_ If this option is triggered, you will need to add `--force` to force a sync to occur.
+> [!NOTE]
+> _**Additional Usage Requirement:**_ If this option is triggered, you will need to add `--force` to force a sync to occur.
 
 ### cleanup_local_files
 _**Description:**_ This config option provides the capability to cleanup local files and folders if they are removed online.
@@ -185,7 +189,8 @@ _**Config Example:**_ `cleanup_local_files = "false"` or `cleanup_local_files = 
 
 _**CLI Option Use:**_ `--cleanup-local-files`
 
-_**Additional Usage Requirement:**_ This configuration option can only be used with 'download_only'. It cannot be used with any other application option.
+> [!IMPORTANT]
+> _**Additional Usage Requirement:**_ This configuration option can only be used with 'download_only'. It cannot be used with any other application option.
 
 ### connect_timeout
 _**Description:**_ This configuration setting manages the TCP connection timeout duration in seconds for HTTPS connections to Microsoft OneDrive when using the curl library (CURLOPT_CONNECTTIMEOUT).
