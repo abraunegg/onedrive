@@ -1,18 +1,22 @@
 # Installation of 'onedrive' package on Debian and Ubuntu
 
-This document covers the appropriate steps to install the 'onedrive' client using the provided packages for Debian and Ubuntu.
+This document outlines the steps for installing the 'onedrive' client on Debian, Ubuntu, and their derivatives using the OpenSuSE Build Service Packages.
 
-#### Important information for all Ubuntu and Ubuntu based distribution users:
-This information is specifically for the following platforms and distributions:
-
-*   Lubuntu
-*   Linux Mint
-*   POP OS
-*   Peppermint OS
-*   Raspbian
-*   Ubuntu
-
-Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) Universe packages available for Ubuntu, do not install 'onedrive' from these Universe packages. The default Ubuntu Universe packages are out-of-date and are not supported and should not be used.
+> [!CAUTION]
+> This information is specifically for the following platforms and distributions:
+> * Debian
+> * Deepin
+> * Elementary OS
+> * Kali Linux
+> * Lubuntu
+> * Linux Mint
+> * Pop!_OS
+> * Peppermint OS
+> * Raspbian | Raspberry Pi OS
+> * Ubuntu | Kubuntu | Xubuntu | Ubuntu Mate
+> * Zorin OS
+>
+> Although packages for the 'onedrive' client are available through distribution repositories, it is strongly advised against installing them. These distribution-provided packages are outdated, unsupported, and contain bugs and issues that have already been resolved in newer versions. They should not be used.
 
 ## Determine which instructions to use
 Ubuntu and its clones are based on various different releases, thus, you must use the correct instructions below, otherwise you may run into package dependancy issues and will be unable to install the client.
