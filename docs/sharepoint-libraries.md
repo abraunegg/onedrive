@@ -1,18 +1,24 @@
 # How to configure OneDrive SharePoint Shared Library sync
-**WARNING:** Several users have reported files being overwritten causing data loss as a result of using this client with SharePoint Libraries when running as a systemd service.
 
-When this has been investigated, the following has been noted as potential root causes:
-*  File indexing application such as Baloo File Indexer or Tracker3 constantly indexing your OneDrive data
-*  The use of WPS Office and how it 'saves' files by deleting the existing item and replaces it with the saved data
+> [!CAUTION]
+> Before reading this document, please ensure you are running application version [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases) or greater. Use `onedrive --version` to determine what application version you are using and upgrade your client if required.
 
-Additionally there could be a yet unknown bug with the client, however all debugging and data provided previously shows that an 'external' process to the 'onedrive' application modifies the files triggering the undesirable upload to occur.
+> [!CAUTION]
+> Several users have reported files being overwritten causing data loss as a result of using this client with SharePoint Libraries when running as a systemd service.
+>
+> When this has been investigated, the following has been noted as potential root causes:
+> *  File indexing application such as Baloo File Indexer or Tracker3 constantly indexing your OneDrive data
+> *  The use of WPS Office and how it 'saves' files by deleting the existing item and replaces it with the saved data. Do not use WPS Office.
+> 
+> Additionally there could be a yet unknown bug with the client, however all debugging and data provided previously shows that an 'external' process to the 'onedrive' application modifies the files triggering the undesirable upload to occur.
+> 
+> **Possible Preventative Actions:**
+> *  Disable all File Indexing for your SharePoint Library data. It is out of scope to detail on how you should do this.
+> *  Disable using a systemd service for syncing your SharePoint Library data.
+> *  Do not use WPS Office to edit your documents. Use OpenOffice or LibreOffice as these do not exhibit the same 'delete to save' action that WPS Office has.
+> 
+> Additionally has been 100% re-written from v2.5.0 onwards, thus the mechanism for saving data to SharePoint has been critically overhauled to simplify actions to negate the impacts where SharePoint will *modify* your file post upload, breaking file integrity as the file you have locally, is not the file that is stored online. Please read https://github.com/OneDrive/onedrive-api-docs/issues/935 for relevant details.
 
-**Possible Preventative Actions:**
-*  Disable all File Indexing for your SharePoint Library data. It is out of scope to detail on how you should do this.
-*  Disable using a systemd service for syncing your SharePoint Library data.
-*  Do not use WPS Office to edit your documents. Use OpenOffice or LibreOffice as these do not exhibit the same 'delete to save' action that WPS Office has.
-
-Additionally, please use caution when using this client with SharePoint.
 
 ## Application Version
 Before reading this document, please ensure you are running application version [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases) or greater. Use `onedrive --version` to determine what application version you are using and upgrade your client if required.
