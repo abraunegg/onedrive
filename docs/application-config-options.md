@@ -328,7 +328,8 @@ _**Config Example:**_ `enable_logging = "false"` or `enable_logging = "true"`
 
 _**CLI Option Use:**_ `--enable-logging`
 
-_**Additional Usage Notes:**_ Additional configuration is potentially required to configure the default log directory. Refer to usage.md for details (ADD LINK)
+> [!IMPORTANT]
+> Additional configuration is potentially required to configure the default log directory. Refer to the [Enabling the Client Activity Log](./usage.md#enabling-the-client-activity-log) section in usage.md for details
 
 ### force_http_11
 _**Description:**_ This setting controls the application HTTP protocol version. By default, the application will use libcurl defaults for which HTTP prodocol version will be used to interact with Microsoft OneDrive. Use this setting to downgrade libcurl to only use HTTP/1.1.
