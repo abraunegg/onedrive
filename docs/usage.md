@@ -84,7 +84,7 @@ ERROR: Invalid skip_file entry '.*' detected
 ```
 
 ### Guidelines for Naming Local Files and Folders in the Synchronisation Directory
-When naming your files and folders in the synchronisation directory, it is important to follow the Windows Naming Conventions for your files and folders.
+When naming your files and folders in the synchronisation directory, it is important to follow the applicable Windows Naming Conventions for your files and folders.
 
 In addition to adhering to Microsoft Windows Naming Convention, Microsoft OneDrive has explicit restrictions and limitations:
 * Invalid characters
