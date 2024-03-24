@@ -551,7 +551,8 @@ _**Config Example:**_ `resync_auth = "false"` or `resync_auth = "true"`
 
 _**CLI Option Use:**_ `--resync-auth`
 
-_**Additional Usage Notes:**_ In certain automated environments (assuming you know what you're doing due to automation), to avoid the 'proceed with acknowledgement' resync requirement, this option allows you to automatically acknowledge the resync prompt.
+> [!TIP]
+> In certain automated environments (assuming you know what you're doing due to using automation), to avoid the 'proceed with acknowledgement' resync requirement, this option allows you to automatically acknowledge the resync prompt.
 
 ### skip_dir
 _**Description:**_ This configuration option controls whether the application skips certain directories from being synced. Directories can be specified in 2 ways:
@@ -588,7 +589,8 @@ skip_dir = "SkipThisDirectoryAnywhere|.SkipThisOtherDirectoryAnywhere|/Explicit/
 
 _**CLI Option Use:**_ `--skip-dir 'SkipThisDirectoryAnywhere|.SkipThisOtherDirectoryAnywhere|/Explicit/Path/To/A/Directory|/Another/Explicit/Path/To/Different/Directory'`
 
-_**Additional Usage Notes:**_ This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. If using the config file and CLI option is used, the CLI option will *replace* the config file entries. After changing or modifying this option, you will be required to perform a resync.
+> [!NOTE]
+> This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. If using the config file and CLI option is used, the CLI option will *replace* the config file entries. After changing or modifying this option, you will be required to perform a resync.
 
 ### skip_dir_strict_match
 _**Description:**_ This configuration option controls whether the application performs strict directory matching when checking 'skip_dir' items. When enabled, the 'skip_dir' item must be a full path match to the path to be skipped.
@@ -612,7 +614,8 @@ _**Config Example:**_ `skip_dotfiles = "false"` or `skip_dotfiles = "true"`
 
 _**CLI Option Use:**_ `--skip-dot-files`
 
-_**Additional Usage Notes:**_ This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. After changing this option, you will be required to perform a resync.
+> [!NOTE]
+> This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. After changing this option, you will be required to perform a resync.
 
 ### skip_file
 _**Description:**_ This configuration option controls whether the application skips certain files from being synced.
@@ -652,7 +655,8 @@ skip_file = "~*|.~*|*.tmp|*.swp|*.blah|never_sync.file|/Documents/keepass.kdbx"
 
 _**CLI Option Use:**_ `--skip-file '~*|.~*|*.tmp|*.swp|*.blah|never_sync.file|/Documents/keepass.kdbx'`
 
-_**Additional Usage Notes:**_ This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. If using the config file and CLI option is used, the CLI option will *replace* the config file entries. After changing or modifying this option, you will be required to perform a resync.
+> [!NOTE]
+> This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. If using the config file and CLI option is used, the CLI option will *replace* the config file entries. After changing or modifying this option, you will be required to perform a resync.
 
 ### skip_size
 _**Description:**_ This configuration option controls whether the application skips syncing certain files larger than the specified size. The value specified is in MB.
