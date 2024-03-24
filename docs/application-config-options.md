@@ -935,7 +935,7 @@ _**Usage Example:**_ `onedrive --auth-files authUrl:responseUrl`
 > Client requires authentication before proceeding. Waiting for --auth-files elements to be available.
 > ```
 > At this point, the client has written the file `~/onedrive-auth-url` which contains the authentication URL that needs to be visited to perform the authentication process. The client will now wait and watch for the presence of the file `~/onedrive-response-url`.
-
+> 
 > Visit the authentication URL, and then create a new file called `~/onedrive-response-url` with the response URI. Once this has been done, the application will acknowledge the presence of this file, read the contents, and authenticate the application.
 > ```text
 > Sync Engine Initialised with new Onedrive API instance
@@ -950,39 +950,44 @@ _**Description:**_ This CLI option allows the user to perform application authen
 
 _**Usage Example:**_ `onedrive --auth-response https://login.microsoftonline.com/common/oauth2/nativeclient?code=<redacted>`
 
-_**Additional Usage Notes:**_ Typically, unless the application client identifier, authentication scopes are being modified or a specific Azure Tenant is being specified, the authentication URL will mostlikely be as follows:
-```text
-https://login.microsoftonline.com/common/oauth2/v2.0/authorise?client_id=22c49a0d-d21c-4792-aed1-8f163c982546&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
-```
-With this URL being known, it is possible ahead of time to request an authentication token by visiting this URL, and performing the authenticaton access request.
+> [!TIP]
+> Typically, unless the application client identifier has been modified, authentication scopes are being modified or a specific Azure Tenant is being specified, the authentication URL will most likely be as follows:
+> ```text
+> https://login.microsoftonline.com/common/oauth2/v2.0/authorise?client_id=22c49a0d-d21c-4792-aed1-8f163c982546&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
+> ```
+> With this URL being known, it is possible ahead of time to request an authentication token by visiting this URL, and performing the authenticaton access request.
 
 ### CLI Option: --confdir
 _**Description:**_ This CLI option allows the user to specify where all the application configuration and relevant components are stored.
 
 _**Usage Example:**_ `onedrive --confdir '~/.config/onedrive-business/'`
 
-_**Additional Usage Notes:**_ If using this option, it must be specified each and every time the application is used. If this is ommited, the application default configuration directory will be used.
+> [!IMPORTANT]
+> If using this option, it must be specified each and every time the application is used. If this is ommited, the application default configuration directory will be used.
 
 ### CLI Option: --create-directory
 _**Description:**_ This CLI option allows the user to create the specified directory path on Microsoft OneDrive without performing a sync.
 
 _**Usage Example:**_ `onedrive --create-directory 'path/of/new/folder/structure/to/create/'`
 
-_**Additional Usage Notes:**_ The specified path to create is relative to your configured 'sync_dir'.
+> [!IMPORTANT]
+> The specified path to create is relative to your configured 'sync_dir'.
 
 ### CLI Option: --create-share-link
 _**Description:**_ This CLI option enables the creation of a shareable file link that can be provided to users to access the file that is stored on Microsoft OneDrive. By default, the permissions for the file will be 'read-only'.
 
 _**Usage Example:**_ `onedrive --create-share-link 'relative/path/to/your/file.txt'`
 
-_**Additional Usage Notes:**_ If writable access to the file is required, you must add `--with-editing-perms` to your command. See below for details.
+> [!IMPORTANT]
+> If writable access to the file is required, you must add `--with-editing-perms` to your command. See below for details.
 
 ### CLI Option: --destination-directory
 _**Description:**_ This CLI option specifies the 'destination' portion of moving a file or folder online, without performing a sync operation.
 
 _**Usage Example:**_ `onedrive --source-directory 'path/as/source/' --destination-directory 'path/as/destination'`
 
-_**Additional Usage Notes:**_ All specified paths are relative to your configured 'sync_dir'.
+> [!IMPORTANT]
+> All specified paths are relative to your configured 'sync_dir'.
 
 ### CLI Option: --display-config
 _**Description:**_ This CLI option will display the effective application configuration
@@ -994,7 +999,8 @@ _**Description:**_ This CLI option will display the sync status of the configure
 
 _**Usage Example:**_ `onedrive --display-sync-status`
 
-_**Additional Usage Notes:**_ This option can also use the `--single-directory` option to determine the sync status of a specific directory within the configured 'sync_dir'
+> [!TIP]
+> This option can also use the `--single-directory` option to determine the sync status of a specific directory within the configured 'sync_dir'
 
 ### CLI Option: ---display-quota
 _**Description:**_ This CLI option will display the quota status of the account drive id or the configured 'drive_id' value
@@ -1006,7 +1012,8 @@ _**Description:**_ This CLI option enables the force the deletion of data when a
 
 _**Usage Example:**_ `onedrive --sync --verbose --force`
 
-_**Additional Usage Notes:**_ This option should only be used exclusively in cases where you've initiated a 'big delete' and genuinely intend to remove all the data that is set to be deleted online.
+> [!IMPORTANT]
+> This option should only be used exclusively in cases where you've initiated a 'big delete' and genuinely intend to remove all the data that is set to be deleted online.
 
 ### CLI Option: --force-sync
 _**Description:**_ This CLI option enables the syncing of a specific directory, using the Client Side Filtering application defaults, overriding any user application configuration.
