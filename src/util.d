@@ -350,11 +350,18 @@ bool isValidName(string path) {
 
 	// Regular expression for invalid patterns
 	// https://support.microsoft.com/en-us/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa?ui=en-us&rs=en-us&ad=us#invalidcharacters
-	// Leading whitespace and trailing whitespace/dot
+	// Leading whitespace and trailing whitespace
 	// Invalid characters
-    auto invalidNameReg = ctRegex!(`^\s.*|^.*[\s\.]$|.*[<>:"\|\?*/\\].*`);
+	// Trailing dot '.' (not documented above) , however see issue https://github.com/abraunegg/onedrive/issues/2678
 	
-    auto matchResult = match(itemName, invalidNameReg);
+	//auto invalidNameReg = ctRegex!(`^\s.*|^.*[\s\.]$|.*[<>:"\|\?*/\\].*`); - original to remove at some point
+	auto invalidNameReg = ctRegex!(`^\s+|\s$|\.$|[<>:"\|\?*/\\]`); // revised 25/3/2024
+	// - ^\s+ matches one or more whitespace characters at the start of the string. The + ensures we match one or more whitespaces, making it more efficient than .* for detecting leading whitespaces.
+	// - \s$ matches a whitespace character at the end of the string. This is more precise than [\s\.]$ because we'll handle the dot separately.
+	// -  \.$ specifically matches a dot character at the end of the string, addressing the requirement to catch trailing dots as invalid.
+	// - [<>:"\|\?*/\\] matches any single instance of the specified invalid characters: ", *, :, <, >, ?, /, \, |
+
+	auto matchResult = match(itemName, invalidNameReg);
     if (!matchResult.empty) {
         return false;
     }

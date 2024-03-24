@@ -103,7 +103,7 @@ Should a file or folder infringe upon these naming conventions or restrictions, 
 
 > [!TIP]
 > UTF-16 provides a capability to use UTF-16 characters to work around the restrictions and limitations imposed by Microsoft OneDrive. An example of some replacement characters are below:
-> | Standard Character | UTF-16 Replacement Character |
+> | Standard Invalid Character | Potential UTF-16 Replacement Character |
 > |--------------------|------------------------------|
 > | .                  | ․ (One Dot Leader, `\u2024`)  |
 > | :                  | ː (Modifier Letter Triangular Colon, `\u02D0`) |
