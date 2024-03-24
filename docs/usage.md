@@ -101,8 +101,16 @@ To ensure seamless synchronisation with Microsoft OneDrive, it's critical to adh
 
 Should a file or folder infringe upon these naming conventions or restrictions, synchronisation will skip the item, indicating an invalid name according to Microsoft Naming Convention. The only remedy is to rename the offending item. This constraint is by design and remains firm.
 
+> [!TIP]
+> UTF-16 provides a capability to use UTF-16 characters to work around the restrictions and limitations imposed by Microsoft OneDrive. An example of some replacement characters are below:
+> | Standard Character | UTF-16 Replacement Character |
+> |--------------------|------------------------------|
+> | .                  | ․ (One Dot Leader, `\u2024`)  |
+> | :                  | ː (Modifier Letter Triangular Colon, `\u02D0`) |
+> | \|                 | │ (Box Drawings Light Vertical, `\u2502`)       |
+
 > [!CAUTION]
-> Microsoft OneDrive does not adhere to POSIX standards, which fundamentally impacts naming conventions. In Unix environments (which are POSIX compliant), files and folders can exist simultaneously with identical names if their capitalisation differs. **This is not possible on Microsoft OneDrive.** If such a scenario occurs, the OneDrive Client for Linux will encounter a conflict, preventing the synchronisation of the conflicting file or folder. This constraint is a conscious design choice and is immutable. To avoid synchronisation issues, preemptive renaming of any conflicting local files or folders is advised.
+> The last critically important point is that Microsoft OneDrive does not adhere to POSIX standards, which fundamentally impacts naming conventions. In Unix environments (which are POSIX compliant), files and folders can exist simultaneously with identical names if their capitalisation differs. **This is not possible on Microsoft OneDrive.** If such a scenario occurs, the OneDrive Client for Linux will encounter a conflict, preventing the synchronisation of the conflicting file or folder. This constraint is a conscious design choice and is immutable. To avoid synchronisation issues, preemptive renaming of any conflicting local files or folders is advised.
 
 #### Further reading:
 The above guidelines are essential for maintaining synchronisation integrity with Microsoft OneDrive. Adhering to them ensures your files and folders sync without issue. For additional details, consult the following resources:
