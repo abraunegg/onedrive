@@ -873,7 +873,8 @@ _**Default Value:**_ 0.0.0.0
 
 _**Config Example:**_ `webhook_listening_host = ""` - this will use the default value. `webhook_listening_host = "192.168.3.4"` - this will bind the client to use the IP address 192.168.3.4.
 
-_**Additional Usage Notes:**_ Use in conjunction with 'webhook_listening_port' to change the webhook listening endpoint.
+> [!NOTE]
+> Use in conjunction with 'webhook_listening_port' to change the webhook listening endpoint.
 
 ### webhook_listening_port
 _**Description:**_ This configuration option controls the TCP port that this client listens on, when the webhook feature is enabled.
@@ -884,7 +885,8 @@ _**Default Value:**_ 8888
 
 _**Config Example:**_ `webhook_listening_port = "9999"`
 
-_**Additional Usage Notes:**_ Use in conjunction with 'webhook_listening_host' to change the webhook listening endpoint.
+> [!NOTE]
+> Use in conjunction with 'webhook_listening_host' to change the webhook listening endpoint.
 
 ### webhook_public_url
 _**Description:**_ This configuration option controls the URL that Microsoft will send subscription notifications to. This must be a valid Internet accessible URL.
@@ -894,7 +896,6 @@ _**Value Type:**_ String
 _**Default Value:**_ *empty*
 
 _**Config Example:**_ 
-
 *  If your host is directly connected to the Internet: `webhook_public_url = "http://<your_host_ip>:8888/"`
 *  If you are using nginx to reverse proxy traffic from the Internet: `webhook_public_url = "https://<public_facing_url_to_reach_your_webhook>/webhooks/onedrive"`
 
@@ -923,25 +924,26 @@ _**Description:**_ This CLI option allows the user to perform application authen
 
 _**Usage Example:**_ `onedrive --auth-files authUrl:responseUrl`
 
-_**Additional Usage Notes:**_ The authorisation URL is written to the specified 'authUrl' file, then onedrive waits for the file 'responseUrl' to be present, and reads the authentication response from that file. Example:
+> [!IMPORTANT]
+> The authorisation URL is written to the specified 'authUrl' file, then onedrive waits for the file 'responseUrl' to be present, and reads the authentication response from that file. Example:
+> 
+> ```text
+> onedrive --auth-files '~/onedrive-auth-url:~/onedrive-response-url' 
+> Reading configuration file: /home/alex/.config/onedrive/config
+> Configuration file successfully loaded
+> Configuring Global Azure AD Endpoints
+> Client requires authentication before proceeding. Waiting for --auth-files elements to be available.
+> ```
+> At this point, the client has written the file `~/onedrive-auth-url` which contains the authentication URL that needs to be visited to perform the authentication process. The client will now wait and watch for the presence of the file `~/onedrive-response-url`.
 
-```text
-onedrive --auth-files '~/onedrive-auth-url:~/onedrive-response-url' 
-Reading configuration file: /home/alex/.config/onedrive/config
-Configuration file successfully loaded
-Configuring Global Azure AD Endpoints
-Client requires authentication before proceeding. Waiting for --auth-files elements to be available.
-```
-At this point, the client has written the file `~/onedrive-auth-url` which contains the authentication URL that needs to be visited to perform the authentication process. The client will now wait and watch for the presence of the file `~/onedrive-response-url`.
-
-Visit the authentication URL, and then create a new file called `~/onedrive-response-url` with the response URI. Once this has been done, the application will acknowledge the presence of this file, read the contents, and authenticate the application.
-```text
-Sync Engine Initialised with new Onedrive API instance
-
- --sync or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use 'onedrive --help' for further assistance.
-
-No OneDrive sync will be performed without one of these two arguments being present.
-```
+> Visit the authentication URL, and then create a new file called `~/onedrive-response-url` with the response URI. Once this has been done, the application will acknowledge the presence of this file, read the contents, and authenticate the application.
+> ```text
+> Sync Engine Initialised with new Onedrive API instance
+> 
+>  --sync or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use 'onedrive --help' for further assistance.
+> 
+> No OneDrive sync will be performed without one of these two arguments being present.
+> ```
 
 ### CLI Option: --auth-response
 _**Description:**_ This CLI option allows the user to perform application authentication not via an interactive dialog but via providing the authentication response URI directly.
