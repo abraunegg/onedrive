@@ -221,7 +221,8 @@ _**Config Example:**_ `debug_https = "false"` or `debug_https = "true"`
 
 _**CLI Option Use:**_ `--debug-https`
 
-_**Additional Usage Notes:**_ Whilst this option can be used at any time, it is advisable that you only use this option when advised as this will output your `Authorization: bearer` - which is your authentication token to Microsoft OneDrive.
+> [!IMPORTANT]
+> _**Additional Usage Notes:**_ Whilst this option can be used at any time, it is advisable that you only use this option when advised as this will output your `Authorization: bearer` - which is your authentication token to Microsoft OneDrive.
 
 ### disable_download_validation
 _**Description:**_ This option determines whether the client will conduct integrity validation on files downloaded from Microsoft OneDrive. Sometimes, when downloading files, particularly from SharePoint, there is a discrepancy between the file size reported by the OneDrive API and the byte count received from the SharePoint HTTP Server for the same file. Enable this option to disable the integrity checks performed by this client.
@@ -234,7 +235,8 @@ _**Config Example:**_ `disable_download_validation = "false"` or `disable_downlo
 
 _**CLI Option Use:**_ `--disable-download-validation`
 
-_**Additional Usage Notes:**_ If you're downloading data from SharePoint or OneDrive Business Shared Folders, you might find it necessary to activate this option. It's important to note that any issues encountered aren't due to a problem with this client; instead, they should be regarded as issues with the Microsoft OneDrive technology stack.
+> [!TIP]
+> _**Additional Usage Notes:**_ If you're downloading data from SharePoint or OneDrive Business Shared Folders, you might find it necessary to activate this option. It's important to note that any issues encountered aren't due to a problem with this client; instead, they should be regarded as issues with the Microsoft OneDrive technology stack.
 
 ### disable_notifications
 _**Description:**_ This setting controls whether GUI notifications are sent from the client to your display manager session. 

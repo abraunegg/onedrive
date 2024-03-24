@@ -84,9 +84,23 @@ ERROR: Invalid skip_file entry '.*' detected
 ```
 
 ### Guidelines for Naming Local Files and Folders in the Synchronisation Directory
-When naming your files and folders in the synchronisation directory, it is important to follow the [Windows naming conventions](https://docs.microsoft.com/windows/win32/fileio/naming-a-file) for your files and folders.
+When naming your files and folders in the synchronisation directory, it is important to follow the Windows Naming Conventions for your files and folders.
+
+In addition to adhering to Microsoft Windows Naming Convention, Microsoft OneDrive has explicit restrictions and limitations:
+* Invalid characters
+  * Characters that aren't allowed in file and folder names: `" * : < > ? / \ |`
+  * Leading and trailing spaces in file or folder names
+  * Trailing `.` at the end of a file or folder name
+* Invalid file or folder names
+  * These names aren't allowed for files or folders: .lock, CON, PRN, AUX, NUL, COM0 - COM9, LPT0 - LPT9, _vti_, desktop.ini, any filename starting with ~$.
+  * `_vti_` can't appear anywhere in a file name
+  * `forms` isn't supported when the folder is at the root level for a library.
 
 Moreover, Microsoft OneDrive does not adhere to POSIX standards. As a result, if you have two files with identical names differing only in capitalisation, the OneDrive Client for Linux will try to manage this. However, in cases of naming conflicts, the conflicting file or folder will not synchronise. This is a deliberate design choice and will not be modified. To avoid such issues, you should rename any conflicting local files or folders.
+
+#### Further reading:
+* [Windows Naming Conventions](https://docs.microsoft.com/windows/win32/fileio/naming-a-file)
+* [Restrictions and limitations in OneDrive and SharePoint](https://support.microsoft.com/en-us/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa)
 
 ### Compatibility with curl
 If your system uses curl < 7.47.0, curl will default to HTTP/1.1 for HTTPS operations, and the client will follow suit, using HTTP/1.1.
