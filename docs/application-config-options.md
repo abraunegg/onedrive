@@ -353,7 +353,8 @@ _**Valid Values:**_ 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
 
 _**Config Example:**_ `ip_protocol_version = "0"` or `ip_protocol_version = "1"` or `ip_protocol_version = "2"`
 
-_**Additional Usage Notes:**_ In some environments where IPv4 and IPv6 are configured at the same time, this causes resolution and routing issues to Microsoft OneDrive. If this is the case, it is advisable to change 'ip_protocol_version' to match your environment.
+> [!IMPORTANT]
+> In some environments where IPv4 and IPv6 are configured at the same time, this causes resolution and routing issues to Microsoft OneDrive. If this is the case, it is advisable to change 'ip_protocol_version' to match your environment.
 
 ### local_first
 _**Description:**_ This setting controls what the application considers the 'source of truth' for your data. By default, what is stored online will be considered as the 'source of truth' when syncing to your local machine. When using this option, your local data will be considered the 'source of truth'.
@@ -388,7 +389,8 @@ _**Config Example:**_ `monitor_fullscan_frequency = "24"`
 
 _**CLI Option Use:**_ `--monitor-fullscan-frequency '24'`
 
-_**Additional Usage Notes:**_ By default without configuration, 'monitor_fullscan_frequency' is set to 12. In this default state, this means that a full scan is performed every 'monitor_interval' x 'monitor_fullscan_frequency' = 3600 seconds. This setting is only applicable when running in `--monitor` mode. Setting this configuration option to '0' will *disable* the full scan of your data online.
+> [!NOTE]
+> By default without configuration, 'monitor_fullscan_frequency' is set to 12. In this default state, this means that a full scan is performed every 'monitor_interval' x 'monitor_fullscan_frequency' = 3600 seconds. This setting is only applicable when running in `--monitor` mode. Setting this configuration option to '0' will *disable* the full scan of your data online.
 
 ### monitor_interval
 _**Description:**_ This configuration setting determines how often the synchronisation loops run in --monitor mode, measured in seconds. When this time period elapses, the client will check for online changes in Microsoft OneDrive, conduct integrity checks on local data and scan the local 'sync_dir' to identify any new content that hasn't been uploaded yet.
@@ -401,7 +403,8 @@ _**Config Example:**_ `monitor_interval = "600"`
 
 _**CLI Option Use:**_ `--monitor-interval '600'`
 
-_**Additional Usage Notes:**_ A minimum value of 300 is enforced for this configuration setting.
+> [!NOTE]
+> A minimum value of 300 is enforced for this configuration setting.
 
 ### monitor_log_frequency
 _**Description:**_ This configuration option controls the suppression of frequently printed log items to the system console when using `--monitor` mode. The aim of this configuration item is to reduce the log output when near zero sync activity is occuring.
@@ -414,7 +417,7 @@ _**Config Example:**_ `monitor_log_frequency = "24"`
 
 _**CLI Option Use:**_ `--monitor-log-frequency '24'`
 
-_**Additional Usage Notes:**_ 
+_**Usage Example:**_ 
 
 By default, at application start-up when using `--monitor` mode, the following will be logged to indicate that the application has correctly started and has performed all the initial processing steps:
 ```text
@@ -442,9 +445,11 @@ Starting a sync with Microsoft OneDrive
 Syncing changes from Microsoft OneDrive ...
 Sync with Microsoft OneDrive is complete
 ```
-**Note:** The additional log output `Performing a database consistency and integrity check on locally stored data ...` will only be displayed when this activity is occuring which is triggered by 'monitor_fullscan_frequency'.
+> [!NOTE]
+> The additional log output `Performing a database consistency and integrity check on locally stored data ...` will only be displayed when this activity is occuring which is triggered by 'monitor_fullscan_frequency'.
 
-**Note:** If verbose application output is being used (`--verbose`), then this configuration setting has zero effect, as application verbose output takes priority over application output surpression.
+> [!NOTE]
+> If verbose application output is being used (`--verbose`), then this configuration setting has zero effect, as application verbose output takes priority over application output surpression.
 
 ### no_remote_delete
 _**Description:**_ This configuration option controls whether local file and folder deletes are actioned on Microsoft OneDrive.
@@ -457,7 +462,8 @@ _**Config Example:**_ `local_first = "false"` or `local_first = "true"`
 
 _**CLI Option Use:**_ `--no-remote-delete`
 
-_**Additional Usage Notes:**_ This configuration option can *only* be used in conjunction with `--upload-only`
+> [!IMPORTANT]
+> This configuration option can *only* be used in conjunction with `--upload-only`
 
 ### operation_timeout
 _**Description:**_ This configuration option controls the maximum amount of time (seconds) a file operation is allowed to take. This includes DNS resolution, connecting, data transfer, etc. We recommend users not to tamper with this option unless strictly necessary. This option controls the CURLOPT_TIMEOUT setting of libcurl.
@@ -495,7 +501,8 @@ _**Default Value:**_ False
 
 _**Config Example:**_ `read_only_auth_scope = "false"` or `read_only_auth_scope = "true"`
 
-_**Additional Usage Notes:**_ When using 'read_only_auth_scope' you also will need to remove your existing application access consent otherwise old authentication consent will be valid and will be used. This will mean the application will technically have the consent to upload data until you revoke this consent.
+> [!IMPORTANT]
+> When using 'read_only_auth_scope' you also will need to remove your existing application access consent otherwise old authentication consent will be valid and will be used. This will mean the application will technically have the consent to upload data until you revoke this consent.
 
 ### remove_source_files
 _**Description:**_ This configuration option controls whether the OneDrive Client for Linux removes the local file post successful transfer to Microsoft OneDrive.
@@ -508,7 +515,8 @@ _**Config Example:**_ `remove_source_files = "false"` or `remove_source_files = 
 
 _**CLI Option Use:**_ `--remove-source-files`
 
-_**Additional Usage Notes:**_ This configuration option can *only* be used in conjunction with `--upload-only`
+> [!IMPORTANT]
+> This configuration option can *only* be used in conjunction with `--upload-only`
 
 ### resync
 _**Description:**_ This configuration option controls whether the known local sync state with Microsoft OneDrive is removed at application startup. When this option is used, a full scan of your data online is performed to ensure that the local sync state is correctly built back up.
@@ -521,15 +529,16 @@ _**Config Example:**_ `resync = "false"` or `resync = "true"`
 
 _**CLI Option Use:**_ `--resync`
 
-_**Additional Usage Notes:**_ It's highly recommended to use this option only if the application prompts you to do so. Don't blindly use this option as a default option. If you alter any of the subsequent configuration items, you will be required to execute a `--resync` to make sure your client is syncing your data with the updated configuration:
-*   drive_id
-*   sync_dir
-*   skip_file
-*   skip_dir
-*   skip_dotfiles
-*   skip_symlinks
-*   sync_business_shared_items
-*   Creating, Modifying or Deleting the 'sync_list' file
+> [!IMPORTANT]
+> It's highly recommended to use this option only if the application prompts you to do so. Don't blindly use this option as a default option. If you alter any of the subsequent configuration items, you will be required to execute a `--resync` to make sure your client is syncing your data with the updated configuration:
+> *   drive_id
+> *   sync_dir
+> *   skip_file
+> *   skip_dir
+> *   skip_dotfiles
+> *   skip_symlinks
+> *   sync_business_shared_items
+> *   Creating, Modifying or Deleting the 'sync_list' file
 
 ### resync_auth
 _**Description:**_ This configuration option controls the approval of performing a 'resync' which can be beneficial in automated environments.
