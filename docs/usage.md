@@ -84,23 +84,34 @@ ERROR: Invalid skip_file entry '.*' detected
 ```
 
 ### Guidelines for Naming Local Files and Folders in the Synchronisation Directory
-When naming your files and folders in the synchronisation directory, it is important to follow the applicable Windows Naming Conventions for your files and folders.
 
-In addition to adhering to Microsoft Windows Naming Convention, Microsoft OneDrive has explicit restrictions and limitations:
-* Invalid characters
-  * Characters that aren't allowed in file and folder names: `" * : < > ? / \ |`
-  * Leading and trailing spaces in file or folder names
-  * Trailing `.` at the end of a file or folder name
-* Invalid file or folder names
-  * These names aren't allowed for files or folders: `.lock`, `CON`, `PRN`, `AUX`, `NUL`, `COM0 - COM9`, `LPT0 - LPT9`, `_vti_`, `desktop.ini`, any filename starting with `~$`
-  * `_vti_` can't appear anywhere in a file name
-  * `forms` isn't supported when the folder is at the root level for a library.
+### Guidelines for Local File and Folder Naming in the Synchronisation Directory
 
-Moreover, Microsoft OneDrive does not adhere to POSIX standards. As a result, if you have two files with identical names differing only in capitalisation, the OneDrive Client for Linux will try to manage this. However, in cases of naming conflicts, the conflicting file or folder will not synchronise. This is a deliberate design choice and will not be modified. To avoid such issues, you should rename any conflicting local files or folders.
+To ensure seamless synchronisation with Microsoft OneDrive, it's critical to adhere strictly to the prescribed naming conventions for your files and folders within the sync directory. The guidelines detailed below are designed to preempt potential sync failures by aligning with Microsoft Windows Naming Conventions, coupled with specific OneDrive restrictions.
+
+> [!WARNING]
+> Failure to comply will result in synchronisation being bypassed for the offending files or folders, necessitating a rename of the local item to establish sync compatibility.
+
+#### Key Restrictions and Limitations
+* Invalid Characters: 
+  * Avoid using the following characters in names of files and folders: `" * : < > ? / \ |`
+  * Names should not start or end with spaces, nor should they end with a period (`.`)
+* Prohibited Names: 
+  * Certain names are reserved and cannot be used for files or folders: `.lock`, `CON`, `PRN`, `AUX`, `NUL`, `COM0 - COM9`, `LPT0 - LPT9`, `desktop.ini`, any filename starting with `~$`
+  * Notably, `_vti_` cannot appear anywhere in a file name
+  * `forms` is unsupported at the root level of a synchronisation directoryy
+
+Should a file or folder infringe upon these naming conventions or restrictions, synchronisation will skip the item, indicating an invalid name according to Microsoft Naming Convention. The only remedy is to rename the offending item. This constraint is by design and remains firm.
+
+> [!CAUTION]
+> Microsoft OneDrive does not adhere to POSIX standards, which fundamentally impacts naming conventions. In Unix environments (which are POSIX compliant), files and folders can exist simultaneously with identical names if their capitalisation differs. **This is not possible on Microsoft OneDrive.** If such a scenario occurs, the OneDrive Client for Linux will encounter a conflict, preventing the synchronisation of the conflicting file or folder. This constraint is a conscious design choice and is immutable. To avoid synchronisation issues, preemptive renaming of any conflicting local files or folders is advised.
 
 #### Further reading:
-* [Windows Naming Conventions](https://docs.microsoft.com/windows/win32/fileio/naming-a-file)
+The above guidelines are essential for maintaining synchronisation integrity with Microsoft OneDrive. Adhering to them ensures your files and folders sync without issue. For additional details, consult the following resources:
+* [Microsoft Windows Naming Conventions](https://docs.microsoft.com/windows/win32/fileio/naming-a-file)
 * [Restrictions and limitations in OneDrive and SharePoint](https://support.microsoft.com/en-us/office/restrictions-and-limitations-in-onedrive-and-sharepoint-64883a5d-228e-48f5-b3d2-eb39e07630fa)
+
+**Adherence to these guidelines is not optional but mandatory to avoid sync disruptions.**
 
 ### Compatibility with curl
 If your system uses curl < 7.47.0, curl will default to HTTP/1.1 for HTTPS operations, and the client will follow suit, using HTTP/1.1.
