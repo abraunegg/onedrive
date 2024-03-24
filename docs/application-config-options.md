@@ -680,7 +680,8 @@ _**Config Example:**_ `skip_symlinks = "false"` or `skip_symlinks = "true"`
 
 _**CLI Option Use:**_ `--skip-symlinks`
 
-_**Additional Usage Notes:**_ This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. After changing this option, you will be required to perform a resync.
+> [!NOTE]
+> This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. After changing this option, you will be required to perform a resync.
 
 ### space_reservation
 _**Description:**_ This configuration option controls how much local disk space should be reserved, to prevent the application from filling up your entire disk due to misconfiguration
@@ -694,7 +695,7 @@ _**Config Example:**_ `space_reservation = "100"`
 _**CLI Option Use:**_ `--space-reservation '100'`
 
 ### sync_business_shared_items
-_**Description:**_ This configuration option controls whether OneDrive Business | Office 365 Shared Folders, when added as a 'shortcut' to your 'My Files' will be synced to your local system.
+_**Description:**_ This configuration option controls whether OneDrive Business | Office 365 Shared Folders, when added as a 'shortcut' to your 'My Files', will be synced to your local system.
 
 _**Value Type:**_ Boolean
 
@@ -704,7 +705,11 @@ _**Config Example:**_ `sync_business_shared_items = "false"` or `sync_business_s
 
 _**CLI Option Use:**_ *none* - this is a config file option only
 
-_**Additional Usage Notes:**_ This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. After changing this option, you will be required to perform a resync.
+> [!NOTE]
+> This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. After changing this option, you will be required to perform a resync.
+
+> [!CAUTION]
+> This option is *not* backwards compatible with any v2.4.x application version. If you are enabling this option on *any* system running v2.5.x application version, all your application versions being used *everywhere* must be v2.5.x codebase.
 
 ### sync_dir
 _**Description:**_ This configuration option determines the location on your local filesystem where your data from Microsoft OneDrive will be saved.
@@ -717,7 +722,8 @@ _**Config Example:**_ `sync_dir = "~/MyDirToSync"`
 
 _**CLI Option Use:**_ `--syncdir '~/MyDirToSync'`
 
-_**Additional Usage Notes:**_ After changing this option, you will be required to perform a resync.
+> [!CAUTION]
+> After changing this option, you will be required to perform a resync. Do not change or modify this option without fully understanding the implications of doing so.
 
 ### sync_dir_permissions
 _**Description:**_ This configuration option defines the directory permissions applied when a new directory is created locally during the process of syncing your data from Microsoft OneDrive.
@@ -728,7 +734,8 @@ _**Default Value:**_ `700` - This provides the following permissions: `drwx-----
 
 _**Config Example:**_ `sync_dir_permissions = "700"`
 
-_**Additional Usage Notes:**_ Use the [Unix Permissions Calculator](https://chmod-calculator.com/) to help you determine the necessary new permissions. You will need to manually update all existing directory permissions if you modify this value.
+> [!IMPORTANT]
+> Use the [Unix Permissions Calculator](https://chmod-calculator.com/) to help you determine the necessary new permissions. You will need to manually update all existing directory permissions if you modify this value.
 
 ### sync_file_permissions
 _**Description:**_ This configuration option defines the file permissions applied when a new file is created locally during the process of syncing your data from Microsoft OneDrive.
@@ -739,7 +746,8 @@ _**Default Value:**_ `600` - This provides the following permissions: `-rw------
 
 _**Config Example:**_ `sync_file_permissions = "600"`
 
-_**Additional Usage Notes:**_ Use the [Unix Permissions Calculator](https://chmod-calculator.com/) to help you determine the necessary new permissions. You will need to manually update all existing directory permissions if you modify this value.
+> [!IMPORTANT]
+> Use the [Unix Permissions Calculator](https://chmod-calculator.com/) to help you determine the necessary new permissions. You will need to manually update all existing directory permissions if you modify this value.
 
 ### sync_root_files
 _**Description:**_ This configuration option manages the synchronisation of files located in the 'sync_dir' root when using a 'sync_list.' It enables you to sync all these files by default, eliminating the need to repeatedly modify your 'sync_list' and initiate resynchronisation.
@@ -752,7 +760,8 @@ _**Config Example:**_ `sync_root_files = "false"` or `sync_root_files = "true"`
 
 _**CLI Option Use:**_ `--sync-root-files`
 
-_**Additional Usage Notes:**_ Although it's not mandatory, it's recommended that after enabling this option, you perform a `--resync`. This ensures that any previously excluded content is now included in your sync process.
+> [!IMPORTANT]
+> Although it's not mandatory, it's recommended that after enabling this option, you perform a `--resync`. This ensures that any previously excluded content is now included in your sync process.
 
 ### threads
 _**Description:**_ This configuration option controls the number of 'threads' for upload and download operations when files need to be transfered between your local system and Microsoft OneDrive.
@@ -765,7 +774,8 @@ _**Maximum Value:**_ `16`
 
 _**Config Example:**_ `threads = "16"`
 
-_**Additional Usage Notes:**_ Increasing the threads beyond the default will lead to increased system utilisation and local TCP port use, which may lead to unpredictable behaviour and/or application stability issues.
+> [!WARNING]
+> Increasing the threads beyond the default will lead to increased system utilisation and local TCP port use, which may lead to unpredictable behaviour and/or may lead application stability issues.
 
 ### upload_only
 _**Description:**_ This setting forces the client to only upload data to Microsoft OneDrive and replicate the locate state online. By default, this will also remove content online, that has been removed locally.
@@ -778,7 +788,8 @@ _**Config Example:**_ `upload_only = "false"` or `upload_only = "true"`
 
 _**CLI Option Use:**_ `--upload-only`
 
-_**Additional Usage Notes:**_ To ensure that data deleted locally remains accessible online, you can use the 'no_remote_delete' option. If you want to delete the data from your local storage after a successful upload to Microsoft OneDrive, you can use the 'remove_source_files' option.
+> [!IMPORTANT]
+> To ensure that data deleted locally remains accessible online, you can use the 'no_remote_delete' option. If you want to delete the data from your local storage after a successful upload to Microsoft OneDrive, you can use the 'remove_source_files' option.
 
 ### user_agent
 _**Description:**_ This configuration option controls the 'User-Agent' request header that is presented to Microsoft Graph API when accessing the Microsoft OneDrive service. This string lets servers and network peers identify the application, operating system, vendor, and/or version of the application making the request. We recommend users not to tamper with this option unless strictly necessary.
@@ -789,7 +800,8 @@ _**Default Value:**_ `ISV|abraunegg|OneDrive Client for Linux/vX.Y.Z-A-bcdefghi`
 
 _**Config Example:**_ `user_agent = "ISV|CompanyName|AppName/Version"`
 
-_**Additional Usage Notes:**_ The current value conforms the the Microsoft Graph API documentation for presenting an appropriate 'User-Agent' header and aligns to the registered 'application_id' that this application uses.
+> [!IMPORTANT]
+> The default 'user_agent' value conforms to specific Microsoft requirements to identify as an ISV that complies with OneDrive traffic decoration requirements. Changing this value potentially will impact how Microsoft see's your client, thus your traffic may get throttled. For further information please read: https://learn.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
 
 ### webhook_enabled
 _**Description:**_ This configuration option controls the application feature 'webhooks' to allow you to subscribe to remote updates as published by Microsoft OneDrive. This option only operates when the client is using 'Monitor Mode'.
@@ -804,43 +816,44 @@ webhook_enabled = "true"
 webhook_public_url = "http://<your_host_ip>:8888/"
 ```
 
-_**Additional Usage Notes:**_ 
+> [!NOTE]
+> Setting `webhook_enabled = "true"` enables the webhook feature in 'monitor' mode. The onedrive process will listen for incoming updates at a configurable endpoint, which defaults to `0.0.0.0:8888`. The `webhook_public_url` must be set to an public-facing url for Microsoft to send updates to your webhook. 
+> 
+> If your host is directly exposed to the Internet, the `webhook_public_url` can be set to `http://<your_host_ip>:8888/` to match the default endpoint. In this case, it is also advisable to configure a reverse proxy like `nginx` to proxy the traffic to the client. For example, below is a nginx config snippet to proxy traffic into the webhook:
+> ```text
+> server {
+> 	listen 80;
+> 	location /webhooks/onedrive {
+> 		proxy_http_version 1.1;
+> 		proxy_pass http://127.0.0.1:8888;
+> 	}
+> }
+> ```
+> 
+> With nginx running, you can configure 'webhook_public_url' to `https://<public_facing_url_to_reach_your_webhook>/webhooks/onedrive`
 
-etting `webhook_enabled = "true"` enables the webhook feature in 'monitor' mode. The onedrive process will listen for incoming updates at a configurable endpoint, which defaults to `0.0.0.0:8888`. The `webhook_public_url` must be set to an public-facing url for Microsoft to send updates to your webhook. 
+> [!IMPORTANT]
+> A valid HTTPS certificate is required for your public-facing URL if using nginx. Self signed certificates will be rejected. Consider using https://letsencrypt.org/ to utilise free SSL certificates for your public-facing URL.
 
-If your host is directly exposed to the Internet, the `webhook_public_url` can be set to `http://<your_host_ip>:8888/` to match the default endpoint. In this case, it is also advisable to configure a reverse proxy like `nginx` to proxy the traffic to the client. For example, below is a nginx config snippet to proxy traffic into the webhook:
-```text
-server {
-	listen 80;
-	location /webhooks/onedrive {
-		proxy_http_version 1.1;
-		proxy_pass http://127.0.0.1:8888;
-	}
-}
-```
-
-With nginx running, you can configure 'webhook_public_url' to `https://<public_facing_url_to_reach_your_webhook>/webhooks/onedrive`
-
-**Note:** A valid HTTPS certificate is required for your public-facing URL if using nginx.
-
-If you receive this application error: `Subscription validation request failed. Response must exactly match validationToken query parameter.` the most likely cause for this error will be your nginx configuration.
-
-To resolve this configuration issue, potentially investigate the following configuration for nginx:
-```text
-server {
-	listen 80;
-	location /webhooks/onedrive {
-		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-		proxy_set_header X-Original-Request-URI $request_uri;
-		proxy_read_timeout 300s;
-		proxy_connect_timeout 75s;
-		proxy_buffering off;
-		proxy_http_version 1.1;
-		proxy_pass http://127.0.0.1:8888;
-	}
-}
-```
-For any further nginx configuration assistance, please refer to: https://docs.nginx.com/
+> [!TIP]
+> If you receive this application error: `Subscription validation request failed. Response must exactly match validationToken query parameter.` the most likely cause for this error will be your nginx configuration.
+> 
+> To resolve this configuration issue, potentially investigate the following configuration for nginx:
+> ```text
+> server {
+> 	listen 80;
+> 	location /webhooks/onedrive {
+> 		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+> 		proxy_set_header X-Original-Request-URI $request_uri;
+> 		proxy_read_timeout 300s;
+> 		proxy_connect_timeout 75s;
+> 		proxy_buffering off;
+> 		proxy_http_version 1.1;
+> 		proxy_pass http://127.0.0.1:8888;
+> 	}
+> }
+> ```
+> For any further nginx configuration assistance, please refer to: https://docs.nginx.com/
 
 ### webhook_expiration_interval
 _**Description:**_ This configuration option controls the frequency at which an existing Microsoft OneDrive webhook subscription expires. The value is expressed in the number of seconds before expiry.
