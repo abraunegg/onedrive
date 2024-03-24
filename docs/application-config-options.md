@@ -529,7 +529,7 @@ _**Config Example:**_ `resync = "false"` or `resync = "true"`
 
 _**CLI Option Use:**_ `--resync`
 
-> [!IMPORTANT]
+> [!CAUTION]
 > It's highly recommended to use this option only if the application prompts you to do so. Don't blindly use this option as a default option. If you alter any of the subsequent configuration items, you will be required to execute a `--resync` to make sure your client is syncing your data with the updated configuration:
 > *   drive_id
 > *   sync_dir
