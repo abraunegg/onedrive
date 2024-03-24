@@ -6,7 +6,7 @@ Before reading this document, please ensure you are running application version 
 
 - [Important Notes](#important-notes)
   - [Upgrading from the 'skilion' Client](#upgrading-from-the-sklion-client)
-  - [Guidelines for Naming Local Files and Folders in the Synchronisation Directory](#guidelines-for-naming-local-files-and-folders-in-the-synchronisation-directory)
+  - [Guidelines for Local File and Folder Naming in the Synchronisation Directory](#guidelines-for-local-file-and-folder-naming-in-the-synchronisation-directory)
   - [Compatibility with curl](#compatibility-with-curl)
 - [First Steps](#first-steps)
   - [Authorise the Application with Your Microsoft OneDrive Account](#authorise-the-application-with-your-microsoft-onedrive-account)
@@ -83,8 +83,6 @@ Avoid using a 'skip_file' entry of `.*` as it may prevent the correct detection 
 ERROR: Invalid skip_file entry '.*' detected
 ```
 
-### Guidelines for Naming Local Files and Folders in the Synchronisation Directory
-
 ### Guidelines for Local File and Folder Naming in the Synchronisation Directory
 
 To ensure seamless synchronisation with Microsoft OneDrive, it's critical to adhere strictly to the prescribed naming conventions for your files and folders within the sync directory. The guidelines detailed below are designed to preempt potential sync failures by aligning with Microsoft Windows Naming Conventions, coupled with specific OneDrive restrictions.
@@ -95,7 +93,7 @@ To ensure seamless synchronisation with Microsoft OneDrive, it's critical to adh
 #### Key Restrictions and Limitations
 * Invalid Characters: 
   * Avoid using the following characters in names of files and folders: `" * : < > ? / \ |`
-  * Names should not start or end with spaces, nor should they end with a period (`.`)
+  * Names should not start or end with spaces, nor should they end with a period `.`
 * Prohibited Names: 
   * Certain names are reserved and cannot be used for files or folders: `.lock`, `CON`, `PRN`, `AUX`, `NUL`, `COM0 - COM9`, `LPT0 - LPT9`, `desktop.ini`, any filename starting with `~$`
   * Notably, `_vti_` cannot appear anywhere in a file name
