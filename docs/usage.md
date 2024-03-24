@@ -92,7 +92,7 @@ In addition to adhering to Microsoft Windows Naming Convention, Microsoft OneDri
   * Leading and trailing spaces in file or folder names
   * Trailing `.` at the end of a file or folder name
 * Invalid file or folder names
-  * These names aren't allowed for files or folders: .lock, CON, PRN, AUX, NUL, COM0 - COM9, LPT0 - LPT9, _vti_, desktop.ini, any filename starting with ~$.
+  * These names aren't allowed for files or folders: `.lock`, `CON`, `PRN`, `AUX`, `NUL`, `COM0 - COM9`, `LPT0 - LPT9`, `_vti_`, `desktop.ini`, any filename starting with `~$`
   * `_vti_` can't appear anywhere in a file name
   * `forms` isn't supported when the folder is at the root level for a library.
 
