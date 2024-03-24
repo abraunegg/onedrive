@@ -1020,23 +1020,25 @@ _**Description:**_ This CLI option enables the syncing of a specific directory, 
 
 _**Usage Example:**_ `onedrive --sync --verbose --force-sync --single-directory 'Data'
 
-_**Additional Usage Notes:**_ When this option is used, you will be presented with the following warning and risk acceptance:
-```text
-WARNING: Overriding application configuration to use application defaults for skip_dir and skip_file due to --synch --single-directory --force-sync being used
-
-The use of --force-sync will reconfigure the application to use defaults. This may have untold and unknown future impacts.
-By proceeding in using this option you accept any impacts including any data loss that may occur as a result of using --force-sync.
-
-Are you sure you wish to proceed with --force-sync [Y/N] 
-```
-To procceed with this sync task, you must risk accept the actions you are taking. If you have any concerns, first use `--dry-run` and evaluate the outcome before proceeding with the actual action.
+> [!NOTE]
+> When this option is used, you will be presented with the following warning and risk acceptance:
+> ```text
+> WARNING: Overriding application configuration to use application defaults for skip_dir and skip_file due to --synch --single-directory --force-sync being used
+> 
+> The use of --force-sync will reconfigure the application to use defaults. This may have untold and unknown future impacts.
+> By proceeding in using this option you accept any impacts including any data loss that may occur as a result of using --force-sync.
+> 
+> Are you sure you wish to proceed with --force-sync [Y/N] 
+> ```
+> To procceed with this sync task, you must risk accept the actions you are taking. If you have any concerns, first use `--dry-run` and evaluate the outcome before proceeding with the actual action.
 
 ### CLI Option: --get-file-link
 _**Description:**_ This CLI option queries the OneDrive API and return's the WebURL for the given local file.
 
 _**Usage Example:**_ `onedrive --get-file-link 'relative/path/to/your/file.txt'`
 
-_**Additional Usage Notes:**_ The path that you should use must be relative to your 'sync_dir'
+> [!IMPORTANT]
+> The path that you should use *must* be relative to your 'sync_dir'
 
 ### CLI Option: --get-sharepoint-drive-id
 _**Description:**_ This CLI option queries the OneDrive API and return's the Office 365 Drive ID for a given Office 365 SharePoint Shared Library that can then be used with 'drive_id' to sync a specific SharePoint Library.
@@ -1094,7 +1096,8 @@ _**Description:**_ This CLI option queries the OneDrive API and return's the las
 
 _**Usage Example:**_ `onedrive --modified-by 'relative/path/to/your/file.txt'`
 
-_**Additional Usage Notes:**_ The path that you should use must be relative to your 'sync_dir'
+> [!IMPORTANT]
+> The path that you should use *must* be relative to your 'sync_dir'
 
 ### CLI Option: --monitor | -m
 _**Description:**_ This CLI option controls the 'Monitor Mode' operational aspect of the client. When this option is used, the client will perform on-going syncs of data between Microsoft OneDrive and your local system. Local changes will be uploaded in near-realtime, whilst online changes will be downloaded on the next sync process. The frequency of these checks is governed by the 'monitor_interval' value.
@@ -1106,7 +1109,8 @@ _**Description:**_ Print the current access token being used to access Microsoft
 
 _**Usage Example:**_ `onedrive --verbose --verbose --debug-https --print-access-token`
 
-_**Additional Usage Notes:**_ Do not use this option if you do not know why you are wanting to use it. Be highly cautious of exposing this object. Change your password if you feel that you have inadvertantly exposed this token.
+> [!CAUTION]
+> Do not use this option if you do not know why you are wanting to use it. Be highly cautious of exposing this object. Change your password if you feel that you have inadvertantly exposed this token.
 
 ### CLI Option: --reauth
 _**Description:**_ This CLI option controls the ability to re-authenticate your client with Microsoft OneDrive.
@@ -1118,21 +1122,24 @@ _**Description:**_ This CLI option allows the user to remove the specified direc
 
 _**Usage Example:**_ `onedrive --remove-directory 'path/of/new/folder/structure/to/remove/'`
 
-_**Additional Usage Notes:**_ The specified path to remove is relative to your configured 'sync_dir'.
+> [!IMPORTANT]
+> The specified path to remove is relative to your configured 'sync_dir'.
 
 ### CLI Option: --single-directory
 _**Description:**_ This CLI option controls the applications ability to sync a specific single directory.
 
 _**Usage Example:**_ `onedrive --sync --single-directory 'Data'`
 
-_**Additional Usage Notes:**_ The path specified is relative to your configured 'sync_dir' path. If the physical local path 'Folder' to sync is `~/OneDrive/Data/Folder` then the command would be `--single-directory 'Data/Folder'`.
+> [!IMPORTANT]
+> The path specified is relative to your configured 'sync_dir' path. If the physical local path 'Folder' to sync is `~/OneDrive/Data/Folder` then the command would be `--single-directory 'Data/Folder'`.
 
 ### CLI Option: --source-directory
 _**Description:**_ This CLI option specifies the 'source' portion of moving a file or folder online, without performing a sync operation.
 
 _**Usage Example:**_ `onedrive --source-directory 'path/as/source/' --destination-directory 'path/as/destination'`
 
-_**Additional Usage Notes:**_ All specified paths are relative to your configured 'sync_dir'.
+> [!IMPORTANT]
+> All specified paths are relative to your configured 'sync_dir'.
 
 ### CLI Option: --sync | -s
 _**Description:**_ This CLI option controls the 'Standalone Mode' operational aspect of the client. When this option is used, the client will perform a one-time sync of data between Microsoft OneDrive and your local system.
@@ -1144,7 +1151,8 @@ _**Description:**_ Sync OneDrive Business Shared Files to the local filesystem.
 
 _**Usage Example:**_ `onedrive --sync --sync-shared-files`
 
-_**Additional Usage Notes:**_ To use this option you must first enable 'sync_business_shared_items' within your application configuration. Please read 'business-shared-items.md' for more information regarding this option.
+> [!IMPORTANT]
+> To use this option you must first enable 'sync_business_shared_items' within your application configuration. Please read 'business-shared-items.md' for more information regarding this option.
 
 ### CLI Option: --verbose | -v+
 _**Description:**_ This CLI option controls the verbosity of the application output. Use the option once, to have normal verbose output, use twice to have debug level application output.
@@ -1156,7 +1164,8 @@ _**Description:**_ This CLI option enables the creation of a writable shareable 
 
 _**Usage Example:**_ `onedrive --create-share-link 'relative/path/to/your/file.txt' --with-editing-perms`
 
-_**Additional Usage Notes:**_ Placement of `--with-editing-perms` is critical. It *must* be placed after the file path as per the example above.
+> [!IMPORTANT]
+> Placement of `--with-editing-perms` is critical. It *must* be placed after the file path as per the example above.
 
 ## Depreciated Configuration File and CLI Options
 The following configuration options are no longer supported:
