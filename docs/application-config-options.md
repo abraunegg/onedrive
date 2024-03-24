@@ -124,7 +124,8 @@ _**Default Value:**_ *Empty* - not required for normal operation
 
 _**Config Example:**_ `azure_tenant_id = "example.onmicrosoft.us"` or `azure_tenant_id = "0c4be462-a1ab-499b-99e0-da08ce52a2cc"`
 
-_**Additional Usage Requirement:**_ Must be configured if 'azure_ad_endpoint' is configured.
+> [!IMPORTANT]
+> Must be configured if 'azure_ad_endpoint' is configured.
 
 ### bypass_data_preservation
 _**Description:**_ This config option allows the disabling of preserving local data by renaming the local file in the event of data conflict. If this is enabled, you will experience data loss on your local data as the local file will be over-written with data from OneDrive online. Use with care and caution.
@@ -146,7 +147,8 @@ _**Config Example:**_ `check_nomount = "false"` or `check_nomount = "true"`
 
 _**CLI Option:**_ `--check-for-nomount`
 
-_**Additional Usage Requirement:**_ Create a `.nosync` file in your mount point *before* you mount your disk so that this is visible, in your mount point if your disk is unmounted.
+> [!TIP]
+> Create a `.nosync` file in your mount point *before* you mount your disk so that this `.nosync` file visible, in your mount point if your disk is unmounted at any point to preserve your data when you enable this option.
 
 ### check_nosync
 _**Description:**_ This config option is useful to prevent the sync of a *local* directory to Microsoft OneDrive. It will *not* check for this file online to prevent the download of directories to your local system.
@@ -159,7 +161,8 @@ _**Config Example:**_ `check_nosync = "false"` or `check_nosync = "true"`
 
 _**CLI Option Use:**_ `--check-for-nosync`
 
-_**Additional Usage Requirement:**_ Create a `.nosync` file in any *local* directory that you wish to not sync to Microsoft OneDrive when you enable this option.
+> [!IMPORTANT]
+> Create a `.nosync` file in any *local* directory that you wish to not sync to Microsoft OneDrive when you enable this option.
 
 ### classify_as_big_delete
 _**Description:**_ This config option defines the number of children in a path that is locally removed which will be classified as a 'big data delete' to safeguard large data removals - which are typically accidental local delete events.
@@ -172,7 +175,8 @@ _**Config Example:**_ `classify_as_big_delete = "2000"`
 
 _**CLI Option Use:**_ `--classify-as-big-delete 2000`
 
-_**Additional Usage Requirement:**_ If this option is triggered, you will need to add `--force` to force a sync to occur.
+> [!NOTE]
+> If this option is triggered, you will need to add `--force` to force a sync to occur.
 
 ### cleanup_local_files
 _**Description:**_ This config option provides the capability to cleanup local files and folders if they are removed online.
@@ -185,7 +189,8 @@ _**Config Example:**_ `cleanup_local_files = "false"` or `cleanup_local_files = 
 
 _**CLI Option Use:**_ `--cleanup-local-files`
 
-_**Additional Usage Requirement:**_ This configuration option can only be used with 'download_only'. It cannot be used with any other application option.
+> [!IMPORTANT]
+> This configuration option can only be used with 'download_only'. It cannot be used with any other application option.
 
 ### connect_timeout
 _**Description:**_ This configuration setting manages the TCP connection timeout duration in seconds for HTTPS connections to Microsoft OneDrive when using the curl library (CURLOPT_CONNECTTIMEOUT).
@@ -216,7 +221,8 @@ _**Config Example:**_ `debug_https = "false"` or `debug_https = "true"`
 
 _**CLI Option Use:**_ `--debug-https`
 
-_**Additional Usage Notes:**_ Whilst this option can be used at any time, it is advisable that you only use this option when advised as this will output your `Authorization: bearer` - which is your authentication token to Microsoft OneDrive.
+> [!WARNING]
+> Whilst this option can be used at any time, it is advisable that you only use this option when advised as this will output your `Authorization: bearer` - which is your authentication token to Microsoft OneDrive.
 
 ### disable_download_validation
 _**Description:**_ This option determines whether the client will conduct integrity validation on files downloaded from Microsoft OneDrive. Sometimes, when downloading files, particularly from SharePoint, there is a discrepancy between the file size reported by the OneDrive API and the byte count received from the SharePoint HTTP Server for the same file. Enable this option to disable the integrity checks performed by this client.
@@ -229,7 +235,8 @@ _**Config Example:**_ `disable_download_validation = "false"` or `disable_downlo
 
 _**CLI Option Use:**_ `--disable-download-validation`
 
-_**Additional Usage Notes:**_ If you're downloading data from SharePoint or OneDrive Business Shared Folders, you might find it necessary to activate this option. It's important to note that any issues encountered aren't due to a problem with this client; instead, they should be regarded as issues with the Microsoft OneDrive technology stack.
+> [!CAUTION]
+> If you're downloading data from SharePoint or OneDrive Business Shared Folders, you might find it necessary to activate this option. It's important to note that any issues encountered aren't due to a problem with this client; instead, they should be regarded as issues with the Microsoft OneDrive technology stack. Enabling this option disables all download integrity checks.
 
 ### disable_notifications
 _**Description:**_ This setting controls whether GUI notifications are sent from the client to your display manager session. 
@@ -253,7 +260,8 @@ _**Config Example:**_ `disable_upload_validation = "false"` or `disable_upload_v
 
 _**CLI Option Use:**_ `--disable-upload-validation`
 
-_**Additional Usage Notes:**_ If you're uploading data to SharePoint or OneDrive Business Shared Folders, you might find it necessary to activate this option. It's important to note that any issues encountered aren't due to a problem with this client; instead, they should be regarded as issues with the Microsoft OneDrive technology stack.
+> [!CAUTION]
+> If you're uploading data to SharePoint or OneDrive Business Shared Folders, you might find it necessary to activate this option. It's important to note that any issues encountered aren't due to a problem with this client; instead, they should be regarded as issues with the Microsoft OneDrive technology stack. Enabling this option disables all upload integrity checks.
 
 ### display_running_config
 _**Description:**_ This option will include the running config of the application at application startup. This may be desirable to enable when running in containerised environments so that any application logging that is occuring, will have the application configuration being consumed at startup, written out to any applicable log file.
@@ -295,7 +303,8 @@ _**Default Value:**_ *None*
 
 _**Config Example:**_ `drive_id = "b!bO8V6s9SSk9R7mWhpIjUrotN73WlW3tEv3OxP_QfIdQimEdOHR-1So6CqeG1MfDB"`
 
-_**Additional Usage Notes:**_ This option is typically only used when configuring the client to sync a specific SharePoint Library. If this configuration option is specified in your config file, a value must be specified otherwise the application will exit citing a fatal error has occured.
+> [!NOTE]
+> This option is typically only used when configuring the client to sync a specific SharePoint Library. If this configuration option is specified in your config file, a value must be specified otherwise the application will exit citing a fatal error has occured.
 
 ### dry_run
 _**Description:**_ This setting controls the application capability to test your application configuration without actually performing any actual activity (download, upload, move, delete, folder creation).
@@ -319,7 +328,8 @@ _**Config Example:**_ `enable_logging = "false"` or `enable_logging = "true"`
 
 _**CLI Option Use:**_ `--enable-logging`
 
-_**Additional Usage Notes:**_ Additional configuration is potentially required to configure the default log directory. Refer to usage.md for details (ADD LINK)
+> [!IMPORTANT]
+> Additional configuration is potentially required to configure the default log directory. Refer to the [Enabling the Client Activity Log](./usage.md#enabling-the-client-activity-log) section in usage.md for details
 
 ### force_http_11
 _**Description:**_ This setting controls the application HTTP protocol version. By default, the application will use libcurl defaults for which HTTP prodocol version will be used to interact with Microsoft OneDrive. Use this setting to downgrade libcurl to only use HTTP/1.1.
@@ -343,7 +353,8 @@ _**Valid Values:**_ 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
 
 _**Config Example:**_ `ip_protocol_version = "0"` or `ip_protocol_version = "1"` or `ip_protocol_version = "2"`
 
-_**Additional Usage Notes:**_ In some environments where IPv4 and IPv6 are configured at the same time, this causes resolution and routing issues to Microsoft OneDrive. If this is the case, it is advisable to change 'ip_protocol_version' to match your environment.
+> [!IMPORTANT]
+> In some environments where IPv4 and IPv6 are configured at the same time, this causes resolution and routing issues to Microsoft OneDrive. If this is the case, it is advisable to change 'ip_protocol_version' to match your environment.
 
 ### local_first
 _**Description:**_ This setting controls what the application considers the 'source of truth' for your data. By default, what is stored online will be considered as the 'source of truth' when syncing to your local machine. When using this option, your local data will be considered the 'source of truth'.
@@ -378,7 +389,8 @@ _**Config Example:**_ `monitor_fullscan_frequency = "24"`
 
 _**CLI Option Use:**_ `--monitor-fullscan-frequency '24'`
 
-_**Additional Usage Notes:**_ By default without configuration, 'monitor_fullscan_frequency' is set to 12. In this default state, this means that a full scan is performed every 'monitor_interval' x 'monitor_fullscan_frequency' = 3600 seconds. This setting is only applicable when running in `--monitor` mode. Setting this configuration option to '0' will *disable* the full scan of your data online.
+> [!NOTE]
+> By default without configuration, 'monitor_fullscan_frequency' is set to 12. In this default state, this means that a full scan is performed every 'monitor_interval' x 'monitor_fullscan_frequency' = 3600 seconds. This setting is only applicable when running in `--monitor` mode. Setting this configuration option to '0' will *disable* the full scan of your data online.
 
 ### monitor_interval
 _**Description:**_ This configuration setting determines how often the synchronisation loops run in --monitor mode, measured in seconds. When this time period elapses, the client will check for online changes in Microsoft OneDrive, conduct integrity checks on local data and scan the local 'sync_dir' to identify any new content that hasn't been uploaded yet.
@@ -391,7 +403,8 @@ _**Config Example:**_ `monitor_interval = "600"`
 
 _**CLI Option Use:**_ `--monitor-interval '600'`
 
-_**Additional Usage Notes:**_ A minimum value of 300 is enforced for this configuration setting.
+> [!NOTE]
+> A minimum value of 300 is enforced for this configuration setting.
 
 ### monitor_log_frequency
 _**Description:**_ This configuration option controls the suppression of frequently printed log items to the system console when using `--monitor` mode. The aim of this configuration item is to reduce the log output when near zero sync activity is occuring.
@@ -404,7 +417,7 @@ _**Config Example:**_ `monitor_log_frequency = "24"`
 
 _**CLI Option Use:**_ `--monitor-log-frequency '24'`
 
-_**Additional Usage Notes:**_ 
+_**Usage Example:**_ 
 
 By default, at application start-up when using `--monitor` mode, the following will be logged to indicate that the application has correctly started and has performed all the initial processing steps:
 ```text
@@ -432,9 +445,11 @@ Starting a sync with Microsoft OneDrive
 Syncing changes from Microsoft OneDrive ...
 Sync with Microsoft OneDrive is complete
 ```
-**Note:** The additional log output `Performing a database consistency and integrity check on locally stored data ...` will only be displayed when this activity is occuring which is triggered by 'monitor_fullscan_frequency'.
+> [!NOTE]
+> The additional log output `Performing a database consistency and integrity check on locally stored data ...` will only be displayed when this activity is occuring which is triggered by 'monitor_fullscan_frequency'.
 
-**Note:** If verbose application output is being used (`--verbose`), then this configuration setting has zero effect, as application verbose output takes priority over application output surpression.
+> [!NOTE]
+> If verbose application output is being used (`--verbose`), then this configuration setting has zero effect, as application verbose output takes priority over application output surpression.
 
 ### no_remote_delete
 _**Description:**_ This configuration option controls whether local file and folder deletes are actioned on Microsoft OneDrive.
@@ -447,7 +462,8 @@ _**Config Example:**_ `local_first = "false"` or `local_first = "true"`
 
 _**CLI Option Use:**_ `--no-remote-delete`
 
-_**Additional Usage Notes:**_ This configuration option can *only* be used in conjunction with `--upload-only`
+> [!IMPORTANT]
+> This configuration option can *only* be used in conjunction with `--upload-only`
 
 ### operation_timeout
 _**Description:**_ This configuration option controls the maximum amount of time (seconds) a file operation is allowed to take. This includes DNS resolution, connecting, data transfer, etc. We recommend users not to tamper with this option unless strictly necessary. This option controls the CURLOPT_TIMEOUT setting of libcurl.
@@ -485,7 +501,8 @@ _**Default Value:**_ False
 
 _**Config Example:**_ `read_only_auth_scope = "false"` or `read_only_auth_scope = "true"`
 
-_**Additional Usage Notes:**_ When using 'read_only_auth_scope' you also will need to remove your existing application access consent otherwise old authentication consent will be valid and will be used. This will mean the application will technically have the consent to upload data until you revoke this consent.
+> [!IMPORTANT]
+> When using 'read_only_auth_scope' you also will need to remove your existing application access consent otherwise old authentication consent will be valid and will be used. This will mean the application will technically have the consent to upload data until you revoke this consent.
 
 ### remove_source_files
 _**Description:**_ This configuration option controls whether the OneDrive Client for Linux removes the local file post successful transfer to Microsoft OneDrive.
@@ -498,7 +515,8 @@ _**Config Example:**_ `remove_source_files = "false"` or `remove_source_files = 
 
 _**CLI Option Use:**_ `--remove-source-files`
 
-_**Additional Usage Notes:**_ This configuration option can *only* be used in conjunction with `--upload-only`
+> [!IMPORTANT]
+> This configuration option can *only* be used in conjunction with `--upload-only`
 
 ### resync
 _**Description:**_ This configuration option controls whether the known local sync state with Microsoft OneDrive is removed at application startup. When this option is used, a full scan of your data online is performed to ensure that the local sync state is correctly built back up.
@@ -511,15 +529,16 @@ _**Config Example:**_ `resync = "false"` or `resync = "true"`
 
 _**CLI Option Use:**_ `--resync`
 
-_**Additional Usage Notes:**_ It's highly recommended to use this option only if the application prompts you to do so. Don't blindly use this option as a default option. If you alter any of the subsequent configuration items, you will be required to execute a `--resync` to make sure your client is syncing your data with the updated configuration:
-*   drive_id
-*   sync_dir
-*   skip_file
-*   skip_dir
-*   skip_dotfiles
-*   skip_symlinks
-*   sync_business_shared_items
-*   Creating, Modifying or Deleting the 'sync_list' file
+> [!CAUTION]
+> It's highly recommended to use this option only if the application prompts you to do so. Don't blindly use this option as a default option. If you alter any of the subsequent configuration items, you will be required to execute a `--resync` to make sure your client is syncing your data with the updated configuration:
+> *   drive_id
+> *   sync_dir
+> *   skip_file
+> *   skip_dir
+> *   skip_dotfiles
+> *   skip_symlinks
+> *   sync_business_shared_items
+> *   Creating, Modifying or Deleting the 'sync_list' file
 
 ### resync_auth
 _**Description:**_ This configuration option controls the approval of performing a 'resync' which can be beneficial in automated environments.
@@ -532,7 +551,8 @@ _**Config Example:**_ `resync_auth = "false"` or `resync_auth = "true"`
 
 _**CLI Option Use:**_ `--resync-auth`
 
-_**Additional Usage Notes:**_ In certain automated environments (assuming you know what you're doing due to automation), to avoid the 'proceed with acknowledgement' resync requirement, this option allows you to automatically acknowledge the resync prompt.
+> [!TIP]
+> In certain automated environments (assuming you know what you're doing due to using automation), to avoid the 'proceed with acknowledgement' resync requirement, this option allows you to automatically acknowledge the resync prompt.
 
 ### skip_dir
 _**Description:**_ This configuration option controls whether the application skips certain directories from being synced. Directories can be specified in 2 ways:
@@ -569,7 +589,8 @@ skip_dir = "SkipThisDirectoryAnywhere|.SkipThisOtherDirectoryAnywhere|/Explicit/
 
 _**CLI Option Use:**_ `--skip-dir 'SkipThisDirectoryAnywhere|.SkipThisOtherDirectoryAnywhere|/Explicit/Path/To/A/Directory|/Another/Explicit/Path/To/Different/Directory'`
 
-_**Additional Usage Notes:**_ This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. If using the config file and CLI option is used, the CLI option will *replace* the config file entries. After changing or modifying this option, you will be required to perform a resync.
+> [!NOTE]
+> This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. If using the config file and CLI option is used, the CLI option will *replace* the config file entries. After changing or modifying this option, you will be required to perform a resync.
 
 ### skip_dir_strict_match
 _**Description:**_ This configuration option controls whether the application performs strict directory matching when checking 'skip_dir' items. When enabled, the 'skip_dir' item must be a full path match to the path to be skipped.
@@ -593,7 +614,8 @@ _**Config Example:**_ `skip_dotfiles = "false"` or `skip_dotfiles = "true"`
 
 _**CLI Option Use:**_ `--skip-dot-files`
 
-_**Additional Usage Notes:**_ This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. After changing this option, you will be required to perform a resync.
+> [!NOTE]
+> This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. After changing this option, you will be required to perform a resync.
 
 ### skip_file
 _**Description:**_ This configuration option controls whether the application skips certain files from being synced.
@@ -633,7 +655,8 @@ skip_file = "~*|.~*|*.tmp|*.swp|*.blah|never_sync.file|/Documents/keepass.kdbx"
 
 _**CLI Option Use:**_ `--skip-file '~*|.~*|*.tmp|*.swp|*.blah|never_sync.file|/Documents/keepass.kdbx'`
 
-_**Additional Usage Notes:**_ This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. If using the config file and CLI option is used, the CLI option will *replace* the config file entries. After changing or modifying this option, you will be required to perform a resync.
+> [!NOTE]
+> This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. If using the config file and CLI option is used, the CLI option will *replace* the config file entries. After changing or modifying this option, you will be required to perform a resync.
 
 ### skip_size
 _**Description:**_ This configuration option controls whether the application skips syncing certain files larger than the specified size. The value specified is in MB.
@@ -657,7 +680,8 @@ _**Config Example:**_ `skip_symlinks = "false"` or `skip_symlinks = "true"`
 
 _**CLI Option Use:**_ `--skip-symlinks`
 
-_**Additional Usage Notes:**_ This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. After changing this option, you will be required to perform a resync.
+> [!NOTE]
+> This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. After changing this option, you will be required to perform a resync.
 
 ### space_reservation
 _**Description:**_ This configuration option controls how much local disk space should be reserved, to prevent the application from filling up your entire disk due to misconfiguration
@@ -671,7 +695,7 @@ _**Config Example:**_ `space_reservation = "100"`
 _**CLI Option Use:**_ `--space-reservation '100'`
 
 ### sync_business_shared_items
-_**Description:**_ This configuration option controls whether OneDrive Business | Office 365 Shared Folders, when added as a 'shortcut' to your 'My Files' will be synced to your local system.
+_**Description:**_ This configuration option controls whether OneDrive Business | Office 365 Shared Folders, when added as a 'shortcut' to your 'My Files', will be synced to your local system.
 
 _**Value Type:**_ Boolean
 
@@ -681,7 +705,11 @@ _**Config Example:**_ `sync_business_shared_items = "false"` or `sync_business_s
 
 _**CLI Option Use:**_ *none* - this is a config file option only
 
-_**Additional Usage Notes:**_ This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. After changing this option, you will be required to perform a resync.
+> [!NOTE]
+> This option is considered a 'Client Side Filtering Rule' and if configured, is utilised for all sync operations. After changing this option, you will be required to perform a resync.
+
+> [!CAUTION]
+> This option is *not* backwards compatible with any v2.4.x application version. If you are enabling this option on *any* system running v2.5.x application version, all your application versions being used *everywhere* must be v2.5.x codebase.
 
 ### sync_dir
 _**Description:**_ This configuration option determines the location on your local filesystem where your data from Microsoft OneDrive will be saved.
@@ -694,7 +722,8 @@ _**Config Example:**_ `sync_dir = "~/MyDirToSync"`
 
 _**CLI Option Use:**_ `--syncdir '~/MyDirToSync'`
 
-_**Additional Usage Notes:**_ After changing this option, you will be required to perform a resync.
+> [!CAUTION]
+> After changing this option, you will be required to perform a resync. Do not change or modify this option without fully understanding the implications of doing so.
 
 ### sync_dir_permissions
 _**Description:**_ This configuration option defines the directory permissions applied when a new directory is created locally during the process of syncing your data from Microsoft OneDrive.
@@ -705,7 +734,8 @@ _**Default Value:**_ `700` - This provides the following permissions: `drwx-----
 
 _**Config Example:**_ `sync_dir_permissions = "700"`
 
-_**Additional Usage Notes:**_ Use the [Unix Permissions Calculator](https://chmod-calculator.com/) to help you determine the necessary new permissions. You will need to manually update all existing directory permissions if you modify this value.
+> [!IMPORTANT]
+> Use the [Unix Permissions Calculator](https://chmod-calculator.com/) to help you determine the necessary new permissions. You will need to manually update all existing directory permissions if you modify this value.
 
 ### sync_file_permissions
 _**Description:**_ This configuration option defines the file permissions applied when a new file is created locally during the process of syncing your data from Microsoft OneDrive.
@@ -716,7 +746,8 @@ _**Default Value:**_ `600` - This provides the following permissions: `-rw------
 
 _**Config Example:**_ `sync_file_permissions = "600"`
 
-_**Additional Usage Notes:**_ Use the [Unix Permissions Calculator](https://chmod-calculator.com/) to help you determine the necessary new permissions. You will need to manually update all existing directory permissions if you modify this value.
+> [!IMPORTANT]
+> Use the [Unix Permissions Calculator](https://chmod-calculator.com/) to help you determine the necessary new permissions. You will need to manually update all existing directory permissions if you modify this value.
 
 ### sync_root_files
 _**Description:**_ This configuration option manages the synchronisation of files located in the 'sync_dir' root when using a 'sync_list.' It enables you to sync all these files by default, eliminating the need to repeatedly modify your 'sync_list' and initiate resynchronisation.
@@ -729,7 +760,8 @@ _**Config Example:**_ `sync_root_files = "false"` or `sync_root_files = "true"`
 
 _**CLI Option Use:**_ `--sync-root-files`
 
-_**Additional Usage Notes:**_ Although it's not mandatory, it's recommended that after enabling this option, you perform a `--resync`. This ensures that any previously excluded content is now included in your sync process.
+> [!IMPORTANT]
+> Although it's not mandatory, it's recommended that after enabling this option, you perform a `--resync`. This ensures that any previously excluded content is now included in your sync process.
 
 ### threads
 _**Description:**_ This configuration option controls the number of 'threads' for upload and download operations when files need to be transfered between your local system and Microsoft OneDrive.
@@ -742,7 +774,8 @@ _**Maximum Value:**_ `16`
 
 _**Config Example:**_ `threads = "16"`
 
-_**Additional Usage Notes:**_ Increasing the threads beyond the default will lead to increased system utilisation and local TCP port use, which may lead to unpredictable behaviour and/or application stability issues.
+> [!WARNING]
+> Increasing the threads beyond the default will lead to increased system utilisation and local TCP port use, which may lead to unpredictable behaviour and/or may lead application stability issues.
 
 ### upload_only
 _**Description:**_ This setting forces the client to only upload data to Microsoft OneDrive and replicate the locate state online. By default, this will also remove content online, that has been removed locally.
@@ -755,7 +788,8 @@ _**Config Example:**_ `upload_only = "false"` or `upload_only = "true"`
 
 _**CLI Option Use:**_ `--upload-only`
 
-_**Additional Usage Notes:**_ To ensure that data deleted locally remains accessible online, you can use the 'no_remote_delete' option. If you want to delete the data from your local storage after a successful upload to Microsoft OneDrive, you can use the 'remove_source_files' option.
+> [!IMPORTANT]
+> To ensure that data deleted locally remains accessible online, you can use the 'no_remote_delete' option. If you want to delete the data from your local storage after a successful upload to Microsoft OneDrive, you can use the 'remove_source_files' option.
 
 ### user_agent
 _**Description:**_ This configuration option controls the 'User-Agent' request header that is presented to Microsoft Graph API when accessing the Microsoft OneDrive service. This string lets servers and network peers identify the application, operating system, vendor, and/or version of the application making the request. We recommend users not to tamper with this option unless strictly necessary.
@@ -766,7 +800,8 @@ _**Default Value:**_ `ISV|abraunegg|OneDrive Client for Linux/vX.Y.Z-A-bcdefghi`
 
 _**Config Example:**_ `user_agent = "ISV|CompanyName|AppName/Version"`
 
-_**Additional Usage Notes:**_ The current value conforms the the Microsoft Graph API documentation for presenting an appropriate 'User-Agent' header and aligns to the registered 'application_id' that this application uses.
+> [!IMPORTANT]
+> The default 'user_agent' value conforms to specific Microsoft requirements to identify as an ISV that complies with OneDrive traffic decoration requirements. Changing this value potentially will impact how Microsoft see's your client, thus your traffic may get throttled. For further information please read: https://learn.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
 
 ### webhook_enabled
 _**Description:**_ This configuration option controls the application feature 'webhooks' to allow you to subscribe to remote updates as published by Microsoft OneDrive. This option only operates when the client is using 'Monitor Mode'.
@@ -781,43 +816,44 @@ webhook_enabled = "true"
 webhook_public_url = "http://<your_host_ip>:8888/"
 ```
 
-_**Additional Usage Notes:**_ 
+> [!NOTE]
+> Setting `webhook_enabled = "true"` enables the webhook feature in 'monitor' mode. The onedrive process will listen for incoming updates at a configurable endpoint, which defaults to `0.0.0.0:8888`. The `webhook_public_url` must be set to an public-facing url for Microsoft to send updates to your webhook. 
+> 
+> If your host is directly exposed to the Internet, the `webhook_public_url` can be set to `http://<your_host_ip>:8888/` to match the default endpoint. In this case, it is also advisable to configure a reverse proxy like `nginx` to proxy the traffic to the client. For example, below is a nginx config snippet to proxy traffic into the webhook:
+> ```text
+> server {
+> 	listen 80;
+> 	location /webhooks/onedrive {
+> 		proxy_http_version 1.1;
+> 		proxy_pass http://127.0.0.1:8888;
+> 	}
+> }
+> ```
+> 
+> With nginx running, you can configure 'webhook_public_url' to `https://<public_facing_url_to_reach_your_webhook>/webhooks/onedrive`
 
-etting `webhook_enabled = "true"` enables the webhook feature in 'monitor' mode. The onedrive process will listen for incoming updates at a configurable endpoint, which defaults to `0.0.0.0:8888`. The `webhook_public_url` must be set to an public-facing url for Microsoft to send updates to your webhook. 
+> [!IMPORTANT]
+> A valid HTTPS certificate is required for your public-facing URL if using nginx. Self signed certificates will be rejected. Consider using https://letsencrypt.org/ to utilise free SSL certificates for your public-facing URL.
 
-If your host is directly exposed to the Internet, the `webhook_public_url` can be set to `http://<your_host_ip>:8888/` to match the default endpoint. In this case, it is also advisable to configure a reverse proxy like `nginx` to proxy the traffic to the client. For example, below is a nginx config snippet to proxy traffic into the webhook:
-```text
-server {
-	listen 80;
-	location /webhooks/onedrive {
-		proxy_http_version 1.1;
-		proxy_pass http://127.0.0.1:8888;
-	}
-}
-```
-
-With nginx running, you can configure 'webhook_public_url' to `https://<public_facing_url_to_reach_your_webhook>/webhooks/onedrive`
-
-**Note:** A valid HTTPS certificate is required for your public-facing URL if using nginx.
-
-If you receive this application error: `Subscription validation request failed. Response must exactly match validationToken query parameter.` the most likely cause for this error will be your nginx configuration.
-
-To resolve this configuration issue, potentially investigate the following configuration for nginx:
-```text
-server {
-	listen 80;
-	location /webhooks/onedrive {
-		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-		proxy_set_header X-Original-Request-URI $request_uri;
-		proxy_read_timeout 300s;
-		proxy_connect_timeout 75s;
-		proxy_buffering off;
-		proxy_http_version 1.1;
-		proxy_pass http://127.0.0.1:8888;
-	}
-}
-```
-For any further nginx configuration assistance, please refer to: https://docs.nginx.com/
+> [!TIP]
+> If you receive this application error: `Subscription validation request failed. Response must exactly match validationToken query parameter.` the most likely cause for this error will be your nginx configuration.
+> 
+> To resolve this configuration issue, potentially investigate the following configuration for nginx:
+> ```text
+> server {
+> 	listen 80;
+> 	location /webhooks/onedrive {
+> 		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+> 		proxy_set_header X-Original-Request-URI $request_uri;
+> 		proxy_read_timeout 300s;
+> 		proxy_connect_timeout 75s;
+> 		proxy_buffering off;
+> 		proxy_http_version 1.1;
+> 		proxy_pass http://127.0.0.1:8888;
+> 	}
+> }
+> ```
+> For any further nginx configuration assistance, please refer to: https://docs.nginx.com/
 
 ### webhook_expiration_interval
 _**Description:**_ This configuration option controls the frequency at which an existing Microsoft OneDrive webhook subscription expires. The value is expressed in the number of seconds before expiry.
@@ -837,7 +873,8 @@ _**Default Value:**_ 0.0.0.0
 
 _**Config Example:**_ `webhook_listening_host = ""` - this will use the default value. `webhook_listening_host = "192.168.3.4"` - this will bind the client to use the IP address 192.168.3.4.
 
-_**Additional Usage Notes:**_ Use in conjunction with 'webhook_listening_port' to change the webhook listening endpoint.
+> [!NOTE]
+> Use in conjunction with 'webhook_listening_port' to change the webhook listening endpoint.
 
 ### webhook_listening_port
 _**Description:**_ This configuration option controls the TCP port that this client listens on, when the webhook feature is enabled.
@@ -848,7 +885,8 @@ _**Default Value:**_ 8888
 
 _**Config Example:**_ `webhook_listening_port = "9999"`
 
-_**Additional Usage Notes:**_ Use in conjunction with 'webhook_listening_host' to change the webhook listening endpoint.
+> [!NOTE]
+> Use in conjunction with 'webhook_listening_host' to change the webhook listening endpoint.
 
 ### webhook_public_url
 _**Description:**_ This configuration option controls the URL that Microsoft will send subscription notifications to. This must be a valid Internet accessible URL.
@@ -858,7 +896,6 @@ _**Value Type:**_ String
 _**Default Value:**_ *empty*
 
 _**Config Example:**_ 
-
 *  If your host is directly connected to the Internet: `webhook_public_url = "http://<your_host_ip>:8888/"`
 *  If you are using nginx to reverse proxy traffic from the Internet: `webhook_public_url = "https://<public_facing_url_to_reach_your_webhook>/webhooks/onedrive"`
 
@@ -887,64 +924,70 @@ _**Description:**_ This CLI option allows the user to perform application authen
 
 _**Usage Example:**_ `onedrive --auth-files authUrl:responseUrl`
 
-_**Additional Usage Notes:**_ The authorisation URL is written to the specified 'authUrl' file, then onedrive waits for the file 'responseUrl' to be present, and reads the authentication response from that file. Example:
-
-```text
-onedrive --auth-files '~/onedrive-auth-url:~/onedrive-response-url' 
-Reading configuration file: /home/alex/.config/onedrive/config
-Configuration file successfully loaded
-Configuring Global Azure AD Endpoints
-Client requires authentication before proceeding. Waiting for --auth-files elements to be available.
-```
-At this point, the client has written the file `~/onedrive-auth-url` which contains the authentication URL that needs to be visited to perform the authentication process. The client will now wait and watch for the presence of the file `~/onedrive-response-url`.
-
-Visit the authentication URL, and then create a new file called `~/onedrive-response-url` with the response URI. Once this has been done, the application will acknowledge the presence of this file, read the contents, and authenticate the application.
-```text
-Sync Engine Initialised with new Onedrive API instance
-
- --sync or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use 'onedrive --help' for further assistance.
-
-No OneDrive sync will be performed without one of these two arguments being present.
-```
+> [!IMPORTANT]
+> The authorisation URL is written to the specified 'authUrl' file, then onedrive waits for the file 'responseUrl' to be present, and reads the authentication response from that file. Example:
+> 
+> ```text
+> onedrive --auth-files '~/onedrive-auth-url:~/onedrive-response-url' 
+> Reading configuration file: /home/alex/.config/onedrive/config
+> Configuration file successfully loaded
+> Configuring Global Azure AD Endpoints
+> Client requires authentication before proceeding. Waiting for --auth-files elements to be available.
+> ```
+> At this point, the client has written the file `~/onedrive-auth-url` which contains the authentication URL that needs to be visited to perform the authentication process. The client will now wait and watch for the presence of the file `~/onedrive-response-url`.
+> 
+> Visit the authentication URL, and then create a new file called `~/onedrive-response-url` with the response URI. Once this has been done, the application will acknowledge the presence of this file, read the contents, and authenticate the application.
+> ```text
+> Sync Engine Initialised with new Onedrive API instance
+> 
+>  --sync or --monitor switches missing from your command line input. Please add one (not both) of these switches to your command line or use 'onedrive --help' for further assistance.
+> 
+> No OneDrive sync will be performed without one of these two arguments being present.
+> ```
 
 ### CLI Option: --auth-response
 _**Description:**_ This CLI option allows the user to perform application authentication not via an interactive dialog but via providing the authentication response URI directly.
 
 _**Usage Example:**_ `onedrive --auth-response https://login.microsoftonline.com/common/oauth2/nativeclient?code=<redacted>`
 
-_**Additional Usage Notes:**_ Typically, unless the application client identifier, authentication scopes are being modified or a specific Azure Tenant is being specified, the authentication URL will mostlikely be as follows:
-```text
-https://login.microsoftonline.com/common/oauth2/v2.0/authorise?client_id=22c49a0d-d21c-4792-aed1-8f163c982546&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
-```
-With this URL being known, it is possible ahead of time to request an authentication token by visiting this URL, and performing the authenticaton access request.
+> [!TIP]
+> Typically, unless the application client identifier has been modified, authentication scopes are being modified or a specific Azure Tenant is being specified, the authentication URL will most likely be as follows:
+> ```text
+> https://login.microsoftonline.com/common/oauth2/v2.0/authorise?client_id=22c49a0d-d21c-4792-aed1-8f163c982546&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
+> ```
+> With this URL being known, it is possible ahead of time to request an authentication token by visiting this URL, and performing the authenticaton access request.
 
 ### CLI Option: --confdir
 _**Description:**_ This CLI option allows the user to specify where all the application configuration and relevant components are stored.
 
 _**Usage Example:**_ `onedrive --confdir '~/.config/onedrive-business/'`
 
-_**Additional Usage Notes:**_ If using this option, it must be specified each and every time the application is used. If this is ommited, the application default configuration directory will be used.
+> [!IMPORTANT]
+> If using this option, it must be specified each and every time the application is used. If this is ommited, the application default configuration directory will be used.
 
 ### CLI Option: --create-directory
 _**Description:**_ This CLI option allows the user to create the specified directory path on Microsoft OneDrive without performing a sync.
 
 _**Usage Example:**_ `onedrive --create-directory 'path/of/new/folder/structure/to/create/'`
 
-_**Additional Usage Notes:**_ The specified path to create is relative to your configured 'sync_dir'.
+> [!IMPORTANT]
+> The specified path to create is relative to your configured 'sync_dir'.
 
 ### CLI Option: --create-share-link
 _**Description:**_ This CLI option enables the creation of a shareable file link that can be provided to users to access the file that is stored on Microsoft OneDrive. By default, the permissions for the file will be 'read-only'.
 
 _**Usage Example:**_ `onedrive --create-share-link 'relative/path/to/your/file.txt'`
 
-_**Additional Usage Notes:**_ If writable access to the file is required, you must add `--with-editing-perms` to your command. See below for details.
+> [!IMPORTANT]
+> If writable access to the file is required, you must add `--with-editing-perms` to your command. See below for details.
 
 ### CLI Option: --destination-directory
 _**Description:**_ This CLI option specifies the 'destination' portion of moving a file or folder online, without performing a sync operation.
 
 _**Usage Example:**_ `onedrive --source-directory 'path/as/source/' --destination-directory 'path/as/destination'`
 
-_**Additional Usage Notes:**_ All specified paths are relative to your configured 'sync_dir'.
+> [!IMPORTANT]
+> All specified paths are relative to your configured 'sync_dir'.
 
 ### CLI Option: --display-config
 _**Description:**_ This CLI option will display the effective application configuration
@@ -956,7 +999,8 @@ _**Description:**_ This CLI option will display the sync status of the configure
 
 _**Usage Example:**_ `onedrive --display-sync-status`
 
-_**Additional Usage Notes:**_ This option can also use the `--single-directory` option to determine the sync status of a specific directory within the configured 'sync_dir'
+> [!TIP]
+> This option can also use the `--single-directory` option to determine the sync status of a specific directory within the configured 'sync_dir'
 
 ### CLI Option: ---display-quota
 _**Description:**_ This CLI option will display the quota status of the account drive id or the configured 'drive_id' value
@@ -968,30 +1012,33 @@ _**Description:**_ This CLI option enables the force the deletion of data when a
 
 _**Usage Example:**_ `onedrive --sync --verbose --force`
 
-_**Additional Usage Notes:**_ This option should only be used exclusively in cases where you've initiated a 'big delete' and genuinely intend to remove all the data that is set to be deleted online.
+> [!IMPORTANT]
+> This option should only be used exclusively in cases where you've initiated a 'big delete' and genuinely intend to remove all the data that is set to be deleted online.
 
 ### CLI Option: --force-sync
 _**Description:**_ This CLI option enables the syncing of a specific directory, using the Client Side Filtering application defaults, overriding any user application configuration.
 
 _**Usage Example:**_ `onedrive --sync --verbose --force-sync --single-directory 'Data'
 
-_**Additional Usage Notes:**_ When this option is used, you will be presented with the following warning and risk acceptance:
-```text
-WARNING: Overriding application configuration to use application defaults for skip_dir and skip_file due to --synch --single-directory --force-sync being used
-
-The use of --force-sync will reconfigure the application to use defaults. This may have untold and unknown future impacts.
-By proceeding in using this option you accept any impacts including any data loss that may occur as a result of using --force-sync.
-
-Are you sure you wish to proceed with --force-sync [Y/N] 
-```
-To procceed with this sync task, you must risk accept the actions you are taking. If you have any concerns, first use `--dry-run` and evaluate the outcome before proceeding with the actual action.
+> [!NOTE]
+> When this option is used, you will be presented with the following warning and risk acceptance:
+> ```text
+> WARNING: Overriding application configuration to use application defaults for skip_dir and skip_file due to --synch --single-directory --force-sync being used
+> 
+> The use of --force-sync will reconfigure the application to use defaults. This may have untold and unknown future impacts.
+> By proceeding in using this option you accept any impacts including any data loss that may occur as a result of using --force-sync.
+> 
+> Are you sure you wish to proceed with --force-sync [Y/N] 
+> ```
+> To procceed with this sync task, you must risk accept the actions you are taking. If you have any concerns, first use `--dry-run` and evaluate the outcome before proceeding with the actual action.
 
 ### CLI Option: --get-file-link
 _**Description:**_ This CLI option queries the OneDrive API and return's the WebURL for the given local file.
 
 _**Usage Example:**_ `onedrive --get-file-link 'relative/path/to/your/file.txt'`
 
-_**Additional Usage Notes:**_ The path that you should use must be relative to your 'sync_dir'
+> [!IMPORTANT]
+> The path that you should use *must* be relative to your 'sync_dir'
 
 ### CLI Option: --get-sharepoint-drive-id
 _**Description:**_ This CLI option queries the OneDrive API and return's the Office 365 Drive ID for a given Office 365 SharePoint Shared Library that can then be used with 'drive_id' to sync a specific SharePoint Library.
@@ -1049,7 +1096,8 @@ _**Description:**_ This CLI option queries the OneDrive API and return's the las
 
 _**Usage Example:**_ `onedrive --modified-by 'relative/path/to/your/file.txt'`
 
-_**Additional Usage Notes:**_ The path that you should use must be relative to your 'sync_dir'
+> [!IMPORTANT]
+> The path that you should use *must* be relative to your 'sync_dir'
 
 ### CLI Option: --monitor | -m
 _**Description:**_ This CLI option controls the 'Monitor Mode' operational aspect of the client. When this option is used, the client will perform on-going syncs of data between Microsoft OneDrive and your local system. Local changes will be uploaded in near-realtime, whilst online changes will be downloaded on the next sync process. The frequency of these checks is governed by the 'monitor_interval' value.
@@ -1061,7 +1109,8 @@ _**Description:**_ Print the current access token being used to access Microsoft
 
 _**Usage Example:**_ `onedrive --verbose --verbose --debug-https --print-access-token`
 
-_**Additional Usage Notes:**_ Do not use this option if you do not know why you are wanting to use it. Be highly cautious of exposing this object. Change your password if you feel that you have inadvertantly exposed this token.
+> [!CAUTION]
+> Do not use this option if you do not know why you are wanting to use it. Be highly cautious of exposing this object. Change your password if you feel that you have inadvertantly exposed this token.
 
 ### CLI Option: --reauth
 _**Description:**_ This CLI option controls the ability to re-authenticate your client with Microsoft OneDrive.
@@ -1073,21 +1122,24 @@ _**Description:**_ This CLI option allows the user to remove the specified direc
 
 _**Usage Example:**_ `onedrive --remove-directory 'path/of/new/folder/structure/to/remove/'`
 
-_**Additional Usage Notes:**_ The specified path to remove is relative to your configured 'sync_dir'.
+> [!IMPORTANT]
+> The specified path to remove is relative to your configured 'sync_dir'.
 
 ### CLI Option: --single-directory
 _**Description:**_ This CLI option controls the applications ability to sync a specific single directory.
 
 _**Usage Example:**_ `onedrive --sync --single-directory 'Data'`
 
-_**Additional Usage Notes:**_ The path specified is relative to your configured 'sync_dir' path. If the physical local path 'Folder' to sync is `~/OneDrive/Data/Folder` then the command would be `--single-directory 'Data/Folder'`.
+> [!IMPORTANT]
+> The path specified is relative to your configured 'sync_dir' path. If the physical local path 'Folder' to sync is `~/OneDrive/Data/Folder` then the command would be `--single-directory 'Data/Folder'`.
 
 ### CLI Option: --source-directory
 _**Description:**_ This CLI option specifies the 'source' portion of moving a file or folder online, without performing a sync operation.
 
 _**Usage Example:**_ `onedrive --source-directory 'path/as/source/' --destination-directory 'path/as/destination'`
 
-_**Additional Usage Notes:**_ All specified paths are relative to your configured 'sync_dir'.
+> [!IMPORTANT]
+> All specified paths are relative to your configured 'sync_dir'.
 
 ### CLI Option: --sync | -s
 _**Description:**_ This CLI option controls the 'Standalone Mode' operational aspect of the client. When this option is used, the client will perform a one-time sync of data between Microsoft OneDrive and your local system.
@@ -1099,7 +1151,8 @@ _**Description:**_ Sync OneDrive Business Shared Files to the local filesystem.
 
 _**Usage Example:**_ `onedrive --sync --sync-shared-files`
 
-_**Additional Usage Notes:**_ To use this option you must first enable 'sync_business_shared_items' within your application configuration. Please read 'business-shared-items.md' for more information regarding this option.
+> [!IMPORTANT]
+> To use this option you must first enable 'sync_business_shared_items' within your application configuration. Please read 'business-shared-items.md' for more information regarding this option.
 
 ### CLI Option: --verbose | -v+
 _**Description:**_ This CLI option controls the verbosity of the application output. Use the option once, to have normal verbose output, use twice to have debug level application output.
@@ -1111,7 +1164,8 @@ _**Description:**_ This CLI option enables the creation of a writable shareable 
 
 _**Usage Example:**_ `onedrive --create-share-link 'relative/path/to/your/file.txt' --with-editing-perms`
 
-_**Additional Usage Notes:**_ Placement of `--with-editing-perms` is critical. It *must* be placed after the file path as per the example above.
+> [!IMPORTANT]
+> Placement of `--with-editing-perms` is critical. It *must* be placed after the file path as per the example above.
 
 ## Depreciated Configuration File and CLI Options
 The following configuration options are no longer supported:

@@ -84,7 +84,8 @@ read_only_auth_scope = "true"
 ```
 This will change the user authentication scope request to use read-only access.
 
-**Note:** When changing this value, you *must* re-authenticate the client using the `--reauth` option to utilise the change in authentication scopes.
+> [!IMPORTANT]
+> When changing this value, you *must* re-authenticate the client using the `--reauth` option to utilise the change in authentication scopes.
 
 When using read-only authentication scopes, the uploading of any data or local change to OneDrive will fail with the following error:
 ```
@@ -100,7 +101,8 @@ As such, it is also advisable for you to add the following to your configuration
 download_only = "true"
 ```
 
-**Important:** Additionally when using 'read_only_auth_scope' you also will need to remove your existing application access consent otherwise old authentication consent will be valid and will be used. This will mean the application will technically have the consent to upload data. See below on how to remove your prior application consent.
+> [!IMPORTANT]
+> Additionally when using 'read_only_auth_scope' you also will need to remove your existing application access consent otherwise old authentication consent will be valid and will be used. This will mean the application will technically have the consent to upload data. See below on how to remove your prior application consent.
  
 ## Reviewing your existing application access consent
 

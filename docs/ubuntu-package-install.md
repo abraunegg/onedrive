@@ -1,24 +1,30 @@
 # Installation of 'onedrive' package on Debian and Ubuntu
 
-This document covers the appropriate steps to install the 'onedrive' client using the provided packages for Debian and Ubuntu.
+This document outlines the steps for installing the 'onedrive' client on Debian, Ubuntu, and their derivatives using the OpenSuSE Build Service Packages.
 
-#### Important information for all Ubuntu and Ubuntu based distribution users:
-This information is specifically for the following platforms and distributions:
-
-*   Lubuntu
-*   Linux Mint
-*   POP OS
-*   Peppermint OS
-*   Raspbian
-*   Ubuntu
-
-Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) Universe packages available for Ubuntu, do not install 'onedrive' from these Universe packages. The default Ubuntu Universe packages are out-of-date and are not supported and should not be used.
+> [!CAUTION]
+> This information is specifically for the following platforms and distributions:
+> * Debian
+> * Deepin
+> * Elementary OS
+> * Kali Linux
+> * Lubuntu
+> * Linux Mint
+> * Pop!_OS
+> * Peppermint OS
+> * Raspbian | Raspberry Pi OS
+> * Ubuntu | Kubuntu | Xubuntu | Ubuntu Mate
+> * Zorin OS
+>
+> Although packages for the 'onedrive' client are available through distribution repositories, it is strongly advised against installing them. These distribution-provided packages are outdated, unsupported, and contain bugs and issues that have already been resolved in newer versions. They should not be used.
 
 ## Determine which instructions to use
 Ubuntu and its clones are based on various different releases, thus, you must use the correct instructions below, otherwise you may run into package dependancy issues and will be unable to install the client.
 
 ### Step 1: Remove any configured PPA and associated 'onedrive' package and systemd service files
-Many Internet 'help' pages provide inconsistent details on how to install the OneDrive Client for Linux. A number of these websites continue to point users to install the client via the yann1ck PPA repository however this PPA no longer exists and should not be used.
+
+#### Step 1a: Remove PPA if configured
+Many Internet 'help' pages provide inconsistent details on how to install the OneDrive Client for Linux. A number of these websites continue to point users to install the client via the yann1ck PPA repository however this PPA no longer exists and should not be used. If you have previously configured, or attempted to add this PPA, this needs to be removed.
 
 To remove the PPA repository and the older client, perform the following actions:
 ```text
@@ -26,10 +32,22 @@ sudo apt remove onedrive
 sudo add-apt-repository --remove ppa:yann1ck/onedrive
 ```
 
-Additionally, Ubuntu and its clones have a bad habit of creating a 'default' systemd service file when installing the 'onedrive' package so that the client will automatically run the client post being authenticated. This systemd entry is erroneous and needs to be removed.
+#### Step 1b: Remove errant systemd service file installed by PPA or distribution package
+
+Additionally, the distributon packages have a bad habit of creating a 'default' systemd service file when installing the 'onedrive' package so that the client will automatically run the client post being authenticated:
 ```
 Created symlink /etc/systemd/user/default.target.wants/onedrive.service → /usr/lib/systemd/user/onedrive.service.
 ```
+This systemd entry is erroneous and needs to be removed. Without removing this erroneous systemd link, this increases your risk of getting the following error message:
+```
+Opening the item database ...
+
+ERROR: onedrive application is already running - check system process list for active application instances
+ - Use 'sudo ps aufxw | grep onedrive' to potentially determine acive running process
+
+Waiting for all internal threads to complete before exiting application
+```
+
 To remove this symbolic link, run the following command:
 ```
 sudo rm /etc/systemd/user/default.target.wants/onedrive.service
@@ -154,10 +172,11 @@ If required, review the table below based on your 'lsb_release' information to p
 | Ubuntu 23.04 / Lunar      | Use [Ubuntu 23.04](#distribution-ubuntu-2304) instructions below |
 | Ubuntu 23.10 / Mantic     | Use [Ubuntu 23.10](#distribution-ubuntu-2310) instructions below |
 
-**Note:** If your Linux distribution and release is not in the table above, you have 2 options:
-
-1. Compile the application from source. Refer to install.md (Compilation & Installation) for assistance.
-2. Raise a support case with your Linux Distribution to provide you with an applicable package you can use.
+> [!IMPORTANT]
+> If your Linux distribution and release is not in the table above, you have 2 options:
+>
+> 1. Compile the application from source. Refer to install.md (Compilation & Installation) for assistance.
+> 2. Raise a support case with your Linux Distribution to provide you with an applicable package you can use.
 
 ## Distribution Package Install Instructions
 

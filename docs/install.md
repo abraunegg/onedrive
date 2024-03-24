@@ -5,8 +5,8 @@ This project has been packaged for the following Linux distributions as per belo
 
 Only the current release version or greater is supported. Earlier versions are not supported and should not be installed or used. 
 
-#### Important Note:
-Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If any package version indicator below is 'red' for your distribution, it is recommended that you build from source. Do not install the software from the available distribution package. If a package is out of date, please contact the package maintainer for resolution.
+> [!CAUTION]
+> Distribution packages may be of an older release when compared to the latest release that is [available](https://github.com/abraunegg/onedrive/releases). If any package version indicator below is 'red' for your distribution, it is recommended that you build from source. Do not install the software from the available distribution package. If a package is out of date, please contact the package maintainer for resolution.
 
 | Distribution                    | Package Name & Package Link                                                  | &nbsp;&nbsp;PKG_Version&nbsp;&nbsp; | &nbsp;i686&nbsp; | x86_64 | ARMHF | AARCH64 | Extra Details                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 |---------------------------------|------------------------------------------------------------------------------|:---------------:|:----:|:------:|:-----:|:-------:|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -33,26 +33,13 @@ Distribution packages may be of an older release when compared to the latest rel
 | Ubuntu 23.04                    | [onedrive](https://packages.ubuntu.com/lunar/onedrive)                       |<a href="https://packages.ubuntu.com/lunar/onedrive"><img src="https://repology.org/badge/version-for-repo/ubuntu_23_04/onedrive.svg?header=" alt="Ubuntu 23.04 package" width="46" height="20"></a> |❌|✔|✔|✔| **Note:** Do not install from Ubuntu Universe as the package is obsolete and is not supported<br><br>For a supported application version, it is recommended that for Ubuntu that you install from OpenSuSE Build Service using the Ubuntu Package Install [Instructions](ubuntu-package-install.md) |
 | Void Linux                      | [onedrive](https://voidlinux.org/packages/?arch=x86_64&q=onedrive)           |<a href="https://voidlinux.org/packages/?arch=x86_64&q=onedrive"><img src="https://repology.org/badge/version-for-repo/void_x86_64/onedrive.svg?header=" alt="Void Linux x86_64 package" width="46" height="20"></a>|✔|✔|❌|❌| |
 
-#### Important information for all Ubuntu and Ubuntu based distribution users:
-This information is specifically for the following platforms and distributions:
-*   Ubuntu
-*   Lubuntu
-*   Linux Mint
-*   POP OS
-*   Peppermint OS
-
-Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) Universe packages available for Ubuntu, do not install 'onedrive' from these Universe packages. The default Universe packages are out-of-date and are not supported and should not be used. If you wish to use a package, it is highly recommended that you utilise the [OpenSuSE Build Service](ubuntu-package-install.md) to install packages for these platforms. If the OpenSuSE Build Service does not cater for your version, your only option is to build from source.
-
-If you wish to change this situation so that you can just use the Universe packages via 'apt install onedrive', consider becoming the Ubuntu package maintainer and contribute back to your community.
-
 ## Building from Source - High Level Requirements
-*   Build environment must have at least 1GB of memory & 1GB swap space
-*   Install the required distribution package dependencies
-*   [libcurl](http://curl.haxx.se/libcurl/)
-*   [SQLite 3](https://www.sqlite.org/) >= 3.7.15
-*   [Digital Mars D Compiler (DMD)](http://dlang.org/download.html) or [LDC – the LLVM-based D Compiler](https://github.com/ldc-developers/ldc)
+*   For successful compilation of this application, it's crucial that the build environment is equipped with a minimum of 1GB of memory and an additional 1GB of swap space.
+*   Install the required distribution package dependencies coverering the required development tools and development libraries for curl and sqlite
+*   Install the [Digital Mars D Compiler (DMD)](http://dlang.org/download.html) or [LDC – the LLVM-based D Compiler](https://github.com/ldc-developers/ldc)
 
-**Note:** DMD version >= 2.088.0 or LDC version >= 1.18.0 is required to compile this application
+> [!IMPORTANT]
+> To compile this application successfully, it is essential to use either DMD version **2.088.0** or higher, or LDC version **1.18.0** or higher. Ensuring compatibility and optimal performance necessitates the use of these specific versions or their more recent updates.
 
 ### Example for installing DMD Compiler
 ```text
@@ -125,14 +112,16 @@ sudo pacman -S libnotify
 ```
 
 ### Dependencies: Raspbian (ARMHF) and Ubuntu 22.x / Debian 11 / Debian 12 / Raspbian (ARM64)
-**Note:** The minimum LDC compiler version required to compile this application is now 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
+> [!CAUTION]
+> The minimum LDC compiler version required to compile this application is 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
 
 These instructions were validated using:
 *   `Linux raspberrypi 5.10.92-v8+ #1514 SMP PREEMPT Mon Jan 17 17:39:38 GMT 2022 aarch64` (2022-01-28-raspios-bullseye-armhf-lite) using Raspberry Pi 3B (revision 1.2)
 *   `Linux raspberrypi 5.10.92-v8+ #1514 SMP PREEMPT Mon Jan 17 17:39:38 GMT 2022 aarch64` (2022-01-28-raspios-bullseye-arm64-lite) using Raspberry Pi 3B (revision 1.2)
 *   `Linux ubuntu 5.15.0-1005-raspi #5-Ubuntu SMP PREEMPT Mon Apr 4 12:21:48 UTC 2022 aarch64 aarch64 aarch64 GNU/Linux` (ubuntu-22.04-preinstalled-server-arm64+raspi) using Raspberry Pi 3B (revision 1.2)
 
-**Note:** Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon`.
+> [!IMPORTANT]
+> For successful compilation of this application, it's crucial that the build environment is equipped with a minimum of 1GB of memory and an additional 1GB of swap space. To verify your system's swap space availability, you can use the `swapon` command. Ensuring these requirements are met is vital for the application's compilation process.
 
 ```text
 sudo apt install build-essential
@@ -203,7 +192,8 @@ Run `deactivate` later on to restore your environment.
 ```
 Without performing this step, the compilation process will fail.
 
-**Note:** Depending on your DMD version, substitute `2.088.0` above with your DMD version that is installed.
+> [!NOTE]
+> Depending on your DMD version, substitute `2.088.0` above with your DMD version that is installed.
 
 ```text
 git clone https://github.com/abraunegg/onedrive.git
@@ -238,9 +228,12 @@ as far as possible automatically, but can be overridden by passing
 
 ### Building using a different compiler (for example [LDC](https://wiki.dlang.org/LDC))
 #### ARMHF Architecture (Raspbian) and ARM64 Architecture (Ubuntu 22.x / Debian 11 / Raspbian)
-**Note:** The minimum LDC compiler version required to compile this application is now 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
+> [!CAUTION]
+> The minimum LDC compiler version required to compile this application is 1.18.0, which is not available for Debian Buster or distributions based on Debian Buster. You are advised to first upgrade your platform distribution to one that is based on Debian Bullseye (Debian 11) or later.
 
-**Note:** Build environment must have at least 1GB of memory & 1GB swap space. Check with `swapon`.
+> [!IMPORTANT]
+> For successful compilation of this application, it's crucial that the build environment is equipped with a minimum of 1GB of memory and an additional 1GB of swap space. To verify your system's swap space availability, you can use the `swapon` command. Ensuring these requirements are met is vital for the application's compilation process.
+
 ```text
 git clone https://github.com/abraunegg/onedrive.git
 cd onedrive
@@ -254,11 +247,13 @@ If you have installed the client from a distribution package, the client will be
 
 If you have built the client from source, to upgrade your client, it is recommended that you first uninstall your existing 'onedrive' binary (see below), then re-install the client by re-cloning, re-compiling and re-installing the client again to install the new version.
 
-**Note:** Following the uninstall process will remove all client components including *all* systemd files, including any custom files created for specific access such as SharePoint Libraries.
+> [!NOTE]
+> Following the uninstall process will remove all client components including *all* systemd files, including any custom files created for specific access such as SharePoint Libraries.
 
 You can optionally choose to not perform this uninstallation step, and simply re-install the client by re-cloning, re-compiling and re-installing the client again - however the risk here is that you end up with two onedrive client binaries on your system, and depending on your system search path preferences, this will determine which binary is used.
 
-**Important:** Before performing any upgrade, it is highly recommended for you to stop any running systemd service if applicable to ensure that these services are restarted using the updated client version.
+> [!CAUTION]
+> Before performing any upgrade, it is highly recommended for you to stop any running systemd service if applicable to ensure that these services are restarted using the updated client version.
 
 Post re-install, to confirm that you have the new version of the client installed, use `onedrive --version` to determine the client version that is now installed.
 
@@ -276,7 +271,8 @@ If you are not upgrading your client, to remove your application state and confi
 ```
 rm -rf ~/.config/onedrive
 ```
-**Note:** If you are using the `--confdir option`, substitute `~/.config/onedrive` for the correct directory storing your client configuration.
+> [!IMPORTANT]
+> If you are using the `--confdir option`, substitute `~/.config/onedrive` for the correct directory storing your client configuration.
 
 If you want to just delete the application key, but keep the items database:
 ```text
