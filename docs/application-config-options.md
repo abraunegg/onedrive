@@ -125,7 +125,7 @@ _**Default Value:**_ *Empty* - not required for normal operation
 _**Config Example:**_ `azure_tenant_id = "example.onmicrosoft.us"` or `azure_tenant_id = "0c4be462-a1ab-499b-99e0-da08ce52a2cc"`
 
 > [!IMPORTANT]
-> _**Additional Usage Requirement:**_ Must be configured if 'azure_ad_endpoint' is configured.
+> Must be configured if 'azure_ad_endpoint' is configured.
 
 ### bypass_data_preservation
 _**Description:**_ This config option allows the disabling of preserving local data by renaming the local file in the event of data conflict. If this is enabled, you will experience data loss on your local data as the local file will be over-written with data from OneDrive online. Use with care and caution.
@@ -147,8 +147,8 @@ _**Config Example:**_ `check_nomount = "false"` or `check_nomount = "true"`
 
 _**CLI Option:**_ `--check-for-nomount`
 
-> [!IMPORTANT]
-> _**Additional Usage Requirement:**_ Create a `.nosync` file in your mount point *before* you mount your disk so that this is visible, in your mount point if your disk is unmounted.
+> [!TIP]
+> Create a `.nosync` file in your mount point *before* you mount your disk so that this `.nosync` file visible, in your mount point if your disk is unmounted at any point to preserve your data when you enable this option.
 
 ### check_nosync
 _**Description:**_ This config option is useful to prevent the sync of a *local* directory to Microsoft OneDrive. It will *not* check for this file online to prevent the download of directories to your local system.
@@ -162,7 +162,7 @@ _**Config Example:**_ `check_nosync = "false"` or `check_nosync = "true"`
 _**CLI Option Use:**_ `--check-for-nosync`
 
 > [!IMPORTANT]
-> _**Additional Usage Requirement:**_ Create a `.nosync` file in any *local* directory that you wish to not sync to Microsoft OneDrive when you enable this option.
+> Create a `.nosync` file in any *local* directory that you wish to not sync to Microsoft OneDrive when you enable this option.
 
 ### classify_as_big_delete
 _**Description:**_ This config option defines the number of children in a path that is locally removed which will be classified as a 'big data delete' to safeguard large data removals - which are typically accidental local delete events.
@@ -176,7 +176,7 @@ _**Config Example:**_ `classify_as_big_delete = "2000"`
 _**CLI Option Use:**_ `--classify-as-big-delete 2000`
 
 > [!NOTE]
-> _**Additional Usage Requirement:**_ If this option is triggered, you will need to add `--force` to force a sync to occur.
+> If this option is triggered, you will need to add `--force` to force a sync to occur.
 
 ### cleanup_local_files
 _**Description:**_ This config option provides the capability to cleanup local files and folders if they are removed online.
@@ -190,7 +190,7 @@ _**Config Example:**_ `cleanup_local_files = "false"` or `cleanup_local_files = 
 _**CLI Option Use:**_ `--cleanup-local-files`
 
 > [!IMPORTANT]
-> _**Additional Usage Requirement:**_ This configuration option can only be used with 'download_only'. It cannot be used with any other application option.
+> This configuration option can only be used with 'download_only'. It cannot be used with any other application option.
 
 ### connect_timeout
 _**Description:**_ This configuration setting manages the TCP connection timeout duration in seconds for HTTPS connections to Microsoft OneDrive when using the curl library (CURLOPT_CONNECTTIMEOUT).
@@ -221,8 +221,8 @@ _**Config Example:**_ `debug_https = "false"` or `debug_https = "true"`
 
 _**CLI Option Use:**_ `--debug-https`
 
-> [!IMPORTANT]
-> _**Additional Usage Notes:**_ Whilst this option can be used at any time, it is advisable that you only use this option when advised as this will output your `Authorization: bearer` - which is your authentication token to Microsoft OneDrive.
+> [!WARNING]
+> Whilst this option can be used at any time, it is advisable that you only use this option when advised as this will output your `Authorization: bearer` - which is your authentication token to Microsoft OneDrive.
 
 ### disable_download_validation
 _**Description:**_ This option determines whether the client will conduct integrity validation on files downloaded from Microsoft OneDrive. Sometimes, when downloading files, particularly from SharePoint, there is a discrepancy between the file size reported by the OneDrive API and the byte count received from the SharePoint HTTP Server for the same file. Enable this option to disable the integrity checks performed by this client.
@@ -235,8 +235,8 @@ _**Config Example:**_ `disable_download_validation = "false"` or `disable_downlo
 
 _**CLI Option Use:**_ `--disable-download-validation`
 
-> [!TIP]
-> _**Additional Usage Notes:**_ If you're downloading data from SharePoint or OneDrive Business Shared Folders, you might find it necessary to activate this option. It's important to note that any issues encountered aren't due to a problem with this client; instead, they should be regarded as issues with the Microsoft OneDrive technology stack.
+> [!CAUTION]
+> If you're downloading data from SharePoint or OneDrive Business Shared Folders, you might find it necessary to activate this option. It's important to note that any issues encountered aren't due to a problem with this client; instead, they should be regarded as issues with the Microsoft OneDrive technology stack. Enabling this option disables all download integrity checks.
 
 ### disable_notifications
 _**Description:**_ This setting controls whether GUI notifications are sent from the client to your display manager session. 
@@ -260,7 +260,8 @@ _**Config Example:**_ `disable_upload_validation = "false"` or `disable_upload_v
 
 _**CLI Option Use:**_ `--disable-upload-validation`
 
-_**Additional Usage Notes:**_ If you're uploading data to SharePoint or OneDrive Business Shared Folders, you might find it necessary to activate this option. It's important to note that any issues encountered aren't due to a problem with this client; instead, they should be regarded as issues with the Microsoft OneDrive technology stack.
+> [!CAUTION]
+> If you're uploading data to SharePoint or OneDrive Business Shared Folders, you might find it necessary to activate this option. It's important to note that any issues encountered aren't due to a problem with this client; instead, they should be regarded as issues with the Microsoft OneDrive technology stack. Enabling this option disables all upload integrity checks.
 
 ### display_running_config
 _**Description:**_ This option will include the running config of the application at application startup. This may be desirable to enable when running in containerised environments so that any application logging that is occuring, will have the application configuration being consumed at startup, written out to any applicable log file.
@@ -302,7 +303,8 @@ _**Default Value:**_ *None*
 
 _**Config Example:**_ `drive_id = "b!bO8V6s9SSk9R7mWhpIjUrotN73WlW3tEv3OxP_QfIdQimEdOHR-1So6CqeG1MfDB"`
 
-_**Additional Usage Notes:**_ This option is typically only used when configuring the client to sync a specific SharePoint Library. If this configuration option is specified in your config file, a value must be specified otherwise the application will exit citing a fatal error has occured.
+> [!NOTE]
+> This option is typically only used when configuring the client to sync a specific SharePoint Library. If this configuration option is specified in your config file, a value must be specified otherwise the application will exit citing a fatal error has occured.
 
 ### dry_run
 _**Description:**_ This setting controls the application capability to test your application configuration without actually performing any actual activity (download, upload, move, delete, folder creation).
