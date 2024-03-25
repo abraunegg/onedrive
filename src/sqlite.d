@@ -15,7 +15,7 @@ extern (C) immutable(char)* sqlite3_errstr(int); // missing from the std library
 
 static this() {
 	if (sqlite3_libversion_number() < 3006019) {
-		throw new SqliteException("sqlite 3.6.19 or newer is required");
+		throw new SqliteException(-1,"sqlite 3.6.19 or newer is required");
 	}
 }
 
@@ -24,14 +24,17 @@ private string ifromStringz(const(char)* cstr) {
 }
 
 class SqliteException: Exception {
-	@safe pure nothrow this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+	int errorCode; // Add an errorCode member to store the SQLite error code
+	@safe pure nothrow this(int errorCode, string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
     {
         super(msg, file, line, next);
+		this.errorCode = errorCode; // Set the errorCode
     }
 
-    @safe pure nothrow this(string msg, Throwable next, string file = __FILE__, size_t line = __LINE__)
+    @safe pure nothrow this(int errorCode, string msg, Throwable next, string file = __FILE__, size_t line = __LINE__)
     {
         super(msg, file, line, next);
+		this.errorCode = errorCode; // Set the errorCode
     }
 }
 
@@ -104,7 +107,7 @@ struct Database {
 		}
 		int rc = sqlite3_exec(pDb, "PRAGMA user_version", &callback, &userVersion, null);
 		if (rc != SQLITE_OK) {
-			throw new SqliteException(ifromStringz(sqlite3_errmsg(pDb)));
+			throw new SqliteException(rc, ifromStringz(sqlite3_errmsg(pDb)));
 		}
 		return userVersion;
 	}
@@ -129,7 +132,7 @@ struct Database {
 		// https://www.sqlite.org/c3ref/prepare.html
 		int rc = sqlite3_prepare_v2(pDb, zSql.ptr, cast(int) zSql.length, &s.pStmt, null);
 		if (rc != SQLITE_OK) {
-			throw new SqliteException(ifromStringz(sqlite3_errmsg(pDb)));
+			throw new SqliteException(rc, ifromStringz(sqlite3_errmsg(pDb)));
 		}
 		return s;
 	}
@@ -204,7 +207,7 @@ struct Statement {
 		// https://www.sqlite.org/c3ref/bind_blob.html
 		int rc = sqlite3_bind_text(pStmt, index, value.ptr, cast(int) value.length, SQLITE_STATIC);
 		if (rc != SQLITE_OK) {
-			throw new SqliteException(ifromStringz(sqlite3_errmsg(sqlite3_db_handle(pStmt))));
+			throw new SqliteException(rc, ifromStringz(sqlite3_errmsg(sqlite3_db_handle(pStmt))));
 		}
 	}
 
@@ -217,7 +220,7 @@ struct Statement {
 		// https://www.sqlite.org/c3ref/reset.html
 		int rc = sqlite3_reset(pStmt);
 		if (rc != SQLITE_OK) {
-			throw new SqliteException(ifromStringz(sqlite3_errmsg(sqlite3_db_handle(pStmt))));
+			throw new SqliteException(rc, ifromStringz(sqlite3_errmsg(sqlite3_db_handle(pStmt))));
 		}
 	}
 }

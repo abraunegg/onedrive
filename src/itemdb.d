@@ -207,12 +207,13 @@ final class ItemDatabase {
 			// An error was generated - what was the error?
 			if (e.msg == "database is locked") {
 				addLogEntry();
-				addLogEntry("ERROR: onedrive application is already running - check system process list for active application instances");
+				addLogEntry("ERROR: The 'onedrive' application is already running - please check system process list for active application instances");
 				addLogEntry(" - Use 'sudo ps aufxw | grep onedrive' to potentially determine acive running process", ["verbose"]);
 				addLogEntry();
 			} else {
+				// A different error .. detail the message, detail the actual SQLite Error Code to assist with troubleshooting
 				addLogEntry();
-				addLogEntry("ERROR: An internal database error occurred: " ~ e.msg);
+				addLogEntry("ERROR: An internal database error occurred: " ~ e.msg ~ " (SQLite Error Code: " ~ to!string(e.errorCode) ~ ")");
 				addLogEntry();
 			}
 			return;
