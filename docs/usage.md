@@ -98,7 +98,7 @@ To ensure seamless synchronisation with Microsoft OneDrive, it's critical to adh
 * Prohibited Names: 
   * Certain names are reserved and cannot be used for files or folders: `.lock`, `CON`, `PRN`, `AUX`, `NUL`, `COM0 - COM9`, `LPT0 - LPT9`, `desktop.ini`, any filename starting with `~$`
   * The text sequence `_vti_` cannot appear anywhere in a file or directory name
-  * A files and folder called `forms` is unsupported at the root level of a synchronisation directory
+  * A file and folder called `forms` is unsupported at the root level of a synchronisation directory
 
 Should a file or folder infringe upon these naming conventions or restrictions, synchronisation will skip the item, indicating an invalid name according to Microsoft Naming Convention. The only remedy is to rename the offending item. This constraint is by design and remains firm.
 
