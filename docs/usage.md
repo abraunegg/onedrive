@@ -103,7 +103,7 @@ To ensure seamless synchronisation with Microsoft OneDrive, it's critical to adh
 Should a file or folder infringe upon these naming conventions or restrictions, synchronisation will skip the item, indicating an invalid name according to Microsoft Naming Convention. The only remedy is to rename the offending item. This constraint is by design and remains firm.
 
 > [!TIP]
-> UTF-16 provides a capability to use UTF-16 characters to work around the restrictions and limitations imposed by Microsoft OneDrive. An example of some replacement characters are below:
+> UTF-16 provides a capability to use alternative characters to work around the restrictions and limitations imposed by Microsoft OneDrive. An example of some replacement characters are below:
 > | Standard Invalid Character | Potential UTF-16 Replacement Character |
 > |--------------------|------------------------------|
 > | .                  | ․ (One Dot Leader, `\u2024`)  |
