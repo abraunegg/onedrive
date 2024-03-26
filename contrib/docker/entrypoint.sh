@@ -139,6 +139,13 @@ if [ "${ONEDRIVE_DISABLE_UPLOAD_VALIDATION:=0}" == "1" ]; then
    ARGS=(--disable-upload-validation ${ARGS[@]})
 fi
 
+# Tell client to download OneDrive Business Shared Files if 'sync_business_shared_items' option has been enabled in the configuration files
+if [ "${ONEDRIVE_SYNC_SHARED_FILES:=0}" == "1" ]; then
+   echo "# We are attempting to sync OneDrive Business Shared Files if 'sync_business_shared_items' has been enabled in the config file"
+   echo "# Adding --sync-shared-files"
+   ARGS=(--sync-shared-files ${ARGS[@]})
+fi
+
 if [ ${#} -gt 0 ]; then
   ARGS=("${@}")
 fi
