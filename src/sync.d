@@ -811,7 +811,7 @@ class SyncEngine {
 				// getDeltaChangesByItemId has the re-try logic for transient errors
 				deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink, getDeltaQueryOneDriveApiInstance);
 				
-				// If the initial deltaChanges response is an invalid JSON object, keep trying ..
+				// If the initial deltaChanges response is an invalid JSON object, keep trying until we get a valid response ..
 				if (deltaChanges.type() != JSONType.object) {
 					while (deltaChanges.type() != JSONType.object) {
 						// Handle the invalid JSON response adn retry
@@ -832,6 +832,7 @@ class SyncEngine {
 					addLogEntry("Processing API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["verbose"]);
 				}
 				
+				// Update the count of items received
 				jsonItemsReceived = jsonItemsReceived + nrChanges;
 				
 				// We have a valid deltaChanges JSON array. This means we have at least 200+ JSON items to process.
@@ -839,7 +840,7 @@ class SyncEngine {
 				foreach (onedriveJSONItem; deltaChanges["value"].array) {
 					// increment change count for this item
 					changeCount++;
-					// Process the OneDrive object item JSON
+					// Process the received OneDrive object item JSON for this JSON bundle
 					processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope);
 				}
 				
@@ -925,13 +926,14 @@ class SyncEngine {
 			ulong nrChanges = count(deltaChanges["value"].array);
 			int changeCount = 0;
 			addLogEntry("API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["debug"]);
+			// Update the count of items received
 			jsonItemsReceived = jsonItemsReceived + nrChanges;
 			
 			// The API response however cannot be run in parallel as the OneDrive API sends the JSON items in the order in which they must be processed
 			foreach (onedriveJSONItem; deltaChanges["value"].array) {
 				// increment change count for this item
 				changeCount++;
-				// Process the OneDrive object item JSON
+				// Process the received OneDrive object item JSON for this JSON bundle
 				processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope);	
 			}
 			
@@ -1854,37 +1856,39 @@ class SyncEngine {
 		}
 	}
 	
-	// Handle create local directory
+	// Handle the creation of a new local directory
 	void handleLocalDirectoryCreation(Item newDatabaseItem, string newItemPath, JSONValue onedriveJSONItem) {
-	
-		// Update the logging output to be consistent
-		addLogEntry("Creating local directory: " ~ "./" ~ buildNormalizedPath(newItemPath));
-		if (!dryRun) {
-			try {
-				// Create the new directory
-				addLogEntry("Requested path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);
-				mkdirRecurse(newItemPath);
-				// Configure the applicable permissions for the folder
-				addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);
-				newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
-				// Update the time of the folder to match the last modified time as is provided by OneDrive
-				// If there are any files then downloaded into this folder, the last modified time will get 
-				// updated by the local Operating System with the latest timestamp - as this is normal operation
-				// as the directory has been modified
-				addLogEntry("Setting directory lastModifiedDateTime for: " ~ newItemPath ~ " to " ~ to!string(newDatabaseItem.mtime), ["debug"]);
-				addLogEntry("Calling setTimes() for this directory: " ~ newItemPath, ["debug"]);
-				setTimes(newItemPath, newDatabaseItem.mtime, newDatabaseItem.mtime);
-				// Save the item to the database
+		// To create a path, 'newItemPath' must not be empty
+		if (!newItemPath.empty) {
+			// Update the logging output to be consistent
+			addLogEntry("Creating local directory: " ~ "./" ~ buildNormalizedPath(newItemPath));
+			if (!dryRun) {
+				try {
+					// Create the new directory
+					addLogEntry("Requested path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);
+					mkdirRecurse(newItemPath);
+					// Configure the applicable permissions for the folder
+					addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);
+					newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
+					// Update the time of the folder to match the last modified time as is provided by OneDrive
+					// If there are any files then downloaded into this folder, the last modified time will get 
+					// updated by the local Operating System with the latest timestamp - as this is normal operation
+					// as the directory has been modified
+					addLogEntry("Setting directory lastModifiedDateTime for: " ~ newItemPath ~ " to " ~ to!string(newDatabaseItem.mtime), ["debug"]);
+					addLogEntry("Calling setTimes() for this directory: " ~ newItemPath, ["debug"]);
+					setTimes(newItemPath, newDatabaseItem.mtime, newDatabaseItem.mtime);
+					// Save the item to the database
+					saveItem(onedriveJSONItem);
+				} catch (FileException e) {
+					// display the error message
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				}
+			} else {
+				// we dont create the directory, but we need to track that we 'faked it'
+				idsFaked ~= [newDatabaseItem.driveId, newDatabaseItem.id];
+				// Save the item to the dry-run database
 				saveItem(onedriveJSONItem);
-			} catch (FileException e) {
-				// display the error message
-				displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 			}
-		} else {
-			// we dont create the directory, but we need to track that we 'faked it'
-			idsFaked ~= [newDatabaseItem.driveId, newDatabaseItem.id];
-			// Save the item to the dry-run database
-			saveItem(onedriveJSONItem);
 		}
 	}
 	
@@ -5397,7 +5401,7 @@ class SyncEngine {
 					// Attempt to upload the zero byte file using simpleUpload for all account types
 					uploadResponse = uploadFileOneDriveApiInstance.simpleUpload(fileToUpload, parentItem.driveId, parentItem.id, baseName(fileToUpload));
 					uploadFailed = false;
-					addLogEntry("Uploading new file " ~ fileToUpload ~ " ... done.");
+					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done.");
 					// Shutdown the API
 					uploadFileOneDriveApiInstance.shutdown();
 					// Free object and memory
@@ -5435,13 +5439,13 @@ class SyncEngine {
 					} else {
 						// Default operation if not 408,429,503,504 errors
 						// display what the error is
-						addLogEntry("Uploading new file " ~ fileToUpload ~ " ... failed.");
+						addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					}
 					
 				} catch (FileException e) {
 					// display the error message
-					addLogEntry("Uploading new file " ~ fileToUpload ~ " ... failed.");
+					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				}
 			} else {
@@ -5489,13 +5493,13 @@ class SyncEngine {
 					} else {
 						// Default operation if not 408,429,503,504 errors
 						// display what the error is
-						addLogEntry("Uploading new file " ~ fileToUpload ~ " ... failed.");
+						addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					}
 					
 				} catch (FileException e) {
 					// display the error message
-					addLogEntry("Uploading new file " ~ fileToUpload ~ " ... failed.");
+					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				}
 				
@@ -5529,9 +5533,9 @@ class SyncEngine {
 							
 							if (uploadResponse.type() == JSONType.object) {
 								uploadFailed = false;
-								addLogEntry("Uploading new file " ~ fileToUpload ~ " ... done.");
+								addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done.");
 							} else {
-								addLogEntry("Uploading new file " ~ fileToUpload ~ " ... failed.");
+								addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 								uploadFailed = true;
 							}
 						} catch (OneDriveException exception) {
@@ -5565,25 +5569,25 @@ class SyncEngine {
 							} else {
 								// Default operation if not 408,429,503,504 errors
 								// display what the error is
-								addLogEntry("Uploading new file " ~ fileToUpload ~ " ... failed.");
+								addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 								displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 							}
 						}
 					} else {
 						// No Upload URL or nextExpectedRanges or localPath .. not a valid JSON we can use
 						addLogEntry("Session data is missing required elements to perform a session upload.", ["verbose"]);
-						addLogEntry("Uploading new file " ~ fileToUpload ~ " ... failed.");
+						addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 					}
 				} else {
 					// Create session Upload URL failed
-					addLogEntry("Uploading new file " ~ fileToUpload ~ " ... failed.");
+					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 				}
 			}
 		} else {
 			// We are in a --dry-run scenario
 			uploadResponse = createFakeResponse(fileToUpload);
 			uploadFailed = false;
-			addLogEntry("Uploading new file " ~ fileToUpload ~ " ... done.", ["info", "notify"]);
+			addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done.", ["info", "notify"]);
 		}
 		
 		// Upload has finished
@@ -7510,7 +7514,7 @@ class SyncEngine {
 			// getDeltaChangesByItemId has the re-try logic for transient errors
 			deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink, getDeltaQueryOneDriveApiInstance);
 			
-			// If the initial deltaChanges response is an invalid JSON object, keep trying ..
+			// If the initial deltaChanges response is an invalid JSON object, keep trying until we get a valid response ..
 			if (deltaChanges.type() != JSONType.object) {
 				while (deltaChanges.type() != JSONType.object) {
 					// Handle the invalid JSON response adn retry
