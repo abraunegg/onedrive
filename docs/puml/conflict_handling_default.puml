@@ -1,0 +1,31 @@
+@startuml
+start
+note left: Operational Mode 'onedrive --sync'
+:Query OneDrive /delta API for online changes;
+note left: This data is considered the 'source-of-truth'\nLocal data should be a 'replica' of this data
+:Process received JSON data;
+if (JSON item is a file) then (yes)
+  if (Does the file exist locally) then (yes)
+    :Compute relevant file hashes;
+    :Check DB for file record;
+    if (DB record found) then (yes)
+      :Compare file hash with DB hash;
+      if (Is the hash different) then (yes)
+        :Log that the local file was modified locally since last sync;
+        :Renaming local file to avoid potential local data loss;
+        note left: Local data loss prevention\nRenamed file will be uploaded as new file
+      else (no)
+      endif
+    else (no)    
+    endif
+  else (no)
+  endif
+:Download file (as per online JSON item) as required;
+else (no)
+  :Other handling for directories | root ojects | deleted items;
+endif
+:Performing a database consistency and\nintegrity check on locally stored data;
+:Scan file system for any new data to upload;
+note left: The file that was renamed will be uploaded here
+stop
+@enduml

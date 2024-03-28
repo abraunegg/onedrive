@@ -1,0 +1,70 @@
+@startuml
+start
+note left: Operational Mode 'onedrive -sync -local-first -resync'
+:Query OneDrive API and create new database with default root account objects;
+:Performing a database consistency and\nintegrity check on locally stored data;
+note left: This data is considered the 'source-of-truth'\nOnline data should be a 'replica' of this data\nHowever the database has only 1 record currently
+:Scan file system for any new data to upload;
+note left: This is where in this specific mode all local\n content is assessed for applicability for\nupload to Microsoft OneDrive
+
+repeat
+  :For each new local item;
+  if (Is the item a directory) then (yes)
+    if (Is Directory found online) then (yes)
+      :Save directory details from online in local database;
+    else (no)
+      :Create directory online;
+      :Save details in local database;
+    endif
+  else (no)
+    :Flag file as a potentially new item to upload;
+  endif
+repeat while
+
+:Process potential new items to upload;
+
+repeat
+  :For each potential file to upload;
+  if (Is File found online) then (yes)
+    if (Does the online JSON data match local file) then (yes)
+		  :Save details in local database;
+	   else (no)
+	    :Log that the local file was modified locally since last sync;
+	    :Renaming local file to avoid potential local data loss;
+       note left: Local data loss prevention\nRenamed file will be uploaded as new file
+       :Upload renamed local file as new file;
+	  endif
+  else (no)
+    :Upload new file;
+  endif
+repeat while
+
+:Query OneDrive /delta API for online changes;
+:Process received JSON data;
+if (JSON item is a file) then (yes)
+  if (Does the file exist locally) then (yes)
+    :Compute relevant file hashes;
+    :Check DB for file record;
+    if (DB record found) then (yes)
+      :Compare file hash with DB hash;
+      if (Is the hash different) then (yes)
+        :Log that the local file was modified locally since last sync;
+        :Renaming local file to avoid potential local data loss;
+        note left: Local data loss prevention\nRenamed file will be uploaded as new file
+      else (no)
+      endif
+    else (no)
+    
+    endif
+  else (no)
+  endif
+
+:Download file (as per online JSON item) as required;
+  
+else (no)
+  :Other handling for directories | root ojects | deleted items;
+endif
+
+
+stop
+@enduml

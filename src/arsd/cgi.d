@@ -683,6 +683,7 @@ enum long defaultMaxContentLength = 5_000_000;
 public import std.string;
 public import std.stdio;
 public import std.conv;
+import std.concurrency;
 import std.uri;
 import std.uni;
 import std.algorithm.comparison;
@@ -3910,14 +3911,16 @@ struct RequestServer {
 
 		If you want the forking worker process server, you do need to compile with the embedded_httpd_processes config though.
 	+/
-	void serveEmbeddedHttp(alias fun, CustomCgi = Cgi, long maxContentLength = defaultMaxContentLength)(ThisFor!fun _this) {
+	shared void serveEmbeddedHttp(alias fun, T, CustomCgi = Cgi, long maxContentLength = defaultMaxContentLength)(shared T _this) {
 		globalStopFlag = false;
 		static if(__traits(isStaticFunction, fun))
-			alias funToUse = fun;
+			void funToUse(CustomCgi cgi) {
+				fun(_this, cgi);
+			}
 		else
 			void funToUse(CustomCgi cgi) {
 				static if(__VERSION__ > 2097)
-					__traits(child, _this, fun)(cgi);
+					__traits(child, _inst_this, fun)(_inst_this, cgi);
 				else static assert(0, "Not implemented in your compiler version!");
 			}
 		auto manager = new ListeningConnectionManager(listeningHost, listeningPort, &doThreadHttpConnection!(CustomCgi, funToUse), null, useFork, numberOfThreads);

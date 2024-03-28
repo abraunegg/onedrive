@@ -1,6 +1,6 @@
 # How to configure access to specific Microsoft Azure deployments
-## Application Version
-Before reading this document, please ensure you are running application version [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases) or greater. Use `onedrive --version` to determine what application version you are using and upgrade your client if required.
+> [!CAUTION]
+> Before reading this document, please ensure you are running application version [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases) or greater. Use `onedrive --version` to determine what application version you are using and upgrade your client if required.
 
 ## Process Overview
 In some cases it is a requirement to utilise specific Microsoft Azure cloud deployments to conform with data and security reuqirements that requires data to reside within the geographic borders of that country.
@@ -37,7 +37,8 @@ In order to successfully use these specific Microsoft Azure deployments, the fol
 
 ![application_registration_done](./images/application_registration_done.jpg)
 
-**Note:** The Application (client) ID UUID as displayed after client registration, is what is required as the 'application_id' for Step 4 below.
+> [!NOTE]
+> The Application (client) ID UUID as displayed after client registration, is what is required as the 'application_id' for Step 4 below.
 
 ## Step 2: Configure application authentication scopes
 Configure the API permissions as per the following:

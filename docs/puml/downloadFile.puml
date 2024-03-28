@@ -1,0 +1,63 @@
+@startuml
+start
+
+partition "Download File" {
+
+  :Get item specifics from JSON;
+  :Calculate item's path;
+  
+  if (Is item malware?) then (yes)
+      :Log malware detected;
+      stop
+  else (no)
+      :Check for file size in JSON;
+      if (File size missing) then (yes)
+          :Log error;
+          stop
+      endif
+      
+      :Configure hashes for comparison;
+      if (Hashes missing) then (yes)
+          :Log error;
+          stop
+      endif
+      
+      if (Does file exist locally?) then (yes)
+          :Check DB for item;
+          if (DB hash match?) then (no)
+              :Log modification; Perform safe backup;
+              note left: Local data loss prevention
+          endif
+      endif
+      
+      :Check local disk space;
+      if (Insufficient space?) then (yes)
+          :Log insufficient space;
+          stop
+      else (no)
+          if (Dry run?) then (yes)
+              :Fake download process;
+          else (no)
+              :Attempt to download file;
+              if (Download exception occurs?) then (yes)
+                  :Handle exceptions; Retry download or log error;
+              endif
+              
+              if (File downloaded successfully?) then (yes)
+                  :Validate download;
+                  if (Validation passes?) then (yes)
+                      :Log success; Update DB;
+                  else (no)
+                      :Log validation failure; Remove file;
+                  endif
+              else (no)
+                  :Log download failed;
+              endif
+          endif
+      endif
+  endif
+
+}
+
+stop
+@enduml

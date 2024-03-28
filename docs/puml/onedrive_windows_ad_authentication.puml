@@ -1,0 +1,59 @@
+@startuml
+participant "Microsoft Windows OneDrive Client"
+participant "Azure Active Directory\n(Active Directory)\n(login.microsoftonline.com)" as AzureAD
+participant "Microsoft OneDrive\nAuthentication Service\n(login.microsoftonline.com)" as AuthServer
+participant "User's Device (for MFA)" as UserDevice
+participant "Microsoft Graph API\n(graph.microsoft.com)" as GraphAPI
+participant "Microsoft OneDrive"
+
+"Microsoft Windows OneDrive Client" -> AzureAD: Request Authorization\n(Client Credentials, Scopes)
+AzureAD -> AuthServer: Validate Credentials\n(Forward Request)
+AuthServer -> AzureAD: Provide Authorization Code
+AzureAD -> "Microsoft Windows OneDrive Client": Provide Authorization Code (via AzureAD)
+
+"Microsoft Windows OneDrive Client" -> AzureAD: Request Access Token\n(Authorization Code, Client Credentials)
+AzureAD -> AuthServer: Request Access Token\n(Authorization Code, Forwarded Credentials)
+AuthServer -> AzureAD: Return Access Token\n(and Refresh Token)
+AzureAD -> "Microsoft Windows OneDrive Client": Return Access Token\n(and Refresh Token) (via AzureAD)
+
+alt MFA Enabled
+    AzureAD -> UserDevice: Trigger MFA Challenge
+    UserDevice -> AzureAD: Provide MFA Verification
+    AzureAD -> "Microsoft Windows OneDrive Client": Return Access Token\n(and Refresh Token) (Post MFA)
+    "Microsoft Windows OneDrive Client" -> GraphAPI: Request Microsoft OneDrive Data\n(Access Token)
+    loop Token Expiry Check
+        "Microsoft Windows OneDrive Client" -> AzureAD: Is Access Token Expired?
+        AzureAD -> AuthServer: Validate Token Expiry
+        alt Token Expired
+            "Microsoft Windows OneDrive Client" -> AzureAD: Request New Access Token\n(Refresh Token)
+            AzureAD -> AuthServer: Request New Access Token\n(Refresh Token)
+            AuthServer -> AzureAD: Return New Access Token
+            AzureAD -> "Microsoft Windows OneDrive Client": Return New Access Token (via AzureAD)
+        else Token Valid
+            GraphAPI -> "Microsoft OneDrive": Retrieve Data
+            "Microsoft OneDrive" -> GraphAPI: Return Data
+            GraphAPI -> "Microsoft Windows OneDrive Client": Provide Data
+        end
+    end
+else MFA Not Required
+    AzureAD -> "Microsoft Windows OneDrive Client": Return Access Token\n(and Refresh Token) (Direct)
+    "Microsoft Windows OneDrive Client" -> GraphAPI: Request Microsoft OneDrive Data\n(Access Token)
+    loop Token Expiry Check
+        "Microsoft Windows OneDrive Client" -> AzureAD: Is Access Token Expired?
+        AzureAD -> AuthServer: Validate Token Expiry
+        alt Token Expired
+            "Microsoft Windows OneDrive Client" -> AzureAD: Request New Access Token\n(Refresh Token)
+            AzureAD -> AuthServer: Request New Access Token\n(Refresh Token)
+            AuthServer -> AzureAD: Return New Access Token
+            AzureAD -> "Microsoft Windows OneDrive Client": Return New Access Token (via AzureAD)
+        else Token Valid
+            GraphAPI -> "Microsoft OneDrive": Retrieve Data
+            "Microsoft OneDrive" -> GraphAPI: Return Data
+            GraphAPI -> "Microsoft Windows OneDrive Client": Provide Data
+        end
+    end
+else MFA Failed or Other Auth Error
+    AzureAD -> "Microsoft Windows OneDrive Client": Error Message (e.g., Invalid Credentials, MFA Failure)
+end
+
+@enduml

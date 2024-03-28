@@ -1,0 +1,81 @@
+@startuml
+
+start
+
+:Validate access and existing access token\nRefresh if needed;
+
+:Query /delta API;
+note right: Query Microsoft OneDrive /delta API
+:Receive JSON responses;
+
+:Process JSON Responses;
+partition "Process /delta JSON Responses" {
+    while (for each JSON response) is (yes)
+        :Determine if JSON is 'root'\nor 'deleted' item;
+        if ('root' or 'deleted') then (yes)
+            :Process 'root' or 'deleted' items;
+            if ('root' object) then (yes)
+                :Process 'root' JSON;
+            else (no)
+                if (Is 'deleted' object in sync) then (yes)
+                    :Process delection of local item;
+                else (no)
+                    :Rename local file as it is not in sync;
+                    note right: Deletion event conflict handling\nLocal data loss prevention
+                endif
+            endif
+        else (no)
+            :Evaluate against 'Client Side Filtering' rules;
+            if (unwanted) then (yes)
+                :Discard JSON;
+            else (no)
+                :Process JSON (create dir/download file);
+                if (Is the 'JSON' item in the local cache) then (yes)
+                  :Process JSON as a potentially changed local item;
+                  note left: Run 'applyPotentiallyChangedItem' function
+                else (no)
+                  :Process JSON as potentially new local item;
+                  note right:  Run 'applyPotentiallyNewLocalItem' function
+                endif
+                :Process objects in download queue;
+                :Download File;
+                note left: Download file from Microsoft OneDrive (Multi Threaded Download)
+                :Save in local database cache;
+            endif
+        endif
+    endwhile
+}
+
+partition "Perform data integrity check based on local cache database" {
+  :Process local cache database\nto check local data integrity and for differences;
+  if (difference found) then (yes)
+      :Upload file/folder change including deletion;
+      note right: Upload local change to Microsoft OneDrive
+      :Receive response with item metadata;
+      :Save response to local cache database;
+  else (no)
+  endif
+}
+
+partition "Local Filesystem Scanning" {
+  :Scan local filesystem\nfor new files/folders;
+    while (for each new item) is (yes)
+        :Check item against 'Client Side Filtering' rules;
+        if (item passes filtering) then (yes)
+            :Upload new file/folder change including deletion;
+            note right: Upload to Microsoft OneDrive
+            :Receive response with item metadata;
+            :Save response in local\ncache database;
+        else (no)
+            :Discard item\n(Does not meet filtering criteria);
+        endif
+    endwhile
+}
+
+partition "Final True-Up" {
+  :Query /delta link for true-up;
+  note right: Final Data True-Up
+  :Process further online JSON changes if required;
+}
+stop
+@enduml

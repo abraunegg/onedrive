@@ -12,7 +12,7 @@ RUN apt-get clean \
 COPY . /usr/src/onedrive
 WORKDIR /usr/src/onedrive
 
-RUN ./configure DC=/usr/bin/ldmd2 \
+RUN ./configure DC=/usr/bin/ldc2 \
  && make clean \
  && make \
  && make install

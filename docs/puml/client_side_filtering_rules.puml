@@ -1,0 +1,71 @@
+@startuml
+start
+:Start;
+partition "checkPathAgainstClientSideFiltering" {
+  :Get localFilePath;
+  
+  if (Does path exist?) then (no)
+    :Return false;
+    stop
+  endif
+  
+  if (Check .nosync?) then (yes)
+    :Check for .nosync file;
+    if (.nosync found) then (yes)
+      :Log and return true;
+      stop
+    endif
+  endif
+  
+  if (Skip dotfiles?) then (yes)
+    :Check if dotfile;
+    if (Is dotfile) then (yes)
+      :Log and return true;
+      stop
+    endif
+  endif
+  
+  if (Skip symlinks?) then (yes)
+    :Check if symlink;
+    if (Is symlink) then (yes)
+      if (Config says skip?) then (yes)
+        :Log and return true;
+        stop
+      elseif (Unexisting symlink?) then (yes)
+        :Check if relative link works;
+        if (Relative link ok) then (no)
+          :Log and return true;
+          stop
+        endif
+      endif
+    endif
+  endif
+  
+  if (Skip dir or file?) then (yes)
+    :Check dir or file exclusion;
+    if (Excluded by config?) then (yes)
+      :Log and return true;
+      stop
+    endif
+  endif
+  
+  if (Use sync_list?) then (yes)
+    :Check sync_list exclusions;
+    if (Excluded by sync_list?) then (yes)
+      :Log and return true;
+      stop
+    endif
+  endif
+  
+  if (Check file size?) then (yes)
+    :Check for file size limit;
+    if (File size exceeds limit?) then (yes)
+      :Log and return true;
+      stop
+    endif
+  endif
+  
+  :Return false;
+}
+stop
+@enduml
