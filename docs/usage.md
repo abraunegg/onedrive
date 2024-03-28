@@ -99,6 +99,10 @@ To ensure seamless synchronisation with Microsoft OneDrive, it's critical to adh
   * Certain names are reserved and cannot be used for files or folders: `.lock`, `CON`, `PRN`, `AUX`, `NUL`, `COM0 - COM9`, `LPT0 - LPT9`, `desktop.ini`, any filename starting with `~$`
   * The text sequence `_vti_` cannot appear anywhere in a file or directory name
   * A file and folder called `forms` is unsupported at the root level of a synchronisation directory
+* Path Length
+  * All files and folders stored in your 'sync_dir' (typically `~/OneDrive`) must not have a path length greater than:
+    * 400 characters for OneDrive Business & SharePoint
+    * 430 characters for OneDrive Personal
 
 Should a file or folder infringe upon these naming conventions or restrictions, synchronisation will skip the item, indicating an invalid name according to Microsoft Naming Convention. The only remedy is to rename the offending item. This constraint is by design and remains firm.
 
