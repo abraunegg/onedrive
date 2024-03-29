@@ -1380,6 +1380,13 @@ class ApplicationConfig {
 		}
 		
 		if (getValueBool("display_running_config")) {
+			addLogEntry();
+			addLogEntry("--------------------DEVELOPER_OPTIONS----------------------------");
+			addLogEntry("Config option 'force_children_scan'          = " ~ to!string(getValueBool("force_children_scan")));
+			addLogEntry();
+		}
+		
+		if (getValueBool("display_running_config")) {
 			addLogEntry("-----------------------------------------------------------------");
 		}
 	}

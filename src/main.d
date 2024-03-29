@@ -157,7 +157,7 @@ int main(string[] cliArgs) {
 	addLogEntry("Basic 'Console only with no new line' message", ["consoleOnlyNoNewLine"]);
 	**/
 	
-	// Log application start time
+	// Log application start time, log line has start time
 	addLogEntry("Application started", ["debug"]);
 	
 	// Who are we running as? This will print the ProcessID, UID, GID and username the application is running as
@@ -366,7 +366,7 @@ int main(string[] cliArgs) {
 	}
 	
 	// Implement https://github.com/abraunegg/onedrive/issues/1129
-	// Force a synchronization of a specific folder, only when using --synchronize --single-directory and ignoring all non-default skip_dir and skip_file rules
+	// Force a synchronisation of a specific folder, only when using --synchronize --single-directory and ignoring all non-default skip_dir and skip_file rules
 	if (appConfig.getValueBool("force_sync")) {
 		// appConfig.checkForBasicOptionConflicts() has already checked for the basic requirements for --force-sync
 		addLogEntry();
@@ -426,6 +426,8 @@ int main(string[] cliArgs) {
 		addLogEntry("Attempting to initialise the OneDrive API ...", ["verbose"]);
 		OneDriveApi oneDriveApiInstance = new OneDriveApi(appConfig);
 		appConfig.apiWasInitialised = oneDriveApiInstance.initialise();
+		
+		// Did the API initialise successfully?
 		if (appConfig.apiWasInitialised) {
 			addLogEntry("The OneDrive API was initialised successfully", ["verbose"]);
 			
@@ -619,7 +621,7 @@ int main(string[] cliArgs) {
 	
 	// Configure the sync direcory based on the runtimeSyncDirectory configured directory
 	addLogEntry("All application operations will be performed in the configured local 'sync_dir' directory: " ~ runtimeSyncDirectory, ["verbose"]);
-	
+	// Try and set the 'sync_dir', attempt to create if it does not exist
 	try {
 		if (!exists(runtimeSyncDirectory)) {
 			addLogEntry("runtimeSyncDirectory: Configured 'sync_dir' is missing locally. Creating: " ~ runtimeSyncDirectory, ["debug"]);
@@ -1287,16 +1289,20 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 				itemDB.performVacuum();
 			}
 			
-			// Perform the final true up scan to ensure we have correctly replicated the current online state locally
-			if (!appConfig.surpressLoggingOutput) {
-				addLogEntry("Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process");
-			}
-			// We pass in the 'appConfig.fullScanTrueUpRequired' value which then flags do we use the configured 'deltaLink'
-			// If 'appConfig.fullScanTrueUpRequired' is true, we do not use the 'deltaLink' if we are in --monitor mode, thus forcing a full scan true up
-			syncEngineInstance.syncOneDriveAccountToLocalDisk();
-			if (appConfig.getValueBool("monitor")) {
-				// Cancel out any inotify events from downloading data
-				filesystemMonitor.update(false);
+			// If we are not doing a 'force_children_scan' perform a true-up
+			// 'force_children_scan' is used when using /children rather than /delta and it is not efficent to re-run this exact same process twice
+			if (!appConfig.getValueBool("force_children_scan")) {
+				// Perform the final true up scan to ensure we have correctly replicated the current online state locally
+				if (!appConfig.surpressLoggingOutput) {
+					addLogEntry("Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process");
+				}
+				// We pass in the 'appConfig.fullScanTrueUpRequired' value which then flags do we use the configured 'deltaLink'
+				// If 'appConfig.fullScanTrueUpRequired' is true, we do not use the 'deltaLink' if we are in --monitor mode, thus forcing a full scan true up
+				syncEngineInstance.syncOneDriveAccountToLocalDisk();
+				if (appConfig.getValueBool("monitor")) {
+					// Cancel out any inotify events from downloading data
+					filesystemMonitor.update(false);
+				}
 			}
 		}
 	}

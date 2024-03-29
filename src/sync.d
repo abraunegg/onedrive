@@ -244,6 +244,20 @@ class SyncEngine {
 			this.noRemoteDelete = true;
 		}
 		
+		// Are we configured to use a National Cloud Deployment?
+		if (appConfig.getValueString("azure_ad_endpoint") != "") {
+			// value is configured, is it a valid value?
+			if ((appConfig.getValueString("azure_ad_endpoint") == "USL4") || (appConfig.getValueString("azure_ad_endpoint") == "USL5") || (appConfig.getValueString("azure_ad_endpoint") == "DE") || (appConfig.getValueString("azure_ad_endpoint") == "CN")) {
+				// valid entries to flag we are using a National Cloud Deployment
+				// National Cloud Deployments do not support /delta as a query
+				// https://docs.microsoft.com/en-us/graph/deployments#supported-features
+				// Flag that we have a valid National Cloud Deployment that cannot use /delta queries
+				this.nationalCloudDeployment = true;
+				// Reverse set 'force_children_scan' for completeness
+				appConfig.setValueBool("force_children_scan", true);
+			}
+		}
+		
 		// Are we forcing to use /children scan instead of /delta to simulate National Cloud Deployment use of /children?
 		if (appConfig.getValueBool("force_children_scan")) {
 			addLogEntry("Forcing client to use /children API call rather than /delta API to retrieve objects from the OneDrive API");
