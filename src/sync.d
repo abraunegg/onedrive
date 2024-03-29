@@ -77,8 +77,6 @@ struct DeltaLinkDetails {
 	string latestDeltaLink;
 }
 
-
-
 class SyncEngine {
 	// Class Variables
 	ApplicationConfig appConfig;
@@ -179,11 +177,9 @@ class SyncEngine {
 	// Store the latest DeltaLink
 	string latestDeltaLink;
 	
-	
-	// Struct of all nextLink and deltaLink URL's
+	// Struct of containing the deltaLink details
 	DeltaLinkDetails deltaLinkCache;
-	
-	
+		
 	// Configure this class instance
 	this(ApplicationConfig appConfig, ItemDatabase itemDB, ClientSideFiltering selectiveSync) {
 		// Configure the class varaible to consume the application configuration
