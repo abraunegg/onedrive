@@ -886,13 +886,13 @@ class SyncEngine {
 					
 					// Store this currentDeltaLink as latestDeltaLink
 					latestDeltaLink = deltaChanges["@odata.deltaLink"].str;
+					
+					// Update deltaLinkCache
+					deltaLinkCache.driveId = driveIdToQuery;
+					deltaLinkCache.itemId = itemIdToQuery;
+					deltaLinkCache.latestDeltaLink = currentDeltaLink;
 				}
 				
-				// Update deltaLinkCache
-				deltaLinkCache.driveId = driveIdToQuery;
-				deltaLinkCache.itemId = itemIdToQuery;
-				deltaLinkCache.latestDeltaLink = currentDeltaLink;
-						
 				// We have a valid deltaChanges JSON array. This means we have at least 200+ JSON items to process.
 				// The API response however cannot be run in parallel as the OneDrive API sends the JSON items in the order in which they must be processed
 				foreach (onedriveJSONItem; deltaChanges["value"].array) {
@@ -1738,9 +1738,9 @@ class SyncEngine {
 			skippedItems.clear();
 		}
 		
-		// Update the deltaLink in the database for this driveId so that we can reuse this now that jsonItemsToProcess has been fully processed
+		// If deltaLinkCache.latestDeltaLink is not empty, update the deltaLink in the database for this driveId so that we can reuse this now that jsonItemsToProcess has been fully processed
 		if (!deltaLinkCache.latestDeltaLink.empty) {
-			addLogEntry("Updating completed deltaLink in DB to: " ~ latestDeltaLink, ["debug"]);
+			addLogEntry("Updating completed deltaLink for driveID " ~ deltaLinkCache.driveId ~ " in DB to: " ~ deltaLinkCache.latestDeltaLink, ["debug"]);
 			itemDB.setDeltaLink(deltaLinkCache.driveId, deltaLinkCache.itemId, deltaLinkCache.latestDeltaLink);
 		}
 	}
