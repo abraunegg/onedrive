@@ -176,7 +176,6 @@ class SyncEngine {
 	bool generateSimulatedDeltaResponse = false;
 	// Store the latest DeltaLink
 	string latestDeltaLink;
-	
 	// Struct of containing the deltaLink details
 	DeltaLinkDetails deltaLinkCache;
 		
@@ -869,7 +868,7 @@ class SyncEngine {
 					// This is an API capability gap:
 					//
 					// ..
-					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>cF9JRD0zODEyNzg7JTIzOyUyMzA7JTIz
+					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>F9JRD0zODEyNzg7JTIzOyUyMzA7JTIz
 					// Processing API Response Bundle: 115 - Quantity of 'changes|items' in this bundle to process: 204
 					// ..
 					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>F9JRD0zODM2Nzg7JTIzOyUyMzA7JTIz
@@ -901,7 +900,7 @@ class SyncEngine {
 					changeCount++;
 					// Process the received OneDrive object item JSON for this JSON bundle
 					// This will determine its initial applicability and perform some initial processing on the JSON if required
-					processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope, currentDeltaLink);
+					processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope);
 				}
 				
 				// Is latestDeltaLink matching deltaChanges["@odata.deltaLink"].str ?
@@ -980,7 +979,7 @@ class SyncEngine {
 				changeCount++;
 				// Process the received OneDrive object item JSON for this JSON bundle
 				// When we generate a /delta response .. there is no currentDeltaLink value
-				processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope, null);
+				processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope);
 			}
 			
 			// To finish off the JSON processing items, this is needed to reflect this in the log
@@ -1065,7 +1064,7 @@ class SyncEngine {
 	}
 	
 	// Process the /delta API JSON response items
-	void processDeltaJSONItem(JSONValue onedriveJSONItem, ulong nrChanges, int changeCount, ulong responseBundleCount, bool singleDirectoryScope, string currentDeltaLink) {
+	void processDeltaJSONItem(JSONValue onedriveJSONItem, ulong nrChanges, int changeCount, ulong responseBundleCount, bool singleDirectoryScope) {
 		
 		// Variables for this JSON item
 		string thisItemId;
@@ -1169,12 +1168,6 @@ class SyncEngine {
 			
 			// Add this JSON item for further processing if this is not being discarded
 			if (!discardDeltaJSONItem) {
-			
-				// Before adding to processing, add currentDeltaLink to this JSON record , so that if this can be updated in the database if required
-				if (!currentDeltaLink.empty) {
-					onedriveJSONItem["currentDeltaLink"] = currentDeltaLink;
-				}
-				
 				// Add onedriveJSONItem to jsonItemsToProcess
 				addLogEntry("Adding this Raw JSON OneDrive Item to jsonItemsToProcess array for further processing", ["debug"]);
 				jsonItemsToProcess ~= onedriveJSONItem;
