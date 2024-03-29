@@ -71,6 +71,14 @@ struct driveDetailsCache {
 	ulong quotaRemaining;
 }
 
+struct DeltaLinkDetails {
+	string driveId;
+	string itemId;
+	string latestDeltaLink;
+}
+
+
+
 class SyncEngine {
 	// Class Variables
 	ApplicationConfig appConfig;
@@ -170,6 +178,11 @@ class SyncEngine {
 	bool generateSimulatedDeltaResponse = false;
 	// Store the latest DeltaLink
 	string latestDeltaLink;
+	
+	
+	// Struct of all nextLink and deltaLink URL's
+	DeltaLinkDetails deltaLinkCache;
+	
 	
 	// Configure this class instance
 	this(ApplicationConfig appConfig, ItemDatabase itemDB, ClientSideFiltering selectiveSync) {
@@ -739,7 +752,6 @@ class SyncEngine {
 		processedCount = 0;
 		
 		// Was a driveId provided as an input
-		//if (driveIdToQuery == "") {
 		if (strip(driveIdToQuery).empty) {
 			// No provided driveId to query, use the account default
 			addLogEntry("driveIdToQuery was empty, setting to appConfig.defaultDriveId", ["debug"]);
@@ -748,7 +760,6 @@ class SyncEngine {
 		}
 		
 		// Was an itemId provided as an input
-		//if (itemIdToQuery == "") {
 		if (strip(itemIdToQuery).empty) {
 			// No provided itemId to query, use the account default
 			addLogEntry("itemIdToQuery was empty, setting to appConfig.defaultRootId", ["debug"]);
@@ -772,6 +783,12 @@ class SyncEngine {
 			generateSimulatedDeltaResponse = true;
 		}
 		
+		// Reset latestDeltaLink & deltaLinkCache
+		latestDeltaLink = null;
+		deltaLinkCache.driveId = null;
+		deltaLinkCache.itemId = null;
+		deltaLinkCache.latestDeltaLink = null;
+				
 		// What /delta query do we use?
 		if (!generateSimulatedDeltaResponse) {
 			// This should be the majority default pathway application use
@@ -835,37 +852,69 @@ class SyncEngine {
 				// Update the count of items received
 				jsonItemsReceived = jsonItemsReceived + nrChanges;
 				
+				// The 'deltaChanges' response may contain either @odata.nextLink or @odata.deltaLink
+				// Check for @odata.nextLink
+				if ("@odata.nextLink" in deltaChanges) {
+					// @odata.nextLink is the pointer within the API to the next '200+' JSON bundle - this is the checkpoint link for this bundle
+					// This URL changes between JSON bundle sets
+					// Log the action of setting currentDeltaLink to @odata.nextLink
+					addLogEntry("Setting currentDeltaLink to @odata.nextLink: " ~ deltaChanges["@odata.nextLink"].str, ["debug"]);
+					
+					// Update currentDeltaLink to @odata.nextLink for the next '200+' JSON bundle - this is the checkpoint link for this bundle
+					currentDeltaLink = deltaChanges["@odata.nextLink"].str;
+				}
+				
+				// Check for @odata.deltaLink - usually only in the LAST JSON changeset bundle
+				if ("@odata.deltaLink" in deltaChanges) {
+					// @odata.deltaLink is the pointer that finalises all the online 'changes' for this particular checkpoint
+					// When the API is queried again, this is fetched from the DB as this is the starting point
+					// The API issue here is - the LAST JSON bundle will ONLY ever contain this item, meaning if this is then committed to the database
+					// if there has been any file download failures from within this LAST JSON bundle, the only way to EVER re-try the failed items is for the user to perform a --resync
+					// This is an API capability gap:
+					//
+					// ..
+					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>cF9JRD0zODEyNzg7JTIzOyUyMzA7JTIz
+					// Processing API Response Bundle: 115 - Quantity of 'changes|items' in this bundle to process: 204
+					// ..
+					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>F9JRD0zODM2Nzg7JTIzOyUyMzA7JTIz
+					// Processing API Response Bundle: 127 - Quantity of 'changes|items' in this bundle to process: 204
+					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>F9JRD0zODM4Nzg7JTIzOyUyMzA7JTIz
+					// Processing API Response Bundle: 128 - Quantity of 'changes|items' in this bundle to process: 176
+					// @odata.deltaLink: https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>
+					// Finished processing /delta JSON response from the OneDrive API
+					
+					// Log the action of setting currentDeltaLink to @odata.deltaLink
+					addLogEntry("Setting currentDeltaLink to (@odata.deltaLink): " ~ deltaChanges["@odata.deltaLink"].str, ["debug"]);
+					
+					// Update currentDeltaLink to @odata.deltaLink as the final checkpoint URL for this entire JSON response set
+					currentDeltaLink = deltaChanges["@odata.deltaLink"].str;
+					
+					// Store this currentDeltaLink as latestDeltaLink
+					latestDeltaLink = deltaChanges["@odata.deltaLink"].str;
+				}
+				
+				// Update deltaLinkCache
+				deltaLinkCache.driveId = driveIdToQuery;
+				deltaLinkCache.itemId = itemIdToQuery;
+				deltaLinkCache.latestDeltaLink = currentDeltaLink;
+						
 				// We have a valid deltaChanges JSON array. This means we have at least 200+ JSON items to process.
 				// The API response however cannot be run in parallel as the OneDrive API sends the JSON items in the order in which they must be processed
 				foreach (onedriveJSONItem; deltaChanges["value"].array) {
 					// increment change count for this item
 					changeCount++;
 					// Process the received OneDrive object item JSON for this JSON bundle
-					processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope);
+					// This will determine its initial applicability and perform some initial processing on the JSON if required
+					processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope, currentDeltaLink);
 				}
 				
-				// The response may contain either @odata.deltaLink or @odata.nextLink
+				// Is latestDeltaLink matching deltaChanges["@odata.deltaLink"].str ?
 				if ("@odata.deltaLink" in deltaChanges) {
-					// Log action
-					addLogEntry("Setting next currentDeltaLink to (@odata.deltaLink): " ~ deltaChanges["@odata.deltaLink"].str, ["debug"]);
-					// Update currentDeltaLink
-					currentDeltaLink = deltaChanges["@odata.deltaLink"].str;
-					// Store this for later use post processing jsonItemsToProcess items
-					latestDeltaLink = deltaChanges["@odata.deltaLink"].str;
+					if (latestDeltaLink == deltaChanges["@odata.deltaLink"].str) {
+						// break out of the 'for (;;) {' loop
+						break;
+					}
 				}
-				
-				// Update deltaLink to next changeSet bundle
-				if ("@odata.nextLink" in deltaChanges) {	
-					// Log action
-					addLogEntry("Setting next currentDeltaLink & deltaLinkAvailable to (@odata.nextLink): " ~ deltaChanges["@odata.nextLink"].str, ["debug"]);
-					// Update currentDeltaLink
-					currentDeltaLink = deltaChanges["@odata.nextLink"].str;
-					// Update deltaLinkAvailable to next changeSet bundle to quantify how many changes we have to process
-					deltaLinkAvailable = deltaChanges["@odata.nextLink"].str;
-					// Store this for later use post processing jsonItemsToProcess items
-					latestDeltaLink = deltaChanges["@odata.nextLink"].str;
-				}
-				else break;
 			}
 			
 			// To finish off the JSON processing items, this is needed to reflect this in the log
@@ -934,7 +983,8 @@ class SyncEngine {
 				// increment change count for this item
 				changeCount++;
 				// Process the received OneDrive object item JSON for this JSON bundle
-				processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope);	
+				// When we generate a /delta response .. there is no currentDeltaLink value
+				processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope, null);
 			}
 			
 			// To finish off the JSON processing items, this is needed to reflect this in the log
@@ -1010,12 +1060,6 @@ class SyncEngine {
 			}
 		}
 		
-		// Update the deltaLink in the database so that we can reuse this now that jsonItemsToProcess has been processed
-		if (!latestDeltaLink.empty) {
-			addLogEntry("Updating completed deltaLink in DB to: " ~ latestDeltaLink, ["debug"]);
-			itemDB.setDeltaLink(driveIdToQuery, itemIdToQuery, latestDeltaLink);
-		}
-		
 		// Keep the driveDetailsCache array with unique entries only
 		driveDetailsCache cachedOnlineDriveData;
 		if (!canFindDriveId(driveIdToQuery, cachedOnlineDriveData)) {
@@ -1025,9 +1069,9 @@ class SyncEngine {
 	}
 	
 	// Process the /delta API JSON response items
-	void processDeltaJSONItem(JSONValue onedriveJSONItem, ulong nrChanges, int changeCount, ulong responseBundleCount, bool singleDirectoryScope) {
+	void processDeltaJSONItem(JSONValue onedriveJSONItem, ulong nrChanges, int changeCount, ulong responseBundleCount, bool singleDirectoryScope, string currentDeltaLink) {
 		
-		// Variables for this foreach loop
+		// Variables for this JSON item
 		string thisItemId;
 		bool itemIsRoot = false;
 		bool handleItemAsRootObject = false;
@@ -1129,6 +1173,13 @@ class SyncEngine {
 			
 			// Add this JSON item for further processing if this is not being discarded
 			if (!discardDeltaJSONItem) {
+			
+				// Before adding to processing, add currentDeltaLink to this JSON record , so that if this can be updated in the database if required
+				if (!currentDeltaLink.empty) {
+					onedriveJSONItem["currentDeltaLink"] = currentDeltaLink;
+				}
+				
+				// Add onedriveJSONItem to jsonItemsToProcess
 				addLogEntry("Adding this Raw JSON OneDrive Item to jsonItemsToProcess array for further processing", ["debug"]);
 				jsonItemsToProcess ~= onedriveJSONItem;
 			}
@@ -1696,6 +1747,12 @@ class SyncEngine {
 		if (!skippedItems.empty) {
 			// Cleanup array memory
 			skippedItems.clear();
+		}
+		
+		// Update the deltaLink in the database for this driveId so that we can reuse this now that jsonItemsToProcess has been fully processed
+		if (!deltaLinkCache.latestDeltaLink.empty) {
+			addLogEntry("Updating completed deltaLink in DB to: " ~ latestDeltaLink, ["debug"]);
+			itemDB.setDeltaLink(deltaLinkCache.driveId, deltaLinkCache.itemId, deltaLinkCache.latestDeltaLink);
 		}
 	}
 	
