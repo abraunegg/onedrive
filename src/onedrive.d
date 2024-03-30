@@ -1147,8 +1147,9 @@ class OneDriveApi {
 				auto errorArray = splitLines(e.msg);
 				string errorMessage = errorArray[0];
 
-				addLogEntry("Handling Curl expection");
-				addLogEntry(to!string(response));
+				// Debug output only
+				addLogEntry("Handling this specific Curl expection", ["debug"]);
+				addLogEntry(to!string(response), ["debug"]);
 				
 				// what is contained in the curl error message?
 				if (canFind(errorMessage, "Couldn't connect to server on handle") || canFind(errorMessage, "Couldn't resolve host name on handle") || canFind(errorMessage, "Timeout was reached on handle")) {
