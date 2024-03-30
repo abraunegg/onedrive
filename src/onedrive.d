@@ -36,23 +36,27 @@ shared bool debugHTTPResponseOutput = false;
 class OneDriveException: Exception {
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/concepts/errors
 	int httpStatusCode;
+	const CurlResponse response;
 	JSONValue error;
 
-	@safe pure this(int httpStatusCode, string reason, string file = __FILE__, size_t line = __LINE__) {
+	this(ushort httpStatusCode, string reason, const CurlResponse response, string file = __FILE__, size_t line = __LINE__) {
 		this.httpStatusCode = httpStatusCode;
-		this.error = error;
-		string msg = format("HTTP request returned status code %d (%s)", httpStatusCode, reason);
-		super(msg, file, line);
-	}
-
-	this(int httpStatusCode, string reason, ref const JSONValue error, string file = __FILE__, size_t line = __LINE__) {
-		this.httpStatusCode = httpStatusCode;
-		this.error = error;
+		this.response = response;
+		this.error = response.json();
 		string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(error, true));
 		super(msg, file, line);
 	}
 }
 
+<<<<<<< HEAD
+=======
+class OneDriveError: Error {
+	this(string msg) {
+		super(msg);
+	}
+}
+
+>>>>>>> pr/2608
 class OneDriveApi {
 	// Class variables
 	ApplicationConfig appConfig;
@@ -76,11 +80,16 @@ class OneDriveApi {
 	const(char)[] refreshToken = "";
 	bool dryRun = false;
 	bool debugResponse = false;
+<<<<<<< HEAD
 	ulong retryAfterValue = 0;
+=======
+	bool keepAlive = false;
+>>>>>>> pr/2608
 
 	this(ApplicationConfig appConfig) {
 		// Configure the class varaible to consume the application configuration
 		this.appConfig = appConfig;
+		this.curlEngine = null;
 		// Configure the major API Query URL's, based on using application configuration
 		// These however can be updated by config option 'azure_ad_endpoint', thus handled differently
 		
@@ -103,12 +112,15 @@ class OneDriveApi {
 		// Subscriptions
 		subscriptionUrl = appConfig.globalGraphEndpoint ~ "/v1.0/subscriptions";
 	}
-	
+
 	// Initialise the OneDrive API class
 	bool initialise(bool keepAlive=true) {
 		// Initialise the curl engine
-		curlEngine = CurlEngine.get();
-		curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"), keepAlive);
+		this.keepAlive = keepAlive;
+		if (curlEngine is null) {
+			curlEngine = CurlEngine.get();
+			curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"), keepAlive);
+		}
 
 		// Authorised value to return
 		bool authorised = false;
@@ -328,6 +340,12 @@ class OneDriveApi {
 		addLogEntry("Authorised State: " ~ to!string(authorised), ["debug"]);
 		return authorised;
 	}
+
+	// Reinitialise the OneDrive API class
+	bool reinitialise() {
+		shutdown();
+		return initialise(this.keepAlive);
+	}
 	
 	// If the API has been configured correctly, print the items that been configured
 	void debugOutputConfiguredAPIItems() {
@@ -361,7 +379,7 @@ class OneDriveApi {
 			curlEngine = null;
 		}
 	}
-	
+
 	// Authenticate this client against Microsoft OneDrive API
 	bool authorise() {
 	
@@ -458,7 +476,6 @@ class OneDriveApi {
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_get
 	JSONValue getDefaultDriveDetails() {
-		checkAccessTokenExpired();
 		string url;
 		url = driveUrl;
 		return get(url);
@@ -466,7 +483,6 @@ class OneDriveApi {
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
 	JSONValue getDefaultRootDetails() {
-		checkAccessTokenExpired();
 		string url;
 		url = driveUrl ~ "/root";
 		return get(url);
@@ -474,7 +490,6 @@ class OneDriveApi {
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
 	JSONValue getDriveIdRoot(string driveId) {
-		checkAccessTokenExpired();
 		string url;
 		url = driveByIdUrl ~ driveId ~ "/root";
 		return get(url);
@@ -482,7 +497,6 @@ class OneDriveApi {
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_get
 	JSONValue getDriveQuota(string driveId) {
-		checkAccessTokenExpired();
 		string url;
 		url = driveByIdUrl ~ driveId ~ "/";
 		url ~= "?select=quota";
@@ -492,7 +506,6 @@ class OneDriveApi {
 	// Return the details of the specified path, by giving the path we wish to query
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
 	JSONValue getPathDetails(string path) {
-		checkAccessTokenExpired();
 		string url;
 		if ((path == ".")||(path == "/")) {
 			url = driveUrl ~ "/root/";
@@ -505,7 +518,6 @@ class OneDriveApi {
 	// Return the details of the specified item based on its driveID and itemID
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
 	JSONValue getPathDetailsById(string driveId, string id) {
-		checkAccessTokenExpired();
 		string url;
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
 		//url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
@@ -522,17 +534,14 @@ class OneDriveApi {
 	// Create a shareable link for an existing file on OneDrive based on the accessScope JSON permissions
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createlink
 	JSONValue createShareableLink(string driveId, string id, JSONValue accessScope) {
-		checkAccessTokenExpired();
 		string url;
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/createLink";
-		curlEngine.http.addRequestHeader("Content-Type", "application/json");
 		return post(url, accessScope.toString());
 	}
 	
 	// Return the requested details of the specified path on the specified drive id and path
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get
 	JSONValue getPathDetailsByDriveId(string driveId, string path) {
-		checkAccessTokenExpired();
 		string url;
 		// https://learn.microsoft.com/en-us/onedrive/developer/rest-api/concepts/addressing-driveitems?view=odsp-graph-online
 		// Required format: /drives/{drive-id}/root:/{item-path}:
@@ -542,11 +551,10 @@ class OneDriveApi {
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delta
 	JSONValue viewChangesByItemId(string driveId, string id, string deltaLink) {
-		checkAccessTokenExpired();
-		
-		// If Business Account add addIncludeFeatureRequestHeader() which should add Prefer: Include-Feature=AddToOneDrive
+		string[string] requestHeaders;
+		// If Business Account add Prefer: Include-Feature=AddToOneDrive
 		if ((appConfig.accountType != "personal") && ( appConfig.getValueBool("sync_business_shared_items"))) {
-			addIncludeFeatureRequestHeader();
+			addIncludeFeatureRequestHeader(&requestHeaders);
 		}
 		
 		string url;
@@ -556,16 +564,15 @@ class OneDriveApi {
 		} else {
 			url = deltaLink;
 		}
-		return get(url);
+		return get(url, false, requestHeaders);
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_list_children
 	JSONValue listChildren(string driveId, string id, string nextLink) {
-		checkAccessTokenExpired();
-		
+		string[string] requestHeaders;
 		// If Business Account add addIncludeFeatureRequestHeader() which should add Prefer: Include-Feature=AddToOneDrive
 		if ((appConfig.accountType != "personal") && ( appConfig.getValueBool("sync_business_shared_items"))) {
-			addIncludeFeatureRequestHeader();
+			addIncludeFeatureRequestHeader(&requestHeaders);
 		}
 		
 		string url;
@@ -576,12 +583,11 @@ class OneDriveApi {
 		} else {
 			url = nextLink;
 		}
-		return get(url);
+		return get(url, false, requestHeaders);
 	}
 	
 	// https://learn.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_search
 	JSONValue searchDriveForPath(string driveId, string path) {
-		checkAccessTokenExpired();
 		string url;
 		url = "https://graph.microsoft.com/v1.0/drives/" ~ driveId ~ "/root/search(q='" ~ encodeComponent(path) ~ "')";
 		return get(url);
@@ -589,107 +595,74 @@ class OneDriveApi {
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_update
 	JSONValue updateById(const(char)[] driveId, const(char)[] id, JSONValue data, const(char)[] eTag = null) {
-		checkAccessTokenExpired();
+		string[string] requestHeaders;
 		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		if (eTag) curlEngine.http.addRequestHeader("If-Match", eTag);
-		curlEngine.http.addRequestHeader("Content-Type", "application/json");
-		return patch(url, data.toString());
+		if (eTag) requestHeaders["If-Match"] = to!string(eTag);
+		return patch(url, data.toString(), requestHeaders);
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delete
 	void deleteById(const(char)[] driveId, const(char)[] id, const(char)[] eTag = null) {
-		checkAccessTokenExpired();
+		// string[string] requestHeaders;
 		const(char)[] url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
 		//TODO: investigate why this always fail with 412 (Precondition Failed)
-		//if (eTag) http.addRequestHeader("If-Match", eTag);
+		// if (eTag) requestHeaders["If-Match"] = eTag;
 		performDelete(url);
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_post_children
 	JSONValue createById(string parentDriveId, string parentId, JSONValue item) {
-		checkAccessTokenExpired();
 		string url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ "/children";
-		curlEngine.http.addRequestHeader("Content-Type", "application/json");
 		return post(url, item.toString());
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
 	JSONValue simpleUpload(string localPath, string parentDriveId, string parentId, string filename) {
-		checkAccessTokenExpired();
 		string url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ ":/" ~ encodeComponent(filename) ~ ":/content";
-		return upload(localPath, url);
+		return put(url, localPath);
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
 	JSONValue simpleUploadReplace(string localPath, string driveId, string id) {
-		checkAccessTokenExpired();
 		string url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/content";
-		return upload(localPath, url);
+		return put(url, localPath);
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createuploadsession
 	//JSONValue createUploadSession(string parentDriveId, string parentId, string filename, string eTag = null, JSONValue item = null) {
 	JSONValue createUploadSession(string parentDriveId, string parentId, string filename, const(char)[] eTag = null, JSONValue item = null) {
-		checkAccessTokenExpired();
+		// string[string] requestHeaders;
 		string url = driveByIdUrl ~ parentDriveId ~ "/items/" ~ parentId ~ ":/" ~ encodeComponent(filename) ~ ":/createUploadSession";
 		// eTag If-Match header addition commented out for the moment
 		// At some point, post the creation of this upload session the eTag is being 'updated' by OneDrive, thus when uploadFragment() is used
 		// this generates a 412 Precondition Failed and then a 416 Requested Range Not Satisfiable
 		// This needs to be investigated further as to why this occurs
-		//if (eTag) curlEngine.http.addRequestHeader("If-Match", eTag);
-		curlEngine.http.addRequestHeader("Content-Type", "application/json");
+		// if (eTag) requestHeaders["If-Match"] = eTag;
 		return post(url, item.toString());
 	}
 	
 	// https://dev.onedrive.com/items/upload_large_files.htm
 	JSONValue uploadFragment(string uploadUrl, string filepath, long offset, long offsetSize, long fileSize) {
-		checkAccessTokenExpired();
 		// open file as read-only in binary mode
 		
 		// If we upload a modified file, with the current known online eTag, this gets changed when the session is started - thus, the tail end of uploading
 		// a fragment fails with a 412 Precondition Failed and then a 416 Requested Range Not Satisfiable
 		// For the moment, comment out adding the If-Match header in createUploadSession, which then avoids this issue
 		
-		auto file = File(filepath, "rb");
-		file.seek(offset);
 		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
 		addLogEntry("", ["debug"]); // Add an empty newline before log output
 		addLogEntry("contentRange: " ~ contentRange, ["debug"]);
-		
-		// function scopes
-		scope(exit) {
-			curlEngine.http.clearRequestHeaders();
-			curlEngine.http.onSend = null;
-			curlEngine.http.onReceive = null;
-			curlEngine.http.onReceiveHeader = null;
-			curlEngine.http.onReceiveStatusLine = null;
-			curlEngine.http.contentLength = 0;
-			// close file if open
-			if (file.isOpen()){
-				// close open file
-				file.close();
-			}
-		}
 
-		curlEngine.connect(HTTP.Method.put, uploadUrl);
-		curlEngine.http.addRequestHeader("Content-Range", contentRange);
-		curlEngine.http.onSend = data => file.rawRead(data).length;
-		// convert offsetSize to ulong
-		curlEngine.http.contentLength = to!ulong(offsetSize);
-		auto response = performHTTPOperation();
-		checkHttpResponseCode(response);
-		return response;
+		return put(uploadUrl, filepath, true, contentRange, offset, offsetSize);
 	}
 	
 	// https://dev.onedrive.com/items/upload_large_files.htm
 	JSONValue requestUploadStatus(string uploadUrl) {
-		checkAccessTokenExpired();
 		return get(uploadUrl, true);
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/site_search?view=odsp-graph-online
 	JSONValue o365SiteSearch(string nextLink) {
-		checkAccessTokenExpired();
 		string url;
 		// configure URL to query
 		if (nextLink.empty) {
@@ -702,7 +675,6 @@ class OneDriveApi {
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_list?view=odsp-graph-online
 	JSONValue o365SiteDrives(string site_id){
-		checkAccessTokenExpired();
 		string url;
 		url = siteDriveUrl ~ site_id ~ "/drives";
 		return get(url);
@@ -751,7 +723,6 @@ class OneDriveApi {
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_get_content
 	void downloadById(const(char)[] driveId, const(char)[] id, string saveToPath, long fileSize) {
-		checkAccessTokenExpired();
 		scope(failure) {
 			if (exists(saveToPath)) {
 				// try and remove the file, catch error
@@ -797,6 +768,7 @@ class OneDriveApi {
 		return siteSearchUrl;
 	}
 	
+<<<<<<< HEAD
 	// Return the current value of retryAfterValue
 	ulong getRetryAfterValue() {
 		return retryAfterValue;
@@ -813,27 +785,34 @@ class OneDriveApi {
 	}
 	
 	private void addIncludeFeatureRequestHeader() {
+=======
+	// Private functions
+	private void addIncludeFeatureRequestHeader(string[string]* headers) {
+>>>>>>> pr/2608
 		addLogEntry("Adding 'Include-Feature=AddToOneDrive' API request header as 'sync_business_shared_items' config option is enabled", ["debug"]);
-		curlEngine.http.addRequestHeader("Prefer", "Include-Feature=AddToOneDrive");
+		(*headers)["Prefer"] = "Include-Feature=AddToOneDrive";
+	}
+
+	private void redeemToken(char[] authCode){
+		char[] postData =
+			"client_id=" ~ clientId ~
+			"&redirect_uri=" ~ redirectUrl ~
+			"&code=" ~ authCode ~
+			"&grant_type=authorization_code";
+		acquireToken(postData);
 	}
 	
 	private void acquireToken(char[] postData) {
 		JSONValue response;
 
 		try {
-			response = post(tokenUrl, postData);
+			response = post(tokenUrl, postData, true, "application/x-www-form-urlencoded");
 		} catch (OneDriveException e) {
-			// an error was generated
-			if ((e.httpStatusCode == 400) || (e.httpStatusCode == 401)) {
-				// Handle an unauthorised client
-				handleClientUnauthorised(e.httpStatusCode, e.msg);
+			if (e.httpStatusCode >= 500) {
+				// There was a HTTP 5xx Server Side Error - retry
+				acquireToken(postData);
 			} else {
-				if (e.httpStatusCode >= 500) {
-					// There was a HTTP 5xx Server Side Error - retry
-					acquireToken(postData);
-				} else {
-					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-				}
+				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 			}
 		}
 
@@ -858,8 +837,7 @@ class OneDriveApi {
 						// force exit
 						shutdown();
 						// Must force exit here, allow logging to be done
-						Thread.sleep(dur!("msecs")(500));
-						exit(-1);
+						forceExit();
 					}
 				}
 			}
@@ -913,11 +891,11 @@ class OneDriveApi {
 		} else {
 			addLogEntry("Invalid response from the OneDrive API. Unable to initialise OneDrive API instance.");
 			// Must force exit here, allow logging to be done
-			Thread.sleep(dur!("msecs")(500));
-			exit(-1);
+			forceExit();
 		}
 	}
 	
+<<<<<<< HEAD
 	private void checkAccessTokenExpired() {
 		try {
 			if (Clock.currTime() >= appConfig.accessTokenExpiration) {
@@ -1152,6 +1130,8 @@ class OneDriveApi {
 		return response;
 	}
 	
+=======
+>>>>>>> pr/2608
 	private void newToken() {
 		addLogEntry("Need to generate a new access token for Microsoft OneDrive", ["debug"]);
 		auto postData = appender!(string)();
@@ -1161,505 +1141,500 @@ class OneDriveApi {
 		postData ~= "&grant_type=refresh_token";
 		acquireToken(postData.data.dup);
 	}
-
-	private auto patch(T)(const(char)[] url, const(T)[] patchData) {
-		scope(exit) curlEngine.http.clearRequestHeaders();
-		curlEngine.connect(HTTP.Method.patch, url);
-		addAccessTokenHeader();
-		auto response = perform(patchData);
-		checkHttpResponseCode(response);
-		return response;
-	}
 	
-	private auto post(T)(string url, const(T)[] postData) {
-		scope(exit) curlEngine.http.clearRequestHeaders();
-		curlEngine.connect(HTTP.Method.post, url);
-		addAccessTokenHeader();
-		auto response = perform(postData);
-		checkHttpResponseCode(response);
-		return response;
-	}
-	
-	private JSONValue perform(const(void)[] sendData) {
-		scope(exit) {
-			curlEngine.http.onSend = null;
-			curlEngine.http.contentLength = 0;
-		}
-		if (sendData) {
-			curlEngine.http.contentLength = sendData.length;
-			curlEngine.http.onSend = (void[] buf) {
-				import std.algorithm: min;
-				size_t minLen = min(buf.length, sendData.length);
-				if (minLen == 0) return 0;
-				buf[0 .. minLen] = sendData[0 .. minLen];
-				sendData = sendData[minLen .. $];
-				return minLen;
-			};
+	private void checkAccessTokenExpired() {
+		if (Clock.currTime() >= appConfig.accessTokenExpiration) {
+			addLogEntry("Microsoft OneDrive Access Token has EXPIRED. Must generate a new Microsoft OneDrive Access Token", ["debug"]);
+			newToken();
 		} else {
-			curlEngine.http.onSend = buf => 0;
+			addLogEntry("Existing Microsoft OneDrive Access Token Expires: " ~ to!string(appConfig.accessTokenExpiration), ["debug"]);
 		}
-		auto response = performHTTPOperation();
-		return response;
 	}
 	
-	private JSONValue performHTTPOperation() {
-		scope(exit) curlEngine.http.onReceive = null;
-		char[] content;
-		JSONValue json;
-
-		curlEngine.http.onReceive = (ubyte[] data) {
-			content ~= data;
-			// HTTP Server Response Code Debugging if --https-debug is being used
-			if (debugResponse){
-				addLogEntry("onedrive.performHTTPOperation() => OneDrive HTTP Server Response: " ~ to!string(curlEngine.http.statusLine.code), ["debug"]);
-			}
-			return data.length;
-		};
-
-		try {
-			// Attempt to perform the action
-			curlEngine.http.perform();
-			// Check the HTTP Response headers - needed for correct 429 handling
-			checkHTTPResponseHeaders();
-		} catch (CurlException e) {
-			// Parse and display error message received from OneDrive
-			addLogEntry("onedrive.performHTTPOperation() Generated a OneDrive CurlException", ["debug"]);
-			auto errorArray = splitLines(e.msg);
-			string errorMessage = errorArray[0];
-			
-			// what is contained in the curl error message?
-			if (canFind(errorMessage, "Couldn't connect to server on handle") || canFind(errorMessage, "Couldn't resolve host name on handle") || canFind(errorMessage, "Timeout was reached on handle")) {
-				// This is a curl timeout
-				// or is this a 408 request timeout
-				// https://github.com/abraunegg/onedrive/issues/694
-				// Back off & retry with incremental delay
-				int retryCount = 10000;
-				int retryAttempts = 0;
-				int backoffInterval = 0;
-				int maxBackoffInterval = 3600;
-				int timestampAlign = 0;
-				bool retrySuccess = false;
-				SysTime currentTime;
-				
-				// Connectivity to Microsoft OneDrive was lost
-				addLogEntry("Internet connectivity to Microsoft OneDrive service has been interrupted .. re-trying in the background");
-				
-				// what caused the initial curl exception?
-				if (canFind(errorMessage, "Couldn't connect to server on handle")) addLogEntry("Unable to connect to server - HTTPS access blocked?", ["debug"]);
-				if (canFind(errorMessage, "Couldn't resolve host name on handle")) addLogEntry("Unable to resolve server - DNS access blocked?", ["debug"]);
-				if (canFind(errorMessage, "Timeout was reached on handle")) {
-					// Common cause is libcurl trying IPv6 DNS resolution when there are only IPv4 DNS servers available
-					addLogEntry("A libcurl timeout was triggered - data too slow, no DNS resolution response, no server response ... use --debug-https to diagnose this issue further.", ["verbose"]);
-					addLogEntry("A common cause is IPv6 DNS resolution. Investigate 'ip_protocol_version' to only use IPv4 network communication to potentially resolve this issue.", ["verbose"]);
-				}
-				
-				while (!retrySuccess){
-					try {
-						// configure libcurl to perform a fresh connection
-						addLogEntry("Configuring libcurl to use a fresh connection for re-try", ["debug"]);
-						curlEngine.http.handle.set(CurlOption.fresh_connect,1);
-						// try the access
-						curlEngine.http.perform();
-						// Check the HTTP Response headers - needed for correct 429 handling
-						checkHTTPResponseHeaders();
-						// no error from http.perform() on re-try
-						addLogEntry("Internet connectivity to Microsoft OneDrive service has been restored");
-						// unset the fresh connect option as this then creates performance issues if left enabled
-						addLogEntry("Unsetting libcurl to use a fresh connection as this causes a performance impact if left enabled", ["debug"]);
-						curlEngine.http.handle.set(CurlOption.fresh_connect,0);
-						// connectivity restored
-						retrySuccess = true;
-					} catch (CurlException e) {
-						// when was the exception generated
-						currentTime = Clock.currTime();
-						// Increment retry attempts
-						retryAttempts++;
-						if (canFind(e.msg, "Couldn't connect to server on handle") || canFind(e.msg, "Couldn't resolve host name on handle") || canFind(errorMessage, "Timeout was reached on handle")) {
-							// no access to Internet
-							addLogEntry();
-							addLogEntry("ERROR: There was a timeout in accessing the Microsoft OneDrive service - Internet connectivity issue?");
-							// what is the error reason to assis the user as what to check
-							if (canFind(e.msg, "Couldn't connect to server on handle")) {
-								addLogEntry("  - Check HTTPS access or Firewall Rules");
-								timestampAlign = 9;
-							}	
-							if (canFind(e.msg, "Couldn't resolve host name on handle")) {
-								addLogEntry("  - Check DNS resolution or Firewall Rules");
-								timestampAlign = 0;
-							}
-							
-							// increment backoff interval
-							backoffInterval++;
-							int thisBackOffInterval = retryAttempts*backoffInterval;
-							
-							// display retry information
-							currentTime.fracSecs = Duration.zero;
-							auto timeString = currentTime.toString();
-							addLogEntry("  Retry attempt:          " ~ to!string(retryAttempts), ["verbose"]);
-							addLogEntry("  This attempt timestamp: " ~ timeString, ["verbose"]);
-							if (thisBackOffInterval > maxBackoffInterval) {
-								thisBackOffInterval = maxBackoffInterval;
-							}
-							
-							// detail when the next attempt will be tried
-							// factor in the delay for curl to generate the exception - otherwise the next timestamp appears to be 'out' even though technically correct
-							auto nextRetry = currentTime + dur!"seconds"(thisBackOffInterval) + dur!"seconds"(timestampAlign);
-							addLogEntry("  Next retry in approx:   " ~ to!string((thisBackOffInterval + timestampAlign)) ~ " seconds", ["verbose"]);
-							addLogEntry("  Next retry approx:      " ~ to!string(nextRetry), ["verbose"]);
-							// thread sleep
-							Thread.sleep(dur!"seconds"(thisBackOffInterval));
-						}
-						if (retryAttempts == retryCount) {
-							// we have attempted to re-connect X number of times
-							// false set this to true to break out of while loop
-							retrySuccess = true;
-						}
-					}
-				}
-				if (retryAttempts >= retryCount) {
-					addLogEntry("  ERROR: Unable to reconnect to the Microsoft OneDrive service after " ~ to!string(retryCount) ~ " attempts lasting over 1.2 years!");
-					throw new OneDriveException(408, "Request Timeout - HTTP 408 or Internet down?");
-				}
-			} else {
-			
-				// what error was returned?
-				if (canFind(errorMessage, "Problem with the SSL CA cert (path? access rights?) on handle")) {
-					// error setting certificate verify locations:
-					//  CAfile: /etc/pki/tls/certs/ca-bundle.crt
-					//	CApath: none
-					// 
-					// Tell the Curl Engine to bypass SSL check - essentially SSL is passing back a bad value due to 'stdio' compile time option
-					// Further reading:
-					//  https://github.com/curl/curl/issues/6090
-					//  https://github.com/openssl/openssl/issues/7536
-					//  https://stackoverflow.com/questions/45829588/brew-install-fails-curl77-error-setting-certificate-verify
-					//  https://forum.dlang.org/post/vwvkbubufexgeuaxhqfl@forum.dlang.org
-					
-					addLogEntry("Problem with reading the SSL CA cert via libcurl - please repair your system SSL CA Certificates");
-					// Must force exit here, allow logging to be done. If needed later, we could re-use setDisableSSLVerifyPeer()
-					Thread.sleep(dur!("msecs")(500));
-					exit(-1);
-				} else {
-					// Log that an error was returned
-					addLogEntry("ERROR: OneDrive returned an error with the following message:");
-					// Some other error was returned
-					addLogEntry("  Error Message: " ~ errorMessage);
-					addLogEntry("  Calling Function: " ~ getFunctionName!({}));
-				
-					// Was this a curl initialization error?
-					if (canFind(errorMessage, "Failed initialization on handle")) {
-						// initialization error ... prevent a run-away process if we have zero disk space
-						ulong localActualFreeSpace = getAvailableDiskSpace(".");
-						if (localActualFreeSpace == 0) {
-							// force exit
-							shutdown();
-							// Must force exit here, allow logging to be done
-							Thread.sleep(dur!("msecs")(500));
-							exit(-1);
-						}
-					}
-				}
-			}
-			// return an empty JSON for handling
-			return json;
-		}
-
-		try {
-			json = content.parseJSON();
-		} catch (JSONException e) {
-			// Log that a JSON Exception was caught, dont output the HTML response from OneDrive
-			addLogEntry("JSON Exception caught when performing HTTP operations - use --debug-https to diagnose further", ["debug"]);
-		}
-		return json;
-	}
-	
-	private void redeemToken(char[] authCode){
-		char[] postData =
-			"client_id=" ~ clientId ~
-			"&redirect_uri=" ~ redirectUrl ~
-			"&code=" ~ authCode ~
-			"&grant_type=authorization_code";
-		acquireToken(postData);
-	}
-	
-	private JSONValue upload(string filepath, string url) {
+	private string getAccessToken() {
 		checkAccessTokenExpired();
-		// open file as read-only in binary mode
-		auto file = File(filepath, "rb");
+		return to!string(appConfig.accessToken);
+	}
 
-		// function scopes
-		scope(exit) {
-			curlEngine.http.clearRequestHeaders();
-			curlEngine.http.onSend = null;
-			curlEngine.http.onReceive = null;
-			curlEngine.http.onReceiveHeader = null;
-			curlEngine.http.onReceiveStatusLine = null;
-			curlEngine.http.contentLength = 0;
-			// close file if open
-			if (file.isOpen()){
-				// close open file
-				file.close();
-			}
-		}
-
-		curlEngine.connect(HTTP.Method.put, url);
-		addAccessTokenHeader();
-		curlEngine.http.addRequestHeader("Content-Type", "application/octet-stream");
-		curlEngine.http.onSend = data => file.rawRead(data).length;
-		curlEngine.http.contentLength = file.size;
-		auto response = performHTTPOperation();
-		checkHttpResponseCode(response);
-		return response;
+	private void addAccessTokenHeader(string[string]* requestHeaders) {
+		(*requestHeaders)["Authorization"] = getAccessToken();
 	}
 	
-	private void checkHTTPResponseHeaders() {
-		// Get the HTTP Response headers - needed for correct 429 handling
-		auto responseHeaders = curlEngine.http.responseHeaders();
-		if (debugResponse){
-			addLogEntry("curlEngine.http.perform() => HTTP Response Headers: " ~ to!string(responseHeaders), ["debug"]);
+	private void connect(HTTP.Method method, const(char)[] url, bool skipToken, 
+						 CurlResponse response, string[string] requestHeaders=null) {
+		addLogEntry("Request URL = " ~ to!string(url), ["debug"]);
+		// Check access token first in case the request is overridden
+		if (!skipToken) addAccessTokenHeader(&requestHeaders);
+		curlEngine.setResponseHolder(response);
+		foreach(k, v; requestHeaders) {
+			curlEngine.addRequestHeader(k, v);
 		}
-
-		// is retry-after in the response headers
-		if ("retry-after" in curlEngine.http.responseHeaders) {
-			// Set the retry-after value
-			addLogEntry("curlEngine.http.perform() => Received a 'Retry-After' Header Response with the following value: " ~ to!string(curlEngine.http.responseHeaders["retry-after"]), ["debug"]);
-			addLogEntry("curlEngine.http.perform() => Setting retryAfterValue to: " ~ to!string(curlEngine.http.responseHeaders["retry-after"]), ["debug"]);
-			retryAfterValue = to!ulong(curlEngine.http.responseHeaders["retry-after"]);
-		}
+		curlEngine.connect(method, url);
 	}
 
-	private void checkHttpResponseCode(JSONValue response) {
-		switch(curlEngine.http.statusLine.code) {
-			//  0 - OK ... HTTP2 version of 200 OK
-			case 0:
-				break;
-			//  100 - Continue
-			case 100:
-				break;
-			//	200 - OK
-			case 200:
-				// No Log ..
-				break;
-			//	201 - Created OK
-			//  202 - Accepted
-			//	204 - Deleted OK
-			case 201,202,204:
-				// Log if --debug-https logging is used
-				if (debugHTTPResponseOutput) {
-					addLogEntry("OneDrive Response: '" ~ to!string(curlEngine.http.statusLine.code) ~ " - " ~ to!string(curlEngine.http.statusLine.reason) ~ "'", ["debug"]);
-				}
-				break;
-
-			// 302 - resource found and available at another location, redirect
-			case 302:
-				// Log if --debug-https logging is used
-				if (debugHTTPResponseOutput) {
-					addLogEntry("OneDrive Response: '" ~ to!string(curlEngine.http.statusLine.code) ~ " - " ~ to!string(curlEngine.http.statusLine.reason) ~ "'", ["debug"]);
-				}
-				break;
-
-			// 400 - Bad Request
-			case 400:
-				// Bad Request .. how should we act?
-				// make sure this is thrown so that it is caught
-				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
-
-			// 403 - Forbidden
-			case 403:
-				// OneDrive responded that the user is forbidden
-				addLogEntry("OneDrive returned a 'HTTP 403 - Forbidden' - gracefully handling error", ["verbose"]);
-				
-				// Throw this as a specific exception so this is caught when performing 'siteQuery = onedrive.o365SiteSearch(nextLink);' call
-				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
-
-			//	412 - Precondition Failed
-			case 412:
-				// Throw this as a specific exception so this is caught when performing sync.uploadLastModifiedTime
-				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
-
-			// Server side (OneDrive) Errors
-			//  500 - Internal Server Error
-			// 	502 - Bad Gateway
-			//	503 - Service Unavailable
-			//  504 - Gateway Timeout (Issue #320)
-			case 500:
-				// Throw this as a specific exception so this is caught
-				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
-
-			case 502:
-				// Throw this as a specific exception so this is caught
-				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
-
-			case 503:
-				// Throw this as a specific exception so this is caught
-				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
-
-			case 504:
-				// Throw this as a specific exception so this is caught
-				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
-
-			// Default - all other errors that are not a 2xx or a 302
-			default:
-			if (curlEngine.http.statusLine.code / 100 != 2 && curlEngine.http.statusLine.code != 302) {
-				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
-			}
-		}
+	private void performDelete(
+		const(char)[] url, string[string] requestHeaders=null,
+		string callingFunction=__FUNCTION__, int lineno=__LINE__
+	) {
+		oneDriveErrorHandlerWrapper((CurlResponse response) {
+			connect(HTTP.Method.del, url, false, response, requestHeaders);
+			return curlEngine.execute();
+		}, callingFunction, lineno);
 	}
 	
-	private void checkHttpCode() {
-		// https://dev.onedrive.com/misc/errors.htm
-		// https://developer.overdrive.com/docs/reference-guide
+	private void downloadFile(
+		const(char)[] url, string filename, long fileSize,
+		string callingFunction=__FUNCTION__, int lineno=__LINE__
+	) {
+		// Threshold for displaying download bar
+		long thresholdFileSize = 4 * 2^^20; // 4 MiB
+		
+		// To support marking of partially-downloaded files, 
+		string originalFilename = filename;
+		string downloadFilename = filename ~ ".partial";
+		oneDriveErrorHandlerWrapper((CurlResponse response) {
+			connect(HTTP.Method.get, url, false, response);
 
-		/*
-			HTTP/1.1 Response handling
-
-			Errors in the OneDrive API are returned using standard HTTP status codes, as well as a JSON error response object. The following HTTP status codes should be expected.
-
-			Status code		Status message						Description
-			100				Continue							Continue
-			200 			OK									Request was handled OK
-			201 			Created								This means you've made a successful POST to checkout, lock in a format, or place a hold
-			204				No Content							This means you've made a successful DELETE to remove a hold or return a title
-
-			400				Bad Request							Cannot process the request because it is malformed or incorrect.
-			401				Unauthorized						Required authentication information is either missing or not valid for the resource.
-			403				Forbidden							Access is denied to the requested resource. The user might not have enough permission.
-			404				Not Found							The requested resource doesn’t exist.
-			405				Method Not Allowed					The HTTP method in the request is not allowed on the resource.
-			406				Not Acceptable						This service doesn’t support the format requested in the Accept header.
-			408				Request Time out					Not expected from OneDrive, but can be used to handle Internet connection failures the same (fallback and try again)
-			409				Conflict							The current state conflicts with what the request expects. For example, the specified parent folder might not exist.
-			410				Gone								The requested resource is no longer available at the server.
-			411				Length Required						A Content-Length header is required on the request.
-			412				Precondition Failed					A precondition provided in the request (such as an if-match header) does not match the resource's current state.
-			413				Request Entity Too Large			The request size exceeds the maximum limit.
-			415				Unsupported Media Type				The content type of the request is a format that is not supported by the service.
-			416				Requested Range Not Satisfiable		The specified byte range is invalid or unavailable.
-			422				Unprocessable Entity				Cannot process the request because it is semantically incorrect.
-			429				Too Many Requests					Client application has been throttled and should not attempt to repeat the request until an amount of time has elapsed.
-
-			500				Internal Server Error				There was an internal server error while processing the request.
-			501				Not Implemented						The requested feature isn’t implemented.
-			502				Bad Gateway							The service was unreachable
-			503				Service Unavailable					The service is temporarily unavailable. You may repeat the request after a delay. There may be a Retry-After header.
-			507				Insufficient Storage				The maximum storage quota has been reached.
-			509				Bandwidth Limit Exceeded			Your app has been throttled for exceeding the maximum bandwidth cap. Your app can retry the request again after more time has elapsed.
-
-			HTTP/2 Response handling
-
-			0				OK
-
-		*/
-
-		switch(curlEngine.http.statusLine.code)
-		{
-			//  0 - OK ... HTTP2 version of 200 OK
-			case 0:
-				break;
-			//  100 - Continue
-			case 100:
-				break;
-			//	200 - OK
-			case 200:
-				// No Log ..
-				break;
-			//	201 - Created OK
-			//  202 - Accepted
-			//	204 - Deleted OK
-			case 201,202,204:
-				// Log if --debug-https logging is used
-				if (debugHTTPResponseOutput) {
-					addLogEntry("OneDrive Response: '" ~ to!string(curlEngine.http.statusLine.code) ~ " - " ~ to!string(curlEngine.http.statusLine.reason) ~ "'", ["debug"]);
-				}
-				break;
-
-			// 302 - resource found and available at another location, redirect
-			case 302:
-				// Log if --debug-https logging is used
-				if (debugHTTPResponseOutput) {
-					addLogEntry("OneDrive Response: '" ~ to!string(curlEngine.http.statusLine.code) ~ " - " ~ to!string(curlEngine.http.statusLine.reason) ~ "'", ["debug"]);
-				}
-				break;
-
-			// 400 - Bad Request
-			case 400:
-				// Bad Request .. how should we act?
-				addLogEntry("OneDrive returned a 'HTTP 400 - Bad Request' - gracefully handling error", ["verbose"]);
-				break;
+			if (fileSize >= thresholdFileSize){
+				// Download Progress variables
+				size_t expected_total_segments = 20;
+				ulong start_unix_time = Clock.currTime.toUnixTime();
+				int h, m, s;
+				string etaString;
+				bool barInit = false;
+				real previousProgressPercent = -1.0;
+				real percentCheck = 5.0;
+				long segmentCount = -1;
 				
+<<<<<<< HEAD
 			// 403 - Forbidden
 			case 403:
 				// OneDrive responded that the user is forbidden
 				addLogEntry("OneDrive returned a 'HTTP 403 - Forbidden' - gracefully handling error", ["verbose"]);
 				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason);
+=======
+				// Setup progress bar to display
+				curlEngine.http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow) {
+					// For each onProgress, what is the % of dlnow to dltotal
+					// floor - rounds down to nearest whole number
+					real currentDLPercent = floor(double(dlnow)/dltotal*100);
+					string downloadLogEntry = "Downloading: " ~ filename ~ " ... ";
+					
+					// Have we started downloading?
+					if (currentDLPercent > 0){
+						// We have started downloading
+						addLogEntry("", ["debug"]); // Debug new line only
+						addLogEntry("Data Received    = " ~ to!string(dlnow), ["debug"]);
+						addLogEntry("Expected Total   = " ~ to!string(dltotal), ["debug"]);
+						addLogEntry("Percent Complete = " ~ to!string(currentDLPercent), ["debug"]);
+						
+						// Every 5% download we need to increment the download bar
 
-			// 404 - Item not found
-			case 404:
-				// Item was not found - do not throw an exception
-				addLogEntry("OneDrive returned a 'HTTP 404 - Item not found' - gracefully handling error", ["verbose"]);
+						// Has the user set a data rate limit?
+						// when using rate_limit, we will get odd download rates, for example:
+						// Percent Complete = 24
+						// Data Received    = 13080163
+						// Expected Total   = 52428800
+						// Percent Complete = 24
+						// Data Received    = 13685777
+						// Expected Total   = 52428800
+						// Percent Complete = 26   <---- jumps to 26% missing 25%, thus fmod misses incrementing progress bar
+						// Data Received    = 13685777
+						// Expected Total   = 52428800
+						// Percent Complete = 26
+											
+						if (appConfig.getValueLong("rate_limit") > 0) {
+							// User configured rate limit
+							// How much data should be in each segment to qualify for 5%
+							ulong dataPerSegment = to!ulong(floor(double(dltotal)/expected_total_segments));
+							// How much data received do we need to validate against
+							ulong thisSegmentData = dataPerSegment * segmentCount;
+							ulong nextSegmentData = dataPerSegment * (segmentCount + 1);
+							
+							// Has the data that has been received in a 5% window that we need to increment the progress bar at
+							if ((dlnow > thisSegmentData) && (dlnow < nextSegmentData) && (previousProgressPercent != currentDLPercent) || (dlnow == dltotal)) {
+								// Downloaded data equals approx 5%
+								addLogEntry("Incrementing Progress Bar using calculated 5% of data received", ["debug"]);
+								
+								// 100% check
+								if (currentDLPercent != 100) {
+									// Not 100% yet
+									// Calculate the output
+									segmentCount++;
+									auto eta = calc_eta(segmentCount, expected_total_segments, start_unix_time);
+									dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
+									etaString = format!"|  ETA    %02d:%02d:%02d"( h, m, s);
+									string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
+									addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+								} else {
+									// 100% done
+									ulong end_unix_time = Clock.currTime.toUnixTime();
+									auto upload_duration = cast(int)(end_unix_time - start_unix_time);
+									dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
+									etaString = format!"| DONE in %02d:%02d:%02d"( h, m, s);
+									string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
+									addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+								}
+								
+								// update values
+								addLogEntry("Setting previousProgressPercent to " ~ to!string(currentDLPercent), ["debug"]);
+								previousProgressPercent = currentDLPercent;
+								addLogEntry("Incrementing segmentCount", ["debug"]);
+								segmentCount++;
+							}
+						} else {
+							// Is currentDLPercent divisible by 5 leaving remainder 0 and does previousProgressPercent not equal currentDLPercent
+							if ((isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) && (previousProgressPercent != currentDLPercent)) {
+								// currentDLPercent matches a new increment
+								addLogEntry("Incrementing Progress Bar using fmod match", ["debug"]);
+								
+								// 100% check
+								if (currentDLPercent != 100) {
+									// Not 100% yet
+									// Calculate the output
+									segmentCount++;
+									auto eta = calc_eta(segmentCount, expected_total_segments, start_unix_time);
+									dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
+									etaString = format!"|  ETA    %02d:%02d:%02d"( h, m, s);
+									string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
+									addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+								} else {
+									// 100% done
+									ulong end_unix_time = Clock.currTime.toUnixTime();
+									auto upload_duration = cast(int)(end_unix_time - start_unix_time);
+									dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
+									etaString = format!"| DONE in %02d:%02d:%02d"( h, m, s);
+									string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
+									addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+								}
+								
+								// update values
+								previousProgressPercent = currentDLPercent;
+							}
+						}
+					} else {
+						if ((currentDLPercent == 0) && (!barInit)) {
+							// Calculate the output
+							segmentCount++;
+							etaString = "|  ETA    --:--:--";
+							string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
+							addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+							barInit = true;
+						}
+					}
+					return 0;
+				};
+			} else {
+				// No progress bar
+			}
+			
+			return curlEngine.download(originalFilename, downloadFilename);
+		}, callingFunction, lineno);
+	}
+
+	private JSONValue get(
+		string url, bool skipToken = false, string[string] requestHeaders=null,
+		string callingFunction=__FUNCTION__, int lineno=__LINE__
+	) {
+		return oneDriveErrorHandlerWrapper((CurlResponse response) {
+			connect(HTTP.Method.get, url, skipToken, response, requestHeaders);
+			return curlEngine.execute();
+		}, callingFunction, lineno);
+	}
+
+	private JSONValue patch(
+		const(char)[] url, const(char)[] patchData, 
+		string[string] requestHeaders=null, 
+		const(char)[] contentType = "application/json",
+		string callingFunction=__FUNCTION__, int lineno=__LINE__
+	) {
+		return oneDriveErrorHandlerWrapper((CurlResponse response) {
+			connect(HTTP.Method.patch, url, false, response, requestHeaders);
+			curlEngine.setContent(contentType, patchData);
+			return curlEngine.execute();
+		}, callingFunction, lineno);
+	}
+
+	private JSONValue post(
+		const(char)[] url, const(char)[] postData, 
+		bool skipToken = false, 
+		const(char)[] contentType = "application/json",
+		string callingFunction=__FUNCTION__, int lineno=__LINE__
+	) {
+		return oneDriveErrorHandlerWrapper((CurlResponse response) {
+			connect(HTTP.Method.post, url, skipToken, response);
+			curlEngine.setContent(contentType, postData);
+			return curlEngine.execute();
+		}, callingFunction, lineno);
+	}
+	
+	private JSONValue put(
+		const(char)[] url, string filepath, bool skipToken=false, string contentRange=null, ulong offset=0, ulong offsetSize=0,
+		string callingFunction=__FUNCTION__, int lineno=__LINE__
+	) {
+		return oneDriveErrorHandlerWrapper((CurlResponse response) {
+			string[string] requestHeaders;
+			// open file as read-only in binary mode
+			auto file = File(filepath, "rb");
+			if (!contentRange.empty)
+				file.seek(offset);
+			// function scopes
+			scope(exit) {
+				// close file if open
+				if (file.isOpen()){
+					// close open file
+					file.close();
+				}
+			}
+			if (!contentRange.empty)
+				requestHeaders["Content-Range"] = contentRange;
+			else
+				offsetSize = file.size;
+			connect(HTTP.Method.put, url, skipToken, response, requestHeaders);
+			curlEngine.setFile(&file, offsetSize);
+			return curlEngine.execute();
+		}, callingFunction, lineno);
+	}
+
+	// Wrapper function for all requests to OneDrive API
+	// throws OneDriveException
+	private JSONValue oneDriveErrorHandlerWrapper(
+		CurlResponse delegate(CurlResponse response) executer,
+		string callingFunction, int lineno
+	) {
+		int maxRetryCount = 10;
+		int retryAttempts = 0;
+		int backoffInterval = 0;
+		ulong thisBackOffInterval = 64;
+		int maxBackoffInterval = 64;
+		int timestampAlign = 0;
+		bool retrySuccess = false;
+		SysTime currentTime;
+		CurlResponse response = new CurlResponse();
+		JSONValue result;
+
+		while (!retrySuccess && retryAttempts++ < maxRetryCount) {
+			try {
+				response.reset();
+				response = executer(response);
+				if (response.hasResponse) {
+					result = response.json();
+					if (debugResponse){
+						addLogEntry("OneDrive API Response: " ~ response.dumpResponse(), ["debug"]);
+					}
+					// Check http response code, raise an error if the operation fails
+					if (response.statusLine.code / 100 != 2 && response.statusLine.code != 302) {
+						throw new OneDriveException(response.statusLine.code, response.statusLine.reason, response);
+					}
+				} else {
+					// No valid response is returned
+					throw new OneDriveException(0, "OneDrive operation returned an invalid response", response);
+				}
+				retrySuccess = true;
+				if (retryAttempts > 1) {
+					// no error from http.perform() on re-try
+					addLogEntry("Internet connectivity to Microsoft OneDrive service has been restored");
+					// unset the fresh connect option as this then creates performance issues if left enabled
+					addLogEntry("Unsetting libcurl to use a fresh connection as this causes a performance impact if left enabled", ["debug"]);
+					curlEngine.http.handle.set(CurlOption.fresh_connect,0);
+				}
 				break;
+			} catch (CurlException e) {
+				// Parse and display error message received from OneDrive
+				addLogEntry("onedrive.performHTTPOperation() Generated a OneDrive CurlException", ["debug"]);
+				auto errorArray = splitLines(e.msg);
+				string errorMessage = errorArray[0];
+>>>>>>> pr/2608
 
-			//	408 - Request Timeout
-			case 408:
-				// Request to connect to OneDrive service timed out
-				addLogEntry("Request Timeout - gracefully handling error", ["verbose"]);
-				throw new OneDriveException(408, "Request Timeout - HTTP 408 or Internet down?");
+				addLogEntry("Handling Curl expection");
+				addLogEntry(to!string(response));
+				
+				// what is contained in the curl error message?
+				if (canFind(errorMessage, "Couldn't connect to server on handle") || canFind(errorMessage, "Couldn't resolve host name on handle") || canFind(errorMessage, "Timeout was reached on handle")) {
+					// Connectivity to Microsoft OneDrive was lost
+					addLogEntry("Internet connectivity to Microsoft OneDrive service has been interrupted .. re-trying in the background");
+					
+					// what caused the initial curl exception?
+					if (canFind(errorMessage, "Couldn't connect to server on handle")) addLogEntry("Unable to connect to server - HTTPS access blocked?", ["debug"]);
+					if (canFind(errorMessage, "Couldn't resolve host name on handle")) addLogEntry("Unable to resolve server - DNS access blocked?", ["debug"]);
+					if (canFind(errorMessage, "Timeout was reached on handle")) {
+						// Common cause is libcurl trying IPv6 DNS resolution when there are only IPv4 DNS servers available
+						addLogEntry("A libcurl timeout was triggered - data too slow, no DNS resolution response, no server response ... use --debug-https to diagnose this issue further.", ["verbose"]);
+						addLogEntry("A common cause is IPv6 DNS resolution. Investigate 'ip_protocol_version' to only use IPv4 network communication to potentially resolve this issue.", ["verbose"]);
+					}
+				} else {
+					// what error was returned?
+					if (canFind(errorMessage, "Problem with the SSL CA cert (path? access rights?) on handle")) {
+						// error setting certificate verify locations:
+						//  CAfile: /etc/pki/tls/certs/ca-bundle.crt
+						//	CApath: none
+						// 
+						// Tell the Curl Engine to bypass SSL check - essentially SSL is passing back a bad value due to 'stdio' compile time option
+						// Further reading:
+						//  https://github.com/curl/curl/issues/6090
+						//  https://github.com/openssl/openssl/issues/7536
+						//  https://stackoverflow.com/questions/45829588/brew-install-fails-curl77-error-setting-certificate-verify
+						//  https://forum.dlang.org/post/vwvkbubufexgeuaxhqfl@forum.dlang.org
+						
+						addLogEntry("Problem with reading the SSL CA cert via libcurl - please repair your system SSL CA Certificates");
+						throw new OneDriveError("OneDrive operation encounter curl lib issue");
+					} else {
+						// Was this a curl initialization error?
+						if (canFind(errorMessage, "Failed initialization on handle")) {
+							// initialization error ... prevent a run-away process if we have zero disk space
+							ulong localActualFreeSpace = getAvailableDiskSpace(".");
+							if (localActualFreeSpace == 0) {
+								throw new OneDriveError("Zero disk space detected");
+							}
+						} else {
+							// Unknown error
+							displayGeneralErrorMessage(e, callingFunction, lineno);
+						}
+					}
+				}
 
-			//	409 - Conflict
-			case 409:
-				// Conflict handling .. how should we act? This only really gets triggered if we are using --local-first & we remove items.db as the DB thinks the file is not uploaded but it is
-				addLogEntry("OneDrive returned a 'HTTP 409 - Conflict' - gracefully handling error", ["verbose"]);
-				break;
+				if (retryAttempts >= maxRetryCount) {
+					addLogEntry("  ERROR: Unable to reconnect to the Microsoft OneDrive service due to curl exception after " ~ to!string(maxRetryCount));
+					throw new OneDriveException(0, "Request Timeout after " ~ to!string(maxRetryCount) ~ " attempts - Encounter Curl Exception", response);
+				}
+				
+				// configure libcurl to perform a fresh connection
+				addLogEntry("Configuring libcurl to use a fresh connection for re-try", ["debug"]);
+				curlEngine.http.handle.set(CurlOption.fresh_connect,1);
 
-			//	412 - Precondition Failed
-			case 412:
-				// A precondition provided in the request (such as an if-match header) does not match the resource's current state.
-				addLogEntry("OneDrive returned a 'HTTP 412 - Precondition Failed' - gracefully handling error", ["verbose"]);
-				break;
+				// increment backoff interval
+				backoffInterval++;
+				thisBackOffInterval = retryAttempts * backoffInterval;
+				if (thisBackOffInterval > maxBackoffInterval) {
+					thisBackOffInterval = maxBackoffInterval;
+				}
+			} catch (OneDriveException exception) {
+				// https://dev.onedrive.com/misc/errors.htm
+				// https://developer.overdrive.com/docs/reference-guide
 
-			//  415 - Unsupported Media Type
-			case 415:
-				// Unsupported Media Type ... sometimes triggered on image files, especially PNG
-				addLogEntry("OneDrive returned a 'HTTP 415 - Unsupported Media Type' - gracefully handling error", ["verbose"]);
-				break;
+				/*
+					HTTP/1.1 Response handling
 
-			//  429 - Too Many Requests
-			case 429:
-				// Too many requests in a certain time window
-				// Check the HTTP Response headers - needed for correct 429 handling
-				checkHTTPResponseHeaders();
-				// https://docs.microsoft.com/en-us/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
-				addLogEntry("OneDrive returned a 'HTTP 429 - Too Many Requests' - gracefully handling error", ["verbose"]);
-				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason);
+					Errors in the OneDrive API are returned using standard HTTP status codes, as well as a JSON error response object. The following HTTP status codes should be expected.
 
-			// Server side (OneDrive) Errors
-			//  500 - Internal Server Error
-			// 	502 - Bad Gateway
-			//	503 - Service Unavailable
-			//  504 - Gateway Timeout (Issue #320)
-			case 500:
-				// No actions
-				addLogEntry("OneDrive returned a 'HTTP 500 Internal Server Error' - gracefully handling error", ["verbose"]);
-				break;
+					Status code		Status message						Description
+					100				Continue							Continue
+					200 			OK									Request was handled OK
+					201 			Created								This means you've made a successful POST to checkout, lock in a format, or place a hold
+					204				No Content							This means you've made a successful DELETE to remove a hold or return a title
 
-			case 502:
-				// No actions
-				addLogEntry("OneDrive returned a 'HTTP 502 Bad Gateway Error' - gracefully handling error", ["verbose"]);
-				break;
+					400				Bad Request							Cannot process the request because it is malformed or incorrect.
+					401				Unauthorized						Required authentication information is either missing or not valid for the resource.
+					403				Forbidden							Access is denied to the requested resource. The user might not have enough permission.
+					404				Not Found							The requested resource doesn’t exist.
+					405				Method Not Allowed					The HTTP method in the request is not allowed on the resource.
+					406				Not Acceptable						This service doesn’t support the format requested in the Accept header.
+					408				Request Time out					Not expected from OneDrive, but can be used to handle Internet connection failures the same (fallback and try again)
+					409				Conflict							The current state conflicts with what the request expects. For example, the specified parent folder might not exist.
+					410				Gone								The requested resource is no longer available at the server.
+					411				Length Required						A Content-Length header is required on the request.
+					412				Precondition Failed					A precondition provided in the request (such as an if-match header) does not match the resource's current state.
+					413				Request Entity Too Large			The request size exceeds the maximum limit.
+					415				Unsupported Media Type				The content type of the request is a format that is not supported by the service.
+					416				Requested Range Not Satisfiable		The specified byte range is invalid or unavailable.
+					422				Unprocessable Entity				Cannot process the request because it is semantically incorrect.
+					429				Too Many Requests					Client application has been throttled and should not attempt to repeat the request until an amount of time has elapsed.
 
-			case 503:
-				// No actions
-				addLogEntry("OneDrive returned a 'HTTP 503 Service Unavailable Error' - gracefully handling error", ["verbose"]);
-				break;
+					500				Internal Server Error				There was an internal server error while processing the request.
+					501				Not Implemented						The requested feature isn’t implemented.
+					502				Bad Gateway							The service was unreachable
+					503				Service Unavailable					The service is temporarily unavailable. You may repeat the request after a delay. There may be a Retry-After header.
+					507				Insufficient Storage				The maximum storage quota has been reached.
+					509				Bandwidth Limit Exceeded			Your app has been throttled for exceeding the maximum bandwidth cap. Your app can retry the request again after more time has elapsed.
 
-			case 504:
-				// No actions
-				addLogEntry("OneDrive returned a 'HTTP 504 Gateway Timeout Error' - gracefully handling error", ["verbose"]);
-				break;
+					HTTP/2 Response handling
 
-			// "else"
-			default:
-				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason);
+					0				OK
+
+				*/
+				// an error was generated
+				// Dump curl connection
+				switch(exception.httpStatusCode) {
+					case 400:
+					case 401:
+					case 408:
+					case 503:
+					case 504:
+						addLogEntry("Handling OneDrive expection");
+						addLogEntry(to!string(response));
+						break;
+					default:
+						break;
+
+				}
+				switch(exception.httpStatusCode) {
+					case 400:
+						// Try one more time, as OneDrive occasionally returns 400 errors.
+						if (retryAttempts < maxRetryCount) {
+							retryAttempts = maxRetryCount - 1;
+							thisBackOffInterval = 5;
+						} else
+							throw exception;
+						break;
+					case 401:
+						handleClientUnauthorised(exception.httpStatusCode, exception.msg);
+						break;
+					case 429:
+						// If OneDrive sends a status code 429 then this function will be used to process the Retry-After response header which contains the value by which we need to wait
+						addLogEntry("Handling a OneDrive HTTP 429 Response Code (Too Many Requests)");
+						
+						// Read in the Retry-After HTTP header as set and delay as per this value before retrying the request
+						thisBackOffInterval = response.getRetryAfterValue();
+						addLogEntry("Using Retry-After Value = " ~ to!string(thisBackOffInterval), ["debug"]);
+						break;
+					case 408:
+					case 503:
+					case 504:
+						auto errorArray = splitLines(exception.msg);
+						addLogEntry(to!string(errorArray[0]) ~ " when attempting to query - retrying applicable request in 30 seconds");
+						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request. 
+						addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
+						thisBackOffInterval = 30;
+						break;
+					default:
+						throw exception;
+				}
+
+				if (retryAttempts >= maxRetryCount) {
+					addLogEntry("  ERROR: Unable to reconnect to the Microsoft OneDrive service after " ~ to!string(maxRetryCount));
+					throw exception;
+				}
+			} catch (ErrnoException e) {
+				// There was a file system error
+				// display the error message
+				displayFileSystemErrorMessage(e.msg, callingFunction);
+				throw new OneDriveException(0, "There was a file system error during OneDrive request: " ~ e.msg, response);
+			}
+
+			// Back off & retry with incremental delay
+			currentTime = Clock.currTime();
+			
+			// display retry information
+			currentTime.fracSecs = Duration.zero;
+			auto timeString = currentTime.toString();
+			addLogEntry("  Retry attempt:          " ~ to!string(retryAttempts), ["verbose"]);
+			addLogEntry("  This attempt timestamp: " ~ timeString, ["verbose"]);
+			
+			// detail when the next attempt will be tried
+			// factor in the delay for curl to generate the exception - otherwise the next timestamp appears to be 'out' even though technically correct
+			auto nextRetry = currentTime + dur!"seconds"(thisBackOffInterval) + dur!"seconds"(timestampAlign);
+			addLogEntry("  Next retry in approx:   " ~ to!string((thisBackOffInterval + timestampAlign)) ~ " seconds");
+			addLogEntry("  Next retry approx:      " ~ to!string(nextRetry), ["verbose"]);
+			
+			// thread sleep
+			Thread.sleep(dur!"seconds"(thisBackOffInterval));
+			addLogEntry("Retrying ...");
 		}
+
+		if (!retrySuccess) {
+			addLogEntry("  ERROR: Unable to reconnect to the Microsoft OneDrive service after " ~ to!string(maxRetryCount));
+			throw new OneDriveException(0, "Request Timeout after " ~ to!string(maxRetryCount) ~ " attempts", response);
+		}
+		return result;
 	}
 }
