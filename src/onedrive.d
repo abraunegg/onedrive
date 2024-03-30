@@ -392,12 +392,10 @@ class OneDriveApi {
 		string authFilesString = appConfig.getValueString("auth_files");
 		string authResponseString = appConfig.getValueString("auth_response");
 	
-		// Is authResponseString not empty
 		if (!authResponseString.empty) {
 			// read the response from authResponseString
 			response = cast(char[]) authResponseString;
 		} else if (authFilesString != "") {
-			// authResponseString empty .. is authFilesString not empty
 			string[] authFiles = authFilesString.split(":");
 			string authUrl = authFiles[0];
 			string responseUrl = authFiles[1];
@@ -422,7 +420,6 @@ class OneDriveApi {
 				exit(-1);
 			}
 	
-			// Add logging that we are waiting for auth elements to be available
 			addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
 			
 			while (!exists(responseUrl)) {
@@ -529,7 +526,6 @@ class OneDriveApi {
 	// Return all the items that are shared with the user
 	// https://docs.microsoft.com/en-us/graph/api/drive-sharedwithme
 	JSONValue getSharedWithMe() {
-		checkAccessTokenExpired();
 		return get(sharedWithMeUrl);
 	}
 	
@@ -683,7 +679,6 @@ class OneDriveApi {
 	}
 
 	JSONValue createSubscription(string notificationUrl, SysTime expirationDateTime) {
-		checkAccessTokenExpired();
 		string driveId = appConfig.getValueString("drive_id");
 		string url = subscriptionUrl;
 		
@@ -772,7 +767,6 @@ class OneDriveApi {
 	
 	// Private OneDrive API Functions
 	private void addIncludeFeatureRequestHeader(string[string]* headers) {
-
 		addLogEntry("Adding 'Include-Feature=AddToOneDrive' API request header as 'sync_business_shared_items' config option is enabled", ["debug"]);
 		(*headers)["Prefer"] = "Include-Feature=AddToOneDrive";
 	}
@@ -919,10 +913,11 @@ class OneDriveApi {
 	}
 
 	private void performDelete(const(char)[] url, string[string] requestHeaders=null, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+		bool validateJSONResponse = false;
 		oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.del, url, false, response, requestHeaders);
 			return curlEngine.execute();
-		}, callingFunction, lineno);
+		}, validateJSONResponse, callingFunction, lineno);
 	}
 	
 	private void downloadFile(const(char)[] url, string filename, long fileSize, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
@@ -1067,55 +1062,42 @@ class OneDriveApi {
 	}
 
 	private JSONValue get(string url, bool skipToken = false, string[string] requestHeaders=null, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+		bool validateJSONResponse = true;
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.get, url, skipToken, response, requestHeaders);
 			return curlEngine.execute();
-		}, callingFunction, lineno);
+		}, validateJSONResponse, callingFunction, lineno);
 	}
 
 	private JSONValue patch(const(char)[] url, const(char)[] patchData, string[string] requestHeaders=null, const(char)[] contentType = "application/json", string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+		bool validateJSONResponse = true;
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.patch, url, false, response, requestHeaders);
 			curlEngine.setContent(contentType, patchData);
 			return curlEngine.execute();
-		}, callingFunction, lineno);
+		}, validateJSONResponse, callingFunction, lineno);
 	}
 
 	private JSONValue post(const(char)[] url, const(char)[] postData, bool skipToken = false, const(char)[] contentType = "application/json", string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+		bool validateJSONResponse = true;
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.post, url, skipToken, response);
 			curlEngine.setContent(contentType, postData);
 			return curlEngine.execute();
-		}, callingFunction, lineno);
+		}, validateJSONResponse, callingFunction, lineno);
 	}
 	
 	private JSONValue put(const(char)[] url, string filepath, bool skipToken=false, string contentRange=null, ulong offset=0, ulong offsetSize=0, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+		bool validateJSONResponse = true;
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
-			string[string] requestHeaders;
-			// open file as read-only in binary mode
-			auto file = File(filepath, "rb");
-			if (!contentRange.empty)
-				file.seek(offset);
-			// function scopes
-			scope(exit) {
-				// close file if open
-				if (file.isOpen()){
-					// close open file
-					file.close();
-				}
-			}
-			if (!contentRange.empty)
-				requestHeaders["Content-Range"] = contentRange;
-			else
-				offsetSize = file.size;
-			connect(HTTP.Method.put, url, skipToken, response, requestHeaders);
-			curlEngine.setFile(&file, offsetSize);
+			connect(HTTP.Method.put, url, skipToken, response);
+			curlEngine.setFile(filepath, contentRange, offset, offsetSize);
 			return curlEngine.execute();
-		}, callingFunction, lineno);
+		}, validateJSONResponse, callingFunction, lineno);
 	}
 
 	// Wrapper function for all requests to OneDrive API
-	// throws a OneDriveException
+	// throws OneDriveException
 	private JSONValue oneDriveErrorHandlerWrapper(CurlResponse delegate(CurlResponse response) executer, bool validateJSONResponse, string callingFunction, int lineno) {
 		int maxRetryCount = 10;
 		int retryAttempts = 0;

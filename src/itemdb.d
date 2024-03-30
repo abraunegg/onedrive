@@ -208,12 +208,37 @@ final class ItemDatabase {
 			if (e.msg == "database is locked") {
 				addLogEntry();
 				addLogEntry("ERROR: The 'onedrive' application is already running - please check system process list for active application instances");
-				addLogEntry(" - Use 'sudo ps aufxw | grep onedrive' to potentially determine acive running process", ["verbose"]);
+				addLogEntry(" - Use 'sudo ps aufxw | grep onedrive' to potentially determine acive running process");
 				addLogEntry();
 			} else {
 				// A different error .. detail the message, detail the actual SQLite Error Code to assist with troubleshooting
 				addLogEntry();
 				addLogEntry("ERROR: An internal database error occurred: " ~ e.msg ~ " (SQLite Error Code: " ~ to!string(e.errorCode) ~ ")");
+				addLogEntry();
+				
+				// Give the user some additional information and pointers on this error
+				// The below list is based on user issue / discussion reports since 2018
+				switch (e.errorCode) {
+					case 7: // SQLITE_NOMEM
+						addLogEntry("The operation could not be completed due to insufficient memory. Please close unnecessary applications to free up memory and try again.");
+						break;
+					case 10: // SQLITE_IOERR
+						addLogEntry("A disk I/O error occurred. This could be due to issues with the storage medium (e.g., disk full, hardware failure, filesystem corruption). Please check your disk's health using a disk utility tool, ensure there is enough free space, and check the filesystem for errors.");
+						break;
+					case 11: // SQLITE_CORRUPT
+						addLogEntry("The database file appears to be corrupt. This could be due to incomplete or failed writes, hardware issues, or unexpected interruptions during database operations. Please perform a --resync operation.");
+						break;
+					case 14: // SQLITE_CANTOPEN
+						addLogEntry("The database file could not be opened. Please check that the database file exists, has the correct permissions, and is not being blocked by another process or security software.");
+						break;
+					case 26: // SQLITE_NOTADB
+						addLogEntry("The file attempted to be opened does not appear to be a valid SQLite database, or it may have been corrupted to a point where it's no longer recognizable. Please check your application configuration directory and/or perform a --resync operation.");
+						break;
+					default:
+						addLogEntry("An unexpected error occurred. Please consult the application documentation or support to resolve this issue.");
+						break;
+				}
+				// Blank line before exit
 				addLogEntry();
 			}
 			return;
