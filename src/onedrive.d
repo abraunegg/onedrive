@@ -33,6 +33,7 @@ import curlEngine;
 // Shared variables between classes
 shared bool debugHTTPResponseOutput = false;
 
+// Define the 'OneDriveException' class
 class OneDriveException: Exception {
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/concepts/errors
 	int httpStatusCode;
@@ -46,17 +47,21 @@ class OneDriveException: Exception {
 		string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(error, true));
 		super(msg, file, line);
 	}
+
+	this(ushort httpStatusCode, string reason, string file = __FILE__, size_t line = __LINE__) {
+		this.response = null;
+		super(msg, file, line, null);
+	}
 }
 
-<<<<<<< HEAD
-=======
+// Define the 'OneDriveError' class
 class OneDriveError: Error {
 	this(string msg) {
 		super(msg);
 	}
 }
 
->>>>>>> pr/2608
+// Define the 'OneDriveApi' class
 class OneDriveApi {
 	// Class variables
 	ApplicationConfig appConfig;
@@ -80,11 +85,7 @@ class OneDriveApi {
 	const(char)[] refreshToken = "";
 	bool dryRun = false;
 	bool debugResponse = false;
-<<<<<<< HEAD
-	ulong retryAfterValue = 0;
-=======
 	bool keepAlive = false;
->>>>>>> pr/2608
 
 	this(ApplicationConfig appConfig) {
 		// Configure the class varaible to consume the application configuration
@@ -336,6 +337,7 @@ class OneDriveApi {
 				addLogEntry("refreshToken is empty !!!!!!!!!! This will cause 4xx errors ... CODING TO DO TO HANDLE ?????");
 			}
 		}
+		
 		// Return if we are authorised
 		addLogEntry("Authorised State: " ~ to!string(authorised), ["debug"]);
 		return authorised;
@@ -390,10 +392,12 @@ class OneDriveApi {
 		string authFilesString = appConfig.getValueString("auth_files");
 		string authResponseString = appConfig.getValueString("auth_response");
 	
+		// Is authResponseString not empty
 		if (!authResponseString.empty) {
 			// read the response from authResponseString
 			response = cast(char[]) authResponseString;
 		} else if (authFilesString != "") {
+			// authResponseString empty .. is authFilesString not empty
 			string[] authFiles = authFilesString.split(":");
 			string authUrl = authFiles[0];
 			string responseUrl = authFiles[1];
@@ -418,6 +422,7 @@ class OneDriveApi {
 				exit(-1);
 			}
 	
+			// Add logging that we are waiting for auth elements to be available
 			addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
 			
 			while (!exists(responseUrl)) {
@@ -468,10 +473,7 @@ class OneDriveApi {
 		}
 		c.popFront(); // skip the whole match
 		redeemToken(c.front);
-		
-		
 		return true;
-		
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_get
@@ -768,27 +770,9 @@ class OneDriveApi {
 		return siteSearchUrl;
 	}
 	
-<<<<<<< HEAD
-	// Return the current value of retryAfterValue
-	ulong getRetryAfterValue() {
-		return retryAfterValue;
-	}
-
-	// Reset the current value of retryAfterValue to 0 after it has been used
-	void resetRetryAfterValue() {
-		retryAfterValue = 0;
-	}
-	
-	// Private functions
-	private void addAccessTokenHeader() {
-		curlEngine.http.addRequestHeader("Authorization", appConfig.accessToken);
-	}
-	
-	private void addIncludeFeatureRequestHeader() {
-=======
-	// Private functions
+	// Private OneDrive API Functions
 	private void addIncludeFeatureRequestHeader(string[string]* headers) {
->>>>>>> pr/2608
+
 		addLogEntry("Adding 'Include-Feature=AddToOneDrive' API request header as 'sync_business_shared_items' config option is enabled", ["debug"]);
 		(*headers)["Prefer"] = "Include-Feature=AddToOneDrive";
 	}
@@ -895,243 +879,6 @@ class OneDriveApi {
 		}
 	}
 	
-<<<<<<< HEAD
-	private void checkAccessTokenExpired() {
-		try {
-			if (Clock.currTime() >= appConfig.accessTokenExpiration) {
-				addLogEntry("Microsoft OneDrive Access Token has EXPIRED. Must generate a new Microsoft OneDrive Access Token", ["debug"]);
-				newToken();
-			} else {
-				addLogEntry("Existing Microsoft OneDrive Access Token Expires: " ~ to!string(appConfig.accessTokenExpiration), ["debug"]);
-			}
-		} catch (OneDriveException e) {
-			if (e.httpStatusCode == 400 || e.httpStatusCode == 401) {
-				// flag error and notify
-				addLogEntry();
-				addLogEntry("ERROR: Refresh token invalid, use --reauth to authorize the client again.", ["info", "notify"]);
-				addLogEntry();
-				// set error message
-				e.msg ~= "\nRefresh token invalid, use --reauth to authorize the client again";
-			}
-		}
-	}
-	
-	private void performDelete(const(char)[] url) {
-		scope(exit) curlEngine.http.clearRequestHeaders();
-		curlEngine.connect(HTTP.Method.del, url);
-		addAccessTokenHeader();
-		auto response = performHTTPOperation();
-		checkHttpResponseCode(response);
-	}
-	
-	private void downloadFile(const(char)[] url, string filename, long fileSize) {
-		// Threshold for displaying download bar
-		long thresholdFileSize = 4 * 2^^20; // 4 MiB
-		
-		// To support marking of partially-downloaded files, 
-		string originalFilename = filename;
-		string downloadFilename = filename ~ ".partial";
-		
-		// open downloadFilename as write in binary mode
-		auto file = File(downloadFilename, "wb");
-
-		// function scopes
-		scope(exit) {
-			curlEngine.http.clearRequestHeaders();
-			curlEngine.http.onSend = null;
-			curlEngine.http.onReceive = null;
-			curlEngine.http.onReceiveHeader = null;
-			curlEngine.http.onReceiveStatusLine = null;
-			curlEngine.http.contentLength = 0;
-			// Reset onProgress to not display anything for next download
-			curlEngine.http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow)
-			{
-				return 0;
-			};
-			// close file if open
-			if (file.isOpen()){
-				// close open file
-				file.close();
-			}
-		}
-
-		curlEngine.connect(HTTP.Method.get, url);
-		addAccessTokenHeader();
-
-		curlEngine.http.onReceive = (ubyte[] data) {
-			file.rawWrite(data);
-			return data.length;
-		};
-
-		if (fileSize >= thresholdFileSize){
-			// Download Progress variables
-			size_t expected_total_segments = 20;
-			ulong start_unix_time = Clock.currTime.toUnixTime();
-			int h, m, s;
-			string etaString;
-			bool barInit = false;
-			real previousProgressPercent = -1.0;
-			real percentCheck = 5.0;
-			size_t segmentCount = -1;
-			
-			// Setup progress bar to display
-			curlEngine.http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow) {
-				// For each onProgress, what is the % of dlnow to dltotal
-				// floor - rounds down to nearest whole number
-				real currentDLPercent = floor(double(dlnow)/dltotal*100);
-				string downloadLogEntry = "Downloading: " ~ filename ~ " ... ";
-				
-				// Have we started downloading?
-				if (currentDLPercent > 0){
-					// We have started downloading
-					addLogEntry("", ["debug"]); // Debug new line only
-					addLogEntry("Data Received    = " ~ to!string(dlnow), ["debug"]);
-					addLogEntry("Expected Total   = " ~ to!string(dltotal), ["debug"]);
-					addLogEntry("Percent Complete = " ~ to!string(currentDLPercent), ["debug"]);
-					
-					// Every 5% download we need to increment the download bar
-
-					// Has the user set a data rate limit?
-					// when using rate_limit, we will get odd download rates, for example:
-					// Percent Complete = 24
-					// Data Received    = 13080163
-					// Expected Total   = 52428800
-					// Percent Complete = 24
-					// Data Received    = 13685777
-					// Expected Total   = 52428800
-					// Percent Complete = 26   <---- jumps to 26% missing 25%, thus fmod misses incrementing progress bar
-					// Data Received    = 13685777
-					// Expected Total   = 52428800
-					// Percent Complete = 26
-										
-					if (appConfig.getValueLong("rate_limit") > 0) {
-						// User configured rate limit
-						// How much data should be in each segment to qualify for 5%
-						ulong dataPerSegment = to!ulong(floor(double(dltotal)/expected_total_segments));
-						// How much data received do we need to validate against
-						ulong thisSegmentData = dataPerSegment * segmentCount;
-						ulong nextSegmentData = dataPerSegment * (segmentCount + 1);
-						
-						// Has the data that has been received in a 5% window that we need to increment the progress bar at
-						if ((dlnow > thisSegmentData) && (dlnow < nextSegmentData) && (previousProgressPercent != currentDLPercent) || (dlnow == dltotal)) {
-							// Downloaded data equals approx 5%
-							addLogEntry("Incrementing Progress Bar using calculated 5% of data received", ["debug"]);
-							
-							// 100% check
-							if (currentDLPercent != 100) {
-								// Not 100% yet
-								// Calculate the output
-								segmentCount++;
-								auto eta = calc_eta(segmentCount, expected_total_segments, start_unix_time);
-								dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
-								etaString = format!"|  ETA    %02d:%02d:%02d"( h, m, s);
-								string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
-								addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
-							} else {
-								// 100% done
-								ulong end_unix_time = Clock.currTime.toUnixTime();
-								auto upload_duration = cast(int)(end_unix_time - start_unix_time);
-								dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
-								etaString = format!"| DONE in %02d:%02d:%02d"( h, m, s);
-								string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
-								addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
-							}
-							
-							// update values
-							addLogEntry("Setting previousProgressPercent to " ~ to!string(currentDLPercent), ["debug"]);
-							previousProgressPercent = currentDLPercent;
-							addLogEntry("Incrementing segmentCount", ["debug"]);
-							segmentCount++;
-						}
-					} else {
-						// Is currentDLPercent divisible by 5 leaving remainder 0 and does previousProgressPercent not equal currentDLPercent
-						if ((isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) && (previousProgressPercent != currentDLPercent)) {
-							// currentDLPercent matches a new increment
-							addLogEntry("Incrementing Progress Bar using fmod match", ["debug"]);
-							
-							// 100% check
-							if (currentDLPercent != 100) {
-								// Not 100% yet
-								// Calculate the output
-								segmentCount++;
-								auto eta = calc_eta(segmentCount, expected_total_segments, start_unix_time);
-								dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
-								etaString = format!"|  ETA    %02d:%02d:%02d"( h, m, s);
-								string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
-								addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
-							} else {
-								// 100% done
-								ulong end_unix_time = Clock.currTime.toUnixTime();
-								auto upload_duration = cast(int)(end_unix_time - start_unix_time);
-								dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
-								etaString = format!"| DONE in %02d:%02d:%02d"( h, m, s);
-								string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
-								addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
-							}
-							
-							// update values
-							previousProgressPercent = currentDLPercent;
-						}
-					}
-				} else {
-					if ((currentDLPercent == 0) && (!barInit)) {
-						// Calculate the output
-						segmentCount++;
-						etaString = "|  ETA    --:--:--";
-						string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
-						addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
-						barInit = true;
-					}
-				}
-				return 0;
-			};
-
-			// Perform download
-			try {
-				// try and catch any curl error
-				curlEngine.http.perform();
-				// Check the HTTP Response headers - needed for correct 429 handling
-				// check will be performed in checkHttpCode()
-				// Reset onProgress to not display anything for next download done using exit scope
-			} catch (CurlException e) {
-				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-			}
-		} else {
-			// No progress bar
-			try {
-				// try and catch any curl error
-				curlEngine.http.perform();
-				// Check the HTTP Response headers - needed for correct 429 handling
-				// check will be performed in checkHttpCode()
-			} catch (CurlException e) {
-				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-			}
-		}
-
-		// Rename downloaded file
-		rename(downloadFilename, originalFilename);
-
-		// Check the HTTP response code, which, if a 429, will also check response headers
-		checkHttpCode();
-	}
-
-	private JSONValue get(string url, bool skipToken = false) {
-		scope(exit) curlEngine.http.clearRequestHeaders();
-		addLogEntry("Request URL = " ~ url, ["debug"]);
-		curlEngine.connect(HTTP.Method.get, url);
-		if (!skipToken) addAccessTokenHeader(); // HACK: requestUploadStatus
-		JSONValue response;
-		response = performHTTPOperation();
-		checkHttpResponseCode(response);
-		// OneDrive API Response Debugging if --https-debug is being used
-		if (debugResponse){
-			addLogEntry("OneDrive API Response: " ~ to!string(response), ["debug"]);
-        }
-		return response;
-	}
-	
-=======
->>>>>>> pr/2608
 	private void newToken() {
 		addLogEntry("Need to generate a new access token for Microsoft OneDrive", ["debug"]);
 		auto postData = appender!(string)();
@@ -1160,8 +907,7 @@ class OneDriveApi {
 		(*requestHeaders)["Authorization"] = getAccessToken();
 	}
 	
-	private void connect(HTTP.Method method, const(char)[] url, bool skipToken, 
-						 CurlResponse response, string[string] requestHeaders=null) {
+	private void connect(HTTP.Method method, const(char)[] url, bool skipToken, CurlResponse response, string[string] requestHeaders=null) {
 		addLogEntry("Request URL = " ~ to!string(url), ["debug"]);
 		// Check access token first in case the request is overridden
 		if (!skipToken) addAccessTokenHeader(&requestHeaders);
@@ -1172,26 +918,21 @@ class OneDriveApi {
 		curlEngine.connect(method, url);
 	}
 
-	private void performDelete(
-		const(char)[] url, string[string] requestHeaders=null,
-		string callingFunction=__FUNCTION__, int lineno=__LINE__
-	) {
+	private void performDelete(const(char)[] url, string[string] requestHeaders=null, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.del, url, false, response, requestHeaders);
 			return curlEngine.execute();
 		}, callingFunction, lineno);
 	}
 	
-	private void downloadFile(
-		const(char)[] url, string filename, long fileSize,
-		string callingFunction=__FUNCTION__, int lineno=__LINE__
-	) {
+	private void downloadFile(const(char)[] url, string filename, long fileSize, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		// Threshold for displaying download bar
 		long thresholdFileSize = 4 * 2^^20; // 4 MiB
 		
 		// To support marking of partially-downloaded files, 
 		string originalFilename = filename;
 		string downloadFilename = filename ~ ".partial";
+		bool validateJSONResponse = false;
 		oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.get, url, false, response);
 
@@ -1206,13 +947,6 @@ class OneDriveApi {
 				real percentCheck = 5.0;
 				long segmentCount = -1;
 				
-<<<<<<< HEAD
-			// 403 - Forbidden
-			case 403:
-				// OneDrive responded that the user is forbidden
-				addLogEntry("OneDrive returned a 'HTTP 403 - Forbidden' - gracefully handling error", ["verbose"]);
-				throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason);
-=======
 				// Setup progress bar to display
 				curlEngine.http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow) {
 					// For each onProgress, what is the % of dlnow to dltotal
@@ -1329,25 +1063,17 @@ class OneDriveApi {
 			}
 			
 			return curlEngine.download(originalFilename, downloadFilename);
-		}, callingFunction, lineno);
+		}, validateJSONResponse, callingFunction, lineno);
 	}
 
-	private JSONValue get(
-		string url, bool skipToken = false, string[string] requestHeaders=null,
-		string callingFunction=__FUNCTION__, int lineno=__LINE__
-	) {
+	private JSONValue get(string url, bool skipToken = false, string[string] requestHeaders=null, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.get, url, skipToken, response, requestHeaders);
 			return curlEngine.execute();
 		}, callingFunction, lineno);
 	}
 
-	private JSONValue patch(
-		const(char)[] url, const(char)[] patchData, 
-		string[string] requestHeaders=null, 
-		const(char)[] contentType = "application/json",
-		string callingFunction=__FUNCTION__, int lineno=__LINE__
-	) {
+	private JSONValue patch(const(char)[] url, const(char)[] patchData, string[string] requestHeaders=null, const(char)[] contentType = "application/json", string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.patch, url, false, response, requestHeaders);
 			curlEngine.setContent(contentType, patchData);
@@ -1355,12 +1081,7 @@ class OneDriveApi {
 		}, callingFunction, lineno);
 	}
 
-	private JSONValue post(
-		const(char)[] url, const(char)[] postData, 
-		bool skipToken = false, 
-		const(char)[] contentType = "application/json",
-		string callingFunction=__FUNCTION__, int lineno=__LINE__
-	) {
+	private JSONValue post(const(char)[] url, const(char)[] postData, bool skipToken = false, const(char)[] contentType = "application/json", string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			connect(HTTP.Method.post, url, skipToken, response);
 			curlEngine.setContent(contentType, postData);
@@ -1368,10 +1089,7 @@ class OneDriveApi {
 		}, callingFunction, lineno);
 	}
 	
-	private JSONValue put(
-		const(char)[] url, string filepath, bool skipToken=false, string contentRange=null, ulong offset=0, ulong offsetSize=0,
-		string callingFunction=__FUNCTION__, int lineno=__LINE__
-	) {
+	private JSONValue put(const(char)[] url, string filepath, bool skipToken=false, string contentRange=null, ulong offset=0, ulong offsetSize=0, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
 		return oneDriveErrorHandlerWrapper((CurlResponse response) {
 			string[string] requestHeaders;
 			// open file as read-only in binary mode
@@ -1397,11 +1115,8 @@ class OneDriveApi {
 	}
 
 	// Wrapper function for all requests to OneDrive API
-	// throws OneDriveException
-	private JSONValue oneDriveErrorHandlerWrapper(
-		CurlResponse delegate(CurlResponse response) executer,
-		string callingFunction, int lineno
-	) {
+	// throws a OneDriveException
+	private JSONValue oneDriveErrorHandlerWrapper(CurlResponse delegate(CurlResponse response) executer, bool validateJSONResponse, string callingFunction, int lineno) {
 		int maxRetryCount = 10;
 		int retryAttempts = 0;
 		int backoffInterval = 0;
@@ -1426,6 +1141,11 @@ class OneDriveApi {
 					if (response.statusLine.code / 100 != 2 && response.statusLine.code != 302) {
 						throw new OneDriveException(response.statusLine.code, response.statusLine.reason, response);
 					}
+					if (validateJSONResponse) {
+						if (result.type() != JSONType.object) {
+							throw new OneDriveException(0, "Caller request a non null JSON response, get null instead", response);
+						}
+					}
 				} else {
 					// No valid response is returned
 					throw new OneDriveException(0, "OneDrive operation returned an invalid response", response);
@@ -1444,7 +1164,6 @@ class OneDriveApi {
 				addLogEntry("onedrive.performHTTPOperation() Generated a OneDrive CurlException", ["debug"]);
 				auto errorArray = splitLines(e.msg);
 				string errorMessage = errorArray[0];
->>>>>>> pr/2608
 
 				addLogEntry("Handling Curl expection");
 				addLogEntry(to!string(response));
