@@ -141,7 +141,7 @@ This will create a docker volume labeled `onedrive_data` and will map to a path 
 > ROOT level privileges prohibited!
 > ```
 
-### 6. First run of Docker container under docker and performing authorisation
+### 6. First run of Docker container under docker and performing authorization
 The 'onedrive' client within the container first needs to be authorised with your Microsoft account. This is achieved by initially running docker in interactive mode.
 
 Run the docker image with the commands below and make sure to change the value of `ONEDRIVE_DATA_DIR` to the actual onedrive data directory on your filesystem that you wish to use (e.g. `export ONEDRIVE_DATA_DIR="/home/abraunegg/OneDrive"`).
