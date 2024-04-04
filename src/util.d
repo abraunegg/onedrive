@@ -488,7 +488,6 @@ bool isValidUTF16(string path) {
     return true;
 }
 
-
 // Does the path contain any HTML URL encoded items (e.g., '%20' for space)
 bool containsURLEncodedItems(string path) {
     // Check for null or empty string

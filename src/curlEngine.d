@@ -72,14 +72,14 @@ class CurlResponse {
 	}
 
 	// Return the current value of retryAfterValue
-	ulong getRetryAfterValue() {
-		ulong delayBeforeRetry;
+	int getRetryAfterValue() {
+		int delayBeforeRetry;
 		// is retry-after in the response headers
 		if ("retry-after" in responseHeaders) {
 			// Set the retry-after value
 			addLogEntry("curlEngine.http.perform() => Received a 'Retry-After' Header Response with the following value: " ~ to!string(responseHeaders["retry-after"]), ["debug"]);
 			addLogEntry("curlEngine.http.perform() => Setting retryAfterValue to: " ~ responseHeaders["retry-after"], ["debug"]);
-			delayBeforeRetry = to!ulong(responseHeaders["retry-after"]);
+			delayBeforeRetry = to!int(responseHeaders["retry-after"]);
 		} else {
 			// Use a 120 second delay as a default given header value was zero
 			// This value is based on log files and data when determining correct process for 429 response handling
@@ -88,24 +88,33 @@ class CurlResponse {
 			addLogEntry("HTTP Response Header retry-after value was 0 - Using a preconfigured default of: " ~ to!string(delayBeforeRetry), ["debug"]);
 		}
 		
-		return delayBeforeRetry; // default to 60 seconds
+		return delayBeforeRetry;
 	}
 
-	const string parseHeaders(const(string[string]) headers) {
+	const string parseHeaders(const(immutable(char)[][immutable(char)[]]) headers) {
 		string responseHeadersStr = "";
-		foreach (const(char)[] header; headers.byKey()) {
-			responseHeadersStr ~= "> " ~ header ~ ": " ~ headers[header] ~ "\n";
+		// Ensure headers is not null and iterate over keys safely.
+		if (headers !is null) {
+			foreach (const(char)[] header; headers.byKey()) {
+				// Check if the key actually exists before accessing it to avoid RangeError.
+				if (auto val = header in headers) { // 'in' checks for the key and returns a pointer to the value if found.
+					responseHeadersStr ~= "> " ~ header ~ ": " ~ *val ~ "\n"; // Dereference pointer to get the value.
+				}
+			}
 		}
 		return responseHeadersStr;
 	}
 
-
 	const string parseHeaders(const(const(char)[][const(char)[]]) headers) {
 		string responseHeadersStr = "";
 		foreach (string header; headers.byKey()) {
-			if (header == "Authorization")
+			if (header == "Authorization") {
 				continue;
-			responseHeadersStr ~= "< " ~ header ~ ": " ~ headers[header] ~ "\n";
+			}
+			// Use the 'in' operator to safely check if the key exists in the associative array.
+			if (auto val = header in headers) {
+				responseHeadersStr ~= "< " ~ header ~ ": " ~ *val ~ "\n";
+			}
 		}
 		return responseHeadersStr;
 	}
