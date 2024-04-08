@@ -34,13 +34,18 @@ DEBUG = @DEBUG@
 DC = @DC@
 DC_TYPE = @DC_TYPE@
 DCFLAGS = @DCFLAGS@
-DCFLAGS += -w -g -O -J.
+DCFLAGS += -w -J.
 ifeq ($(DEBUG),yes)
 ifeq ($(DC_TYPE),dmd)
-DCFLAGS += -debug -gs
+# Add DMD Debugging Flags
+DCFLAGS += -g -debug -gs
 else
-DCFLAGS += -d-debug -gc
+# Add LDC Debuggging Flags
+DCFLAGS += -g -d-debug -gc
 endif
+else
+# Only add optimisation flags if debugging is not enabled
+DCFLAGS += -O
 endif
 
 ifeq ($(NOTIFICATIONS),yes)
