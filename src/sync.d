@@ -178,6 +178,9 @@ class SyncEngine {
 	string latestDeltaLink;
 	// Struct of containing the deltaLink details
 	DeltaLinkDetails deltaLinkCache;
+	
+	// Create the specific task pool to process items in parallel
+	TaskPool processPool;
 		
 	// Configure this class instance
 	this(ApplicationConfig appConfig, ItemDatabase itemDB, ClientSideFiltering selectiveSync) {
@@ -298,6 +301,10 @@ class SyncEngine {
 	// Initialise the Sync Engine class
 	bool initialise() {
 
+		// Create common parallel thread pool
+		processPool = taskPool();
+		processPool.isDaemon(true); // Control whether the worker threads are daemon threads. A daemon thread is automatically terminated when all non-daemon threads have terminated.
+
 		// create a new instance of the OneDrive API
 		oneDriveApiInstance = new OneDriveApi(appConfig);
 		if (oneDriveApiInstance.initialise()) {
@@ -307,7 +314,7 @@ class SyncEngine {
 			} catch (accountDetailsException exception) {
 				// details could not be queried
 				addLogEntry(exception.msg);
-				// Shutdown API instance
+				// Shutdown this API instance, as we will create API instances as required, when required
 				oneDriveApiInstance.shutdown();
 				// Free object and memory
 				object.destroy(oneDriveApiInstance);
@@ -321,7 +328,7 @@ class SyncEngine {
 			} catch (accountDetailsException exception) {
 				// details could not be queried
 				addLogEntry(exception.msg);
-				// Shutdown API instance
+				// Shutdown this API instance, as we will create API instances as required, when required
 				oneDriveApiInstance.shutdown();
 				// Free object and memory
 				object.destroy(oneDriveApiInstance);
@@ -335,7 +342,7 @@ class SyncEngine {
 			} catch (accountDetailsException exception) {
 				// details could not be queried
 				addLogEntry(exception.msg);
-				// Shutdown API instance
+				// Shutdown this API instance, as we will create API instances as required, when required
 				oneDriveApiInstance.shutdown();
 				// Free object and memory
 				object.destroy(oneDriveApiInstance);
@@ -345,7 +352,7 @@ class SyncEngine {
 		} else {
 			// API could not be initialised
 			addLogEntry("OneDrive API could not be initialised with previously used details");
-			// Shutdown API instance
+			// Shutdown this API instance, as we will create API instances as required, when required
 			oneDriveApiInstance.shutdown();
 			// Free object and memory
 			object.destroy(oneDriveApiInstance);
@@ -358,6 +365,7 @@ class SyncEngine {
 		
 		// Shutdown this API instance, as we will create API instances as required, when required
 		oneDriveApiInstance.shutdown();
+		
 		// Free object and memory
 		object.destroy(oneDriveApiInstance);
 		return true;
@@ -929,7 +937,7 @@ class SyncEngine {
 			// To finish off the JSON processing items, this is needed to reflect this in the log
 			addLogEntry("------------------------------------------------------------------", ["debug"]);
 			
-			// Shutdown the API
+			// Shutdown this API instance, as we will create API instances as required, when required
 			getDeltaQueryOneDriveApiInstance.shutdown();
 			// Free object and memory
 			object.destroy(getDeltaQueryOneDriveApiInstance);
@@ -2107,7 +2115,7 @@ class SyncEngine {
 	// Download items in parallel
 	void downloadOneDriveItemsInParallel(JSONValue[] array) {
 		// This function recieved an array of 16 JSON items to download
-		foreach (i, onedriveJSONItem; taskPool.parallel(array)) {
+		foreach (i, onedriveJSONItem; processPool.parallel(array)) {
 			// Take each JSON item and 
 			downloadFileItem(onedriveJSONItem);
 		}
@@ -3690,12 +3698,13 @@ class SyncEngine {
 		// For each batch of files to upload, upload the changed data to OneDrive
 		foreach (chunk; databaseItemsWhereContentHasChanged.chunks(batchSize)) {
 			processChangedLocalItemsToUploadInParallel(chunk);
+			chunk = null;
 		}
 	}
 
-	// Upload the changed file batches in parallel
 	void processChangedLocalItemsToUploadInParallel(string[3][] array) {
-		foreach (i, localItemDetails; taskPool.parallel(array)) {
+		
+		foreach (i, localItemDetails; processPool.parallel(array)) {
 			addLogEntry("Upload Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);
 			uploadChangedLocalFileToOneDrive(localItemDetails);
 			addLogEntry("Upload Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);
@@ -4166,7 +4175,7 @@ class SyncEngine {
 		// Debug Log the modified upload response
 		addLogEntry("Modified File Upload Response: " ~ to!string(uploadResponse), ["debug"]);
 		
-		// Shutdown the API instance
+		// Shutdown this API instance, as we will create API instances as required, when required instance
 		uploadFileOneDriveApiInstance.shutdown();
 		// Free object and memory
 		object.destroy(uploadFileOneDriveApiInstance);
@@ -4906,7 +4915,7 @@ class SyncEngine {
 							// OneDrive API returned a 404 (above) to say the directory did not exist
 							// but when we attempted to create it, OneDrive responded that it now already exists
 							addLogEntry("OneDrive reported that " ~ thisNewPathToCreate ~ " already exists .. OneDrive API race condition", ["verbose"]);
-							// Shutdown API instance
+							// Shutdown this API instance, as we will create API instances as required, when required
 							createDirectoryOnlineOneDriveApiInstance.shutdown();
 							// Free object and memory
 							object.destroy(createDirectoryOnlineOneDriveApiInstance);
@@ -4915,7 +4924,7 @@ class SyncEngine {
 							// some other error from OneDrive was returned - display what it is
 							addLogEntry("OneDrive generated an error when creating this path: " ~ thisNewPathToCreate);
 							displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-							// Shutdown API instance
+							// Shutdown this API instance, as we will create API instances as required, when required
 							createDirectoryOnlineOneDriveApiInstance.shutdown();
 							// Free object and memory
 							object.destroy(createDirectoryOnlineOneDriveApiInstance);
@@ -4931,7 +4940,7 @@ class SyncEngine {
 					saveItem(fakeResponse);
 				}
 				
-				// Shutdown API instance
+				// Shutdown this API instance, as we will create API instances as required, when required
 				createDirectoryOnlineOneDriveApiInstance.shutdown();
 				// Free object and memory
 				object.destroy(createDirectoryOnlineOneDriveApiInstance);
@@ -5001,7 +5010,7 @@ class SyncEngine {
 							// Add this path to businessSharedFoldersOnlineToSkip
 							businessSharedFoldersOnlineToSkip ~= [thisNewPathToCreate];
 							// no save to database, no online create
-							// Shutdown API instance
+							// Shutdown this API instance, as we will create API instances as required, when required
 							createDirectoryOnlineOneDriveApiInstance.shutdown();
 							// Free object and memory
 							object.destroy(createDirectoryOnlineOneDriveApiInstance);
@@ -5026,7 +5035,7 @@ class SyncEngine {
 				// Is the response a valid JSON object - validation checking done in saveItem
 				saveItem(onlinePathData);
 				
-				// Shutdown API instance
+				// Shutdown this API instance, as we will create API instances as required, when required
 				createDirectoryOnlineOneDriveApiInstance.shutdown();
 				// Free object and memory
 				object.destroy(createDirectoryOnlineOneDriveApiInstance);
@@ -5040,7 +5049,7 @@ class SyncEngine {
 				addLogEntry("Skipping creating this directory online due to 'case-insensitive match': " ~ thisNewPathToCreate);
 				// Add this path to posixViolationPaths
 				posixViolationPaths ~= [thisNewPathToCreate];
-				// Shutdown API instance
+				// Shutdown this API instance, as we will create API instances as required, when required
 				createDirectoryOnlineOneDriveApiInstance.shutdown();
 				// Free object and memory
 				object.destroy(createDirectoryOnlineOneDriveApiInstance);
@@ -5051,7 +5060,7 @@ class SyncEngine {
 			addLogEntry("ERROR: There was an error performing this operation on Microsoft OneDrive");
 			addLogEntry("ERROR: Increase logging verbosity to assist determining why.");
 			addLogEntry("Skipping: " ~ buildNormalizedPath(absolutePath(thisNewPathToCreate)));
-			// Shutdown API instance
+			// Shutdown this API instance, as we will create API instances as required, when required
 			createDirectoryOnlineOneDriveApiInstance.shutdown();
 			// Free object and memory
 			object.destroy(createDirectoryOnlineOneDriveApiInstance);
@@ -5089,7 +5098,7 @@ class SyncEngine {
 	
 	// Upload the file batches in parallel
 	void uploadNewLocalFileItemsInParallel(string[] array) {
-		foreach (i, fileToUpload; taskPool.parallel(array)) {
+		foreach (i, fileToUpload; processPool.parallel(array)) {
 			// Add a processing '.'
 			if (appConfig.verbosityCount == 0)
 				addProcessingDotEntry();
@@ -5437,8 +5446,6 @@ class SyncEngine {
 		
 		// Create the OneDriveAPI Upload Instance
 		OneDriveApi uploadFileOneDriveApiInstance;
-		uploadFileOneDriveApiInstance = new OneDriveApi(appConfig);
-		uploadFileOneDriveApiInstance.initialise();
 		
 		// Calculate upload speed
 		auto uploadStartTime = Clock.currTime();
@@ -5458,14 +5465,22 @@ class SyncEngine {
 			
 			if ((thisFileSize == 0) || (useSimpleUpload)) { 
 				try {
+					// Initialise API
+					uploadFileOneDriveApiInstance = new OneDriveApi(appConfig);
+					uploadFileOneDriveApiInstance.initialise();
+					
 					// Attempt to upload the zero byte file using simpleUpload for all account types
 					uploadResponse = uploadFileOneDriveApiInstance.simpleUpload(fileToUpload, parentItem.driveId, parentItem.id, baseName(fileToUpload));
 					uploadFailed = false;
 					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done.");
-					// Shutdown the API
-					uploadFileOneDriveApiInstance.shutdown();
-					// Free object and memory
-					object.destroy(uploadFileOneDriveApiInstance);
+					
+					// If the API instance is still valid, shut it down
+					if (uploadFileOneDriveApiInstance !is null) {
+						// Shutdown this API instance, as we will create API instances as required, when required
+						uploadFileOneDriveApiInstance.shutdown();
+						// Free object and memory
+						object.destroy(uploadFileOneDriveApiInstance);		
+					}
 				} catch (OneDriveException exception) {
 					// An error was responded with - what was it
 					
@@ -5494,21 +5509,49 @@ class SyncEngine {
 						}
 						// re-try original request - retried for 429, 503, 504 - but loop back calling this function 
 						performNewFileUpload(parentItem, fileToUpload, thisFileSize);
-						// Return upload status
-						return uploadFailed;
+						
+						// If the API instance is still valid, shut it down
+						if (uploadFileOneDriveApiInstance !is null) {
+							// Shutdown this API instance, as we will create API instances as required, when required
+							uploadFileOneDriveApiInstance.shutdown();
+							// Free object and memory
+							object.destroy(uploadFileOneDriveApiInstance);		
+						}
+						
 					} else {
 						// Default operation if not 408,429,503,504 errors
 						// display what the error is
 						addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+						
+						// If the API instance is still valid, shut it down
+						if (uploadFileOneDriveApiInstance !is null) {
+							// Shutdown this API instance, as we will create API instances as required, when required
+							uploadFileOneDriveApiInstance.shutdown();
+							// Free object and memory
+							object.destroy(uploadFileOneDriveApiInstance);		
+						}						
 					}
 					
 				} catch (FileException e) {
 					// display the error message
 					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					
+					// If the API instance is still valid, shut it down
+					if (uploadFileOneDriveApiInstance !is null) {
+						// Shutdown this API instance, as we will create API instances as required, when required
+						uploadFileOneDriveApiInstance.shutdown();
+						// Free object and memory
+						object.destroy(uploadFileOneDriveApiInstance);		
+					}
 				}
 			} else {
+				
+				// Initialise API
+				uploadFileOneDriveApiInstance = new OneDriveApi(appConfig);
+				uploadFileOneDriveApiInstance.initialise();
+				
 				// Session Upload for this criteria:
 				// - Personal Account and file size > 4MB
 				// - All Business | Office365 | SharePoint files > 0 bytes
@@ -5642,6 +5685,14 @@ class SyncEngine {
 					// Create session Upload URL failed
 					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 				}
+				
+				// If the API instance is still valid, shut it down
+				if (uploadFileOneDriveApiInstance !is null) {
+					// Shutdown this API instance, as we will create API instances as required, when required
+					uploadFileOneDriveApiInstance.shutdown();
+					// Free object and memory
+					object.destroy(uploadFileOneDriveApiInstance);		
+				}	
 			}
 		} else {
 			// We are in a --dry-run scenario
@@ -6055,7 +6106,7 @@ class SyncEngine {
 		
 		// Perform the delete via the default OneDrive API instance
 		performReverseDeletionOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id, itemToDelete.eTag);
-		// Shutdown API instance
+		// Shutdown this API instance, as we will create API instances as required, when required
 		performReverseDeletionOneDriveApiInstance.shutdown();
 		// Free object and memory
 		object.destroy(performReverseDeletionOneDriveApiInstance);
@@ -6697,7 +6748,7 @@ class SyncEngine {
 			}
 		}
 		
-		// Shutdown API instance
+		// Shutdown this API instance, as we will create API instances as required, when required
 		queryChildrenOneDriveApiInstance.shutdown();
 		// Free object and memory
 		object.destroy(queryChildrenOneDriveApiInstance);
@@ -7038,7 +7089,7 @@ class SyncEngine {
 			}
 		}
 		
-		// Shutdown API instance
+		// Shutdown this API instance, as we will create API instances as required, when required
 		queryOneDriveForSpecificPath.shutdown();
 		// Free object and memory
 		object.destroy(queryOneDriveForSpecificPath);
@@ -7244,7 +7295,7 @@ class SyncEngine {
 					}
 				} 
 				
-				// Shutdown API instance
+				// Shutdown this API instance, as we will create API instances as required, when required
 				movePathOnlineApiInstance.shutdown();
 				// Free object and memory
 				object.destroy(movePathOnlineApiInstance);
@@ -7531,7 +7582,7 @@ class SyncEngine {
 			}
 		}
 		
-		// Shutdown API instance
+		// Shutdown this API instance, as we will create API instances as required, when required
 		querySharePointLibraryNameApiInstance.shutdown();
 		// Free object and memory
 		object.destroy(querySharePointLibraryNameApiInstance);
@@ -7816,7 +7867,7 @@ class SyncEngine {
 						}
 					}
 					
-					// Shutdown the API access
+					// Shutdown this API instance, as we will create API instances as required, when required access
 					queryOneDriveForFileDetailsApiInstance.shutdown();
 					// Free object and memory
 					object.destroy(queryOneDriveForFileDetailsApiInstance);
@@ -8050,7 +8101,7 @@ class SyncEngine {
 				return false;
 			}
 			
-			// Shutdown API instance
+			// Shutdown this API instance, as we will create API instances as required, when required
 			validateUploadSessionFileDataApiInstance.shutdown();
 			// Free object and memory
 			object.destroy(validateUploadSessionFileDataApiInstance);
@@ -8091,7 +8142,7 @@ class SyncEngine {
 	
 	void resumeSessionUploadsInParallel(JSONValue[] array) {
 		// This function recieved an array of 16 JSON items to resume upload
-		foreach (i, jsonItemToResume; taskPool.parallel(array)) {
+		foreach (i, jsonItemToResume; processPool.parallel(array)) {
 			// Take each JSON item and resume upload using the JSON data
 			
 			JSONValue uploadResponse;
@@ -8140,7 +8191,7 @@ class SyncEngine {
 				addLogEntry("CODING TO DO: what to do when session upload resumption JSON data is not valid ... nothing ? error message ?");
 			}
 			
-			// Shutdown API instance
+			// Shutdown this API instance, as we will create API instances as required, when required
 			uploadFileOneDriveApiInstance.shutdown();
 			// Free object and memory
 			object.destroy(uploadFileOneDriveApiInstance);

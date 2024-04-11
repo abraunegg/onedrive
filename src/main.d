@@ -1175,7 +1175,6 @@ void performStandardExitProcess(string scopeCaller = null) {
 		syncEngineInstance = null;
 	} else {
 		addLogEntry("Waiting for all internal threads to complete before exiting application", ["verbose"]);
-		thread_joinAll();
 		addLogEntry("Application exit", ["debug"]);
 		addLogEntry("#######################################################################################################################################", ["logFileOnly"]);
 		// Destroy the shared logging buffer

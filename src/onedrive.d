@@ -676,7 +676,8 @@ class OneDriveApi {
 		curlEngine.http.onSend = data => file.rawRead(data).length;
 		// convert offsetSize to ulong
 		curlEngine.http.contentLength = to!ulong(offsetSize);
-		auto response = performHTTPOperation();
+		JSONValue response;
+		response = performHTTPOperation();
 		checkHttpResponseCode(response);
 		return response;
 	}
@@ -942,7 +943,8 @@ class OneDriveApi {
 		scope(exit) curlEngine.http.clearRequestHeaders();
 		curlEngine.connect(HTTP.Method.del, url);
 		addAccessTokenHeader();
-		auto response = performHTTPOperation();
+		JSONValue response;
+		response = performHTTPOperation();
 		checkHttpResponseCode(response);
 	}
 	
@@ -1198,7 +1200,8 @@ class OneDriveApi {
 		} else {
 			curlEngine.http.onSend = buf => 0;
 		}
-		auto response = performHTTPOperation();
+		JSONValue response;
+		response = performHTTPOperation();
 		return response;
 	}
 	
@@ -1407,7 +1410,8 @@ class OneDriveApi {
 		curlEngine.http.addRequestHeader("Content-Type", "application/octet-stream");
 		curlEngine.http.onSend = data => file.rawRead(data).length;
 		curlEngine.http.contentLength = file.size;
-		auto response = performHTTPOperation();
+		JSONValue response;
+		response = performHTTPOperation();
 		checkHttpResponseCode(response);
 		return response;
 	}
