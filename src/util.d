@@ -227,13 +227,14 @@ bool testInternetReachability(ApplicationConfig appConfig) {
         addLogEntry("No Network Connection", ["debug"]);
         addLogEntry("Cannot connect to Microsoft OneDrive Login Service - Network Connection Issue");
         displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-    } finally {
-        if (curlEngine) {
-            curlEngine.release();
-			curlEngine = null;
-        }
-    }
-	
+    } 
+
+	// Shutdown engine
+	curlEngine.http.shutdown();
+	curlEngine.releaseAll();
+	object.destroy(curlEngine);
+	curlEngine = null;
+
 	// Return test result
     return result;
 }

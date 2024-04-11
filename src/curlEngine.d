@@ -194,6 +194,7 @@ class CurlEngine {
 		synchronized(CurlEngine.classinfo) {
 			foreach(curlEngine; curlEnginePool) {
 				curlEngine.shutdown();
+				object.destroy(curlEngine);
 			}
 			curlEnginePool = null;
 		}

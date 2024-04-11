@@ -507,7 +507,7 @@ Are you sure you want to proceed with --force-sync [Y/N]
 To proceed with `--force-sync`, you must type 'y' or 'Y' to allow the application to continue.
 
 ### Enabling the Client Activity Log
-When running onedrive, all actions can be logged to a separate log file. This can be enabled by using the `--enable-logging` flag. 
+When running onedrive, all actions can be logged to a separate log file. This can be enabled by using the `--enable-logging` flag or by adding `enable_logging = "true"` to your 'config' file.
 
 By default, log files will be written to `/var/log/onedrive/` and will be in the format of `%username%.onedrive.log`, where `%username%` represents the user who ran the client to allow easy sorting of user to client activity log.
 
