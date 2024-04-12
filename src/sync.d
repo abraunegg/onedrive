@@ -298,6 +298,13 @@ class SyncEngine {
 		}
 	}
 	
+	~this() {	
+		processPool = null;
+		addLogEntry("processPool = null");
+		object.destroy(oneDriveApiInstance);
+		addLogEntry("object.destroy(oneDriveApiInstance)");
+	}
+	
 	// Initialise the Sync Engine class
 	bool initialise() {
 
@@ -519,7 +526,7 @@ class SyncEngine {
 		addLogEntry("Perform a Full Scan True-Up: " ~ to!string(appConfig.fullScanTrueUpRequired), ["debug"]);
 		
 		// Fetch the API response of /delta to track changes that were performed online
-		fetchOneDriveDeltaAPIResponse(null, null, null);
+		fetchOneDriveDeltaAPIResponse();
 		// Process any download activities or cleanup actions
 		processDownloadActivities();
 		

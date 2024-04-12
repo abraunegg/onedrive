@@ -682,11 +682,21 @@ class ApplicationConfig {
 		}
 		
 		auto file = File(filename, "r");
-		scope(exit) file.close();
-		scope(failure) file.close();
-
+		string lineBuffer;
+		scope(exit) {
+			file.close();
+			object.destroy(file);
+			object.destroy(lineBuffer);
+		}
+		
+		scope(failure) {
+			file.close();
+			object.destroy(file);
+			object.destroy(lineBuffer);
+		}
+		
 		foreach (line; file.byLine()) {
-			string lineBuffer = stripLeft(line).to!string;
+			lineBuffer = stripLeft(line).to!string;
 			if (lineBuffer.empty || lineBuffer[0] == ';' || lineBuffer[0] == '#') continue;
 			auto c = lineBuffer.matchFirst(configRegex);
 			if (c.empty) {

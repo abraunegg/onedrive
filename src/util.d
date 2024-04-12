@@ -201,42 +201,54 @@ Regex!char wild2regex(const(char)[] pattern) {
     return regex(str, "i");
 }
 
-// Test Internet access to Microsoft OneDrive
+// Test Internet access to Microsoft OneDrive using a simple HTTP HEAD request
 bool testInternetReachability(ApplicationConfig appConfig) {
-    CurlEngine curlEngine;
-    bool result = false;
+    auto http = HTTP();
+    http.url = "https://login.microsoftonline.com";
+    
+    // Configure timeouts based on application configuration
+    http.dnsTimeout = dur!"seconds"(appConfig.getValueLong("dns_timeout"));
+    http.connectTimeout = dur!"seconds"(appConfig.getValueLong("connect_timeout"));
+    http.dataTimeout = dur!"seconds"(appConfig.getValueLong("data_timeout"));
+    http.operationTimeout = dur!"seconds"(appConfig.getValueLong("operation_timeout"));
+
+    // Set IP protocol version
+    http.handle.set(CurlOption.ipresolve, appConfig.getValueLong("ip_protocol_version"));
+
+    // Set HTTP method to HEAD for minimal data transfer
+    http.method = HTTP.Method.head;
+
+    // Execute the request and handle exceptions
     try {
-		// Use preconfigured object with all the correct http values assigned
-		curlEngine = CurlEngine.get();
-		curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"));
+        addLogEntry("Attempting to contact Microsoft OneDrive Login Service");
+        http.perform();
 
-		// Configure the remaining items required
-		// URL to use
-		// HTTP connection test method
+        // Check response for HTTP status code
+        if (http.statusLine.code >= 200 && http.statusLine.code < 400) {
+            addLogEntry("Successfully reached Microsoft OneDrive Login Service");
+        } else {
+            addLogEntry("Failed to reach Microsoft OneDrive Login Service. HTTP status code: " ~ to!string(http.statusLine.code));
+            throw new Exception("HTTP Request Failed with Status Code: " ~ to!string(http.statusLine.code));
+        }
 
-		curlEngine.connect(HTTP.Method.head, "https://login.microsoftonline.com");
-		addLogEntry("Attempting to contact Microsoft OneDrive Login Service", ["debug"]);
-		curlEngine.http.perform();
-		addLogEntry("Shutting down HTTP engine as successfully reached OneDrive Login Service", ["debug"]);
-		result = true;
+        http.shutdown();
+        return true;
     } catch (SocketException e) {
-        addLogEntry("HTTP Socket Issue", ["debug"]);
-        addLogEntry("Cannot connect to Microsoft OneDrive Login Service - Socket Issue");
+        addLogEntry("Cannot connect to Microsoft OneDrive Service - Socket Issue: " ~ e.msg);
         displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+        http.shutdown();
+        return false;
     } catch (CurlException e) {
-        addLogEntry("No Network Connection", ["debug"]);
-        addLogEntry("Cannot connect to Microsoft OneDrive Login Service - Network Connection Issue");
+        addLogEntry("Cannot connect to Microsoft OneDrive Service - Network Connection Issue: " ~ e.msg);
         displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-    } 
-
-	// Shutdown engine
-	curlEngine.http.shutdown();
-	curlEngine.releaseAll();
-	object.destroy(curlEngine);
-	curlEngine = null;
-
-	// Return test result
-    return result;
+        http.shutdown();
+        return false;
+    } catch (Exception e) {
+        addLogEntry("Unexpected error occurred: " ~ e.toString());
+        displayOneDriveErrorMessage(e.toString(), getFunctionName!({}));
+        http.shutdown();
+        return false;
+    }
 }
 
 // Retry Internet access test to Microsoft OneDrive

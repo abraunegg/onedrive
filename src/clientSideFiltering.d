@@ -30,6 +30,13 @@ class ClientSideFiltering {
 		this.appConfig = appConfig;
 	}
 	
+	~this() {
+		object.destroy(appConfig);
+		object.destroy(paths);
+		object.destroy(fileMask);
+		object.destroy(directoryMask);
+	}
+	
 	// Initialise the required items
 	bool initialise() {
 		// Log what is being done

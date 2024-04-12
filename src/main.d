@@ -1123,12 +1123,6 @@ void performStandardExitProcess(string scopeCaller = null) {
 		object.destroy(oneDriveWebhook);
 	}
 	
-	// Shutdown the sync engine
-	if (syncEngineInstance !is null) {
-		addLogEntry("Shutdown Sync Engine instance", ["debug"]);
-		object.destroy(syncEngineInstance);
-	}
-	
 	// Shutdown the client side filtering objects
 	if (selectiveSync !is null) {
 		addLogEntry("Shutdown Client Side Filtering instance", ["debug"]);
@@ -1149,6 +1143,12 @@ void performStandardExitProcess(string scopeCaller = null) {
 		addLogEntry("Shutdown Filesystem Monitoring instance", ["debug"]);
 		filesystemMonitor.shutdown();
 		object.destroy(filesystemMonitor);
+	}
+	
+	// Shutdown the sync engine
+	if (syncEngineInstance !is null) {
+		addLogEntry("Shutdown Sync Engine instance", ["debug"]);
+		object.destroy(syncEngineInstance);
 	}
 	
 	// Shutdown the database

@@ -176,55 +176,62 @@ class CurlResponse {
 
 class CurlEngine {
 
-	__gshared CurlEngine[] curlEnginePool;
+	__gshared static CurlEngine[] curlEnginePool;  // __gshared is used for thread-shared static variables
+    
+    HTTP http;
+    bool keepAlive;
+    ulong dnsTimeout;
+    CurlResponse response;
+    File uploadFile;
 
-	static CurlEngine get() {
-		synchronized(CurlEngine.classinfo) {
-			if (curlEnginePool.empty) {
-				return new CurlEngine;
-			} else {
-				CurlEngine curlEngine = curlEnginePool[$-1];
-				curlEnginePool.popBack();
-				return curlEngine;
-			}
-		}
-	}
+    static CurlEngine getCurlInstance() {
+        synchronized (CurlEngine.classinfo) {
+            if (curlEnginePool.empty) {
+                return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
+            } else {
+                CurlEngine curlEngine = curlEnginePool[$ - 1];
+                curlEnginePool = curlEnginePool[0 .. $ - 1];  
+                return curlEngine;
+            }
+        }
+    }
 
-	static releaseAll() {
-		synchronized(CurlEngine.classinfo) {
-			foreach(curlEngine; curlEnginePool) {
-				curlEngine.shutdown();
+    static void releaseAll() {
+		synchronized (CurlEngine.classinfo) {
+            foreach (CurlEngine curlEngine; curlEnginePool) {
+				curlEngine.cleanUp(); // Cleanup instance by resetting values
+                curlEngine.shutdown();  // Assume proper cleanup of any resources used by HTTP
 				object.destroy(curlEngine);
-			}
-			curlEnginePool = null;
-		}
-	}
+            }
+            curlEnginePool.length = 0;
+        }
+		
+		// Cleanup curlEnginePool
+		object.destroy(curlEnginePool);
+    }
 
-	void release() {
-		cleanUp();
-		synchronized(CurlEngine.classinfo) {
-			curlEnginePool ~= this;
-		}
-	}
+    this() {
+        http = HTTP();   // Directly initializes HTTP using its default constructor
+        response = null; // Initialize as null
+    }
 
-	HTTP http;
-	bool keepAlive;
-	ulong dnsTimeout;
-	CurlResponse response;
-	File uploadFile;
-
-	this() {	
-		http = HTTP();
-		response = null;
-	}
-
-	~this() {
-		object.destroy(http);
-		object.destroy(response);
+    ~this() {
+        // The destructor should only clean up resources owned directly by this instance
+        // Avoid modifying or destroying shared/static resources here
 		if (uploadFile.isOpen())
-			uploadFile.close();
-	}
+            uploadFile.close();
+
+		// Cleanup curlEnginePool
+		object.destroy(curlEnginePool);
+    }
 	
+	void release() {
+        cleanUp();
+        synchronized (CurlEngine.classinfo) {
+            curlEnginePool ~= this;
+        }
+    }
+
 	void initialise(ulong dnsTimeout, ulong connectTimeout, ulong dataTimeout, ulong operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, ulong userRateLimit, ulong protocolVersion, bool keepAlive=true) {
 		//   Setting this to false ensures that when we close the curl instance, any open sockets are closed - which we need to do when running 
 		//   multiple threads and API instances at the same time otherwise we run out of local files | sockets pretty quickly
