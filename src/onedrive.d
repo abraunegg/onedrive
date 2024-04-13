@@ -1238,8 +1238,8 @@ class OneDriveApi {
 						//  https://stackoverflow.com/questions/45829588/brew-install-fails-curl77-error-setting-certificate-verify
 						//  https://forum.dlang.org/post/vwvkbubufexgeuaxhqfl@forum.dlang.org
 						
-						addLogEntry("Problem with reading the SSL CA cert via libcurl - please repair your system SSL CA Certificates");
-						throw new OneDriveError("OneDrive operation encounter curl lib issue");
+						addLogEntry("Problem with reading the local SSL CA cert via libcurl - please repair your system SSL CA Certificates");
+						throw new OneDriveError("OneDrive operation encountered an issue with libcurl reading the local SSL CA Certificates");
 					} else {
 						// Was this a curl initialization error?
 						if (canFind(errorMessage, "Failed initialization on handle")) {
@@ -1286,6 +1286,7 @@ class OneDriveApi {
 					415				Unsupported Media Type				The content type of the request is a format that is not supported by the service.
 					416				Requested Range Not Satisfiable		The specified byte range is invalid or unavailable.
 					422				Unprocessable Entity				Cannot process the request because it is semantically incorrect.
+					423				Locked								The file is currently checked out or locked for editing by another user
 					429				Too Many Requests					Client application has been throttled and should not attempt to repeat the request until an amount of time has elapsed.
 
 					500				Internal Server Error				There was an internal server error while processing the request.
@@ -1322,10 +1323,15 @@ class OneDriveApi {
 					//  100 - Continue
 					case 100:
 						break;
-					//  429 - Too Many Requests
-					case 429:
+					//  408 - Request Time Out
+					//  429 - Too Many Requests, backoff
+					case 408,429:
 						// If OneDrive sends a status code 429 then this function will be used to process the Retry-After response header which contains the value by which we need to wait
-						addLogEntry("Handling a OneDrive HTTP 429 Response Code (Too Many Requests) - Internal Thread ID: " ~ to!string(internalThreadId));
+						if (exception.httpStatusCode == 408) {
+							addLogEntry("Handling a OneDrive HTTP 408 Response Code (Request Time Out) - Internal Thread ID: " ~ to!string(internalThreadId));
+						} else {
+							addLogEntry("Handling a OneDrive HTTP 429 Response Code (Too Many Requests) - Internal Thread ID: " ~ to!string(internalThreadId));
+						}
 						// Read in the Retry-After HTTP header as set and delay as per this value before retrying the request
 						thisBackOffInterval = response.getRetryAfterValue();
 						addLogEntry("Using Retry-After Value = " ~ to!string(thisBackOffInterval), ["debug"]);
@@ -1333,10 +1339,9 @@ class OneDriveApi {
 						transientError = true;
 						break;
 					//  Transient errors
-					//  408 - Request Time Out
 					//	503 - Service Unavailable
 					//  504 - Gateway Timeout
-					case 408,503,504:
+					case 503,504:
 						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request
 						auto errorArray = splitLines(exception.msg);
 						addLogEntry(to!string(errorArray[0]) ~ " when attempting to query the OneDrive API Service - retrying applicable request in 30 seconds - Internal Thread ID: " ~ to!string(internalThreadId));
@@ -1347,7 +1352,6 @@ class OneDriveApi {
 						break;
 					// Default
 					default:
-						addLogEntry("DEFAULT HANDLER (OneDriveAPI exception) - TO REMOVE");
 						// This exception should be then passed back to the original calling function for handling a OneDriveException
 						throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
 				}

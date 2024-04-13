@@ -184,6 +184,10 @@ class SyncEngine {
 		
 	// Configure this class instance
 	this(ApplicationConfig appConfig, ItemDatabase itemDB, ClientSideFiltering selectiveSync) {
+	
+		// Create the specific task pool to process items in parallel
+		this.processPool = taskPool();
+	
 		// Configure the class varaible to consume the application configuration
 		this.appConfig = appConfig;
 		// Configure the class varaible to consume the database configuration
@@ -300,17 +304,15 @@ class SyncEngine {
 	
 	~this() {	
 		processPool = null;
-		addLogEntry("processPool = null");
+		object.destroy(processPool);
 		object.destroy(oneDriveApiInstance);
-		addLogEntry("object.destroy(oneDriveApiInstance)");
 	}
 	
 	// Initialise the Sync Engine class
 	bool initialise() {
 
-		// Create common parallel thread pool
-		processPool = taskPool();
-		processPool.isDaemon(true); // Control whether the worker threads are daemon threads. A daemon thread is automatically terminated when all non-daemon threads have terminated.
+		// Control whether the worker threads are daemon threads. A daemon thread is automatically terminated when all non-daemon threads have terminated.
+		processPool.isDaemon(true); 
 
 		// create a new instance of the OneDrive API
 		oneDriveApiInstance = new OneDriveApi(appConfig);
@@ -397,7 +399,7 @@ class SyncEngine {
 				handleClientUnauthorised(exception.httpStatusCode, exception.msg);
 			} else {
 				// Default operation if not 400,401 errors
-				// - 429,503,504 errors are handled as a retry within oneDriveApiInstance
+				// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 				// Display what the error is
 				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 			}
@@ -480,7 +482,7 @@ class SyncEngine {
 				handleClientUnauthorised(exception.httpStatusCode, exception.msg);
 			} else {
 				// Default operation if not 400,401 errors
-				// - 429,503,504 errors are handled as a retry within oneDriveApiInstance
+				// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 				// Display what the error is
 				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 			}
@@ -2212,7 +2214,7 @@ class SyncEngine {
 							downloadFailed = true;
 						} else {
 							// Default operation if not a 403 error
-							// - 429,503,504 errors are handled as a retry within downloadFileOneDriveApiInstance
+							// - 408,429,503,504 errors are handled as a retry within downloadFileOneDriveApiInstance
 							// Display what the error is
 							displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 						}
@@ -2464,7 +2466,7 @@ class SyncEngine {
 			string thisFunctionName = getFunctionName!({});
 			
 			// Error handling operation if not 408,429,503,504 errors
-			// - 429,503,504 errors are handled as a retry within getDeltaQueryOneDriveApiInstance
+			// - 408,429,503,504 errors are handled as a retry within getDeltaQueryOneDriveApiInstance
 			if (exception.httpStatusCode == 410) {
 				addLogEntry();
 				addLogEntry("WARNING: The OneDrive API responded with an error that indicates the locally stored deltaLink value is invalid");
@@ -2477,7 +2479,7 @@ class SyncEngine {
 				deltaChangesBundle = getDeltaQueryOneDriveApiInstance.getChangesByItemId(selectedDriveId, selectedItemId, emptyDeltaLink);
 			} else {
 				// Display what the error is
-				addLogEntry("CODING TO DO: Hitting this failure error output");
+				addLogEntry("CODING TO DO: Hitting this failure error output after getting a httpStatusCode == 410 when the API responded the deltaLink was invalid");
 				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				deltaChangesBundle = null;
 			}
@@ -2660,19 +2662,20 @@ class SyncEngine {
 		// What eTag value do we use?
 		string eTagValue;
 		if (appConfig.accountType == "personal") {
+			// Nullify the eTag to avoid 412 errors as much as possible
 			eTagValue = null;
 		} else {
 			eTagValue = eTag;
 		}
 		
 		JSONValue response;
-		// Create a new OneDrive API instance
 		OneDriveApi uploadLastModifiedTimeApiInstance;
-		uploadLastModifiedTimeApiInstance = new OneDriveApi(appConfig);
-		uploadLastModifiedTimeApiInstance.initialise();
 		
 		// Try and update the online last modified time
 		try {
+			// Create a new OneDrive API instance
+			uploadLastModifiedTimeApiInstance = new OneDriveApi(appConfig);
+			uploadLastModifiedTimeApiInstance.initialise();
 			// Use this instance
 			response = uploadLastModifiedTimeApiInstance.updateById(driveId, id, data, eTagValue);
 			// Shut the instance down
@@ -2681,7 +2684,7 @@ class SyncEngine {
 			object.destroy(uploadLastModifiedTimeApiInstance);
 			
 			// Do we actually save the response?
-			// Special case here .. if the DB record item (originItem) is a remote object, thus, if we same the 'response' we will have a DB FOREIGN KEY constraint failed problem
+			// Special case here .. if the DB record item (originItem) is a remote object, thus, if we save the 'response' we will have a DB FOREIGN KEY constraint failed problem
 			//  Update 'originItem.mtime' with the correct timestamp
 			//  Update 'originItem.size' with the correct size from the response
 			//  Update 'originItem.eTag' with the correct eTag from the response
@@ -2694,17 +2697,19 @@ class SyncEngine {
 				// Is the response a valid JSON object - validation checking done in saveItem
 				saveItem(response);
 			} 
-			
 		} catch (OneDriveException exception) {
 			string thisFunctionName = getFunctionName!({});
-			// Handle a 409 - The current state conflicts with what the request expects.
-			if (exception.httpStatusCode == 409) {
-				// Usually means the eTag does not match current item's value - use a null eTag
+			// Handle a 412 - A precondition provided in the request (such as an if-match header) does not match the resource's current state.
+			if (exception.httpStatusCode == 412) {
+				// OneDrive threw a 412 error, most likely: ETag does not match current item's value
+				addLogEntry("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting file time stamp update - gracefully handling error", ["verbose"]);
+				addLogEntry("File Metadata Update Failed - OneDrive eTag / cTag match issue", ["debug"]);
 				addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
+				// Retry without eTag
 				uploadLastModifiedTime(originItem, driveId, id, mtime, null);
 			} else {
 				// Any other error that should be handled
-				// - 429,503,504 errors are handled as a retry within oneDriveApiInstance
+				// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 				// Display what the error is
 				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 			}
@@ -3730,7 +3735,7 @@ class SyncEngine {
 		}
 	}
 	
-		// Perform the upload of a locally modified file to OneDrive
+	// Perform the upload of a locally modified file to OneDrive
 	JSONValue performModifiedFileUpload(Item dbItem, string localFilePath, ulong thisFileSizeLocal) {
 			
 		// Function variables
@@ -3767,12 +3772,12 @@ class SyncEngine {
 			// Do we use simpleUpload or create an upload session?
 			bool useSimpleUpload = false;
 			
-			// Try and get the absolute latest object details from online
+			// Try and get the absolute latest object details from online, so we get the latest eTag to try and avoid a 412 eTag error
 			try {
 				currentOnlineData = uploadFileOneDriveApiInstance.getPathDetailsById(targetDriveId, targetItemId);
 			} catch (OneDriveException exception) {
 				// Display what the error is
-				// - 429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+				// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
 				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 			}
 			
@@ -3780,14 +3785,16 @@ class SyncEngine {
 			if (currentOnlineData.type() == JSONType.object) {
 				// Does the response contain an eTag?
 				if (hasETag(currentOnlineData)) {
-					// Use the value returned from online
+					// Use the value returned from online as this will attempt to avoid a 412 response if we are creating a session upload
 					currentETag = currentOnlineData["eTag"].str;
 				} else {
-					// Use the database value
+					// Use the database value - greater potential for a 412 error to occur if we are creating a session upload
+					addLogEntry("Online data for file returned zero eTag - using database eTag value", ["debug"]);
 					currentETag = dbItem.eTag;
 				}
 			} else {
-				// no valid JSON response
+				// no valid JSON response - greater potential for a 412 error to occur if we are creating a session upload
+				addLogEntry("Online data returned was invalid - using database eTag value", ["debug"]);
 				currentETag = dbItem.eTag;
 			}
 			
@@ -3845,18 +3852,23 @@ class SyncEngine {
 				} catch (OneDriveException exception) {
 					// Function name
 					string thisFunctionName = getFunctionName!({});
-					
 					// HTTP request returned status code 403
 					if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
 						// We attempted to upload a file, that was shared with us, but this was shared with us as read-only
 						addLogEntry("Unable to upload this modified file as this was shared as read-only: " ~ localFilePath);
+					}
+					// HTTP request returned status code 423
+					// Resolve https://github.com/abraunegg/onedrive/issues/36
+					if (exception.httpStatusCode == 423) {
+						// The file is currently checked out or locked for editing by another user
+						// We cant upload this file at this time
+						addLogEntry("Unable to upload this modified file as this is currently checked out or locked for editing by another user: " ~ localFilePath);
 					} else {
 						// Handle all other HTTP status codes
-						// - 429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+						// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
 						// Display what the error is
 						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					}
-				
 				} catch (FileException e) {
 					// filesystem error
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
@@ -3878,9 +3890,17 @@ class SyncEngine {
 						// We attempted to upload a file, that was shared with us, but this was shared with us as read-only
 						addLogEntry("Unable to upload this modified file as this was shared as read-only: " ~ localFilePath);
 						return uploadResponse;
+					} 
+					// HTTP request returned status code 423
+					// Resolve https://github.com/abraunegg/onedrive/issues/36
+					if (exception.httpStatusCode == 423) {
+						// The file is currently checked out or locked for editing by another user
+						// We cant upload this file at this time
+						addLogEntry("Unable to upload this modified file as this is currently checked out or locked for editing by another user: " ~ localFilePath);
+						return uploadResponse;
 					} else {
 						// Handle all other HTTP status codes
-						// - 429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+						// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
 						// Display what the error is
 						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					}
@@ -3898,7 +3918,7 @@ class SyncEngine {
 					string thisFunctionName = getFunctionName!({});
 					
 					// Handle all other HTTP status codes
-					// - 429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+					// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
 					// Display what the error is
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					
@@ -4485,7 +4505,7 @@ class SyncEngine {
 						string thisFunctionName = getFunctionName!({});
 						
 						// Default operation if not 408,429,503,504 errors
-						// - 429,503,504 errors are handled as a retry within oneDriveApiInstance
+						// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 						// Display what the error is
 						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					}
@@ -4664,7 +4684,7 @@ class SyncEngine {
 			} else {
 			
 				// Default operation if not 408,429,503,504 errors
-				// - 429,503,504 errors are handled as a retry within createDirectoryOnlineOneDriveApiInstance
+				// - 408,429,503,504 errors are handled as a retry within createDirectoryOnlineOneDriveApiInstance
 				
 				// If we get a 400 error, there is an issue creating this folder on Microsoft OneDrive for some reason
 				// If the error is not 400, re-try, else fail
@@ -5041,7 +5061,7 @@ class SyncEngine {
 									
 									string thisFunctionName = getFunctionName!({});
 									// Default operation if not 408,429,503,504 errors
-									// - 429,503,504 errors are handled as a retry within oneDriveApiInstance
+									// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 									// Display what the error is
 									displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 									
@@ -5152,7 +5172,7 @@ class SyncEngine {
 					
 					string thisFunctionName = getFunctionName!({});
 					// Default operation if not 408,429,503,504 errors
-					// - 429,503,504 errors are handled as a retry within oneDriveApiInstance
+					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 					// Display what the error is
 					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
@@ -5202,7 +5222,7 @@ class SyncEngine {
 					
 					string thisFunctionName = getFunctionName!({});
 					// Default operation if not 408,429,503,504 errors
-					// - 429,503,504 errors are handled as a retry within oneDriveApiInstance
+					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 					// Display what the error is
 					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
@@ -5252,7 +5272,7 @@ class SyncEngine {
 						
 							string thisFunctionName = getFunctionName!({});
 							// Default operation if not 408,429,503,504 errors
-							// - 429,503,504 errors are handled as a retry within oneDriveApiInstance
+							// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 							// Display what the error is
 							addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
@@ -6003,7 +6023,7 @@ class SyncEngine {
 			
 			string thisFunctionName = getFunctionName!({});
 			// Default operation if not 408,429,503,504 errors
-			// - 429,503,504 errors are handled as a retry within oneDriveApiInstance
+			// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 			// Display what the error is
 			displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 			
@@ -6031,7 +6051,7 @@ class SyncEngine {
 					
 					string thisFunctionName = getFunctionName!({});
 					// Default operation if not 408,429,503,504 errors
-					// - 429,503,504 errors are handled as a retry within oneDriveApiInstance
+					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 					// Display what the error is
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					
@@ -6682,10 +6702,11 @@ class SyncEngine {
 				// Try the online move
 				for (int i = 0; i < 3; i++) {
 					try {
-						response = movePathOnlineApiInstance.updateById(oldItem.driveId, oldItem.id, data, oldItem.eTag);
+						response = movePathOnlineApiInstance.updateById(oldItem.driveId, oldItem.id, data, eTag);
 						isMoveSuccess = true;
 						break;
 					} catch (OneDriveException e) {
+						// Handle a 412 - A precondition provided in the request (such as an if-match header) does not match the resource's current state.
 						if (e.httpStatusCode == 412) {
 							// OneDrive threw a 412 error, most likely: ETag does not match current item's value
 							// Retry without eTag
@@ -6694,7 +6715,7 @@ class SyncEngine {
 							eTag = null;
 							// Retry to move the file but without the eTag, via the for() loop
 						} else if (e.httpStatusCode == 409) {
-							// Destination item already exists, delete it first
+							// Destination item already exists and is a conflict, delete it first
 							addLogEntry("Moved local item overwrote an existing item - deleting old online item");
 							uploadDeletedItem(newItem, newPath);
 						} else
