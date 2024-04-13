@@ -1406,22 +1406,14 @@ auto assumeNoGC(T) (T t) if (isFunctionPointer!T || isDelegate!T) {
 	return cast(SetFunctionAttributes!(T, functionLinkage!T, attrs)) t;
 }
 
-// Catch CTRL-C
+// Catch CTRL-C if user pressed this 
 extern(C) nothrow @nogc @system void exitHandler(int value) {
 	try {
 		assumeNoGC ( () {
-			addLogEntry("Got termination signal, performing clean up");
 			// Force kill any running threads as ^C was used
 			taskPool.finish(false);
-			// Was itemDb initialised?
-			if (itemDB.isDatabaseInitialised()) {
-				// Make sure the .wal file is incorporated into the main db before we exit
-				addLogEntry("Shutting down DB connection and merging temporary data");
-				itemDB.performVacuum();
-				object.destroy(itemDB);
-			}
-			performStandardExitProcess();
 		})();
 	} catch(Exception e) {}
-	exit(0);
+	// Exit with the exitHandler value
+	exit(value);
 }
