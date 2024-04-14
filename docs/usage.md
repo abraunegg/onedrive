@@ -420,6 +420,7 @@ Documents/latest_report.docx
 #
 # Include all Work/Project directories or files, inside 'Work' folder(s), anywhere in OneDrive
 Work/Project*
+#
 # Include the 'Blog' directory, but exclude 'Parent' and any other children of the parent
 # .
 # ├── Parent
