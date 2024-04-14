@@ -420,6 +420,18 @@ Documents/latest_report.docx
 #
 # Include all Work/Project directories or files, inside 'Work' folder(s), anywhere in OneDrive
 Work/Project*
+# Include the 'Blog' directory, but exclude 'Parent' and any other children of the parent
+# .
+# ├── Parent
+# │   ├── Blog
+# │   │   ├── random_files
+# │   │   │   ├── CZ9aZRM7U1j7pM21fH0MfP2gywlX7bqW
+# │   │   │   └── k4GptfTBE2z2meRFqjf54tnvSXcXe30Y
+# │   │   └── random_images
+# │   │       ├── cAuQMfX7qsMIOmzyQYdELikZwsXeCYsL
+# │   │       └── GqjZuo7UBB0qjYM2WUcZXOvToAhCQ29M
+# │   └── other_stuffs
+/Parent/Blog/*
 #
 # Include all "notes.txt" files, anywhere in OneDrive
 notes.txt
