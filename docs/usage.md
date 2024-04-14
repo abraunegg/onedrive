@@ -432,7 +432,6 @@ Work/Project*
 # │   │       └── GqjZuo7UBB0qjYM2WUcZXOvToAhCQ29M
 # │   └── other_stuffs
 /Parent/Blog/*
-
 #
 # Include all "notes.txt" files, anywhere in OneDrive
 notes.txt
