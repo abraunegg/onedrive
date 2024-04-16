@@ -976,7 +976,7 @@ Refer to [./advanced-usage.md](advanced-usage.md) for configuration assistance.
 Monitor mode (`--monitor`) allows the onedrive process to continually monitor your local file system for changes to files.
 
 Two common errors can occur when using monitor mode:
-*   Intialisation failure
+*   Initialisation failure
 *   Unable to add a new inotify watch
 
 Both of these errors are local environment issues, where the following system variables need to be increased as the current system values are potentially too low:
