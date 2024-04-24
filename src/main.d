@@ -1417,8 +1417,10 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 		// Finalise all logging and destroy log buffer
 		shutdownApplicationLogging();
 		
-		// Memory Garbage Collection
+		// Perform Garbage Cleanup
 		GC.collect();
+		// Return free memory to the OS
+		GC.minimize();
 	}
 }
 
