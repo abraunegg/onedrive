@@ -201,8 +201,46 @@ Regex!char wild2regex(const(char)[] pattern) {
     return regex(str, "i");
 }
 
-// Test Internet access to Microsoft OneDrive using a simple HTTP HEAD request
+// Test Internet access to Microsoft OneDrive
 bool testInternetReachability(ApplicationConfig appConfig) {
+    CurlEngine curlEngine;
+    bool result = false;
+    try {
+		// Use preconfigured object with all the correct http values assigned
+		curlEngine = CurlEngine.getCurlInstance();
+		curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"));
+
+		// Configure the remaining items required
+		// URL to use
+		// HTTP connection test method
+
+		curlEngine.connect(HTTP.Method.head, "https://login.microsoftonline.com");
+		addLogEntry("Attempting to contact Microsoft OneDrive Login Service", ["debug"]);
+		curlEngine.http.perform();
+		addLogEntry("Shutting down HTTP engine as successfully reached OneDrive Login Service", ["debug"]);
+		
+		// Release
+		curlEngine.release(); // performs curl cleanup()
+		curlEngine = null; // Clean up this memory variable
+		
+		// Set that we are online
+		result = true;
+    } catch (SocketException e) {
+        addLogEntry("HTTP Socket Issue", ["debug"]);
+        addLogEntry("Cannot connect to Microsoft OneDrive Login Service - Socket Issue");
+        displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+    } catch (CurlException e) {
+        addLogEntry("No Network Connection", ["debug"]);
+        addLogEntry("Cannot connect to Microsoft OneDrive Login Service - Network Connection Issue");
+        displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+    } 
+
+	// Return test result
+    return result;
+}
+
+// Test Internet access to Microsoft OneDrive using a simple HTTP HEAD request
+bool testInternetReachabilityAlternate(ApplicationConfig appConfig) {
     auto http = HTTP();
     http.url = "https://login.microsoftonline.com";
     
@@ -684,26 +722,60 @@ string getFunctionName(alias func)() {
     return __traits(identifier, __traits(parent, func)) ~ "()\n";
 }
 
+JSONValue fetchOnlineURLContent(string url) {
+	// Function variables
+	char[] content;
+	JSONValue onlineContent;
+
+	// Setup HTTP request
+	HTTP http = HTTP();
+	
+	// Create an HTTP object within a scope to ensure cleanup
+    scope(exit) {
+        http.shutdown();
+        object.destroy(http);
+    }
+	
+	// Configure the URL to access
+	http.url = url;
+	// HTTP the connection method
+	http.method = HTTP.Method.get;
+	
+	// Data receive handler
+	http.onReceive = (ubyte[] data) {
+		content ~= data; // Append data as it's received
+		return data.length;
+	};
+	
+	// Perform HTTP request
+	http.perform();
+	
+	// Parse Content
+	onlineContent = parseJSON(to!string(content));
+	
+	// Ensure resources are cleaned up
+	http.shutdown();  
+	object.destroy(http);
+		
+    // Return onlineResponse
+    return onlineContent;
+}
+
 // Get the latest release version from GitHub
 JSONValue getLatestReleaseDetails() {
-	// Import curl just for this function
-	import std.net.curl;
-	char[] content;
 	JSONValue githubLatest;
 	JSONValue versionDetails;
 	string latestTag;
 	string publishedDate;
 	
 	// Query GitHub for the 'latest' release details
-	try {
-        content = get("https://api.github.com/repos/abraunegg/onedrive/releases/latest");
-        githubLatest = content.parseJSON();
+	try {	
+		githubLatest = fetchOnlineURLContent("https://api.github.com/repos/abraunegg/onedrive/releases/latest");
     } catch (CurlException e) {
         addLogEntry("CurlException: Unable to query GitHub for latest release - " ~ e.msg, ["debug"]);
     } catch (JSONException e) {
         addLogEntry("JSONException: Unable to parse GitHub JSON response - " ~ e.msg, ["debug"]);
     }
-	
 	
 	// githubLatest has to be a valid JSON object
 	if (githubLatest.type() == JSONType.object){
@@ -746,9 +818,6 @@ JSONValue getLatestReleaseDetails() {
 
 // Get the release details from the 'current' running version
 JSONValue getCurrentVersionDetails(string thisVersion) {
-	// Import curl just for this function
-	import std.net.curl;
-	char[] content;
 	JSONValue githubDetails;
 	JSONValue versionDetails;
 	string versionTag = "v" ~ thisVersion;
@@ -756,9 +825,8 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 	
 	// Query GitHub for the release details to match the running version
 	try {
-        content = get("https://api.github.com/repos/abraunegg/onedrive/releases");
-        githubDetails = content.parseJSON();
-    } catch (CurlException e) {
+		githubDetails = fetchOnlineURLContent("https://api.github.com/repos/abraunegg/onedrive/releases");
+	} catch (CurlException e) {
         addLogEntry("CurlException: Unable to query GitHub for release details - " ~ e.msg, ["debug"]);
         return parseJSON(`{"Error": "CurlException", "message": "` ~ e.msg ~ `"}`);
     } catch (JSONException e) {

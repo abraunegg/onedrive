@@ -52,7 +52,13 @@ class LogBuffer {
 			flushThread.isDaemon(true);
 			flushThread.start();
         }
-
+		
+		~this() {
+			object.destroy(bufferLock);
+			object.destroy(condReady);
+			object.destroy(flushThread);
+		}
+		
 		void shutdown() {
 			synchronized(bufferLock) {
 				if (!isRunning) return; // Prevent multiple shutdowns
@@ -62,6 +68,7 @@ class LogBuffer {
 			flushThread.join(); // Wait for the flush thread to finish
 			flush(); // Perform a final flush to ensure all data is processed
 		}
+		
         shared void logThisMessage(string message, string[] levels = ["info"]) {
 			// Generate the timestamp for this log entry
 			auto timeStamp = leftJustify(Clock.currTime().toString(), 28, '0');

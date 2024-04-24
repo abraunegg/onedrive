@@ -63,10 +63,12 @@ class OneDriveError: Error {
 
 // Define the 'OneDriveApi' class
 class OneDriveApi {
-	// Class variables
+	// Class variables that use other classes
 	ApplicationConfig appConfig;
 	CurlEngine curlEngine;
+	CurlResponse response;
 	
+	// Class variables
 	string clientId = "";
 	string companyName = "";
 	string authUrl = "";
@@ -115,7 +117,11 @@ class OneDriveApi {
 	}
 	
 	~this() {
+		// We cant destroy 'appConfig' here as this leads to a segfault
 		object.destroy(curlEngine);
+		object.destroy(response);
+		curlEngine = null;
+		response = null;
 	}
 
 	// Initialise the OneDrive API class
@@ -1114,6 +1120,10 @@ class OneDriveApi {
 	// - This should throw a OneDriveException so that this exception can be handled appropriately elsewhere in the application
 	
 	private JSONValue oneDriveErrorHandlerWrapper(CurlResponse delegate(CurlResponse response) executer, bool validateJSONResponse, string callingFunction, int lineno) {
+		// Create a new 'curl' response
+		response = new CurlResponse();
+		
+		// Other wrapper variables
 		int retryAttempts = 0;
 		int baseBackoffInterval = 1; // Base backoff interval in seconds
 		int maxRetryCount = 175200; // Approx 365 days based on maxBackoffInterval + appConfig.defaultDataTimeout
@@ -1122,12 +1132,10 @@ class OneDriveApi {
 		int thisBackOffInterval = 0;
 		int timestampAlign = 0;
 		JSONValue result;
-		CurlResponse response = new CurlResponse();
 		SysTime currentTime;
 		SysTime retryTime;
 		bool retrySuccess = false;
 		bool transientError = false;
-
 		auto internalThreadId = generateAlphanumericString();
 
 		while (!retrySuccess) {

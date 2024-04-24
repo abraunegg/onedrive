@@ -140,8 +140,7 @@ class MonitorBackgroundWorker {
 	}
 }
 
-void startMonitorJob(shared(MonitorBackgroundWorker) worker, Tid callerTid)
-{
+void startMonitorJob(shared(MonitorBackgroundWorker) worker, Tid callerTid) {
 	try {
     	worker.watch(callerTid);
 	} catch (OwnerTerminated error) {
@@ -280,6 +279,11 @@ final class Monitor {
 	this(ApplicationConfig appConfig, ClientSideFiltering selectiveSync) {
 		this.appConfig = appConfig;
 		this.selectiveSync = selectiveSync;
+	}
+	
+	// The destructor should only clean up resources owned directly by this instance
+	~this() {
+		object.destroy(worker);
 	}
 	
 	// Initialise the monitor class

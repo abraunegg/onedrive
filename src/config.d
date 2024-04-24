@@ -683,6 +683,7 @@ class ApplicationConfig {
 		
 		auto file = File(filename, "r");
 		string lineBuffer;
+		
 		scope(exit) {
 			file.close();
 			object.destroy(file);

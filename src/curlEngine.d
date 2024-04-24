@@ -3,7 +3,7 @@ module curlEngine;
 
 // What does this module require to function?
 import std.net.curl;
-import etc.c.curl: CurlOption;
+import etc.c.curl;
 import std.datetime;
 import std.conv;
 import std.file;
@@ -31,18 +31,17 @@ class CurlResponse {
 
 	void reset() {
 		method = HTTP.Method.undefined;
-		url = null;
+		url = "";
 		requestHeaders = null;
-		postBody = null;
-		
+		postBody = [];
 		hasResponse = false;
 		responseHeaders = null;
-		object.destroy(statusLine);
-		content = null;
+		statusLine.reset();
+		content = [];
 	}
 
 	void addRequestHeader(const(char)[] name, const(char)[] value) {
-		requestHeaders[name] = value;
+		requestHeaders[to!string(name)] = to!string(value);
 	}
 
 	void connect(HTTP.Method method, const(char)[] url) {
@@ -74,7 +73,7 @@ class CurlResponse {
 	// Return the current value of retryAfterValue
 	int getRetryAfterValue() {
 		int delayBeforeRetry;
-		// is retry-after in the response headers
+		// Is 'retry-after' in the response headers
 		if ("retry-after" in responseHeaders) {
 			// Set the retry-after value
 			addLogEntry("curlEngine.http.perform() => Received a 'Retry-After' Header Response with the following value: " ~ to!string(responseHeaders["retry-after"]), ["debug"]);
@@ -85,35 +84,34 @@ class CurlResponse {
 			// This value is based on log files and data when determining correct process for 429 response handling
 			delayBeforeRetry = 120;
 			// Update that we are over-riding the provided value with a default
-			addLogEntry("HTTP Response Header retry-after value was 0 - Using a preconfigured default of: " ~ to!string(delayBeforeRetry), ["debug"]);
+			addLogEntry("HTTP Response Header retry-after value was missing - Using a preconfigured default of: " ~ to!string(delayBeforeRetry), ["debug"]);
 		}
-		
 		return delayBeforeRetry;
 	}
-
-	const string parseHeaders(const(immutable(char)[][immutable(char)[]]) headers) {
-		string responseHeadersStr = "";
-		// Ensure headers is not null and iterate over keys safely.
-		if (headers !is null) {
-			foreach (const(char)[] header; headers.byKey()) {
-				// Check if the key actually exists before accessing it to avoid RangeError.
-				if (auto val = header in headers) { // 'in' checks for the key and returns a pointer to the value if found.
-					responseHeadersStr ~= "> " ~ header ~ ": " ~ *val ~ "\n"; // Dereference pointer to get the value.
-				}
-			}
-		}
-		return responseHeadersStr;
-	}
-
-	const string parseHeaders(const(const(char)[][const(char)[]]) headers) {
-		string responseHeadersStr = "";
+	
+	const string parseRequestHeaders(const(const(char)[][const(char)[]]) headers) {
+		string requestHeadersStr = "";
 		foreach (string header; headers.byKey()) {
 			if (header == "Authorization") {
 				continue;
 			}
 			// Use the 'in' operator to safely check if the key exists in the associative array.
 			if (auto val = header in headers) {
-				responseHeadersStr ~= "< " ~ header ~ ": " ~ *val ~ "\n";
+				requestHeadersStr ~= "< " ~ header ~ ": " ~ *val ~ "\n";
+			}
+		}
+		return requestHeadersStr;
+	}
+
+	const string parseResponseHeaders(const(immutable(char)[][immutable(char)[]]) headers) {
+		string responseHeadersStr = "";
+		// Ensure response headers is not null and iterate over keys safely.
+		if (headers !is null) {
+			foreach (const(char)[] header; headers.byKey()) {
+				// Check if the key actually exists before accessing it to avoid RangeError.
+				if (auto val = header in headers) { // 'in' checks for the key and returns a pointer to the value if found.
+					responseHeadersStr ~= "> " ~ header ~ ": " ~ *val ~ "\n"; // Dereference pointer to get the value.
+				}
 			}
 		}
 		return responseHeadersStr;
@@ -126,14 +124,14 @@ class CurlResponse {
 		string str = "";
 		str ~= format("< %s %s\n", method, url);
 		if (!requestHeaders.empty) {
-			str ~= parseHeaders(requestHeaders);
+			str ~= parseRequestHeaders(requestHeaders);
 		}
 		if (!postBody.empty) {
-			str ~= format("----\n%s\n----\n", postBody);
+			str ~= format("\n----\n%s\n----\n", postBody);
 		}
 		str ~= format("< %s\n", statusLine);
 		if (!responseHeaders.empty) {
-			str ~= parseHeaders(responseHeaders);
+			str ~= parseResponseHeaders(responseHeaders);
 		}
 		return str;
 	}
@@ -144,7 +142,7 @@ class CurlResponse {
 
 		string str = "";
 		if (!content.empty) {
-			str ~= format("----\n%s\n----\n", content);
+			str ~= format("\n----\n%s\n----\n", content);
 		}
 		return str;
 	}
@@ -158,75 +156,92 @@ class CurlResponse {
 		}
 		return str;
 	}
-
-	CurlResponse dup() {
-        CurlResponse copy = new CurlResponse();
-		copy.method = method;
-		copy.url = url;
-		copy.requestHeaders = requestHeaders;
-		copy.postBody = postBody;
-		
-		copy.responseHeaders = responseHeaders;
-		copy.statusLine = statusLine;
-		copy.content = content;
-
-		return copy;
-	}
 }
 
 class CurlEngine {
 
-	__gshared static CurlEngine[] curlEnginePool;  // __gshared is used for thread-shared static variables
+	__gshared static CurlEngine[] curlEnginePool; // __gshared is used for thread-shared static variables
     
-    HTTP http;
-    bool keepAlive;
-    ulong dnsTimeout;
-    CurlResponse response;
-    File uploadFile;
-
-    static CurlEngine getCurlInstance() {
-        synchronized (CurlEngine.classinfo) {
-            if (curlEnginePool.empty) {
-                return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
-            } else {
-                CurlEngine curlEngine = curlEnginePool[$ - 1];
-                curlEnginePool = curlEnginePool[0 .. $ - 1];  
-                return curlEngine;
-            }
-        }
-    }
-
-    static void releaseAll() {
-		synchronized (CurlEngine.classinfo) {
-            foreach (CurlEngine curlEngine; curlEnginePool) {
-				curlEngine.cleanUp(); // Cleanup instance by resetting values
-                curlEngine.shutdown();  // Assume proper cleanup of any resources used by HTTP
-				object.destroy(curlEngine);
-            }
-            curlEnginePool.length = 0;
-        }
-		
-		// Cleanup curlEnginePool
-		object.destroy(curlEnginePool);
-    }
-
+	HTTP http;
+	bool keepAlive;
+	ulong dnsTimeout;
+	CurlResponse response;
+	File uploadFile;
+	
     this() {
-        http = HTTP();   // Directly initializes HTTP using its default constructor
-        response = null; // Initialize as null
+        this.http = HTTP();   // Directly initializes HTTP using its default constructor
+        this.response = null; // Initialize as null
     }
 
     ~this() {
-        // The destructor should only clean up resources owned directly by this instance
-        // Avoid modifying or destroying shared/static resources here
-		if (uploadFile.isOpen())
-            uploadFile.close();
+		// The destructor should only clean up resources owned directly by this instance
+		// Avoid modifying or destroying shared/static resources here
+		if (uploadFile.isOpen()) {
+			uploadFile.close();
+		}
 
-		// Cleanup curlEnginePool
-		object.destroy(curlEnginePool);
+		// Cleanup class memory usage
+		object.destroy(this.uploadFile); // Destroy, however we cant set to null
+		object.destroy(this.response); // Destroy, then set to null
+		this.response = null;
+		
+		// Is the http instance is stopped?
+		if (!this.http.isStopped) {
+		
+			writeln("TO REMOVE: Calling this.http.shutdown() on this curl instance");
+		
+			this.http.shutdown();
+		}
+		
+		object.destroy(this.http); // Destroy, however we cant set to null
+		
     }
-	
+
+	static CurlEngine getCurlInstance() {
+		synchronized (CurlEngine.classinfo) {
+			if (curlEnginePool.empty) {
+				return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
+			} else {
+				CurlEngine curlEngine = curlEnginePool[$ - 1];
+				curlEnginePool = curlEnginePool[0 .. $ - 1];
+				
+				// Is this engine stopped?
+				if (curlEngine.http.isStopped) {
+					// return a new curl engine as a stopped one cannot be used
+					return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
+				} else {
+					// return an existing curl engine
+					return curlEngine;
+				}
+			}
+		}
+	}
+
+    static void releaseAllCurlInstances() {
+        synchronized (CurlEngine.classinfo) {
+            // Safely iterate and clean up each CurlEngine instance
+			foreach (CurlEngine curlEngine; curlEnginePool) {
+                try {
+					curlEngine.cleanup(); // Cleanup instance by resetting values
+					curlEngine.shutdown();  // Assume proper cleanup of any resources used by HTTP
+                } catch (Exception e) {
+					// Log the error or handle it appropriately
+					// e.g., writeln("Error during cleanup/shutdown: ", e.toString());
+                }
+                // It's safe to destroy the object here assuming no other references exist
+                object.destroy(curlEngine); // Destroy, then set to null
+				curlEngine = null;
+            }
+            // Clear the array after all instances have been handled
+            curlEnginePool.length = 0; // More explicit than curlEnginePool = [];
+        }
+        // Destroy curlEnginePool, set to null 
+		object.destroy(curlEnginePool);
+		curlEnginePool = null;
+    }
+
 	void release() {
-        cleanUp();
+        cleanup();
         synchronized (CurlEngine.classinfo) {
             curlEnginePool ~= this;
         }
@@ -381,7 +396,7 @@ class CurlEngine {
 
 	CurlResponse execute() {
 		scope(exit) {
-			cleanUp();
+			cleanup();
 		}
 		setResponseHolder(null);
 		http.onReceive = (ubyte[] data) {
@@ -402,7 +417,7 @@ class CurlEngine {
 
 		// function scopes
 		scope(exit) {
-			cleanUp();
+			cleanup();
 			if (file.isOpen()){
 				// close open file
 				file.close();
@@ -423,17 +438,27 @@ class CurlEngine {
 		return response;
 	}
 
-	void cleanUp() {
+	void cleanup() {
 		// Reset any values to defaults, freeing any set objects
-		http.clearRequestHeaders();
-		http.onSend = null;
-		http.onReceive = null;
-		http.onReceiveHeader = null;
-		http.onReceiveStatusLine = null;
-		http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow) {
-			return 0;
-		};
-		http.contentLength = 0;
+		
+		// Is the instance is stopped?
+		if (!http.isStopped) {
+			// A stopped instance is not usable, these cannot be reset
+			http.clearRequestHeaders();
+			http.onSend = null;
+			http.onReceive = null;
+			http.onReceiveHeader = null;
+			http.onReceiveStatusLine = null;
+			http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow) {
+				return 0;
+			};
+			http.contentLength = 0;
+			http.flushCookieJar();
+			http.clearSessionCookies();
+			http.clearAllCookies();
+		}
+		
+		// set the response to null
 		response = null;
 
 		// close file if open
@@ -445,11 +470,9 @@ class CurlEngine {
 
 	void shutdown() {
 		// Shut down the curl instance & close any open sockets
-		http.shutdown();
-	}
-	
-	void setDisableSSLVerifyPeer() {
-		addLogEntry("CAUTION: Switching off CurlOption.ssl_verifypeer ... this makes the application insecure.", ["debug"]);
-		http.handle.set(CurlOption.ssl_verifypeer, 0);
+		// Is the instance is stopped?
+		if (!http.isStopped) {
+			http.shutdown();
+		}
 	}
 }

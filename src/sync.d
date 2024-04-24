@@ -303,9 +303,17 @@ class SyncEngine {
 	}
 	
 	~this() {	
-		processPool = null;
-		object.destroy(processPool);
-		object.destroy(oneDriveApiInstance);
+		this.processPool.finish(true);
+		object.destroy(this.processPool); // Destroy, then set to null
+		this.processPool = null;
+		object.destroy(this.oneDriveApiInstance); // Destroy, then set to null
+		this.oneDriveApiInstance = null;
+		object.destroy(this.appConfig); // Destroy, then set to null
+		this.appConfig = null;
+		object.destroy(this.itemDB); // Destroy, then set to null
+		this.itemDB = null;
+		object.destroy(this.selectiveSync); // Destroy, then set to null
+		this.selectiveSync = null;
 	}
 	
 	// Initialise the Sync Engine class
