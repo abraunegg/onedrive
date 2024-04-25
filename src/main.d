@@ -1486,10 +1486,6 @@ void shutdownCurlInstances() {
 }
 
 void shutdownApplicationLogging() {
-	// Join all threads to avoid any thread hanging out there
-	addLogEntry("Waiting for all internal threads to complete before exiting application", ["verbose"]);
-	// Join all threads
-	thread_joinAll();
 	// Log that we are exitintg
 	addLogEntry("Application is exiting.", ["debug"]);
     addLogEntry("#######################################################################################################################################", ["logFileOnly"]);
