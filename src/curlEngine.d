@@ -187,14 +187,9 @@ class CurlEngine {
 		
 		// Is the http instance is stopped?
 		if (!this.http.isStopped) {
-		
-			writeln("TO REMOVE: Calling this.http.shutdown() on this curl instance");
-		
 			this.http.shutdown();
 		}
-		
 		object.destroy(this.http); // Destroy, however we cant set to null
-		
     }
 
 	static CurlEngine getCurlInstance() {
