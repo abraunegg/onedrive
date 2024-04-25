@@ -107,8 +107,9 @@ class LogBuffer {
             // Use dnotify's functionality for GUI notifications, if GUI notifications is enabled
 			version(Notifications) {
 				try {
-					auto n = new Notification("OneDrive Client for Linux", message, "IGNORED");
-					//n.timeout = 5;
+					auto n = new Notification("OneDrive Client", message, "IGNORED");
+					// Show notification for 10 seconds
+					n.timeout = 10;
 					n.show();
 				} catch (NotificationError e) {
 					sendGUINotification = false;

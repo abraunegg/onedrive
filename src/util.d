@@ -202,7 +202,7 @@ Regex!char wild2regex(const(char)[] pattern) {
 }
 
 // Test Internet access to Microsoft OneDrive
-bool testInternetReachability(ApplicationConfig appConfig) {
+bool testInternetReachabilityCurlPool(ApplicationConfig appConfig) {
     CurlEngine curlEngine;
     bool result = false;
     try {
@@ -240,7 +240,7 @@ bool testInternetReachability(ApplicationConfig appConfig) {
 }
 
 // Test Internet access to Microsoft OneDrive using a simple HTTP HEAD request
-bool testInternetReachabilityAlternate(ApplicationConfig appConfig) {
+bool testInternetReachability(ApplicationConfig appConfig) {
     auto http = HTTP();
     http.url = "https://login.microsoftonline.com";
     
@@ -1114,26 +1114,25 @@ string generateAlphanumericString(size_t length = 16) {
 void displayMemoryUsagePreGC() {
 	// Display memory usage
 	writeln();
-	writeln("Memory Usage pre GC (KB)");
-	writeln("------------------------");
+	writeln("Memory Usage PRE Garbage Collection (KB)");
+	writeln("-----------------------------------------");
 	writeMemoryStats();
 	writeln();
 }
 
 void displayMemoryUsagePostGC() {
 	// Display memory usage
-	writeln();
-	writeln("Memory Usage post GC (KB)");
-	writeln("-------------------------");
+	writeln("Memory Usage POST Garbage Collection (KB)");
+	writeln("-----------------------------------------");
 	writeMemoryStats();
 	writeln();
 }
 
 void writeMemoryStats() {
 	// write memory stats
-	writeln("memory usedSize                 = ", (GC.stats.usedSize/1024));
-	writeln("memory freeSize                 = ", (GC.stats.freeSize/1024));
-	writeln("memory allocatedInCurrentThread = ", (GC.stats.allocatedInCurrentThread/1024));
+	writeln("memory usedSize                 = ", (GC.stats.usedSize/1024)); // number of used bytes on the GC heap (might only get updated after a collection)
+	writeln("memory freeSize                 = ", (GC.stats.freeSize/1024)); // number of free bytes on the GC heap (might only get updated after a collection)
+	writeln("memory allocatedInCurrentThread = ", (GC.stats.allocatedInCurrentThread/1024)); // number of bytes allocated for current thread since program start
 }
 
 // Return the username of the UID running the 'onedrive' process

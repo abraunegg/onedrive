@@ -161,7 +161,7 @@ class CurlResponse {
 class CurlEngine {
 
 	__gshared static CurlEngine[] curlEnginePool; // __gshared is used for thread-shared static variables
-    
+	
 	HTTP http;
 	bool keepAlive;
 	ulong dnsTimeout;
@@ -211,8 +211,8 @@ class CurlEngine {
 			}
 		}
 	}
-
-    static void releaseAllCurlInstances() {
+	
+	static void releaseAllCurlInstances() {
         synchronized (CurlEngine.classinfo) {
             // Safely iterate and clean up each CurlEngine instance
 			foreach (CurlEngine curlEngine; curlEnginePool) {
@@ -230,7 +230,12 @@ class CurlEngine {
             // Clear the array after all instances have been handled
             curlEnginePool.length = 0; // More explicit than curlEnginePool = [];
         }
-        // Destroy curlEnginePool, set to null 
+    }
+
+    static void destroyAllCurlInstances() {
+        // Release all 'curl' instances
+		releaseAllCurlInstances();
+		// Destroy curlEnginePool, set to null 
 		object.destroy(curlEnginePool);
 		curlEnginePool = null;
     }

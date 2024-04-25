@@ -994,13 +994,17 @@ int main(string[] cliArgs) {
 					addLogEntry("End Monitor Loop Time:                " ~ to!string(endFunctionProcessingTime), ["debug"]);
 					addLogEntry("Elapsed Monitor Loop Processing Time: " ~ to!string((endFunctionProcessingTime - startFunctionProcessingTime)), ["debug"]);
 					
-					// Display memory details before cleanup
+					// Release all the curl instances used during this loop
+					// New curl instances will be established on next loop
+					CurlEngine.releaseAllCurlInstances();
+					
+					// Display memory details before garbage collection
 					if (displayMemoryUsage) displayMemoryUsagePreGC();
-					// Perform Garbage Cleanup
+					// Perform Garbage Collection
 					GC.collect();
 					// Return free memory to the OS
 					GC.minimize();
-					// Display memory details after cleanup
+					// Display memory details after garbage collection
 					if (displayMemoryUsage) displayMemoryUsagePostGC();
 					
 					// Log that this loop is complete
@@ -1405,8 +1409,8 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 			shutdownFilesystemMonitor();
 			// Shutdown the database
 			shutdownDatabase();
-			// Shutdown 'curl' instances
-			shutdownCurlInstances();
+			// Destroy all 'curl' instances
+			destroyCurlInstances();
 			// Shutdown the application configuration objects
 			shutdownAppConfig();
 			
@@ -1481,8 +1485,8 @@ void shutdownAppConfig() {
     }
 }
 
-void shutdownCurlInstances() {
-    CurlEngine.releaseAllCurlInstances();
+void destroyCurlInstances() {
+    CurlEngine.destroyAllCurlInstances();
 }
 
 void shutdownApplicationLogging() {
