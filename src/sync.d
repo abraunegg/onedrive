@@ -2762,6 +2762,11 @@ class SyncEngine {
 				// Display what the error is
 				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 			}
+			
+			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+			uploadLastModifiedTimeApiInstance.shutdown();
+			object.destroy(uploadLastModifiedTimeApiInstance);
+			uploadLastModifiedTimeApiInstance = null;
 		}
 	}
 	
@@ -3600,6 +3605,7 @@ class SyncEngine {
 		}
 	}
 
+	// Process all the changed local items in parrallel
 	void processChangedLocalItemsToUploadInParallel(string[3][] array) {
 		
 		foreach (i, localItemDetails; processPool.parallel(array)) {
@@ -4083,6 +4089,7 @@ class SyncEngine {
 		processNewLocalItemsToUpload();
 	}
 
+	// Scan the local filesystem for new data to upload
 	void scanLocalFilesystemPathForNewDataToUpload(string path) {
 		// To improve logging output for this function, what is the 'logical path' we are scanning for file & folder differences?
 		string logPath;
@@ -5221,7 +5228,7 @@ class SyncEngine {
 			
 			if ((thisFileSize == 0) || (useSimpleUpload)) { 
 				try {
-					// Initialise API
+					// Initialise API for simple upload
 					uploadFileOneDriveApiInstance = new OneDriveApi(appConfig);
 					uploadFileOneDriveApiInstance.initialise();
 				
@@ -5230,13 +5237,10 @@ class SyncEngine {
 					uploadFailed = false;
 					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done.");
 					
-					// If the API instance is still valid, shut it down
-					if (uploadFileOneDriveApiInstance !is null) {
-						// Shutdown this API instance, as we will create API instances as required, when required
-						uploadFileOneDriveApiInstance.shutdown();
-						// Free object and memory
-						object.destroy(uploadFileOneDriveApiInstance);		
-					}
+					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+					uploadFileOneDriveApiInstance.shutdown();
+					object.destroy(uploadFileOneDriveApiInstance);
+					uploadFileOneDriveApiInstance = null;
 					
 				} catch (OneDriveException exception) {
 					// An error was responded with - what was it
@@ -5248,31 +5252,23 @@ class SyncEngine {
 					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					
-					// If the API instance is still valid, shut it down
-					if (uploadFileOneDriveApiInstance !is null) {
-						// Shutdown this API instance, as we will create API instances as required, when required
-						uploadFileOneDriveApiInstance.shutdown();
-						// Free object and memory
-						object.destroy(uploadFileOneDriveApiInstance);		
-					}
+					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+					uploadFileOneDriveApiInstance.shutdown();
+					object.destroy(uploadFileOneDriveApiInstance);
+					uploadFileOneDriveApiInstance = null;
 					
 				} catch (FileException e) {
 					// display the error message
 					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 					
-					// If the API instance is still valid, shut it down
-					if (uploadFileOneDriveApiInstance !is null) {
-						addLogEntry("API SHUTDOWN: Shutting down API instance uploadFileOneDriveApiInstance");
-						// Shutdown this API instance, as we will create API instances as required, when required
-						uploadFileOneDriveApiInstance.shutdown();
-						// Free object and memory
-						object.destroy(uploadFileOneDriveApiInstance);		
-					}
+					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+					uploadFileOneDriveApiInstance.shutdown();
+					object.destroy(uploadFileOneDriveApiInstance);
+					uploadFileOneDriveApiInstance = null;
 				}
 			} else {
-				
-				// Initialise API
+				// Initialise API for session upload
 				uploadFileOneDriveApiInstance = new OneDriveApi(appConfig);
 				uploadFileOneDriveApiInstance.initialise();
 				
@@ -5327,7 +5323,6 @@ class SyncEngine {
 								
 					if (sessionDataValid) {
 						// We have a valid Upload Session Data we can use
-						
 						try {
 							// Try and perform the upload session
 							uploadResponse = performSessionFileUpload(uploadFileOneDriveApiInstance, thisFileSize, uploadSessionData, threadUploadSessionFilePath);
@@ -5359,13 +5354,10 @@ class SyncEngine {
 					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 				}
 				
-				// If the API instance is still valid, shut it down
-				if (uploadFileOneDriveApiInstance !is null) {
-					// Shutdown this API instance, as we will create API instances as required, when required
-					uploadFileOneDriveApiInstance.shutdown();
-					// Free object and memory
-					object.destroy(uploadFileOneDriveApiInstance);		
-				}	
+				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+				uploadFileOneDriveApiInstance.shutdown();
+				object.destroy(uploadFileOneDriveApiInstance);
+				uploadFileOneDriveApiInstance = null;
 			}
 		} else {
 			// We are in a --dry-run scenario
@@ -7232,6 +7224,12 @@ class SyncEngine {
 			}
 			else break;
 		}
+		
+		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+		getDeltaQueryOneDriveApiInstance.shutdown();
+		object.destroy(getDeltaQueryOneDriveApiInstance);
+		getDeltaQueryOneDriveApiInstance = null;
+		
 		// Needed after printing out '....' when fetching changes from OneDrive API
 		if (appConfig.verbosityCount == 0)
 			addLogEntry("\n", ["consoleOnlyNoNewLine"]);
@@ -7300,6 +7298,8 @@ class SyncEngine {
 	// Query OneDrive for file details of a given path, returning either the 'webURL' or 'lastModifiedBy' JSON facet
 	void queryOneDriveForFileDetails(string inputFilePath, string runtimePath, string outputType) {
 	
+		OneDriveApi queryOneDriveForFileDetailsApiInstance;
+		
 		// Calculate the full local file path
 		string fullLocalFilePath = buildNormalizedPath(buildPath(runtimePath, inputFilePath));
 		
@@ -7318,15 +7318,22 @@ class SyncEngine {
 					JSONValue fileDetailsFromOneDrive;
 				
 					// Create a new API Instance for this thread and initialise it
-					OneDriveApi queryOneDriveForFileDetailsApiInstance;
 					queryOneDriveForFileDetailsApiInstance = new OneDriveApi(appConfig);
 					queryOneDriveForFileDetailsApiInstance.initialise();
 					
 					try {
 						fileDetailsFromOneDrive = queryOneDriveForFileDetailsApiInstance.getPathDetailsById(dbItem.driveId, dbItem.id);
+						
+						// Dont cleanup here as if we are creating a shareable file link (below) it is still needed
+						
 					} catch (OneDriveException exception) {
 						// display what the error is
 						displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+						
+						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+						queryOneDriveForFileDetailsApiInstance.shutdown();
+						object.destroy(queryOneDriveForFileDetailsApiInstance);
+						queryOneDriveForFileDetailsApiInstance = null;
 						return;
 					}
 					
@@ -7406,10 +7413,10 @@ class SyncEngine {
 						}
 					}
 					
-					// Shutdown this API instance, as we will create API instances as required, when required access
+					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					queryOneDriveForFileDetailsApiInstance.shutdown();
-					// Free object and memory
 					object.destroy(queryOneDriveForFileDetailsApiInstance);
+					queryOneDriveForFileDetailsApiInstance = null;	
 				}
 			}
 			
@@ -7429,6 +7436,7 @@ class SyncEngine {
 		// This function is similar to getRemainingFreeSpace() but is different in data being analysed and output method
 		JSONValue currentDriveQuota;
 		string driveId;
+		OneDriveApi getCurrentDriveQuotaApiInstance;
 
 		if (appConfig.getValueString("drive_id").length) {
 			driveId = appConfig.getValueString("drive_id");
@@ -7438,17 +7446,21 @@ class SyncEngine {
 		
 		try {
 			// Create a new OneDrive API instance
-			OneDriveApi getCurrentDriveQuotaApiInstance;
 			getCurrentDriveQuotaApiInstance = new OneDriveApi(appConfig);
 			getCurrentDriveQuotaApiInstance.initialise();
 			addLogEntry("Seeking available quota for this drive id: " ~ driveId, ["debug"]);
 			currentDriveQuota = getCurrentDriveQuotaApiInstance.getDriveQuota(driveId);
-			// Shut this API instance down
+			
+			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			getCurrentDriveQuotaApiInstance.shutdown();
-			// Free object and memory
 			object.destroy(getCurrentDriveQuotaApiInstance);
+			getCurrentDriveQuotaApiInstance = null;
 		} catch (OneDriveException e) {
 			addLogEntry("currentDriveQuota = onedrive.getDriveQuota(driveId) generated a OneDriveException", ["debug"]);
+			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+			getCurrentDriveQuotaApiInstance.shutdown();
+			object.destroy(getCurrentDriveQuotaApiInstance);
+			getCurrentDriveQuotaApiInstance = null;
 		}
 		
 		// validate that currentDriveQuota is a JSON value
@@ -7498,7 +7510,6 @@ class SyncEngine {
 			} else {
 				writeln("Microsoft OneDrive quota information is being restricted for this Drive ID: ", driveId);
 			}
-	
 		} 
 	}
 	
@@ -7564,7 +7575,6 @@ class SyncEngine {
 		// At this point we should have an array of JSON items to resume uploading
 		if (count(jsonItemsToResumeUpload) > 0) {
 			// there are valid items to resume upload
-		
 			// Lets deal with all the JSON items that need to be reumed for upload in a batch process
 			size_t batchSize = to!int(appConfig.getValueLong("threads"));
 			ulong batchCount = (jsonItemsToResumeUpload.length + batchSize - 1) / batchSize;
@@ -7577,9 +7587,12 @@ class SyncEngine {
 		}
 	}
 	
+	// A resume session upload file need to be valid to be used
+	// This function validates this data
 	bool validateUploadSessionFileData(string sessionFilePath) {
 		
 		JSONValue sessionFileData;
+		OneDriveApi validateUploadSessionFileDataApiInstance;
 
 		// Try and read the text from the session file as a JSON array
 		try {
@@ -7627,23 +7640,29 @@ class SyncEngine {
 		if ("uploadUrl" in sessionFileData) {
 			JSONValue response;
 			
-			// Create a new OneDrive API instance
-			OneDriveApi validateUploadSessionFileDataApiInstance;
-			validateUploadSessionFileDataApiInstance = new OneDriveApi(appConfig);
-			validateUploadSessionFileDataApiInstance.initialise();
-			
 			try {
+				// Create a new OneDrive API instance
+				validateUploadSessionFileDataApiInstance = new OneDriveApi(appConfig);
+				validateUploadSessionFileDataApiInstance.initialise();
+				
+				// Request upload status
 				response = validateUploadSessionFileDataApiInstance.requestUploadStatus(sessionFileData["uploadUrl"].str);
+				
+				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+				validateUploadSessionFileDataApiInstance.shutdown();
+				object.destroy(validateUploadSessionFileDataApiInstance);
+				validateUploadSessionFileDataApiInstance = null;
+				
 			} catch (OneDriveException e) {
 				// handle any onedrive error response as invalid
 				addLogEntry("SESSION-RESUME: Invalid response when using uploadUrl in: " ~ sessionFilePath, ["debug"]);
+				
+				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+				validateUploadSessionFileDataApiInstance.shutdown();
+				object.destroy(validateUploadSessionFileDataApiInstance);
+				validateUploadSessionFileDataApiInstance = null;
 				return false;
 			}
-			
-			// Shutdown this API instance, as we will create API instances as required, when required
-			validateUploadSessionFileDataApiInstance.shutdown();
-			// Free object and memory
-			object.destroy(validateUploadSessionFileDataApiInstance);
 			
 			// Do we have a valid response from OneDrive?
 			if (response.type() == JSONType.object) {
@@ -7679,6 +7698,7 @@ class SyncEngine {
 		return true;
 	}
 	
+	// Resume all resumable session uploads in parrallel
 	void resumeSessionUploadsInParallel(JSONValue[] array) {
 		// This function recieved an array of 16 JSON items to resume upload
 		foreach (i, jsonItemToResume; processPool.parallel(array)) {
@@ -7686,6 +7706,8 @@ class SyncEngine {
 			
 			JSONValue uploadResponse;
 			OneDriveApi uploadFileOneDriveApiInstance;
+			
+			// Create a new API instance
 			uploadFileOneDriveApiInstance = new OneDriveApi(appConfig);
 			uploadFileOneDriveApiInstance.initialise();
 			
@@ -7700,6 +7722,11 @@ class SyncEngine {
 				writeln("CODING TO DO: Handle an exception when performing a resume session upload");	
 			}
 			
+			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+			uploadFileOneDriveApiInstance.shutdown();
+			object.destroy(uploadFileOneDriveApiInstance);
+			uploadFileOneDriveApiInstance = null;
+						
 			// Was the response from the OneDrive API a valid JSON item?
 			if (uploadResponse.type() == JSONType.object) {
 				// A valid JSON object was returned - session resumption upload sucessful
@@ -7729,11 +7756,6 @@ class SyncEngine {
 				// No valid response was returned
 				addLogEntry("CODING TO DO: what to do when session upload resumption JSON data is not valid ... nothing ? error message ?");
 			}
-			
-			// Shutdown this API instance, as we will create API instances as required, when required
-			uploadFileOneDriveApiInstance.shutdown();
-			// Free object and memory
-			object.destroy(uploadFileOneDriveApiInstance);
 		}
 	}
 	
@@ -7778,7 +7800,6 @@ class SyncEngine {
 		addLogEntry("onlineDriveDetails: " ~ to!string(onlineDriveDetails), ["debug"]);
 	}
 
-	
 	// Return a specific 'driveId' details from 'onlineDriveDetails'
 	driveDetailsCache getDriveDetails(string driveId) {
 		auto ptr = driveId in onlineDriveDetails;
@@ -7821,7 +7842,6 @@ class SyncEngine {
 				// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 				// Display what the error is
 				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-				
 			}
 			
 			// process thisLevelChildren response
@@ -7830,9 +7850,12 @@ class SyncEngine {
 				if ((child["name"].str == searchName) && (("file" in child) != null)) {
 					// Found the matching file, return its JSON representation
 					// Operations in this thread are done / complete
+					
+					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					checkFileOneDriveApiInstance.shutdown();
-					// Free object and memory
 					object.destroy(checkFileOneDriveApiInstance);
+					checkFileOneDriveApiInstance = null;
+					
 					// Return child
                     return child;
                 }
@@ -7847,10 +7870,11 @@ class SyncEngine {
 			} else break;
 		}
 		
-		// Operations in this thread are done / complete
+		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		checkFileOneDriveApiInstance.shutdown();
-		// Free object and memory
 		object.destroy(checkFileOneDriveApiInstance);
+		checkFileOneDriveApiInstance = null;
+					
 		// return an empty JSON item
 		return onedriveJSONItem;
 	}
@@ -7975,14 +7999,21 @@ class SyncEngine {
 		
 		try {
 			sharedWithMeItems = sharedWithMeOneDriveApiInstance.getSharedWithMe();
-		} catch (OneDriveException e) {
 			
+			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+			sharedWithMeOneDriveApiInstance.shutdown();
+			object.destroy(sharedWithMeOneDriveApiInstance);
+			sharedWithMeOneDriveApiInstance = null;
+			
+		} catch (OneDriveException e) {
 			// Display error message
 			displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-			// Must exit here
+			
+			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			sharedWithMeOneDriveApiInstance.shutdown();
-			// Free object and memory
 			object.destroy(sharedWithMeOneDriveApiInstance);
+			sharedWithMeOneDriveApiInstance = null;
+			return;
 		}
 		
 		if (sharedWithMeItems.type() == JSONType.object) {
@@ -8050,11 +8081,6 @@ class SyncEngine {
 				addLogEntry();
 			}
 		}
-		
-		// Shutdown API access
-		sharedWithMeOneDriveApiInstance.shutdown();
-		// Free object and memory
-		object.destroy(sharedWithMeOneDriveApiInstance);
 	}
 	
 	// Query all the OneDrive Business Shared Objects to sync only Shared Files
@@ -8070,10 +8096,18 @@ class SyncEngine {
 		
 		try {
 			sharedWithMeItems = sharedWithMeOneDriveApiInstance.getSharedWithMe();
+			
+			// We cant shutdown the API instance here, as we re-use it below
+			
 		} catch (OneDriveException e) {
+			// Display error message
+			displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 			
-			// Add eventual API error handling here
-			
+			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+			sharedWithMeOneDriveApiInstance.shutdown();
+			object.destroy(sharedWithMeOneDriveApiInstance);
+			sharedWithMeOneDriveApiInstance = null;
+			return;
 		}
 		
 		// Valid JSON response
@@ -8273,5 +8307,10 @@ class SyncEngine {
 				}
 			}
 		}
+		
+		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+		sharedWithMeOneDriveApiInstance.shutdown();
+		object.destroy(sharedWithMeOneDriveApiInstance);
+		sharedWithMeOneDriveApiInstance = null;	
 	}	
 }
