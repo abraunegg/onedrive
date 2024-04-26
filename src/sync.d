@@ -510,17 +510,32 @@ class SyncEngine {
 		}
 	}
 	
-	// Reset syncFailures to false
+	// Reset syncFailures to false based on file activity
 	void resetSyncFailures() {
-		// Reset syncFailures to false if these are both empty
-		if (syncFailures) {
-			if ((fileDownloadFailures.empty) && (fileUploadFailures.empty)) {
-				addLogEntry("Resetting syncFailures = false");
-				syncFailures = false;
-			} else {
-				addLogEntry("File activity array's not empty - not resetting syncFailures");
-			}
+		// Log initial status and any non-empty arrays
+		string logMessage = "Evaluating reset of syncFailures: ";
+		if (fileDownloadFailures.length > 0) {
+			logMessage ~= "fileDownloadFailures is not empty; ";
 		}
+		if (fileUploadFailures.length > 0) {
+			logMessage ~= "fileUploadFailures is not empty; ";
+		}
+
+		// Check if both arrays are empty to reset syncFailures
+		if (fileDownloadFailures.length == 0 && fileUploadFailures.length == 0) {
+			if (syncFailures) {
+				syncFailures = false;
+				logMessage ~= "Resetting syncFailures to false.";
+			} else {
+				logMessage ~= "syncFailures already false.";
+			}
+		} else {
+			// Indicate no reset of syncFailures due to non-empty conditions
+			logMessage ~= "Not resetting syncFailures due to non-empty arrays.";
+		}
+
+		// Log the final decision and conditions
+		addLogEntry(logMessage);
 	}
 	
 	// Perform a sync of the OneDrive Account

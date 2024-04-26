@@ -42,6 +42,7 @@ import curlEngine;
 
 // module variables
 shared string deviceName;
+ulong previousRSS;
 
 static this() {
 	deviceName = Socket.hostName;
@@ -1111,28 +1112,51 @@ string generateAlphanumericString(size_t length = 16) {
     return to!string(randomString);
 }
 
+// Display internal memory stats pre garbage collection
 void displayMemoryUsagePreGC() {
 	// Display memory usage
-	writeln();
-	writeln("Memory Usage PRE Garbage Collection (KB)");
-	writeln("-----------------------------------------");
+	addLogEntry();
+	addLogEntry("Memory Usage PRE Garbage Collection (KB)");
+	addLogEntry("-----------------------------------------------------");
 	writeMemoryStats();
-	writeln();
+	addLogEntry();
 }
 
+// Display internal memory stats post garbage collection + RSS (actual memory being used)
 void displayMemoryUsagePostGC() {
 	// Display memory usage
-	writeln("Memory Usage POST Garbage Collection (KB)");
-	writeln("-----------------------------------------");
+	addLogEntry("Memory Usage POST Garbage Collection (KB)");
+	addLogEntry("-----------------------------------------------------");
 	writeMemoryStats();
-	writeln();
+	
+	// Query the actual Resident Set Size (RSS) for the PID
+	pid_t pid = getCurrentPID();
+	ulong rss = getRSS(pid);
+	addLogEntry("current Resident Set Size (RSS)          = " ~ to!string(rss)); // actual memory in RAM used by the process - this needs to remain stable, already in KB
+	
+	// Is there a previous value 
+	if (previousRSS != 0) {
+		addLogEntry("previous Resident Set Size (RSS)         = " ~ to!string(previousRSS)); // actual memory in RAM used by the process - this needs to remain stable, already in KB
+		// Increase or decrease in RSS
+		if (rss > previousRSS) {
+			addLogEntry("difference in Resident Set Size (RSS)    = +" ~ to!string((rss - previousRSS))); // Difference in actual memory used
+		} else {
+			addLogEntry("difference in Resident Set Size (RSS)    = -" ~ to!string((previousRSS - rss))); // Difference in actual memory used
+		}
+	}
+	
+	// Update previous RSS with new value
+	previousRSS = rss;
+	
+	// Closout
+	addLogEntry();
 }
 
 void writeMemoryStats() {
 	// write memory stats
-	writeln("memory usedSize                 = ", (GC.stats.usedSize/1024)); // number of used bytes on the GC heap (might only get updated after a collection)
-	writeln("memory freeSize                 = ", (GC.stats.freeSize/1024)); // number of free bytes on the GC heap (might only get updated after a collection)
-	writeln("memory allocatedInCurrentThread = ", (GC.stats.allocatedInCurrentThread/1024)); // number of bytes allocated for current thread since program start
+	addLogEntry("current memory usedSize                  = " ~ to!string((GC.stats.usedSize/1024))); // number of used bytes on the GC heap (might only get updated after a collection)
+	addLogEntry("current memory freeSize                  = " ~ to!string((GC.stats.freeSize/1024))); // number of free bytes on the GC heap (might only get updated after a collection)
+	addLogEntry("current memory allocatedInCurrentThread  = " ~ to!string((GC.stats.allocatedInCurrentThread/1024))); // number of bytes allocated for current thread since program start
 }
 
 // Return the username of the UID running the 'onedrive' process
@@ -1203,9 +1227,56 @@ int calc_eta(size_t counter, size_t iterations, ulong start_time) {
     }
 }
 
+// Force Exit
 void forceExit() {
 	// Allow logging to flush and complete
 	Thread.sleep(dur!("msecs")(500));
 	// Force Exit
 	exit(EXIT_FAILURE);
+}
+
+// Get the current PID of the application
+pid_t getCurrentPID() {
+    // The '/proc/self' is a symlink to the current process's proc directory
+    string path = "/proc/self/stat";
+    
+    // Read the content of the stat file
+    string content;
+    try {
+        content = readText(path);
+    } catch (Exception e) {
+        writeln("Failed to read stat file: ", e.msg);
+        return 0;
+    }
+
+    // The first value in the stat file is the PID
+    auto parts = split(content);
+    return to!pid_t(parts[0]);  // Convert the first part to pid_t
+}
+
+// Access the Resident Set Size (RSS) based on the PID of the running application
+ulong getRSS(pid_t pid) {
+    // Construct the path to the statm file for the given PID
+    string path = format("/proc/%s/statm", to!string(pid));
+
+    // Read the content of the file
+    string content;
+    try {
+        content = readText(path);
+    } catch (Exception e) {
+        writeln("Failed to read statm file: ", e.msg);
+        return 0;
+    }
+
+    // Split the content and get the RSS (second value)
+    auto stats = split(content);
+    if (stats.length < 2) {
+        writeln("Unexpected format in statm file.");
+        return 0;
+    }
+
+    // RSS is in pages, convert it to kilobytes
+    ulong rssPages = to!ulong(stats[1]);
+    ulong rssKilobytes = rssPages * sysconf(_SC_PAGESIZE) / 1024;
+    return rssKilobytes;
 }
