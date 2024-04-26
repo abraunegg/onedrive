@@ -78,8 +78,8 @@ class OneDriveWebhook {
 		} catch (OneDriveException e) {
 			logSubscriptionError(e);
 		}
-		oneDriveApiInstance.shutdown();
-        object.destroy(oneDriveApiInstance);
+		// Release API instance back to the pool
+		oneDriveApiInstance.releaseCurlEngine();
 	}
 
 	private static void handle(shared OneDriveWebhook _this, Cgi cgi) {

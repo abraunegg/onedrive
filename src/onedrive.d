@@ -355,7 +355,7 @@ class OneDriveApi {
 
 	// Reinitialise the OneDrive API class
 	bool reinitialise() {
-		shutdown();
+		releaseCurlEngine();
 		return initialise(this.keepAlive);
 	}
 	
@@ -383,11 +383,13 @@ class OneDriveApi {
 		addLogEntry("Configured siteDriveUrl:     " ~ siteDriveUrl, ["debug"]);
 	}
 	
-	// Shutdown OneDrive API Curl Engine
-	void shutdown() {
-		// Release curl instance
+	// Release CurlEngine bask to the Curl Engine Pool
+	void releaseCurlEngine() {
+		// Log that this was called
+		addLogEntry("OneDrive API releaseCurlEngine() CALLED", ["debug"]);
+		// Release curl instance back to the pool
 		if (curlEngine !is null) {
-			curlEngine.release();
+			curlEngine.releaseEngine();
 			curlEngine = null;
 		}
 	}
@@ -833,7 +835,7 @@ class OneDriveApi {
 						addLogEntry("Please login to https://account.live.com/consent/Manage and remove your existing application access consent");
 						addLogEntry();
 						// force exit
-						shutdown();
+						releaseCurlEngine();
 						// Must force exit here, allow logging to be done
 						forceExit();
 					}
@@ -1136,10 +1138,8 @@ class OneDriveApi {
 		SysTime retryTime;
 		bool retrySuccess = false;
 		bool transientError = false;
-		auto internalThreadId = generateAlphanumericString();
-
-		while (!retrySuccess) {
 		
+		while (!retrySuccess) {
 			// Reset thisBackOffInterval
 			thisBackOffInterval = 0;
 			transientError = false;
@@ -1336,9 +1336,9 @@ class OneDriveApi {
 					case 408,429:
 						// If OneDrive sends a status code 429 then this function will be used to process the Retry-After response header which contains the value by which we need to wait
 						if (exception.httpStatusCode == 408) {
-							addLogEntry("Handling a OneDrive HTTP 408 Response Code (Request Time Out) - Internal Thread ID: " ~ to!string(internalThreadId));
+							addLogEntry("Handling a OneDrive HTTP 408 Response Code (Request Time Out) - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
 						} else {
-							addLogEntry("Handling a OneDrive HTTP 429 Response Code (Too Many Requests) - Internal Thread ID: " ~ to!string(internalThreadId));
+							addLogEntry("Handling a OneDrive HTTP 429 Response Code (Too Many Requests) - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
 						}
 						// Read in the Retry-After HTTP header as set and delay as per this value before retrying the request
 						thisBackOffInterval = response.getRetryAfterValue();
@@ -1352,7 +1352,7 @@ class OneDriveApi {
 					case 503,504:
 						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request
 						auto errorArray = splitLines(exception.msg);
-						addLogEntry(to!string(errorArray[0]) ~ " when attempting to query the OneDrive API Service - retrying applicable request in 30 seconds - Internal Thread ID: " ~ to!string(internalThreadId));
+						addLogEntry(to!string(errorArray[0]) ~ " when attempting to query the OneDrive API Service - retrying applicable request in 30 seconds - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
 						addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 						// Transient error - try again in 30 seconds
 						thisBackOffInterval = 30;
@@ -1390,7 +1390,7 @@ class OneDriveApi {
 				currentTime = Clock.currTime();
 				currentTime.fracSecs = Duration.zero;
 				auto timeString = currentTime.toString();
-				addLogEntry("Retry attempt:           " ~ to!string(retryAttempts) ~ " - Internal Thread ID: " ~ to!string(internalThreadId), ["verbose"]);
+				addLogEntry("Retry attempt:           " ~ to!string(retryAttempts) ~ " - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId), ["verbose"]);
 				addLogEntry(" This attempt timestamp: " ~ timeString, ["verbose"]);
 				// Detail when the next attempt will be tried
 				// Factor in the delay for curl to generate the exception - otherwise the next timestamp appears to be 'out' even though technically correct

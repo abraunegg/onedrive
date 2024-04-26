@@ -202,44 +202,6 @@ Regex!char wild2regex(const(char)[] pattern) {
     return regex(str, "i");
 }
 
-// Test Internet access to Microsoft OneDrive
-bool testInternetReachabilityCurlPool(ApplicationConfig appConfig) {
-    CurlEngine curlEngine;
-    bool result = false;
-    try {
-		// Use preconfigured object with all the correct http values assigned
-		curlEngine = CurlEngine.getCurlInstance();
-		curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"));
-
-		// Configure the remaining items required
-		// URL to use
-		// HTTP connection test method
-
-		curlEngine.connect(HTTP.Method.head, "https://login.microsoftonline.com");
-		addLogEntry("Attempting to contact Microsoft OneDrive Login Service", ["debug"]);
-		curlEngine.http.perform();
-		addLogEntry("Shutting down HTTP engine as successfully reached OneDrive Login Service", ["debug"]);
-		
-		// Release
-		curlEngine.release(); // performs curl cleanup()
-		curlEngine = null; // Clean up this memory variable
-		
-		// Set that we are online
-		result = true;
-    } catch (SocketException e) {
-        addLogEntry("HTTP Socket Issue", ["debug"]);
-        addLogEntry("Cannot connect to Microsoft OneDrive Login Service - Socket Issue");
-        displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-    } catch (CurlException e) {
-        addLogEntry("No Network Connection", ["debug"]);
-        addLogEntry("Cannot connect to Microsoft OneDrive Login Service - Network Connection Issue");
-        displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-    } 
-
-	// Return test result
-    return result;
-}
-
 // Test Internet access to Microsoft OneDrive using a simple HTTP HEAD request
 bool testInternetReachability(ApplicationConfig appConfig) {
     auto http = HTTP();
@@ -259,34 +221,38 @@ bool testInternetReachability(ApplicationConfig appConfig) {
 
     // Execute the request and handle exceptions
     try {
-        addLogEntry("Attempting to contact Microsoft OneDrive Login Service");
-        http.perform();
+		addLogEntry("Attempting to contact Microsoft OneDrive Login Service");
+		http.perform();
 
-        // Check response for HTTP status code
-        if (http.statusLine.code >= 200 && http.statusLine.code < 400) {
-            addLogEntry("Successfully reached Microsoft OneDrive Login Service");
-        } else {
-            addLogEntry("Failed to reach Microsoft OneDrive Login Service. HTTP status code: " ~ to!string(http.statusLine.code));
-            throw new Exception("HTTP Request Failed with Status Code: " ~ to!string(http.statusLine.code));
-        }
+		// Check response for HTTP status code
+		if (http.statusLine.code >= 200 && http.statusLine.code < 400) {
+			addLogEntry("Successfully reached Microsoft OneDrive Login Service");
+		} else {
+			addLogEntry("Failed to reach Microsoft OneDrive Login Service. HTTP status code: " ~ to!string(http.statusLine.code));
+			throw new Exception("HTTP Request Failed with Status Code: " ~ to!string(http.statusLine.code));
+		}
 
-        http.shutdown();
-        return true;
+		http.shutdown();
+		object.destroy(http);
+		return true;
     } catch (SocketException e) {
-        addLogEntry("Cannot connect to Microsoft OneDrive Service - Socket Issue: " ~ e.msg);
-        displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-        http.shutdown();
-        return false;
+		addLogEntry("Cannot connect to Microsoft OneDrive Service - Socket Issue: " ~ e.msg);
+		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+		http.shutdown();
+		object.destroy(http);
+		return false;
     } catch (CurlException e) {
-        addLogEntry("Cannot connect to Microsoft OneDrive Service - Network Connection Issue: " ~ e.msg);
-        displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-        http.shutdown();
-        return false;
+		addLogEntry("Cannot connect to Microsoft OneDrive Service - Network Connection Issue: " ~ e.msg);
+		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+		http.shutdown();
+		object.destroy(http);
+		return false;
     } catch (Exception e) {
-        addLogEntry("Unexpected error occurred: " ~ e.toString());
-        displayOneDriveErrorMessage(e.toString(), getFunctionName!({}));
-        http.shutdown();
-        return false;
+		addLogEntry("Unexpected error occurred: " ~ e.toString());
+		displayOneDriveErrorMessage(e.toString(), getFunctionName!({}));
+		http.shutdown();
+		object.destroy(http);
+		return false;
     }
 }
 
@@ -757,7 +723,7 @@ JSONValue fetchOnlineURLContent(string url) {
 	// Ensure resources are cleaned up
 	http.shutdown();  
 	object.destroy(http);
-		
+
     // Return onlineResponse
     return onlineContent;
 }
@@ -1152,8 +1118,8 @@ void displayMemoryUsagePostGC() {
 	addLogEntry();
 }
 
+// Write internal memory stats
 void writeMemoryStats() {
-	// write memory stats
 	addLogEntry("current memory usedSize                  = " ~ to!string((GC.stats.usedSize/1024))); // number of used bytes on the GC heap (might only get updated after a collection)
 	addLogEntry("current memory freeSize                  = " ~ to!string((GC.stats.freeSize/1024))); // number of free bytes on the GC heap (might only get updated after a collection)
 	addLogEntry("current memory allocatedInCurrentThread  = " ~ to!string((GC.stats.allocatedInCurrentThread/1024))); // number of bytes allocated for current thread since program start
