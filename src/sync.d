@@ -185,7 +185,8 @@ class SyncEngine {
 	this(ApplicationConfig appConfig, ItemDatabase itemDB, ClientSideFiltering selectiveSync) {
 	
 		// Create the specific task pool to process items in parallel
-		this.processPool = taskPool();
+		this.processPool = new TaskPool(to!int(appConfig.getValueLong("threads")));
+		addLogEntry("PROCESS POOL WORKER THREADS: " ~ to!string(processPool.size), ["debug"]);
 	
 		// Configure the class varaible to consume the application configuration
 		this.appConfig = appConfig;
