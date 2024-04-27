@@ -53,6 +53,7 @@ class LogBuffer {
 			flushThread.start();
         }
 		
+		// The destructor should only clean up resources owned directly by this instance
 		~this() {
 			object.destroy(bufferLock);
 			object.destroy(condReady);

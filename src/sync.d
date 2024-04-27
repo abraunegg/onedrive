@@ -185,9 +185,9 @@ class SyncEngine {
 	this(ApplicationConfig appConfig, ItemDatabase itemDB, ClientSideFiltering selectiveSync) {
 	
 		// Create the specific task pool to process items in parallel
-		this.processPool = new TaskPool(to!int(appConfig.getValueLong("threads")));
+		processPool = new TaskPool(to!int(appConfig.getValueLong("threads")));
 		addLogEntry("PROCESS POOL WORKER THREADS: " ~ to!string(processPool.size), ["debug"]);
-	
+		
 		// Configure the class varaible to consume the application configuration
 		this.appConfig = appConfig;
 		// Configure the class varaible to consume the database configuration
@@ -302,23 +302,15 @@ class SyncEngine {
 		}
 	}
 	
-	~this() {	
-		this.processPool.finish(true);
-		object.destroy(this.processPool); // Destroy, then set to null
-		this.processPool = null;
-		object.destroy(this.appConfig); // Destroy, then set to null
-		this.appConfig = null;
-		object.destroy(this.itemDB); // Destroy, then set to null
-		this.itemDB = null;
-		object.destroy(this.selectiveSync); // Destroy, then set to null
-		this.selectiveSync = null;
+	// The destructor should only clean up resources owned directly by this instance
+	~this() {
+		processPool.finish(true);
 	}
 	
 	// Initialise the Sync Engine class
 	bool initialise() {
-
 		// Control whether the worker threads are daemon threads. A daemon thread is automatically terminated when all non-daemon threads have terminated.
-		processPool.isDaemon(true); 
+		processPool.isDaemon(true);
 
 		// Create a new instance of the OneDrive API
 		OneDriveApi oneDriveApiInstance;
@@ -387,13 +379,13 @@ class SyncEngine {
 		
 		// Shutdown this API instance, as we will create API instances as required, when required
 		oneDriveApiInstance.releaseCurlEngine();
-		
-		// Free object and memory
-		//object.destroy(oneDriveApiInstance);
-		//oneDriveApiInstance = null;
-		
-		
 		return true;
+	}
+	
+	// Shutdown the sync engine, wait for anything in processPool to complete
+	void shutdown() {
+		addLogEntry("SYNC-ENGINE: Waiting for all internal threads to complete", ["debug"]);
+		processPool.finish(true);
 	}
 	
 	// Get Default Drive Details for this Account

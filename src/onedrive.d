@@ -111,17 +111,19 @@ class OneDriveApi {
 		siteSearchUrl = appConfig.globalGraphEndpoint ~ "/v1.0/sites?search";
 		siteDriveUrl = appConfig.globalGraphEndpoint ~ "/v1.0/sites/";
 
-
 		// Subscriptions
 		subscriptionUrl = appConfig.globalGraphEndpoint ~ "/v1.0/subscriptions";
 	}
 	
+	// The destructor should only clean up resources owned directly by this instance
 	~this() {
-		// We cant destroy 'appConfig' here as this leads to a segfault
-		object.destroy(curlEngine);
-		object.destroy(response);
-		curlEngine = null;
-		response = null;
+		if (curlEngine !is null) {
+			curlEngine = null;
+		} 
+		
+		if (response !is null) {
+			response = null;
+		}
 	}
 
 	// Initialise the OneDrive API class
@@ -353,12 +355,6 @@ class OneDriveApi {
 		return authorised;
 	}
 
-	// Reinitialise the OneDrive API class
-	bool reinitialise() {
-		releaseCurlEngine();
-		return initialise(this.keepAlive);
-	}
-	
 	// If the API has been configured correctly, print the items that been configured
 	void debugOutputConfiguredAPIItems() {
 		// Debug output of configured URL's
@@ -1120,7 +1116,6 @@ class OneDriveApi {
 
 	// Wrapper function for all requests to OneDrive API
 	// - This should throw a OneDriveException so that this exception can be handled appropriately elsewhere in the application
-	
 	private JSONValue oneDriveErrorHandlerWrapper(CurlResponse delegate(CurlResponse response) executer, bool validateJSONResponse, string callingFunction, int lineno) {
 		// Create a new 'curl' response
 		response = new CurlResponse();

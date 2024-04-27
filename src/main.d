@@ -1367,13 +1367,8 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 		assumeNoGC ( () {
 		addLogEntry("\nReceived termination signal, initiating cleanup");
 			// Wait for all parallel jobs that depend on the database to complete
-			
 			addLogEntry("Waiting for any existing upload|download process to complete");
-			taskPool.finish(true);
-			
-			// Force kill any running threads
-			//addLogEntry("Forcing any active thread to exit");
-			//taskPool.finish(false);
+			syncEngineInstance.shutdown();
 			
 			// Perform the shutdown process
 			performSynchronisedExitProcess("exitHandler");
@@ -1403,17 +1398,16 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 			shutdownOneDriveWebhook();
 			// Shutdown the client side filtering objects
 			shutdownSelectiveSync();
+			// Destroy all 'curl' instances
+			destroyCurlInstances();
 			// Shutdown the sync engine
 			shutdownSyncEngine();
 			// Shutdown any local filesystem monitoring
 			shutdownFilesystemMonitor();
 			// Shutdown the database
 			shutdownDatabase();
-			// Destroy all 'curl' instances
-			destroyCurlInstances();
 			// Shutdown the application configuration objects
 			shutdownAppConfig();
-			
 		} catch (Exception e) {
             addLogEntry("Error during performStandardExitProcess: " ~ e.toString(), ["error"]);
         }
@@ -1449,7 +1443,7 @@ void shutdownFilesystemMonitor() {
 void shutdownSelectiveSync() {
     if (selectiveSync !is null) {
 		addLogEntry("Shutdown Client Side Filtering instance", ["debug"]);
-        selectiveSync.shutdown();
+		selectiveSync.shutdown();
         object.destroy(selectiveSync);
         selectiveSync = null;
     }
@@ -1458,7 +1452,7 @@ void shutdownSelectiveSync() {
 void shutdownSyncEngine() {
     if (syncEngineInstance !is null) {
 		addLogEntry("Shutdown Sync Engine instance", ["debug"]);
-		//syncEngineInstance.shutdown(); - potentially need this and also check for a ~this() for class cleanup
+		syncEngineInstance.shutdown(); // Make sure any running thread completes first
         object.destroy(syncEngineInstance);
         syncEngineInstance = null;
     }
@@ -1480,7 +1474,7 @@ void shutdownAppConfig() {
 			// We were running with --dry-run , clean up the applicable database
 			cleanupDryRunDatabaseFiles(runtimeDatabaseFile);
 		}
-        object.destroy(appConfig);
+		object.destroy(appConfig);
         appConfig = null;
     }
 }

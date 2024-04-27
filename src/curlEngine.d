@@ -161,13 +161,14 @@ class CurlResponse {
 
 class CurlEngine {
 
-	__gshared CurlEngine[] curlEnginePool;
-
+	// Shared pool of CurlEngine instances accessible across all threads
+	__gshared CurlEngine[] curlEnginePool; // __gshared is used to declare a variable that is shared across all threads
+	
 	HTTP http;
+	File uploadFile;
+	CurlResponse response;
 	bool keepAlive;
 	ulong dnsTimeout;
-	CurlResponse response;
-	File uploadFile;
 	string internalThreadId;
 	
     this() {
@@ -176,31 +177,27 @@ class CurlEngine {
 		internalThreadId = generateAlphanumericString();
     }
 
+	// The destructor should only clean up resources owned directly by this instance
 	~this() {
-		// The destructor should only clean up resources owned directly by this instance
-		addLogEntry("CurlEngine DESTRUCTOR CALLED", ["debug"]);
-		addLogEntry("CurlEngine DESTRUCTOR CALLED");
-	
-		// Avoid modifying or destroying shared/static resources here
+		// Is the file still open?
 		if (uploadFile.isOpen()) {
 			uploadFile.close();
 		}
-
-		// Cleanup class memory usage
-		object.destroy(uploadFile); // Destroy, however we cant set to null
-		object.destroy(response); // Destroy, then set to null
-		response = null;
-		internalThreadId = null;
+		
+		// Is 'response' cleared?
+		if (response !is null) {
+			object.destroy(response); // Destroy, then set to null
+			response = null;
+		}
 		
 		// Is the actual http instance is stopped?
 		if (!http.isStopped) {
-			// instance was not stopped .. need to stop it
-			addLogEntry("CurlEngine DESTRUCTOR HTTP INSTANCE WAS NOT STOPPED - STOPPING", ["debug"]);
+			// HTTP instance was not stopped .. need to stop it
 			http.shutdown();
+			object.destroy(http); // Destroy, however we cant set to null
 		}
-		object.destroy(http); // Destroy, however we cant set to null
     }
-	
+		
 	static CurlEngine getCurlInstance() {
 		synchronized (CurlEngine.classinfo) {
 			// What is the current pool size
@@ -232,6 +229,7 @@ class CurlEngine {
         synchronized (CurlEngine.classinfo) {
 			// What is the current pool size
 			addLogEntry("CURL ENGINES TO RELEASE: " ~ to!string(curlEnginePool.length), ["debug"]);
+			addLogEntry("CURL ENGINES TO RELEASE: " ~ to!string(curlEnginePool.length));
 		
             // Safely iterate and clean up each CurlEngine instance
 			foreach (curlEngineInstance; curlEnginePool) {
@@ -253,12 +251,11 @@ class CurlEngine {
 
     // Destroy all curl instances
 	static void destroyAllCurlInstances() {
+		
 		addLogEntry("DESTROY ALL CURL ENGINES", ["debug"]);
+		addLogEntry("DESTROY ALL CURL ENGINES");
 		// Release all 'curl' instances
 		releaseAllCurlInstances();
-		// Destroy curlEnginePool, set to null 
-		object.destroy(curlEnginePool);
-		curlEnginePool = null;
     }
 
 	// We are releasing a curl instance back to the pool
