@@ -80,6 +80,8 @@ class OneDriveWebhook {
 		}
 		// Release API instance back to the pool
 		oneDriveApiInstance.releaseCurlEngine();
+		object.destroy(oneDriveApiInstance);
+		oneDriveApiInstance = null;
 	}
 
 	private static void handle(shared OneDriveWebhook _this, Cgi cgi) {

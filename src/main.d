@@ -435,8 +435,8 @@ int main(string[] cliArgs) {
 			// Flag that we were able to initalise the API in the application config
 			oneDriveApiInstance.debugOutputConfiguredAPIItems();
 			oneDriveApiInstance.releaseCurlEngine();
-			
-			//object.destroy(oneDriveApiInstance);
+			object.destroy(oneDriveApiInstance);
+			oneDriveApiInstance = null;
 			
 			// Need to configure the itemDB and syncEngineInstance for 'sync' and 'non-sync' operations
 			addLogEntry("Opening the item database ...", ["verbose"]);

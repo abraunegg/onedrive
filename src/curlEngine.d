@@ -15,8 +15,6 @@ import std.range;
 import log;
 import util;
 
-__gshared CurlEngine[] curlEnginePool;
-
 class CurlResponse {
 	HTTP.Method method;
 	const(char)[] url;
@@ -163,6 +161,8 @@ class CurlResponse {
 
 class CurlEngine {
 
+	__gshared CurlEngine[] curlEnginePool;
+
 	HTTP http;
 	bool keepAlive;
 	ulong dnsTimeout;
@@ -179,6 +179,7 @@ class CurlEngine {
 	~this() {
 		// The destructor should only clean up resources owned directly by this instance
 		addLogEntry("CurlEngine DESTRUCTOR CALLED", ["debug"]);
+		addLogEntry("CurlEngine DESTRUCTOR CALLED");
 	
 		// Avoid modifying or destroying shared/static resources here
 		if (uploadFile.isOpen()) {
@@ -252,7 +253,6 @@ class CurlEngine {
 
     // Destroy all curl instances
 	static void destroyAllCurlInstances() {
-		
 		addLogEntry("DESTROY ALL CURL ENGINES", ["debug"]);
 		// Release all 'curl' instances
 		releaseAllCurlInstances();
