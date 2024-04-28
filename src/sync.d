@@ -7,6 +7,7 @@ import core.thread;
 import core.time;
 import std.algorithm;
 import std.array;
+import std.compiler;
 import std.concurrency;
 import std.container.rbtree;
 import std.conv;
@@ -304,14 +305,21 @@ class SyncEngine {
 	
 	// The destructor should only clean up resources owned directly by this instance
 	~this() {
-		processPool.finish(true);
+		shutdownProcessPool();
 	}
 	
 	// Initialise the Sync Engine class
 	bool initialise() {
 		// Control whether the worker threads are daemon threads. A daemon thread is automatically terminated when all non-daemon threads have terminated.
-		processPool.isDaemon(true);
-
+		if (__VERSION__ < 2098) {
+			// LDC version less than 1.28.0 is being used
+			// DMD version less than 2.098.0 is being used
+			processPool.isDaemon(false); // Not a daemon thread
+		} else {
+			// Normal TaskPool threading
+			processPool.isDaemon(true); // daemon thread
+		}
+		
 		// Create a new instance of the OneDrive API
 		OneDriveApi oneDriveApiInstance;
 		oneDriveApiInstance = new OneDriveApi(appConfig);
@@ -385,9 +393,26 @@ class SyncEngine {
 	// Shutdown the sync engine, wait for anything in processPool to complete
 	void shutdown() {
 		addLogEntry("SYNC-ENGINE: Waiting for all internal threads to complete", ["debug"]);
-		processPool.finish(true);
+		shutdownProcessPool();
 	}
 	
+	void shutdownProcessPool() {
+		// TaskPool needs specific shutdown based on compiler version otherwise this causes a segfault
+		addLogEntry("COMPILER VERSION: " ~ to!string(__VERSION__), ["debug"]);
+		
+		// We must be using 2098 or greater
+		if (__VERSION__ < 2098) {
+			// Compromised TaskPool shutdown process
+			// LDC version less than 1.28.0 is being used
+			// DMD version less than 2.098.0 is being used
+			processPool.stop();
+			processPool.finish();
+		} else {
+			// Normal TaskPool shutdown process
+			processPool.finish(true);
+		}
+	}
+		
 	// Get Default Drive Details for this Account
 	void getDefaultDriveDetails() {
 		
