@@ -2153,6 +2153,8 @@ class SyncEngine {
 		string OneDriveFileXORHash;
 		string OneDriveFileSHA256Hash;
 		ulong jsonFileSize = 0;
+		Item databaseItem;
+		bool fileFoundInDB = false;
 		
 		// Download item specifics
 		string downloadItemId = onedriveJSONItem["id"].str;
@@ -2205,8 +2207,6 @@ class SyncEngine {
 			// Does the file already exist in the path locally?
 			if (exists(newItemPath)) {
 				// file exists locally already
-				Item databaseItem;
-				bool fileFoundInDB = false;
 				foreach (driveId; onlineDriveDetails.keys) {
 					if (itemDB.selectByPath(newItemPath, driveId, databaseItem)) {
 						fileFoundInDB = true;
@@ -2348,6 +2348,7 @@ class SyncEngine {
 							} else {
 								// Downloaded file does not match size or hash .. which is it?
 								bool downloadValueMismatch = false;
+								
 								// Size error?
 								if (downloadFileSize != jsonFileSize) {
 									// downloaded file size does not match
@@ -2356,6 +2357,7 @@ class SyncEngine {
 									addLogEntry("OneDrive API reported size: " ~ to!string(jsonFileSize), ["debug"]);
 									addLogEntry("ERROR: File download size mis-match. Increase logging verbosity to determine why.");
 								}
+								
 								// Hash Error
 								if (downloadedFileHash != onlineFileHash) {
 									// downloaded file hash does not match
@@ -2364,6 +2366,7 @@ class SyncEngine {
 									addLogEntry("OneDrive API reported hash: " ~ onlineFileHash, ["debug"]);
 									addLogEntry("ERROR: File download hash mis-match. Increase logging verbosity to determine why.");
 								}
+								
 								// .heic data loss check
 								// - https://github.com/abraunegg/onedrive/issues/2471
 								// - https://github.com/OneDrive/onedrive-api-docs/issues/1532
@@ -2390,10 +2393,21 @@ class SyncEngine {
 								// If the computed hash does not equal provided online hash, consider this a failed download
 								if (downloadedFileHash != onlineFileHash) {
 									// We do not want this local file to remain on the local file system as it failed the integrity checks
-									addLogEntry("Removing file " ~ newItemPath ~ " due to failed integrity checks");
+									addLogEntry("Removing local file " ~ newItemPath ~ " due to failed integrity checks");
 									if (!dryRun) {
 										safeRemove(newItemPath);
 									}
+									
+									// Was this item previously in-sync with the local system?
+									// We previously searched for the file in the DB, we need to use that record
+									if (fileFoundInDB) {
+										// Purge DB record so that the deleted local file does not cause an online delete
+										// In a --dry-run scenario, this is being done against a DB copy
+										addLogEntry("Removing DB record due to failed integrity checks");
+										itemDB.deleteById(databaseItem.driveId, databaseItem.id);
+									}
+									
+									// Flag that the download failed
 									downloadFailed = true;
 								}
 							}

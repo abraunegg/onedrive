@@ -38,10 +38,11 @@ Additionally there are specific version release tags for each release. Refer to 
 ## Configuration Steps
 
 ### 1. Install 'docker' on your platform
-Install 'docker' as per your distribution platform's instructions if not already installed as per the instructions on https://docs.docker.com/engine/install/
+Install Docker for your system using the official instructions found at https://docs.docker.com/engine/install/.
 
 > [!CAUTION]
-> If you are using Ubuntu, do not install Docker from your distribution platform's repositories as these contain obsolete and outdated versions. You *must* install Docker from Docker provided packages.
+> If you are using Ubuntu or any distribution based on Ubuntu, do not install Docker from your distribution's repositories, as they may contain obsolete versions. Instead, you must install Docker using the packages provided directly by Docker.
+
 
 ### 2. Configure 'docker' to allow non-privileged users to run Docker commands
 Read https://docs.docker.com/engine/install/linux-postinstall/ to configure the 'docker' user group with your user account to allow your non 'root' user to run 'docker' commands.
