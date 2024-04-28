@@ -4,6 +4,7 @@ module main;
 // What does this module require to function?
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
 import core.stdc.signal;
+import core.sys.posix.signal;
 import core.memory;
 import core.time;
 import core.thread;
@@ -44,7 +45,19 @@ ItemDatabase itemDB;
 ClientSideFiltering selectiveSync;
 Monitor filesystemMonitor;
 
+// Class variables
+// Flag for performing a synchronised shutdown
+bool shutdownInProgress = false;
+// Flag if a --dry-run is being performed, as, on shutdown, once config is destroyed, we have no reference here
+bool dryRun = false;
+// Configure the runtime database file path so that it is available to us on shutdown so objects can be destroyed and removed if required
+// - Typically this will be the default, but in a --dry-run scenario, we use a separate database file
+string runtimeDatabaseFile = "";
+
 int main(string[] cliArgs) {
+	// Setup CTRL-C handler
+    setupSignalHandler();
+
 	// Application Start Time - used during monitor loop to detail how long it has been running for
 	auto applicationStartTime = Clock.currTime();
 	// Disable buffering on stdout - this is needed so that when we are using plain write() it will go to the terminal without flushing
@@ -63,8 +76,7 @@ int main(string[] cliArgs) {
 	// What is the runtime syncronisation directory that will be used
 	// Typically this will be '~/OneDrive' .. however tilde expansion is unreliable
 	string runtimeSyncDirectory = "";
-	// Configure the runtime database file path. Typically this will be the default, but in a --dry-run scenario, we use a separate database file
-	string runtimeDatabaseFile = "";
+	
 	// Verbosity Logging Count - this defines if verbose or debug logging is being used
 	long verbosityCount = 0;
 	// Application Logging Level
@@ -86,15 +98,15 @@ int main(string[] cliArgs) {
 	scope(exit) {
 		// Detail what scope was called
 		addLogEntry("Exit scope was called", ["debug"]);
-		// Perform exit tasks
-		performStandardExitProcess("exitScope");
+		// Perform synchronised exit
+		performSynchronisedExitProcess("exitScope");
 	}
 	
 	scope(failure) {
 		// Detail what scope was called
 		addLogEntry("Failure scope was called", ["debug"]);
-		// Perform exit tasks
-		performStandardExitProcess("failureScope");
+		// Perform synchronised exit
+		performSynchronisedExitProcess("failureScope");
 	}
 	
 	// Read in application options as passed in
@@ -140,23 +152,6 @@ int main(string[] cliArgs) {
 	// If we need to enable logging to a file, we can only do this once we know the application configuration which is done slightly later on
     initialiseLogging(verboseLogging, debugLogging);
 	
-	/**
-	// most used
-	addLogEntry("Basic 'info' message", ["info"]); .... or just use addLogEntry("Basic 'info' message");
-	addLogEntry("Basic 'verbose' message", ["verbose"]);
-	addLogEntry("Basic 'debug' message", ["debug"]);
-	// GUI notify only
-	addLogEntry("Basic 'notify' ONLY message and displayed in GUI if notifications are enabled", ["notify"]);
-	// info and notify
-	addLogEntry("Basic 'info and notify' message and displayed in GUI if notifications are enabled", ["info", "notify"]);
-	// log file only
-	addLogEntry("Information sent to the log file only, and only if logging to a file is enabled", ["logFileOnly"]);
-	// Console only (session based upload|download)
-	addLogEntry("Basic 'Console only with new line' message", ["consoleOnly"]);
-	// Console only with no new line
-	addLogEntry("Basic 'Console only with no new line' message", ["consoleOnlyNoNewLine"]);
-	**/
-	
 	// Log application start time, log line has start time
 	addLogEntry("Application started", ["debug"]);
 	
@@ -187,6 +182,9 @@ int main(string[] cliArgs) {
 	
 	// Update the current runtime application configuration (default or 'config' fileread-in options) from any passed in command line arguments
 	appConfig.updateFromArgs(cliArgs);
+	
+	// Configure dryRun so that this can be used here & during shutdown
+	dryRun = appConfig.getValueBool("dry_run");
 	
 	// As early as possible, now re-configure the logging class, given that we have read in any applicable 'config' file and updated the application running config from CLI input:
 	// - Enable logging to a file if this is required
@@ -264,9 +262,9 @@ int main(string[] cliArgs) {
 	// Check for --dry-run operation or a 'no-sync' operation where the 'dry-run' DB copy should be used
 	// If this has been requested, we need to ensure that all actions are performed against the dry-run database copy, and, 
 	// no actual action takes place - such as deleting files if deleted online, moving files if moved online or local, downloading new & changed files, uploading new & changed files
-	if ((appConfig.getValueBool("dry_run")) || (appConfig.hasNoSyncOperationBeenRequested())) {
+	if (dryRun || (appConfig.hasNoSyncOperationBeenRequested())) {
 		
-		if (appConfig.getValueBool("dry_run")) {
+		if (dryRun) {
 			// This is a --dry-run operation
 			addLogEntry("DRY-RUN Configured. Output below shows what 'would' have occurred.");
 		} 
@@ -279,26 +277,29 @@ int main(string[] cliArgs) {
 			// In a --dry-run --resync scenario, we should not copy the existing database file
 			if (!appConfig.getValueBool("resync")) {
 				// Copy the existing DB file to the dry-run copy
-				if (appConfig.getValueBool("dry_run")) {
+				if (dryRun) {
 					addLogEntry("DRY-RUN: Copying items.sqlite3 to items-dryrun.sqlite3 to use for dry run operations");
 				}
 				copy(appConfig.databaseFilePath,appConfig.databaseFilePathDryRun);
 			} else {
 				// No database copy due to --resync
-				if (appConfig.getValueBool("dry_run")) {
+				if (dryRun) {
 					addLogEntry("DRY-RUN: No database copy created for --dry-run due to --resync also being used");
 				}
 			}
 		}
 		// update runtimeDatabaseFile now that we are using the dry run path
 		runtimeDatabaseFile = appConfig.databaseFilePathDryRun;
+	} else {
+		// Cleanup any existing dry-run elements ... these should never be left hanging around
+		cleanupDryRunDatabaseFiles(appConfig.databaseFilePathDryRun);
 	}
 	
 	// Handle --logout as separate item, do not 'resync' on a --logout
 	if (appConfig.getValueBool("logout")) {
 		addLogEntry("--logout requested", ["debug"]);
 		addLogEntry("Deleting the saved authentication status ...");
-		if (!appConfig.getValueBool("dry_run")) {
+		if (!dryRun) {
 			safeRemove(appConfig.refreshTokenFilePath);
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
@@ -312,7 +313,7 @@ int main(string[] cliArgs) {
 	if (appConfig.getValueBool("reauth")) {
 		addLogEntry("--reauth requested", ["debug"]);
 		addLogEntry("Deleting the saved authentication status ... re-authentication requested");
-		if (!appConfig.getValueBool("dry_run")) {
+		if (!dryRun) {
 			safeRemove(appConfig.refreshTokenFilePath);
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
@@ -433,9 +434,9 @@ int main(string[] cliArgs) {
 			
 			// Flag that we were able to initalise the API in the application config
 			oneDriveApiInstance.debugOutputConfiguredAPIItems();
-
-			oneDriveApiInstance.shutdown();
+			oneDriveApiInstance.releaseCurlEngine();
 			object.destroy(oneDriveApiInstance);
+			oneDriveApiInstance = null;
 			
 			// Need to configure the itemDB and syncEngineInstance for 'sync' and 'non-sync' operations
 			addLogEntry("Opening the item database ...", ["verbose"]);
@@ -824,10 +825,6 @@ int main(string[] cliArgs) {
 				}
 			};
 			
-			// Handle SIGINT and SIGTERM
-			signal(SIGINT, &exitHandler);
-			signal(SIGTERM, &exitHandler);
-			
 			// Initialise the local filesystem monitor class using inotify to monitor for local filesystem changes
 			// If we are in a --download-only method of operation, we do not enable local filesystem monitoring
 			if (!appConfig.getValueBool("download_only")) {
@@ -997,13 +994,17 @@ int main(string[] cliArgs) {
 					addLogEntry("End Monitor Loop Time:                " ~ to!string(endFunctionProcessingTime), ["debug"]);
 					addLogEntry("Elapsed Monitor Loop Processing Time: " ~ to!string((endFunctionProcessingTime - startFunctionProcessingTime)), ["debug"]);
 					
-					// Display memory details before cleanup
+					// Release all the curl instances used during this loop
+					// New curl instances will be established on next loop
+					CurlEngine.releaseAllCurlInstances();
+					
+					// Display memory details before garbage collection
 					if (displayMemoryUsage) displayMemoryUsagePreGC();
-					// Perform Garbage Cleanup
+					// Perform Garbage Collection
 					GC.collect();
 					// Return free memory to the OS
 					GC.minimize();
-					// Display memory details after cleanup
+					// Display memory details after garbage collection
 					if (displayMemoryUsage) displayMemoryUsagePostGC();
 					
 					// Log that this loop is complete
@@ -1108,78 +1109,6 @@ int main(string[] cliArgs) {
 		return EXIT_SUCCESS;
 	} else {
 		return EXIT_FAILURE;
-	}
-}
-
-void performStandardExitProcess(string scopeCaller = null) {
-	// Who called this function
-	if (!scopeCaller.empty) {
-		addLogEntry("Running performStandardExitProcess due to: " ~ scopeCaller, ["debug"]);
-	}
-		
-	// Shutdown the OneDrive Webhook instance
-	if (oneDriveWebhook !is null) {
-		oneDriveWebhook.stop();
-		object.destroy(oneDriveWebhook);
-	}
-	
-	// Shutdown the sync engine
-	if (syncEngineInstance !is null) {
-		addLogEntry("Shutdown Sync Engine instance", ["debug"]);
-		object.destroy(syncEngineInstance);
-	}
-	
-	// Shutdown the client side filtering objects
-	if (selectiveSync !is null) {
-		addLogEntry("Shutdown Client Side Filtering instance", ["debug"]);
-		selectiveSync.shutdown();
-		object.destroy(selectiveSync);
-	}
-	
-	// Shutdown the application configuration objects
-	if (appConfig !is null) {
-		addLogEntry("Shutdown Application Configuration instance", ["debug"]);
-		// Cleanup any existing dry-run elements ... these should never be left hanging around
-		cleanupDryRunDatabaseFiles(appConfig.databaseFilePathDryRun);
-		object.destroy(appConfig);
-	}
-	
-	// Shutdown any local filesystem monitoring
-	if (filesystemMonitor !is null) {
-		addLogEntry("Shutdown Filesystem Monitoring instance", ["debug"]);
-		filesystemMonitor.shutdown();
-		object.destroy(filesystemMonitor);
-	}
-	
-	// Shutdown the database
-	if (itemDB !is null) {
-		addLogEntry("Shutdown Database instance", ["debug"]);
-		// Make sure the .wal file is incorporated into the main db before we exit
-		if (itemDB.isDatabaseInitialised()) {
-			itemDB.performVacuum();
-		}
-		object.destroy(itemDB);
-	}
-
-	// Shutdown cached sockets
-	CurlEngine.releaseAll();
-	
-	// Set all objects to null
-	if (scopeCaller == "failureScope") {
-		// Set these to be null due to failure scope - prevent 'ERROR: Unable to perform a database vacuum: out of memory' when the exit scope is then called
-		addLogEntry("Setting ALL Class Objects to null due to failure scope", ["debug"]);
-		itemDB = null;
-		appConfig = null;
-		oneDriveWebhook = null;
-		selectiveSync = null;
-		syncEngineInstance = null;
-	} else {
-		addLogEntry("Waiting for all internal threads to complete before exiting application", ["verbose"]);
-		addLogEntry("Application exit", ["debug"]);
-		addLogEntry("#######################################################################################################################################", ["logFileOnly"]);
-		// Destroy the shared logging buffer
-		(cast() logBuffer).shutdown();
-		object.destroy(logBuffer);
 	}
 }
 
@@ -1352,7 +1281,7 @@ void processResyncDatabaseRemoval(string databaseFilePathToRemove) {
 	destroy(itemDB);
 	// delete application sync state
 	addLogEntry("Deleting the saved application sync status ...");
-	if (!appConfig.getValueBool("dry_run")) {
+	if (!dryRun) {
 		safeRemove(databaseFilePathToRemove);
 	} else {
 		// --dry-run scenario ... technically we should not be making any local file changes .......
@@ -1364,7 +1293,7 @@ void cleanupDryRunDatabaseFiles(string dryRunDatabaseFile) {
 	// Temp variables
 	string dryRunShmFile = dryRunDatabaseFile ~ "-shm";
 	string dryRunWalFile = dryRunDatabaseFile ~ "-wal";
-
+	
 	// If the dry run database exists, clean this up
 	if (exists(dryRunDatabaseFile)) {
 		// remove the existing file
@@ -1406,23 +1335,159 @@ auto assumeNoGC(T) (T t) if (isFunctionPointer!T || isDelegate!T) {
 	return cast(SetFunctionAttributes!(T, functionLinkage!T, attrs)) t;
 }
 
-// Catch CTRL-C
+// Configure the signal handler to catch SIGINT (CTRL-C) and SIGTERM (kill)
+void setupSignalHandler() {
+    sigaction_t sa;
+    sa.sa_flags = SA_RESETHAND | SA_NODEFER;  // Use reset and no defer flags to handle reentrant signals
+    sa.sa_handler = &exitHandler;  // Direct function pointer assignment
+    sigemptyset(&sa.sa_mask);  // Initialize the signal set to empty
+
+    // Register the signal handler for SIGINT
+    if (sigaction(SIGINT, &sa, null) != 0) {
+        writeln("FATAL: Failed to install SIGINT handler");
+        exit(-1);
+    }
+
+    // Register the signal handler for SIGTERM
+    if (sigaction(SIGTERM, &sa, null) != 0) {
+        writeln("FATAL: Failed to install SIGTERM handler");
+        exit(-1);
+    }
+}
+
+// Catch SIGINT (CTRL-C) and SIGTERM (kill), handle rapid repeat presses 
 extern(C) nothrow @nogc @system void exitHandler(int value) {
+   
+	if (shutdownInProgress) {
+		return;  // Ignore subsequent presses
+	}
+	shutdownInProgress = true;
+
 	try {
 		assumeNoGC ( () {
-			addLogEntry("Got termination signal, performing clean up");
+		addLogEntry("\nReceived termination signal, initiating cleanup");
 			// Wait for all parallel jobs that depend on the database to complete
 			addLogEntry("Waiting for any existing upload|download process to complete");
-			taskPool.finish(true);
-			// Was itemDb initialised?
-			if (itemDB.isDatabaseInitialised()) {
-				// Make sure the .wal file is incorporated into the main db before we exit
-				addLogEntry("Shutting down DB connection and merging temporary data");
-				itemDB.performVacuum();
-				object.destroy(itemDB);
-			}
-			performStandardExitProcess();
+			syncEngineInstance.shutdown();
+			
+			// Perform the shutdown process
+			performSynchronisedExitProcess("exitHandler");
 		})();
-	} catch(Exception e) {}
-	exit(0);
+	} catch(Exception e) {
+		// Any output here will cause a GC allocation
+		// - Error: `@nogc` function `main.exitHandler` cannot call non-@nogc function `std.stdio.writeln!string.writeln`
+		// - Error: cannot use operator `~` in `@nogc` function `main.exitHandler`
+		// writeln("Exception during shutdown: " ~ e.msg);
+	}
+	// Exit the process with the provided exit code
+	exit(value); 
+	
+}
+
+// Handle application exit
+void performSynchronisedExitProcess(string scopeCaller = null) {
+	synchronized {
+		// Logging the caller of the shutdown procedure
+		if (!scopeCaller.empty) {
+			addLogEntry("performSynchronisedExitProcess called by: " ~ scopeCaller, ["debug"]);
+		}
+		
+		// Perform cleanup and shutdown of various services and resources
+		try {
+			// Shutdown the OneDrive Webhook instance
+			shutdownOneDriveWebhook();
+			// Shutdown the client side filtering objects
+			shutdownSelectiveSync();
+			// Destroy all 'curl' instances
+			destroyCurlInstances();
+			// Shutdown the sync engine
+			shutdownSyncEngine();
+			// Shutdown any local filesystem monitoring
+			shutdownFilesystemMonitor();
+			// Shutdown the database
+			shutdownDatabase();
+			// Shutdown the application configuration objects
+			shutdownAppConfig();
+		} catch (Exception e) {
+            addLogEntry("Error during performStandardExitProcess: " ~ e.toString(), ["error"]);
+        }
+		
+		// Finalise all logging and destroy log buffer
+		shutdownApplicationLogging();
+		
+		// Perform Garbage Cleanup
+		GC.collect();
+		// Return free memory to the OS
+		GC.minimize();
+	}
+}
+
+void shutdownOneDriveWebhook() {
+    if (oneDriveWebhook !is null) {
+		addLogEntry("Shutdown OneDrive Webhook instance", ["debug"]);
+		oneDriveWebhook.stop();
+        object.destroy(oneDriveWebhook);
+        oneDriveWebhook = null;
+    }
+}
+
+void shutdownFilesystemMonitor() {
+    if (filesystemMonitor !is null) {
+		addLogEntry("Shutdown Filesystem Monitoring instance", ["debug"]);
+		filesystemMonitor.shutdown();
+        object.destroy(filesystemMonitor);
+        filesystemMonitor = null;
+    }
+}
+
+void shutdownSelectiveSync() {
+    if (selectiveSync !is null) {
+		addLogEntry("Shutdown Client Side Filtering instance", ["debug"]);
+		selectiveSync.shutdown();
+        object.destroy(selectiveSync);
+        selectiveSync = null;
+    }
+}
+
+void shutdownSyncEngine() {
+    if (syncEngineInstance !is null) {
+		addLogEntry("Shutdown Sync Engine instance", ["debug"]);
+		syncEngineInstance.shutdown(); // Make sure any running thread completes first
+        object.destroy(syncEngineInstance);
+        syncEngineInstance = null;
+    }
+}
+
+void shutdownDatabase() {
+    if (itemDB !is null && itemDB.isDatabaseInitialised()) {
+		addLogEntry("Shutdown Database instance", ["debug"]);
+		itemDB.performVacuum();
+        object.destroy(itemDB);
+        itemDB = null;
+    }
+}
+
+void shutdownAppConfig() {
+    if (appConfig !is null) {
+		addLogEntry("Shutdown Application Configuration instance", ["debug"]);
+		if (dryRun) {
+			// We were running with --dry-run , clean up the applicable database
+			cleanupDryRunDatabaseFiles(runtimeDatabaseFile);
+		}
+		object.destroy(appConfig);
+        appConfig = null;
+    }
+}
+
+void destroyCurlInstances() {
+    CurlEngine.destroyAllCurlInstances();
+}
+
+void shutdownApplicationLogging() {
+	// Log that we are exitintg
+	addLogEntry("Application is exiting.", ["debug"]);
+    addLogEntry("#######################################################################################################################################", ["logFileOnly"]);
+    // Destroy the shared logging buffer
+	(cast() logBuffer).shutdown();
+	object.destroy(logBuffer);
 }

@@ -206,7 +206,7 @@ _**Description:**_ This setting controls the timeout duration, in seconds, for w
 
 _**Value Type:**_ Integer
 
-_**Default Value:**_ 240
+_**Default Value:**_ 60
 
 _**Config Example:**_ `data_timeout = "300"`
 

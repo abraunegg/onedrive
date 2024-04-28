@@ -42,6 +42,7 @@ import curlEngine;
 
 // module variables
 shared string deviceName;
+ulong previousRSS;
 
 static this() {
 	deviceName = Socket.hostName;
@@ -201,42 +202,58 @@ Regex!char wild2regex(const(char)[] pattern) {
     return regex(str, "i");
 }
 
-// Test Internet access to Microsoft OneDrive
+// Test Internet access to Microsoft OneDrive using a simple HTTP HEAD request
 bool testInternetReachability(ApplicationConfig appConfig) {
-    CurlEngine curlEngine;
-    bool result = false;
+    auto http = HTTP();
+    http.url = "https://login.microsoftonline.com";
+    
+    // Configure timeouts based on application configuration
+    http.dnsTimeout = dur!"seconds"(appConfig.getValueLong("dns_timeout"));
+    http.connectTimeout = dur!"seconds"(appConfig.getValueLong("connect_timeout"));
+    http.dataTimeout = dur!"seconds"(appConfig.getValueLong("data_timeout"));
+    http.operationTimeout = dur!"seconds"(appConfig.getValueLong("operation_timeout"));
+
+    // Set IP protocol version
+    http.handle.set(CurlOption.ipresolve, appConfig.getValueLong("ip_protocol_version"));
+
+    // Set HTTP method to HEAD for minimal data transfer
+    http.method = HTTP.Method.head;
+
+    // Execute the request and handle exceptions
     try {
-		// Use preconfigured object with all the correct http values assigned
-		curlEngine = CurlEngine.get();
-		curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"));
+		addLogEntry("Attempting to contact Microsoft OneDrive Login Service");
+		http.perform();
 
-		// Configure the remaining items required
-		// URL to use
-		// HTTP connection test method
+		// Check response for HTTP status code
+		if (http.statusLine.code >= 200 && http.statusLine.code < 400) {
+			addLogEntry("Successfully reached Microsoft OneDrive Login Service");
+		} else {
+			addLogEntry("Failed to reach Microsoft OneDrive Login Service. HTTP status code: " ~ to!string(http.statusLine.code));
+			throw new Exception("HTTP Request Failed with Status Code: " ~ to!string(http.statusLine.code));
+		}
 
-		curlEngine.connect(HTTP.Method.head, "https://login.microsoftonline.com");
-		addLogEntry("Attempting to contact Microsoft OneDrive Login Service", ["debug"]);
-		curlEngine.http.perform();
-		addLogEntry("Shutting down HTTP engine as successfully reached OneDrive Login Service", ["debug"]);
-		result = true;
+		http.shutdown();
+		object.destroy(http);
+		return true;
     } catch (SocketException e) {
-        addLogEntry("HTTP Socket Issue", ["debug"]);
-        addLogEntry("Cannot connect to Microsoft OneDrive Login Service - Socket Issue");
-        displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+		addLogEntry("Cannot connect to Microsoft OneDrive Service - Socket Issue: " ~ e.msg);
+		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+		http.shutdown();
+		object.destroy(http);
+		return false;
     } catch (CurlException e) {
-        addLogEntry("No Network Connection", ["debug"]);
-        addLogEntry("Cannot connect to Microsoft OneDrive Login Service - Network Connection Issue");
-        displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-    } 
-
-	// Shutdown engine
-	curlEngine.http.shutdown();
-	curlEngine.releaseAll();
-	object.destroy(curlEngine);
-	curlEngine = null;
-
-	// Return test result
-    return result;
+		addLogEntry("Cannot connect to Microsoft OneDrive Service - Network Connection Issue: " ~ e.msg);
+		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+		http.shutdown();
+		object.destroy(http);
+		return false;
+    } catch (Exception e) {
+		addLogEntry("Unexpected error occurred: " ~ e.toString());
+		displayOneDriveErrorMessage(e.toString(), getFunctionName!({}));
+		http.shutdown();
+		object.destroy(http);
+		return false;
+    }
 }
 
 // Retry Internet access test to Microsoft OneDrive
@@ -489,7 +506,6 @@ bool isValidUTF16(string path) {
     return true;
 }
 
-
 // Does the path contain any HTML URL encoded items (e.g., '%20' for space)
 bool containsURLEncodedItems(string path) {
     // Check for null or empty string
@@ -636,7 +652,7 @@ void displayFileSystemErrorMessage(string message, string callingFunction) {
     addLogEntry("  Error Message:    " ~ errorMessage);
     
     // Log the calling function
-    addLogEntry("  Calling Function: " ~ callingFunction, ["verbose"]);
+    addLogEntry("  Calling Function: " ~ callingFunction);
 
     try {
         // Safely check for disk space
@@ -659,31 +675,74 @@ void displayPosixErrorMessage(string message) {
 	addLogEntry("  Error Message:    " ~ message);
 }
 
+// Display the Error Message
+void displayGeneralErrorMessage(Exception e, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
+	addLogEntry(); // used rather than writeln
+	addLogEntry("ERROR: Encounter " ~ e.classinfo.name ~ ":");
+	addLogEntry("  Error Message:    " ~ e.msg);
+	addLogEntry("  Calling Function:    " ~ callingFunction);
+	addLogEntry("  Line number:    " ~ to!string(lineno));
+}
+
 // Get the function name that is being called to assist with identifying where an error is being generated
 string getFunctionName(alias func)() {
     return __traits(identifier, __traits(parent, func)) ~ "()\n";
 }
 
+JSONValue fetchOnlineURLContent(string url) {
+	// Function variables
+	char[] content;
+	JSONValue onlineContent;
+
+	// Setup HTTP request
+	HTTP http = HTTP();
+	
+	// Create an HTTP object within a scope to ensure cleanup
+    scope(exit) {
+        http.shutdown();
+        object.destroy(http);
+    }
+	
+	// Configure the URL to access
+	http.url = url;
+	// HTTP the connection method
+	http.method = HTTP.Method.get;
+	
+	// Data receive handler
+	http.onReceive = (ubyte[] data) {
+		content ~= data; // Append data as it's received
+		return data.length;
+	};
+	
+	// Perform HTTP request
+	http.perform();
+	
+	// Parse Content
+	onlineContent = parseJSON(to!string(content));
+	
+	// Ensure resources are cleaned up
+	http.shutdown();  
+	object.destroy(http);
+
+    // Return onlineResponse
+    return onlineContent;
+}
+
 // Get the latest release version from GitHub
 JSONValue getLatestReleaseDetails() {
-	// Import curl just for this function
-	import std.net.curl;
-	char[] content;
 	JSONValue githubLatest;
 	JSONValue versionDetails;
 	string latestTag;
 	string publishedDate;
 	
 	// Query GitHub for the 'latest' release details
-	try {
-        content = get("https://api.github.com/repos/abraunegg/onedrive/releases/latest");
-        githubLatest = content.parseJSON();
+	try {	
+		githubLatest = fetchOnlineURLContent("https://api.github.com/repos/abraunegg/onedrive/releases/latest");
     } catch (CurlException e) {
         addLogEntry("CurlException: Unable to query GitHub for latest release - " ~ e.msg, ["debug"]);
     } catch (JSONException e) {
         addLogEntry("JSONException: Unable to parse GitHub JSON response - " ~ e.msg, ["debug"]);
     }
-	
 	
 	// githubLatest has to be a valid JSON object
 	if (githubLatest.type() == JSONType.object){
@@ -726,9 +785,6 @@ JSONValue getLatestReleaseDetails() {
 
 // Get the release details from the 'current' running version
 JSONValue getCurrentVersionDetails(string thisVersion) {
-	// Import curl just for this function
-	import std.net.curl;
-	char[] content;
 	JSONValue githubDetails;
 	JSONValue versionDetails;
 	string versionTag = "v" ~ thisVersion;
@@ -736,9 +792,8 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 	
 	// Query GitHub for the release details to match the running version
 	try {
-        content = get("https://api.github.com/repos/abraunegg/onedrive/releases");
-        githubDetails = content.parseJSON();
-    } catch (CurlException e) {
+		githubDetails = fetchOnlineURLContent("https://api.github.com/repos/abraunegg/onedrive/releases");
+	} catch (CurlException e) {
         addLogEntry("CurlException: Unable to query GitHub for release details - " ~ e.msg, ["debug"]);
         return parseJSON(`{"Error": "CurlException", "message": "` ~ e.msg ~ `"}`);
     } catch (JSONException e) {
@@ -1023,29 +1078,51 @@ string generateAlphanumericString(size_t length = 16) {
     return to!string(randomString);
 }
 
+// Display internal memory stats pre garbage collection
 void displayMemoryUsagePreGC() {
 	// Display memory usage
-	writeln();
-	writeln("Memory Usage pre GC (KB)");
-	writeln("------------------------");
+	addLogEntry();
+	addLogEntry("Memory Usage PRE Garbage Collection (KB)");
+	addLogEntry("-----------------------------------------------------");
 	writeMemoryStats();
-	writeln();
+	addLogEntry();
 }
 
+// Display internal memory stats post garbage collection + RSS (actual memory being used)
 void displayMemoryUsagePostGC() {
 	// Display memory usage
-	writeln();
-	writeln("Memory Usage post GC (KB)");
-	writeln("-------------------------");
+	addLogEntry("Memory Usage POST Garbage Collection (KB)");
+	addLogEntry("-----------------------------------------------------");
 	writeMemoryStats();
-	writeln();
+	
+	// Query the actual Resident Set Size (RSS) for the PID
+	pid_t pid = getCurrentPID();
+	ulong rss = getRSS(pid);
+	addLogEntry("current Resident Set Size (RSS)          = " ~ to!string(rss)); // actual memory in RAM used by the process - this needs to remain stable, already in KB
+	
+	// Is there a previous value 
+	if (previousRSS != 0) {
+		addLogEntry("previous Resident Set Size (RSS)         = " ~ to!string(previousRSS)); // actual memory in RAM used by the process - this needs to remain stable, already in KB
+		// Increase or decrease in RSS
+		if (rss > previousRSS) {
+			addLogEntry("difference in Resident Set Size (RSS)    = +" ~ to!string((rss - previousRSS))); // Difference in actual memory used
+		} else {
+			addLogEntry("difference in Resident Set Size (RSS)    = -" ~ to!string((previousRSS - rss))); // Difference in actual memory used
+		}
+	}
+	
+	// Update previous RSS with new value
+	previousRSS = rss;
+	
+	// Closout
+	addLogEntry();
 }
 
+// Write internal memory stats
 void writeMemoryStats() {
-	// write memory stats
-	writeln("memory usedSize                 = ", (GC.stats.usedSize/1024));
-	writeln("memory freeSize                 = ", (GC.stats.freeSize/1024));
-	writeln("memory allocatedInCurrentThread = ", (GC.stats.allocatedInCurrentThread/1024));
+	addLogEntry("current memory usedSize                  = " ~ to!string((GC.stats.usedSize/1024))); // number of used bytes on the GC heap (might only get updated after a collection)
+	addLogEntry("current memory freeSize                  = " ~ to!string((GC.stats.freeSize/1024))); // number of free bytes on the GC heap (might only get updated after a collection)
+	addLogEntry("current memory allocatedInCurrentThread  = " ~ to!string((GC.stats.allocatedInCurrentThread/1024))); // number of bytes allocated for current thread since program start
 }
 
 // Return the username of the UID running the 'onedrive' process
@@ -1116,9 +1193,56 @@ int calc_eta(size_t counter, size_t iterations, ulong start_time) {
     }
 }
 
+// Force Exit
 void forceExit() {
 	// Allow logging to flush and complete
 	Thread.sleep(dur!("msecs")(500));
 	// Force Exit
 	exit(EXIT_FAILURE);
+}
+
+// Get the current PID of the application
+pid_t getCurrentPID() {
+    // The '/proc/self' is a symlink to the current process's proc directory
+    string path = "/proc/self/stat";
+    
+    // Read the content of the stat file
+    string content;
+    try {
+        content = readText(path);
+    } catch (Exception e) {
+        writeln("Failed to read stat file: ", e.msg);
+        return 0;
+    }
+
+    // The first value in the stat file is the PID
+    auto parts = split(content);
+    return to!pid_t(parts[0]);  // Convert the first part to pid_t
+}
+
+// Access the Resident Set Size (RSS) based on the PID of the running application
+ulong getRSS(pid_t pid) {
+    // Construct the path to the statm file for the given PID
+    string path = format("/proc/%s/statm", to!string(pid));
+
+    // Read the content of the file
+    string content;
+    try {
+        content = readText(path);
+    } catch (Exception e) {
+        writeln("Failed to read statm file: ", e.msg);
+        return 0;
+    }
+
+    // Split the content and get the RSS (second value)
+    auto stats = split(content);
+    if (stats.length < 2) {
+        writeln("Unexpected format in statm file.");
+        return 0;
+    }
+
+    // RSS is in pages, convert it to kilobytes
+    ulong rssPages = to!ulong(stats[1]);
+    ulong rssKilobytes = rssPages * sysconf(_SC_PAGESIZE) / 1024;
+    return rssKilobytes;
 }

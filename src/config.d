@@ -61,17 +61,17 @@ class ApplicationConfig {
 	// HTTP Struct items, used for configuring HTTP()
 	// Curl Timeout Handling
 	// libcurl dns_cache_timeout timeout
-	immutable int defaultDnsTimeout = 60;
+	immutable int defaultDnsTimeout = 60; // in seconds
 	// Connect timeout for HTTP|HTTPS connections
 	// Controls CURLOPT_CONNECTTIMEOUT
-	immutable int defaultConnectTimeout = 10;
-	// Default data timeout for HTTP
+	immutable int defaultConnectTimeout = 10; // in seconds
+	// Default data timeout for HTTP operations
 	// curl.d has a default of: _defaultDataTimeout = dur!"minutes"(2);
-	immutable int defaultDataTimeout = 240;
+	immutable int defaultDataTimeout = 60; // in seconds
 	// Maximum time any operation is allowed to take
 	// This includes dns resolution, connecting, data transfer, etc.
 	// Controls CURLOPT_TIMEOUT
-	immutable int defaultOperationTimeout = 3600;
+	immutable int defaultOperationTimeout = 3600; // in seconds
 	// Specify what IP protocol version should be used when communicating with OneDrive
 	immutable int defaultIpProtocol = 0; // 0 = IPv4 + IPv6, 1 = IPv4 Only, 2 = IPv6 Only
 	// Specify how many redirects should be allowed
@@ -682,11 +682,22 @@ class ApplicationConfig {
 		}
 		
 		auto file = File(filename, "r");
-		scope(exit) file.close();
-		scope(failure) file.close();
-
+		string lineBuffer;
+		
+		scope(exit) {
+			file.close();
+			object.destroy(file);
+			object.destroy(lineBuffer);
+		}
+		
+		scope(failure) {
+			file.close();
+			object.destroy(file);
+			object.destroy(lineBuffer);
+		}
+		
 		foreach (line; file.byLine()) {
-			string lineBuffer = stripLeft(line).to!string;
+			lineBuffer = stripLeft(line).to!string;
 			if (lineBuffer.empty || lineBuffer[0] == ';' || lineBuffer[0] == '#') continue;
 			auto c = lineBuffer.matchFirst(configRegex);
 			if (c.empty) {

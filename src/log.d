@@ -52,7 +52,14 @@ class LogBuffer {
 			flushThread.isDaemon(true);
 			flushThread.start();
         }
-
+		
+		// The destructor should only clean up resources owned directly by this instance
+		~this() {
+			object.destroy(bufferLock);
+			object.destroy(condReady);
+			object.destroy(flushThread);
+		}
+		
 		void shutdown() {
 			synchronized(bufferLock) {
 				if (!isRunning) return; // Prevent multiple shutdowns
@@ -62,6 +69,7 @@ class LogBuffer {
 			flushThread.join(); // Wait for the flush thread to finish
 			flush(); // Perform a final flush to ensure all data is processed
 		}
+		
         shared void logThisMessage(string message, string[] levels = ["info"]) {
 			// Generate the timestamp for this log entry
 			auto timeStamp = leftJustify(Clock.currTime().toString(), 28, '0');
@@ -100,7 +108,9 @@ class LogBuffer {
             // Use dnotify's functionality for GUI notifications, if GUI notifications is enabled
 			version(Notifications) {
 				try {
-					auto n = new Notification("Log Notification", message, "IGNORED");
+					auto n = new Notification("OneDrive Client", message, "IGNORED");
+					// Show notification for 10 seconds
+					n.timeout = 10;
 					n.show();
 				} catch (NotificationError e) {
 					sendGUINotification = false;

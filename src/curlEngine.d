@@ -3,7 +3,7 @@ module curlEngine;
 
 // What does this module require to function?
 import std.net.curl;
-import etc.c.curl: CurlOption;
+import etc.c.curl;
 import std.datetime;
 import std.conv;
 import std.file;
@@ -13,6 +13,7 @@ import std.range;
 
 // What other modules that we have created do we need to import?
 import log;
+import util;
 
 class CurlResponse {
 	HTTP.Method method;
@@ -20,23 +21,28 @@ class CurlResponse {
 	const(char)[][const(char)[]] requestHeaders;
 	const(char)[] postBody;
 
+	bool hasResponse;
 	string[string] responseHeaders;
 	HTTP.StatusLine statusLine;
 	char[] content;
 
+	this() {
+		reset();
+	}
+
 	void reset() {
 		method = HTTP.Method.undefined;
-		url = null;
+		url = "";
 		requestHeaders = null;
-		postBody = null;
-		
+		postBody = [];
+		hasResponse = false;
 		responseHeaders = null;
-		object.destroy(statusLine);
-		content = null;
+		statusLine.reset();
+		content = [];
 	}
 
 	void addRequestHeader(const(char)[] name, const(char)[] value) {
-		requestHeaders[name] = value;
+		requestHeaders[to!string(name)] = to!string(value);
 	}
 
 	void connect(HTTP.Method method, const(char)[] url) {
@@ -56,6 +62,7 @@ class CurlResponse {
 	};
 
 	void update(HTTP *http) {
+		hasResponse = true;
 		this.responseHeaders = http.responseHeaders();
 		this.statusLine = http.statusLine;
 	}
@@ -65,40 +72,48 @@ class CurlResponse {
 	}
 
 	// Return the current value of retryAfterValue
-	ulong getRetryAfterValue() {
-		ulong delayBeforeRetry;
-		// is retry-after in the response headers
+	int getRetryAfterValue() {
+		int delayBeforeRetry;
+		// Is 'retry-after' in the response headers
 		if ("retry-after" in responseHeaders) {
 			// Set the retry-after value
 			addLogEntry("curlEngine.http.perform() => Received a 'Retry-After' Header Response with the following value: " ~ to!string(responseHeaders["retry-after"]), ["debug"]);
 			addLogEntry("curlEngine.http.perform() => Setting retryAfterValue to: " ~ responseHeaders["retry-after"], ["debug"]);
-			delayBeforeRetry = to!ulong(responseHeaders["retry-after"]);
+			delayBeforeRetry = to!int(responseHeaders["retry-after"]);
 		} else {
 			// Use a 120 second delay as a default given header value was zero
 			// This value is based on log files and data when determining correct process for 429 response handling
 			delayBeforeRetry = 120;
 			// Update that we are over-riding the provided value with a default
-			addLogEntry("HTTP Response Header retry-after value was 0 - Using a preconfigured default of: " ~ to!string(delayBeforeRetry), ["debug"]);
+			addLogEntry("HTTP Response Header retry-after value was missing - Using a preconfigured default of: " ~ to!string(delayBeforeRetry), ["debug"]);
 		}
-		
-		return delayBeforeRetry; // default to 60 seconds
+		return delayBeforeRetry;
 	}
-
-	const string parseHeaders(const(string[string]) headers) {
-		string responseHeadersStr = "";
-		foreach (const(char)[] header; headers.byKey()) {
-			responseHeadersStr ~= "> " ~ header ~ ": " ~ headers[header] ~ "\n";
-		}
-		return responseHeadersStr;
-	}
-
-
-	const string parseHeaders(const(const(char)[][const(char)[]]) headers) {
-		string responseHeadersStr = "";
+	
+	const string parseRequestHeaders(const(const(char)[][const(char)[]]) headers) {
+		string requestHeadersStr = "";
 		foreach (string header; headers.byKey()) {
-			if (header == "Authorization")
+			if (header == "Authorization") {
 				continue;
-			responseHeadersStr ~= "< " ~ header ~ ": " ~ headers[header] ~ "\n";
+			}
+			// Use the 'in' operator to safely check if the key exists in the associative array.
+			if (auto val = header in headers) {
+				requestHeadersStr ~= "< " ~ header ~ ": " ~ *val ~ "\n";
+			}
+		}
+		return requestHeadersStr;
+	}
+
+	const string parseResponseHeaders(const(immutable(char)[][immutable(char)[]]) headers) {
+		string responseHeadersStr = "";
+		// Ensure response headers is not null and iterate over keys safely.
+		if (headers !is null) {
+			foreach (const(char)[] header; headers.byKey()) {
+				// Check if the key actually exists before accessing it to avoid RangeError.
+				if (auto val = header in headers) { // 'in' checks for the key and returns a pointer to the value if found.
+					responseHeadersStr ~= "> " ~ header ~ ": " ~ *val ~ "\n"; // Dereference pointer to get the value.
+				}
+			}
 		}
 		return responseHeadersStr;
 	}
@@ -110,14 +125,14 @@ class CurlResponse {
 		string str = "";
 		str ~= format("< %s %s\n", method, url);
 		if (!requestHeaders.empty) {
-			str ~= parseHeaders(requestHeaders);
+			str ~= parseRequestHeaders(requestHeaders);
 		}
 		if (!postBody.empty) {
-			str ~= format("----\n%s\n----\n", postBody);
+			str ~= format("\n----\n%s\n----\n", postBody);
 		}
 		str ~= format("< %s\n", statusLine);
 		if (!responseHeaders.empty) {
-			str ~= parseHeaders(responseHeaders);
+			str ~= parseResponseHeaders(responseHeaders);
 		}
 		return str;
 	}
@@ -128,7 +143,7 @@ class CurlResponse {
 
 		string str = "";
 		if (!content.empty) {
-			str ~= format("----\n%s\n----\n", content);
+			str ~= format("\n----\n%s\n----\n", content);
 		}
 		return str;
 	}
@@ -136,73 +151,120 @@ class CurlResponse {
 	override string toString() const {
 		string str = "Curl debugging: \n";
 		str ~= dumpDebug();
-		str ~= "Curl response: \n";
-		str ~= dumpResponse();
+		if (hasResponse) {
+			str ~= "Curl response: \n";
+			str ~= dumpResponse();
+		}
 		return str;
-	}
-
-	CurlResponse dup() {
-        CurlResponse copy = new CurlResponse();
-		copy.method = method;
-		copy.url = url;
-		copy.requestHeaders = requestHeaders;
-		copy.postBody = postBody;
-		
-		copy.responseHeaders = responseHeaders;
-		copy.statusLine = statusLine;
-		copy.content = content;
-
-		return copy;
 	}
 }
 
 class CurlEngine {
 
-	__gshared CurlEngine[] curlEnginePool;
-
-	static CurlEngine get() {
-		synchronized(CurlEngine.classinfo) {
-			if (curlEnginePool.empty) {
-				return new CurlEngine;
-			} else {
-				CurlEngine curlEngine = curlEnginePool[$-1];
-				curlEnginePool.popBack();
-				return curlEngine;
-			}
-		}
-	}
-
-	static releaseAll() {
-		synchronized(CurlEngine.classinfo) {
-			foreach(curlEngine; curlEnginePool) {
-				curlEngine.shutdown();
-				object.destroy(curlEngine);
-			}
-			curlEnginePool = null;
-		}
-	}
-
-	void release() {
-		cleanUp();
-		synchronized(CurlEngine.classinfo) {
-			curlEnginePool ~= this;
-		}
-	}
-
+	// Shared pool of CurlEngine instances accessible across all threads
+	__gshared CurlEngine[] curlEnginePool; // __gshared is used to declare a variable that is shared across all threads
+	
 	HTTP http;
+	File uploadFile;
+	CurlResponse response;
 	bool keepAlive;
 	ulong dnsTimeout;
-	CurlResponse response;
+	string internalThreadId;
+	
+    this() {
+        http = HTTP();   // Directly initializes HTTP using its default constructor
+        response = null; // Initialize as null
+		internalThreadId = generateAlphanumericString();
+    }
 
-	this() {	
-		http = HTTP();
-		response = new CurlResponse();
-	}
-
+	// The destructor should only clean up resources owned directly by this instance
 	~this() {
-		object.destroy(http);
-		object.destroy(response);
+		// Is the file still open?
+		if (uploadFile.isOpen()) {
+			uploadFile.close();
+		}
+		
+		// Is 'response' cleared?
+		if (response !is null) {
+			object.destroy(response); // Destroy, then set to null
+			response = null;
+		}
+		
+		// Is the actual http instance is stopped?
+		if (!http.isStopped) {
+			// HTTP instance was not stopped .. need to stop it
+			http.shutdown();
+			object.destroy(http); // Destroy, however we cant set to null
+		}
+    }
+		
+	static CurlEngine getCurlInstance() {
+		synchronized (CurlEngine.classinfo) {
+			// What is the current pool size
+			addLogEntry("CURL ENGINE AVAILABLE POOL SIZE: " ~ to!string(curlEnginePool.length), ["debug"]);
+		
+			if (curlEnginePool.empty) {
+				addLogEntry("CURL ENGINE POOL EMPTY - CONSTRUCTING A NEW CURL ENGINE INSTANCE" , ["debug"]);
+				return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
+			} else {
+				CurlEngine curlEngine = curlEnginePool[$ - 1];
+				curlEnginePool.popBack();
+				
+				// Is this engine stopped?
+				if (curlEngine.http.isStopped) {
+					// return a new curl engine as a stopped one cannot be used
+					addLogEntry("CURL ENGINE WAS STOPPED - CONSTRUCTING A NEW CURL ENGINE INSTANCE" , ["debug"]);
+					return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
+				} else {
+					// return an existing curl engine
+					addLogEntry("CURL ENGINE WAS VALID - RETURNED AN EXISTING CURL ENGINE INSTANCE" , ["debug"]);
+					addLogEntry("CURL ENGINE ID: " ~ curlEngine.internalThreadId, ["debug"]);
+					return curlEngine;
+				}
+			}
+		}
 	}
+	
+	static void releaseAllCurlInstances() {
+		synchronized (CurlEngine.classinfo) {
+			// What is the current pool size
+			addLogEntry("CURL ENGINES TO RELEASE: " ~ to!string(curlEnginePool.length), ["debug"]);
+			
+			// Safely iterate and clean up each CurlEngine instance
+			foreach (curlEngineInstance; curlEnginePool) {
+                try {
+					curlEngineInstance.cleanup(); // Cleanup instance by resetting values
+					curlEngineInstance.shutdownCurlHTTPInstance();  // Assume proper cleanup of any resources used by HTTP
+                } catch (Exception e) {
+					// Log the error or handle it appropriately
+					// e.g., writeln("Error during cleanup/shutdown: ", e.toString());
+                }
+                // It's safe to destroy the object here assuming no other references exist
+                object.destroy(curlEngineInstance); // Destroy, then set to null
+				curlEngineInstance = null;
+            }
+            // Clear the array after all instances have been handled
+            curlEnginePool.length = 0; // More explicit than curlEnginePool = [];
+        }
+    }
+
+    // Destroy all curl instances
+	static void destroyAllCurlInstances() {
+		addLogEntry("DESTROY ALL CURL ENGINES", ["debug"]);
+		// Release all 'curl' instances
+		releaseAllCurlInstances();
+    }
+
+	// We are releasing a curl instance back to the pool
+	void releaseEngine() {
+		addLogEntry("CurlEngine releaseEngine() CALLED", ["debug"]);
+		addLogEntry("CURRENT CURL ENGINE AVAILABLE POOL SIZE: " ~ to!string(curlEnginePool.length), ["debug"]);
+		cleanup();
+        synchronized (CurlEngine.classinfo) {
+            curlEnginePool ~= this;
+			addLogEntry("CURL ENGINE POOL SIZE AFTER RELEASE BACK TO POOL: " ~ to!string(curlEnginePool.length), ["debug"]);
+        }
+    }
 	
 	void initialise(ulong dnsTimeout, ulong connectTimeout, ulong dataTimeout, ulong operationTimeout, int maxRedirects, bool httpsDebug, string userAgent, bool httpProtocol, ulong userRateLimit, ulong protocolVersion, bool keepAlive=true) {
 		//   Setting this to false ensures that when we close the curl instance, any open sockets are closed - which we need to do when running 
@@ -287,12 +349,24 @@ class CurlEngine {
 		}
 	}
 
+	void setResponseHolder(CurlResponse response) {
+		if (response is null) {
+			// Create a response instance if it doesn't already exist
+			if (this.response is null)
+				this.response = new CurlResponse();
+		} else {
+			this.response = response;
+		}
+	}
+
 	void addRequestHeader(const(char)[] name, const(char)[] value) {
+		setResponseHolder(null);
 		http.addRequestHeader(name, value);
 		response.addRequestHeader(name, value);
 	}
 
 	void connect(HTTP.Method method, const(char)[] url) {
+		setResponseHolder(null);
 		if (!keepAlive)
 			addRequestHeader("Connection", "close");
 		http.method = method;
@@ -301,6 +375,7 @@ class CurlEngine {
 	}
 
 	void setContent(const(char)[] contentType, const(char)[] sendData) {
+		setResponseHolder(null);
 		addRequestHeader("Content-Type", contentType);
 		if (sendData) {
 			http.contentLength = sendData.length;
@@ -316,16 +391,33 @@ class CurlEngine {
 		}
 	}
 
-	void setFile(File* file, ulong offsetSize) {
+	void setFile(string filepath, string contentRange, ulong offset, ulong offsetSize) {
+		setResponseHolder(null);
+		// open file as read-only in binary mode
+		uploadFile = File(filepath, "rb");
+
+		if (contentRange.empty) {
+			offsetSize = uploadFile.size();
+		} else {
+			addRequestHeader("Content-Range", contentRange);
+			uploadFile.seek(offset);
+		}
+
+		// Setup progress bar to display
+		http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow) {
+			return 0;
+		};
+		
 		addRequestHeader("Content-Type", "application/octet-stream");
-		http.onSend = data => file.rawRead(data).length;
+		http.onSend = data => uploadFile.rawRead(data).length;
 		http.contentLength = offsetSize;
 	}
 
 	CurlResponse execute() {
 		scope(exit) {
-			cleanUp();
+			cleanup();
 		}
+		setResponseHolder(null);
 		http.onReceive = (ubyte[] data) {
 			response.content ~= data;
 			// HTTP Server Response Code Debugging if --https-debug is being used
@@ -334,20 +426,17 @@ class CurlEngine {
 		};
 		http.perform();
 		response.update(&http);
-		return response.dup;
+		return response;
 	}
 
 	CurlResponse download(string originalFilename, string downloadFilename) {
-		// Threshold for displaying download bar
-		long thresholdFileSize = 4 * 2^^20; // 4 MiB
-		
-		CurlResponse response = new CurlResponse();
+		setResponseHolder(null);
 		// open downloadFilename as write in binary mode
 		auto file = File(downloadFilename, "wb");
 
 		// function scopes
 		scope(exit) {
-			cleanUp();
+			cleanup();
 			if (file.isOpen()){
 				// close open file
 				file.close();
@@ -368,27 +457,44 @@ class CurlEngine {
 		return response;
 	}
 
-	void cleanUp() {
+	void cleanup() {
 		// Reset any values to defaults, freeing any set objects
-		http.clearRequestHeaders();
-		http.onSend = null;
-		http.onReceive = null;
-		http.onReceiveHeader = null;
-		http.onReceiveStatusLine = null;
-		http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow) {
-			return 0;
-		};
-		http.contentLength = 0;
-		response.reset();
+		addLogEntry("CurlEngine cleanup() CALLED", ["debug"]);
+		
+		// Is the instance is stopped?
+		if (!http.isStopped) {
+			// A stopped instance is not usable, these cannot be reset
+			http.clearRequestHeaders();
+			http.onSend = null;
+			http.onReceive = null;
+			http.onReceiveHeader = null;
+			http.onReceiveStatusLine = null;
+			http.onProgress = delegate int(size_t dltotal, size_t dlnow, size_t ultotal, size_t ulnow) {
+				return 0;
+			};
+			http.contentLength = 0;
+			http.flushCookieJar();
+			http.clearSessionCookies();
+			http.clearAllCookies();
+		}
+		
+		// set the response to null
+		response = null;
+
+		// close file if open
+		if (uploadFile.isOpen()){
+			// close open file
+			uploadFile.close();
+		}
 	}
 
-	void shutdown() {
+	void shutdownCurlHTTPInstance() {
 		// Shut down the curl instance & close any open sockets
-		http.shutdown();
-	}
-	
-	void setDisableSSLVerifyPeer() {
-		addLogEntry("CAUTION: Switching off CurlOption.ssl_verifypeer ... this makes the application insecure.", ["debug"]);
-		http.handle.set(CurlOption.ssl_verifypeer, 0);
+		addLogEntry("HTTP SHUTDOWN CALLED ..." , ["debug"]);
+		
+		// Is the instance is stopped?
+		if (!http.isStopped) {
+			http.shutdown();
+		}
 	}
 }
