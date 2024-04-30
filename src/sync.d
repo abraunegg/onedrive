@@ -178,6 +178,9 @@ class SyncEngine {
 	string latestDeltaLink;
 	// Struct of containing the deltaLink details
 	DeltaLinkDetails deltaLinkCache;
+	// Array of driveId and deltaLink for use when performing the last examination of the most recent online data
+	alias DeltaLinkInfo = string[string];
+	DeltaLinkInfo deltaLinkInfo;
 	
 	// Create the specific task pool to process items in parallel
 	TaskPool processPool;
@@ -405,11 +408,14 @@ class SyncEngine {
 			// Compromised TaskPool shutdown process
 			// LDC version less than 1.28.0 is being used
 			// DMD version less than 2.098.0 is being used
-			processPool.stop();
-			processPool.finish();
+			// https://dlang.org/library/std/parallelism/task_pool.finish.html
+			// https://dlang.org/library/std/parallelism/task_pool.stop.html
+			processPool.finish(); // If we flag 'true' here, the application segfaults on exit
+			processPool.stop(); // Signals to all worker threads to terminate as soon as they are finished with their current Task, or immediately if they are not executing a Task.
 		} else {
 			// Normal TaskPool shutdown process
-			processPool.finish(true);
+			processPool.finish(true); // If blocking argument is true, wait for all worker threads to terminate before returning.
+			processPool.stop(); // Signals to all worker threads to terminate as soon as they are finished with their current Task, or immediately if they are not executing a Task.
 		}
 	}
 		
@@ -786,7 +792,7 @@ class SyncEngine {
 				
 		string deltaLink = null;
 		string currentDeltaLink = null;
-		string deltaLinkAvailable;
+		string databaseDeltaLink;
 		JSONValue deltaChanges;
 		ulong responseBundleCount;
 		ulong jsonItemsReceived = 0;
@@ -836,18 +842,31 @@ class SyncEngine {
 		// What /delta query do we use?
 		if (!generateSimulatedDeltaResponse) {
 			// This should be the majority default pathway application use
-			// Get the current delta link from the database for this DriveID and RootID
-			deltaLinkAvailable = itemDB.getDeltaLink(driveIdToQuery, itemIdToQuery);
-			if (!deltaLinkAvailable.empty) {
-				addLogEntry("Using database stored deltaLink", ["debug"]);
-				currentDeltaLink = deltaLinkAvailable;
-			}
 			
 			// Do we need to perform a Full Scan True Up? Is 'appConfig.fullScanTrueUpRequired' set to 'true'?
 			if (appConfig.fullScanTrueUpRequired) {
 				addLogEntry("Performing a full scan of online data to ensure consistent local state");
 				addLogEntry("Setting currentDeltaLink = null", ["debug"]);
 				currentDeltaLink = null;
+			} else {
+				// Try and get the current Delta Link from the internal cache, this saves a DB I/O call
+				currentDeltaLink = getDeltaLinkFromCache(deltaLinkInfo, driveIdToQuery);
+				
+				// Is currentDeltaLink empty (no cached entry found) ?
+				if (currentDeltaLink.empty) {
+					// Try and get the current delta link from the database for this DriveID and RootID
+					databaseDeltaLink = itemDB.getDeltaLink(driveIdToQuery, itemIdToQuery);
+					if (!databaseDeltaLink.empty) {
+						addLogEntry("Using database stored deltaLink", ["debug"]);
+						currentDeltaLink = databaseDeltaLink;
+					} else {
+						addLogEntry("Zero deltaLink available for use, we will be performing a full online scan", ["debug"]);
+						currentDeltaLink = null;
+					}
+				} else {
+					// Log that we are using the deltaLink for cache
+					addLogEntry("Using cached deltaLink", ["debug"]);
+				}
 			}
 			
 			// Dynamic output for non-verbose and verbose run so that the user knows something is being retreived from the OneDrive API
@@ -1789,7 +1808,29 @@ class SyncEngine {
 		if (!deltaLinkCache.latestDeltaLink.empty) {
 			addLogEntry("Updating completed deltaLink for driveID " ~ deltaLinkCache.driveId ~ " in DB to: " ~ deltaLinkCache.latestDeltaLink, ["debug"]);
 			itemDB.setDeltaLink(deltaLinkCache.driveId, deltaLinkCache.itemId, deltaLinkCache.latestDeltaLink);
+			
+			// Now that the DB is updated, when we perform the last examination of the most recent online data, cache this so this can be obtained this from memory
+			cacheLatestDeltaLink(deltaLinkInfo, deltaLinkCache.driveId, deltaLinkCache.latestDeltaLink);		
 		}
+	}
+	
+	// Function to add or update a key pair in the deltaLinkInfo array
+	void cacheLatestDeltaLink(ref DeltaLinkInfo deltaLinkInfo, string driveId, string latestDeltaLink) {
+		if (driveId !in deltaLinkInfo) {
+			addLogEntry("Added new latestDeltaLink entry: " ~ driveId ~ " -> " ~ latestDeltaLink, ["debug"]);
+		} else {
+			addLogEntry("Updated latestDeltaLink entry for " ~ driveId ~ " from " ~ deltaLinkInfo[driveId] ~ " to " ~ latestDeltaLink, ["debug"]);
+		}
+		deltaLinkInfo[driveId] = latestDeltaLink;
+	}
+	
+	// Function to get the latestDeltaLink based on driveId
+	string getDeltaLinkFromCache(ref DeltaLinkInfo deltaLinkInfo, string driveId) {
+		string cachedDeltaLink;
+		if (driveId in deltaLinkInfo) {
+			cachedDeltaLink = deltaLinkInfo[driveId];
+		}
+		return cachedDeltaLink;
 	}
 	
 	// If the JSON item is not in the database, it is potentially a new item that we need to action
