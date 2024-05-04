@@ -72,7 +72,7 @@ The diagrams below show the high level process flow and decision making when run
 ### Upload a new local file to Microsoft OneDrive
 ![uploadFile](./puml/uploadFile.png)
 
-### Determining if an 'item' is syncronised between Microsoft OneDrive and the local file system
+### Determining if an 'item' is synchronised between Microsoft OneDrive and the local file system
 ![Item Sync Determination](./puml/is_item_in_sync.png)
 
 ### Determining if an 'item' is excluded due to 'Client Side Filtering' rules
@@ -304,7 +304,7 @@ The requested directory to create was found on OneDrive - skipping creating the 
 New items to upload to OneDrive: 9
 Total New Data to Upload:        49 KB
 ...
-The file we are attemtping to upload as a new file already exists on Microsoft OneDrive: ./1.txt
+The file we are attempting to upload as a new file already exists on Microsoft OneDrive: ./1.txt
 Skipping uploading this item as a new file, will upload as a modified file (online file already exists): ./1.txt
 The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: ./1.txt -> ./1-onedrive-client-dev.txt
 Uploading new file ./1-onedrive-client-dev.txt ... done.

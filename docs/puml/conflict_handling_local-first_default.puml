@@ -56,7 +56,7 @@ if (JSON item is a file) then (yes)
   :Download file (as per online JSON item) as required;
   
 else (no)
-  :Other handling for directories | root ojects | deleted items;
+  :Other handling for directories | root objects | deleted items;
 endif
 stop
 @enduml

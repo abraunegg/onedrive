@@ -18,7 +18,7 @@ partition "Process /delta JSON Responses" {
                 :Process 'root' JSON;
             else (no)
                 if (Is 'deleted' object in sync) then (yes)
-                    :Process delection of local item;
+                    :Process deletion of local item;
                 else (no)
                     :Rename local file as it is not in sync;
                     note right: Deletion event conflict handling\nLocal data loss prevention

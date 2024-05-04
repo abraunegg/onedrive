@@ -239,7 +239,7 @@ When this is viewed locally, on Linux, this 'Files Shared With Me' and content i
 
 ![files_shared_with_me_folder](./images/files_shared_with_me_folder.png)
 
-Unfortunatly there is no Microsoft Windows equivalent for this capability.
+Unfortunately there is no Microsoft Windows equivalent for this capability.
 
 ## Known Issues
 Shared folders, shared with you from people outside of your 'organisation' are unable to be synced. This is due to the Microsoft Graph API not presenting these folders.

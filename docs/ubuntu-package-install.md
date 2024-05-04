@@ -19,7 +19,7 @@ This document outlines the steps for installing the 'onedrive' client on Debian,
 > Although packages for the 'onedrive' client are available through distribution repositories, it is strongly advised against installing them. These distribution-provided packages are outdated, unsupported, and contain bugs and issues that have already been resolved in newer versions. They should not be used.
 
 ## Determine which instructions to use
-Ubuntu and its clones are based on various different releases, thus, you must use the correct instructions below, otherwise you may run into package dependancy issues and will be unable to install the client.
+Ubuntu and its clones are based on various different releases, thus, you must use the correct instructions below, otherwise you may run into package dependency issues and will be unable to install the client.
 
 ### Step 1: Remove any configured PPA and associated 'onedrive' package and systemd service files
 
@@ -43,7 +43,7 @@ This systemd entry is erroneous and needs to be removed. Without removing this e
 Opening the item database ...
 
 ERROR: onedrive application is already running - check system process list for active application instances
- - Use 'sudo ps aufxw | grep onedrive' to potentially determine acive running process
+ - Use 'sudo ps aufxw | grep onedrive' to potentially determine active running process
 
 Waiting for all internal threads to complete before exiting application
 ```

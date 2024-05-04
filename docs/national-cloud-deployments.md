@@ -3,7 +3,7 @@
 > Before reading this document, please ensure you are running application version [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases) or greater. Use `onedrive --version` to determine what application version you are using and upgrade your client if required.
 
 ## Process Overview
-In some cases it is a requirement to utilise specific Microsoft Azure cloud deployments to conform with data and security reuqirements that requires data to reside within the geographic borders of that country.
+In some cases it is a requirement to utilise specific Microsoft Azure cloud deployments to conform with data and security requirements that requires data to reside within the geographic borders of that country.
 Current national clouds that are supported are:
 *   Microsoft Cloud for US Government
 *   Microsoft Cloud Germany
@@ -106,7 +106,7 @@ azure_tenant_id = "insert valid entry here"
 
 This will configure your client to use the specified tenant id in its Azure AD and Graph endpoint URIs, instead of "common".
 The tenant id may be the GUID Directory ID (formatted "00000000-0000-0000-0000-000000000000"), or the fully qualified tenant name (e.g. "example.onmicrosoft.us").
-The GUID Directory ID may be located in the Azure administation page as per [https://docs.microsoft.com/en-us/onedrive/find-your-office-365-tenant-id](https://docs.microsoft.com/en-us/onedrive/find-your-office-365-tenant-id). Note that you may need to go to your national-deployment-specific administration page, rather than following the links within that document.
+The GUID Directory ID may be located in the Azure administration page as per [https://docs.microsoft.com/en-us/onedrive/find-your-office-365-tenant-id](https://docs.microsoft.com/en-us/onedrive/find-your-office-365-tenant-id). Note that you may need to go to your national-deployment-specific administration page, rather than following the links within that document.
 The tenant name may be obtained by following the PowerShell instructions on [https://docs.microsoft.com/en-us/onedrive/find-your-office-365-tenant-id](https://docs.microsoft.com/en-us/onedrive/find-your-office-365-tenant-id); it is shown as the "TenantDomain" upon completion of the "Connect-AzureAD" command.
 
 **Example:**

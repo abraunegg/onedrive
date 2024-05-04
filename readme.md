@@ -22,7 +22,7 @@ This client represents a 100% re-imagining of the original work, addressing nume
 *   Monitors local files in real-time using inotify
 *   Supports interrupted uploads for completion at a later time
 *   Capability to sync remote updates immediately via webhooks
-*   Enhanced syncronisation speed with multi-threaded file transfers
+*   Enhanced synchronisation speed with multi-threaded file transfers
 *   Manages traffic bandwidth use with rate limiting
 *   Supports seamless access to shared folders and files across both OneDrive Personal and OneDrive for Business accounts
 *   Supports national cloud deployments including Microsoft Cloud for US Government, Microsoft Cloud Germany and Azure and Office 365 operated by 21Vianet in China
@@ -43,7 +43,7 @@ This client represents a 100% re-imagining of the original work, addressing nume
 Refer to [Frequently Asked Questions](https://github.com/abraunegg/onedrive/wiki/Frequently-Asked-Questions)
 
 ## Have a question
-If you have a question or need something clarified, please raise a new disscussion post [here](https://github.com/abraunegg/onedrive/discussions)
+If you have a question or need something clarified, please raise a new discussion post [here](https://github.com/abraunegg/onedrive/discussions)
 
 ## Reporting an Issue or Bug
 If you encounter any bugs you can report them here on Github. Before filing an issue be sure to:

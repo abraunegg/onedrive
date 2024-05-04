@@ -264,7 +264,7 @@ _**CLI Option Use:**_ `--disable-upload-validation`
 > If you're uploading data to SharePoint or OneDrive Business Shared Folders, you might find it necessary to activate this option. It's important to note that any issues encountered aren't due to a problem with this client; instead, they should be regarded as issues with the Microsoft OneDrive technology stack. Enabling this option disables all upload integrity checks.
 
 ### display_running_config
-_**Description:**_ This option will include the running config of the application at application startup. This may be desirable to enable when running in containerised environments so that any application logging that is occuring, will have the application configuration being consumed at startup, written out to any applicable log file.
+_**Description:**_ This option will include the running config of the application at application startup. This may be desirable to enable when running in containerised environments so that any application logging that is occurring, will have the application configuration being consumed at startup, written out to any applicable log file.
 
 _**Value Type:**_ Boolean
 
@@ -304,7 +304,7 @@ _**Default Value:**_ *None*
 _**Config Example:**_ `drive_id = "b!bO8V6s9SSk9R7mWhpIjUrotN73WlW3tEv3OxP_QfIdQimEdOHR-1So6CqeG1MfDB"`
 
 > [!NOTE]
-> This option is typically only used when configuring the client to sync a specific SharePoint Library. If this configuration option is specified in your config file, a value must be specified otherwise the application will exit citing a fatal error has occured.
+> This option is typically only used when configuring the client to sync a specific SharePoint Library. If this configuration option is specified in your config file, a value must be specified otherwise the application will exit citing a fatal error has occurred.
 
 ### dry_run
 _**Description:**_ This setting controls the application capability to test your application configuration without actually performing any actual activity (download, upload, move, delete, folder creation).
@@ -407,7 +407,7 @@ _**CLI Option Use:**_ `--monitor-interval '600'`
 > A minimum value of 300 is enforced for this configuration setting.
 
 ### monitor_log_frequency
-_**Description:**_ This configuration option controls the suppression of frequently printed log items to the system console when using `--monitor` mode. The aim of this configuration item is to reduce the log output when near zero sync activity is occuring.
+_**Description:**_ This configuration option controls the suppression of frequently printed log items to the system console when using `--monitor` mode. The aim of this configuration item is to reduce the log output when near zero sync activity is occurring.
 
 _**Value Type:**_ Integer
 
@@ -428,7 +428,7 @@ Sync Engine Initialised with new Onedrive API instance
 All application operations will be performed in: /home/user/OneDrive
 OneDrive synchronisation interval (seconds): 300
 Initialising filesystem inotify monitoring ...
-Performing initial syncronisation to ensure consistent local state ...
+Performing initial synchronisation to ensure consistent local state ...
 Starting a sync with Microsoft OneDrive
 Fetching items from the OneDrive API for Drive ID: b!bO8V6s9SSk9R7mWhpIjUrotN73WlW3tEv3OxP_QfIdQimEdOHR-1So6CqeG1MfDB ..
 Processing changes and items received from Microsoft OneDrive ...
@@ -446,10 +446,10 @@ Syncing changes from Microsoft OneDrive ...
 Sync with Microsoft OneDrive is complete
 ```
 > [!NOTE]
-> The additional log output `Performing a database consistency and integrity check on locally stored data ...` will only be displayed when this activity is occuring which is triggered by 'monitor_fullscan_frequency'.
+> The additional log output `Performing a database consistency and integrity check on locally stored data ...` will only be displayed when this activity is occurring which is triggered by 'monitor_fullscan_frequency'.
 
 > [!NOTE]
-> If verbose application output is being used (`--verbose`), then this configuration setting has zero effect, as application verbose output takes priority over application output surpression.
+> If verbose application output is being used (`--verbose`), then this configuration setting has zero effect, as application verbose output takes priority over application output suppression.
 
 ### no_remote_delete
 _**Description:**_ This configuration option controls whether local file and folder deletes are actioned on Microsoft OneDrive.
@@ -764,7 +764,7 @@ _**CLI Option Use:**_ `--sync-root-files`
 > Although it's not mandatory, it's recommended that after enabling this option, you perform a `--resync`. This ensures that any previously excluded content is now included in your sync process.
 
 ### threads
-_**Description:**_ This configuration option controls the number of 'threads' for upload and download operations when files need to be transfered between your local system and Microsoft OneDrive.
+_**Description:**_ This configuration option controls the number of 'threads' for upload and download operations when files need to be transferred between your local system and Microsoft OneDrive.
 
 _**Value Type:**_ Integer
 
@@ -955,7 +955,7 @@ _**Usage Example:**_ `onedrive --auth-response https://login.microsoftonline.com
 > ```text
 > https://login.microsoftonline.com/common/oauth2/v2.0/authorise?client_id=22c49a0d-d21c-4792-aed1-8f163c982546&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
 > ```
-> With this URL being known, it is possible ahead of time to request an authentication token by visiting this URL, and performing the authenticaton access request.
+> With this URL being known, it is possible ahead of time to request an authentication token by visiting this URL, and performing the authentication access request.
 
 ### CLI Option: --confdir
 _**Description:**_ This CLI option allows the user to specify where all the application configuration and relevant components are stored.
@@ -963,7 +963,7 @@ _**Description:**_ This CLI option allows the user to specify where all the appl
 _**Usage Example:**_ `onedrive --confdir '~/.config/onedrive-business/'`
 
 > [!IMPORTANT]
-> If using this option, it must be specified each and every time the application is used. If this is ommited, the application default configuration directory will be used.
+> If using this option, it must be specified each and every time the application is used. If this is omitted, the application default configuration directory will be used.
 
 ### CLI Option: --create-directory
 _**Description:**_ This CLI option allows the user to create the specified directory path on Microsoft OneDrive without performing a sync.
@@ -1030,7 +1030,7 @@ _**Usage Example:**_ `onedrive --sync --verbose --force-sync --single-directory 
 > 
 > Are you sure you wish to proceed with --force-sync [Y/N] 
 > ```
-> To procceed with this sync task, you must risk accept the actions you are taking. If you have any concerns, first use `--dry-run` and evaluate the outcome before proceeding with the actual action.
+> To proceed with this sync task, you must risk accept the actions you are taking. If you have any concerns, first use `--dry-run` and evaluate the outcome before proceeding with the actual action.
 
 ### CLI Option: --get-file-link
 _**Description:**_ This CLI option queries the OneDrive API and return's the WebURL for the given local file.
@@ -1087,7 +1087,7 @@ Shared By:       test user (testuser@domain.tld)
 ```
 
 ### CLI Option: --logout
-_**Description:**_ This CLI option removes this clients authentictaion status with Microsoft OneDrive. Any further application use will requrie the application to be re-authenticated with Microsoft OneDrive.
+_**Description:**_ This CLI option removes this clients authentictaion status with Microsoft OneDrive. Any further application use will require the application to be re-authenticated with Microsoft OneDrive.
 
 _**Usage Example:**_ `onedrive --logout`
 
@@ -1110,7 +1110,7 @@ _**Description:**_ Print the current access token being used to access Microsoft
 _**Usage Example:**_ `onedrive --verbose --verbose --debug-https --print-access-token`
 
 > [!CAUTION]
-> Do not use this option if you do not know why you are wanting to use it. Be highly cautious of exposing this object. Change your password if you feel that you have inadvertantly exposed this token.
+> Do not use this option if you do not know why you are wanting to use it. Be highly cautious of exposing this object. Change your password if you feel that you have inadvertently exposed this token.
 
 ### CLI Option: --reauth
 _**Description:**_ This CLI option controls the ability to re-authenticate your client with Microsoft OneDrive.
@@ -1177,7 +1177,7 @@ _**Depreciated Config Example:**_ `force_http_2 = "true"`
 
 _**Depreciated CLI Option:**_ `--force-http-2`
 
-_**Reason for depreciation:**_ HTTP/2 will be used by default where possible, when the OneDrive API platform does not downgrade the connection to HTTP/1.1, thus this confuguration option is no longer required.
+_**Reason for depreciation:**_ HTTP/2 will be used by default where possible, when the OneDrive API platform does not downgrade the connection to HTTP/1.1, thus this configuration option is no longer required.
 
 ### min_notify_changes
 _**Description:**_ Minimum number of pending incoming changes necessary to trigger a GUI desktop notification.

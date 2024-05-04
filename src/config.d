@@ -200,8 +200,8 @@ class ApplicationConfig {
 	bool initialise(string confdirOption, bool helpRequested) {
 		
 		// Default runtime configuration - entries in config file ~/.config/onedrive/config or derived from variables above
-		// An entry here means it can be set via the config file if there is a coresponding entry, read from config and set via update_from_args()
-		// The below becomes the 'default' application configuration before config file and/or cli options are overlayed on top
+		// An entry here means it can be set via the config file if there is a corresponding entry, read from config and set via update_from_args()
+		// The below becomes the 'default' application configuration before config file and/or cli options are overlaid on top
 		
 		// - Set the required default values
 		stringValues["application_id"] = defaultApplicationId;
@@ -1435,7 +1435,7 @@ class ApplicationConfig {
 			// What did the user enter?
 			addLogEntry("--resync warning User Response Entered: " ~ to!string(response), ["debug"]);
 			
-			// Evaluate user repsonse
+			// Evaluate user response
 			if ((to!string(response) == "y") || (to!string(response) == "Y")) {
 				// User has accepted --resync risk to proceed
 				userRiskAcceptance = true;
@@ -1481,7 +1481,7 @@ class ApplicationConfig {
 		// What did the user enter?
 		addLogEntry("--force-sync warning User Response Entered: " ~ to!string(response), ["debug"]);
 		
-		// Evaluate user repsonse
+		// Evaluate user response
 		if ((to!string(response) == "y") || (to!string(response) == "Y")) {
 			// User has accepted --force-sync risk to proceed
 			userRiskAcceptance = true;
@@ -2124,17 +2124,17 @@ class ApplicationConfig {
 	
 		// Are we performing some sort of 'no-sync' task?
 		// - Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
-		// - Are we displaying the sync satus?
+		// - Are we displaying the sync status?
 		// - Are we getting the URL for a file online?
 		// - Are we listing who modified a file last online?
 		// - Are we listing OneDrive Business Shared Items?
-		// - Are we createing a shareable link for an existing file on OneDrive?
+		// - Are we creating a shareable link for an existing file on OneDrive?
 		// - Are we just creating a directory online, without any sync being performed?
 		// - Are we just deleting a directory online, without any sync being performed?
 		// - Are we renaming or moving a directory?
 		// - Are we displaying the quota information?
 		
-		// Return a true|false if any of these have been set, so that we use the 'dry-run' DB copy, to execute these tasks, incase the client is currently operational
+		// Return a true|false if any of these have been set, so that we use the 'dry-run' DB copy, to execute these tasks, in case the client is currently operational
 		
 		// --get-sharepoint-drive-id - Get the SharePoint Library drive_id
 		if (getValueString("sharepoint_library_name") != "") {
@@ -2166,7 +2166,7 @@ class ApplicationConfig {
 			noSyncOperation = true;
 		}
 		
-		// --create-share-link - Are we createing a shareable link for an existing file on OneDrive?
+		// --create-share-link - Are we creating a shareable link for an existing file on OneDrive?
 		if (getValueString("create_share_link") != "") {
 			// flag that a no sync operation has been requested
 			noSyncOperation = true;

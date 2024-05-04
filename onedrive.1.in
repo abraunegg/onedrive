@@ -127,7 +127,7 @@ Query OneDrive service and report on pending changes.
 
 .TP
 \fB\-\-auth-files\fR \fIARG\fR
-Perform authentication not via interactive dialog but via files that are read/writen when using this option. The two files are passed in as \fBARG\fP in the format \fBauthUrl:responseUrl\fP.
+Perform authentication not via interactive dialog but via files that are read/written when using this option. The two files are passed in as \fBARG\fP in the format \fBauthUrl:responseUrl\fP.
 The authorisation URL is written to the \fBauthUrl\fP file, then \fBonedrive\fP waits for the file \fBresponseUrl\fP to be present, and reads the response from that file.
 .br
 Always specify the full path when using this option, otherwise the application will default to using the default configuration path for these files (~/.config/onedrive/)

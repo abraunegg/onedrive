@@ -208,7 +208,7 @@ final class ItemDatabase {
 			if (e.msg == "database is locked") {
 				addLogEntry();
 				addLogEntry("ERROR: The 'onedrive' application is already running - please check system process list for active application instances");
-				addLogEntry(" - Use 'sudo ps aufxw | grep onedrive' to potentially determine acive running process");
+				addLogEntry(" - Use 'sudo ps aufxw | grep onedrive' to potentially determine active running process");
 				addLogEntry();
 			} else {
 				// A different error .. detail the message, detail the actual SQLite Error Code to assist with troubleshooting
@@ -693,7 +693,7 @@ final class ItemDatabase {
 	// National Cloud Deployments (US and DE) do not support /delta as a query
 	// We need to track in the database that this item is in sync
 	// As we query /children to get all children from OneDrive, update anything in the database 
-	// to be flagged as not-in-sync, thus, we can use that flag to determing what was previously
+	// to be flagged as not-in-sync, thus, we can use that flag to determine what was previously
 	// in-sync, but now deleted on OneDrive
 	void downgradeSyncStatusFlag(const(char)[] driveId, const(char)[] id) {
 		assert(driveId);

@@ -1,5 +1,5 @@
 # RPM Package Build Process
-The instuctions below have been tested on the following systems:
+The instructions below have been tested on the following systems:
 *   CentOS 7 x86_64
 *   CentOS 8 x86_64
 

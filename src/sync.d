@@ -111,7 +111,7 @@ class SyncEngine {
 	string[] pathsRenamed;
 	// List of paths that were a POSIX case-insensitive match, thus could not be created online
 	string[] posixViolationPaths;
-	// List of local paths, that, when using the OneDrive Business Shared Folders feature, then diabling it, folder still exists locally and online
+	// List of local paths, that, when using the OneDrive Business Shared Folders feature, then disabling it, folder still exists locally and online
 	// This list of local paths need to be skipped
 	string[] businessSharedFoldersOnlineToSkip;
 	// List of interrupted uploads session files that need to be resumed
@@ -192,9 +192,9 @@ class SyncEngine {
 		processPool = new TaskPool(to!int(appConfig.getValueLong("threads")));
 		addLogEntry("PROCESS POOL WORKER THREADS: " ~ to!string(processPool.size), ["debug"]);
 		
-		// Configure the class varaible to consume the application configuration
+		// Configure the class variable to consume the application configuration
 		this.appConfig = appConfig;
-		// Configure the class varaible to consume the database configuration
+		// Configure the class variable to consume the database configuration
 		this.itemDB = itemDB;
 		// Configure the class variable to consume the selective sync (skip_dir, skip_file and sync_list) configuration
 		this.selectiveSync = selectiveSync;
@@ -826,7 +826,7 @@ class SyncEngine {
 		// 
 		// - Are we performing a --download-only --cleanup-local-files action?
 		//   - If we are, and we use a normal /delta query, we get all the local 'deleted' objects as well.
-		//   - If the user deletes a folder online, then replaces it online, we download the deletion events and process the new 'upload' via the web iterface .. 
+		//   - If the user deletes a folder online, then replaces it online, we download the deletion events and process the new 'upload' via the web interface .. 
 		//     the net effect of this, is that the valid local files we want to keep, are actually deleted ...... not desirable
 		if ((singleDirectoryScope) || (nationalCloudDeployment) || (cleanupLocalFiles)) {
 			// Generate a simulated /delta response so that we correctly capture the current online state, less any 'online' delete and replace activity
@@ -869,7 +869,7 @@ class SyncEngine {
 				}
 			}
 			
-			// Dynamic output for non-verbose and verbose run so that the user knows something is being retreived from the OneDrive API
+			// Dynamic output for non-verbose and verbose run so that the user knows something is being retrieved from the OneDrive API
 			if (appConfig.verbosityCount == 0) {
 				if (!appConfig.surpressLoggingOutput) {
 					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ driveIdToQuery, appConfig.verbosityCount);
@@ -892,7 +892,7 @@ class SyncEngine {
 				// If the initial deltaChanges response is an invalid JSON object, keep trying until we get a valid response ..
 				if (deltaChanges.type() != JSONType.object) {
 					while (deltaChanges.type() != JSONType.object) {
-						// Handle the invalid JSON response adn retry
+						// Handle the invalid JSON response and retry
 						addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response", ["debug"]);
 						deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink, getDeltaQueryOneDriveApiInstance);
 					}
@@ -1641,7 +1641,7 @@ class SyncEngine {
 					// What path are we checking?
 					addLogEntry("sync_list item to check: " ~ newItemPath, ["debug"]);
 					
-					// Unfortunatly there is no avoiding this call to check if the path is excluded|included via sync_list
+					// Unfortunately there is no avoiding this call to check if the path is excluded|included via sync_list
 					if (selectiveSync.isPathExcludedViaSyncList(newItemPath)) {
 						// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
 						if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (rootName(newItemPath) == "") ) {
@@ -2114,7 +2114,7 @@ class SyncEngine {
 					fileJSONItemsToDownload ~= onedriveJSONItem;
 				} else {
 					// If the timestamp is different, or we are running a client operational mode that does not support /delta queries - we have to update the DB with the details from OneDrive
-					// Unfortunatly because of the consequence of Nataional Cloud Deployments not supporting /delta queries, the application uses the local database to flag what is out-of-date / track changes
+					// Unfortunately because of the consequence of Nataional Cloud Deployments not supporting /delta queries, the application uses the local database to flag what is out-of-date / track changes
 					// This means that the constant disk writing to the database fix implemented with https://github.com/abraunegg/onedrive/pull/2004 cannot be utilised when using these operational modes
 					// as all records are touched / updated when performing the OneDrive sync operations. The impacted operational modes are:
 					// - National Cloud Deployments do not support /delta as a query
@@ -2148,7 +2148,7 @@ class SyncEngine {
 			// The existingDatabaseItem.eTag == changedOneDriveItem.eTag .. nothing has changed eTag wise
 			
 			// If the timestamp is different, or we are running a client operational mode that does not support /delta queries - we have to update the DB with the details from OneDrive
-			// Unfortunatly because of the consequence of Nataional Cloud Deployments not supporting /delta queries, the application uses the local database to flag what is out-of-date / track changes
+			// Unfortunately because of the consequence of Nataional Cloud Deployments not supporting /delta queries, the application uses the local database to flag what is out-of-date / track changes
 			// This means that the constant disk writing to the database fix implemented with https://github.com/abraunegg/onedrive/pull/2004 cannot be utilised when using these operational modes
 			// as all records are touched / updated when performing the OneDrive sync operations. The impacted operational modes are:
 			// - National Cloud Deployments do not support /delta as a query
@@ -2180,7 +2180,7 @@ class SyncEngine {
 	
 	// Download items in parallel
 	void downloadOneDriveItemsInParallel(JSONValue[] array) {
-		// This function recieved an array of 16 JSON items to download
+		// This function received an array of 16 JSON items to download
 		foreach (i, onedriveJSONItem; processPool.parallel(array)) {
 			// Take each JSON item and 
 			downloadFileItem(onedriveJSONItem);
@@ -2396,7 +2396,7 @@ class SyncEngine {
 									downloadValueMismatch = true;
 									addLogEntry("Actual file size on disk:   " ~ to!string(downloadFileSize), ["debug"]);
 									addLogEntry("OneDrive API reported size: " ~ to!string(jsonFileSize), ["debug"]);
-									addLogEntry("ERROR: File download size mis-match. Increase logging verbosity to determine why.");
+									addLogEntry("ERROR: File download size mismatch. Increase logging verbosity to determine why.");
 								}
 								
 								// Hash Error
@@ -2405,7 +2405,7 @@ class SyncEngine {
 									downloadValueMismatch = true;
 									addLogEntry("Actual local file hash:     " ~ downloadedFileHash, ["debug"]);
 									addLogEntry("OneDrive API reported hash: " ~ onlineFileHash, ["debug"]);
-									addLogEntry("ERROR: File download hash mis-match. Increase logging verbosity to determine why.");
+									addLogEntry("ERROR: File download hash mismatch. Increase logging verbosity to determine why.");
 								}
 								
 								// .heic data loss check
@@ -2815,7 +2815,7 @@ class SyncEngine {
 			//  Update 'originItem.cTag' with the correct cTag from the response
 			//  Update 'originItem.quickXorHash' with the correct quickXorHash from the response
 			// Everything else should remain the same .. and then save this DB record to the DB ..
-			// However, we did this, for the local modified file right before calling this function to update the online timestamp ... so .. do we need to do this again, effectivly performing a double DB write for the same data?
+			// However, we did this, for the local modified file right before calling this function to update the online timestamp ... so .. do we need to do this again, effectively performing a double DB write for the same data?
 			if ((originItem.type != ItemType.remote) && (originItem.remoteType != ItemType.file)) {
 				// Save the response JSON
 				// Is the response a valid JSON object - validation checking done in saveItem
@@ -3631,7 +3631,7 @@ class SyncEngine {
 				// What path are we checking?
 				addLogEntry("sync_list item to check: " ~ newItemPath, ["debug"]);
 				
-				// Unfortunatly there is no avoiding this call to check if the path is excluded|included via sync_list
+				// Unfortunately there is no avoiding this call to check if the path is excluded|included via sync_list
 				if (selectiveSync.isPathExcludedViaSyncList(newItemPath)) {
 					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
 					if ((isItemFile(onedriveJSONItem)) && (appConfig.getValueBool("sync_root_files")) && (rootName(newItemPath) == "") ) {
@@ -3680,7 +3680,7 @@ class SyncEngine {
 		}
 	}
 
-	// Process all the changed local items in parrallel
+	// Process all the changed local items in parallel
 	void processChangedLocalItemsToUploadInParallel(string[3][] array) {
 		
 		foreach (i, localItemDetails; processPool.parallel(array)) {
@@ -3712,11 +3712,11 @@ class SyncEngine {
 		// Flag for if space is available online
 		bool spaceAvailableOnline = false;
 		
-		// When we are uploading OneDrive Business Shared Files, we need to be targetting the right driveId and itemId
+		// When we are uploading OneDrive Business Shared Files, we need to be targeting the right driveId and itemId
 		string targetDriveId;
 		string targetItemId;
 		
-		// Unfortunatly, we cant store an array of Item's ... so we have to re-query the DB again - unavoidable extra processing here
+		// Unfortunately, we cant store an array of Item's ... so we have to re-query the DB again - unavoidable extra processing here
 		// This is because the Item[] has no other functions to allow is to parallel process those elements, so we have to use a string array as input to this function
 		Item dbItem;
 		itemDB.selectById(changedItemParentId, changedItemId, dbItem);
@@ -3769,7 +3769,7 @@ class SyncEngine {
 		if (cachedOnlineDriveData.quotaAvailable) {
 			// Our query told us we have free space online .. if we upload this file, will we exceed space online - thus upload will fail during upload?
 			if (calculatedSpaceOnlinePostUpload > 0) {
-				// Based on this thread action, we beleive that there is space available online to upload - proceed
+				// Based on this thread action, we believe that there is space available online to upload - proceed
 				spaceAvailableOnline = true;
 			}
 		}
@@ -3845,7 +3845,7 @@ class SyncEngine {
 				saveItem(uploadResponse);
 			}
 			
-			// Update the 'cachedOnlineDriveData' record for this 'targetDriveId' so that this is tracked as accuratly as possible for other threads
+			// Update the 'cachedOnlineDriveData' record for this 'targetDriveId' so that this is tracked as accurately as possible for other threads
 			updateDriveDetailsCache(targetDriveId, cachedOnlineDriveData.quotaRestricted, cachedOnlineDriveData.quotaAvailable, thisFileSizeLocal);
 			
 			// Check the integrity of the uploaded modified file if not in a --dry-run scenario
@@ -3879,7 +3879,7 @@ class SyncEngine {
 		JSONValue uploadSessionData;
 		string currentETag;
 		
-		// When we are uploading OneDrive Business Shared Files, we need to be targetting the right driveId and itemId
+		// When we are uploading OneDrive Business Shared Files, we need to be targeting the right driveId and itemId
 		string targetDriveId;
 		string targetParentId;
 		string targetItemId;
@@ -3936,7 +3936,7 @@ class SyncEngine {
 			// If the filesize is greater than zero , and we have valid 'latest' online data is the online file matching what we think is in the database?
 			if ((thisFileSizeLocal > 0) && (currentOnlineData.type() == JSONType.object)) {
 				// Issue #2626 | Case 2-1 
-				// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - potentially consituting online data loss
+				// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - potentially constituting online data loss
 				Item onlineFile = makeItem(currentOnlineData);
 				
 				// Which file is technically newer? The local file or the remote file?
@@ -4005,7 +4005,7 @@ class SyncEngine {
 				}
 			} else {
 				// As this is a unique thread, the sessionFilePath for where we save the data needs to be unique
-				// The best way to do this is generate a 10 digit alphanumeric string, and use this as the file extention
+				// The best way to do this is generate a 10 digit alphanumeric string, and use this as the file extension
 				string threadUploadSessionFilePath = appConfig.uploadSessionFilePath ~ "." ~ generateAlphanumericString();
 				
 				// Create the upload session
@@ -5019,7 +5019,7 @@ class SyncEngine {
 			// Can we read the file - as a permissions issue or actual file corruption will cause a failure
 			// Resolves: https://github.com/abraunegg/onedrive/issues/113
 			if (readLocalFile(fileToUpload)) {
-				// The local file can be read - so we can read it to attemtp to upload it in this thread
+				// The local file can be read - so we can read it to attempt to upload it in this thread
 				// Is the path parent in the DB?
 				if (parentPathFoundInDB) {
 					// Parent path is in the database
@@ -5072,7 +5072,7 @@ class SyncEngine {
 							if (cachedOnlineDriveData.quotaAvailable) {
 								// Our query told us we have free space online .. if we upload this file, will we exceed space online - thus upload will fail during upload?
 								if (calculatedSpaceOnlinePostUpload > 0) {
-									// Based on this thread action, we beleive that there is space available online to upload - proceed
+									// Based on this thread action, we believe that there is space available online to upload - proceed
 									spaceAvailableOnline = true;
 								}
 							}
@@ -5162,13 +5162,13 @@ class SyncEngine {
 									
 									// Issue #2626 | Case 2-2 (resync)
 									
-									// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - potentially consituting online data loss
+									// If the 'online' file is newer, this will be overwritten with the file from the local filesystem - potentially constituting online data loss
 									// The file 'version history' online will have to be used to 'recover' the prior online file
 									string changedItemParentDriveId = fileDetailsFromOneDrive["parentReference"]["driveId"].str;
 									string changedItemId = fileDetailsFromOneDrive["id"].str;
 									addLogEntry("Skipping uploading this item as a new file, will upload as a modified file (online file already exists): " ~ fileToUpload);
 									
-									// In order for the processing of the local item as a 'changed' item, unfortunatly we need to save the online data of the existing online file to the local DB
+									// In order for the processing of the local item as a 'changed' item, unfortunately we need to save the online data of the existing online file to the local DB
 									saveItem(fileDetailsFromOneDrive);
 									
 									// Which file is technically newer? The local file or the remote file?
@@ -5236,7 +5236,7 @@ class SyncEngine {
 								uploadFailed = true;
 							}
 						} else {
-							// skip file upload - insufficent space to upload
+							// skip file upload - insufficient space to upload
 							addLogEntry("Skipping uploading this new file as it exceeds the available free space on OneDrive: " ~ fileToUpload);
 							uploadFailed = true;
 						}
@@ -5268,7 +5268,7 @@ class SyncEngine {
 
 		// Upload success or failure?
 		if (!uploadFailed) {
-			// Update the 'cachedOnlineDriveData' record for this 'dbItem.driveId' so that this is tracked as accuratly as possible for other threads
+			// Update the 'cachedOnlineDriveData' record for this 'dbItem.driveId' so that this is tracked as accurately as possible for other threads
 			updateDriveDetailsCache(parentItem.driveId, cachedOnlineDriveData.quotaRestricted, cachedOnlineDriveData.quotaAvailable, thisFileSize);
 			
 		} else {
@@ -5356,7 +5356,7 @@ class SyncEngine {
 				// - All Business | Office365 | SharePoint files > 0 bytes
 				JSONValue uploadSessionData;
 				// As this is a unique thread, the sessionFilePath for where we save the data needs to be unique
-				// The best way to do this is generate a 10 digit alphanumeric string, and use this as the file extention
+				// The best way to do this is generate a 10 digit alphanumeric string, and use this as the file extension
 				string threadUploadSessionFilePath = appConfig.uploadSessionFilePath ~ "." ~ generateAlphanumericString();
 				
 				// Attempt to upload the > 4MB file using an upload session for all account types
@@ -5458,7 +5458,7 @@ class SyncEngine {
 			
 			// OK as the upload did not fail, we need to save the response from OneDrive, but it has to be a valid JSON response
 			if (uploadResponse.type() == JSONType.object) {
-				// check if the path still exists locally before we try to set the file times online - as short lived files, whilst we uploaded it - it may not exist locally aready
+				// check if the path still exists locally before we try to set the file times online - as short lived files, whilst we uploaded it - it may not exist locally already
 				if (exists(fileToUpload)) {
 					if (!dryRun) {
 						// Check the integrity of the uploaded file, if the local file still exists
@@ -5995,7 +5995,7 @@ class SyncEngine {
 							} else {
 								// Not a Microsoft OneNote Mime Type Object ..
 								string apiWarningMessage = "WARNING: OneDrive API inconsistency - this file does not have any hash: ";
-								// This is computationally expensive .. but we are only doing this if there are no hashses provided
+								// This is computationally expensive .. but we are only doing this if there are no hashes provided
 								bool parentInDatabase = itemDB.idInLocalDatabase(newDatabaseItem.driveId, newDatabaseItem.parentId);
 								// Is the parent id in the database?
 								if (parentInDatabase) {
@@ -6384,7 +6384,7 @@ class SyncEngine {
 					// The full parent path of the child, as per the JSON might be:
 					//   /Level 1/Level 2/Level 3/Child Shared Folder/some folder/another folder
 					// But 'Child Shared Folder' is what is shared, thus '/Level 1/Level 2/Level 3/' is a potential information leak if logged.
-					// Plus, the application output now shows accuratly what is being shared - so that is a good thing.
+					// Plus, the application output now shows accurately what is being shared - so that is a good thing.
 					addLogEntry("Adding " ~ to!string(count(thisLevelChildren["value"].array)) ~ " OneDrive items for processing from " ~ pathForLogging, ["verbose"]);
 				}
 				foreach (child; thisLevelChildren["value"].array) {
@@ -6499,7 +6499,7 @@ class SyncEngine {
 		queryOneDriveForSpecificPath.initialise();
 		
 		foreach (thisFolderName; pathSplitter(thisNewPathToSearch)) {
-			addLogEntry("Testing for the existance online of this folder path: " ~ thisFolderName, ["debug"]);
+			addLogEntry("Testing for the existence online of this folder path: " ~ thisFolderName, ["debug"]);
 			directoryFoundOnline = false;
 			
 			// If this is '.' this is the account root
@@ -6809,7 +6809,7 @@ class SyncEngine {
 		
 			if (!itemDB.selectByPath(oldPath, appConfig.defaultDriveId, oldItem)) {
 				// The old path|item is not synced with the database, upload as a new file
-				addLogEntry("Moved local item was not in-sync with local databse - uploading as new item");
+				addLogEntry("Moved local item was not in-sync with local database - uploading as new item");
 				scanLocalFilesystemPathForNewData(newPath);
 				return;
 			}
@@ -7246,7 +7246,7 @@ class SyncEngine {
 			// If the initial deltaChanges response is an invalid JSON object, keep trying until we get a valid response ..
 			if (deltaChanges.type() != JSONType.object) {
 				while (deltaChanges.type() != JSONType.object) {
-					// Handle the invalid JSON response adn retry
+					// Handle the invalid JSON response and retry
 					addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response", ["debug"]);
 					deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink, getDeltaQueryOneDriveApiInstance);
 				}
@@ -7780,7 +7780,7 @@ class SyncEngine {
 			return false;
 		}
 		
-		// Add 'sessionFilePath' to 'sessionFileData' so that it can be used when we re-use the JSON data to resume the upload
+		// Add 'sessionFilePath' to 'sessionFileData' so that it can be used when we reuse the JSON data to resume the upload
 		sessionFileData["sessionFilePath"] = sessionFilePath;
 		
 		// Add sessionFileData to jsonItemsToResumeUpload as it is now valid
@@ -7788,9 +7788,9 @@ class SyncEngine {
 		return true;
 	}
 	
-	// Resume all resumable session uploads in parrallel
+	// Resume all resumable session uploads in parallel
 	void resumeSessionUploadsInParallel(JSONValue[] array) {
-		// This function recieved an array of 16 JSON items to resume upload
+		// This function received an array of 16 JSON items to resume upload
 		foreach (i, jsonItemToResume; processPool.parallel(array)) {
 			// Take each JSON item and resume upload using the JSON data
 			
@@ -7819,7 +7819,7 @@ class SyncEngine {
 						
 			// Was the response from the OneDrive API a valid JSON item?
 			if (uploadResponse.type() == JSONType.object) {
-				// A valid JSON object was returned - session resumption upload sucessful
+				// A valid JSON object was returned - session resumption upload successful
 				
 				// Are we in an --upload-only & --remove-source-files scenario?
 				// Use actual config values as we are doing an upload session recovery
@@ -8188,7 +8188,7 @@ class SyncEngine {
 		try {
 			sharedWithMeItems = sharedWithMeOneDriveApiInstance.getSharedWithMe();
 			
-			// We cant shutdown the API instance here, as we re-use it below
+			// We cant shutdown the API instance here, as we reuse it below
 			
 		} catch (OneDriveException e) {
 			// Display error message
