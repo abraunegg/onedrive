@@ -25,7 +25,7 @@ This client represents a 100% re-imagining of the original work, addressing nume
 *   Enhanced syncronisation speed with multi-threaded file transfers
 *   Manages traffic bandwidth use with rate limiting
 *   Supports seamless access to shared folders and files across both OneDrive Personal and OneDrive for Business accounts
-*   Supports national cloud deployments including Microsoft Cloud for US Government, Microsoft Cloud Germany and Azure and Office 365 operated by 21Vianet in China
+*   Supports national cloud deployments including Microsoft Cloud for US Government, Microsoft Cloud Germany and Azure and Office 365 operated by VNET in China
 *   Supports sending desktop alerts using libnotify
 *   Protects against significant data loss on OneDrive after configuration changes
 *   Works with both single and multi-tenant applications
