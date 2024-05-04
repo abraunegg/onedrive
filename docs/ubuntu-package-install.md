@@ -15,7 +15,7 @@ This information is specifically for the following platforms and distributions:
 Whilst there are [onedrive](https://packages.ubuntu.com/search?keywords=onedrive&searchon=names&suite=all&section=all) Universe packages available for Ubuntu, do not install 'onedrive' from these Universe packages. The default Ubuntu Universe packages are out-of-date and are not supported and should not be used.
 
 ## Determine which instructions to use
-Ubuntu and its clones are based on various different releases, thus, you must use the correct instructions below, otherwise you may run into package dependancy issues and will be unable to install the client.
+Ubuntu and its clones are based on various different releases, thus, you must use the correct instructions below, otherwise you may run into package dependency issues and will be unable to install the client.
 
 ### Step 1: Remove any configured PPA and associated 'onedrive' package and systemd service files
 Many Internet 'help' pages provide inconsistent details on how to install the OneDrive Client for Linux. A number of these websites continue to point users to install the client via the yann1ck PPA repository however this PPA no longer exists and should not be used.

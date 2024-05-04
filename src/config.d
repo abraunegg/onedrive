@@ -76,7 +76,7 @@ final class Config
 	this(string confdirOption)
 	{
 		// default configuration - entries in config file ~/.config/onedrive/config
-		// an entry here means it can be set via the config file if there is a coresponding entry, read from config and set via update_from_args()
+		// an entry here means it can be set via the config file if there is a corresponding entry, read from config and set via update_from_args()
 		stringValues["sync_dir"] = defaultSyncDir;
 		stringValues["skip_file"] = defaultSkipFile;
 		stringValues["skip_dir"] = defaultSkipDir;

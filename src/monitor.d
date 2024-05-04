@@ -107,7 +107,7 @@ final class Monitor
 					return;
 				}
 			}
-			// is the path exluded by sync_list?
+			// is the path excluded by sync_list?
 			if (selectiveSync.isPathExcludedViaSyncList(buildNormalizedPath(dirname))) {
 				// dont add a watch for this item
 				log.vdebug("Skipping monitoring due to sync_list match: ", dirname);
@@ -137,7 +137,7 @@ final class Monitor
 		log.vdebug("Calling add() for this dirname: ", dirname);
 		add(dirname);
 		
-		// if this is a directory, recursivly add this path
+		// if this is a directory, recursively add this path
 		if (isDir(dirname)) {
 			// try and get all the directory entities for this path
 			try {
@@ -205,7 +205,7 @@ final class Monitor
 		// Do we log that we are monitoring this directory?
 		if (isDir(pathname)) {
 			// This is a directory			
-			// is the path exluded if skip_dotfiles configured and path is a .folder?
+			// is the path excluded if skip_dotfiles configured and path is a .folder?
 			if ((selectiveSync.getSkipDotfiles()) && (selectiveSync.isDotFile(pathname))) {
 				// no misleading output that we are monitoring this directory
 				return;

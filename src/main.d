@@ -218,7 +218,7 @@ int main(string[] args)
 				return EXIT_FAILURE;
 			}
 			
-			// Evaluate user repsonse
+			// Evaluate user response
 			if ((to!string(response) == "y") || (to!string(response) == "Y")) {
 				// User has accepted --resync risk to proceed
 				resyncRiskAcceptance = true;
@@ -1049,7 +1049,7 @@ int main(string[] args)
 		cfg.configureRequiredFilePermisions();
 	}
 
-	// configure the sync direcory based on syncDir config option
+	// configure the sync directory based on syncDir config option
 	log.vlog("All operations will be performed in: ", syncDir);
 	try {
 		if (!exists(syncDir)) {
@@ -1170,7 +1170,7 @@ int main(string[] args)
 			return EXIT_FAILURE;
 		}
 		
-		// Evaluate user repsonse
+		// Evaluate user response
 		if ((to!string(response) == "y") || (to!string(response) == "Y")) {
 			// User has accepted --force-sync risk to proceed
 			resyncRiskAcceptance = true;
@@ -1321,7 +1321,7 @@ int main(string[] args)
 		return EXIT_SUCCESS;
 	}
 
-	// --create-share-link - Are we createing a shareable link for an existing file on OneDrive?
+	// --create-share-link - Are we creating a shareable link for an existing file on OneDrive?
 	if (cfg.getValueString("create_share_link") != "") {
 		// Query OneDrive for the file, and if valid, create a shareable link for the file
 		
@@ -1703,7 +1703,7 @@ int main(string[] args)
 					// Display memory details after cleanup
 					if (displayMemoryUsage) log.displayMemoryUsagePostGC();
 					
-					// If we did a full scan, make sure we merge the conents of the WAL and SHM to disk
+					// If we did a full scan, make sure we merge the contents of the WAL and SHM to disk
 					if (fullScanRequired) {
 						// Write WAL and SHM data to file for this loop
 						log.vdebug("Merge contents of WAL and SHM files into main database file");
@@ -1948,7 +1948,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 									if (fullScanRequired) {
 										log.log("Performing a database consistency and integrity check on locally stored data due to fullscan requirement ... ");
 										sync.scanForDifferencesDatabaseScan(localPath);
-										// handle any inotify events that occured 'whilst' we were scanning the database
+										// handle any inotify events that occurred 'whilst' we were scanning the database
 										m.update(true);
 									} else {
 										log.vdebug("NOT performing Database Integrity Check .. fullScanRequired = FALSE");
@@ -1958,7 +1958,7 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 									// Filesystem walk to find new files not uploaded
 									log.vdebug("Searching local filesystem for new data");
 									sync.scanForDifferencesFilesystemScan(localPath);
-									// handle any inotify events that occured 'whilst' we were scanning the local filesystem
+									// handle any inotify events that occurred 'whilst' we were scanning the local filesystem
 									m.update(true);
 								}
 								
@@ -1971,12 +1971,12 @@ void performSync(SyncEngine sync, string singleDirectory, bool downloadOnly, boo
 								}
 																
 								// At this point, all OneDrive changes / local changes should be uploaded and in sync
-								// This MAY not be the case when using sync_list, thus a full walk of OneDrive ojects is required
+								// This MAY not be the case when using sync_list, thus a full walk of OneDrive objects is required
 
 								// --synchronize & no sync_list     : fullScanRequired = false, syncListConfiguredFullScanOverride = false
 								// --synchronize & sync_list in use : fullScanRequired = false, syncListConfiguredFullScanOverride = true
 
-								// --monitor loops around 12 iterations. On the 1st loop, sets fullScanRequired = true, syncListConfiguredFullScanOverride = true if requried
+								// --monitor loops around 12 iterations. On the 1st loop, sets fullScanRequired = true, syncListConfiguredFullScanOverride = true if required
 
 								// --monitor & no sync_list (loop #1)           : fullScanRequired = true, syncListConfiguredFullScanOverride = false
 								// --monitor & no sync_list (loop #2 - #12)     : fullScanRequired = false, syncListConfiguredFullScanOverride = false

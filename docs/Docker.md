@@ -246,7 +246,7 @@ If you are experienced with docker and onedrive, you can use the following scrip
 ```bash
 # Update ONEDRIVE_DATA_DIR with correct OneDrive directory path
 ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
-# Create directory if non-existant
+# Create directory if non-existent
 mkdir -p ${ONEDRIVE_DATA_DIR} 
 
 firstRun='-d'

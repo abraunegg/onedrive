@@ -2451,7 +2451,7 @@ final class SyncEngine
 				// what path are we checking
 				log.vdebug("sync_list item to check: ", path);
 								
-				// Unfortunatly there is no avoiding this call to check if the path is excluded|included via sync_list
+				// Unfortunately there is no avoiding this call to check if the path is excluded|included via sync_list
 				if (selectiveSync.isPathExcludedViaSyncList(path)) {
 					// selective sync advised to skip, however is this a file and are we configured to upload / download files in the root?
 					if ((isItemFile(driveItem)) && (cfg.getValueBool("sync_root_files")) && (rootName(path) == "") ) {
@@ -2636,7 +2636,7 @@ final class SyncEngine
 				remoteModifiedTime.fracSecs = Duration.zero;
 				
 				// If the timestamp is different, or we are running on a National Cloud Deployment that does not support /delta queries - we have to update the DB with the details from OneDrive
-				// Unfortunatly because of the consequence of Nataional Cloud Deployments not supporting /delta queries, the application uses the local database to flag what is out-of-date / track changes
+				// Unfortunately because of the consequence of Nataional Cloud Deployments not supporting /delta queries, the application uses the local database to flag what is out-of-date / track changes
 				// This means that the constant disk writing to the database fix implemented with https://github.com/abraunegg/onedrive/pull/2004 cannot be utilised when using Nataional Cloud Deployments
 				// as all records are touched / updated when performing the OneDrive sync operations. The only way to change this, is for Microsoft to support /delta queries for Nataional Cloud Deployments
 				if ((localModifiedTime != remoteModifiedTime) || (nationalCloudDeployment)) {
@@ -2716,7 +2716,7 @@ final class SyncEngine
 								log.vlog("Skipping downloading item - .nosync found in parent folder & --check-for-nosync is enabled: ", path);
 								// flag that this download failed, otherwise the 'item' is added to the database - then, as not present on the local disk, would get deleted from OneDrive
 								downloadFailed = true;
-								// clean up this partial file, otherwise every sync we will get theis warning
+								// clean up this partial file, otherwise every sync we will get this warning
 								log.vlog("Removing previous partial file download due to .nosync found in parent folder & --check-for-nosync is enabled");
 								safeRemove(path);
 								return;
@@ -3173,14 +3173,14 @@ final class SyncEngine
 							// downloaded file size does not match
 							log.vdebug("Actual file size on disk:   ", localFileSize);
 							log.vdebug("OneDrive API reported size: ", onlineFileSize);
-							log.error("ERROR: File download size mis-match. Increase logging verbosity to determine why.");
+							log.error("ERROR: File download size mismatch. Increase logging verbosity to determine why.");
 						}
 						// hash error?
 						if (OneDriveFileHash != quickXorHash) {
 							// downloaded file hash does not match
 							log.vdebug("Actual local file hash:     ", quickXorHash);
 							log.vdebug("OneDrive API reported hash: ", OneDriveFileHash);
-							log.error("ERROR: File download hash mis-match. Increase logging verbosity to determine why.");
+							log.error("ERROR: File download hash mismatch. Increase logging verbosity to determine why.");
 						}
 						// add some workaround messaging
 						if (accountType == "documentLibrary"){
@@ -3346,7 +3346,7 @@ final class SyncEngine
 			logPath = path;
 		}
 		
-		// If we are using --upload-only & --sync-shared-folders there is a possability that a 'new' local folder might 
+		// If we are using --upload-only & --sync-shared-folders there is a possibility that a 'new' local folder might 
 		// be misinterpreted that it needs to be uploaded to the users default OneDrive DriveID rather than the requested / configured
 		// Shared Business Folder. In --resync scenarios, the DB information that tells that this Business Shared Folder does not exist, 
 		// and in a --upload-only scenario will never exist, so the correct lookups are unable to be performed.
@@ -3429,7 +3429,7 @@ final class SyncEngine
 			logPath = path;
 		}
 		
-		// If we are using --upload-only & --sync-shared-folders there is a possability that a 'new' local folder might 
+		// If we are using --upload-only & --sync-shared-folders there is a possibility that a 'new' local folder might 
 		// be misinterpreted that it needs to be uploaded to the users default OneDrive DriveID rather than the requested / configured
 		// Shared Business Folder. In --resync scenarios, the DB information that tells that this Business Shared Folder does not exist, 
 		// and in a --upload-only scenario will never exist, so the correct lookups are unable to be performed.
@@ -4468,7 +4468,7 @@ final class SyncEngine
 			}
 			
 			// If we are in a --dry-run scenario, we may have renamed a folder - but it is technically not renamed locally
-			// Thus, that entire path may be attemtped to be uploaded as new data to OneDrive
+			// Thus, that entire path may be attempted to be uploaded as new data to OneDrive
 			if (dryRun) {
 				// check the pathsRenamed array for this path
 				// if any match - we need to exclude this path
@@ -4722,7 +4722,7 @@ final class SyncEngine
 						
 						// Is the parent a 'folder' from another user? ie - is this a 'shared folder' that has been shared with us?
 						if (defaultDriveId == parent.driveId){
-							// enforce check of parent path. if the above was triggered, the below will generate a sync retry and will now be sucessful
+							// enforce check of parent path. if the above was triggered, the below will generate a sync retry and will now be successful
 							enforce(itemdb.selectByPath(dirName(path), parent.driveId, parent), "The parent item id is not in the database");
 						} else {
 							log.vdebug("Parent drive ID is not our drive ID - parent most likely a shared folder");
@@ -6859,7 +6859,7 @@ final class SyncEngine
 		onedrive.resetRetryAfterValue();
 	}
 	
-	// Generage a /delta compatible response when using National Azure AD deployments that do not support /delta queries
+	// Generate a /delta compatible response when using National Azure AD deployments that do not support /delta queries
 	// see: https://docs.microsoft.com/en-us/graph/deployments#supported-features
 	JSONValue generateDeltaResponse(const(char)[] driveId, const(char)[] idToQuery)
 	{
@@ -7057,7 +7057,7 @@ final class SyncEngine
 				// The full parent path of the child, as per the JSON might be:
 				//   /Level 1/Level 2/Level 3/Child Shared Folder/some folder/another folder
 				// But 'Child Shared Folder' is what is shared, thus '/Level 1/Level 2/Level 3/' is a potential information leak if logged.
-				// Plus, the application output now shows accuratly what is being shared - so that is a good thing.
+				// Plus, the application output now shows accurately what is being shared - so that is a good thing.
 				log.vlog("Adding ", count(thisLevelChildren["value"].array), " OneDrive items for processing from ", pathForLogging);
 			}
 			foreach (child; thisLevelChildren["value"].array) {
@@ -7282,7 +7282,7 @@ final class SyncEngine
 					if ((newDatabaseItem.quickXorHash.empty) && (newDatabaseItem.sha256Hash.empty)) {
 						// Odd .. no hash ......
 						string apiMessage = "WARNING: OneDrive API inconsistency - this file does not have any hash: ";
-						// This is computationally expensive .. but we are only doing this if there are no hashses provided:
+						// This is computationally expensive .. but we are only doing this if there are no hashes provided:
 						bool parentInDatabase = itemdb.idInLocalDatabase(newDatabaseItem.driveId, newDatabaseItem.parentId);
 						if (parentInDatabase) {
 							// Calculate this item path

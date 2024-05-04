@@ -14,7 +14,7 @@ Technically, the client is 'working' correctly, as, when moving files, you are '
 
 **Workaround:**
 
-If the tracking of moving data to new local directories is requried, it is better to run the client in service mode (`--monitor`) rather than in standalone mode, as the 'move' of files can then be handled at the point when it occurs, so that the data is moved to the new location on OneDrive without the need to be deleted and re-uploaded.
+If the tracking of moving data to new local directories is required, it is better to run the client in service mode (`--monitor`) rather than in standalone mode, as the 'move' of files can then be handled at the point when it occurs, so that the data is moved to the new location on OneDrive without the need to be deleted and re-uploaded.
 
 ## Application 'stops' running without any visible reason
 **Issue Tracker:** [#494](https://github.com/abraunegg/onedrive/issues/494), [#753](https://github.com/abraunegg/onedrive/issues/753), [#792](https://github.com/abraunegg/onedrive/issues/792), [#884](https://github.com/abraunegg/onedrive/issues/884), [#1162](https://github.com/abraunegg/onedrive/issues/1162), [#1408](https://github.com/abraunegg/onedrive/issues/1408), [#1520](https://github.com/abraunegg/onedrive/issues/1520), [#1526](https://github.com/abraunegg/onedrive/issues/1526)
@@ -27,7 +27,7 @@ Additionally, this issue has mainly been seen when the client is operating again
 
 **Explanation:**
 
-The client is heavily dependant on Curl and OpenSSL to perform the activities with the Microsoft OneDrive service. Generally, when this issue occurs, the following is found in the HTTPS Debug Log:
+The client is heavily dependent on Curl and OpenSSL to perform the activities with the Microsoft OneDrive service. Generally, when this issue occurs, the following is found in the HTTPS Debug Log:
 ```
 OpenSSL SSL_read: SSL_ERROR_SYSCALL, errno 104
 ```

@@ -102,7 +102,7 @@ If your system utilises curl < 7.47.0, curl defaults to HTTP/1.1 for HTTPS opera
 
 If your system utilises curl >= 7.47.0 and < 7.62.0, curl will prefer HTTP/2 for HTTPS but will stick to HTTP/1.1 by default. The client will use HTTP/1.1 for HTTPS operations.
 
-If your system utilises curl >= 7.62.0, curl defaults to prefer HTTP/2 over HTTP/1.1 by default. The client will utilse HTTP/2 for most HTTPS operations and HTTP/1.1 for others. This difference is governed by the OneDrive platform and not this client.
+If your system utilises curl >= 7.62.0, curl defaults to prefer HTTP/2 over HTTP/1.1 by default. The client will utilise HTTP/2 for most HTTPS operations and HTTP/1.1 for others. This difference is governed by the OneDrive platform and not this client.
 
 If you wish to explicitly use HTTP/1.1 you will need to use the `--force-http-11` flag or set the config option `force_http_11 = "true"` to force the application to use HTTP/1.1 otherwise all client operations will use whatever is the curl default for your distribution.
 
@@ -704,7 +704,7 @@ monitor_fullscan_frequency = "24"
 **Note:** When running in --monitor mode, at application start-up, a full scan will be performed to ensure data integrity. This option has zero effect when running the application in `--synchronize` mode and a full scan will always be performed.
 
 #### monitor_log_frequency
-This configuration option controls the output of when logging is performed to detail that a sync is occuring with OneDrive when using `--monitor` mode. The frequency of syncing with OneDrive is controled via 'monitor_interval'.
+This configuration option controls the output of when logging is performed to detail that a sync is occurring with OneDrive when using `--monitor` mode. The frequency of syncing with OneDrive is controlled via 'monitor_interval'.
 
 By default without configuration, 'monitor_log_frequency' is set to 6.
 
@@ -725,7 +725,7 @@ Starting a sync with OneDrive
 Syncing changes from OneDrive ...
 Sync with OneDrive is complete
 ```
-**Note:** The additional log output `Performing a database consistency and integrity check on locally stored data ...` will only be displayed when this activity is occuring which is triggered by 'monitor_fullscan_frequency'.
+**Note:** The additional log output `Performing a database consistency and integrity check on locally stored data ...` will only be displayed when this activity is occurring which is triggered by 'monitor_fullscan_frequency'.
 
 #### min_notify_changes
 This option defines the minimum number of pending incoming changes necessary to trigger a desktop notification. This allows controlling the frequency of notifications.
@@ -817,12 +817,12 @@ application_id = "22c49a0d-d21c-4792-aed1-8f163c982546"
 ### How to sync only specific or single directory?
 There are two methods to achieve this:
 *   Utilise '--single-directory' option to only sync this specific path
-*   Utilise 'sync_list' to configure what files and directories to sync, and what should be exluded
+*   Utilise 'sync_list' to configure what files and directories to sync, and what should be excluded
 
 ### How to 'skip' directories from syncing?
 There are several mechanisms available to 'skip' a directory from the sync process:
 *   Utilise 'skip_dir' to configure what directories to skip. Refer to above for configuration advice.
-*   Utilise 'sync_list' to configure what files and directories to sync, and what should be exluded
+*   Utilise 'sync_list' to configure what files and directories to sync, and what should be excluded
 
 One further method is to add a '.nosync' empty file to any folder. When this file is present, adding `--check-for-nosync` to your command line will now make the sync process skip any folder where the '.nosync' file is present.
 
@@ -841,12 +841,12 @@ check_nosync = "true"
 ### How to 'skip' files from syncing?
 There are two methods to achieve this:
 *   Utilise 'skip_file' to configure what files to skip. Refer to above for configuration advice.
-*   Utilise 'sync_list' to configure what files and directories to sync, and what should be exluded
+*   Utilise 'sync_list' to configure what files and directories to sync, and what should be excluded
 
 ### How to 'skip' dot files and folders from syncing?
 There are three methods to achieve this:
 *   Utilise 'skip_file' or 'skip_dir' to configure what files or folders to skip. Refer to above for configuration advice.
-*   Utilise 'sync_list' to configure what files and directories to sync, and what should be exluded
+*   Utilise 'sync_list' to configure what files and directories to sync, and what should be excluded
 *   Utilise 'skip_dotfiles' to skip any dot file (for example: `.Trash-1000` or `.xdg-volume-info`) from syncing to OneDrive.
 
 Example:
@@ -976,7 +976,7 @@ Refer to [./advanced-usage.md](advanced-usage.md) for configuration assistance.
 Monitor mode (`--monitor`) allows the onedrive process to continually monitor your local file system for changes to files.
 
 Two common errors can occur when using monitor mode:
-*   Intialisation failure
+*   Initialisation failure
 *   Unable to add a new inotify watch
 
 Both of these errors are local environment issues, where the following system variables need to be increased as the current system values are potentially too low:
@@ -1217,7 +1217,7 @@ journalctl --user-unit=onedrive -f
    - `# touch /etc/sv/runsvdir-<username>/run`
    - `# chmod 0755 /etc/sv/runsvdir-<username>/run`
 
-3. Edit the `run` file with the following contents (priviledges needed)
+3. Edit the `run` file with the following contents (privileges needed)
 
   ```sh
   #!/bin/sh
@@ -1274,7 +1274,7 @@ for extra details.
 
 ## Additional Configuration
 ### Advanced Configuration of the OneDrive Free Client
-* Configuring the client to use mulitple OneDrive accounts / configurations, for example:
+* Configuring the client to use multiple OneDrive accounts / configurations, for example:
   * Setup to use onedrive with both Personal and Business accounts
   * Setup to use onedrive with multiple SharePoint Libraries
 * Configuring the client for use in dual-boot (Windows / Linux) situations
@@ -1313,7 +1313,7 @@ If selinux is enforced and the sync folder is outside of the home folder, as lon
 sudo semanage fcontext -a -t user_home_t /path/to/onedriveSyncFolder
 sudo restorecon -R -v /path/to/onedriveSyncFolder
 ```
-To remove this change from selinux and restore the default behaivor:
+To remove this change from selinux and restore the default behavior:
 ```text
 sudo semanage fcontext -d /path/to/onedriveSyncFolder
 sudo restorecon -R -v /path/to/onedriveSyncFolder

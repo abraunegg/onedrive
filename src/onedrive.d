@@ -510,7 +510,7 @@ final class OneDriveApi
 	bool init()
 	{
 		static import std.utf;
-		// detail what we are using for applicaion identification
+		// detail what we are using for application identification
 		log.vdebug("clientId    = ", clientId);
 		log.vdebug("companyName = ", companyName);
 		log.vdebug("appTitle    = ", appTitle);

@@ -46,7 +46,7 @@ Check the version of the application you are using `onedrive --version` and ensu
 If you are not using the above application version or greater, you must upgrade your application to obtain support.
 
 ## Have a Question
-If you have a question or need something clarified, please raise a new disscussion post [here](https://github.com/abraunegg/onedrive/discussions)
+If you have a question or need something clarified, please raise a new discussion post [here](https://github.com/abraunegg/onedrive/discussions)
 
 Be sure to review the Frequently Asked Questions as well before raising a new discussion post.
 
@@ -57,7 +57,7 @@ Refer to [Frequently Asked Questions](https://github.com/abraunegg/onedrive/wiki
 If you encounter any bugs you can report them here on GitHub. Before filing an issue be sure to:
 
 1.  Check the version of the application you are using `onedrive --version` and ensure that you are running a supported application version. If you are not using a supported application version, you must first upgrade your application to a supported version and then re-test for your issue.
-2.  If you are using a supported applcation version, fill in a new bug report using the [issue template](https://github.com/abraunegg/onedrive/issues/new?template=bug_report.md)
+2.  If you are using a supported application version, fill in a new bug report using the [issue template](https://github.com/abraunegg/onedrive/issues/new?template=bug_report.md)
 3.  Generate a debug log for support using the following [process](https://github.com/abraunegg/onedrive/wiki/Generate-debug-log-for-support)
     *   If you are in *any* way concerned regarding the sensitivity of the data contained with in the verbose debug log file, create a new OneDrive account, configure the client to use that, use *dummy* data to simulate your environment and then replicate your original issue
     *   If you are still concerned, provide an NDA or confidentiality document to sign
