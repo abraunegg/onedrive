@@ -130,7 +130,7 @@ class ApplicationConfig {
 		
 	// Sync Operations
 	bool fullScanTrueUpRequired = false;
-	bool surpressLoggingOutput = false;
+	bool suppressLoggingOutput = false;
 	
 	// Number of concurrent threads when downloading and uploading data
 	ulong defaultConcurrentThreads = 8;

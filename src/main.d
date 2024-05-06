@@ -931,26 +931,24 @@ int main(string[] cliArgs) {
 						// unsurpress the logging output
 						monitorLogOutputLoopCount = 1;
 						addLogEntry("Unsuppressing initial sync log output", ["debug"]);
-						appConfig.surpressLoggingOutput = false;
+						appConfig.suppressLoggingOutput = false;
 					} else {
 						// do we suppress the logging output to absolute minimal
 						if (monitorLoopFullCount == 1) {
 							// application startup with --monitor
 							addLogEntry("Unsuppressing initial sync log output", ["debug"]);
-							appConfig.surpressLoggingOutput = false;
+							appConfig.suppressLoggingOutput = false;
 						} else {
 							// only suppress if we are not doing --verbose or higher
 							if (appConfig.verbosityCount == 0) {
 								addLogEntry("Suppressing --monitor log output", ["debug"]);
-								appConfig.surpressLoggingOutput = true;
+								appConfig.suppressLoggingOutput = true;
 							} else {
 								addLogEntry("Unsuppressing log output", ["debug"]);
-								appConfig.surpressLoggingOutput = false;
+								appConfig.suppressLoggingOutput = false;
 							}
 						}
 					}
-					
-					appConfig.surpressLoggingOutput = false; // TO REMOVE
 					
 					// How long has the application been running for?
 					auto elapsedTime = Clock.currTime() - applicationStartTime;
@@ -1147,7 +1145,7 @@ void performUploadOnlySyncProcess(string localPath, Monitor filesystemMonitor = 
 void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = null) {
 
 	// If we are performing log suppression, output this message so the user knows what is happening
-	if (appConfig.surpressLoggingOutput) {
+	if (appConfig.suppressLoggingOutput) {
 		addLogEntry("Syncing changes from Microsoft OneDrive ...");
 	}
 	
@@ -1217,7 +1215,7 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 			// 'force_children_scan' is used when using /children rather than /delta and it is not efficient to re-run this exact same process twice
 			if (!appConfig.getValueBool("force_children_scan")) {
 				// Perform the final true up scan to ensure we have correctly replicated the current online state locally
-				if (!appConfig.surpressLoggingOutput) {
+				if (!appConfig.suppressLoggingOutput) {
 					addLogEntry("Performing a last examination of the most recent online data within Microsoft OneDrive to complete the reconciliation process");
 				}
 				// We pass in the 'appConfig.fullScanTrueUpRequired' value which then flags do we use the configured 'deltaLink'

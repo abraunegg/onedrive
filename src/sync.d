@@ -647,7 +647,7 @@ class SyncEngine {
 					}
 					
 					// Directory name is not excluded or skip_dir is not populated
-					if (!appConfig.surpressLoggingOutput) {
+					if (!appConfig.suppressLoggingOutput) {
 						addLogEntry("Syncing this OneDrive Personal Shared Folder: " ~ remoteItem.name);
 					}
 					// Check this OneDrive Personal Shared Folder for changes
@@ -682,7 +682,7 @@ class SyncEngine {
 							}
 							
 							// Directory name is not excluded or skip_dir is not populated
-							if (!appConfig.surpressLoggingOutput) {
+							if (!appConfig.suppressLoggingOutput) {
 								addLogEntry("Syncing this OneDrive Business Shared Folder: " ~ remoteItem.name);
 							}
 							
@@ -889,7 +889,7 @@ class SyncEngine {
 			
 			// Dynamic output for non-verbose and verbose run so that the user knows something is being retrieved from the OneDrive API
 			if (appConfig.verbosityCount == 0) {
-				if (!appConfig.surpressLoggingOutput) {
+				if (!appConfig.suppressLoggingOutput) {
 					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ driveIdToQuery, appConfig.verbosityCount);
 				}
 			} else {
@@ -921,7 +921,7 @@ class SyncEngine {
 				
 				if (appConfig.verbosityCount == 0) {
 					// Dynamic output for a non-verbose run so that the user knows something is happening
-					if (!appConfig.surpressLoggingOutput) {
+					if (!appConfig.suppressLoggingOutput) {
 						addProcessingDotEntry();
 					}
 				} else {
@@ -1006,7 +1006,7 @@ class SyncEngine {
 			
 			// Log that we have finished querying the /delta API
 			if (appConfig.verbosityCount == 0) {
-				if (!appConfig.surpressLoggingOutput) {
+				if (!appConfig.suppressLoggingOutput) {
 					// Close out the '....' being printed to the console
 					addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 				}
@@ -1070,7 +1070,7 @@ class SyncEngine {
 			addLogEntry("------------------------------------------------------------------", ["debug"]);
 			
 			// Log that we have finished generating our self generated /delta response
-			if (!appConfig.surpressLoggingOutput) {
+			if (!appConfig.suppressLoggingOutput) {
 				addLogEntry("Finished processing self generated /delta JSON response from the OneDrive API");
 			}
 		}
@@ -1094,7 +1094,7 @@ class SyncEngine {
 			ulong batchesProcessed = 0;
 			
 			// Dynamic output for a non-verbose run so that the user knows something is happening
-			if (!appConfig.surpressLoggingOutput) {
+			if (!appConfig.suppressLoggingOutput) {
 				addProcessingLogHeaderEntry("Processing " ~ to!string(jsonItemsToProcess.length) ~ " applicable changes and items received from Microsoft OneDrive", appConfig.verbosityCount);
 			}
 			
@@ -1106,7 +1106,7 @@ class SyncEngine {
 				
 				if (appConfig.verbosityCount == 0) {
 					// Dynamic output for a non-verbose run so that the user knows something is happening
-					if (!appConfig.surpressLoggingOutput) {
+					if (!appConfig.suppressLoggingOutput) {
 						addProcessingDotEntry();
 					}
 				} else {
@@ -1122,7 +1122,7 @@ class SyncEngine {
 			
 			if (appConfig.verbosityCount == 0) {
 				// close off '.' output
-				if (!appConfig.surpressLoggingOutput) {
+				if (!appConfig.suppressLoggingOutput) {
 					addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 				}
 			}
@@ -1134,8 +1134,8 @@ class SyncEngine {
 			// Free up memory and items processed as it is pointless now having this data around
 			jsonItemsToProcess = [];
 		} else {
-			if (!appConfig.surpressLoggingOutput) {
-				addLogEntry("No additional changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive");
+			if (!appConfig.suppressLoggingOutput) {
+				addLogEntry("No changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive");
 			}
 		}
 		
@@ -2885,7 +2885,7 @@ class SyncEngine {
 	void performDatabaseConsistencyAndIntegrityCheck() {
 		
 		// Log what we are doing
-		if (!appConfig.surpressLoggingOutput) {
+		if (!appConfig.suppressLoggingOutput) {
 			addProcessingLogHeaderEntry("Performing a database consistency and integrity check on locally stored data", appConfig.verbosityCount);
 		}
 		
@@ -2980,7 +2980,7 @@ class SyncEngine {
 		}
 
 		// Close out the '....' being printed to the console
-		if (!appConfig.surpressLoggingOutput) {
+		if (!appConfig.suppressLoggingOutput) {
 			if (appConfig.verbosityCount == 0) {
 				addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 			}
@@ -3042,7 +3042,7 @@ class SyncEngine {
 		// Log what we are doing
 		addLogEntry("Processing: " ~ logOutputPath, ["verbose"]);
 		// Add a processing '.'
-		if (!appConfig.surpressLoggingOutput) {
+		if (!appConfig.suppressLoggingOutput) {
 			if (appConfig.verbosityCount == 0) {
 				addProcessingDotEntry();
 			}
@@ -4237,7 +4237,7 @@ class SyncEngine {
 		
 		// Log the action that we are performing, however only if this is a directory
 		if (isDir(path)) {
-			if (!appConfig.surpressLoggingOutput) {
+			if (!appConfig.suppressLoggingOutput) {
 				if (!cleanupLocalFiles) {
 					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload", appConfig.verbosityCount);
 				} else {
@@ -4250,7 +4250,7 @@ class SyncEngine {
 		addLogEntry("Starting Filesystem Walk:     " ~ to!string(startTime), ["debug"]);
 		
 		// Add a processing '.'
-		if (!appConfig.surpressLoggingOutput) {
+		if (!appConfig.suppressLoggingOutput) {
 			if (appConfig.verbosityCount == 0) {
 				addProcessingDotEntry();
 			}
@@ -4260,7 +4260,7 @@ class SyncEngine {
 		scanPathForNewData(path);
 		
 		if (appConfig.verbosityCount == 0) {
-			if (!appConfig.surpressLoggingOutput) {
+			if (!appConfig.suppressLoggingOutput) {
 				// Close out the '....' being printed to the console
 				addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 			}
@@ -4341,7 +4341,7 @@ class SyncEngine {
 		
 		// Add a processing '.'
 		if (isDir(path)) {
-			if (!appConfig.surpressLoggingOutput) {
+			if (!appConfig.suppressLoggingOutput) {
 				if (appConfig.verbosityCount == 0) {
 					addProcessingDotEntry();
 				}
@@ -6287,7 +6287,7 @@ class SyncEngine {
 		
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (appConfig.verbosityCount == 0) {
-				if (!appConfig.surpressLoggingOutput) {
+				if (!appConfig.suppressLoggingOutput) {
 					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ searchItem.driveId, appConfig.verbosityCount);
 				}
 			} else {
@@ -6397,7 +6397,7 @@ class SyncEngine {
 		
 		if (appConfig.verbosityCount == 0) {
 			// Dynamic output for a non-verbose run so that the user knows something is happening
-			if (!appConfig.surpressLoggingOutput) {
+			if (!appConfig.suppressLoggingOutput) {
 				addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 			}
 		}
@@ -6441,7 +6441,7 @@ class SyncEngine {
 			
 			if (appConfig.verbosityCount == 0) {
 				// Dynamic output for a non-verbose run so that the user knows something is happening
-				if (!appConfig.surpressLoggingOutput) {
+				if (!appConfig.suppressLoggingOutput) {
 					addProcessingDotEntry();
 				}
 			}
