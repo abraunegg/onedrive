@@ -37,7 +37,7 @@ Only the current release version or greater is supported. Earlier versions are n
 ## Building from Source - High Level Requirements
 *   For successful compilation of this application, it's crucial that the build environment is equipped with a minimum of 1GB of memory and an additional 1GB of swap space.
 *   Install the required distribution package dependencies coverering the required development tools and development libraries for curl and sqlite
-*   Install the [Digital Mars D Compiler (DMD)](http://dlang.org/download.html) or [LDC – the LLVM-based D Compiler](https://github.com/ldc-developers/ldc)
+*   Install the [Digital Mars D Compiler (DMD)](https://dlang.org/download.html) or [LDC – the LLVM-based D Compiler](https://github.com/ldc-developers/ldc)
 
 > [!IMPORTANT]
 > To compile this application successfully, it is essential to use either DMD version **2.088.0** or higher, or LDC version **1.18.0** or higher. Ensuring compatibility and optimal performance necessitates the use of these specific versions or their more recent updates.
