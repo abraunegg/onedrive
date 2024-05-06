@@ -26,7 +26,7 @@ class ClientSideFiltering {
 	bool skipDotfiles = false;
 	
 	this(ApplicationConfig appConfig) {
-		// Configure the class varaible to consume the application configuration
+		// Configure the class variable to consume the application configuration
 		this.appConfig = appConfig;
 	}
 	

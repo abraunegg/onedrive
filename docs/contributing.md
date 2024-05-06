@@ -122,7 +122,7 @@ For reference, below are the available application logging output functions and 
 If the code changes any of the functionality that is documented, it is expected that any PR submission will also include updating the respective section of user documentation and/or man page as part of the code submission.
 
 ## Development Testing
-Whilst there are more modern DMD and LDC compilers available, ensuring client build compatability with older platforms is a key requirement.
+Whilst there are more modern DMD and LDC compilers available, ensuring client build compatibility with older platforms is a key requirement.
 
 The issue stems from Debian and Ubuntu LTS versions - such as Ubuntu 20.04. It's [ldc package](https://packages.ubuntu.com/focal/ldc) is only v1.20.1 , thus, this is the minimum version that all compilation needs to be tested against.
 
@@ -144,7 +144,7 @@ Application output that is doing whatever | or illustration of issue being fixed
 ```
 Please also include validation of compilation using the minimum LDC package version.
 
-To assist with your testing validation against the minimum LDC compiler version, a script as per below could assit you with this validation:
+To assist with your testing validation against the minimum LDC compiler version, a script as per below could assist you with this validation:
 
 ```bash
 

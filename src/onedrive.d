@@ -90,7 +90,7 @@ class OneDriveApi {
 	bool keepAlive = false;
 
 	this(ApplicationConfig appConfig) {
-		// Configure the class varaible to consume the application configuration
+		// Configure the class variable to consume the application configuration
 		this.appConfig = appConfig;
 		this.curlEngine = null;
 		// Configure the major API Query URL's, based on using application configuration

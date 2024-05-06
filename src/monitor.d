@@ -275,7 +275,7 @@ final class Monitor {
 
 	ActionHolder actionHolder;
 	
-	// Configure the class varaible to consume the application configuration including selective sync
+	// Configure the class variable to consume the application configuration including selective sync
 	this(ApplicationConfig appConfig, ClientSideFiltering selectiveSync) {
 		this.appConfig = appConfig;
 		this.selectiveSync = selectiveSync;
@@ -335,7 +335,7 @@ final class Monitor {
 		wdToDirName = null;
 	}
 
-	// Recursivly add this path to be monitored
+	// Recursively add this path to be monitored
 	private void addRecursive(string dirname) {
 		// skip non existing/disappeared items
 		if (!exists(dirname)) {
@@ -365,7 +365,7 @@ final class Monitor {
 					return;
 				}
 			}
-			// is the path exluded by sync_list?
+			// is the path excluded by sync_list?
 			if (selectiveSync.isPathExcludedViaSyncList(buildNormalizedPath(dirname))) {
 				// dont add a watch for this item
 				addLogEntry("Skipping monitoring due to sync_list match: " ~ dirname, ["debug"]);
@@ -392,7 +392,7 @@ final class Monitor {
 
 		if (isDir(dirname)) {
 			// This is a directory			
-			// is the path exluded if skip_dotfiles configured and path is a .folder?
+			// is the path excluded if skip_dotfiles configured and path is a .folder?
 			if ((selectiveSync.getSkipDotfiles()) && (isDotFile(dirname))) {
 				// dont add a watch for this directory
 				return;
@@ -407,7 +407,7 @@ final class Monitor {
 			wdToDirName[wd] = buildNormalizedPath(dirname) ~ "/";
 		}
 		
-		// if this is a directory, recursivly add this path
+		// if this is a directory, recursively add this path
 		if (isDir(dirname)) {
 			// try and get all the directory entities for this path
 			try {

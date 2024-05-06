@@ -73,7 +73,7 @@ int main(string[] cliArgs) {
 	bool online = false;
 	// Does the operating environment have shell environment variables set
 	bool shellEnvSet = false;
-	// What is the runtime syncronisation directory that will be used
+	// What is the runtime synchronisation directory that will be used
 	// Typically this will be '~/OneDrive' .. however tilde expansion is unreliable
 	string runtimeSyncDirectory = "";
 	
@@ -432,7 +432,7 @@ int main(string[] cliArgs) {
 		if (appConfig.apiWasInitialised) {
 			addLogEntry("The OneDrive API was initialised successfully", ["verbose"]);
 			
-			// Flag that we were able to initalise the API in the application config
+			// Flag that we were able to initialise the API in the application config
 			oneDriveApiInstance.debugOutputConfiguredAPIItems();
 			oneDriveApiInstance.releaseCurlEngine();
 			object.destroy(oneDriveApiInstance);
@@ -460,11 +460,11 @@ int main(string[] cliArgs) {
 				
 				// Are we performing some sort of 'no-sync' task?
 				// - Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
-				// - Are we displaying the sync satus?
+				// - Are we displaying the sync status?
 				// - Are we getting the URL for a file online?
 				// - Are we listing who modified a file last online?
 				// - Are we listing OneDrive Business Shared Items?
-				// - Are we createing a shareable link for an existing file on OneDrive?
+				// - Are we creating a shareable link for an existing file on OneDrive?
 				// - Are we just creating a directory online, without any sync being performed?
 				// - Are we just deleting a directory online, without any sync being performed?
 				// - Are we renaming or moving a directory?
@@ -529,7 +529,7 @@ int main(string[] cliArgs) {
 					return EXIT_SUCCESS;
 				}
 				
-				// --create-share-link - Are we createing a shareable link for an existing file on OneDrive?
+				// --create-share-link - Are we creating a shareable link for an existing file on OneDrive?
 				if (appConfig.getValueString("create_share_link") != "") {
 					// Query OneDrive for the file, and if valid, create a shareable link for the file
 					
@@ -620,7 +620,7 @@ int main(string[] cliArgs) {
 		}
 	}
 	
-	// Configure the sync direcory based on the runtimeSyncDirectory configured directory
+	// Configure the sync directory based on the runtimeSyncDirectory configured directory
 	addLogEntry("All application operations will be performed in the configured local 'sync_dir' directory: " ~ runtimeSyncDirectory, ["verbose"]);
 	// Try and set the 'sync_dir', attempt to create if it does not exist
 	try {
@@ -656,7 +656,7 @@ int main(string[] cliArgs) {
 	// Set the default thread pool value
 	defaultPoolThreads(to!int(appConfig.getValueLong("threads")));
 	
-	// Is the sync engine initiallised correctly?
+	// Is the sync engine initialised correctly?
 	if (appConfig.syncEngineWasInitialised) {
 		// Configure some initial variables
 		string singleDirectoryPath;
@@ -832,7 +832,7 @@ int main(string[] cliArgs) {
 				try {
 					addLogEntry("Initialising filesystem inotify monitoring ...");
 					filesystemMonitor.initialise();
-					addLogEntry("Performing initial syncronisation to ensure consistent local state ...");
+					addLogEntry("Performing initial synchronisation to ensure consistent local state ...");
 				} catch (MonitorException e) {	
 					// monitor class initialisation failed
 					addLogEntry("ERROR: " ~ e.msg);
@@ -919,13 +919,13 @@ int main(string[] cliArgs) {
 					// Loop Start
 					addLogEntry(loopStartOutputMessage, ["debug"]);
 					addLogEntry("Total Run-Time Loop Number:     " ~ to!string(monitorLoopFullCount), ["debug"]);
-					addLogEntry("Full Scan Freqency Loop Number: " ~ to!string(fullScanFrequencyLoopCount), ["debug"]);
+					addLogEntry("Full Scan Frequency Loop Number: " ~ to!string(fullScanFrequencyLoopCount), ["debug"]);
 					SysTime startFunctionProcessingTime = Clock.currTime();
 					addLogEntry("Start Monitor Loop Time:        " ~ to!string(startFunctionProcessingTime), ["debug"]);
 					
-					// Do we perform any monitor console logging output surpression?
+					// Do we perform any monitor console logging output suppression?
 					// 'monitor_log_frequency' controls how often, in a non-verbose application output mode, how often 
-					// the full output of what is occuring is done. This is done to lessen the 'verbosity' of non-verbose 
+					// the full output of what is occurring is done. This is done to lessen the 'verbosity' of non-verbose 
 					// logging, but only when running in --monitor
 					if (monitorLogOutputLoopCount > logOutputSupressionInterval) {
 						// unsurpress the logging output
@@ -933,13 +933,13 @@ int main(string[] cliArgs) {
 						addLogEntry("Unsuppressing initial sync log output", ["debug"]);
 						appConfig.surpressLoggingOutput = false;
 					} else {
-						// do we surpress the logging output to absolute minimal
+						// do we suppress the logging output to absolute minimal
 						if (monitorLoopFullCount == 1) {
 							// application startup with --monitor
 							addLogEntry("Unsuppressing initial sync log output", ["debug"]);
 							appConfig.surpressLoggingOutput = false;
 						} else {
-							// only surpress if we are not doing --verbose or higher
+							// only suppress if we are not doing --verbose or higher
 							if (appConfig.verbosityCount == 0) {
 								addLogEntry("Suppressing --monitor log output", ["debug"]);
 								appConfig.surpressLoggingOutput = true;
@@ -1146,7 +1146,7 @@ void performUploadOnlySyncProcess(string localPath, Monitor filesystemMonitor = 
 
 void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = null) {
 
-	// If we are performing log supression, output this message so the user knows what is happening
+	// If we are performing log suppression, output this message so the user knows what is happening
 	if (appConfig.surpressLoggingOutput) {
 		addLogEntry("Syncing changes from Microsoft OneDrive ...");
 	}
@@ -1214,7 +1214,7 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 			}
 			
 			// If we are not doing a 'force_children_scan' perform a true-up
-			// 'force_children_scan' is used when using /children rather than /delta and it is not efficent to re-run this exact same process twice
+			// 'force_children_scan' is used when using /children rather than /delta and it is not efficient to re-run this exact same process twice
 			if (!appConfig.getValueBool("force_children_scan")) {
 				// Perform the final true up scan to ensure we have correctly replicated the current online state locally
 				if (!appConfig.surpressLoggingOutput) {

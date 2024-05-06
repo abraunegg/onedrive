@@ -40,7 +40,7 @@ ifeq ($(DC_TYPE),dmd)
 # Add DMD Debugging Flags
 DCFLAGS += -g -debug -gs
 else
-# Add LDC Debuggging Flags
+# Add LDC Debugging Flags
 DCFLAGS += -g -d-debug -gc
 endif
 else

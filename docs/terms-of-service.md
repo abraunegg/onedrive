@@ -38,7 +38,7 @@ OneDrive Client for Linux is not responsible for the Microsoft OneDrive Service 
 
 To the fullest extent permitted by law, we shall not be liable for any direct, indirect, incidental, special, consequential, or punitive damages, or any loss of profits or revenues, whether incurred directly or indirectly, or any loss of data, use, goodwill, or other intangible losses, resulting from (a) your use or inability to use the Service, or (b) any other matter relating to the Service.
 
-This limitiation of liability explicitly relates to the use of the OneDrive Client for Linux software and does not affect your rights under the GPLv3.
+This limitation of liability explicitly relates to the use of the OneDrive Client for Linux software and does not affect your rights under the GPLv3.
 
 ## 7. Changes to Terms
 

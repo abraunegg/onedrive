@@ -302,7 +302,7 @@ bool readLocalFile(string path) {
 
 			// Check if the read operation was successful
 			if (data.length != 1) {
-				// Read operation not sucessful
+				// Read operation not successful
 				addLogEntry("Failed to read the required amount from the file: " ~ path);
 				return false;
 			}

@@ -22,7 +22,7 @@ if (JSON item is a file) then (yes)
   endif
 :Download file (as per online JSON item) as required;
 else (no)
-  :Other handling for directories | root ojects | deleted items;
+  :Other handling for directories | root objects | deleted items;
 endif
 :Performing a database consistency and\nintegrity check on locally stored data;
 :Scan file system for any new data to upload;
