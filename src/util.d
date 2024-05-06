@@ -71,7 +71,7 @@ void safeBackup(const(char)[] path, bool dryRun, out string renamedPath) {
 	newPath ~= ext;
 
     // Log that we are perform the backup by renaming the file
-	addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath));
+	addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath) , ["verbose"]);
 
     if (!dryRun) {
 		// Not a --dry-run scenario - do the file rename
@@ -204,7 +204,7 @@ Regex!char wild2regex(const(char)[] pattern) {
 
 // Test Internet access to Microsoft OneDrive using a simple HTTP HEAD request
 bool testInternetReachability(ApplicationConfig appConfig) {
-    auto http = HTTP();
+    HTTP http = HTTP();
     http.url = "https://login.microsoftonline.com";
     
     // Configure timeouts based on application configuration
@@ -697,7 +697,7 @@ JSONValue fetchOnlineURLContent(string url) {
 	// Setup HTTP request
 	HTTP http = HTTP();
 	
-	// Create an HTTP object within a scope to ensure cleanup
+	// Exit scope to ensure cleanup
     scope(exit) {
         http.shutdown();
         object.destroy(http);

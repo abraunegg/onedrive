@@ -62,7 +62,7 @@ class SyncException: Exception {
     }
 }
 
-struct driveDetailsCache {
+struct DriveDetailsCache {
 	// - driveId is the drive for the operations were items need to be stored
 	// - quotaRestricted details a bool value as to if that drive is restricting our ability to understand if there is space available. Some 'Business' and 'SharePoint' restrict, and most (if not all) shared folders it cant be determined if there is free space
 	// - quotaAvailable is a ulong value that stores the value of what the current free space is available online
@@ -76,6 +76,12 @@ struct DeltaLinkDetails {
 	string driveId;
 	string itemId;
 	string latestDeltaLink;
+}
+
+struct DatabaseItemsToDeleteOnline {
+	// uploadDeletedItem(dbItem, localFilePath);
+	Item dbItem;
+	string localFilePath;
 }
 
 class SyncEngine {
@@ -95,8 +101,8 @@ class SyncEngine {
 	JSONValue[] fileJSONItemsToDownload;
 	// Array of paths that failed to download
 	string[] fileDownloadFailures;
-	// Associative array mapping of all OneDrive driveId's that have been seen, mapped with driveDetailsCache data for reference
-	driveDetailsCache[string] onlineDriveDetails;
+	// Associative array mapping of all OneDrive driveId's that have been seen, mapped with DriveDetailsCache data for reference
+	DriveDetailsCache[string] onlineDriveDetails;
 	// List of items we fake created when using --dry-run
 	string[2][] idsFaked;
 	// List of paths we fake deleted when using --dry-run
@@ -118,6 +124,10 @@ class SyncEngine {
 	string[] interruptedUploadsSessionFiles;
 	// List of validated interrupted uploads session JSON items to resume
 	JSONValue[] jsonItemsToResumeUpload;
+	// This list of local paths that need to be created online
+	string[] pathsToCreateOnline;
+	// Array of items from the database that have been deleted locally, that needs to be deleted online
+	DatabaseItemsToDeleteOnline[] databaseItemsToDeleteOnline;
 		
 	// Flag that there were upload or download failures listed
 	bool syncFailures = false;
@@ -190,7 +200,7 @@ class SyncEngine {
 	
 		// Create the specific task pool to process items in parallel
 		processPool = new TaskPool(to!int(appConfig.getValueLong("threads")));
-		addLogEntry("PROCESS POOL WORKER THREADS: " ~ to!string(processPool.size), ["debug"]);
+		addLogEntry("Initialised TaskPool worker with threads: " ~ to!string(processPool.size), ["debug"]);
 		
 		// Configure the class varaible to consume the application configuration
 		this.appConfig = appConfig;
@@ -309,6 +319,7 @@ class SyncEngine {
 	// The destructor should only clean up resources owned directly by this instance
 	~this() {
 		shutdownProcessPool();
+		processPool = null;
 	}
 	
 	// Initialise the Sync Engine class
@@ -395,27 +406,34 @@ class SyncEngine {
 	
 	// Shutdown the sync engine, wait for anything in processPool to complete
 	void shutdown() {
-		addLogEntry("SYNC-ENGINE: Waiting for all internal threads to complete", ["debug"]);
+		addLogEntry("SyncEngine: Waiting for all internal threads to complete", ["debug"]);
 		shutdownProcessPool();
 	}
 	
 	void shutdownProcessPool() {
 		// TaskPool needs specific shutdown based on compiler version otherwise this causes a segfault
-		addLogEntry("COMPILER VERSION: " ~ to!string(__VERSION__), ["debug"]);
-		
-		// We must be using 2098 or greater
-		if (__VERSION__ < 2098) {
-			// Compromised TaskPool shutdown process
-			// LDC version less than 1.28.0 is being used
-			// DMD version less than 2.098.0 is being used
-			// https://dlang.org/library/std/parallelism/task_pool.finish.html
-			// https://dlang.org/library/std/parallelism/task_pool.stop.html
-			processPool.finish(); // If we flag 'true' here, the application segfaults on exit
-			processPool.stop(); // Signals to all worker threads to terminate as soon as they are finished with their current Task, or immediately if they are not executing a Task.
-		} else {
-			// Normal TaskPool shutdown process
-			processPool.finish(true); // If blocking argument is true, wait for all worker threads to terminate before returning.
-			processPool.stop(); // Signals to all worker threads to terminate as soon as they are finished with their current Task, or immediately if they are not executing a Task.
+		if (processPool.size > 0) {
+			// TaskPool is still configured for 'thread' size
+			addLogEntry("Application compiled with D compiler version: " ~ to!string(__VERSION__), ["debug"]);
+			
+			// We must be using 2098 or greater to use thread blocking when shutting down
+			if (__VERSION__ < 2098) {
+				// Compromised TaskPool shutdown process
+				addLogEntry("Shutting down processPool in a legacy manner", ["debug"]);
+				// LDC version less than 1.28.0 is being used
+				// DMD version less than 2.098.0 is being used
+				// https://dlang.org/library/std/parallelism/task_pool.finish.html
+				// https://dlang.org/library/std/parallelism/task_pool.stop.html
+				processPool.finish(); // If we flag 'true' here, the application segfaults on exit
+				processPool.stop(); // Signals to all worker threads to terminate as soon as they are finished with their current Task, or immediately if they are not executing a Task.
+				//processPool = new TaskPool(to!int(0)); // Reinitialise processPool to a zero size
+			} else {
+				// Normal TaskPool shutdown process
+				addLogEntry("Shutting down processPool in a thread blocking manner", ["debug"]);
+				processPool.finish(true); // If blocking argument is true, wait for all worker threads to terminate before returning.
+				processPool.stop(); // Signals to all worker threads to terminate as soon as they are finished with their current Task, or immediately if they are not executing a Task.
+				//processPool = new TaskPool(to!int(0)); // Reinitialise processPool to a zero size
+			}
 		}
 	}
 		
@@ -456,8 +474,8 @@ class SyncEngine {
 			appConfig.defaultDriveId = defaultOneDriveDriveDetails["id"].str;
 			
 			// Make sure that appConfig.defaultDriveId is in our driveIDs array to use when checking if item is in database
-			// Keep the driveDetailsCache array with unique entries only
-			driveDetailsCache cachedOnlineDriveData;
+			// Keep the DriveDetailsCache array with unique entries only
+			DriveDetailsCache cachedOnlineDriveData;
 			if (!canFindDriveId(appConfig.defaultDriveId, cachedOnlineDriveData)) {
 				// Add this driveId to the drive cache, which then also sets for the defaultDriveId:
 				// - quotaRestricted;
@@ -1121,8 +1139,8 @@ class SyncEngine {
 			}
 		}
 		
-		// Keep the driveDetailsCache array with unique entries only
-		driveDetailsCache cachedOnlineDriveData;
+		// Keep the DriveDetailsCache array with unique entries only
+		DriveDetailsCache cachedOnlineDriveData;
 		if (!canFindDriveId(driveIdToQuery, cachedOnlineDriveData)) {
 			// Add this driveId to the drive cache
 			addOrUpdateOneDriveOnlineDetails(driveIdToQuery);
@@ -1310,7 +1328,7 @@ class SyncEngine {
 			// To show this is the processing for this particular item, start off with this breaker line
 			addLogEntry("------------------------------------------------------------------", ["debug"]);
 			addLogEntry("Processing OneDrive JSON item " ~ to!string(elementCount) ~ " of " ~ to!string(batchElementCount) ~ " as part of JSON Item Batch " ~ to!string(batchGroup) ~ " of " ~ to!string(batchCount), ["debug"]);
-			addLogEntry("Raw JSON OneDrive Item: " ~ to!string(onedriveJSONItem), ["debug"]);
+			addLogEntry("Raw JSON OneDrive Item (Batched Item): " ~ to!string(onedriveJSONItem), ["debug"]);
 			
 			string thisItemId = onedriveJSONItem["id"].str;
 			string thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
@@ -1344,17 +1362,23 @@ class SyncEngine {
 			} else {
 				// Parent not in the database
 				// Is the parent a 'folder' from another user? ie - is this a 'shared folder' that has been shared with us?
-				addLogEntry("Parent ID is not in DB .. ", ["debug"]);
 				
-				// Why?
+				
+				// Lets determine why?
 				if (thisItemDriveId == appConfig.defaultDriveId) {
-					// Flagging as unwanted
+					// Parent path does not exist - flagging as unwanted
 					addLogEntry("Flagging as unwanted: thisItemDriveId (" ~ thisItemDriveId ~ "), thisItemParentId (" ~ thisItemParentId ~ ") not in local database", ["debug"]);
-					
+					// Was this a skipped item?
 					if (thisItemParentId in skippedItems) {
+						// Parent is a skipped item
 						addLogEntry("Reason: thisItemParentId listed within skippedItems", ["debug"]);
+					} else {
+						// Parent is not in the database, as we are not creating it
+						addLogEntry("Reason: Parent ID is not in the DB .. ", ["debug"]);
 					}
-					unwanted = true;
+					
+					// Flag as unwanted
+					unwanted = true;	
 				} else {
 					// Edge case as the parent (from another users OneDrive account) will never be in the database - potentially a shared object?
 					addLogEntry("The reported parentId is not in the database. This potentially is a shared folder as 'remoteItem.driveId' != 'appConfig.defaultDriveId'. Relevant Details: remoteItem.driveId (" ~ remoteItem.driveId ~ "), remoteItem.parentId (" ~ remoteItem.parentId ~ ")", ["debug"]);
@@ -1792,7 +1816,7 @@ class SyncEngine {
 		// Are there any items to download post fetching and processing the /delta data?
 		if (!fileJSONItemsToDownload.empty) {
 			// There are elements to download
-			addLogEntry("Number of items to download from OneDrive: " ~ to!string(fileJSONItemsToDownload.length), ["verbose"]);
+			addLogEntry("Number of items to download from Microsoft OneDrive: " ~ to!string(fileJSONItemsToDownload.length));
 			downloadOneDriveItems();
 			// Cleanup array memory
 			fileJSONItemsToDownload = [];
@@ -1968,18 +1992,19 @@ class SyncEngine {
 		// How to handle this Potentially New Local Item JSON ?
 		final switch (newDatabaseItem.type) {
 			case ItemType.file:
-				// Add to the items to download array for processing
+				// Add to the file to the download array for processing later
 				fileJSONItemsToDownload ~= onedriveJSONItem;
 				break;
 			case ItemType.dir:
+				// Create the directory immediately as we depend on its entry existing
 				handleLocalDirectoryCreation(newDatabaseItem, newItemPath, onedriveJSONItem);
 				break;
 			case ItemType.remote:
-				// Handle remote directory and files differently
+				// Add to the directory and relevant detils for processing later
 				if (newDatabaseItem.remoteType == ItemType.dir) {
 					handleLocalDirectoryCreation(newDatabaseItem, newItemPath, onedriveJSONItem);
 				} else {
-					// Add to the items to download array for processing
+					// Add to the file to the download array for processing later
 					fileJSONItemsToDownload ~= onedriveJSONItem;
 				}
 				break;
@@ -1995,7 +2020,7 @@ class SyncEngine {
 		// To create a path, 'newItemPath' must not be empty
 		if (!newItemPath.empty) {
 			// Update the logging output to be consistent
-			addLogEntry("Creating local directory: " ~ "./" ~ buildNormalizedPath(newItemPath));
+			addLogEntry("Creating local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);
 			if (!dryRun) {
 				try {
 					// Create the new directory
@@ -2635,7 +2660,7 @@ class SyncEngine {
 		addLogEntry("Default Root ID:      " ~ appConfig.defaultRootId, ["verbose"]);
 
 		// Fetch the details from cachedOnlineDriveData
-		driveDetailsCache cachedOnlineDriveData;
+		DriveDetailsCache cachedOnlineDriveData;
 		cachedOnlineDriveData = getDriveDetails(appConfig.defaultDriveId);
 		
 		// What do we display here for space remaining
@@ -2945,16 +2970,30 @@ class SyncEngine {
 
 		// Close out the '....' being printed to the console
 		if (!appConfig.surpressLoggingOutput) {
-			if (appConfig.verbosityCount == 0)
+			if (appConfig.verbosityCount == 0) {
 				addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+			}
 		}
 		
 		// Are we doing a --download-only sync?
 		if (!appConfig.getValueBool("download_only")) {
+			
+			// Do we have any known items, where they have been deleted locally, that now need to be deleted online?
+			if (!databaseItemsToDeleteOnline.empty) {
+				// There are items to delete online
+				addLogEntry("Deleted local items to delete on Microsoft OneDrive: " ~ to!string(databaseItemsToDeleteOnline.length));
+				foreach(localItemToDeleteOnline; databaseItemsToDeleteOnline) {
+					// Upload to OneDrive the instruction to delete this item. This will handle the 'noRemoteDelete' flag if set
+					uploadDeletedItem(localItemToDeleteOnline.dbItem, localItemToDeleteOnline.localFilePath);
+				}
+				// Cleanup array memory
+				databaseItemsToDeleteOnline = [];
+			}
+			
 			// Do we have any known items, where the content has changed locally, that needs to be uploaded?
 			if (!databaseItemsWhereContentHasChanged.empty) {
 				// There are changed local files that were in the DB to upload
-				addLogEntry("Changed local items to upload to OneDrive: " ~ to!string(databaseItemsWhereContentHasChanged.length));
+				addLogEntry("Changed local items to upload to Microsoft OneDrive: " ~ to!string(databaseItemsWhereContentHasChanged.length));
 				processChangedLocalItemsToUpload();
 				// Cleanup array memory
 				databaseItemsWhereContentHasChanged = [];
@@ -2993,8 +3032,9 @@ class SyncEngine {
 		addLogEntry("Processing: " ~ logOutputPath, ["verbose"]);
 		// Add a processing '.'
 		if (!appConfig.surpressLoggingOutput) {
-			if (appConfig.verbosityCount == 0)
+			if (appConfig.verbosityCount == 0) {
 				addProcessingDotEntry();
+			}
 		}
 		
 		// Determine which action to take
@@ -3115,8 +3155,8 @@ class SyncEngine {
 			if (!dryRun) {
 				// Not --dry-run situation
 				addLogEntry("The file has been deleted locally", ["verbose"]);
-				// Upload to OneDrive the instruction to delete this item. This will handle the 'noRemoteDelete' flag if set
-				uploadDeletedItem(dbItem, localFilePath);
+				// Add this to the array to handle post checking all database items
+				databaseItemsToDeleteOnline ~= [DatabaseItemsToDeleteOnline(dbItem, localFilePath)];
 			} else {
 				// We are in a --dry-run situation, file appears to have been deleted locally - this file may never have existed locally as we never downloaded it due to --dry-run
 				// Did we 'fake create it' as part of --dry-run ?
@@ -3131,8 +3171,8 @@ class SyncEngine {
 				if (!idsFakedMatch) {
 					// dbItem.id did not match a 'faked' download new file creation - so this in-sync object was actually deleted locally, but we are in a --dry-run situation
 					addLogEntry("The file has been deleted locally", ["verbose"]);
-					// Upload to OneDrive the instruction to delete this item. This will handle the 'noRemoteDelete' flag if set
-					uploadDeletedItem(dbItem, localFilePath);
+					// Add this to the array to handle post checking all database items
+					databaseItemsToDeleteOnline ~= [DatabaseItemsToDeleteOnline(dbItem, localFilePath)];
 				}
 			}
 		}
@@ -3182,8 +3222,8 @@ class SyncEngine {
 					addLogEntry("Most likely cause - 'inotify' event was missing for whatever action was taken locally or action taken when application was stopped", ["debug"]);
 				}
 				// A moved directory will be uploaded as 'new', delete the old directory and database reference
-				// Upload to OneDrive the instruction to delete this item. This will handle the 'noRemoteDelete' flag if set
-				uploadDeletedItem(dbItem, localFilePath);
+				// Add this to the array to handle post checking all database items
+				databaseItemsToDeleteOnline ~= [DatabaseItemsToDeleteOnline(dbItem, localFilePath)];
 			} else {
 				// We are in a --dry-run situation, directory appears to have been deleted locally - this directory may never have existed locally as we never created it due to --dry-run
 				// Did we 'fake create it' as part of --dry-run ?
@@ -3198,8 +3238,8 @@ class SyncEngine {
 				if (!idsFakedMatch) {
 					// dbItem.id did not match a 'faked' download new directory creation - so this in-sync object was actually deleted locally, but we are in a --dry-run situation
 					addLogEntry("The directory has been deleted locally", ["verbose"]);
-					// Upload to OneDrive the instruction to delete this item. This will handle the 'noRemoteDelete' flag if set
-					uploadDeletedItem(dbItem, localFilePath);
+					// Add this to the array to handle post checking all database items
+					databaseItemsToDeleteOnline ~= [DatabaseItemsToDeleteOnline(dbItem, localFilePath)];
 				} else {
 					// When we are using --single-directory, we use a the getChildren() call to get all children of a path, meaning all children are already traversed
 					// Thus, if we traverse the path of this directory .. we end up with double processing & log output .. which is not ideal
@@ -3738,7 +3778,7 @@ class SyncEngine {
 		// - cachedOnlineDriveData.quotaRestricted;
 		// - cachedOnlineDriveData.quotaAvailable;
 		// - cachedOnlineDriveData.quotaRemaining;
-		driveDetailsCache cachedOnlineDriveData;
+		DriveDetailsCache cachedOnlineDriveData;
 		cachedOnlineDriveData = getDriveDetails(targetDriveId);
 		remainingFreeSpace = cachedOnlineDriveData.quotaRemaining;
 		
@@ -3814,7 +3854,7 @@ class SyncEngine {
 			}
 			// File exceeds max allowed size
 			if (skippedMaxSize) {
-				addLogEntry("Skipping uploading this modified file as it exceeds the maximum size allowed by OneDrive: " ~ localFilePath, ["info", "notify"]);
+				addLogEntry("Skipping uploading this modified file as it exceeds the maximum size allowed by Microsoft OneDrive: " ~ localFilePath, ["info", "notify"]);
 			}
 			// Generic message
 			if (skippedExceptionError) {
@@ -4155,10 +4195,14 @@ class SyncEngine {
 	// Perform a filesystem walk to uncover new data to upload to OneDrive
 	void scanLocalFilesystemPathForNewData(string path) {
 		// Cleanup array memory before we start adding files
+		pathsToCreateOnline = [];
 		newLocalFilesToUploadToOneDrive = [];
 		
 		// Perform a filesystem walk to uncover new data
 		scanLocalFilesystemPathForNewDataToUpload(path);
+		
+		// Create new directories online that has been identified
+		processNewDirectoriesToCreateOnline();
 		
 		// Upload new data that has been identified
 		processNewLocalItemsToUpload();
@@ -4193,13 +4237,21 @@ class SyncEngine {
 		
 		auto startTime = Clock.currTime();
 		addLogEntry("Starting Filesystem Walk:     " ~ to!string(startTime), ["debug"]);
+		
+		// Add a processing '.'
+		if (!appConfig.surpressLoggingOutput) {
+			if (appConfig.verbosityCount == 0) {
+				addProcessingDotEntry();
+			}
+		}
 	
 		// Perform the filesystem walk of this path, building an array of new items to upload
 		scanPathForNewData(path);
-		if (isDir(path)) {
+		
+		if (appConfig.verbosityCount == 0) {
 			if (!appConfig.surpressLoggingOutput) {
-				if (appConfig.verbosityCount == 0)
-					addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+				// Close out the '....' being printed to the console
+				addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 			}
 		}
 		
@@ -4213,13 +4265,24 @@ class SyncEngine {
 		addLogEntry("Elapsed Time Filesystem Walk: " ~ to!string(elapsedTime), ["debug"]);
 	}
 	
-	// Perform a filesystem walk to uncover new data to upload to OneDrive
+	void processNewDirectoriesToCreateOnline() {
+		// Are there any new local directories to create online?
+		if (!pathsToCreateOnline.empty) {
+			// There are new directories to create online
+			addLogEntry("New directories to create on Microsoft OneDrive: " ~ to!string(pathsToCreateOnline.length) );
+			foreach(pathToCreateOnline; pathsToCreateOnline) {
+				// Create this directory on OneDrive so that we can upload files to it
+				createDirectoryOnline(pathToCreateOnline);
+			}
+		}
+	}
+	
+	// Upload new data that has been identified to Microsoft OneDrive
 	void processNewLocalItemsToUpload() {
-		// Upload new data that has been identified
-		// Are there any items to download post fetching the /delta data?
+		// Are there any new local items to upload?
 		if (!newLocalFilesToUploadToOneDrive.empty) {
 			// There are elements to upload
-			addProcessingLogHeaderEntry("New items to upload to OneDrive: " ~ to!string(newLocalFilesToUploadToOneDrive.length), appConfig.verbosityCount);
+			addLogEntry("New items to upload to Microsoft OneDrive: " ~ to!string(newLocalFilesToUploadToOneDrive.length) );
 			
 			// Reset totalDataToUpload
 			totalDataToUpload = 0;
@@ -4264,11 +4327,13 @@ class SyncEngine {
 	
 	// Scan this path for new data
 	void scanPathForNewData(string path) {
+		
 		// Add a processing '.'
 		if (isDir(path)) {
 			if (!appConfig.surpressLoggingOutput) {
-				if (appConfig.verbosityCount == 0)
+				if (appConfig.verbosityCount == 0) {
 					addProcessingDotEntry();
+				}
 			}
 		}
 
@@ -4385,7 +4450,8 @@ class SyncEngine {
 						if (!cleanupLocalFiles) {
 							// --download-only --cleanup-local-files not used
 							// Create this directory on OneDrive so that we can upload files to it
-							createDirectoryOnline(path);
+							// Add this path to an array so that the directory online can be created before we upload files
+							pathsToCreateOnline ~= [path];
 						} else {
 							// we need to clean up this directory
 							addLogEntry("Removing local directory as --download-only & --cleanup-local-files configured");
@@ -4475,7 +4541,7 @@ class SyncEngine {
 							if (!cleanupLocalFiles) {
 								// --download-only --cleanup-local-files not used
 								// Add this path as a file we need to upload
-								addLogEntry("OneDrive Client flagging to upload this file to OneDrive: " ~ path, ["debug"]);
+								addLogEntry("OneDrive Client flagging to upload this file to Microsoft OneDrive: " ~ path, ["debug"]);
 								newLocalFilesToUploadToOneDrive ~= path;
 							} else {
 								// we need to clean up this file
@@ -4942,16 +5008,11 @@ class SyncEngine {
 		foreach (chunk; newLocalFilesToUploadToOneDrive.chunks(batchSize)) {
 			uploadNewLocalFileItemsInParallel(chunk);
 		}
-		if (appConfig.verbosityCount == 0)
-			addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 	}
 	
 	// Upload the file batches in parallel
 	void uploadNewLocalFileItemsInParallel(string[] array) {
 		foreach (i, fileToUpload; processPool.parallel(array)) {
-			// Add a processing '.'
-			if (appConfig.verbosityCount == 0)
-				addProcessingDotEntry();
 			addLogEntry("Upload Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);
 			uploadNewFile(fileToUpload);
 			addLogEntry("Upload Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);
@@ -4979,7 +5040,7 @@ class SyncEngine {
 		// Is there space available online
 		bool spaceAvailableOnline = false;
 		
-		driveDetailsCache cachedOnlineDriveData;
+		DriveDetailsCache cachedOnlineDriveData;
 		ulong calculatedSpaceOnlinePostUpload;
 		
 		OneDriveApi checkFileOneDriveApiInstance;
@@ -5034,7 +5095,7 @@ class SyncEngine {
 						// Is there enough free space on OneDrive as compared to when we started this thread, to safely upload the file to OneDrive?
 						
 						// Make sure that parentItem.driveId is in our driveIDs array to use when checking if item is in database
-						// Keep the driveDetailsCache array with unique entries only
+						// Keep the DriveDetailsCache array with unique entries only
 						if (!canFindDriveId(parentItem.driveId, cachedOnlineDriveData)) {
 							// Add this driveId to the drive cache, which then also sets for the defaultDriveId:
 							// - quotaRestricted;
@@ -5237,12 +5298,12 @@ class SyncEngine {
 							}
 						} else {
 							// skip file upload - insufficent space to upload
-							addLogEntry("Skipping uploading this new file as it exceeds the available free space on OneDrive: " ~ fileToUpload);
+							addLogEntry("Skipping uploading this new file as it exceeds the available free space on Microsoft OneDrive: " ~ fileToUpload);
 							uploadFailed = true;
 						}
 					} else {
 						// Skip file upload - too large
-						addLogEntry("Skipping uploading this new file as it exceeds the maximum size allowed by OneDrive: " ~ fileToUpload);
+						addLogEntry("Skipping uploading this new file as it exceeds the maximum size allowed by Microsoft OneDrive: " ~ fileToUpload);
 						uploadFailed = true;
 					}
 				} else {
@@ -5619,14 +5680,12 @@ class SyncEngine {
 				//   503 - Service Unavailable
 				//   504 - Gateway Timeout
 					
-				
-				// insert a new line as well, so that the below error is inserted on the console in the right location
+				// Insert a new line as well, so that the below error is inserted on the console in the right location
 				addLogEntry("Fragment upload failed - received an exception response from OneDrive API", ["verbose"]);
 				// display what the error is
 				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 				// retry fragment upload in case error is transient
 				addLogEntry("Retrying fragment upload", ["verbose"]);
-				
 				
 				try {
 					uploadResponse = activeOneDriveApiInstance.uploadFragment(
@@ -5715,7 +5774,7 @@ class SyncEngine {
 			// Is this a --download-only operation?
 			if (!appConfig.getValueBool("download_only")) {
 				// Process the delete - delete the object online
-				addLogEntry("Deleting item from OneDrive: " ~ path);
+				addLogEntry("Deleting item from Microsoft OneDrive: " ~ path);
 				bool flagAsBigDelete = false;
 				
 				Item[] children;
@@ -5951,8 +6010,8 @@ class SyncEngine {
 					
 					// If we have a remote drive ID, add this to our list of known drive id's
 					if (!item.remoteDriveId.empty) {
-						// Keep the driveDetailsCache array with unique entries only
-						driveDetailsCache cachedOnlineDriveData;
+						// Keep the DriveDetailsCache array with unique entries only
+						DriveDetailsCache cachedOnlineDriveData;
 						if (!canFindDriveId(item.remoteDriveId, cachedOnlineDriveData)) {
 							// Add this driveId to the drive cache
 							addOrUpdateOneDriveOnlineDetails(item.remoteDriveId);
@@ -6033,7 +6092,7 @@ class SyncEngine {
 		if (!fileDownloadFailures.empty) {
 			// There are download failures ...
 			addLogEntry();
-			addLogEntry("Failed items to download from OneDrive: " ~ to!string(fileDownloadFailures.length));
+			addLogEntry("Failed items to download from Microsoft OneDrive: " ~ to!string(fileDownloadFailures.length));
 			foreach(failedFileToDownload; fileDownloadFailures) {
 				// List the detail of the item that failed to download
 				addLogEntry("Failed to download: " ~ failedFileToDownload, ["info", "notify"]);
@@ -6062,7 +6121,7 @@ class SyncEngine {
 		if (!fileUploadFailures.empty) {
 			// There are download failures ...
 			addLogEntry();
-			addLogEntry("Failed items to upload to OneDrive: " ~ to!string(fileUploadFailures.length));
+			addLogEntry("Failed items to upload to Microsoft OneDrive: " ~ to!string(fileUploadFailures.length));
 			foreach(failedFileToUpload; fileUploadFailures) {
 				// List the path of the item that failed to upload
 				addLogEntry("Failed to upload: " ~ failedFileToUpload, ["info", "notify"]);
@@ -6094,7 +6153,7 @@ class SyncEngine {
 			if (failures.empty) return false;
 
 			addLogEntry();
-			addLogEntry("Failed items to " ~ operation ~ " to/from OneDrive: " ~ to!string(failures.length));
+			addLogEntry("Failed items to " ~ operation ~ " to/from Microsoft OneDrive: " ~ to!string(failures.length));
 
 			foreach (failedFile; failures) {
 				addLogEntry("Failed to " ~ operation ~ ": " ~ failedFile, ["info", "notify"]);
@@ -7023,7 +7082,6 @@ class SyncEngine {
 					querySharePointLibraryNameApiInstance.releaseCurlEngine();
 					object.destroy(querySharePointLibraryNameApiInstance);
 					querySharePointLibraryNameApiInstance = null;					
-					
 					return;
 				}
 				
@@ -7043,7 +7101,6 @@ class SyncEngine {
 					querySharePointLibraryNameApiInstance.releaseCurlEngine();
 					object.destroy(querySharePointLibraryNameApiInstance);
 					querySharePointLibraryNameApiInstance = null;
-					
 					return;
 				}
 				
@@ -7056,7 +7113,6 @@ class SyncEngine {
 				querySharePointLibraryNameApiInstance.releaseCurlEngine();
 				object.destroy(querySharePointLibraryNameApiInstance);
 				querySharePointLibraryNameApiInstance = null;
-				
 				return;
 			}
 			
@@ -7087,7 +7143,6 @@ class SyncEngine {
 								querySharePointLibraryNameApiInstance.releaseCurlEngine();
 								object.destroy(querySharePointLibraryNameApiInstance);
 								querySharePointLibraryNameApiInstance = null;								
-																
 								return;
 							}
 							
@@ -7115,7 +7170,6 @@ class SyncEngine {
 								querySharePointLibraryNameApiInstance.releaseCurlEngine();
 								object.destroy(querySharePointLibraryNameApiInstance);
 								querySharePointLibraryNameApiInstance = null;
-								
 								return;
 							}
 						}
@@ -7236,8 +7290,9 @@ class SyncEngine {
 		
 		for (;;) {
 			// Add a processing '.'
-			if (appConfig.verbosityCount == 0)
+			if (appConfig.verbosityCount == 0) {
 				addProcessingDotEntry();
+			}
 		
 			// Get the /delta changes via the OneDrive API
 			// getDeltaChangesByItemId has the re-try logic for transient errors
@@ -7318,8 +7373,9 @@ class SyncEngine {
 		getDeltaQueryOneDriveApiInstance = null;
 		
 		// Needed after printing out '....' when fetching changes from OneDrive API
-		if (appConfig.verbosityCount == 0)
+		if (appConfig.verbosityCount == 0) {
 			addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+		}
 		
 		// Are there any JSON items to process?
 		if (count(jsonItemsArray) != 0) {
@@ -7410,7 +7466,6 @@ class SyncEngine {
 					
 					try {
 						fileDetailsFromOneDrive = queryOneDriveForFileDetailsApiInstance.getPathDetailsById(dbItem.driveId, dbItem.id);
-						
 						// Dont cleanup here as if we are creating a shareable file link (below) it is still needed
 						
 					} catch (OneDriveException exception) {
@@ -7421,7 +7476,6 @@ class SyncEngine {
 						queryOneDriveForFileDetailsApiInstance.releaseCurlEngine();
 						object.destroy(queryOneDriveForFileDetailsApiInstance);
 						queryOneDriveForFileDetailsApiInstance = null;
-						
 						return;
 					}
 					
@@ -7511,7 +7565,7 @@ class SyncEngine {
 			// was path found?
 			if (!pathInDB) {
 				// File has not been synced with OneDrive
-				addLogEntry("Selected path has not been synced with OneDrive: " ~ inputFilePath);
+				addLogEntry("Selected path has not been synced with Microsoft OneDrive: " ~ inputFilePath);
 			}
 		} else {
 			// File does not exist locally
@@ -7860,9 +7914,9 @@ class SyncEngine {
 		return pathToCheck;
 	}
 	
-	// Function to find a given DriveId in the onlineDriveDetails associative array that maps driveId to driveDetailsCache
-	// If 'true' will return 'driveDetails' containing the struct data 'driveDetailsCache'
-	bool canFindDriveId(string driveId, out driveDetailsCache driveDetails) {
+	// Function to find a given DriveId in the onlineDriveDetails associative array that maps driveId to DriveDetailsCache
+	// If 'true' will return 'driveDetails' containing the struct data 'DriveDetailsCache'
+	bool canFindDriveId(string driveId, out DriveDetailsCache driveDetails) {
 		auto ptr = driveId in onlineDriveDetails;
 		if (ptr !is null) {
 			driveDetails = *ptr; // Dereference the pointer to get the value
@@ -7884,20 +7938,20 @@ class SyncEngine {
 		quotaRestricted = to!bool(onlineDriveData[0][0]);
 		quotaAvailable = to!bool(onlineDriveData[0][1]);
 		quotaRemaining = to!long(onlineDriveData[0][2]);
-		onlineDriveDetails[driveId] = driveDetailsCache(driveId, quotaRestricted, quotaAvailable, quotaRemaining);
+		onlineDriveDetails[driveId] = DriveDetailsCache(driveId, quotaRestricted, quotaAvailable, quotaRemaining);
 		
 		// Debug log what the cached array now contains
 		addLogEntry("onlineDriveDetails: " ~ to!string(onlineDriveDetails), ["debug"]);
 	}
 
 	// Return a specific 'driveId' details from 'onlineDriveDetails'
-	driveDetailsCache getDriveDetails(string driveId) {
+	DriveDetailsCache getDriveDetails(string driveId) {
 		auto ptr = driveId in onlineDriveDetails;
 		if (ptr !is null) {
 			return *ptr;  // Dereference the pointer to get the value
 		} else {
-			// Return a default driveDetailsCache or handle the case where the driveId is not found
-			return driveDetailsCache.init; // Return default-initialized struct
+			// Return a default DriveDetailsCache or handle the case where the driveId is not found
+			return DriveDetailsCache.init; // Return default-initialised struct
 		}
 	}
 	
@@ -7974,7 +8028,7 @@ class SyncEngine {
 	
 		// As each thread is running differently, what is the current 'quotaRemaining' for 'driveId' ?
 		ulong quotaRemaining;
-		driveDetailsCache cachedOnlineDriveData;
+		DriveDetailsCache cachedOnlineDriveData;
 		cachedOnlineDriveData = getDriveDetails(driveId);
 		quotaRemaining = cachedOnlineDriveData.quotaRemaining;
 		
@@ -7997,7 +8051,7 @@ class SyncEngine {
 		}
 		
 		// Updated the details
-		onlineDriveDetails[driveId] = driveDetailsCache(driveId, quotaRestricted, quotaAvailable, quotaRemaining);
+		onlineDriveDetails[driveId] = DriveDetailsCache(driveId, quotaRestricted, quotaAvailable, quotaRemaining);
 	}
 	
 	// Update all of the known cached driveId quota details
@@ -8103,7 +8157,6 @@ class SyncEngine {
 			sharedWithMeOneDriveApiInstance.releaseCurlEngine();
 			object.destroy(sharedWithMeOneDriveApiInstance);
 			sharedWithMeOneDriveApiInstance = null;
-			
 			return;
 		}
 		
