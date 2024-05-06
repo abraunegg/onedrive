@@ -45,22 +45,23 @@ class OneDriveWebhook {
 
 	// The static serve() is necessary because spawn() does not like instance methods
 	void serve() {
-        if (this.started)
-            return;
+		if (this.started) {
+			return;
+		}
+		
 		this.started = true;
-        this.count = 0;
+		this.count = 0;
 
 		server.listeningHost = this.host;
-        server.listeningPort = this.port;
+		server.listeningPort = this.port;
 
 		spawn(&serveImpl, cast(shared) this);
 		addLogEntry("Started webhook server");
 
-        // Subscriptions
+		// Subscriptions
 		oneDriveApiInstance = new OneDriveApi(this.appConfig);
-        oneDriveApiInstance.initialise();
-
-        createOrRenewSubscription();
+		oneDriveApiInstance.initialise();
+		createOrRenewSubscription();
 	}
     
     void stop() {

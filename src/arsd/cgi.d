@@ -764,7 +764,7 @@ class ConnectionClosedException : Exception {
 version(Windows) {
 // FIXME: ugly hack to solve stdin exception problems on Windows:
 // reading stdin results in StdioException (Bad file descriptor)
-// this is probably due to http://d.puremagic.com/issues/show_bug.cgi?id=3425
+// this is probably due to https://issues.dlang.org/show_bug.cgi?id=3425
 private struct stdin {
 	struct ByChunk { // Replicates std.stdio.ByChunk
 	private:
@@ -6278,7 +6278,7 @@ ByChunkRange byChunk(BufferedInputRange ir, size_t atMost) {
 }
 
 version(cgi_with_websocket) {
-	// http://tools.ietf.org/html/rfc6455
+	// https://tools.ietf.org/html/rfc6455
 
 	/**
 		WEBSOCKET SUPPORT:

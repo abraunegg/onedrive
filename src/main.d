@@ -883,8 +883,9 @@ int main(string[] cliArgs) {
 					if (oneDriveWebhook is null) {
 						oneDriveWebhook = new OneDriveWebhook(thisTid, appConfig);
 						oneDriveWebhook.serve();
-					} else 
+					} else {
 						oneDriveWebhook.createOrRenewSubscription();
+					}
 				}
 				
 				// Get the current time this loop is starting
@@ -948,6 +949,8 @@ int main(string[] cliArgs) {
 							}
 						}
 					}
+					
+					appConfig.surpressLoggingOutput = false; // TO REMOVE
 					
 					// How long has the application been running for?
 					auto elapsedTime = Clock.currTime() - applicationStartTime;
@@ -1051,14 +1054,7 @@ int main(string[] cliArgs) {
 
 						int res = 1;
 						// Process incoming notifications if any.
-						auto signalExists = receiveTimeout(sleepTime, 
-							(int msg) {
-								res = msg;
-							},
-							(ulong _) {
-								notificationReceived = true;
-							}
-						);
+						auto signalExists = receiveTimeout(sleepTime, (int msg) {res = msg;},(ulong _) {notificationReceived = true;});
 						
 						// Debug values
 						addLogEntry("signalExists = " ~ to!string(signalExists), ["debug"]);
@@ -1273,7 +1269,7 @@ void processResyncDatabaseRemoval(string databaseFilePathToRemove) {
 		// no .. destroy class
 		itemDB = null;
 		// exit application - void function, force exit this way
-		exit(-1);
+		exit(EXIT_FAILURE);
 	}
 	
 	// If we have exclusive access we will not have exited
@@ -1322,7 +1318,9 @@ void checkForNoMountScenario() {
 		// we were asked to check the mount point for the presence of a '.nosync' file
 		if (exists(".nosync")) {
 			addLogEntry("ERROR: .nosync file found in directory mount point. Aborting application startup process to safeguard data.", ["info", "notify"]);
-			Thread.sleep(dur!("msecs")(500));
+			// Perform the shutdown process
+			performSynchronisedExitProcess("check_nomount");
+			// Exit
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -1345,13 +1343,13 @@ void setupSignalHandler() {
     // Register the signal handler for SIGINT
     if (sigaction(SIGINT, &sa, null) != 0) {
         writeln("FATAL: Failed to install SIGINT handler");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
     // Register the signal handler for SIGTERM
     if (sigaction(SIGTERM, &sa, null) != 0) {
         writeln("FATAL: Failed to install SIGTERM handler");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -1380,8 +1378,7 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 		// writeln("Exception during shutdown: " ~ e.msg);
 	}
 	// Exit the process with the provided exit code
-	exit(value); 
-	
+	exit(value);
 }
 
 // Handle application exit

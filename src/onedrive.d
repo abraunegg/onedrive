@@ -278,7 +278,7 @@ class OneDriveApi {
 				subscriptionUrl = appConfig.deGraphEndpoint ~ "/v1.0/subscriptions";
 				break;
 			case "CN":
-				if (!appConfig.apiWasInitialised) addLogEntry("Configuring AD China operated by 21Vianet");
+				if (!appConfig.apiWasInitialised) addLogEntry("Configuring AD China operated by VNET");
 				// Authentication
 				authUrl = appConfig.cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
 				tokenUrl = appConfig.cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";

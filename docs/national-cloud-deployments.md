@@ -7,7 +7,7 @@ In some cases it is a requirement to utilise specific Microsoft Azure cloud depl
 Current national clouds that are supported are:
 *   Microsoft Cloud for US Government
 *   Microsoft Cloud Germany
-*   Azure and Office365 operated by 21Vianet in China
+*   Azure and Office365 operated by VNET in China
 
 In order to successfully use these specific Microsoft Azure deployments, the following steps are required:
 1. Register an application with the Microsoft identity platform using the Azure portal
@@ -22,9 +22,9 @@ In order to successfully use these specific Microsoft Azure deployments, the fol
 
 | National Cloud Environment | Microsoft Azure Portal |
 |---|---|
-| Microsoft Cloud for US Government        | https://portal.azure.com/ | 
-| Microsoft Cloud Germany                  | https://portal.azure.com/ | 
-| Azure and Office365 operated by 21Vianet | https://portal.azure.cn/  | 
+| Microsoft Cloud for US Government    | https://portal.azure.com/ | 
+| Microsoft Cloud Germany              | https://portal.azure.com/ | 
+| Azure and Office365 operated by VNET | https://portal.azure.cn/  | 
 
 2. Select 'Azure Active Directory' as the service you wish to configure
 3. Under 'Manage', select 'App registrations' to register a new application
@@ -60,12 +60,12 @@ Add the appropriate redirect URI for your Azure deployment:
 A valid entry for the response URI should be one of:
 *   https://login.microsoftonline.us/common/oauth2/nativeclient (Microsoft Cloud for US Government)
 *   https://login.microsoftonline.de/common/oauth2/nativeclient (Microsoft Cloud Germany)
-*   https://login.chinacloudapi.cn/common/oauth2/nativeclient (Azure and Office365 operated by 21Vianet in China)
+*   https://login.chinacloudapi.cn/common/oauth2/nativeclient (Azure and Office365 operated by VNET in China)
 
 For a single-tenant application, it may be necessary to use your specific tenant id instead of "common":
 *   https://login.microsoftonline.us/example.onmicrosoft.us/oauth2/nativeclient (Microsoft Cloud for US Government)
 *   https://login.microsoftonline.de/example.onmicrosoft.de/oauth2/nativeclient (Microsoft Cloud Germany)
-*   https://login.chinacloudapi.cn/example.onmicrosoft.cn/oauth2/nativeclient (Azure and Office365 operated by 21Vianet in China)
+*   https://login.chinacloudapi.cn/example.onmicrosoft.cn/oauth2/nativeclient (Azure and Office365 operated by VNET in China)
 
 ## Step 4: Configure the onedrive client to use new application registration
 Update to your 'onedrive' configuration file (`~/.config/onedrive/config`) the following:
@@ -90,7 +90,7 @@ Valid entries are:
 *   USL4 (Microsoft Cloud for US Government)
 *   USL5 (Microsoft Cloud for US Government - DOD)
 *   DE (Microsoft Cloud Germany)
-*   CN (Azure and Office365 operated by 21Vianet in China)
+*   CN (Azure and Office365 operated by VNET in China)
 
 This will configure your client to use the correct Azure AD and Graph endpoints as per [https://docs.microsoft.com/en-us/graph/deployments](https://docs.microsoft.com/en-us/graph/deployments)
 

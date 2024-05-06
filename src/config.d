@@ -785,7 +785,7 @@ class ApplicationConfig {
 							addLogEntry("Using config option for Azure AD Germany");
 							break;
 						case "CN":
-							addLogEntry("Using config option for Azure AD China operated by 21Vianet");
+							addLogEntry("Using config option for Azure AD China operated by VNET");
 							break;
 						default:
 							addLogEntry("Unknown Azure AD Endpoint - using Global Azure AD Endpoints");
