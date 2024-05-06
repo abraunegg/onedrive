@@ -5237,7 +5237,7 @@ class SyncEngine {
 							}
 						} else {
 							// skip file upload - insufficient space to upload
-							addLogEntry("Skipping uploading this new file as it exceeds the available free space on OneDrive: " ~ fileToUpload);
+							addLogEntry("Skipping uploading this new file as it exceeds the available free space on Microsoft OneDrive: " ~ fileToUpload);
 							uploadFailed = true;
 						}
 					} else {
