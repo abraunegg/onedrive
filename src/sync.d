@@ -1160,6 +1160,7 @@ class SyncEngine {
 		bool itemIdMatchesDefaultRootId = false;
 		bool itemNameExplicitMatchRoot = false;
 		string objectParentDriveId;
+		auto jsonProcessingStartTime = Clock.currTime();
 		
 		addLogEntry("------------------------------------------------------------------", ["debug"]);
 		addLogEntry("Processing OneDrive Item " ~ to!string(changeCount) ~ " of " ~ to!string(nrChanges) ~ " from API Response Bundle " ~ to!string(responseBundleCount), ["debug"]);
@@ -1257,6 +1258,10 @@ class SyncEngine {
 				jsonItemsToProcess ~= onedriveJSONItem;
 			}
 		}
+		
+		// How long to initially process this JSON item
+		auto jsonProcessingElapsedTime = Clock.currTime() - jsonProcessingStartTime;
+		addLogEntry("Initial JSON item processing time: " ~ to!string(jsonProcessingElapsedTime), ["debug"]);
 	}
 	
 	// Process 'root' and 'deleted' OneDrive JSON items
@@ -1324,6 +1329,7 @@ class SyncEngine {
 		foreach (i, onedriveJSONItem; array.enumerate) {
 			// Use the JSON elements rather can computing a DB struct via makeItem()
 			ulong elementCount = i +1;
+			auto jsonProcessingStartTime = Clock.currTime();
 			
 			// To show this is the processing for this particular item, start off with this breaker line
 			addLogEntry("------------------------------------------------------------------", ["debug"]);
@@ -1781,6 +1787,11 @@ class SyncEngine {
 					applyPotentiallyNewLocalItem(newDatabaseItem, onedriveJSONItem, newItemPath);
 				}
 			}
+			
+			
+			// How long to process this JSON item in batch
+			auto jsonProcessingElapsedTime = Clock.currTime() - jsonProcessingStartTime;
+			addLogEntry("Batched JSON item processing time: " ~ to!string(jsonProcessingElapsedTime), ["debug"]);
 			
 			// Tracking as to if this item was processed
 			processedCount++;
