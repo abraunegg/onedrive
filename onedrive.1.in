@@ -46,7 +46,7 @@ This is a free Microsoft OneDrive Client designed to work with OneDrive Personal
 .br
 * Supports seamless access to shared folders and files across both OneDrive Personal and OneDrive for Business accounts
 .br
-* Supports national cloud deployments including Microsoft Cloud for US Government, Microsoft Cloud Germany, and Azure and Office 365 operated by 21Vianet in China
+* Supports national cloud deployments including Microsoft Cloud for US Government, Microsoft Cloud Germany, and Azure and Office 365 operated by VNET in China
 .br
 * Supports sending desktop alerts using libnotify
 .br
