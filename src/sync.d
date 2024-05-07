@@ -79,7 +79,6 @@ struct DeltaLinkDetails {
 }
 
 struct DatabaseItemsToDeleteOnline {
-	// uploadDeletedItem(dbItem, localFilePath);
 	Item dbItem;
 	string localFilePath;
 }
@@ -2638,7 +2637,7 @@ class SyncEngine {
 				deltaChangesBundle = getDeltaQueryOneDriveApiInstance.getChangesByItemId(selectedDriveId, selectedItemId, emptyDeltaLink);
 			} else {
 				// Display what the error is
-				addLogEntry("CODING TO DO: Hitting this failure error output after getting a httpStatusCode == 410 when the API responded the deltaLink was invalid");
+				addLogEntry("CODING TO DO: Hitting this failure error output after getting a httpStatusCode != 410 when the API responded the deltaLink was invalid");
 				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				deltaChangesBundle = null;
 			}
@@ -5822,13 +5821,46 @@ class SyncEngine {
 					// what item are we trying to delete?
 					addLogEntry("Attempting to delete this single item id: " ~ itemToDelete.id ~ " from drive: " ~ itemToDelete.driveId, ["debug"]);
 					
+					// Configure these item variables to handle OneDrive Business Shared Folder Deletion
+					Item actualItemToDelete;
+					Item remoteShortcutLinkItem;
+					
+					// OneDrive Business Shared Folder Deletion Handling
+					// Is this a Business Account with Sync Business Shared Items enabled?
+					if ((appConfig.accountType == "business") && (appConfig.getValueBool("sync_business_shared_items"))) {
+						// Syncing Business Shared Items is enabled
+						if (itemToDelete.driveId != appConfig.defaultDriveId) {
+							// The item to delete is on a remote drive ... technically we do not own this and should not be deleting this online
+							// We should however be deleting the 'link' in our account online, and, remove the DB link entry
+							if (itemToDelete.type == ItemType.dir) {			
+								// Query the database for this potential link
+								itemDB.selectByPathIncludingRemoteItems(path, appConfig.defaultDriveId, remoteShortcutLinkItem);
+							}
+						}
+					}
+					
+					// Configure actualItemToDelete
+					if (remoteShortcutLinkItem.id != "") {
+						// A DB entry was returned
+						addLogEntry("remoteShortcutLinkItem: " ~ to!string(remoteShortcutLinkItem), ["debug"]);
+						// Set actualItemToDelete to this data
+						actualItemToDelete = remoteShortcutLinkItem;
+						// Delete the shortcut reference in the local database
+						itemDB.deleteById(remoteShortcutLinkItem.driveId, remoteShortcutLinkItem.id);
+						addLogEntry("Deleted OneDrive Business Shared Folder 'Shorcut Link'", ["debug"]);
+					} else {
+						// No data was returned, use the original data
+						actualItemToDelete = itemToDelete;
+					}
+					
+					// Try the online deletion
 					try {
 						// Create new OneDrive API Instance
 						uploadDeletedItemOneDriveApiInstance = new OneDriveApi(appConfig);
 						uploadDeletedItemOneDriveApiInstance.initialise();
 					
 						// Perform the delete via the default OneDrive API instance
-						uploadDeletedItemOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id);
+						uploadDeletedItemOneDriveApiInstance.deleteById(actualItemToDelete.driveId, actualItemToDelete.id);
 						
 						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 						uploadDeletedItemOneDriveApiInstance.releaseCurlEngine();
@@ -5847,7 +5879,7 @@ class SyncEngine {
 						uploadDeletedItemOneDriveApiInstance = null;
 					}
 					
-					// Delete the reference in the local database
+					// Delete the reference in the local database - use the original input
 					itemDB.deleteById(itemToDelete.driveId, itemToDelete.id);
 					if (itemToDelete.remoteId != null) {
 						// If the item is a remote item, delete the reference in the local database
