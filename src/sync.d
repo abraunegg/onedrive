@@ -35,21 +35,21 @@ import onedrive;
 import itemdb;
 import clientSideFiltering;
 
-class jsonResponseException: Exception {
+class JsonResponseException: Exception {
 	@safe pure this(string inputMessage) {
 		string msg = format(inputMessage);
 		super(msg);
 	}	
 }
 
-class posixException: Exception {
+class PosixException: Exception {
 	@safe pure this(string localTargetName, string remoteTargetName) {
 		string msg = format("POSIX 'case-insensitive match' between '%s' (local) and '%s' (online) which violates the Microsoft OneDrive API namespace convention", localTargetName, remoteTargetName);
 		super(msg);
 	}	
 }
 
-class accountDetailsException: Exception {
+class AccountDetailsException: Exception {
 	@safe pure this() {
 		string msg = format("Unable to query OneDrive API to obtain required account details");
 		super(msg);
@@ -342,7 +342,7 @@ class SyncEngine {
 			// Get the relevant default drive details
 			try {
 				getDefaultDriveDetails();
-			} catch (accountDetailsException exception) {
+			} catch (AccountDetailsException exception) {
 				// details could not be queried
 				addLogEntry(exception.msg);
 				// Shutdown this API instance, as we will create API instances as required, when required
@@ -357,7 +357,7 @@ class SyncEngine {
 			// Get the relevant default root details
 			try {
 				getDefaultRootDetails();
-			} catch (accountDetailsException exception) {
+			} catch (AccountDetailsException exception) {
 				// details could not be queried
 				addLogEntry(exception.msg);
 				// Shutdown this API instance, as we will create API instances as required, when required
@@ -372,7 +372,7 @@ class SyncEngine {
 			// Display details
 			try {
 				displaySyncEngineDetails();
-			} catch (accountDetailsException exception) {
+			} catch (AccountDetailsException exception) {
 				// Details could not be queried
 				addLogEntry(exception.msg);
 				// Shutdown this API instance, as we will create API instances as required, when required
@@ -520,7 +520,7 @@ class SyncEngine {
 			
 		} else {
 			// Handle the invalid JSON response
-			throw new accountDetailsException();
+			throw new AccountDetailsException();
 		}
 		
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
@@ -569,7 +569,7 @@ class SyncEngine {
 			saveItem(defaultOneDriveRootDetails);
 		} else {
 			// Handle the invalid JSON response
-			throw new accountDetailsException();
+			throw new AccountDetailsException();
 		}
 		
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
@@ -774,7 +774,7 @@ class SyncEngine {
 		
 		try {
 			onlinePathData = queryOneDriveForSpecificPathAndCreateIfMissing(normalisedSingleDirectoryPath, true);
-		} catch (posixException e) {
+		} catch (PosixException e) {
 			displayPosixErrorMessage(e.msg);
 			addLogEntry("ERROR: Requested directory to search for and potentially create has a 'case-insensitive match' to an existing directory on OneDrive online.");
 		}
@@ -4669,7 +4669,7 @@ class SyncEngine {
 		} else {
 			// Query the parent path online
 			addLogEntry("Attempting to query Local Database for this parent path: " ~ parentPath, ["debug"]);
-			
+
 			// Attempt a 2 step process to work out where to create the directory
 			// Step 1: Query the DB first for the parent path, to try and avoid an API call
 			// Step 2: Query online as last resort
@@ -4691,7 +4691,7 @@ class SyncEngine {
 			
 			// After querying all DB entries for each driveID for the parent path, what are the details in parentItem?
 			addLogEntry("Parent parentItem after DB Query exhausted: " ~ to!string(parentItem), ["debug"]);
-						
+
 			// Step 2: Query for the path online if not found in the local database
 			if (!parentPathFoundInDB) {
 				// parent path not found in database
@@ -4713,7 +4713,6 @@ class SyncEngine {
 						parentItem = makeItem(onlinePathData);
 					} else {
 						string thisFunctionName = getFunctionName!({});
-						
 						// Default operation if not 408,429,503,504 errors
 						// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 						// Display what the error is
@@ -4786,6 +4785,7 @@ class SyncEngine {
 							string childAsLower = toLower(childJSON["name"].str);
 							string thisFolderNameAsLower = toLower(baseName(thisNewPathToCreate));
 							
+							// Child name check
 							if (childAsLower == thisFolderNameAsLower) {	
 								// This is a POSIX 'case in-sensitive match' ..... 
 								// Local item name has a 'case-insensitive match' to an existing item on OneDrive
@@ -4892,7 +4892,6 @@ class SyncEngine {
 				return;
 				
 			} else {
-			
 				// Default operation if not 408,429,503,504 errors
 				// - 408,429,503,504 errors are handled as a retry within createDirectoryOnlineOneDriveApiInstance
 				
@@ -4964,7 +4963,7 @@ class SyncEngine {
 				
 				return;
 			} else {
-				// Normally this would throw an error, however we cant use throw new posixException()
+				// Normally this would throw an error, however we cant use throw new PosixException()
 				string msg = format("POSIX 'case-insensitive match' between '%s' (local) and '%s' (online) which violates the Microsoft OneDrive API namespace convention", baseName(thisNewPathToCreate), onlinePathData["name"].str);
 				displayPosixErrorMessage(msg);
 				addLogEntry("ERROR: Requested directory to create has a 'case-insensitive match' to an existing directory on OneDrive online.");
@@ -5004,7 +5003,7 @@ class SyncEngine {
 		if (localNameToCheck != onlineName) {
 			// POSIX Error
 			// Local item name has a 'case-insensitive match' to an existing item on OneDrive
-			throw new posixException(localNameToCheck, onlineName);
+			throw new PosixException(localNameToCheck, onlineName);
 		}
 	}
 	
@@ -5212,7 +5211,7 @@ class SyncEngine {
 								if (hasName(fileDetailsFromOneDrive)) {
 									performPosixTest(baseName(fileToUpload), fileDetailsFromOneDrive["name"].str);
 								} else {
-									throw new jsonResponseException("Unable to perform POSIX test as the OneDrive API request generated an invalid JSON response");
+									throw new JsonResponseException("Unable to perform POSIX test as the OneDrive API request generated an invalid JSON response");
 								}
 								
 								// If we get to this point, the OneDrive API returned a 200 OK with valid JSON data that indicates a 'file' exists at this location already
@@ -5287,7 +5286,7 @@ class SyncEngine {
 									// Display what the error is
 									displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 								}
-							} catch (posixException e) {
+							} catch (PosixException e) {
 								// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 								checkFileOneDriveApiInstance.releaseCurlEngine();
 								object.destroy(checkFileOneDriveApiInstance);
@@ -5296,7 +5295,7 @@ class SyncEngine {
 								// Display POSIX error message
 								displayPosixErrorMessage(e.msg);
 								uploadFailed = true;
-							} catch (jsonResponseException e) {
+							} catch (JsonResponseException e) {
 								// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 								checkFileOneDriveApiInstance.releaseCurlEngine();
 								object.destroy(checkFileOneDriveApiInstance);
@@ -6648,7 +6647,7 @@ class SyncEngine {
 						if (hasName(getPathDetailsAPIResponse)) {
 							performPosixTest(thisFolderName, getPathDetailsAPIResponse["name"].str);
 						} else {
-							throw new jsonResponseException("Unable to perform POSIX test as the OneDrive API request generated an invalid JSON response");
+							throw new JsonResponseException("Unable to perform POSIX test as the OneDrive API request generated an invalid JSON response");
 						}
 						
 						// No POSIX issue with requested path element
@@ -6690,7 +6689,7 @@ class SyncEngine {
 							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 							
 						}
-					} catch (jsonResponseException e) {
+					} catch (JsonResponseException e) {
 							addLogEntry(e.msg, ["debug"]);
 					}
 				} else {
@@ -6723,7 +6722,7 @@ class SyncEngine {
 										// This is a POSIX 'case in-sensitive match' ..... 
 										// Local item name has a 'case-insensitive match' to an existing item on OneDrive
 										posixIssue = true;
-										throw new posixException(thisFolderName, child["name"].str);
+										throw new PosixException(thisFolderName, child["name"].str);
 									}
 								}
 							}

@@ -49,6 +49,7 @@ class OneDriveException: Exception {
 	}
 
 	this(int httpStatusCode, string reason, string file = __FILE__, size_t line = __LINE__) {
+		this.httpStatusCode = httpStatusCode;
 		this.response = null;
 		super(msg, file, line, null);
 	}
