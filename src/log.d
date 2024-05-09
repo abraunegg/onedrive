@@ -53,24 +53,21 @@ class LogBuffer {
 			flushThread.start();
         }
 		
-		// The destructor should only clean up resources owned directly by this instance
-		~this() {
-			object.destroy(bufferLock);
-			object.destroy(condReady);
-			object.destroy(flushThread);
-		}
-		
+		// Shutdown logging
 		void shutdown() {
 			synchronized(bufferLock) {
 				if (!isRunning) return; // Prevent multiple shutdowns
 				isRunning = false;
 				condReady.notifyAll(); // Wake up all waiting threads
 			}
-			flushThread.join(); // Wait for the flush thread to finish
+			// Wait for the flush thread to finish outside of the synchronized block to avoid deadlocks
+			if (flushThread.isRunning()) {
+				flushThread.join();
+			}
 			flush(); // Perform a final flush to ensure all data is processed
 		}
-		
-        shared void logThisMessage(string message, string[] levels = ["info"]) {
+
+		shared void logThisMessage(string message, string[] levels = ["info"]) {
 			// Generate the timestamp for this log entry
 			auto timeStamp = leftJustify(Clock.currTime().toString(), 28, '0');
 			
@@ -172,6 +169,11 @@ void initialiseLogging(bool verboseLogging = false, bool debugLogging = false) {
 // Function to add a log entry with multiple levels
 void addLogEntry(string message = "", string[] levels = ["info"]) {
 	logBuffer.logThisMessage(message, levels);
+}
+
+// Is logging still active
+bool loggingActive() {
+	return logBuffer.isRunning;
 }
 
 void addProcessingLogHeaderEntry(string message, long verbosityCount) {

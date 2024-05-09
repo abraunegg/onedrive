@@ -100,6 +100,7 @@ int main(string[] cliArgs) {
 		addLogEntry("Exit scope was called", ["debug"]);
 		// Perform synchronised exit
 		performSynchronisedExitProcess("exitScope");
+		exit(EXIT_SUCCESS);
 	}
 	
 	scope(failure) {
@@ -107,6 +108,7 @@ int main(string[] cliArgs) {
 		addLogEntry("Failure scope was called", ["debug"]);
 		// Perform synchronised exit
 		performSynchronisedExitProcess("failureScope");
+		exit(EXIT_FAILURE);
 	}
 	
 	// Read in application options as passed in
@@ -774,7 +776,7 @@ int main(string[] cliArgs) {
 						syncEngineInstance.scanLocalFilesystemPathForNewData(path);
 					} catch (CurlException e) {
 						addLogEntry("Offline, cannot create remote dir: " ~ path, ["verbose"]);
-					} catch(Exception e) {
+					} catch (Exception e) {
 						addLogEntry("Cannot create remote directory: " ~ e.msg, ["info", "notify"]);
 					}
 				}
@@ -796,13 +798,13 @@ int main(string[] cliArgs) {
 					syncEngineInstance.deleteByPath(path);
 				} catch (CurlException e) {
 					addLogEntry("Offline, cannot delete item: " ~ path, ["verbose"]);
-				} catch(SyncException e) {
+				} catch (SyncException e) {
 					if (e.msg == "The item to delete is not in the local database") {
 						addLogEntry("Item cannot be deleted from Microsoft OneDrive because it was not found in the local database", ["verbose"]);
 					} else {
 						addLogEntry("Cannot delete remote item: " ~ e.msg, ["info", "notify"]);
 					}
-				} catch(Exception e) {
+				} catch (Exception e) {
 					addLogEntry("Cannot delete remote item: " ~ e.msg, ["info", "notify"]);
 				}
 			};
@@ -820,7 +822,7 @@ int main(string[] cliArgs) {
 					}
 				} catch (CurlException e) {
 					addLogEntry("Offline, cannot move item !", ["verbose"]);
-				} catch(Exception e) {
+				} catch (Exception e) {
 					addLogEntry("Cannot move item: " ~ e.msg, ["info", "notify"]);
 				}
 			};
@@ -1361,7 +1363,7 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 
 	try {
 		assumeNoGC ( () {
-		addLogEntry("\nReceived termination signal, initiating cleanup");
+			addLogEntry("\nReceived termination signal, initiating cleanup");
 			// Wait for all parallel jobs that depend on the database to complete
 			addLogEntry("Waiting for any existing upload|download process to complete");
 			syncEngineInstance.shutdown();
@@ -1369,7 +1371,7 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 			// Perform the shutdown process
 			performSynchronisedExitProcess("exitHandler");
 		})();
-	} catch(Exception e) {
+	} catch (Exception e) {
 		// Any output here will cause a GC allocation
 		// - Error: `@nogc` function `main.exitHandler` cannot call non-@nogc function `std.stdio.writeln!string.writeln`
 		// - Error: cannot use operator `~` in `@nogc` function `main.exitHandler`
@@ -1408,7 +1410,10 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
         }
 		
 		// Finalise all logging and destroy log buffer
-		shutdownApplicationLogging();
+		if (loggingActive()) {
+			// Shutdown application logging
+			shutdownApplicationLogging();
+		}
 		
 		// Perform Garbage Cleanup
 		GC.collect();

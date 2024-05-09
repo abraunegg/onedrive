@@ -316,10 +316,10 @@ class SyncEngine {
 	}
 	
 	// The destructor should only clean up resources owned directly by this instance
-	~this() {
-		shutdownProcessPool();
-		processPool = null;
-	}
+	//~this() {
+	//	//shutdownProcessPool();
+	//	processPool = null;
+	//}
 	
 	// Initialise the Sync Engine class
 	bool initialise() {
@@ -425,13 +425,11 @@ class SyncEngine {
 				// https://dlang.org/library/std/parallelism/task_pool.stop.html
 				processPool.finish(); // If we flag 'true' here, the application segfaults on exit
 				processPool.stop(); // Signals to all worker threads to terminate as soon as they are finished with their current Task, or immediately if they are not executing a Task.
-				//processPool = new TaskPool(to!int(0)); // Reinitialise processPool to a zero size
 			} else {
 				// Normal TaskPool shutdown process
 				addLogEntry("Shutting down processPool in a thread blocking manner", ["debug"]);
 				processPool.finish(true); // If blocking argument is true, wait for all worker threads to terminate before returning.
 				processPool.stop(); // Signals to all worker threads to terminate as soon as they are finished with their current Task, or immediately if they are not executing a Task.
-				//processPool = new TaskPool(to!int(0)); // Reinitialise processPool to a zero size
 			}
 		}
 	}
