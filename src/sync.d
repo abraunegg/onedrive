@@ -316,10 +316,10 @@ class SyncEngine {
 	}
 	
 	// The destructor should only clean up resources owned directly by this instance
-	//~this() {
-	//	//shutdownProcessPool();
-	//	processPool = null;
-	//}
+	~this() {
+		shutdownProcessPool();
+		processPool = null;
+	}
 	
 	// Initialise the Sync Engine class
 	bool initialise() {
