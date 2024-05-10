@@ -1337,7 +1337,6 @@ class OneDriveApi {
 						// Read in the Retry-After HTTP header as set and delay as per this value before retrying the request
 						thisBackOffInterval = response.getRetryAfterValue();
 						addLogEntry("Using Retry-After Value = " ~ to!string(thisBackOffInterval), ["debug"]);
-						addLogEntry("Using Retry-After Value = " ~ to!string(thisBackOffInterval));
 						transientError = true;
 						break;
 					//  Transient errors
