@@ -418,15 +418,13 @@ class OneDriveApi {
 				// display the error message
 				displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
 				// Must force exit here, allow logging to be done
-				Thread.sleep(dur!("msecs")(500));
-				exit(-1);
+				forceExit();
 			} catch (ErrnoException exception) {
 				// There was a file system error
 				// display the error message
 				displayFileSystemErrorMessage(exception.msg, getFunctionName!({}));
 				// Must force exit here, allow logging to be done
-				Thread.sleep(dur!("msecs")(500));
-				exit(-1);
+				forceExit();
 			}
 	
 			addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");

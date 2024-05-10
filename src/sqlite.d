@@ -10,6 +10,7 @@ import std.conv;
 
 // What other modules that we have created do we need to import?
 import log;
+import util;
 
 extern (C) immutable(char)* sqlite3_errstr(int); // missing from the std library
 
@@ -72,14 +73,16 @@ struct Database {
 			addLogEntry("The database cannot be opened. Please check the permissions of " ~ to!string(filename));
 			addLogEntry();
 			close();
-			exit(-1);
+			// Must force exit here, allow logging to be done
+			forceExit();
 		}
 		if (rc != SQLITE_OK) {
 			addLogEntry();
 			addLogEntry("A database access error occurred: " ~ getErrorMessage());
 			addLogEntry();
 			close();
-			exit(-1);
+			// Must force exit here, allow logging to be done
+			forceExit();
 		}
 		sqlite3_extended_result_codes(pDb, 1); // always use extended result codes
 	}
@@ -94,7 +97,8 @@ struct Database {
 			addLogEntry("Please retry your command with --resync to fix any local database corruption issues.");
 			addLogEntry();
 			close();
-			exit(-1);
+			// Must force exit here, allow logging to be done
+			forceExit();
 		}
 	}
 
@@ -190,7 +194,8 @@ struct Statement {
 				addLogEntry();
 				addLogEntry("Please retry your command with --resync to fix any local database corruption issues.");
 				addLogEntry();
-				exit(-1);
+				// Must force exit here, allow logging to be done
+				forceExit();
 			}
 		}
 	}

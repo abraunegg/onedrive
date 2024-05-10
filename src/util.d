@@ -637,8 +637,7 @@ void handleClientUnauthorised(int httpStatusCode, string message) {
 	}
 	
 	// Must force exit here, allow logging to be done
-	Thread.sleep(dur!("msecs")(500));
-	exit(EXIT_FAILURE);
+	forceExit();
 }
 
 // Parse and display error message received from the local file system
@@ -659,8 +658,7 @@ void displayFileSystemErrorMessage(string message, string callingFunction) {
         ulong localActualFreeSpace = to!ulong(getAvailableDiskSpace("."));
         if (localActualFreeSpace == 0) {
             // Must force exit here, allow logging to be done
-			Thread.sleep(dur!("msecs")(500));
-            exit(EXIT_FAILURE);
+			forceExit();
         }
     } catch (Exception e) {
         // Handle exceptions from disk space check or type conversion
@@ -1193,10 +1191,15 @@ int calc_eta(size_t counter, size_t iterations, ulong start_time) {
     }
 }
 
-// Force Exit
+// Force Exit due to failure
 void forceExit() {
-	// Allow logging to flush and complete
+	// Allow any logging complete before we force exit
 	Thread.sleep(dur!("msecs")(500));
+	
+	// Shutdown logging, which also flushes all logging buffers
+	(cast() logBuffer).shutdown();
+	object.destroy(logBuffer);
+	
 	// Force Exit
 	exit(EXIT_FAILURE);
 }

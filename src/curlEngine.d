@@ -65,6 +65,8 @@ class CurlResponse {
 		hasResponse = true;
 		this.responseHeaders = http.responseHeaders();
 		this.statusLine = http.statusLine;
+		addLogEntry("HTTP Response Headers: " ~ to!string(this.responseHeaders), ["debug"]);
+		addLogEntry("HTTP Status Line: " ~ to!string(this.statusLine), ["debug"]);
 	}
 
 	@safe pure HTTP.StatusLine getStatus() {
@@ -92,23 +94,26 @@ class CurlResponse {
 	
 	const string parseRequestHeaders(const(const(char)[][const(char)[]]) headers) {
 		string requestHeadersStr = "";
-		foreach (string header; headers.byKey()) {
-			if (header == "Authorization") {
-				continue;
-			}
-			// Use the 'in' operator to safely check if the key exists in the associative array.
-			if (auto val = header in headers) {
-				requestHeadersStr ~= "< " ~ header ~ ": " ~ *val ~ "\n";
+		// Ensure response headers is not null and iterate over keys safely.
+		if (headers !is null) {
+			foreach (string header; headers.byKey()) {
+				if (header == "Authorization") {
+					continue;
+				}
+				// Use the 'in' operator to safely check if the key exists in the associative array.
+				if (auto val = header in headers) {
+					requestHeadersStr ~= "< " ~ header ~ ": " ~ *val ~ "\n";
+				}
 			}
 		}
 		return requestHeadersStr;
 	}
 
-	const string parseResponseHeaders(const(immutable(char)[][immutable(char)[]]) headers) {
+	const string parseResponseHeaders(const(string[string]) headers) {
 		string responseHeadersStr = "";
 		// Ensure response headers is not null and iterate over keys safely.
 		if (headers !is null) {
-			foreach (const(char)[] header; headers.byKey()) {
+			foreach (string header; headers.byKey()) {
 				// Check if the key actually exists before accessing it to avoid RangeError.
 				if (auto val = header in headers) { // 'in' checks for the key and returns a pointer to the value if found.
 					responseHeadersStr ~= "> " ~ header ~ ": " ~ *val ~ "\n"; // Dereference pointer to get the value.

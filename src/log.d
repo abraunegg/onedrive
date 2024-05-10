@@ -60,11 +60,18 @@ class LogBuffer {
 				isRunning = false;
 				condReady.notifyAll(); // Wake up all waiting threads
 			}
+			
 			// Wait for the flush thread to finish outside of the synchronized block to avoid deadlocks
 			if (flushThread.isRunning()) {
+				// Flush any remaining log
+				flushBuffer();
+				// Join all threads
 				flushThread.join();
 			}
+			
+			// Flush anything remaining
 			flush(); // Perform a final flush to ensure all data is processed
+			flushBuffer(); // Finally flush the buffers one last time
 		}
 
 		shared void logThisMessage(string message, string[] levels = ["info"]) {

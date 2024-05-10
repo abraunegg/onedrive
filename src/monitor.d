@@ -432,8 +432,8 @@ final class Monitor {
 					addLogEntry("  Error Message: " ~ e.msg);
 					addLogEntry("ACCESS ERROR: Please check your UID and GID access to this file, as the permissions on this file is preventing this application to read it");
 					addLogEntry("\nFATAL: Forcing exiting application to avoid deleting data due to local file system access issues\n");
-					// Must exit here
-					exit(-1);
+					// Must force exit here, allow logging to be done
+					forceExit();
 				} else {
 					// some other error
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
