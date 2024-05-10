@@ -560,7 +560,8 @@ _**Description:**_ This configuration option controls whether the application sk
 * As a single entry. This will search the respective path for this entry and skip all instances where this directory is present, where ever it may exist.
 * As a full path entry. This will skip the explicit path as set.
 
-**Important:** Entries for 'skip_dir' are *relative* to your 'sync_dir' path.
+> [!IMPORTANT]
+> Entries for 'skip_dir' are *relative* to your 'sync_dir' path.
 
 _**Value Type:**_ String
 
@@ -641,6 +642,10 @@ Files can be skipped in the following fashion:
 ```text
 skip_file = "~*|/Documents/OneNote*|/Documents/config.xlaunch|myfile.ext|/Documents/keepass.kdbx"
 ```
+
+> [!IMPORTANT]
+> Entries for 'skip_file' are *relative* to your 'sync_dir' path.
+
 The 'skip_file' option can be specified multiple times within your config file, for example:
 ```text
 skip_file = "~*|.~*|*.tmp|*.swp"
