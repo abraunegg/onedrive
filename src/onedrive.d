@@ -884,7 +884,7 @@ class OneDriveApi {
 				authorise();
 			}
 		} else {
-			addLogEntry("Invalid response from the OneDrive API. Unable to initialise OneDrive API instance.");
+			addLogEntry("Invalid response from the Microsoft Graph API. Unable to initialise OneDrive API instance.");
 			// Must force exit here, allow logging to be done
 			forceExit();
 		}
@@ -1142,7 +1142,7 @@ class OneDriveApi {
 				// re-try log entry & clock time
 				retryTime = Clock.currTime();
 				retryTime.fracSecs = Duration.zero;
-				addLogEntry("Retrying the respective OneDrive Graph API call ... (" ~ to!string(retryTime) ~ ")");
+				addLogEntry("Retrying the respective Microsoft Graph API call ... (" ~ to!string(retryTime) ~ ")");
 			}
 		
 			try {
@@ -1154,7 +1154,7 @@ class OneDriveApi {
 					result = response.json();
 					// Print response if 'debugResponse' is flagged
 					if (debugResponse){
-						addLogEntry("OneDrive API Response: " ~ response.dumpResponse(), ["debug"]);
+						addLogEntry("Microsoft Graph API Response: " ~ response.dumpResponse(), ["debug"]);
 					}
 					// Check http response code, raise a OneDriveException if the operation was not successfully performed
 					// '100 != 2' This condition checks if the response code does not start with 2. In the context of HTTP response codes, the 2xx series represents successful responses.
@@ -1330,9 +1330,9 @@ class OneDriveApi {
 					case 408,429:
 						// If OneDrive sends a status code 429 then this function will be used to process the Retry-After response header which contains the value by which we need to wait
 						if (exception.httpStatusCode == 408) {
-							addLogEntry("Handling a OneDrive HTTP 408 Response Code (Request Time Out) - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
+							addLogEntry("Handling a Microsoft Graph API HTTP 408 Response Code (Request Time Out) - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
 						} else {
-							addLogEntry("Handling a OneDrive HTTP 429 Response Code (Too Many Requests) - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
+							addLogEntry("Handling a Microsoft Graph API HTTP 429 Response Code (Too Many Requests) - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
 						}
 						// Read in the Retry-After HTTP header as set and delay as per this value before retrying the request
 						thisBackOffInterval = response.getRetryAfterValue();
@@ -1345,7 +1345,7 @@ class OneDriveApi {
 					case 503,504:
 						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request
 						auto errorArray = splitLines(exception.msg);
-						addLogEntry(to!string(errorArray[0]) ~ " when attempting to query the OneDrive API Service - retrying applicable request in 30 seconds - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
+						addLogEntry(to!string(errorArray[0]) ~ " when attempting to query the Microsoft Graph API Service - retrying applicable request in 30 seconds - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
 						addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 						// Transient error - try again in 30 seconds
 						thisBackOffInterval = 30;
