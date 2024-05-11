@@ -1366,7 +1366,7 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 			addLogEntry("\nReceived termination signal, initiating cleanup");
 			// Wait for all parallel jobs that depend on the database to complete
 			addLogEntry("Waiting for any existing upload|download process to complete");
-			syncEngineInstance.shutdown();
+			shutdownSyncEngine();
 			
 			// Perform the shutdown process
 			performSynchronisedExitProcess("exitHandler");
