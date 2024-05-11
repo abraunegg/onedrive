@@ -334,10 +334,11 @@ class CurlEngine {
 			http.handle.set(CurlOption.max_recv_speed_large,userRateLimit);
 		}
 		
-		// Explicitly set these libcurl options
-		//   https://curl.se/libcurl/c/CURLOPT_NOSIGNAL.html
-		//   Ensure that nosignal is set to 0 - Setting CURLOPT_NOSIGNAL to 0 makes libcurl ask the system to ignore SIGPIPE signals
-		http.handle.set(CurlOption.nosignal,0);
+		// Explicitly set libcurl options to avoid using signal handlers in a multi-threaded environment
+		// See: https://curl.se/libcurl/c/CURLOPT_NOSIGNAL.html
+		// The CURLOPT_NOSIGNAL option is intended for use in multi-threaded programs to ensure that libcurl does not use any signal handling.
+		// Set CURLOPT_NOSIGNAL to 1 to prevent libcurl from using signal handlers, thus avoiding interference with the application's signal handling which could lead to issues such as unstable behavior or application crashes.
+		http.handle.set(CurlOption.nosignal,1);
 		
 		//   https://curl.se/libcurl/c/CURLOPT_TCP_NODELAY.html
 		//   Ensure that TCP_NODELAY is set to 0 to ensure that TCP NAGLE is enabled
