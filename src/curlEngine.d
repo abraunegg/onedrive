@@ -10,6 +10,7 @@ import std.file;
 import std.json;
 import std.stdio;
 import std.range;
+import core.memory;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -197,7 +198,7 @@ class CurlEngine {
 		
 		// Is the actual http instance is stopped?
 		if (!http.isStopped) {
-			// HTTP instance was not stopped .. need to stop it
+			// HTTP instance was not stopped .. we need to stop it
 			http.shutdown();
 			object.destroy(http); // Destroy, however we cant set to null
 		}
@@ -216,7 +217,7 @@ class CurlEngine {
 				return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
 			} else {
 				CurlEngine curlEngine = curlEnginePool[$ - 1];
-				curlEnginePool.popBack();
+				curlEnginePool.popBack(); // assumes a LIFO (last-in, first-out) usage pattern
 				
 				// Is this engine stopped?
 				if (curlEngine.http.isStopped) {
@@ -236,30 +237,41 @@ class CurlEngine {
 	// Release all curl instances
 	static void releaseAllCurlInstances() {
 		addLogEntry("CurlEngine releaseAllCurlInstances() called", ["debug"]);
-	
 		synchronized (CurlEngine.classinfo) {
 			// What is the current pool size
 			addLogEntry("CurlEngine curlEnginePool size to release: " ~ to!string(curlEnginePool.length), ["debug"]);
-			
-			// Safely iterate and clean up each CurlEngine instance
-			foreach (curlEngineInstance; curlEnginePool) {
-                try {
-					curlEngineInstance.cleanup(); // Cleanup instance by resetting values
-					curlEngineInstance.shutdownCurlHTTPInstance();  // Assume proper cleanup of any resources used by HTTP
-                } catch (Exception e) {
-					// Log the error or handle it appropriately
-					// e.g., writeln("Error during cleanup/shutdown: ", e.toString());
-                }
-                // It's safe to destroy the object here assuming no other references exist
-                object.destroy(curlEngineInstance); // Destroy, then set to null
-				curlEngineInstance = null;
-            }
-            // Clear the array after all instances have been handled
-            curlEnginePool.length = 0; // More explicit than curlEnginePool = [];
+			if (curlEnginePool.length > 0) {
+				// Safely iterate and clean up each CurlEngine instance
+				foreach (curlEngineInstance; curlEnginePool) {
+					try {
+						curlEngineInstance.cleanup(true); // Cleanup instance by resetting values and flushing cookie cache
+						curlEngineInstance.shutdownCurlHTTPInstance();  // Assume proper cleanup of any resources used by HTTP
+					} catch (Exception e) {
+						// Log the error or handle it appropriately
+						// e.g., writeln("Error during cleanup/shutdown: ", e.toString());
+					}
+					
+					// It's safe to destroy the object here assuming no other references exist
+					object.destroy(curlEngineInstance); // Destroy, then set to null
+					curlEngineInstance = null;
+					// Perform Garbage Collection on this destroyed curl engine
+					GC.collect();
+				}
+            
+				// Clear the array after all instances have been handled
+				curlEnginePool.length = 0; // More explicit than curlEnginePool = [];
+			}
         }
+		// Perform Garbage Collection on this destroyed curl engine
+		GC.collect();
     }
 
-    // Destroy all curl instances
+    // Return how many curl engines there are
+	static ulong curlEnginePoolLength() {
+		return curlEnginePool.length;
+	}
+	
+	// Destroy all curl instances
 	static void destroyAllCurlInstances() {
 		addLogEntry("CurlEngine destroyAllCurlInstances() called", ["debug"]);
 		// Release all 'curl' instances
@@ -271,11 +283,15 @@ class CurlEngine {
 		// Log that we are releasing this engine back to the pool
 		addLogEntry("CurlEngine releaseEngine() called on instance id: " ~ to!string(internalThreadId), ["debug"]);
 		addLogEntry("CurlEngine curlEnginePool size before release: " ~ to!string(curlEnginePool.length), ["debug"]);
-		cleanup();
+		
+		// cleanup this curl instance before putting it back in the pool
+		cleanup(true); // Cleanup instance by resetting values and flushing cookie cache
         synchronized (CurlEngine.classinfo) {
             curlEnginePool ~= this;
 			addLogEntry("CurlEngine curlEnginePool size after release: " ~ to!string(curlEnginePool.length), ["debug"]);
         }
+		// Perform Garbage Collection
+		GC.collect();
     }
 	
 	// Initialise this curl instance
@@ -472,7 +488,7 @@ class CurlEngine {
 	}
 
 	// Cleanup this instance internal variables that may have been set
-	void cleanup() {
+	void cleanup(bool flushCookies = false) {
 		// Reset any values to defaults, freeing any set objects
 		addLogEntry("CurlEngine cleanup() called on instance id: " ~ to!string(internalThreadId), ["debug"]);
 		
@@ -488,9 +504,14 @@ class CurlEngine {
 				return 0;
 			};
 			http.contentLength = 0;
-			http.flushCookieJar();
-			http.clearSessionCookies();
-			http.clearAllCookies();
+			
+			// We only do this if we are pushing the curl engine back to the curl pool
+			if (flushCookies) {
+				// Flush the cookie cache as well
+				http.flushCookieJar();
+				http.clearSessionCookies();
+				http.clearAllCookies();
+			}
 		}
 		
 		// set the response to null
@@ -513,6 +534,12 @@ class CurlEngine {
 			http.shutdown();
 			object.destroy(http); // Destroy, however we cant set to null
 			addLogEntry("HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);
+		} else {
+			// Already stopped .. destroy it
+			object.destroy(http); // Destroy, however we cant set to null
+			addLogEntry("Stopped HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);
 		}
+		// Perform Garbage Collection
+		GC.collect();
 	}
 }

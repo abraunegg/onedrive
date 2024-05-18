@@ -163,9 +163,7 @@ class ClientSideFiltering {
 				// Test the entire path working backwards from child
 				string path = buildNormalizedPath(name);
 				string checkPath;
-				auto paths = pathSplitter(path);
-				
-				foreach_reverse(directory; paths) {
+				foreach_reverse(directory; pathSplitter(path)) {
 					if (directory != "/") {
 						// This will add a leading '/' but that needs to be stripped to check
 						checkPath = "/" ~ directory ~ checkPath;

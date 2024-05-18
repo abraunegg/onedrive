@@ -63,10 +63,10 @@ class LogBuffer {
 			
 			// Wait for the flush thread to finish outside of the synchronized block to avoid deadlocks
 			if (flushThread.isRunning()) {
-				// Flush any remaining log
-				flushBuffer();
 				// Join all threads
 				flushThread.join();
+				// Flush any remaining log
+				flushBuffer();
 			}
 			
 			// Flush anything remaining
@@ -164,6 +164,8 @@ class LogBuffer {
 					}
 				}
             }
+			// Clear Messages
+			messages = [];
         }
 }
 

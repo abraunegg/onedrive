@@ -1088,31 +1088,29 @@ void displayMemoryUsagePreGC() {
 
 // Display internal memory stats post garbage collection + RSS (actual memory being used)
 void displayMemoryUsagePostGC() {
-	// Display memory usage
-	addLogEntry("Memory Usage POST Garbage Collection (KB)");
-	addLogEntry("-----------------------------------------------------");
-	writeMemoryStats();
-	
-	// Query the actual Resident Set Size (RSS) for the PID
-	pid_t pid = getCurrentPID();
-	ulong rss = getRSS(pid);
-	addLogEntry("current Resident Set Size (RSS)          = " ~ to!string(rss)); // actual memory in RAM used by the process - this needs to remain stable, already in KB
-	
-	// Is there a previous value 
-	if (previousRSS != 0) {
-		addLogEntry("previous Resident Set Size (RSS)         = " ~ to!string(previousRSS)); // actual memory in RAM used by the process - this needs to remain stable, already in KB
-		// Increase or decrease in RSS
-		if (rss > previousRSS) {
-			addLogEntry("difference in Resident Set Size (RSS)    = +" ~ to!string((rss - previousRSS))); // Difference in actual memory used
-		} else {
-			addLogEntry("difference in Resident Set Size (RSS)    = -" ~ to!string((previousRSS - rss))); // Difference in actual memory used
-		}
-	}
-	
-	// Update previous RSS with new value
-	previousRSS = rss;
-	
-	// Closout
+    // Display memory usage title
+    addLogEntry("Memory Usage POST Garbage Collection (KB)");
+    addLogEntry("-----------------------------------------------------");
+    writeMemoryStats();  // Assuming this function logs memory stats correctly
+
+    // Query the actual Resident Set Size (RSS) for the PID
+    pid_t pid = getCurrentPID();
+    ulong rss = getRSS(pid);
+
+    // Check and log the previous RSS value
+    if (previousRSS != 0) {
+        addLogEntry("previous Resident Set Size (RSS)         = " ~ to!string(previousRSS) ~ " KB");
+        
+        // Calculate and log the difference in RSS
+        long difference = rss - previousRSS;  // 'difference' can be negative, use 'long' to handle it
+        string sign = difference > 0 ? "+" : (difference < 0 ? "" : "");  // Determine the sign for display, no sign for zero
+        addLogEntry("difference in Resident Set Size (RSS)    = " ~ sign ~ to!string(difference) ~ " KB");
+    }
+    
+    // Update previous RSS with the new value
+    previousRSS = rss;
+    
+    // Closout
 	addLogEntry();
 }
 
@@ -1121,6 +1119,15 @@ void writeMemoryStats() {
 	addLogEntry("current memory usedSize                  = " ~ to!string((GC.stats.usedSize/1024))); // number of used bytes on the GC heap (might only get updated after a collection)
 	addLogEntry("current memory freeSize                  = " ~ to!string((GC.stats.freeSize/1024))); // number of free bytes on the GC heap (might only get updated after a collection)
 	addLogEntry("current memory allocatedInCurrentThread  = " ~ to!string((GC.stats.allocatedInCurrentThread/1024))); // number of bytes allocated for current thread since program start
+	
+	// Query the actual Resident Set Size (RSS) for the PID
+	pid_t pid = getCurrentPID();
+	ulong rss = getRSS(pid);
+	// The RSS includes all memory that is currently marked as occupied by the process. 
+	// Over time, the heap can become fragmented. Even after garbage collection, fragmented memory blocks may not be contiguous enough to be returned to the OS, leading to an increase in the reported memory usage despite having free space.
+	// This includes memory that might not be actively used but has not been returned to the system. 
+	// The GC.minimize() function can sometimes cause an increase in RSS due to how memory pages are managed and freed.
+	addLogEntry("current Resident Set Size (RSS)          = " ~ to!string(rss)  ~ " KB"); // actual memory in RAM used by the process at this point in time
 }
 
 // Return the username of the UID running the 'onedrive' process

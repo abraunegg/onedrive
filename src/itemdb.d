@@ -733,24 +733,9 @@ final class ItemDatabase {
 		return items;
 	}
 	
-	// Select all items associated with the provided driveId
-	Item[] selectAllItemsByDriveId(const(char)[] driveId) {
-		assert(driveId);
-		Item[] items;
-		auto stmt = db.prepare("SELECT * FROM item WHERE driveId = ?1");
-		stmt.bind(1, driveId);
-		auto res = stmt.exec();
-		while (!res.empty) {
-			items ~= buildItem(res);
-			res.step();
-		}
-		return items;
-	}
-	
 	// Perform a vacuum on the database, commit WAL / SHM to file
 	void performVacuum() {
 		addLogEntry("Attempting to perform a database vacuum to merge any temporary data", ["debug"]);
-		
 		try {
 			auto stmt = db.prepare("VACUUM;");
 			stmt.exec();

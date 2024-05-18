@@ -118,13 +118,11 @@ class OneDriveApi {
 	
 	// The destructor should only clean up resources owned directly by this instance
 	~this() {
-		if (curlEngine !is null) {
-			curlEngine = null;
-		} 
-		
-		if (response !is null) {
-			response = null;
-		}
+		object.destroy(response);
+		object.destroy(curlEngine);
+		response = null;
+		curlEngine = null;
+		appConfig = null;
 	}
 
 	// Initialise the OneDrive API class
@@ -518,6 +516,8 @@ class OneDriveApi {
 		} else {
 			url = itemByPathUrl ~ encodeComponent(path) ~ ":/";
 		}
+		// Add select clause
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		return get(url);
 	}
 	
@@ -526,7 +526,7 @@ class OneDriveApi {
 	JSONValue getPathDetailsById(string driveId, string id) {
 		string url;
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		//url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		return get(url);
 	}
 	
@@ -551,6 +551,7 @@ class OneDriveApi {
 		// https://learn.microsoft.com/en-us/onedrive/developer/rest-api/concepts/addressing-driveitems?view=odsp-graph-online
 		// Required format: /drives/{drive-id}/root:/{item-path}:
 		url = driveByIdUrl ~ driveId ~ "/root:/" ~ encodeComponent(path) ~ ":";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		return get(url);
 	}
 	
@@ -570,6 +571,8 @@ class OneDriveApi {
 		// configure deltaLink to query
 		if (deltaLink.empty) {
 			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/delta";
+			// Reduce what we ask for in the response - which reduces the data transferred back to us, and reduces what is held in memory during initial JSON processing
+			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		} else {
 			url = deltaLink;
 		}
@@ -588,7 +591,7 @@ class OneDriveApi {
 		// configure URL to query
 		if (nextLink.empty) {
 			url = driveByIdUrl ~ driveId ~ "/items/" ~ id ~ "/children";
-			//url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+			url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
 		} else {
 			url = nextLink;
 		}

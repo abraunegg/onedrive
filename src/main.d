@@ -3,7 +3,6 @@ module main;
 
 // What does this module require to function?
 import core.stdc.stdlib: EXIT_SUCCESS, EXIT_FAILURE, exit;
-import core.stdc.signal;
 import core.sys.posix.signal;
 import core.memory;
 import core.time;
@@ -55,9 +54,6 @@ bool dryRun = false;
 string runtimeDatabaseFile = "";
 
 int main(string[] cliArgs) {
-	// Setup CTRL-C handler
-    setupSignalHandler();
-
 	// Application Start Time - used during monitor loop to detail how long it has been running for
 	auto applicationStartTime = Clock.currTime();
 	// Disable buffering on stdout - this is needed so that when we are using plain write() it will go to the terminal without flushing
@@ -160,8 +156,9 @@ int main(string[] cliArgs) {
 	// Who are we running as? This will print the ProcessID, UID, GID and username the application is running as
 	runtimeUserName = getUserName();
 	
-	// Print in debug the application version as soon as possible
+	// Print the application version and how this was compiled as soon as possible
 	addLogEntry("Application Version: " ~ applicationVersion, ["debug"]);
+	addLogEntry("Application Compiled With: " ~ compilerDetails(), ["debug"]);
 	
 	// How was this application started - what options were passed in
 	addLogEntry("Passed in 'cliArgs': " ~ to!string(cliArgs), ["debug"]);
@@ -656,7 +653,7 @@ int main(string[] cliArgs) {
 	checkForNoMountScenario();
 	
 	// Set the default thread pool value
-	defaultPoolThreads(to!int(appConfig.getValueLong("threads")));
+	defaultPoolThreads(1);
 	
 	// Is the sync engine initialised correctly?
 	if (appConfig.syncEngineWasInitialised) {
@@ -708,7 +705,10 @@ int main(string[] cliArgs) {
 			// Display that we are syncing from a specific path due to --single-directory
 			addLogEntry("Syncing changes from this selected path: " ~ singleDirectoryPath, ["verbose"]);
 		}
-
+		
+		// Handle SIGINT and SIGTERM
+		setupSignalHandler();
+		
 		// Are we doing a --sync operation? This includes doing any --single-directory operations
 		if (appConfig.getValueBool("synchronize")) {
 			// Did the user specify --upload-only?
@@ -982,11 +982,12 @@ int main(string[] cliArgs) {
 						// Detail the outcome of the sync process
 						displaySyncOutcome();
 						
-						if (appConfig.fullScanTrueUpRequired) {
-							// Write WAL and SHM data to file for this loop
-							addLogEntry("Merge contents of WAL and SHM files into main database file", ["debug"]);
-							itemDB.performVacuum();
-						}
+						// Cleanup sync process arrays
+						syncEngineInstance.cleanupArrays();
+						
+						// Write WAL and SHM data to file for this loop and release memory used by in-memory processing
+						addLogEntry("Merge contents of WAL and SHM files into main database file", ["debug"]);
+						itemDB.performVacuum();
 					} else {
 						// Not online
 						addLogEntry("Microsoft OneDrive service is not reachable at this time. Will re-try on next sync attempt.");
@@ -999,7 +1000,9 @@ int main(string[] cliArgs) {
 					
 					// Release all the curl instances used during this loop
 					// New curl instances will be established on next loop
+					addLogEntry("CurlEngine Pool Size PRE Cleanup: " ~ to!string(CurlEngine.curlEnginePoolLength()), ["debug"]);
 					CurlEngine.releaseAllCurlInstances();
+					addLogEntry("CurlEngine Pool Size POST Cleanup: " ~ to!string(CurlEngine.curlEnginePoolLength()) , ["debug"]);
 					
 					// Display memory details before garbage collection
 					if (displayMemoryUsage) displayMemoryUsagePreGC();
@@ -1007,6 +1010,7 @@ int main(string[] cliArgs) {
 					GC.collect();
 					// Return free memory to the OS
 					GC.minimize();
+					
 					// Display memory details after garbage collection
 					if (displayMemoryUsage) displayMemoryUsagePostGC();
 					
@@ -1189,7 +1193,6 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 			filesystemMonitor.update(false);
 		}
 		
-		
 		// Perform the local database consistency check, picking up locally modified data and uploading this to OneDrive
 		syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 		if (appConfig.getValueBool("monitor")) {
@@ -1333,24 +1336,13 @@ auto assumeNoGC(T) (T t) if (isFunctionPointer!T || isDelegate!T) {
 	return cast(SetFunctionAttributes!(T, functionLinkage!T, attrs)) t;
 }
 
-// Configure the signal handler to catch SIGINT (CTRL-C) and SIGTERM (kill)
 void setupSignalHandler() {
-    sigaction_t sa;
-    sa.sa_flags = SA_RESETHAND | SA_NODEFER;  // Use reset and no defer flags to handle reentrant signals
-    sa.sa_handler = &exitHandler;  // Direct function pointer assignment
-    sigemptyset(&sa.sa_mask);  // Initialize the signal set to empty
-
-    // Register the signal handler for SIGINT
-    if (sigaction(SIGINT, &sa, null) != 0) {
-        writeln("FATAL: Failed to install SIGINT handler");
-        exit(EXIT_FAILURE);
-    }
-
-    // Register the signal handler for SIGTERM
-    if (sigaction(SIGTERM, &sa, null) != 0) {
-        writeln("FATAL: Failed to install SIGTERM handler");
-        exit(EXIT_FAILURE);
-    }
+    sigaction_t action;
+    action.sa_handler = &exitHandler; // Direct function pointer assignment
+    sigemptyset(&action.sa_mask); // Initialize the signal set to empty
+    action.sa_flags = 0;
+	sigaction(SIGINT, &action, null);  // Interrupt from keyboard
+    sigaction(SIGTERM, &action, null); // Termination signal
 }
 
 // Catch SIGINT (CTRL-C) and SIGTERM (kill), handle rapid repeat presses 
@@ -1358,39 +1350,40 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
    
 	if (shutdownInProgress) {
 		return;  // Ignore subsequent presses
-	}
-	shutdownInProgress = true;
+	} else {
+		// Disable logging suppression
+		appConfig.suppressLoggingOutput = false;
+		// Flag we are shutting down
+		shutdownInProgress = true;
 
-	try {
-		assumeNoGC ( () {
-			addLogEntry("\nReceived termination signal, initiating cleanup");
-			// Wait for all parallel jobs that depend on the database to complete
-			addLogEntry("Waiting for any existing upload|download process to complete");
-			shutdownSyncEngine();
-			
-			// Perform the shutdown process
-			performSynchronisedExitProcess("exitHandler");
-		})();
-	} catch (Exception e) {
-		// Any output here will cause a GC allocation
-		// - Error: `@nogc` function `main.exitHandler` cannot call non-@nogc function `std.stdio.writeln!string.writeln`
-		// - Error: cannot use operator `~` in `@nogc` function `main.exitHandler`
-		// writeln("Exception during shutdown: " ~ e.msg);
+		try {
+			assumeNoGC ( () {
+				addLogEntry("\nReceived termination signal, initiating application cleanup");
+				// Wait for all parallel jobs that depend on the database to complete
+				addLogEntry("Waiting for any existing upload|download process to complete");
+				shutdownSyncEngine();
+				
+				// Perform the shutdown process
+				performSynchronisedExitProcess("SIGINT-SIGTERM-HANDLER");
+			})();
+		} catch (Exception e) {
+			// Any output here will cause a GC allocation
+			// - Error: `@nogc` function `main.exitHandler` cannot call non-@nogc function `std.stdio.writeln!string.writeln`
+			// - Error: cannot use operator `~` in `@nogc` function `main.exitHandler`
+			// writeln("Exception during shutdown: " ~ e.msg);
+		}
+		// Exit the process with the provided exit code
+		exit(value);
 	}
-	// Exit the process with the provided exit code
-	exit(value);
 }
 
 // Handle application exit
 void performSynchronisedExitProcess(string scopeCaller = null) {
 	synchronized {
-		// Logging the caller of the shutdown procedure
-		if (!scopeCaller.empty) {
-			addLogEntry("performSynchronisedExitProcess called by: " ~ scopeCaller, ["debug"]);
-		}
-		
 		// Perform cleanup and shutdown of various services and resources
 		try {
+			// Log who called this function
+			addLogEntry("performSynchronisedExitProcess called by: " ~ scopeCaller, ["debug"]);
 			// Shutdown the OneDrive Webhook instance
 			shutdownOneDriveWebhook();
 			// Shutdown the client side filtering objects
@@ -1414,68 +1407,71 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 			// Shutdown application logging
 			shutdownApplicationLogging();
 		}
-		
-		// Perform Garbage Cleanup
-		GC.collect();
-		// Return free memory to the OS
-		GC.minimize();
 	}
 }
 
 void shutdownOneDriveWebhook() {
     if (oneDriveWebhook !is null) {
-		addLogEntry("Shutdown OneDrive Webhook instance", ["debug"]);
+		addLogEntry("Shutting down OneDrive Webhook instance", ["debug"]);
 		oneDriveWebhook.stop();
         object.destroy(oneDriveWebhook);
         oneDriveWebhook = null;
+		addLogEntry("Shutdown of OneDrive Webhook instance is complete", ["debug"]);
     }
 }
 
 void shutdownFilesystemMonitor() {
     if (filesystemMonitor !is null) {
-		addLogEntry("Shutdown Filesystem Monitoring instance", ["debug"]);
+		addLogEntry("Shutting down Filesystem Monitoring instance", ["debug"]);
 		filesystemMonitor.shutdown();
         object.destroy(filesystemMonitor);
         filesystemMonitor = null;
+		addLogEntry("Shut down of Filesystem Monitoring instance is complete", ["debug"]);
     }
 }
 
 void shutdownSelectiveSync() {
     if (selectiveSync !is null) {
-		addLogEntry("Shutdown Client Side Filtering instance", ["debug"]);
+		addLogEntry("Shutting down Client Side Filtering instance", ["debug"]);
 		selectiveSync.shutdown();
         object.destroy(selectiveSync);
         selectiveSync = null;
+		addLogEntry("Shut down of Client Side Filtering instance is complete", ["debug"]);
     }
 }
 
 void shutdownSyncEngine() {
     if (syncEngineInstance !is null) {
-		addLogEntry("Shutdown Sync Engine instance", ["debug"]);
+		addLogEntry("Shutting down Sync Engine instance", ["debug"]);
 		syncEngineInstance.shutdown(); // Make sure any running thread completes first
         object.destroy(syncEngineInstance);
         syncEngineInstance = null;
+		addLogEntry("Shut down Sync Engine instance is complete", ["debug"]);
     }
 }
 
 void shutdownDatabase() {
     if (itemDB !is null && itemDB.isDatabaseInitialised()) {
-		addLogEntry("Shutdown Database instance", ["debug"]);
+		addLogEntry("Shutting down Database instance", ["debug"]);
+		addLogEntry("Performing a database vacuum" , ["debug"]);
 		itemDB.performVacuum();
+		addLogEntry("Database vacuum is complete" , ["debug"]);
         object.destroy(itemDB);
         itemDB = null;
+		addLogEntry("Shut down Database instance is complete", ["debug"]);
     }
 }
 
 void shutdownAppConfig() {
     if (appConfig !is null) {
-		addLogEntry("Shutdown Application Configuration instance", ["debug"]);
+		addLogEntry("Shutting down Application Configuration instance", ["debug"]);
 		if (dryRun) {
 			// We were running with --dry-run , clean up the applicable database
 			cleanupDryRunDatabaseFiles(runtimeDatabaseFile);
 		}
 		object.destroy(appConfig);
         appConfig = null;
+		addLogEntry("Shut down of Application Configuration instance is complete", ["debug"]);
     }
 }
 
@@ -1491,3 +1487,13 @@ void shutdownApplicationLogging() {
 	(cast() logBuffer).shutdown();
 	object.destroy(logBuffer);
 }
+
+string compilerDetails() {
+	version(DigitalMars) enum compiler = "DMD";
+	else version(LDC)    enum compiler = "LDC";
+	else version(GNU)    enum compiler = "GDC";
+	else enum compiler = "Unknown compiler";
+	string compilerString = compiler ~ " " ~ to!string(__VERSION__);
+	return compilerString;
+}
+
