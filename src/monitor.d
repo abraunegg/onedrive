@@ -254,6 +254,8 @@ final class Monitor {
 	bool initialised = false;
 	// Worker Tid
 	Tid workerTid;
+	// Caller Tid
+	Tid callerTid;
 	
 	// Configure Private Class Variables
 	shared(MonitorBackgroundWorker) worker;
@@ -312,6 +314,7 @@ final class Monitor {
 		addRecursive(monitorPath);
 		
 		// Start monitoring
+		callerTid = thisTid;
 		workerTid = spawn(&startMonitorJob, worker, thisTid);
 
 		initialised = true;
@@ -320,6 +323,11 @@ final class Monitor {
 	// Communication with worker
 	void send(bool isAlive) {
 		workerTid.send(isAlive);
+	}
+
+	void interrupt() {
+		// Wake up caller
+		callerTid.send(-1);
 	}
 
 	// Shutdown the monitor class

@@ -46,7 +46,7 @@ Monitor filesystemMonitor;
 
 // Class variables
 // Flag for performing a synchronised shutdown
-bool shutdownInProgress = false;
+int interruptCounter = 0;
 // Flag if a --dry-run is being performed, as, on shutdown, once config is destroyed, we have no reference here
 bool dryRun = false;
 // Configure the runtime database file path so that it is available to us on shutdown so objects can be destroyed and removed if required
@@ -92,19 +92,24 @@ int main(string[] cliArgs) {
 	
 	// Define 'exit' and 'failure' scopes
 	scope(exit) {
-		// Detail what scope was called
-		addLogEntry("Exit scope was called", ["debug"]);
-		// Perform synchronised exit
-		performSynchronisedExitProcess("exitScope");
-		exit(EXIT_SUCCESS);
+		// Only perform cleanup if the exit process has not been triggered.
+		if (interruptCounter < 2) {
+			// Detail what scope was called
+			addLogEntry("Exit scope was called", ["debug"]);
+			// Perform synchronised exit
+			performSynchronisedExitProcess("exitScope");
+		}
 	}
 	
 	scope(failure) {
-		// Detail what scope was called
-		addLogEntry("Failure scope was called", ["debug"]);
-		// Perform synchronised exit
-		performSynchronisedExitProcess("failureScope");
-		exit(EXIT_FAILURE);
+		// Only perform cleanup if the exit process has not been triggered.
+		if (interruptCounter < 2) {
+			interruptCounter = 2;
+			// Detail what scope was called
+			addLogEntry("Failure scope was called", ["debug"]);
+			// Perform synchronised exit
+			performSynchronisedExitProcess("failureScope");
+		}
 	}
 	
 	// Read in application options as passed in
@@ -1060,6 +1065,10 @@ int main(string[] cliArgs) {
 						// Process incoming notifications if any.
 						auto signalExists = receiveTimeout(sleepTime, (int msg) {res = msg;},(ulong _) {notificationReceived = true;});
 						
+						// Stop running if in the shutdown process.
+						if (interruptCounter)
+							return EXIT_FAILURE;
+						
 						// Debug values
 						addLogEntry("signalExists = " ~ to!string(signalExists), ["debug"]);
 						addLogEntry("worker status = " ~ to!string(res), ["debug"]);
@@ -1347,17 +1356,22 @@ void setupSignalHandler() {
 
 // Catch SIGINT (CTRL-C) and SIGTERM (kill), handle rapid repeat presses 
 extern(C) nothrow @nogc @system void exitHandler(int value) {
-   
-	if (shutdownInProgress) {
+    interruptCounter += 1;
+	if (interruptCounter > 2)
 		return;  // Ignore subsequent presses
-	} else {
-		// Disable logging suppression
-		appConfig.suppressLoggingOutput = false;
-		// Flag we are shutting down
-		shutdownInProgress = true;
 
-		try {
-			assumeNoGC ( () {
+	try {
+		assumeNoGC ( () {
+			if (interruptCounter == 1) {
+				// Wake up sleeping thread first
+				if (filesystemMonitor !is null) {
+					addLogEntry("Sending Filesystem Monitoring interruption", ["debug"]);
+					filesystemMonitor.interrupt();
+				}	
+				writeln("\nCleanup already in progress, hit one more time to force immediate shutdown...\n");
+			} else if (interruptCounter == 2) {
+				// Disable logging suppression
+				appConfig.suppressLoggingOutput = false;
 				addLogEntry("\nReceived termination signal, initiating application cleanup");
 				// Wait for all parallel jobs that depend on the database to complete
 				addLogEntry("Waiting for any existing upload|download process to complete");
@@ -1365,13 +1379,15 @@ extern(C) nothrow @nogc @system void exitHandler(int value) {
 				
 				// Perform the shutdown process
 				performSynchronisedExitProcess("SIGINT-SIGTERM-HANDLER");
-			})();
-		} catch (Exception e) {
-			// Any output here will cause a GC allocation
-			// - Error: `@nogc` function `main.exitHandler` cannot call non-@nogc function `std.stdio.writeln!string.writeln`
-			// - Error: cannot use operator `~` in `@nogc` function `main.exitHandler`
-			// writeln("Exception during shutdown: " ~ e.msg);
-		}
+			}
+		})();
+	} catch (Exception e) {
+		// Any output here will cause a GC allocation
+		// - Error: `@nogc` function `main.exitHandler` cannot call non-@nogc function `std.stdio.writeln!string.writeln`
+		// - Error: cannot use operator `~` in `@nogc` function `main.exitHandler`
+		// writeln("Exception during shutdown: " ~ e.msg);
+	}
+	if (interruptCounter >= 2) {
 		// Exit the process with the provided exit code
 		exit(value);
 	}
