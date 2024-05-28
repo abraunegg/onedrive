@@ -17,200 +17,214 @@ version(Notifications) {
 	import dnotify;
 }
 
-// Shared module object
+// Shared logging object
 shared LogBuffer logBuffer;
 
-// Timer for logging
-shared MonoTime lastInsertedTime;
-
+// Logging class
 class LogBuffer {
-    private:
-		string[3][] buffer;
-		Mutex bufferLock;
-		Condition condReady;
-		string logFilePath;
-		bool writeToFile;
-		bool verboseLogging;
-		bool debugLogging;
-		Thread flushThread;
-		bool isRunning;
-		bool sendGUINotification;
+    
+	// Private Variables
+	private bool verboseLogging;
+	private bool debugLogging;
+	private bool isRunning;
+	private bool sendGUINotification;
+	private bool writeToFile;
+	private string[3][] logLineBuffer;
+	private shared(Mutex) bufferLock;
+	private string logFilePath;
+	
+	// Record last insertion time - used for addProcessingDotEntry to not flood the logger|console
+	MonoTime lastInsertedTime;
+	
+	// The actual thread performing the logging action
+	Thread writerThread;
 
-    public:
-        this(bool verboseLogging, bool debugLogging) {
-			// Initialise the mutex
-            bufferLock = new Mutex();
-			condReady = new Condition(bufferLock);
-			// Initialise other items
-            this.logFilePath = logFilePath;
-            this.writeToFile = writeToFile;
-            this.verboseLogging = verboseLogging;
-            this.debugLogging = debugLogging;
-            this.isRunning = true;
-			this.sendGUINotification = true;
-            this.flushThread = new Thread(&flushBuffer);
-			flushThread.isDaemon(true);
-			flushThread.start();
-        }
+	// Class initialisation
+	this() {
+		logLineBuffer = [];
+		isRunning = true;
+		bufferLock = cast(shared) new Mutex();
+		//writerThread = new Thread(&logWriter);
+		writerThread = new Thread(&flushLogBuffer);
 		
-		// Shutdown logging
-		void shutdown() {
+		writerThread.isDaemon(true);
+		// Start a thread to handle writing logs to console/disk
+		writerThread.start();
+	}
+	
+	// Initialise logging
+	shared void initialise(bool verboseLoggingInput, bool debugLoggingInput) {
+        verboseLogging = verboseLoggingInput;
+        debugLogging = debugLoggingInput;
+    }
+	
+	// Store the log message in the logLineBuffer array
+	shared private void storeLogMessage(string message, string[] levels = ["info"]) {
+        // Generate the timestamp for this log entry
+		auto timeStamp = leftJustify(Clock.currTime().toString(), 28, '0');
+		synchronized(bufferLock) {
+			foreach (level; levels) { // For each 'log level'
+			
+				// Normal application output
+				if (!debugLogging) {
+					if ((level == "info") || ((verboseLogging) && (level == "verbose")) || (level == "logFileOnly") || (level == "consoleOnly") || (level == "consoleOnlyNoNewLine")) {
+						// Add this message to the buffer, with this format
+						logLineBuffer ~= [timeStamp, level, format("%s", message)];
+					}
+				} else {
+					// Debug Logging (--verbose --verbose | -v -v | -vv) output
+					// Add this message, regardless of 'level' to the buffer, with this format
+					logLineBuffer ~= [timeStamp, level, format("DEBUG: %s", message)];
+					// If there are multiple 'levels' configured, ignore this and break as we are doing debug logging
+					break;
+				}
+				
+				// Submit the message to the dbus / notification daemon for display within the GUI being used
+				// Will not send GUI notifications when running in debug mode
+				if ((!debugLogging) && (level == "notify")) {
+					version(Notifications) {
+						if (sendGUINotification) {
+							notify(message);
+						}
+					}
+				}	
+			}
+        }
+	}
+	
+	// Flush any logs in the buffer via a thread
+	private void flushLogBuffer() {
+		while (isRunning) {
+			Thread.sleep(dur!("msecs")(250)); // Wait for 1/4 of a second
 			synchronized(bufferLock) {
-				if (!isRunning) return; // Prevent multiple shutdowns
-				isRunning = false;
-				condReady.notifyAll(); // Wake up all waiting threads
+				if (!logLineBuffer.empty) {
+					logWriter(); 
+				}
 			}
-			
-			// Wait for the flush thread to finish outside of the synchronized block to avoid deadlocks
-			if (flushThread.isRunning()) {
-				// Join all threads
-				flushThread.join();
-				// Flush any remaining log
-				flushBuffer();
-			}
-			
-			// Flush anything remaining
-			flush(); // Perform a final flush to ensure all data is processed
-			flushBuffer(); // Finally flush the buffers one last time
 		}
-
-		shared void logThisMessage(string message, string[] levels = ["info"]) {
-			// Generate the timestamp for this log entry
-			auto timeStamp = leftJustify(Clock.currTime().toString(), 28, '0');
-			
-			synchronized(bufferLock) {
-				foreach (level; levels) {
-					// Normal application output
-					if (!debugLogging) {
-						if ((level == "info") || ((verboseLogging) && (level == "verbose")) || (level == "logFileOnly") || (level == "consoleOnly") || (level == "consoleOnlyNoNewLine")) {
-							// Add this message to the buffer, with this format
-							buffer ~= [timeStamp, level, format("%s", message)];
-						}
-					} else {
-						// Debug Logging (--verbose --verbose | -v -v | -vv) output
-						// Add this message, regardless of 'level' to the buffer, with this format
-						buffer ~= [timeStamp, level, format("DEBUG: %s", message)];
-						// If there are multiple 'levels' configured, ignore this and break as we are doing debug logging
-						break;
-                    }
-					
-					// Submit the message to the dbus / notification daemon for display within the GUI being used
-					// Will not send GUI notifications when running in debug mode
-					if ((!debugLogging) && (level == "notify")) {
-						version(Notifications) {
-							if (sendGUINotification) {
-								notify(message);
-							}
-						}
-                    }
-                }
-				(cast()condReady).notify();
-            }
-        }
-		
-		shared void notify(string message) {
-            // Use dnotify's functionality for GUI notifications, if GUI notifications is enabled
-			version(Notifications) {
-				try {
-					auto n = new Notification("OneDrive Client", message, "IGNORED");
-					// Show notification for 10 seconds
-					n.timeout = 10;
-					n.show();
-				} catch (NotificationError e) {
-					sendGUINotification = false;
-					addLogEntry("Unable to send notification; disabled in the following: " ~ e.message);
+	}
+	
+	// Write logs 
+	private void logWriter() {
+		string[3][] messages;
+		synchronized(bufferLock) {
+			messages = logLineBuffer;
+			logLineBuffer = [];
+		}
+		writeTheseLogsOut(messages);
+		messages = [];
+	}
+	
+	// Log output formatting
+	private void writeTheseLogsOut(string[3][] logLinesToWrite) {
+	
+		foreach (msg; logLinesToWrite) {
+			// timestamp, logLevel, message
+			// Always write the log line to the console, if level != logFileOnly
+	
+			if (msg[1] != "logFileOnly") {
+				// Console output .. what sort of output
+				if (msg[1] == "consoleOnlyNoNewLine") {
+					// This is used write out a message to the console only, without a new line 
+					// This is used in non-verbose mode to indicate something is happening when downloading JSON data from OneDrive or when we need user input from --resync
+					write(msg[2]);
+				} else {
+					// write this to the console with a new line
+					writeln(msg[2]);
 				}
 			}
-        }
-
-        private void flushBuffer() {
-            while (isRunning) {
-                flush();
-            }
-			stdout.flush();
-        }
+			
+			// Was this just console only output?
+			if ((msg[1] != "consoleOnlyNoNewLine") && (msg[1] != "consoleOnly")) {
+				// Write to the logfile only if configured to do so - console only items should not be written out
+				if (writeToFile) {
+					string logFileLine = format("[%s] %s", msg[0], msg[2]);
+					std.file.append(logFilePath, logFileLine ~ "\n");
+				}
+			}
+	
+		}
+	}
+	
+	
+	shared void shutdown() {
+        isRunning = false;
 		
-		private void flush() {
-            string[3][] messages;
-            synchronized(bufferLock) {
-				while (buffer.empty && isRunning) {
-					condReady.wait();
-				}
-                messages = buffer;
-                buffer.length = 0;
-            }
-
-            foreach (msg; messages) {
-                // timestamp, logLevel, message
-				// Always write the log line to the console, if level != logFileOnly
-				if (msg[1] != "logFileOnly") {
-					// Console output .. what sort of output
-					if (msg[1] == "consoleOnlyNoNewLine") {
-						// This is used write out a message to the console only, without a new line 
-						// This is used in non-verbose mode to indicate something is happening when downloading JSON data from OneDrive or when we need user input from --resync
-						write(msg[2]);
-					} else {
-						// write this to the console with a new line
-						writeln(msg[2]);
+        synchronized(bufferLock) {
+            if (!logLineBuffer.empty) {
+			
+				// duplicated code from writeTheseLogsOut() as temp measure .. work out why writeTheseLogsOut() cant be called here later
+				foreach (msg; logLineBuffer) {
+					// timestamp, logLevel, message
+					// Always write the log line to the console, if level != logFileOnly
+			
+					if (msg[1] != "logFileOnly") {
+						// Console output .. what sort of output
+						if (msg[1] == "consoleOnlyNoNewLine") {
+							// This is used write out a message to the console only, without a new line 
+							// This is used in non-verbose mode to indicate something is happening when downloading JSON data from OneDrive or when we need user input from --resync
+							write(msg[2]);
+						} else {
+							// write this to the console with a new line
+							writeln(msg[2]);
+						}
 					}
-				}
-                
-				// Was this just console only output?
-				if ((msg[1] != "consoleOnlyNoNewLine") && (msg[1] != "consoleOnly")) {
-					// Write to the logfile only if configured to do so - console only items should not be written out
-					if (writeToFile) {
-						string logFileLine = format("[%s] %s", msg[0], msg[2]);
-						std.file.append(logFilePath, logFileLine ~ "\n");
+					
+					// Was this just console only output?
+					if ((msg[1] != "consoleOnlyNoNewLine") && (msg[1] != "consoleOnly")) {
+						// Write to the logfile only if configured to do so - console only items should not be written out
+						if (writeToFile) {
+							string logFileLine = format("[%s] %s", msg[0], msg[2]);
+							std.file.append(logFilePath, logFileLine ~ "\n");
+						}
 					}
 				}
             }
-			// Clear Messages
-			messages = [];
         }
-}
-
-// Function to initialize the logging system
-void initialiseLogging(bool verboseLogging = false, bool debugLogging = false) {
-    logBuffer = cast(shared) new LogBuffer(verboseLogging, debugLogging);
-	lastInsertedTime = MonoTime.currTime();
-}
-
-// Function to add a log entry with multiple levels
-void addLogEntry(string message = "", string[] levels = ["info"]) {
-	logBuffer.logThisMessage(message, levels);
-}
-
-// Is logging still active
-bool loggingActive() {
-	return logBuffer.isRunning;
-}
-
-void addProcessingLogHeaderEntry(string message, long verbosityCount) {
-	if (verbosityCount == 0) {
-		addLogEntry(message, ["logFileOnly"]);					
-		// Use the dots to show the application is 'doing something' if verbosityCount == 0
-		addLogEntry(message ~ " .", ["consoleOnlyNoNewLine"]);
-	} else {
-		// Fallback to normal logging if in verbose or above level
-		addLogEntry(message);
+    }
+	
+	// Is logging still active
+	shared bool loggingActive() {
+		return isRunning;
 	}
-}
-
-void addProcessingDotEntry() {
-	if (MonoTime.currTime() - lastInsertedTime < dur!"seconds"(1)) {
-		// Don't flood the log buffer
-		return;
+	
+	
+	// Function to add a log entry with multiple levels
+	shared void addLogEntry(string message = "", string[] levels = ["info"]) {
+		storeLogMessage(message, levels);
 	}
-	lastInsertedTime = MonoTime.currTime();
-	addLogEntry(".", ["consoleOnlyNoNewLine"]);
-}
-
-// Function to set logFilePath and enable logging to a file
-void enableLogFileOutput(string configuredLogFilePath) {
-	logBuffer.logFilePath = configuredLogFilePath;
-	logBuffer.writeToFile = true;
-}
-
-void disableGUINotifications(bool userConfigDisableNotifications) {
-	logBuffer.sendGUINotification = userConfigDisableNotifications;
+	
+	
+	// Add a console only processing '.' entry to indicate 'something' is happening
+	shared void addProcessingLogHeaderEntry(string message, long verbosityCount) {
+		if (verbosityCount == 0) {
+			addLogEntry(message, ["logFileOnly"]);					
+			// Use the dots to show the application is 'doing something' if verbosityCount == 0
+			addLogEntry(message ~ " .", ["consoleOnlyNoNewLine"]);
+		} else {
+			// Fallback to normal logging if in verbose or above level
+			addLogEntry(message);
+		}
+	}
+	
+	// Add a console only processing '.' entry to indicate 'something' is happening
+	shared void addProcessingDotEntry() {
+		if (MonoTime.currTime() - lastInsertedTime < dur!"seconds"(1)) {
+			// Don't flood the log buffer
+			return;
+		}
+		lastInsertedTime = MonoTime.currTime();
+		addLogEntry(".", ["consoleOnlyNoNewLine"]);
+	}
+	
+	// Function to set logFilePath and enable logging to a file
+	shared void enableLogFileOutput(string configuredLogFilePath) {
+		logFilePath = configuredLogFilePath;
+		writeToFile = true;
+	}
+	
+	// Disable GUI notifications
+	shared void disableGUINotifications(bool userConfigDisableNotifications) {
+		sendGUINotification = userConfigDisableNotifications;
+	}
 }

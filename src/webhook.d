@@ -56,7 +56,7 @@ class OneDriveWebhook {
 		server.listeningPort = this.port;
 
 		spawn(&serveImpl, cast(shared) this);
-		addLogEntry("Started webhook server");
+		logBuffer.addLogEntry("Started webhook server");
 
 		// Subscriptions
 		oneDriveApiInstance = new OneDriveApi(this.appConfig);
@@ -70,7 +70,7 @@ class OneDriveWebhook {
         server.stop();
         this.started = false;
 
-		addLogEntry("Stopped webhook server");
+		logBuffer.addLogEntry("Stopped webhook server");
 		object.destroy(server);
 
         // Delete subscription if there exists any
@@ -87,9 +87,9 @@ class OneDriveWebhook {
 
 	private static void handle(shared OneDriveWebhook _this, Cgi cgi) {
 		if (debugHTTPResponseOutput) {
-			addLogEntry("Webhook request: " ~ to!string(cgi.requestMethod) ~ " " ~ to!string(cgi.requestUri));
+			logBuffer.addLogEntry("Webhook request: " ~ to!string(cgi.requestMethod) ~ " " ~ to!string(cgi.requestUri));
 			if (!cgi.postBody.empty) {
-				addLogEntry("Webhook post body: " ~ to!string(cgi.postBody));
+				logBuffer.addLogEntry("Webhook post body: " ~ to!string(cgi.postBody));
 			}
 		}
 
@@ -99,7 +99,7 @@ class OneDriveWebhook {
 			// For validation requests, respond with the validation token passed in the query string
 			// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/concepts/webhook-receiver-validation-request
 			cgi.write(cgi.get["validationToken"]);
-			addLogEntry("Webhook: handled validation request");
+			logBuffer.addLogEntry("Webhook: handled validation request");
 		} else {
 			// Notifications don't include any information about the changes that triggered them.
 			// Put a refresh signal in the queue and let the main monitor loop process it.
@@ -107,7 +107,7 @@ class OneDriveWebhook {
 			_this.count.atomicOp!"+="(1);
 			send(cast()_this.parentTid, to!ulong(_this.count));
 			cgi.write("OK");
-			addLogEntry("Webhook: sent refresh signal #" ~ to!string(_this.count));
+			logBuffer.addLogEntry("Webhook: sent refresh signal #" ~ to!string(_this.count));
 		}
 	}
 
@@ -131,11 +131,11 @@ class OneDriveWebhook {
 		} catch (OneDriveException e) {
 			logSubscriptionError(e);
 			subscriptionLastErrorAt = Clock.currTime(UTC());
-			addLogEntry("Will retry creating or renewing subscription in " ~ to!string(subscriptionRetryInterval));
+			logBuffer.addLogEntry("Will retry creating or renewing subscription in " ~ to!string(subscriptionRetryInterval));
 		} catch (JSONException e) {
-			addLogEntry("ERROR: Unexpected JSON error when attempting to validate subscription: " ~ e.msg);
+			logBuffer.addLogEntry("ERROR: Unexpected JSON error when attempting to validate subscription: " ~ e.msg);
 			subscriptionLastErrorAt = Clock.currTime(UTC());
-			addLogEntry("Will retry creating or renewing subscription in " ~ to!string(subscriptionRetryInterval));
+			logBuffer.addLogEntry("Will retry creating or renewing subscription in " ~ to!string(subscriptionRetryInterval));
 		}
 	}
 
@@ -163,7 +163,7 @@ class OneDriveWebhook {
 	}
 
 	private void createSubscription() {
-		addLogEntry("Initializing subscription for updates ...");
+		logBuffer.addLogEntry("Initializing subscription for updates ...");
 
 		auto expirationDateTime = Clock.currTime(UTC()) + subscriptionExpirationInterval;
 		try {
@@ -171,7 +171,7 @@ class OneDriveWebhook {
 			// Save important subscription metadata including id and expiration
 			subscriptionId = response["id"].str;
 			subscriptionExpiration = SysTime.fromISOExtString(response["expirationDateTime"].str);
-			addLogEntry("Created new subscription " ~ subscriptionId ~ " with expiration: " ~ to!string(subscriptionExpiration.toISOExtString()));
+			logBuffer.addLogEntry("Created new subscription " ~ subscriptionId ~ " with expiration: " ~ to!string(subscriptionExpiration.toISOExtString()));
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 409) {
 				// Take over an existing subscription on HTTP 409.
@@ -208,7 +208,7 @@ class OneDriveWebhook {
 
 				// Save the subscription id and renew it immediately since we don't know the expiration timestamp
 				subscriptionId = m[0];
-				addLogEntry("Found existing subscription " ~ subscriptionId);
+				logBuffer.addLogEntry("Found existing subscription " ~ subscriptionId);
 				renewSubscription();
 			} else {
 				throw e;
@@ -217,7 +217,7 @@ class OneDriveWebhook {
 	}
 	
 	private void renewSubscription() {
-		addLogEntry("Renewing subscription for updates ...");
+		logBuffer.addLogEntry("Renewing subscription for updates ...");
 
 		auto expirationDateTime = Clock.currTime(UTC()) + subscriptionExpirationInterval;
 		try {
@@ -225,10 +225,10 @@ class OneDriveWebhook {
 
 			// Update subscription expiration from the response
 			subscriptionExpiration = SysTime.fromISOExtString(response["expirationDateTime"].str);
-			addLogEntry("Created new subscription " ~ subscriptionId ~ " with expiration: " ~ to!string(subscriptionExpiration.toISOExtString()));
+			logBuffer.addLogEntry("Created new subscription " ~ subscriptionId ~ " with expiration: " ~ to!string(subscriptionExpiration.toISOExtString()));
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 404) {
-				addLogEntry("The subscription is not found on the server. Recreating subscription ...");
+				logBuffer.addLogEntry("The subscription is not found on the server. Recreating subscription ...");
 				subscriptionId = null;
 				subscriptionExpiration = Clock.currTime(UTC());
 				createSubscription();
@@ -243,7 +243,7 @@ class OneDriveWebhook {
 			return;
 		}
 		oneDriveApiInstance.deleteSubscription(subscriptionId);
-		addLogEntry("Deleted subscription");
+		logBuffer.addLogEntry("Deleted subscription");
 	}
 	
 	private void logSubscriptionError(OneDriveException e) {
@@ -269,7 +269,7 @@ class OneDriveWebhook {
 					auto msgReg = ctRegex!(r"Subscription validation request failed", "i");
 					auto m = matchFirst(e.error["error"]["message"].str, msgReg);
 					if (m) {
-						addLogEntry("ERROR: Cannot create or renew subscription: Microsoft did not get 200 OK from the webhook endpoint.");
+						logBuffer.addLogEntry("ERROR: Cannot create or renew subscription: Microsoft did not get 200 OK from the webhook endpoint.");
 						return;
 					}
 				}
@@ -298,7 +298,7 @@ class OneDriveWebhook {
 					auto msgReg = ctRegex!(r"Authentication failed", "i");
 					auto m = matchFirst(e.error["error"]["message"].str, msgReg);
 					if (m) {
-						addLogEntry("ERROR: Cannot create or renew subscription: Authentication failed.");
+						logBuffer.addLogEntry("ERROR: Cannot create or renew subscription: Authentication failed.");
 						return;
 					}
 				}
@@ -326,7 +326,7 @@ class OneDriveWebhook {
 					auto msgReg = ctRegex!(r"Number of subscriptions on item has exceeded limit", "i");
 					auto m = matchFirst(e.error["error"]["message"].str, msgReg);
 					if (m) {
-						addLogEntry("ERROR: Cannot create or renew subscription: Number of subscriptions has exceeded limit.");
+						logBuffer.addLogEntry("ERROR: Cannot create or renew subscription: Number of subscriptions has exceeded limit.");
 						return;
 					}
 				}
@@ -336,7 +336,7 @@ class OneDriveWebhook {
 		}
 
 		// Log detailed message for unknown errors
-		addLogEntry("ERROR: Cannot create or renew subscription.");
+		logBuffer.addLogEntry("ERROR: Cannot create or renew subscription.");
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 	}
 }

@@ -91,21 +91,21 @@ Item makeDatabaseItem(JSONValue driveItem) {
 	bool typeSet = false;
 	if (isItemFile(driveItem)) {
 		// 'file' object exists in the JSON
-		addLogEntry("Flagging object as a file", ["debug"]);
+		logBuffer.addLogEntry("Flagging object as a file", ["debug"]);
 		typeSet = true;
 		item.type = ItemType.file;
 	}
 	
 	if (isItemFolder(driveItem)) {
 		// 'folder' object exists in the JSON
-		addLogEntry("Flagging object as a directory", ["debug"]);
+		logBuffer.addLogEntry("Flagging object as a directory", ["debug"]);
 		typeSet = true;
 		item.type = ItemType.dir;
 	}
 	
 	if (isItemRemote(driveItem)) {
 		// 'remote' object exists in the JSON
-		addLogEntry("Flagging object as a remote", ["debug"]);
+		logBuffer.addLogEntry("Flagging object as a remote", ["debug"]);
 		typeSet = true;
 		item.type = ItemType.remote;
 	}
@@ -127,7 +127,7 @@ Item makeDatabaseItem(JSONValue driveItem) {
 			if ("quickXorHash" in driveItem["file"]["hashes"]) {
 				item.quickXorHash = driveItem["file"]["hashes"]["quickXorHash"].str;
 			} else {
-				addLogEntry("quickXorHash is missing from " ~ driveItem["id"].str, ["debug"]);
+				logBuffer.addLogEntry("quickXorHash is missing from " ~ driveItem["id"].str, ["debug"]);
 			}
 			
 			// If quickXorHash is empty ..
@@ -136,7 +136,7 @@ Item makeDatabaseItem(JSONValue driveItem) {
 				if ("sha256Hash" in driveItem["file"]["hashes"]) {
 					item.sha256Hash = driveItem["file"]["hashes"]["sha256Hash"].str;
 				} else {
-					addLogEntry("sha256Hash is missing from " ~ driveItem["id"].str, ["debug"]);
+					logBuffer.addLogEntry("sha256Hash is missing from " ~ driveItem["id"].str, ["debug"]);
 				}
 			}
 		} else {
@@ -206,40 +206,40 @@ final class ItemDatabase {
 		} catch (SqliteException e) {
 			// An error was generated - what was the error?
 			if (e.msg == "database is locked") {
-				addLogEntry();
-				addLogEntry("ERROR: The 'onedrive' application is already running - please check system process list for active application instances");
-				addLogEntry(" - Use 'sudo ps aufxw | grep onedrive' to potentially determine active running process");
-				addLogEntry();
+				logBuffer.addLogEntry();
+				logBuffer.addLogEntry("ERROR: The 'onedrive' application is already running - please check system process list for active application instances");
+				logBuffer.addLogEntry(" - Use 'sudo ps aufxw | grep onedrive' to potentially determine active running process");
+				logBuffer.addLogEntry();
 			} else {
 				// A different error .. detail the message, detail the actual SQLite Error Code to assist with troubleshooting
-				addLogEntry();
-				addLogEntry("ERROR: An internal database error occurred: " ~ e.msg ~ " (SQLite Error Code: " ~ to!string(e.errorCode) ~ ")");
-				addLogEntry();
+				logBuffer.addLogEntry();
+				logBuffer.addLogEntry("ERROR: An internal database error occurred: " ~ e.msg ~ " (SQLite Error Code: " ~ to!string(e.errorCode) ~ ")");
+				logBuffer.addLogEntry();
 				
 				// Give the user some additional information and pointers on this error
 				// The below list is based on user issue / discussion reports since 2018
 				switch (e.errorCode) {
 					case 7: // SQLITE_NOMEM
-						addLogEntry("The operation could not be completed due to insufficient memory. Please close unnecessary applications to free up memory and try again.");
+						logBuffer.addLogEntry("The operation could not be completed due to insufficient memory. Please close unnecessary applications to free up memory and try again.");
 						break;
 					case 10: // SQLITE_IOERR
-						addLogEntry("A disk I/O error occurred. This could be due to issues with the storage medium (e.g., disk full, hardware failure, filesystem corruption). Please check your disk's health using a disk utility tool, ensure there is enough free space, and check the filesystem for errors.");
+						logBuffer.addLogEntry("A disk I/O error occurred. This could be due to issues with the storage medium (e.g., disk full, hardware failure, filesystem corruption). Please check your disk's health using a disk utility tool, ensure there is enough free space, and check the filesystem for errors.");
 						break;
 					case 11: // SQLITE_CORRUPT
-						addLogEntry("The database file appears to be corrupt. This could be due to incomplete or failed writes, hardware issues, or unexpected interruptions during database operations. Please perform a --resync operation.");
+						logBuffer.addLogEntry("The database file appears to be corrupt. This could be due to incomplete or failed writes, hardware issues, or unexpected interruptions during database operations. Please perform a --resync operation.");
 						break;
 					case 14: // SQLITE_CANTOPEN
-						addLogEntry("The database file could not be opened. Please check that the database file exists, has the correct permissions, and is not being blocked by another process or security software.");
+						logBuffer.addLogEntry("The database file could not be opened. Please check that the database file exists, has the correct permissions, and is not being blocked by another process or security software.");
 						break;
 					case 26: // SQLITE_NOTADB
-						addLogEntry("The file attempted to be opened does not appear to be a valid SQLite database, or it may have been corrupted to a point where it's no longer recognizable. Please check your application configuration directory and/or perform a --resync operation.");
+						logBuffer.addLogEntry("The file attempted to be opened does not appear to be a valid SQLite database, or it may have been corrupted to a point where it's no longer recognizable. Please check your application configuration directory and/or perform a --resync operation.");
 						break;
 					default:
-						addLogEntry("An unexpected error occurred. Please consult the application documentation or support to resolve this issue.");
+						logBuffer.addLogEntry("An unexpected error occurred. Please consult the application documentation or support to resolve this issue.");
 						break;
 				}
 				// Blank line before exit
-				addLogEntry();
+				logBuffer.addLogEntry();
 			}
 			return;
 		}
@@ -247,14 +247,14 @@ final class ItemDatabase {
 		if (dbVersion == 0) {
 			createTable();
 		} else if (db.getVersion() != itemDatabaseVersion) {
-			addLogEntry("The item database is incompatible, re-creating database table structures");
+			logBuffer.addLogEntry("The item database is incompatible, re-creating database table structures");
 			db.exec("DROP TABLE item");
 			createTable();
 		}
 		
 		// What is the threadsafe value
 		auto threadsafeValue = db.getThreadsafeValue();
-		addLogEntry("Threadsafe database value: " ~ to!string(threadsafeValue), ["debug"]);
+		logBuffer.addLogEntry("Threadsafe database value: " ~ to!string(threadsafeValue), ["debug"]);
 		
 		// Set the enforcement of foreign key constraints.
 		// https://www.sqlite.org/pragma.html#pragma_foreign_keys
@@ -446,12 +446,12 @@ final class ItemDatabase {
 			
 			// If the item is of type remote substitute it with the child
 			if (currItem.type == ItemType.remote) {
-				addLogEntry("Record is a Remote Object: " ~  to!string(currItem), ["debug"]);
+				logBuffer.addLogEntry("Record is a Remote Object: " ~  to!string(currItem), ["debug"]);
 				Item child;
 				if (selectById(currItem.remoteDriveId, currItem.remoteId, child)) {
 					assert(child.type != ItemType.remote, "The type of the child cannot be remote");
 					currItem = child;
-					addLogEntry("Selecting Record that is NOT Remote Object: " ~  to!string(currItem), ["debug"]);
+					logBuffer.addLogEntry("Selecting Record that is NOT Remote Object: " ~  to!string(currItem), ["debug"]);
 				}
 			}
 		}
@@ -477,7 +477,7 @@ final class ItemDatabase {
 		}
 		
 		if (currItem.type == ItemType.remote) {
-			addLogEntry("Record selected is a Remote Object: " ~  to!string(currItem), ["debug"]);
+			logBuffer.addLogEntry("Record selected is a Remote Object: " ~  to!string(currItem), ["debug"]);
 		}
 		
 		item = currItem;
@@ -645,9 +645,9 @@ final class ItemDatabase {
 					}
 				} else {
 					// broken tree
-					addLogEntry("The following generated a broken tree query:", ["debug"]);
-					addLogEntry("Drive ID: " ~ to!string(driveId), ["debug"]);
-					addLogEntry("Item ID: " ~ to!string(id), ["debug"]);
+					logBuffer.addLogEntry("The following generated a broken tree query:", ["debug"]);
+					logBuffer.addLogEntry("Drive ID: " ~ to!string(driveId), ["debug"]);
+					logBuffer.addLogEntry("Item ID: " ~ to!string(id), ["debug"]);
 					assert(0);
 				}
 			}
@@ -668,8 +668,8 @@ final class ItemDatabase {
 
 	string getDeltaLink(const(char)[] driveId, const(char)[] id) {
 		// Log what we received
-		addLogEntry("DeltaLink Query (driveId): " ~ to!string(driveId), ["debug"]);
-		addLogEntry("DeltaLink Query (id):      " ~ to!string(id), ["debug"]);
+		logBuffer.addLogEntry("DeltaLink Query (driveId): " ~ to!string(driveId), ["debug"]);
+		logBuffer.addLogEntry("DeltaLink Query (id):      " ~ to!string(id), ["debug"]);
 			
 		assert(driveId && id);
 		auto stmt = db.prepare("SELECT deltaLink FROM item WHERE driveId = ?1 AND id = ?2");
@@ -735,15 +735,15 @@ final class ItemDatabase {
 	
 	// Perform a vacuum on the database, commit WAL / SHM to file
 	void performVacuum() {
-		addLogEntry("Attempting to perform a database vacuum to merge any temporary data", ["debug"]);
+		logBuffer.addLogEntry("Attempting to perform a database vacuum to merge any temporary data", ["debug"]);
 		try {
 			auto stmt = db.prepare("VACUUM;");
 			stmt.exec();
-			addLogEntry("Database vacuum is complete", ["debug"]);
+			logBuffer.addLogEntry("Database vacuum is complete", ["debug"]);
 		} catch (SqliteException e) {
-			addLogEntry();
-			addLogEntry("ERROR: Unable to perform a database vacuum: " ~ e.msg);
-			addLogEntry();
+			logBuffer.addLogEntry();
+			logBuffer.addLogEntry("ERROR: Unable to perform a database vacuum: " ~ e.msg);
+			logBuffer.addLogEntry();
 		}
 	}
 	

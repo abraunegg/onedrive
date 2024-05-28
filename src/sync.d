@@ -199,7 +199,7 @@ class SyncEngine {
 	
 		// Create the specific task pool to process items in parallel
 		processPool = new TaskPool(to!int(appConfig.getValueLong("threads")));
-		addLogEntry("Initialised TaskPool worker with threads: " ~ to!string(processPool.size), ["debug"]);
+		logBuffer.addLogEntry("Initialised TaskPool worker with threads: " ~ to!string(processPool.size), ["debug"]);
 		
 		// Configure the class variable to consume the application configuration
 		this.appConfig = appConfig;
@@ -223,35 +223,35 @@ class SyncEngine {
 		
 		// Configure the uploadOnly flag to capture if --upload-only was used
 		if (appConfig.getValueBool("upload_only")) {
-			addLogEntry("Configuring uploadOnly flag to TRUE as --upload-only passed in or configured", ["debug"]);
+			logBuffer.addLogEntry("Configuring uploadOnly flag to TRUE as --upload-only passed in or configured", ["debug"]);
 			this.uploadOnly = true;
 		}
 		
 		// Configure the localDeleteAfterUpload flag
 		if (appConfig.getValueBool("remove_source_files")) {
-			addLogEntry("Configuring localDeleteAfterUpload flag to TRUE as --remove-source-files passed in or configured", ["debug"]);
+			logBuffer.addLogEntry("Configuring localDeleteAfterUpload flag to TRUE as --remove-source-files passed in or configured", ["debug"]);
 			this.localDeleteAfterUpload = true;
 		}
 		
 		// Configure the disableDownloadValidation flag
 		if (appConfig.getValueBool("disable_download_validation")) {
-			addLogEntry("Configuring disableDownloadValidation flag to TRUE as --disable-download-validation passed in or configured", ["debug"]);
+			logBuffer.addLogEntry("Configuring disableDownloadValidation flag to TRUE as --disable-download-validation passed in or configured", ["debug"]);
 			this.disableDownloadValidation = true;
 		}
 		
 		// Configure the disableUploadValidation flag
 		if (appConfig.getValueBool("disable_upload_validation")) {
-			addLogEntry("Configuring disableUploadValidation flag to TRUE as --disable-upload-validation passed in or configured", ["debug"]);
+			logBuffer.addLogEntry("Configuring disableUploadValidation flag to TRUE as --disable-upload-validation passed in or configured", ["debug"]);
 			this.disableUploadValidation = true;
 		}
 		
 		// Do we configure to clean up local files if using --download-only ?
 		if ((appConfig.getValueBool("download_only")) && (appConfig.getValueBool("cleanup_local_files"))) {
 			// --download-only and --cleanup-local-files were passed in
-			addLogEntry();
-			addLogEntry("WARNING: Application has been configured to cleanup local files that are not present online.");
-			addLogEntry("WARNING: Local data loss MAY occur in this scenario if you are expecting data to remain archived locally.");
-			addLogEntry();
+			logBuffer.addLogEntry();
+			logBuffer.addLogEntry("WARNING: Application has been configured to cleanup local files that are not present online.");
+			logBuffer.addLogEntry("WARNING: Local data loss MAY occur in this scenario if you are expecting data to remain archived locally.");
+			logBuffer.addLogEntry();
 			// Set the flag
 			this.cleanupLocalFiles = true;
 		}
@@ -259,7 +259,7 @@ class SyncEngine {
 		// Do we configure to NOT perform a remote delete if --upload-only & --no-remote-delete configured ?
 		if ((appConfig.getValueBool("upload_only")) && (appConfig.getValueBool("no_remote_delete"))) {
 			// --upload-only and --no-remote-delete were passed in
-			addLogEntry("WARNING: Application has been configured NOT to cleanup remote files that are deleted locally.");
+			logBuffer.addLogEntry("WARNING: Application has been configured NOT to cleanup remote files that are deleted locally.");
 			// Set the flag
 			this.noRemoteDelete = true;
 		}
@@ -280,27 +280,27 @@ class SyncEngine {
 		
 		// Are we forcing to use /children scan instead of /delta to simulate National Cloud Deployment use of /children?
 		if (appConfig.getValueBool("force_children_scan")) {
-			addLogEntry("Forcing client to use /children API call rather than /delta API to retrieve objects from the OneDrive API");
+			logBuffer.addLogEntry("Forcing client to use /children API call rather than /delta API to retrieve objects from the OneDrive API");
 			this.nationalCloudDeployment = true;
 		}
 		
 		// Are we forcing the client to bypass any data preservation techniques to NOT rename any local files if there is a conflict?
 		// The enabling of this function could lead to data loss
 		if (appConfig.getValueBool("bypass_data_preservation")) {
-			addLogEntry("WARNING: Application has been configured to bypass local data preservation in the event of file conflict.");
-			addLogEntry("WARNING: Local data loss MAY occur in this scenario.");
+			logBuffer.addLogEntry("WARNING: Application has been configured to bypass local data preservation in the event of file conflict.");
+			logBuffer.addLogEntry("WARNING: Local data loss MAY occur in this scenario.");
 			this.bypassDataPreservation = true;
 		}
 		
 		// Did the user configure a specific rate limit for the application?
 		if (appConfig.getValueLong("rate_limit") > 0) {
 			// User configured rate limit
-			addLogEntry("User Configured Rate Limit: " ~ to!string(appConfig.getValueLong("rate_limit")));
+			logBuffer.addLogEntry("User Configured Rate Limit: " ~ to!string(appConfig.getValueLong("rate_limit")));
 			
 			// If user provided rate limit is < 131072, flag that this is too low, setting to the recommended minimum of 131072
 			if (appConfig.getValueLong("rate_limit") < 131072) {
 				// user provided limit too low
-				addLogEntry("WARNING: User configured rate limit too low for normal application processing and preventing application timeouts. Overriding to recommended minimum of 131072 (128KB/s)");
+				logBuffer.addLogEntry("WARNING: User configured rate limit too low for normal application processing and preventing application timeouts. Overriding to recommended minimum of 131072 (128KB/s)");
 				appConfig.setValueLong("rate_limit", 131072);
 			}
 		}
@@ -308,10 +308,10 @@ class SyncEngine {
 		// Did the user downgrade all HTTP operations to force HTTP 1.1
 		if (appConfig.getValueBool("force_http_11")) {
 			// User is forcing downgrade to curl to use HTTP 1.1 for all operations
-			addLogEntry("Downgrading all HTTP operations to HTTP/1.1 due to user configuration", ["verbose"]);
+			logBuffer.addLogEntry("Downgrading all HTTP operations to HTTP/1.1 due to user configuration", ["verbose"]);
 		} else {
 			// Use curl defaults
-			addLogEntry("Using Curl defaults for HTTP operational protocol version (potentially HTTP/2)", ["debug"]);
+			logBuffer.addLogEntry("Using Curl defaults for HTTP operational protocol version (potentially HTTP/2)", ["debug"]);
 		}
 	}
 	
@@ -338,7 +338,7 @@ class SyncEngine {
 				getDefaultDriveDetails();
 			} catch (AccountDetailsException exception) {
 				// details could not be queried
-				addLogEntry(exception.msg);
+				logBuffer.addLogEntry(exception.msg);
 				// Shutdown this API instance, as we will create API instances as required, when required
 				oneDriveApiInstance.releaseCurlEngine();
 				// Free object and memory
@@ -352,7 +352,7 @@ class SyncEngine {
 				getDefaultRootDetails();
 			} catch (AccountDetailsException exception) {
 				// details could not be queried
-				addLogEntry(exception.msg);
+				logBuffer.addLogEntry(exception.msg);
 				// Shutdown this API instance, as we will create API instances as required, when required
 				oneDriveApiInstance.releaseCurlEngine();
 				// Free object and memory
@@ -366,7 +366,7 @@ class SyncEngine {
 				displaySyncEngineDetails();
 			} catch (AccountDetailsException exception) {
 				// Details could not be queried
-				addLogEntry(exception.msg);
+				logBuffer.addLogEntry(exception.msg);
 				// Shutdown this API instance, as we will create API instances as required, when required
 				oneDriveApiInstance.releaseCurlEngine();
 				// Free object and memory
@@ -376,7 +376,7 @@ class SyncEngine {
 			}
 		} else {
 			// API could not be initialised
-			addLogEntry("OneDrive API could not be initialised with previously used details");
+			logBuffer.addLogEntry("OneDrive API could not be initialised with previously used details");
 			// Shutdown this API instance, as we will create API instances as required, when required
 			oneDriveApiInstance.releaseCurlEngine();
 			// Free object and memory
@@ -386,7 +386,7 @@ class SyncEngine {
 		}
 		
 		// API was initialised
-		addLogEntry("Sync Engine Initialised with new Onedrive API instance", ["verbose"]);
+		logBuffer.addLogEntry("Sync Engine Initialised with new Onedrive API instance", ["verbose"]);
 		// Shutdown this API instance, as we will create API instances as required, when required
 		oneDriveApiInstance.releaseCurlEngine();
 		oneDriveApiInstance = null;
@@ -397,7 +397,7 @@ class SyncEngine {
 	
 	// Shutdown the sync engine, wait for anything in processPool to complete
 	void shutdown() {
-		addLogEntry("SyncEngine: Waiting for all internal threads to complete", ["debug"]);
+		logBuffer.addLogEntry("SyncEngine: Waiting for all internal threads to complete", ["debug"]);
 		shutdownProcessPool();
 	}
 	
@@ -405,11 +405,11 @@ class SyncEngine {
 		// TaskPool needs specific shutdown based on compiler version otherwise this causes a segfault
 		if (processPool.size > 0) {
 			// TaskPool is still configured for 'thread' size
-			addLogEntry("Application compiled with D compiler version: " ~ to!string(__VERSION__), ["debug"]);
+			logBuffer.addLogEntry("Application compiled with D compiler version: " ~ to!string(__VERSION__), ["debug"]);
 			// We must be using 2098 or greater to use thread blocking when shutting down
 			if (__VERSION__ < 2098) {
 				// Compromised TaskPool shutdown process
-				addLogEntry("Shutting down processPool in a legacy manner", ["debug"]);
+				logBuffer.addLogEntry("Shutting down processPool in a legacy manner", ["debug"]);
 				// LDC version less than 1.28.0 is being used
 				// DMD version less than 2.098.0 is being used
 				// https://dlang.org/library/std/parallelism/task_pool.finish.html
@@ -418,7 +418,7 @@ class SyncEngine {
 				processPool.stop(); // Signals to all worker threads to terminate as soon as they are finished with their current Task, or immediately if they are not executing a Task.
 			} else {
 				// Normal TaskPool shutdown process
-				addLogEntry("Shutting down processPool in a thread blocking manner", ["debug"]);
+				logBuffer.addLogEntry("Shutting down processPool in a thread blocking manner", ["debug"]);
 				// All worker threads are daemon threads which are automatically terminated when all non-daemon threads have terminated.
 				processPool.finish(true); // If blocking argument is true, wait for all worker threads to terminate before returning.
 			}
@@ -438,10 +438,10 @@ class SyncEngine {
 		
 		// Get Default Drive Details for this Account
 		try {
-			addLogEntry("Getting Account Default Drive Details", ["debug"]);
+			logBuffer.addLogEntry("Getting Account Default Drive Details", ["debug"]);
 			defaultOneDriveDriveDetails = getDefaultDriveApiInstance.getDefaultDriveDetails();
 		} catch (OneDriveException exception) {
-			addLogEntry("defaultOneDriveDriveDetails = getDefaultDriveApiInstance.getDefaultDriveDetails() generated a OneDriveException", ["debug"]);
+			logBuffer.addLogEntry("defaultOneDriveDriveDetails = getDefaultDriveApiInstance.getDefaultDriveDetails() generated a OneDriveException", ["debug"]);
 			string thisFunctionName = getFunctionName!({});
 			
 			if ((exception.httpStatusCode == 400) || (exception.httpStatusCode == 401)) {
@@ -457,7 +457,7 @@ class SyncEngine {
 		
 		// If the JSON response is a correct JSON object, and has an 'id' we can set these details
 		if ((defaultOneDriveDriveDetails.type() == JSONType.object) && (hasId(defaultOneDriveDriveDetails))) {
-			addLogEntry("OneDrive Account Default Drive Details:      " ~ to!string(defaultOneDriveDriveDetails), ["debug"]);
+			logBuffer.addLogEntry("OneDrive Account Default Drive Details:      " ~ to!string(defaultOneDriveDriveDetails), ["debug"]);
 			appConfig.accountType = defaultOneDriveDriveDetails["driveType"].str;
 			appConfig.defaultDriveId = defaultOneDriveDriveDetails["id"].str;
 			
@@ -484,28 +484,28 @@ class SyncEngine {
 				if ("remaining" in defaultOneDriveDriveDetails["quota"]) {
 					if (appConfig.accountType == "personal") {
 						// zero space available
-						addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online.");
+						logBuffer.addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online.");
 					} else {
 						// zero space available is being reported, maybe being restricted?
-						addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+						logBuffer.addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
 					}
 				} else {
 					// json response was missing a 'remaining' value
 					if (appConfig.accountType == "personal") {
-						addLogEntry("ERROR: OneDrive quota information is missing. Potentially your OneDrive account currently has zero space available. Please free up some space online.");
+						logBuffer.addLogEntry("ERROR: OneDrive quota information is missing. Potentially your OneDrive account currently has zero space available. Please free up some space online.");
 					} else {
 						// quota details not available
-						addLogEntry("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+						logBuffer.addLogEntry("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
 					}
 				}
 			}
 			
 			// What did we set based on the data from the JSON
-			addLogEntry("appConfig.accountType                 = " ~ appConfig.accountType, ["debug"]);
-			addLogEntry("appConfig.defaultDriveId              = " ~ appConfig.defaultDriveId, ["debug"]);
-			addLogEntry("cachedOnlineDriveData.quotaRemaining  = " ~ to!string(cachedOnlineDriveData.quotaRemaining), ["debug"]);
-			addLogEntry("cachedOnlineDriveData.quotaAvailable  = " ~ to!string(cachedOnlineDriveData.quotaAvailable), ["debug"]);
-			addLogEntry("cachedOnlineDriveData.quotaRestricted = " ~ to!string(cachedOnlineDriveData.quotaRestricted), ["debug"]);
+			logBuffer.addLogEntry("appConfig.accountType                 = " ~ appConfig.accountType, ["debug"]);
+			logBuffer.addLogEntry("appConfig.defaultDriveId              = " ~ appConfig.defaultDriveId, ["debug"]);
+			logBuffer.addLogEntry("cachedOnlineDriveData.quotaRemaining  = " ~ to!string(cachedOnlineDriveData.quotaRemaining), ["debug"]);
+			logBuffer.addLogEntry("cachedOnlineDriveData.quotaAvailable  = " ~ to!string(cachedOnlineDriveData.quotaAvailable), ["debug"]);
+			logBuffer.addLogEntry("cachedOnlineDriveData.quotaRestricted = " ~ to!string(cachedOnlineDriveData.quotaRestricted), ["debug"]);
 			
 		} else {
 			// Handle the invalid JSON response
@@ -532,10 +532,10 @@ class SyncEngine {
 		
 		// Get Default Root Details for this Account
 		try {
-			addLogEntry("Getting Account Default Root Details", ["debug"]);
+			logBuffer.addLogEntry("Getting Account Default Root Details", ["debug"]);
 			defaultOneDriveRootDetails = getDefaultRootApiInstance.getDefaultRootDetails();
 		} catch (OneDriveException exception) {
-			addLogEntry("defaultOneDriveRootDetails = getDefaultRootApiInstance.getDefaultRootDetails() generated a OneDriveException", ["debug"]);
+			logBuffer.addLogEntry("defaultOneDriveRootDetails = getDefaultRootApiInstance.getDefaultRootDetails() generated a OneDriveException", ["debug"]);
 			string thisFunctionName = getFunctionName!({});
 
 			if ((exception.httpStatusCode == 400) || (exception.httpStatusCode == 401)) {
@@ -551,9 +551,9 @@ class SyncEngine {
 		
 		// If the JSON response is a correct JSON object, and has an 'id' we can set these details
 		if ((defaultOneDriveRootDetails.type() == JSONType.object) && (hasId(defaultOneDriveRootDetails))) {
-			addLogEntry("OneDrive Account Default Root Details:       " ~ to!string(defaultOneDriveRootDetails), ["debug"]);
+			logBuffer.addLogEntry("OneDrive Account Default Root Details:       " ~ to!string(defaultOneDriveRootDetails), ["debug"]);
 			appConfig.defaultRootId = defaultOneDriveRootDetails["id"].str;
-			addLogEntry("appConfig.defaultRootId      = " ~ appConfig.defaultRootId, ["debug"]);
+			logBuffer.addLogEntry("appConfig.defaultRootId      = " ~ appConfig.defaultRootId, ["debug"]);
 			
 			// Save the item to the database, so the account root drive is is always going to be present in the DB
 			saveItem(defaultOneDriveRootDetails);
@@ -594,7 +594,7 @@ class SyncEngine {
 		}
 
 		// Log the final decision and conditions
-		addLogEntry(logMessage, ["debug"]);
+		logBuffer.addLogEntry(logMessage, ["debug"]);
 	}
 	
 	// Perform a sync of the OneDrive Account
@@ -607,7 +607,7 @@ class SyncEngine {
 	void syncOneDriveAccountToLocalDisk() {
 	
 		// performFullScanTrueUp value
-		addLogEntry("Perform a Full Scan True-Up: " ~ to!string(appConfig.fullScanTrueUpRequired), ["debug"]);
+		logBuffer.addLogEntry("Perform a Full Scan True-Up: " ~ to!string(appConfig.fullScanTrueUpRequired), ["debug"]);
 		
 		// Fetch the API response of /delta to track changes that were performed online
 		fetchOneDriveDeltaAPIResponse();
@@ -632,14 +632,14 @@ class SyncEngine {
 						// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
 						if (selectiveSync.isDirNameExcluded(remoteItem.name)) {
 							// This directory name is excluded
-							addLogEntry("Skipping item - excluded by skip_dir config: " ~ remoteItem.name, ["verbose"]);
+							logBuffer.addLogEntry("Skipping item - excluded by skip_dir config: " ~ remoteItem.name, ["verbose"]);
 							continue;
 						}
 					}
 					
 					// Directory name is not excluded or skip_dir is not populated
 					if (!appConfig.suppressLoggingOutput) {
-						addLogEntry("Syncing this OneDrive Personal Shared Folder: " ~ remoteItem.name);
+						logBuffer.addLogEntry("Syncing this OneDrive Personal Shared Folder: " ~ remoteItem.name);
 					}
 					// Check this OneDrive Personal Shared Folder for changes
 					fetchOneDriveDeltaAPIResponse(remoteItem.remoteDriveId, remoteItem.remoteId, remoteItem.name);
@@ -670,20 +670,20 @@ class SyncEngine {
 								// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
 								if (selectiveSync.isDirNameExcluded(remoteItem.name)) {
 									// This directory name is excluded
-									addLogEntry("Skipping item - excluded by skip_dir config: " ~ remoteItem.name, ["verbose"]);
+									logBuffer.addLogEntry("Skipping item - excluded by skip_dir config: " ~ remoteItem.name, ["verbose"]);
 									continue;
 								}
 							}
 							
 							// Directory name is not excluded or skip_dir is not populated
 							if (!appConfig.suppressLoggingOutput) {
-								addLogEntry("Syncing this OneDrive Business Shared Folder: " ~ remoteItem.name);
+								logBuffer.addLogEntry("Syncing this OneDrive Business Shared Folder: " ~ remoteItem.name);
 							}
 							
 							// Debug log output
-							addLogEntry("Fetching /delta API response for:", ["debug"]);
-							addLogEntry("    remoteItem.remoteDriveId: " ~ remoteItem.remoteDriveId, ["debug"]);
-							addLogEntry("    remoteItem.remoteId:      " ~ remoteItem.remoteId, ["debug"]);
+							logBuffer.addLogEntry("Fetching /delta API response for:", ["debug"]);
+							logBuffer.addLogEntry("    remoteItem.remoteDriveId: " ~ remoteItem.remoteDriveId, ["debug"]);
+							logBuffer.addLogEntry("    remoteItem.remoteId:      " ~ remoteItem.remoteId, ["debug"]);
 							
 							// Check this OneDrive Business Shared Folder for changes
 							fetchOneDriveDeltaAPIResponse(remoteItem.remoteDriveId, remoteItem.remoteId, remoteItem.name);
@@ -712,7 +712,7 @@ class SyncEngine {
 						// Does the Local Folder to store the OneDrive Business Shared Files exist?
 						if (!exists(appConfig.configuredBusinessSharedFilesDirectoryName)) {
 							// Folder does not exist locally and needs to be created
-							addLogEntry("Creating the OneDrive Business Shared Files Local Directory: " ~ appConfig.configuredBusinessSharedFilesDirectoryName);
+							logBuffer.addLogEntry("Creating the OneDrive Business Shared Files Local Directory: " ~ appConfig.configuredBusinessSharedFilesDirectoryName);
 						
 							// Local folder does not exist, thus needs to be created
 							mkdirRecurse(appConfig.configuredBusinessSharedFilesDirectoryName);
@@ -720,7 +720,7 @@ class SyncEngine {
 							Item sharedFilesPath = makeItem(createFakeResponse(baseName(appConfig.configuredBusinessSharedFilesDirectoryName)));
 							
 							// Add DB record to the local database
-							addLogEntry("Creating|Updating into local database a DB record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);
+							logBuffer.addLogEntry("Creating|Updating into local database a DB record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);
 							itemDB.upsert(sharedFilesPath);
 						} else {
 							// Folder exists locally, is the folder in the database? 
@@ -731,13 +731,13 @@ class SyncEngine {
 								Item sharedFilesPath = makeItem(createFakeResponse(baseName(appConfig.configuredBusinessSharedFilesDirectoryName)));
 								
 								// Add DB record to the local database
-								addLogEntry("Creating|Updating into local database a DB record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);
+								logBuffer.addLogEntry("Creating|Updating into local database a DB record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);
 								itemDB.upsert(sharedFilesPath);
 							}
 						}
 						
 						// Query for OneDrive Business Shared Files
-						addLogEntry("Checking for any applicable OneDrive Business Shared Files which need to be synced locally", ["verbose"]);
+						logBuffer.addLogEntry("Checking for any applicable OneDrive Business Shared Files which need to be synced locally", ["verbose"]);
 						queryBusinessSharedObjects();
 						
 						// Download any OneDrive Business Shared Files
@@ -750,7 +750,7 @@ class SyncEngine {
 	
 	// Cleanup arrays when used in --monitor loops
 	void cleanupArrays() {
-		addLogEntry("Cleaning up all internal arrays used when processing data", ["debug"]);
+		logBuffer.addLogEntry("Cleaning up all internal arrays used when processing data", ["debug"]);
 		
 		// Multi Dimensional Arrays
 		idsToDelete.length = 0;
@@ -776,7 +776,7 @@ class SyncEngine {
 		
 		// Perform Garbage Collection on this destroyed curl engine
 		GC.collect();
-		addLogEntry("Cleaning of internal arrays complete", ["debug"]);
+		logBuffer.addLogEntry("Cleaning of internal arrays complete", ["debug"]);
 	}
 	
 	// Configure singleDirectoryScope = true if this function is called
@@ -791,7 +791,7 @@ class SyncEngine {
 		singleDirectoryScope = true;
 		
 		// What are we doing?
-		addLogEntry("The OneDrive Client was asked to search for this directory online and create it if it's not located: " ~ normalisedSingleDirectoryPath);
+		logBuffer.addLogEntry("The OneDrive Client was asked to search for this directory online and create it if it's not located: " ~ normalisedSingleDirectoryPath);
 		
 		// Query the OneDrive API for the specified path online
 		// In a --single-directory scenario, we need to travervse the entire path that we are wanting to sync
@@ -804,14 +804,14 @@ class SyncEngine {
 			onlinePathData = queryOneDriveForSpecificPathAndCreateIfMissing(normalisedSingleDirectoryPath, true);
 		} catch (PosixException e) {
 			displayPosixErrorMessage(e.msg);
-			addLogEntry("ERROR: Requested directory to search for and potentially create has a 'case-insensitive match' to an existing directory on OneDrive online.");
+			logBuffer.addLogEntry("ERROR: Requested directory to search for and potentially create has a 'case-insensitive match' to an existing directory on OneDrive online.");
 		}
 		
 		// Was a valid JSON response provided?
 		if (onlinePathData.type() == JSONType.object) {
 			// Valid JSON item was returned
 			searchItem = makeItem(onlinePathData);
-			addLogEntry("searchItem: " ~ to!string(searchItem), ["debug"]);
+			logBuffer.addLogEntry("searchItem: " ~ to!string(searchItem), ["debug"]);
 			
 			// Is this item a potential Shared Folder?
 			// Is this JSON a remote object
@@ -825,9 +825,9 @@ class SyncEngine {
 			singleDirectoryScopeDriveId = searchItem.driveId;
 			singleDirectoryScopeItemId = searchItem.id;
 		} else {
-			addLogEntry();
-			addLogEntry("The requested --single-directory path to sync has generated an error. Please correct this error and try again.");
-			addLogEntry();
+			logBuffer.addLogEntry();
+			logBuffer.addLogEntry("The requested --single-directory path to sync has generated an error. Please correct this error and try again.");
+			logBuffer.addLogEntry();
 			forceExit();
 		}
 	}
@@ -849,17 +849,17 @@ class SyncEngine {
 		// Was a driveId provided as an input
 		if (strip(driveIdToQuery).empty) {
 			// No provided driveId to query, use the account default
-			addLogEntry("driveIdToQuery was empty, setting to appConfig.defaultDriveId", ["debug"]);
+			logBuffer.addLogEntry("driveIdToQuery was empty, setting to appConfig.defaultDriveId", ["debug"]);
 			driveIdToQuery = appConfig.defaultDriveId;
-			addLogEntry("driveIdToQuery: " ~ driveIdToQuery, ["debug"]);
+			logBuffer.addLogEntry("driveIdToQuery: " ~ driveIdToQuery, ["debug"]);
 		}
 		
 		// Was an itemId provided as an input
 		if (strip(itemIdToQuery).empty) {
 			// No provided itemId to query, use the account default
-			addLogEntry("itemIdToQuery was empty, setting to appConfig.defaultRootId", ["debug"]);
+			logBuffer.addLogEntry("itemIdToQuery was empty, setting to appConfig.defaultRootId", ["debug"]);
 			itemIdToQuery = appConfig.defaultRootId;
-			addLogEntry("itemIdToQuery: " ~ itemIdToQuery, ["debug"]);
+			logBuffer.addLogEntry("itemIdToQuery: " ~ itemIdToQuery, ["debug"]);
 		}
 		
 		// What OneDrive API query do we use?
@@ -892,8 +892,8 @@ class SyncEngine {
 			
 			// Do we need to perform a Full Scan True Up? Is 'appConfig.fullScanTrueUpRequired' set to 'true'?
 			if (appConfig.fullScanTrueUpRequired) {
-				addLogEntry("Performing a full scan of online data to ensure consistent local state");
-				addLogEntry("Setting currentDeltaLink = null", ["debug"]);
+				logBuffer.addLogEntry("Performing a full scan of online data to ensure consistent local state");
+				logBuffer.addLogEntry("Setting currentDeltaLink = null", ["debug"]);
 				currentDeltaLink = null;
 			} else {
 				// Try and get the current Delta Link from the internal cache, this saves a DB I/O call
@@ -904,25 +904,25 @@ class SyncEngine {
 					// Try and get the current delta link from the database for this DriveID and RootID
 					databaseDeltaLink = itemDB.getDeltaLink(driveIdToQuery, itemIdToQuery);
 					if (!databaseDeltaLink.empty) {
-						addLogEntry("Using database stored deltaLink", ["debug"]);
+						logBuffer.addLogEntry("Using database stored deltaLink", ["debug"]);
 						currentDeltaLink = databaseDeltaLink;
 					} else {
-						addLogEntry("Zero deltaLink available for use, we will be performing a full online scan", ["debug"]);
+						logBuffer.addLogEntry("Zero deltaLink available for use, we will be performing a full online scan", ["debug"]);
 						currentDeltaLink = null;
 					}
 				} else {
 					// Log that we are using the deltaLink for cache
-					addLogEntry("Using cached deltaLink", ["debug"]);
+					logBuffer.addLogEntry("Using cached deltaLink", ["debug"]);
 				}
 			}
 			
 			// Dynamic output for non-verbose and verbose run so that the user knows something is being retrieved from the OneDrive API
 			if (appConfig.verbosityCount == 0) {
 				if (!appConfig.suppressLoggingOutput) {
-					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ driveIdToQuery, appConfig.verbosityCount);
+					logBuffer.addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ driveIdToQuery, appConfig.verbosityCount);
 				}
 			} else {
-				addLogEntry("Fetching /delta response from the OneDrive API for Drive ID: " ~  driveIdToQuery, ["verbose"]);
+				logBuffer.addLogEntry("Fetching /delta response from the OneDrive API for Drive ID: " ~  driveIdToQuery, ["verbose"]);
 			}
 							
 			for (;;) {
@@ -941,7 +941,7 @@ class SyncEngine {
 				if (deltaChanges.type() != JSONType.object) {
 					while (deltaChanges.type() != JSONType.object) {
 						// Handle the invalid JSON response and retry
-						addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response", ["debug"]);
+						logBuffer.addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response", ["debug"]);
 						deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink);
 					}
 				}
@@ -952,10 +952,10 @@ class SyncEngine {
 				if (appConfig.verbosityCount == 0) {
 					// Dynamic output for a non-verbose run so that the user knows something is happening
 					if (!appConfig.suppressLoggingOutput) {
-						addProcessingDotEntry();
+						logBuffer.addProcessingDotEntry();
 					}
 				} else {
-					addLogEntry("Processing API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["verbose"]);
+					logBuffer.addLogEntry("Processing API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["verbose"]);
 				}
 				
 				// Update the count of items received
@@ -967,7 +967,7 @@ class SyncEngine {
 					// @odata.nextLink is the pointer within the API to the next '200+' JSON bundle - this is the checkpoint link for this bundle
 					// This URL changes between JSON bundle sets
 					// Log the action of setting currentDeltaLink to @odata.nextLink
-					addLogEntry("Setting currentDeltaLink to @odata.nextLink: " ~ deltaChanges["@odata.nextLink"].str, ["debug"]);
+					logBuffer.addLogEntry("Setting currentDeltaLink to @odata.nextLink: " ~ deltaChanges["@odata.nextLink"].str, ["debug"]);
 					
 					// Update currentDeltaLink to @odata.nextLink for the next '200+' JSON bundle - this is the checkpoint link for this bundle
 					currentDeltaLink = deltaChanges["@odata.nextLink"].str;
@@ -993,7 +993,7 @@ class SyncEngine {
 					// Finished processing /delta JSON response from the OneDrive API
 					
 					// Log the action of setting currentDeltaLink to @odata.deltaLink
-					addLogEntry("Setting currentDeltaLink to (@odata.deltaLink): " ~ deltaChanges["@odata.deltaLink"].str, ["debug"]);
+					logBuffer.addLogEntry("Setting currentDeltaLink to (@odata.deltaLink): " ~ deltaChanges["@odata.deltaLink"].str, ["debug"]);
 					
 					// Update currentDeltaLink to @odata.deltaLink as the final checkpoint URL for this entire JSON response set
 					currentDeltaLink = deltaChanges["@odata.deltaLink"].str;
@@ -1038,21 +1038,21 @@ class SyncEngine {
 			}
 			
 			// To finish off the JSON processing items, this is needed to reflect this in the log
-			addLogEntry("------------------------------------------------------------------", ["debug"]);
+			logBuffer.addLogEntry("------------------------------------------------------------------", ["debug"]);
 			
 			// Log that we have finished querying the /delta API
 			if (appConfig.verbosityCount == 0) {
 				if (!appConfig.suppressLoggingOutput) {
 					// Close out the '....' being printed to the console
-					addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+					logBuffer.addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 				}
 			} else {
-				addLogEntry("Finished processing /delta JSON response from the OneDrive API", ["verbose"]);
+				logBuffer.addLogEntry("Finished processing /delta JSON response from the OneDrive API", ["verbose"]);
 			}
 			
 			// If this was set, now unset it, as this will have been completed, so that for a true up, we dont do a double full scan
 			if (appConfig.fullScanTrueUpRequired) {
-				addLogEntry("Unsetting fullScanTrueUpRequired as this has been performed", ["debug"]);
+				logBuffer.addLogEntry("Unsetting fullScanTrueUpRequired as this has been performed", ["debug"]);
 				appConfig.fullScanTrueUpRequired = false;
 			}
 			
@@ -1063,10 +1063,10 @@ class SyncEngine {
 			
 		} else {
 			// Why are are generating a /delta response
-			addLogEntry("Why are we generating a /delta response:", ["debug"]);
-			addLogEntry(" singleDirectoryScope:    " ~ to!string(singleDirectoryScope), ["debug"]);
-			addLogEntry(" nationalCloudDeployment: " ~ to!string(nationalCloudDeployment), ["debug"]);
-			addLogEntry(" cleanupLocalFiles:       " ~ to!string(cleanupLocalFiles), ["debug"]);
+			logBuffer.addLogEntry("Why are we generating a /delta response:", ["debug"]);
+			logBuffer.addLogEntry(" singleDirectoryScope:    " ~ to!string(singleDirectoryScope), ["debug"]);
+			logBuffer.addLogEntry(" nationalCloudDeployment: " ~ to!string(nationalCloudDeployment), ["debug"]);
+			logBuffer.addLogEntry(" cleanupLocalFiles:       " ~ to!string(cleanupLocalFiles), ["debug"]);
 			
 			// What 'path' are we going to start generating the response for
 			string pathToQuery;
@@ -1095,7 +1095,7 @@ class SyncEngine {
 			
 			ulong nrChanges = count(deltaChanges["value"].array);
 			int changeCount = 0;
-			addLogEntry("API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["debug"]);
+			logBuffer.addLogEntry("API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["debug"]);
 			// Update the count of items received
 			jsonItemsReceived = jsonItemsReceived + nrChanges;
 			
@@ -1115,11 +1115,11 @@ class SyncEngine {
 			GC.collect();
 			
 			// To finish off the JSON processing items, this is needed to reflect this in the log
-			addLogEntry("------------------------------------------------------------------", ["debug"]);
+			logBuffer.addLogEntry("------------------------------------------------------------------", ["debug"]);
 			
 			// Log that we have finished generating our self generated /delta response
 			if (!appConfig.suppressLoggingOutput) {
-				addLogEntry("Finished processing self generated /delta JSON response from the OneDrive API");
+				logBuffer.addLogEntry("Finished processing self generated /delta JSON response from the OneDrive API");
 			}
 			
 			// Cleanup deltaChanges as this is no longer needed
@@ -1133,12 +1133,12 @@ class SyncEngine {
 		GC.collect();
 		
 		// We have JSON items received from the OneDrive API
-		addLogEntry("Number of JSON Objects received from OneDrive API:                 " ~ to!string(jsonItemsReceived), ["debug"]);
-		addLogEntry("Number of JSON Objects already processed (root and deleted items): " ~ to!string((jsonItemsReceived - jsonItemsToProcess.length)), ["debug"]);
+		logBuffer.addLogEntry("Number of JSON Objects received from OneDrive API:                 " ~ to!string(jsonItemsReceived), ["debug"]);
+		logBuffer.addLogEntry("Number of JSON Objects already processed (root and deleted items): " ~ to!string((jsonItemsReceived - jsonItemsToProcess.length)), ["debug"]);
 		
 		// We should have now at least processed all the JSON items as returned by the /delta call
 		// Additionally, we should have a new array, that now contains all the JSON items we need to process that are non 'root' or deleted items
-		addLogEntry("Number of JSON items to process is: " ~ to!string(jsonItemsToProcess.length), ["debug"]);
+		logBuffer.addLogEntry("Number of JSON items to process is: " ~ to!string(jsonItemsToProcess.length), ["debug"]);
 		
 		// Are there items to process?
 		if (jsonItemsToProcess.length > 0) {
@@ -1149,7 +1149,7 @@ class SyncEngine {
 			
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (!appConfig.suppressLoggingOutput) {
-				addProcessingLogHeaderEntry("Processing " ~ to!string(jsonItemsToProcess.length) ~ " applicable changes and items received from Microsoft OneDrive", appConfig.verbosityCount);
+				logBuffer.addProcessingLogHeaderEntry("Processing " ~ to!string(jsonItemsToProcess.length) ~ " applicable changes and items received from Microsoft OneDrive", appConfig.verbosityCount);
 			}
 			
 			// For each batch, process the JSON items that need to be now processed.
@@ -1160,29 +1160,29 @@ class SyncEngine {
 				if (appConfig.verbosityCount == 0) {
 					// Dynamic output for a non-verbose run so that the user knows something is happening
 					if (!appConfig.suppressLoggingOutput) {
-						addProcessingDotEntry();
+						logBuffer.addProcessingDotEntry();
 					}
 				} else {
-					addLogEntry("Processing OneDrive JSON item batch [" ~ to!string(batchesProcessed) ~ "/" ~ to!string(batchCount) ~ "] to ensure consistent local state", ["verbose"]);
+					logBuffer.addLogEntry("Processing OneDrive JSON item batch [" ~ to!string(batchesProcessed) ~ "/" ~ to!string(batchCount) ~ "] to ensure consistent local state", ["verbose"]);
 				}	
 					
 				// Process the batch
 				processJSONItemsInBatch(batchOfJSONItems, batchesProcessed, batchCount);
 				
 				// To finish off the JSON processing items, this is needed to reflect this in the log
-				addLogEntry("------------------------------------------------------------------", ["debug"]);
+				logBuffer.addLogEntry("------------------------------------------------------------------", ["debug"]);
 			}
 			
 			if (appConfig.verbosityCount == 0) {
 				// close off '.' output
 				if (!appConfig.suppressLoggingOutput) {
-					addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+					logBuffer.addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 				}
 			}
 			
 			// Debug output - what was processed
-			addLogEntry("Number of JSON items to process is: " ~ to!string(jsonItemsToProcess.length), ["debug"]);
-			addLogEntry("Number of JSON items processed was: " ~ to!string(processedCount), ["debug"]);
+			logBuffer.addLogEntry("Number of JSON items to process is: " ~ to!string(jsonItemsToProcess.length), ["debug"]);
+			logBuffer.addLogEntry("Number of JSON items processed was: " ~ to!string(processedCount), ["debug"]);
 			
 			// Free up memory and items processed as it is pointless now having this data around
 			jsonItemsToProcess = [];
@@ -1191,7 +1191,7 @@ class SyncEngine {
 			GC.collect();
 		} else {
 			if (!appConfig.suppressLoggingOutput) {
-				addLogEntry("No changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive");
+				logBuffer.addLogEntry("No changes or items that can be applied were discovered while processing the data received from Microsoft OneDrive");
 			}
 		}
 		
@@ -1218,9 +1218,9 @@ class SyncEngine {
 		string objectParentDriveId;
 		auto jsonProcessingStartTime = Clock.currTime();
 		
-		addLogEntry("------------------------------------------------------------------", ["debug"]);
-		addLogEntry("Processing OneDrive Item " ~ to!string(changeCount) ~ " of " ~ to!string(nrChanges) ~ " from API Response Bundle " ~ to!string(responseBundleCount), ["debug"]);
-		addLogEntry("Raw JSON OneDrive Item: " ~ to!string(onedriveJSONItem), ["debug"]);
+		logBuffer.addLogEntry("------------------------------------------------------------------", ["debug"]);
+		logBuffer.addLogEntry("Processing OneDrive Item " ~ to!string(changeCount) ~ " of " ~ to!string(nrChanges) ~ " from API Response Bundle " ~ to!string(responseBundleCount), ["debug"]);
+		logBuffer.addLogEntry("Raw JSON OneDrive Item: " ~ to!string(onedriveJSONItem), ["debug"]);
 		
 		// What is this item's id
 		thisItemId = onedriveJSONItem["id"].str;
@@ -1229,7 +1229,7 @@ class SyncEngine {
 		itemIsDeletedOnline = isItemDeleted(onedriveJSONItem);
 		if (!itemIsDeletedOnline) {
 			// This is not a deleted item
-			addLogEntry("This item is not a OneDrive deletion change", ["debug"]);
+			logBuffer.addLogEntry("This item is not a OneDrive deletion change", ["debug"]);
 			
 			// Only calculate this once
 			itemIsRoot = isItemRoot(onedriveJSONItem);
@@ -1240,16 +1240,16 @@ class SyncEngine {
 			
 			// Test is this is the OneDrive Users Root?
 			// Debug output of change evaluation items
-			addLogEntry("defaultRootId                                        = " ~ appConfig.defaultRootId, ["debug"]);
-			addLogEntry("'search id'                                          = " ~ thisItemId, ["debug"]);
-			addLogEntry("id == defaultRootId                                  = " ~ to!string(itemIdMatchesDefaultRootId), ["debug"]);
-			addLogEntry("isItemRoot(onedriveJSONItem)                         = " ~ to!string(itemIsRoot), ["debug"]);
-			addLogEntry("onedriveJSONItem['name'].str == 'root'               = " ~ to!string(itemNameExplicitMatchRoot), ["debug"]);
-			addLogEntry("itemHasParentReferenceId                             = " ~ to!string(itemHasParentReferenceId), ["debug"]);
+			logBuffer.addLogEntry("defaultRootId                                        = " ~ appConfig.defaultRootId, ["debug"]);
+			logBuffer.addLogEntry("'search id'                                          = " ~ thisItemId, ["debug"]);
+			logBuffer.addLogEntry("id == defaultRootId                                  = " ~ to!string(itemIdMatchesDefaultRootId), ["debug"]);
+			logBuffer.addLogEntry("isItemRoot(onedriveJSONItem)                         = " ~ to!string(itemIsRoot), ["debug"]);
+			logBuffer.addLogEntry("onedriveJSONItem['name'].str == 'root'               = " ~ to!string(itemNameExplicitMatchRoot), ["debug"]);
+			logBuffer.addLogEntry("itemHasParentReferenceId                             = " ~ to!string(itemHasParentReferenceId), ["debug"]);
 			
 			if ( (itemIdMatchesDefaultRootId || singleDirectoryScope) && itemIsRoot && itemNameExplicitMatchRoot) {
 				// This IS a OneDrive Root item or should be classified as such in the case of 'singleDirectoryScope'
-				addLogEntry("JSON item will flagged as a 'root' item", ["debug"]);
+				logBuffer.addLogEntry("JSON item will flagged as a 'root' item", ["debug"]);
 				handleItemAsRootObject = true;
 			}
 		}
@@ -1258,11 +1258,11 @@ class SyncEngine {
 		// Is this a confirmed 'root' item, has no Parent ID, or is a Deleted Item
 		if (handleItemAsRootObject || !itemHasParentReferenceId || itemIsDeletedOnline){
 			// Is a root item, has no id in parentReference or is a OneDrive deleted item
-			addLogEntry("objectParentDriveId                                  = " ~ objectParentDriveId, ["debug"]);
-			addLogEntry("handleItemAsRootObject                               = " ~ to!string(handleItemAsRootObject), ["debug"]);
-			addLogEntry("itemHasParentReferenceId                             = " ~ to!string(itemHasParentReferenceId), ["debug"]);
-			addLogEntry("itemIsDeletedOnline                                  = " ~ to!string(itemIsDeletedOnline), ["debug"]);
-			addLogEntry("Handling change immediately as 'root item', or has no parent reference id or is a deleted item", ["debug"]);
+			logBuffer.addLogEntry("objectParentDriveId                                  = " ~ objectParentDriveId, ["debug"]);
+			logBuffer.addLogEntry("handleItemAsRootObject                               = " ~ to!string(handleItemAsRootObject), ["debug"]);
+			logBuffer.addLogEntry("itemHasParentReferenceId                             = " ~ to!string(itemHasParentReferenceId), ["debug"]);
+			logBuffer.addLogEntry("itemIsDeletedOnline                                  = " ~ to!string(itemIsDeletedOnline), ["debug"]);
+			logBuffer.addLogEntry("Handling change immediately as 'root item', or has no parent reference id or is a deleted item", ["debug"]);
 			
 			// OK ... do something with this JSON post here ....
 			processRootAndDeletedJSONItems(onedriveJSONItem, objectParentDriveId, handleItemAsRootObject, itemIsDeletedOnline, itemHasParentReferenceId);
@@ -1270,7 +1270,7 @@ class SyncEngine {
 			// Do we need to update this RAW JSON from OneDrive?
 			if ( (objectParentDriveId != appConfig.defaultDriveId) && (appConfig.accountType == "business") && (appConfig.getValueBool("sync_business_shared_items")) ) {
 				// Potentially need to update this JSON data
-				addLogEntry("Potentially need to update this source JSON .... need to check the database", ["debug"]);
+				logBuffer.addLogEntry("Potentially need to update this source JSON .... need to check the database", ["debug"]);
 				
 				// Check the DB for 'remote' objects, searching 'remoteDriveId' and 'remoteId' items for this remoteItem.driveId and remoteItem.id
 				Item remoteDBItem;
@@ -1279,17 +1279,17 @@ class SyncEngine {
 				// Is the data that was returned from the database what we are looking for?
 				if ((remoteDBItem.remoteDriveId == objectParentDriveId) && (remoteDBItem.remoteId == thisItemId)) {
 					// Yes, this is the record we are looking for
-					addLogEntry("DB Item response for remoteDBItem: " ~ to!string(remoteDBItem), ["debug"]);
+					logBuffer.addLogEntry("DB Item response for remoteDBItem: " ~ to!string(remoteDBItem), ["debug"]);
 				
 					// Must compare remoteDBItem.name with remoteItem.name
 					if (remoteDBItem.name != onedriveJSONItem["name"].str) {
 						// Update JSON Item
 						string actualOnlineName = onedriveJSONItem["name"].str;
-						addLogEntry("Updating source JSON 'name' to that which is the actual local directory", ["debug"]);
-						addLogEntry("onedriveJSONItem['name'] was:         " ~ onedriveJSONItem["name"].str, ["debug"]);
-						addLogEntry("Updating onedriveJSONItem['name'] to: " ~ remoteDBItem.name, ["debug"]);
+						logBuffer.addLogEntry("Updating source JSON 'name' to that which is the actual local directory", ["debug"]);
+						logBuffer.addLogEntry("onedriveJSONItem['name'] was:         " ~ onedriveJSONItem["name"].str, ["debug"]);
+						logBuffer.addLogEntry("Updating onedriveJSONItem['name'] to: " ~ remoteDBItem.name, ["debug"]);
 						onedriveJSONItem["name"] = remoteDBItem.name;
-						addLogEntry("onedriveJSONItem['name'] now:         " ~ onedriveJSONItem["name"].str, ["debug"]);
+						logBuffer.addLogEntry("onedriveJSONItem['name'] now:         " ~ onedriveJSONItem["name"].str, ["debug"]);
 						// Add the original name to the JSON
 						onedriveJSONItem["actualOnlineName"] = actualOnlineName;
 					}
@@ -1310,14 +1310,14 @@ class SyncEngine {
 			// Add this JSON item for further processing if this is not being discarded
 			if (!discardDeltaJSONItem) {
 				// Add onedriveJSONItem to jsonItemsToProcess
-				addLogEntry("Adding this Raw JSON OneDrive Item to jsonItemsToProcess array for further processing", ["debug"]);
+				logBuffer.addLogEntry("Adding this Raw JSON OneDrive Item to jsonItemsToProcess array for further processing", ["debug"]);
 				jsonItemsToProcess ~= onedriveJSONItem;
 			}
 		}
 		
 		// How long to initially process this JSON item
 		auto jsonProcessingElapsedTime = Clock.currTime() - jsonProcessingStartTime;
-		addLogEntry("Initial JSON item processing time: " ~ to!string(jsonProcessingElapsedTime), ["debug"]);
+		logBuffer.addLogEntry("Initial JSON item processing time: " ~ to!string(jsonProcessingElapsedTime), ["debug"]);
 	}
 	
 	// Process 'root' and 'deleted' OneDrive JSON items
@@ -1343,7 +1343,7 @@ class SyncEngine {
 			// 3. Was detected by an input flag as to be handled as a root item regardless of actual status
 			
 			if ((handleItemAsRootObject) || (!itemHasParentReferenceId)) {
-				addLogEntry("Handing JSON object as OneDrive 'root' object", ["debug"]);
+				logBuffer.addLogEntry("Handing JSON object as OneDrive 'root' object", ["debug"]);
 				if (!existingDBEntry) {
 					// we have not seen this item before
 					saveItem(onedriveJSONItem);
@@ -1351,7 +1351,7 @@ class SyncEngine {
 			}
 		} else {
 			// Change is to delete an item
-			addLogEntry("Handing a OneDrive Deleted Item", ["debug"]);
+			logBuffer.addLogEntry("Handing a OneDrive Deleted Item", ["debug"]);
 			if (existingDBEntry) {
 				// Is the item to delete locally actually in sync with OneDrive currently?
 				// What is the source of this item data?
@@ -1361,7 +1361,7 @@ class SyncEngine {
 				string localPathToDelete = computeItemPath(existingDatabaseItem.driveId, existingDatabaseItem.parentId) ~ "/" ~ existingDatabaseItem.name;
 				if (isItemSynced(existingDatabaseItem, localPathToDelete, itemSource)) {
 					// Flag to delete
-					addLogEntry("Flagging to delete item locally: " ~ to!string(onedriveJSONItem), ["debug"]);
+					logBuffer.addLogEntry("Flagging to delete item locally: " ~ to!string(onedriveJSONItem), ["debug"]);
 					idsToDelete ~= [thisItemDriveId, thisItemId];
 				} else {
 					// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
@@ -1371,7 +1371,7 @@ class SyncEngine {
 				}
 			} else {
 				// Flag to ignore
-				addLogEntry("Flagging item to skip: " ~ to!string(onedriveJSONItem), ["debug"]);
+				logBuffer.addLogEntry("Flagging item to skip: " ~ to!string(onedriveJSONItem), ["debug"]);
 				skippedItems.insert(thisItemId);
 			}
 		}
@@ -1388,9 +1388,9 @@ class SyncEngine {
 			auto jsonProcessingStartTime = Clock.currTime();
 			
 			// To show this is the processing for this particular item, start off with this breaker line
-			addLogEntry("------------------------------------------------------------------", ["debug"]);
-			addLogEntry("Processing OneDrive JSON item " ~ to!string(elementCount) ~ " of " ~ to!string(batchElementCount) ~ " as part of JSON Item Batch " ~ to!string(batchGroup) ~ " of " ~ to!string(batchCount), ["debug"]);
-			addLogEntry("Raw JSON OneDrive Item (Batched Item): " ~ to!string(onedriveJSONItem), ["debug"]);
+			logBuffer.addLogEntry("------------------------------------------------------------------", ["debug"]);
+			logBuffer.addLogEntry("Processing OneDrive JSON item " ~ to!string(elementCount) ~ " of " ~ to!string(batchElementCount) ~ " as part of JSON Item Batch " ~ to!string(batchGroup) ~ " of " ~ to!string(batchCount), ["debug"]);
+			logBuffer.addLogEntry("Raw JSON OneDrive Item (Batched Item): " ~ to!string(onedriveJSONItem), ["debug"]);
 			
 			string thisItemId = onedriveJSONItem["id"].str;
 			string thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
@@ -1420,7 +1420,7 @@ class SyncEngine {
 			if (parentInDatabase) {
 				// Calculate this items path
 				newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
-				addLogEntry("JSON Item calculated full path is: " ~ newItemPath, ["debug"]);
+				logBuffer.addLogEntry("JSON Item calculated full path is: " ~ newItemPath, ["debug"]);
 			} else {
 				// Parent not in the database
 				// Is the parent a 'folder' from another user? ie - is this a 'shared folder' that has been shared with us?
@@ -1428,53 +1428,53 @@ class SyncEngine {
 				// Lets determine why?
 				if (thisItemDriveId == appConfig.defaultDriveId) {
 					// Parent path does not exist - flagging as unwanted
-					addLogEntry("Flagging as unwanted: thisItemDriveId (" ~ thisItemDriveId ~ "), thisItemParentId (" ~ thisItemParentId ~ ") not in local database", ["debug"]);
+					logBuffer.addLogEntry("Flagging as unwanted: thisItemDriveId (" ~ thisItemDriveId ~ "), thisItemParentId (" ~ thisItemParentId ~ ") not in local database", ["debug"]);
 					// Was this a skipped item?
 					if (thisItemParentId in skippedItems) {
 						// Parent is a skipped item
-						addLogEntry("Reason: thisItemParentId listed within skippedItems", ["debug"]);
+						logBuffer.addLogEntry("Reason: thisItemParentId listed within skippedItems", ["debug"]);
 					} else {
 						// Parent is not in the database, as we are not creating it
-						addLogEntry("Reason: Parent ID is not in the DB .. ", ["debug"]);
+						logBuffer.addLogEntry("Reason: Parent ID is not in the DB .. ", ["debug"]);
 					}
 					
 					// Flag as unwanted
 					unwanted = true;	
 				} else {
 					// Edge case as the parent (from another users OneDrive account) will never be in the database - potentially a shared object?
-					addLogEntry("The reported parentId is not in the database. This potentially is a shared folder as 'remoteItem.driveId' != 'appConfig.defaultDriveId'. Relevant Details: remoteItem.driveId (" ~ remoteItem.driveId ~ "), remoteItem.parentId (" ~ remoteItem.parentId ~ ")", ["debug"]);
-					addLogEntry("Potential Shared Object JSON: " ~ to!string(onedriveJSONItem), ["debug"]);
+					logBuffer.addLogEntry("The reported parentId is not in the database. This potentially is a shared folder as 'remoteItem.driveId' != 'appConfig.defaultDriveId'. Relevant Details: remoteItem.driveId (" ~ remoteItem.driveId ~ "), remoteItem.parentId (" ~ remoteItem.parentId ~ ")", ["debug"]);
+					logBuffer.addLogEntry("Potential Shared Object JSON: " ~ to!string(onedriveJSONItem), ["debug"]);
 
 					// Format the OneDrive change into a consumable object for the database
 					remoteItem = makeItem(onedriveJSONItem);
 										
 					if (appConfig.accountType == "personal") {
 						// Personal Account Handling
-						addLogEntry("Handling a Personal Shared Item JSON object", ["debug"]);
+						logBuffer.addLogEntry("Handling a Personal Shared Item JSON object", ["debug"]);
 						
 						if (hasSharedElement(onedriveJSONItem)) {
 							// Has the Shared JSON structure
-							addLogEntry("Personal Shared Item JSON object has the 'shared' JSON structure", ["debug"]);
+							logBuffer.addLogEntry("Personal Shared Item JSON object has the 'shared' JSON structure", ["debug"]);
 							// Create a 'root' DB Tie Record for this JSON object
 							createDatabaseRootTieRecordForOnlineSharedFolder(onedriveJSONItem);
 						}
 						
 						// Ensure that this item has no parent
-						addLogEntry("Setting remoteItem.parentId to be null", ["debug"]);
+						logBuffer.addLogEntry("Setting remoteItem.parentId to be null", ["debug"]);
 						remoteItem.parentId = null;
 						// Add this record to the local database
-						addLogEntry("Update/Insert local database with remoteItem details with remoteItem.parentId as null: " ~ to!string(remoteItem), ["debug"]);
+						logBuffer.addLogEntry("Update/Insert local database with remoteItem details with remoteItem.parentId as null: " ~ to!string(remoteItem), ["debug"]);
 						itemDB.upsert(remoteItem);
 					} else {
 						// Business or SharePoint Account Handling
-						addLogEntry("Handling a Business or SharePoint Shared Item JSON object", ["debug"]);
+						logBuffer.addLogEntry("Handling a Business or SharePoint Shared Item JSON object", ["debug"]);
 						
 						if (appConfig.accountType == "business") {
 							// Create a 'root' DB Tie Record for this JSON object
 							createDatabaseRootTieRecordForOnlineSharedFolder(onedriveJSONItem);
 							
 							// Ensure that this item has no parent
-							addLogEntry("Setting remoteItem.parentId to be null", ["debug"]);
+							logBuffer.addLogEntry("Setting remoteItem.parentId to be null", ["debug"]);
 							remoteItem.parentId = null;
 							
 							// Check the DB for 'remote' objects, searching 'remoteDriveId' and 'remoteId' items for this remoteItem.driveId and remoteItem.id
@@ -1484,32 +1484,32 @@ class SyncEngine {
 							// Must compare remoteDBItem.name with remoteItem.name
 							if ((!remoteDBItem.name.empty) && (remoteDBItem.name != remoteItem.name)) {
 								// Update DB Item
-								addLogEntry("The shared item stored in OneDrive, has a different name to the actual name on the remote drive", ["debug"]);
-								addLogEntry("Updating remoteItem.name JSON data with the actual name being used on account drive and local folder", ["debug"]);
-								addLogEntry("remoteItem.name was:              " ~ remoteItem.name, ["debug"]);
-								addLogEntry("Updating remoteItem.name to:      " ~ remoteDBItem.name, ["debug"]);
+								logBuffer.addLogEntry("The shared item stored in OneDrive, has a different name to the actual name on the remote drive", ["debug"]);
+								logBuffer.addLogEntry("Updating remoteItem.name JSON data with the actual name being used on account drive and local folder", ["debug"]);
+								logBuffer.addLogEntry("remoteItem.name was:              " ~ remoteItem.name, ["debug"]);
+								logBuffer.addLogEntry("Updating remoteItem.name to:      " ~ remoteDBItem.name, ["debug"]);
 								remoteItem.name = remoteDBItem.name;
-								addLogEntry("Setting remoteItem.remoteName to: " ~ onedriveJSONItem["name"].str, ["debug"]);
+								logBuffer.addLogEntry("Setting remoteItem.remoteName to: " ~ onedriveJSONItem["name"].str, ["debug"]);
 								
 								// Update JSON Item
 								remoteItem.remoteName = onedriveJSONItem["name"].str;
-								addLogEntry("Updating source JSON 'name' to that which is the actual local directory", ["debug"]);
-								addLogEntry("onedriveJSONItem['name'] was:         " ~ onedriveJSONItem["name"].str, ["debug"]);
-								addLogEntry("Updating onedriveJSONItem['name'] to: " ~ remoteDBItem.name, ["debug"]);
+								logBuffer.addLogEntry("Updating source JSON 'name' to that which is the actual local directory", ["debug"]);
+								logBuffer.addLogEntry("onedriveJSONItem['name'] was:         " ~ onedriveJSONItem["name"].str, ["debug"]);
+								logBuffer.addLogEntry("Updating onedriveJSONItem['name'] to: " ~ remoteDBItem.name, ["debug"]);
 								onedriveJSONItem["name"] = remoteDBItem.name;
-								addLogEntry("onedriveJSONItem['name'] now:         " ~ onedriveJSONItem["name"].str, ["debug"]);
+								logBuffer.addLogEntry("onedriveJSONItem['name'] now:         " ~ onedriveJSONItem["name"].str, ["debug"]);
 								
 								// Update newItemPath value
 								newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ remoteDBItem.name;
-								addLogEntry("New Item updated calculated full path is: " ~ newItemPath, ["debug"]);
+								logBuffer.addLogEntry("New Item updated calculated full path is: " ~ newItemPath, ["debug"]);
 							}
 								
 							// Add this record to the local database
-							addLogEntry("Update/Insert local database with remoteItem details: " ~ to!string(remoteItem), ["debug"]);
+							logBuffer.addLogEntry("Update/Insert local database with remoteItem details: " ~ to!string(remoteItem), ["debug"]);
 							itemDB.upsert(remoteItem);
 						} else {
 							// Sharepoint account type
-							addLogEntry("Handling a SharePoint Shared Item JSON object - NOT IMPLEMENTED YET ........ ", ["info"]);
+							logBuffer.addLogEntry("Handling a SharePoint Shared Item JSON object - NOT IMPLEMENTED YET ........ ", ["info"]);
 						}
 					}
 				}
@@ -1519,13 +1519,13 @@ class SyncEngine {
 			if (!unwanted) {
 				if (thisItemParentId in skippedItems) {
 					// Flag this JSON item as unwanted
-					addLogEntry("Flagging as unwanted: find(thisItemParentId).length != 0", ["debug"]);
+					logBuffer.addLogEntry("Flagging as unwanted: find(thisItemParentId).length != 0", ["debug"]);
 					unwanted = true;
 					
 					// Is this item id in the database?
 					if (existingDBEntry) {
 						// item exists in database, most likely moved out of scope for current client configuration
-						addLogEntry("This item was previously synced / seen by the client", ["debug"]);
+						logBuffer.addLogEntry("This item was previously synced / seen by the client", ["debug"]);
 						
 						if (("name" in onedriveJSONItem["parentReference"]) != null) {
 							
@@ -1535,11 +1535,11 @@ class SyncEngine {
 								// sync_list configured and in use
 								if (selectiveSync.isPathExcludedViaSyncList(onedriveJSONItem["parentReference"]["name"].str)) {
 									// Previously synced item is now out of scope as it has been moved out of what is included in sync_list
-									addLogEntry("This previously synced item is now excluded from being synced due to sync_list exclusion", ["debug"]);
+									logBuffer.addLogEntry("This previously synced item is now excluded from being synced due to sync_list exclusion", ["debug"]);
 								}
 							}
 							// flag to delete local file as it now is no longer in sync with OneDrive
-							addLogEntry("Flagging to delete item locally: ", ["debug"]);
+							logBuffer.addLogEntry("Flagging to delete item locally: ", ["debug"]);
 							idsToDelete ~= [thisItemDriveId, thisItemId];
 						}
 					}	
@@ -1549,28 +1549,28 @@ class SyncEngine {
 			// Check the item type - if it not an item type that we support, we cant process the JSON item
 			if (!unwanted) {
 				if (isItemFile(onedriveJSONItem)) {
-					addLogEntry("The item we are syncing is a file", ["debug"]);
+					logBuffer.addLogEntry("The item we are syncing is a file", ["debug"]);
 				} else if (isItemFolder(onedriveJSONItem)) {
-					addLogEntry("The item we are syncing is a folder", ["debug"]);
+					logBuffer.addLogEntry("The item we are syncing is a folder", ["debug"]);
 				} else if (isItemRemote(onedriveJSONItem)) {
-					addLogEntry("The item we are syncing is a remote item", ["debug"]);
+					logBuffer.addLogEntry("The item we are syncing is a remote item", ["debug"]);
 				} else {
 					// Why was this unwanted?
 					if (newItemPath.empty) {
 						// Compute this item path & need the full path for this file
 						newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
-						addLogEntry("New Item calculated full path is: " ~ newItemPath, ["debug"]);
+						logBuffer.addLogEntry("New Item calculated full path is: " ~ newItemPath, ["debug"]);
 					}
 					// Microsoft OneNote container objects present as neither folder or file but has file size
 					if ((!isItemFile(onedriveJSONItem)) && (!isItemFolder(onedriveJSONItem)) && (hasFileSize(onedriveJSONItem))) {
 						// Log that this was skipped as this was a Microsoft OneNote item and unsupported
-						addLogEntry("The Microsoft OneNote Notebook '" ~ newItemPath ~ "' is not supported by this client", ["verbose"]);
+						logBuffer.addLogEntry("The Microsoft OneNote Notebook '" ~ newItemPath ~ "' is not supported by this client", ["verbose"]);
 					} else {
 						// Log that this item was skipped as unsupported 
-						addLogEntry("The OneDrive item '" ~ newItemPath ~ "' is not supported by this client", ["verbose"]);
+						logBuffer.addLogEntry("The OneDrive item '" ~ newItemPath ~ "' is not supported by this client", ["verbose"]);
 					}
 					unwanted = true;
-					addLogEntry("Flagging as unwanted: item type is not supported", ["debug"]);
+					logBuffer.addLogEntry("Flagging as unwanted: item type is not supported", ["debug"]);
 				}
 			}
 			
@@ -1593,17 +1593,17 @@ class SyncEngine {
 							} else {
 								simplePathToCheck = onedriveJSONItem["name"].str;
 							}
-							addLogEntry("skip_dir path to check (simple):  " ~ simplePathToCheck, ["debug"]);
+							logBuffer.addLogEntry("skip_dir path to check (simple):  " ~ simplePathToCheck, ["debug"]);
 							
 							// complex path
 							if (parentInDatabase) {
 								// build up complexPathToCheck
 								complexPathToCheck = buildNormalizedPath(newItemPath);
 							} else {
-								addLogEntry("Parent details not in database - unable to compute complex path to check", ["debug"]);
+								logBuffer.addLogEntry("Parent details not in database - unable to compute complex path to check", ["debug"]);
 							}
 							if (!complexPathToCheck.empty) {
-								addLogEntry("skip_dir path to check (complex): " ~ complexPathToCheck, ["debug"]);
+								logBuffer.addLogEntry("skip_dir path to check (complex): " ~ complexPathToCheck, ["debug"]);
 							}
 						} else {
 							simplePathToCheck = onedriveJSONItem["name"].str;
@@ -1612,39 +1612,39 @@ class SyncEngine {
 						// If 'simplePathToCheck' or 'complexPathToCheck' is of the following format:  root:/folder
 						// then isDirNameExcluded matching will not work
 						if (simplePathToCheck.canFind(":")) {
-							addLogEntry("Updating simplePathToCheck to remove 'root:'", ["debug"]);
+							logBuffer.addLogEntry("Updating simplePathToCheck to remove 'root:'", ["debug"]);
 							simplePathToCheck = processPathToRemoveRootReference(simplePathToCheck);
 						}
 						if (complexPathToCheck.canFind(":")) {
-							addLogEntry("Updating complexPathToCheck to remove 'root:'", ["debug"]);
+							logBuffer.addLogEntry("Updating complexPathToCheck to remove 'root:'", ["debug"]);
 							complexPathToCheck = processPathToRemoveRootReference(complexPathToCheck);
 						}
 						
 						// OK .. what checks are we doing?
 						if ((!simplePathToCheck.empty) && (complexPathToCheck.empty)) {
 							// just a simple check
-							addLogEntry("Performing a simple check only", ["debug"]);
+							logBuffer.addLogEntry("Performing a simple check only", ["debug"]);
 							unwanted = selectiveSync.isDirNameExcluded(simplePathToCheck);
 						} else {
 							// simple and complex
-							addLogEntry("Performing a simple then complex path match if required", ["debug"]);
+							logBuffer.addLogEntry("Performing a simple then complex path match if required", ["debug"]);
 							
 							// simple first
-							addLogEntry("Performing a simple check first", ["debug"]);
+							logBuffer.addLogEntry("Performing a simple check first", ["debug"]);
 							unwanted = selectiveSync.isDirNameExcluded(simplePathToCheck);
 							matchDisplay = simplePathToCheck;
 							if (!unwanted) {
 								// simple didnt match, perform a complex check
-								addLogEntry("Simple match was false, attempting complex match", ["debug"]);
+								logBuffer.addLogEntry("Simple match was false, attempting complex match", ["debug"]);
 								unwanted = selectiveSync.isDirNameExcluded(complexPathToCheck);
 								matchDisplay = complexPathToCheck;
 							}
 						}
 						// result
-						addLogEntry("skip_dir exclude result (directory based): " ~ to!string(unwanted), ["debug"]);
+						logBuffer.addLogEntry("skip_dir exclude result (directory based): " ~ to!string(unwanted), ["debug"]);
 						if (unwanted) {
 							// This path should be skipped
-							addLogEntry("Skipping item - excluded by skip_dir config: " ~ matchDisplay, ["verbose"]);
+							logBuffer.addLogEntry("Skipping item - excluded by skip_dir config: " ~ matchDisplay, ["verbose"]);
 						}
 					}
 					// Is the item a file?
@@ -1664,10 +1664,10 @@ class SyncEngine {
 						// perform the check
 						unwanted = selectiveSync.isDirNameExcluded(pathToCheck);
 						// result
-						addLogEntry("skip_dir exclude result (file based): " ~ to!string(unwanted), ["debug"]);
+						logBuffer.addLogEntry("skip_dir exclude result (file based): " ~ to!string(unwanted), ["debug"]);
 						if (unwanted) {
 							// this files path should be skipped
-							addLogEntry("Skipping item - file path is excluded by skip_dir config: " ~ newItemPath, ["verbose"]);
+							logBuffer.addLogEntry("Skipping item - file path is excluded by skip_dir config: " ~ newItemPath, ["verbose"]);
 						}
 					}
 				}
@@ -1688,7 +1688,7 @@ class SyncEngine {
 						// Compute this item path & need the full path for this file
 						if (newItemPath.empty) {
 							newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
-							addLogEntry("New Item calculated full path is: " ~ newItemPath, ["debug"]);
+							logBuffer.addLogEntry("New Item calculated full path is: " ~ newItemPath, ["debug"]);
 						}
 						
 						// The path that needs to be checked needs to include the '/'
@@ -1700,14 +1700,14 @@ class SyncEngine {
 							exclusionTestPath = '/' ~ newItemPath;
 						}
 						
-						addLogEntry("skip_file item to check: " ~ exclusionTestPath, ["debug"]);
+						logBuffer.addLogEntry("skip_file item to check: " ~ exclusionTestPath, ["debug"]);
 						unwanted = selectiveSync.isFileNameExcluded(exclusionTestPath);
-						addLogEntry("Result: " ~ to!string(unwanted), ["debug"]);
-						if (unwanted) addLogEntry("Skipping item - excluded by skip_file config: " ~ thisItemName, ["verbose"]);
+						logBuffer.addLogEntry("Result: " ~ to!string(unwanted), ["debug"]);
+						if (unwanted) logBuffer.addLogEntry("Skipping item - excluded by skip_file config: " ~ thisItemName, ["verbose"]);
 					} else {
 						// parent id is not in the database
 						unwanted = true;
-						addLogEntry("Skipping file - parent path not present in local database", ["verbose"]);
+						logBuffer.addLogEntry("Skipping file - parent path not present in local database", ["verbose"]);
 					}
 				}
 			}
@@ -1720,11 +1720,11 @@ class SyncEngine {
 					if (newItemPath.empty) {
 						// Calculate this items path
 						newItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
-						addLogEntry("New Item calculated full path is: " ~ newItemPath, ["debug"]);
+						logBuffer.addLogEntry("New Item calculated full path is: " ~ newItemPath, ["debug"]);
 					}
 					
 					// What path are we checking?
-					addLogEntry("sync_list item to check: " ~ newItemPath, ["debug"]);
+					logBuffer.addLogEntry("sync_list item to check: " ~ newItemPath, ["debug"]);
 					
 					// Unfortunately there is no avoiding this call to check if the path is excluded|included via sync_list
 					if (selectiveSync.isPathExcludedViaSyncList(newItemPath)) {
@@ -1737,11 +1737,11 @@ class SyncEngine {
 						} else {
 							// path is unwanted
 							unwanted = true;
-							addLogEntry("Skipping item - excluded by sync_list config: " ~ newItemPath, ["verbose"]);
+							logBuffer.addLogEntry("Skipping item - excluded by sync_list config: " ~ newItemPath, ["verbose"]);
 							// flagging to skip this item now, but does this exist in the DB thus needs to be removed / deleted?
 							if (existingDBEntry) {
 								// flag to delete
-								addLogEntry("Flagging item for local delete as item exists in database: " ~ newItemPath, ["verbose"]);
+								logBuffer.addLogEntry("Flagging item for local delete as item exists in database: " ~ newItemPath, ["verbose"]);
 								idsToDelete ~= [thisItemDriveId, thisItemId];
 							}
 						}
@@ -1753,7 +1753,7 @@ class SyncEngine {
 			if (!unwanted) {
 				if (appConfig.getValueBool("skip_dotfiles")) {
 					if (isDotFile(newItemPath)) {
-						addLogEntry("Skipping item - .file or .folder: " ~ newItemPath, ["verbose"]);
+						logBuffer.addLogEntry("Skipping item - .file or .folder: " ~ newItemPath, ["verbose"]);
 						unwanted = true;
 					}
 				}
@@ -1766,7 +1766,7 @@ class SyncEngine {
 					string parentPath = dirName(newItemPath);
 					// Check for the presence of a .nosync in the parent path
 					if (exists(parentPath ~ "/.nosync")) {
-						addLogEntry("Skipping downloading item - .nosync found in parent folder & --check-for-nosync is enabled: " ~ newItemPath, ["verbose"]);
+						logBuffer.addLogEntry("Skipping downloading item - .nosync found in parent folder & --check-for-nosync is enabled: " ~ newItemPath, ["verbose"]);
 						unwanted = true;
 					}
 				}
@@ -1777,7 +1777,7 @@ class SyncEngine {
 				if (isItemFile(onedriveJSONItem)) {
 					if (fileSizeLimit != 0) {
 						if (onedriveJSONItem["size"].integer >= fileSizeLimit) {
-							addLogEntry("Skipping item - excluded by skip_size config: " ~ thisItemName ~ " (" ~ to!string(onedriveJSONItem["size"].integer/2^^20) ~ " MB)", ["verbose"]);
+							logBuffer.addLogEntry("Skipping item - excluded by skip_size config: " ~ thisItemName ~ " (" ~ to!string(onedriveJSONItem["size"].integer/2^^20) ~ " MB)", ["verbose"]);
 							unwanted = true;
 						}
 					}
@@ -1796,7 +1796,7 @@ class SyncEngine {
 			// We know if this JSON item is unwanted or not
 			if (unwanted) {
 				// This JSON item is NOT wanted - it is excluded
-				addLogEntry("Skipping OneDrive change as this is determined to be unwanted", ["debug"]);
+				logBuffer.addLogEntry("Skipping OneDrive change as this is determined to be unwanted", ["debug"]);
 				
 				// Add to the skippedItems array, but only if it is a directory ... pointless adding 'files' here, as it is the 'id' we check as the parent path which can only be a directory
 				if (!isItemFile(onedriveJSONItem)) {
@@ -1810,7 +1810,7 @@ class SyncEngine {
 				if (existingDBEntry) {
 					// The details of this JSON item are already in the DB
 					// Is the item in the DB the same as the JSON data provided - or is the JSON data advising this is an updated file?
-					addLogEntry("OneDrive change is an update to an existing local item", ["debug"]);
+					logBuffer.addLogEntry("OneDrive change is an update to an existing local item", ["debug"]);
 					
 					// Compute the existing item path
 					// NOTE:
@@ -1836,7 +1836,7 @@ class SyncEngine {
 					// Action this JSON item as a new item as we have no DB record of it
 					// The actual item may actually exist locally already, meaning that just the database is out-of-date or missing the data due to --resync
 					// But we also cannot compute the newItemPath as the parental objects may not exist as well
-					addLogEntry("OneDrive change is potentially a new local item", ["debug"]);
+					logBuffer.addLogEntry("OneDrive change is potentially a new local item", ["debug"]);
 					
 					// Attempt to apply this potentially new item
 					applyPotentiallyNewLocalItem(newDatabaseItem, onedriveJSONItem, newItemPath);
@@ -1846,7 +1846,7 @@ class SyncEngine {
 			
 			// How long to process this JSON item in batch
 			auto jsonProcessingElapsedTime = Clock.currTime() - jsonProcessingStartTime;
-			addLogEntry("Batched JSON item processing time: " ~ to!string(jsonProcessingElapsedTime), ["debug"]);
+			logBuffer.addLogEntry("Batched JSON item processing time: " ~ to!string(jsonProcessingElapsedTime), ["debug"]);
 			
 			// Tracking as to if this item was processed
 			processedCount++;
@@ -1859,17 +1859,17 @@ class SyncEngine {
 		// Are there any items to delete locally? Cleanup space locally first
 		if (!idsToDelete.empty) {
 			// There are elements that potentially need to be deleted locally
-			addLogEntry("Items to potentially delete locally: " ~ to!string(idsToDelete.length), ["verbose"]);
+			logBuffer.addLogEntry("Items to potentially delete locally: " ~ to!string(idsToDelete.length), ["verbose"]);
 			
 			if (appConfig.getValueBool("download_only")) {
 				// Download only has been configured
 				if (cleanupLocalFiles) {
 					// Process online deleted items
-					addLogEntry("Processing local deletion activity as --download-only & --cleanup-local-files configured", ["verbose"]);
+					logBuffer.addLogEntry("Processing local deletion activity as --download-only & --cleanup-local-files configured", ["verbose"]);
 					processDeleteItems();
 				} else {
 					// Not cleaning up local files
-					addLogEntry("Skipping local deletion activity as --download-only has been used", ["verbose"]);
+					logBuffer.addLogEntry("Skipping local deletion activity as --download-only has been used", ["verbose"]);
 				}
 			} else {
 				// Not using --download-only process normally
@@ -1882,7 +1882,7 @@ class SyncEngine {
 		// Are there any items to download post fetching and processing the /delta data?
 		if (!fileJSONItemsToDownload.empty) {
 			// There are elements to download
-			addLogEntry("Number of items to download from Microsoft OneDrive: " ~ to!string(fileJSONItemsToDownload.length));
+			logBuffer.addLogEntry("Number of items to download from Microsoft OneDrive: " ~ to!string(fileJSONItemsToDownload.length));
 			downloadOneDriveItems();
 			// Cleanup array memory
 			fileJSONItemsToDownload = [];
@@ -1896,7 +1896,7 @@ class SyncEngine {
 		
 		// If deltaLinkCache.latestDeltaLink is not empty, update the deltaLink in the database for this driveId so that we can reuse this now that jsonItemsToProcess has been fully processed
 		if (!deltaLinkCache.latestDeltaLink.empty) {
-			addLogEntry("Updating completed deltaLink for driveID " ~ deltaLinkCache.driveId ~ " in DB to: " ~ deltaLinkCache.latestDeltaLink, ["debug"]);
+			logBuffer.addLogEntry("Updating completed deltaLink for driveID " ~ deltaLinkCache.driveId ~ " in DB to: " ~ deltaLinkCache.latestDeltaLink, ["debug"]);
 			itemDB.setDeltaLink(deltaLinkCache.driveId, deltaLinkCache.itemId, deltaLinkCache.latestDeltaLink);
 			
 			// Now that the DB is updated, when we perform the last examination of the most recent online data, cache this so this can be obtained this from memory
@@ -1907,9 +1907,9 @@ class SyncEngine {
 	// Function to add or update a key pair in the deltaLinkInfo array
 	void cacheLatestDeltaLink(ref DeltaLinkInfo deltaLinkInfo, string driveId, string latestDeltaLink) {
 		if (driveId !in deltaLinkInfo) {
-			addLogEntry("Added new latestDeltaLink entry: " ~ driveId ~ " -> " ~ latestDeltaLink, ["debug"]);
+			logBuffer.addLogEntry("Added new latestDeltaLink entry: " ~ driveId ~ " -> " ~ latestDeltaLink, ["debug"]);
 		} else {
-			addLogEntry("Updated latestDeltaLink entry for " ~ driveId ~ " from " ~ deltaLinkInfo[driveId] ~ " to " ~ latestDeltaLink, ["debug"]);
+			logBuffer.addLogEntry("Updated latestDeltaLink entry for " ~ driveId ~ " from " ~ deltaLinkInfo[driveId] ~ " to " ~ latestDeltaLink, ["debug"]);
 		}
 		deltaLinkInfo[driveId] = latestDeltaLink;
 	}
@@ -1937,14 +1937,14 @@ class SyncEngine {
 		// As such, we should not be doing any other checks here to determine if the JSON item is wanted .. it is
 		
 		if (exists(newItemPath)) {
-			addLogEntry("Path on local disk already exists", ["debug"]);
+			logBuffer.addLogEntry("Path on local disk already exists", ["debug"]);
 			// Issue #2209 fix - test if path is a bad symbolic link
 			if (isSymlink(newItemPath)) {
-				addLogEntry("Path on local disk is a symbolic link ........", ["debug"]);
+				logBuffer.addLogEntry("Path on local disk is a symbolic link ........", ["debug"]);
 				if (!exists(readLink(newItemPath))) {
 					// reading the symbolic link failed	
-					addLogEntry("Reading the symbolic link target failed ........ ", ["debug"]);
-					addLogEntry("Skipping item - invalid symbolic link: " ~ newItemPath, ["info", "notify"]);
+					logBuffer.addLogEntry("Reading the symbolic link target failed ........ ", ["debug"]);
+					logBuffer.addLogEntry("Skipping item - invalid symbolic link: " ~ newItemPath, ["info", "notify"]);
 					return;
 				}
 			}
@@ -1955,13 +1955,13 @@ class SyncEngine {
 			string itemSource = "remote";
 			if (isItemSynced(newDatabaseItem, newItemPath, itemSource)) {
 				// Item details from OneDrive and local item details in database are in-sync
-				addLogEntry("The item to sync is already present on the local filesystem and is in-sync with what is reported online", ["debug"]);
-				addLogEntry("Update/Insert local database with item details: " ~ to!string(newDatabaseItem), ["debug"]);
+				logBuffer.addLogEntry("The item to sync is already present on the local filesystem and is in-sync with what is reported online", ["debug"]);
+				logBuffer.addLogEntry("Update/Insert local database with item details: " ~ to!string(newDatabaseItem), ["debug"]);
 				itemDB.upsert(newDatabaseItem);
 				return;
 			} else {
 				// Item details from OneDrive and local item details in database are NOT in-sync
-				addLogEntry("The item to sync exists locally but is potentially not in the local database - otherwise this would be handled as changed item", ["debug"]);
+				logBuffer.addLogEntry("The item to sync exists locally but is potentially not in the local database - otherwise this would be handled as changed item", ["debug"]);
 				
 				// Which object is newer? The local file or the remote file?
 				SysTime localModifiedTime = timeLastModified(newItemPath).toUTC();
@@ -1982,7 +1982,7 @@ class SyncEngine {
 						// Fetch the latest DB record - as this could have been updated by the isItemSynced if the date online was being corrected, then the DB updated as a result
 						Item latestDatabaseItem;
 						itemDB.selectById(newDatabaseItem.driveId, newDatabaseItem.id, latestDatabaseItem);
-						addLogEntry("latestDatabaseItem: " ~ to!string(latestDatabaseItem), ["debug"]);
+						logBuffer.addLogEntry("latestDatabaseItem: " ~ to!string(latestDatabaseItem), ["debug"]);
 						
 						SysTime latestItemModifiedTime = latestDatabaseItem.mtime;
 						// Reduce time resolution to seconds before comparing
@@ -1990,19 +1990,19 @@ class SyncEngine {
 						
 						if (localModifiedTime == latestItemModifiedTime) {
 							// Log action
-							addLogEntry("Local file modified time matches existing database record - keeping local file", ["verbose"]);
-							addLogEntry("Skipping OneDrive change as this is determined to be unwanted due to local file modified time matching database data", ["debug"]);
+							logBuffer.addLogEntry("Local file modified time matches existing database record - keeping local file", ["verbose"]);
+							logBuffer.addLogEntry("Skipping OneDrive change as this is determined to be unwanted due to local file modified time matching database data", ["debug"]);
 						} else {
 							// Log action
-							addLogEntry("Local file modified time is newer based on UTC time conversion - keeping local file as this exists in the local database", ["verbose"]);
-							addLogEntry("Skipping OneDrive change as this is determined to be unwanted due to local file modified time being newer than OneDrive file and present in the sqlite database", ["debug"]);
+							logBuffer.addLogEntry("Local file modified time is newer based on UTC time conversion - keeping local file as this exists in the local database", ["verbose"]);
+							logBuffer.addLogEntry("Skipping OneDrive change as this is determined to be unwanted due to local file modified time being newer than OneDrive file and present in the sqlite database", ["debug"]);
 						}
 						// Return as no further action needed
 						return;
 					} else {
 						// item id is not in the database .. maybe a --resync ?
 						// file exists locally but is not in the sqlite database - maybe a failed download?
-						addLogEntry("Local item does not exist in local database - replacing with file from OneDrive - failed download?", ["verbose"]);
+						logBuffer.addLogEntry("Local item does not exist in local database - replacing with file from OneDrive - failed download?", ["verbose"]);
 						
 						// In a --resync scenario or if items.sqlite3 was deleted before startup we have zero way of knowing IF the local file is meant to be the right file
 						// To this pint we have passed the following checks:
@@ -2014,7 +2014,7 @@ class SyncEngine {
 						// Has the user configured to IGNORE local data protection rules?
 						if (bypassDataPreservation) {
 							// The user has configured to ignore data safety checks and overwrite local data rather than preserve & safeBackup
-							addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ newItemPath, ["info", "notify"]);
+							logBuffer.addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ newItemPath, ["info", "notify"]);
 						} else {
 							// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
 							// In case the renamed path is needed
@@ -2026,14 +2026,14 @@ class SyncEngine {
 					// Is the remote newer?
 					if (localModifiedTime < itemModifiedTime) {
 						// Remote file is newer than the existing local item
-						addLogEntry("Remote item modified time is newer based on UTC time conversion", ["verbose"]); // correct message, remote item is newer
-						addLogEntry("localModifiedTime (local file):   " ~ to!string(localModifiedTime), ["debug"]);
-						addLogEntry("itemModifiedTime (OneDrive item): " ~ to!string(itemModifiedTime), ["debug"]);
+						logBuffer.addLogEntry("Remote item modified time is newer based on UTC time conversion", ["verbose"]); // correct message, remote item is newer
+						logBuffer.addLogEntry("localModifiedTime (local file):   " ~ to!string(localModifiedTime), ["debug"]);
+						logBuffer.addLogEntry("itemModifiedTime (OneDrive item): " ~ to!string(itemModifiedTime), ["debug"]);
 						
 						// Has the user configured to IGNORE local data protection rules?
 						if (bypassDataPreservation) {
 							// The user has configured to ignore data safety checks and overwrite local data rather than preserve & safeBackup
-							addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ newItemPath, ["info", "notify"]);
+							logBuffer.addLogEntry("WARNING: Local Data Protection has been disabled. You may experience data loss on this file: " ~ newItemPath, ["info", "notify"]);
 						} else {
 							// local data protection is configured, safeBackup the local file, passing in if we are performing a --dry-run or not
 							// In case the renamed path is needed
@@ -2045,8 +2045,8 @@ class SyncEngine {
 					// Are the timestamps equal?
 					if (localModifiedTime == itemModifiedTime) {
 						// yes they are equal
-						addLogEntry("File timestamps are equal, no further action required", ["debug"]); // correct message as timestamps are equal
-						addLogEntry("Update/Insert local database with item details: " ~ to!string(newDatabaseItem), ["debug"]);
+						logBuffer.addLogEntry("File timestamps are equal, no further action required", ["debug"]); // correct message as timestamps are equal
+						logBuffer.addLogEntry("Update/Insert local database with item details: " ~ to!string(newDatabaseItem), ["debug"]);
 						itemDB.upsert(newDatabaseItem);
 						return;
 					}
@@ -2086,21 +2086,21 @@ class SyncEngine {
 		// To create a path, 'newItemPath' must not be empty
 		if (!newItemPath.empty) {
 			// Update the logging output to be consistent
-			addLogEntry("Creating local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);
+			logBuffer.addLogEntry("Creating local directory: " ~ "./" ~ buildNormalizedPath(newItemPath), ["verbose"]);
 			if (!dryRun) {
 				try {
 					// Create the new directory
-					addLogEntry("Requested path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);
+					logBuffer.addLogEntry("Requested path does not exist, creating directory structure: " ~ newItemPath, ["debug"]);
 					mkdirRecurse(newItemPath);
 					// Configure the applicable permissions for the folder
-					addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);
+					logBuffer.addLogEntry("Setting directory permissions for: " ~ newItemPath, ["debug"]);
 					newItemPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
 					// Update the time of the folder to match the last modified time as is provided by OneDrive
 					// If there are any files then downloaded into this folder, the last modified time will get 
 					// updated by the local Operating System with the latest timestamp - as this is normal operation
 					// as the directory has been modified
-					addLogEntry("Setting directory lastModifiedDateTime for: " ~ newItemPath ~ " to " ~ to!string(newDatabaseItem.mtime), ["debug"]);
-					addLogEntry("Calling setTimes() for this directory: " ~ newItemPath, ["debug"]);
+					logBuffer.addLogEntry("Setting directory lastModifiedDateTime for: " ~ newItemPath ~ " to " ~ to!string(newDatabaseItem.mtime), ["debug"]);
+					logBuffer.addLogEntry("Calling setTimes() for this directory: " ~ newItemPath, ["debug"]);
 					setTimes(newItemPath, newDatabaseItem.mtime, newDatabaseItem.mtime);
 					// Save the item to the database
 					saveItem(onedriveJSONItem);
@@ -2135,7 +2135,7 @@ class SyncEngine {
 			// The eTag has changed to what we previously cached
 			if (existingItemPath != changedItemPath) {
 				// Log that we are changing / moving an item to a new name
-				addLogEntry("Moving " ~ existingItemPath ~ " to " ~ changedItemPath);
+				logBuffer.addLogEntry("Moving " ~ existingItemPath ~ " to " ~ changedItemPath);
 				// Is the destination path empty .. or does something exist at that location?
 				if (exists(changedItemPath)) {
 					// Destination we are moving to exists ... 
@@ -2146,10 +2146,10 @@ class SyncEngine {
 						string itemSource = "database";
 						if (isItemSynced(changedLocalItem, changedItemPath, itemSource)) {
 							// The destination item is in-sync
-							addLogEntry("Destination is in sync and will be overwritten", ["verbose"]);
+							logBuffer.addLogEntry("Destination is in sync and will be overwritten", ["verbose"]);
 						} else {
 							// The destination item is different
-							addLogEntry("The destination is occupied with a different item, renaming the conflicting file...", ["verbose"]);
+							logBuffer.addLogEntry("The destination is occupied with a different item, renaming the conflicting file...", ["verbose"]);
 							// Backup this item, passing in if we are performing a --dry-run or not
 							// In case the renamed path is needed
 							string renamedPath;
@@ -2157,7 +2157,7 @@ class SyncEngine {
 						}
 					} else {
 						// The to be overwritten item is not already in the itemdb, so it should saved to avoid data loss
-						addLogEntry("The destination is occupied by an existing un-synced file, renaming the conflicting file...", ["verbose"]);
+						logBuffer.addLogEntry("The destination is occupied by an existing un-synced file, renaming the conflicting file...", ["verbose"]);
 						// Backup this item, passing in if we are performing a --dry-run or not
 						// In case the renamed path is needed
 						string renamedPath;
@@ -2180,7 +2180,7 @@ class SyncEngine {
 						// which is 'correct' .. but we need to report locally the online timestamp here as the move was made online
 						if (changedOneDriveItem.type == ItemType.file) {
 							// Set the timestamp
-							addLogEntry("Calling setTimes() for this file: " ~ changedItemPath, ["debug"]);
+							logBuffer.addLogEntry("Calling setTimes() for this file: " ~ changedItemPath, ["debug"]);
 							setTimes(changedItemPath, changedOneDriveItem.mtime, changedOneDriveItem.mtime);
 						}
 					} else {
@@ -2216,7 +2216,7 @@ class SyncEngine {
 					if ((existingItemModifiedTime != changedOneDriveItemModifiedTime) || (generateSimulatedDeltaResponse)) {
 					// Save this item in the database
 						// Add to the local database
-						addLogEntry("Adding changed OneDrive Item to database: " ~ to!string(changedOneDriveItem), ["debug"]);
+						logBuffer.addLogEntry("Adding changed OneDrive Item to database: " ~ to!string(changedOneDriveItem), ["debug"]);
 						itemDB.upsert(changedOneDriveItem);
 					}
 				}
@@ -2250,7 +2250,7 @@ class SyncEngine {
 			if ((existingItemModifiedTime != changedOneDriveItemModifiedTime) || (generateSimulatedDeltaResponse)) {
 				// Database update needed for this item because our local record is out-of-date
 				// Add to the local database
-				addLogEntry("Adding changed OneDrive Item to database: " ~ to!string(changedOneDriveItem), ["debug"]);
+				logBuffer.addLogEntry("Adding changed OneDrive Item to database: " ~ to!string(changedOneDriveItem), ["debug"]);
 				itemDB.upsert(changedOneDriveItem);
 			}
 		}
@@ -2296,12 +2296,12 @@ class SyncEngine {
 		
 		// Calculate this items path
 		string newItemPath = computeItemPath(downloadDriveId, downloadParentId) ~ "/" ~ downloadItemName;
-		addLogEntry("JSON Item calculated full path for download is: " ~ newItemPath, ["debug"]);
+		logBuffer.addLogEntry("JSON Item calculated full path for download is: " ~ newItemPath, ["debug"]);
 		
 		// Is the item reported as Malware ?
 		if (isMalware(onedriveJSONItem)){
 			// OneDrive reports that this file is malware
-			addLogEntry("ERROR: MALWARE DETECTED IN FILE - DOWNLOAD SKIPPED: " ~ newItemPath, ["info", "notify"]);
+			logBuffer.addLogEntry("ERROR: MALWARE DETECTED IN FILE - DOWNLOAD SKIPPED: " ~ newItemPath, ["info", "notify"]);
 			downloadFailed = true;
 		} else {
 			// Grab this file's filesize
@@ -2310,7 +2310,7 @@ class SyncEngine {
 				jsonFileSize = onedriveJSONItem["size"].integer;
 			} else {
 				// filesize missing
-				addLogEntry("ERROR: onedriveJSONItem['size'] is missing", ["debug"]);
+				logBuffer.addLogEntry("ERROR: onedriveJSONItem['size'] is missing", ["debug"]);
 			}
 			
 			// Configure the hashes for comparison post download
@@ -2333,7 +2333,7 @@ class SyncEngine {
 				}
 			} else {
 				// file hash data missing
-				addLogEntry("ERROR: onedriveJSONItem['file']['hashes'] is missing - unable to compare file hash after download", ["debug"]);
+				logBuffer.addLogEntry("ERROR: onedriveJSONItem['file']['hashes'] is missing - unable to compare file hash after download", ["debug"]);
 			}
 		
 			// Does the file already exist in the path locally?
@@ -2347,12 +2347,12 @@ class SyncEngine {
 				}
 				
 				// Log the DB details
-				addLogEntry("File to download exists locally and this is the DB record: " ~ to!string(databaseItem), ["debug"]);
+				logBuffer.addLogEntry("File to download exists locally and this is the DB record: " ~ to!string(databaseItem), ["debug"]);
 				
 				// Does the DB (what we think is in sync) hash match the existing local file hash?
 				if (!testFileHash(newItemPath, databaseItem)) {
 					// local file is different to what we know to be true
-					addLogEntry("The local file to replace (" ~ newItemPath ~ ") has been modified locally since the last download. Renaming it to avoid potential local data loss.");
+					logBuffer.addLogEntry("The local file to replace (" ~ newItemPath ~ ") has been modified locally since the last download. Renaming it to avoid potential local data loss.");
 					
 					// Perform the local safeBackup of the existing local file, passing in if we are performing a --dry-run or not
 					// In case the renamed path is needed
@@ -2368,16 +2368,16 @@ class SyncEngine {
 			// The reservation value is user configurable in the config file, 50MB by default
 			ulong freeSpaceReservation = appConfig.getValueLong("space_reservation");
 			// debug output
-			addLogEntry("Local Disk Space Actual: " ~ to!string(localActualFreeSpace), ["debug"]);
-			addLogEntry("Free Space Reservation:  " ~ to!string(freeSpaceReservation), ["debug"]);
-			addLogEntry("File Size to Download:   " ~ to!string(jsonFileSize), ["debug"]);
+			logBuffer.addLogEntry("Local Disk Space Actual: " ~ to!string(localActualFreeSpace), ["debug"]);
+			logBuffer.addLogEntry("Free Space Reservation:  " ~ to!string(freeSpaceReservation), ["debug"]);
+			logBuffer.addLogEntry("File Size to Download:   " ~ to!string(jsonFileSize), ["debug"]);
 			
 			// Calculate if we can actually download file - is there enough free space?
 			if ((localActualFreeSpace < freeSpaceReservation) || (jsonFileSize > localActualFreeSpace)) {
 				// localActualFreeSpace is less than freeSpaceReservation .. insufficient free space
 				// jsonFileSize is greater than localActualFreeSpace .. insufficient free space
-				addLogEntry("Downloading file: " ~ newItemPath ~ " ... failed!");
-				addLogEntry("Insufficient local disk space to download file");
+				logBuffer.addLogEntry("Downloading file: " ~ newItemPath ~ " ... failed!");
+				logBuffer.addLogEntry("Insufficient local disk space to download file");
 				downloadFailed = true;
 			} else {
 				// If we are in a --dry-run situation - if not, actually perform the download
@@ -2405,13 +2405,13 @@ class SyncEngine {
 						GC.collect();
 						
 					} catch (OneDriveException exception) {
-						addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize); generated a OneDriveException", ["debug"]);
+						logBuffer.addLogEntry("downloadFileOneDriveApiInstance.downloadById(downloadDriveId, downloadItemId, newItemPath, jsonFileSize); generated a OneDriveException", ["debug"]);
 						string thisFunctionName = getFunctionName!({});
 						
 						// HTTP request returned status code 403
 						if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
 							// We attempted to download a file, that was shared with us, but this was shared with us as read-only and no download permission
-							addLogEntry("Unable to download this file as this was shared as read-only without download permission: " ~ newItemPath);
+							logBuffer.addLogEntry("Unable to download this file as this was shared as read-only without download permission: " ~ newItemPath);
 							downloadFailed = true;
 						} else {
 							// Default operation if not a 403 error
@@ -2456,7 +2456,7 @@ class SyncEngine {
 							
 							if ((downloadFileSize == jsonFileSize) && (downloadedFileHash == onlineFileHash)) {
 								// Downloaded file matches size and hash
-								addLogEntry("Downloaded file matches reported size and reported file hash", ["debug"]);
+								logBuffer.addLogEntry("Downloaded file matches reported size and reported file hash", ["debug"]);
 								
 								try {
 									// get the mtime from the JSON data
@@ -2471,7 +2471,7 @@ class SyncEngine {
 									
 									// set the correct time on the downloaded file
 									if (!dryRun) {
-										addLogEntry("Calling setTimes() for this file: " ~ newItemPath, ["debug"]);
+										logBuffer.addLogEntry("Calling setTimes() for this file: " ~ newItemPath, ["debug"]);
 										setTimes(newItemPath, itemModifiedTime, itemModifiedTime);
 									}
 								} catch (FileException e) {
@@ -2486,18 +2486,18 @@ class SyncEngine {
 								if (downloadFileSize != jsonFileSize) {
 									// downloaded file size does not match
 									downloadValueMismatch = true;
-									addLogEntry("Actual file size on disk:   " ~ to!string(downloadFileSize), ["debug"]);
-									addLogEntry("OneDrive API reported size: " ~ to!string(jsonFileSize), ["debug"]);
-									addLogEntry("ERROR: File download size mismatch. Increase logging verbosity to determine why.");
+									logBuffer.addLogEntry("Actual file size on disk:   " ~ to!string(downloadFileSize), ["debug"]);
+									logBuffer.addLogEntry("OneDrive API reported size: " ~ to!string(jsonFileSize), ["debug"]);
+									logBuffer.addLogEntry("ERROR: File download size mismatch. Increase logging verbosity to determine why.");
 								}
 								
 								// Hash Error
 								if (downloadedFileHash != onlineFileHash) {
 									// downloaded file hash does not match
 									downloadValueMismatch = true;
-									addLogEntry("Actual local file hash:     " ~ downloadedFileHash, ["debug"]);
-									addLogEntry("OneDrive API reported hash: " ~ onlineFileHash, ["debug"]);
-									addLogEntry("ERROR: File download hash mismatch. Increase logging verbosity to determine why.");
+									logBuffer.addLogEntry("Actual local file hash:     " ~ downloadedFileHash, ["debug"]);
+									logBuffer.addLogEntry("OneDrive API reported hash: " ~ onlineFileHash, ["debug"]);
+									logBuffer.addLogEntry("ERROR: File download hash mismatch. Increase logging verbosity to determine why.");
 								}
 								
 								// .heic data loss check
@@ -2506,8 +2506,8 @@ class SyncEngine {
 								// - https://github.com/OneDrive/onedrive-api-docs/issues/1723
 								if (downloadValueMismatch && (toLower(extension(newItemPath)) == ".heic")) {
 									// Need to display a message to the user that they have experienced data loss
-									addLogEntry("DATA-LOSS: File downloaded has experienced data loss due to a Microsoft OneDrive API bug. DO NOT DELETE THIS FILE ONLINE: " ~ newItemPath, ["info", "notify"]);
-									addLogEntry("           Please read https://github.com/OneDrive/onedrive-api-docs/issues/1723 for more details.", ["verbose"]);
+									logBuffer.addLogEntry("DATA-LOSS: File downloaded has experienced data loss due to a Microsoft OneDrive API bug. DO NOT DELETE THIS FILE ONLINE: " ~ newItemPath, ["info", "notify"]);
+									logBuffer.addLogEntry("           Please read https://github.com/OneDrive/onedrive-api-docs/issues/1723 for more details.", ["verbose"]);
 								}
 								
 								// Add some workaround messaging for SharePoint
@@ -2517,16 +2517,16 @@ class SyncEngine {
 									// From JSON:         "size": 17133
 									// From HTTPS Server: < Content-Length: 19340
 									// with no logical reason for the difference, except for a 302 redirect before file download
-									addLogEntry("INFO: It is most likely that a SharePoint OneDrive API issue is the root cause. Add --disable-download-validation to work around this issue but downloaded data integrity cannot be guaranteed.");
+									logBuffer.addLogEntry("INFO: It is most likely that a SharePoint OneDrive API issue is the root cause. Add --disable-download-validation to work around this issue but downloaded data integrity cannot be guaranteed.");
 								} else {
 									// other account types
-									addLogEntry("INFO: Potentially add --disable-download-validation to work around this issue but downloaded data integrity cannot be guaranteed.");
+									logBuffer.addLogEntry("INFO: Potentially add --disable-download-validation to work around this issue but downloaded data integrity cannot be guaranteed.");
 								}
 								
 								// If the computed hash does not equal provided online hash, consider this a failed download
 								if (downloadedFileHash != onlineFileHash) {
 									// We do not want this local file to remain on the local file system as it failed the integrity checks
-									addLogEntry("Removing local file " ~ newItemPath ~ " due to failed integrity checks");
+									logBuffer.addLogEntry("Removing local file " ~ newItemPath ~ " due to failed integrity checks");
 									if (!dryRun) {
 										safeRemove(newItemPath);
 									}
@@ -2536,7 +2536,7 @@ class SyncEngine {
 									if (fileFoundInDB) {
 										// Purge DB record so that the deleted local file does not cause an online delete
 										// In a --dry-run scenario, this is being done against a DB copy
-										addLogEntry("Removing DB record due to failed integrity checks");
+										logBuffer.addLogEntry("Removing DB record due to failed integrity checks");
 										itemDB.deleteById(databaseItem.driveId, databaseItem.id);
 									}
 									
@@ -2546,11 +2546,11 @@ class SyncEngine {
 							}
 						} else {
 							// Download validation checks were disabled
-							addLogEntry("Downloaded file validation disabled due to --disable-download-validation", ["debug"]);
-							addLogEntry("WARNING: Skipping download integrity check for: " ~ newItemPath, ["verbose"]);
+							logBuffer.addLogEntry("Downloaded file validation disabled due to --disable-download-validation", ["debug"]);
+							logBuffer.addLogEntry("WARNING: Skipping download integrity check for: " ~ newItemPath, ["verbose"]);
 						}	 // end of (!disableDownloadValidation)
 					} else {
-						addLogEntry("ERROR: File failed to download. Increase logging verbosity to determine why.");
+						logBuffer.addLogEntry("ERROR: File failed to download. Increase logging verbosity to determine why.");
 						downloadFailed = true;
 					}
 				}
@@ -2559,7 +2559,7 @@ class SyncEngine {
 			// File should have been downloaded
 			if (!downloadFailed) {
 				// Download did not fail
-				addLogEntry("Downloading file: " ~ newItemPath ~ " ... done");
+				logBuffer.addLogEntry("Downloading file: " ~ newItemPath ~ " ... done");
 				// Save this item into the database
 				saveItem(onedriveJSONItem);
 				
@@ -2570,7 +2570,7 @@ class SyncEngine {
 				}
 			} else {
 				// Output download failed
-				addLogEntry("Downloading file: " ~ newItemPath ~ " ... failed!");
+				logBuffer.addLogEntry("Downloading file: " ~ newItemPath ~ " ... failed!");
 				// Add the path to a list of items that failed to download
 				if (!canFind(fileDownloadFailures, newItemPath)) {
 					fileDownloadFailures ~= newItemPath; // Add newItemPath if it's not already present
@@ -2588,7 +2588,7 @@ class SyncEngine {
 			// Can we actually read the local file?
 			if (!readLocalFile(path)) {
 				// Unable to read local file
-				addLogEntry("Unable to determine the sync state of this file as it cannot be read (file permissions or file corruption): " ~ path);
+				logBuffer.addLogEntry("Unable to determine the sync state of this file as it cannot be read (file permissions or file corruption): " ~ path);
 				return false;
 			}
 			
@@ -2603,21 +2603,21 @@ class SyncEngine {
 				return true;
 			} else {
 				// The file has a different timestamp ... is the hash the same meaning no file modification?
-				addLogEntry("Local file time discrepancy detected: " ~ path, ["verbose"]);
-				addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " (UTC) when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime) ~ " (UTC)", ["verbose"]);
+				logBuffer.addLogEntry("Local file time discrepancy detected: " ~ path, ["verbose"]);
+				logBuffer.addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " (UTC) when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime) ~ " (UTC)", ["verbose"]);
 
 				// The file has a different timestamp ... is the hash the same meaning no file modification?
 				// Test the file hash as the date / time stamp is different
 				// Generating a hash is computationally expensive - we only generate the hash if timestamp was different
 				if (testFileHash(path, item)) {
 					// The hash is the same .. so we need to fix-up the timestamp depending on where it is wrong
-					addLogEntry("Local item has the same hash value as the item online - correcting the applicable file timestamp", ["verbose"]);
+					logBuffer.addLogEntry("Local item has the same hash value as the item online - correcting the applicable file timestamp", ["verbose"]);
 					// Correction logic based on the configuration and the comparison of timestamps
 					if (localModifiedTime > itemModifiedTime) {
 						// Local file is newer .. are we in a --download-only situation?
 						if (!appConfig.getValueBool("download_only") && !dryRun) {
 							// The source of the out-of-date timestamp was OneDrive and this needs to be corrected to avoid always generating a hash test if timestamp is different
-							addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);
+							logBuffer.addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);
 							// Attempt to update the online date time stamp
 							// We need to use the correct driveId and itemId, especially if we are updating a OneDrive Business Shared File timestamp
 							if (item.type == ItemType.file) {
@@ -2629,22 +2629,22 @@ class SyncEngine {
 							}
 						} else if (!dryRun) {
 							// --download-only is being used ... local file needs to be corrected ... but why is it newer - indexing application potentially changing the timestamp ?
-							addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --download-only", ["verbose"]);
+							logBuffer.addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --download-only", ["verbose"]);
 							// Fix the local file timestamp
-							addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);
+							logBuffer.addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);
 							setTimes(path, item.mtime, item.mtime);
 						}
 					} else if (!dryRun) {
 						// The source of the out-of-date timestamp was the local file and this needs to be corrected to avoid always generating a hash test if timestamp is different
-						addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally", ["verbose"]);
+						logBuffer.addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally", ["verbose"]);
 						// Fix the local file timestamp
-						addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);
+						logBuffer.addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);
 						setTimes(path, item.mtime, item.mtime);
 					}
 					return false;
 				} else {
 					// The hash is different so the content of the file has to be different as to what is stored online
-					addLogEntry("The local file has a different hash when compared to " ~ itemSource ~ " file hash", ["verbose"]);
+					logBuffer.addLogEntry("The local file has a different hash when compared to " ~ itemSource ~ " file hash", ["verbose"]);
 					return false;
 				}
 			}
@@ -2672,17 +2672,17 @@ class SyncEngine {
 		
 		
 		// Get the /delta data for this account | driveId | deltaLink combination
-		addLogEntry("------------------------------------------------------------------", ["debug"]);
-		addLogEntry("selectedDriveId:   " ~ selectedDriveId, ["debug"]);
-		addLogEntry("selectedItemId:    " ~ selectedItemId, ["debug"]);
-		addLogEntry("providedDeltaLink: " ~ providedDeltaLink, ["debug"]);
-		addLogEntry("------------------------------------------------------------------", ["debug"]);
+		logBuffer.addLogEntry("------------------------------------------------------------------", ["debug"]);
+		logBuffer.addLogEntry("selectedDriveId:   " ~ selectedDriveId, ["debug"]);
+		logBuffer.addLogEntry("selectedItemId:    " ~ selectedItemId, ["debug"]);
+		logBuffer.addLogEntry("providedDeltaLink: " ~ providedDeltaLink, ["debug"]);
+		logBuffer.addLogEntry("------------------------------------------------------------------", ["debug"]);
 		
 		try {
 			deltaChangesBundle = getDeltaDataOneDriveApiInstance.getChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink);
 		} catch (OneDriveException exception) {
 			// caught an exception
-			addLogEntry("getDeltaDataOneDriveApiInstance.getChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink) generated a OneDriveException", ["debug"]);
+			logBuffer.addLogEntry("getDeltaDataOneDriveApiInstance.getChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink) generated a OneDriveException", ["debug"]);
 			
 			auto errorArray = splitLines(exception.msg);
 			string thisFunctionName = getFunctionName!({});
@@ -2690,18 +2690,18 @@ class SyncEngine {
 			// Error handling operation if not 408,429,503,504 errors
 			// - 408,429,503,504 errors are handled as a retry within getDeltaDataOneDriveApiInstance
 			if (exception.httpStatusCode == 410) {
-				addLogEntry();
-				addLogEntry("WARNING: The OneDrive API responded with an error that indicates the locally stored deltaLink value is invalid");
+				logBuffer.addLogEntry();
+				logBuffer.addLogEntry("WARNING: The OneDrive API responded with an error that indicates the locally stored deltaLink value is invalid");
 				// Essentially the 'providedDeltaLink' that we have stored is no longer available ... re-try without the stored deltaLink
-				addLogEntry("WARNING: Retrying OneDrive API call without using the locally stored deltaLink value");
+				logBuffer.addLogEntry("WARNING: Retrying OneDrive API call without using the locally stored deltaLink value");
 				// Configure an empty deltaLink
-				addLogEntry("Delta link expired for 'getDeltaDataOneDriveApiInstance.getChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink)', setting 'deltaLink = null'", ["debug"]);
+				logBuffer.addLogEntry("Delta link expired for 'getDeltaDataOneDriveApiInstance.getChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink)', setting 'deltaLink = null'", ["debug"]);
 				string emptyDeltaLink = "";
 				// retry with empty deltaLink
 				deltaChangesBundle = getDeltaDataOneDriveApiInstance.getChangesByItemId(selectedDriveId, selectedItemId, emptyDeltaLink);
 			} else {
 				// Display what the error is
-				addLogEntry("CODING TO DO: Hitting this failure error output after getting a httpStatusCode != 410 when the API responded the deltaLink was invalid");
+				logBuffer.addLogEntry("CODING TO DO: Hitting this failure error output after getting a httpStatusCode != 410 when the API responded the deltaLink was invalid");
 				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 				deltaChangesBundle = null;
 				// Perform Garbage Collection
@@ -2721,7 +2721,7 @@ class SyncEngine {
 	
 	// If the JSON response is not correct JSON object, exit
 	void invalidJSONResponseFromOneDriveAPI() {
-		addLogEntry("ERROR: Query of the OneDrive API returned an invalid JSON response");
+		logBuffer.addLogEntry("ERROR: Query of the OneDrive API returned an invalid JSON response");
 		// Must force exit here, allow logging to be done
 		forceExit();
 	}
@@ -2737,10 +2737,10 @@ class SyncEngine {
 	// Display the pertinant details of the sync engine
 	void displaySyncEngineDetails() {
 		// Display accountType, defaultDriveId, defaultRootId & remainingFreeSpace for verbose logging purposes
-		addLogEntry("Application Version:  " ~ appConfig.applicationVersion, ["verbose"]);
-		addLogEntry("Account Type:         " ~ appConfig.accountType, ["verbose"]);
-		addLogEntry("Default Drive ID:     " ~ appConfig.defaultDriveId, ["verbose"]);
-		addLogEntry("Default Root ID:      " ~ appConfig.defaultRootId, ["verbose"]);
+		logBuffer.addLogEntry("Application Version:  " ~ appConfig.applicationVersion, ["verbose"]);
+		logBuffer.addLogEntry("Account Type:         " ~ appConfig.accountType, ["verbose"]);
+		logBuffer.addLogEntry("Default Drive ID:     " ~ appConfig.defaultDriveId, ["verbose"]);
+		logBuffer.addLogEntry("Default Root ID:      " ~ appConfig.defaultRootId, ["verbose"]);
 
 		// Fetch the details from cachedOnlineDriveData
 		DriveDetailsCache cachedOnlineDriveData;
@@ -2749,13 +2749,13 @@ class SyncEngine {
 		// What do we display here for space remaining
 		if (cachedOnlineDriveData.quotaRemaining > 0) {
 			// Display the actual value
-			addLogEntry("Remaining Free Space: " ~ to!string(byteToGibiByte(cachedOnlineDriveData.quotaRemaining)) ~ " GB (" ~ to!string(cachedOnlineDriveData.quotaRemaining) ~ " bytes)", ["verbose"]);
+			logBuffer.addLogEntry("Remaining Free Space: " ~ to!string(byteToGibiByte(cachedOnlineDriveData.quotaRemaining)) ~ " GB (" ~ to!string(cachedOnlineDriveData.quotaRemaining) ~ " bytes)", ["verbose"]);
 		} else {
 			// zero or non-zero value or restricted
 			if (!cachedOnlineDriveData.quotaRestricted){
-				addLogEntry("Remaining Free Space:       0 KB", ["verbose"]);
+				logBuffer.addLogEntry("Remaining Free Space:       0 KB", ["verbose"]);
 			} else {
-				addLogEntry("Remaining Free Space:       Not Available", ["verbose"]);
+				logBuffer.addLogEntry("Remaining Free Space:       Not Available", ["verbose"]);
 			}
 		}
 	}
@@ -2766,13 +2766,13 @@ class SyncEngine {
 		// static declare this for this function
 		static import core.exception;
 		string calculatedPath;
-		addLogEntry("Attempting to calculate local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);
+		logBuffer.addLogEntry("Attempting to calculate local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);
 		
 		try {
 			calculatedPath = itemDB.computePath(thisDriveId, thisItemId);
 		} catch (core.exception.AssertError) {
 			// broken tree in the database, we cant compute the path for this item id, exit
-			addLogEntry("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
+			logBuffer.addLogEntry("ERROR: A database consistency issue has been caught. A --resync is needed to rebuild the database.");
 			// Must force exit here, allow logging to be done
 			forceExit();
 		}
@@ -2806,9 +2806,9 @@ class SyncEngine {
 			// Log the action if the path exists .. it may of already been removed and this is a legacy array item
 			if (exists(path)) {
 				if (item.type == ItemType.file) {
-					addLogEntry("Trying to delete file " ~ path);
+					logBuffer.addLogEntry("Trying to delete file " ~ path);
 				} else {
-					addLogEntry("Trying to delete directory " ~ path);
+					logBuffer.addLogEntry("Trying to delete directory " ~ path);
 				}
 			}
 			
@@ -2836,7 +2836,7 @@ class SyncEngine {
 					if (pathItem.id == item.id) {
 						needsRemoval = true;
 					} else {
-						addLogEntry("Skipped due to id difference!");
+						logBuffer.addLogEntry("Skipped due to id difference!");
 					}
 				} else {
 					// item has disappeared completely
@@ -2846,9 +2846,9 @@ class SyncEngine {
 			if (needsRemoval) {
 				// Log the action
 				if (item.type == ItemType.file) {
-					addLogEntry("Deleting file " ~ path);
+					logBuffer.addLogEntry("Deleting file " ~ path);
 				} else {
-					addLogEntry("Deleting directory " ~ path);
+					logBuffer.addLogEntry("Deleting directory " ~ path);
 				}
 				
 				// Perform the action
@@ -2935,9 +2935,9 @@ class SyncEngine {
 			// Handle a 412 - A precondition provided in the request (such as an if-match header) does not match the resource's current state.
 			if (exception.httpStatusCode == 412) {
 				// OneDrive threw a 412 error, most likely: ETag does not match current item's value
-				addLogEntry("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting file time stamp update - gracefully handling error", ["verbose"]);
-				addLogEntry("File Metadata Update Failed - OneDrive eTag / cTag match issue", ["debug"]);
-				addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
+				logBuffer.addLogEntry("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting file time stamp update - gracefully handling error", ["verbose"]);
+				logBuffer.addLogEntry("File Metadata Update Failed - OneDrive eTag / cTag match issue", ["debug"]);
+				logBuffer.addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
 				// Retry without eTag
 				uploadLastModifiedTime(originItem, driveId, id, mtime, null);
 			} else {
@@ -2960,7 +2960,7 @@ class SyncEngine {
 		
 		// Log what we are doing
 		if (!appConfig.suppressLoggingOutput) {
-			addProcessingLogHeaderEntry("Performing a database consistency and integrity check on locally stored data", appConfig.verbosityCount);
+			logBuffer.addProcessingLogHeaderEntry("Performing a database consistency and integrity check on locally stored data", appConfig.verbosityCount);
 		}
 		
 		// What driveIDsArray do we use? If we are doing a --single-directory we need to use just the drive id associated with that operation
@@ -2977,7 +2977,7 @@ class SyncEngine {
 		// Use the array we populate, rather than selecting all distinct driveId's from the database
 		foreach (driveId; consistencyCheckDriveIdsArray) {
 			// Make the logging more accurate - we cant update driveId as this then breaks the below queries
-			addLogEntry("Processing DB entries for this Drive ID: " ~ driveId, ["verbose"]);
+			logBuffer.addLogEntry("Processing DB entries for this Drive ID: " ~ driveId, ["verbose"]);
 			
 			// Initialise the array 
 			Item[] driveItems = [];
@@ -3011,8 +3011,8 @@ class SyncEngine {
 						idsToDelete.length = 0;
 						assumeSafeAppend(idsToDelete);
 						// flag to delete local file as it now is no longer in sync with OneDrive
-						addLogEntry("Flagging to delete local item as it now is no longer in sync with OneDrive", ["debug"]);
-						addLogEntry("outOfSyncItem: " ~ to!string(outOfSyncItem), ["debug"]);
+						logBuffer.addLogEntry("Flagging to delete local item as it now is no longer in sync with OneDrive", ["debug"]);
+						logBuffer.addLogEntry("outOfSyncItem: " ~ to!string(outOfSyncItem), ["debug"]);
 						idsToDelete ~= [outOfSyncItem.driveId, outOfSyncItem.id];
 						// delete items in idsToDelete
 						if (idsToDelete.length > 0) processDeleteItems();
@@ -3029,13 +3029,13 @@ class SyncEngine {
 					driveItems = getChildren(singleDirectoryScopeDriveId, singleDirectoryScopeItemId);
 				} else {
 					// Check everything associated with each driveId we know about
-					addLogEntry("Selecting DB items via itemDB.selectByDriveId(driveId)", ["debug"]);
+					logBuffer.addLogEntry("Selecting DB items via itemDB.selectByDriveId(driveId)", ["debug"]);
 					// Query database
 					driveItems = itemDB.selectByDriveId(driveId);
 				}
 				
 				// Log DB items to process
-				addLogEntry("Database items to process for this driveId: " ~ to!string(driveItems.count), ["debug"]);
+				logBuffer.addLogEntry("Database items to process for this driveId: " ~ to!string(driveItems.count), ["debug"]);
 				
 				// Process each database database item associated with the driveId
 				foreach(dbItem; driveItems) {
@@ -3044,11 +3044,11 @@ class SyncEngine {
 				}
 			} else {
 				// Check everything associated with each driveId we know about
-				addLogEntry("Selecting DB items via itemDB.selectByDriveId(driveId)", ["debug"]);
+				logBuffer.addLogEntry("Selecting DB items via itemDB.selectByDriveId(driveId)", ["debug"]);
 				
 				// Query database
 				driveItems = itemDB.selectByDriveId(driveId);
-				addLogEntry("Database items to process for this driveId: " ~ to!string(driveItems.count), ["debug"]);
+				logBuffer.addLogEntry("Database items to process for this driveId: " ~ to!string(driveItems.count), ["debug"]);
 				
 				// Process each database database item associated with the driveId
 				foreach(dbItem; driveItems) {
@@ -3064,7 +3064,7 @@ class SyncEngine {
 		// Close out the '....' being printed to the console
 		if (!appConfig.suppressLoggingOutput) {
 			if (appConfig.verbosityCount == 0) {
-				addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+				logBuffer.addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 			}
 		}
 		
@@ -3074,7 +3074,7 @@ class SyncEngine {
 			// Do we have any known items, where they have been deleted locally, that now need to be deleted online?
 			if (databaseItemsToDeleteOnline.length > 0) {
 				// There are items to delete online
-				addLogEntry("Deleted local items to delete on Microsoft OneDrive: " ~ to!string(databaseItemsToDeleteOnline.length));
+				logBuffer.addLogEntry("Deleted local items to delete on Microsoft OneDrive: " ~ to!string(databaseItemsToDeleteOnline.length));
 				foreach(localItemToDeleteOnline; databaseItemsToDeleteOnline) {
 					// Upload to OneDrive the instruction to delete this item. This will handle the 'noRemoteDelete' flag if set
 					uploadDeletedItem(localItemToDeleteOnline.dbItem, localItemToDeleteOnline.localFilePath);
@@ -3086,7 +3086,7 @@ class SyncEngine {
 			// Do we have any known items, where the content has changed locally, that needs to be uploaded?
 			if (databaseItemsWhereContentHasChanged.length > 0) {
 				// There are changed local files that were in the DB to upload
-				addLogEntry("Changed local items to upload to Microsoft OneDrive: " ~ to!string(databaseItemsWhereContentHasChanged.length));
+				logBuffer.addLogEntry("Changed local items to upload to Microsoft OneDrive: " ~ to!string(databaseItemsWhereContentHasChanged.length));
 				processChangedLocalItemsToUpload();
 				// Cleanup array memory
 				databaseItemsWhereContentHasChanged = [];
@@ -3122,11 +3122,11 @@ class SyncEngine {
 		}
 		
 		// Log what we are doing
-		addLogEntry("Processing: " ~ logOutputPath, ["verbose"]);
+		logBuffer.addLogEntry("Processing: " ~ logOutputPath, ["verbose"]);
 		// Add a processing '.'
 		if (!appConfig.suppressLoggingOutput) {
 			if (appConfig.verbosityCount == 0) {
-				addProcessingDotEntry();
+				logBuffer.addProcessingDotEntry();
 			}
 		}
 		
@@ -3173,8 +3173,8 @@ class SyncEngine {
 					
 					if (localModifiedTime != itemModifiedTime) {
 						// The modified dates are different
-						addLogEntry("Local file time discrepancy detected: " ~ localFilePath, ["verbose"]);
-						addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " (UTC) when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime) ~ " (UTC)", ["debug"]);
+						logBuffer.addLogEntry("Local file time discrepancy detected: " ~ localFilePath, ["verbose"]);
+						logBuffer.addLogEntry("This local file has a different modified time " ~ to!string(localModifiedTime) ~ " (UTC) when compared to " ~ itemSource ~ " modified time " ~ to!string(itemModifiedTime) ~ " (UTC)", ["debug"]);
 						
 						// Test the file hash
 						if (!testFileHash(localFilePath, dbItem)) {
@@ -3182,25 +3182,25 @@ class SyncEngine {
 							if (localModifiedTime >= itemModifiedTime) {
 								// Local file is newer
 								if (!appConfig.getValueBool("download_only")) {
-									addLogEntry("The file content has changed locally and has a newer timestamp, thus needs to be uploaded to OneDrive", ["verbose"]);
+									logBuffer.addLogEntry("The file content has changed locally and has a newer timestamp, thus needs to be uploaded to OneDrive", ["verbose"]);
 									// Add to an array of files we need to upload as this file has changed locally in-between doing the /delta check and performing this check
 									databaseItemsWhereContentHasChanged ~= [dbItem.driveId, dbItem.id, localFilePath];
 								} else {
-									addLogEntry("The file content has changed locally and has a newer timestamp. The file will remain different to online file due to --download-only being used", ["verbose"]);
+									logBuffer.addLogEntry("The file content has changed locally and has a newer timestamp. The file will remain different to online file due to --download-only being used", ["verbose"]);
 								}
 							} else {
 								// Local file is older - data recovery process? something else?
 								if (!appConfig.getValueBool("download_only")) {
-									addLogEntry("The file content has changed locally and file now has a older timestamp. Uploading this file to OneDrive may potentially cause data-loss online", ["verbose"]);
+									logBuffer.addLogEntry("The file content has changed locally and file now has a older timestamp. Uploading this file to OneDrive may potentially cause data-loss online", ["verbose"]);
 									// Add to an array of files we need to upload as this file has changed locally in-between doing the /delta check and performing this check
 									databaseItemsWhereContentHasChanged ~= [dbItem.driveId, dbItem.id, localFilePath];
 								} else {
-									addLogEntry("The file content has changed locally and file now has a older timestamp. The file will remain different to online file due to --download-only being used", ["verbose"]);
+									logBuffer.addLogEntry("The file content has changed locally and file now has a older timestamp. The file will remain different to online file due to --download-only being used", ["verbose"]);
 								}
 							}
 						} else {
 							// The file contents have not changed, but the modified timestamp has
-							addLogEntry("The last modified timestamp has changed however the file content has not changed", ["verbose"]);
+							logBuffer.addLogEntry("The last modified timestamp has changed however the file content has not changed", ["verbose"]);
 							
 							// Local file is newer .. are we in a --download-only situation?
 							if (!appConfig.getValueBool("download_only")) {
@@ -3211,43 +3211,43 @@ class SyncEngine {
 									if (dbItem.type == ItemType.file) {
 										// Not a remote file
 										// Log what is being done
-										addLogEntry("The local item has the same hash value as the item online - correcting timestamp online", ["verbose"]);
+										logBuffer.addLogEntry("The local item has the same hash value as the item online - correcting timestamp online", ["verbose"]);
 										// Correct timestamp
 										uploadLastModifiedTime(dbItem, dbItem.driveId, dbItem.id, localModifiedTime.toUTC(), dbItem.eTag);
 									} else {
 										// Remote file, remote values need to be used, we may not even have permission to change timestamp, update local file
-										addLogEntry("The local item has the same hash value as the item online, however file is a OneDrive Business Shared File - correcting local timestamp", ["verbose"]);
-										addLogEntry("Calling setTimes() for this file: " ~ localFilePath, ["debug"]);
+										logBuffer.addLogEntry("The local item has the same hash value as the item online, however file is a OneDrive Business Shared File - correcting local timestamp", ["verbose"]);
+										logBuffer.addLogEntry("Calling setTimes() for this file: " ~ localFilePath, ["debug"]);
 										setTimes(localFilePath, dbItem.mtime, dbItem.mtime);
 									}
 								}
 							} else {
 								// --download-only being used
-								addLogEntry("The local item has the same hash value as the item online - correcting local timestamp due to --download-only being used to ensure local file matches timestamp online", ["verbose"]);
+								logBuffer.addLogEntry("The local item has the same hash value as the item online - correcting local timestamp due to --download-only being used to ensure local file matches timestamp online", ["verbose"]);
 								if (!dryRun) {
-									addLogEntry("Calling setTimes() for this file: " ~ localFilePath, ["debug"]);
+									logBuffer.addLogEntry("Calling setTimes() for this file: " ~ localFilePath, ["debug"]);
 									setTimes(localFilePath, dbItem.mtime, dbItem.mtime);
 								}
 							}
 						}
 					} else {
 						// The file has not changed
-						addLogEntry("The file has not changed", ["verbose"]);
+						logBuffer.addLogEntry("The file has not changed", ["verbose"]);
 					}
 				} else {
 					//The file is not readable - skipped
-					addLogEntry("Skipping processing this file as it cannot be read (file permissions or file corruption): " ~ localFilePath);
+					logBuffer.addLogEntry("Skipping processing this file as it cannot be read (file permissions or file corruption): " ~ localFilePath);
 				}
 			} else {
 				// The item was a file but now is a directory
-				addLogEntry("The item was a file but now is a directory", ["verbose"]);
+				logBuffer.addLogEntry("The item was a file but now is a directory", ["verbose"]);
 			}
 		} else {
 			// File does not exist locally, but is in our database as a dbItem containing all the data was passed into this function
 			// If we are in a --dry-run situation - this file may never have existed as we never downloaded it
 			if (!dryRun) {
 				// Not --dry-run situation
-				addLogEntry("The file has been deleted locally", ["verbose"]);
+				logBuffer.addLogEntry("The file has been deleted locally", ["verbose"]);
 				// Add this to the array to handle post checking all database items
 				databaseItemsToDeleteOnline ~= [DatabaseItemsToDeleteOnline(dbItem, localFilePath)];
 			} else {
@@ -3256,14 +3256,14 @@ class SyncEngine {
 				bool idsFakedMatch = false;
 				foreach (i; idsFaked) {
 					if (i[1] == dbItem.id) {
-						addLogEntry("Matched faked file which is 'supposed' to exist but not created due to --dry-run use", ["debug"]);
-						addLogEntry("The file has not changed", ["verbose"]);
+						logBuffer.addLogEntry("Matched faked file which is 'supposed' to exist but not created due to --dry-run use", ["debug"]);
+						logBuffer.addLogEntry("The file has not changed", ["verbose"]);
 						idsFakedMatch = true;
 					}
 				}
 				if (!idsFakedMatch) {
 					// dbItem.id did not match a 'faked' download new file creation - so this in-sync object was actually deleted locally, but we are in a --dry-run situation
-					addLogEntry("The file has been deleted locally", ["verbose"]);
+					logBuffer.addLogEntry("The file has been deleted locally", ["verbose"]);
 					// Add this to the array to handle post checking all database items
 					databaseItemsToDeleteOnline ~= [DatabaseItemsToDeleteOnline(dbItem, localFilePath)];
 				}
@@ -3282,12 +3282,12 @@ class SyncEngine {
 			// Fix https://github.com/abraunegg/onedrive/issues/1915
 			try {
 				if (!isDir(localFilePath)) {
-					addLogEntry("The item was a directory but now it is a file", ["verbose"]);
+					logBuffer.addLogEntry("The item was a directory but now it is a file", ["verbose"]);
 					uploadDeletedItem(dbItem, localFilePath);
 					uploadNewFile(localFilePath);
 				} else {
 					// Directory still exists locally
-					addLogEntry("The directory has not changed", ["verbose"]);
+					logBuffer.addLogEntry("The directory has not changed", ["verbose"]);
 					// When we are using --single-directory, we use a the getChildren() call to get all children of a path, meaning all children are already traversed
 					// Thus, if we traverse the path of this directory .. we end up with double processing & log output .. which is not ideal
 					if (!singleDirectoryScope) {
@@ -3311,11 +3311,11 @@ class SyncEngine {
 				// Not --dry-run situation
 				if (!appConfig.getValueBool("monitor")) {
 					// Not in --monitor mode
-					addLogEntry("The directory has been deleted locally", ["verbose"]);
+					logBuffer.addLogEntry("The directory has been deleted locally", ["verbose"]);
 				} else {
 					// Appropriate message as we are in --monitor mode
-					addLogEntry("The directory appears to have been deleted locally .. but we are running in --monitor mode. This may have been 'moved' on the local filesystem rather than being 'deleted'", ["verbose"]);
-					addLogEntry("Most likely cause - 'inotify' event was missing for whatever action was taken locally or action taken when application was stopped", ["debug"]);
+					logBuffer.addLogEntry("The directory appears to have been deleted locally .. but we are running in --monitor mode. This may have been 'moved' on the local filesystem rather than being 'deleted'", ["verbose"]);
+					logBuffer.addLogEntry("Most likely cause - 'inotify' event was missing for whatever action was taken locally or action taken when application was stopped", ["debug"]);
 				}
 				// A moved directory will be uploaded as 'new', delete the old directory and database reference
 				// Add this to the array to handle post checking all database items
@@ -3326,14 +3326,14 @@ class SyncEngine {
 				bool idsFakedMatch = false;
 				foreach (i; idsFaked) {
 					if (i[1] == dbItem.id) {
-						addLogEntry("Matched faked dir which is 'supposed' to exist but not created due to --dry-run use", ["debug"]);
-						addLogEntry("The directory has not changed", ["verbose"]);
+						logBuffer.addLogEntry("Matched faked dir which is 'supposed' to exist but not created due to --dry-run use", ["debug"]);
+						logBuffer.addLogEntry("The directory has not changed", ["verbose"]);
 						idsFakedMatch = true;
 					}
 				}
 				if (!idsFakedMatch) {
 					// dbItem.id did not match a 'faked' download new directory creation - so this in-sync object was actually deleted locally, but we are in a --dry-run situation
-					addLogEntry("The directory has been deleted locally", ["verbose"]);
+					logBuffer.addLogEntry("The directory has been deleted locally", ["verbose"]);
 					// Add this to the array to handle post checking all database items
 					databaseItemsToDeleteOnline ~= [DatabaseItemsToDeleteOnline(dbItem, localFilePath)];
 				} else {
@@ -3363,7 +3363,7 @@ class SyncEngine {
 		// Check path against Microsoft OneDrive restriction and limitations about Windows naming for files and folders
 		if (!invalidPath) {
 			if (!isValidName(localFilePath)) { // This will return false if this is not a valid name according to the OneDrive API specifications
-				addLogEntry("Skipping item - invalid name (Microsoft Naming Convention): " ~ localFilePath, ["info", "notify"]);
+				logBuffer.addLogEntry("Skipping item - invalid name (Microsoft Naming Convention): " ~ localFilePath, ["info", "notify"]);
 				invalidPath = true;
 			}
 		}
@@ -3371,7 +3371,7 @@ class SyncEngine {
 		// Check path for bad whitespace items
 		if (!invalidPath) {
 			if (containsBadWhiteSpace(localFilePath)) { // This will return true if this contains a bad whitespace item
-				addLogEntry("Skipping item - invalid name (Contains an invalid whitespace item): " ~ localFilePath, ["info", "notify"]);
+				logBuffer.addLogEntry("Skipping item - invalid name (Contains an invalid whitespace item): " ~ localFilePath, ["info", "notify"]);
 				invalidPath = true;
 			}
 		}
@@ -3379,7 +3379,7 @@ class SyncEngine {
 		// Check path for HTML ASCII Codes
 		if (!invalidPath) {
 			if (containsASCIIHTMLCodes(localFilePath)) { // This will return true if this contains HTML ASCII Codes
-				addLogEntry("Skipping item - invalid name (Contains HTML ASCII Code): " ~ localFilePath, ["info", "notify"]);
+				logBuffer.addLogEntry("Skipping item - invalid name (Contains HTML ASCII Code): " ~ localFilePath, ["info", "notify"]);
 				invalidPath = true;
 			}
 		}
@@ -3387,7 +3387,7 @@ class SyncEngine {
 		// Validate that the path is a valid UTF-16 encoded path
 		if (!invalidPath) {
 			if (!isValidUTF16(localFilePath)) { // This will return true if this is a valid UTF-16 encoded path, so we are checking for 'false' as response
-				addLogEntry("Skipping item - invalid name (Invalid UTF-16 encoded item): " ~ localFilePath, ["info", "notify"]);
+				logBuffer.addLogEntry("Skipping item - invalid name (Invalid UTF-16 encoded item): " ~ localFilePath, ["info", "notify"]);
 				invalidPath = true;
 			}
 		}
@@ -3395,7 +3395,7 @@ class SyncEngine {
 		// Check path for ASCII Control Codes
 		if (!invalidPath) {
 			if (containsASCIIControlCodes(localFilePath)) { // This will return true if this contains ASCII Control Codes
-				addLogEntry("Skipping item - invalid name (Contains ASCII Control Codes): " ~ localFilePath, ["info", "notify"]);
+				logBuffer.addLogEntry("Skipping item - invalid name (Contains ASCII Control Codes): " ~ localFilePath, ["info", "notify"]);
 				invalidPath = true;
 			}
 		}
@@ -3430,7 +3430,7 @@ class SyncEngine {
 			// Do we need to check for .nosync? Only if --check-for-nosync was passed in
 			if (appConfig.getValueBool("check_nosync")) {
 				if (exists(localFilePath ~ "/.nosync")) {
-					addLogEntry("Skipping item - .nosync found & --check-for-nosync enabled: " ~ localFilePath, ["verbose"]);
+					logBuffer.addLogEntry("Skipping item - .nosync found & --check-for-nosync enabled: " ~ localFilePath, ["verbose"]);
 					clientSideRuleExcludesPath = true;
 				}
 			}
@@ -3441,7 +3441,7 @@ class SyncEngine {
 			// Do we need to check skip dot files if configured
 			if (appConfig.getValueBool("skip_dotfiles")) {
 				if (isDotFile(localFilePath)) {
-					addLogEntry("Skipping item - .file or .folder: " ~ localFilePath, ["verbose"]);
+					logBuffer.addLogEntry("Skipping item - .file or .folder: " ~ localFilePath, ["verbose"]);
 					clientSideRuleExcludesPath = true;
 				}
 			}
@@ -3453,7 +3453,7 @@ class SyncEngine {
 			if (isSymlink(localFilePath)) {
 				// if config says so we skip all symlinked items
 				if (appConfig.getValueBool("skip_symlinks")) {
-					addLogEntry("Skipping item - skip symbolic links configured: " ~ localFilePath, ["verbose"]);
+					logBuffer.addLogEntry("Skipping item - skip symbolic links configured: " ~ localFilePath, ["verbose"]);
 					clientSideRuleExcludesPath = true;
 				}
 				// skip unexisting symbolic links
@@ -3477,9 +3477,9 @@ class SyncEngine {
 					chdir(currentSyncDir);
 					// results
 					if (relativeLinkTest) {
-						addLogEntry("Not skipping item - symbolic link is a 'relative link' to target ('" ~ relativeLink ~ "') which can be supported: " ~ localFilePath, ["debug"]);
+						logBuffer.addLogEntry("Not skipping item - symbolic link is a 'relative link' to target ('" ~ relativeLink ~ "') which can be supported: " ~ localFilePath, ["debug"]);
 					} else {
-						addLogEntry("Skipping item - invalid symbolic link: "~ localFilePath, ["info", "notify"]);
+						logBuffer.addLogEntry("Skipping item - invalid symbolic link: "~ localFilePath, ["info", "notify"]);
 						clientSideRuleExcludesPath = true;
 					}
 				}
@@ -3491,14 +3491,14 @@ class SyncEngine {
 			if (localFilePath != ".") {
 				// skip_dir handling
 				if (isDir(localFilePath)) {
-					addLogEntry("Checking local path: " ~ localFilePath, ["debug"]);
+					logBuffer.addLogEntry("Checking local path: " ~ localFilePath, ["debug"]);
 					
 					// Only check path if config is != ""
 					if (appConfig.getValueString("skip_dir") != "") {
 						// The path that needs to be checked needs to include the '/'
 						// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
 						if (selectiveSync.isDirNameExcluded(localFilePath.strip('.'))) {
-							addLogEntry("Skipping item - excluded by skip_dir config: " ~ localFilePath, ["verbose"]);
+							logBuffer.addLogEntry("Skipping item - excluded by skip_dir config: " ~ localFilePath, ["verbose"]);
 							clientSideRuleExcludesPath = true;
 						}
 					}
@@ -3506,12 +3506,12 @@ class SyncEngine {
 				
 				// skip_file handling
 				if (isFile(localFilePath)) {
-					addLogEntry("Checking file: " ~ localFilePath, ["debug"]);
+					logBuffer.addLogEntry("Checking file: " ~ localFilePath, ["debug"]);
 					
 					// The path that needs to be checked needs to include the '/'
 					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
 					if (selectiveSync.isFileNameExcluded(localFilePath.strip('.'))) {
-						addLogEntry("Skipping item - excluded by skip_file config: " ~ localFilePath, ["verbose"]);
+						logBuffer.addLogEntry("Skipping item - excluded by skip_file config: " ~ localFilePath, ["verbose"]);
 						clientSideRuleExcludesPath = true;
 					}
 				}
@@ -3525,15 +3525,15 @@ class SyncEngine {
 					// sync_list configured and in use
 					if (selectiveSync.isPathExcludedViaSyncList(localFilePath)) {
 						if ((isFile(localFilePath)) && (appConfig.getValueBool("sync_root_files")) && (rootName(localFilePath.strip('.').strip('/')) == "")) {
-							addLogEntry("Not skipping path due to sync_root_files inclusion: " ~ localFilePath, ["debug"]);
+							logBuffer.addLogEntry("Not skipping path due to sync_root_files inclusion: " ~ localFilePath, ["debug"]);
 						} else {
 							if (exists(appConfig.syncListFilePath)){
 								// skipped most likely due to inclusion in sync_list
-								addLogEntry("Skipping item - excluded by sync_list config: " ~ localFilePath, ["verbose"]);
+								logBuffer.addLogEntry("Skipping item - excluded by sync_list config: " ~ localFilePath, ["verbose"]);
 								clientSideRuleExcludesPath = true;
 							} else {
 								// skipped for some other reason
-								addLogEntry("Skipping item - path excluded by user config: " ~ localFilePath, ["verbose"]);
+								logBuffer.addLogEntry("Skipping item - path excluded by user config: " ~ localFilePath, ["verbose"]);
 								clientSideRuleExcludesPath = true;
 							}
 						}
@@ -3549,7 +3549,7 @@ class SyncEngine {
 					// Get the file size
 					ulong thisFileSize = getSize(localFilePath);
 					if (thisFileSize >= fileSizeLimit) {
-						addLogEntry("Skipping item - excluded by skip_size config: " ~ localFilePath ~ " (" ~ to!string(thisFileSize/2^^20) ~ " MB)", ["verbose"]);
+						logBuffer.addLogEntry("Skipping item - excluded by skip_size config: " ~ localFilePath ~ " (" ~ to!string(thisFileSize/2^^20) ~ " MB)", ["verbose"]);
 					}
 				}
 			}
@@ -3605,7 +3605,7 @@ class SyncEngine {
 						} else {
 							simplePathToCheck = onedriveJSONItem["name"].str;
 						}
-						addLogEntry("skip_dir path to check (simple):  " ~ simplePathToCheck, ["debug"]);
+						logBuffer.addLogEntry("skip_dir path to check (simple):  " ~ simplePathToCheck, ["debug"]);
 						
 						// complex path
 						if (parentInDatabase) {
@@ -3613,10 +3613,10 @@ class SyncEngine {
 							//complexPathToCheck = buildNormalizedPath(newItemPath);
 							complexPathToCheck = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
 						} else {
-							addLogEntry("Parent details not in database - unable to compute complex path to check", ["debug"]);
+							logBuffer.addLogEntry("Parent details not in database - unable to compute complex path to check", ["debug"]);
 						}
 						if (!complexPathToCheck.empty) {
-							addLogEntry("skip_dir path to check (complex): " ~ complexPathToCheck, ["debug"]);
+							logBuffer.addLogEntry("skip_dir path to check (complex): " ~ complexPathToCheck, ["debug"]);
 						}
 					} else {
 						simplePathToCheck = onedriveJSONItem["name"].str;
@@ -3625,39 +3625,39 @@ class SyncEngine {
 					// If 'simplePathToCheck' or 'complexPathToCheck' is of the following format:  root:/folder
 					// then isDirNameExcluded matching will not work
 					if (simplePathToCheck.canFind(":")) {
-						addLogEntry("Updating simplePathToCheck to remove 'root:'", ["debug"]);
+						logBuffer.addLogEntry("Updating simplePathToCheck to remove 'root:'", ["debug"]);
 						simplePathToCheck = processPathToRemoveRootReference(simplePathToCheck);
 					}
 					if (complexPathToCheck.canFind(":")) {
-						addLogEntry("Updating complexPathToCheck to remove 'root:'", ["debug"]);
+						logBuffer.addLogEntry("Updating complexPathToCheck to remove 'root:'", ["debug"]);
 						complexPathToCheck = processPathToRemoveRootReference(complexPathToCheck);
 					}
 					
 					// OK .. what checks are we doing?
 					if ((!simplePathToCheck.empty) && (complexPathToCheck.empty)) {
 						// just a simple check
-						addLogEntry("Performing a simple check only", ["debug"]);
+						logBuffer.addLogEntry("Performing a simple check only", ["debug"]);
 						clientSideRuleExcludesPath = selectiveSync.isDirNameExcluded(simplePathToCheck);
 					} else {
 						// simple and complex
-						addLogEntry("Performing a simple then complex path match if required", ["debug"]);
+						logBuffer.addLogEntry("Performing a simple then complex path match if required", ["debug"]);
 												
 						// simple first
-						addLogEntry("Performing a simple check first", ["debug"]);
+						logBuffer.addLogEntry("Performing a simple check first", ["debug"]);
 						clientSideRuleExcludesPath = selectiveSync.isDirNameExcluded(simplePathToCheck);
 						matchDisplay = simplePathToCheck;
 						if (!clientSideRuleExcludesPath) {
-							addLogEntry("Simple match was false, attempting complex match", ["debug"]);
+							logBuffer.addLogEntry("Simple match was false, attempting complex match", ["debug"]);
 							// simple didnt match, perform a complex check
 							clientSideRuleExcludesPath = selectiveSync.isDirNameExcluded(complexPathToCheck);
 							matchDisplay = complexPathToCheck;
 						}
 					}
 					// End Result
-					addLogEntry("skip_dir exclude result (directory based): " ~ to!string(clientSideRuleExcludesPath), ["debug"]);
+					logBuffer.addLogEntry("skip_dir exclude result (directory based): " ~ to!string(clientSideRuleExcludesPath), ["debug"]);
 					if (clientSideRuleExcludesPath) {
 						// This path should be skipped
-						addLogEntry("Skipping item - excluded by skip_dir config: " ~ matchDisplay, ["verbose"]);
+						logBuffer.addLogEntry("Skipping item - excluded by skip_dir config: " ~ matchDisplay, ["verbose"]);
 					}
 				}
 			}
@@ -3685,7 +3685,7 @@ class SyncEngine {
 					// Compute this item path & need the full path for this file
 					jsonItemPath = computeItemPath(thisItemDriveId, thisItemParentId) ~ "/" ~ thisItemName;
 					// Log the calculation
-					addLogEntry("New Item calculated full path is: " ~ jsonItemPath, ["debug"]);
+					logBuffer.addLogEntry("New Item calculated full path is: " ~ jsonItemPath, ["debug"]);
 					
 					// The path that needs to be checked needs to include the '/'
 					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
@@ -3696,7 +3696,7 @@ class SyncEngine {
 					}
 					
 					// what are we checking
-					addLogEntry("skip_file item to check (full calculated path): " ~ exclusionTestPath, ["debug"]);
+					logBuffer.addLogEntry("skip_file item to check (full calculated path): " ~ exclusionTestPath, ["debug"]);
 				} else {
 					// parent not in database, we can only check using this JSON item's name
 					if (!startsWith(thisItemName, "/")){
@@ -3705,17 +3705,17 @@ class SyncEngine {
 					}
 					
 					// what are we checking
-					addLogEntry("skip_file item to check (file name only - parent path not in database): " ~ exclusionTestPath, ["debug"]);
+					logBuffer.addLogEntry("skip_file item to check (file name only - parent path not in database): " ~ exclusionTestPath, ["debug"]);
 					clientSideRuleExcludesPath = selectiveSync.isFileNameExcluded(exclusionTestPath);
 				}
 				
 				// Perform the 'skip_file' evaluation
 				clientSideRuleExcludesPath = selectiveSync.isFileNameExcluded(exclusionTestPath);
-				addLogEntry("Result: " ~ to!string(clientSideRuleExcludesPath), ["debug"]);
+				logBuffer.addLogEntry("Result: " ~ to!string(clientSideRuleExcludesPath), ["debug"]);
 				
 				if (clientSideRuleExcludesPath) {
 					// This path should be skipped
-					addLogEntry("Skipping item - excluded by skip_file config: " ~ exclusionTestPath, ["verbose"]);
+					logBuffer.addLogEntry("Skipping item - excluded by skip_file config: " ~ exclusionTestPath, ["verbose"]);
 				}
 			}
 		}
@@ -3757,9 +3757,9 @@ class SyncEngine {
 				
 				// Check for HTML entities (e.g., '%20' for space) in newItemPath
 				if (containsURLEncodedItems(newItemPath)) {
-					addLogEntry("CAUTION:    The JSON element transmitted by the Microsoft OneDrive API includes HTML URL encoded items, which may complicate pattern matching and potentially lead to synchronisation problems for this item.");
-					addLogEntry("WORKAROUND: An alternative solution could be to change the name of this item through the online platform: " ~ newItemPath, ["verbose"]);
-					addLogEntry("See: https://github.com/OneDrive/onedrive-api-docs/issues/1765 for further details", ["verbose"]);
+					logBuffer.addLogEntry("CAUTION:    The JSON element transmitted by the Microsoft OneDrive API includes HTML URL encoded items, which may complicate pattern matching and potentially lead to synchronisation problems for this item.");
+					logBuffer.addLogEntry("WORKAROUND: An alternative solution could be to change the name of this item through the online platform: " ~ newItemPath, ["verbose"]);
+					logBuffer.addLogEntry("See: https://github.com/OneDrive/onedrive-api-docs/issues/1765 for further details", ["verbose"]);
 				}
 				
 				// Update newItemPath
@@ -3768,7 +3768,7 @@ class SyncEngine {
 				}
 				
 				// What path are we checking?
-				addLogEntry("sync_list item to check: " ~ newItemPath, ["debug"]);
+				logBuffer.addLogEntry("sync_list item to check: " ~ newItemPath, ["debug"]);
 				
 				// Unfortunately there is no avoiding this call to check if the path is excluded|included via sync_list
 				if (selectiveSync.isPathExcludedViaSyncList(newItemPath)) {
@@ -3781,7 +3781,7 @@ class SyncEngine {
 					} else {
 						// path is unwanted
 						clientSideRuleExcludesPath = true;
-						addLogEntry("Skipping item - excluded by sync_list config: " ~ newItemPath, ["verbose"]);
+						logBuffer.addLogEntry("Skipping item - excluded by sync_list config: " ~ newItemPath, ["verbose"]);
 					}
 				}
 			}
@@ -3792,7 +3792,7 @@ class SyncEngine {
 			if (isItemFile(onedriveJSONItem)) {
 				if (fileSizeLimit != 0) {
 					if (onedriveJSONItem["size"].integer >= fileSizeLimit) {
-						addLogEntry("Skipping item - excluded by skip_size config: " ~ thisItemName ~ " (" ~ to!string(onedriveJSONItem["size"].integer/2^^20) ~ " MB)", ["verbose"]);
+						logBuffer.addLogEntry("Skipping item - excluded by skip_size config: " ~ thisItemName ~ " (" ~ to!string(onedriveJSONItem["size"].integer/2^^20) ~ " MB)", ["verbose"]);
 						clientSideRuleExcludesPath = true;
 					}
 				}
@@ -3823,9 +3823,9 @@ class SyncEngine {
 	void processChangedLocalItemsToUploadInParallel(string[3][] array) {
 		// This function received an array of string items to upload, the number of elements based on appConfig.getValueLong("threads")
 		foreach (i, localItemDetails; processPool.parallel(array)) {
-			addLogEntry("Upload Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);
+			logBuffer.addLogEntry("Upload Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);
 			uploadChangedLocalFileToOneDrive(localItemDetails);
-			addLogEntry("Upload Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);
+			logBuffer.addLogEntry("Upload Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);
 		}
 	}
 	
@@ -3838,7 +3838,7 @@ class SyncEngine {
 		string localFilePath = localItemDetails[2];
 		
 		// Log the path that was modified
-		addLogEntry("uploadChangedLocalFileToOneDrive: " ~ localFilePath, ["debug"]);
+		logBuffer.addLogEntry("uploadChangedLocalFileToOneDrive: " ~ localFilePath, ["debug"]);
 		
 		// How much space is remaining on OneDrive
 		ulong remainingFreeSpace;
@@ -3896,8 +3896,8 @@ class SyncEngine {
 		ulong calculatedSpaceOnlinePostUpload = (remainingFreeSpace + thisFileSizeFromDB) - thisFileSizeLocal;
 		
 		// Based on what we know, for this thread - can we safely upload this modified local file?
-		addLogEntry("This Thread Estimated Free Space Online:              " ~ to!string(remainingFreeSpace), ["debug"]);
-		addLogEntry("This Thread Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
+		logBuffer.addLogEntry("This Thread Estimated Free Space Online:              " ~ to!string(remainingFreeSpace), ["debug"]);
+		logBuffer.addLogEntry("This Thread Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
 		JSONValue uploadResponse;
 		
 		// Is there quota available for the given drive where we are uploading to?
@@ -3949,11 +3949,11 @@ class SyncEngine {
 			// Upload failed .. why?
 			// No space available online
 			if (!spaceAvailableOnline) {
-				addLogEntry("Skipping uploading modified file: " ~ localFilePath ~ " due to insufficient free space available on Microsoft OneDrive", ["info", "notify"]);
+				logBuffer.addLogEntry("Skipping uploading modified file: " ~ localFilePath ~ " due to insufficient free space available on Microsoft OneDrive", ["info", "notify"]);
 			}
 			// File exceeds max allowed size
 			if (skippedMaxSize) {
-				addLogEntry("Skipping uploading this modified file as it exceeds the maximum size allowed by Microsoft OneDrive: " ~ localFilePath, ["info", "notify"]);
+				logBuffer.addLogEntry("Skipping uploading this modified file as it exceeds the maximum size allowed by Microsoft OneDrive: " ~ localFilePath, ["info", "notify"]);
 			}
 			// Generic message
 			if (skippedExceptionError) {
@@ -3961,12 +3961,12 @@ class SyncEngine {
 				// If Issue #2626 | Case 2-1 is triggered, the file we tried to upload was renamed, then uploaded as a new name
 				if (exists(localFilePath)) {
 					// Issue #2626 | Case 2-1 was not triggered, file still exists on local filesystem
-					addLogEntry("Uploading modified file: " ~ localFilePath ~ " ... failed!", ["info", "notify"]);
+					logBuffer.addLogEntry("Uploading modified file: " ~ localFilePath ~ " ... failed!", ["info", "notify"]);
 				}
 			}
 		} else {
 			// Upload was successful
-			addLogEntry("Uploading modified file: " ~ localFilePath ~ " ... done.", ["info", "notify"]);
+			logBuffer.addLogEntry("Uploading modified file: " ~ localFilePath ~ " ... done.", ["info", "notify"]);
 			
 			// What do we save to the DB? Is this a OneDrive Business Shared File?
 			if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file)) {
@@ -4058,12 +4058,12 @@ class SyncEngine {
 					currentETag = currentOnlineData["eTag"].str;
 				} else {
 					// Use the database value - greater potential for a 412 error to occur if we are creating a session upload
-					addLogEntry("Online data for file returned zero eTag - using database eTag value", ["debug"]);
+					logBuffer.addLogEntry("Online data for file returned zero eTag - using database eTag value", ["debug"]);
 					currentETag = dbItem.eTag;
 				}
 			} else {
 				// no valid JSON response - greater potential for a 412 error to occur if we are creating a session upload
-				addLogEntry("Online data returned was invalid - using database eTag value", ["debug"]);
+				logBuffer.addLogEntry("Online data returned was invalid - using database eTag value", ["debug"]);
 				currentETag = dbItem.eTag;
 			}
 			
@@ -4089,10 +4089,10 @@ class SyncEngine {
 				// Which file is newer? If local is newer, it will be uploaded as a modified file in the correct manner
 				if (localModifiedTime < onlineModifiedTime) {
 					// Online File is actually newer than the locally modified file
-					addLogEntry("currentOnlineData: " ~ to!string(currentOnlineData), ["debug"]);
-					addLogEntry("onlineFile:    " ~ to!string(onlineFile), ["debug"]);
-					addLogEntry("database item: " ~ to!string(dbItem), ["debug"]);
-					addLogEntry("Skipping uploading this item as a locally modified file, will upload as a new file (online file already exists and is newer): " ~ localFilePath);
+					logBuffer.addLogEntry("currentOnlineData: " ~ to!string(currentOnlineData), ["debug"]);
+					logBuffer.addLogEntry("onlineFile:    " ~ to!string(onlineFile), ["debug"]);
+					logBuffer.addLogEntry("database item: " ~ to!string(dbItem), ["debug"]);
+					logBuffer.addLogEntry("Skipping uploading this item as a locally modified file, will upload as a new file (online file already exists and is newer): " ~ localFilePath);
 					
 					// Online is newer, rename local, then upload the renamed file
 					// We need to know the renamed path so we can upload it
@@ -4124,14 +4124,14 @@ class SyncEngine {
 					// HTTP request returned status code 403
 					if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
 						// We attempted to upload a file, that was shared with us, but this was shared with us as read-only
-						addLogEntry("Unable to upload this modified file as this was shared as read-only: " ~ localFilePath);
+						logBuffer.addLogEntry("Unable to upload this modified file as this was shared as read-only: " ~ localFilePath);
 					}
 					// HTTP request returned status code 423
 					// Resolve https://github.com/abraunegg/onedrive/issues/36
 					if (exception.httpStatusCode == 423) {
 						// The file is currently checked out or locked for editing by another user
 						// We cant upload this file at this time
-						addLogEntry("Unable to upload this modified file as this is currently checked out or locked for editing by another user: " ~ localFilePath);
+						logBuffer.addLogEntry("Unable to upload this modified file as this is currently checked out or locked for editing by another user: " ~ localFilePath);
 					} else {
 						// Handle all other HTTP status codes
 						// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
@@ -4157,7 +4157,7 @@ class SyncEngine {
 					// HTTP request returned status code 403
 					if ((exception.httpStatusCode == 403) && (appConfig.getValueBool("sync_business_shared_files"))) {
 						// We attempted to upload a file, that was shared with us, but this was shared with us as read-only
-						addLogEntry("Unable to upload this modified file as this was shared as read-only: " ~ localFilePath);
+						logBuffer.addLogEntry("Unable to upload this modified file as this was shared as read-only: " ~ localFilePath);
 						return uploadResponse;
 					} 
 					// HTTP request returned status code 423
@@ -4165,7 +4165,7 @@ class SyncEngine {
 					if (exception.httpStatusCode == 423) {
 						// The file is currently checked out or locked for editing by another user
 						// We cant upload this file at this time
-						addLogEntry("Unable to upload this modified file as this is currently checked out or locked for editing by another user: " ~ localFilePath);
+						logBuffer.addLogEntry("Unable to upload this modified file as this is currently checked out or locked for editing by another user: " ~ localFilePath);
 						return uploadResponse;
 					} else {
 						// Handle all other HTTP status codes
@@ -4202,7 +4202,7 @@ class SyncEngine {
 		}
 		
 		// Debug Log the modified upload response
-		addLogEntry("Modified File Upload Response: " ~ to!string(uploadResponse), ["debug"]);
+		logBuffer.addLogEntry("Modified File Upload Response: " ~ to!string(uploadResponse), ["debug"]);
 		
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 		uploadFileOneDriveApiInstance.releaseCurlEngine();
@@ -4236,7 +4236,7 @@ class SyncEngine {
 			// Create a new OneDrive API instance
 			getCurrentDriveQuotaApiInstance = new OneDriveApi(appConfig);
 			getCurrentDriveQuotaApiInstance.initialise();
-			addLogEntry("Seeking available quota for this drive id: " ~ driveId, ["debug"]);
+			logBuffer.addLogEntry("Seeking available quota for this drive id: " ~ driveId, ["debug"]);
 			currentDriveQuota = getCurrentDriveQuotaApiInstance.getDriveQuota(driveId);
 			
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
@@ -4246,7 +4246,7 @@ class SyncEngine {
 			GC.collect();
 			
 		} catch (OneDriveException e) {
-			addLogEntry("currentDriveQuota = onedrive.getDriveQuota(driveId) generated a OneDriveException", ["debug"]);
+			logBuffer.addLogEntry("currentDriveQuota = onedrive.getDriveQuota(driveId) generated a OneDriveException", ["debug"]);
 			// If an exception occurs, it's unclear if quota is restricted, but quota details are not available
 			quotaRestricted = true; // Considering restricted due to failure to access
 			// Return result
@@ -4267,7 +4267,7 @@ class SyncEngine {
 			// If 'personal' accounts, if driveId != defaultDriveId, then we will not have quota data
 			// If 'business' accounts, if driveId == defaultDriveId, then we will have data
 			// If 'business' accounts, if driveId != defaultDriveId, then we will have data, but it will be a 0 value
-			addLogEntry("Quota Details: " ~ to!string(currentDriveQuota), ["debug"]);
+			logBuffer.addLogEntry("Quota Details: " ~ to!string(currentDriveQuota), ["debug"]);
 			
 			auto quota = currentDriveQuota["quota"];
 			if ("remaining" in quota) {
@@ -4276,24 +4276,24 @@ class SyncEngine {
 				// If "remaining" is present but its value is <= 0, it's not restricted but exhausted
 				if (quotaRemainingOnline <= 0) {
 					if (appConfig.accountType == "personal") {
-						addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional capacity.");
+						logBuffer.addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional capacity.");
 					} else { // Assuming 'business' or 'sharedLibrary'
-						addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+						logBuffer.addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
 					}
 				}
 			} else {
 				// "remaining" not present, indicating restricted quota information
 				quotaRestricted = true;
-				addLogEntry("Quota information is restricted or not available for this drive.", ["verbose"]);
+				logBuffer.addLogEntry("Quota information is restricted or not available for this drive.", ["verbose"]);
 			}
 		} else {
 			// When valid quota details are not fetched
-			addLogEntry("Failed to fetch or interpret quota details from the API response.", ["verbose"]);
+			logBuffer.addLogEntry("Failed to fetch or interpret quota details from the API response.", ["verbose"]);
 			quotaRestricted = true; // Considering restricted due to failure to interpret
 		}
 
 		// What was the determined available quota?
-		addLogEntry("Reported Available Online Quota for driveID '" ~ driveId ~ "': " ~ to!string(quotaRemainingOnline), ["debug"]);
+		logBuffer.addLogEntry("Reported Available Online Quota for driveID '" ~ driveId ~ "': " ~ to!string(quotaRemainingOnline), ["debug"]);
 		
 		// Return result
 		result ~= [to!string(quotaRestricted), to!string(quotaAvailable), to!string(quotaRemainingOnline)];
@@ -4336,20 +4336,20 @@ class SyncEngine {
 		if (isDir(path)) {
 			if (!appConfig.suppressLoggingOutput) {
 				if (!cleanupLocalFiles) {
-					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload", appConfig.verbosityCount);
+					logBuffer.addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload", appConfig.verbosityCount);
 				} else {
-					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for data to cleanup", appConfig.verbosityCount);
+					logBuffer.addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for data to cleanup", appConfig.verbosityCount);
 				}
 			}
 		}
 		
 		auto startTime = Clock.currTime();
-		addLogEntry("Starting Filesystem Walk:     " ~ to!string(startTime), ["debug"]);
+		logBuffer.addLogEntry("Starting Filesystem Walk:     " ~ to!string(startTime), ["debug"]);
 		
 		// Add a processing '.'
 		if (!appConfig.suppressLoggingOutput) {
 			if (appConfig.verbosityCount == 0) {
-				addProcessingDotEntry();
+				logBuffer.addProcessingDotEntry();
 			}
 		}
 		
@@ -4359,25 +4359,25 @@ class SyncEngine {
 		if (appConfig.verbosityCount == 0) {
 			if (!appConfig.suppressLoggingOutput) {
 				// Close out the '....' being printed to the console
-				addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+				logBuffer.addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 			}
 		}
 		
 		// To finish off the processing items, this is needed to reflect this in the log
-		addLogEntry("------------------------------------------------------------------", ["debug"]);
+		logBuffer.addLogEntry("------------------------------------------------------------------", ["debug"]);
 		
 		auto finishTime = Clock.currTime();
-		addLogEntry("Finished Filesystem Walk:     " ~ to!string(finishTime), ["debug"]);
+		logBuffer.addLogEntry("Finished Filesystem Walk:     " ~ to!string(finishTime), ["debug"]);
 		
 		auto elapsedTime = finishTime - startTime;
-		addLogEntry("Elapsed Time Filesystem Walk: " ~ to!string(elapsedTime), ["debug"]);
+		logBuffer.addLogEntry("Elapsed Time Filesystem Walk: " ~ to!string(elapsedTime), ["debug"]);
 	}
 	
 	void processNewDirectoriesToCreateOnline() {
 		// Are there any new local directories to create online?
 		if (!pathsToCreateOnline.empty) {
 			// There are new directories to create online
-			addLogEntry("New directories to create on Microsoft OneDrive: " ~ to!string(pathsToCreateOnline.length) );
+			logBuffer.addLogEntry("New directories to create on Microsoft OneDrive: " ~ to!string(pathsToCreateOnline.length) );
 			foreach(pathToCreateOnline; pathsToCreateOnline) {
 				// Create this directory on OneDrive so that we can upload files to it
 				createDirectoryOnline(pathToCreateOnline);
@@ -4390,7 +4390,7 @@ class SyncEngine {
 		// Are there any new local items to upload?
 		if (!newLocalFilesToUploadToOneDrive.empty) {
 			// There are elements to upload
-			addLogEntry("New items to upload to Microsoft OneDrive: " ~ to!string(newLocalFilesToUploadToOneDrive.length) );
+			logBuffer.addLogEntry("New items to upload to Microsoft OneDrive: " ~ to!string(newLocalFilesToUploadToOneDrive.length) );
 			
 			// Reset totalDataToUpload
 			totalDataToUpload = 0;
@@ -4406,14 +4406,14 @@ class SyncEngine {
 			// How much data is there to upload
 			if (totalDataToUpload < 1024) {
 				// Display as Bytes to upload
-				addLogEntry("Total New Data to Upload:        " ~ to!string(totalDataToUpload) ~ " Bytes", ["verbose"]);
+				logBuffer.addLogEntry("Total New Data to Upload:        " ~ to!string(totalDataToUpload) ~ " Bytes", ["verbose"]);
 			} else {
 				if ((totalDataToUpload > 1024) && (totalDataToUpload < 1048576)) {
 					// Display as KB to upload
-					addLogEntry("Total New Data to Upload:        " ~ to!string((totalDataToUpload / 1024)) ~ " KB", ["verbose"]);
+					logBuffer.addLogEntry("Total New Data to Upload:        " ~ to!string((totalDataToUpload / 1024)) ~ " KB", ["verbose"]);
 				} else {
 					// Display as MB to upload
-					addLogEntry("Total New Data to Upload:        " ~ to!string((totalDataToUpload / 1024 / 1024)) ~ " MB", ["verbose"]);
+					logBuffer.addLogEntry("Total New Data to Upload:        " ~ to!string((totalDataToUpload / 1024 / 1024)) ~ " MB", ["verbose"]);
 				}
 			}
 			
@@ -4422,7 +4422,7 @@ class SyncEngine {
 			// Iterate through all the drives we have cached thus far, that we know about
 			foreach (driveId, driveDetails; onlineDriveDetails) {
 				// Log how much space is available for each driveId
-				addLogEntry("Current Available Space Online (" ~ driveId ~ "): " ~ to!string((driveDetails.quotaRemaining / 1024 / 1024)) ~ " MB", ["debug"]);
+				logBuffer.addLogEntry("Current Available Space Online (" ~ driveId ~ "): " ~ to!string((driveDetails.quotaRemaining / 1024 / 1024)) ~ " MB", ["debug"]);
 			}
 			
 			// Perform the upload
@@ -4440,7 +4440,7 @@ class SyncEngine {
 		if (isDir(path)) {
 			if (!appConfig.suppressLoggingOutput) {
 				if (appConfig.verbosityCount == 0) {
-					addProcessingDotEntry();
+					logBuffer.addProcessingDotEntry();
 				}
 			}
 		}
@@ -4450,7 +4450,7 @@ class SyncEngine {
 		
 		// Add this logging break to assist with what was checked for each path
 		if (path != ".") {
-			addLogEntry("------------------------------------------------------------------", ["debug"]);
+			logBuffer.addLogEntry("------------------------------------------------------------------", ["debug"]);
 		}
 		
 		// https://support.microsoft.com/en-us/help/3125202/restrictions-and-limitations-when-you-sync-files-and-folders
@@ -4475,14 +4475,14 @@ class SyncEngine {
 			// Check appConfig.configuredBusinessSharedFilesDirectoryName against 'path'
 			if (canFind(path, baseName(appConfig.configuredBusinessSharedFilesDirectoryName))) {
 				// Log why this path is being skipped
-				addLogEntry("Skipping scanning path for new files as this is reserved for OneDrive Business Shared Files: " ~ path, ["info"]);
+				logBuffer.addLogEntry("Skipping scanning path for new files as this is reserved for OneDrive Business Shared Files: " ~ path, ["info"]);
 				return;
 			}
 		}
 				
 		// A short lived item that has already disappeared will cause an error - is the path still valid?
 		if (!exists(path)) {
-			addLogEntry("Skipping item - path has disappeared: " ~ path);
+			logBuffer.addLogEntry("Skipping item - path has disappeared: " ~ path);
 			return;
 		}
 		
@@ -4494,8 +4494,8 @@ class SyncEngine {
 			pathWalkLength = path.byGrapheme.walkLength;
 		} catch (std.utf.UTFException e) {
 			// Path contains characters which generate a UTF exception
-			addLogEntry("Skipping item - invalid UTF sequence: " ~ path, ["info", "notify"]);
-			addLogEntry("  Error Reason:" ~ e.msg, ["debug"]);
+			logBuffer.addLogEntry("Skipping item - invalid UTF sequence: " ~ path, ["info", "notify"]);
+			logBuffer.addLogEntry("  Error Reason:" ~ e.msg, ["debug"]);
 			return;
 		}
 		
@@ -4522,7 +4522,7 @@ class SyncEngine {
 				if (!unwanted) {
 					if(!isValid(path)) {
 						// Path is not valid according to https://dlang.org/phobos/std_encoding.html
-						addLogEntry("Skipping item - invalid character encoding sequence: " ~ path, ["info", "notify"]);
+						logBuffer.addLogEntry("Skipping item - invalid character encoding sequence: " ~ path, ["info", "notify"]);
 						unwanted = true;
 					}
 				}
@@ -4562,7 +4562,7 @@ class SyncEngine {
 							pathsToCreateOnline ~= [path];
 						} else {
 							// we need to clean up this directory
-							addLogEntry("Removing local directory as --download-only & --cleanup-local-files configured");
+							logBuffer.addLogEntry("Removing local directory as --download-only & --cleanup-local-files configured");
 							// Remove any children of this path if they still exist
 							// Resolve 'Directory not empty' error when deleting local files
 							try {
@@ -4570,9 +4570,9 @@ class SyncEngine {
 								foreach (DirEntry child; directoryEntries) {
 									// what sort of child is this?
 									if (isDir(child.name)) {
-										addLogEntry("Removing local directory: " ~ child.name);
+										logBuffer.addLogEntry("Removing local directory: " ~ child.name);
 									} else {
-										addLogEntry("Removing local file: " ~ child.name);
+										logBuffer.addLogEntry("Removing local file: " ~ child.name);
 									}
 									
 									// are we in a --dry-run scenario?
@@ -4592,7 +4592,7 @@ class SyncEngine {
 								object.destroy(directoryEntries);
 								
 								// Remove the path now that it is empty of children
-								addLogEntry("Removing local directory: " ~ path);
+								logBuffer.addLogEntry("Removing local directory: " ~ path);
 								// are we in a --dry-run scenario?
 								if (!dryRun) {
 									// No --dry-run ... process local delete
@@ -4619,8 +4619,8 @@ class SyncEngine {
 						// search businessSharedFoldersOnlineToSkip for this path
 						if (canFind(businessSharedFoldersOnlineToSkip, path)) {
 							// This path was skipped - why?
-							addLogEntry("Skipping item '" ~ path ~ "' due to this path matching an existing online Business Shared Folder name", ["info", "notify"]);
-							addLogEntry("To sync this Business Shared Folder, consider enabling 'sync_business_shared_folders' within your application configuration.", ["info"]);
+							logBuffer.addLogEntry("Skipping item '" ~ path ~ "' due to this path matching an existing online Business Shared Folder name", ["info", "notify"]);
+							logBuffer.addLogEntry("To sync this Business Shared Folder, consider enabling 'sync_business_shared_folders' within your application configuration.", ["info"]);
 							skipFolderTraverse = true;
 						}
 					}
@@ -4655,13 +4655,13 @@ class SyncEngine {
 							if (!cleanupLocalFiles) {
 								// --download-only --cleanup-local-files not used
 								// Add this path as a file we need to upload
-								addLogEntry("OneDrive Client flagging to upload this file to Microsoft OneDrive: " ~ path, ["debug"]);
+								logBuffer.addLogEntry("OneDrive Client flagging to upload this file to Microsoft OneDrive: " ~ path, ["debug"]);
 								newLocalFilesToUploadToOneDrive ~= path;
 							} else {
 								// we need to clean up this file
-								addLogEntry("Removing local file as --download-only & --cleanup-local-files configured");
+								logBuffer.addLogEntry("Removing local file as --download-only & --cleanup-local-files configured");
 								// are we in a --dry-run scenario?
-								addLogEntry("Removing local file: " ~ path);
+								logBuffer.addLogEntry("Removing local file: " ~ path);
 								if (!dryRun) {
 									// No --dry-run ... process local file delete
 									safeRemove(path);
@@ -4670,13 +4670,13 @@ class SyncEngine {
 						}
 					} else {
 						// path is not a valid file
-						addLogEntry("Skipping item - item is not a valid file: " ~ path, ["info", "notify"]);
+						logBuffer.addLogEntry("Skipping item - item is not a valid file: " ~ path, ["info", "notify"]);
 					}
 				}
 			}
 		} else {
 			// This path was skipped - why?
-			addLogEntry("Skipping item '" ~ path ~ "' due to the full path exceeding " ~ to!string(maxPathLength) ~ " characters (Microsoft OneDrive limitation)", ["info", "notify"]);
+			logBuffer.addLogEntry("Skipping item '" ~ path ~ "' due to the full path exceeding " ~ to!string(maxPathLength) ~ " characters (Microsoft OneDrive limitation)", ["info", "notify"]);
 		}
 	}
 	
@@ -4700,20 +4700,20 @@ class SyncEngine {
 				if (!fileFoundInDB) {
 					// This is a new file as it is not in the database
 					// Log that the file has been added locally
-					addLogEntry("[M] New local file added: " ~ localFilePath, ["verbose"]);
+					logBuffer.addLogEntry("[M] New local file added: " ~ localFilePath, ["verbose"]);
 					scanLocalFilesystemPathForNewDataToUpload(localFilePath);
 				} else {
 					// This is a potentially modified file, needs to be handled as such. Is the item truly modified?
 					if (!testFileHash(localFilePath, databaseItem)) {
 						// The local file failed the hash comparison test - there is a data difference
 						// Log that the file has changed locally
-						addLogEntry("[M] Local file changed: " ~ localFilePath, ["verbose"]);
+						logBuffer.addLogEntry("[M] Local file changed: " ~ localFilePath, ["verbose"]);
 						// Add the modified item to the array to upload
 						uploadChangedLocalFileToOneDrive([databaseItem.driveId, databaseItem.id, localFilePath]);
 					}
 				}
 			} catch(Exception e) {
-				addLogEntry("Cannot upload file changes/creation: " ~ e.msg, ["info", "notify"]);
+				logBuffer.addLogEntry("Cannot upload file changes/creation: " ~ e.msg, ["info", "notify"]);
 			}
 		}
 		processNewLocalItemsToUpload();
@@ -4724,11 +4724,11 @@ class SyncEngine {
 		
 		// Check if this path in the database
 		Item databaseItem;
-		addLogEntry("Search DB for this path: " ~ searchPath, ["debug"]);
+		logBuffer.addLogEntry("Search DB for this path: " ~ searchPath, ["debug"]);
 		
 		foreach (driveId; onlineDriveDetails.keys) {
 			if (itemDB.selectByPath(searchPath, driveId, databaseItem)) {
-				addLogEntry("DB Record for search path: " ~ to!string(databaseItem), ["debug"]);
+				logBuffer.addLogEntry("DB Record for search path: " ~ to!string(databaseItem), ["debug"]);
 				return true; // Early exit on finding the path in the DB
 			}
 		}
@@ -4740,7 +4740,7 @@ class SyncEngine {
 	//   for the path flow and create the folder that way
 	void createDirectoryOnline(string thisNewPathToCreate) {
 		// Log what we are doing
-		addLogEntry("OneDrive Client requested to create this directory online: " ~ thisNewPathToCreate, ["verbose"]);
+		logBuffer.addLogEntry("OneDrive Client requested to create this directory online: " ~ thisNewPathToCreate, ["verbose"]);
 		
 		// Function variables
 		Item parentItem;
@@ -4751,7 +4751,7 @@ class SyncEngine {
 		// Check appConfig.configuredBusinessSharedFilesDirectoryName against 'thisNewPathToCreate'
 		if (canFind(thisNewPathToCreate, baseName(appConfig.configuredBusinessSharedFilesDirectoryName))) {
 			// Log why this is being skipped
-			addLogEntry("Skipping creating '" ~ thisNewPathToCreate ~ "' as this path is used for handling OneDrive Business Shared Files", ["info", "notify"]);
+			logBuffer.addLogEntry("Skipping creating '" ~ thisNewPathToCreate ~ "' as this path is used for handling OneDrive Business Shared Files", ["info", "notify"]);
 			return;
 		}
 		
@@ -4771,7 +4771,7 @@ class SyncEngine {
 			parentItem.id = appConfig.defaultRootId;  		// Should give something like 12345ABCDE1234A1!101
 		} else {
 			// Query the parent path online
-			addLogEntry("Attempting to query Local Database for this parent path: " ~ parentPath, ["debug"]);
+			logBuffer.addLogEntry("Attempting to query Local Database for this parent path: " ~ parentPath, ["debug"]);
 
 			// Attempt a 2 step process to work out where to create the directory
 			// Step 1: Query the DB first for the parent path, to try and avoid an API call
@@ -4782,26 +4782,26 @@ class SyncEngine {
 			bool parentPathFoundInDB = false;
 			
 			foreach (driveId; onlineDriveDetails.keys) {
-				addLogEntry("Query DB with this driveID for the Parent Path: " ~ driveId, ["debug"]);
+				logBuffer.addLogEntry("Query DB with this driveID for the Parent Path: " ~ driveId, ["debug"]);
 				// Query the database for this parent path using each driveId that we know about
 				if (itemDB.selectByPath(parentPath, driveId, databaseItem)) {
 					parentPathFoundInDB = true;
-					addLogEntry("Parent databaseItem: " ~ to!string(databaseItem), ["debug"]);
-					addLogEntry("parentPathFoundInDB: " ~ to!string(parentPathFoundInDB), ["debug"]);
+					logBuffer.addLogEntry("Parent databaseItem: " ~ to!string(databaseItem), ["debug"]);
+					logBuffer.addLogEntry("parentPathFoundInDB: " ~ to!string(parentPathFoundInDB), ["debug"]);
 					parentItem = databaseItem;
 				}
 			}
 			
 			// After querying all DB entries for each driveID for the parent path, what are the details in parentItem?
-			addLogEntry("Parent parentItem after DB Query exhausted: " ~ to!string(parentItem), ["debug"]);
+			logBuffer.addLogEntry("Parent parentItem after DB Query exhausted: " ~ to!string(parentItem), ["debug"]);
 
 			// Step 2: Query for the path online if not found in the local database
 			if (!parentPathFoundInDB) {
 				// parent path not found in database
 				try {
-					addLogEntry("Attempting to query OneDrive Online for this parent path as path not found in local database: " ~ parentPath, ["debug"]);
+					logBuffer.addLogEntry("Attempting to query OneDrive Online for this parent path as path not found in local database: " ~ parentPath, ["debug"]);
 					onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetails(parentPath);
-					addLogEntry("Online Parent Path Query Response: " ~ to!string(onlinePathData), ["debug"]);
+					logBuffer.addLogEntry("Online Parent Path Query Response: " ~ to!string(onlinePathData), ["debug"]);
 					
 					// Save item to the database
 					saveItem(onlinePathData);
@@ -4809,7 +4809,7 @@ class SyncEngine {
 				} catch (OneDriveException exception) {
 					if (exception.httpStatusCode == 404) {
 						// Parent does not exist ... need to create parent
-						addLogEntry("Parent path does not exist online: " ~ parentPath, ["debug"]);
+						logBuffer.addLogEntry("Parent path does not exist online: " ~ parentPath, ["debug"]);
 						createDirectoryOnline(parentPath);
 						// no return here as we need to continue, but need to re-query the OneDrive API to get the right parental details now that they exist
 						onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetails(parentPath);
@@ -4828,8 +4828,8 @@ class SyncEngine {
 		// Make sure the full path does not exist online, this should generate a 404 response, to which then the folder will be created online
 		try {
 			// Try and query the OneDrive API for the path we need to create
-			addLogEntry("Attempting to query OneDrive API for this path: " ~ thisNewPathToCreate, ["debug"]);
-			addLogEntry("parentItem details: " ~ to!string(parentItem), ["debug"]);
+			logBuffer.addLogEntry("Attempting to query OneDrive API for this path: " ~ thisNewPathToCreate, ["debug"]);
+			logBuffer.addLogEntry("parentItem details: " ~ to!string(parentItem), ["debug"]);
 			
 			// Depending on the data within parentItem, will depend on what method we are using to search
 			// A Shared Folder will be 'remote' so we need to check the remote parent id, rather than parentItem details
@@ -4837,7 +4837,7 @@ class SyncEngine {
 			
 			if (parentItem.type == ItemType.remote) {
 				// This folder is a potential shared object
-				addLogEntry("ParentItem is a remote item object", ["debug"]);
+				logBuffer.addLogEntry("ParentItem is a remote item object", ["debug"]);
 				// Need to create the DB Tie for this shared object to ensure this exists in the database
 				createDatabaseTieRecordForOnlineSharedFolder(parentItem);
 				// Update the queryItem values
@@ -4845,23 +4845,23 @@ class SyncEngine {
 				queryItem.id = parentItem.remoteId;
 			} else {
 				// Use parent item for the query item
-				addLogEntry("Standard Query, use parentItem", ["debug"]);
+				logBuffer.addLogEntry("Standard Query, use parentItem", ["debug"]);
 				queryItem = parentItem;
 			}
 			
 			if (queryItem.driveId == appConfig.defaultDriveId) {
 				// Use getPathDetailsByDriveId
-				addLogEntry("Selecting getPathDetailsByDriveId to query OneDrive API for path data", ["debug"]);
+				logBuffer.addLogEntry("Selecting getPathDetailsByDriveId to query OneDrive API for path data", ["debug"]);
 				onlinePathData = createDirectoryOnlineOneDriveApiInstance.getPathDetailsByDriveId(queryItem.driveId, thisNewPathToCreate);
 			} else {
 				// Use searchDriveForPath to query OneDrive
-				addLogEntry("Selecting searchDriveForPath to query OneDrive API for path data", ["debug"]);
+				logBuffer.addLogEntry("Selecting searchDriveForPath to query OneDrive API for path data", ["debug"]);
 				// If the queryItem.driveId is not our driveId - the path we are looking for will not be at the logical location that getPathDetailsByDriveId 
 				// can use - as it will always return a 404 .. even if the path actually exists (which is the whole point of this test)
 				// Search the queryItem.driveId for any folder name match that we are going to create, then compare response JSON items with queryItem.id
 				// If no match, the folder we want to create does not exist at the location we are seeking to create it at, thus generate a 404
 				onlinePathData = createDirectoryOnlineOneDriveApiInstance.searchDriveForPath(queryItem.driveId, baseName(thisNewPathToCreate));
-				addLogEntry("onlinePathData: " ~to!string(onlinePathData), ["debug"]);
+				logBuffer.addLogEntry("onlinePathData: " ~to!string(onlinePathData), ["debug"]);
 				
 				// Process the response from searching the drive
 				ulong responseCount = count(onlinePathData["value"].array);
@@ -4877,8 +4877,8 @@ class SyncEngine {
 							// Direct Match Check
 							if ((queryItem.id == thisChildItem.parentId) && (baseName(thisNewPathToCreate) == thisChildItem.name)) {
 								// High confidence that this child folder is a direct match we are trying to create and it already exists online
-								addLogEntry("Path we are searching for exists online (Direct Match): " ~ baseName(thisNewPathToCreate), ["debug"]);
-								addLogEntry("childJSON: " ~ to!string(childJSON), ["debug"]);
+								logBuffer.addLogEntry("Path we are searching for exists online (Direct Match): " ~ baseName(thisNewPathToCreate), ["debug"]);
+								logBuffer.addLogEntry("childJSON: " ~ to!string(childJSON), ["debug"]);
 								foundDirectoryOnline = true;
 								foundDirectoryJSONItem = childJSON;
 								break;
@@ -4892,8 +4892,8 @@ class SyncEngine {
 							if (childAsLower == thisFolderNameAsLower) {	
 								// This is a POSIX 'case in-sensitive match' ..... 
 								// Local item name has a 'case-insensitive match' to an existing item on OneDrive
-								addLogEntry("Path we are searching for exists online (POSIX 'case in-sensitive match'): " ~ baseName(thisNewPathToCreate), ["debug"]);
-								addLogEntry("childJSON: " ~ to!string(childJSON), ["debug"]);
+								logBuffer.addLogEntry("Path we are searching for exists online (POSIX 'case in-sensitive match'): " ~ baseName(thisNewPathToCreate), ["debug"]);
+								logBuffer.addLogEntry("childJSON: " ~ to!string(childJSON), ["debug"]);
 								foundDirectoryOnline = true;
 								foundDirectoryJSONItem = childJSON;
 								break;
@@ -4903,7 +4903,7 @@ class SyncEngine {
 					
 					if (foundDirectoryOnline) {
 						// Directory we are seeking was found online ...
-						addLogEntry("The directory we are seeking was found online by using searchDriveForPath ...", ["debug"]);
+						logBuffer.addLogEntry("The directory we are seeking was found online by using searchDriveForPath ...", ["debug"]);
 						onlinePathData = foundDirectoryJSONItem;
 					} else {
 						// No 'search item matches found' - raise a 404 so that the exception handling will take over to create the folder
@@ -4918,7 +4918,7 @@ class SyncEngine {
 			if (exception.httpStatusCode == 404) {
 				// This is a good error - it means that the directory to create 100% does not exist online
 				// The directory was not found on the drive id we queried
-				addLogEntry("The requested directory to create was not found on OneDrive - creating remote directory: " ~ thisNewPathToCreate, ["verbose"]);
+				logBuffer.addLogEntry("The requested directory to create was not found on OneDrive - creating remote directory: " ~ thisNewPathToCreate, ["verbose"]);
 				
 				// Build up the create directory request
 				JSONValue createDirectoryOnlineAPIResponse;
@@ -4938,7 +4938,7 @@ class SyncEngine {
 						// Is the item a Remote Object (Shared Folder) ?
 						if (parentItem.type == ItemType.remote) {
 							// Yes .. Shared Folder
-							addLogEntry("parentItem data: " ~ to!string(parentItem), ["debug"]);
+							logBuffer.addLogEntry("parentItem data: " ~ to!string(parentItem), ["debug"]);
 							requiredDriveId = parentItem.remoteDriveId;
 							requiredParentItemId = parentItem.remoteId;
 						} else {
@@ -4948,21 +4948,21 @@ class SyncEngine {
 						}
 						
 						// Where are we creating this new folder?
-						addLogEntry("requiredDriveId:      " ~ requiredDriveId, ["debug"]);
-						addLogEntry("requiredParentItemId: " ~ requiredParentItemId, ["debug"]);
-						addLogEntry("newDriveItem JSON:    " ~ to!string(newDriveItem), ["debug"]);
+						logBuffer.addLogEntry("requiredDriveId:      " ~ requiredDriveId, ["debug"]);
+						logBuffer.addLogEntry("requiredParentItemId: " ~ requiredParentItemId, ["debug"]);
+						logBuffer.addLogEntry("newDriveItem JSON:    " ~ to!string(newDriveItem), ["debug"]);
 					
 						// Create the new folder
 						createDirectoryOnlineAPIResponse = createDirectoryOnlineOneDriveApiInstance.createById(requiredDriveId, requiredParentItemId, newDriveItem);
 						// Is the response a valid JSON object - validation checking done in saveItem
 						saveItem(createDirectoryOnlineAPIResponse);
 						// Log that the directory was created
-						addLogEntry("Successfully created the remote directory " ~ thisNewPathToCreate ~ " on Microsoft OneDrive");
+						logBuffer.addLogEntry("Successfully created the remote directory " ~ thisNewPathToCreate ~ " on Microsoft OneDrive");
 					} catch (OneDriveException exception) {
 						if (exception.httpStatusCode == 409) {
 							// OneDrive API returned a 404 (above) to say the directory did not exist
 							// but when we attempted to create it, OneDrive responded that it now already exists
-							addLogEntry("OneDrive reported that " ~ thisNewPathToCreate ~ " already exists .. OneDrive API race condition", ["verbose"]);
+							logBuffer.addLogEntry("OneDrive reported that " ~ thisNewPathToCreate ~ " already exists .. OneDrive API race condition", ["verbose"]);
 							// Shutdown this API instance, as we will create API instances as required, when required
 							createDirectoryOnlineOneDriveApiInstance.releaseCurlEngine();
 							// Free object and memory
@@ -4972,7 +4972,7 @@ class SyncEngine {
 							return;
 						} else {
 							// some other error from OneDrive was returned - display what it is
-							addLogEntry("OneDrive generated an error when creating this path: " ~ thisNewPathToCreate);
+							logBuffer.addLogEntry("OneDrive generated an error when creating this path: " ~ thisNewPathToCreate);
 							displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 							// Shutdown this API instance, as we will create API instances as required, when required
 							createDirectoryOnlineOneDriveApiInstance.releaseCurlEngine();
@@ -4985,7 +4985,7 @@ class SyncEngine {
 					}
 				} else {
 					// Simulate a successful 'directory create' & save it to the dryRun database copy
-					addLogEntry("Successfully created the remote directory " ~ thisNewPathToCreate ~ " on Microsoft OneDrive");
+					logBuffer.addLogEntry("Successfully created the remote directory " ~ thisNewPathToCreate ~ " on Microsoft OneDrive");
 					// The simulated response has to pass 'makeItem' as part of saveItem
 					auto fakeResponse = createFakeResponse(thisNewPathToCreate);
 					// Save item to the database
@@ -5011,7 +5011,7 @@ class SyncEngine {
 					createDirectoryOnline(thisNewPathToCreate);
 				} else {
 					// We cant create this directory online
-					addLogEntry("This folder cannot be created online: " ~ buildNormalizedPath(absolutePath(thisNewPathToCreate)), ["debug"]);
+					logBuffer.addLogEntry("This folder cannot be created online: " ~ buildNormalizedPath(absolutePath(thisNewPathToCreate)), ["debug"]);
 				}	
 			}
 		}
@@ -5024,17 +5024,17 @@ class SyncEngine {
 				// OneDrive 'name' matches local path name
 				if (appConfig.accountType == "business") {
 					// We are a business account, this existing online folder, could be a Shared Online Folder could be a 'Add shortcut to My files' item
-					addLogEntry("onlinePathData: " ~ to!string(onlinePathData), ["debug"]);
+					logBuffer.addLogEntry("onlinePathData: " ~ to!string(onlinePathData), ["debug"]);
 					
 					// Is this a remote folder
 					if (isItemRemote(onlinePathData)) {
 						// The folder is a remote item ... we do not want to create this ...
-						addLogEntry("Existing Remote Online Folder is most likely a OneDrive Shared Business Folder Link added by 'Add shortcut to My files'", ["debug"]);
+						logBuffer.addLogEntry("Existing Remote Online Folder is most likely a OneDrive Shared Business Folder Link added by 'Add shortcut to My files'", ["debug"]);
 						
 						// Is Shared Business Folder Syncing enabled ?
 						if (!appConfig.getValueBool("sync_business_shared_items")) {
 							// Shared Business Folder Syncing is NOT enabled
-							addLogEntry("We need to skip this path: " ~ thisNewPathToCreate, ["debug"]);
+							logBuffer.addLogEntry("We need to skip this path: " ~ thisNewPathToCreate, ["debug"]);
 							// Add this path to businessSharedFoldersOnlineToSkip
 							businessSharedFoldersOnlineToSkip ~= [thisNewPathToCreate];
 							// no save to database, no online create
@@ -5061,7 +5061,7 @@ class SyncEngine {
 				}
 				
 				// Path found online
-				addLogEntry("The requested directory to create was found on OneDrive - skipping creating the directory: " ~ thisNewPathToCreate, ["verbose"]);
+				logBuffer.addLogEntry("The requested directory to create was found on OneDrive - skipping creating the directory: " ~ thisNewPathToCreate, ["verbose"]);
 				
 				// Is the response a valid JSON object - validation checking done in saveItem
 				saveItem(onlinePathData);
@@ -5076,9 +5076,9 @@ class SyncEngine {
 				// Normally this would throw an error, however we cant use throw new PosixException()
 				string msg = format("POSIX 'case-insensitive match' between '%s' (local) and '%s' (online) which violates the Microsoft OneDrive API namespace convention", baseName(thisNewPathToCreate), onlinePathData["name"].str);
 				displayPosixErrorMessage(msg);
-				addLogEntry("ERROR: Requested directory to create has a 'case-insensitive match' to an existing directory on OneDrive online.");
-				addLogEntry("ERROR: To resolve, rename this local directory: " ~ buildNormalizedPath(absolutePath(thisNewPathToCreate)));
-				addLogEntry("Skipping creating this directory online due to 'case-insensitive match': " ~ thisNewPathToCreate);
+				logBuffer.addLogEntry("ERROR: Requested directory to create has a 'case-insensitive match' to an existing directory on OneDrive online.");
+				logBuffer.addLogEntry("ERROR: To resolve, rename this local directory: " ~ buildNormalizedPath(absolutePath(thisNewPathToCreate)));
+				logBuffer.addLogEntry("Skipping creating this directory online due to 'case-insensitive match': " ~ thisNewPathToCreate);
 				// Add this path to posixViolationPaths
 				posixViolationPaths ~= [thisNewPathToCreate];
 				
@@ -5091,9 +5091,9 @@ class SyncEngine {
 			}
 		} else {
 			// response is not valid JSON, an error was returned from OneDrive
-			addLogEntry("ERROR: There was an error performing this operation on Microsoft OneDrive");
-			addLogEntry("ERROR: Increase logging verbosity to assist determining why.");
-			addLogEntry("Skipping: " ~ buildNormalizedPath(absolutePath(thisNewPathToCreate)));
+			logBuffer.addLogEntry("ERROR: There was an error performing this operation on Microsoft OneDrive");
+			logBuffer.addLogEntry("ERROR: Increase logging verbosity to assist determining why.");
+			logBuffer.addLogEntry("Skipping: " ~ buildNormalizedPath(absolutePath(thisNewPathToCreate)));
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			createDirectoryOnlineOneDriveApiInstance.releaseCurlEngine();
 			createDirectoryOnlineOneDriveApiInstance = null;
@@ -5133,16 +5133,16 @@ class SyncEngine {
 	void uploadNewLocalFileItemsInParallel(string[] array) {
 		// This function received an array of string items to upload, the number of elements based on appConfig.getValueLong("threads")
 		foreach (i, fileToUpload; processPool.parallel(array)) {
-			addLogEntry("Upload Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);
+			logBuffer.addLogEntry("Upload Thread " ~ to!string(i) ~ " Starting: " ~ to!string(Clock.currTime()), ["debug"]);
 			uploadNewFile(fileToUpload);
-			addLogEntry("Upload Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);
+			logBuffer.addLogEntry("Upload Thread " ~ to!string(i) ~ " Finished: " ~ to!string(Clock.currTime()), ["debug"]);
 		}
 	}
 	
 	// Upload a new file to OneDrive
 	void uploadNewFile(string fileToUpload) {
 		// Debug for the moment
-		addLogEntry("fileToUpload: " ~ fileToUpload, ["debug"]);
+		logBuffer.addLogEntry("fileToUpload: " ~ fileToUpload, ["debug"]);
 		
 		// These are the details of the item we need to upload
 		// How much space is remaining on OneDrive
@@ -5191,7 +5191,7 @@ class SyncEngine {
 		// If the parent path was found in the DB, to ensure we are uploading the the right location 'parentItem.driveId' must not be empty
 		if ((parentPathFoundInDB) && (parentItem.driveId.empty)) {
 			// switch to using defaultDriveId
-			addLogEntry("parentItem.driveId is empty - using defaultDriveId for upload API calls", ["debug"]);
+			logBuffer.addLogEntry("parentItem.driveId is empty - using defaultDriveId for upload API calls", ["debug"]);
 			parentItem.driveId = appConfig.defaultDriveId;
 		}
 		
@@ -5236,8 +5236,8 @@ class SyncEngine {
 						calculatedSpaceOnlinePostUpload = remainingFreeSpaceOnline - thisFileSize;
 						
 						// Based on what we know, for this thread - can we safely upload this modified local file?
-						addLogEntry("This Thread Estimated Free Space Online:              " ~ to!string(remainingFreeSpaceOnline), ["debug"]);
-						addLogEntry("This Thread Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
+						logBuffer.addLogEntry("This Thread Estimated Free Space Online:              " ~ to!string(remainingFreeSpaceOnline), ["debug"]);
+						logBuffer.addLogEntry("This Thread Calculated Free Space Online Post Upload: " ~ to!string(calculatedSpaceOnlinePostUpload), ["debug"]);
 			
 						// If 'personal' accounts, if driveId == defaultDriveId, then we will have data - appConfig.quotaAvailable will be updated
 						// If 'personal' accounts, if driveId != defaultDriveId, then we will not have quota data - appConfig.quotaRestricted will be set as true
@@ -5265,15 +5265,15 @@ class SyncEngine {
 							if (parentItem.driveId != appConfig.defaultDriveId) {
 								// Different message depending on account type
 								if (appConfig.accountType == "personal") {
-									addLogEntry("WARNING: Shared Folder OneDrive quota information is being restricted or providing a zero value. Space available online cannot be guaranteed.", ["verbose"]);
+									logBuffer.addLogEntry("WARNING: Shared Folder OneDrive quota information is being restricted or providing a zero value. Space available online cannot be guaranteed.", ["verbose"]);
 								} else {
-									addLogEntry("WARNING: Shared Folder OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);
+									logBuffer.addLogEntry("WARNING: Shared Folder OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);
 								}
 							} else {
 								if (appConfig.accountType == "personal") {
-									addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Space available online cannot be guaranteed.", ["verbose"]);
+									logBuffer.addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Space available online cannot be guaranteed.", ["verbose"]);
 								} else {
-									addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);
+									logBuffer.addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);
 								}
 							}
 							// Space available online is being restricted - so we have no way to really know if there is space available online
@@ -5328,10 +5328,10 @@ class SyncEngine {
 								
 								// If we get to this point, the OneDrive API returned a 200 OK with valid JSON data that indicates a 'file' exists at this location already
 								// and that it matches the POSIX filename of the local item we are trying to upload as a new file
-								addLogEntry("The file we are attempting to upload as a new file already exists on Microsoft OneDrive: " ~ fileToUpload, ["verbose"]);
+								logBuffer.addLogEntry("The file we are attempting to upload as a new file already exists on Microsoft OneDrive: " ~ fileToUpload, ["verbose"]);
 								
 								// No 404 or otherwise was triggered, meaning that the file already exists online and passes the POSIX test ...
-								addLogEntry("fileDetailsFromOneDrive after exist online check: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);
+								logBuffer.addLogEntry("fileDetailsFromOneDrive after exist online check: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);
 								
 								// Does the data from online match our local file that we are attempting to upload as a new file?
 								bool raiseWarning = true;
@@ -5340,7 +5340,7 @@ class SyncEngine {
 									saveItem(fileDetailsFromOneDrive);
 								} else {
 									// The local file we are attempting to upload as a new file is different to the existing file online
-									addLogEntry("Triggering newfile upload target already exists edge case, where the online item does not match what we are trying to upload", ["debug"]);
+									logBuffer.addLogEntry("Triggering newfile upload target already exists edge case, where the online item does not match what we are trying to upload", ["debug"]);
 									
 									// Issue #2626 | Case 2-2 (resync)
 									
@@ -5348,7 +5348,7 @@ class SyncEngine {
 									// The file 'version history' online will have to be used to 'recover' the prior online file
 									string changedItemParentDriveId = fileDetailsFromOneDrive["parentReference"]["driveId"].str;
 									string changedItemId = fileDetailsFromOneDrive["id"].str;
-									addLogEntry("Skipping uploading this item as a new file, will upload as a modified file (online file already exists): " ~ fileToUpload);
+									logBuffer.addLogEntry("Skipping uploading this item as a new file, will upload as a modified file (online file already exists): " ~ fileToUpload);
 									
 									// In order for the processing of the local item as a 'changed' item, unfortunately we need to save the online data of the existing online file to the local DB
 									saveItem(fileDetailsFromOneDrive);
@@ -5389,7 +5389,7 @@ class SyncEngine {
 								// If we get a 404 .. the file is not online .. this is what we want .. file does not exist online
 								if (exception.httpStatusCode == 404) {
 									// The file has been checked, client side filtering checked, does not exist online - we need to upload it
-									addLogEntry("fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload); generated a 404 - file does not exist online - must upload it", ["debug"]);
+									logBuffer.addLogEntry("fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload); generated a 404 - file does not exist online - must upload it", ["debug"]);
 									uploadFailed = performNewFileUpload(parentItem, fileToUpload, thisFileSize);
 								} else {
 									// some other error
@@ -5417,37 +5417,37 @@ class SyncEngine {
 								GC.collect();
 								
 								// Display JSON error message
-								addLogEntry(e.msg, ["debug"]);
+								logBuffer.addLogEntry(e.msg, ["debug"]);
 								uploadFailed = true;
 							}
 						} else {
 							// skip file upload - insufficient space to upload
-							addLogEntry("Skipping uploading this new file as it exceeds the available free space on Microsoft OneDrive: " ~ fileToUpload);
+							logBuffer.addLogEntry("Skipping uploading this new file as it exceeds the available free space on Microsoft OneDrive: " ~ fileToUpload);
 							uploadFailed = true;
 						}
 					} else {
 						// Skip file upload - too large
-						addLogEntry("Skipping uploading this new file as it exceeds the maximum size allowed by Microsoft OneDrive: " ~ fileToUpload);
+						logBuffer.addLogEntry("Skipping uploading this new file as it exceeds the maximum size allowed by Microsoft OneDrive: " ~ fileToUpload);
 						uploadFailed = true;
 					}
 				} else {
 					// why was the parent path not in the database?
 					if (canFind(posixViolationPaths, parentPath)) {
-						addLogEntry("ERROR: POSIX 'case-insensitive match' for the parent path which violates the Microsoft OneDrive API namespace convention.");
+						logBuffer.addLogEntry("ERROR: POSIX 'case-insensitive match' for the parent path which violates the Microsoft OneDrive API namespace convention.");
 					} else {
-						addLogEntry("ERROR: Parent path is not in the database or online.");
+						logBuffer.addLogEntry("ERROR: Parent path is not in the database or online.");
 					}
-					addLogEntry("ERROR: Unable to upload this file: " ~ fileToUpload);
+					logBuffer.addLogEntry("ERROR: Unable to upload this file: " ~ fileToUpload);
 					uploadFailed = true;
 				}
 			} else {
 				// Unable to read local file
-				addLogEntry("Skipping uploading this file as it cannot be read (file permissions or file corruption): " ~ fileToUpload);
+				logBuffer.addLogEntry("Skipping uploading this file as it cannot be read (file permissions or file corruption): " ~ fileToUpload);
 				uploadFailed = true;
 			}
 		} else {
 			// File disappeared before upload
-			addLogEntry("File disappeared locally before upload: " ~ fileToUpload);
+			logBuffer.addLogEntry("File disappeared locally before upload: " ~ fileToUpload);
 			// dont set uploadFailed = true; as the file disappeared before upload, thus nothing here failed
 		}
 
@@ -5499,7 +5499,7 @@ class SyncEngine {
 					// Attempt to upload the zero byte file using simpleUpload for all account types
 					uploadResponse = uploadFileOneDriveApiInstance.simpleUpload(fileToUpload, parentItem.driveId, parentItem.id, baseName(fileToUpload));
 					uploadFailed = false;
-					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done.");
+					logBuffer.addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done.");
 					
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
@@ -5514,7 +5514,7 @@ class SyncEngine {
 					// Default operation if not 408,429,503,504 errors
 					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 					// Display what the error is
-					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
+					logBuffer.addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
@@ -5525,7 +5525,7 @@ class SyncEngine {
 					
 				} catch (FileException e) {
 					// display the error message
-					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
+					logBuffer.addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 					
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
@@ -5558,12 +5558,12 @@ class SyncEngine {
 					// Default operation if not 408,429,503,504 errors
 					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 					// Display what the error is
-					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
+					logBuffer.addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 										
 				} catch (FileException e) {
 					// display the error message
-					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
+					logBuffer.addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				}
 				
@@ -5575,17 +5575,17 @@ class SyncEngine {
 					// Validate that we have the following items which we need
 					if (!hasUploadURL(uploadSessionData)) {
 						sessionDataValid = false;
-						addLogEntry("Session data missing 'uploadUrl'", ["debug"]);
+						logBuffer.addLogEntry("Session data missing 'uploadUrl'", ["debug"]);
 					}
 					
 					if (!hasNextExpectedRanges(uploadSessionData)) {
 						sessionDataValid = false;
-						addLogEntry("Session data missing 'nextExpectedRanges'", ["debug"]);
+						logBuffer.addLogEntry("Session data missing 'nextExpectedRanges'", ["debug"]);
 					}
 					
 					if (!hasLocalPath(uploadSessionData)) {
 						sessionDataValid = false;
-						addLogEntry("Session data missing 'localPath'", ["debug"]);
+						logBuffer.addLogEntry("Session data missing 'localPath'", ["debug"]);
 					}
 								
 					if (sessionDataValid) {
@@ -5596,9 +5596,9 @@ class SyncEngine {
 							
 							if (uploadResponse.type() == JSONType.object) {
 								uploadFailed = false;
-								addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done.");
+								logBuffer.addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done.");
 							} else {
-								addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
+								logBuffer.addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 								uploadFailed = true;
 							}
 						} catch (OneDriveException exception) {
@@ -5607,18 +5607,18 @@ class SyncEngine {
 							// Default operation if not 408,429,503,504 errors
 							// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 							// Display what the error is
-							addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
+							logBuffer.addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 							
 						}
 					} else {
 						// No Upload URL or nextExpectedRanges or localPath .. not a valid JSON we can use
-						addLogEntry("Session data is missing required elements to perform a session upload.", ["verbose"]);
-						addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
+						logBuffer.addLogEntry("Session data is missing required elements to perform a session upload.", ["verbose"]);
+						logBuffer.addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 					}
 				} else {
 					// Create session Upload URL failed
-					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
+					logBuffer.addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 				}
 				
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
@@ -5631,7 +5631,7 @@ class SyncEngine {
 			// We are in a --dry-run scenario
 			uploadResponse = createFakeResponse(fileToUpload);
 			uploadFailed = false;
-			addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done.", ["info", "notify"]);
+			logBuffer.addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done.", ["info", "notify"]);
 		}
 		
 		// Upload has finished
@@ -5640,10 +5640,10 @@ class SyncEngine {
 		if (!uploadFailed) {
 			// Upload did not fail ...
 			auto uploadDuration = uploadFinishTime - uploadStartTime;
-			addLogEntry("File Size: " ~ to!string(thisFileSize) ~ " Bytes", ["debug"]);
-			addLogEntry("Upload Duration: " ~ to!string((uploadDuration.total!"msecs"/1e3)) ~ " Seconds", ["debug"]);
+			logBuffer.addLogEntry("File Size: " ~ to!string(thisFileSize) ~ " Bytes", ["debug"]);
+			logBuffer.addLogEntry("Upload Duration: " ~ to!string((uploadDuration.total!"msecs"/1e3)) ~ " Seconds", ["debug"]);
 			auto uploadSpeed = (thisFileSize / (uploadDuration.total!"msecs"/1e3)/ 1024 / 1024);
-			addLogEntry("Upload Speed: " ~ to!string(uploadSpeed) ~ " Mbps (approx)", ["debug"]);
+			logBuffer.addLogEntry("Upload Speed: " ~ to!string(uploadSpeed) ~ " Mbps (approx)", ["debug"]);
 			
 			// OK as the upload did not fail, we need to save the response from OneDrive, but it has to be a valid JSON response
 			if (uploadResponse.type() == JSONType.object) {
@@ -5664,11 +5664,11 @@ class SyncEngine {
 					}
 				} else {
 					// will be removed in different event!
-					addLogEntry("File disappeared locally after upload: " ~ fileToUpload);
+					logBuffer.addLogEntry("File disappeared locally after upload: " ~ fileToUpload);
 				}
 			} else {
 				// Log that an invalid JSON object was returned
-				addLogEntry("uploadFileOneDriveApiInstance.simpleUpload or session.upload call returned an invalid JSON Object from the OneDrive API", ["debug"]);
+				logBuffer.addLogEntry("uploadFileOneDriveApiInstance.simpleUpload or session.upload call returned an invalid JSON Object from the OneDrive API", ["debug"]);
 			}
 		}
 		
@@ -5709,7 +5709,7 @@ class SyncEngine {
 			}
 		} else {
 			// no valid session was created
-			addLogEntry("Creation of OneDrive API Upload Session failed.", ["verbose"]);
+			logBuffer.addLogEntry("Creation of OneDrive API Upload Session failed.", ["verbose"]);
 			// return upload() will return a JSONValue response, create an empty JSONValue response to return
 			uploadSession = null;
 		}
@@ -5749,7 +5749,7 @@ class SyncEngine {
 		// Start the session upload using the active API instance for this thread
 		while (true) {
 			fragmentCount++;
-			addLogEntry("Fragment: " ~ to!string(fragmentCount) ~ " of " ~ to!string(expected_total_fragments), ["debug"]);
+			logBuffer.addLogEntry("Fragment: " ~ to!string(fragmentCount) ~ " of " ~ to!string(expected_total_fragments), ["debug"]);
 			
 			// What ETA string do we use?
 			auto eta = calc_eta((fragmentCount -1), expected_total_fragments, start_unix_time);
@@ -5766,18 +5766,18 @@ class SyncEngine {
 			auto ratio = cast(double)(fragmentCount -1) / expected_total_fragments;
 			// Convert the ratio to a percentage and format it to two decimal places
 			string percentage = leftJustify(format("%d%%", cast(int)(ratio * 100)), 5, ' ');
-			addLogEntry(uploadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+			logBuffer.addLogEntry(uploadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 			
 			// What fragment size will be used?
-			addLogEntry("fragmentSize: " ~ to!string(fragmentSize) ~ " offset: " ~ to!string(offset) ~ " thisFileSize: " ~ to!string(thisFileSize), ["debug"]);
+			logBuffer.addLogEntry("fragmentSize: " ~ to!string(fragmentSize) ~ " offset: " ~ to!string(offset) ~ " thisFileSize: " ~ to!string(thisFileSize), ["debug"]);
 			fragSize = fragmentSize < thisFileSize - offset ? fragmentSize : thisFileSize - offset;
-			addLogEntry("Using fragSize: " ~ to!string(fragSize), ["debug"]);
+			logBuffer.addLogEntry("Using fragSize: " ~ to!string(fragSize), ["debug"]);
 						
 			// fragSize must not be a negative value
 			if (fragSize < 0) {
 				// Session upload will fail
 				// not a JSON object - fragment upload failed
-				addLogEntry("File upload session failed - invalid calculation of fragment size", ["verbose"]);
+				logBuffer.addLogEntry("File upload session failed - invalid calculation of fragment size", ["verbose"]);
 				if (exists(threadUploadSessionFilePath)) {
 					remove(threadUploadSessionFilePath);
 				}
@@ -5809,11 +5809,11 @@ class SyncEngine {
 				//   504 - Gateway Timeout
 					
 				// Insert a new line as well, so that the below error is inserted on the console in the right location
-				addLogEntry("Fragment upload failed - received an exception response from OneDrive API", ["verbose"]);
+				logBuffer.addLogEntry("Fragment upload failed - received an exception response from OneDrive API", ["verbose"]);
 				// display what the error is
 				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 				// retry fragment upload in case error is transient
-				addLogEntry("Retrying fragment upload", ["verbose"]);
+				logBuffer.addLogEntry("Retrying fragment upload", ["verbose"]);
 				
 				try {
 					uploadResponse = activeOneDriveApiInstance.uploadFragment(
@@ -5825,7 +5825,7 @@ class SyncEngine {
 					);
 				} catch (OneDriveException e) {
 					// OneDrive threw another error on retry
-					addLogEntry("Retry to upload fragment failed", ["verbose"]);
+					logBuffer.addLogEntry("Retry to upload fragment failed", ["verbose"]);
 					// display what the error is
 					displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 					// set uploadResponse to null as the fragment upload was in error twice
@@ -5855,7 +5855,7 @@ class SyncEngine {
 				saveSessionFile(threadUploadSessionFilePath, uploadSessionData);
 			} else {
 				// not a JSON object - fragment upload failed
-				addLogEntry("File upload session failed - invalid response from OneDrive API", ["verbose"]);
+				logBuffer.addLogEntry("File upload session failed - invalid response from OneDrive API", ["verbose"]);
 				
 				// cleanup session data
 				if (exists(threadUploadSessionFilePath)) {
@@ -5872,7 +5872,7 @@ class SyncEngine {
 		auto upload_duration = cast(int)(end_unix_time - start_unix_time);
 		dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
 		etaString = format!"| DONE in %02d:%02d:%02d"( h, m, s);
-		addLogEntry(uploadLogEntry ~ "100% " ~ etaString, ["consoleOnly"]);
+		logBuffer.addLogEntry(uploadLogEntry ~ "100% " ~ etaString, ["consoleOnly"]);
 		
 		// Remove session file if it exists		
 		if (exists(threadUploadSessionFilePath)) {
@@ -5892,17 +5892,17 @@ class SyncEngine {
 		if (noRemoteDelete) {
 			if ((itemToDelete.type == ItemType.dir)) {
 				// Do not process remote directory delete
-				addLogEntry("Skipping remote directory delete as --upload-only & --no-remote-delete configured", ["verbose"]);
+				logBuffer.addLogEntry("Skipping remote directory delete as --upload-only & --no-remote-delete configured", ["verbose"]);
 			} else {
 				// Do not process remote file delete
-				addLogEntry("Skipping remote file delete as --upload-only & --no-remote-delete configured", ["verbose"]);
+				logBuffer.addLogEntry("Skipping remote file delete as --upload-only & --no-remote-delete configured", ["verbose"]);
 			}
 		} else {
 			
 			// Is this a --download-only operation?
 			if (!appConfig.getValueBool("download_only")) {
 				// Process the delete - delete the object online
-				addLogEntry("Deleting item from Microsoft OneDrive: " ~ path);
+				logBuffer.addLogEntry("Deleting item from Microsoft OneDrive: " ~ path);
 				bool flagAsBigDelete = false;
 				
 				Item[] children;
@@ -5913,7 +5913,7 @@ class SyncEngine {
 					children = getChildren(itemToDelete.driveId, itemToDelete.id);
 					// Count the returned items + the original item (1)
 					itemsToDelete = count(children) + 1;
-					addLogEntry("Number of items online to delete: " ~ to!string(itemsToDelete), ["debug"]);
+					logBuffer.addLogEntry("Number of items online to delete: " ~ to!string(itemsToDelete), ["debug"]);
 				} else {
 					itemsToDelete = 1;
 				}
@@ -5926,9 +5926,9 @@ class SyncEngine {
 					// A big delete has been detected
 					flagAsBigDelete = true;
 					if (!appConfig.getValueBool("force")) {
-						addLogEntry("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on Microsoft OneDrive");
-						addLogEntry("ERROR: The total number of items being deleted is: " ~ to!string(itemsToDelete));
-						addLogEntry("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
+						logBuffer.addLogEntry("ERROR: An attempt to remove a large volume of data from OneDrive has been detected. Exiting client to preserve data on Microsoft OneDrive");
+						logBuffer.addLogEntry("ERROR: The total number of items being deleted is: " ~ to!string(itemsToDelete));
+						logBuffer.addLogEntry("ERROR: To delete a large volume of data use --force or increase the config value 'classify_as_big_delete' to a larger value");
 						// Must exit here to preserve data on online , allow logging to be done
 						forceExit();
 					}
@@ -5937,10 +5937,10 @@ class SyncEngine {
 				// Are we in a --dry-run scenario?
 				if (!dryRun) {
 					// We are not in a dry run scenario
-					addLogEntry("itemToDelete: " ~ to!string(itemToDelete), ["debug"]);
+					logBuffer.addLogEntry("itemToDelete: " ~ to!string(itemToDelete), ["debug"]);
 					
 					// what item are we trying to delete?
-					addLogEntry("Attempting to delete this single item id: " ~ itemToDelete.id ~ " from drive: " ~ itemToDelete.driveId, ["debug"]);
+					logBuffer.addLogEntry("Attempting to delete this single item id: " ~ itemToDelete.id ~ " from drive: " ~ itemToDelete.driveId, ["debug"]);
 					
 					// Configure these item variables to handle OneDrive Business Shared Folder Deletion
 					Item actualItemToDelete;
@@ -5963,12 +5963,12 @@ class SyncEngine {
 					// Configure actualItemToDelete
 					if (remoteShortcutLinkItem.id != "") {
 						// A DB entry was returned
-						addLogEntry("remoteShortcutLinkItem: " ~ to!string(remoteShortcutLinkItem), ["debug"]);
+						logBuffer.addLogEntry("remoteShortcutLinkItem: " ~ to!string(remoteShortcutLinkItem), ["debug"]);
 						// Set actualItemToDelete to this data
 						actualItemToDelete = remoteShortcutLinkItem;
 						// Delete the shortcut reference in the local database
 						itemDB.deleteById(remoteShortcutLinkItem.driveId, remoteShortcutLinkItem.id);
-						addLogEntry("Deleted OneDrive Business Shared Folder 'Shorcut Link'", ["debug"]);
+						logBuffer.addLogEntry("Deleted OneDrive Business Shared Folder 'Shorcut Link'", ["debug"]);
 					} else {
 						// No data was returned, use the original data
 						actualItemToDelete = itemToDelete;
@@ -5992,7 +5992,7 @@ class SyncEngine {
 					} catch (OneDriveException e) {
 						if (e.httpStatusCode == 404) {
 							// item.id, item.eTag could not be found on the specified driveId
-							addLogEntry("OneDrive reported: The resource could not be found to be deleted.", ["verbose"]);
+							logBuffer.addLogEntry("OneDrive reported: The resource could not be found to be deleted.", ["verbose"]);
 						}
 						
 						// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
@@ -6010,11 +6010,11 @@ class SyncEngine {
 					}
 				} else {
 					// log that this is a dry-run activity
-					addLogEntry("dry run - no delete activity");
+					logBuffer.addLogEntry("dry run - no delete activity");
 				}
 			} else {
 				// --download-only operation, we are not uploading any delete event to OneDrive
-				addLogEntry("Not pushing local delete to Microsoft OneDrive due to --download-only being used", ["debug"]);
+				logBuffer.addLogEntry("Not pushing local delete to Microsoft OneDrive due to --download-only being used", ["debug"]);
 			}
 		}
 	}
@@ -6037,7 +6037,7 @@ class SyncEngine {
 	void performReverseDeletionOfOneDriveItems(Item[] children, Item itemToDelete) {
 		
 		// Log what is happening
-		addLogEntry("Attempting a reverse delete of all child objects from OneDrive", ["debug"]);
+		logBuffer.addLogEntry("Attempting a reverse delete of all child objects from OneDrive", ["debug"]);
 		
 		// Create a new API Instance for this thread and initialise it
 		OneDriveApi performReverseDeletionOneDriveApiInstance;
@@ -6046,7 +6046,7 @@ class SyncEngine {
 		
 		foreach_reverse (Item child; children) {
 			// Log the action
-			addLogEntry("Attempting to delete this child item id: " ~ child.id ~ " from drive: " ~ child.driveId, ["debug"]);
+			logBuffer.addLogEntry("Attempting to delete this child item id: " ~ child.id ~ " from drive: " ~ child.driveId, ["debug"]);
 			
 			// perform the delete via the default OneDrive API instance
 			performReverseDeletionOneDriveApiInstance.deleteById(child.driveId, child.id, child.eTag);
@@ -6054,7 +6054,7 @@ class SyncEngine {
 			itemDB.deleteById(child.driveId, child.id);
 		}
 		// Log the action
-		addLogEntry("Attempting to delete this parent item id: " ~ itemToDelete.id ~ " from drive: " ~ itemToDelete.driveId, ["debug"]);
+		logBuffer.addLogEntry("Attempting to delete this parent item id: " ~ itemToDelete.id ~ " from drive: " ~ itemToDelete.driveId, ["debug"]);
 		
 		// Perform the delete via the default OneDrive API instance
 		performReverseDeletionOneDriveApiInstance.deleteById(itemToDelete.driveId, itemToDelete.id, itemToDelete.eTag);
@@ -6130,7 +6130,7 @@ class SyncEngine {
 			fakeResponse["folder"] = JSONValue("");
 		}
 
-		addLogEntry("Generated Fake OneDrive Response: " ~ to!string(fakeResponse), ["debug"]);
+		logBuffer.addLogEntry("Generated Fake OneDrive Response: " ~ to!string(fakeResponse), ["debug"]);
 		return fakeResponse;
 	}
 
@@ -6145,29 +6145,29 @@ class SyncEngine {
 				// If the item is a directory, we need to add this to the DB, if this is a file, we dont add this, the parent path is not in DB, thus any new files in this directory are not added
 				if ((uploadOnly) && (localDeleteAfterUpload) && (isItemFile(jsonItem))) {
 					// Log that we skipping adding item to the local DB and the reason why
-					addLogEntry("Skipping adding to database as --upload-only & --remove-source-files configured", ["debug"]);
+					logBuffer.addLogEntry("Skipping adding to database as --upload-only & --remove-source-files configured", ["debug"]);
 				} else {
 					// What is the JSON item we are trying to create a DB record with?
-					addLogEntry("saveItem - creating DB item from this JSON: " ~ to!string(jsonItem), ["debug"]);
+					logBuffer.addLogEntry("saveItem - creating DB item from this JSON: " ~ to!string(jsonItem), ["debug"]);
 					
 					// Takes a JSON input and formats to an item which can be used by the database
 					Item item = makeItem(jsonItem);
 					
 					// Is this JSON item a 'root' item?
 					if ((isItemRoot(jsonItem)) && (item.name == "root")) {
-						addLogEntry("Updating DB Item object with correct values as this is a 'root' object", ["debug"]);
+						logBuffer.addLogEntry("Updating DB Item object with correct values as this is a 'root' object", ["debug"]);
 						item.parentId = null; 	// ensures that this database entry has no parent
 						// Check for parentReference
 						if (hasParentReference(jsonItem)) {
 							// Set the correct item.driveId
-							addLogEntry("ROOT JSON Item HAS parentReference .... setting item.driveId = jsonItem['parentReference']['driveId'].str", ["debug"]);
+							logBuffer.addLogEntry("ROOT JSON Item HAS parentReference .... setting item.driveId = jsonItem['parentReference']['driveId'].str", ["debug"]);
 							item.driveId = jsonItem["parentReference"]["driveId"].str;
 						}
 						
 						// We only should be adding our account 'root' to the database, not shared folder 'root' items
 						if (item.driveId != appConfig.defaultDriveId) {
 							// Shared Folder drive 'root' object .. we dont want this item
-							addLogEntry("NOT adding 'remote root' object to database: " ~ to!string(item), ["debug"]);
+							logBuffer.addLogEntry("NOT adding 'remote root' object to database: " ~ to!string(item), ["debug"]);
 							return;
 						}
 					}
@@ -6187,13 +6187,13 @@ class SyncEngine {
 				}
 			} else {
 				// log error
-				addLogEntry("ERROR: OneDrive response missing required 'id' element");
-				addLogEntry("ERROR: " ~ to!string(jsonItem));
+				logBuffer.addLogEntry("ERROR: OneDrive response missing required 'id' element");
+				logBuffer.addLogEntry("ERROR: " ~ to!string(jsonItem));
 			}
 		} else {
 			// log error
-			addLogEntry("ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object that can be processed.");
-			addLogEntry("ERROR: Increase logging verbosity to assist determining why.");
+			logBuffer.addLogEntry("ERROR: An error was returned from OneDrive and the resulting response is not a valid JSON object that can be processed.");
+			logBuffer.addLogEntry("ERROR: Increase logging verbosity to assist determining why.");
 		}
 	}
 	
@@ -6217,7 +6217,7 @@ class SyncEngine {
 							// Microsoft OneDrive OneNote objects will report as files but have 'application/msonenote' and 'application/octet-stream' as mime types
 							if ((isMicrosoftOneNoteMimeType1(onedriveJSONItem)) || (isMicrosoftOneNoteMimeType2(onedriveJSONItem))) {
 								// Debug log output that this is a potential OneNote object
-								addLogEntry("This item is potentially an associated Microsoft OneNote Object Item", ["debug"]);
+								logBuffer.addLogEntry("This item is potentially an associated Microsoft OneNote Object Item", ["debug"]);
 							} else {
 								// Not a Microsoft OneNote Mime Type Object ..
 								string apiWarningMessage = "WARNING: OneDrive API inconsistency - this file does not have any hash: ";
@@ -6227,15 +6227,15 @@ class SyncEngine {
 								if (parentInDatabase) {
 									// This is again computationally expensive .. calculate this item path to advise the user the actual path of this item that has no hash
 									string newItemPath = computeItemPath(newDatabaseItem.driveId, newDatabaseItem.parentId) ~ "/" ~ newDatabaseItem.name;
-									addLogEntry(apiWarningMessage ~ newItemPath);
+									logBuffer.addLogEntry(apiWarningMessage ~ newItemPath);
 								} else {
 									// Parent is not in the database .. why?
 									// Check if the parent item had been skipped .. 
 									if (newDatabaseItem.parentId in skippedItems) {
-										addLogEntry(apiWarningMessage ~ "newDatabaseItem.parentId listed within skippedItems", ["debug"]);
+										logBuffer.addLogEntry(apiWarningMessage ~ "newDatabaseItem.parentId listed within skippedItems", ["debug"]);
 									} else {
 										// Use the item ID .. there is no other reference available, parent is not being skipped, so we should have been able to calculate this - but we could not
-										addLogEntry(apiWarningMessage ~ newDatabaseItem.id);
+										logBuffer.addLogEntry(apiWarningMessage ~ newDatabaseItem.id);
 									}
 								}
 							}
@@ -6243,7 +6243,7 @@ class SyncEngine {
 					}
 				} else {
 					// zero file size
-					addLogEntry("This item file is zero size - potentially no hash provided by the OneDrive API", ["debug"]);
+					logBuffer.addLogEntry("This item file is zero size - potentially no hash provided by the OneDrive API", ["debug"]);
 				}
 			}
 		}
@@ -6258,11 +6258,11 @@ class SyncEngine {
 		// Were there any file download failures?
 		if (!fileDownloadFailures.empty) {
 			// There are download failures ...
-			addLogEntry();
-			addLogEntry("Failed items to download from Microsoft OneDrive: " ~ to!string(fileDownloadFailures.length));
+			logBuffer.addLogEntry();
+			logBuffer.addLogEntry("Failed items to download from Microsoft OneDrive: " ~ to!string(fileDownloadFailures.length));
 			foreach(failedFileToDownload; fileDownloadFailures) {
 				// List the detail of the item that failed to download
-				addLogEntry("Failed to download: " ~ failedFileToDownload, ["info", "notify"]);
+				logBuffer.addLogEntry("Failed to download: " ~ failedFileToDownload, ["info", "notify"]);
 				
 				// Is this failed item in the DB? It should not be ..
 				Item downloadDBItem;
@@ -6270,7 +6270,7 @@ class SyncEngine {
 				foreach (searchDriveId; onlineDriveDetails.keys) {
 					if (itemDB.selectByPath(failedFileToDownload, searchDriveId, downloadDBItem)) {
 						// item was found in the DB
-						addLogEntry("ERROR: Failed Download Path found in database, must delete this item from the database .. it should not be in there if it failed to download");
+						logBuffer.addLogEntry("ERROR: Failed Download Path found in database, must delete this item from the database .. it should not be in there if it failed to download");
 						// Process the database entry removal. In a --dry-run scenario, this is being done against a DB copy
 						itemDB.deleteById(downloadDBItem.driveId, downloadDBItem.id);
 						if (downloadDBItem.remoteDriveId != null) {
@@ -6287,11 +6287,11 @@ class SyncEngine {
 		// Were there any file upload failures?
 		if (!fileUploadFailures.empty) {
 			// There are download failures ...
-			addLogEntry();
-			addLogEntry("Failed items to upload to Microsoft OneDrive: " ~ to!string(fileUploadFailures.length));
+			logBuffer.addLogEntry();
+			logBuffer.addLogEntry("Failed items to upload to Microsoft OneDrive: " ~ to!string(fileUploadFailures.length));
 			foreach(failedFileToUpload; fileUploadFailures) {
 				// List the path of the item that failed to upload
-				addLogEntry("Failed to upload: " ~ failedFileToUpload, ["info", "notify"]);
+				logBuffer.addLogEntry("Failed to upload: " ~ failedFileToUpload, ["info", "notify"]);
 				
 				// Is this failed item in the DB? It should not be ..
 				Item uploadDBItem;
@@ -6299,7 +6299,7 @@ class SyncEngine {
 				foreach (searchDriveId; onlineDriveDetails.keys) {
 					if (itemDB.selectByPath(failedFileToUpload, searchDriveId, uploadDBItem)) {
 						// item was found in the DB
-						addLogEntry("ERROR: Failed Upload Path found in database, must delete this item from the database .. it should not be in there if it failed to upload");
+						logBuffer.addLogEntry("ERROR: Failed Upload Path found in database, must delete this item from the database .. it should not be in there if it failed to upload");
 						// Process the database entry removal. In a --dry-run scenario, this is being done against a DB copy
 						itemDB.deleteById(uploadDBItem.driveId, uploadDBItem.id);
 						if (uploadDBItem.remoteDriveId != null) {
@@ -6319,16 +6319,16 @@ class SyncEngine {
 		bool logFailures(string[] failures, string operation) {
 			if (failures.empty) return false;
 
-			addLogEntry();
-			addLogEntry("Failed items to " ~ operation ~ " to/from Microsoft OneDrive: " ~ to!string(failures.length));
+			logBuffer.addLogEntry();
+			logBuffer.addLogEntry("Failed items to " ~ operation ~ " to/from Microsoft OneDrive: " ~ to!string(failures.length));
 
 			foreach (failedFile; failures) {
-				addLogEntry("Failed to " ~ operation ~ ": " ~ failedFile, ["info", "notify"]);
+				logBuffer.addLogEntry("Failed to " ~ operation ~ ": " ~ failedFile, ["info", "notify"]);
 
 				foreach (searchDriveId; onlineDriveDetails.keys) {
 					Item dbItem;
 					if (itemDB.selectByPath(failedFile, searchDriveId, dbItem)) {
-						addLogEntry("ERROR: Failed " ~ operation ~ " path found in database, must delete this item from the database .. it should not be in there if the file failed to " ~ operation);
+						logBuffer.addLogEntry("ERROR: Failed " ~ operation ~ " path found in database, must delete this item from the database .. it should not be in there if the file failed to " ~ operation);
 						itemDB.deleteById(dbItem.driveId, dbItem.id);
 						if (dbItem.remoteDriveId != null) {
 							itemDB.deleteById(dbItem.remoteDriveId, dbItem.remoteId);
@@ -6414,14 +6414,14 @@ class SyncEngine {
 		
 		// Before we get any data from the OneDrive API, flag any child object in the database as out-of-sync for this driveId & and object id
 		// Downgrade ONLY files associated with this driveId and idToQuery
-		addLogEntry("Downgrading all children for this searchItem.driveId (" ~ searchItem.driveId ~ ") and searchItem.id (" ~ searchItem.id ~ ") to an out-of-sync state", ["debug"]);
+		logBuffer.addLogEntry("Downgrading all children for this searchItem.driveId (" ~ searchItem.driveId ~ ") and searchItem.id (" ~ searchItem.id ~ ") to an out-of-sync state", ["debug"]);
 		
 		Item[] drivePathChildren = getChildren(searchItem.driveId, searchItem.id);
 		if (count(drivePathChildren) > 0) {
 			// Children to process and flag as out-of-sync	
 			foreach (drivePathChild; drivePathChildren) {
 				// Flag any object in the database as out-of-sync for this driveId & and object id
-				addLogEntry("Downgrading item as out-of-sync: " ~ drivePathChild.id, ["debug"]);
+				logBuffer.addLogEntry("Downgrading item as out-of-sync: " ~ drivePathChild.id, ["debug"]);
 				itemDB.downgradeSyncStatusFlag(drivePathChild.driveId, drivePathChild.id);
 			}
 		}
@@ -6432,7 +6432,7 @@ class SyncEngine {
 		try {
 			driveData = generateDeltaResponseOneDriveApiInstance.getPathDetailsById(searchItem.driveId, searchItem.id);
 		} catch (OneDriveException exception) {
-			addLogEntry("driveData = generateDeltaResponseOneDriveApiInstance.getPathDetailsById(searchItem.driveId, searchItem.id) generated a OneDriveException", ["debug"]);
+			logBuffer.addLogEntry("driveData = generateDeltaResponseOneDriveApiInstance.getPathDetailsById(searchItem.driveId, searchItem.id) generated a OneDriveException", ["debug"]);
 			
 			string thisFunctionName = getFunctionName!({});
 			// Default operation if not 408,429,503,504 errors
@@ -6447,10 +6447,10 @@ class SyncEngine {
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (appConfig.verbosityCount == 0) {
 				if (!appConfig.suppressLoggingOutput) {
-					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ searchItem.driveId, appConfig.verbosityCount);
+					logBuffer.addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ searchItem.driveId, appConfig.verbosityCount);
 				}
 			} else {
-				addLogEntry("Generating a /delta response from the OneDrive API for Drive ID: " ~ searchItem.driveId, ["verbose"]);
+				logBuffer.addLogEntry("Generating a /delta response from the OneDrive API for Drive ID: " ~ searchItem.driveId, ["verbose"]);
 			}
 		
 			// Process this initial JSON response
@@ -6459,7 +6459,7 @@ class SyncEngine {
 				try {
 					rootData = generateDeltaResponseOneDriveApiInstance.getDriveIdRoot(searchItem.driveId);
 				} catch (OneDriveException exception) {
-					addLogEntry("rootData = onedrive.getDriveIdRoot(searchItem.driveId) generated a OneDriveException", ["debug"]);
+					logBuffer.addLogEntry("rootData = onedrive.getDriveIdRoot(searchItem.driveId) generated a OneDriveException", ["debug"]);
 					
 					string thisFunctionName = getFunctionName!({});
 					// Default operation if not 408,429,503,504 errors
@@ -6469,12 +6469,12 @@ class SyncEngine {
 					
 				}
 				// Add driveData JSON data to array
-				addLogEntry("Adding OneDrive root details for processing", ["verbose"]);
+				logBuffer.addLogEntry("Adding OneDrive root details for processing", ["verbose"]);
 				childrenData ~= rootData;
 			}
 			
 			// Add driveData JSON data to array
-			addLogEntry("Adding OneDrive folder details for processing", ["verbose"]);
+			logBuffer.addLogEntry("Adding OneDrive folder details for processing", ["verbose"]);
 			childrenData ~= driveData;
 		} else {
 			// driveData is an invalid JSON object
@@ -6497,11 +6497,11 @@ class SyncEngine {
 				topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink);
 			} catch (OneDriveException exception) {
 				// OneDrive threw an error
-				addLogEntry("------------------------------------------------------------------", ["debug"]);
-				addLogEntry("Query Error: topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink)", ["debug"]);
-				addLogEntry("driveId:   " ~ searchItem.driveId, ["debug"]);
-				addLogEntry("idToQuery: " ~ searchItem.id, ["debug"]);
-				addLogEntry("nextLink:  " ~ nextLink, ["debug"]);
+				logBuffer.addLogEntry("------------------------------------------------------------------", ["debug"]);
+				logBuffer.addLogEntry("Query Error: topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink)", ["debug"]);
+				logBuffer.addLogEntry("driveId:   " ~ searchItem.driveId, ["debug"]);
+				logBuffer.addLogEntry("idToQuery: " ~ searchItem.id, ["debug"]);
+				logBuffer.addLogEntry("nextLink:  " ~ nextLink, ["debug"]);
 				
 				string thisFunctionName = getFunctionName!({});
 				// Default operation if not 408,429,503,504 errors
@@ -6512,7 +6512,7 @@ class SyncEngine {
 			}
 			
 			// process top level children
-			addLogEntry("Adding " ~ to!string(count(topLevelChildren["value"].array)) ~ " OneDrive items for processing from the OneDrive 'root' folder", ["verbose"]);
+			logBuffer.addLogEntry("Adding " ~ to!string(count(topLevelChildren["value"].array)) ~ " OneDrive items for processing from the OneDrive 'root' folder", ["verbose"]);
 			
 			foreach (child; topLevelChildren["value"].array) {
 				// Check for any Client Side Filtering here ... we should skip querying the OneDrive API for 'folders' that we are going to just process and skip anyway.
@@ -6552,7 +6552,7 @@ class SyncEngine {
 			// to indicate more items are available and provide the request URL for the next page of items.
 			if ("@odata.nextLink" in topLevelChildren) {
 				// Update nextLink to next changeSet bundle
-				addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
+				logBuffer.addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
 				nextLink = topLevelChildren["@odata.nextLink"].str;
 			} else break;
 		}
@@ -6560,7 +6560,7 @@ class SyncEngine {
 		if (appConfig.verbosityCount == 0) {
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (!appConfig.suppressLoggingOutput) {
-				addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+				logBuffer.addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 			}
 		}
 		
@@ -6605,7 +6605,7 @@ class SyncEngine {
 			if (appConfig.verbosityCount == 0) {
 				// Dynamic output for a non-verbose run so that the user knows something is happening
 				if (!appConfig.suppressLoggingOutput) {
-					addProcessingDotEntry();
+					logBuffer.addProcessingDotEntry();
 				}
 			}
 			
@@ -6618,7 +6618,7 @@ class SyncEngine {
 					//   /Level 1/Level 2/Level 3/Child Shared Folder/some folder/another folder
 					// But 'Child Shared Folder' is what is shared, thus '/Level 1/Level 2/Level 3/' is a potential information leak if logged.
 					// Plus, the application output now shows accurately what is being shared - so that is a good thing.
-					addLogEntry("Adding " ~ to!string(count(thisLevelChildren["value"].array)) ~ " OneDrive items for processing from " ~ pathForLogging, ["verbose"]);
+					logBuffer.addLogEntry("Adding " ~ to!string(count(thisLevelChildren["value"].array)) ~ " OneDrive items for processing from " ~ pathForLogging, ["verbose"]);
 				}
 				foreach (child; thisLevelChildren["value"].array) {
 					// Check for any Client Side Filtering here ... we should skip querying the OneDrive API for 'folders' that we are going to just process and skip anyway.
@@ -6650,17 +6650,17 @@ class SyncEngine {
 				if ("@odata.nextLink" in thisLevelChildren) {
 					// Update nextLink to next changeSet bundle
 					nextLink = thisLevelChildren["@odata.nextLink"].str;
-					addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
+					logBuffer.addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
 				} else break;
 			
 			} else {
 				// Invalid JSON response when querying this level children
-				addLogEntry("INVALID JSON response when attempting a retry of parent function - queryForChildren(driveId, idToQuery, childParentPath, pathForLogging)", ["debug"]);
+				logBuffer.addLogEntry("INVALID JSON response when attempting a retry of parent function - queryForChildren(driveId, idToQuery, childParentPath, pathForLogging)", ["debug"]);
 				
 				// retry thisLevelChildren = queryThisLevelChildren
-				addLogEntry("Thread sleeping for an additional 30 seconds", ["debug"]);
+				logBuffer.addLogEntry("Thread sleeping for an additional 30 seconds", ["debug"]);
 				Thread.sleep(dur!"seconds"(30));
-				addLogEntry("Retry this call thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance)", ["debug"]);
+				logBuffer.addLogEntry("Retry this call thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance)", ["debug"]);
 				thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance);
 			}
 		}
@@ -6684,16 +6684,16 @@ class SyncEngine {
 		// query children
 		try {
 			// attempt API call
-			addLogEntry("Attempting Query: thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink)", ["debug"]);
+			logBuffer.addLogEntry("Attempting Query: thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink)", ["debug"]);
 			thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink);
-			addLogEntry("Query 'thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink)' performed successfully", ["debug"]);
+			logBuffer.addLogEntry("Query 'thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink)' performed successfully", ["debug"]);
 		} catch (OneDriveException exception) {
 			// OneDrive threw an error
-			addLogEntry("------------------------------------------------------------------", ["debug"]);
-			addLogEntry("Query Error: thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink)", ["debug"]);
-			addLogEntry("driveId: " ~ driveId, ["debug"]);
-			addLogEntry("idToQuery: " ~ idToQuery, ["debug"]);
-			addLogEntry("nextLink: " ~ nextLink, ["debug"]);
+			logBuffer.addLogEntry("------------------------------------------------------------------", ["debug"]);
+			logBuffer.addLogEntry("Query Error: thisLevelChildren = queryChildrenOneDriveApiInstance.listChildren(driveId, idToQuery, nextLink)", ["debug"]);
+			logBuffer.addLogEntry("driveId: " ~ driveId, ["debug"]);
+			logBuffer.addLogEntry("idToQuery: " ~ idToQuery, ["debug"]);
+			logBuffer.addLogEntry("nextLink: " ~ nextLink, ["debug"]);
 			
 			string thisFunctionName = getFunctionName!({});
 			// Default operation if not 408,429,503,504 errors
@@ -6733,7 +6733,7 @@ class SyncEngine {
 		queryOneDriveForSpecificPath.initialise();
 		
 		foreach (thisFolderName; pathSplitter(thisNewPathToSearch)) {
-			addLogEntry("Testing for the existence online of this folder path: " ~ thisFolderName, ["debug"]);
+			logBuffer.addLogEntry("Testing for the existence online of this folder path: " ~ thisFolderName, ["debug"]);
 			directoryFoundOnline = false;
 			
 			// If this is '.' this is the account root
@@ -6743,7 +6743,7 @@ class SyncEngine {
 				currentPathTree = currentPathTree ~ "/" ~ thisFolderName;
 			}
 			
-			addLogEntry("Attempting to query OneDrive for this path: " ~ currentPathTree, ["debug"]);
+			logBuffer.addLogEntry("Attempting to query OneDrive for this path: " ~ currentPathTree, ["debug"]);
 			
 			// What query do we use?
 			if (thisFolderName == ".") {
@@ -6790,7 +6790,7 @@ class SyncEngine {
 						directoryFoundOnline = true;
 						
 						// Is this JSON a remote object
-						addLogEntry("Testing if this is a remote Shared Folder", ["debug"]);
+						logBuffer.addLogEntry("Testing if this is a remote Shared Folder", ["debug"]);
 						if (isItemRemote(getPathDetailsAPIResponse)) {
 							// Remote Directory .. need a DB Tie Record
 							createDatabaseTieRecordForOnlineSharedFolder(parentDetails);
@@ -6823,11 +6823,11 @@ class SyncEngine {
 							
 						}
 					} catch (JsonResponseException e) {
-							addLogEntry(e.msg, ["debug"]);
+							logBuffer.addLogEntry(e.msg, ["debug"]);
 					}
 				} else {
 					// parentDetails.driveId is not the account drive id - thus will be a remote shared item
-					addLogEntry("This parent directory is a remote object this next path will be on a remote drive", ["debug"]);
+					logBuffer.addLogEntry("This parent directory is a remote object this next path will be on a remote drive", ["debug"]);
 					
 					// For this parentDetails.driveId, parentDetails.id object, query the OneDrive API for it's children
 					for (;;) {
@@ -6870,7 +6870,7 @@ class SyncEngine {
 						// to indicate more items are available and provide the request URL for the next page of items.
 						if ("@odata.nextLink" in topLevelChildren) {
 							// Update nextLink to next changeSet bundle
-							addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
+							logBuffer.addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
 							nextLink = topLevelChildren["@odata.nextLink"].str;
 						} else break;
 					}
@@ -6887,10 +6887,10 @@ class SyncEngine {
 					// No POSIX issue
 					if (createPathIfMissing) {
 						// Create this path as it is missing on OneDrive online and there is no POSIX issue with a 'case-insensitive match'
-						addLogEntry("FOLDER NOT FOUND ONLINE AND WE ARE REQUESTED TO CREATE IT", ["debug"]);
-						addLogEntry("Create folder on this drive:             " ~ parentDetails.driveId, ["debug"]);
-						addLogEntry("Create folder as a child on this object: " ~ parentDetails.id, ["debug"]);
-						addLogEntry("Create this folder name:                 " ~ thisFolderName, ["debug"]);
+						logBuffer.addLogEntry("FOLDER NOT FOUND ONLINE AND WE ARE REQUESTED TO CREATE IT", ["debug"]);
+						logBuffer.addLogEntry("Create folder on this drive:             " ~ parentDetails.driveId, ["debug"]);
+						logBuffer.addLogEntry("Create folder as a child on this object: " ~ parentDetails.id, ["debug"]);
+						logBuffer.addLogEntry("Create this folder name:                 " ~ thisFolderName, ["debug"]);
 						
 						// Generate the JSON needed to create the folder online
 						JSONValue newDriveItem = [
@@ -6913,10 +6913,10 @@ class SyncEngine {
 								// 409 - API Race Condition
 								if (e.httpStatusCode == 409) {
 									// When we attempted to create it, OneDrive responded that it now already exists
-									addLogEntry("OneDrive reported that " ~ thisFolderName ~ " already exists .. OneDrive API race condition", ["verbose"]);
+									logBuffer.addLogEntry("OneDrive reported that " ~ thisFolderName ~ " already exists .. OneDrive API race condition", ["verbose"]);
 								} else {
 									// some other error from OneDrive was returned - display what it is
-									addLogEntry("OneDrive generated an error when creating this path: " ~ thisFolderName);
+									logBuffer.addLogEntry("OneDrive generated an error when creating this path: " ~ thisFolderName);
 									displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 								}
 							}
@@ -6939,7 +6939,7 @@ class SyncEngine {
 		GC.collect();
 		
 		// Output our search results
-		addLogEntry("queryOneDriveForSpecificPathAndCreateIfMissing.getPathDetailsAPIResponse = " ~ to!string(getPathDetailsAPIResponse), ["debug"]);
+		logBuffer.addLogEntry("queryOneDriveForSpecificPathAndCreateIfMissing.getPathDetailsAPIResponse = " ~ to!string(getPathDetailsAPIResponse), ["debug"]);
 		return getPathDetailsAPIResponse;
 	}
 	
@@ -6966,7 +6966,7 @@ class SyncEngine {
 			// was this a --remove-directory attempt?
 			if (!appConfig.getValueBool("monitor")) {
 				// --remove-directory deletion attempt
-				addLogEntry("The item to delete is not in the local database - unable to delete online");
+				logBuffer.addLogEntry("The item to delete is not in the local database - unable to delete online");
 				return;
 			} else {
 				// normal use .. --monitor being used
@@ -6983,13 +6983,13 @@ class SyncEngine {
 		try {
 			if (noRemoteDelete) {
 				// do not process remote delete
-				addLogEntry("Skipping remote delete as --upload-only & --no-remote-delete configured", ["verbose"]);
+				logBuffer.addLogEntry("Skipping remote delete as --upload-only & --no-remote-delete configured", ["verbose"]);
 			} else {
 				uploadDeletedItem(dbItem, path);
 			}
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 404) {
-				addLogEntry(e.msg);
+				logBuffer.addLogEntry(e.msg);
 			} else {
 				// display what the error is
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
@@ -7002,7 +7002,7 @@ class SyncEngine {
 	// inotify and we try to move the item.
 	void uploadMoveItem(string oldPath, string newPath) {
 		// Log that we are doing a move
-		addLogEntry("Moving " ~ oldPath ~ " to " ~ newPath);
+		logBuffer.addLogEntry("Moving " ~ oldPath ~ " to " ~ newPath);
 		// Is this move unwanted?
 		bool unwanted = false;
 		// Item variables
@@ -7013,7 +7013,7 @@ class SyncEngine {
 		if (!unwanted) {
 			if(!isValid(newPath)) {
 				// Path is not valid according to https://dlang.org/phobos/std_encoding.html
-				addLogEntry("Skipping item - invalid character encoding sequence: " ~ newPath, ["info", "notify"]);
+				logBuffer.addLogEntry("Skipping item - invalid character encoding sequence: " ~ newPath, ["info", "notify"]);
 				unwanted = true;
 			}
 		}
@@ -7044,7 +7044,7 @@ class SyncEngine {
 		
 			if (!itemDB.selectByPath(oldPath, appConfig.defaultDriveId, oldItem)) {
 				// The old path|item is not synced with the database, upload as a new file
-				addLogEntry("Moved local item was not in-sync with local database - uploading as new item");
+				logBuffer.addLogEntry("Moved local item was not in-sync with local database - uploading as new item");
 				scanLocalFilesystemPathForNewData(newPath);
 				return;
 			}
@@ -7056,7 +7056,7 @@ class SyncEngine {
 		
 			if (itemDB.selectByPath(newPath, appConfig.defaultDriveId, newItem)) {
 				// the destination has been overwritten
-				addLogEntry("Moved local item overwrote an existing item - deleting old online item");
+				logBuffer.addLogEntry("Moved local item overwrote an existing item - deleting old online item");
 				uploadDeletedItem(newItem, newPath);
 			}
 			
@@ -7081,7 +7081,7 @@ class SyncEngine {
 				if (!exists(newPath)) {
 					// is this --monitor use?
 					if (appConfig.getValueBool("monitor")) {
-						addLogEntry("uploadMoveItem target has disappeared: " ~ newPath, ["verbose"]);
+						logBuffer.addLogEntry("uploadMoveItem target has disappeared: " ~ newPath, ["verbose"]);
 						return;
 					}
 				}
@@ -7127,13 +7127,13 @@ class SyncEngine {
 						if (e.httpStatusCode == 412) {
 							// OneDrive threw a 412 error, most likely: ETag does not match current item's value
 							// Retry without eTag
-							addLogEntry("File Move Failed - OneDrive eTag / cTag match issue", ["debug"]);
-							addLogEntry("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting to move the file - gracefully handling error", ["verbose"]);
+							logBuffer.addLogEntry("File Move Failed - OneDrive eTag / cTag match issue", ["debug"]);
+							logBuffer.addLogEntry("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting to move the file - gracefully handling error", ["verbose"]);
 							eTag = null;
 							// Retry to move the file but without the eTag, via the for() loop
 						} else if (e.httpStatusCode == 409) {
 							// Destination item already exists and is a conflict, delete it first
-							addLogEntry("Moved local item overwrote an existing item - deleting old online item");
+							logBuffer.addLogEntry("Moved local item overwrote an existing item - deleting old online item");
 							uploadDeletedItem(newItem, newPath);
 						} else
 							break;
@@ -7152,7 +7152,7 @@ class SyncEngine {
 			}
 		} else {
 			// Moved item is unwanted
-			addLogEntry("Item has been moved to a location that is excluded from sync operations. Removing item from OneDrive");
+			logBuffer.addLogEntry("Item has been moved to a location that is excluded from sync operations. Removing item from OneDrive");
 			uploadDeletedItem(oldItem, oldPath);
 		}
 	}
@@ -7172,43 +7172,43 @@ class SyncEngine {
 				
 				if ((localFileSize == uploadFileSize) && (localFileHash == uploadFileHash)) {
 					// Uploaded file integrity intact
-					addLogEntry("Uploaded local file matches reported online size and hash values", ["debug"]);
+					logBuffer.addLogEntry("Uploaded local file matches reported online size and hash values", ["debug"]);
 					integrityValid = true;
 				} else if (raiseWarning) {
 					// Upload integrity failure .. what failed?
 					// There are 2 scenarios where this happens:
 					// 1. Failed Transfer
 					// 2. Upload file is going to a SharePoint Site, where Microsoft enriches the file with additional metadata with no way to disable
-					addLogEntry("WARNING: Online file integrity failure for: " ~ localFilePath, ["info", "notify"]);
+					logBuffer.addLogEntry("WARNING: Online file integrity failure for: " ~ localFilePath, ["info", "notify"]);
 					
 					// What integrity failed - size?
 					if (localFileSize != uploadFileSize) {
-						addLogEntry("WARNING: Online file integrity failure - Size Mismatch", ["verbose"]);
+						logBuffer.addLogEntry("WARNING: Online file integrity failure - Size Mismatch", ["verbose"]);
 					}
 					
 					// What integrity failed - hash?
 					if (localFileHash != uploadFileHash) {
-						addLogEntry("WARNING: Online file integrity failure - Hash Mismatch", ["verbose"]);
+						logBuffer.addLogEntry("WARNING: Online file integrity failure - Hash Mismatch", ["verbose"]);
 					}
 					
 					// What account type is this?
 					if (appConfig.accountType != "personal") {
 						// Not a personal account, thus the integrity failure is most likely due to SharePoint
-						addLogEntry("CAUTION: When you upload files to Microsoft OneDrive that uses SharePoint as its backend, Microsoft OneDrive will alter your files post upload.", ["verbose"]);
-						addLogEntry("CAUTION: This will lead to technical differences between the version stored online and your local original file, potentially causing issues with the accuracy or consistency of your data.", ["verbose"]);
-						addLogEntry("CAUTION: Please read https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.", ["verbose"]);
+						logBuffer.addLogEntry("CAUTION: When you upload files to Microsoft OneDrive that uses SharePoint as its backend, Microsoft OneDrive will alter your files post upload.", ["verbose"]);
+						logBuffer.addLogEntry("CAUTION: This will lead to technical differences between the version stored online and your local original file, potentially causing issues with the accuracy or consistency of your data.", ["verbose"]);
+						logBuffer.addLogEntry("CAUTION: Please read https://github.com/OneDrive/onedrive-api-docs/issues/935 for further details.", ["verbose"]);
 					}
 					// How can this be disabled?
-					addLogEntry("To disable the integrity checking of uploaded files use --disable-upload-validation");
+					logBuffer.addLogEntry("To disable the integrity checking of uploaded files use --disable-upload-validation");
 				}
 			} else {
-				addLogEntry("Online file validation unable to be performed: input JSON was invalid");
-				addLogEntry("WARNING: Skipping upload integrity check for: " ~ localFilePath);
+				logBuffer.addLogEntry("Online file validation unable to be performed: input JSON was invalid");
+				logBuffer.addLogEntry("WARNING: Skipping upload integrity check for: " ~ localFilePath);
 			}
 		} else {
 			// We are bypassing integrity checks due to --disable-upload-validation
-			addLogEntry("Online file validation disabled due to --disable-upload-validation", ["debug"]);
-			addLogEntry("WARNING: Skipping upload integrity check for: " ~ localFilePath, ["info", "notify"]);
+			logBuffer.addLogEntry("Online file validation disabled due to --disable-upload-validation", ["debug"]);
+			logBuffer.addLogEntry("WARNING: Skipping upload integrity check for: " ~ localFilePath, ["info", "notify"]);
 		}
 		
 		// Is the file integrity online valid?
@@ -7238,22 +7238,22 @@ class SyncEngine {
 		
 		// The account type must not be a personal account type
 		if (appConfig.accountType == "personal") {
-			addLogEntry("ERROR: A OneDrive Personal Account cannot be used with --get-sharepoint-drive-id. Please re-authenticate your client using a OneDrive Business Account.");
+			logBuffer.addLogEntry("ERROR: A OneDrive Personal Account cannot be used with --get-sharepoint-drive-id. Please re-authenticate your client using a OneDrive Business Account.");
 			return;
 		}
 		
 		// What query are we performing?
-		addLogEntry();
-		addLogEntry("Office 365 Library Name Query: " ~ sharepointLibraryNameToQuery);
+		logBuffer.addLogEntry();
+		logBuffer.addLogEntry("Office 365 Library Name Query: " ~ sharepointLibraryNameToQuery);
 		
 		for (;;) {
 			try {
 				siteQuery = querySharePointLibraryNameApiInstance.o365SiteSearch(nextLink);
 			} catch (OneDriveException e) {
-				addLogEntry("ERROR: Query of OneDrive for Office 365 Library Name failed");
+				logBuffer.addLogEntry("ERROR: Query of OneDrive for Office 365 Library Name failed");
 				// Forbidden - most likely authentication scope needs to be updated
 				if (e.httpStatusCode == 403) {
-					addLogEntry("ERROR: Authentication scope needs to be updated. Use --reauth and re-authenticate client.");
+					logBuffer.addLogEntry("ERROR: Authentication scope needs to be updated. Use --reauth and re-authenticate client.");
 					
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					querySharePointLibraryNameApiInstance.releaseCurlEngine();
@@ -7272,8 +7272,8 @@ class SyncEngine {
 						siteSearchUrl = nextLink;
 					}
 					// log the error
-					addLogEntry("ERROR: Your OneDrive Account and Authentication Scope cannot access this OneDrive API: " ~ siteSearchUrl);
-					addLogEntry("ERROR: To resolve, please discuss this issue with whomever supports your OneDrive and SharePoint environment.");
+					logBuffer.addLogEntry("ERROR: Your OneDrive Account and Authentication Scope cannot access this OneDrive API: " ~ siteSearchUrl);
+					logBuffer.addLogEntry("ERROR: To resolve, please discuss this issue with whomever supports your OneDrive and SharePoint environment.");
 					
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					querySharePointLibraryNameApiInstance.releaseCurlEngine();
@@ -7299,11 +7299,11 @@ class SyncEngine {
 			// is siteQuery a valid JSON object & contain data we can use?
 			if ((siteQuery.type() == JSONType.object) && ("value" in siteQuery)) {
 				// valid JSON object
-				addLogEntry("O365 Query Response: " ~ to!string(siteQuery), ["debug"]);
+				logBuffer.addLogEntry("O365 Query Response: " ~ to!string(siteQuery), ["debug"]);
 				
 				foreach (searchResult; siteQuery["value"].array) {
 					// Need an 'exclusive' match here with sharepointLibraryNameToQuery as entered
-					addLogEntry("Found O365 Site: " ~ to!string(searchResult), ["debug"]);
+					logBuffer.addLogEntry("Found O365 Site: " ~ to!string(searchResult), ["debug"]);
 					
 					// 'displayName' and 'id' have to be present in the search result record in order to query the site
 					if (("displayName" in searchResult) && ("id" in searchResult)) {
@@ -7315,7 +7315,7 @@ class SyncEngine {
 							try {
 								siteDriveQuery = querySharePointLibraryNameApiInstance.o365SiteDrives(site_id);
 							} catch (OneDriveException e) {
-								addLogEntry("ERROR: Query of OneDrive for Office Site ID failed");
+								logBuffer.addLogEntry("ERROR: Query of OneDrive for Office Site ID failed");
 								// display what the error is
 								displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 								
@@ -7333,7 +7333,7 @@ class SyncEngine {
 								foreach (driveResult; siteDriveQuery["value"].array) {
 									// Display results
 									writeln("-----------------------------------------------");
-									addLogEntry("Site Details: " ~ to!string(driveResult), ["debug"]);
+									logBuffer.addLogEntry("Site Details: " ~ to!string(driveResult), ["debug"]);
 									found = true;
 									writeln("Site Name:    ", searchResult["displayName"].str);
 									writeln("Library Name: ", driveResult["name"].str);
@@ -7344,8 +7344,8 @@ class SyncEngine {
 								writeln("-----------------------------------------------");
 							} else {
 								// not a valid JSON object
-								addLogEntry("ERROR: There was an error performing this operation on Microsoft OneDrive");
-								addLogEntry("ERROR: Increase logging verbosity to assist determining why.");
+								logBuffer.addLogEntry("ERROR: There was an error performing this operation on Microsoft OneDrive");
+								logBuffer.addLogEntry("ERROR: Increase logging verbosity to assist determining why.");
 								
 								// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 								querySharePointLibraryNameApiInstance.releaseCurlEngine();
@@ -7365,13 +7365,13 @@ class SyncEngine {
 						if ("id" in searchResult) idAvailable = true;
 						
 						// Display error details for this site data
-						addLogEntry();
-						addLogEntry("ERROR: SharePoint Site details not provided for: " ~ siteNameAvailable);
-						addLogEntry("ERROR: The SharePoint Site results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator.");
-						addLogEntry("ERROR: Your site security settings is preventing the following details from being accessed: 'displayName' or 'id'");
-						addLogEntry(" - Is 'displayName' available = " ~ to!string(displayNameAvailable), ["verbose"]);
-						addLogEntry(" - Is 'id' available          = " ~ to!string(idAvailable), ["verbose"]);
-						addLogEntry("ERROR: To debug this further, please increase verbosity (--verbose or --verbose --verbose) to provide further insight as to what details are actually being returned.");
+						logBuffer.addLogEntry();
+						logBuffer.addLogEntry("ERROR: SharePoint Site details not provided for: " ~ siteNameAvailable);
+						logBuffer.addLogEntry("ERROR: The SharePoint Site results returned from OneDrive API do not contain the required items to match. Please check your permissions with your site administrator.");
+						logBuffer.addLogEntry("ERROR: Your site security settings is preventing the following details from being accessed: 'displayName' or 'id'");
+						logBuffer.addLogEntry(" - Is 'displayName' available = " ~ to!string(displayNameAvailable), ["verbose"]);
+						logBuffer.addLogEntry(" - Is 'id' available          = " ~ to!string(idAvailable), ["verbose"]);
+						logBuffer.addLogEntry("ERROR: To debug this further, please increase verbosity (--verbose or --verbose --verbose) to provide further insight as to what details are actually being returned.");
 					}
 				}
 				
@@ -7392,15 +7392,15 @@ class SyncEngine {
 								siteSearchResults ~= siteSearchResultsEntry;
 							} else {
 								// displayName and id unavailable, display in debug log the entry
-								addLogEntry("Bad SharePoint Data for site: " ~ to!string(searchResult), ["debug"]);
+								logBuffer.addLogEntry("Bad SharePoint Data for site: " ~ to!string(searchResult), ["debug"]);
 							}
 						}
 					}
 				}
 			} else {
 				// not a valid JSON object
-				addLogEntry("ERROR: There was an error performing this operation on Microsoft OneDrive");
-				addLogEntry("ERROR: Increase logging verbosity to assist determining why.");
+				logBuffer.addLogEntry("ERROR: There was an error performing this operation on Microsoft OneDrive");
+				logBuffer.addLogEntry("ERROR: Increase logging verbosity to assist determining why.");
 				
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				querySharePointLibraryNameApiInstance.releaseCurlEngine();
@@ -7415,7 +7415,7 @@ class SyncEngine {
 			if ("@odata.nextLink" in siteQuery) {
 				// Update nextLink to next set of SharePoint library names
 				nextLink = siteQuery["@odata.nextLink"].str;
-				addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
+				logBuffer.addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
 			} else break;
 		}
 		
@@ -7424,15 +7424,15 @@ class SyncEngine {
 			// Was the search a wildcard?
 			if (sharepointLibraryNameToQuery != "*") {
 				// Only print this out if the search was not a wildcard
-				addLogEntry();
-				addLogEntry("ERROR: The requested SharePoint site could not be found. Please check it's name and your permissions to access the site.");
+				logBuffer.addLogEntry();
+				logBuffer.addLogEntry("ERROR: The requested SharePoint site could not be found. Please check it's name and your permissions to access the site.");
 			}
 			// List all sites returned to assist user
-			addLogEntry();
-			addLogEntry("The following SharePoint site names were returned:");
+			logBuffer.addLogEntry();
+			logBuffer.addLogEntry("The following SharePoint site names were returned:");
 			foreach (searchResultEntry; siteSearchResults) {
 				// list the display name that we use to match against the user query
-				addLogEntry(searchResultEntry);
+				logBuffer.addLogEntry(searchResultEntry);
 			}
 		}
 		
@@ -7463,12 +7463,12 @@ class SyncEngine {
 		deltaLink = itemDB.getDeltaLink(driveIdToQuery, itemIdToQuery);
 		
 		// Log what we are doing
-		addProcessingLogHeaderEntry("Querying the change status of Drive ID: " ~ driveIdToQuery, appConfig.verbosityCount);
+		logBuffer.addProcessingLogHeaderEntry("Querying the change status of Drive ID: " ~ driveIdToQuery, appConfig.verbosityCount);
 		
 		for (;;) {
 			// Add a processing '.'
 			if (appConfig.verbosityCount == 0) {
-				addProcessingDotEntry();
+				logBuffer.addProcessingDotEntry();
 			}
 		
 			// Get the /delta changes via the OneDrive API
@@ -7479,7 +7479,7 @@ class SyncEngine {
 			if (deltaChanges.type() != JSONType.object) {
 				while (deltaChanges.type() != JSONType.object) {
 					// Handle the invalid JSON response and retry
-					addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response", ["debug"]);
+					logBuffer.addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response", ["debug"]);
 					deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink);
 				}
 			}
@@ -7533,20 +7533,20 @@ class SyncEngine {
 			// The response may contain either @odata.deltaLink or @odata.nextLink
 			if ("@odata.deltaLink" in deltaChanges) {
 				deltaLink = deltaChanges["@odata.deltaLink"].str;
-				addLogEntry("Setting next deltaLink to (@odata.deltaLink): " ~ deltaLink, ["debug"]);
+				logBuffer.addLogEntry("Setting next deltaLink to (@odata.deltaLink): " ~ deltaLink, ["debug"]);
 			}
 			
 			// Update deltaLink to next changeSet bundle
 			if ("@odata.nextLink" in deltaChanges) {	
 				deltaLink = deltaChanges["@odata.nextLink"].str;
-				addLogEntry("Setting next deltaLink to (@odata.nextLink): " ~ deltaLink, ["debug"]);
+				logBuffer.addLogEntry("Setting next deltaLink to (@odata.nextLink): " ~ deltaLink, ["debug"]);
 			}
 			else break;
 		}
 		
 		// Needed after printing out '....' when fetching changes from OneDrive API
 		if (appConfig.verbosityCount == 0) {
-			addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+			logBuffer.addLogEntry("\n", ["consoleOnlyNoNewLine"]);
 		}
 		
 		// Are there any JSON items to process?
@@ -7656,14 +7656,14 @@ class SyncEngine {
 					if (fileDetailsFromOneDrive.type() == JSONType.object) {
 					
 						// debug output of response
-						addLogEntry("API Response: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);
+						logBuffer.addLogEntry("API Response: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);
 						
 						// What sort of response to we generate
 						// --get-file-link response
 						if (outputType == "URL") {
 							if ((fileDetailsFromOneDrive.type() == JSONType.object) && ("webUrl" in fileDetailsFromOneDrive)) {
 								// Valid JSON object
-								addLogEntry();
+								logBuffer.addLogEntry();
 								writeln("WebURL: ", fileDetailsFromOneDrive["webUrl"].str);
 							}
 						}
@@ -7739,11 +7739,11 @@ class SyncEngine {
 			// was path found?
 			if (!pathInDB) {
 				// File has not been synced with OneDrive
-				addLogEntry("Selected path has not been synced with Microsoft OneDrive: " ~ inputFilePath);
+				logBuffer.addLogEntry("Selected path has not been synced with Microsoft OneDrive: " ~ inputFilePath);
 			}
 		} else {
 			// File does not exist locally
-			addLogEntry("Selected path not found on local system: " ~ inputFilePath);
+			logBuffer.addLogEntry("Selected path not found on local system: " ~ inputFilePath);
 		}
 	}
 	
@@ -7764,7 +7764,7 @@ class SyncEngine {
 			// Create a new OneDrive API instance
 			getCurrentDriveQuotaApiInstance = new OneDriveApi(appConfig);
 			getCurrentDriveQuotaApiInstance.initialise();
-			addLogEntry("Seeking available quota for this drive id: " ~ driveId, ["debug"]);
+			logBuffer.addLogEntry("Seeking available quota for this drive id: " ~ driveId, ["debug"]);
 			currentDriveQuota = getCurrentDriveQuotaApiInstance.getDriveQuota(driveId);
 			
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
@@ -7774,7 +7774,7 @@ class SyncEngine {
 			GC.collect();
 			
 		} catch (OneDriveException e) {
-			addLogEntry("currentDriveQuota = onedrive.getDriveQuota(driveId) generated a OneDriveException", ["debug"]);
+			logBuffer.addLogEntry("currentDriveQuota = onedrive.getDriveQuota(driveId) generated a OneDriveException", ["debug"]);
 			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 			getCurrentDriveQuotaApiInstance.releaseCurlEngine();
 			getCurrentDriveQuotaApiInstance = null;
@@ -7788,7 +7788,7 @@ class SyncEngine {
 			if ("quota" in currentDriveQuota) {
 		
 				// debug output of response
-				addLogEntry("currentDriveQuota: " ~ to!string(currentDriveQuota), ["debug"]);
+				logBuffer.addLogEntry("currentDriveQuota: " ~ to!string(currentDriveQuota), ["debug"]);
 				
 				// human readable output of response
 				string deletedValue = "Not Provided";
@@ -7864,7 +7864,7 @@ class SyncEngine {
 			// calculate the full path
 			string tempPath = buildNormalizedPath(buildPath(appConfig.configDirName, sessionFile));
 			JSONValue sessionFileData = readText(tempPath).parseJSON();
-			addLogEntry("Removing interrupted session upload file due to --resync for: " ~ sessionFileData["localPath"].str, ["info"]);
+			logBuffer.addLogEntry("Removing interrupted session upload file due to --resync for: " ~ sessionFileData["localPath"].str, ["info"]);
 			
 			// Process removal
 			if (!dryRun) {
@@ -7880,7 +7880,7 @@ class SyncEngine {
 			if (!validateUploadSessionFileData(sessionFilePath)) {
 				// Remove upload_session file as it is invalid
 				// upload_session file file contains an error - cant resume this session
-				addLogEntry("Restore file upload session failed - cleaning up resumable session data file: " ~ sessionFilePath, ["verbose"]);
+				logBuffer.addLogEntry("Restore file upload session failed - cleaning up resumable session data file: " ~ sessionFilePath, ["verbose"]);
 				
 				// cleanup session path
 				if (exists(sessionFilePath)) {
@@ -7917,18 +7917,18 @@ class SyncEngine {
 		try {
 			sessionFileData = readText(sessionFilePath).parseJSON();
 		} catch (JSONException e) {
-			addLogEntry("SESSION-RESUME: Invalid JSON data in: " ~ sessionFilePath, ["debug"]);
+			logBuffer.addLogEntry("SESSION-RESUME: Invalid JSON data in: " ~ sessionFilePath, ["debug"]);
 			return false;
 		}
 		
 		// Does the file we wish to resume uploading exist locally still?
 		if ("localPath" in sessionFileData) {
 			string sessionLocalFilePath = sessionFileData["localPath"].str;
-			addLogEntry("SESSION-RESUME: sessionLocalFilePath: " ~ sessionLocalFilePath, ["debug"]);
+			logBuffer.addLogEntry("SESSION-RESUME: sessionLocalFilePath: " ~ sessionLocalFilePath, ["debug"]);
 			
 			// Does the file exist?
 			if (!exists(sessionLocalFilePath)) {
-				addLogEntry("The local file to upload does not exist locally anymore", ["verbose"]);
+				logBuffer.addLogEntry("The local file to upload does not exist locally anymore", ["verbose"]);
 				return false;
 			}
 			
@@ -7939,7 +7939,7 @@ class SyncEngine {
 			}
 			
 		} else {
-			addLogEntry("SESSION-RESUME: No localPath data in: " ~ sessionFilePath, ["debug"]);
+			logBuffer.addLogEntry("SESSION-RESUME: No localPath data in: " ~ sessionFilePath, ["debug"]);
 			return false;
 		}
 		
@@ -7947,11 +7947,11 @@ class SyncEngine {
 		if ("expirationDateTime" in sessionFileData) {
 			auto expiration = SysTime.fromISOExtString(sessionFileData["expirationDateTime"].str);
 			if (expiration < Clock.currTime()) {
-				addLogEntry("The upload session has expired for: " ~ sessionFilePath, ["verbose"]);
+				logBuffer.addLogEntry("The upload session has expired for: " ~ sessionFilePath, ["verbose"]);
 				return false;
 			}
 		} else {
-			addLogEntry("SESSION-RESUME: No expirationDateTime data in: " ~ sessionFilePath, ["debug"]);
+			logBuffer.addLogEntry("SESSION-RESUME: No expirationDateTime data in: " ~ sessionFilePath, ["debug"]);
 			return false;
 		}
 		
@@ -7975,7 +7975,7 @@ class SyncEngine {
 				
 			} catch (OneDriveException e) {
 				// handle any onedrive error response as invalid
-				addLogEntry("SESSION-RESUME: Invalid response when using uploadUrl in: " ~ sessionFilePath, ["debug"]);
+				logBuffer.addLogEntry("SESSION-RESUME: Invalid response when using uploadUrl in: " ~ sessionFilePath, ["debug"]);
 				
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 				validateUploadSessionFileDataApiInstance.releaseCurlEngine();
@@ -7994,20 +7994,20 @@ class SyncEngine {
 					sessionFileData["nextExpectedRanges"] = response["nextExpectedRanges"];
 					
 					if (sessionFileData["nextExpectedRanges"].array.length == 0) {
-						addLogEntry("The upload session was already completed", ["verbose"]);
+						logBuffer.addLogEntry("The upload session was already completed", ["verbose"]);
 						return false;
 					}
 				} else {
-					addLogEntry("SESSION-RESUME: No expirationDateTime & nextExpectedRanges data in Microsoft OneDrive API response: " ~ to!string(response), ["debug"]);
+					logBuffer.addLogEntry("SESSION-RESUME: No expirationDateTime & nextExpectedRanges data in Microsoft OneDrive API response: " ~ to!string(response), ["debug"]);
 					return false;
 				}
 			} else {
 				// not a JSON object
-				addLogEntry("Restore file upload session failed - invalid response from Microsoft OneDrive", ["verbose"]);
+				logBuffer.addLogEntry("Restore file upload session failed - invalid response from Microsoft OneDrive", ["verbose"]);
 				return false;
 			}
 		} else {
-			addLogEntry("SESSION-RESUME: No uploadUrl data in: " ~ sessionFilePath, ["debug"]);
+			logBuffer.addLogEntry("SESSION-RESUME: No uploadUrl data in: " ~ sessionFilePath, ["debug"]);
 			return false;
 		}
 		
@@ -8057,26 +8057,26 @@ class SyncEngine {
 				// Use actual config values as we are doing an upload session recovery
 				if (localDeleteAfterUpload) {
 					// Log that we are deleting a local item
-					addLogEntry("Removing local file as --upload-only & --remove-source-files configured");
+					logBuffer.addLogEntry("Removing local file as --upload-only & --remove-source-files configured");
 					// are we in a --dry-run scenario?
 					if (!dryRun) {
 						// No --dry-run ... process local file delete
 						// Only perform the delete if we have a valid file path
 						if (exists(jsonItemToResume["localPath"].str)) {
 							// file exists
-							addLogEntry("Removing local file: " ~ jsonItemToResume["localPath"].str, ["debug"]);
+							logBuffer.addLogEntry("Removing local file: " ~ jsonItemToResume["localPath"].str, ["debug"]);
 							safeRemove(jsonItemToResume["localPath"].str);
 						}
 					}
 					// as file is removed, we have nothing to add to the local database
-					addLogEntry("Skipping adding to database as --upload-only & --remove-source-files configured", ["debug"]);
+					logBuffer.addLogEntry("Skipping adding to database as --upload-only & --remove-source-files configured", ["debug"]);
 				} else {
 					// Save JSON item in database
 					saveItem(uploadResponse);
 				}
 			} else {
 				// No valid response was returned
-				addLogEntry("CODING TO DO: what to do when session upload resumption JSON data is not valid ... nothing ? error message ?");
+				logBuffer.addLogEntry("CODING TO DO: what to do when session upload resumption JSON data is not valid ... nothing ? error message ?");
 			}
 		}
 	}
@@ -8085,9 +8085,9 @@ class SyncEngine {
 	string processPathToRemoveRootReference(ref string pathToCheck) {
 		size_t colonIndex = pathToCheck.indexOf(":");
 		if (colonIndex != -1) {
-			addLogEntry("Updating " ~ pathToCheck ~ " to remove prefix up to ':'", ["debug"]);
+			logBuffer.addLogEntry("Updating " ~ pathToCheck ~ " to remove prefix up to ':'", ["debug"]);
 			pathToCheck = pathToCheck[colonIndex + 1 .. $];
-			addLogEntry("Updated path for 'skip_dir' check: " ~ pathToCheck, ["debug"]);
+			logBuffer.addLogEntry("Updated path for 'skip_dir' check: " ~ pathToCheck, ["debug"]);
 		}
 		return pathToCheck;
 	}
@@ -8119,7 +8119,7 @@ class SyncEngine {
 		onlineDriveDetails[driveId] = DriveDetailsCache(driveId, quotaRestricted, quotaAvailable, quotaRemaining);
 		
 		// Debug log what the cached array now contains
-		addLogEntry("onlineDriveDetails: " ~ to!string(onlineDriveDetails), ["debug"]);
+		logBuffer.addLogEntry("onlineDriveDetails: " ~ to!string(onlineDriveDetails), ["debug"]);
 	}
 
 	// Return a specific 'driveId' details from 'onlineDriveDetails'
@@ -8153,11 +8153,11 @@ class SyncEngine {
 				thisLevelChildren = checkFileOneDriveApiInstance.listChildren(parentItemDriveId, parentItemId, nextLink);
 			} catch (OneDriveException exception) {
 				// OneDrive threw an error
-				addLogEntry("------------------------------------------------------------------", ["debug"]);
-				addLogEntry("Query Error: thisLevelChildren = checkFileOneDriveApiInstance.listChildren(parentItemDriveId, parentItemId, nextLink)", ["debug"]);
-				addLogEntry("driveId:   " ~ parentItemDriveId, ["debug"]);
-				addLogEntry("idToQuery: " ~ parentItemId, ["debug"]);
-				addLogEntry("nextLink:  " ~ nextLink, ["debug"]);
+				logBuffer.addLogEntry("------------------------------------------------------------------", ["debug"]);
+				logBuffer.addLogEntry("Query Error: thisLevelChildren = checkFileOneDriveApiInstance.listChildren(parentItemDriveId, parentItemId, nextLink)", ["debug"]);
+				logBuffer.addLogEntry("driveId:   " ~ parentItemDriveId, ["debug"]);
+				logBuffer.addLogEntry("idToQuery: " ~ parentItemId, ["debug"]);
+				logBuffer.addLogEntry("nextLink:  " ~ nextLink, ["debug"]);
 				
 				string thisFunctionName = getFunctionName!({});
 				// Default operation if not 408,429,503,504 errors
@@ -8188,7 +8188,7 @@ class SyncEngine {
 			// to indicate more items are available and provide the request URL for the next page of items.
 			if ("@odata.nextLink" in thisLevelChildren) {
 				// Update nextLink to next changeSet bundle
-				addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
+				logBuffer.addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
 				nextLink = thisLevelChildren["@odata.nextLink"].str;
 			} else break;
 		}
@@ -8219,12 +8219,12 @@ class SyncEngine {
 		if (quotaRemaining <= 0) {
 			if (appConfig.accountType == "personal"){
 				// zero space available
-				addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional space.");
+				logBuffer.addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional space.");
 				quotaRemaining = 0;
 				quotaAvailable = false;
 			} else {
 				// zero space available is being reported, maybe being restricted?
-				addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);
+				logBuffer.addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);
 				quotaRemaining = 0;
 				quotaRestricted = true;
 			}
@@ -8238,7 +8238,7 @@ class SyncEngine {
 	void freshenCachedDriveQuotaDetails() {
 		foreach (driveId; onlineDriveDetails.keys) {
 			// Update this driveid quota details
-			addLogEntry("Freshen Quota Details: " ~ driveId, ["debug"]);
+			logBuffer.addLogEntry("Freshen Quota Details: " ~ driveId, ["debug"]);
 			addOrUpdateOneDriveOnlineDetails(driveId);
 		}
 	}
@@ -8246,8 +8246,8 @@ class SyncEngine {
 	// Create a 'root' DB Tie Record for a Shared Folder from the JSON data
 	void createDatabaseRootTieRecordForOnlineSharedFolder(JSONValue onedriveJSONItem) {
 		// Creating|Updating a DB Tie
-		addLogEntry("Creating|Updating a 'root' DB Tie Record for this Shared Folder: " ~ onedriveJSONItem["name"].str, ["debug"]);
-		addLogEntry("Raw JSON for 'root' DB Tie Record: " ~ to!string(onedriveJSONItem), ["debug"]);
+		logBuffer.addLogEntry("Creating|Updating a 'root' DB Tie Record for this Shared Folder: " ~ onedriveJSONItem["name"].str, ["debug"]);
+		logBuffer.addLogEntry("Raw JSON for 'root' DB Tie Record: " ~ to!string(onedriveJSONItem), ["debug"]);
 		
 		// New DB Tie Item to detail the 'root' of the Shared Folder
 		Item tieDBItem;
@@ -8272,15 +8272,15 @@ class SyncEngine {
 		tieDBItem.parentId = null;
 		
 		// Add this DB Tie parent record to the local database
-		addLogEntry("Creating|Updating into local database a 'root' DB Tie record: " ~ to!string(tieDBItem), ["debug"]);
+		logBuffer.addLogEntry("Creating|Updating into local database a 'root' DB Tie record: " ~ to!string(tieDBItem), ["debug"]);
 		itemDB.upsert(tieDBItem);
 	}
 	
 	// Create a DB Tie Record for a Shared Folder 
 	void createDatabaseTieRecordForOnlineSharedFolder(Item parentItem) {
 		// Creating|Updating a DB Tie
-		addLogEntry("Creating|Updating a DB Tie Record for this Shared Folder: " ~ parentItem.name, ["debug"]);
-		addLogEntry("Parent Item Record: " ~ to!string(parentItem), ["debug"]);
+		logBuffer.addLogEntry("Creating|Updating a DB Tie Record for this Shared Folder: " ~ parentItem.name, ["debug"]);
+		logBuffer.addLogEntry("Parent Item Record: " ~ to!string(parentItem), ["debug"]);
 		
 		// New DB Tie Item to bind the 'remote' path to our parent path
 		Item tieDBItem;
@@ -8308,7 +8308,7 @@ class SyncEngine {
 		}
 		
 		// Add tie DB record to the local database
-		addLogEntry("Creating|Updating into local database a DB Tie record: " ~ to!string(tieDBItem), ["debug"]);
+		logBuffer.addLogEntry("Creating|Updating into local database a DB Tie record: " ~ to!string(tieDBItem), ["debug"]);
 		itemDB.upsert(tieDBItem);
 	}
 	
@@ -8347,9 +8347,9 @@ class SyncEngine {
 		
 			if (count(sharedWithMeItems["value"].array) > 0) {
 				// No shared items
-				addLogEntry();
-				addLogEntry("Listing available OneDrive Business Shared Items:");
-				addLogEntry();
+				logBuffer.addLogEntry();
+				logBuffer.addLogEntry("Listing available OneDrive Business Shared Items:");
+				logBuffer.addLogEntry();
 				
 				// Iterate through the array
 				foreach (searchResult; sharedWithMeItems["value"].array) {
@@ -8359,7 +8359,7 @@ class SyncEngine {
 					string sharedByEmail;
 					
 					// Debug response output
-					addLogEntry("shared folder entry: " ~ to!string(searchResult), ["debug"]);
+					logBuffer.addLogEntry("shared folder entry: " ~ to!string(searchResult), ["debug"]);
 					
 					// Configure 'who' this was shared by
 					if ("sharedBy" in searchResult["remoteItem"]["shared"]) {
@@ -8373,39 +8373,39 @@ class SyncEngine {
 					}
 					
 					// Output query result
-					addLogEntry("-----------------------------------------------------------------------------------");
+					logBuffer.addLogEntry("-----------------------------------------------------------------------------------");
 					if (isItemFile(searchResult)) {
-						addLogEntry("Shared File:     " ~ to!string(searchResult["name"].str));
+						logBuffer.addLogEntry("Shared File:     " ~ to!string(searchResult["name"].str));
 					} else {
-						addLogEntry("Shared Folder:   " ~ to!string(searchResult["name"].str));
+						logBuffer.addLogEntry("Shared Folder:   " ~ to!string(searchResult["name"].str));
 					}
 					
 					// Detail 'who' shared this
 					if ((sharedByName != "") && (sharedByEmail != "")) {
-						addLogEntry("Shared By:       " ~ sharedByName ~ " (" ~ sharedByEmail ~ ")");
+						logBuffer.addLogEntry("Shared By:       " ~ sharedByName ~ " (" ~ sharedByEmail ~ ")");
 					} else {
 						if (sharedByName != "") {
-							addLogEntry("Shared By:       " ~ sharedByName);
+							logBuffer.addLogEntry("Shared By:       " ~ sharedByName);
 						}
 					}
 					
 					// More detail if --verbose is being used
-					addLogEntry("Item Id:         " ~ searchResult["remoteItem"]["id"].str, ["verbose"]);
-					addLogEntry("Parent Drive Id: " ~ searchResult["remoteItem"]["parentReference"]["driveId"].str, ["verbose"]);
+					logBuffer.addLogEntry("Item Id:         " ~ searchResult["remoteItem"]["id"].str, ["verbose"]);
+					logBuffer.addLogEntry("Parent Drive Id: " ~ searchResult["remoteItem"]["parentReference"]["driveId"].str, ["verbose"]);
 					if ("id" in searchResult["remoteItem"]["parentReference"]) {
-						addLogEntry("Parent Item Id:  " ~ searchResult["remoteItem"]["parentReference"]["id"].str, ["verbose"]);
+						logBuffer.addLogEntry("Parent Item Id:  " ~ searchResult["remoteItem"]["parentReference"]["id"].str, ["verbose"]);
 					}	
 				}
 				
 				// Close out the loop
-				addLogEntry("-----------------------------------------------------------------------------------");
-				addLogEntry();
+				logBuffer.addLogEntry("-----------------------------------------------------------------------------------");
+				logBuffer.addLogEntry();
 				
 			} else {
 				// No shared items
-				addLogEntry();
-				addLogEntry("No OneDrive Business Shared Folders were returned");
-				addLogEntry();
+				logBuffer.addLogEntry();
+				logBuffer.addLogEntry("No OneDrive Business Shared Folders were returned");
+				logBuffer.addLogEntry();
 			}
 		}
 	}
@@ -8454,7 +8454,7 @@ class SyncEngine {
 				
 				if (isItemFile(searchResult)) {
 					// Debug response output
-					addLogEntry("getSharedWithMe Response Shared File JSON: " ~ to!string(searchResult), ["debug"]);
+					logBuffer.addLogEntry("getSharedWithMe Response Shared File JSON: " ~ to!string(searchResult), ["debug"]);
 					
 					// Make a DB item from this JSON
 					Item sharedFileOriginalData = makeItem(searchResult);
@@ -8497,7 +8497,7 @@ class SyncEngine {
 					// Does the Shared File Users Local Directory to store the shared file(s) exist?
 					if (!exists(newLocalSharedFilePath)) {
 						// Folder does not exist locally and needs to be created
-						addLogEntry("Creating the OneDrive Business Shared File Users Local Directory: " ~ newLocalSharedFilePath);
+						logBuffer.addLogEntry("Creating the OneDrive Business Shared File Users Local Directory: " ~ newLocalSharedFilePath);
 					
 						// Local folder does not exist, thus needs to be created
 						mkdirRecurse(newLocalSharedFilePath);
@@ -8509,7 +8509,7 @@ class SyncEngine {
 						sharedFilesPath.parentId = sharedFilesRootDirectoryDatabaseRecord.id;
 						
 						// Add DB record to the local database
-						addLogEntry("Creating|Updating into local database a DB record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);
+						logBuffer.addLogEntry("Creating|Updating into local database a DB record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);
 						itemDB.upsert(sharedFilesPath);
 					} else {
 						// Folder exists locally, is the folder in the database? 
@@ -8523,7 +8523,7 @@ class SyncEngine {
 							sharedFilesPath.parentId = sharedFilesRootDirectoryDatabaseRecord.id;
 							
 							// Add DB record to the local database
-							addLogEntry("Creating|Updating into local database a DB record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);
+							logBuffer.addLogEntry("Creating|Updating into local database a DB record for storing OneDrive Business Shared Files: " ~ to!string(sharedFilesPath), ["debug"]);
 							itemDB.upsert(sharedFilesPath);
 						}
 					}
@@ -8584,7 +8584,7 @@ class SyncEngine {
 					fileToDownload["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"] = latestOnlineDetails["fileSystemInfo"]["lastModifiedDateTime"].str;
 					
 					// Final JSON that will be used to download the file
-					addLogEntry("Final fileToDownload: " ~ to!string(fileToDownload), ["debug"]);
+					logBuffer.addLogEntry("Final fileToDownload: " ~ to!string(fileToDownload), ["debug"]);
 					
 					// Make the new DB item from the consolidated JSON item
 					Item downloadSharedFileDbItem = makeItem(fileToDownload);
