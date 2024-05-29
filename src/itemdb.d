@@ -737,8 +737,8 @@ final class ItemDatabase {
 	void performVacuum() {
 		logBuffer.addLogEntry("Attempting to perform a database vacuum to merge any temporary data", ["debug"]);
 		try {
-			auto stmt = db.prepare("VACUUM;");
-			stmt.exec();
+			//auto stmt = db.prepare("VACUUM;");
+			//stmt.exec();
 			logBuffer.addLogEntry("Database vacuum is complete", ["debug"]);
 		} catch (SqliteException e) {
 			logBuffer.addLogEntry();
