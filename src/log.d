@@ -37,19 +37,17 @@ class LogBuffer {
 	MonoTime lastInsertedTime;
 	
 	// The actual thread performing the logging action
-	Thread writerThread;
+	Thread flushLogsThread;
 
 	// Class initialisation
 	this() {
 		logLineBuffer = [];
 		isRunning = true;
 		bufferLock = cast(shared) new Mutex();
-		//writerThread = new Thread(&logWriter);
-		writerThread = new Thread(&flushLogBuffer);
-		
-		writerThread.isDaemon(true);
+		flushLogsThread = new Thread(&flushLogBuffer);
+		flushLogsThread.isDaemon(true);
 		// Start a thread to handle writing logs to console/disk
-		writerThread.start();
+		flushLogsThread.start();
 	}
 	
 	// Initialise logging

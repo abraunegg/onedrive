@@ -1318,33 +1318,54 @@ void setupSignalHandler() {
 // Catch SIGINT (CTRL-C) and SIGTERM (kill), handle rapid repeat presses 
 extern(C) nothrow @nogc @system void exitHandler(int value) {
    
-	if (shutdownInProgress) {
-		return;  // Ignore subsequent presses
-	} else {
-		// Disable logging suppression
-		appConfig.suppressLoggingOutput = false;
-		// Flag we are shutting down
-		shutdownInProgress = true;
 
-		try {
-			assumeNoGC ( () {
-				logBuffer.addLogEntry("\nReceived termination signal, initiating application cleanup");
-				// Wait for all parallel jobs that depend on the database to complete
-				logBuffer.addLogEntry("Waiting for any existing upload|download process to complete");
-				shutdownSyncEngine();
+	synchronized {
+
+		if (shutdownInProgress) {
+			return;  // Ignore subsequent presses
+		} else {
+			if (appConfig !is null) {
+				// Disable logging output suppression
+				appConfig.suppressLoggingOutput = false;
+			}
+			// Flag we are shutting down
+			shutdownInProgress = true;
+
+			try {
+				assumeNoGC ( () {
+					
+					if (shutdownInProgress) {
+					
+					
+						logBuffer.addLogEntry("\nReceived termination signal, initiating application cleanup");
+						// Wait for all parallel jobs that depend on the database to complete
+						logBuffer.addLogEntry("Waiting for any existing upload|download process to complete");
+						shutdownSyncEngine();
+						
+						// Perform the shutdown process
+						performSynchronisedExitProcess("SIGINT-SIGTERM-HANDLER");
+					
+					}
+					
+					
+				})();
 				
-				// Perform the shutdown process
-				performSynchronisedExitProcess("SIGINT-SIGTERM-HANDLER");
-			})();
-		} catch (Exception e) {
-			// Any output here will cause a GC allocation
-			// - Error: `@nogc` function `main.exitHandler` cannot call non-@nogc function `std.stdio.writeln!string.writeln`
-			// - Error: cannot use operator `~` in `@nogc` function `main.exitHandler`
-			// writeln("Exception during shutdown: " ~ e.msg);
+				
+				
+			} catch (Exception e) {
+				// Any output here will cause a GC allocation
+				// - Error: `@nogc` function `main.exitHandler` cannot call non-@nogc function `std.stdio.writeln!string.writeln`
+				// - Error: cannot use operator `~` in `@nogc` function `main.exitHandler`
+				// writeln("Exception during shutdown: " ~ e.msg);
+			}
+			
+			// Exit the process with the provided exit code
+			exit(value);
+			
 		}
-		// Exit the process with the provided exit code
-		exit(value);
+	
 	}
+	
 }
 
 // Handle application exit
@@ -1354,35 +1375,44 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 		try {
 			// Log who called this function
 			logBuffer.addLogEntry("performSynchronisedExitProcess called by: " ~ scopeCaller, ["debug"]);
+			
 			// Shutdown the OneDrive Webhook instance
 			shutdownOneDriveWebhook();
-			// Shutdown the client side filtering objects
-			shutdownSelectiveSync();
-			// Destroy all 'curl' instances
-			destroyCurlInstances();
+			
 			// Shutdown the sync engine
 			shutdownSyncEngine();
+			
+			// Destroy all 'curl' instances
+			destroyCurlInstances();
+			
 			// Shutdown any local filesystem monitoring
 			shutdownFilesystemMonitor();
+			
+			// Shutdown the client side filtering objects
+			shutdownSelectiveSync();
+			
 			// Shutdown the database
 			shutdownDatabase();
+			
 			// Shutdown the application configuration objects
 			shutdownAppConfig();
+			
 		} catch (Exception e) {
             logBuffer.addLogEntry("Error during performStandardExitProcess: " ~ e.toString(), ["error"]);
         }
-		
-		// Finalise all logging and destroy log buffer
-		if (logBuffer.loggingActive()) {
-			// Shutdown application logging
-			shutdownApplicationLogging();
-		}
 	}
+	
+	// Finalise all logging and destroy log buffer
+	if (logBuffer.loggingActive()) {
+		// Shutdown application logging
+		shutdownApplicationLogging();
+	}	
 }
 
 void shutdownOneDriveWebhook() {
     if (oneDriveWebhook !is null) {
 		logBuffer.addLogEntry("Shutting down OneDrive Webhook instance", ["debug"]);
+		logBuffer.addLogEntry("Shutting down OneDrive Webhook instance");
 		oneDriveWebhook.stop();
         object.destroy(oneDriveWebhook);
         oneDriveWebhook = null;
@@ -1393,6 +1423,7 @@ void shutdownOneDriveWebhook() {
 void shutdownFilesystemMonitor() {
     if (filesystemMonitor !is null) {
 		logBuffer.addLogEntry("Shutting down Filesystem Monitoring instance", ["debug"]);
+		logBuffer.addLogEntry("Shutting down Filesystem Monitoring instance");
 		filesystemMonitor.shutdown();
         object.destroy(filesystemMonitor);
         filesystemMonitor = null;
@@ -1403,6 +1434,7 @@ void shutdownFilesystemMonitor() {
 void shutdownSelectiveSync() {
     if (selectiveSync !is null) {
 		logBuffer.addLogEntry("Shutting down Client Side Filtering instance", ["debug"]);
+		logBuffer.addLogEntry("Shutting down Client Side Filtering instance");
 		selectiveSync.shutdown();
         object.destroy(selectiveSync);
         selectiveSync = null;
@@ -1413,6 +1445,7 @@ void shutdownSelectiveSync() {
 void shutdownSyncEngine() {
     if (syncEngineInstance !is null) {
 		logBuffer.addLogEntry("Shutting down Sync Engine instance", ["debug"]);
+		logBuffer.addLogEntry("Shutting down Sync Engine instance");
 		syncEngineInstance.shutdown(); // Make sure any running thread completes first
         object.destroy(syncEngineInstance);
         syncEngineInstance = null;
@@ -1423,6 +1456,7 @@ void shutdownSyncEngine() {
 void shutdownDatabase() {
     if (itemDB !is null && itemDB.isDatabaseInitialised()) {
 		logBuffer.addLogEntry("Shutting down Database instance", ["debug"]);
+		logBuffer.addLogEntry("Shutting down Database instance");
 		logBuffer.addLogEntry("Performing a database vacuum" , ["debug"]);
 		itemDB.performVacuum();
 		logBuffer.addLogEntry("Database vacuum is complete" , ["debug"]);
@@ -1435,6 +1469,7 @@ void shutdownDatabase() {
 void shutdownAppConfig() {
     if (appConfig !is null) {
 		logBuffer.addLogEntry("Shutting down Application Configuration instance", ["debug"]);
+		logBuffer.addLogEntry("Shutting down Application Configuration instance");
 		if (dryRun) {
 			// We were running with --dry-run , clean up the applicable database
 			cleanupDryRunDatabaseFiles(runtimeDatabaseFile);
@@ -1446,6 +1481,7 @@ void shutdownAppConfig() {
 }
 
 void destroyCurlInstances() {
+	logBuffer.addLogEntry("Shutting down Curl Engine Instances");
     CurlEngine.destroyAllCurlInstances();
 }
 
@@ -1453,8 +1489,6 @@ void shutdownApplicationLogging() {
 	// Log that we are exitintg
 	logBuffer.addLogEntry("Application is exiting.", ["debug"]);
 	logBuffer.addLogEntry("#######################################################################################################################################", ["logFileOnly"]);
-	// Allow any logging complete before we exit
-	Thread.sleep(dur!("msecs")(500));
 	// Destroy the shared logging buffer which flushes any remaing logs
 	logBuffer.shutdown();
 	object.destroy(logBuffer);
@@ -1468,4 +1502,3 @@ string compilerDetails() {
 	string compilerString = compiler ~ " " ~ to!string(__VERSION__);
 	return compilerString;
 }
-

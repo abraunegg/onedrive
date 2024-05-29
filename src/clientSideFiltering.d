@@ -31,7 +31,6 @@ class ClientSideFiltering {
 	}
 	
 	~this() {
-		object.destroy(appConfig);
 		object.destroy(paths);
 		object.destroy(fileMask);
 		object.destroy(directoryMask);
@@ -90,7 +89,6 @@ class ClientSideFiltering {
 	
 	// Shutdown components
 	void shutdown() {
-		object.destroy(appConfig);
 		object.destroy(paths);
 		object.destroy(fileMask);
 		object.destroy(directoryMask);
