@@ -13,14 +13,16 @@ else
   odgroup=${odgroup%%:*}
 fi
 
-# Create new user using target UID
-if ! oduser="$(getent passwd "$ONEDRIVE_UID")"; then
-  oduser='onedrive'
-  useradd -m "${oduser}" -u "$ONEDRIVE_UID" -g "$ONEDRIVE_GID"
-else
-  oduser="${oduser%%:*}"
-  usermod -g "${odgroup}" "${oduser}"
-  grep -qv root <( groups "${oduser}" ) || { echo 'ROOT level privileges prohibited!'; exit 1; }
+# Create new user using target UID except for root
+if [ "$ONEDRIVE_UID" != "0" ]; then
+  if ! oduser="$(getent passwd "$ONEDRIVE_UID")"; then
+    oduser='onedrive'
+    useradd -m "${oduser}" -u "$ONEDRIVE_UID" -g "$ONEDRIVE_GID"
+  else
+    oduser="${oduser%%:*}"
+    usermod -g "${odgroup}" "${oduser}"
+    grep -qv root <( groups "${oduser}" ) || { echo 'ROOT level privileges prohibited!'; exit 1; }
+  fi
 fi
 
 # Default parameters
