@@ -371,6 +371,7 @@ final class ItemDatabase {
 		s.bind(1, item.driveId);
 		s.bind(2, item.id);
 		auto r = s.exec();
+		
 		Statement stmt;
 		if (r.front[0] == "0") stmt = db.prepare(insertItemStmt);
 		else stmt = db.prepare(updateItemStmt);
@@ -737,8 +738,9 @@ final class ItemDatabase {
 	void performVacuum() {
 		logBuffer.addLogEntry("Attempting to perform a database vacuum to merge any temporary data", ["debug"]);
 		try {
-			//auto stmt = db.prepare("VACUUM;");
-			//stmt.exec();
+			// Try VACUUM
+			auto stmt = db.prepare("VACUUM;");
+			stmt.exec();
 			logBuffer.addLogEntry("Database vacuum is complete", ["debug"]);
 		} catch (SqliteException e) {
 			logBuffer.addLogEntry();

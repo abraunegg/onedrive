@@ -118,8 +118,6 @@ class OneDriveApi {
 	
 	// The destructor should only clean up resources owned directly by this instance
 	~this() {
-		object.destroy(response);
-		object.destroy(curlEngine);
 		response = null;
 		curlEngine = null;
 		appConfig = null;
@@ -1391,8 +1389,8 @@ class OneDriveApi {
 				// Detail when the next attempt will be tried
 				// Factor in the delay for curl to generate the exception - otherwise the next timestamp appears to be 'out' even though technically correct
 				auto nextRetry = currentTime + dur!"seconds"(thisBackOffInterval) + dur!"seconds"(timestampAlign);
-				logBuffer.addLogEntry(" Next retry in approx:   " ~ to!string((thisBackOffInterval + timestampAlign)) ~ " seconds");
-				logBuffer.addLogEntry(" Next retry approx:      " ~ to!string(nextRetry), ["verbose"]);
+				logBuffer.addLogEntry("  Next retry in approx:   " ~ to!string((thisBackOffInterval + timestampAlign)) ~ " seconds");
+				logBuffer.addLogEntry("  Next retry approx:      " ~ to!string(nextRetry), ["verbose"]);
 				
 				// Thread sleep
 				Thread.sleep(dur!"seconds"(thisBackOffInterval));

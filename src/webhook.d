@@ -72,8 +72,8 @@ class OneDriveWebhook {
 
 		logBuffer.addLogEntry("Stopped webhook server");
 		object.destroy(server);
-
-        // Delete subscription if there exists any
+		
+		// Delete subscription if there exists any
 		try {
 			deleteSubscription();
 		} catch (OneDriveException e) {
@@ -81,7 +81,6 @@ class OneDriveWebhook {
 		}
 		// Release API instance back to the pool
 		oneDriveApiInstance.releaseCurlEngine();
-		object.destroy(oneDriveApiInstance);
 		oneDriveApiInstance = null;
 	}
 

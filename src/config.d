@@ -686,14 +686,10 @@ class ApplicationConfig {
 		
 		scope(exit) {
 			file.close();
-			object.destroy(file);
-			object.destroy(lineBuffer);
 		}
 		
 		scope(failure) {
 			file.close();
-			object.destroy(file);
-			object.destroy(lineBuffer);
 		}
 		
 		foreach (line; file.byLine()) {
@@ -1155,9 +1151,6 @@ class ApplicationConfig {
 							applicableConfigFilePathFileHandle.close();
 						}
 						
-						// free memory from file open
-						object.destroy(applicableConfigFilePathFileHandle);
-						
 						// Update the existing item in the file line array
 						if (!getValueBool("dry_run")) {
 							// Open the file with write access using 'w' mode to overwrite existing content
@@ -1170,12 +1163,9 @@ class ApplicationConfig {
 
 							// Flush and close the file handle to ensure all data is written
 							if (applicableConfigFilePathFileHandleWrite.isOpen()) {
-							applicableConfigFilePathFileHandleWrite.flush();
+								applicableConfigFilePathFileHandleWrite.flush();
 								applicableConfigFilePathFileHandleWrite.close();
 							}
-							
-							// free memory from file open
-							object.destroy(applicableConfigFilePathFileHandleWrite);
 						}
 					}
 				}

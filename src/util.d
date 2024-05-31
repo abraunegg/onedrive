@@ -1205,7 +1205,7 @@ void forceExit() {
 	
 	// Destroy the shared logging buffer which flushes any remaing logs
 	logBuffer.shutdown();
-	object.destroy(logBuffer);
+	logBuffer = null;
 	
 	// Force Exit
 	exit(EXIT_FAILURE);

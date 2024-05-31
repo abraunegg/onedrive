@@ -30,12 +30,6 @@ class ClientSideFiltering {
 		this.appConfig = appConfig;
 	}
 	
-	~this() {
-		object.destroy(paths);
-		object.destroy(fileMask);
-		object.destroy(directoryMask);
-	}
-	
 	// Initialise the required items
 	bool initialise() {
 		// Log what is being done
@@ -89,9 +83,9 @@ class ClientSideFiltering {
 	
 	// Shutdown components
 	void shutdown() {
-		object.destroy(paths);
-		object.destroy(fileMask);
-		object.destroy(directoryMask);
+		paths = null;
+		fileMask = regex("");
+		directoryMask = regex("");
 	}
 	
 	// Load sync_list file if it exists

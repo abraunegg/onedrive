@@ -16,24 +16,22 @@ extern (C) immutable(char)* sqlite3_errstr(int); // missing from the std library
 
 static this() {
 	if (sqlite3_libversion_number() < 3006019) {
-		throw new SqliteException(-1,"sqlite 3.6.19 or newer is required");
+		throw new SqliteException(-1, "SQLite 3.6.19 or newer is required");
 	}
 }
 
 private string ifromStringz(const(char)* cstr) {
-	return fromStringz(cstr).dup;
+	return fromStringz(cstr).idup;
 }
 
 class SqliteException: Exception {
 	int errorCode; // Add an errorCode member to store the SQLite error code
-	@safe pure nothrow this(int errorCode, string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
-    {
+	@safe pure nothrow this(int errorCode, string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) {
         super(msg, file, line, next);
 		this.errorCode = errorCode; // Set the errorCode
     }
 
-    @safe pure nothrow this(int errorCode, string msg, Throwable next, string file = __FILE__, size_t line = __LINE__)
-    {
+    @safe pure nothrow this(int errorCode, string msg, Throwable next, string file = __FILE__, size_t line = __LINE__) {
         super(msg, file, line, next);
 		this.errorCode = errorCode; // Set the errorCode
     }
@@ -63,43 +61,58 @@ struct Database {
 		}
 	}
 
-
 	void open(const(char)[] filename) {
 		// https://www.sqlite.org/c3ref/open.html
 		int rc = sqlite3_open(toStringz(filename), &pDb);
-		if (rc == SQLITE_CANTOPEN) {
-			// Database cannot be opened
-			logBuffer.addLogEntry();
-			logBuffer.addLogEntry("The database cannot be opened. Please check the permissions of " ~ to!string(filename));
-			logBuffer.addLogEntry();
-			close();
-			// Must force exit here, allow logging to be done
-			forceExit();
-		}
+		
 		if (rc != SQLITE_OK) {
+			string errorMsg;
+			if (rc == SQLITE_CANTOPEN) {
+				// Database cannot be opened
+				errorMsg = "The database cannot be opened. Please check the permissions of " ~ to!string(filename);
+			} else {
+				// Some other error
+				errorMsg = "A database access error occurred: " ~ getErrorMessage();
+			}
+			
+			// Log why we could not open
 			logBuffer.addLogEntry();
-			logBuffer.addLogEntry("A database access error occurred: " ~ getErrorMessage());
+			logBuffer.addLogEntry(errorMsg);
 			logBuffer.addLogEntry();
+			
 			close();
-			// Must force exit here, allow logging to be done
-			forceExit();
+			throw new SqliteException(rc, getErrorMessage());
 		}
-		sqlite3_extended_result_codes(pDb, 1); // always use extended result codes
+		
+		// Opened database file OK
+		// Flag to always use extended result codes for errors
+		sqlite3_extended_result_codes(pDb, 1);
 	}
 
 	void exec(const(char)[] sql) {
 		// https://www.sqlite.org/c3ref/exec.html
-		int rc = sqlite3_exec(pDb, toStringz(sql), null, null, null);
-		if (rc != SQLITE_OK) {
-			logBuffer.addLogEntry();
-			logBuffer.addLogEntry("A database execution error occurred: "~ getErrorMessage());
-			logBuffer.addLogEntry();
-			logBuffer.addLogEntry("Please retry your command with --resync to fix any local database corruption issues.");
-			logBuffer.addLogEntry();
-			close();
-			// Must force exit here, allow logging to be done
-			forceExit();
+		
+		if (pDb !is null) {
+		
+			int rc = sqlite3_exec(pDb, toStringz(sql), null, null, null);
+			if (rc != SQLITE_OK) {
+				// Get error message and print it, then exit
+				string errorMessage = getErrorMessage();
+				printSQLExecutionErrorMessage(errorMessage);
+				close();
+				// Throw sqlite error
+				throw new SqliteException(rc, getErrorMessage());
+			}
 		}
+	}
+	
+	void printSQLExecutionErrorMessage(string errorMessage) {
+		// If we are 'rc != SQLITE_OK' output this message
+		logBuffer.addLogEntry();
+		logBuffer.addLogEntry("A database execution error occurred: "~ errorMessage);
+		logBuffer.addLogEntry();
+		logBuffer.addLogEntry("Please retry your command with --resync to fix any local database corruption issues.");
+		logBuffer.addLogEntry();
 	}
 
 	int getVersion() {
@@ -111,15 +124,14 @@ struct Database {
 		}
 		int rc = sqlite3_exec(pDb, "PRAGMA user_version", &callback, &userVersion, null);
 		if (rc != SQLITE_OK) {
-			throw new SqliteException(rc, ifromStringz(sqlite3_errmsg(pDb)));
+			throw new SqliteException(rc, getErrorMessage());
 		}
 		return userVersion;
 	}
 	
 	int getThreadsafeValue() {
 		// Get the threadsafe value
-		auto threadsafeValue = sqlite3_threadsafe();
-		return threadsafeValue;
+		return sqlite3_threadsafe();
 	}
 
 	string getErrorMessage() {
@@ -127,24 +139,27 @@ struct Database {
 	}
 	
 	void setVersion(int userVersion) {
-		import std.conv: to;
 		exec("PRAGMA user_version=" ~ to!string(userVersion));
 	}
 
 	Statement prepare(const(char)[] zSql) {
 		Statement s;
 		// https://www.sqlite.org/c3ref/prepare.html
-		int rc = sqlite3_prepare_v2(pDb, zSql.ptr, cast(int) zSql.length, &s.pStmt, null);
-		if (rc != SQLITE_OK) {
-			throw new SqliteException(rc, ifromStringz(sqlite3_errmsg(pDb)));
+		if (pDb !is null) {
+			int rc = sqlite3_prepare_v2(pDb, zSql.ptr, cast(int) zSql.length, &s.pStmt, null);
+			if (rc != SQLITE_OK) {
+				throw new SqliteException(rc, getErrorMessage());
+			}
 		}
 		return s;
 	}
 
 	void close() {
 		// https://www.sqlite.org/c3ref/close.html
-		sqlite3_close_v2(pDb);
-		pDb = null;
+		if (pDb !is null) {
+			sqlite3_close_v2(pDb);
+			pDb = null;
+		}
 	}
 }
 
@@ -188,23 +203,36 @@ struct Statement {
 					column = fromStringz(sqlite3_column_text(pStmt, to!int(i)));
 				}
 			} else {
-				string errorMessage = ifromStringz(sqlite3_errmsg(sqlite3_db_handle(pStmt)));
+				string errorMessage = getErrorMessage();
 				logBuffer.addLogEntry();
 				logBuffer.addLogEntry("A database statement execution error occurred: "~ errorMessage);
 				logBuffer.addLogEntry();
 				logBuffer.addLogEntry("Please retry your command with --resync to fix any local database corruption issues.");
 				logBuffer.addLogEntry();
 				// Must force exit here, allow logging to be done
-				forceExit();
+				throw new SqliteException(rc, errorMessage);
 			}
 		}
+		
+		string getErrorMessage() {
+			return ifromStringz(sqlite3_errmsg(sqlite3_db_handle(pStmt)));
+		}	
 	}
 
 	private sqlite3_stmt* pStmt;
 
 	~this() {
-		// https://www.sqlite.org/c3ref/finalize.html
-		sqlite3_finalize(pStmt);
+		// Finalise any prepared statement
+		finalise();
+	}
+	
+	// https://www.sqlite.org/c3ref/finalize.html
+	void finalise() {
+		if (pStmt !is null) {
+			// The sqlite3_finalize() function is called to delete a prepared statement
+			sqlite3_finalize(pStmt);
+			pStmt = null;
+		}
 	}
 
 	void bind(int index, const(char)[] value) {
@@ -212,7 +240,7 @@ struct Statement {
 		// https://www.sqlite.org/c3ref/bind_blob.html
 		int rc = sqlite3_bind_text(pStmt, index, value.ptr, cast(int) value.length, SQLITE_STATIC);
 		if (rc != SQLITE_OK) {
-			throw new SqliteException(rc, ifromStringz(sqlite3_errmsg(sqlite3_db_handle(pStmt))));
+			throw new SqliteException(rc, getErrorMessage());
 		}
 	}
 
@@ -220,12 +248,16 @@ struct Statement {
 		reset();
 		return Result(pStmt);
 	}
-
+	
 	private void reset() {
 		// https://www.sqlite.org/c3ref/reset.html
 		int rc = sqlite3_reset(pStmt);
 		if (rc != SQLITE_OK) {
-			throw new SqliteException(rc, ifromStringz(sqlite3_errmsg(sqlite3_db_handle(pStmt))));
+			throw new SqliteException(rc, getErrorMessage());
 		}
+	}
+	
+	string getErrorMessage() {
+		return ifromStringz(sqlite3_errmsg(sqlite3_db_handle(pStmt)));
 	}
 }

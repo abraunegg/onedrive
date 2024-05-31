@@ -192,7 +192,6 @@ class CurlEngine {
 		
 		// Is 'response' cleared?
 		if (response !is null) {
-			object.destroy(response); // Destroy, then set to null
 			response = null;
 		}
 		
@@ -252,7 +251,6 @@ class CurlEngine {
 					}
 					
 					// It's safe to destroy the object here assuming no other references exist
-					object.destroy(curlEngineInstance); // Destroy, then set to null
 					curlEngineInstance = null;
 					// Perform Garbage Collection on this destroyed curl engine
 					GC.collect();
