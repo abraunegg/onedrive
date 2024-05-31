@@ -1453,7 +1453,7 @@ void shutdownDatabase() {
     if (itemDB !is null && itemDB.isDatabaseInitialised()) {
 		logBuffer.addLogEntry("Shutting down Database instance", ["debug"]);
 		logBuffer.addLogEntry("Shutting down Database instance");
-		logBuffer.addLogEntry("Attempting a database vacuum" , ["debug"]);
+		// Logging to attempt this is dentoed from performVacuum() - so no need to confirm here
 		itemDB.performVacuum();
 		// If this completes, it is dentoed from performVacuum() - so no need to confirm here
         itemDB = null;

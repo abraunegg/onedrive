@@ -737,11 +737,15 @@ final class ItemDatabase {
 	// Perform a vacuum on the database, commit WAL / SHM to file
 	void performVacuum() {
 		logBuffer.addLogEntry("Attempting to perform a database vacuum to merge any temporary data", ["debug"]);
+		logBuffer.addLogEntry("Attempting to perform a database vacuum to merge any temporary data");
 		try {
 			// Try VACUUM
-			auto stmt = db.prepare("VACUUM;");
+			Statement stmt;
+			stmt.finalise();
+			stmt = db.prepare("VACUUM;");
 			stmt.exec();
 			logBuffer.addLogEntry("Database vacuum is complete", ["debug"]);
+			logBuffer.addLogEntry("Database vacuum is complete");
 		} catch (SqliteException e) {
 			logBuffer.addLogEntry();
 			logBuffer.addLogEntry("ERROR: Unable to perform a database vacuum: " ~ e.msg);
