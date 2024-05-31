@@ -1363,11 +1363,13 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 			// Log who called this function
 			if (logBuffer !is null) {
 				logBuffer.addLogEntry("performSynchronisedExitProcess called by: " ~ scopeCaller, ["debug"]);
+				logBuffer.addLogEntry("performSynchronisedExitProcess called by: " ~ scopeCaller);
 			}
 			
 			if (thread_isMainThread()) {
 				if (logBuffer !is null) {
 					logBuffer.addLogEntry("Main Execution Thread - Attempting to join any and all threads together" , ["debug"]);
+					logBuffer.addLogEntry("Main Execution Thread - Attempting to join any and all threads together");
 				}
 				// If there are any threads lurking - join them all
 				thread_joinAll();

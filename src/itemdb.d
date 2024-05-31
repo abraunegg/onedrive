@@ -346,16 +346,48 @@ final class ItemDatabase {
 		db.setVersion(itemDatabaseVersion);
 	}
 	
+	void detailSQLErrorMessage(string errorMessage) {
+		logBuffer.addLogEntry();
+		logBuffer.addLogEntry("A database statement execution error occurred: " ~ errorMessage);
+		logBuffer.addLogEntry();
+	}
+	
+	/**
 	void insert(const ref Item item) {
 		auto p = db.prepare(insertItemStmt);
 		bindItem(item, p);
 		p.exec();
 	}
+	**/
+	
+	void insert(const ref Item item) {
+		auto p = db.prepare(insertItemStmt);
+		scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
+		try {
+			bindItem(item, p);
+			p.exec();
+		} catch (SqliteException e) {
+			detailSQLErrorMessage(e.msg);
+		}
+	}
 
+	/**
 	void update(const ref Item item) {
 		auto p = db.prepare(updateItemStmt);
 		bindItem(item, p);
 		p.exec();
+	}
+	**/
+
+	void update(const ref Item item) {
+		auto p = db.prepare(updateItemStmt);
+		scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
+		try {
+			bindItem(item, p);
+			p.exec();
+		} catch (SqliteException e) {
+			detailSQLErrorMessage(e.msg);
+		}
 	}
 
 	void dump_open_statements() {
@@ -366,6 +398,7 @@ final class ItemDatabase {
 		return db.db_checkpoint();
 	}
 
+	/**
 	void upsert(const ref Item item) {
 		auto s = db.prepare("SELECT COUNT(*) FROM item WHERE driveId = ? AND id = ?");
 		s.bind(1, item.driveId);
@@ -378,7 +411,33 @@ final class ItemDatabase {
 		bindItem(item, stmt);
 		stmt.exec();
 	}
+	**/
+	
+	void upsert(const ref Item item) {
+		Statement selectStmt = db.prepare("SELECT COUNT(*) FROM item WHERE driveId = ? AND id = ?");
+		Statement executionStmt = Statement.init;  // Initialise executionStmt to avoid uninitialised variable usage
+		scope(exit) {
+			selectStmt.finalise();
+			executionStmt.finalise();
+		}
+		
+		selectStmt.bind(1, item.driveId);
+		selectStmt.bind(2, item.id);
+		
+		auto result = selectStmt.exec();
+		size_t count = result.front[0].to!size_t;
+		
+		if (count == 0) {
+			executionStmt = db.prepare(insertItemStmt);
+		} else {
+			executionStmt = db.prepare(updateItemStmt);
+		}
+		
+		bindItem(item, executionStmt);
+		executionStmt.exec();
+	}
 
+	/**
 	Item[] selectChildren(const(char)[] driveId, const(char)[] id) {
 		auto p = db.prepare(selectItemByParentIdStmt);
 		p.bind(1, driveId);
@@ -391,7 +450,33 @@ final class ItemDatabase {
 		}
 		return items;
 	}
+	**/
+	
+	Item[] selectChildren(const(char)[] driveId, const(char)[] id) {
+		
+		Item[] items;
+		auto p = db.prepare(selectItemByParentIdStmt);
+		scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
+		
+		try {
+			p.bind(1, driveId);
+			p.bind(2, id);
+			auto res = p.exec();
+			
+			while (!res.empty) {
+				items ~= buildItem(res);
+				res.step();
+			}
+			return items;
+		} catch (SqliteException e) {
+			// Handle errors appropriately
+			detailSQLErrorMessage(e.msg);
+			items = [];
+			return items; // Return an empty array on error
+		}
+	}
 
+	/**
 	bool selectById(const(char)[] driveId, const(char)[] id, out Item item) {
 		auto p = db.prepare(selectItemByIdStmt);
 		p.bind(1, driveId);
@@ -403,7 +488,29 @@ final class ItemDatabase {
 		}
 		return false;
 	}
+	**/
+	
+	bool selectById(const(char)[] driveId, const(char)[] id, out Item item) {
+		auto p = db.prepare(selectItemByIdStmt);
+		scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
+		
+		try {
+			p.bind(1, driveId);
+			p.bind(2, id);
+			auto r = p.exec();
+			if (!r.empty) {
+				item = buildItem(r);
+				return true;
+			}
+		} catch (SqliteException e) {
+			// Handle the error appropriately
+			detailSQLErrorMessage(e.msg);
+		}
 
+		return false;
+	}
+
+	/**
 	bool selectByRemoteId(const(char)[] remoteDriveId, const(char)[] remoteId, out Item item) {
 		auto p = db.prepare(selectItemByRemoteIdStmt);
 		p.bind(1, remoteDriveId);
@@ -415,7 +522,28 @@ final class ItemDatabase {
 		}
 		return false;
 	}
+	**/
 	
+	bool selectByRemoteId(const(char)[] remoteDriveId, const(char)[] remoteId, out Item item) {
+		auto p = db.prepare(selectItemByRemoteIdStmt);
+		scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
+		try {
+			p.bind(1, remoteDriveId);
+			p.bind(2, remoteId);
+			auto r = p.exec();
+			if (!r.empty) {
+				item = buildItem(r);
+				return true;
+			}
+		} catch (SqliteException e) {
+			// Handle the error appropriately
+			detailSQLErrorMessage(e.msg);
+		}
+
+		return false;
+	}
+
+	/**
 	// returns true if an item id is in the database
 	bool idInLocalDatabase(const(string) driveId, const(string)id) {
 		auto p = db.prepare(selectItemByIdStmt);
@@ -427,7 +555,25 @@ final class ItemDatabase {
 		}
 		return false;
 	}
+	**/
 	
+	// returns true if an item id is in the database
+	bool idInLocalDatabase(const(string) driveId, const(string) id) {
+		auto p = db.prepare(selectItemByIdStmt);
+		scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
+		try {
+			p.bind(1, driveId);
+			p.bind(2, id);
+			auto r = p.exec();
+			return !r.empty;
+		} catch (SqliteException e) {
+			// Handle the error appropriately
+			detailSQLErrorMessage(e.msg);
+			return false;
+		}
+	}
+
+	/**
 	// returns the item with the given path
 	// the path is relative to the sync directory ex: "./Music/Turbo Killer.mp3"
 	bool selectByPath(const(char)[] path, string rootDriveId, out Item item) {
@@ -459,6 +605,52 @@ final class ItemDatabase {
 		item = currItem;
 		return true;
 	}
+	**/
+	
+	// returns the item with the given path
+	// the path is relative to the sync directory ex: "./Music/file_name.mp3"
+	bool selectByPath(const(char)[] path, string rootDriveId, out Item item) {
+		Item currItem = { driveId: rootDriveId };
+		
+		// Issue https://github.com/abraunegg/onedrive/issues/578
+		path = "root/" ~ (startsWith(path, "./") || path == "." ? path.chompPrefix(".") : path);
+		
+		auto s = db.prepare("SELECT * FROM item WHERE name = ?1 AND driveId IS ?2 AND parentId IS ?3");
+		scope(exit) s.finalise(); // Ensure that the prepared statement is finalised after execution.
+
+		try {
+			foreach (name; pathSplitter(path)) {
+				s.bind(1, name);
+				s.bind(2, currItem.driveId);
+				s.bind(3, currItem.id);
+				auto r = s.exec();
+				if (r.empty) return false;
+				currItem = buildItem(r);
+				
+				// If the item is of type remote, substitute it with the child
+				if (currItem.type == ItemType.remote) {
+					logBuffer.addLogEntry("Record is a Remote Object: " ~ to!string(currItem), ["debug"]);
+					Item child;
+					if (selectById(currItem.remoteDriveId, currItem.remoteId, child)) {
+						assert(child.type != ItemType.remote, "The type of the child cannot be remote");
+						currItem = child;
+						logBuffer.addLogEntry("Selecting Record that is NOT Remote Object: " ~ to!string(currItem), ["debug"]);
+					}
+				}
+			}
+			item = currItem;
+			return true;
+		} catch (SqliteException e) {
+			// Handle the error appropriately
+			detailSQLErrorMessage(e.msg);
+			return false;
+		}
+	}
+
+	
+	
+	/**
+	
 
 	// same as selectByPath() but it does not traverse remote folders, returns the remote element if that is what is required
 	bool selectByPathIncludingRemoteItems(const(char)[] path, string rootDriveId, out Item item) {
@@ -485,12 +677,67 @@ final class ItemDatabase {
 		return true;
 	}
 
+	**/
+	
+	// same as selectByPath() but it does not traverse remote folders, returns the remote element if that is what is required
+	bool selectByPathIncludingRemoteItems(const(char)[] path, string rootDriveId, out Item item) {
+		Item currItem = { driveId: rootDriveId };
+
+		// Issue https://github.com/abraunegg/onedrive/issues/578
+		path = "root/" ~ (startsWith(path, "./") || path == "." ? path.chompPrefix(".") : path);
+
+		auto s = db.prepare("SELECT * FROM item WHERE name IS ?1 AND driveId IS ?2 AND parentId IS ?3");
+		scope(exit) s.finalise(); // Ensure that the prepared statement is finalised after execution.
+
+		try {
+			foreach (name; pathSplitter(path)) {
+				s.bind(1, name);
+				s.bind(2, currItem.driveId);
+				s.bind(3, currItem.id);
+				auto r = s.exec();
+				if (r.empty) return false;
+				currItem = buildItem(r);
+			}
+
+			if (currItem.type == ItemType.remote) {
+				logBuffer.addLogEntry("Record selected is a Remote Object: " ~ to!string(currItem), ["debug"]);
+			}
+
+			item = currItem;
+			return true;
+		} catch (SqliteException e) {
+			// Handle the error appropriately
+			detailSQLErrorMessage(e.msg);
+			return false;
+		}
+	}
+
+	
+	/**
 	void deleteById(const(char)[] driveId, const(char)[] id) {
 		auto p = db.prepare(deleteItemByIdStmt);
 		p.bind(1, driveId);
 		p.bind(2, id);
 		p.exec();
 	}
+	
+	**/
+	
+	void deleteById(const(char)[] driveId, const(char)[] id) {
+		auto p = db.prepare(deleteItemByIdStmt);
+		scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
+		try {
+			p.bind(1, driveId);
+			p.bind(2, id);
+			p.exec();
+		} catch (SqliteException e) {
+			// Handle the error appropriately
+			detailSQLErrorMessage(e.msg);
+		}
+	}
+
+
+	
 
 	private void bindItem(const ref Item item, ref Statement stmt) {
 		with (stmt) with (item) {
@@ -595,6 +842,9 @@ final class ItemDatabase {
 		return item;
 	}
 
+	
+	
+	
 	// computes the path of the given item id
 	// the path is relative to the sync directory ex: "Music/Turbo Killer.mp3"
 	// the trailing slash is not added even if the item is a directory
@@ -604,58 +854,72 @@ final class ItemDatabase {
 		Item item;
 		auto s = db.prepare("SELECT * FROM item WHERE driveId = ?1 AND id = ?2");
 		auto s2 = db.prepare("SELECT driveId, id FROM item WHERE remoteDriveId = ?1 AND remoteId = ?2");
-		while (true) {
-			s.bind(1, driveId);
-			s.bind(2, id);
-			auto r = s.exec();
-			if (!r.empty) {
-				item = buildItem(r);
-				if (item.type == ItemType.remote) {
-					// substitute the last name with the current
-					ptrdiff_t idx = indexOf(path, '/');
-					path = idx >= 0 ? item.name ~ path[idx .. $] : item.name;
-				} else {
-					if (path) path = item.name ~ "/" ~ path;
-					else path = item.name;
-				}
-				id = item.parentId;
-			} else {
-				if (id == null) {
-					// check for remoteItem
-					s2.bind(1, item.driveId);
-					s2.bind(2, item.id);
-					auto r2 = s2.exec();
-					if (r2.empty) {
-						// root reached
-						assert(path.length >= 4);
-						// remove "root/" from path string if it exists
-						if (path.length >= 5) {
-							if (canFind(path, "root/")){
-								path = path[5 .. $];
-							}
-						} else {
-							path = path[4 .. $];
-						}
-						// special case of computing the path of the root itself
-						if (path.length == 0) path = ".";
-						break;
+		
+		scope(exit) {
+			s.finalise(); // Ensure that the prepared statement is finalised after execution.
+			s2.finalise(); // Ensure that the prepared statement is finalised after execution.
+		}
+		
+		try {
+			while (true) {
+				s.bind(1, driveId);
+				s.bind(2, id);
+				auto r = s.exec();
+				if (!r.empty) {
+					item = buildItem(r);
+					if (item.type == ItemType.remote) {
+						// substitute the last name with the current
+						ptrdiff_t idx = indexOf(path, '/');
+						path = idx >= 0 ? item.name ~ path[idx .. $] : item.name;
 					} else {
-						// remote folder
-						driveId = r2.front[0].dup;
-						id = r2.front[1].dup;
+						if (path) path = item.name ~ "/" ~ path;
+						else path = item.name;
 					}
+					id = item.parentId;
 				} else {
-					// broken tree
-					logBuffer.addLogEntry("The following generated a broken tree query:", ["debug"]);
-					logBuffer.addLogEntry("Drive ID: " ~ to!string(driveId), ["debug"]);
-					logBuffer.addLogEntry("Item ID: " ~ to!string(id), ["debug"]);
-					assert(0);
+					if (id == null) {
+						// check for remoteItem
+						s2.bind(1, item.driveId);
+						s2.bind(2, item.id);
+						auto r2 = s2.exec();
+						if (r2.empty) {
+							// root reached
+							assert(path.length >= 4);
+							// remove "root/" from path string if it exists
+							if (path.length >= 5) {
+								if (canFind(path, "root/")){
+									path = path[5 .. $];
+								}
+							} else {
+								path = path[4 .. $];
+							}
+							// special case of computing the path of the root itself
+							if (path.length == 0) path = ".";
+							break;
+						} else {
+							// remote folder
+							driveId = r2.front[0].dup;
+							id = r2.front[1].dup;
+						}
+					} else {
+						// broken tree
+						logBuffer.addLogEntry("The following generated a broken tree query:", ["debug"]);
+						logBuffer.addLogEntry("Drive ID: " ~ to!string(driveId), ["debug"]);
+						logBuffer.addLogEntry("Item ID: " ~ to!string(id), ["debug"]);
+						assert(0);
+					}
 				}
 			}
+		} catch (SqliteException e) {
+			// Handle the error appropriately
+			detailSQLErrorMessage(e.msg);
 		}
+		
 		return path;
 	}
 
+	
+	/**
 	Item[] selectRemoteItems() {
 		Item[] items;
 		auto stmt = db.prepare("SELECT * FROM item WHERE remoteDriveId IS NOT NULL");
@@ -666,6 +930,27 @@ final class ItemDatabase {
 		}
 		return items;
 	}
+	**/
+	
+	Item[] selectRemoteItems() {
+		Item[] items;
+		auto stmt = db.prepare("SELECT * FROM item WHERE remoteDriveId IS NOT NULL");
+		scope (exit) stmt.finalise(); // Ensure that the prepared statement is finalised after execution.
+
+		try {
+			auto res = stmt.exec();
+			while (!res.empty) {
+				items ~= buildItem(res);
+				res.step();
+			}
+		} catch (SqliteException e) {
+			// Handle the error appropriately
+			detailSQLErrorMessage(e.msg);
+		}
+		return items;
+	}
+
+	/**
 
 	string getDeltaLink(const(char)[] driveId, const(char)[] id) {
 		// Log what we received
@@ -680,6 +965,33 @@ final class ItemDatabase {
 		if (res.empty) return null;
 		return res.front[0].dup;
 	}
+	
+	**/
+	
+	string getDeltaLink(const(char)[] driveId, const(char)[] id) {
+		// Log what we received
+		logBuffer.addLogEntry("DeltaLink Query (driveId): " ~ to!string(driveId), ["debug"]);
+		logBuffer.addLogEntry("DeltaLink Query (id):      " ~ to!string(id), ["debug"]);
+		// assert if these are null
+		assert(driveId && id);
+		
+		auto stmt = db.prepare("SELECT deltaLink FROM item WHERE driveId = ?1 AND id = ?2");
+		scope(exit) stmt.finalise(); // Ensure that the prepared statement is finalised after execution.
+
+		try {
+			stmt.bind(1, driveId);
+			stmt.bind(2, id);
+			auto res = stmt.exec();
+			if (res.empty) return null;
+			return res.front[0].dup;
+		} catch (SqliteException e) {
+			// Handle the error appropriately
+			detailSQLErrorMessage(e.msg);
+			return null;
+		}
+	}
+	
+	/**
 
 	void setDeltaLink(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink) {
 		assert(driveId && id);
@@ -690,6 +1002,28 @@ final class ItemDatabase {
 		stmt.bind(3, deltaLink);
 		stmt.exec();
 	}
+	
+	**/
+	
+	void setDeltaLink(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink) {
+		assert(driveId && id);
+		assert(deltaLink);
+		
+		auto stmt = db.prepare("UPDATE item SET deltaLink = ?3 WHERE driveId = ?1 AND id = ?2");
+		scope(exit) stmt.finalise(); // Ensure that the prepared statement is finalised after execution.
+		
+		try {
+			stmt.bind(1, driveId);
+			stmt.bind(2, id);
+			stmt.bind(3, deltaLink);
+			stmt.exec();
+		} catch (SqliteException e) {
+			// Handle the error appropriately
+			detailSQLErrorMessage(e.msg);
+		}
+	}
+	
+	/**
 	
 	// National Cloud Deployments (US and DE) do not support /delta as a query
 	// We need to track in the database that this item is in sync
@@ -704,6 +1038,32 @@ final class ItemDatabase {
 		stmt.exec();
 	}
 	
+	**/
+	
+	// National Cloud Deployments (US and DE) do not support /delta as a query
+	// We need to track in the database that this item is in sync
+	// As we query /children to get all children from OneDrive, update anything in the database 
+	// to be flagged as not-in-sync, thus, we can use that flag to determine what was previously
+	// in-sync, but now deleted on OneDrive
+	void downgradeSyncStatusFlag(const(char)[] driveId, const(char)[] id) {
+		assert(driveId);
+
+		auto stmt = db.prepare("UPDATE item SET syncStatus = 'N' WHERE driveId = ?1 AND id = ?2");
+		scope(exit) {
+			stmt.finalise(); // Ensure that the prepared statement is finalised after execution.
+		}
+
+		try {
+			stmt.bind(1, driveId);
+			stmt.bind(2, id);
+			stmt.exec();
+		} catch (SqliteException e) {
+			// Handle the error appropriately
+			detailSQLErrorMessage(e.msg);
+		}
+	}
+	
+	/**
 	// National Cloud Deployments (US and DE) do not support /delta as a query
 	// Select items that have a out-of-sync flag set
 	Item[] selectOutOfSyncItems(const(char)[] driveId) {
@@ -718,7 +1078,32 @@ final class ItemDatabase {
 		}
 		return items;
 	}
+	**/
 	
+	
+	// National Cloud Deployments (US and DE) do not support /delta as a query
+	// Select items that have a out-of-sync flag set
+	Item[] selectOutOfSyncItems(const(char)[] driveId) {
+		assert(driveId);
+		Item[] items;
+		auto stmt = db.prepare("SELECT * FROM item WHERE syncStatus = 'N' AND driveId = ?1");
+		scope(exit) stmt.finalise(); // Ensure that the prepared statement is finalised after execution.
+		
+		try {
+			stmt.bind(1, driveId);
+			auto res = stmt.exec();
+			while (!res.empty) {
+				items ~= buildItem(res);
+				res.step();
+			}
+		} catch (SqliteException e) {
+			// Handle the error appropriately
+			detailSQLErrorMessage(e.msg);
+		}
+		return items;
+	}
+
+	/**
 	// OneDrive Business Folders are stored in the database potentially without a root | parentRoot link
 	// Select items associated with the provided driveId
 	Item[] selectByDriveId(const(char)[] driveId) {
@@ -733,16 +1118,38 @@ final class ItemDatabase {
 		}
 		return items;
 	}
+	**/
 	
+	// OneDrive Business Folders are stored in the database potentially without a root | parentRoot link
+	// Select items associated with the provided driveId
+	Item[] selectByDriveId(const(char)[] driveId) {
+		assert(driveId);
+		Item[] items;
+		auto stmt = db.prepare("SELECT * FROM item WHERE driveId = ?1 AND parentId IS NULL");
+		scope(exit) stmt.finalise(); // Ensure that the prepared statement is finalised after execution.
+
+		try {
+			stmt.bind(1, driveId);
+			auto res = stmt.exec();
+			while (!res.empty) {
+				items ~= buildItem(res);
+				res.step();
+			}
+		} catch (SqliteException e) {
+			// Handle the error appropriately
+			detailSQLErrorMessage(e.msg);
+		}
+		return items;
+	}
+
 	// Perform a vacuum on the database, commit WAL / SHM to file
 	void performVacuum() {
 		logBuffer.addLogEntry("Attempting to perform a database vacuum to merge any temporary data", ["debug"]);
 		logBuffer.addLogEntry("Attempting to perform a database vacuum to merge any temporary data");
 		try {
-			// Try VACUUM
-			Statement stmt;
-			stmt.finalise();
-			stmt = db.prepare("VACUUM;");
+			// Prepare and execute VACUUM statement
+			Statement stmt = db.prepare("VACUUM;");
+			scope(exit) stmt.finalise();  // Ensure the statement is finalised
 			stmt.exec();
 			logBuffer.addLogEntry("Database vacuum is complete", ["debug"]);
 			logBuffer.addLogEntry("Database vacuum is complete");
@@ -753,6 +1160,7 @@ final class ItemDatabase {
 		}
 	}
 	
+	/**
 	// Select distinct driveId items from database
 	string[] selectDistinctDriveIds() {
 		string[] driveIdArray;
@@ -762,6 +1170,27 @@ final class ItemDatabase {
 		while (!res.empty) {
 			driveIdArray ~= res.front[0].dup;
 			res.step();
+		}
+		return driveIdArray;
+	}
+	**/
+	
+	// Select distinct driveId items from database
+	string[] selectDistinctDriveIds() {
+		string[] driveIdArray;
+		auto stmt = db.prepare("SELECT DISTINCT driveId FROM item;");
+		scope(exit) stmt.finalise(); // Ensure that the prepared statement is finalised after execution.
+		
+		try {
+			auto res = stmt.exec();
+			if (res.empty) return driveIdArray;
+			while (!res.empty) {
+				driveIdArray ~= res.front[0].dup;
+				res.step();
+			}
+		} catch (SqliteException e) {
+			// Handle the error appropriately
+			detailSQLErrorMessage(e.msg);
 		}
 		return driveIdArray;
 	}

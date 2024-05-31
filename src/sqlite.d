@@ -205,7 +205,7 @@ struct Statement {
 			} else {
 				string errorMessage = getErrorMessage();
 				logBuffer.addLogEntry();
-				logBuffer.addLogEntry("A database statement execution error occurred: "~ errorMessage);
+				logBuffer.addLogEntry("A database statement execution error occurred: " ~ errorMessage);
 				logBuffer.addLogEntry();
 				logBuffer.addLogEntry("Please retry your command with --resync to fix any local database corruption issues.");
 				logBuffer.addLogEntry();
