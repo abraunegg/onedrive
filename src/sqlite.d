@@ -53,10 +53,10 @@ struct Database {
 	}
 
 	void dump_open_statements() {
-		logBuffer.addLogEntry("Dumping open statements:", ["debug"]);
+		addLogEntry("Dumping open statements:", ["debug"]);
 		auto p = sqlite3_next_stmt(pDb, null);
 		while (p != null) {
-			logBuffer.addLogEntry(" - " ~ to!string(ifromStringz(sqlite3_sql(p))));
+			addLogEntry(" - " ~ to!string(ifromStringz(sqlite3_sql(p))));
 			p = sqlite3_next_stmt(pDb, p);
 		}
 	}
@@ -75,10 +75,10 @@ struct Database {
 				errorMsg = "A database access error occurred: " ~ getErrorMessage();
 			}
 			
-			// Log why we could not open
-			logBuffer.addLogEntry();
-			logBuffer.addLogEntry(errorMsg);
-			logBuffer.addLogEntry();
+			// Log why we could not open the database file
+			addLogEntry();
+			addLogEntry(errorMsg);
+			addLogEntry();
 			
 			close();
 			throw new SqliteException(rc, getErrorMessage());
@@ -108,11 +108,11 @@ struct Database {
 	
 	void printSQLExecutionErrorMessage(string errorMessage) {
 		// If we are 'rc != SQLITE_OK' output this message
-		logBuffer.addLogEntry();
-		logBuffer.addLogEntry("A database execution error occurred: "~ errorMessage);
-		logBuffer.addLogEntry();
-		logBuffer.addLogEntry("Please retry your command with --resync to fix any local database corruption issues.");
-		logBuffer.addLogEntry();
+		addLogEntry();
+		addLogEntry("A database execution error occurred: "~ errorMessage);
+		addLogEntry();
+		addLogEntry("Please retry your command with --resync to fix any local database corruption issues.");
+		addLogEntry();
 	}
 
 	int getVersion() {
@@ -188,7 +188,7 @@ struct Statement {
 			int rc = sqlite3_step(pStmt);
 			if (rc == SQLITE_BUSY) {
 				// Database is locked by another onedrive process
-				logBuffer.addLogEntry("The database is currently locked by another process - cannot sync");
+				addLogEntry("The database is currently locked by another process - cannot sync");
 				return;
 			}
 			if (rc == SQLITE_DONE) {
@@ -204,11 +204,11 @@ struct Statement {
 				}
 			} else {
 				string errorMessage = getErrorMessage();
-				logBuffer.addLogEntry();
-				logBuffer.addLogEntry("A database statement execution error occurred: " ~ errorMessage);
-				logBuffer.addLogEntry();
-				logBuffer.addLogEntry("Please retry your command with --resync to fix any local database corruption issues.");
-				logBuffer.addLogEntry();
+				addLogEntry();
+				addLogEntry("A database statement execution error occurred: " ~ errorMessage);
+				addLogEntry();
+				addLogEntry("Please retry your command with --resync to fix any local database corruption issues.");
+				addLogEntry();
 				// Must force exit here, allow logging to be done
 				throw new SqliteException(rc, errorMessage);
 			}

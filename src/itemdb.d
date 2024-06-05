@@ -45,7 +45,7 @@ struct Item {
 	string   size;
 }
 
-// Construct an Item struct from a JSON driveItem
+// Construct an Item DB struct from a JSON driveItem
 Item makeDatabaseItem(JSONValue driveItem) {
 	
 	Item item = {
@@ -91,21 +91,21 @@ Item makeDatabaseItem(JSONValue driveItem) {
 	bool typeSet = false;
 	if (isItemFile(driveItem)) {
 		// 'file' object exists in the JSON
-		logBuffer.addLogEntry("Flagging object as a file", ["debug"]);
+		addLogEntry("Flagging object as a file", ["debug"]);
 		typeSet = true;
 		item.type = ItemType.file;
 	}
 	
 	if (isItemFolder(driveItem)) {
 		// 'folder' object exists in the JSON
-		logBuffer.addLogEntry("Flagging object as a directory", ["debug"]);
+		addLogEntry("Flagging object as a directory", ["debug"]);
 		typeSet = true;
 		item.type = ItemType.dir;
 	}
 	
 	if (isItemRemote(driveItem)) {
 		// 'remote' object exists in the JSON
-		logBuffer.addLogEntry("Flagging object as a remote", ["debug"]);
+		addLogEntry("Flagging object as a remote", ["debug"]);
 		typeSet = true;
 		item.type = ItemType.remote;
 	}
@@ -127,7 +127,7 @@ Item makeDatabaseItem(JSONValue driveItem) {
 			if ("quickXorHash" in driveItem["file"]["hashes"]) {
 				item.quickXorHash = driveItem["file"]["hashes"]["quickXorHash"].str;
 			} else {
-				logBuffer.addLogEntry("quickXorHash is missing from " ~ driveItem["id"].str, ["debug"]);
+				addLogEntry("quickXorHash is missing from " ~ driveItem["id"].str, ["debug"]);
 			}
 			
 			// If quickXorHash is empty ..
@@ -136,7 +136,7 @@ Item makeDatabaseItem(JSONValue driveItem) {
 				if ("sha256Hash" in driveItem["file"]["hashes"]) {
 					item.sha256Hash = driveItem["file"]["hashes"]["sha256Hash"].str;
 				} else {
-					logBuffer.addLogEntry("sha256Hash is missing from " ~ driveItem["id"].str, ["debug"]);
+					addLogEntry("sha256Hash is missing from " ~ driveItem["id"].str, ["debug"]);
 				}
 			}
 		} else {
@@ -198,7 +198,7 @@ final class ItemDatabase {
 	string deleteItemByIdStmt;
 	bool databaseInitialised = false;
 
-	this(const(char)[] filename) {
+	this(string filename) {
 		db = Database(filename);
 		int dbVersion;
 		try {
@@ -206,40 +206,40 @@ final class ItemDatabase {
 		} catch (SqliteException e) {
 			// An error was generated - what was the error?
 			if (e.msg == "database is locked") {
-				logBuffer.addLogEntry();
-				logBuffer.addLogEntry("ERROR: The 'onedrive' application is already running - please check system process list for active application instances");
-				logBuffer.addLogEntry(" - Use 'sudo ps aufxw | grep onedrive' to potentially determine active running process");
-				logBuffer.addLogEntry();
+				addLogEntry();
+				addLogEntry("ERROR: The 'onedrive' application is already running - please check system process list for active application instances");
+				addLogEntry(" - Use 'sudo ps aufxw | grep onedrive' to potentially determine active running process");
+				addLogEntry();
 			} else {
 				// A different error .. detail the message, detail the actual SQLite Error Code to assist with troubleshooting
-				logBuffer.addLogEntry();
-				logBuffer.addLogEntry("ERROR: An internal database error occurred: " ~ e.msg ~ " (SQLite Error Code: " ~ to!string(e.errorCode) ~ ")");
-				logBuffer.addLogEntry();
+				addLogEntry();
+				addLogEntry("ERROR: An internal database error occurred: " ~ e.msg ~ " (SQLite Error Code: " ~ to!string(e.errorCode) ~ ")");
+				addLogEntry();
 				
 				// Give the user some additional information and pointers on this error
 				// The below list is based on user issue / discussion reports since 2018
 				switch (e.errorCode) {
 					case 7: // SQLITE_NOMEM
-						logBuffer.addLogEntry("The operation could not be completed due to insufficient memory. Please close unnecessary applications to free up memory and try again.");
+						addLogEntry("The operation could not be completed due to insufficient memory. Please close unnecessary applications to free up memory and try again.");
 						break;
 					case 10: // SQLITE_IOERR
-						logBuffer.addLogEntry("A disk I/O error occurred. This could be due to issues with the storage medium (e.g., disk full, hardware failure, filesystem corruption). Please check your disk's health using a disk utility tool, ensure there is enough free space, and check the filesystem for errors.");
+						addLogEntry("A disk I/O error occurred. This could be due to issues with the storage medium (e.g., disk full, hardware failure, filesystem corruption). Please check your disk's health using a disk utility tool, ensure there is enough free space, and check the filesystem for errors.");
 						break;
 					case 11: // SQLITE_CORRUPT
-						logBuffer.addLogEntry("The database file appears to be corrupt. This could be due to incomplete or failed writes, hardware issues, or unexpected interruptions during database operations. Please perform a --resync operation.");
+						addLogEntry("The database file appears to be corrupt. This could be due to incomplete or failed writes, hardware issues, or unexpected interruptions during database operations. Please perform a --resync operation.");
 						break;
 					case 14: // SQLITE_CANTOPEN
-						logBuffer.addLogEntry("The database file could not be opened. Please check that the database file exists, has the correct permissions, and is not being blocked by another process or security software.");
+						addLogEntry("The database file could not be opened. Please check that the database file exists, has the correct permissions, and is not being blocked by another process or security software.");
 						break;
 					case 26: // SQLITE_NOTADB
-						logBuffer.addLogEntry("The file attempted to be opened does not appear to be a valid SQLite database, or it may have been corrupted to a point where it's no longer recognizable. Please check your application configuration directory and/or perform a --resync operation.");
+						addLogEntry("The file attempted to be opened does not appear to be a valid SQLite database, or it may have been corrupted to a point where it's no longer recognizable. Please check your application configuration directory and/or perform a --resync operation.");
 						break;
 					default:
-						logBuffer.addLogEntry("An unexpected error occurred. Please consult the application documentation or support to resolve this issue.");
+						addLogEntry("An unexpected error occurred. Please consult the application documentation or support to resolve this issue.");
 						break;
 				}
 				// Blank line before exit
-				logBuffer.addLogEntry();
+				addLogEntry();
 			}
 			return;
 		}
@@ -247,14 +247,14 @@ final class ItemDatabase {
 		if (dbVersion == 0) {
 			createTable();
 		} else if (db.getVersion() != itemDatabaseVersion) {
-			logBuffer.addLogEntry("The item database is incompatible, re-creating database table structures");
+			addLogEntry("The item database is incompatible, re-creating database table structures");
 			db.exec("DROP TABLE item");
 			createTable();
 		}
 		
 		// What is the threadsafe value
 		auto threadsafeValue = db.getThreadsafeValue();
-		logBuffer.addLogEntry("Threadsafe database value: " ~ to!string(threadsafeValue), ["debug"]);
+		addLogEntry("Threadsafe database value: " ~ to!string(threadsafeValue), ["debug"]);
 		
 		// Set the enforcement of foreign key constraints.
 		// https://www.sqlite.org/pragma.html#pragma_foreign_keys
@@ -309,8 +309,19 @@ final class ItemDatabase {
 		databaseInitialised = true;
 	}
 
+	~this() {
+		closeDatabaseFile();
+	}
+	
 	bool isDatabaseInitialised() {
 		return databaseInitialised;
+	}
+	
+	void closeDatabaseFile() {
+		if (databaseInitialised) {
+			db.close();
+		}
+		databaseInitialised = false;
 	}
 
 	void createTable() {
@@ -347,18 +358,10 @@ final class ItemDatabase {
 	}
 	
 	void detailSQLErrorMessage(string errorMessage) {
-		logBuffer.addLogEntry();
-		logBuffer.addLogEntry("A database statement execution error occurred: " ~ errorMessage);
-		logBuffer.addLogEntry();
+		addLogEntry();
+		addLogEntry("A database statement execution error occurred: " ~ errorMessage);
+		addLogEntry();
 	}
-	
-	/**
-	void insert(const ref Item item) {
-		auto p = db.prepare(insertItemStmt);
-		bindItem(item, p);
-		p.exec();
-	}
-	**/
 	
 	void insert(const ref Item item) {
 		auto p = db.prepare(insertItemStmt);
@@ -370,14 +373,6 @@ final class ItemDatabase {
 			detailSQLErrorMessage(e.msg);
 		}
 	}
-
-	/**
-	void update(const ref Item item) {
-		auto p = db.prepare(updateItemStmt);
-		bindItem(item, p);
-		p.exec();
-	}
-	**/
 
 	void update(const ref Item item) {
 		auto p = db.prepare(updateItemStmt);
@@ -398,21 +393,6 @@ final class ItemDatabase {
 		return db.db_checkpoint();
 	}
 
-	/**
-	void upsert(const ref Item item) {
-		auto s = db.prepare("SELECT COUNT(*) FROM item WHERE driveId = ? AND id = ?");
-		s.bind(1, item.driveId);
-		s.bind(2, item.id);
-		auto r = s.exec();
-		
-		Statement stmt;
-		if (r.front[0] == "0") stmt = db.prepare(insertItemStmt);
-		else stmt = db.prepare(updateItemStmt);
-		bindItem(item, stmt);
-		stmt.exec();
-	}
-	**/
-	
 	void upsert(const ref Item item) {
 		Statement selectStmt = db.prepare("SELECT COUNT(*) FROM item WHERE driveId = ? AND id = ?");
 		Statement executionStmt = Statement.init;  // Initialise executionStmt to avoid uninitialised variable usage
@@ -437,21 +417,6 @@ final class ItemDatabase {
 		executionStmt.exec();
 	}
 
-	/**
-	Item[] selectChildren(const(char)[] driveId, const(char)[] id) {
-		auto p = db.prepare(selectItemByParentIdStmt);
-		p.bind(1, driveId);
-		p.bind(2, id);
-		auto res = p.exec();
-		Item[] items;
-		while (!res.empty) {
-			items ~= buildItem(res);
-			res.step();
-		}
-		return items;
-	}
-	**/
-	
 	Item[] selectChildren(const(char)[] driveId, const(char)[] id) {
 		
 		Item[] items;
@@ -476,20 +441,6 @@ final class ItemDatabase {
 		}
 	}
 
-	/**
-	bool selectById(const(char)[] driveId, const(char)[] id, out Item item) {
-		auto p = db.prepare(selectItemByIdStmt);
-		p.bind(1, driveId);
-		p.bind(2, id);
-		auto r = p.exec();
-		if (!r.empty) {
-			item = buildItem(r);
-			return true;
-		}
-		return false;
-	}
-	**/
-	
 	bool selectById(const(char)[] driveId, const(char)[] id, out Item item) {
 		auto p = db.prepare(selectItemByIdStmt);
 		scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
@@ -510,20 +461,6 @@ final class ItemDatabase {
 		return false;
 	}
 
-	/**
-	bool selectByRemoteId(const(char)[] remoteDriveId, const(char)[] remoteId, out Item item) {
-		auto p = db.prepare(selectItemByRemoteIdStmt);
-		p.bind(1, remoteDriveId);
-		p.bind(2, remoteId);
-		auto r = p.exec();
-		if (!r.empty) {
-			item = buildItem(r);
-			return true;
-		}
-		return false;
-	}
-	**/
-	
 	bool selectByRemoteId(const(char)[] remoteDriveId, const(char)[] remoteId, out Item item) {
 		auto p = db.prepare(selectItemByRemoteIdStmt);
 		scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
@@ -543,20 +480,6 @@ final class ItemDatabase {
 		return false;
 	}
 
-	/**
-	// returns true if an item id is in the database
-	bool idInLocalDatabase(const(string) driveId, const(string)id) {
-		auto p = db.prepare(selectItemByIdStmt);
-		p.bind(1, driveId);
-		p.bind(2, id);
-		auto r = p.exec();
-		if (!r.empty) {
-			return true;
-		}
-		return false;
-	}
-	**/
-	
 	// returns true if an item id is in the database
 	bool idInLocalDatabase(const(string) driveId, const(string) id) {
 		auto p = db.prepare(selectItemByIdStmt);
@@ -573,40 +496,6 @@ final class ItemDatabase {
 		}
 	}
 
-	/**
-	// returns the item with the given path
-	// the path is relative to the sync directory ex: "./Music/Turbo Killer.mp3"
-	bool selectByPath(const(char)[] path, string rootDriveId, out Item item) {
-		Item currItem = { driveId: rootDriveId };
-		
-		// Issue https://github.com/abraunegg/onedrive/issues/578
-		path = "root/" ~ (startsWith(path, "./") || path == "." ? path.chompPrefix(".") : path);
-		
-		auto s = db.prepare("SELECT * FROM item WHERE name = ?1 AND driveId IS ?2 AND parentId IS ?3");
-		foreach (name; pathSplitter(path)) {
-			s.bind(1, name);
-			s.bind(2, currItem.driveId);
-			s.bind(3, currItem.id);
-			auto r = s.exec();
-			if (r.empty) return false;
-			currItem = buildItem(r);
-			
-			// If the item is of type remote substitute it with the child
-			if (currItem.type == ItemType.remote) {
-				logBuffer.addLogEntry("Record is a Remote Object: " ~  to!string(currItem), ["debug"]);
-				Item child;
-				if (selectById(currItem.remoteDriveId, currItem.remoteId, child)) {
-					assert(child.type != ItemType.remote, "The type of the child cannot be remote");
-					currItem = child;
-					logBuffer.addLogEntry("Selecting Record that is NOT Remote Object: " ~  to!string(currItem), ["debug"]);
-				}
-			}
-		}
-		item = currItem;
-		return true;
-	}
-	**/
-	
 	// returns the item with the given path
 	// the path is relative to the sync directory ex: "./Music/file_name.mp3"
 	bool selectByPath(const(char)[] path, string rootDriveId, out Item item) {
@@ -629,12 +518,12 @@ final class ItemDatabase {
 				
 				// If the item is of type remote, substitute it with the child
 				if (currItem.type == ItemType.remote) {
-					logBuffer.addLogEntry("Record is a Remote Object: " ~ to!string(currItem), ["debug"]);
+					addLogEntry("Record is a Remote Object: " ~ to!string(currItem), ["debug"]);
 					Item child;
 					if (selectById(currItem.remoteDriveId, currItem.remoteId, child)) {
 						assert(child.type != ItemType.remote, "The type of the child cannot be remote");
 						currItem = child;
-						logBuffer.addLogEntry("Selecting Record that is NOT Remote Object: " ~ to!string(currItem), ["debug"]);
+						addLogEntry("Selecting Record that is NOT Remote Object: " ~ to!string(currItem), ["debug"]);
 					}
 				}
 			}
@@ -647,38 +536,6 @@ final class ItemDatabase {
 		}
 	}
 
-	
-	
-	/**
-	
-
-	// same as selectByPath() but it does not traverse remote folders, returns the remote element if that is what is required
-	bool selectByPathIncludingRemoteItems(const(char)[] path, string rootDriveId, out Item item) {
-		Item currItem = { driveId: rootDriveId };
-		
-		// Issue https://github.com/abraunegg/onedrive/issues/578
-		path = "root/" ~ (startsWith(path, "./") || path == "." ? path.chompPrefix(".") : path);
-		
-		auto s = db.prepare("SELECT * FROM item WHERE name IS ?1 AND driveId IS ?2 AND parentId IS ?3");
-		foreach (name; pathSplitter(path)) {
-			s.bind(1, name);
-			s.bind(2, currItem.driveId);
-			s.bind(3, currItem.id);
-			auto r = s.exec();
-			if (r.empty) return false;
-			currItem = buildItem(r);
-		}
-		
-		if (currItem.type == ItemType.remote) {
-			logBuffer.addLogEntry("Record selected is a Remote Object: " ~  to!string(currItem), ["debug"]);
-		}
-		
-		item = currItem;
-		return true;
-	}
-
-	**/
-	
 	// same as selectByPath() but it does not traverse remote folders, returns the remote element if that is what is required
 	bool selectByPathIncludingRemoteItems(const(char)[] path, string rootDriveId, out Item item) {
 		Item currItem = { driveId: rootDriveId };
@@ -700,7 +557,7 @@ final class ItemDatabase {
 			}
 
 			if (currItem.type == ItemType.remote) {
-				logBuffer.addLogEntry("Record selected is a Remote Object: " ~ to!string(currItem), ["debug"]);
+				addLogEntry("Record selected is a Remote Object: " ~ to!string(currItem), ["debug"]);
 			}
 
 			item = currItem;
@@ -712,17 +569,6 @@ final class ItemDatabase {
 		}
 	}
 
-	
-	/**
-	void deleteById(const(char)[] driveId, const(char)[] id) {
-		auto p = db.prepare(deleteItemByIdStmt);
-		p.bind(1, driveId);
-		p.bind(2, id);
-		p.exec();
-	}
-	
-	**/
-	
 	void deleteById(const(char)[] driveId, const(char)[] id) {
 		auto p = db.prepare(deleteItemByIdStmt);
 		scope(exit) p.finalise(); // Ensure that the prepared statement is finalised after execution.
@@ -735,9 +581,6 @@ final class ItemDatabase {
 			detailSQLErrorMessage(e.msg);
 		}
 	}
-
-
-	
 
 	private void bindItem(const ref Item item, ref Statement stmt) {
 		with (stmt) with (item) {
@@ -842,9 +685,6 @@ final class ItemDatabase {
 		return item;
 	}
 
-	
-	
-	
 	// computes the path of the given item id
 	// the path is relative to the sync directory ex: "Music/Turbo Killer.mp3"
 	// the trailing slash is not added even if the item is a directory
@@ -903,9 +743,9 @@ final class ItemDatabase {
 						}
 					} else {
 						// broken tree
-						logBuffer.addLogEntry("The following generated a broken tree query:", ["debug"]);
-						logBuffer.addLogEntry("Drive ID: " ~ to!string(driveId), ["debug"]);
-						logBuffer.addLogEntry("Item ID: " ~ to!string(id), ["debug"]);
+						addLogEntry("The following generated a broken tree query:", ["debug"]);
+						addLogEntry("Drive ID: " ~ to!string(driveId), ["debug"]);
+						addLogEntry("Item ID: " ~ to!string(id), ["debug"]);
 						assert(0);
 					}
 				}
@@ -918,20 +758,6 @@ final class ItemDatabase {
 		return path;
 	}
 
-	
-	/**
-	Item[] selectRemoteItems() {
-		Item[] items;
-		auto stmt = db.prepare("SELECT * FROM item WHERE remoteDriveId IS NOT NULL");
-		auto res = stmt.exec();
-		while (!res.empty) {
-			items ~= buildItem(res);
-			res.step();
-		}
-		return items;
-	}
-	**/
-	
 	Item[] selectRemoteItems() {
 		Item[] items;
 		auto stmt = db.prepare("SELECT * FROM item WHERE remoteDriveId IS NOT NULL");
@@ -950,28 +776,10 @@ final class ItemDatabase {
 		return items;
 	}
 
-	/**
-
 	string getDeltaLink(const(char)[] driveId, const(char)[] id) {
 		// Log what we received
-		logBuffer.addLogEntry("DeltaLink Query (driveId): " ~ to!string(driveId), ["debug"]);
-		logBuffer.addLogEntry("DeltaLink Query (id):      " ~ to!string(id), ["debug"]);
-			
-		assert(driveId && id);
-		auto stmt = db.prepare("SELECT deltaLink FROM item WHERE driveId = ?1 AND id = ?2");
-		stmt.bind(1, driveId);
-		stmt.bind(2, id);
-		auto res = stmt.exec();
-		if (res.empty) return null;
-		return res.front[0].dup;
-	}
-	
-	**/
-	
-	string getDeltaLink(const(char)[] driveId, const(char)[] id) {
-		// Log what we received
-		logBuffer.addLogEntry("DeltaLink Query (driveId): " ~ to!string(driveId), ["debug"]);
-		logBuffer.addLogEntry("DeltaLink Query (id):      " ~ to!string(id), ["debug"]);
+		addLogEntry("DeltaLink Query (driveId): " ~ to!string(driveId), ["debug"]);
+		addLogEntry("DeltaLink Query (id):      " ~ to!string(id), ["debug"]);
 		// assert if these are null
 		assert(driveId && id);
 		
@@ -991,20 +799,6 @@ final class ItemDatabase {
 		}
 	}
 	
-	/**
-
-	void setDeltaLink(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink) {
-		assert(driveId && id);
-		assert(deltaLink);
-		auto stmt = db.prepare("UPDATE item SET deltaLink = ?3 WHERE driveId = ?1 AND id = ?2");
-		stmt.bind(1, driveId);
-		stmt.bind(2, id);
-		stmt.bind(3, deltaLink);
-		stmt.exec();
-	}
-	
-	**/
-	
 	void setDeltaLink(const(char)[] driveId, const(char)[] id, const(char)[] deltaLink) {
 		assert(driveId && id);
 		assert(deltaLink);
@@ -1022,23 +816,6 @@ final class ItemDatabase {
 			detailSQLErrorMessage(e.msg);
 		}
 	}
-	
-	/**
-	
-	// National Cloud Deployments (US and DE) do not support /delta as a query
-	// We need to track in the database that this item is in sync
-	// As we query /children to get all children from OneDrive, update anything in the database 
-	// to be flagged as not-in-sync, thus, we can use that flag to determine what was previously
-	// in-sync, but now deleted on OneDrive
-	void downgradeSyncStatusFlag(const(char)[] driveId, const(char)[] id) {
-		assert(driveId);
-		auto stmt = db.prepare("UPDATE item SET syncStatus = 'N' WHERE driveId = ?1 AND id = ?2");
-		stmt.bind(1, driveId);
-		stmt.bind(2, id);
-		stmt.exec();
-	}
-	
-	**/
 	
 	// National Cloud Deployments (US and DE) do not support /delta as a query
 	// We need to track in the database that this item is in sync
@@ -1063,24 +840,6 @@ final class ItemDatabase {
 		}
 	}
 	
-	/**
-	// National Cloud Deployments (US and DE) do not support /delta as a query
-	// Select items that have a out-of-sync flag set
-	Item[] selectOutOfSyncItems(const(char)[] driveId) {
-		assert(driveId);
-		Item[] items;
-		auto stmt = db.prepare("SELECT * FROM item WHERE syncStatus = 'N' AND driveId = ?1");
-		stmt.bind(1, driveId);
-		auto res = stmt.exec();
-		while (!res.empty) {
-			items ~= buildItem(res);
-			res.step();
-		}
-		return items;
-	}
-	**/
-	
-	
 	// National Cloud Deployments (US and DE) do not support /delta as a query
 	// Select items that have a out-of-sync flag set
 	Item[] selectOutOfSyncItems(const(char)[] driveId) {
@@ -1103,23 +862,6 @@ final class ItemDatabase {
 		return items;
 	}
 
-	/**
-	// OneDrive Business Folders are stored in the database potentially without a root | parentRoot link
-	// Select items associated with the provided driveId
-	Item[] selectByDriveId(const(char)[] driveId) {
-		assert(driveId);
-		Item[] items;
-		auto stmt = db.prepare("SELECT * FROM item WHERE driveId = ?1 AND parentId IS NULL");
-		stmt.bind(1, driveId);
-		auto res = stmt.exec();
-		while (!res.empty) {
-			items ~= buildItem(res);
-			res.step();
-		}
-		return items;
-	}
-	**/
-	
 	// OneDrive Business Folders are stored in the database potentially without a root | parentRoot link
 	// Select items associated with the provided driveId
 	Item[] selectByDriveId(const(char)[] driveId) {
@@ -1144,36 +886,19 @@ final class ItemDatabase {
 
 	// Perform a vacuum on the database, commit WAL / SHM to file
 	void performVacuum() {
-		logBuffer.addLogEntry("Attempting to perform a database vacuum to merge any temporary data", ["debug"]);
-		logBuffer.addLogEntry("Attempting to perform a database vacuum to merge any temporary data");
+		addLogEntry("Attempting to perform a database vacuum to merge any temporary data", ["debug"]);
 		try {
 			// Prepare and execute VACUUM statement
 			Statement stmt = db.prepare("VACUUM;");
 			scope(exit) stmt.finalise();  // Ensure the statement is finalised
 			stmt.exec();
-			logBuffer.addLogEntry("Database vacuum is complete", ["debug"]);
-			logBuffer.addLogEntry("Database vacuum is complete");
+			addLogEntry("Database vacuum is complete", ["debug"]);
 		} catch (SqliteException e) {
-			logBuffer.addLogEntry();
-			logBuffer.addLogEntry("ERROR: Unable to perform a database vacuum: " ~ e.msg);
-			logBuffer.addLogEntry();
+			addLogEntry();
+			addLogEntry("ERROR: Unable to perform a database vacuum: " ~ e.msg);
+			addLogEntry();
 		}
 	}
-	
-	/**
-	// Select distinct driveId items from database
-	string[] selectDistinctDriveIds() {
-		string[] driveIdArray;
-		auto stmt = db.prepare("SELECT DISTINCT driveId FROM item;");
-		auto res = stmt.exec();
-		if (res.empty) return driveIdArray;
-		while (!res.empty) {
-			driveIdArray ~= res.front[0].dup;
-			res.step();
-		}
-		return driveIdArray;
-	}
-	**/
 	
 	// Select distinct driveId items from database
 	string[] selectDistinctDriveIds() {

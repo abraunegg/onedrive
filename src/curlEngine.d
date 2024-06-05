@@ -16,6 +16,12 @@ import core.memory;
 import log;
 import util;
 
+// Shared pool of CurlEngine instances accessible across all threads
+__gshared CurlEngine[] curlEnginePool; // __gshared is used to declare a variable that is shared across all threads
+
+// Global flag for SIGINT (CTRL-C) and SIGTERM (kill) state
+__gshared bool exitHandlerTriggered = false;
+
 class CurlResponse {
 	HTTP.Method method;
 	const(char)[] url;
@@ -28,6 +34,10 @@ class CurlResponse {
 	char[] content;
 
 	this() {
+		reset();
+	}
+	
+	~this() {
 		reset();
 	}
 
@@ -57,7 +67,7 @@ class CurlResponse {
 			json = content.parseJSON();
 		} catch (JSONException e) {
 			// Log that a JSON Exception was caught, dont output the HTML response from OneDrive
-			logBuffer.addLogEntry("JSON Exception caught when performing HTTP operations - use --debug-https to diagnose further", ["debug"]);
+			addLogEntry("JSON Exception caught when performing HTTP operations - use --debug-https to diagnose further", ["debug"]);
 		}
 		return json;
 	};
@@ -66,8 +76,8 @@ class CurlResponse {
 		hasResponse = true;
 		this.responseHeaders = http.responseHeaders();
 		this.statusLine = http.statusLine;
-		logBuffer.addLogEntry("HTTP Response Headers: " ~ to!string(this.responseHeaders), ["debug"]);
-		logBuffer.addLogEntry("HTTP Status Line: " ~ to!string(this.statusLine), ["debug"]);
+		addLogEntry("HTTP Response Headers: " ~ to!string(this.responseHeaders), ["debug"]);
+		addLogEntry("HTTP Status Line: " ~ to!string(this.statusLine), ["debug"]);
 	}
 
 	@safe pure HTTP.StatusLine getStatus() {
@@ -80,15 +90,15 @@ class CurlResponse {
 		// Is 'retry-after' in the response headers
 		if ("retry-after" in responseHeaders) {
 			// Set the retry-after value
-			logBuffer.addLogEntry("curlEngine.http.perform() => Received a 'Retry-After' Header Response with the following value: " ~ to!string(responseHeaders["retry-after"]), ["debug"]);
-			logBuffer.addLogEntry("curlEngine.http.perform() => Setting retryAfterValue to: " ~ responseHeaders["retry-after"], ["debug"]);
+			addLogEntry("curlEngine.http.perform() => Received a 'Retry-After' Header Response with the following value: " ~ to!string(responseHeaders["retry-after"]), ["debug"]);
+			addLogEntry("curlEngine.http.perform() => Setting retryAfterValue to: " ~ responseHeaders["retry-after"], ["debug"]);
 			delayBeforeRetry = to!int(responseHeaders["retry-after"]);
 		} else {
 			// Use a 120 second delay as a default given header value was zero
 			// This value is based on log files and data when determining correct process for 429 response handling
 			delayBeforeRetry = 120;
 			// Update that we are over-riding the provided value with a default
-			logBuffer.addLogEntry("HTTP Response Header retry-after value was missing - Using a preconfigured default of: " ~ to!string(delayBeforeRetry), ["debug"]);
+			addLogEntry("HTTP Response Header retry-after value was missing - Using a preconfigured default of: " ~ to!string(delayBeforeRetry), ["debug"]);
 		}
 		return delayBeforeRetry;
 	}
@@ -167,9 +177,6 @@ class CurlResponse {
 
 class CurlEngine {
 
-	// Shared pool of CurlEngine instances accessible across all threads
-	__gshared CurlEngine[] curlEnginePool; // __gshared is used to declare a variable that is shared across all threads
-	
 	HTTP http;
 	File uploadFile;
 	CurlResponse response;
@@ -180,10 +187,10 @@ class CurlEngine {
     this() {
         http = HTTP();   // Directly initializes HTTP using its default constructor
         response = null; // Initialize as null
-		internalThreadId = generateAlphanumericString();
+		internalThreadId = generateAlphanumericString(); // Give this CurlEngine instance a unique ID
     }
 
-	// The destructor should only clean up resources owned directly by this instance
+	// The destructor should only clean up resources owned directly by this CurlEngine instance
 	~this() {
 		// Is the file still open?
 		if (uploadFile.isOpen()) {
@@ -192,101 +199,36 @@ class CurlEngine {
 		
 		// Is 'response' cleared?
 		if (response !is null) {
+			//object.destroy(response); // Destroy, then set to null
 			response = null;
 		}
 		
 		// Is the actual http instance is stopped?
 		if (!http.isStopped) {
-			// HTTP instance was not stopped .. we need to stop it
-			http.shutdown();
-			object.destroy(http); // Destroy, however we cant set to null
-		}
-    }
-		
-	// Get a curl instance for the OneDrive API to use
-	static CurlEngine getCurlInstance() {
-		logBuffer.addLogEntry("CurlEngine getCurlInstance() called", ["debug"]);
-		
-		synchronized (CurlEngine.classinfo) {
-			// What is the current pool size
-			logBuffer.addLogEntry("CurlEngine curlEnginePool current size: " ~ to!string(curlEnginePool.length), ["debug"]);
-		
-			if (curlEnginePool.empty) {
-				logBuffer.addLogEntry("CurlEngine curlEnginePool is empty - constructing a new CurlEngine instance", ["debug"]);
-				return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
-			} else {
-				CurlEngine curlEngine = curlEnginePool[$ - 1];
-				curlEnginePool.popBack(); // assumes a LIFO (last-in, first-out) usage pattern
-				
-				// Is this engine stopped?
-				if (curlEngine.http.isStopped) {
-					// return a new curl engine as a stopped one cannot be used
-					logBuffer.addLogEntry("CurlEngine was in a stoppped state (not usable) - constructing a new CurlEngine instance", ["debug"]);
-					return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
-				} else {
-					// return an existing curl engine
-					logBuffer.addLogEntry("CurlEngine was in a valid state - returning existing CurlEngine instance", ["debug"]);
-					logBuffer.addLogEntry("CurlEngine instance ID: " ~ curlEngine.internalThreadId, ["debug"]);
-					return curlEngine;
-				}
+			// HTTP instance was not stopped .. but it should have been ..
+			if (exitHandlerTriggered) {
+				// Regardless of what we do here, if we are shutting down because of SIGINT (CTRL-C) and SIGTERM (kill)
+				// This will have caused 'http' to be corrupt memory wise
+				// - http.shutdown(); will not work
+				// - object.destroy(http); will not work
+				// Have to use writeln() here as, logging most likely have been shutdown by now
+				writeln("Due to a termination signal, a curl engine was not shutdown in a safe manner.");
+				// Application will now exit with 'Segmentation fault' after completing ~this() function
 			}
 		}
-	}
-	
-	// Release all curl instances
-	static void releaseAllCurlInstances() {
-		logBuffer.addLogEntry("CurlEngine releaseAllCurlInstances() called", ["debug"]);
-		synchronized (CurlEngine.classinfo) {
-			// What is the current pool size
-			logBuffer.addLogEntry("CurlEngine curlEnginePool size to release: " ~ to!string(curlEnginePool.length), ["debug"]);
-			if (curlEnginePool.length > 0) {
-				// Safely iterate and clean up each CurlEngine instance
-				foreach (curlEngineInstance; curlEnginePool) {
-					try {
-						curlEngineInstance.cleanup(true); // Cleanup instance by resetting values and flushing cookie cache
-						curlEngineInstance.shutdownCurlHTTPInstance();  // Assume proper cleanup of any resources used by HTTP
-					} catch (Exception e) {
-						// Log the error or handle it appropriately
-						// e.g., writeln("Error during cleanup/shutdown: ", e.toString());
-					}
-					
-					// It's safe to destroy the object here assuming no other references exist
-					curlEngineInstance = null;
-					// Perform Garbage Collection on this destroyed curl engine
-					GC.collect();
-				}
-            
-				// Clear the array after all instances have been handled
-				curlEnginePool.length = 0; // More explicit than curlEnginePool = [];
-			}
-        }
-		// Perform Garbage Collection on this destroyed curl engine
-		GC.collect();
     }
-
-    // Return how many curl engines there are
-	static ulong curlEnginePoolLength() {
-		return curlEnginePool.length;
-	}
-	
-	// Destroy all curl instances
-	static void destroyAllCurlInstances() {
-		logBuffer.addLogEntry("CurlEngine destroyAllCurlInstances() called", ["debug"]);
-		// Release all 'curl' instances
-		releaseAllCurlInstances();
-    }
-
+		
 	// We are releasing a curl instance back to the pool
 	void releaseEngine() {
 		// Log that we are releasing this engine back to the pool
-		logBuffer.addLogEntry("CurlEngine releaseEngine() called on instance id: " ~ to!string(internalThreadId), ["debug"]);
-		logBuffer.addLogEntry("CurlEngine curlEnginePool size before release: " ~ to!string(curlEnginePool.length), ["debug"]);
+		addLogEntry("CurlEngine releaseEngine() called on instance id: " ~ to!string(internalThreadId), ["debug"]);
+		addLogEntry("CurlEngine curlEnginePool size before release: " ~ to!string(curlEnginePool.length), ["debug"]);
 		
 		// cleanup this curl instance before putting it back in the pool
 		cleanup(true); // Cleanup instance by resetting values and flushing cookie cache
         synchronized (CurlEngine.classinfo) {
             curlEnginePool ~= this;
-			logBuffer.addLogEntry("CurlEngine curlEnginePool size after release: " ~ to!string(curlEnginePool.length), ["debug"]);
+			addLogEntry("CurlEngine curlEnginePool size after release: " ~ to!string(curlEnginePool.length), ["debug"]);
         }
 		// Perform Garbage Collection
 		GC.collect();
@@ -367,13 +309,13 @@ class CurlEngine {
 		
 		if (httpsDebug) {
 			// Output what options we are using so that in the debug log this can be tracked
-			logBuffer.addLogEntry("http.dnsTimeout = " ~ to!string(dnsTimeout), ["debug"]);
-			logBuffer.addLogEntry("http.connectTimeout = " ~ to!string(connectTimeout), ["debug"]);
-			logBuffer.addLogEntry("http.dataTimeout = " ~ to!string(dataTimeout), ["debug"]);
-			logBuffer.addLogEntry("http.operationTimeout = " ~ to!string(operationTimeout), ["debug"]);
-			logBuffer.addLogEntry("http.maxRedirects = " ~ to!string(maxRedirects), ["debug"]);
-			logBuffer.addLogEntry("http.CurlOption.ipresolve = " ~ to!string(protocolVersion), ["debug"]);
-			logBuffer.addLogEntry("http.header.Connection.keepAlive = " ~ to!string(keepAlive), ["debug"]);
+			addLogEntry("http.dnsTimeout = " ~ to!string(dnsTimeout), ["debug"]);
+			addLogEntry("http.connectTimeout = " ~ to!string(connectTimeout), ["debug"]);
+			addLogEntry("http.dataTimeout = " ~ to!string(dataTimeout), ["debug"]);
+			addLogEntry("http.operationTimeout = " ~ to!string(operationTimeout), ["debug"]);
+			addLogEntry("http.maxRedirects = " ~ to!string(maxRedirects), ["debug"]);
+			addLogEntry("http.CurlOption.ipresolve = " ~ to!string(protocolVersion), ["debug"]);
+			addLogEntry("http.header.Connection.keepAlive = " ~ to!string(keepAlive), ["debug"]);
 		}
 	}
 
@@ -488,7 +430,7 @@ class CurlEngine {
 	// Cleanup this instance internal variables that may have been set
 	void cleanup(bool flushCookies = false) {
 		// Reset any values to defaults, freeing any set objects
-		logBuffer.addLogEntry("CurlEngine cleanup() called on instance id: " ~ to!string(internalThreadId), ["debug"]);
+		addLogEntry("CurlEngine cleanup() called on instance id: " ~ to!string(internalThreadId), ["debug"]);
 		
 		// Is the instance is stopped?
 		if (!http.isStopped) {
@@ -524,20 +466,96 @@ class CurlEngine {
 
 	// Shut down the curl instance & close any open sockets
 	void shutdownCurlHTTPInstance() {
-		logBuffer.addLogEntry("CurlEngine shutdownCurlHTTPInstance() called on instance id: " ~ to!string(internalThreadId), ["debug"]);
+		addLogEntry("CurlEngine shutdownCurlHTTPInstance() called on instance id: " ~ to!string(internalThreadId), ["debug"]);
 		
 		// Is the instance is stopped?
 		if (!http.isStopped) {
-			logBuffer.addLogEntry("HTTP instance still active: " ~ to!string(internalThreadId), ["debug"]);
+			addLogEntry("HTTP instance still active: " ~ to!string(internalThreadId), ["debug"]);
 			http.shutdown();
-			object.destroy(http); // Destroy, however we cant set to null
-			logBuffer.addLogEntry("HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);
+			//object.destroy(http); // Destroy, however we cant set to null
+			addLogEntry("HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);
 		} else {
 			// Already stopped .. destroy it
-			object.destroy(http); // Destroy, however we cant set to null
-			logBuffer.addLogEntry("Stopped HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);
+			//object.destroy(http); // Destroy, however we cant set to null
+			addLogEntry("Stopped HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);
 		}
 		// Perform Garbage Collection
 		GC.collect();
 	}
+}
+
+// Methods to control obtaining and releasing a CurlEngine instance from the curlEnginePool
+
+// Get a curl instance for the OneDrive API to use
+CurlEngine getCurlInstance() {
+	addLogEntry("CurlEngine getCurlInstance() called", ["debug"]);
+	
+	synchronized (CurlEngine.classinfo) {
+		// What is the current pool size
+		addLogEntry("CurlEngine curlEnginePool current size: " ~ to!string(curlEnginePool.length), ["debug"]);
+	
+		if (curlEnginePool.empty) {
+			addLogEntry("CurlEngine curlEnginePool is empty - constructing a new CurlEngine instance", ["debug"]);
+			return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
+		} else {
+			CurlEngine curlEngine = curlEnginePool[$ - 1];
+			curlEnginePool.popBack(); // assumes a LIFO (last-in, first-out) usage pattern
+			
+			// Is this engine stopped?
+			if (curlEngine.http.isStopped) {
+				// return a new curl engine as a stopped one cannot be used
+				addLogEntry("CurlEngine was in a stoppped state (not usable) - constructing a new CurlEngine instance", ["debug"]);
+				return new CurlEngine;  // Constructs a new CurlEngine with a fresh HTTP instance
+			} else {
+				// return an existing curl engine
+				addLogEntry("CurlEngine was in a valid state - returning existing CurlEngine instance", ["debug"]);
+				addLogEntry("CurlEngine instance ID: " ~ curlEngine.internalThreadId, ["debug"]);
+				return curlEngine;
+			}
+		}
+	}
+}
+
+// Release all CurlEngine instances
+void releaseAllCurlInstances() {
+	addLogEntry("CurlEngine releaseAllCurlInstances() called", ["debug"]);
+	addLogEntry("CurlEngine releaseAllCurlInstances() called");
+	synchronized (CurlEngine.classinfo) {
+		// What is the current pool size
+		addLogEntry("CurlEngine curlEnginePool size to release: " ~ to!string(curlEnginePool.length), ["debug"]);
+		if (curlEnginePool.length > 0) {
+			// Safely iterate and clean up each CurlEngine instance
+			foreach (curlEngineInstance; curlEnginePool) {
+				try {
+					curlEngineInstance.cleanup(true); // Cleanup instance by resetting values and flushing cookie cache
+					curlEngineInstance.shutdownCurlHTTPInstance();  // Assume proper cleanup of any resources used by HTTP
+				} catch (Exception e) {
+					// Log the error or handle it appropriately
+					// e.g., writeln("Error during cleanup/shutdown: ", e.toString());
+				}
+				
+				// It's safe to destroy the object here assuming no other references exist
+				//object.destroy(curlEngineInstance); // Destroy, then set to null
+				curlEngineInstance = null;
+				// Perform Garbage Collection on this destroyed curl engine
+				GC.collect();
+				// Log release
+				addLogEntry("CurlEngine released", ["debug"]);
+			}
+		
+			// Clear the array after all instances have been handled
+			curlEnginePool.length = 0; // More explicit than curlEnginePool = [];
+		}
+	}
+	// Perform Garbage Collection on the destroyed curl engines
+	GC.collect();
+	
+	addLogEntry("CurlEngine releaseAllCurlInstances() completed", ["debug"]);
+	addLogEntry("CurlEngine releaseAllCurlInstances() completed");
+	
+}
+
+// Return how many curl engines there are
+ulong curlEnginePoolLength() {
+	return curlEnginePool.length;
 }

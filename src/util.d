@@ -63,7 +63,7 @@ void safeBackup(const(char)[] path, bool dryRun, out string renamedPath) {
 	// Check if unique file name was found
 	if (exists(newPath ~ ext)) {
 		// On the 1000th backup of this file, this should be triggered
-		logBuffer.addLogEntry("Failed to backup " ~ to!string(path) ~ ": Unique file name could not be found after 1000 attempts", ["error"]);
+		addLogEntry("Failed to backup " ~ to!string(path) ~ ": Unique file name could not be found after 1000 attempts", ["error"]);
 		return; // Exit function as a unique file name could not be found
 	}
 	
@@ -71,7 +71,7 @@ void safeBackup(const(char)[] path, bool dryRun, out string renamedPath) {
 	newPath ~= ext;
 
     // Log that we are perform the backup by renaming the file
-	logBuffer.addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath) , ["verbose"]);
+	addLogEntry("The local item is out-of-sync with OneDrive, renaming to preserve existing file and prevent local data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath) , ["verbose"]);
 
     if (!dryRun) {
 		// Not a --dry-run scenario - do the file rename
@@ -92,10 +92,10 @@ void safeBackup(const(char)[] path, bool dryRun, out string renamedPath) {
 			renamedPath = to!string(newPath);
         } catch (Exception e) {
             // Handle exceptions, e.g., log error
-            logBuffer.addLogEntry("Renaming of local file failed for " ~ to!string(path) ~ ": " ~ e.msg, ["error"]);
+            addLogEntry("Renaming of local file failed for " ~ to!string(path) ~ ": " ~ e.msg, ["error"]);
         }
     } else {
-        logBuffer.addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["debug"]);
+        addLogEntry("DRY-RUN: Skipping renaming local file to preserve existing file and prevent data loss: " ~ to!string(path) ~ " -> " ~ to!string(newPath), ["debug"]);
     }
 }
 
@@ -103,11 +103,11 @@ void safeBackup(const(char)[] path, bool dryRun, out string renamedPath) {
 void safeRename(const(char)[] oldPath, const(char)[] newPath, bool dryRun) {
 	// Perform the rename
 	if (!dryRun) {
-		logBuffer.addLogEntry("Calling rename(oldPath, newPath)", ["debug"]);
+		addLogEntry("Calling rename(oldPath, newPath)", ["debug"]);
 		// Use rename() as Linux is POSIX compliant, we have an atomic operation where at no point in time the 'to' is missing.
 		rename(oldPath, newPath);
 	} else {
-		logBuffer.addLogEntry("DRY-RUN: Skipping local file rename", ["debug"]);
+		addLogEntry("DRY-RUN: Skipping local file rename", ["debug"]);
 	}
 }
 
@@ -221,37 +221,37 @@ bool testInternetReachability(ApplicationConfig appConfig) {
 
     // Execute the request and handle exceptions
     try {
-		logBuffer.addLogEntry("Attempting to contact Microsoft OneDrive Login Service");
+		addLogEntry("Attempting to contact Microsoft OneDrive Login Service");
 		http.perform();
 
 		// Check response for HTTP status code
 		if (http.statusLine.code >= 200 && http.statusLine.code < 400) {
-			logBuffer.addLogEntry("Successfully reached Microsoft OneDrive Login Service");
+			addLogEntry("Successfully reached Microsoft OneDrive Login Service");
 		} else {
-			logBuffer.addLogEntry("Failed to reach Microsoft OneDrive Login Service. HTTP status code: " ~ to!string(http.statusLine.code));
+			addLogEntry("Failed to reach Microsoft OneDrive Login Service. HTTP status code: " ~ to!string(http.statusLine.code));
 			throw new Exception("HTTP Request Failed with Status Code: " ~ to!string(http.statusLine.code));
 		}
 
 		http.shutdown();
-		object.destroy(http);
+		//object.destroy(http);
 		return true;
     } catch (SocketException e) {
-		logBuffer.addLogEntry("Cannot connect to Microsoft OneDrive Service - Socket Issue: " ~ e.msg);
+		addLogEntry("Cannot connect to Microsoft OneDrive Service - Socket Issue: " ~ e.msg);
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 		http.shutdown();
-		object.destroy(http);
+		//object.destroy(http);
 		return false;
     } catch (CurlException e) {
-		logBuffer.addLogEntry("Cannot connect to Microsoft OneDrive Service - Network Connection Issue: " ~ e.msg);
+		addLogEntry("Cannot connect to Microsoft OneDrive Service - Network Connection Issue: " ~ e.msg);
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 		http.shutdown();
-		object.destroy(http);
+		//object.destroy(http);
 		return false;
     } catch (Exception e) {
-		logBuffer.addLogEntry("Unexpected error occurred: " ~ e.toString());
+		addLogEntry("Unexpected error occurred: " ~ e.toString());
 		displayOneDriveErrorMessage(e.toString(), getFunctionName!({}));
 		http.shutdown();
-		object.destroy(http);
+		//object.destroy(http);
 		return false;
     }
 }
@@ -269,21 +269,21 @@ bool retryInternetConnectivtyTest(ApplicationConfig appConfig) {
             backoffInterval = min(backoffInterval * 2, maxBackoffInterval); // exponential increase
         }
 
-        logBuffer.addLogEntry("  Retry Attempt:      " ~ to!string(retryAttempts + 1), ["debug"]);
-        logBuffer.addLogEntry("  Retry In (seconds): " ~ to!string(backoffInterval), ["debug"]);
+        addLogEntry("  Retry Attempt:      " ~ to!string(retryAttempts + 1), ["debug"]);
+        addLogEntry("  Retry In (seconds): " ~ to!string(backoffInterval), ["debug"]);
 
         Thread.sleep(dur!"seconds"(backoffInterval));
         isOnline = testInternetReachability(appConfig); // assuming this function is defined elsewhere
 
         if (isOnline) {
-            logBuffer.addLogEntry("Internet connectivity to Microsoft OneDrive service has been restored");
+            addLogEntry("Internet connectivity to Microsoft OneDrive service has been restored");
         }
 
         retryAttempts++;
     }
 
     if (!isOnline) {
-        logBuffer.addLogEntry("ERROR: Was unable to reconnect to the Microsoft OneDrive service after " ~ to!string(maxRetryCount) ~ " attempts!");
+        addLogEntry("ERROR: Was unable to reconnect to the Microsoft OneDrive service after " ~ to!string(maxRetryCount) ~ " attempts!");
     }
 	
 	// Return state
@@ -303,7 +303,7 @@ bool readLocalFile(string path) {
 			// Check if the read operation was successful
 			if (data.length != 1) {
 				// Read operation not successful
-				logBuffer.addLogEntry("Failed to read the required amount from the file: " ~ path);
+				addLogEntry("Failed to read the required amount from the file: " ~ path);
 				return false;
 			}
 		} catch (std.file.FileException e) {
@@ -525,10 +525,10 @@ bool containsURLEncodedItems(string path) {
 
 // Parse and display error message received from OneDrive
 void displayOneDriveErrorMessage(string message, string callingFunction) {
-	logBuffer.addLogEntry();
-	logBuffer.addLogEntry("ERROR: Microsoft OneDrive API returned an error with the following message:");
+	addLogEntry();
+	addLogEntry("ERROR: Microsoft OneDrive API returned an error with the following message:");
 	auto errorArray = splitLines(message);
-	logBuffer.addLogEntry("  Error Message:    " ~ to!string(errorArray[0]));
+	addLogEntry("  Error Message:    " ~ to!string(errorArray[0]));
 	// Extract 'message' as the reason
 	JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
 	
@@ -559,12 +559,12 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 		// Display the error reason
 		if (errorReason.startsWith("<!DOCTYPE")) {
 			// a HTML Error Reason was given
-			logBuffer.addLogEntry("  Error Reason:  A HTML Error response was provided. Use debug logging (--verbose --verbose) to view this error");
-			logBuffer.addLogEntry(errorReason, ["debug"]);
+			addLogEntry("  Error Reason:  A HTML Error response was provided. Use debug logging (--verbose --verbose) to view this error");
+			addLogEntry(errorReason, ["debug"]);
 			
 		} else {
 			// a non HTML Error Reason was given
-			logBuffer.addLogEntry("  Error Reason:     " ~ errorReason);
+			addLogEntry("  Error Reason:     " ~ errorReason);
 		}
 		
 		// Get the error code if available
@@ -592,17 +592,17 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 		}
 		
 		// Display the error code, date and request id if available
-		if (errorCode != "")   logBuffer.addLogEntry("  Error Code:       " ~ errorCode);
-		if (requestDate != "") logBuffer.addLogEntry("  Error Timestamp:  " ~ requestDate);
-		if (requestId != "")   logBuffer.addLogEntry("  API Request ID:   " ~ requestId);
+		if (errorCode != "")   addLogEntry("  Error Code:       " ~ errorCode);
+		if (requestDate != "") addLogEntry("  Error Timestamp:  " ~ requestDate);
+		if (requestId != "")   addLogEntry("  API Request ID:   " ~ requestId);
 	}
 	
 	// Where in the code was this error generated
-	logBuffer.addLogEntry("  Calling Function: " ~ callingFunction, ["verbose"]);
+	addLogEntry("  Calling Function: " ~ callingFunction, ["verbose"]);
 	
 	// Extra Debug if we are using --verbose --verbose
-	logBuffer.addLogEntry("Raw Error Data: " ~ message, ["debug"]);
-	logBuffer.addLogEntry("JSON Message: " ~ to!string(errorMessage), ["debug"]);
+	addLogEntry("Raw Error Data: " ~ message, ["debug"]);
+	addLogEntry("JSON Message: " ~ to!string(errorMessage), ["debug"]);
 }
 
 // Common code for handling when a client is unauthorised
@@ -612,7 +612,7 @@ void handleClientUnauthorised(int httpStatusCode, string message) {
 	auto errorArray = splitLines(message);
 	// Extract 'message' as the reason
 	JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
-	logBuffer.addLogEntry("errorMessage: " ~ to!string(errorMessage), ["debug"]);
+	addLogEntry("errorMessage: " ~ to!string(errorMessage), ["debug"]);
 	
 	if (httpStatusCode == 400) {
 		// bad request or a new auth token is needed
@@ -620,20 +620,20 @@ void handleClientUnauthorised(int httpStatusCode, string message) {
 		// Is there an error description?
 		if ("error_description" in errorMessage) {
 			// error_description to process
-			logBuffer.addLogEntry();
+			addLogEntry();
 			string[] errorReason = splitLines(errorMessage["error_description"].str);
-			logBuffer.addLogEntry(to!string(errorReason[0]), ["info", "notify"]);
+			addLogEntry(to!string(errorReason[0]), ["info", "notify"]);
 		}
-		logBuffer.addLogEntry();
-		logBuffer.addLogEntry("ERROR: You will need to issue a --reauth and re-authorise this client to obtain a fresh auth token.", ["info", "notify"]);
-		logBuffer.addLogEntry();
+		addLogEntry();
+		addLogEntry("ERROR: You will need to issue a --reauth and re-authorise this client to obtain a fresh auth token.", ["info", "notify"]);
+		addLogEntry();
 	}
 	
 	if (httpStatusCode == 401) {
 		writeln("CODING TO DO: Triggered a 401 HTTP unauthorised response when client was unauthorised");
-		logBuffer.addLogEntry();
-		logBuffer.addLogEntry("ERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.", ["info", "notify"]);
-		logBuffer.addLogEntry();
+		addLogEntry();
+		addLogEntry("ERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.", ["info", "notify"]);
+		addLogEntry();
 	}
 	
 	// Must force exit here, allow logging to be done
@@ -642,16 +642,16 @@ void handleClientUnauthorised(int httpStatusCode, string message) {
 
 // Parse and display error message received from the local file system
 void displayFileSystemErrorMessage(string message, string callingFunction) {
-    logBuffer.addLogEntry(); // used rather than writeln
-    logBuffer.addLogEntry("ERROR: The local file system returned an error with the following message:");
+    addLogEntry(); // used rather than writeln
+    addLogEntry("ERROR: The local file system returned an error with the following message:");
 
     auto errorArray = splitLines(message);
     // Safely get the error message
     string errorMessage = errorArray.length > 0 ? to!string(errorArray[0]) : "No error message available";
-    logBuffer.addLogEntry("  Error Message:    " ~ errorMessage);
+    addLogEntry("  Error Message:    " ~ errorMessage);
     
     // Log the calling function
-    logBuffer.addLogEntry("  Calling Function: " ~ callingFunction);
+    addLogEntry("  Calling Function: " ~ callingFunction);
 
     try {
         // Safely check for disk space
@@ -662,24 +662,24 @@ void displayFileSystemErrorMessage(string message, string callingFunction) {
         }
     } catch (Exception e) {
         // Handle exceptions from disk space check or type conversion
-        logBuffer.addLogEntry("  Exception in disk space check: " ~ e.msg);
+        addLogEntry("  Exception in disk space check: " ~ e.msg);
     }
 }
 
 // Display the POSIX Error Message
 void displayPosixErrorMessage(string message) {
-	logBuffer.addLogEntry(); // used rather than writeln
-	logBuffer.addLogEntry("ERROR: Microsoft OneDrive API returned data that highlights a POSIX compliance issue:");
-	logBuffer.addLogEntry("  Error Message:    " ~ message);
+	addLogEntry(); // used rather than writeln
+	addLogEntry("ERROR: Microsoft OneDrive API returned data that highlights a POSIX compliance issue:");
+	addLogEntry("  Error Message:    " ~ message);
 }
 
 // Display the Error Message
 void displayGeneralErrorMessage(Exception e, string callingFunction=__FUNCTION__, int lineno=__LINE__) {
-	logBuffer.addLogEntry(); // used rather than writeln
-	logBuffer.addLogEntry("ERROR: Encounter " ~ e.classinfo.name ~ ":");
-	logBuffer.addLogEntry("  Error Message:    " ~ e.msg);
-	logBuffer.addLogEntry("  Calling Function:    " ~ callingFunction);
-	logBuffer.addLogEntry("  Line number:    " ~ to!string(lineno));
+	addLogEntry(); // used rather than writeln
+	addLogEntry("ERROR: Encounter " ~ e.classinfo.name ~ ":");
+	addLogEntry("  Error Message:    " ~ e.msg);
+	addLogEntry("  Calling Function:    " ~ callingFunction);
+	addLogEntry("  Line number:    " ~ to!string(lineno));
 }
 
 // Get the function name that is being called to assist with identifying where an error is being generated
@@ -698,7 +698,7 @@ JSONValue fetchOnlineURLContent(string url) {
 	// Exit scope to ensure cleanup
     scope(exit) {
         http.shutdown();
-        object.destroy(http);
+        //object.destroy(http);
     }
 	
 	// Configure the URL to access
@@ -720,7 +720,7 @@ JSONValue fetchOnlineURLContent(string url) {
 	
 	// Ensure resources are cleaned up
 	http.shutdown();  
-	object.destroy(http);
+	//object.destroy(http);
 
     // Return onlineResponse
     return onlineContent;
@@ -737,9 +737,9 @@ JSONValue getLatestReleaseDetails() {
 	try {	
 		githubLatest = fetchOnlineURLContent("https://api.github.com/repos/abraunegg/onedrive/releases/latest");
     } catch (CurlException e) {
-        logBuffer.addLogEntry("CurlException: Unable to query GitHub for latest release - " ~ e.msg, ["debug"]);
+        addLogEntry("CurlException: Unable to query GitHub for latest release - " ~ e.msg, ["debug"]);
     } catch (JSONException e) {
-        logBuffer.addLogEntry("JSONException: Unable to parse GitHub JSON response - " ~ e.msg, ["debug"]);
+        addLogEntry("JSONException: Unable to parse GitHub JSON response - " ~ e.msg, ["debug"]);
     }
 	
 	// githubLatest has to be a valid JSON object
@@ -751,7 +751,7 @@ JSONValue getLatestReleaseDetails() {
 			latestTag = strip(githubLatest["tag_name"].str, "v");
 		} else {
 			// set to latestTag zeros
-			logBuffer.addLogEntry("'tag_name' unavailable in JSON response. Setting GitHub 'tag_name' release version to 0.0.0", ["debug"]);
+			addLogEntry("'tag_name' unavailable in JSON response. Setting GitHub 'tag_name' release version to 0.0.0", ["debug"]);
 			latestTag = "0.0.0";
 		}
 		// use the returned published_at date
@@ -760,14 +760,14 @@ JSONValue getLatestReleaseDetails() {
 			publishedDate = githubLatest["published_at"].str;
 		} else {
 			// set to v2.0.0 release date
-			logBuffer.addLogEntry("'published_at' unavailable in JSON response. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);
+			addLogEntry("'published_at' unavailable in JSON response. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);
 			publishedDate = "2018-07-18T18:00:00Z";
 		}
 	} else {
 		// JSONValue is not an object
-		logBuffer.addLogEntry("Invalid JSON Object response from GitHub. Setting GitHub 'tag_name' release version to 0.0.0", ["debug"]);
+		addLogEntry("Invalid JSON Object response from GitHub. Setting GitHub 'tag_name' release version to 0.0.0", ["debug"]);
 		latestTag = "0.0.0";
-		logBuffer.addLogEntry("Invalid JSON Object. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);
+		addLogEntry("Invalid JSON Object. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);
 		publishedDate = "2018-07-18T18:00:00Z";
 	}
 		
@@ -792,10 +792,10 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 	try {
 		githubDetails = fetchOnlineURLContent("https://api.github.com/repos/abraunegg/onedrive/releases");
 	} catch (CurlException e) {
-        logBuffer.addLogEntry("CurlException: Unable to query GitHub for release details - " ~ e.msg, ["debug"]);
+        addLogEntry("CurlException: Unable to query GitHub for release details - " ~ e.msg, ["debug"]);
         return parseJSON(`{"Error": "CurlException", "message": "` ~ e.msg ~ `"}`);
     } catch (JSONException e) {
-        logBuffer.addLogEntry("JSONException: Unable to parse GitHub JSON response - " ~ e.msg, ["debug"]);
+        addLogEntry("JSONException: Unable to parse GitHub JSON response - " ~ e.msg, ["debug"]);
         return parseJSON(`{"Error": "JSONException", "message": "` ~ e.msg ~ `"}`);
     }
 	
@@ -804,9 +804,9 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 		foreach (searchResult; githubDetails.array) {
 			// searchResult["tag_name"].str;
 			if (searchResult["tag_name"].str == versionTag) {
-				logBuffer.addLogEntry("MATCHED version", ["debug"]);
-				logBuffer.addLogEntry("tag_name: " ~ searchResult["tag_name"].str, ["debug"]);
-				logBuffer.addLogEntry("published_at: " ~ searchResult["published_at"].str, ["debug"]);
+				addLogEntry("MATCHED version", ["debug"]);
+				addLogEntry("tag_name: " ~ searchResult["tag_name"].str, ["debug"]);
+				addLogEntry("published_at: " ~ searchResult["published_at"].str, ["debug"]);
 				publishedDate = searchResult["published_at"].str;
 			}
 		}
@@ -814,12 +814,12 @@ JSONValue getCurrentVersionDetails(string thisVersion) {
 		if (publishedDate.empty) {
 			// empty .. no version match ?
 			// set to v2.0.0 release date
-			logBuffer.addLogEntry("'published_at' unavailable in JSON response. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);
+			addLogEntry("'published_at' unavailable in JSON response. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);
 			publishedDate = "2018-07-18T18:00:00Z";
 		}
 	} else {
 		// JSONValue is not an Array
-		logBuffer.addLogEntry("Invalid JSON Array. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);
+		addLogEntry("Invalid JSON Array. Setting GitHub 'published_at' date to 2018-07-18T18:00:00Z", ["debug"]);
 		publishedDate = "2018-07-18T18:00:00Z";
 	}
 		
@@ -854,11 +854,11 @@ void checkApplicationVersion() {
 	string applicationVersion = currentVersionArray[0];
 	
 	// debug output
-	logBuffer.addLogEntry("applicationVersion:       " ~ applicationVersion, ["debug"]);
-	logBuffer.addLogEntry("latestVersion:            " ~ latestVersion, ["debug"]);
-	logBuffer.addLogEntry("publishedDate:            " ~ to!string(publishedDate), ["debug"]);
-	logBuffer.addLogEntry("currentTime:              " ~ to!string(currentTime), ["debug"]);
-	logBuffer.addLogEntry("releaseGracePeriod:       " ~ to!string(releaseGracePeriod), ["debug"]);
+	addLogEntry("applicationVersion:       " ~ applicationVersion, ["debug"]);
+	addLogEntry("latestVersion:            " ~ latestVersion, ["debug"]);
+	addLogEntry("publishedDate:            " ~ to!string(publishedDate), ["debug"]);
+	addLogEntry("currentTime:              " ~ to!string(currentTime), ["debug"]);
+	addLogEntry("releaseGracePeriod:       " ~ to!string(releaseGracePeriod), ["debug"]);
 	
 	// display details if not current
 	// is application version is older than available on GitHub
@@ -872,12 +872,12 @@ void checkApplicationVersion() {
 			JSONValue thisVersionDetails = getCurrentVersionDetails(applicationVersion);
 			SysTime thisVersionPublishedDate = SysTime.fromISOExtString(thisVersionDetails["publishedDate"].str).toUTC();
 			thisVersionPublishedDate.fracSecs = Duration.zero;
-			logBuffer.addLogEntry("thisVersionPublishedDate: " ~ to!string(thisVersionPublishedDate), ["debug"]);
+			addLogEntry("thisVersionPublishedDate: " ~ to!string(thisVersionPublishedDate), ["debug"]);
 			
 			// the running version grace period is its release date + 1 month
 			SysTime thisVersionReleaseGracePeriod = thisVersionPublishedDate;
 			thisVersionReleaseGracePeriod = thisVersionReleaseGracePeriod.add!"months"(1);
-			logBuffer.addLogEntry("thisVersionReleaseGracePeriod: " ~ to!string(thisVersionReleaseGracePeriod), ["debug"]);
+			addLogEntry("thisVersionReleaseGracePeriod: " ~ to!string(thisVersionReleaseGracePeriod), ["debug"]);
 			
 			// Is this running version obsolete ?
 			if (!displayObsolete) {
@@ -893,17 +893,17 @@ void checkApplicationVersion() {
 			}
 			
 			// display version response
-			logBuffer.addLogEntry();
+			addLogEntry();
 			if (!displayObsolete) {
 				// display the new version is available message
-				logBuffer.addLogEntry("INFO: A new onedrive client version is available. Please upgrade your client version when possible.", ["info", "notify"]);
+				addLogEntry("INFO: A new onedrive client version is available. Please upgrade your client version when possible.", ["info", "notify"]);
 			} else {
 				// display the obsolete message
-				logBuffer.addLogEntry("WARNING: Your onedrive client version is now obsolete and unsupported. Please upgrade your client version.", ["info", "notify"]);
+				addLogEntry("WARNING: Your onedrive client version is now obsolete and unsupported. Please upgrade your client version.", ["info", "notify"]);
 			}
-			logBuffer.addLogEntry("Current Application Version: " ~ applicationVersion);
-			logBuffer.addLogEntry("Version Available:           " ~ latestVersion);
-			logBuffer.addLogEntry();
+			addLogEntry("Current Application Version: " ~ applicationVersion);
+			addLogEntry("Version Available:           " ~ latestVersion);
+			addLogEntry();
 		}
 	}
 }
@@ -1079,18 +1079,18 @@ string generateAlphanumericString(size_t length = 16) {
 // Display internal memory stats pre garbage collection
 void displayMemoryUsagePreGC() {
 	// Display memory usage
-	logBuffer.addLogEntry();
-	logBuffer.addLogEntry("Memory Usage PRE Garbage Collection (KB)");
-	logBuffer.addLogEntry("-----------------------------------------------------");
+	addLogEntry();
+	addLogEntry("Memory Usage PRE Garbage Collection (KB)");
+	addLogEntry("-----------------------------------------------------");
 	writeMemoryStats();
-	logBuffer.addLogEntry();
+	addLogEntry();
 }
 
 // Display internal memory stats post garbage collection + RSS (actual memory being used)
 void displayMemoryUsagePostGC() {
     // Display memory usage title
-    logBuffer.addLogEntry("Memory Usage POST Garbage Collection (KB)");
-    logBuffer.addLogEntry("-----------------------------------------------------");
+    addLogEntry("Memory Usage POST Garbage Collection (KB)");
+    addLogEntry("-----------------------------------------------------");
     writeMemoryStats();  // Assuming this function logs memory stats correctly
 
     // Query the actual Resident Set Size (RSS) for the PID
@@ -1099,26 +1099,26 @@ void displayMemoryUsagePostGC() {
 
     // Check and log the previous RSS value
     if (previousRSS != 0) {
-        logBuffer.addLogEntry("previous Resident Set Size (RSS)         = " ~ to!string(previousRSS) ~ " KB");
+        addLogEntry("previous Resident Set Size (RSS)         = " ~ to!string(previousRSS) ~ " KB");
         
         // Calculate and log the difference in RSS
         long difference = rss - previousRSS;  // 'difference' can be negative, use 'long' to handle it
         string sign = difference > 0 ? "+" : (difference < 0 ? "" : "");  // Determine the sign for display, no sign for zero
-        logBuffer.addLogEntry("difference in Resident Set Size (RSS)    = " ~ sign ~ to!string(difference) ~ " KB");
+        addLogEntry("difference in Resident Set Size (RSS)    = " ~ sign ~ to!string(difference) ~ " KB");
     }
     
     // Update previous RSS with the new value
     previousRSS = rss;
     
     // Closout
-	logBuffer.addLogEntry();
+	addLogEntry();
 }
 
 // Write internal memory stats
 void writeMemoryStats() {
-	logBuffer.addLogEntry("current memory usedSize                  = " ~ to!string((GC.stats.usedSize/1024))); // number of used bytes on the GC heap (might only get updated after a collection)
-	logBuffer.addLogEntry("current memory freeSize                  = " ~ to!string((GC.stats.freeSize/1024))); // number of free bytes on the GC heap (might only get updated after a collection)
-	logBuffer.addLogEntry("current memory allocatedInCurrentThread  = " ~ to!string((GC.stats.allocatedInCurrentThread/1024))); // number of bytes allocated for current thread since program start
+	addLogEntry("current memory usedSize                  = " ~ to!string((GC.stats.usedSize/1024))); // number of used bytes on the GC heap (might only get updated after a collection)
+	addLogEntry("current memory freeSize                  = " ~ to!string((GC.stats.freeSize/1024))); // number of free bytes on the GC heap (might only get updated after a collection)
+	addLogEntry("current memory allocatedInCurrentThread  = " ~ to!string((GC.stats.allocatedInCurrentThread/1024))); // number of bytes allocated for current thread since program start
 	
 	// Query the actual Resident Set Size (RSS) for the PID
 	pid_t pid = getCurrentPID();
@@ -1127,7 +1127,7 @@ void writeMemoryStats() {
 	// Over time, the heap can become fragmented. Even after garbage collection, fragmented memory blocks may not be contiguous enough to be returned to the OS, leading to an increase in the reported memory usage despite having free space.
 	// This includes memory that might not be actively used but has not been returned to the system. 
 	// The GC.minimize() function can sometimes cause an increase in RSS due to how memory pages are managed and freed.
-	logBuffer.addLogEntry("current Resident Set Size (RSS)          = " ~ to!string(rss)  ~ " KB"); // actual memory in RAM used by the process at this point in time
+	addLogEntry("current Resident Set Size (RSS)          = " ~ to!string(rss)  ~ " KB"); // actual memory in RAM used by the process at this point in time
 }
 
 // Return the username of the UID running the 'onedrive' process
@@ -1143,17 +1143,17 @@ string getUserName() {
     string userName = to!string(fromStringz(pw.pw_name));
 
     // Log User identifiers from process
-    logBuffer.addLogEntry("Process ID: " ~ to!string(pw), ["debug"]);
-    logBuffer.addLogEntry("User UID:   " ~ to!string(pw.pw_uid), ["debug"]);
-    logBuffer.addLogEntry("User GID:   " ~ to!string(pw.pw_gid), ["debug"]);
+    addLogEntry("Process ID: " ~ to!string(pw), ["debug"]);
+    addLogEntry("User UID:   " ~ to!string(pw.pw_uid), ["debug"]);
+    addLogEntry("User GID:   " ~ to!string(pw.pw_gid), ["debug"]);
 
     // Check if username is valid
     if (!userName.empty) {
-        logBuffer.addLogEntry("User Name:  " ~ userName, ["debug"]);
+        addLogEntry("User Name:  " ~ userName, ["debug"]);
         return userName;
     } else {
         // Log and return unknown user
-        logBuffer.addLogEntry("User Name:  unknown", ["debug"]);
+        addLogEntry("User Name:  unknown", ["debug"]);
         return "unknown";
     }
 }
@@ -1175,21 +1175,21 @@ int calc_eta(size_t counter, size_t iterations, ulong start_time) {
     double avg_time_per_iteration = cast(double) duration / counter;
 
     // Debug output for the ETA calculation
-    logBuffer.addLogEntry("counter: " ~ to!string(counter), ["debug"]);
-	logBuffer.addLogEntry("iterations: " ~ to!string(iterations), ["debug"]);
-	logBuffer.addLogEntry("segments_remaining: " ~ to!string(segments_remaining), ["debug"]);
-	logBuffer.addLogEntry("ratio: " ~ format("%.2f", ratio), ["debug"]);
-	logBuffer.addLogEntry("start_time:   " ~ to!string(start_time), ["debug"]);
-	logBuffer.addLogEntry("current_time: " ~ to!string(current_time), ["debug"]);
-	logBuffer.addLogEntry("duration: " ~ to!string(duration), ["debug"]);
-	logBuffer.addLogEntry("avg_time_per_iteration: " ~ format("%.2f", avg_time_per_iteration), ["debug"]);
+    addLogEntry("counter: " ~ to!string(counter), ["debug"]);
+	addLogEntry("iterations: " ~ to!string(iterations), ["debug"]);
+	addLogEntry("segments_remaining: " ~ to!string(segments_remaining), ["debug"]);
+	addLogEntry("ratio: " ~ format("%.2f", ratio), ["debug"]);
+	addLogEntry("start_time:   " ~ to!string(start_time), ["debug"]);
+	addLogEntry("current_time: " ~ to!string(current_time), ["debug"]);
+	addLogEntry("duration: " ~ to!string(duration), ["debug"]);
+	addLogEntry("avg_time_per_iteration: " ~ format("%.2f", avg_time_per_iteration), ["debug"]);
 	
 	// Return the ETA or duration
     if (counter != iterations) {
         auto eta_sec = avg_time_per_iteration * segments_remaining;
 		// ETA Debug
-		logBuffer.addLogEntry("eta_sec: " ~ to!string(eta_sec), ["debug"]);
-		logBuffer.addLogEntry("estimated_total_time: " ~ to!string(avg_time_per_iteration * iterations), ["debug"]);
+		addLogEntry("eta_sec: " ~ to!string(eta_sec), ["debug"]);
+		addLogEntry("estimated_total_time: " ~ to!string(avg_time_per_iteration * iterations), ["debug"]);
 		// Return ETA
         return eta_sec > 0 ? cast(int) ceil(eta_sec) : 0;
     } else {
@@ -1203,9 +1203,8 @@ void forceExit() {
 	// Allow any logging complete before we force exit
 	Thread.sleep(dur!("msecs")(500));
 	
-	// Destroy the shared logging buffer which flushes any remaing logs
-	logBuffer.shutdown();
-	logBuffer = null;
+	// Shutdown logging, which also flushes all logging buffers
+	shutdownLogging();
 	
 	// Force Exit
 	exit(EXIT_FAILURE);

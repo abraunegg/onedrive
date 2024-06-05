@@ -94,6 +94,7 @@ class OneDriveApi {
 		// Configure the class variable to consume the application configuration
 		this.appConfig = appConfig;
 		this.curlEngine = null;
+		this.response = null;
 		// Configure the major API Query URL's, based on using application configuration
 		// These however can be updated by config option 'azure_ad_endpoint', thus handled differently
 		
@@ -118,9 +119,10 @@ class OneDriveApi {
 	
 	// The destructor should only clean up resources owned directly by this instance
 	~this() {
+		//object.destroy(response);
+		//object.destroy(curlEngine);
 		response = null;
 		curlEngine = null;
-		appConfig = null;
 	}
 
 	// Initialise the OneDrive API class
@@ -128,7 +130,7 @@ class OneDriveApi {
 		// Initialise the curl engine
 		this.keepAlive = keepAlive;
 		if (curlEngine is null) {
-			curlEngine = CurlEngine.getCurlInstance();
+			curlEngine = getCurlInstance();
 			curlEngine.initialise(appConfig.getValueLong("dns_timeout"), appConfig.getValueLong("connect_timeout"), appConfig.getValueLong("data_timeout"), appConfig.getValueLong("operation_timeout"), appConfig.defaultMaxRedirects, appConfig.getValueBool("debug_https"), appConfig.getValueString("user_agent"), appConfig.getValueBool("force_http_11"), appConfig.getValueLong("rate_limit"), appConfig.getValueLong("ip_protocol_version"), keepAlive);
 		}
 
@@ -181,9 +183,9 @@ class OneDriveApi {
 		switch(azureConfigValue) {
 			case "":
 				if (tenantId == "common") {
-					if (!appConfig.apiWasInitialised) logBuffer.addLogEntry("Configuring Global Azure AD Endpoints");
+					if (!appConfig.apiWasInitialised) addLogEntry("Configuring Global Azure AD Endpoints");
 				} else {
-					if (!appConfig.apiWasInitialised) logBuffer.addLogEntry("Configuring Global Azure AD Endpoints - Single Tenant Application");
+					if (!appConfig.apiWasInitialised) addLogEntry("Configuring Global Azure AD Endpoints - Single Tenant Application");
 				}
 				// Authentication
 				authUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
@@ -191,13 +193,13 @@ class OneDriveApi {
 				tokenUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				break;
 			case "USL4":
-				if (!appConfig.apiWasInitialised) logBuffer.addLogEntry("Configuring Azure AD for US Government Endpoints");
+				if (!appConfig.apiWasInitialised) addLogEntry("Configuring Azure AD for US Government Endpoints");
 				// Authentication
 				authUrl = appConfig.usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
 				tokenUrl = appConfig.usl4AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				if (clientId == appConfig.defaultApplicationId) {
 					// application_id == default
-					logBuffer.addLogEntry("USL4 AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint", ["debug"]);
+					addLogEntry("USL4 AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint", ["debug"]);
 					redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				} else {
 					// custom application_id
@@ -219,13 +221,13 @@ class OneDriveApi {
 				subscriptionUrl = appConfig.usl4GraphEndpoint ~ "/v1.0/subscriptions";
 				break;
 			case "USL5":
-				if (!appConfig.apiWasInitialised) logBuffer.addLogEntry("Configuring Azure AD for US Government Endpoints (DOD)");
+				if (!appConfig.apiWasInitialised) addLogEntry("Configuring Azure AD for US Government Endpoints (DOD)");
 				// Authentication
 				authUrl = appConfig.usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
 				tokenUrl = appConfig.usl5AuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				if (clientId == appConfig.defaultApplicationId) {
 					// application_id == default
-					logBuffer.addLogEntry("USL5 AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint", ["debug"]);
+					addLogEntry("USL5 AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint", ["debug"]);
 					redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				} else {
 					// custom application_id
@@ -247,13 +249,13 @@ class OneDriveApi {
 				subscriptionUrl = appConfig.usl5GraphEndpoint ~ "/v1.0/subscriptions";
 				break;
 			case "DE":
-				if (!appConfig.apiWasInitialised) logBuffer.addLogEntry("Configuring Azure AD Germany");
+				if (!appConfig.apiWasInitialised) addLogEntry("Configuring Azure AD Germany");
 				// Authentication
 				authUrl = appConfig.deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
 				tokenUrl = appConfig.deAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				if (clientId == appConfig.defaultApplicationId) {
 					// application_id == default
-					logBuffer.addLogEntry("DE AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint", ["debug"]);
+					addLogEntry("DE AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint", ["debug"]);
 					redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				} else {
 					// custom application_id
@@ -275,13 +277,13 @@ class OneDriveApi {
 				subscriptionUrl = appConfig.deGraphEndpoint ~ "/v1.0/subscriptions";
 				break;
 			case "CN":
-				if (!appConfig.apiWasInitialised) logBuffer.addLogEntry("Configuring AD China operated by VNET");
+				if (!appConfig.apiWasInitialised) addLogEntry("Configuring AD China operated by VNET");
 				// Authentication
 				authUrl = appConfig.cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/authorize";
 				tokenUrl = appConfig.cnAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/v2.0/token";
 				if (clientId == appConfig.defaultApplicationId) {
 					// application_id == default
-					logBuffer.addLogEntry("CN AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint", ["debug"]);
+					addLogEntry("CN AD Endpoint but default application_id, redirectUrl needs to be aligned to globalAuthEndpoint", ["debug"]);
 					redirectUrl = appConfig.globalAuthEndpoint ~ "/" ~ tenantId ~ "/oauth2/nativeclient";
 				} else {
 					// custom application_id
@@ -304,17 +306,17 @@ class OneDriveApi {
 				break;
 			// Default - all other entries
 			default:
-				if (!appConfig.apiWasInitialised) logBuffer.addLogEntry("Unknown Azure AD Endpoint request - using Global Azure AD Endpoints");
+				if (!appConfig.apiWasInitialised) addLogEntry("Unknown Azure AD Endpoint request - using Global Azure AD Endpoints");
 		}
 		
 		// Has the application been authenticated?
 		if (!exists(appConfig.refreshTokenFilePath)) {
-			logBuffer.addLogEntry("Application has no 'refresh_token' thus needs to be authenticated", ["debug"]);
+			addLogEntry("Application has no 'refresh_token' thus needs to be authenticated", ["debug"]);
 			authorised = authorise();
 		} else {
 			// Try and read the value from the appConfig if it is set, rather than trying to read the value from disk
 			if (!appConfig.refreshToken.empty) {
-				logBuffer.addLogEntry("Read token from appConfig", ["debug"]);
+				addLogEntry("Read token from appConfig", ["debug"]);
 				refreshToken = strip(appConfig.refreshToken);
 				authorised = true;
 			} else {
@@ -323,7 +325,7 @@ class OneDriveApi {
 					refreshToken = strip(readText(appConfig.refreshTokenFilePath));
 					// is the refresh_token empty?
 					if (refreshToken.empty) {
-						logBuffer.addLogEntry("RefreshToken exists but is empty: " ~ appConfig.refreshTokenFilePath);
+						addLogEntry("RefreshToken exists but is empty: " ~ appConfig.refreshTokenFilePath);
 						authorised = authorise();
 					} else {
 						// existing token not empty
@@ -335,20 +337,20 @@ class OneDriveApi {
 					authorised = authorise();
 				} catch (std.utf.UTFException exception) {
 					// path contains characters which generate a UTF exception
-					logBuffer.addLogEntry("Cannot read refreshToken from: " ~ appConfig.refreshTokenFilePath);
-					logBuffer.addLogEntry("  Error Reason:" ~ exception.msg);
+					addLogEntry("Cannot read refreshToken from: " ~ appConfig.refreshTokenFilePath);
+					addLogEntry("  Error Reason:" ~ exception.msg);
 					authorised = false;
 				}
 			}
 			
 			if (refreshToken.empty) {
 				// PROBLEM ... CODING TO DO ??????????
-				logBuffer.addLogEntry("refreshToken is empty !!!!!!!!!! This will cause 4xx errors ... CODING TO DO TO HANDLE ?????");
+				addLogEntry("refreshToken is empty !!!!!!!!!! This will cause 4xx errors ... CODING TO DO TO HANDLE ?????");
 			}
 		}
 		
 		// Return if we are authorised
-		logBuffer.addLogEntry("Authorised State: " ~ to!string(authorised), ["debug"]);
+		addLogEntry("Authorised State: " ~ to!string(authorised), ["debug"]);
 		return authorised;
 	}
 
@@ -356,30 +358,30 @@ class OneDriveApi {
 	void debugOutputConfiguredAPIItems() {
 		// Debug output of configured URL's
 		// Application Identification
-		logBuffer.addLogEntry("Configured clientId          " ~ clientId, ["debug"]);
-		logBuffer.addLogEntry("Configured userAgent         " ~ appConfig.getValueString("user_agent"), ["debug"]);
+		addLogEntry("Configured clientId          " ~ clientId, ["debug"]);
+		addLogEntry("Configured userAgent         " ~ appConfig.getValueString("user_agent"), ["debug"]);
 		// Authentication
-		logBuffer.addLogEntry("Configured authScope:        " ~ authScope, ["debug"]);
-		logBuffer.addLogEntry("Configured authUrl:          " ~ authUrl, ["debug"]);
-		logBuffer.addLogEntry("Configured redirectUrl:      " ~ redirectUrl, ["debug"]);
-		logBuffer.addLogEntry("Configured tokenUrl:         " ~ tokenUrl, ["debug"]);
+		addLogEntry("Configured authScope:        " ~ authScope, ["debug"]);
+		addLogEntry("Configured authUrl:          " ~ authUrl, ["debug"]);
+		addLogEntry("Configured redirectUrl:      " ~ redirectUrl, ["debug"]);
+		addLogEntry("Configured tokenUrl:         " ~ tokenUrl, ["debug"]);
 		// Drive Queries
-		logBuffer.addLogEntry("Configured driveUrl:         " ~ driveUrl, ["debug"]);
-		logBuffer.addLogEntry("Configured driveByIdUrl:     " ~ driveByIdUrl, ["debug"]);
+		addLogEntry("Configured driveUrl:         " ~ driveUrl, ["debug"]);
+		addLogEntry("Configured driveByIdUrl:     " ~ driveByIdUrl, ["debug"]);
 		// Shared With Me
-		logBuffer.addLogEntry("Configured sharedWithMeUrl:  " ~ sharedWithMeUrl, ["debug"]);
+		addLogEntry("Configured sharedWithMeUrl:  " ~ sharedWithMeUrl, ["debug"]);
 		// Item Queries
-		logBuffer.addLogEntry("Configured itemByIdUrl:      " ~ itemByIdUrl, ["debug"]);
-		logBuffer.addLogEntry("Configured itemByPathUrl:    " ~ itemByPathUrl, ["debug"]);
+		addLogEntry("Configured itemByIdUrl:      " ~ itemByIdUrl, ["debug"]);
+		addLogEntry("Configured itemByPathUrl:    " ~ itemByPathUrl, ["debug"]);
 		// SharePoint Queries
-		logBuffer.addLogEntry("Configured siteSearchUrl:    " ~ siteSearchUrl, ["debug"]);
-		logBuffer.addLogEntry("Configured siteDriveUrl:     " ~ siteDriveUrl, ["debug"]);
+		addLogEntry("Configured siteSearchUrl:    " ~ siteSearchUrl, ["debug"]);
+		addLogEntry("Configured siteDriveUrl:     " ~ siteDriveUrl, ["debug"]);
 	}
 	
 	// Release CurlEngine bask to the Curl Engine Pool
 	void releaseCurlEngine() {
 		// Log that this was called
-		logBuffer.addLogEntry("OneDrive API releaseCurlEngine() CALLED", ["debug"]);
+		addLogEntry("OneDrive API releaseCurlEngine() CALLED", ["debug"]);
 		// Release curl instance back to the pool
 		if (curlEngine !is null) {
 			curlEngine.releaseEngine();
@@ -423,7 +425,7 @@ class OneDriveApi {
 				forceExit();
 			}
 	
-			logBuffer.addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
+			addLogEntry("Client requires authentication before proceeding. Waiting for --auth-files elements to be available.");
 			
 			while (!exists(responseUrl)) {
 				Thread.sleep(dur!("msecs")(100));
@@ -443,32 +445,32 @@ class OneDriveApi {
 				std.file.remove(authUrl);
 				std.file.remove(responseUrl);
 			} catch (FileException exception) {
-				logBuffer.addLogEntry("Cannot remove files " ~ authUrl ~ " " ~ responseUrl);
+				addLogEntry("Cannot remove files " ~ authUrl ~ " " ~ responseUrl);
 				return false;
 			}
 		} else {
 			// Are we in a --dry-run scenario?
 			if (!appConfig.getValueBool("dry_run")) {
 				// No --dry-run is being used
-				logBuffer.addLogEntry("Authorise this application by visiting:\n", ["consoleOnly"]);
-				logBuffer.addLogEntry(url ~ "\n", ["consoleOnly"]);
-				logBuffer.addLogEntry("Enter the response uri from your browser: ", ["consoleOnlyNoNewLine"]);
+				addLogEntry("Authorise this application by visiting:\n", ["consoleOnly"]);
+				addLogEntry(url ~ "\n", ["consoleOnly"]);
+				addLogEntry("Enter the response uri from your browser: ", ["consoleOnlyNoNewLine"]);
 				readln(response);
 				appConfig.applicationAuthorizeResponseUri = true;
 			} else {
 				// The application cannot be authorised when using --dry-run as we have to write out the authentication data, which negates the whole 'dry-run' process
-				logBuffer.addLogEntry();
-				logBuffer.addLogEntry("The application requires authorisation, which involves saving authentication data on your system. Note that authorisation cannot be completed with the '--dry-run' option.");
-				logBuffer.addLogEntry();
-				logBuffer.addLogEntry("To exclusively authorise the application without performing any additional actions, use this command: onedrive");
-				logBuffer.addLogEntry();
+				addLogEntry();
+				addLogEntry("The application requires authorisation, which involves saving authentication data on your system. Note that authorisation cannot be completed with the '--dry-run' option.");
+				addLogEntry();
+				addLogEntry("To exclusively authorise the application without performing any additional actions, use this command: onedrive");
+				addLogEntry();
 				forceExit();
 			}
 		}
 		// match the authorization code
 		auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
 		if (c.empty) {
-			logBuffer.addLogEntry("An empty or invalid response uri was entered");
+			addLogEntry("An empty or invalid response uri was entered");
 			return false;
 		}
 		c.popFront(); // skip the whole match
@@ -660,8 +662,8 @@ class OneDriveApi {
 		// For the moment, comment out adding the If-Match header in createUploadSession, which then avoids this issue
 		
 		string contentRange = "bytes " ~ to!string(offset) ~ "-" ~ to!string(offset + offsetSize - 1) ~ "/" ~ to!string(fileSize);
-		logBuffer.addLogEntry("", ["debug"]); // Add an empty newline before log output
-		logBuffer.addLogEntry("contentRange: " ~ contentRange, ["debug"]);
+		addLogEntry("", ["debug"]); // Add an empty newline before log output
+		addLogEntry("contentRange: " ~ contentRange, ["debug"]);
 
 		return put(uploadUrl, filepath, true, contentRange, offset, offsetSize);
 	}
@@ -750,10 +752,10 @@ class OneDriveApi {
 		// Does the path exist locally?
 		if (!exists(newPath)) {
 			try {
-				logBuffer.addLogEntry("Requested local path does not exist, creating directory structure: " ~ newPath, ["debug"]);
+				addLogEntry("Requested local path does not exist, creating directory structure: " ~ newPath, ["debug"]);
 				mkdirRecurse(newPath);
 				// Configure the applicable permissions for the folder
-				logBuffer.addLogEntry("Setting directory permissions for: " ~ newPath, ["debug"]);
+				addLogEntry("Setting directory permissions for: " ~ newPath, ["debug"]);
 				newPath.setAttributes(appConfig.returnRequiredDirectoryPermisions());
 			} catch (FileException exception) {
 				// display the error message
@@ -767,7 +769,7 @@ class OneDriveApi {
 		// Does path exist?
 		if (exists(saveToPath)) {
 			// File was downloaded successfully - configure the applicable permissions for the file
-			logBuffer.addLogEntry("Setting file permissions for: " ~ saveToPath, ["debug"]);
+			addLogEntry("Setting file permissions for: " ~ saveToPath, ["debug"]);
 			saveToPath.setAttributes(appConfig.returnRequiredFilePermisions());
 		}
 	}
@@ -779,7 +781,7 @@ class OneDriveApi {
 	
 	// Private OneDrive API Functions
 	private void addIncludeFeatureRequestHeader(string[string]* headers) {
-		logBuffer.addLogEntry("Adding 'Include-Feature=AddToOneDrive' API request header as 'sync_business_shared_items' config option is enabled", ["debug"]);
+		addLogEntry("Adding 'Include-Feature=AddToOneDrive' API request header as 'sync_business_shared_items' config option is enabled", ["debug"]);
 		(*headers)["Prefer"] = "Include-Feature=AddToOneDrive";
 	}
 
@@ -819,17 +821,17 @@ class OneDriveApi {
 				if ("scope" in response){
 					string effectiveScopes = response["scope"].str();
 					// Display the effective authentication scopes
-					logBuffer.addLogEntry();
-					logBuffer.addLogEntry("Effective API Authentication Scopes: " ~ effectiveScopes, ["verbose"]);
+					addLogEntry();
+					addLogEntry("Effective API Authentication Scopes: " ~ effectiveScopes, ["verbose"]);
 					
 					// if we have any write scopes, we need to tell the user to update an remove online prior authentication and exit application
 					if (canFind(effectiveScopes, "Write")) {
 						// effective scopes contain write scopes .. so not a read-only configuration
-						logBuffer.addLogEntry();
-						logBuffer.addLogEntry("ERROR: You have authentication scopes that allow write operations. You need to remove your existing application access consent");
-						logBuffer.addLogEntry();
-						logBuffer.addLogEntry("Please login to https://account.live.com/consent/Manage and remove your existing application access consent");
-						logBuffer.addLogEntry();
+						addLogEntry();
+						addLogEntry("ERROR: You have authentication scopes that allow write operations. You need to remove your existing application access consent");
+						addLogEntry();
+						addLogEntry("Please login to https://account.live.com/consent/Manage and remove your existing application access consent");
+						addLogEntry();
 						// force exit
 						releaseCurlEngine();
 						// Must force exit here, allow logging to be done
@@ -846,7 +848,7 @@ class OneDriveApi {
 					if (appConfig.getValueBool("debug_https")) {
 						if (appConfig.getValueBool("print_token")) {
 							// This needs to be highly restricted in output .... 
-							logBuffer.addLogEntry("CAUTION - KEEP THIS SAFE: Current access token: " ~ to!string(appConfig.accessToken), ["debug"]);
+							addLogEntry("CAUTION - KEEP THIS SAFE: Current access token: " ~ to!string(appConfig.accessToken), ["debug"]);
 						}
 					}
 				}
@@ -857,22 +859,22 @@ class OneDriveApi {
 					// Update the refreshToken in appConfig so that we can reuse it
 					if (appConfig.refreshToken.empty) {
 						// The access token is empty
-						logBuffer.addLogEntry("Updating appConfig.refreshToken with new refreshToken as appConfig.refreshToken is empty", ["debug"]);
+						addLogEntry("Updating appConfig.refreshToken with new refreshToken as appConfig.refreshToken is empty", ["debug"]);
 						appConfig.refreshToken = refreshToken;
 					} else {
 						// Is the access token different?
 						if (appConfig.refreshToken != refreshToken) {
 							// Update the memory version
-							logBuffer.addLogEntry("Updating appConfig.refreshToken with updated refreshToken", ["debug"]);
+							addLogEntry("Updating appConfig.refreshToken with updated refreshToken", ["debug"]);
 							appConfig.refreshToken = refreshToken;
 						}
 					}
 					
 					// try and update the refresh_token file on disk
 					try {
-						logBuffer.addLogEntry("Updating refreshToken on disk", ["debug"]);
+						addLogEntry("Updating refreshToken on disk", ["debug"]);
 						std.file.write(appConfig.refreshTokenFilePath, refreshToken);
-						logBuffer.addLogEntry("Setting file permissions for: " ~ appConfig.refreshTokenFilePath, ["debug"]);
+						addLogEntry("Setting file permissions for: " ~ appConfig.refreshTokenFilePath, ["debug"]);
 						appConfig.refreshTokenFilePath.setAttributes(appConfig.returnRequiredFilePermisions());
 					} catch (FileException exception) {
 						// display the error message
@@ -880,19 +882,19 @@ class OneDriveApi {
 					}
 				}
 			} else {
-				logBuffer.addLogEntry("\nInvalid authentication response from OneDrive. Please check the response uri\n");
+				addLogEntry("\nInvalid authentication response from OneDrive. Please check the response uri\n");
 				// re-authorize
 				authorise();
 			}
 		} else {
-			logBuffer.addLogEntry("Invalid response from the Microsoft Graph API. Unable to initialise OneDrive API instance.");
+			addLogEntry("Invalid response from the Microsoft Graph API. Unable to initialise OneDrive API instance.");
 			// Must force exit here, allow logging to be done
 			forceExit();
 		}
 	}
 	
 	private void newToken() {
-		logBuffer.addLogEntry("Need to generate a new access token for Microsoft OneDrive", ["debug"]);
+		addLogEntry("Need to generate a new access token for Microsoft OneDrive", ["debug"]);
 		auto postData = appender!(string)();
 		postData ~= "client_id=" ~ clientId;
 		postData ~= "&redirect_uri=" ~ redirectUrl;
@@ -903,10 +905,10 @@ class OneDriveApi {
 	
 	private void checkAccessTokenExpired() {
 		if (Clock.currTime() >= appConfig.accessTokenExpiration) {
-			logBuffer.addLogEntry("Microsoft OneDrive Access Token has EXPIRED. Must generate a new Microsoft OneDrive Access Token", ["debug"]);
+			addLogEntry("Microsoft OneDrive Access Token has EXPIRED. Must generate a new Microsoft OneDrive Access Token", ["debug"]);
 			newToken();
 		} else {
-			logBuffer.addLogEntry("Existing Microsoft OneDrive Access Token Expires: " ~ to!string(appConfig.accessTokenExpiration), ["debug"]);
+			addLogEntry("Existing Microsoft OneDrive Access Token Expires: " ~ to!string(appConfig.accessTokenExpiration), ["debug"]);
 		}
 	}
 	
@@ -920,7 +922,7 @@ class OneDriveApi {
 	}
 	
 	private void connect(HTTP.Method method, const(char)[] url, bool skipToken, CurlResponse response, string[string] requestHeaders=null) {
-		logBuffer.addLogEntry("Request URL = " ~ to!string(url), ["debug"]);
+		addLogEntry("Request URL = " ~ to!string(url), ["debug"]);
 		// Check access token first in case the request is overridden
 		if (!skipToken) addAccessTokenHeader(&requestHeaders);
 		curlEngine.setResponseHolder(response);
@@ -970,10 +972,10 @@ class OneDriveApi {
 					// Have we started downloading?
 					if (currentDLPercent > 0){
 						// We have started downloading
-						logBuffer.addLogEntry("", ["debug"]); // Debug new line only
-						logBuffer.addLogEntry("Data Received    = " ~ to!string(dlnow), ["debug"]);
-						logBuffer.addLogEntry("Expected Total   = " ~ to!string(dltotal), ["debug"]);
-						logBuffer.addLogEntry("Percent Complete = " ~ to!string(currentDLPercent), ["debug"]);
+						addLogEntry("", ["debug"]); // Debug new line only
+						addLogEntry("Data Received    = " ~ to!string(dlnow), ["debug"]);
+						addLogEntry("Expected Total   = " ~ to!string(dltotal), ["debug"]);
+						addLogEntry("Percent Complete = " ~ to!string(currentDLPercent), ["debug"]);
 						
 						// Every 5% download we need to increment the download bar
 
@@ -1001,7 +1003,7 @@ class OneDriveApi {
 							// Has the data that has been received in a 5% window that we need to increment the progress bar at
 							if ((dlnow > thisSegmentData) && (dlnow < nextSegmentData) && (previousProgressPercent != currentDLPercent) || (dlnow == dltotal)) {
 								// Downloaded data equals approx 5%
-								logBuffer.addLogEntry("Incrementing Progress Bar using calculated 5% of data received", ["debug"]);
+								addLogEntry("Incrementing Progress Bar using calculated 5% of data received", ["debug"]);
 								
 								// 100% check
 								if (currentDLPercent != 100) {
@@ -1012,7 +1014,7 @@ class OneDriveApi {
 									dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
 									etaString = format!"|  ETA    %02d:%02d:%02d"( h, m, s);
 									string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
-									logBuffer.addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+									addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 								} else {
 									// 100% done
 									ulong end_unix_time = Clock.currTime.toUnixTime();
@@ -1020,20 +1022,20 @@ class OneDriveApi {
 									dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
 									etaString = format!"| DONE in %02d:%02d:%02d"( h, m, s);
 									string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
-									logBuffer.addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+									addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 								}
 								
 								// update values
-								logBuffer.addLogEntry("Setting previousProgressPercent to " ~ to!string(currentDLPercent), ["debug"]);
+								addLogEntry("Setting previousProgressPercent to " ~ to!string(currentDLPercent), ["debug"]);
 								previousProgressPercent = currentDLPercent;
-								logBuffer.addLogEntry("Incrementing segmentCount", ["debug"]);
+								addLogEntry("Incrementing segmentCount", ["debug"]);
 								segmentCount++;
 							}
 						} else {
 							// Is currentDLPercent divisible by 5 leaving remainder 0 and does previousProgressPercent not equal currentDLPercent
 							if ((isIdentical(fmod(currentDLPercent, percentCheck), 0.0)) && (previousProgressPercent != currentDLPercent)) {
 								// currentDLPercent matches a new increment
-								logBuffer.addLogEntry("Incrementing Progress Bar using fmod match", ["debug"]);
+								addLogEntry("Incrementing Progress Bar using fmod match", ["debug"]);
 								
 								// 100% check
 								if (currentDLPercent != 100) {
@@ -1044,7 +1046,7 @@ class OneDriveApi {
 									dur!"seconds"(eta).split!("hours", "minutes", "seconds")(h, m, s);
 									etaString = format!"|  ETA    %02d:%02d:%02d"( h, m, s);
 									string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
-									logBuffer.addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+									addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 								} else {
 									// 100% done
 									ulong end_unix_time = Clock.currTime.toUnixTime();
@@ -1052,7 +1054,7 @@ class OneDriveApi {
 									dur!"seconds"(upload_duration).split!("hours", "minutes", "seconds")(h, m, s);
 									etaString = format!"| DONE in %02d:%02d:%02d"( h, m, s);
 									string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
-									logBuffer.addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+									addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 								}
 								
 								// update values
@@ -1065,7 +1067,7 @@ class OneDriveApi {
 							segmentCount++;
 							etaString = "|  ETA    --:--:--";
 							string percentage = leftJustify(to!string(currentDLPercent) ~ "%", 5, ' ');
-							logBuffer.addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
+							addLogEntry(downloadLogEntry ~ percentage ~ etaString, ["consoleOnly"]);
 							barInit = true;
 						}
 					}
@@ -1143,7 +1145,7 @@ class OneDriveApi {
 				// re-try log entry & clock time
 				retryTime = Clock.currTime();
 				retryTime.fracSecs = Duration.zero;
-				logBuffer.addLogEntry("Retrying the respective Microsoft Graph API call ... (" ~ to!string(retryTime) ~ ")");
+				addLogEntry("Retrying the respective Microsoft Graph API call ... (" ~ to!string(retryTime) ~ ")");
 			}
 		
 			try {
@@ -1155,7 +1157,7 @@ class OneDriveApi {
 					result = response.json();
 					// Print response if 'debugResponse' is flagged
 					if (debugResponse){
-						logBuffer.addLogEntry("Microsoft Graph API Response: " ~ response.dumpResponse(), ["debug"]);
+						addLogEntry("Microsoft Graph API Response: " ~ response.dumpResponse(), ["debug"]);
 					}
 					// Check http response code, raise a OneDriveException if the operation was not successfully performed
 					// '100 != 2' This condition checks if the response code does not start with 2. In the context of HTTP response codes, the 2xx series represents successful responses.
@@ -1177,10 +1179,10 @@ class OneDriveApi {
 						// No error from http.perform() on re-try
 						if (!transientError) {
 							// Log that Internet access has been restored
-							logBuffer.addLogEntry("Internet connectivity to Microsoft OneDrive service has been restored");
+							addLogEntry("Internet connectivity to Microsoft OneDrive service has been restored");
 						}
 						// unset the fresh connect option as this then creates performance issues if left enabled
-						logBuffer.addLogEntry("Unsetting libcurl to use a fresh connection as this causes a performance impact if left enabled", ["debug"]);
+						addLogEntry("Unsetting libcurl to use a fresh connection as this causes a performance impact if left enabled", ["debug"]);
 						curlEngine.http.handle.set(CurlOption.fresh_connect,0);
 					}
 					
@@ -1197,11 +1199,11 @@ class OneDriveApi {
 				// Handle 'curl' exception errors
 				
 				// Detail the curl exception, debug output only
-				logBuffer.addLogEntry("Handling a specific Curl exception:", ["debug"]);
-				logBuffer.addLogEntry(to!string(response), ["debug"]);
+				addLogEntry("Handling a specific Curl exception:", ["debug"]);
+				addLogEntry(to!string(response), ["debug"]);
 				
 				// Parse and display error message received from OneDrive
-				logBuffer.addLogEntry(callingFunction ~ "() - Generated a OneDrive CurlException", ["debug"]);
+				addLogEntry(callingFunction ~ "() - Generated a OneDrive CurlException", ["debug"]);
 				auto errorArray = splitLines(exception.msg);
 				string errorMessage = errorArray[0];
 
@@ -1211,21 +1213,21 @@ class OneDriveApi {
 				// What is contained in the curl error message?
 				if (canFind(errorMessage, "Couldn't connect to server on handle") || canFind(errorMessage, "Couldn't resolve host name on handle") || canFind(errorMessage, "Timeout was reached on handle")) {
 					// Connectivity to Microsoft OneDrive was lost
-					logBuffer.addLogEntry("Internet connectivity to Microsoft OneDrive service has been interrupted .. re-trying in the background");
+					addLogEntry("Internet connectivity to Microsoft OneDrive service has been interrupted .. re-trying in the background");
 					
 					// What caused the initial curl exception?
-					if (canFind(errorMessage, "Couldn't resolve host name on handle")) logBuffer.addLogEntry("Unable to resolve server - DNS access blocked?", ["debug"]);
-					if (canFind(errorMessage, "Couldn't connect to server on handle")) logBuffer.addLogEntry("Unable to connect to server - HTTPS access blocked?", ["debug"]);
+					if (canFind(errorMessage, "Couldn't resolve host name on handle")) addLogEntry("Unable to resolve server - DNS access blocked?", ["debug"]);
+					if (canFind(errorMessage, "Couldn't connect to server on handle")) addLogEntry("Unable to connect to server - HTTPS access blocked?", ["debug"]);
 					if (canFind(errorMessage, "Timeout was reached on handle")) {
 						// Common cause is libcurl trying IPv6 DNS resolution when there are only IPv4 DNS servers available
-						logBuffer.addLogEntry("A libcurl timeout has been triggered - data transfer too slow, no DNS resolution response, no server response", ["verbose"]);
+						addLogEntry("A libcurl timeout has been triggered - data transfer too slow, no DNS resolution response, no server response", ["verbose"]);
 						// There are 3 common causes for this issue:
 						// 1. Usually poor DNS resolution where libcurl flip/flops to use IPv6 and is unable to resolve
 						// 2. A device between the user and Microsoft OneDrive is unable to correctly handle HTTP/2 communication
 						// 3. No Internet access from this system at this point in time
-						logBuffer.addLogEntry(" - IPv6 DNS resolution issues may be causing timeouts. Consider setting 'ip_protocol_version' to IPv4 to potentially avoid this", ["verbose"]);
-						logBuffer.addLogEntry(" - HTTP/2 compatibility issues might also be interfering with your system. Use 'force_http_11' to switch to HTTP/1.1 to potentially avoid this", ["verbose"]);
-						logBuffer.addLogEntry(" - If these options do not resolve this timeout issue, please use --debug-https to diagnose this issue further.", ["verbose"]);
+						addLogEntry(" - IPv6 DNS resolution issues may be causing timeouts. Consider setting 'ip_protocol_version' to IPv4 to potentially avoid this", ["verbose"]);
+						addLogEntry(" - HTTP/2 compatibility issues might also be interfering with your system. Use 'force_http_11' to switch to HTTP/1.1 to potentially avoid this", ["verbose"]);
+						addLogEntry(" - If these options do not resolve this timeout issue, please use --debug-https to diagnose this issue further.", ["verbose"]);
 					}
 				} else {
 					// Some other 'libcurl' error was returned
@@ -1241,7 +1243,7 @@ class OneDriveApi {
 						//  https://stackoverflow.com/questions/45829588/brew-install-fails-curl77-error-setting-certificate-verify
 						//  https://forum.dlang.org/post/vwvkbubufexgeuaxhqfl@forum.dlang.org
 						
-						logBuffer.addLogEntry("Problem with reading the local SSL CA cert via libcurl - please repair your system SSL CA Certificates");
+						addLogEntry("Problem with reading the local SSL CA cert via libcurl - please repair your system SSL CA Certificates");
 						throw new OneDriveError("OneDrive operation encountered an issue with libcurl reading the local SSL CA Certificates");
 					} else {
 						// Was this a curl initialization error?
@@ -1308,11 +1310,11 @@ class OneDriveApi {
 				**/
 				
 				// Detail the OneDriveAPI exception, debug output only
-				logBuffer.addLogEntry("Handling a OneDrive API exception:", ["debug"]);
-				logBuffer.addLogEntry(to!string(response), ["debug"]);
+				addLogEntry("Handling a OneDrive API exception:", ["debug"]);
+				addLogEntry(to!string(response), ["debug"]);
 				
 				// Parse and display error message received from OneDrive
-				logBuffer.addLogEntry(callingFunction ~ "() - Generated a OneDriveException", ["debug"]);
+				addLogEntry(callingFunction ~ "() - Generated a OneDriveException", ["debug"]);
 				
 				// Configure libcurl to perform a fresh connection on API retry
 				setFreshConnectOption();
@@ -1331,13 +1333,13 @@ class OneDriveApi {
 					case 408,429:
 						// If OneDrive sends a status code 429 then this function will be used to process the Retry-After response header which contains the value by which we need to wait
 						if (exception.httpStatusCode == 408) {
-							logBuffer.addLogEntry("Handling a Microsoft Graph API HTTP 408 Response Code (Request Time Out) - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
+							addLogEntry("Handling a Microsoft Graph API HTTP 408 Response Code (Request Time Out) - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
 						} else {
-							logBuffer.addLogEntry("Handling a Microsoft Graph API HTTP 429 Response Code (Too Many Requests) - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
+							addLogEntry("Handling a Microsoft Graph API HTTP 429 Response Code (Too Many Requests) - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
 						}
 						// Read in the Retry-After HTTP header as set and delay as per this value before retrying the request
 						thisBackOffInterval = response.getRetryAfterValue();
-						logBuffer.addLogEntry("Using Retry-After Value = " ~ to!string(thisBackOffInterval), ["debug"]);
+						addLogEntry("Using Retry-After Value = " ~ to!string(thisBackOffInterval), ["debug"]);
 						transientError = true;
 						break;
 					//  Transient errors
@@ -1346,8 +1348,8 @@ class OneDriveApi {
 					case 503,504:
 						// The server, while acting as a proxy, did not receive a timely response from the upstream server it needed to access in attempting to complete the request
 						auto errorArray = splitLines(exception.msg);
-						logBuffer.addLogEntry(to!string(errorArray[0]) ~ " when attempting to query the Microsoft Graph API Service - retrying applicable request in 30 seconds - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
-						logBuffer.addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
+						addLogEntry(to!string(errorArray[0]) ~ " when attempting to query the Microsoft Graph API Service - retrying applicable request in 30 seconds - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId));
+						addLogEntry("Thread sleeping for 30 seconds as the server did not receive a timely response from the upstream server it needed to access in attempting to complete the request", ["debug"]);
 						// Transient error - try again in 30 seconds
 						thisBackOffInterval = 30;
 						transientError = true;
@@ -1371,7 +1373,7 @@ class OneDriveApi {
 			
 			// Has maxRetryCount been reached?
 			if (retryAttempts > maxRetryCount) {
-				logBuffer.addLogEntry("ERROR: Unable to reconnect to the Microsoft OneDrive service after " ~ to!string(retryAttempts) ~ " attempts lasting approximately 365 days");
+				addLogEntry("ERROR: Unable to reconnect to the Microsoft OneDrive service after " ~ to!string(retryAttempts) ~ " attempts lasting approximately 365 days");
 				throw new OneDriveException(408, "Request Timeout - HTTP 408 or Internet down?", response);
 			} else {
 				// Was 'thisBackOffInterval' set by a 429 event ?
@@ -1384,13 +1386,13 @@ class OneDriveApi {
 				currentTime = Clock.currTime();
 				currentTime.fracSecs = Duration.zero;
 				auto timeString = currentTime.toString();
-				logBuffer.addLogEntry("Retry attempt:           " ~ to!string(retryAttempts) ~ " - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId), ["verbose"]);
-				logBuffer.addLogEntry(" This attempt timestamp: " ~ timeString, ["verbose"]);
+				addLogEntry("Retry attempt:           " ~ to!string(retryAttempts) ~ " - Internal Thread ID: " ~ to!string(curlEngine.internalThreadId), ["verbose"]);
+				addLogEntry(" This attempt timestamp: " ~ timeString, ["verbose"]);
 				// Detail when the next attempt will be tried
 				// Factor in the delay for curl to generate the exception - otherwise the next timestamp appears to be 'out' even though technically correct
 				auto nextRetry = currentTime + dur!"seconds"(thisBackOffInterval) + dur!"seconds"(timestampAlign);
-				logBuffer.addLogEntry("  Next retry in approx:   " ~ to!string((thisBackOffInterval + timestampAlign)) ~ " seconds");
-				logBuffer.addLogEntry("  Next retry approx:      " ~ to!string(nextRetry), ["verbose"]);
+				addLogEntry(" Next retry in approx:   " ~ to!string((thisBackOffInterval + timestampAlign)) ~ " seconds");
+				addLogEntry(" Next retry approx:      " ~ to!string(nextRetry), ["verbose"]);
 				
 				// Thread sleep
 				Thread.sleep(dur!"seconds"(thisBackOffInterval));
@@ -1409,7 +1411,7 @@ class OneDriveApi {
 	
 	// Configure libcurl to perform a fresh connection
 	private void setFreshConnectOption() {
-		logBuffer.addLogEntry("Configuring libcurl to use a fresh connection for re-try", ["debug"]);
+		addLogEntry("Configuring libcurl to use a fresh connection for re-try", ["debug"]);
 		curlEngine.http.handle.set(CurlOption.fresh_connect,1);
 	}
 }
