@@ -664,9 +664,7 @@ int main(string[] cliArgs) {
 		string localPath = ".";
 		string remotePath = "/";
 		
-		// Join all threads together before proceeding further
-		thread_joinAll();
-				
+		// If not performing a --resync , interrupted upload session(s)		
 		if (!appConfig.getValueBool("resync")) {
 			// Check if there are interrupted upload session(s)
 			if (syncEngineInstance.checkForInterruptedSessionUploads) {
