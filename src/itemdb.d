@@ -259,29 +259,33 @@ final class ItemDatabase {
 		// Set the enforcement of foreign key constraints.
 		// https://www.sqlite.org/pragma.html#pragma_foreign_keys
 		// PRAGMA foreign_keys = boolean;
-		db.exec("PRAGMA foreign_keys = TRUE");
+		db.exec("PRAGMA foreign_keys = TRUE;");
 		// Set the recursive trigger capability
 		// https://www.sqlite.org/pragma.html#pragma_recursive_triggers
 		// PRAGMA recursive_triggers = boolean;
-		db.exec("PRAGMA recursive_triggers = TRUE");
+		db.exec("PRAGMA recursive_triggers = TRUE;");
 		// Set the journal mode for databases associated with the current connection
 		// https://www.sqlite.org/pragma.html#pragma_journal_mode
-		db.exec("PRAGMA journal_mode = WAL");
+		db.exec("PRAGMA journal_mode = WAL;");
 		// Automatic indexing is enabled by default as of version 3.7.17
 		// https://www.sqlite.org/pragma.html#pragma_automatic_index 
 		// PRAGMA automatic_index = boolean;
-		db.exec("PRAGMA automatic_index = FALSE");
+		db.exec("PRAGMA automatic_index = FALSE;");
 		// Tell SQLite to store temporary tables in memory. This will speed up many read operations that rely on temporary tables, indices, and views.
 		// https://www.sqlite.org/pragma.html#pragma_temp_store
-		db.exec("PRAGMA temp_store = MEMORY");
+		db.exec("PRAGMA temp_store = MEMORY;");
 		// Tell SQlite to cleanup database table size
 		// https://www.sqlite.org/pragma.html#pragma_auto_vacuum
 		// PRAGMA schema.auto_vacuum = 0 | NONE | 1 | FULL | 2 | INCREMENTAL;
-		db.exec("PRAGMA auto_vacuum = FULL");
+		db.exec("PRAGMA auto_vacuum = FULL;");
 		// This pragma sets or queries the database connection locking-mode. The locking-mode is either NORMAL or EXCLUSIVE.
 		// https://www.sqlite.org/pragma.html#pragma_locking_mode
 		// PRAGMA schema.locking_mode = NORMAL | EXCLUSIVE
-		db.exec("PRAGMA locking_mode = EXCLUSIVE");
+		db.exec("PRAGMA locking_mode = EXCLUSIVE;");
+		// The synchronous setting determines how carefully SQLite writes data to disk, balancing between performance and data safety.
+		// https://sqlite.org/pragma.html#pragma_synchronous
+		// PRAGMA synchronous = 0 | OFF | 1 | NORMAL | 2 | FULL | 3 | EXTRA;
+		db.exec("PRAGMA synchronous=NORMAL;");
 		
 		insertItemStmt = "
 			INSERT OR REPLACE INTO item (driveId, id, name, remoteName, type, eTag, cTag, mtime, parentId, quickXorHash, sha256Hash, remoteDriveId, remoteParentId, remoteId, remoteType, syncStatus, size)
@@ -886,11 +890,34 @@ final class ItemDatabase {
 
 	// Perform a vacuum on the database, commit WAL / SHM to file
 	void performVacuum() {
+		// Log what we are attempting to do
 		addLogEntry("Attempting to perform a database vacuum to merge any temporary data", ["debug"]);
+		
 		try {
+			// Check the current DB Status - we have to be in a clean state here
+			db.checkStatus();
+			
+			// Are there any open statements that need to be closed?
+			if (db.count_open_statements() > 0) {
+				// Dump open statements
+				db.dump_open_statements(); // dump open statements so we know what the are
+				
+				// SIGINT (CTRL-C), SIGTERM (kill) handling
+				if (exitHandlerTriggered) {
+					// The SQLITE_INTERRUPT result code indicates that an operation was interrupted - which if we have open statements, most likely a SIGINT scenario
+					throw new SqliteException(9, "Open SQL Statements due to interrupted operations");
+				} else {
+					// Try and close open statements
+					db.close_open_statements();
+				}
+			}
+			
+			// Ensure there are no pending operations by performing a checkpoint
+			db.exec("PRAGMA wal_checkpoint(FULL);");
+			
 			// Prepare and execute VACUUM statement
 			Statement stmt = db.prepare("VACUUM;");
-			scope(exit) stmt.finalise();  // Ensure the statement is finalised
+			scope(exit) stmt.finalise();  // Ensure the statement is finalised when we exit
 			stmt.exec();
 			addLogEntry("Database vacuum is complete", ["debug"]);
 		} catch (SqliteException e) {

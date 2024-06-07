@@ -19,9 +19,6 @@ import util;
 // Shared pool of CurlEngine instances accessible across all threads
 __gshared CurlEngine[] curlEnginePool; // __gshared is used to declare a variable that is shared across all threads
 
-// Global flag for SIGINT (CTRL-C) and SIGTERM (kill) state
-__gshared bool exitHandlerTriggered = false;
-
 class CurlResponse {
 	HTTP.Method method;
 	const(char)[] url;
@@ -208,12 +205,16 @@ class CurlEngine {
 			// HTTP instance was not stopped .. but it should have been ..
 			if (exitHandlerTriggered) {
 				// Regardless of what we do here, if we are shutting down because of SIGINT (CTRL-C) and SIGTERM (kill)
-				// This will have caused 'http' to be corrupt memory wise
-				// - http.shutdown(); will not work here
-				// - object.destroy(http); will not work here
-				// Have to use writeln() here as, logging most likely have been shutdown by now
-				writeln("Due to a termination signal, a curl engine was not shutdown in a safe manner.");
-				// Application will now exit with 'Segmentation fault' after completing ~this() function
+				addLogEntry("Due to a termination signal, a curl engine was potentially not shutdown in a safe manner.", ["debug"]);
+				// What engine is still active?
+				addLogEntry("Destructor HTTP instance still active: " ~ to!string(internalThreadId), ["debug"]);
+				// This will cause some sort of memory corruption somewhere ..
+				addLogEntry("Destructor HTTP instance isStopped state before http.shutdown(): " ~ to!string(http.isStopped), ["debug"]);
+				http.shutdown();
+				addLogEntry("Destructor HTTP instance isStopped state post http.shutdown(): " ~ to!string(http.isStopped), ["debug"]);
+				object.destroy(http);
+				addLogEntry("Destructor HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);
+				// Application may now potentially exit with 'Segmentation fault' after completing ~this() function
 			}
 		}
     }
@@ -466,14 +467,18 @@ class CurlEngine {
 
 	// Shut down the curl instance & close any open sockets
 	void shutdownCurlHTTPInstance() {
+		// Log that we are attempting to shutdown this curl instance
 		addLogEntry("CurlEngine shutdownCurlHTTPInstance() called on instance id: " ~ to!string(internalThreadId), ["debug"]);
 		
-		// Is the instance is stopped?
+		// Is this curl instance is stopped?
 		if (!http.isStopped) {
 			addLogEntry("HTTP instance still active: " ~ to!string(internalThreadId), ["debug"]);
+			addLogEntry("HTTP instance isStopped state before http.shutdown(): " ~ to!string(http.isStopped), ["debug"]);
 			http.shutdown();
+			addLogEntry("HTTP instance isStopped state post http.shutdown(): " ~ to!string(http.isStopped), ["debug"]);
 			object.destroy(http); // Destroy, however we cant set to null
 			addLogEntry("HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);
+			
 		} else {
 			// Already stopped .. destroy it
 			object.destroy(http); // Destroy, however we cant set to null
@@ -519,7 +524,6 @@ CurlEngine getCurlInstance() {
 // Release all CurlEngine instances
 void releaseAllCurlInstances() {
 	addLogEntry("CurlEngine releaseAllCurlInstances() called", ["debug"]);
-	addLogEntry("CurlEngine releaseAllCurlInstances() called");
 	synchronized (CurlEngine.classinfo) {
 		// What is the current pool size
 		addLogEntry("CurlEngine curlEnginePool size to release: " ~ to!string(curlEnginePool.length), ["debug"]);
@@ -549,10 +553,8 @@ void releaseAllCurlInstances() {
 	}
 	// Perform Garbage Collection on the destroyed curl engines
 	GC.collect();
-	
+	// Log that all curl engines have been released
 	addLogEntry("CurlEngine releaseAllCurlInstances() completed", ["debug"]);
-	addLogEntry("CurlEngine releaseAllCurlInstances() completed");
-	
 }
 
 // Return how many curl engines there are

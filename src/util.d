@@ -40,8 +40,11 @@ import config;
 import qxor;
 import curlEngine;
 
-// module variables
+// Global variable for the device name
 __gshared string deviceName;
+// Global flag for SIGINT (CTRL-C) and SIGTERM (kill) state
+__gshared bool exitHandlerTriggered = false;
+// util module variable
 ulong previousRSS;
 
 shared static this() {

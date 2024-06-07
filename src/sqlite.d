@@ -52,15 +52,49 @@ struct Database {
 		return sqlite3_wal_checkpoint(pDb, null);
 	}
 
+	// Dump open statements
 	void dump_open_statements() {
-		addLogEntry("Dumping open statements:", ["debug"]);
+		addLogEntry("Dumping open SQL statements:", ["debug"]);
 		auto p = sqlite3_next_stmt(pDb, null);
 		while (p != null) {
-			addLogEntry(" - " ~ to!string(ifromStringz(sqlite3_sql(p))));
+			addLogEntry(" Still Open: " ~ to!string(ifromStringz(sqlite3_sql(p))), ["debug"]);
 			p = sqlite3_next_stmt(pDb, p);
 		}
 	}
-
+	
+	// Close open statements
+	void close_open_statements() {
+		addLogEntry("Closing open SQL statements:", ["debug"]);
+		auto p = sqlite3_next_stmt(pDb, null);
+		while (p != null) {
+			// The sqlite3_finalize() function is called to delete a prepared statement
+			sqlite3_finalize(p);
+			addLogEntry(" Finalised:  " ~ to!string(ifromStringz(sqlite3_sql(p))));
+			p = sqlite3_next_stmt(pDb, p);
+		}
+	}
+	
+	// Count open statements
+	int count_open_statements() {
+		addLogEntry("Counting open SQL statements", ["debug"]);
+		int openStatementCount = 0;
+		auto p = sqlite3_next_stmt(pDb, null);
+		while (p != null) {
+			openStatementCount++;
+			p = sqlite3_next_stmt(pDb, p);
+		}
+		return openStatementCount;
+	}
+	
+	// Check DB Status
+	void checkStatus() {
+        int rc = sqlite3_errcode(pDb);
+        if (rc != SQLITE_OK) {
+            throw new SqliteException(rc, getErrorMessage());
+        }
+    }
+	
+	// Open the database file
 	void open(const(char)[] filename) {
 		// https://www.sqlite.org/c3ref/open.html
 		int rc = sqlite3_open(toStringz(filename), &pDb);
@@ -91,9 +125,7 @@ struct Database {
 
 	void exec(const(char)[] sql) {
 		// https://www.sqlite.org/c3ref/exec.html
-		
 		if (pDb !is null) {
-		
 			int rc = sqlite3_exec(pDb, toStringz(sql), null, null, null);
 			if (rc != SQLITE_OK) {
 				// Get error message and print it, then exit
@@ -101,7 +133,7 @@ struct Database {
 				printSQLExecutionErrorMessage(errorMessage);
 				close();
 				// Throw sqlite error
-				throw new SqliteException(rc, getErrorMessage());
+				throw new SqliteException(rc, errorMessage);
 			}
 		}
 	}

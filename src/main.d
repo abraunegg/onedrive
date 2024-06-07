@@ -664,6 +664,9 @@ int main(string[] cliArgs) {
 		string localPath = ".";
 		string remotePath = "/";
 		
+		// Join all threads together before proceeding further
+		thread_joinAll();
+				
 		if (!appConfig.getValueBool("resync")) {
 			// Check if there are interrupted upload session(s)
 			if (syncEngineInstance.checkForInterruptedSessionUploads) {
@@ -1176,12 +1179,6 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 				filesystemMonitor.update(true);
 			}
 			
-			// Make sure we sync any DB data to this point, but only if not in --monitor mode
-			// In --monitor mode, this is handled within the 'loop', based on when the full scan true up is being performed
-			if (!appConfig.getValueBool("monitor")) {
-				itemDB.performVacuum();
-			}
-			
 			// If we are not doing a 'force_children_scan' perform a true-up
 			// 'force_children_scan' is used when using /children rather than /delta and it is not efficient to re-run this exact same process twice
 			if (!appConfig.getValueBool("force_children_scan")) {
@@ -1315,6 +1312,9 @@ void setupSignalHandler() {
 // Catch SIGINT (CTRL-C), SIGTERM (kill) and SIGSEGV (invalid memory access), handle rapid repeat CTRL-C presses
 extern(C) nothrow @nogc @system void exitHandler(int signo) {
 
+	// Update exitHandlerTriggered flag within curlEngine as http objects to not shutdown automatically if CTRL-C is used
+	exitHandlerTriggered = true;
+	
 	// Catch the generation of SIGSEV post CTRL-C event
     if (signo == SIGSEGV) {
 		printf("Due to a termination signal, internal processing stopped abruptly. The application will now exit in a unclean manner.\n");
@@ -1324,8 +1324,7 @@ extern(C) nothrow @nogc @system void exitHandler(int signo) {
 	if (shutdownInProgress) {
 		return;  // Ignore subsequent presses
 	} else {
-		// Update exitHandlerTriggered flag within curlEngine as http objects to not shutdown automatically if CTRL-C is used
-		exitHandlerTriggered = true;
+		
 		// Disable logging suppression
 		appConfig.suppressLoggingOutput = false;
 		// Flag we are shutting down
@@ -1333,13 +1332,9 @@ extern(C) nothrow @nogc @system void exitHandler(int signo) {
 		
 		try {
 			assumeNoGC ( () {
-				addLogEntry("\nReceived termination signal, initiating application cleanup");
-				// Wait for all parallel jobs that depend on the database being available to complete
-				addLogEntry("Waiting for any existing upload|download process to complete");
-				shutdownSyncEngine();
-				// Perform the database shutdown process
-				shutdownDatabase();
-				// Try and shutdown anything else that might be still operational
+				// Log that a termination signal was caught
+				addLogEntry("\nReceived termination signal, attempting to cleanly shutdown application");
+				// Try and shutdown in a safe and synchronised manner
 				performSynchronisedExitProcess("SIGINT-SIGTERM-HANDLER");
 			})();
 		} catch (Exception e) {
@@ -1360,12 +1355,15 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 		try {
 			// Log who called this function
 			addLogEntry("performSynchronisedExitProcess called by: " ~ scopeCaller, ["debug"]);
-			addLogEntry("performSynchronisedExitProcess called by: " ~ scopeCaller);
 			// Shutdown the OneDrive Webhook instance
 			shutdownOneDriveWebhook();
 			// Shutdown any local filesystem monitoring
 			shutdownFilesystemMonitor();
 			// Shutdown the sync engine
+			if (scopeCaller == "SIGINT-SIGTERM-HANDLER") {
+				// Wait for all parallel jobs that depend on the database being available to complete
+				addLogEntry("Waiting for any existing upload|download process to complete");
+			}
 			shutdownSyncEngine();
 			// Release all CurlEngine instances
 			releaseAllCurlInstances();
@@ -1430,7 +1428,8 @@ void shutdownDatabase() {
 		// Logging to attempt this is dentoed from performVacuum() - so no need to confirm here
 		itemDB.performVacuum();
 		// If this completes, it is dentoed from performVacuum() - so no need to confirm here
-        itemDB.closeDatabaseFile(); // Close the DB File Handle
+		itemDB.closeDatabaseFile(); // Close the DB File Handle
+		object.destroy(itemDB);
         itemDB = null;
 		addLogEntry("Shutdown of Database instance is complete", ["debug"]);
 		addLogEntry("Shutdown of Database instance is complete");
