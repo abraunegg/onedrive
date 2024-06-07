@@ -81,7 +81,7 @@ class OneDriveWebhook {
 		}
 		// Release API instance back to the pool
 		oneDriveApiInstance.releaseCurlEngine();
-		//object.destroy(oneDriveApiInstance);
+		object.destroy(oneDriveApiInstance);
 		oneDriveApiInstance = null;
 	}
 

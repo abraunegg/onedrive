@@ -199,7 +199,7 @@ class CurlEngine {
 		
 		// Is 'response' cleared?
 		if (response !is null) {
-			//object.destroy(response); // Destroy, then set to null
+			object.destroy(response); // Destroy, then set to null
 			response = null;
 		}
 		
@@ -209,8 +209,8 @@ class CurlEngine {
 			if (exitHandlerTriggered) {
 				// Regardless of what we do here, if we are shutting down because of SIGINT (CTRL-C) and SIGTERM (kill)
 				// This will have caused 'http' to be corrupt memory wise
-				// - http.shutdown(); will not work
-				// - object.destroy(http); will not work
+				// - http.shutdown(); will not work here
+				// - object.destroy(http); will not work here
 				// Have to use writeln() here as, logging most likely have been shutdown by now
 				writeln("Due to a termination signal, a curl engine was not shutdown in a safe manner.");
 				// Application will now exit with 'Segmentation fault' after completing ~this() function
@@ -472,11 +472,11 @@ class CurlEngine {
 		if (!http.isStopped) {
 			addLogEntry("HTTP instance still active: " ~ to!string(internalThreadId), ["debug"]);
 			http.shutdown();
-			//object.destroy(http); // Destroy, however we cant set to null
+			object.destroy(http); // Destroy, however we cant set to null
 			addLogEntry("HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);
 		} else {
 			// Already stopped .. destroy it
-			//object.destroy(http); // Destroy, however we cant set to null
+			object.destroy(http); // Destroy, however we cant set to null
 			addLogEntry("Stopped HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);
 		}
 		// Perform Garbage Collection
@@ -535,7 +535,7 @@ void releaseAllCurlInstances() {
 				}
 				
 				// It's safe to destroy the object here assuming no other references exist
-				//object.destroy(curlEngineInstance); // Destroy, then set to null
+				object.destroy(curlEngineInstance); // Destroy, then set to null
 				curlEngineInstance = null;
 				// Perform Garbage Collection on this destroyed curl engine
 				GC.collect();

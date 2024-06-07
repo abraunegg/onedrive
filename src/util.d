@@ -41,10 +41,10 @@ import qxor;
 import curlEngine;
 
 // module variables
-shared string deviceName;
+__gshared string deviceName;
 ulong previousRSS;
 
-static this() {
+shared static this() {
 	deviceName = Socket.hostName;
 }
 
@@ -233,25 +233,25 @@ bool testInternetReachability(ApplicationConfig appConfig) {
 		}
 
 		http.shutdown();
-		//object.destroy(http);
+		object.destroy(http);
 		return true;
     } catch (SocketException e) {
 		addLogEntry("Cannot connect to Microsoft OneDrive Service - Socket Issue: " ~ e.msg);
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 		http.shutdown();
-		//object.destroy(http);
+		object.destroy(http);
 		return false;
     } catch (CurlException e) {
 		addLogEntry("Cannot connect to Microsoft OneDrive Service - Network Connection Issue: " ~ e.msg);
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 		http.shutdown();
-		//object.destroy(http);
+		object.destroy(http);
 		return false;
     } catch (Exception e) {
 		addLogEntry("Unexpected error occurred: " ~ e.toString());
 		displayOneDriveErrorMessage(e.toString(), getFunctionName!({}));
 		http.shutdown();
-		//object.destroy(http);
+		object.destroy(http);
 		return false;
     }
 }
@@ -698,7 +698,7 @@ JSONValue fetchOnlineURLContent(string url) {
 	// Exit scope to ensure cleanup
     scope(exit) {
         http.shutdown();
-        //object.destroy(http);
+        object.destroy(http);
     }
 	
 	// Configure the URL to access
@@ -720,7 +720,7 @@ JSONValue fetchOnlineURLContent(string url) {
 	
 	// Ensure resources are cleaned up
 	http.shutdown();  
-	//object.destroy(http);
+	object.destroy(http);
 
     // Return onlineResponse
     return onlineContent;

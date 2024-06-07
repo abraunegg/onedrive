@@ -436,7 +436,7 @@ int main(string[] cliArgs) {
 			// Flag that we were able to initialise the API in the application config
 			oneDriveApiInstance.debugOutputConfiguredAPIItems();
 			oneDriveApiInstance.releaseCurlEngine();
-			//object.destroy(oneDriveApiInstance);
+			object.destroy(oneDriveApiInstance);
 			oneDriveApiInstance = null;
 			
 			// Need to configure the itemDB and syncEngineInstance for 'sync' and 'non-sync' operations
@@ -1339,6 +1339,8 @@ extern(C) nothrow @nogc @system void exitHandler(int signo) {
 				shutdownSyncEngine();
 				// Perform the database shutdown process
 				shutdownDatabase();
+				// Try and shutdown anything else that might be still operational
+				performSynchronisedExitProcess("SIGINT-SIGTERM-HANDLER");
 			})();
 		} catch (Exception e) {
 			// Any output here will cause a GC allocation
@@ -1358,6 +1360,7 @@ void performSynchronisedExitProcess(string scopeCaller = null) {
 		try {
 			// Log who called this function
 			addLogEntry("performSynchronisedExitProcess called by: " ~ scopeCaller, ["debug"]);
+			addLogEntry("performSynchronisedExitProcess called by: " ~ scopeCaller);
 			// Shutdown the OneDrive Webhook instance
 			shutdownOneDriveWebhook();
 			// Shutdown any local filesystem monitoring
@@ -1384,7 +1387,7 @@ void shutdownOneDriveWebhook() {
     if (oneDriveWebhook !is null) {
 		addLogEntry("Shutting down OneDrive Webhook instance", ["debug"]);
 		oneDriveWebhook.stop();
-        //object.destroy(oneDriveWebhook);
+        object.destroy(oneDriveWebhook);
         oneDriveWebhook = null;
 		addLogEntry("Shutdown of OneDrive Webhook instance is complete", ["debug"]);
     }
@@ -1394,9 +1397,9 @@ void shutdownFilesystemMonitor() {
     if (filesystemMonitor !is null) {
 		addLogEntry("Shutting down Filesystem Monitoring instance", ["debug"]);
 		filesystemMonitor.shutdown();
-        //object.destroy(filesystemMonitor);
+        object.destroy(filesystemMonitor);
         filesystemMonitor = null;
-		addLogEntry("Shut down of Filesystem Monitoring instance is complete", ["debug"]);
+		addLogEntry("Shutdown of Filesystem Monitoring instance is complete", ["debug"]);
     }
 }
 
@@ -1404,9 +1407,9 @@ void shutdownSelectiveSync() {
     if (selectiveSync !is null) {
 		addLogEntry("Shutting down Client Side Filtering instance", ["debug"]);
 		selectiveSync.shutdown();
-        //object.destroy(selectiveSync);
+        object.destroy(selectiveSync);
         selectiveSync = null;
-		addLogEntry("Shut down of Client Side Filtering instance is complete", ["debug"]);
+		addLogEntry("Shutdown of Client Side Filtering instance is complete", ["debug"]);
     }
 }
 
@@ -1414,9 +1417,9 @@ void shutdownSyncEngine() {
     if (syncEngineInstance !is null) {
 		addLogEntry("Shutting down Sync Engine instance", ["debug"]);
 		syncEngineInstance.shutdown(); // Make sure any running thread completes first
-        //object.destroy(syncEngineInstance);
+        object.destroy(syncEngineInstance);
         syncEngineInstance = null;
-		addLogEntry("Shut down Sync Engine instance is complete", ["debug"]);
+		addLogEntry("Shutdown Sync Engine instance is complete", ["debug"]);
     }
 }
 
@@ -1429,8 +1432,8 @@ void shutdownDatabase() {
 		// If this completes, it is dentoed from performVacuum() - so no need to confirm here
         itemDB.closeDatabaseFile(); // Close the DB File Handle
         itemDB = null;
-		addLogEntry("Shut down Database instance is complete", ["debug"]);
-		addLogEntry("Shut down Database instance is complete");
+		addLogEntry("Shutdown of Database instance is complete", ["debug"]);
+		addLogEntry("Shutdown of Database instance is complete");
     }
 }
 
@@ -1441,9 +1444,9 @@ void shutdownAppConfig() {
 			// We were running with --dry-run , clean up the applicable database
 			cleanupDryRunDatabaseFiles(runtimeDatabaseFile);
 		}
-		//object.destroy(appConfig);
+		object.destroy(appConfig);
         appConfig = null;
-		addLogEntry("Shut down of Application Configuration instance is complete", ["debug"]);
+		addLogEntry("Shutdown of Application Configuration instance is complete", ["debug"]);
     }
 }
 

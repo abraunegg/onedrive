@@ -119,8 +119,8 @@ class OneDriveApi {
 	
 	// The destructor should only clean up resources owned directly by this instance
 	~this() {
-		//object.destroy(response);
-		//object.destroy(curlEngine);
+		object.destroy(response);
+		object.destroy(curlEngine);
 		response = null;
 		curlEngine = null;
 	}
