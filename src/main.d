@@ -1422,7 +1422,6 @@ void shutdownSyncEngine() {
 void shutdownDatabase() {
     if (itemDB !is null && itemDB.isDatabaseInitialised()) {
 		addLogEntry("Shutting down Database instance", ["debug"]);
-		addLogEntry("Shutting down Database instance");
 		// Logging to attempt this is dentoed from performVacuum() - so no need to confirm here
 		itemDB.performVacuum();
 		// If this completes, it is dentoed from performVacuum() - so no need to confirm here
@@ -1430,7 +1429,6 @@ void shutdownDatabase() {
 		object.destroy(itemDB);
         itemDB = null;
 		addLogEntry("Shutdown of Database instance is complete", ["debug"]);
-		addLogEntry("Shutdown of Database instance is complete");
     }
 }
 
