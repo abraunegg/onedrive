@@ -936,7 +936,8 @@ class SyncEngine {
 				
 				// If the initial deltaChanges response is an invalid JSON object, keep trying until we get a valid response ..
 				if (deltaChanges.type() != JSONType.object) {
-					while (deltaChanges.type() != JSONType.object) {
+					// While the response is not a JSON Object or the Exit Handler has not been triggered
+					while ((deltaChanges.type() != JSONType.object) && (!exitHandlerTriggered)) {
 						// Handle the invalid JSON response and retry
 						addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response", ["debug"]);
 						deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink);
@@ -5746,8 +5747,10 @@ class SyncEngine {
 		string etaString;
 		string uploadLogEntry = "Uploading: " ~ uploadSessionData["localPath"].str ~ " ... ";
 
-		// Start the session upload using the active API instance for this thread
-		while (true) {
+		// While 'true' and the Exit Handler has not been triggered
+		// - start the session upload using the active API instance for this thread
+		while ((true) && (!exitHandlerTriggered)) {
+		
 			fragmentCount++;
 			addLogEntry("Fragment: " ~ to!string(fragmentCount) ~ " of " ~ to!string(expected_total_fragments), ["debug"]);
 			
@@ -7477,7 +7480,8 @@ class SyncEngine {
 			
 			// If the initial deltaChanges response is an invalid JSON object, keep trying until we get a valid response ..
 			if (deltaChanges.type() != JSONType.object) {
-				while (deltaChanges.type() != JSONType.object) {
+				// While the response is not a JSON Object or the Exit Handler has not been triggered
+				while ((deltaChanges.type() != JSONType.object) && (!exitHandlerTriggered)) {
 					// Handle the invalid JSON response and retry
 					addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response", ["debug"]);
 					deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink);
