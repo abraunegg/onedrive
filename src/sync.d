@@ -5746,10 +5746,9 @@ class SyncEngine {
 		string etaString;
 		string uploadLogEntry = "Uploading: " ~ uploadSessionData["localPath"].str ~ " ... ";
 
-		// While 'true' and the Exit Handler has not been triggered
-		// - start the session upload using the active API instance for this thread
-		while ((true) && (!exitHandlerTriggered)) {
-		
+		// Start the session upload using the active API instance for this thread
+		// - If 'exitHandlerTriggered' we want the transfer to complete
+		while (true) {
 			fragmentCount++;
 			addLogEntry("Fragment: " ~ to!string(fragmentCount) ~ " of " ~ to!string(expected_total_fragments), ["debug"]);
 			
