@@ -226,10 +226,10 @@ bool testInternetReachability(ApplicationConfig appConfig) {
     scope(exit) {
 		// Shut http down and destroy
 		http.shutdown();
-        object.destroy(http);
+		object.destroy(http);
 		// Perform Garbage Collection
 		GC.collect();
-    }
+	}
 
     // Execute the request and handle exceptions
     try {
@@ -699,13 +699,13 @@ JSONValue fetchOnlineURLContent(string url) {
 	HTTP http = HTTP();
 	
 	// Exit scope to ensure cleanup
-    scope(exit) {
+	scope(exit) {
 		// Shut http down and destroy
-        http.shutdown();
-        object.destroy(http);
+		http.shutdown();
+		object.destroy(http);
 		// Perform Garbage Collection
 		GC.collect();
-    }
+	}
 	
 	// Configure the URL to access
 	http.url = url;

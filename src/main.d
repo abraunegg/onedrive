@@ -1060,8 +1060,8 @@ int main(string[] cliArgs) {
 					}
 				}
 				
-				// Sleep the monitor thread for 1 second, loop around and pick up any inotify changes
-				Thread.sleep(dur!"seconds"(1));
+				// Sleep the monitor thread for 5 second, loop around and pick up any inotify changes
+				Thread.sleep(dur!"seconds"(5));
 			}
 		}
 	} else {

@@ -189,16 +189,17 @@ class CurlEngine {
 
 	// The destructor should only clean up resources owned directly by this CurlEngine instance
 	~this() {
+		
+		addLogEntry("CurlEngine Destructor Called");
+		
 		// Is the file still open?
 		if (uploadFile.isOpen()) {
 			uploadFile.close();
 		}
 		
 		// Is 'response' cleared?
-		if (response !is null) {
-			object.destroy(response); // Destroy, then set to null
-			response = null;
-		}
+		object.destroy(response); // Destroy, then set to null
+		response = null;
 		
 		// Is the actual http instance is stopped?
 		if (!http.isStopped) {
@@ -212,15 +213,28 @@ class CurlEngine {
 				addLogEntry("Destructor HTTP instance isStopped state before http.shutdown(): " ~ to!string(http.isStopped), ["debug"]);
 				http.shutdown();
 				addLogEntry("Destructor HTTP instance isStopped state post http.shutdown(): " ~ to!string(http.isStopped), ["debug"]);
-				object.destroy(http);
-				addLogEntry("Destructor HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);
-				// Application may now potentially exit with 'Segmentation fault' after completing ~this() function
 			}
 		}
+		
+		// Make sure this HTTP instance is destroyed
+		object.destroy(http);
+		addLogEntry("Destructor HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);
+		addLogEntry("Destructor HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId));
+		
+		// ThreadId needs to be set to null
+		internalThreadId = null;
+		
+		// Perform Garbage Collection
+		GC.collect();
+		// Return free memory to the OS
+		GC.minimize();
     }
 		
 	// We are releasing a curl instance back to the pool
 	void releaseEngine() {
+	
+		addLogEntry("CurlEngine.releaseEngine() Called");
+	
 		// Log that we are releasing this engine back to the pool
 		addLogEntry("CurlEngine releaseEngine() called on instance id: " ~ to!string(internalThreadId), ["debug"]);
 		addLogEntry("CurlEngine curlEnginePool size before release: " ~ to!string(curlEnginePool.length), ["debug"]);
@@ -233,6 +247,8 @@ class CurlEngine {
         }
 		// Perform Garbage Collection
 		GC.collect();
+		// Return free memory to the OS
+		GC.minimize();
     }
 	
 	// Initialise this curl instance
@@ -469,6 +485,7 @@ class CurlEngine {
 	void shutdownCurlHTTPInstance() {
 		// Log that we are attempting to shutdown this curl instance
 		addLogEntry("CurlEngine shutdownCurlHTTPInstance() called on instance id: " ~ to!string(internalThreadId), ["debug"]);
+		addLogEntry("CurlEngine shutdownCurlHTTPInstance() called on instance id: " ~ to!string(internalThreadId));
 		
 		// Is this curl instance is stopped?
 		if (!http.isStopped) {
