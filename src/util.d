@@ -221,6 +221,15 @@ bool testInternetReachability(ApplicationConfig appConfig) {
 
     // Set HTTP method to HEAD for minimal data transfer
     http.method = HTTP.Method.head;
+	
+	// Exit scope to ensure cleanup
+    scope(exit) {
+		// Shut http down and destroy
+		http.shutdown();
+        object.destroy(http);
+		// Perform Garbage Collection
+		GC.collect();
+    }
 
     // Execute the request and handle exceptions
     try {
@@ -234,27 +243,18 @@ bool testInternetReachability(ApplicationConfig appConfig) {
 			addLogEntry("Failed to reach Microsoft OneDrive Login Service. HTTP status code: " ~ to!string(http.statusLine.code));
 			throw new Exception("HTTP Request Failed with Status Code: " ~ to!string(http.statusLine.code));
 		}
-
-		http.shutdown();
-		object.destroy(http);
 		return true;
     } catch (SocketException e) {
 		addLogEntry("Cannot connect to Microsoft OneDrive Service - Socket Issue: " ~ e.msg);
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-		http.shutdown();
-		object.destroy(http);
 		return false;
     } catch (CurlException e) {
 		addLogEntry("Cannot connect to Microsoft OneDrive Service - Network Connection Issue: " ~ e.msg);
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-		http.shutdown();
-		object.destroy(http);
 		return false;
     } catch (Exception e) {
 		addLogEntry("Unexpected error occurred: " ~ e.toString());
 		displayOneDriveErrorMessage(e.toString(), getFunctionName!({}));
-		http.shutdown();
-		object.destroy(http);
 		return false;
     }
 }
@@ -681,8 +681,8 @@ void displayGeneralErrorMessage(Exception e, string callingFunction=__FUNCTION__
 	addLogEntry(); // used rather than writeln
 	addLogEntry("ERROR: Encounter " ~ e.classinfo.name ~ ":");
 	addLogEntry("  Error Message:    " ~ e.msg);
-	addLogEntry("  Calling Function:    " ~ callingFunction);
-	addLogEntry("  Line number:    " ~ to!string(lineno));
+	addLogEntry("  Calling Function: " ~ callingFunction);
+	addLogEntry("  Line number:      " ~ to!string(lineno));
 }
 
 // Get the function name that is being called to assist with identifying where an error is being generated
@@ -700,15 +700,17 @@ JSONValue fetchOnlineURLContent(string url) {
 	
 	// Exit scope to ensure cleanup
     scope(exit) {
+		// Shut http down and destroy
         http.shutdown();
         object.destroy(http);
+		// Perform Garbage Collection
+		GC.collect();
     }
 	
 	// Configure the URL to access
 	http.url = url;
 	// HTTP the connection method
 	http.method = HTTP.Method.get;
-	
 	// Data receive handler
 	http.onReceive = (ubyte[] data) {
 		content ~= data; // Append data as it's received
@@ -717,15 +719,9 @@ JSONValue fetchOnlineURLContent(string url) {
 	
 	// Perform HTTP request
 	http.perform();
-	
 	// Parse Content
 	onlineContent = parseJSON(to!string(content));
-	
-	// Ensure resources are cleaned up
-	http.shutdown();  
-	object.destroy(http);
-
-    // Return onlineResponse
+	// Return onlineResponse
     return onlineContent;
 }
 

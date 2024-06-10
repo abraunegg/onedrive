@@ -2930,12 +2930,24 @@ class SyncEngine {
 			} 
 		} catch (OneDriveException exception) {
 			string thisFunctionName = getFunctionName!({});
+			// Handle a 409 - ETag does not match current item's value
 			// Handle a 412 - A precondition provided in the request (such as an if-match header) does not match the resource's current state.
-			if (exception.httpStatusCode == 412) {
-				// OneDrive threw a 412 error, most likely: ETag does not match current item's value
-				addLogEntry("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting file time stamp update - gracefully handling error", ["verbose"]);
-				addLogEntry("File Metadata Update Failed - OneDrive eTag / cTag match issue", ["debug"]);
-				addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
+			if ((exception.httpStatusCode == 409) || (exception.httpStatusCode == 412)) {
+				// Handle the 409
+				if (exception.httpStatusCode == 409) {
+					// OneDrive threw a 412 error
+					addLogEntry("OneDrive returned a 'HTTP 409 - ETag does not match current item's value' when attempting file time stamp update - gracefully handling error", ["verbose"]);
+					addLogEntry("File Metadata Update Failed - OneDrive eTag / cTag match issue", ["debug"]);
+					addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
+				}
+				// Handle the 412
+				if (exception.httpStatusCode == 412) {
+					// OneDrive threw a 412 error
+					addLogEntry("OneDrive returned a 'HTTP 412 - Precondition Failed' when attempting file time stamp update - gracefully handling error", ["verbose"]);
+					addLogEntry("File Metadata Update Failed - OneDrive eTag / cTag match issue", ["debug"]);
+					addLogEntry("Retrying Function: " ~ thisFunctionName, ["debug"]);
+				}
+				
 				// Retry without eTag
 				uploadLastModifiedTime(originItem, driveId, id, mtime, null);
 			} else {

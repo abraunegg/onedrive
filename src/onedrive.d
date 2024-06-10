@@ -44,7 +44,13 @@ class OneDriveException: Exception {
 		this.httpStatusCode = httpStatusCode;
 		this.response = response;
 		this.error = response.json();
-		string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(error, true));
+		if (reason.length == 0) {
+			// No reason given
+			string msg = format("HTTP request returned status code %d \n%s", httpStatusCode, toJSON(error, true));
+		} else {
+			// reason given
+			string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(error, true));
+		}
 		super(msg, file, line);
 	}
 
@@ -387,6 +393,10 @@ class OneDriveApi {
 			curlEngine.releaseEngine();
 			curlEngine = null;
 		}
+		// Release the response
+		response = null;
+		// Perform Garbage Collection
+		GC.collect();
 	}
 
 	// Authenticate this client against Microsoft OneDrive API
@@ -1165,7 +1175,7 @@ class OneDriveApi {
 					if (response.statusLine.code / 100 != 2 && response.statusLine.code != 302) {
 						// Not a 2xx or 302 response code
 						// Every other HTTP status code, including those from the 1xx (Informational), 3xx (other Redirection codes excluding 302), 4xx (Client Error), and 5xx (Server Error) series, will trigger the following line of code.
-						throw new OneDriveException(response.statusLine.code, response.statusLine.reason, response);
+						throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
 					}
 					// Do we need to validate the JSON response?
 					if (validateJSONResponse) {
