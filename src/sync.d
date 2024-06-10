@@ -5335,8 +5335,7 @@ class SyncEngine {
 								addLogEntry("fileDetailsFromOneDrive after exist online check: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);
 								
 								// Does the data from online match our local file that we are attempting to upload as a new file?
-								bool raiseWarning = true;
-								if (!disableUploadValidation && performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize, raiseWarning)) {
+								if (!disableUploadValidation && performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize)) {
 									// Save online item details to the database
 									saveItem(fileDetailsFromOneDrive);
 								} else {
@@ -7161,23 +7160,34 @@ class SyncEngine {
 	}
 	
 	// Perform integrity validation of the file that was uploaded
-	bool performUploadIntegrityValidationChecks(JSONValue uploadResponse, string localFilePath, ulong localFileSize, bool raiseWarning=true) {
+	bool performUploadIntegrityValidationChecks(JSONValue uploadResponse, string localFilePath, ulong localFileSize) {
 	
 		bool integrityValid = false;
 	
 		if (!disableUploadValidation) {
 			// Integrity validation has not been disabled (this is the default so we are always integrity checking our uploads)
 			if (uploadResponse.type() == JSONType.object) {
-				// Provided JSON is a valid JSON	
-				ulong uploadFileSize = uploadResponse["size"].integer;
-				string uploadFileHash = uploadResponse["file"]["hashes"]["quickXorHash"].str;
-				string localFileHash = computeQuickXorHash(localFilePath);
+				// Provided JSON is a valid JSON
+				ulong uploadFileSize;
+				string uploadFileHash;
+				string localFileHash;
+				// Regardless if valid JSON is responded with, 'size' and 'quickXorHash' must be present
+				if (hasFileSize(uploadResponse) && hasQuickXorHash(uploadResponse)) {
+					uploadFileSize = uploadResponse["size"].integer;
+					uploadFileHash = uploadResponse["file"]["hashes"]["quickXorHash"].str;
+					localFileHash = computeQuickXorHash(localFilePath);
+				} else {
+					addLogEntry("Online file validation unable to be performed: input JSON whilst valid did not contain data which could be validated");
+					addLogEntry("WARNING: Skipping upload integrity check for: " ~ localFilePath);
+					return integrityValid;
+				}
 				
+				// compare values
 				if ((localFileSize == uploadFileSize) && (localFileHash == uploadFileHash)) {
 					// Uploaded file integrity intact
 					addLogEntry("Uploaded local file matches reported online size and hash values", ["debug"]);
 					integrityValid = true;
-				} else if (raiseWarning) {
+				} else {
 					// Upload integrity failure .. what failed?
 					// There are 2 scenarios where this happens:
 					// 1. Failed Transfer
