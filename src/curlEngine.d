@@ -226,8 +226,6 @@ class CurlEngine {
 		
 		// Perform Garbage Collection
 		GC.collect();
-		// Return free memory to the OS
-		GC.minimize();
     }
 		
 	// We are releasing a curl instance back to the pool
@@ -247,8 +245,6 @@ class CurlEngine {
         }
 		// Perform Garbage Collection
 		GC.collect();
-		// Return free memory to the OS
-		GC.minimize();
     }
 	
 	// Initialise this curl instance
