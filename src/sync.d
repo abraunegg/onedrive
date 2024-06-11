@@ -746,7 +746,6 @@ class SyncEngine {
 	// Cleanup arrays when used in --monitor loops
 	void cleanupArrays() {
 		addLogEntry("Cleaning up all internal arrays used when processing data", ["debug"]);
-		writeln("Cleaning up all internal arrays used when processing data");
 		
 		// Multi Dimensional Arrays
 		idsToDelete.length = 0;
@@ -773,7 +772,6 @@ class SyncEngine {
 		// Perform Garbage Collection on this destroyed curl engine
 		GC.collect();
 		addLogEntry("Cleaning of internal arrays complete", ["debug"]);
-		writeln("Cleaning of internal arrays complete");
 	}
 	
 	// Configure singleDirectoryScope = true if this function is called

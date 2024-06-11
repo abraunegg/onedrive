@@ -189,9 +189,6 @@ class CurlEngine {
 
 	// The destructor should only clean up resources owned directly by this CurlEngine instance
 	~this() {
-		
-		addLogEntry("CurlEngine Destructor Called");
-		
 		// Is the file still open?
 		if (uploadFile.isOpen()) {
 			uploadFile.close();
@@ -219,7 +216,6 @@ class CurlEngine {
 		// Make sure this HTTP instance is destroyed
 		object.destroy(http);
 		addLogEntry("Destructor HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);
-		addLogEntry("Destructor HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId));
 		
 		// ThreadId needs to be set to null
 		internalThreadId = null;
@@ -230,9 +226,6 @@ class CurlEngine {
 		
 	// We are releasing a curl instance back to the pool
 	void releaseEngine() {
-	
-		addLogEntry("CurlEngine.releaseEngine() Called");
-	
 		// Log that we are releasing this engine back to the pool
 		addLogEntry("CurlEngine releaseEngine() called on instance id: " ~ to!string(internalThreadId), ["debug"]);
 		addLogEntry("CurlEngine curlEnginePool size before release: " ~ to!string(curlEnginePool.length), ["debug"]);
@@ -481,7 +474,6 @@ class CurlEngine {
 	void shutdownCurlHTTPInstance() {
 		// Log that we are attempting to shutdown this curl instance
 		addLogEntry("CurlEngine shutdownCurlHTTPInstance() called on instance id: " ~ to!string(internalThreadId), ["debug"]);
-		addLogEntry("CurlEngine shutdownCurlHTTPInstance() called on instance id: " ~ to!string(internalThreadId));
 		
 		// Is this curl instance is stopped?
 		if (!http.isStopped) {

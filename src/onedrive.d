@@ -125,7 +125,6 @@ class OneDriveApi {
 	
 	// The destructor should only clean up resources owned directly by this instance
 	~this() {
-		writeln("OneDriveApi Destructor Called");
 		object.destroy(response);
 		object.destroy(curlEngine);
 		response = null;
@@ -389,8 +388,8 @@ class OneDriveApi {
 	// Release CurlEngine bask to the Curl Engine Pool
 	void releaseCurlEngine() {
 		// Log that this was called
-		addLogEntry("OneDrive API releaseCurlEngine() CALLED", ["debug"]);
-		addLogEntry("OneDrive API releaseCurlEngine() CALLED");
+		addLogEntry("OneDrive API releaseCurlEngine() Called", ["debug"]);
+		
 		// Release curl instance back to the pool
 		if (curlEngine !is null) {
 			curlEngine.releaseEngine();

@@ -891,7 +891,7 @@ final class ItemDatabase {
 	// Perform a vacuum on the database, commit WAL / SHM to file
 	void performVacuum() {
 		// Log what we are attempting to do
-		addLogEntry("Attempting to perform a database vacuum to merge any temporary data", ["debug"]);
+		addLogEntry("Attempting to perform a database vacuum to optimise database", ["debug"]);
 		
 		try {
 			// Check the current DB Status - we have to be in a clean state here
@@ -923,6 +923,41 @@ final class ItemDatabase {
 		} catch (SqliteException e) {
 			addLogEntry();
 			addLogEntry("ERROR: Unable to perform a database vacuum: " ~ e.msg);
+			addLogEntry();
+		}
+	}
+	
+	// Perform a checkpoint by writing the data into to the database from the WAL file
+	void performCheckpoint() {
+		// Log what we are attempting to do
+		addLogEntry("Attempting to perform a database checkpoint to merge temporary data", ["debug"]);
+		
+		try {
+			// Check the current DB Status - we have to be in a clean state here
+			db.checkStatus();
+			
+			// Are there any open statements that need to be closed?
+			if (db.count_open_statements() > 0) {
+				// Dump open statements
+				db.dump_open_statements(); // dump open statements so we know what the are
+				
+				// SIGINT (CTRL-C), SIGTERM (kill) handling
+				if (exitHandlerTriggered) {
+					// The SQLITE_INTERRUPT result code indicates that an operation was interrupted - which if we have open statements, most likely a SIGINT scenario
+					throw new SqliteException(9, "Open SQL Statements due to interrupted operations");
+				} else {
+					// Try and close open statements
+					db.close_open_statements();
+				}
+			}
+			
+			// Ensure there are no pending operations by performing a checkpoint
+			db.exec("PRAGMA wal_checkpoint(FULL);");
+			addLogEntry("Database checkpoint is complete", ["debug"]);
+			
+		} catch (SqliteException e) {
+			addLogEntry();
+			addLogEntry("ERROR: Unable to perform a database checkpoint: " ~ e.msg);
 			addLogEntry();
 		}
 	}
