@@ -193,35 +193,21 @@ class CurlEngine {
 		if (uploadFile.isOpen()) {
 			uploadFile.close();
 		}
-		
 		// Is 'response' cleared?
 		object.destroy(response); // Destroy, then set to null
 		response = null;
-		
 		// Is the actual http instance is stopped?
 		if (!http.isStopped) {
-			// HTTP instance was not stopped .. but it should have been ..
-			if (exitHandlerTriggered) {
-				// Regardless of what we do here, if we are shutting down because of SIGINT (CTRL-C) and SIGTERM (kill)
-				addLogEntry("Due to a termination signal, a curl engine was potentially not shutdown in a safe manner.", ["debug"]);
-				// What engine is still active?
-				addLogEntry("Destructor HTTP instance still active: " ~ to!string(internalThreadId), ["debug"]);
-				// This will cause some sort of memory corruption somewhere ..
-				addLogEntry("Destructor HTTP instance isStopped state before http.shutdown(): " ~ to!string(http.isStopped), ["debug"]);
-				http.shutdown();
-				addLogEntry("Destructor HTTP instance isStopped state post http.shutdown(): " ~ to!string(http.isStopped), ["debug"]);
-			}
+			http.shutdown();
 		}
-		
 		// Make sure this HTTP instance is destroyed
 		object.destroy(http);
-		addLogEntry("Destructor HTTP instance shutdown and destroyed: " ~ to!string(internalThreadId), ["debug"]);
-		
 		// ThreadId needs to be set to null
 		internalThreadId = null;
-		
 		// Perform Garbage Collection
 		GC.collect();
+		// Return free memory to the OS
+		GC.minimize();
     }
 		
 	// We are releasing a curl instance back to the pool
@@ -238,6 +224,8 @@ class CurlEngine {
         }
 		// Perform Garbage Collection
 		GC.collect();
+		// Return free memory to the OS
+		GC.minimize();
     }
 	
 	// Initialise this curl instance
@@ -491,6 +479,8 @@ class CurlEngine {
 		}
 		// Perform Garbage Collection
 		GC.collect();
+		// Return free memory to the OS
+		GC.minimize();
 	}
 }
 
@@ -558,6 +548,8 @@ void releaseAllCurlInstances() {
 	}
 	// Perform Garbage Collection on the destroyed curl engines
 	GC.collect();
+	// Return free memory to the OS
+	GC.minimize();
 	// Log that all curl engines have been released
 	addLogEntry("CurlEngine releaseAllCurlInstances() completed", ["debug"]);
 }

@@ -655,7 +655,7 @@ int main(string[] cliArgs) {
 	checkForNoMountScenario();
 	
 	// Set the default thread pool value
-	defaultPoolThreads(1);
+	defaultPoolThreads(to!int(appConfig.getValueLong("threads")));
 	
 	// Is the sync engine initialised correctly?
 	if (appConfig.syncEngineWasInitialised) {
@@ -1017,7 +1017,7 @@ int main(string[] cliArgs) {
 						
 						// Write WAL and SHM data to file for this loop and release memory used by in-memory processing
 						addLogEntry("Merge contents of WAL and SHM files into main database file", ["debug"]);
-						itemDB.performVacuum();
+						itemDB.performCheckpoint();
 					} else {
 						// Not online
 						addLogEntry("Microsoft OneDrive service is not reachable at this time. Will re-try on next sync attempt.");
