@@ -44,12 +44,12 @@ class LogBuffer {
 		// Initialise shared items
 		isRunning = true;
 		// Initialise other items
-		logFilePath = "";
-		writeToFile = false;
-		verboseLogging = verboseLogging;
-		debugLogging = debugLogging;
-		sendGUINotification = true;
-		flushThread = new Thread(&flushBuffer);
+		this.logFilePath = "";
+		this.writeToFile = false;
+		this.verboseLogging = verboseLogging;
+		this.debugLogging = debugLogging;
+		this.sendGUINotification = true;
+		this.flushThread = new Thread(&flushBuffer);
 		flushThread.isDaemon(true);
 		flushThread.start();
 	}
