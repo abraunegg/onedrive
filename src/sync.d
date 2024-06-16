@@ -919,119 +919,124 @@ class SyncEngine {
 			} else {
 				addLogEntry("Fetching /delta response from the OneDrive API for Drive ID: " ~  driveIdToQuery, ["verbose"]);
 			}
-							
-			for (;;) {
-				responseBundleCount++;
-				// Get the /delta changes via the OneDrive API
-				
-				// Ensure deltaChanges is empty before we query /delta
-				deltaChanges = null;
-				// Perform Garbage Collection
-				GC.collect();
-				
-				// getDeltaChangesByItemId has the re-try logic for transient errors
-				deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink);
-				
-				// If the initial deltaChanges response is an invalid JSON object, keep trying until we get a valid response ..
-				if (deltaChanges.type() != JSONType.object) {
-					// While the response is not a JSON Object or the Exit Handler has not been triggered
-					while ((deltaChanges.type() != JSONType.object) && (!exitHandlerTriggered)) {
-						// Handle the invalid JSON response and retry
-						addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response", ["debug"]);
-						deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink);
+
+			// We need to be able to exit this process if CTRL-C is triggered
+			while (!exitHandlerTriggered) {
+				for (;;) {
+					
+					// increment bundle count
+					responseBundleCount++;
+					// Get the /delta changes via the OneDrive API
+					
+					// Ensure deltaChanges is empty before we query /delta
+					deltaChanges = null;
+					// Perform Garbage Collection
+					GC.collect();
+					
+					// getDeltaChangesByItemId has the re-try logic for transient errors
+					deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink);
+					
+					// If the initial deltaChanges response is an invalid JSON object, keep trying until we get a valid response ..
+					if (deltaChanges.type() != JSONType.object) {
+						// While the response is not a JSON Object or the Exit Handler has not been triggered
+						while ((deltaChanges.type() != JSONType.object) && (!exitHandlerTriggered)) {
+							// Handle the invalid JSON response and retry
+							addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response", ["debug"]);
+							deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink);
+						}
 					}
-				}
-				
-				ulong nrChanges = count(deltaChanges["value"].array);
-				int changeCount = 0;
-				
-				if (appConfig.verbosityCount == 0) {
-					// Dynamic output for a non-verbose run so that the user knows something is happening
-					if (!appConfig.suppressLoggingOutput) {
-						addProcessingDotEntry();
+					
+					ulong nrChanges = count(deltaChanges["value"].array);
+					int changeCount = 0;
+					
+					if (appConfig.verbosityCount == 0) {
+						// Dynamic output for a non-verbose run so that the user knows something is happening
+						if (!appConfig.suppressLoggingOutput) {
+							addProcessingDotEntry();
+						}
+					} else {
+						addLogEntry("Processing API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["verbose"]);
 					}
-				} else {
-					addLogEntry("Processing API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["verbose"]);
-				}
-				
-				// Update the count of items received
-				jsonItemsReceived = jsonItemsReceived + nrChanges;
-				
-				// The 'deltaChanges' response may contain either @odata.nextLink or @odata.deltaLink
-				// Check for @odata.nextLink
-				if ("@odata.nextLink" in deltaChanges) {
-					// @odata.nextLink is the pointer within the API to the next '200+' JSON bundle - this is the checkpoint link for this bundle
-					// This URL changes between JSON bundle sets
-					// Log the action of setting currentDeltaLink to @odata.nextLink
-					addLogEntry("Setting currentDeltaLink to @odata.nextLink: " ~ deltaChanges["@odata.nextLink"].str, ["debug"]);
 					
-					// Update currentDeltaLink to @odata.nextLink for the next '200+' JSON bundle - this is the checkpoint link for this bundle
-					currentDeltaLink = deltaChanges["@odata.nextLink"].str;
-				}
-				
-				// Check for @odata.deltaLink - usually only in the LAST JSON changeset bundle
-				if ("@odata.deltaLink" in deltaChanges) {
-					// @odata.deltaLink is the pointer that finalises all the online 'changes' for this particular checkpoint
-					// When the API is queried again, this is fetched from the DB as this is the starting point
-					// The API issue here is - the LAST JSON bundle will ONLY ever contain this item, meaning if this is then committed to the database
-					// if there has been any file download failures from within this LAST JSON bundle, the only way to EVER re-try the failed items is for the user to perform a --resync
-					// This is an API capability gap:
-					//
-					// ..
-					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>F9JRD0zODEyNzg7JTIzOyUyMzA7JTIz
-					// Processing API Response Bundle: 115 - Quantity of 'changes|items' in this bundle to process: 204
-					// ..
-					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>F9JRD0zODM2Nzg7JTIzOyUyMzA7JTIz
-					// Processing API Response Bundle: 127 - Quantity of 'changes|items' in this bundle to process: 204
-					// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>F9JRD0zODM4Nzg7JTIzOyUyMzA7JTIz
-					// Processing API Response Bundle: 128 - Quantity of 'changes|items' in this bundle to process: 176
-					// @odata.deltaLink: https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>
-					// Finished processing /delta JSON response from the OneDrive API
+					// Update the count of items received
+					jsonItemsReceived = jsonItemsReceived + nrChanges;
 					
-					// Log the action of setting currentDeltaLink to @odata.deltaLink
-					addLogEntry("Setting currentDeltaLink to (@odata.deltaLink): " ~ deltaChanges["@odata.deltaLink"].str, ["debug"]);
-					
-					// Update currentDeltaLink to @odata.deltaLink as the final checkpoint URL for this entire JSON response set
-					currentDeltaLink = deltaChanges["@odata.deltaLink"].str;
-					
-					// Store this currentDeltaLink as latestDeltaLink
-					latestDeltaLink = deltaChanges["@odata.deltaLink"].str;
-					
-					// Update deltaLinkCache
-					deltaLinkCache.driveId = driveIdToQuery;
-					deltaLinkCache.itemId = itemIdToQuery;
-					deltaLinkCache.latestDeltaLink = currentDeltaLink;
-				}
-				
-				// We have a valid deltaChanges JSON array. This means we have at least 200+ JSON items to process.
-				// The API response however cannot be run in parallel as the OneDrive API sends the JSON items in the order in which they must be processed
-				auto jsonArrayToProcess = deltaChanges["value"].array;
-				foreach (onedriveJSONItem; jsonArrayToProcess) {
-					// increment change count for this item
-					changeCount++;
-					// Process the received OneDrive object item JSON for this JSON bundle
-					// This will determine its initial applicability and perform some initial processing on the JSON if required
-					processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope);
-				}
-				
-				// Clear up this data
-				jsonArrayToProcess = null;
-				// Perform Garbage Collection
-				GC.collect();
-				
-				// Is latestDeltaLink matching deltaChanges["@odata.deltaLink"].str ?
-				if ("@odata.deltaLink" in deltaChanges) {
-					if (latestDeltaLink == deltaChanges["@odata.deltaLink"].str) {
-						// break out of the 'for (;;) {' loop
-						break;
+					// The 'deltaChanges' response may contain either @odata.nextLink or @odata.deltaLink
+					// Check for @odata.nextLink
+					if ("@odata.nextLink" in deltaChanges) {
+						// @odata.nextLink is the pointer within the API to the next '200+' JSON bundle - this is the checkpoint link for this bundle
+						// This URL changes between JSON bundle sets
+						// Log the action of setting currentDeltaLink to @odata.nextLink
+						addLogEntry("Setting currentDeltaLink to @odata.nextLink: " ~ deltaChanges["@odata.nextLink"].str, ["debug"]);
+						
+						// Update currentDeltaLink to @odata.nextLink for the next '200+' JSON bundle - this is the checkpoint link for this bundle
+						currentDeltaLink = deltaChanges["@odata.nextLink"].str;
 					}
-				}
-				
-				// Cleanup deltaChanges as this is no longer needed
-				deltaChanges = null;
-				// Perform Garbage Collection
-				GC.collect();
-			}
+					
+					// Check for @odata.deltaLink - usually only in the LAST JSON changeset bundle
+					if ("@odata.deltaLink" in deltaChanges) {
+						// @odata.deltaLink is the pointer that finalises all the online 'changes' for this particular checkpoint
+						// When the API is queried again, this is fetched from the DB as this is the starting point
+						// The API issue here is - the LAST JSON bundle will ONLY ever contain this item, meaning if this is then committed to the database
+						// if there has been any file download failures from within this LAST JSON bundle, the only way to EVER re-try the failed items is for the user to perform a --resync
+						// This is an API capability gap:
+						//
+						// ..
+						// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>F9JRD0zODEyNzg7JTIzOyUyMzA7JTIz
+						// Processing API Response Bundle: 115 - Quantity of 'changes|items' in this bundle to process: 204
+						// ..
+						// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>F9JRD0zODM2Nzg7JTIzOyUyMzA7JTIz
+						// Processing API Response Bundle: 127 - Quantity of 'changes|items' in this bundle to process: 204
+						// @odata.nextLink:  https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>F9JRD0zODM4Nzg7JTIzOyUyMzA7JTIz
+						// Processing API Response Bundle: 128 - Quantity of 'changes|items' in this bundle to process: 176
+						// @odata.deltaLink: https://graph.microsoft.com/v1.0/drives/<redacted>/items/<redacted>/delta?token=<redacted>
+						// Finished processing /delta JSON response from the OneDrive API
+						
+						// Log the action of setting currentDeltaLink to @odata.deltaLink
+						addLogEntry("Setting currentDeltaLink to (@odata.deltaLink): " ~ deltaChanges["@odata.deltaLink"].str, ["debug"]);
+						
+						// Update currentDeltaLink to @odata.deltaLink as the final checkpoint URL for this entire JSON response set
+						currentDeltaLink = deltaChanges["@odata.deltaLink"].str;
+						
+						// Store this currentDeltaLink as latestDeltaLink
+						latestDeltaLink = deltaChanges["@odata.deltaLink"].str;
+						
+						// Update deltaLinkCache
+						deltaLinkCache.driveId = driveIdToQuery;
+						deltaLinkCache.itemId = itemIdToQuery;
+						deltaLinkCache.latestDeltaLink = currentDeltaLink;
+					}
+					
+					// We have a valid deltaChanges JSON array. This means we have at least 200+ JSON items to process.
+					// The API response however cannot be run in parallel as the OneDrive API sends the JSON items in the order in which they must be processed
+					auto jsonArrayToProcess = deltaChanges["value"].array;
+					foreach (onedriveJSONItem; jsonArrayToProcess) {
+						// increment change count for this item
+						changeCount++;
+						// Process the received OneDrive object item JSON for this JSON bundle
+						// This will determine its initial applicability and perform some initial processing on the JSON if required
+						processDeltaJSONItem(onedriveJSONItem, nrChanges, changeCount, responseBundleCount, singleDirectoryScope);
+					}
+					
+					// Clear up this data
+					jsonArrayToProcess = null;
+					// Perform Garbage Collection
+					GC.collect();
+					
+					// Is latestDeltaLink matching deltaChanges["@odata.deltaLink"].str ?
+					if ("@odata.deltaLink" in deltaChanges) {
+						if (latestDeltaLink == deltaChanges["@odata.deltaLink"].str) {
+							// break out of the 'for (;;) {' loop
+							break;
+						}
+					}
+					
+					// Cleanup deltaChanges as this is no longer needed
+					deltaChanges = null;
+					// Perform Garbage Collection
+					GC.collect();
+				} // end of 'for (;;) {'
+			} 
 			
 			// To finish off the JSON processing items, this is needed to reflect this in the log
 			addLogEntry("------------------------------------------------------------------", ["debug"]);
