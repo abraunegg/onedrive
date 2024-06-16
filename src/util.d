@@ -611,14 +611,8 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 }
 
 // Common code for handling when a client is unauthorised
-void handleClientUnauthorised(int httpStatusCode, string message) {
-
-	// Split the lines of the error message
-	auto errorArray = splitLines(message);
-	// Extract 'message' as the reason
-	JSONValue errorMessage = parseJSON(replace(message, errorArray[0], ""));
-	addLogEntry("errorMessage: " ~ to!string(errorMessage), ["debug"]);
-	
+void handleClientUnauthorised(int httpStatusCode, JSONValue errorMessage) {
+	// What httpStatusCode was received
 	if (httpStatusCode == 400) {
 		// bad request or a new auth token is needed
 		// configure the error reason
@@ -632,17 +626,18 @@ void handleClientUnauthorised(int httpStatusCode, string message) {
 		addLogEntry();
 		addLogEntry("ERROR: You will need to issue a --reauth and re-authorise this client to obtain a fresh auth token.", ["info", "notify"]);
 		addLogEntry();
-	}
-	
-	if (httpStatusCode == 401) {
-		writeln("CODING TO DO: Triggered a 401 HTTP unauthorised response when client was unauthorised");
+	} else {
+		// 401 error code
 		addLogEntry();
 		addLogEntry("ERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.", ["info", "notify"]);
 		addLogEntry();
 	}
 	
-	// Must force exit here, allow logging to be done
-	forceExit();
+	// If not the special code used for initialisation and token expiry check, force application exit
+	if (httpStatusCode != 999) {
+		// Must force exit here, allow logging to be done
+		forceExit();
+	}
 }
 
 // Parse and display error message received from the local file system
@@ -1205,10 +1200,8 @@ int calc_eta(size_t counter, size_t iterations, ulong start_time) {
 void forceExit() {
 	// Allow any logging complete before we force exit
 	Thread.sleep(dur!("msecs")(500));
-	
 	// Shutdown logging, which also flushes all logging buffers
 	shutdownLogging();
-	
 	// Force Exit
 	exit(EXIT_FAILURE);
 }

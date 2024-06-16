@@ -35,7 +35,14 @@ class CurlResponse {
 	}
 	
 	~this() {
-		reset();
+		// As we need statusLine for exception handling, we cant use reset()
+		method = HTTP.Method.undefined;
+		url = "";
+		requestHeaders = null;
+		postBody = [];
+		hasResponse = false;
+		responseHeaders = null;
+		content = [];
 	}
 
 	void reset() {
@@ -385,7 +392,6 @@ class CurlEngine {
 		http.onReceive = (ubyte[] data) {
 			response.content ~= data;
 			// HTTP Server Response Code Debugging if --https-debug is being used
-			
 			return data.length;
 		};
 		http.perform();

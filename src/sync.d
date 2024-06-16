@@ -441,7 +441,7 @@ class SyncEngine {
 			
 			if ((exception.httpStatusCode == 400) || (exception.httpStatusCode == 401)) {
 				// Handle the 400 | 401 error
-				handleClientUnauthorised(exception.httpStatusCode, exception.msg);
+				handleClientUnauthorised(exception.httpStatusCode, exception.error);
 			} else {
 				// Default operation if not 400,401 errors
 				// - 408,429,503,504 errors are handled as a retry within getDefaultDriveApiInstance
@@ -535,7 +535,7 @@ class SyncEngine {
 
 			if ((exception.httpStatusCode == 400) || (exception.httpStatusCode == 401)) {
 				// Handle the 400 | 401 error
-				handleClientUnauthorised(exception.httpStatusCode, exception.msg);
+				handleClientUnauthorised(exception.httpStatusCode, exception.error);
 			} else {
 				// Default operation if not 400,401 errors
 				// - 408,429,503,504 errors are handled as a retry within getDefaultRootApiInstance

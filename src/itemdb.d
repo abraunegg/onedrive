@@ -891,7 +891,7 @@ final class ItemDatabase {
 	// Perform a vacuum on the database, commit WAL / SHM to file
 	void performVacuum() {
 		// Log what we are attempting to do
-		addLogEntry("Attempting to perform a database vacuum to optimise database", ["debug"]);
+		addLogEntry("Attempting to perform a database vacuum to optimise database");
 		
 		try {
 			// Check the current DB Status - we have to be in a clean state here
@@ -919,7 +919,7 @@ final class ItemDatabase {
 			Statement stmt = db.prepare("VACUUM;");
 			scope(exit) stmt.finalise();  // Ensure the statement is finalised when we exit
 			stmt.exec();
-			addLogEntry("Database vacuum is complete", ["debug"]);
+			addLogEntry("Database vacuum is complete");
 		} catch (SqliteException e) {
 			addLogEntry();
 			addLogEntry("ERROR: Unable to perform a database vacuum: " ~ e.msg);

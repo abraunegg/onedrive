@@ -44,18 +44,11 @@ class OneDriveException: Exception {
 		this.httpStatusCode = httpStatusCode;
 		this.response = response;
 		this.error = response.json();
-		if (reason.length == 0) {
-			// No reason given
-			string msg = format("HTTP request returned status code %d \n%s", httpStatusCode, toJSON(error, true));
-		} else {
-			// reason given
-			string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(error, true));
-		}
+		string msg = format("HTTP request returned status code %d (%s)\n%s", httpStatusCode, reason, toJSON(error, true));
 		super(msg, file, line);
 	}
 
 	this(int httpStatusCode, string reason, string file = __FILE__, size_t line = __LINE__) {
-		this.httpStatusCode = httpStatusCode;
 		this.response = null;
 		super(msg, file, line, null);
 	}
@@ -125,11 +118,19 @@ class OneDriveApi {
 	
 	// The destructor should only clean up resources owned directly by this instance
 	~this() {
-		object.destroy(response);
-		object.destroy(curlEngine);
-		response = null;
-		curlEngine = null;
-		appConfig = null;
+		if (response !is null) {
+			object.destroy(response); // calls class CurlResponse destructor
+			response = null;
+		}
+		
+		if (curlEngine !is null) {
+			object.destroy(curlEngine); // calls class CurlEngine destructor
+			curlEngine = null;
+		}
+		
+		if (appConfig !is null) {
+			appConfig = null;
+		}
 	}
 
 	// Initialise the OneDrive API class
@@ -336,9 +337,20 @@ class OneDriveApi {
 						authorised = authorise();
 					} else {
 						// existing token not empty
-						authorised = true;
-						// update appConfig.refreshToken
-						appConfig.refreshToken = refreshToken;	
+						// Has the token expired?
+						if (!checkTokenExpiryAtInitialisation) {
+							// Token not expired
+							authorised = true;
+							// update appConfig.refreshToken
+							appConfig.refreshToken = refreshToken;
+						} else {
+							// Token has expired
+							JSONValue errorMessage = JSONValue([
+								"error_description": "AADSTS700082: The refresh token has expired."
+							]);
+							handleClientUnauthorised(999, errorMessage); // Special code so we do not run forceExit()
+							authorised = false;
+						}
 					}
 				} catch (FileException exception) {
 					authorised = authorise();
@@ -352,7 +364,7 @@ class OneDriveApi {
 			
 			if (refreshToken.empty) {
 				// PROBLEM ... CODING TO DO ??????????
-				addLogEntry("refreshToken is empty !!!!!!!!!! This will cause 4xx errors ... CODING TO DO TO HANDLE ?????");
+				addLogEntry("CODING TO DO: refreshToken is empty !!!!!!!!!! This will cause 4xx errors ... CODING TO DO TO HANDLE ?????");
 			}
 		}
 		
@@ -814,8 +826,11 @@ class OneDriveApi {
 		} catch (OneDriveException exception) {
 			// an error was generated
 			if ((exception.httpStatusCode == 400) || (exception.httpStatusCode == 401)) {
+				// Release curl engine
+				releaseCurlEngine();
+			
 				// Handle an unauthorised client
-				handleClientUnauthorised(exception.httpStatusCode, exception.msg);
+				handleClientUnauthorised(exception.httpStatusCode, exception.error);
 			} else {
 				if (exception.httpStatusCode >= 500) {
 					// There was a HTTP 5xx Server Side Error - retry
@@ -894,11 +909,16 @@ class OneDriveApi {
 					}
 				}
 			} else {
+				// Release curl engine
+				releaseCurlEngine();
+				// Log error message
 				addLogEntry("\nInvalid authentication response from OneDrive. Please check the response uri\n");
 				// re-authorize
 				authorise();
 			}
 		} else {
+			// Release curl engine
+			releaseCurlEngine();
 			addLogEntry("Invalid response from the Microsoft Graph API. Unable to initialise OneDrive API instance.");
 			// Must force exit here, allow logging to be done
 			forceExit();
@@ -917,11 +937,20 @@ class OneDriveApi {
 	
 	private void checkAccessTokenExpired() {
 		if (Clock.currTime() >= appConfig.accessTokenExpiration) {
-			addLogEntry("Microsoft OneDrive Access Token has EXPIRED. Must generate a new Microsoft OneDrive Access Token", ["debug"]);
+			addLogEntry("Microsoft OneDrive Access Token has expired. Must generate a new Microsoft OneDrive Access Token", ["debug"]);
 			newToken();
 		} else {
 			addLogEntry("Existing Microsoft OneDrive Access Token Expires: " ~ to!string(appConfig.accessTokenExpiration), ["debug"]);
 		}
+	}
+	
+	private bool checkTokenExpiryAtInitialisation() {
+		bool expired = false;
+		if (Clock.currTime() >= appConfig.accessTokenExpiration) {
+			addLogEntry("Microsoft OneDrive Access Token has expired. Application reauthentication is required.", ["info", "notify"]);
+			expired = true;
+		}
+		return expired;
 	}
 	
 	private string getAccessToken() {
@@ -1171,14 +1200,20 @@ class OneDriveApi {
 					if (debugResponse){
 						addLogEntry("Microsoft Graph API Response: " ~ response.dumpResponse(), ["debug"]);
 					}
+					
 					// Check http response code, raise a OneDriveException if the operation was not successfully performed
-					// '100 != 2' This condition checks if the response code does not start with 2. In the context of HTTP response codes, the 2xx series represents successful responses.
-					// '!= 302' This condition explicitly checks if the response code is not 302. The 302 status code represents a temporary redirect, indicating that the requested resource has been temporarily moved to a different URI.
-					if (response.statusLine.code / 100 != 2 && response.statusLine.code != 302) {
-						// Not a 2xx or 302 response code
-						// Every other HTTP status code, including those from the 1xx (Informational), 3xx (other Redirection codes excluding 302), 4xx (Client Error), and 5xx (Server Error) series, will trigger the following line of code.
-						throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
+					if (checkHttpResponseCode(response.statusLine.code)) {
+						// Why are throwing a OneDriveException - do not do this for a 404 error as this is not required as we use a 404 if things are not online, to create them
+						if (response.statusLine.code != 404) {
+							addLogEntry("response.statusLine.code: " ~ to!string(response.statusLine.code), ["debug"]);
+							addLogEntry("response.statusLine.reason: " ~ to!string(response.statusLine.reason), ["debug"]);
+							addLogEntry("actual curl response: " ~ to!string(response), ["debug"]);
+						}
+						
+						// For every HTTP error status code, including those from 3xx (other Redirection codes excluding 302), 4xx (Client Error), and 5xx (Server Error) series, will trigger the following line of code.
+						throw new OneDriveException(response.statusLine.code, response.statusLine.reason, response);
 					}
+					
 					// Do we need to validate the JSON response?
 					if (validateJSONResponse) {
 						if (result.type() != JSONType.object) {
@@ -1328,9 +1363,6 @@ class OneDriveApi {
 				// Parse and display error message received from OneDrive
 				addLogEntry(callingFunction ~ "() - Generated a OneDriveException", ["debug"]);
 				
-				// Configure libcurl to perform a fresh connection on API retry
-				setFreshConnectOption();
-				
 				// Perform action based on the HTTP Status Code
 				switch(exception.httpStatusCode) {
 					
@@ -1340,6 +1372,7 @@ class OneDriveApi {
 					//  100 - Continue
 					case 100:
 						break;
+					
 					//  408 - Request Time Out
 					//  429 - Too Many Requests, backoff
 					case 408,429:
@@ -1369,7 +1402,7 @@ class OneDriveApi {
 					// Default
 					default:
 						// This exception should be then passed back to the original calling function for handling a OneDriveException
-						throw new OneDriveException(curlEngine.http.statusLine.code, curlEngine.http.statusLine.reason, response);
+						throw new OneDriveException(response.statusLine.code, response.statusLine.reason, response);
 				}
 				
 			// A FileSystem exception was thrown
@@ -1382,6 +1415,9 @@ class OneDriveApi {
 
 			// Increment re-try counter
 			retryAttempts++;
+			
+			// Configure libcurl to perform a fresh connection on API retry
+			setFreshConnectOption();
 			
 			// Has maxRetryCount been reached?
 			if (retryAttempts > maxRetryCount) {
@@ -1410,9 +1446,41 @@ class OneDriveApi {
 				Thread.sleep(dur!"seconds"(thisBackOffInterval));
 			}
 		}
-
+		
 		// Return the result
 		return result;
+	}
+	
+	// Check the HTTP Response code and determine if a OneDriveException should be thrown
+	private bool checkHttpResponseCode(int httpResponseCode) {
+	
+		bool shouldThrow = false;
+	
+		//
+		// This condition checks if the HTTP response code falls within the acceptable range for both HTTP 1.1 and HTTP 2.0.
+		//
+		// For HTTP 1.1:
+		// - Any 1xx response (Informational responses, ranging from 100 to 199)
+		// - Any 2xx response (Successful responses, ranging from 200 to 299)
+		// - A 302 response (Temporary Redirect)
+		//
+		// For HTTP 2.0:
+		// - Any 1xx response (Informational responses, ranging from 100 to 199)
+		// - Any 2xx response (Successful responses, ranging from 200 to 299)
+		// - A 302 response (Temporary Redirect)
+		// - A 0 response (Interpreted as 200 OK based on empirical evidence)
+		//
+		// If the HTTP response code meets any of these conditions, it is considered acceptable, and no exception will be thrown.
+		//
+		
+		if ((httpResponseCode >= 100 && httpResponseCode < 200) || (httpResponseCode >= 200 && httpResponseCode < 300) || httpResponseCode == 302 || httpResponseCode == 0) {
+            shouldThrow = false;
+        } else {
+            shouldThrow = true;
+        }
+	
+		// return evaluation
+		return shouldThrow;
 	}
 	
 	// Calculates the delay for exponential backoff

@@ -12,6 +12,7 @@ import core.sync.mutex;
 import core.thread;
 import std.format;
 import std.string;
+import std.conv;
 
 version(Notifications) {
 	import dnotify;
@@ -43,21 +44,23 @@ class LogBuffer {
 		// Initialise shared items
 		isRunning = true;
 		// Initialise other items
-		this.logFilePath = "";
-		this.writeToFile = false;
-		this.verboseLogging = verboseLogging;
-		this.debugLogging = debugLogging;
-		this.sendGUINotification = true;
-		this.flushThread = new Thread(&this.flushBuffer);
-		this.flushThread.isDaemon(true);
-		this.flushThread.start();
+		logFilePath = "";
+		writeToFile = false;
+		verboseLogging = verboseLogging;
+		debugLogging = debugLogging;
+		sendGUINotification = true;
+		flushThread = new Thread(&flushBuffer);
+		flushThread.isDaemon(true);
+		flushThread.start();
 	}
 
 	~this() {
-		isRunning = false;
-		if (logBuffer !is null) {
+		if (isRunning) {
 			terminateLogging();
 		}
+		// Destroy these
+		object.destroy(flushThread);
+		object.destroy(buffer);
 	}
 
 	// Terminate Logging
@@ -71,19 +74,15 @@ class LogBuffer {
 		// Wait for the flush thread to finish outside of the synchronized block to avoid deadlocks
 		if (flushThread.isRunning()) {
 			// Join all threads
-			flushThread.join();
+			flushThread.join(true);
 			// Flush any remaining log
 			flushBuffer();
 		}
 		
-		// Flush anything remaining
-		flush(); // Perform a final flush to ensure all data is processed
-		flushBuffer(); // Finally flush the buffers one last time
-		
-		// Set these to empty values as we are terminating
-		buffer.length = 0; 
-		flushThread = null;
-		logBuffer = null;
+		// Set buffer length to 0
+		buffer.length = 0;
+		// Flush anything else in the buffer
+		stdout.flush();
 	}
 
 	void logThisMessage(string message, string[] levels = ["info"]) {
@@ -116,7 +115,8 @@ class LogBuffer {
 					}
 				}
 			}
-			(cast()condReady).notify();
+			// Notify thread to wake up
+			condReady.notify();
 		}
 	}
 		
@@ -144,40 +144,47 @@ class LogBuffer {
 		
 	private void flush() {
 		string[3][] messages;
+		
 		synchronized(bufferLock) {
-			while (buffer.empty && isRunning) {
-				condReady.wait();
+			if (isRunning) {
+				while (buffer.empty && isRunning) { // buffer is empty and logging is still active
+					condReady.wait();
+				}
+				messages = buffer;
+				buffer.length = 0;
 			}
-			messages = buffer;
-			buffer.length = 0;
 		}
 
-		foreach (msg; messages) {
-			// timestamp, logLevel, message
-			// Always write the log line to the console, if level != logFileOnly
-			if (msg[1] != "logFileOnly") {
-				// Console output .. what sort of output
-				if (msg[1] == "consoleOnlyNoNewLine") {
-					// This is used write out a message to the console only, without a new line 
-					// This is used in non-verbose mode to indicate something is happening when downloading JSON data from OneDrive or when we need user input from --resync
-					write(msg[2]);
-				} else {
-					// write this to the console with a new line
-					writeln(msg[2]);
+		// Are there messages to process?
+		if (messages.length > 0) {
+			// There are messages to process
+			foreach (msg; messages) {
+				// timestamp, logLevel, message
+				// Always write the log line to the console, if level != logFileOnly
+				if (msg[1] != "logFileOnly") {
+					// Console output .. what sort of output
+					if (msg[1] == "consoleOnlyNoNewLine") {
+						// This is used write out a message to the console only, without a new line 
+						// This is used in non-verbose mode to indicate something is happening when downloading JSON data from OneDrive or when we need user input from --resync
+						write(msg[2]);
+					} else {
+						// write this to the console with a new line
+						writeln(msg[2]);
+					}
+				}
+				
+				// Was this just console only output?
+				if ((msg[1] != "consoleOnlyNoNewLine") && (msg[1] != "consoleOnly")) {
+					// Write to the logfile only if configured to do so - console only items should not be written out
+					if (writeToFile) {
+						string logFileLine = format("[%s] %s", msg[0], msg[2]);
+						std.file.append(logFilePath, logFileLine ~ "\n");
+					}
 				}
 			}
-			
-			// Was this just console only output?
-			if ((msg[1] != "consoleOnlyNoNewLine") && (msg[1] != "consoleOnly")) {
-				// Write to the logfile only if configured to do so - console only items should not be written out
-				if (writeToFile) {
-					string logFileLine = format("[%s] %s", msg[0], msg[2]);
-					std.file.append(logFilePath, logFileLine ~ "\n");
-				}
-			}
+			// Clear Messages
+			messages.length = 0;
 		}
-		// Clear Messages
-		messages.length = 0;
 	}
 }
 
