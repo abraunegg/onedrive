@@ -336,21 +336,10 @@ class OneDriveApi {
 						addLogEntry("RefreshToken exists but is empty: " ~ appConfig.refreshTokenFilePath);
 						authorised = authorise();
 					} else {
-						// existing token not empty
-						// Has the token expired?
-						if (!checkTokenExpiryAtInitialisation) {
-							// Token not expired
-							authorised = true;
-							// update appConfig.refreshToken
-							appConfig.refreshToken = refreshToken;
-						} else {
-							// Token has expired
-							JSONValue errorMessage = JSONValue([
-								"error_description": "AADSTS700082: The refresh token has expired."
-							]);
-							handleClientUnauthorised(999, errorMessage); // Special code so we do not run forceExit()
-							authorised = false;
-						}
+						// Existing token not empty
+						authorised = true;
+						// update appConfig.refreshToken
+						appConfig.refreshToken = refreshToken;
 					}
 				} catch (FileException exception) {
 					authorised = authorise();
@@ -942,15 +931,6 @@ class OneDriveApi {
 		} else {
 			addLogEntry("Existing Microsoft OneDrive Access Token Expires: " ~ to!string(appConfig.accessTokenExpiration), ["debug"]);
 		}
-	}
-	
-	private bool checkTokenExpiryAtInitialisation() {
-		bool expired = false;
-		if (Clock.currTime() >= appConfig.accessTokenExpiration) {
-			addLogEntry("Microsoft OneDrive Access Token has expired. Application reauthentication is required.", ["info", "notify"]);
-			expired = true;
-		}
-		return expired;
 	}
 	
 	private string getAccessToken() {
