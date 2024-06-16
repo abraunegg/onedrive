@@ -230,8 +230,6 @@ bool testInternetReachability(ApplicationConfig appConfig) {
 		object.destroy(http);
 		// Perform Garbage Collection
 		GC.collect();
-		// Return free memory to the OS
-		GC.minimize();
 	}
 
     // Execute the request and handle exceptions
@@ -703,8 +701,6 @@ JSONValue fetchOnlineURLContent(string url) {
 		object.destroy(http);
 		// Perform Garbage Collection
 		GC.collect();
-		// Return free memory to the OS
-		GC.minimize();
 	}
 	
 	// Configure the URL to access
@@ -1277,7 +1273,7 @@ void setupExitScopeSignalHandler() {
 extern(C) nothrow @nogc @system void exitScopeSignalHandler(int signo) {
 	if (signo == SIGSEGV) {
 		// Caught a SIGSEG but everything was shutdown cleanly .....
-		printf("Caught a SIGSEG but everything was shutdown cleanly .....\n");
+		// printf("Caught a SIGSEG but everything was shutdown cleanly .....\n");
 		exit(0);
 	}
 }

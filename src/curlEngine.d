@@ -214,7 +214,7 @@ class CurlEngine {
 		// Perform Garbage Collection
 		GC.collect();
 		// Return free memory to the OS
-		GC.minimize();
+		//GC.minimize();
     }
 		
 	// We are releasing a curl instance back to the pool
@@ -232,7 +232,7 @@ class CurlEngine {
 		// Perform Garbage Collection
 		GC.collect();
 		// Return free memory to the OS
-		GC.minimize();
+		//GC.minimize();
     }
 	
 	// Initialise this curl instance
@@ -486,7 +486,7 @@ class CurlEngine {
 		// Perform Garbage Collection
 		GC.collect();
 		// Return free memory to the OS
-		GC.minimize();
+		//GC.minimize();
 	}
 }
 
@@ -555,7 +555,7 @@ void releaseAllCurlInstances() {
 	// Perform Garbage Collection on the destroyed curl engines
 	GC.collect();
 	// Return free memory to the OS
-	GC.minimize();
+	//GC.minimize();
 	// Log that all curl engines have been released
 	addLogEntry("CurlEngine releaseAllCurlInstances() completed", ["debug"]);
 }
