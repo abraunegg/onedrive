@@ -1285,6 +1285,7 @@ class ApplicationConfig {
 		
 		// Display application version
 		addLogEntry("onedrive version                             = " ~ applicationVersion);
+		addLogEntry("compiled with                                = " ~ compilerDetails());
 		
 		// Display all of the pertinent configuration options
 		addLogEntry("Config path                                  = " ~ configDirName);

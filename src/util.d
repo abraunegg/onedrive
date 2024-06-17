@@ -1277,3 +1277,13 @@ extern(C) nothrow @nogc @system void exitScopeSignalHandler(int signo) {
 		exit(0);
 	}
 }
+
+string compilerDetails() {
+	version(DigitalMars) enum compiler = "DMD";
+	else version(LDC)    enum compiler = "LDC";
+	else version(GNU)    enum compiler = "GDC";
+	else enum compiler = "Unknown compiler";
+	string compilerString = compiler ~ " " ~ to!string(__VERSION__);
+	return compilerString;
+}
+

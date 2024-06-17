@@ -919,7 +919,12 @@ class SyncEngine {
 			} else {
 				addLogEntry("Fetching /delta response from the OneDrive API for Drive ID: " ~  driveIdToQuery, ["verbose"]);
 			}
-							
+			
+			// Create a new API Instance for querying the actual /delta and initialise it
+			OneDriveApi getDeltaDataOneDriveApiInstance;
+			getDeltaDataOneDriveApiInstance = new OneDriveApi(appConfig);
+			getDeltaDataOneDriveApiInstance.initialise();
+
 			for (;;) {
 				responseBundleCount++;
 				// Get the /delta changes via the OneDrive API
@@ -930,7 +935,7 @@ class SyncEngine {
 				GC.collect();
 				
 				// getDeltaChangesByItemId has the re-try logic for transient errors
-				deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink);
+				deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink, getDeltaDataOneDriveApiInstance);
 				
 				// If the initial deltaChanges response is an invalid JSON object, keep trying until we get a valid response ..
 				if (deltaChanges.type() != JSONType.object) {
@@ -938,7 +943,7 @@ class SyncEngine {
 					while ((deltaChanges.type() != JSONType.object) && (!exitHandlerTriggered)) {
 						// Handle the invalid JSON response and retry
 						addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response", ["debug"]);
-						deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink);
+						deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink, getDeltaDataOneDriveApiInstance);
 					}
 				}
 				
@@ -1032,6 +1037,12 @@ class SyncEngine {
 				// Perform Garbage Collection
 				GC.collect();
 			}
+			
+			// Terminate getDeltaDataOneDriveApiInstance here
+			getDeltaDataOneDriveApiInstance.releaseCurlEngine();
+			getDeltaDataOneDriveApiInstance = null;
+			// Perform Garbage Collection on this destroyed curl engine
+			GC.collect();
 			
 			// To finish off the JSON processing items, this is needed to reflect this in the log
 			addLogEntry("------------------------------------------------------------------", ["debug"]);
@@ -2268,9 +2279,13 @@ class SyncEngine {
 	// Download items in parallel
 	void downloadOneDriveItemsInParallel(JSONValue[] array) {
 		// This function received an array of JSON items to download, the number of elements based on appConfig.getValueLong("threads")
-		foreach (i, onedriveJSONItem; processPool.parallel(array)) {
-			// Take each JSON item and 
-			downloadFileItem(onedriveJSONItem);
+		
+		while (!exitHandlerTriggered) {
+		
+			foreach (i, onedriveJSONItem; processPool.parallel(array)) {
+				// Take each JSON item and 
+				downloadFileItem(onedriveJSONItem);
+			}
 		}
 	}
 	
@@ -2655,17 +2670,10 @@ class SyncEngine {
 	}
 	
 	// Get the /delta data using the provided details
-	//JSONValue getDeltaChangesByItemId(string selectedDriveId, string selectedItemId, string providedDeltaLink, OneDriveApi getDeltaQueryOneDriveApiInstance) {
-	JSONValue getDeltaChangesByItemId(string selectedDriveId, string selectedItemId, string providedDeltaLink) {
-		
+	JSONValue getDeltaChangesByItemId(string selectedDriveId, string selectedItemId, string providedDeltaLink, OneDriveApi getDeltaQueryOneDriveApiInstance) {
+			
 		// Function variables
 		JSONValue deltaChangesBundle;
-		
-		// Create a new API Instance for querying the actual /delta and initialise it
-		OneDriveApi getDeltaDataOneDriveApiInstance;
-		getDeltaDataOneDriveApiInstance = new OneDriveApi(appConfig);
-		getDeltaDataOneDriveApiInstance.initialise();
-		
 		
 		// Get the /delta data for this account | driveId | deltaLink combination
 		addLogEntry("------------------------------------------------------------------", ["debug"]);
@@ -2675,26 +2683,26 @@ class SyncEngine {
 		addLogEntry("------------------------------------------------------------------", ["debug"]);
 		
 		try {
-			deltaChangesBundle = getDeltaDataOneDriveApiInstance.getChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink);
+			deltaChangesBundle = getDeltaQueryOneDriveApiInstance.getChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink);
 		} catch (OneDriveException exception) {
 			// caught an exception
-			addLogEntry("getDeltaDataOneDriveApiInstance.getChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink) generated a OneDriveException", ["debug"]);
+			addLogEntry("getDeltaQueryOneDriveApiInstance.getChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink) generated a OneDriveException", ["debug"]);
 			
 			auto errorArray = splitLines(exception.msg);
 			string thisFunctionName = getFunctionName!({});
 			
 			// Error handling operation if not 408,429,503,504 errors
-			// - 408,429,503,504 errors are handled as a retry within getDeltaDataOneDriveApiInstance
+			// - 408,429,503,504 errors are handled as a retry within getDeltaQueryOneDriveApiInstance
 			if (exception.httpStatusCode == 410) {
 				addLogEntry();
 				addLogEntry("WARNING: The OneDrive API responded with an error that indicates the locally stored deltaLink value is invalid");
 				// Essentially the 'providedDeltaLink' that we have stored is no longer available ... re-try without the stored deltaLink
 				addLogEntry("WARNING: Retrying OneDrive API call without using the locally stored deltaLink value");
 				// Configure an empty deltaLink
-				addLogEntry("Delta link expired for 'getDeltaDataOneDriveApiInstance.getChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink)', setting 'deltaLink = null'", ["debug"]);
+				addLogEntry("Delta link expired for 'getDeltaQueryOneDriveApiInstance.getChangesByItemId(selectedDriveId, selectedItemId, providedDeltaLink)', setting 'deltaLink = null'", ["debug"]);
 				string emptyDeltaLink = "";
 				// retry with empty deltaLink
-				deltaChangesBundle = getDeltaDataOneDriveApiInstance.getChangesByItemId(selectedDriveId, selectedItemId, emptyDeltaLink);
+				deltaChangesBundle = getDeltaQueryOneDriveApiInstance.getChangesByItemId(selectedDriveId, selectedItemId, emptyDeltaLink);
 			} else {
 				// Display what the error is
 				addLogEntry("CODING TO DO: Hitting this failure error output after getting a httpStatusCode != 410 when the API responded the deltaLink was invalid");
@@ -2704,12 +2712,6 @@ class SyncEngine {
 				GC.collect();
 			}
 		}
-		
-		// Destroy this object?
-		getDeltaDataOneDriveApiInstance.releaseCurlEngine();
-		getDeltaDataOneDriveApiInstance = null;
-		// Perform Garbage Collection on this destroyed curl engine
-		GC.collect();
 		
 		// Return data
 		return deltaChangesBundle;
@@ -7487,6 +7489,11 @@ class SyncEngine {
 		// Log what we are doing
 		addProcessingLogHeaderEntry("Querying the change status of Drive ID: " ~ driveIdToQuery, appConfig.verbosityCount);
 		
+		// Create a new API Instance for querying the actual /delta and initialise it
+		OneDriveApi getDeltaDataOneDriveApiInstance;
+		getDeltaDataOneDriveApiInstance = new OneDriveApi(appConfig);
+		getDeltaDataOneDriveApiInstance.initialise();
+		
 		for (;;) {
 			// Add a processing '.'
 			if (appConfig.verbosityCount == 0) {
@@ -7495,7 +7502,7 @@ class SyncEngine {
 		
 			// Get the /delta changes via the OneDrive API
 			// getDeltaChangesByItemId has the re-try logic for transient errors
-			deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink);
+			deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink, getDeltaDataOneDriveApiInstance);
 			
 			// If the initial deltaChanges response is an invalid JSON object, keep trying until we get a valid response ..
 			if (deltaChanges.type() != JSONType.object) {
@@ -7503,7 +7510,7 @@ class SyncEngine {
 				while ((deltaChanges.type() != JSONType.object) && (!exitHandlerTriggered)) {
 					// Handle the invalid JSON response and retry
 					addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response", ["debug"]);
-					deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink);
+					deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, deltaLink, getDeltaDataOneDriveApiInstance);
 				}
 			}
 			
@@ -7566,6 +7573,12 @@ class SyncEngine {
 			}
 			else break;
 		}
+		
+		// Terminate getDeltaDataOneDriveApiInstance here
+		getDeltaDataOneDriveApiInstance.releaseCurlEngine();
+		getDeltaDataOneDriveApiInstance = null;
+		// Perform Garbage Collection on this destroyed curl engine
+		GC.collect();
 		
 		// Needed after printing out '....' when fetching changes from OneDrive API
 		if (appConfig.verbosityCount == 0) {
