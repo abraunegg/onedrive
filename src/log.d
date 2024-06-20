@@ -50,10 +50,10 @@ class LogBuffer {
 		this.debugLogging = debugLogging;
 		this.sendGUINotification = true;
 		this.flushThread = new Thread(&flushBuffer);
-		flushThread.isDaemon(true);
-		flushThread.start();
+		this.flushThread.isDaemon(true);
+		this.flushThread.start();
 	}
-
+	
 	~this() {
 		if (isRunning) {
 			terminateLogging();
@@ -62,29 +62,36 @@ class LogBuffer {
 		object.destroy(flushThread);
 		object.destroy(buffer);
 	}
-
+	
 	// Terminate Logging
-	void terminateLogging() {
-		synchronized(bufferLock) {
-			if (!isRunning) return; // Prevent multiple shutdowns
-			isRunning = false;
-			condReady.notifyAll(); // Wake up all waiting threads
+    void terminateLogging() {
+        synchronized(bufferLock) {
+            if (!isRunning) return; // Prevent multiple shutdowns
+            isRunning = false;
+            condReady.notifyAll(); // Wake up all waiting threads
+        }
+        
+        // Wait for the flush thread to finish outside of the synchronized block to avoid deadlocks
+        if (flushThread.isRunning()) {
+            flushThread.join(true);
+        }
+        
+        scope(exit) {
+            bufferLock.lock();
+            scope(exit) bufferLock.unlock();
+            flushBuffer(); // Flush any remaining log
+        }
+    }
+	
+	// Flush the logging buffer
+	private void flushBuffer() {
+		while (isRunning) {
+			flush();
 		}
-		
-		// Wait for the flush thread to finish outside of the synchronized block to avoid deadlocks
-		if (flushThread.isRunning()) {
-			// Join all threads
-			flushThread.join(true);
-			// Flush any remaining log
-			flushBuffer();
-		}
-		
-		// Set buffer length to 0
-		buffer.length = 0;
-		// Flush anything else in the buffer
 		stdout.flush();
 	}
-
+	
+	// Add the message received to the buffer for logging
 	void logThisMessage(string message, string[] levels = ["info"]) {
 		// Generate the timestamp for this log entry
 		auto timeStamp = leftJustify(Clock.currTime().toString(), 28, '0');
@@ -135,16 +142,8 @@ class LogBuffer {
 		}
 	}
 
-	private void flushBuffer() {
-		while (isRunning) {
-			flush();
-		}
-		stdout.flush();
-	}
-		
 	private void flush() {
 		string[3][] messages;
-		
 		synchronized(bufferLock) {
 			if (isRunning) {
 				while (buffer.empty && isRunning) { // buffer is empty and logging is still active

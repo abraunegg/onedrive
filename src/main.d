@@ -1318,7 +1318,7 @@ extern(C) nothrow @nogc @system void exitViaSignalHandler(int signo) {
 	// Catch the generation of SIGSEV post CTRL-C event
     if (signo == SIGSEGV) {
 		printf("Due to a termination signal, internal processing stopped abruptly. The application will now exit in a unclean manner.\n");
-		exit(1);
+		exit(130);
 	}
 
 	if (shutdownInProgress) {
