@@ -54,6 +54,8 @@ bool dryRun = false;
 string runtimeDatabaseFile = "";
 // Flag for if we are performing filesystem monitoring 
 bool performFileSystemMonitoring = false;
+// Flag for if we perform a database vacuum. This gets set to false if we have not performed a 'no-sync' task
+bool performDatabaseVacuum = true;
 
 int main(string[] cliArgs) {
 	// Application Start Time - used during monitor loop to detail how long it has been running for
@@ -586,6 +588,8 @@ int main(string[] cliArgs) {
 				}
 				
 				// If we get to this point, we have not performed a 'no-sync' task ..
+				// Do not perform a vacuum on exit, pointless
+				performDatabaseVacuum = false;
 				// Did we just authorise the client?
 				if (appConfig.applicationAuthorizeResponseUri) {
 					// Authorisation activity
@@ -1420,9 +1424,11 @@ void shutdownSyncEngine() {
 void shutdownDatabase() {
     if (itemDB !is null && itemDB.isDatabaseInitialised()) {
 		addLogEntry("Shutting down Database instance", ["debug"]);
-		// Logging to attempt this is dentoed from performVacuum() - so no need to confirm here
-		itemDB.performVacuum();
-		// If this completes, it is dentoed from performVacuum() - so no need to confirm here
+		if (performDatabaseVacuum) {
+			// Logging to attempt this is dentoed from performVacuum() - so no need to confirm here
+			itemDB.performVacuum();
+			// If this completes, it is dentoed from performVacuum() - so no need to confirm here
+		}
 		itemDB.closeDatabaseFile(); // Close the DB File Handle
 		object.destroy(itemDB);
         itemDB = null;
