@@ -925,9 +925,16 @@ class SyncEngine {
 			getDeltaDataOneDriveApiInstance = new OneDriveApi(appConfig);
 			getDeltaDataOneDriveApiInstance.initialise();
 
-			for (;;) {
+			// Get the /delta changes via the OneDrive API
+			while (true) {
+				// Check if exitHandlerTriggered is true
+				if (exitHandlerTriggered) {
+					// break out of the 'while (true)' loop
+					break;
+				}
+				
+				// Increment responseBundleCount
 				responseBundleCount++;
-				// Get the /delta changes via the OneDrive API
 				
 				// Ensure deltaChanges is empty before we query /delta
 				deltaChanges = null;
@@ -941,6 +948,12 @@ class SyncEngine {
 				if (deltaChanges.type() != JSONType.object) {
 					// While the response is not a JSON Object or the Exit Handler has not been triggered
 					while (deltaChanges.type() != JSONType.object) {
+						// Check if exitHandlerTriggered is true
+						if (exitHandlerTriggered) {
+							// break out of the 'while (true)' loop
+							break;
+						}
+					
 						// Handle the invalid JSON response and retry
 						addLogEntry("ERROR: Query of the OneDrive API via deltaChanges = getDeltaChangesByItemId() returned an invalid JSON response", ["debug"]);
 						deltaChanges = getDeltaChangesByItemId(driveIdToQuery, itemIdToQuery, currentDeltaLink, getDeltaDataOneDriveApiInstance);
@@ -1027,7 +1040,7 @@ class SyncEngine {
 				// Is latestDeltaLink matching deltaChanges["@odata.deltaLink"].str ?
 				if ("@odata.deltaLink" in deltaChanges) {
 					if (latestDeltaLink == deltaChanges["@odata.deltaLink"].str) {
-						// break out of the 'for (;;) {' loop
+						// break out of the 'while (true)' loop
 						break;
 					}
 				}
@@ -1036,6 +1049,9 @@ class SyncEngine {
 				deltaChanges = null;
 				// Perform Garbage Collection
 				GC.collect();
+				
+				// Sleep for a while to avoid busy-waiting
+				Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
 			}
 			
 			// Terminate getDeltaDataOneDriveApiInstance here

@@ -61,6 +61,7 @@ class LogBuffer {
 		// Destroy these
 		object.destroy(flushThread);
 		object.destroy(buffer);
+		stdout.flush();
 	}
 	
 	// Terminate Logging

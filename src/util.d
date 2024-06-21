@@ -1268,8 +1268,6 @@ void setupExitScopeSignalHandler() {
 	action.sa_handler = &exitScopeSignalHandler; // Direct function pointer assignment
 	sigemptyset(&action.sa_mask); // Initialize the signal set to empty
 	action.sa_flags = 0;
-	sigaction(SIGINT, &action, null);  // Interrupt from keyboard
-	sigaction(SIGTERM, &action, null); // Termination signal
 	sigaction(SIGSEGV, &action, null); // Invalid Memory Access signal
 }
 
@@ -1277,7 +1275,7 @@ void setupExitScopeSignalHandler() {
 extern(C) nothrow @nogc @system void exitScopeSignalHandler(int signo) {
 	if (signo == SIGSEGV) {
 		// Caught a SIGSEG but everything was shutdown cleanly .....
-		// printf("Caught a SIGSEG but everything was shutdown cleanly .....\n");
+		//printf("Caught a SIGSEG but everything was shutdown cleanly .....\n");
 		exit(0);
 	}
 }

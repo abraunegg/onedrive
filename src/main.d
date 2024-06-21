@@ -102,7 +102,6 @@ int main(string[] cliArgs) {
 		performSynchronisedExitProcess("exitScope");
 		// Setup signal handling for the exit scope
 		setupExitScopeSignalHandler();
-		exit(EXIT_SUCCESS);
 	}
 	
 	scope(failure) {
@@ -112,7 +111,6 @@ int main(string[] cliArgs) {
 		performSynchronisedExitProcess("failureScope");
 		// Setup signal handling for the exit scope
 		setupExitScopeSignalHandler();
-		exit(EXIT_FAILURE);
 	}
 	
 	// Read in application options as passed in
@@ -276,8 +274,8 @@ int main(string[] cliArgs) {
 			addLogEntry("DRY-RUN Configured. Output below shows what 'would' have occurred.");
 		} 
 		
-		// Cleanup any existing dry-run elements ... these should never be left hanging around
-		cleanupDryRunDatabaseFiles(appConfig.databaseFilePathDryRun);
+		// Cleanup any existing dry-run elements ... these should never be left hanging around and should be cleaned up first
+		cleanupDatabaseFiles(appConfig.databaseFilePathDryRun);
 		
 		// Make a copy of the original items.sqlite3 for use as the dry run copy if it exists
 		if (exists(appConfig.databaseFilePath)) {
@@ -299,7 +297,7 @@ int main(string[] cliArgs) {
 		runtimeDatabaseFile = appConfig.databaseFilePathDryRun;
 	} else {
 		// Cleanup any existing dry-run elements ... these should never be left hanging around
-		cleanupDryRunDatabaseFiles(appConfig.databaseFilePathDryRun);
+		cleanupDatabaseFiles(appConfig.databaseFilePathDryRun);
 	}
 	
 	// Handle --logout as separate item, do not 'resync' on a --logout
@@ -722,6 +720,9 @@ int main(string[] cliArgs) {
 		
 		// Are we doing a --sync operation? This includes doing any --single-directory operations
 		if (appConfig.getValueBool("synchronize")) {
+			// We are not using this, so destroy it early
+			object.destroy(filesystemMonitor);
+		
 			// Did the user specify --upload-only?
 			if (appConfig.getValueBool("upload_only")) {
 				// Perform the --upload-only sync process
@@ -1257,30 +1258,47 @@ void processResyncDatabaseRemoval(string databaseFilePathToRemove) {
 	}
 }
 
-void cleanupDryRunDatabaseFiles(string dryRunDatabaseFile) {
+void cleanupDatabaseFiles(string activeDatabaseFileName) {
 	// Temp variables
-	string dryRunShmFile = dryRunDatabaseFile ~ "-shm";
-	string dryRunWalFile = dryRunDatabaseFile ~ "-wal";
+	string databaseShmFile = activeDatabaseFileName ~ "-shm";
+	string databaseWalFile = activeDatabaseFileName ~ "-wal";
 	
-	// If the dry run database exists, clean this up
-	if (exists(dryRunDatabaseFile)) {
-		// remove the existing file
-		addLogEntry("DRY-RUN: Removing items-dryrun.sqlite3 as it still exists for some reason", ["debug"]);
-		safeRemove(dryRunDatabaseFile);
+	// Are we performing a --dry-run?
+	if (dryRun) {
+		// If the dry run database exists, clean this up
+		if (exists(activeDatabaseFileName)) {
+			// remove the dry run database file
+			addLogEntry("DRY-RUN: Removing items-dryrun.sqlite3 as it still exists for some reason", ["debug"]);
+			safeRemove(activeDatabaseFileName);
+		}
 	}
 	
-	// silent cleanup of shm files if it exists
-	if (exists(dryRunShmFile)) {
-		// remove items-dryrun.sqlite3-shm
-		addLogEntry("DRY-RUN: Removing items-dryrun.sqlite3-shm as it still exists for some reason", ["debug"]);
-		safeRemove(dryRunShmFile);
+	// Silent cleanup of -shm file if it exists
+	if (exists(databaseShmFile)) {
+		// Configure the log message
+		string logMessage = "Removing " ~ baseName(databaseShmFile) ~ " as it still exists for some reason";
+		// Is this a --dry-run scenario
+		if (dryRun) {
+			logMessage = "DRY-RUN: " ~ logMessage;
+		}
+	
+		// Remove -shm file
+		addLogEntry(logMessage, ["debug"]);
+		safeRemove(databaseShmFile);
 	}
 	
-	// silent cleanup of wal files if it exists
-	if (exists(dryRunWalFile)) {
-		// remove items-dryrun.sqlite3-wal
-		addLogEntry("DRY-RUN: Removing items-dryrun.sqlite3-wal as it still exists for some reason", ["debug"]);
-		safeRemove(dryRunWalFile);
+	// Silent cleanup of wal files if it exists
+	if (exists(databaseWalFile)) {
+		// Configure the log message
+		string logMessage = "Removing " ~ baseName(databaseWalFile) ~ " as it still exists for some reason";
+		// Is this a --dry-run scenario
+		if (dryRun) {
+			logMessage = "DRY-RUN: " ~ logMessage;
+		}
+		
+		// Remove -wal file
+		addLogEntry(logMessage, ["debug"]);
+		safeRemove(databaseWalFile);
 	}
 }
 
@@ -1431,6 +1449,9 @@ void shutdownDatabase() {
 		}
 		itemDB.closeDatabaseFile(); // Close the DB File Handle
 		object.destroy(itemDB);
+		
+		cleanupDatabaseFiles(runtimeDatabaseFile);
+		
         itemDB = null;
 		addLogEntry("Shutdown of Database instance is complete", ["debug"]);
     }
@@ -1439,10 +1460,6 @@ void shutdownDatabase() {
 void shutdownAppConfig() {
     if (appConfig !is null) {
 		addLogEntry("Shutting down Application Configuration instance", ["debug"]);
-		if (dryRun) {
-			// We were running with --dry-run , clean up the applicable database
-			cleanupDryRunDatabaseFiles(runtimeDatabaseFile);
-		}
 		object.destroy(appConfig);
         appConfig = null;
 		addLogEntry("Shutdown of Application Configuration instance is complete", ["debug"]);

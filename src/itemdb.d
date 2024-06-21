@@ -913,7 +913,7 @@ final class ItemDatabase {
 			}
 			
 			// Ensure there are no pending operations by performing a checkpoint
-			db.exec("PRAGMA wal_checkpoint(FULL);");
+			db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
 			
 			// Prepare and execute VACUUM statement
 			Statement stmt = db.prepare("VACUUM;");
@@ -952,7 +952,7 @@ final class ItemDatabase {
 			}
 			
 			// Ensure there are no pending operations by performing a checkpoint
-			db.exec("PRAGMA wal_checkpoint(FULL);");
+			db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
 			addLogEntry("Database checkpoint is complete", ["debug"]);
 			
 		} catch (SqliteException e) {
