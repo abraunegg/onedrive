@@ -1450,10 +1450,8 @@ void shutdownDatabase() {
 		}
 		itemDB.closeDatabaseFile(); // Close the DB File Handle
 		object.destroy(itemDB);
-		
 		cleanupDatabaseFiles(runtimeDatabaseFile);
-		
-        itemDB = null;
+		itemDB = null;
 		addLogEntry("Shutdown of Database instance is complete", ["debug"]);
     }
 }
