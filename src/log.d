@@ -58,31 +58,41 @@ class LogBuffer {
 		if (isRunning) {
 			terminateLogging();
 		}
+		// ensure this is unlocked
+		bufferLock.unlock();
+		
 		// Destroy these
 		object.destroy(flushThread);
 		object.destroy(buffer);
+		object.destroy(bufferLock);
 		stdout.flush();
 	}
 	
 	// Terminate Logging
-    void terminateLogging() {
-        synchronized(bufferLock) {
-            if (!isRunning) return; // Prevent multiple shutdowns
-            isRunning = false;
-            condReady.notifyAll(); // Wake up all waiting threads
-        }
-        
-        // Wait for the flush thread to finish outside of the synchronized block to avoid deadlocks
-        if (flushThread.isRunning()) {
-            flushThread.join(true);
-        }
-        
-        scope(exit) {
-            bufferLock.lock();
-            scope(exit) bufferLock.unlock();
-            flushBuffer(); // Flush any remaining log
-        }
-    }
+	void terminateLogging() {
+		synchronized(bufferLock) {
+			if (!isRunning) return; // Prevent multiple shutdowns
+			isRunning = false;
+			condReady.notifyAll(); // Wake up all waiting threads
+		}
+
+		// Wait for the flush thread to finish outside of the synchronized block to avoid deadlocks
+		if (flushThread.isRunning()) {
+			flushThread.join(true);
+		}
+
+		scope(exit) {
+			bufferLock.lock();
+			scope(exit) bufferLock.unlock();
+			flushBuffer(); // Flush any remaining log
+		}
+
+		scope(failure) {
+			bufferLock.lock();
+			scope(exit) bufferLock.unlock();
+			flushBuffer(); // Flush any remaining log
+		}
+	}
 	
 	// Flush the logging buffer
 	private void flushBuffer() {
