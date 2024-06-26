@@ -58,8 +58,6 @@ class LogBuffer {
 		if (isRunning) {
 			terminateLogging();
 		}
-		// ensure this is unlocked
-		bufferLock.unlock();
 		
 		// Destroy these
 		object.destroy(flushThread);

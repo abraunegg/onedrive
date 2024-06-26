@@ -315,15 +315,6 @@ class SyncEngine {
 		}
 	}
 	
-	
-	/**
-	~this() {
-	
-		writeln("RUNNING SYNC DESTRUCTOR");
-		writeln("RUNNING SYNC DESTRUCTOR DONE");
-	}
-	**/
-	
 	// Initialise the Sync Engine class
 	bool initialise() {
 		// Control whether the worker threads are daemon threads. A daemon thread is automatically terminated when all non-daemon threads have terminated.
