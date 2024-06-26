@@ -623,10 +623,23 @@ void handleClientUnauthorised(int httpStatusCode, JSONValue errorMessage) {
 			addLogEntry();
 			string[] errorReason = splitLines(errorMessage["error_description"].str);
 			addLogEntry(to!string(errorReason[0]), ["info", "notify"]);
+			addLogEntry();
+			addLogEntry("ERROR: You will need to issue a --reauth and re-authorise this client to obtain a fresh auth token.", ["info", "notify"]);
+			addLogEntry();
+		} else {
+			if ("code" in errorMessage["error"]) {
+				if (errorMessage["error"]["code"].str == "invalidRequest") {
+					addLogEntry();
+					addLogEntry("ERROR: Check your configuration as your existing refresh_token generated an invalid request. You may need to issue a --reauth and re-authorise this client.", ["info", "notify"]);
+					addLogEntry();
+				}
+			} else {
+				// no error_description
+				addLogEntry();
+				addLogEntry("ERROR: Check your configuration as it may be invalid. You will need to issue a --reauth and re-authorise this client to obtain a fresh auth token.", ["info", "notify"]);
+				addLogEntry();
+			}
 		}
-		addLogEntry();
-		addLogEntry("ERROR: You will need to issue a --reauth and re-authorise this client to obtain a fresh auth token.", ["info", "notify"]);
-		addLogEntry();
 	} else {
 		// 401 error code
 		addLogEntry();

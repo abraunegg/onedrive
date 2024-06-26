@@ -49,6 +49,7 @@ class OneDriveException: Exception {
 	}
 
 	this(int httpStatusCode, string reason, string file = __FILE__, size_t line = __LINE__) {
+		this.httpStatusCode = httpStatusCode;
 		this.response = null;
 		super(msg, file, line, null);
 	}
@@ -817,7 +818,6 @@ class OneDriveApi {
 			if ((exception.httpStatusCode == 400) || (exception.httpStatusCode == 401)) {
 				// Release curl engine
 				releaseCurlEngine();
-			
 				// Handle an unauthorised client
 				handleClientUnauthorised(exception.httpStatusCode, exception.error);
 			} else {
@@ -1183,6 +1183,13 @@ class OneDriveApi {
 					
 					// Check http response code, raise a OneDriveException if the operation was not successfully performed
 					if (checkHttpResponseCode(response.statusLine.code)) {
+						// 'curl' on platforms like Ubuntu does not reliably provide the 'http.statusLine.reason' when using HTTP/2
+						// This is a curl bug, but because Ubuntu uses old packages and never updates them, we are stuck with working around this bug
+						if (response.statusLine.reason.length == 0) {
+							// No 'reason', fetch what it should have been
+							response.statusLine.reason = getMicrosoftGraphStatusMessage(response.statusLine.code);
+						}
+						
 						// Why are throwing a OneDriveException - do not do this for a 404 error as this is not required as we use a 404 if things are not online, to create them
 						if (response.statusLine.code != 404) {
 							addLogEntry("response.statusLine.code: " ~ to!string(response.statusLine.code), ["debug"]);
@@ -1473,5 +1480,85 @@ class OneDriveApi {
 	private void setFreshConnectOption() {
 		addLogEntry("Configuring libcurl to use a fresh connection for re-try", ["debug"]);
 		curlEngine.http.handle.set(CurlOption.fresh_connect,1);
+	}
+	
+	// Generate a HTTP 'reason' based on the HTTP 'code'
+	private string getMicrosoftGraphStatusMessage(ushort code) {
+		string message;
+		switch (code) {
+			case 200:
+				message = "OK";
+				break;
+			case 201:
+				message = "Created";
+				break;
+			case 202:
+				message = "Accepted";
+				break;
+			case 204:
+				message = "No Content";
+				break;
+			case 301:
+				message = "Moved Permanently";
+				break;
+			case 302:
+				message = "Found";
+				break;
+			case 304:
+				message = "Not Modified";
+				break;
+			case 400:
+				message = "Bad Request";
+				break;
+			case 401:
+				message = "Unauthorized";
+				break;
+			case 403:
+				message = "Forbidden";
+				break;
+			case 404:
+				message = "Not Found";
+				break;
+			case 405:
+				message = "Method Not Allowed";
+				break;
+			case 406:
+				message = "Not Acceptable";
+				break;
+			case 409:
+				message = "Conflict";
+				break;
+			case 410:
+				message = "Gone";
+				break;
+			case 412:
+				message = "Precondition Failed";
+				break;
+			case 415:
+				message = "Unsupported Media Type";
+				break;
+			case 422:
+				message = "Unprocessable Entity";
+				break;
+			case 429:
+				message = "Too Many Requests";
+				break;
+			case 500:
+				message = "Internal Server Error";
+				break;
+			case 501:
+				message = "Not Implemented";
+				break;
+			case 503:
+				message = "Service Unavailable";
+				break;
+			case 504:
+				message = "Gateway Timeout";
+				break;
+			default:
+				message = "Unknown Status Code";
+				break;
+		}
+		return message;
 	}
 }

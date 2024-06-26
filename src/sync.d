@@ -6515,7 +6515,12 @@ class SyncEngine {
 		}
 		
 		// For each child object, query the OneDrive API
-		for (;;) {
+		while (true) {
+			// Check if exitHandlerTriggered is true
+			if (exitHandlerTriggered) {
+				// break out of the 'while (true)' loop
+				break;
+			}
 			// query top level children
 			try {
 				topLevelChildren = generateDeltaResponseOneDriveApiInstance.listChildren(searchItem.driveId, searchItem.id, nextLink);
@@ -6579,6 +6584,9 @@ class SyncEngine {
 				addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
 				nextLink = topLevelChildren["@odata.nextLink"].str;
 			} else break;
+			
+			// Sleep for a while to avoid busy-waiting
+			Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
 		}
 		
 		if (appConfig.verbosityCount == 0) {
@@ -6617,7 +6625,13 @@ class SyncEngine {
 		queryChildrenOneDriveApiInstance = new OneDriveApi(appConfig);
 		queryChildrenOneDriveApiInstance.initialise();
 		
-		for (;;) {
+		while (true) {
+			// Check if exitHandlerTriggered is true
+			if (exitHandlerTriggered) {
+				// break out of the 'while (true)' loop
+				break;
+			}
+			
 			// query this level children
 			try {
 				thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance);
@@ -6687,6 +6701,9 @@ class SyncEngine {
 				addLogEntry("Retry this call thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance)", ["debug"]);
 				thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance);
 			}
+			
+			// Sleep for a while to avoid busy-waiting
+			Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
 		}
 		
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
@@ -6854,7 +6871,12 @@ class SyncEngine {
 					addLogEntry("This parent directory is a remote object this next path will be on a remote drive", ["debug"]);
 					
 					// For this parentDetails.driveId, parentDetails.id object, query the OneDrive API for it's children
-					for (;;) {
+					while (true) {
+						// Check if exitHandlerTriggered is true
+						if (exitHandlerTriggered) {
+							// break out of the 'while (true)' loop
+							break;
+						}
 						// Query this remote object for its children
 						topLevelChildren = queryOneDriveForSpecificPath.listChildren(parentDetails.driveId, parentDetails.id, nextLink);
 						// Process each child
@@ -6897,6 +6919,9 @@ class SyncEngine {
 							addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
 							nextLink = topLevelChildren["@odata.nextLink"].str;
 						} else break;
+						
+						// Sleep for a while to avoid busy-waiting
+						Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
 					}
 				}
 			}
@@ -7281,7 +7306,13 @@ class SyncEngine {
 		addLogEntry();
 		addLogEntry("Office 365 Library Name Query: " ~ sharepointLibraryNameToQuery);
 		
-		for (;;) {
+		while (true) {
+			// Check if exitHandlerTriggered is true
+			if (exitHandlerTriggered) {
+				// break out of the 'while (true)' loop
+				break;
+			}
+		
 			try {
 				siteQuery = querySharePointLibraryNameApiInstance.o365SiteSearch(nextLink);
 			} catch (OneDriveException e) {
@@ -7452,6 +7483,9 @@ class SyncEngine {
 				nextLink = siteQuery["@odata.nextLink"].str;
 				addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
 			} else break;
+			
+			// Sleep for a while to avoid busy-waiting
+			Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
 		}
 		
 		// Was the intended target found?
@@ -7505,7 +7539,13 @@ class SyncEngine {
 		getDeltaDataOneDriveApiInstance = new OneDriveApi(appConfig);
 		getDeltaDataOneDriveApiInstance.initialise();
 		
-		for (;;) {
+		while (true) {
+			// Check if exitHandlerTriggered is true
+			if (exitHandlerTriggered) {
+				// break out of the 'while (true)' loop
+				break;
+			}
+			
 			// Add a processing '.'
 			if (appConfig.verbosityCount == 0) {
 				addProcessingDotEntry();
@@ -7581,8 +7621,10 @@ class SyncEngine {
 			if ("@odata.nextLink" in deltaChanges) {	
 				deltaLink = deltaChanges["@odata.nextLink"].str;
 				addLogEntry("Setting next deltaLink to (@odata.nextLink): " ~ deltaLink, ["debug"]);
-			}
-			else break;
+			} else break;
+			
+			// Sleep for a while to avoid busy-waiting
+			Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
 		}
 		
 		// Terminate getDeltaDataOneDriveApiInstance here
@@ -8194,7 +8236,13 @@ class SyncEngine {
 		checkFileOneDriveApiInstance = new OneDriveApi(appConfig);
 		checkFileOneDriveApiInstance.initialise();
 		
-		for (;;) {
+		while (true) {
+			// Check if exitHandlerTriggered is true
+			if (exitHandlerTriggered) {
+				// break out of the 'while (true)' loop
+				break;
+			}
+		
 			// query top level children
 			try {
 				thisLevelChildren = checkFileOneDriveApiInstance.listChildren(parentItemDriveId, parentItemId, nextLink);
@@ -8238,6 +8286,9 @@ class SyncEngine {
 				addLogEntry("Setting nextLink to (@odata.nextLink): " ~ nextLink, ["debug"]);
 				nextLink = thisLevelChildren["@odata.nextLink"].str;
 			} else break;
+			
+			// Sleep for a while to avoid busy-waiting
+			Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
 		}
 		
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory

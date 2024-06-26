@@ -35,14 +35,7 @@ class CurlResponse {
 	}
 	
 	~this() {
-		// As we need statusLine for exception handling, we cant use reset()
-		method = HTTP.Method.undefined;
-		url = "";
-		requestHeaders = null;
-		postBody = [];
-		hasResponse = false;
-		responseHeaders = null;
-		content = [];
+		reset();
 	}
 
 	void reset() {

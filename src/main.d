@@ -722,6 +722,7 @@ int main(string[] cliArgs) {
 		if (appConfig.getValueBool("synchronize")) {
 			// We are not using this, so destroy it early
 			object.destroy(filesystemMonitor);
+			filesystemMonitor = null;
 		
 			// Did the user specify --upload-only?
 			if (appConfig.getValueBool("upload_only")) {
