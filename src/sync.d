@@ -318,14 +318,7 @@ class SyncEngine {
 	// Initialise the Sync Engine class
 	bool initialise() {
 		// Control whether the worker threads are daemon threads. A daemon thread is automatically terminated when all non-daemon threads have terminated.
-		if (__VERSION__ < 2098) {
-			// LDC version less than 1.28.0 is being used
-			// DMD version less than 2.098.0 is being used
-			processPool.isDaemon(false); // Not a daemon thread
-		} else {
-			// Normal TaskPool threading
-			processPool.isDaemon(true); // daemon thread
-		}
+		processPool.isDaemon(true); // daemon thread
 		
 		// Create a new instance of the OneDrive API
 		OneDriveApi oneDriveApiInstance;
@@ -391,23 +384,10 @@ class SyncEngine {
 		// TaskPool needs specific shutdown based on compiler version otherwise this causes a segfault
 		if (processPool.size > 0) {
 			// TaskPool is still configured for 'thread' size
-			addLogEntry("Application compiled with D compiler version: " ~ to!string(__VERSION__), ["debug"]);
-			// We must be using 2098 or greater to use thread blocking when shutting down
-			if (__VERSION__ < 2098) {
-				// Compromised TaskPool shutdown process
-				addLogEntry("Shutting down processPool in a legacy manner", ["debug"]);
-				// LDC version less than 1.28.0 is being used
-				// DMD version less than 2.098.0 is being used
-				// https://dlang.org/library/std/parallelism/task_pool.finish.html
-				// https://dlang.org/library/std/parallelism/task_pool.stop.html
-				processPool.finish(); // If we flag 'true' here, the application segfaults on exit when using DMD 2.098.0 or LDC 1.28.0 or earlier
-				processPool.stop(); // Signals to all worker threads to terminate as soon as they are finished with their current Task, or immediately if they are not executing a Task.
-			} else {
-				// Normal TaskPool shutdown process
-				addLogEntry("Shutting down processPool in a thread blocking manner", ["debug"]);
-				// All worker threads are daemon threads which are automatically terminated when all non-daemon threads have terminated.
-				processPool.finish(true); // If blocking argument is true, wait for all worker threads to terminate before returning.
-			}
+			// Normal TaskPool shutdown process
+			addLogEntry("Shutting down processPool in a thread blocking manner", ["debug"]);
+			// All worker threads are daemon threads which are automatically terminated when all non-daemon threads have terminated.
+			processPool.finish(true); // If blocking argument is true, wait for all worker threads to terminate before returning.
 		}
 	}
 		

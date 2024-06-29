@@ -55,17 +55,9 @@ class LogBuffer {
 	}
 	
 	~this() {
-		if (isRunning) {
-			terminateLogging();
-		}
-		
-		// Destroy these
-		object.destroy(flushThread);
-		object.destroy(buffer);
-		object.destroy(bufferLock);
-		stdout.flush();
+		bufferLock.unlock();
 	}
-	
+		
 	// Terminate Logging
 	void terminateLogging() {
 		synchronized(bufferLock) {
