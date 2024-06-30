@@ -1166,7 +1166,7 @@ class OneDriveApi {
 				// re-try log entry & clock time
 				retryTime = Clock.currTime();
 				retryTime.fracSecs = Duration.zero;
-				addLogEntry("Retrying the respective Microsoft Graph API call ... (" ~ to!string(retryTime) ~ ")");
+				addLogEntry("Retrying the respective Microsoft Graph API call for Internal Thread ID " ~ to!string(curlEngine.internalThreadId) ~ " (Timestamp: " ~ to!string(retryTime) ~ ") ...");
 			}
 		
 			try {
