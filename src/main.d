@@ -1273,6 +1273,12 @@ void cleanupDatabaseFiles(string activeDatabaseFileName) {
 			addLogEntry("DRY-RUN: Removing items-dryrun.sqlite3 as it still exists for some reason", ["debug"]);
 			safeRemove(activeDatabaseFileName);
 		}
+	} else {
+		// we may have not been using --dry-run, however we may have been running some operations that use a dry-run database, and this needs to be explicitly cleaned up
+		if (exists(appConfig.databaseFilePathDryRun)) {
+			addLogEntry("Removing items-dryrun.sqlite3 as it still exists for some reason post being used for non-dryrun operations", ["debug"]);
+			safeRemove(appConfig.databaseFilePathDryRun);
+		}
 	}
 	
 	// Silent cleanup of -shm file if it exists
@@ -1344,7 +1350,6 @@ extern(C) nothrow @nogc @system void exitViaSignalHandler(int signo) {
 	if (shutdownInProgress) {
 		return;  // Ignore subsequent presses
 	} else {
-		
 		// Disable logging suppression
 		appConfig.suppressLoggingOutput = false;
 		// Flag we are shutting down
