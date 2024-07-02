@@ -7633,7 +7633,11 @@ class SyncEngine {
 				
 				// Get the file hash
 				if (hasHashes(onedriveJSONItem)) {
-					thisItemHash = onedriveJSONItem["file"]["hashes"]["quickXorHash"].str;
+					// At a minimum we require 'quickXorHash' to exist
+					if (hasQuickXorHash(onedriveJSONItem)) {
+						// JSON itme has a hash we can use
+						thisItemHash = onedriveJSONItem["file"]["hashes"]["quickXorHash"].str;
+					}
 					
 					// Check if the item has been seen before
 					Item existingDatabaseItem;
