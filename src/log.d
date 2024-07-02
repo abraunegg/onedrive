@@ -55,7 +55,7 @@ class LogBuffer {
 	}
 	
 	~this() {
-		bufferLock.unlock();
+		//bufferLock.unlock();
 	}
 		
 	// Terminate Logging
@@ -199,7 +199,13 @@ void shutdownLogging() {
 	if (logBuffer !is null) {
 		logBuffer.terminateLogging();
 	}
-	// cleanup array
+	
+	// Lock then unlock the mutex
+	logBuffer.bufferLock.lock();
+	logBuffer.bufferLock.unlock();
+	
+	// Destroy the logBuffer variable
+	object.destroy(logBuffer);
 	logBuffer = null;
 }
 

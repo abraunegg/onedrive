@@ -462,6 +462,9 @@ int main(string[] cliArgs) {
 			
 			// Are we not doing a --sync or a --monitor operation? Both of these will be false if they are not set
 			if ((!appConfig.getValueBool("synchronize")) && (!appConfig.getValueBool("monitor"))) {
+			
+				// Do not perform a vacuum on exit, pointless
+				performDatabaseVacuum = false;
 				
 				// Are we performing some sort of 'no-sync' task?
 				// - Are we obtaining the Office 365 Drive ID for a given Office 365 SharePoint Shared Library?
@@ -576,7 +579,7 @@ int main(string[] cliArgs) {
 					return EXIT_SUCCESS;
 				}
 				
-				// Are we displaying the quota information?
+				// --display-quota - Are we displaying the quota information?
 				if (appConfig.getValueBool("display_quota")) {
 					// Query and respond with the quota details
 					syncEngineInstance.queryOneDriveForQuotaDetails();
@@ -586,8 +589,7 @@ int main(string[] cliArgs) {
 				}
 				
 				// If we get to this point, we have not performed a 'no-sync' task ..
-				// Do not perform a vacuum on exit, pointless
-				performDatabaseVacuum = false;
+				
 				// Did we just authorise the client?
 				if (appConfig.applicationAuthorizeResponseUri) {
 					// Authorisation activity
@@ -616,7 +618,6 @@ int main(string[] cliArgs) {
 					addLogEntry("It is important to note that you must include one of these two arguments in your command line for the application to perform a synchronisation with Microsoft OneDrive");
 					addLogEntry();
 					// Use exit scopes to shutdown API
-					// invalidSyncExit = true;
 					return EXIT_FAILURE;
 				}
 			}
@@ -1478,7 +1479,7 @@ void shutdownApplicationLogging() {
 			// Shutdown Logging which also sets logBuffer to null
 			shutdownLogging();
 		}
-	}	
+	}
 }
 
 string compilerDetails() {
