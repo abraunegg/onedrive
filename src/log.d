@@ -55,7 +55,7 @@ class LogBuffer {
 	}
 	
 	~this() {
-		//bufferLock.unlock();
+		terminateLogging();
 	}
 		
 	// Terminate Logging
@@ -74,13 +74,13 @@ class LogBuffer {
 		scope(exit) {
 			bufferLock.lock();
 			scope(exit) bufferLock.unlock();
-			flushBuffer(); // Flush any remaining log
+			flushBuffer(); // Flush any remaining logs
 		}
 
 		scope(failure) {
 			bufferLock.lock();
 			scope(exit) bufferLock.unlock();
-			flushBuffer(); // Flush any remaining log
+			flushBuffer(); // Flush any remaining logs
 		}
 	}
 	
@@ -224,11 +224,7 @@ bool loggingActive() {
 
 // Is logging still initialised
 bool loggingStillInitialised() {
-	if (logBuffer !is null) {
-		return true;
-	} else {
-		return false;
-	}
+	 return logBuffer !is null;
 }
 
 void addProcessingLogHeaderEntry(string message, long verbosityCount) {
