@@ -7,11 +7,15 @@ import std.file;
 import std.datetime;
 import std.concurrency;
 import std.typecons;
+import core.sync.mutex;
 import core.sync.condition;
 import core.thread;
 import std.format;
 import std.string;
 import std.conv;
+
+// What other modules that we have created do we need to import?
+import util;
 
 version(Notifications) {
 	import dnotify;
@@ -54,8 +58,10 @@ class LogBuffer {
 	}
 	
 	~this() {
-		if (!isRunning) {
-			bufferLock.unlock();
+		if (!isRunning) {		
+			if (exitHandlerTriggered) {
+				bufferLock.unlock();	
+			}
 		}
 	}
 		
@@ -80,7 +86,10 @@ class LogBuffer {
 		}
 		
 		// Flush any remaining logs
-		flushBuffer(); 
+		flushBuffer();
+		
+		// Sleep for a while to avoid busy-waiting
+		Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
 		
 		// Exit scopes
 		scope(exit) {
