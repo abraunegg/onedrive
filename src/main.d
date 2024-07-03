@@ -1475,6 +1475,8 @@ void shutdownApplicationLogging() {
 	// Log that we are exiting
 	if (loggingStillInitialised()) {
 		if (loggingActive()) {
+			// join all threads
+			thread_joinAll();
 			addLogEntry("Application is exiting", ["debug"]);
 			addLogEntry("#######################################################################################################################################", ["logFileOnly"]);
 			// Destroy the shared logging buffer which flushes any remaing logs

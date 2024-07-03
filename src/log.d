@@ -8,7 +8,6 @@ import std.datetime;
 import std.concurrency;
 import std.typecons;
 import core.sync.condition;
-import core.sync.mutex;
 import core.thread;
 import std.format;
 import std.string;
@@ -55,13 +54,22 @@ class LogBuffer {
 	}
 	
 	~this() {
-		terminateLogging();
+		if (!isRunning) {
+			bufferLock.unlock();
+		}
 	}
 		
 	// Terminate Logging
 	void terminateLogging() {
-		synchronized(bufferLock) {
-			if (!isRunning) return; // Prevent multiple shutdowns
+		synchronized {
+			// join all threads
+			thread_joinAll();
+			
+			if (!isRunning) {
+				return; // Prevent multiple shutdowns
+			}
+			
+			// flag that we are no longer running due to shutting down
 			isRunning = false;
 			condReady.notifyAll(); // Wake up all waiting threads
 		}
@@ -70,17 +78,37 @@ class LogBuffer {
 		if (flushThread.isRunning()) {
 			flushThread.join(true);
 		}
-
+		
+		// Flush any remaining logs
+		flushBuffer(); 
+		
+		// Exit scopes
 		scope(exit) {
-			bufferLock.lock();
-			scope(exit) bufferLock.unlock();
-			flushBuffer(); // Flush any remaining logs
+			if (bufferLock !is null) {
+				bufferLock.lock();
+			}
+			
+			scope(exit) {
+				if (bufferLock !is null) {
+					bufferLock.unlock();
+					object.destroy(bufferLock);
+					bufferLock = null;
+				}
+			}
 		}
 
 		scope(failure) {
-			bufferLock.lock();
-			scope(exit) bufferLock.unlock();
-			flushBuffer(); // Flush any remaining logs
+			if (bufferLock !is null) {
+				bufferLock.lock();	
+			}
+			
+			scope(exit) {
+				if (bufferLock !is null) {
+					bufferLock.unlock();
+					object.destroy(bufferLock);
+					bufferLock = null;
+				}
+			}
 		}
 	}
 	
@@ -197,16 +225,10 @@ void initialiseLogging(bool verboseLogging = false, bool debugLogging = false) {
 // Shutdown Logging
 void shutdownLogging() {
 	if (logBuffer !is null) {
+		// Terminate logging in a safe manner
 		logBuffer.terminateLogging();
+		logBuffer = null;
 	}
-	
-	// Lock then unlock the mutex
-	logBuffer.bufferLock.lock();
-	logBuffer.bufferLock.unlock();
-	
-	// Destroy the logBuffer variable
-	object.destroy(logBuffer);
-	logBuffer = null;
 }
 
 // Function to add a log entry with multiple levels
