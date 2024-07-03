@@ -1233,17 +1233,26 @@ class ApplicationConfig {
 			
 			if (opt.helpWanted) {
 				outputLongHelp(opt.options);
+				// Shutdown logging, which also flushes all logging buffers
+				shutdownLogging();
+				// Exit as successful
 				exit(EXIT_SUCCESS);
 			}
 		} catch (GetOptException e) {
 			// getOpt error - must use writeln() here
 			writeln(e.msg);
 			writeln("Try 'onedrive -h' for more information");
+			// Shutdown logging, which also flushes all logging buffers
+			shutdownLogging();
+			// Exit as failure
 			exit(EXIT_FAILURE);
 		} catch (Exception e) {
 			// general error - must use writeln() here
 			writeln(e.msg);
 			writeln("Try 'onedrive -h' for more information");
+			// Shutdown logging, which also flushes all logging buffers
+			shutdownLogging();
+			// Exit as failure
 			exit(EXIT_FAILURE);
 		}
 	}
