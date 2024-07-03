@@ -646,12 +646,6 @@ void handleClientUnauthorised(int httpStatusCode, JSONValue errorMessage) {
 		addLogEntry("ERROR: Check your configuration as your refresh_token may be empty or invalid. You may need to issue a --reauth and re-authorise this client.", ["info", "notify"]);
 		addLogEntry();
 	}
-	
-	// If not the special code used for initialisation and token expiry check, force application exit
-	if (httpStatusCode != 999) {
-		// Must force exit here, allow logging to be done
-		forceExit();
-	}
 }
 
 // Parse and display error message received from the local file system

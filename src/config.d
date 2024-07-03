@@ -1520,6 +1520,7 @@ class ApplicationConfig {
 		
 		// Create and read the required initial hash files
 		createRequiredInitialConfigurationHashFiles();
+		
 		// Read in the existing hash file values
 		readExistingConfigurationHashFiles();
 
