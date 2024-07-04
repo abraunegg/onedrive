@@ -958,7 +958,7 @@ _**Usage Example:**_ `onedrive --auth-response https://login.microsoftonline.com
 > [!TIP]
 > Typically, unless the application client identifier has been modified, authentication scopes are being modified or a specific Azure Tenant is being specified, the authentication URL will most likely be as follows:
 > ```text
-> https://login.microsoftonline.com/common/oauth2/v2.0/authorise?client_id=22c49a0d-d21c-4792-aed1-8f163c982546&scope=Files.ReadWrite%20Files.ReadWrite.all%20Sites.ReadWrite.All%20offline_access&response_type=code&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient
+> https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=d50ca740-c83f-4d1b-b616-12c519384f0c&scope=Files.ReadWrite%20Files.ReadWrite.All%20Sites.ReadWrite.All%20offline_access&response_type=code&prompt=login&redirect_uri=https://login.microsoftonline.com/common/oauth2/nativeclient 
 > ```
 > With this URL being known, it is possible ahead of time to request an authentication token by visiting this URL, and performing the authentication access request.
 
