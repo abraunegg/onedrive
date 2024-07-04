@@ -1890,7 +1890,7 @@ class ApplicationConfig {
 			operationalConflictDetected = true;
 		}
 		
-		// --sync and and --display-sync-status cannot be used together
+		// --sync and --display-sync-status cannot be used together
 		if ((getValueBool("synchronize")) && (getValueBool("display_sync_status"))) {
 			addLogEntry("ERROR: --sync and and --display-sync-status cannot be used together");
 			operationalConflictDetected = true;
@@ -1902,13 +1902,13 @@ class ApplicationConfig {
 			operationalConflictDetected = true;
 		}
 		
-		// --sync and and --display-quota cannot be used together
+		// --sync and --display-quota cannot be used together
 		if ((getValueBool("synchronize")) && (getValueBool("display_quota"))) {
 			addLogEntry("ERROR: --sync and and --display-quota cannot be used together");
 			operationalConflictDetected = true;
 		}
 				
-		// --force-sync can only be used when using --sync --single-directory
+		// --force-sync can only be used when using --sync and --single-directory
 		if (getValueBool("force_sync")) {
 		
 			bool conflict = false;
