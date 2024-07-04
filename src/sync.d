@@ -5795,7 +5795,14 @@ class SyncEngine {
 				if (exception.httpStatusCode == 100) {
 					continue;
 				}
+				
 				// There was an error uploadResponse from OneDrive when uploading the file fragment
+				
+				// Issue https://github.com/abraunegg/onedrive/issues/2747
+				// if a 416 uploadResponse is generated, continue
+				if (exception.httpStatusCode == 416) {
+					continue;
+				}
 				
 				// Handle transient errors:
 				//   408 - Request Time Out

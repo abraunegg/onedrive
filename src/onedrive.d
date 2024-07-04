@@ -1540,6 +1540,9 @@ class OneDriveApi {
 			case 415:
 				message = "Unsupported Media Type";
 				break;
+			case 416:
+				message = "Requested Range Not Satisfiable";
+				break;
 			case 422:
 				message = "Unprocessable Entity";
 				break;
