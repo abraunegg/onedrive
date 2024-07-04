@@ -505,7 +505,7 @@ int main(string[] cliArgs) {
 					return EXIT_SUCCESS;
 				}
 				
-				// --get-file-link - Get the URL path for a synced file?
+				// --get-file-link - Get the URL path for a synced file
 				if (appConfig.getValueString("get_file_link") != "") {
 					// Query the OneDrive API for the file link
 					syncEngineInstance.queryOneDriveForFileDetails(appConfig.getValueString("get_file_link"), runtimeSyncDirectory, "URL");
@@ -514,7 +514,7 @@ int main(string[] cliArgs) {
 					return EXIT_SUCCESS;
 				}
 				
-				// --modified-by - Are we listing the modified-by details of a provided path?
+				// --modified-by - Get listing the modified-by details of a provided path
 				if (appConfig.getValueString("modified_by") != "") {
 					// Query the OneDrive API for the last modified by details
 					syncEngineInstance.queryOneDriveForFileDetails(appConfig.getValueString("modified_by"), runtimeSyncDirectory, "ModifiedBy");
@@ -523,7 +523,7 @@ int main(string[] cliArgs) {
 					return EXIT_SUCCESS;
 				}
 				
-				// --list-shared-items - Are we listing OneDrive Business Shared Items
+				// --list-shared-items - Get listing OneDrive Business Shared Items
 				if (appConfig.getValueBool("list_business_shared_items")) {
 					// Is this a business account type?
 					if (appConfig.accountType == "business") {
@@ -537,7 +537,7 @@ int main(string[] cliArgs) {
 					return EXIT_SUCCESS;
 				}
 				
-				// --create-share-link - Are we creating a shareable link for an existing file on OneDrive?
+				// --create-share-link - Create a shareable link for an existing file, based on the local path
 				if (appConfig.getValueString("create_share_link") != "") {
 					// Query OneDrive for the file, and if valid, create a shareable link for the file
 					
