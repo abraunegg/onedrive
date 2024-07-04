@@ -541,7 +541,7 @@ class OneDriveApi {
 	JSONValue getPathDetailsById(string driveId, string id) {
 		string url;
 		url = driveByIdUrl ~ driveId ~ "/items/" ~ id;
-		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size";
+		url ~= "?select=id,name,eTag,cTag,deleted,file,folder,root,fileSystemInfo,remoteItem,parentReference,size,webUrl,lastModifiedBy,lastModifiedDateTime";
 		return get(url);
 	}
 	
