@@ -1516,6 +1516,9 @@ class OneDriveApi {
 			case 401:
 				message = "Unauthorized";
 				break;
+			case 402:
+				message = "Payment Required";
+				break;
 			case 403:
 				message = "Forbidden";
 				break;
@@ -1534,8 +1537,14 @@ class OneDriveApi {
 			case 410:
 				message = "Gone";
 				break;
+			case 411:
+				message = "Length Required";
+				break;
 			case 412:
 				message = "Precondition Failed";
+				break;
+			case 413:
+				message = "Request Entity Too Large";
 				break;
 			case 415:
 				message = "Unsupported Media Type";
@@ -1545,6 +1554,9 @@ class OneDriveApi {
 				break;
 			case 422:
 				message = "Unprocessable Entity";
+				break;
+			case 423:
+				message = "Locked";
 				break;
 			case 429:
 				message = "Too Many Requests";
@@ -1560,6 +1572,12 @@ class OneDriveApi {
 				break;
 			case 504:
 				message = "Gateway Timeout";
+				break;
+			case 507:
+				message = "Insufficient Storage";
+				break;
+			case 509:
+				message = "Bandwidth Limit Exceeded";
 				break;
 			default:
 				message = "Unknown Status Code";
