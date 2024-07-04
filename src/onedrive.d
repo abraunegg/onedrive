@@ -481,6 +481,7 @@ class OneDriveApi {
 				forceExit();
 			}
 		}
+		
 		// match the authorization code
 		auto c = matchFirst(response, r"(?:[\?&]code=)([\w\d-.]+)");
 		if (c.empty) {
@@ -820,6 +821,8 @@ class OneDriveApi {
 				releaseCurlEngine();
 				// Handle an unauthorised client
 				handleClientUnauthorised(exception.httpStatusCode, exception.error);
+				// Must force exit here, allow logging to be done
+				forceExit();
 			} else {
 				if (exception.httpStatusCode >= 500) {
 					// There was a HTTP 5xx Server Side Error - retry
