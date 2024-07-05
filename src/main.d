@@ -563,7 +563,7 @@ int main(string[] cliArgs) {
 				// --remove-directory - Are we just deleting a directory online, without any sync being performed?
 				if ((appConfig.getValueString("remove_directory") != "")) {
 					// Handle the remote path deletion without performing a sync
-					syncEngineInstance.deleteByPath(appConfig.getValueString("remove_directory"));
+					syncEngineInstance.deleteByPathNoSync(appConfig.getValueString("remove_directory"));
 					// Exit application
 					// Use exit scopes to shutdown API
 					return EXIT_SUCCESS;

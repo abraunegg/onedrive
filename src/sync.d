@@ -6762,6 +6762,7 @@ class SyncEngine {
 				currentPathTree = currentPathTree ~ "/" ~ thisFolderName;
 			}
 			
+			// What path are we querying
 			addLogEntry("Attempting to query OneDrive for this path: " ~ currentPathTree, ["debug"]);
 			
 			// What query do we use?
@@ -6780,7 +6781,6 @@ class SyncEngine {
 					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 					// Display what the error is
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-					
 				}
 			} else {
 				// Ensure we have a valid driveId to search here
@@ -6839,7 +6839,6 @@ class SyncEngine {
 							// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 							// Display what the error is
 							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-							
 						}
 					} catch (JsonResponseException e) {
 							addLogEntry(e.msg, ["debug"]);
@@ -6971,7 +6970,7 @@ class SyncEngine {
 	}
 	
 	// Delete an item by it's path
-	// This function is only used in --monitor mode and --remove-directory directive
+	// This function is only used in --monitor mode to remove a directory online
 	void deleteByPath(string path) {
 		
 		// function variables
@@ -7022,6 +7021,81 @@ class SyncEngine {
 				displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 			}
 		}
+	}
+	
+	// Delete an item by it's path
+	// Delete a directory on OneDrive without syncing. This function is only used with --remove-directory
+	void deleteByPathNoSync(string path) {
+	
+		// Attempt to delete the requested path within OneDrive without performing a sync
+		addLogEntry("Attempting to delete the requested path within Microsoft OneDrive");
+		
+		// function variables
+		JSONValue getPathDetailsAPIResponse;
+		OneDriveApi deleteByPathNoSyncAPIInstance;
+		
+		// test if the path we are going to exists on OneDrive
+		try {
+			// Create a new API Instance for this thread and initialise it
+			deleteByPathNoSyncAPIInstance = new OneDriveApi(appConfig);
+			deleteByPathNoSyncAPIInstance.initialise();
+			getPathDetailsAPIResponse = deleteByPathNoSyncAPIInstance.getPathDetails(path);
+			
+			// If we get here, no error, the path to delete exists online
+
+		} catch (OneDriveException exception) {
+		
+			// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+			deleteByPathNoSyncAPIInstance.releaseCurlEngine();
+			deleteByPathNoSyncAPIInstance = null;
+			// Perform Garbage Collection
+			GC.collect();
+		
+			// Log that an error was generated
+			addLogEntry("deleteByPathNoSyncAPIInstance.getPathDetails(path) generated a OneDriveException", ["debug"]);
+			if (exception.httpStatusCode == 404) {
+				// The directory was not found on OneDrive - no need to delete it
+				addLogEntry("The requested directory to delete was not found on OneDrive - skipping removing the remote directory online as it does not exist");
+				return;
+			}
+			
+			// Default operation if not 408,429,503,504 errors
+			// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
+			// Display what the error is
+			displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+			return;	
+		}
+		
+		// Make a DB item from the JSON data that was returned via the API call
+		Item deletionItem = makeItem(getPathDetailsAPIResponse);
+		
+		// Is the item to remove the correct type
+		if (deletionItem.type == ItemType.dir) {
+			// Item is a directory to remove
+			// Log that the path | item was found, is a directory
+			addLogEntry("The requested directory to delete was found on OneDrive - attempting deletion");
+			
+			// Try the online deletion
+			try {
+				// Perform the delete via the default OneDrive API instance
+				deleteByPathNoSyncAPIInstance.deleteById(deletionItem.driveId, deletionItem.id);
+				// If we get here without error, directory was deleted
+				addLogEntry("The requested directory to delete online has been deleted");
+			} catch (OneDriveException exception) {
+				// Display what the error is
+				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+			}
+		} else {
+			// --remove-directory is for removing directories
+			// Log that the path | item was found, is a directory
+			addLogEntry("The requested path to delete is not a directory - aborting deletion attempt");
+		}
+		
+		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+		deleteByPathNoSyncAPIInstance.releaseCurlEngine();
+		deleteByPathNoSyncAPIInstance = null;
+		// Perform Garbage Collection
+		GC.collect();
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_move
