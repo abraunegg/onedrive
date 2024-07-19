@@ -3347,7 +3347,7 @@ class SyncEngine {
 	}
 	
 	// Does this local path (directory or file) conform with the Microsoft Naming Restrictions? It needs to conform otherwise we cannot create the directory or upload the file.
-	bool checkPathAgainstMicrosoftNamingRestrictions(string localFilePath) {
+	bool checkPathAgainstMicrosoftNamingRestrictions(string localFilePath, string logModifier = "item") {
 			
 		// Check if the given path violates certain Microsoft restrictions and limitations
 		// Return a true|false response
@@ -3356,15 +3356,15 @@ class SyncEngine {
 		// Check path against Microsoft OneDrive restriction and limitations about Windows naming for files and folders
 		if (!invalidPath) {
 			if (!isValidName(localFilePath)) { // This will return false if this is not a valid name according to the OneDrive API specifications
-				addLogEntry("Skipping item - invalid name (Microsoft Naming Convention): " ~ localFilePath, ["info", "notify"]);
+				addLogEntry("Skipping " ~ logModifier ~" - invalid name (Microsoft Naming Convention): " ~ localFilePath, ["info", "notify"]);
 				invalidPath = true;
 			}
 		}
 		
 		// Check path for bad whitespace items
 		if (!invalidPath) {
-			if (containsBadWhiteSpace(localFilePath)) { // This will return true if this contains a bad whitespace item
-				addLogEntry("Skipping item - invalid name (Contains an invalid whitespace item): " ~ localFilePath, ["info", "notify"]);
+			if (containsBadWhiteSpace(localFilePath)) { // This will return true if this contains a bad whitespace character
+				addLogEntry("Skipping " ~ logModifier ~" - invalid name (Contains an invalid whitespace character): " ~ localFilePath, ["info", "notify"]);
 				invalidPath = true;
 			}
 		}
@@ -3372,7 +3372,7 @@ class SyncEngine {
 		// Check path for HTML ASCII Codes
 		if (!invalidPath) {
 			if (containsASCIIHTMLCodes(localFilePath)) { // This will return true if this contains HTML ASCII Codes
-				addLogEntry("Skipping item - invalid name (Contains HTML ASCII Code): " ~ localFilePath, ["info", "notify"]);
+				addLogEntry("Skipping " ~ logModifier ~" - invalid name (Contains HTML ASCII Code): " ~ localFilePath, ["info", "notify"]);
 				invalidPath = true;
 			}
 		}
@@ -3380,7 +3380,7 @@ class SyncEngine {
 		// Validate that the path is a valid UTF-16 encoded path
 		if (!invalidPath) {
 			if (!isValidUTF16(localFilePath)) { // This will return true if this is a valid UTF-16 encoded path, so we are checking for 'false' as response
-				addLogEntry("Skipping item - invalid name (Invalid UTF-16 encoded item): " ~ localFilePath, ["info", "notify"]);
+				addLogEntry("Skipping " ~ logModifier ~" - invalid name (Invalid UTF-16 encoded path): " ~ localFilePath, ["info", "notify"]);
 				invalidPath = true;
 			}
 		}
@@ -3388,7 +3388,7 @@ class SyncEngine {
 		// Check path for ASCII Control Codes
 		if (!invalidPath) {
 			if (containsASCIIControlCodes(localFilePath)) { // This will return true if this contains ASCII Control Codes
-				addLogEntry("Skipping item - invalid name (Contains ASCII Control Codes): " ~ localFilePath, ["info", "notify"]);
+				addLogEntry("Skipping " ~ logModifier ~" - invalid name (Contains ASCII Control Codes): " ~ localFilePath, ["info", "notify"]);
 				invalidPath = true;
 			}
 		}
@@ -7233,8 +7233,8 @@ class SyncEngine {
 							eTag = null;
 							// Retry to move the file but without the eTag, via the for() loop
 						} else if (e.httpStatusCode == 409) {
-							// Destination item already exists and is a conflict, delete it first
-							addLogEntry("Moved local item overwrote an existing item - deleting old online item");
+							// Destination item already exists and is a conflict, delete existing item first
+							addLogEntry("Moved local item will overwrite an existing online item - deleting old online item first");
 							uploadDeletedItem(newItem, newPath);
 						} else
 							break;
@@ -8795,5 +8795,163 @@ class SyncEngine {
 		sharedWithMeOneDriveApiInstance = null;
 		// Perform Garbage Collection
 		GC.collect();
-	}	
+	}
+	
+	// Renaming or moving a directory online manually using --source-directory 'path/as/source/' --destination-directory 'path/as/destination'
+	void moveOrRenameDirectoryOnline(string sourcePath, string destinationPath) {
+	
+		// Function Variables
+		bool sourcePathExists = false;
+		bool destinationPathExists = false;
+		bool invalidDestination = false;
+		JSONValue sourcePathData;
+		JSONValue destinationPathData;
+		JSONValue parentPathData;
+		Item sourceItem;
+		Item parentItem;
+		
+		// Log that we are doing a move
+		addLogEntry("Moving " ~ sourcePath ~ " to " ~ destinationPath);
+		
+		// Create a new API Instance for this thread and initialise it
+		OneDriveApi onlineMoveApiInstance;
+		onlineMoveApiInstance = new OneDriveApi(appConfig);
+		onlineMoveApiInstance.initialise();
+		
+		// In order to move, the 'source' needs to exist online, so this is the first check
+		try {
+			sourcePathData = onlineMoveApiInstance.getPathDetails(sourcePath);
+			sourceItem = makeItem(sourcePathData);
+			sourcePathExists = true;
+		} catch (OneDriveException exception) {
+		
+			if (exception.httpStatusCode == 404) {
+				// The item to search was not found. If it does not exist, how can we move it?
+				addLogEntry("The source path to move does not exist online - unable to move|rename a path that does not already exist online");
+				forceExit();
+			} else {
+				// An error, regardless of what it is ... not good
+				// Display what the error is
+				// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				forceExit();
+			}
+		}
+		
+		// The second check needs to be that the destination does not already exist
+		try {
+			destinationPathData = onlineMoveApiInstance.getPathDetails(destinationPath);
+			destinationPathExists = true;
+			addLogEntry("The destination path to move to exists online - unable to move|rename to a path that already exists online");
+			forceExit();
+		} catch (OneDriveException exception) {
+		
+			if (exception.httpStatusCode == 404) {
+				// The item to search was not found. This is good as the destination path is empty
+			} else {
+				// An error, regardless of what it is ... not good
+				// Display what the error is
+				// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				forceExit();
+			}
+		}
+		
+		// Can we move?
+		if ((sourcePathExists) && (!destinationPathExists)) {
+			// Make an item we can use
+			Item onlineItem = makeItem(sourcePathData);
+		
+			// The directory to move MUST be a directory
+			if (onlineItem.type == ItemType.dir) {
+			
+				// Validate that the 'destination' is valid
+				
+				// This not a Client Side Filtering check, nor a Microsoft Check, but is a sanity check that the path provided is UTF encoded correctly
+				// Check the std.encoding of the path against: Unicode 5.0, ASCII, ISO-8859-1, ISO-8859-2, WINDOWS-1250, WINDOWS-1251, WINDOWS-1252
+				if (!invalidDestination) {
+					if(!isValid(destinationPath)) {
+						// Path is not valid according to https://dlang.org/phobos/std_encoding.html
+						addLogEntry("Skipping move - invalid character encoding sequence: " ~ destinationPath, ["info", "notify"]);
+						invalidDestination = true;
+					}
+				}
+				
+				// We do not check this path against the Client Side Filtering Rules as this is 100% an online move only
+				
+				// Check this path against the Microsoft Naming Conventions & Restristions
+				// - Check path against Microsoft OneDrive restriction and limitations about Windows naming for files and folders
+				// - Check path for bad whitespace items
+				// - Check path for HTML ASCII Codes
+				// - Check path for ASCII Control Codes
+				if (!invalidDestination) {
+					invalidDestination = checkPathAgainstMicrosoftNamingRestrictions(destinationPath, "move");
+				}
+				
+				// Is the destination location invalid?
+				if (!invalidDestination) {
+					// We can perform the online move
+					// We need to query for the parent information of the destination path
+					string parentPath = dirName(destinationPath);
+					
+					// Configure the parentItem by if this is the account 'root' use the root details, or query online for the parent details
+					if (parentPath == ".") {
+						// Parent path is '.' which is the account root - use client defaults
+						parentItem.driveId = appConfig.defaultDriveId; 	// Should give something like 12345abcde1234a1
+						parentItem.id = appConfig.defaultRootId;  		// Should give something like 12345ABCDE1234A1!101
+					} else {
+						// Need to query to obtain the details
+						try {
+							addLogEntry("Attempting to query OneDrive Online for this parent path: " ~ parentPath, ["debug"]);
+							parentPathData = onlineMoveApiInstance.getPathDetails(parentPath);
+							addLogEntry("Online Parent Path Query Response: " ~ to!string(parentPathData), ["debug"]);
+							parentItem = makeItem(parentPathData);
+						} catch (OneDriveException exception) {
+							if (exception.httpStatusCode == 404) {
+								// The item to search was not found. If it does not exist, how can we move it?
+								addLogEntry("The parent path to move to does not exist online - unable to move|rename a path to a parent that does exist online");
+								forceExit();
+							} else {
+								// Display what the error is
+								// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+								displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+								forceExit();
+							}
+						}
+					}
+					
+					// Configure the modification JSON item
+					SysTime mtime;
+					// Use the current system time
+					mtime = Clock.currTime().toUTC();
+					
+					JSONValue data = [
+						"name": JSONValue(baseName(destinationPath)),
+						"parentReference": JSONValue([
+							"id": parentItem.id
+						]),
+						"fileSystemInfo": JSONValue([
+							"lastModifiedDateTime": mtime.toISOExtString()
+						])
+					];
+					
+					// Try the online move
+					try {
+						onlineMoveApiInstance.updateById(sourceItem.driveId, sourceItem.id, data, sourceItem.eTag);
+						// Log that it was successful
+						addLogEntry("Successfully moved " ~ sourcePath ~ " to " ~ destinationPath);
+					} catch (OneDriveException exception) {
+						// Display what the error is
+						// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+						displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+						forceExit();	
+					}
+				}
+			} else {
+				// The source item is not a directory
+				addLogEntry("ERROR: The source path to move is not a directory");
+				forceExit();
+			}
+		}
+	}
 }

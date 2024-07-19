@@ -573,7 +573,7 @@ int main(string[] cliArgs) {
 				// 	onedrive --source-directory 'path/as/source/' --destination-directory 'path/as/destination'
 				if ((appConfig.getValueString("source_directory") != "") && (appConfig.getValueString("destination_directory") != "")) {
 					// We are renaming or moving a directory
-					syncEngineInstance.uploadMoveItem(appConfig.getValueString("source_directory"), appConfig.getValueString("destination_directory"));
+					syncEngineInstance.moveOrRenameDirectoryOnline(appConfig.getValueString("source_directory"), appConfig.getValueString("destination_directory"));
 					// Exit application
 					// Use exit scopes to shutdown API
 					return EXIT_SUCCESS;
