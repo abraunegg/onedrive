@@ -1993,7 +1993,16 @@ class ApplicationConfig {
 			addLogEntry("ERROR: --download-only cannot be used with --local-first");
 			operationalConflictDetected = true;
 		}
-				
+		
+		// Test that '--modified-by <arg>' has a valid argument and not another directive
+		if (getValueString("modified_by") != "") {
+			// Does the string start with '--' ?
+			if (getValueString("modified_by").startsWith("--")) {
+				addLogEntry("ERROR: --modified-by missing a valid entry");
+				operationalConflictDetected = true;
+			}
+		}
+		
 		// Return bool value indicating if we have an operational conflict
 		return operationalConflictDetected;
 	}
