@@ -2003,6 +2003,15 @@ class ApplicationConfig {
 			}
 		}
 		
+		// Test that '--get-file-link <arg>' has a valid argument and not another directive
+		if (getValueString("get_file_link") != "") {
+			// Does the string start with '--' ?
+			if (getValueString("get_file_link").startsWith("--")) {
+				addLogEntry("ERROR: --get-file-link missing a valid entry");
+				operationalConflictDetected = true;
+			}
+		}
+		
 		// Return bool value indicating if we have an operational conflict
 		return operationalConflictDetected;
 	}
