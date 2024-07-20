@@ -1874,7 +1874,6 @@ class ApplicationConfig {
 		// --create-share-link cannot be used with --resync and/or --resync-auth
 		if ((!getValueString("create_share_link").empty) && ((getValueBool("resync")) || (getValueBool("resync_auth")))) {
 			addLogEntry("ERROR: --create-share-link cannot be used with --resync or --resync-auth");
-			
 			operationalConflictDetected = true;
 		}
 		
@@ -2008,6 +2007,15 @@ class ApplicationConfig {
 			// Does the string start with '--' ?
 			if (getValueString("get_file_link").startsWith("--")) {
 				addLogEntry("ERROR: --get-file-link missing a valid entry");
+				operationalConflictDetected = true;
+			}
+		}
+		
+		// Test that '--create-share-link <arg>' has a valid argument and not another directive
+		if (getValueString("create_share_link") != "") {
+			// Does the string start with '--' ?
+			if (getValueString("create_share_link").startsWith("--")) {
+				addLogEntry("ERROR: --create-share-link missing a valid entry");
 				operationalConflictDetected = true;
 			}
 		}
