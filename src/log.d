@@ -269,6 +269,7 @@ void addProcessingLogHeaderEntry(string message, long verbosityCount) {
 	}
 }
 
+// Add a processing '.' to indicate activity
 void addProcessingDotEntry() {
 	if (MonoTime.currTime() - lastInsertedTime < dur!"seconds"(1)) {
 		// Don't flood the log buffer
@@ -276,6 +277,11 @@ void addProcessingDotEntry() {
 	}
 	lastInsertedTime = MonoTime.currTime();
 	addLogEntry(".", ["consoleOnlyNoNewLine"]);
+}
+
+// Finish processing '.' line output
+void completeProcessingDots() {
+	addLogEntry(" ", ["consoleOnly"]);
 }
 
 // Function to set logFilePath and enable logging to a file

@@ -1038,7 +1038,7 @@ class SyncEngine {
 			if (appConfig.verbosityCount == 0) {
 				if (!appConfig.suppressLoggingOutput) {
 					// Close out the '....' being printed to the console
-					addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+					completeProcessingDots();
 				}
 			} else {
 				addLogEntry("Finished processing /delta JSON response from the OneDrive API", ["verbose"]);
@@ -1170,7 +1170,8 @@ class SyncEngine {
 			if (appConfig.verbosityCount == 0) {
 				// close off '.' output
 				if (!appConfig.suppressLoggingOutput) {
-					addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+					// Close out the '....' being printed to the console
+					completeProcessingDots();
 				}
 			}
 			
@@ -3057,7 +3058,7 @@ class SyncEngine {
 		// Close out the '....' being printed to the console
 		if (!appConfig.suppressLoggingOutput) {
 			if (appConfig.verbosityCount == 0) {
-				addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+				completeProcessingDots();
 			}
 		}
 		
@@ -4352,7 +4353,7 @@ class SyncEngine {
 		if (appConfig.verbosityCount == 0) {
 			if (!appConfig.suppressLoggingOutput) {
 				// Close out the '....' being printed to the console
-				addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+				completeProcessingDots();
 			}
 		}
 		
@@ -6570,7 +6571,8 @@ class SyncEngine {
 		if (appConfig.verbosityCount == 0) {
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (!appConfig.suppressLoggingOutput) {
-				addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+				// Close out the '....' being printed to the console
+				completeProcessingDots();
 			}
 		}
 		
@@ -7687,7 +7689,7 @@ class SyncEngine {
 		
 		// Needed after printing out '....' when fetching changes from OneDrive API
 		if (appConfig.verbosityCount == 0) {
-			addLogEntry("\n", ["consoleOnlyNoNewLine"]);
+			completeProcessingDots();
 		}
 		
 		// Are there any JSON items to process?
@@ -7728,13 +7730,17 @@ class SyncEngine {
 						// item exists in database .. do the database details match the JSON record?
 						if (existingDatabaseItem.quickXorHash != thisItemHash) {
 							// file hash is different, this will trigger a download event
-							downloadSize = downloadSize + onedriveJSONItem["size"].integer;
+							if (hasFileSize(onedriveJSONItem)) {
+								downloadSize = downloadSize + onedriveJSONItem["size"].integer;
+							}
 						} 
 					} else {
 						// item does not exist in the database
 						// this item has already passed client side filtering rules (skip_dir, skip_file, sync_list)
 						// this will trigger a download event
-						downloadSize = downloadSize + onedriveJSONItem["size"].integer;
+						if (hasFileSize(onedriveJSONItem)) {
+							downloadSize = downloadSize + onedriveJSONItem["size"].integer;
+						}
 					}
 				}
 			}
@@ -7744,14 +7750,14 @@ class SyncEngine {
 		if (downloadSize > 0) {
 			// we have something to download
 			if (pathToQueryStatusOn != "/") {
-				writeln("The selected local directory via --single-directory is out of sync with Microsoft OneDrive");
+				addLogEntry("The selected local directory via --single-directory is out of sync with Microsoft OneDrive");
 			} else {
-				writeln("The configured local 'sync_dir' directory is out of sync with Microsoft OneDrive");
+				addLogEntry("The configured local 'sync_dir' directory is out of sync with Microsoft OneDrive");
 			}
-			writeln("Approximate data to download from Microsoft OneDrive: ", (downloadSize/1024), " KB");
+			addLogEntry("Approximate data to download from Microsoft OneDrive: " ~ to!string(downloadSize/1024) ~ " KB");
 		} else {
 			// No changes were returned
-			writeln("There are no pending changes from Microsoft OneDrive; your local directory matches the data online.");
+			addLogEntry("There are no pending changes from Microsoft OneDrive; your local directory matches the data online.");
 		}
 	}
 	
