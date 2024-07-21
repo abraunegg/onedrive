@@ -2047,6 +2047,15 @@ class ApplicationConfig {
 			}
 		}
 		
+		// Test that '--destination-directory <arg>' has a valid argument and not another directive
+		if (getValueString("destination_directory") != "") {
+			// Does the string start with '--' ?
+			if (getValueString("destination_directory").startsWith("--")) {
+				addLogEntry("ERROR: --destination-directory missing a valid entry");
+				operationalConflictDetected = true;
+			}
+		}
+		
 		// Return bool value indicating if we have an operational conflict
 		return operationalConflictDetected;
 	}
