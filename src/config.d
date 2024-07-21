@@ -2020,6 +2020,15 @@ class ApplicationConfig {
 			}
 		}
 		
+		// Test that '--create-directory <arg>' has a valid argument and not another directive
+		if (getValueString("create_directory") != "") {
+			// Does the string start with '--' ?
+			if (getValueString("create_directory").startsWith("--")) {
+				addLogEntry("ERROR: --create-directory missing a valid entry");
+				operationalConflictDetected = true;
+			}
+		}
+		
 		// Return bool value indicating if we have an operational conflict
 		return operationalConflictDetected;
 	}
@@ -2251,6 +2260,7 @@ void outputLongHelp(Option[] opt) {
 			"--destination-directory",
 			"--get-file-link",
 			"--get-O365-drive-id",
+			"--get-sharepoint-drive-id",
 			"--log-dir",
 			"--min-notify-changes",
 			"--modified-by",
