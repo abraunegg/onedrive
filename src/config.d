@@ -2038,6 +2038,15 @@ class ApplicationConfig {
 			}
 		}
 		
+		// Test that '--source-directory <arg>' has a valid argument and not another directive
+		if (getValueString("source_directory") != "") {
+			// Does the string start with '--' ?
+			if (getValueString("source_directory").startsWith("--")) {
+				addLogEntry("ERROR: --source-directory missing a valid entry");
+				operationalConflictDetected = true;
+			}
+		}
+		
 		// Return bool value indicating if we have an operational conflict
 		return operationalConflictDetected;
 	}
