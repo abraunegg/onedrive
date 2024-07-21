@@ -2029,6 +2029,15 @@ class ApplicationConfig {
 			}
 		}
 		
+		// Test that '--remove-directory <arg>' has a valid argument and not another directive
+		if (getValueString("remove_directory") != "") {
+			// Does the string start with '--' ?
+			if (getValueString("remove_directory").startsWith("--")) {
+				addLogEntry("ERROR: --remove-directory missing a valid entry");
+				operationalConflictDetected = true;
+			}
+		}
+		
 		// Return bool value indicating if we have an operational conflict
 		return operationalConflictDetected;
 	}
