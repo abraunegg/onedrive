@@ -188,6 +188,11 @@ int main(string[] cliArgs) {
 	// Update the current runtime application configuration (default or 'config' fileread-in options) from any passed in command line arguments
 	appConfig.updateFromArgs(cliArgs);
 	
+	// In a debug scenario, to assist with understanding the run-time configuration, ensure this flag is set
+	if (debugLogging) {
+		appConfig.setValueBool("display_running_config", true);
+	}
+	
 	// Configure dryRun so that this can be used here & during shutdown
 	dryRun = appConfig.getValueBool("dry_run");
 	
