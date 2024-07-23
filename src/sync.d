@@ -4642,6 +4642,12 @@ class SyncEngine {
 					// pipes - whilst technically valid files, are not valid for this client
 					//  prw-rw-r--.  1 user user    0 Jul  7 05:55 my_pipe
 					if (isFile(path)) {
+						// Is the file a '.nosync' file?
+						if (canFind(path, ".nosync")) {
+							addLogEntry("Skipping .nosync file", ["debug"]);
+							return;
+						}
+					
 						// Was the file found in the database?
 						if (!itemFoundInDB) {
 							// File not found in database when searching all drive id's
