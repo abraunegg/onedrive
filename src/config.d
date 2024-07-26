@@ -1184,6 +1184,12 @@ class ApplicationConfig {
 				setValueString("sync_dir", getValueString("sync_dir_cli"));
 			}
 			
+			// was --monitor-interval used and now set to a value below minimum requirement?
+			if (getValueLong("monitor_interval") < 300 ) {
+				addLogEntry("Invalid value for --monitor-interval - using default value: 300");
+				setValueLong("monitor_interval", 300);
+			}
+			
 			// Was --auth-files used?
 			if (!getValueString("auth_files").empty) {
 				// --auth-files used, need to validate that '~' was not used as a path identifier, and if yes, perform the correct expansion
