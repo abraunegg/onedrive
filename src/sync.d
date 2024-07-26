@@ -3740,9 +3740,9 @@ class SyncEngine {
 							// Keep only the part after ':'
 							selfBuiltPath = selfBuiltPath[splitIndex + 1 .. $];
 						}
-						
-						// Set newItemPath to the self built path
-						newItemPath = selfBuiltPath;
+						// If selfBuiltPath is containing any sort of URL encoding, due to special characters (spaces, umlaut, or any other character that is HTML encoded, this specific path now needs to be HTML decoded
+						// Set newItemPath to the self built decoded path
+						newItemPath = decodeComponent(selfBuiltPath);
 					} else {
 						// no parent reference path available in provided JSON
 						newItemPath = thisItemName;
