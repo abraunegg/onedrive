@@ -3735,11 +3735,30 @@ class SyncEngine {
 						string selfBuiltPath = onedriveJSONItem["parentReference"]["path"].str ~ "/" ~ onedriveJSONItem["name"].str;
 						
 						// Check for ':' and split if present
+						string[] splitPaths;
 						auto splitIndex = selfBuiltPath.indexOf(":");
 						if (splitIndex != -1) {
 							// Keep only the part after ':'
-							selfBuiltPath = selfBuiltPath[splitIndex + 1 .. $];
+							splitPaths = selfBuiltPath.split(":");
+							selfBuiltPath = splitPaths[1];
 						}
+						
+						// Issue #2731
+						// Is this potentially a shared folder?
+						if (onedriveJSONItem["parentReference"]["driveId"].str != appConfig.defaultDriveId) {
+							// Download item specifics
+							string downloadDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+							string parentFolderId = baseName(splitPaths[0]);
+							
+							// Query the database for the parent folder details
+							Item remoteItem;
+							itemDB.selectByRemoteId(downloadDriveId, parentFolderId, remoteItem);
+							
+							// Update the path that will be used to check 'sync_list' with
+							selfBuiltPath = remoteItem.name ~ selfBuiltPath;
+						}
+						
+						// Issue #2740
 						// If selfBuiltPath is containing any sort of URL encoding, due to special characters (spaces, umlaut, or any other character that is HTML encoded, this specific path now needs to be HTML decoded
 						// Set newItemPath to the self built decoded path
 						newItemPath = decodeComponent(selfBuiltPath);
@@ -3761,7 +3780,7 @@ class SyncEngine {
 					newItemPath = newItemPath[1..$];
 				}
 				
-				// What path are we checking?
+				// What path are we checking against sync_list?
 				addLogEntry("sync_list item to check: " ~ newItemPath, ["debug"]);
 				
 				// Unfortunately there is no avoiding this call to check if the path is excluded|included via sync_list
