@@ -463,4 +463,4 @@ This issue is caused by the way the 'onedrive' packages are built using the dist
 *  https://github.com/abraunegg/onedrive/issues/1609
 
 **Resolution Options:**
-*  Uninstall the package and build client from source
+*  Uninstall the 'onedrive' package and build client from source, installing either the DMD or LDC compiler via the Install Script found here: https://dlang.org/download.html. Do not use your distribuion provided 'ldc' package.
