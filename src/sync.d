@@ -190,6 +190,8 @@ class SyncEngine {
 	// Array of driveId and deltaLink for use when performing the last examination of the most recent online data
 	alias DeltaLinkInfo = string[string];
 	DeltaLinkInfo deltaLinkInfo;
+	// Flag to denote data cleanup pass when using --download-only --cleanup-local-files
+	bool cleanupDataPass = false;
 	
 	// Create the specific task pool to process items in parallel
 	TaskPool processPool;
@@ -4352,6 +4354,8 @@ class SyncEngine {
 					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload", appConfig.verbosityCount);
 				} else {
 					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for data to cleanup", appConfig.verbosityCount);
+					// Set the cleanup flag
+					cleanupDataPass = true;
 				}
 			}
 		}
@@ -4368,6 +4372,8 @@ class SyncEngine {
 		
 		// Perform the filesystem walk of this path, building an array of new items to upload
 		scanPathForNewData(path);
+		// Reset flag
+		cleanupDataPass = false;
 		
 		if (appConfig.verbosityCount == 0) {
 			if (!appConfig.suppressLoggingOutput) {
@@ -4549,7 +4555,10 @@ class SyncEngine {
 				// - sync_list
 				// - skip_size
 				if (!unwanted) {
-					unwanted = checkPathAgainstClientSideFiltering(path);
+					// If this is not the cleanup data pass when using --download-only --cleanup-local-files we dont want to exclude files we need to delete locally when using 'sync_list'
+					if (!cleanupDataPass) {
+						unwanted = checkPathAgainstClientSideFiltering(path);
+					}
 				}
 				
 				// Check this path against the Microsoft Naming Conventions & Restristions
@@ -4609,11 +4618,15 @@ class SyncEngine {
 								// are we in a --dry-run scenario?
 								if (!dryRun) {
 									// No --dry-run ... process local delete
-									try {
-										rmdirRecurse(path);
-									} catch (FileException e) {
-										// display the error message
-										displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+									if (exists(path)) {
+									
+										try {
+											rmdirRecurse(path);
+										} catch (FileException e) {
+											// display the error message
+											displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+										}
+										
 									}
 								}
 							} catch (FileException e) {
@@ -4641,18 +4654,20 @@ class SyncEngine {
 					// Do we traverse this path?
 					if (!skipFolderTraverse) {
 						// Try and access this directory and any path below
-						try {
-							auto directoryEntries = dirEntries(path, SpanMode.shallow, false);
-							foreach (DirEntry entry; directoryEntries) {
-								string thisPath = entry.name;
-								scanPathForNewData(thisPath);
+						if (exists(path)) {
+							try {
+								auto directoryEntries = dirEntries(path, SpanMode.shallow, false);
+								foreach (DirEntry entry; directoryEntries) {
+									string thisPath = entry.name;
+									scanPathForNewData(thisPath);
+								}
+								// Clear directoryEntries
+								object.destroy(directoryEntries);
+							} catch (FileException e) {
+								// display the error message
+								displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+								return;
 							}
-							// Clear directoryEntries
-							object.destroy(directoryEntries);
-						} catch (FileException e) {
-							// display the error message
-							displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
-							return;
 						}
 					}
 				} else {
