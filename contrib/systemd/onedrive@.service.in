@@ -1,12 +1,13 @@
 [Unit]
-Description=OneDrive Free Client for %i
+Description=OneDrive Client for Linux running for %i
 Documentation=https://github.com/abraunegg/onedrive
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-# Commented out hardenings are disabled because they don't work out of the box.
+# Commented out hardenings are disabled because they may not work out of the box on your distribution
 # If you know what you are doing please try to enable them.
+
 ProtectSystem=full
 #PrivateDevices=true
 ProtectHostname=true
