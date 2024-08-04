@@ -38,8 +38,9 @@ class LogBuffer {
 	private bool verboseLogging;
 	private bool debugLogging;
 	private Thread flushThread;
+	private bool environmentVariablesAvailable;
 	private bool sendGUINotification;
-    
+	    
 	this(bool verboseLogging, bool debugLogging) {
 		// Initialise the mutex
 		bufferLock = new Mutex();
@@ -51,7 +52,8 @@ class LogBuffer {
 		this.writeToFile = false;
 		this.verboseLogging = verboseLogging;
 		this.debugLogging = debugLogging;
-		this.sendGUINotification = true;
+		this.environmentVariablesAvailable = false;
+		this.sendGUINotification = false;
 		this.flushThread = new Thread(&flushBuffer);
 		this.flushThread.isDaemon(true);
 		this.flushThread.start();
@@ -153,10 +155,8 @@ class LogBuffer {
 				// Submit the message to the dbus / notification daemon for display within the GUI being used
 				// Will not send GUI notifications when running in debug mode
 				if ((!debugLogging) && (level == "notify")) {
-					version(Notifications) {
-						if (sendGUINotification) {
-							notify(message);
-						}
+					if (sendGUINotification) {
+						notify(message);
 					}
 				}
 			}
@@ -165,8 +165,15 @@ class LogBuffer {
 		}
 	}
 		
+	
+	
+	// Is the notification DBUS Server available?
+	
+	
+	
+	// Send GUI notification if --enable-notifications as been used at compile time
 	void notify(string message) {
-		// Use dnotify's functionality for GUI notifications, if GUI notifications is enabled
+		// Use dnotify's functionality for GUI notifications, if GUI notification support has been compiled in
 		version(Notifications) {
 			try {
 				auto n = new Notification("OneDrive Client", message, "IGNORED");
@@ -180,6 +187,7 @@ class LogBuffer {
 		}
 	}
 
+	// Flush the logging buffer
 	private void flush() {
 		string[3][] messages;
 		synchronized(bufferLock) {
@@ -290,6 +298,31 @@ void enableLogFileOutput(string configuredLogFilePath) {
 	logBuffer.writeToFile = true;
 }
 
+// Flag that the environment variables exists so if logging is compiled in, it can be enabled
+void flagEnvironmentVariablesAvailable(bool variablesAvailable) {
+	logBuffer.environmentVariablesAvailable = variablesAvailable;
+}
+
+// Disable GUI Notifications
 void disableGUINotifications(bool userConfigDisableNotifications) {
 	logBuffer.sendGUINotification = userConfigDisableNotifications;
+}
+
+// Validate that if GUI Notification support has been compiled in using --enable-notifications, the DBUS Server is actually usable
+void validateDBUSServerAvailability() {
+	version(Notifications) {
+		if (logBuffer.environmentVariablesAvailable) {
+			bool serverAvailable = dnotify.check_availability();
+			if (!serverAvailable) {
+				addLogEntry("WARNING: Notification (dbus) server is not available, disabling GUI notifications");
+				logBuffer.sendGUINotification = false;
+			} else {
+				addLogEntry("Notification (dbus) server is available, enabling GUI notifications");
+				logBuffer.sendGUINotification = true;
+			}
+		} else {
+			addLogEntry("WARNING: Required environment variables for GUI Notifications are not available, disabling GUI notifications");
+			logBuffer.sendGUINotification = false;
+		}
+	}
 }

@@ -196,6 +196,10 @@ class ApplicationConfig {
 	bool[string] boolValues;
 	bool shellEnvironmentSet = false;
 	
+	// GUI Notification Environment variables
+	bool xdg_exists = false;
+	bool dbus_exists = false;
+	
 	// Initialise the application configuration
 	bool initialise(string confdirOption, bool helpRequested) {
 		
@@ -359,8 +363,14 @@ class ApplicationConfig {
 				shellEnvironmentSet = true;
 			}
 		}
+		
 		// outcome of setting defaultHomePath
 		addLogEntry("runtime_environment: Calculated defaultHomePath: " ~ defaultHomePath, ["debug"]);
+		
+		// If logging was compiled in, we need to ensure that these variables are actually available before we enable GUI Notifications
+		flagEnvironmentVariablesAvailable(validateGUINotificationEnvironmentVariables());
+		// Attempt to enable GUI Notifications
+		validateDBUSServerAvailability();
 		
 		// DEVELOPER OPTIONS
 		// display_memory = true | false
@@ -1368,6 +1378,14 @@ class ApplicationConfig {
 		addLogEntry("Config option 'ip_protocol_version'          = " ~ to!string(getValueLong("ip_protocol_version")));
 		addLogEntry("Config option 'threads'                      = " ~ to!string(getValueLong("threads")));
 		
+		// GUI notifications
+		version(Notifications) {
+			addLogEntry("Environment var 'XDG_RUNTIME_DIR'            = " ~ to!string(xdg_exists));
+			addLogEntry("Environment var 'DBUS_SESSION_BUS_ADDRESS'   = " ~ to!string(dbus_exists));
+		} else {
+			addLogEntry("Compile time option --enable-notifications   = false");
+		}
+		
 		// Is sync_list configured ?
 		if (exists(syncListFilePath)){
 			addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
@@ -2278,6 +2296,59 @@ class ApplicationConfig {
 		
 		// Return result
 		return noSyncOperation;
+	}
+	
+	// Are the required GUI logging environment variables for this user available?
+	// Specifically these must be available:
+	// - XDG_RUNTIME_DIR
+	// - DBUS_SESSION_BUS_ADDRESS
+	bool validateGUINotificationEnvironmentVariables() {
+	
+		bool variablesAvailable = false;
+		string xdg_value;
+		string dbus_value;
+		
+		version(Notifications) {
+			// Check XDG_RUNTIME_DIR environment variable
+			try {
+				xdg_value = environment["XDG_RUNTIME_DIR"];
+				xdg_exists = true;
+			} catch (Exception e) {
+				xdg_exists = false;
+			}
+			
+			// Check DBUS_SESSION_BUS_ADDRESS environment variable
+			try {
+				dbus_value = environment["DBUS_SESSION_BUS_ADDRESS"];
+				dbus_exists = true;
+			} catch (Exception e) {
+				dbus_exists = false;
+			}
+			
+			// Output the result
+			if (xdg_exists) {
+				addLogEntry("runtime_environment: XDG_RUNTIME_DIR exists with value: " ~ xdg_value , ["debug"]);
+			} else {
+				addLogEntry("runtime_environment: XDG_RUNTIME_DIR missing from runtime user environment", ["debug"]);
+			}
+			
+			if (dbus_exists) {
+				addLogEntry("runtime_environment: DBUS_SESSION_BUS_ADDRESS exists with value: " ~ dbus_value, ["debug"]);
+			} else {
+				addLogEntry("runtime_environment: DBUS_SESSION_BUS_ADDRESS missing from runtime user environment", ["debug"]);
+			}
+
+			// Determine result
+			if (xdg_exists && dbus_exists) {
+				variablesAvailable = true;
+			} else {
+				addLogEntry("WARNING: Required environment variables required to enable GUI Notifications are not present");
+				variablesAvailable = false;
+			}	
+		}
+
+		// Return result
+		return variablesAvailable;
 	}
 }
 
