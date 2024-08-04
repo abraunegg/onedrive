@@ -176,13 +176,11 @@ class LogBuffer {
 		// Use dnotify's functionality for GUI notifications, if GUI notification support has been compiled in
 		version(Notifications) {
 			try {
-				auto n = new Notification("OneDrive Client", message, "IGNORED");
-				// Show notification for 10 seconds
-				n.timeout = 10;
+				auto n = new Notification("OneDrive Client for Linux", message, "dialog-information");
 				n.show();
 			} catch (NotificationError e) {
+				addLogEntry("Unable to send notification to the GUI, disabling GUI notifications: " ~ e.message);
 				sendGUINotification = false;
-				addLogEntry("Unable to send notification; disabled in the following: " ~ e.message);
 			}
 		}
 	}
@@ -312,7 +310,7 @@ void disableGUINotifications(bool userConfigDisableNotifications) {
 void validateDBUSServerAvailability() {
 	version(Notifications) {
 		if (logBuffer.environmentVariablesAvailable) {
-			bool serverAvailable = dnotify.check_availability();
+			auto serverAvailable = dnotify.check_availability();
 			if (!serverAvailable) {
 				addLogEntry("WARNING: Notification (dbus) server is not available, disabling GUI notifications");
 				logBuffer.sendGUINotification = false;
