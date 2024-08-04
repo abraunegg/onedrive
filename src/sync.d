@@ -5336,9 +5336,6 @@ class SyncEngine {
 								if (parentItem.driveId == appConfig.defaultDriveId) {
 									// getPathDetailsByDriveId is only reliable when the driveId is our driveId
 									fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload);
-									
-									addLogEntry("fileDetailsFromOneDrive: " ~ to!string(fileDetailsFromOneDrive));
-									
 								} else {
 									// We need to curate a response by listing the children of this parentItem.driveId and parentItem.id , without traversing directories
 									// So that IF the file is on a Shared Folder, it can be found, and, if it exists, checked correctly
