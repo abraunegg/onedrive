@@ -312,10 +312,10 @@ void validateDBUSServerAvailability() {
 		if (logBuffer.environmentVariablesAvailable) {
 			auto serverAvailable = dnotify.check_availability();
 			if (!serverAvailable) {
-				addLogEntry("WARNING: Notification (dbus) server is not available, disabling GUI notifications");
+				addLogEntry("WARNING: D-Bus message bus daemon is not available; GUI notifications are disabled");
 				logBuffer.sendGUINotification = false;
 			} else {
-				addLogEntry("Notification (dbus) server is available, enabling GUI notifications");
+				addLogEntry("D-Bus message bus daemon is available; GUI notifications are now enabled");
 				logBuffer.sendGUINotification = true;
 			}
 		} else {
