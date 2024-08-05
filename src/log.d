@@ -314,7 +314,7 @@ void validateDBUSServerAvailability() {
 				logBuffer.sendGUINotification = true;
 			}
 		} else {
-			addLogEntry("WARNING: The required environment variables to enable GUI Notifications are not available, disabling GUI notifications");
+			addLogEntry("WARNING: The required environment variables to enable GUI Notifications are not available; GUI notifications are disabled");
 			logBuffer.sendGUINotification = false;
 		}
 	}
