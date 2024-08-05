@@ -627,7 +627,15 @@ Using the following path to store the runtime application log: /var/log/onedrive
 ```
 
 ### GUI Notifications
-If notification support has been compiled in (refer to [GUI Notification Support](install.md#gui-notification-support)), the following events will trigger a GUI notification within the display manager session:
+To enable GUI notifications, you must compile the application with GUI Notification Support. Refer to [GUI Notification Support](install.md#gui-notification-support) for details. Once compiled, GUI notifications will work by default in the display manager session under the following conditions:
+
+* A D-Bus message bus daemon must be running.
+* The environment variables XDG_RUNTIME_DIR and DBUS_SESSION_BUS_ADDRESS must be set.
+
+Without these conditions met, GUI notifications will not function even if the support is compiled in.
+
+Once these conditions have been met, the following application events will trigger a GUI notification within the display manager session by default:
+
 *   Aborting a sync if .nosync file is found
 *   Skipping a particular item due to an invalid name
 *   Skipping a particular item due to an invalid symbolic link
