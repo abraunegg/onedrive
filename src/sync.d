@@ -3762,8 +3762,16 @@ class SyncEngine {
 						
 						// Issue #2740
 						// If selfBuiltPath is containing any sort of URL encoding, due to special characters (spaces, umlaut, or any other character that is HTML encoded, this specific path now needs to be HTML decoded
-						// Set newItemPath to the self built decoded path
-						newItemPath = decodeComponent(selfBuiltPath);
+						addLogEntry("selfBuiltPath for sync_list check: " ~ selfBuiltPath, ["debug"]);
+						
+						// Does the path contain HTML encoding?
+						if (containsURLEncodedItems(selfBuiltPath)) {
+							// decode it
+							newItemPath = decodeComponent(selfBuiltPath);
+						} else {
+							// use as-is
+							newItemPath = selfBuiltPath;
+						}
 					} else {
 						// no parent reference path available in provided JSON
 						newItemPath = thisItemName;
