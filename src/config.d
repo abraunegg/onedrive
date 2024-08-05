@@ -395,7 +395,7 @@ class ApplicationConfig {
 		
 		// Function variables
 		string configDirBase;
-		string systemConfigDirBase;
+		string systemConfigDirBase = "/etc";
 		bool configurationInitialised = false;
 		
 		// Initialise the application configuration, using the provided --confdir option was passed in
@@ -405,6 +405,7 @@ class ApplicationConfig {
 			confdirOption = strip(confdirOption,"\"");
 			addLogEntry("configDirName: CLI override to set configDirName to: " ~ confdirOption, ["debug"]);
 			
+			// For the passed in --confdir option ..
 			if (canFind(confdirOption,"~")) {
 				// A ~ was found
 				addLogEntry("configDirName: A '~' was found in configDirName, using the calculated 'defaultHomePath' to replace '~'", ["debug"]);
@@ -421,8 +422,6 @@ class ApplicationConfig {
 				// XDG_CONFIG_HOME does not exist on systems where X11 is not present - ie - headless systems / servers
 				addLogEntry("configDirBase: WARNING - no XDG_CONFIG_HOME environment variable set", ["debug"]);
 				configDirBase = buildNormalizedPath(buildPath(defaultHomePath, ".config"));
-				// Also set up a path to pre-shipped shared configs (which can be overridden by supplying a config file in userspace)
-				systemConfigDirBase = "/etc";
 			}
 			
 			// Output configDirBase calculation
@@ -431,9 +430,10 @@ class ApplicationConfig {
 			addLogEntry("configDirName: Configuring application to use calculated config path", ["debug"]);
 			// configDirBase contains the correct path so we do not need to check for presence of '~'
 			configDirName = buildNormalizedPath(buildPath(configDirBase, "onedrive"));
-			// systemConfigDirBase contains the correct path so we do not need to check for presence of '~'
-			systemConfigDirName = buildNormalizedPath(buildPath(systemConfigDirBase, "onedrive"));
 		}
+		
+		// systemConfigDirBase contains the correct path, build the correct path for the system config file
+		systemConfigDirName = buildNormalizedPath(buildPath(systemConfigDirBase, "onedrive"));
 		
 		// Configuration directory should now have been correctly identified
 		if (!exists(configDirName)) {
@@ -508,33 +508,40 @@ class ApplicationConfig {
 		} else {
 			// Initialise the application using the configuration file if it exists
 			if (!exists(userConfigFilePath)) {
-				// 'user' configuration file does not exist
-				// Is there a system configuration file?
-				if (!exists(systemConfigFilePath)) {
-					// 'system' configuration file does not exist
-					addLogEntry("No user or system config file found, using application defaults", ["verbose"]);
-					applicableConfigFilePath = userConfigFilePath;
-					configurationInitialised = true;
-				} else {
-					// 'system' configuration file exists
-					// can we load the configuration file without error?
-					if (loadConfigFile(systemConfigFilePath)) {
-						// configuration file loaded without error
-						addLogEntry("System configuration file successfully loaded");
-						
-						// Set 'applicableConfigFilePath' to equal the 'config' we loaded
-						applicableConfigFilePath = systemConfigFilePath;
-						// Update the configHashFile path value to ensure we are using the system 'config' file for the hash
-						configHashFile = buildNormalizedPath(buildPath(systemConfigDirName, ".config.hash"));
+				// 'user' configuration file does not exist .. but did the user specify a custom configuration directory via --confdir ?
+				if (confdirOption.empty) {
+					// No --confdir entry
+					// Is there a system configuration file?
+					if (!exists(systemConfigFilePath)) {
+						// 'system' configuration file does not exist
+						addLogEntry("No user or system config file found, using application defaults", ["verbose"]);
+						applicableConfigFilePath = userConfigFilePath;
 						configurationInitialised = true;
 					} else {
-						// there was a problem loading the configuration file
-						addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
-						addLogEntry("System configuration file has errors - please check your configuration");
+						// 'system' configuration file exists
+						// can we load the configuration file without error?
+						if (loadConfigFile(systemConfigFilePath)) {
+							// configuration file loaded without error
+							addLogEntry("System configuration file successfully loaded");
+							
+							// Set 'applicableConfigFilePath' to equal the 'config' we loaded
+							applicableConfigFilePath = systemConfigFilePath;
+							// Update the configHashFile path value to ensure we are using the system 'config' file for the hash
+							configHashFile = buildNormalizedPath(buildPath(systemConfigDirName, ".config.hash"));
+							configurationInitialised = true;
+						} else {
+							// there was a problem loading the configuration file
+							addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
+							addLogEntry("System configuration file has errors - please check your configuration");
+						}
 					}
-				}						
+				} else {
+					// Set 'applicableConfigFilePath' to equal the 'config' path specified via --confdir
+					applicableConfigFilePath = userConfigFilePath;
+					configurationInitialised = true;
+				}
 			} else {
-				// 'user' configuration file exists
+				// 'user' configuration file exists in the specified path
 				// can we load the configuration file without error?
 				if (loadConfigFile(userConfigFilePath)) {
 					// configuration file loaded without error
@@ -552,10 +559,11 @@ class ApplicationConfig {
 			
 			// Advise the user path that we will use for the application state data
 			if (canFind(applicableConfigFilePath, configDirName)) {
-				addLogEntry("Using 'user' configuration path for application state data: " ~ configDirName, ["verbose"]);
-			} else {
+				addLogEntry("Using 'user' configuration path for application config and state data: " ~ configDirName, ["verbose"]);
+			} else {				
 				if (canFind(applicableConfigFilePath, systemConfigDirName)) {
-					addLogEntry("Using 'system' configuration path for application state data: " ~ systemConfigDirName, ["verbose"]);
+					addLogEntry("Using 'system' configuration path for application config data: " ~ systemConfigDirName, ["verbose"]);
+					addLogEntry("Using 'user' configuration path for application state data:    " ~ configDirName, ["verbose"]);
 				}
 			}
 		}
