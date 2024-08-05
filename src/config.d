@@ -1735,17 +1735,27 @@ class ApplicationConfig {
 			if (exists(applicableConfigFilePath)) {
 				// Update the hash of the applicable config file
 				addLogEntry("Updating applicable config file hash", ["debug"]);
-				std.file.write(configHashFile, computeQuickXorHash(applicableConfigFilePath));
-				// Hash file should only be readable by the user who created it - 0600 permissions needed
-				configHashFile.setAttributes(convertedPermissionValue);
+				try {
+					std.file.write(configHashFile, computeQuickXorHash(applicableConfigFilePath));
+					// Hash file should only be readable by the user who created it - 0600 permissions needed
+					configHashFile.setAttributes(convertedPermissionValue);
+				} catch (FileException e) {
+					// filesystem error
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				}
 			}
 			// Update 'sync_list' files
 			if (exists(syncListFilePath)) {
 				// update sync_list hash
 				addLogEntry("Updating sync_list hash", ["debug"]);
-				std.file.write(syncListHashFile, computeQuickXorHash(syncListFilePath));
-				// Hash file should only be readable by the user who created it - 0600 permissions needed
-				syncListHashFile.setAttributes(convertedPermissionValue);
+				try {
+					std.file.write(syncListHashFile, computeQuickXorHash(syncListFilePath));
+					// Hash file should only be readable by the user who created it - 0600 permissions needed
+					syncListHashFile.setAttributes(convertedPermissionValue);
+				} catch (FileException e) {
+					// filesystem error
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				}
 			}
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
@@ -1759,9 +1769,14 @@ class ApplicationConfig {
 		if (exists(applicableConfigFilePath)) {
 			if (!exists(configHashFile)) {
 				// no existing hash file exists
-				std.file.write(configHashFile, "initial-hash");
-				// Hash file should only be readable by the user who created it - 0600 permissions needed
-				configHashFile.setAttributes(convertedPermissionValue);
+				try {
+					std.file.write(configHashFile, "initial-hash");
+					// Hash file should only be readable by the user who created it - 0600 permissions needed
+					configHashFile.setAttributes(convertedPermissionValue);
+				} catch (FileException e) {
+					// filesystem error
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				}
 			}
 			// Generate the runtime hash for the 'config' file
 			currentConfigHash = computeQuickXorHash(applicableConfigFilePath);
@@ -1771,9 +1786,14 @@ class ApplicationConfig {
 		if (exists(syncListFilePath)) {
 			if (!exists(syncListHashFile)) {
 				// no existing hash file exists
-				std.file.write(syncListHashFile, "initial-hash");
-				// Hash file should only be readable by the user who created it - 0600 permissions needed
-				syncListHashFile.setAttributes(convertedPermissionValue);
+				try {
+					std.file.write(syncListHashFile, "initial-hash");
+					// Hash file should only be readable by the user who created it - 0600 permissions needed
+					syncListHashFile.setAttributes(convertedPermissionValue);
+				} catch (FileException e) {
+					// filesystem error
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				}
 			}
 			// Generate the runtime hash for the 'sync_list' file
 			currentSyncListHash = computeQuickXorHash(syncListFilePath);
