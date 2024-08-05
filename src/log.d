@@ -165,12 +165,6 @@ class LogBuffer {
 		}
 	}
 		
-	
-	
-	// Is the notification DBUS Server available?
-	
-	
-	
 	// Send GUI notification if --enable-notifications as been used at compile time
 	void notify(string message) {
 		// Use dnotify's functionality for GUI notifications, if GUI notification support has been compiled in
@@ -179,7 +173,7 @@ class LogBuffer {
 				auto n = new Notification("OneDrive Client for Linux", message, "dialog-information");
 				n.show();
 			} catch (NotificationError e) {
-				addLogEntry("Unable to send notification to the GUI, disabling GUI notifications: " ~ e.message);
+				addLogEntry("Unable to send notification to the D-Bus message bus daemon, disabling GUI notifications: " ~ e.message);
 				sendGUINotification = false;
 			}
 		}
@@ -316,10 +310,11 @@ void validateDBUSServerAvailability() {
 				logBuffer.sendGUINotification = false;
 			} else {
 				addLogEntry("D-Bus message bus daemon is available; GUI notifications are now enabled");
+				addLogEntry("D-Bus message bus daemon server details: " ~ to!string(dnotify.get_server_info()), ["debug"]);
 				logBuffer.sendGUINotification = true;
 			}
 		} else {
-			addLogEntry("WARNING: Required environment variables for GUI Notifications are not available, disabling GUI notifications");
+			addLogEntry("WARNING: The required environment variables to enable GUI Notifications are not available, disabling GUI notifications");
 			logBuffer.sendGUINotification = false;
 		}
 	}
