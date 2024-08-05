@@ -1309,13 +1309,30 @@ class ApplicationConfig {
 		}
 		
 		// Display application version
-		addLogEntry("onedrive version                             = " ~ applicationVersion);
-		addLogEntry("compiled with                                = " ~ compilerDetails());
+		addLogEntry("Application version                          = " ~ applicationVersion);
+		addLogEntry("Compiled with                                = " ~ compilerDetails());
 		
 		// Display all of the pertinent configuration options
-		addLogEntry("Config path                                  = " ~ configDirName);
+		addLogEntry("User Application Config path                 = " ~ configDirName);
+		addLogEntry("System Application Config path               = " ~ systemConfigDirName);
+		
 		// Does a config file exist or are we using application defaults
-		addLogEntry("Config file found in config path             = " ~ to!string(exists(applicableConfigFilePath)));
+		addLogEntry("Applicable Application 'config' location     = " ~ applicableConfigFilePath);
+		
+		string configFileStatusMessage;
+		if (exists(applicableConfigFilePath)) {
+			configFileStatusMessage = "true - using 'config' file values to override application defaults";
+		} else {
+			configFileStatusMessage = "false - using application defaults";
+		}
+		addLogEntry("Configuration file found in config location  = " ~ configFileStatusMessage);
+		
+		// Display where various files should live
+		// - items.sqlite3
+		// - sync_list
+		// If using the 'system' directory, (/etc/onedrive) for the config file, these should always live in the 'users' home directory
+		addLogEntry("Applicable 'sync_list' location              = " ~ syncListFilePath);
+		addLogEntry("Applicable 'items.sqlite3' location          = " ~ databaseFilePath);
 		
 		// Is config option drive_id configured?
 		addLogEntry("Config option 'drive_id'                     = " ~ getValueString("drive_id"));
