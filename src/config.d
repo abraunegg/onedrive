@@ -1756,6 +1756,7 @@ class ApplicationConfig {
 		// Are we in a --dry-run scenario?
 		if (!getValueBool("dry_run")) {
 			// Not a dry-run scenario, update the applicable files
+			addLogEntry("applicableConfigFilePath:" ~ applicableConfigFilePath);
 			// Update applicable 'config' files
 			if (exists(applicableConfigFilePath)) {
 				// Update the hash of the applicable config file
@@ -1863,8 +1864,24 @@ class ApplicationConfig {
 		// - Any new folder created under ~/OneDrive or 'sync_dir'
 		// - Any new file created under ~/OneDrive or 'sync_dir'
 		// valid permissions are 000 -> 777 - anything else is invalid
-		if ((getValueLong("sync_dir_permissions") < 0) || (getValueLong("sync_file_permissions") < 0) || (getValueLong("sync_dir_permissions") > 777) || (getValueLong("sync_file_permissions") > 777)) {
-			addLogEntry("ERROR: Invalid 'User|Group|Other' permissions set within config file. Please check your configuration");
+		long syncDirPermissions = getValueLong("sync_dir_permissions");
+		long syncFilePermissions = getValueLong("sync_file_permissions");
+		bool invalidPermissions = false;
+		
+		// Check 'sync_dir_permissions'
+		if (syncDirPermissions < 0 || syncDirPermissions > 777) {
+			addLogEntry("ERROR: Invalid 'User|Group|Other' permissions set for 'sync_dir_permissions' within your config file. Please check your configuration");
+			invalidPermissions = true;
+		}
+		
+		// Check 'sync_file_permissions'
+		if (syncFilePermissions < 0 || syncFilePermissions > 777) {
+			addLogEntry("ERROR: Invalid 'User|Group|Other' permissions set for 'sync_file_permissions' within your config file. Please check your configuration");
+			invalidPermissions = true;
+		}
+		
+		// Invalid permissions detected?
+		if (invalidPermissions) {
 			operationalConflictDetected = true;
 		} else {
 			// Debug log output what permissions are being set to
