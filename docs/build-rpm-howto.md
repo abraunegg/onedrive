@@ -1,5 +1,5 @@
 # RPM Package Build Process
-The instuctions below have been tested on the following systems:
+The instructions below have been tested on the following systems:
 *   CentOS 7 x86_64
 *   CentOS 8 x86_64
 
@@ -13,7 +13,7 @@ sudo yum install -y libcurl-devel
 sudo yum install -y sqlite-devel
 sudo yum install -y libnotify-devel
 sudo yum install -y wget
-sudo yum install -y http://downloads.dlang.org/releases/2.x/2.088.0/dmd-2.088.0-0.fedora.x86_64.rpm
+sudo yum install -y https://downloads.dlang.org/releases/2.x/2.088.0/dmd-2.088.0-0.fedora.x86_64.rpm
 mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 ```
 

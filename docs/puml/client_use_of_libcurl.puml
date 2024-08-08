@@ -1,0 +1,41 @@
+@startuml
+participant "OneDrive Client\nfor Linux" as od
+participant "libcurl" as lc
+participant "Client Web Browser" as browser
+participant "Microsoft Authentication Service\n(OAuth 2.0 Endpoint)" as oauth
+participant "GitHub API" as github
+participant "Microsoft Graph API" as graph
+
+activate od
+activate lc
+
+od->od: Generate Authentication\nService URL
+activate browser
+od->browser: Navigate to Authentication\nService URL via Client Web Browser
+browser->oauth: Request access token
+activate oauth
+oauth-->browser: Access token
+browser-->od: Access token
+deactivate oauth
+deactivate browser
+
+od->lc: Check application version\nvia api.github.com
+activate github
+lc->github: Query release status
+activate github
+github-->lc: Release information
+deactivate github
+lc-->od: Process release information
+deactivate lc
+
+loop API Communication
+    od->lc: Construct HTTPS request (with token)
+    activate lc
+    lc->graph: API Request
+    activate graph
+    graph-->lc: API Response
+    deactivate graph
+    lc-->od: Process response
+    deactivate lc
+end
+@enduml

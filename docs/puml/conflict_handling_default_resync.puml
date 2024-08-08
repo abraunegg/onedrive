@@ -1,0 +1,35 @@
+@startuml
+start
+note left: Operational Mode 'onedrive -sync --resync'
+:Query OneDrive /delta API for online changes;
+note left: This data is considered the 'source-of-truth'\nLocal data should be a 'replica' of this data
+:Process received JSON data;
+if (JSON item is a file) then (yes)
+  if (Does the file exist locally) then (yes)
+    note left: In a --resync scenario there are no DB\nrecords that can be used or referenced\nuntil the JSON item is processed and\nadded to the local database cache
+    if (Can the file be read) then (yes)
+      :Compute UTC timestamp data from local file and JSON data;
+      if (timestamps are equal) then (yes)
+      else (no)
+        :Log that a local file time discrepancy was detected;
+        if (Do file hashes match) then (yes)
+          :Correct the offending timestamp as hashes match;
+        else (no)
+          :Local file is technically different;
+          :Renaming local file to avoid potential local data loss;
+          note left: Local data loss prevention\nRenamed file will be uploaded as new file
+        endif
+      endif
+    else (no)
+    endif
+  else (no)
+  endif
+:Download file (as per online JSON item) as required;
+else (no)
+  :Other handling for directories | root objects | deleted items;
+endif
+:Performing a database consistency and\nintegrity check on locally stored data;
+:Scan file system for any new data to upload;
+note left: The file that was renamed will be uploaded here
+stop
+@enduml

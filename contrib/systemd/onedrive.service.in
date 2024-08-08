@@ -1,5 +1,5 @@
 [Unit]
-Description=OneDrive Free Client
+Description=OneDrive Client for Linux
 Documentation=https://github.com/abraunegg/onedrive
 After=network-online.target
 Wants=network-online.target

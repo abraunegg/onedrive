@@ -118,6 +118,34 @@ if [ -n "${ONEDRIVE_SINGLE_DIRECTORY:=""}" ]; then
    ARGS=(--single-directory \"${ONEDRIVE_SINGLE_DIRECTORY}\" ${ARGS[@]})
 fi
 
+# Tell client run in dry-run mode
+if [ "${ONEDRIVE_DRYRUN:=0}" == "1" ]; then
+   echo "# We are running in dry-run mode"
+   echo "# Adding --dry-run"
+   ARGS=(--dry-run ${ARGS[@]})
+fi
+
+# Tell client to disable download validation
+if [ "${ONEDRIVE_DISABLE_DOWNLOAD_VALIDATION:=0}" == "1" ]; then
+   echo "# We are disabling the download integrity checks performed by this client"
+   echo "# Adding --disable-download-validation"
+   ARGS=(--disable-download-validation ${ARGS[@]})
+fi
+
+# Tell client to disable upload validation
+if [ "${ONEDRIVE_DISABLE_UPLOAD_VALIDATION:=0}" == "1" ]; then
+   echo "# We are disabling the upload integrity checks performed by this client"
+   echo "# Adding --disable-upload-validation"
+   ARGS=(--disable-upload-validation ${ARGS[@]})
+fi
+
+# Tell client to download OneDrive Business Shared Files if 'sync_business_shared_items' option has been enabled in the configuration files
+if [ "${ONEDRIVE_SYNC_SHARED_FILES:=0}" == "1" ]; then
+   echo "# We are attempting to sync OneDrive Business Shared Files if 'sync_business_shared_items' has been enabled in the config file"
+   echo "# Adding --sync-shared-files"
+   ARGS=(--sync-shared-files ${ARGS[@]})
+fi
+
 if [ ${#} -gt 0 ]; then
   ARGS=("${@}")
 fi
