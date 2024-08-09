@@ -124,10 +124,12 @@ Example:
 ExecStart=/usr/local/bin/onedrive --monitor --confdir="/home/myusername/.config/my-new-config"
 ```
 
-**Note:** When running the client manually, `--confdir="~/.config/......` is acceptable. In a systemd configuration file, the full path must be used. The `~` must be expanded.
+> [!IMPORTANT]
+> When running the client manually, `--confdir="~/.config/......` is acceptable. In a systemd configuration file, the full path must be used. The `~` must be manually expanded when editing your systemd file.
+
 
 ### Step 3: Enable the new systemd service
-Once the file is correctly editied, you can enable the new systemd service using the following commands.
+Once the file is correctly edited, you can enable the new systemd service using the following commands.
 
 #### Red Hat Enterprise Linux, CentOS Linux
 ```text
@@ -227,10 +229,10 @@ docker run -it --name onedrive -v onedrive_conf_sharepoint_site3:/onedrive/conf 
 docker run -it --name onedrive -v onedrive_conf_sharepoint_site50:/onedrive/conf -v "/use/full/local/path/no/tilda/SharePointSite50:/onedrive/data" driveone/onedrive:latest
 ```
 
-#### TIP
-To avoid 're-authenticating' and 'authorising' each individual Docker container, if all the Docker containers are using the 'same' OneDrive credentials, you can re-use the 'refresh_token' from one Docker container to another by copying this file to the configuration Docker volume of each Docker container.
-
-If the account credentials are different .. you will need to re-authenticate each Docker container individually.
+> [!TIP]
+> To avoid 're-authenticating' and 'authorising' each individual Docker container, if all the Docker containers are using the 'same' OneDrive credentials, you can reuse the 'refresh_token' from one Docker container to another by copying this file to the configuration Docker volume of each Docker container.
+>
+> If the account credentials are different .. you will need to re-authenticate each Docker container individually.
 
 ## Configuring the client for use in dual-boot (Windows / Linux) situations
 When dual booting Windows and Linux, depending on the Windows OneDrive account configuration, the 'Files On-Demand' option may be enabled when running OneDrive within your Windows environment.
@@ -241,7 +243,7 @@ To fix the problem of windows turning all files (that should be kept offline) in
 
 To find this setting, open the onedrive pop-up window from the taskbar, click "Help & Settings" > "Settings". This opens a new window. Go to the tab "Settings" and look for the section "Files On-Demand".
 
-After unchecking the option and clicking "OK", the Windows OneDrive client should restart itself and start actually downloading your files so they will truely be available on your disk when offline. These files will then be fully accessible under Linux and the Linux OneDrive client.
+After unchecking the option and clicking "OK", the Windows OneDrive client should restart itself and start actually downloading your files so they will truly be available on your disk when offline. These files will then be fully accessible under Linux and the Linux OneDrive client.
 
 | OneDrive Personal | Onedrive Business<br>SharePoint |
 |---|---|
@@ -257,12 +259,13 @@ The issue here is - how does the client react if the mount point gets removed - 
 
 The client has zero knowledge of any event that causes a mountpoint to become unavailable, thus, the client (if you are running as a service) will assume that you deleted the files, thus, will go ahead and delete all your files on OneDrive. This is most certainly an undesirable action.
 
-There are a few options here which you can configure in your 'config' file to assist you to prevent this sort of item from occuring:
+There are a few options here which you can configure in your 'config' file to assist you to prevent this sort of item from occurring:
 1. classify_as_big_delete
 2. check_nomount
 3. check_nosync
 
-**Note:** Before making any change to your configuration, stop any sync process & stop any onedrive systemd service from running.
+> [!NOTE] 
+> Before making any change to your configuration, stop any sync process & stop any onedrive systemd service from running.
 
 ### classify_as_big_delete
 By default, this uses a value of 1000 files|folders. An undesirable unmount if you have more than 1000 files, this default level will prevent the client from executing the online delete. Modify this value up or down as desired
@@ -282,7 +285,7 @@ After making this sort of change - test with `--dry-run` so you can see the impa
 ## Upload data from the local ~/OneDrive folder to a specific location on OneDrive
 In some environments, you may not want your local ~/OneDrive folder to be uploaded directly to the root of your OneDrive account online.
 
-Unfortunatly, the OneDrive API lacks any facility to perform a re-direction of data during upload.
+Unfortunately, the OneDrive API lacks any facility to perform a re-direction of data during upload.
 
 The workaround for this is to structure your local filesystem and reconfigure your client to achieve the desired goal.
 

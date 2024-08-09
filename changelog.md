@@ -1,6 +1,13 @@
 # Changelog
-The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
-and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## 2.5.0 - TBA
+
+
+### Changed
+*   Renamed various documentation files to align with document content
+
 
 ## 2.4.25 - 2023-06-21
 ### Fixed

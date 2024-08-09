@@ -683,6 +683,7 @@ enum long defaultMaxContentLength = 5_000_000;
 public import std.string;
 public import std.stdio;
 public import std.conv;
+import std.concurrency;
 import std.uri;
 import std.uni;
 import std.algorithm.comparison;
@@ -763,7 +764,7 @@ class ConnectionClosedException : Exception {
 version(Windows) {
 // FIXME: ugly hack to solve stdin exception problems on Windows:
 // reading stdin results in StdioException (Bad file descriptor)
-// this is probably due to http://d.puremagic.com/issues/show_bug.cgi?id=3425
+// this is probably due to https://issues.dlang.org/show_bug.cgi?id=3425
 private struct stdin {
 	struct ByChunk { // Replicates std.stdio.ByChunk
 	private:
@@ -1100,7 +1101,7 @@ class Cgi {
 		const(ubyte)[] delegate() readdata = null,
 		// finally, use this to do custom output if needed
 		void delegate(const(ubyte)[]) _rawDataOutput = null,
-		// to flush teh custom output
+		// to flush the custom output
 		void delegate() _flush = null
 		)
 	{
@@ -2226,7 +2227,7 @@ class Cgi {
 			uri ~= "s";
 		uri ~= "://";
 		uri ~= host;
-		/+ // the host has the port so p sure this never needed, cgi on apache and embedded http all do the right hting now
+		/+ // the host has the port so p sure this never needed, cgi on apache and embedded http all do the right thing now
 		version(none)
 		if(!(!port || port == defaultPort)) {
 			uri ~= ":";
@@ -2316,7 +2317,7 @@ class Cgi {
 
 	/// This is like setResponseExpires, but it can be called multiple times. The setting most in the past is the one kept.
 	/// If you have multiple functions, they all might call updateResponseExpires about their own return value. The program
-	/// output as a whole is as cacheable as the least cachable part in the chain.
+	/// output as a whole is as cacheable as the least cacheable part in the chain.
 
 	/// setCache(false) always overrides this - it is, by definition, the strictest anti-cache statement available. If your site outputs sensitive user data, you should probably call setCache(false) when you do, to ensure no other functions will cache the content, as it may be a privacy risk.
 	/// Conversely, setting here overrides setCache(true), since any expiration date is in the past of infinity.
@@ -2328,7 +2329,7 @@ class Cgi {
 	}
 
 	/*
-	/// Set to true if you want the result to be cached publically - that is, is the content shared?
+	/// Set to true if you want the result to be cached publicly - that is, is the content shared?
 	/// Should generally be false if the user is logged in. It assumes private cache only.
 	/// setCache(true) also turns on public caching, and setCache(false) sets to private.
 	void setPublicCaching(bool allowPublicCaches) {
@@ -3910,14 +3911,16 @@ struct RequestServer {
 
 		If you want the forking worker process server, you do need to compile with the embedded_httpd_processes config though.
 	+/
-	void serveEmbeddedHttp(alias fun, CustomCgi = Cgi, long maxContentLength = defaultMaxContentLength)(ThisFor!fun _this) {
+	shared void serveEmbeddedHttp(alias fun, T, CustomCgi = Cgi, long maxContentLength = defaultMaxContentLength)(shared T _this) {
 		globalStopFlag = false;
 		static if(__traits(isStaticFunction, fun))
-			alias funToUse = fun;
+			void funToUse(CustomCgi cgi) {
+				fun(_this, cgi);
+			}
 		else
 			void funToUse(CustomCgi cgi) {
 				static if(__VERSION__ > 2097)
-					__traits(child, _this, fun)(cgi);
+					__traits(child, _inst_this, fun)(_inst_this, cgi);
 				else static assert(0, "Not implemented in your compiler version!");
 			}
 		auto manager = new ListeningConnectionManager(listeningHost, listeningPort, &doThreadHttpConnection!(CustomCgi, funToUse), null, useFork, numberOfThreads);
@@ -6275,7 +6278,7 @@ ByChunkRange byChunk(BufferedInputRange ir, size_t atMost) {
 }
 
 version(cgi_with_websocket) {
-	// http://tools.ietf.org/html/rfc6455
+	// https://tools.ietf.org/html/rfc6455
 
 	/**
 		WEBSOCKET SUPPORT:
@@ -7289,7 +7292,7 @@ private void serialize(T)(scope void delegate(scope ubyte[]) sink, T t) {
 	} else static assert(0, T.stringof);
 }
 
-// all may be stack buffers, so use cautio
+// all may be stack buffers, so use caution
 private void deserialize(T)(scope ubyte[] delegate(int sz) get, scope void delegate(T) dg) {
 	static if(is(T == struct)) {
 		T t;
@@ -10178,7 +10181,7 @@ struct Redirection {
 /++
 	Serves a class' methods, as a kind of low-state RPC over the web. To be used with [dispatcher].
 
-	Usage of this function will add a dependency on [arsd.dom] and [arsd.jsvar] unless you have overriden
+	Usage of this function will add a dependency on [arsd.dom] and [arsd.jsvar] unless you have overridden
 	the presenter in the dispatcher.
 
 	FIXME: explain this better
@@ -10618,7 +10621,7 @@ template urlNamesForMethod(alias method, string default_) {
 	enum AccessCheck {
 		allowed,
 		denied,
-		nonExistant,
+		nonExistent,
 	}
 
 	enum Operation {

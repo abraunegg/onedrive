@@ -43,7 +43,9 @@ This systemd entry is erroneous and needs to be removed. Without removing this e
 Opening the item database ...
 
 ERROR: onedrive application is already running - check system process list for active application instances
- - Use 'sudo ps aufxw | grep onedrive' to potentially determine acive running process
+ - Use 'sudo ps aufxw | grep onedrive' to potentially determine active running process
+
+Waiting for all internal threads to complete before exiting application
 ```
 
 To remove this symbolic link, run the following command:
@@ -148,7 +150,7 @@ If required, review the table below based on your 'lsb_release' information to p
 
 | Release & Codename | Instructions to use |
 |--------------------|---------------------|
-| Linux Mint 19.x           | This platform is End-of-Life (EOL) and no longer supported. You must upgrade to Linux Mint 21.x |
+| Linux Mint 19.x           | This platform is End-of-Life (EOL) and no longer supported. You must upgrade to at least Linux Mint 20.x |
 | Linux Mint 20.x           | Use [Ubuntu 20.04](#distribution-ubuntu-2004) instructions below |
 | Linux Mint 21.x           | Use [Ubuntu 22.04](#distribution-ubuntu-2204) instructions below |
 | Linux Mint 22.x           | Use [Ubuntu 24.04](#distribution-ubuntu-2404) instructions below |
@@ -162,7 +164,7 @@ If required, review the table below based on your 'lsb_release' information to p
 | Raspbian GNU/Linux 10     | You must build from source or upgrade your Operating System to Raspbian GNU/Linux 12 |
 | Raspbian GNU/Linux 11     | Use [Debian 11](#distribution-debian-11) instructions below |
 | Raspbian GNU/Linux 12     | Use [Debian 12](#distribution-debian-12) instructions below |
-| Ubuntu 18.04 / Bionic     | This platform is End-of-Life (EOL) and no longer supported. You must upgrade to Ubuntu 24.04 |
+| Ubuntu 18.04 / Bionic     | This platform is End-of-Life (EOL) and no longer supported. You must upgrade to at least Ubuntu 20.04 |
 | Ubuntu 20.04 / Focal      | Use [Ubuntu 20.04](#distribution-ubuntu-2004) instructions below |
 | Ubuntu 21.04 / Hirsute    | Use [Ubuntu 21.04](#distribution-ubuntu-2104) instructions below |
 | Ubuntu 21.10 / Impish     | Use [Ubuntu 21.10](#distribution-ubuntu-2110) instructions below |
@@ -462,4 +464,4 @@ This issue is caused by the way the 'onedrive' packages are built using the dist
 *  https://github.com/abraunegg/onedrive/issues/1609
 
 **Resolution Options:**
-*  Uninstall the package and build client from source
+*  Uninstall the 'onedrive' package and build client from source, installing either the DMD or LDC compiler via the Install Script found here: https://dlang.org/download.html. Do not use your distribuion provided 'ldc' package.

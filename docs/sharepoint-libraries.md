@@ -1,21 +1,23 @@
 # How to configure OneDrive SharePoint Shared Library sync
-**WARNING:** Several users have reported files being overwritten causing data loss as a result of using this client with SharePoint Libraries when running as a systemd service.
 
-When this has been investigated, the following has been noted as potential root causes:
-*  File indexing application such as Baloo File Indexer or Tracker3 constantly indexing your OneDrive data
-*  The use of WPS Office and how it 'saves' files by deleting the existing item and replaces it with the saved data
+> [!CAUTION]
+> Before reading this document, please ensure you are running application version [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases) or greater. Use `onedrive --version` to determine what application version you are using and upgrade your client if required.
 
-Additionally there could be a yet unknown bug with the client, however all debugging and data provided previously shows that an 'external' process to the 'onedrive' application modifies the files triggering the undesirable upload to occur.
-
-**Possible Preventative Actions:**
-*  Disable all File Indexing for your SharePoint Library data. It is out of scope to detail on how you should do this.
-*  Disable using a systemd service for syncing your SharePoint Library data.
-*  Do not use WPS Office to edit your documents. Use OpenOffice or LibreOffice as these do not exhibit the same 'delete to save' action that WPS Office has.
-
-Additionally, please use caution when using this client with SharePoint.
-
-## Application Version
-Before reading this document, please ensure you are running application version [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases) or greater. Use `onedrive --version` to determine what application version you are using and upgrade your client if required.
+> [!CAUTION]
+> Several users have reported files being overwritten causing data loss as a result of using this client with SharePoint Libraries when running as a systemd service.
+>
+> When this has been investigated, the following has been noted as potential root causes:
+> *  File indexing application such as Baloo File Indexer or Tracker3 constantly indexing your OneDrive data
+> *  The use of WPS Office and how it 'saves' files by deleting the existing item and replaces it with the saved data. Do not use WPS Office.
+> 
+> Additionally there could be a yet unknown bug with the client, however all debugging and data provided previously shows that an 'external' process to the 'onedrive' application modifies the files triggering the undesirable upload to occur.
+> 
+> **Possible Preventative Actions:**
+> *  Disable all File Indexing for your SharePoint Library data. It is out of scope to detail on how you should do this.
+> *  Disable using a systemd service for syncing your SharePoint Library data.
+> *  Do not use WPS Office to edit your documents. Use OpenOffice or LibreOffice as these do not exhibit the same 'delete to save' action that WPS Office has.
+> 
+> Additionally has been 100% re-written from v2.5.0 onwards, thus the mechanism for saving data to SharePoint has been critically overhauled to simplify actions to negate the impacts where SharePoint will *modify* your file post upload, breaking file integrity as the file you have locally, is not the file that is stored online. Please read https://github.com/OneDrive/onedrive-api-docs/issues/935 for relevant details.
 
 ## Process Overview
 Syncing a OneDrive SharePoint library requires additional configuration for your 'onedrive' client:
@@ -26,7 +28,8 @@ Syncing a OneDrive SharePoint library requires additional configuration for your
 5.  Test the configuration using '--dry-run'
 6.  Sync the SharePoint Library as required
 
-**Note:** The `--get-O365-drive-id` process below requires a fully configured 'onedrive' configuration so that the applicable Drive ID for the given Office 365 SharePoint Shared Library can be determined. It is highly recommended that you do not use the application 'default' configuration directory for any SharePoint Site, and configure separate items for each site you wish to use.
+> [!IMPORTANT]
+> The `--get-sharepoint-drive-id` process below requires a fully configured 'onedrive' configuration so that the applicable Drive ID for the given SharePoint Shared Library can be determined. It is highly recommended that you do not use the application 'default' configuration directory for any SharePoint Site, and configure separate items for each site you wish to use.
 
 ## 1. Listing available OneDrive SharePoint Libraries
 Login to the OneDrive web interface and determine which shared library you wish to configure the client for:
@@ -35,7 +38,7 @@ Login to the OneDrive web interface and determine which shared library you wish 
 ## 2. Query OneDrive API to obtain required configuration details
 Run the following command using the 'onedrive' client to query the OneDrive API to obtain the required 'drive_id' of the SharePoint Library that you wish to sync:
 ```text
-onedrive --get-O365-drive-id '<your site name to search>'
+onedrive --get-sharepoint-drive-id '<your site name to search>'
 ```
 This will return something similar to the following:
 ```text
@@ -78,7 +81,8 @@ Create a new local folder to store the SharePoint Library data in:
 mkdir ~/SharePoint_My_Library_Name
 ```
 
-**Note:** Do not use spaces in the directory name, use '_' as a replacement
+> [!TIP]
+> Do not use spaces in the directory name, use '_' as a replacement
 
 ## 4. Configure SharePoint Library config file with the required 'drive_id' & 'sync_dir' options
 Download a copy of the default configuration file by downloading this file from GitHub and saving this file in the directory created above:
@@ -97,7 +101,8 @@ drive_id = "insert the drive_id value from above here"
 ```
 The OneDrive client will now be configured to sync this SharePoint shared library to your local system and the location you have configured.
 
-**Note:** After changing `drive_id`, you must perform a full re-synchronization by adding `--resync` to your existing command line.
+> [!IMPORTANT]
+> After changing `drive_id`, you must perform a full re-synchronization by adding `--resync` to your existing command line.
 
 ## 5. Validate and Test the configuration
 Validate your new configuration using the `--display-config` option to validate you have configured the application correctly:
@@ -110,7 +115,8 @@ Test your new configuration using the `--dry-run` option to validate the applica
 onedrive --confdir="~/.config/SharePoint_My_Library_Name" --synchronize --verbose --dry-run
 ```
 
-**Note:** As this is a *new* configuration, the application will be required to be re-authorised the first time this command is run with the new configuration.
+> [!IMPORTANT]
+> As this is a *new* configuration, the application will be required to be re-authorised the first time this command is run with the new configuration.
 
 ## 6. Sync the SharePoint Library as required
 Sync the SharePoint Library to your system with either `--synchronize` or `--monitor` operations:
@@ -122,7 +128,8 @@ onedrive --confdir="~/.config/SharePoint_My_Library_Name" --synchronize --verbos
 onedrive --confdir="~/.config/SharePoint_My_Library_Name" --monitor --verbose
 ```
 
-**Note:** As this is a *new* configuration, the application will be required to be re-authorised the first time this command is run with the new configuration.
+> [!IMPORTANT]
+> As this is a *new* configuration, the application will be required to be re-authorised the first time this command is run with the new configuration.
 
 ## 7. Enable custom systemd service for SharePoint Library
 Systemd can be used to automatically run this configuration in the background, however, a unique systemd service will need to be setup for this SharePoint Library instance
@@ -163,10 +170,11 @@ Example:
 ExecStart=/usr/local/bin/onedrive --monitor --confdir="/home/myusername/.config/SharePoint_My_Library_Name"
 ```
 
-**Note:** When running the client manually, `--confdir="~/.config/......` is acceptable. In a systemd configuration file, the full path must be used. The `~` must be expanded.
+> [!IMPORTANT]
+> When running the client manually, `--confdir="~/.config/......` is acceptable. In a systemd configuration file, the full path must be used. The `~` must be manually expanded when editing your systemd file.
 
 ### Step 3: Enable the new systemd service
-Once the file is correctly editied, you can enable the new systemd service using the following commands.
+Once the file is correctly edited, you can enable the new systemd service using the following commands.
 
 #### Red Hat Enterprise Linux, CentOS Linux
 ```text

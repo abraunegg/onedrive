@@ -27,7 +27,6 @@ all_opts=(
   '--logout[Logout the current user]'
   '(-m --monitor)'{-m,--monitor}'[Keep monitoring for local and remote changes]'
   '--no-remote-delete[Do not delete local file deletes from OneDrive when using --upload-only]'
-  '--operation-timeout[Specify the maximum amount of time (in seconds) an operation is allowed to take.]:seconds:'
   '--print-token[Print the access token, useful for debugging]'
   '--reauth[Reauthenticate the client with OneDrive]'
   '--resync[Forget the last saved state, perform a full sync]'
