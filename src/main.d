@@ -805,17 +805,13 @@ int main(string[] cliArgs) {
 			};
 			
 			// Delegated function for when inotify detects a local file has been changed
-			filesystemMonitor.onFileChanged = delegate(string changedLocalFilesToUploadToOneDrive) {
+			filesystemMonitor.onFileChanged = delegate(string[] changedLocalFilesToUploadToOneDrive) {
 				// Handle a potentially locally changed file
 				// Logging for this event moved to handleLocalFileTrigger() due to threading and false triggers from scanLocalFilesystemPathForNewData() above
-				
-				// TEMP HANDLING - put this change into an array for the moment to limit other change - this is to limit the blast radius of removing #2519, #2609 and #2628
-				string[] tempChangedFiles;
-				tempChangedFiles ~= changedLocalFilesToUploadToOneDrive;
-				addLogEntry("[M] Total number of local file changes: " ~ to!string(tempChangedFiles.length));
-				syncEngineInstance.handleLocalFileTrigger(tempChangedFiles);
+				addLogEntry("[M] Total number of local file changed: " ~ to!string(changedLocalFilesToUploadToOneDrive.length));
+				syncEngineInstance.handleLocalFileTrigger(changedLocalFilesToUploadToOneDrive);
 			};
-			
+
 			// Delegated function for when inotify detects a delete event
 			filesystemMonitor.onDelete = delegate(string path) {
 				addLogEntry("[M] Local item deleted: " ~ path, ["verbose"]);
@@ -913,34 +909,13 @@ int main(string[] cliArgs) {
 					} else {
 						oneDriveWebhook.createOrRenewSubscription();
 					}
-					
-					// Process incoming webhook notifications if any.
-
-					// Empirical evidence shows that Microsoft often sends multiple
-					// notifications for one single change, so we need a loop to exhaust
-					// all signals that were queued up by the webhook. The notifications
-					// do not contain any actual changes, and we will always rely do the
-					// delta endpoint to sync to latest. Therefore, only one sync run is
-					// good enough to catch up for multiple notifications.
-					for (int signalCount = 0;; signalCount++) {
-						const auto signalExists = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
-						if (signalExists) {
-							notificationReceived = true;
-						} else {
-							if (notificationReceived) {
-								addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signals from the webhook");
-							}
-							break;
-						}
-					}
 				}
 				
 				// Get the current time this loop is starting
 				auto currentTime = MonoTime.currTime();
 				
 				// Do we perform a sync with OneDrive?
-				if (notificationReceived || (currentTime - lastCheckTime > checkOnlineInterval) || (monitorLoopFullCount == 0)) {
-				
+				if ((currentTime - lastCheckTime >= checkOnlineInterval) || (monitorLoopFullCount == 0)) {
 					// Increment relevant counters
 					monitorLoopFullCount++;
 					fullScanFrequencyLoopCount++;
@@ -1023,7 +998,7 @@ int main(string[] cliArgs) {
 						}
 						
 						// Handle any new inotify events
-						filesystemMonitor.update(false);
+						filesystemMonitor.update(true);
 						
 						// Detail the outcome of the sync process
 						displaySyncOutcome();
@@ -1076,8 +1051,75 @@ int main(string[] cliArgs) {
 					}
 				}
 				
-				// Sleep the monitor thread for 5 second, loop around and pick up any inotify changes
-				Thread.sleep(dur!"seconds"(1));
+				if (performFileSystemMonitoring) {	
+					auto nextCheckTime = lastCheckTime + checkOnlineInterval;
+					currentTime = MonoTime.currTime();
+					auto sleepTime = nextCheckTime - currentTime;
+					addLogEntry("Sleep for " ~ to!string(sleepTime), ["debug"]);
+				
+					if(filesystemMonitor.initialised || webhookEnabled) {
+					
+						if(filesystemMonitor.initialised) {
+							// If local monitor is on and is waiting (previous event was not from webhook)
+							// start the worker and wait for event
+							if (!notificationReceived)
+								filesystemMonitor.send(true);
+						}
+						
+						if(webhookEnabled) {
+							// if onedrive webhook is enabled
+							// update sleep time based on renew interval
+							Duration nextWebhookCheckDuration = oneDriveWebhook.getNextExpirationCheckDuration();
+							if (nextWebhookCheckDuration < sleepTime) {
+								sleepTime = nextWebhookCheckDuration;
+								addLogEntry("Update sleeping time to " ~ to!string(sleepTime), ["debug"]);
+							}
+							// Webhook Notification reset to false for this loop
+							notificationReceived = false;
+						}
+						
+						int res = 1;
+						// Process incoming notifications if any.
+						auto signalExists = receiveTimeout(sleepTime, (int msg) {res = msg;},(ulong _) {notificationReceived = true;});
+						
+						// Debug values
+						addLogEntry("signalExists = " ~ to!string(signalExists), ["debug"]);
+						addLogEntry("worker status = " ~ to!string(res), ["debug"]);
+						addLogEntry("notificationReceived = " ~ to!string(notificationReceived), ["debug"]);
+					
+						// Empirical evidence shows that Microsoft often sends multiple
+						// notifications for one single change, so we need a loop to exhaust
+						// all signals that were queued up by the webhook. The notifications
+						// do not contain any actual changes, and we will always rely do the
+						// delta endpoint to sync to latest. Therefore, only one sync run is
+						// good enough to catch up for multiple notifications.
+						if (notificationReceived) {
+							int signalCount = 1;
+							while (true) {
+								signalExists = receiveTimeout(dur!"seconds"(-1), (ulong _) {});
+								if (signalExists) {
+									signalCount++;
+								} else {
+									addLogEntry("Received " ~ to!string(signalCount) ~ " refresh signals from the webhook");
+									oneDriveWebhookCallback();
+									break;
+								}
+							}
+						}
+
+						if(res == -1) {
+							addLogEntry("ERROR: Monitor worker failed.");
+							monitorFailures = true;
+							performFileSystemMonitoring = false;
+						}
+					
+					} else {
+						// no hooks available, nothing to check
+						Thread.sleep(sleepTime);
+					}
+				
+				}
+				
 			}
 		}
 	} else {
