@@ -144,7 +144,8 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 
 > [!IMPORTANT]
 > There are significant HTTP/2 bugs in all curl versions < 8.8.x that can lead to HTTP2 errors such as `Error in the HTTP2 framing layer on handle` or `Stream error in the HTTP/2 framing layer on handle`
-> The only options to resolve this is for you are the following:
+>
+> The only options to resolve this are the following:
 > 1. Upgrade your curl version to the latest available, or get your distribution to provide a more modern version of curl. Refer to [curl releases](https://curl.se/docs/releases.html) for curl version information.
 > 2. Configure the client to only use HTTP/1.1 via the config option `--force-http-11` flag or setting the configuration option `force_http_11 = "true"`
 
