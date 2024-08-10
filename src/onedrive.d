@@ -1418,6 +1418,18 @@ class OneDriveApi {
 				if (thisBackOffInterval == 0) {
 					// Calculate and apply exponential backoff upto a maximum of 120 seconds before the API call is re-tried
 					thisBackOffInterval = calculateBackoff(retryAttempts, baseBackoffInterval, maxBackoffInterval);
+					// If this 'somehow' calculates a negative number, this is not correct .. and this has been seen in testing - unknown cause
+					// 
+					// Retry attempt:           31 - Internal Thread ID: ICO4ELBlGXFwyTzh
+					//  This attempt timestamp: 2024-Aug-10 10:32:07
+					//  Next retry in approx:   -2147483648 seconds
+					//  Next retry approx:      1956-Jul-23 07:17:59
+					// Illegal instruction (core dumped)
+					// 
+					// Set to 'maxBackoffInterval' if calculated value is negative
+					if (thisBackOffInterval < 0) {
+						thisBackOffInterval = maxBackoffInterval;
+					}
 				}
 				
 				// When are we re-trying the API call?
