@@ -1247,7 +1247,7 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 void processInotifyEvents(bool updateFlag) {
 	// Attempt to process or cancel inotify events
 	// filesystemMonitor.update will throw this, thus needs to be caught
-	//   monitor.MonitorException@src/monitor.d(549): inotify overflow, inotify events will be missing (Interrupted system call)
+	//   monitor.MonitorException@src/monitor.d(549): inotify queue overflow: some events may be lost (Interrupted system call)
 	try {
 		// Process any inotify events or cancel events based on flag value
 		// True = process

@@ -546,7 +546,7 @@ final class Monitor {
 						wdToDirName.remove(event.wd);
 						goto skip;
 					} else if (event.mask & IN_Q_OVERFLOW) {
-						throw new MonitorException("inotify overflow, inotify events will be missing");
+						throw new MonitorException("inotify queue overflow: some events may be lost");
 					}
 
 					// if the event is not to be ignored, obtain path
