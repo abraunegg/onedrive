@@ -5,6 +5,7 @@ Before reading this document, please ensure you are running application version 
 ## Table of Contents
 
 - [Important Notes](#important-notes)
+  - [Memory Usage](#memory-usage)
   - [Upgrading from the 'skilion' Client](#upgrading-from-the-sklion-client)
   - [Guidelines for Local File and Folder Naming in the Synchronisation Directory](#guidelines-for-local-file-and-folder-naming-in-the-synchronisation-directory)
   - [Compatibility with curl](#compatibility-with-curl)
@@ -60,6 +61,14 @@ Before reading this document, please ensure you are running application version 
   - [How to start a user systemd service at boot without user login?](#how-to-start-a-user-systemd-service-at-boot-without-user-login)
 
 ## Important Notes
+
+### Memory Usage
+Starting with version 2.5.x, the application has been completely rewritten. It is crucial to understand the memory requirements to ensure the application runs smoothly on your system.
+
+Testing indicates that during a --resync operation or a full online scan, the client may use approximately 1GB of memory for every 100,000 objects stored online. This occurs because the client queries the OneDrive API for all objects before processing them locally. Once processing is complete, the memory is released back to the system.
+
+To avoid potential system instability or the client being terminated by your Out-Of-Memory (OOM) process monitors, please ensure your system has sufficient memory allocated or configure adequate swap space.
+
 ### Upgrading from the 'skilion' Client
 The 'skilion' version has a significant number of issues in how it manages the local sync state. When upgrading from the 'skilion' client to this client, it's recommended to stop any service or OneDrive process that may be running. Once all OneDrive services are stopped, make sure to remove any old client binaries from your system.
 
@@ -132,6 +141,12 @@ For systems running curl >= 7.47.0 and < 7.62.0, curl will prefer HTTP/2 for HTT
 However, if your system employs curl >= 7.62.0, curl will, by default, prioritise HTTP/2 over HTTP/1.1. In this case, the client will utilise HTTP/2 for most HTTPS operations and stick with HTTP/1.1 for others. Please note that this distinction is governed by the OneDrive platform, not our client.
 
 If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http-11` flag or setting the configuration option `force_http_11 = "true"`. This will compel the application to exclusively use HTTP/1.1. Otherwise, all client operations will align with the curl default settings for your distribution.
+
+> [!IMPORTANT]
+> There are significant HTTP/2 bugs in all curl versions < 8.8.x that can lead to HTTP2 errors such as `Error in the HTTP2 framing layer on handle` or `Stream error in the HTTP/2 framing layer on handle`
+> The only options to resolve this is for you are the following:
+> 1. Upgrade your curl version to the latest available, or get your distribution to provide a more modern version of curl
+> 2. Configure the client to only use HTTP/1.1 via the config option `--force-http-11` flag or setting the configuration option `force_http_11 = "true"`
 
 ## First Steps
 ### Authorise the Application with Your Microsoft OneDrive Account
