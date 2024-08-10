@@ -887,13 +887,8 @@ int main(string[] cliArgs) {
 			
 				// If we are in a --download-only method of operation, there is no filesystem monitoring, so no inotify events to check
 				if (!appConfig.getValueBool("download_only")) {
-					try {
-						// Process any inotify events
-						filesystemMonitor.update(true);
-					} catch (MonitorException e) {
-						// Catch any exceptions thrown by inotify / monitor engine
-						addLogEntry("ERROR: The following inotify error was generated: " ~ e.msg);
-					}
+					// Process any inotify events
+					processInotifyEvents(true);
 				}
 				
 				// Webhook Notification Handling
@@ -998,7 +993,7 @@ int main(string[] cliArgs) {
 						}
 						
 						// Handle any new inotify events
-						filesystemMonitor.update(true);
+						processInotifyEvents(true);
 						
 						// Detail the outcome of the sync process
 						displaySyncOutcome();
@@ -1140,20 +1135,15 @@ int main(string[] cliArgs) {
 void oneDriveWebhookCallback() {
 	// If we are in a --download-only method of operation, there is no filesystem monitoring, so no inotify events to check
 	if (!appConfig.getValueBool("download_only")) {
-		try {
-			// Process any inotify events
-			filesystemMonitor.update(true);
-		} catch (MonitorException e) {
-			// Catch any exceptions thrown by inotify / monitor engine
-			addLogEntry("ERROR: The following inotify error was generated: " ~ e.msg);
-		}
+		// Handle inotify events
+		processInotifyEvents(true);
 	}
 
 	// Download data from OneDrive last
 	syncEngineInstance.syncOneDriveAccountToLocalDisk();
 	if (appConfig.getValueBool("monitor")) {
-	// Handle any new inotify events
-		filesystemMonitor.update(true);
+		// Handle inotify events
+		processInotifyEvents(true);
 	}
 }
 
@@ -1162,14 +1152,14 @@ void performUploadOnlySyncProcess(string localPath, Monitor filesystemMonitor = 
 	syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 	if (appConfig.getValueBool("monitor")) {
 		// Handle any inotify events whilst the DB was being scanned
-		filesystemMonitor.update(true);
+		processInotifyEvents(true);
 	}
 	
 	// Scan the configured 'sync_dir' for new data to upload
 	syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
 	if (appConfig.getValueBool("monitor")) {
 		// Handle any new inotify events whilst the local filesystem was being scanned
-		filesystemMonitor.update(true);
+		processInotifyEvents(true);
 	}
 }
 
@@ -1193,21 +1183,21 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 		syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 		if (appConfig.getValueBool("monitor")) {
 			// Handle any inotify events whilst the DB was being scanned
-			filesystemMonitor.update(true);
+			processInotifyEvents(true);
 		}
 		
 		// Scan the configured 'sync_dir' for new data to upload to OneDrive
 		syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
 		if (appConfig.getValueBool("monitor")) {
 			// Handle any new inotify events whilst the local filesystem was being scanned
-			filesystemMonitor.update(true);
+			processInotifyEvents(true);
 		}
 		
 		// Download data from OneDrive last
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
 		if (appConfig.getValueBool("monitor")) {
-		// Cancel out any inotify events from downloading data
-			filesystemMonitor.update(false);
+			// Cancel out any inotify events from downloading data
+			processInotifyEvents(false);
 		}
 	} else {
 		// Normal sync
@@ -1215,14 +1205,14 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 		syncEngineInstance.syncOneDriveAccountToLocalDisk();
 		if (appConfig.getValueBool("monitor")) {
 			// Cancel out any inotify events from downloading data
-			filesystemMonitor.update(false);
+			processInotifyEvents(false);
 		}
 		
 		// Perform the local database consistency check, picking up locally modified data and uploading this to OneDrive
 		syncEngineInstance.performDatabaseConsistencyAndIntegrityCheck();
 		if (appConfig.getValueBool("monitor")) {
 			// Handle any inotify events whilst the DB was being scanned
-			filesystemMonitor.update(true);
+			processInotifyEvents(true);
 		}
 			
 		// Is --download-only NOT configured?
@@ -1232,7 +1222,7 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 			syncEngineInstance.scanLocalFilesystemPathForNewData(localPath);
 			if (appConfig.getValueBool("monitor")) {
 				// Handle any new inotify events whilst the local filesystem was being scanned
-				filesystemMonitor.update(true);
+				processInotifyEvents(true);
 			}
 			
 			// If we are not doing a 'force_children_scan' perform a true-up
@@ -1247,10 +1237,25 @@ void performStandardSyncProcess(string localPath, Monitor filesystemMonitor = nu
 				syncEngineInstance.syncOneDriveAccountToLocalDisk();
 				if (appConfig.getValueBool("monitor")) {
 					// Cancel out any inotify events from downloading data
-					filesystemMonitor.update(false);
+					processInotifyEvents(false);
 				}
 			}
 		}
+	}
+}
+
+void processInotifyEvents(bool updateFlag) {
+	// Attempt to process or cancel inotify events
+	// filesystemMonitor.update will throw this, thus needs to be caught
+	//   monitor.MonitorException@src/monitor.d(549): inotify overflow, inotify events will be missing (Interrupted system call)
+	try {
+		// Process any inotify events or cancel events based on flag value
+		// True = process
+		// False = cancel
+		filesystemMonitor.update(updateFlag);
+	} catch (MonitorException e) {
+		// Catch any exceptions thrown by inotify / monitor engine
+		addLogEntry("ERROR: The following inotify error was generated: " ~ e.msg);
 	}
 }
 
