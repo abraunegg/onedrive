@@ -1756,7 +1756,6 @@ class ApplicationConfig {
 		// Are we in a --dry-run scenario?
 		if (!getValueBool("dry_run")) {
 			// Not a dry-run scenario, update the applicable files
-			addLogEntry("applicableConfigFilePath:" ~ applicableConfigFilePath);
 			// Update applicable 'config' files
 			if (exists(applicableConfigFilePath)) {
 				// Update the hash of the applicable config file
