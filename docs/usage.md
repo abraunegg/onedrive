@@ -65,7 +65,7 @@ Before reading this document, please ensure you are running application version 
 ### Memory Usage
 Starting with version 2.5.x, the application has been completely rewritten. It is crucial to understand the memory requirements to ensure the application runs smoothly on your system.
 
-Testing indicates that during a --resync operation or a full online scan, the client may use approximately 1GB of memory for every 100,000 objects stored online. This occurs because the client queries the OneDrive API for all objects before processing them locally. Once processing is complete, the memory is released back to the system.
+Testing indicates that during a `--resync` operation or a full online scan, the client may use approximately 1GB of memory for every 100,000 objects stored online. This occurs because the client queries the OneDrive API for all objects before processing them locally. Once processing is complete, the memory is released back to the system.
 
 To avoid potential system instability or the client being terminated by your Out-Of-Memory (OOM) process monitors, please ensure your system has sufficient memory allocated or configure adequate swap space.
 
@@ -145,7 +145,7 @@ If you explicitly want to use HTTP/1.1, you can do so by using the `--force-http
 > [!IMPORTANT]
 > There are significant HTTP/2 bugs in all curl versions < 8.8.x that can lead to HTTP2 errors such as `Error in the HTTP2 framing layer on handle` or `Stream error in the HTTP/2 framing layer on handle`
 > The only options to resolve this is for you are the following:
-> 1. Upgrade your curl version to the latest available, or get your distribution to provide a more modern version of curl
+> 1. Upgrade your curl version to the latest available, or get your distribution to provide a more modern version of curl. Refer to [curl releases](https://curl.se/docs/releases.html) for curl version information.
 > 2. Configure the client to only use HTTP/1.1 via the config option `--force-http-11` flag or setting the configuration option `force_http_11 = "true"`
 
 ## First Steps
