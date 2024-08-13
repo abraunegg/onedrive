@@ -1,0 +1,25 @@
+@startuml
+
+skinparam SequenceBoxBackgroundColor<<Internal>> AliceBlue
+
+box "Linux System"<<Internal>>
+  participant ClientApp as "OneDrive Client for Linux\n(webhook listener 127.0.0.1:8888)"
+  participant Nginx
+end box
+
+participant Firewall as "Firewall | Router"
+participant GraphAPI as "Microsoft Graph API"
+
+ClientApp -> GraphAPI: HTTPS POST /v1.0/subscriptions
+GraphAPI -> ClientApp: Subscription details response (HTTPS)
+
+== Subscription Notification ==
+GraphAPI -> Firewall: HTTPS Notification (port 443)
+Firewall -> Nginx: Port forwarding to Nginx (port 443)
+
+alt Request for /webhooks/onedrive
+    Nginx -> ClientApp: Proxy notification to http://127.0.0.1:8888
+    ClientApp -> Nginx: Response
+    Nginx -> GraphAPI: Return proxied response (HTTPS)
+end
+@enduml

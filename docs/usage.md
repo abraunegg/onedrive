@@ -852,13 +852,27 @@ For each SharePoint Library, configure a separate instance of the application co
 Refer to [advanced-usage.md](advanced-usage.md) for configuration instructions.
 
 ### How to Receive Real-time Changes from Microsoft OneDrive Service, instead of waiting for the next sync period?
-When operating in 'Monitor Mode,' it may be advantageous to receive real-time updates to online data. A 'webhook' is the method to achieve this, so that when in 'Monitor Mode,' the client subscribes to remote updates.
+When operating in 'Monitor Mode,' receiving real-time updates to online data can significantly enhance synchronisation efficiency. This is achieved by enabling 'webhooks,' which allow the client to subscribe to remote updates.
 
-Remote changes can then be promptly synchronised to your local file system, without waiting for the next synchronisation cycle.
+With this setup, any remote changes are promptly synchronised to your local file system, eliminating the need to wait for the next scheduled synchronisation cycle.
 
-This is accomplished by:
-*   Using 'webhook_enabled' as part of your 'config' file to enable this feature
-*   Using 'webhook_public_url' as part of your 'config' file to configure the URL the webhook will use for subscription updates
+Depending on your environment, a number of steps are required to configure this capability. These steps are:
+#### 1. Application configuration
+*   **Enable Webhooks:** In your 'config' file, set `webhook_enabled = "true"` to activate the webhook feature.
+*   **Configure Webhook URL:** In your 'config' file, set `webhook_public_url = "http://<your_host_ip>:8888/"` to provide the public URL that will receive subscription updates from the remote server. This URL should be accessible from the internet and typically points to your Nginx configuration.
+
+#### 2. Install and configure 'nginx'
+*   **Setup Nginx as a Reverse Proxy:** Configure Nginx to listen on port 443 for HTTPS traffic. It should proxy incoming webhook notifications to the internal webhook listener running on the client
+
+#### 3. Firewall/Router Configuration
+*   **Port Forwarding:** Ensure that your firewall or router is configured to forward incoming HTTPS traffic on port 443 to the internal IP address of your Nginx server. This setup allows external webhook notifications from the Microsoft Graph API to reach your Nginx server and subsequently be proxied to the local webhook listener.
+
+When these steps are followed, your environment configuration will be similar to the following diagram:
+
+![webhooks](./puml/webhooks.png)
+
+Refer to [application-config-options.md](application-config-options.md) for further guidance on 'webhook' configuration.
+
 
 ### How to initiate the client as a background service?
 There are a few ways to employ onedrive as a service:
