@@ -417,8 +417,13 @@ final class ItemDatabase {
 			executionStmt = db.prepare(updateItemStmt);
 		}
 		
-		bindItem(item, executionStmt);
-		executionStmt.exec();
+		try {
+			bindItem(item, executionStmt);
+			executionStmt.exec();
+		} catch (SqliteException e) {
+			// Handle errors appropriately
+			detailSQLErrorMessage(e.msg);
+		}
 	}
 
 	Item[] selectChildren(const(char)[] driveId, const(char)[] id) {
