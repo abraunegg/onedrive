@@ -285,6 +285,7 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 | <B>ONEDRIVE_DISABLE_DOWNLOAD_VALIDATION</B> | Controls "--disable-download-validation" option. Default is 0 | 1 |
 | <B>ONEDRIVE_DISABLE_UPLOAD_VALIDATION</B> | Controls "--disable-upload-validation" option. Default is 0 | 1 |
 | <B>ONEDRIVE_SYNC_SHARED_FILES</B> | Controls "--sync-shared-files" option. Default is 0 | 1 |
+| <B>ONEDRIVE_RUNAS_ROOT</B> | Controls if the Docker container should be run as the 'root' user instead of 'onedrive' user. Default is 0 | 1 |
 
 ### Environment Variables Usage Examples
 **Verbose Output:**
