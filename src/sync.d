@@ -7476,48 +7476,64 @@ class SyncEngine {
 							// 'displayName' matches search request
 							site_id = searchResult["id"].str;
 							JSONValue siteDriveQuery;
-							
-							try {
-								siteDriveQuery = querySharePointLibraryNameApiInstance.o365SiteDrives(site_id);
-							} catch (OneDriveException e) {
-								addLogEntry("ERROR: Query of OneDrive for Office Site ID failed");
-								// display what the error is
-								displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
-								
-								// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
-								querySharePointLibraryNameApiInstance.releaseCurlEngine();
-								querySharePointLibraryNameApiInstance = null;
-								// Perform Garbage Collection
-								GC.collect();
-								return;
-							}
-							
-							// is siteDriveQuery a valid JSON object & contain data we can use?
-							if ((siteDriveQuery.type() == JSONType.object) && ("value" in siteDriveQuery)) {
-								// valid JSON object
-								foreach (driveResult; siteDriveQuery["value"].array) {
-									// Display results
-									writeln("-----------------------------------------------");
-									addLogEntry("Site Details: " ~ to!string(driveResult), ["debug"]);
-									found = true;
-									writeln("Site Name:    ", searchResult["displayName"].str);
-									writeln("Library Name: ", driveResult["name"].str);
-									writeln("drive_id:     ", driveResult["id"].str);
-									writeln("Library URL:  ", driveResult["webUrl"].str);
+							string nextLinkDrive;
+
+							while (true) {
+								try {
+									siteDriveQuery = querySharePointLibraryNameApiInstance.o365SiteDrives(site_id, nextLinkDrive);
+								} catch (OneDriveException e) {
+									addLogEntry("ERROR: Query of OneDrive for Office Site ID failed");
+									// display what the error is
+									displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
+									
+									// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+									querySharePointLibraryNameApiInstance.releaseCurlEngine();
+									querySharePointLibraryNameApiInstance = null;
+									// Perform Garbage Collection
+									GC.collect();
+									return;
 								}
-								// closeout
-								writeln("-----------------------------------------------");
-							} else {
-								// not a valid JSON object
-								addLogEntry("ERROR: There was an error performing this operation on Microsoft OneDrive");
-								addLogEntry("ERROR: Increase logging verbosity to assist determining why.");
 								
-								// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
-								querySharePointLibraryNameApiInstance.releaseCurlEngine();
-								querySharePointLibraryNameApiInstance = null;
-								// Perform Garbage Collection
-								GC.collect();
-								return;
+								// is siteDriveQuery a valid JSON object & contain data we can use?
+								if ((siteDriveQuery.type() == JSONType.object) && ("value" in siteDriveQuery)) {
+									// valid JSON object
+									foreach (driveResult; siteDriveQuery["value"].array) {
+										// Display results
+										writeln("-----------------------------------------------");
+										addLogEntry("Site Details: " ~ to!string(driveResult), ["debug"]);
+										found = true;
+										writeln("Site Name:    ", searchResult["displayName"].str);
+										writeln("Library Name: ", driveResult["name"].str);
+										writeln("drive_id:     ", driveResult["id"].str);
+										writeln("Library URL:  ", driveResult["webUrl"].str);
+									}
+			
+									// If a collection exceeds the default page size (200 items), the @odata.nextLink property is returned in the response 
+									// to indicate more items are available and provide the request URL for the next page of items.
+									if ("@odata.nextLink" in siteDriveQuery) {
+										// Update nextLink to next set of SharePoint library names
+										nextLinkDrive = siteDriveQuery["@odata.nextLink"].str;
+										addLogEntry("Setting nextLinkDrive to (@odata.nextLink): " ~ nextLinkDrive, ["debug"]);
+
+										// Sleep for a while to avoid busy-waiting
+										Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
+									} else {
+										// closeout
+										writeln("-----------------------------------------------");
+										break;
+									}
+								} else {
+									// not a valid JSON object
+									addLogEntry("ERROR: There was an error performing this operation on Microsoft OneDrive");
+									addLogEntry("ERROR: Increase logging verbosity to assist determining why.");
+									
+									// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+									querySharePointLibraryNameApiInstance.releaseCurlEngine();
+									querySharePointLibraryNameApiInstance = null;
+									// Perform Garbage Collection
+									GC.collect();
+									return;
+								}
 							}
 						}
 					} else {
