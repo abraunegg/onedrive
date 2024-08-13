@@ -162,7 +162,7 @@ fi
 
 # Only switch user if not running as target uid (ie. Docker)
 if [ "$ONEDRIVE_UID" = "$(id -u)" ]; then
-	echo "# Launching 'onedrive' as ${ONEDRIVE_UID}"
+	echo "# Launching 'onedrive' as ${oduser}"
 	/usr/local/bin/onedrive "${ARGS[@]}"
 else
 	echo "# Changing ownership permissions on /onedrive/data and /onedrive/conf to ${oduser}:${odgroup}"
