@@ -701,9 +701,14 @@ class OneDriveApi {
 	}
 	
 	// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/api/drive_list?view=odsp-graph-online
-	JSONValue o365SiteDrives(string site_id){
+	JSONValue o365SiteDrives(string site_id, string nextLink){
 		string url;
-		url = siteDriveUrl ~ site_id ~ "/drives";
+		// configure URL to query
+		if (nextLink.empty) {
+			url = siteDriveUrl ~ site_id ~ "/drives";
+		} else {
+			url = nextLink;
+		}
 		return get(url);
 	}
 
