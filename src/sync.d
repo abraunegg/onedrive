@@ -4391,10 +4391,12 @@ class SyncEngine {
 		auto startTime = Clock.currTime();
 		addLogEntry("Starting Filesystem Walk:     " ~ to!string(startTime), ["debug"]);
 		
-		// Add a processing '.'
-		if (!appConfig.suppressLoggingOutput) {
-			if (appConfig.verbosityCount == 0) {
-				addProcessingDotEntry();
+		// Add a processing '.' if this is a directory we are scanning
+		if (isDir(path)) {
+			if (!appConfig.suppressLoggingOutput) {
+				if (appConfig.verbosityCount == 0) {
+					addProcessingDotEntry();
+				}
 			}
 		}
 		
@@ -4403,10 +4405,13 @@ class SyncEngine {
 		// Reset flag
 		cleanupDataPass = false;
 		
-		if (appConfig.verbosityCount == 0) {
-			if (!appConfig.suppressLoggingOutput) {
-				// Close out the '....' being printed to the console
-				completeProcessingDots();
+		// Close processing '.' if this is a directory we are scanning
+		if (isDir(path)) {
+			if (appConfig.verbosityCount == 0) {
+				if (!appConfig.suppressLoggingOutput) {
+					// Close out the '....' being printed to the console
+					completeProcessingDots();
+				}
 			}
 		}
 		

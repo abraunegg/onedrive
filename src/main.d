@@ -808,8 +808,8 @@ int main(string[] cliArgs) {
 			filesystemMonitor.onFileChanged = delegate(string[] changedLocalFilesToUploadToOneDrive) {
 				// Handle a potentially locally changed file
 				// Logging for this event moved to handleLocalFileTrigger() due to threading and false triggers from scanLocalFilesystemPathForNewData() above
-				addLogEntry("[M] Total number of local file changed: " ~ to!string(changedLocalFilesToUploadToOneDrive.length));
 				syncEngineInstance.handleLocalFileTrigger(changedLocalFilesToUploadToOneDrive);
+				addLogEntry("[M] Total number of local file(s) added or changed: " ~ to!string(changedLocalFilesToUploadToOneDrive.length), ["verbose"]);
 			};
 
 			// Delegated function for when inotify detects a delete event
