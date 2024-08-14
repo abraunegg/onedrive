@@ -4957,13 +4957,19 @@ class SyncEngine {
 							
 							// Child name check
 							if (childAsLower == thisFolderNameAsLower) {	
-								// This is a POSIX 'case in-sensitive match' ..... 
-								// Local item name has a 'case-insensitive match' to an existing item on OneDrive
-								addLogEntry("Path we are searching for exists online (POSIX 'case in-sensitive match'): " ~ baseName(thisNewPathToCreate), ["debug"]);
-								addLogEntry("childJSON: " ~ to!string(childJSON), ["debug"]);
-								foundDirectoryOnline = true;
-								foundDirectoryJSONItem = childJSON;
-								break;
+								// This is a POSIX 'case in-sensitive match' ..... in folder name only
+								// - Local item name has a 'case-insensitive match' to an existing item on OneDrive
+								// The 'parentId' of this JSON object must match the the parentId of where the folder was created
+								// - why .. we might have the same folder name, but somewhere totally different
+								
+								if (queryItem.id == thisChildItem.parentId) {
+									// Found the directory in the location, using case in-sensitive matching
+									addLogEntry("Path we are searching for exists online (POSIX 'case in-sensitive match'): " ~ baseName(thisNewPathToCreate), ["debug"]);
+									addLogEntry("childJSON: " ~ to!string(childJSON), ["debug"]);
+									foundDirectoryOnline = true;
+									foundDirectoryJSONItem = childJSON;
+									break;
+								}
 							}
 						}
 					}
