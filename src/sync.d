@@ -1389,6 +1389,7 @@ class SyncEngine {
 			addLogEntry("Processing OneDrive JSON item " ~ to!string(elementCount) ~ " of " ~ to!string(batchElementCount) ~ " as part of JSON Item Batch " ~ to!string(batchGroup) ~ " of " ~ to!string(batchCount), ["debug"]);
 			addLogEntry("Raw JSON OneDrive Item (Batched Item): " ~ to!string(onedriveJSONItem), ["debug"]);
 			
+			// Configure required items from the JSON elements
 			string thisItemId = onedriveJSONItem["id"].str;
 			string thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
 			string thisItemParentId = onedriveJSONItem["parentReference"]["id"].str;
@@ -1826,7 +1827,27 @@ class SyncEngine {
 					//  	changedItemPath:      ./Document.txt
 					// 
 					// Need to be consistent here with how 'newItemPath' was calculated
-					string existingItemPath = computeItemPath(existingDatabaseItem.driveId, existingDatabaseItem.parentId) ~ "/" ~ existingDatabaseItem.name;
+					string queryDriveID;
+					string queryParentID;
+					
+					// Must query with a valid driveid entry
+					if (existingDatabaseItem.driveId.empty) {
+						queryDriveID = thisItemDriveId;
+					} else {
+						queryDriveID = existingDatabaseItem.driveId;
+					}
+					
+					// Must query with a valid parentid entry
+					if (existingDatabaseItem.parentId.empty) {
+						queryParentID = thisItemParentId;
+					} else {
+						queryParentID = existingDatabaseItem.parentId;
+					}
+					
+					// Calculate the existing path
+					string existingItemPath = computeItemPath(queryDriveID, queryParentID) ~ "/" ~ existingDatabaseItem.name;
+					addLogEntry("existingItemPath calculated full path is: " ~ existingItemPath, ["debug"]);
+					
 					// Attempt to apply this changed item
 					applyPotentiallyChangedItem(existingDatabaseItem, existingItemPath, newDatabaseItem, newItemPath, onedriveJSONItem);
 				} else {
@@ -1839,7 +1860,6 @@ class SyncEngine {
 					applyPotentiallyNewLocalItem(newDatabaseItem, onedriveJSONItem, newItemPath);
 				}
 			}
-			
 			
 			// How long to process this JSON item in batch
 			auto jsonProcessingElapsedTime = Clock.currTime() - jsonProcessingStartTime;
@@ -2746,10 +2766,11 @@ class SyncEngine {
 	
 	// Query itemdb.computePath() and catch potential assert when DB consistency issue occurs
 	string computeItemPath(string thisDriveId, string thisItemId) {
-		
 		// static declare this for this function
 		static import core.exception;
 		string calculatedPath;
+		
+		// What driveID and itemID we trying to calculate the path for
 		addLogEntry("Attempting to calculate local filesystem path for " ~ thisDriveId ~ " and " ~ thisItemId, ["debug"]);
 		
 		try {
