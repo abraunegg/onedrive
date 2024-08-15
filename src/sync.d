@@ -2585,6 +2585,13 @@ class SyncEngine {
 					// track that we 'faked it'
 					idsFaked ~= [downloadDriveId, downloadItemId];
 				}
+				
+				// If, the initial download failed, but, during the 'Performing a last examination of the most recent online data within Microsoft OneDrive' Process
+				// the file downloads without issue, check if the path is in 'fileDownloadFailures' and if this is in this array, remove this entry as it is technically no longer valid to be in there
+				if (canFind(fileDownloadFailures, newItemPath)) {
+					// Remove 'newItemPath' from 'fileDownloadFailures' as this is no longer a failed download
+					fileDownloadFailures = fileDownloadFailures.filter!(item => item != newItemPath).array;
+				}
 			} else {
 				// Output download failed
 				addLogEntry("Downloading file: " ~ newItemPath ~ " ... failed!");
@@ -6330,68 +6337,6 @@ class SyncEngine {
 		
 		// Return the new database item
 		return newDatabaseItem;
-	}
-	
-	// Print the fileDownloadFailures and fileUploadFailures arrays if they are not empty
-	void displaySyncFailures_old() {
-			
-		// Were there any file download failures?
-		if (!fileDownloadFailures.empty) {
-			// There are download failures ...
-			addLogEntry();
-			addLogEntry("Failed items to download from Microsoft OneDrive: " ~ to!string(fileDownloadFailures.length));
-			foreach(failedFileToDownload; fileDownloadFailures) {
-				// List the detail of the item that failed to download
-				addLogEntry("Failed to download: " ~ failedFileToDownload, ["info", "notify"]);
-				
-				// Is this failed item in the DB? It should not be ..
-				Item downloadDBItem;
-				// Need to check all driveid's we know about, not just the defaultDriveId
-				foreach (searchDriveId; onlineDriveDetails.keys) {
-					if (itemDB.selectByPath(failedFileToDownload, searchDriveId, downloadDBItem)) {
-						// item was found in the DB
-						addLogEntry("ERROR: Failed Download Path found in database, must delete this item from the database .. it should not be in there if it failed to download");
-						// Process the database entry removal. In a --dry-run scenario, this is being done against a DB copy
-						itemDB.deleteById(downloadDBItem.driveId, downloadDBItem.id);
-						if (downloadDBItem.remoteDriveId != null) {
-							// delete the linked remote folder
-							itemDB.deleteById(downloadDBItem.remoteDriveId, downloadDBItem.remoteId);
-						}	
-					}
-				}
-			}
-			// Set the flag
-			syncFailures = true;
-		}
-		
-		// Were there any file upload failures?
-		if (!fileUploadFailures.empty) {
-			// There are download failures ...
-			addLogEntry();
-			addLogEntry("Failed items to upload to Microsoft OneDrive: " ~ to!string(fileUploadFailures.length));
-			foreach(failedFileToUpload; fileUploadFailures) {
-				// List the path of the item that failed to upload
-				addLogEntry("Failed to upload: " ~ failedFileToUpload, ["info", "notify"]);
-				
-				// Is this failed item in the DB? It should not be ..
-				Item uploadDBItem;
-				// Need to check all driveid's we know about, not just the defaultDriveId
-				foreach (searchDriveId; onlineDriveDetails.keys) {
-					if (itemDB.selectByPath(failedFileToUpload, searchDriveId, uploadDBItem)) {
-						// item was found in the DB
-						addLogEntry("ERROR: Failed Upload Path found in database, must delete this item from the database .. it should not be in there if it failed to upload");
-						// Process the database entry removal. In a --dry-run scenario, this is being done against a DB copy
-						itemDB.deleteById(uploadDBItem.driveId, uploadDBItem.id);
-						if (uploadDBItem.remoteDriveId != null) {
-							// delete the linked remote folder
-							itemDB.deleteById(uploadDBItem.remoteDriveId, uploadDBItem.remoteId);
-						}	
-					}
-				}
-			}
-			// Set the flag
-			syncFailures = true;
-		}
 	}
 	
 	// Print the fileDownloadFailures and fileUploadFailures arrays if they are not empty
