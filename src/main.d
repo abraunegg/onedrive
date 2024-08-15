@@ -56,6 +56,8 @@ string runtimeDatabaseFile = "";
 bool performFileSystemMonitoring = false;
 // Flag for if we perform a database vacuum. This gets set to false if we have not performed a 'no-sync' task
 bool performDatabaseVacuum = true;
+// Flag if SIGTERM is used
+bool sigtermHandlerTriggered = false;
 
 int main(string[] cliArgs) {
 	// Application Start Time - used during monitor loop to detail how long it has been running for
@@ -1107,14 +1109,11 @@ int main(string[] cliArgs) {
 							monitorFailures = true;
 							performFileSystemMonitoring = false;
 						}
-					
 					} else {
 						// no hooks available, nothing to check
 						Thread.sleep(sleepTime);
 					}
-				
 				}
-				
 			}
 		}
 	} else {
@@ -1390,13 +1389,26 @@ void setupSignalHandler() {
 // Catch SIGINT (CTRL-C), SIGTERM (kill) and SIGSEGV (invalid memory access), handle rapid repeat CTRL-C presses
 extern(C) nothrow @nogc @system void exitViaSignalHandler(int signo) {
 
-	// Update exitHandlerTriggered flag so that objects that depend on this know we are shutting down
+	// Update global exitHandlerTriggered flag so that objects that depend on this know we are shutting down
 	exitHandlerTriggered = true;
 	
-	// Catch the generation of SIGSEV post CTRL-C event
+	// Catch the generation of SIGSEV post SIGINT or SIGTERM event
     if (signo == SIGSEGV) {
-		printf("Due to a termination signal, internal processing stopped abruptly. The application will now exit in a unclean manner.\n");
-		exit(130);
+		// Was SIGTERM used?
+		if (!sigtermHandlerTriggered) {
+			// No .. so most likely SIGINT (CTRL-C)
+			printf("Due to a termination signal, internal processing stopped abruptly. The application will now exit in a unclean manner.\n");
+			exit(130);
+		} else {
+			// High probability of being shutdown by systemd, for example: systemctl --user stop onedrive
+			// Exit in a manner that does not trigger an exit failure in systemd
+			exit(0);
+		}
+	}
+	
+	if (signo == SIGTERM) {
+		// systemd will use SIGTERM to terminate a running process
+		sigtermHandlerTriggered = true;
 	}
 
 	if (shutdownInProgress) {
