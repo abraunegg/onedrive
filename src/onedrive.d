@@ -805,7 +805,7 @@ class OneDriveApi {
 		(*headers)["Prefer"] = "Include-Feature=AddToOneDrive";
 	}
 
-	private void redeemToken(char[] authCode){
+	private void redeemToken(char[] authCode) {
 		char[] postData =
 			"client_id=" ~ clientId ~
 			"&redirect_uri=" ~ redirectUrl ~
@@ -864,7 +864,7 @@ class OneDriveApi {
 				}
 			}
 		
-			if ("access_token" in response){
+			if ("access_token" in response) {
 				appConfig.accessToken = "bearer " ~ strip(response["access_token"].str);
 				
 				// Do we print the current access token

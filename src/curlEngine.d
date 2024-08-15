@@ -204,10 +204,6 @@ class CurlEngine {
 		object.destroy(http);
 		// ThreadId needs to be set to null
 		internalThreadId = null;
-		// Perform Garbage Collection
-		//GC.collect();
-		// Return free memory to the OS
-		//GC.minimize();
     }
 		
 	// We are releasing a curl instance back to the pool

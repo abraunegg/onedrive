@@ -192,7 +192,6 @@ class SyncEngine {
 	DeltaLinkInfo deltaLinkInfo;
 	// Flag to denote data cleanup pass when using --download-only --cleanup-local-files
 	bool cleanupDataPass = false;
-	
 	// Create the specific task pool to process items in parallel
 	TaskPool processPool;
 		
@@ -1120,7 +1119,6 @@ class SyncEngine {
 			
 			// Cleanup deltaChanges as this is no longer needed
 			deltaChanges = null;
-			
 		}
 		
 		// Cleanup deltaChanges as this is no longer needed
@@ -6639,7 +6637,7 @@ class SyncEngine {
 				thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance);
 			} catch (OneDriveException exception) {
 				// MAY NEED FUTURE WORK HERE .. YET TO TRIGGER THIS
-				writeln("CODING TO DO: EXCEPTION HANDLING NEEDED: thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance)");
+				addLogEntry("CODING TO DO: EXCEPTION HANDLING NEEDED: thisLevelChildren = queryThisLevelChildren(driveId, idToQuery, nextLink, queryChildrenOneDriveApiInstance)");
 			}
 			
 			if (appConfig.verbosityCount == 0) {
@@ -7476,13 +7474,13 @@ class SyncEngine {
 									// valid JSON object
 									foreach (driveResult; siteDriveQuery["value"].array) {
 										// Display results
-										writeln("-----------------------------------------------");
-										addLogEntry("Site Details: " ~ to!string(driveResult), ["debug"]);
 										found = true;
-										writeln("Site Name:    ", searchResult["displayName"].str);
-										writeln("Library Name: ", driveResult["name"].str);
-										writeln("drive_id:     ", driveResult["id"].str);
-										writeln("Library URL:  ", driveResult["webUrl"].str);
+										addLogEntry("-----------------------------------------------");
+										addLogEntry("Site Details: " ~ to!string(driveResult), ["debug"]);
+										addLogEntry("Site Name:    " ~ searchResult["displayName"].str);
+										addLogEntry("Library Name: " ~ driveResult["name"].str);
+										addLogEntry("drive_id:     " ~ driveResult["id"].str);
+										addLogEntry("Library URL:  " ~ driveResult["webUrl"].str);
 									}
 			
 									// If a collection exceeds the default page size (200 items), the @odata.nextLink property is returned in the response 
@@ -7496,7 +7494,7 @@ class SyncEngine {
 										Thread.sleep(dur!"msecs"(100)); // Adjust the sleep duration as needed
 									} else {
 										// closeout
-										writeln("-----------------------------------------------");
+										addLogEntry("-----------------------------------------------");
 										break;
 									}
 								} else {
@@ -8213,7 +8211,6 @@ class SyncEngine {
 		// This function received an array of JSON items to resume upload, the number of elements based on appConfig.getValueLong("threads")
 		foreach (i, jsonItemToResume; processPool.parallel(array)) {
 			// Take each JSON item and resume upload using the JSON data
-			
 			JSONValue uploadResponse;
 			OneDriveApi uploadFileOneDriveApiInstance;
 			
@@ -8328,7 +8325,6 @@ class SyncEngine {
 		JSONValue onedriveJSONItem;
 		string searchName = baseName(fileToUpload);
 		JSONValue thisLevelChildren;
-		
 		string nextLink;
 		
 		// Create a new API Instance for this thread and initialise it

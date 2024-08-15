@@ -1297,4 +1297,3 @@ string compilerDetails() {
 	string compilerString = compiler ~ " " ~ to!string(__VERSION__);
 	return compilerString;
 }
-

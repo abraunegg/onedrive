@@ -672,8 +672,9 @@ final class Monitor {
 					break;
 			}
 		}
-		if (!changes.empty)
+		if (!changes.empty) {
 			onFileChanged(changes);
+		}
 
 		object.destroy(actionHolder);
 	}

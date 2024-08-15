@@ -1059,8 +1059,9 @@ int main(string[] cliArgs) {
 						if(filesystemMonitor.initialised) {
 							// If local monitor is on and is waiting (previous event was not from webhook)
 							// start the worker and wait for event
-							if (!notificationReceived)
+							if (!notificationReceived) {
 								filesystemMonitor.send(true);
+							}
 						}
 						
 						if(webhookEnabled) {
