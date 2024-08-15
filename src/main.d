@@ -362,7 +362,7 @@ int main(string[] cliArgs) {
 			if (appConfig.applicationChangeWhereResyncRequired()) {
 				// Application configuration has changed however --resync not issued, fail fast
 				addLogEntry();
-				addLogEntry("An application configuration change has been detected where a --resync is required");
+				addLogEntry("An application configuration change has been detected where a --resync is required", ["info", "notify"]);
 				addLogEntry();
 				return EXIT_RESYNC_REQUIRED;
 			} else {
