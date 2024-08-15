@@ -220,22 +220,22 @@ final class ItemDatabase {
 				// The below list is based on user issue / discussion reports since 2018
 				switch (e.errorCode) {
 					case 7: // SQLITE_NOMEM
-						addLogEntry("The operation could not be completed due to insufficient memory. Please close unnecessary applications to free up memory and try again.");
+						addLogEntry("The operation could not be completed due to insufficient memory. Please close unnecessary applications to free up memory and try again.", ["info", "notify"]);
 						break;
 					case 10: // SQLITE_IOERR
-						addLogEntry("A disk I/O error occurred. This could be due to issues with the storage medium (e.g., disk full, hardware failure, filesystem corruption). Please check your disk's health using a disk utility tool, ensure there is enough free space, and check the filesystem for errors.");
+						addLogEntry("A disk I/O error occurred. This could be due to issues with the storage medium (e.g., disk full, hardware failure, filesystem corruption).\nPlease check your disk's health using a disk utility tool, ensure there is enough free space, and check the filesystem for errors.", ["info", "notify"]);
 						break;
 					case 11: // SQLITE_CORRUPT
-						addLogEntry("The database file appears to be corrupt. This could be due to incomplete or failed writes, hardware issues, or unexpected interruptions during database operations. Please perform a --resync operation.");
+						addLogEntry("The database file appears to be corrupt. This could be due to incomplete or failed writes, hardware issues, or unexpected interruptions during database operations.\nPlease perform a --resync operation.", ["info", "notify"]);
 						break;
 					case 14: // SQLITE_CANTOPEN
-						addLogEntry("The database file could not be opened. Please check that the database file exists, has the correct permissions, and is not being blocked by another process or security software.");
+						addLogEntry("The database file could not be opened. Please check that the database file exists, has the correct permissions, and is not being blocked by another process or security software.", ["info", "notify"]);
 						break;
 					case 26: // SQLITE_NOTADB
-						addLogEntry("The file attempted to be opened does not appear to be a valid SQLite database, or it may have been corrupted to a point where it's no longer recognizable. Please check your application configuration directory and/or perform a --resync operation.");
+						addLogEntry("The database file that attempted to be opened does not appear to be a valid SQLite database, or it may have been corrupted to a point where it's no longer recognisable.\nPlease check your application configuration directory and/or perform a --resync operation.", ["info", "notify"]);
 						break;
 					default:
-						addLogEntry("An unexpected error occurred. Please consult the application documentation or support to resolve this issue.");
+						addLogEntry("An unexpected error occurred. Please consult the application documentation or request support to resolve this issue.", ["info", "notify"]);
 						break;
 				}
 				// Blank line before exit
