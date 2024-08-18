@@ -16,6 +16,7 @@ import std.getopt;
 import std.format;
 import std.ascii;
 import std.datetime;
+import std.exception;
 
 // What other modules that we have created do we need to import?
 import log;
@@ -579,9 +580,14 @@ class ApplicationConfig {
 			if (exists(applicableConfigFilePath)) {
 				addLogEntry("Creating a backup of the applicable config file", ["debug"]);
 				// create backup copy of current config file
-				std.file.copy(applicableConfigFilePath, configBackupFile);
-				// File Copy should only be readable by the user who created it - 0600 permissions needed
-				configBackupFile.setAttributes(convertedPermissionValue);
+				try {
+					std.file.copy(applicableConfigFilePath, configBackupFile);
+					// File Copy should only be readable by the user who created it - 0600 permissions needed
+					configBackupFile.setAttributes(convertedPermissionValue);
+				} catch (FileException e) {
+					// filesystem error
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				}
 			}
 		} else {
 			// --dry-run scenario ... technically we should not be making any local file changes .......
@@ -1572,6 +1578,9 @@ class ApplicationConfig {
 		
 		// Read in the existing hash file values
 		readExistingConfigurationHashFiles();
+		
+		// can we read the backup config file
+		bool failedToReadBackupConfig = false;
 
 		// Helper lambda for logging and setting the difference flag
 		auto logAndSetDifference = (string message, size_t index) {
@@ -1607,105 +1616,123 @@ class ApplicationConfig {
 				bool sync_business_shared_items_present = false;
 
 				string configOptionModifiedMessage = " was modified since the last time the application was successfully run, --resync required";
+				File configBackupFileHandle;
 				
-				auto configBackupFileHandle = File(configBackupFile, "r");
+				try {
+					configBackupFileHandle = File(configBackupFile, "r");
+				} catch (FileException e) {
+					// filesystem error
+					failedToReadBackupConfig = true;
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				} catch (std.exception.ErrnoException e) {
+					// filesystem error
+					failedToReadBackupConfig = true;
+					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				}
+				
 				scope(exit) {
 					if (configBackupFileHandle.isOpen()) {
 						configBackupFileHandle.close();
 					}
 				}
+				
+				if (!failedToReadBackupConfig) {
+					// backup config file was able to be read
+					string lineBuffer;
+					auto range = configBackupFileHandle.byLine();
+					foreach (line; range) {
+						lineBuffer = stripLeft(line).to!string;
+						if (lineBuffer.length == 0 || lineBuffer[0] == ';' || lineBuffer[0] == '#') continue;
+						auto c = lineBuffer.matchFirst(configRegex);
+						if (!c.empty) {
+							c.popFront(); // skip the whole match
+							string key = c.front.dup;
+							addLogEntry("Backup Config Key: " ~ key, ["debug"]);
 
-				string lineBuffer;
-				auto range = configBackupFileHandle.byLine();
-				foreach (line; range) {
-					lineBuffer = stripLeft(line).to!string;
-					if (lineBuffer.length == 0 || lineBuffer[0] == ';' || lineBuffer[0] == '#') continue;
-					auto c = lineBuffer.matchFirst(configRegex);
-					if (!c.empty) {
-						c.popFront(); // skip the whole match
-						string key = c.front.dup;
-						addLogEntry("Backup Config Key: " ~ key, ["debug"]);
-
-						auto p = key in backupConfigStringValues;
-						if (p) {
-							c.popFront();
-							string value = c.front.dup;
-							// Compare each key value with current config
-							if (key == "drive_id") {
-								drive_id_present = true;
-								if (value != getValueString("drive_id")) {
-									logAndSetDifference(key ~ configOptionModifiedMessage, 2);
+							auto p = key in backupConfigStringValues;
+							if (p) {
+								c.popFront();
+								string value = c.front.dup;
+								// Compare each key value with current config
+								if (key == "drive_id") {
+									drive_id_present = true;
+									if (value != getValueString("drive_id")) {
+										logAndSetDifference(key ~ configOptionModifiedMessage, 2);
+									}
 								}
-							}
-							if (key == "sync_dir") {
-								sync_dir_present = true;
-								if (value != getValueString("sync_dir")) {
-									logAndSetDifference(key ~ configOptionModifiedMessage, 3);
+								if (key == "sync_dir") {
+									sync_dir_present = true;
+									if (value != getValueString("sync_dir")) {
+										logAndSetDifference(key ~ configOptionModifiedMessage, 3);
+									}
 								}
-							}
-							
-							// skip_file handling
-							if (key == "skip_file") {
-								skip_file_present = true;
-								// Handle multiple entries of skip_file
-								if (backupConfigFileSkipFile.empty) {
-									// currently no entry exists, include 'defaultSkipFile' entries
-									backupConfigFileSkipFile = defaultSkipFile ~ "|" ~ to!string(c.front.dup);
-								} else {
-									// add to existing backupConfigFileSkipFile entry
-									backupConfigFileSkipFile = backupConfigFileSkipFile ~ "|" ~ to!string(c.front.dup);
+								
+								// skip_file handling
+								if (key == "skip_file") {
+									skip_file_present = true;
+									// Handle multiple entries of skip_file
+									if (backupConfigFileSkipFile.empty) {
+										// currently no entry exists, include 'defaultSkipFile' entries
+										backupConfigFileSkipFile = defaultSkipFile ~ "|" ~ to!string(c.front.dup);
+									} else {
+										// add to existing backupConfigFileSkipFile entry
+										backupConfigFileSkipFile = backupConfigFileSkipFile ~ "|" ~ to!string(c.front.dup);
+									}
 								}
-							}
-							
-							// skip_dir handling
-							if (key == "skip_dir") {
-								skip_dir_present = true;
-								// Handle multiple entries of skip_dir
-								if (backupConfigFileSkipDir.empty) {
-									// currently no entry exists
-									backupConfigFileSkipDir = c.front.dup;
-								} else {
-									// add to existing backupConfigFileSkipDir entry
-									backupConfigFileSkipDir = backupConfigFileSkipDir ~ "|" ~ to!string(c.front.dup);
+								
+								// skip_dir handling
+								if (key == "skip_dir") {
+									skip_dir_present = true;
+									// Handle multiple entries of skip_dir
+									if (backupConfigFileSkipDir.empty) {
+										// currently no entry exists
+										backupConfigFileSkipDir = c.front.dup;
+									} else {
+										// add to existing backupConfigFileSkipDir entry
+										backupConfigFileSkipDir = backupConfigFileSkipDir ~ "|" ~ to!string(c.front.dup);
+									}
 								}
-							}
-							
-							if (key == "skip_dotfiles") {
-								skip_dotfiles_present = true;
-								if (value != to!string(getValueBool("skip_dotfiles"))) {
-									logAndSetDifference(key ~ configOptionModifiedMessage, 6);
+								
+								if (key == "skip_dotfiles") {
+									skip_dotfiles_present = true;
+									if (value != to!string(getValueBool("skip_dotfiles"))) {
+										logAndSetDifference(key ~ configOptionModifiedMessage, 6);
+									}
 								}
-							}
-							if (key == "skip_symlinks") {
-								skip_symlinks_present = true;
-								if (value != to!string(getValueBool("skip_symlinks"))) {
-									logAndSetDifference(key ~ configOptionModifiedMessage, 7);
+								if (key == "skip_symlinks") {
+									skip_symlinks_present = true;
+									if (value != to!string(getValueBool("skip_symlinks"))) {
+										logAndSetDifference(key ~ configOptionModifiedMessage, 7);
+									}
 								}
-							}
-							if (key == "sync_business_shared_items") {
-								sync_business_shared_items_present = true;
-								if (value != to!string(getValueBool("sync_business_shared_items"))) {
-									logAndSetDifference(key ~ configOptionModifiedMessage, 8);
+								if (key == "sync_business_shared_items") {
+									sync_business_shared_items_present = true;
+									if (value != to!string(getValueBool("sync_business_shared_items"))) {
+										logAndSetDifference(key ~ configOptionModifiedMessage, 8);
+									}
 								}
 							}
 						}
 					}
+				
+					// skip_file can be specified multiple times
+					if (skip_file_present && backupConfigFileSkipFile != configFileSkipFile) logAndSetDifference("skip_file" ~ configOptionModifiedMessage, 4);
+					
+					// skip_dir can be specified multiple times
+					if (skip_dir_present && backupConfigFileSkipDir != configFileSkipDir) logAndSetDifference("skip_dir" ~ configOptionModifiedMessage, 5);
+					
+					// Check for newly added configuration options
+					if (!drive_id_present && configFileDriveId != "") logAndSetDifference("drive_id newly added ... --resync needed", 2);
+					if (!sync_dir_present && configFileSyncDir != defaultSyncDir) logAndSetDifference("sync_dir newly added ... --resync needed", 3);
+					if (!skip_file_present && configFileSkipFile != defaultSkipFile) logAndSetDifference("skip_file newly added ... --resync needed", 4);
+					if (!skip_dir_present && configFileSkipDir != "") logAndSetDifference("skip_dir newly added ... --resync needed", 5);
+					if (!skip_dotfiles_present && configFileSkipDotfiles) logAndSetDifference("skip_dotfiles newly added ... --resync needed", 6);
+					if (!skip_symlinks_present && configFileSkipSymbolicLinks) logAndSetDifference("skip_symlinks newly added ... --resync needed", 7);
+					if (!sync_business_shared_items_present && configFileSyncBusinessSharedItems) logAndSetDifference("sync_business_shared_items newly added ... --resync needed", 8);
+				} else {
+					// failed to read backup config file
+					addLogEntry("WARNING: unable to read backup config, unable to validate if any changes made");
 				}
-				
-				// skip_file can be specified multiple times
-				if (skip_file_present && backupConfigFileSkipFile != configFileSkipFile) logAndSetDifference("skip_file" ~ configOptionModifiedMessage, 4);
-				
-				// skip_dir can be specified multiple times
-				if (skip_dir_present && backupConfigFileSkipDir != configFileSkipDir) logAndSetDifference("skip_dir" ~ configOptionModifiedMessage, 5);
-				
-				// Check for newly added configuration options
-				if (!drive_id_present && configFileDriveId != "") logAndSetDifference("drive_id newly added ... --resync needed", 2);
-				if (!sync_dir_present && configFileSyncDir != defaultSyncDir) logAndSetDifference("sync_dir newly added ... --resync needed", 3);
-				if (!skip_file_present && configFileSkipFile != defaultSkipFile) logAndSetDifference("skip_file newly added ... --resync needed", 4);
-				if (!skip_dir_present && configFileSkipDir != "") logAndSetDifference("skip_dir newly added ... --resync needed", 5);
-				if (!skip_dotfiles_present && configFileSkipDotfiles) logAndSetDifference("skip_dotfiles newly added ... --resync needed", 6);
-				if (!skip_symlinks_present && configFileSkipSymbolicLinks) logAndSetDifference("skip_symlinks newly added ... --resync needed", 7);
-				if (!sync_business_shared_items_present && configFileSyncBusinessSharedItems) logAndSetDifference("sync_business_shared_items newly added ... --resync needed", 8);
 			} else {
 				addLogEntry("WARNING: no backup config file was found, unable to validate if any changes made");
 			}
@@ -1721,10 +1748,12 @@ class ApplicationConfig {
 		}
 
 		// Aggregate the result to determine if a resync is required
-		foreach (optionDifferent; configOptionsDifferent) {
-			if (optionDifferent) {
-				resyncRequired = true;
-				break;
+		if (!failedToReadBackupConfig) {
+			foreach (optionDifferent; configOptionsDifferent) {
+				if (optionDifferent) {
+					resyncRequired = true;
+					break;
+				}
 			}
 		}
 		
