@@ -354,7 +354,7 @@ class OneDriveApi {
 			
 			if (refreshToken.empty) {
 				// PROBLEM ... CODING TO DO ??????????
-				addLogEntry("CODING TO DO: refreshToken is empty !!!!!!!!!! This will cause 4xx errors ... CODING TO DO TO HANDLE ?????");
+				addLogEntry("DEBUG: refreshToken is empty !!!!!!!!!!", ["debug"]);
 			}
 		}
 		
