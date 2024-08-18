@@ -642,17 +642,33 @@ int main(string[] cliArgs) {
 		if (!exists(runtimeSyncDirectory)) {
 			addLogEntry("runtimeSyncDirectory: Configured 'sync_dir' is missing locally. Creating: " ~ runtimeSyncDirectory, ["debug"]);
 			
-			try {
-				// Attempt to create the sync dir we have been configured with
-				mkdirRecurse(runtimeSyncDirectory);
-				// Configure the applicable permissions for the folder
-				addLogEntry("Setting directory permissions for: " ~ runtimeSyncDirectory, ["debug"]);
-				runtimeSyncDirectory.setAttributes(appConfig.returnRequiredDirectoryPermisions());
-			} catch (std.file.FileException e) {
-				// Creating the sync directory failed
-				addLogEntry("ERROR: Unable to create the configured local 'sync_dir' directory: " ~ e.msg);
-				// Use exit scopes to shutdown API
-				return EXIT_FAILURE;
+			// At this point 'sync_dir' is missing and we have requested to create it
+			// However ... 'itemDB' is pointing to a valid database file
+			// If this database has any entries, an empty 'sync_dir' will cause the application to think that all content in 'sync_dir' has been deleted
+			// In this scenario, the application, depending on the options being used, may attempt to delete all files online - which is not desirable
+			// Do a sanity check here to ensure that there are no database entries
+		
+			if (itemDB.getTotalRowCount() == 1) {
+				// Technically an 'empty database'
+				// An empty database will just have 1 row in it, that row being the account 'root' data added when the API is initially initialised above
+				try {
+					// Attempt to create the sync dir we have been configured with
+					mkdirRecurse(runtimeSyncDirectory);
+					// Configure the applicable permissions for the folder
+					addLogEntry("Setting directory permissions for: " ~ runtimeSyncDirectory, ["debug"]);
+					runtimeSyncDirectory.setAttributes(appConfig.returnRequiredDirectoryPermisions());
+				} catch (std.file.FileException e) {
+					// Creating the sync directory failed
+					addLogEntry("ERROR: Unable to create the configured local 'sync_dir' directory: " ~ e.msg, ["info", "notify"]);
+					// Use exit scopes to shutdown API
+					return EXIT_FAILURE;
+				}
+			} else {
+				// Not an empty database
+				addLogEntry();
+				addLogEntry("An application cache state issue has been detected where a --resync is required", ["info", "notify"]);
+				addLogEntry();
+				return EXIT_RESYNC_REQUIRED;
 			}
 		}
 	} catch (std.file.FileException e) {

@@ -986,4 +986,23 @@ final class ItemDatabase {
 		}
 		return driveIdArray;
 	}
+	
+	// Function to get the total number of rows in a table
+	int getTotalRowCount() {
+		int rowCount = 0;
+		auto stmt = db.prepare("SELECT COUNT(*) FROM item;");
+		scope(exit) stmt.finalise(); // Ensure that the prepared statement is finalised after execution.
+
+		try {
+			auto res = stmt.exec();
+			if (!res.empty) {
+				rowCount = res.front[0].to!int;
+			}
+		} catch (SqliteException e) {
+			// Handle the error appropriately
+			detailSQLErrorMessage(e.msg);
+		}
+		
+		return rowCount;
+	}
 }
