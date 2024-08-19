@@ -130,7 +130,6 @@ struct Database {
 			if (rc != SQLITE_OK) {
 				// Get error message and print it, then exit
 				string errorMessage = getErrorMessage();
-				printSQLExecutionErrorMessage(errorMessage);
 				close();
 				// Throw sqlite error
 				throw new SqliteException(rc, errorMessage);
@@ -138,15 +137,6 @@ struct Database {
 		}
 	}
 	
-	void printSQLExecutionErrorMessage(string errorMessage) {
-		// If we are 'rc != SQLITE_OK' output this message
-		addLogEntry();
-		addLogEntry("A database execution error occurred: "~ errorMessage);
-		addLogEntry();
-		addLogEntry("Please retry your command with --resync to fix any local database corruption issues.");
-		addLogEntry();
-	}
-
 	int getVersion() {
 		int userVersion;
 		extern (C) int callback(void* user_version, int count, char** column_text, char** column_name) {
@@ -236,11 +226,6 @@ struct Statement {
 				}
 			} else {
 				string errorMessage = getErrorMessage();
-				addLogEntry();
-				addLogEntry("A database statement execution error occurred: " ~ errorMessage);
-				addLogEntry();
-				addLogEntry("Please retry your command with --resync to fix any local database corruption issues.");
-				addLogEntry();
 				// Must force exit here, allow logging to be done
 				throw new SqliteException(rc, errorMessage);
 			}

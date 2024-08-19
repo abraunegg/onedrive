@@ -203,22 +203,23 @@ final class ItemDatabase {
 		int dbVersion;
 		try {
 			dbVersion = db.getVersion();
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			// An error was generated - what was the error?
-			if (e.msg == "database is locked") {
+			// - database is locked
+			if (exception.msg == "database is locked" || exception.errorCode == 5) {
 				addLogEntry();
-				addLogEntry("ERROR: The 'onedrive' application is already running - please check system process list for active application instances");
+				addLogEntry("ERROR: The 'onedrive' application is already running - please check system process list for active application instances" , ["info", "notify"]);
 				addLogEntry(" - Use 'sudo ps aufxw | grep onedrive' to potentially determine active running process");
 				addLogEntry();
 			} else {
 				// A different error .. detail the message, detail the actual SQLite Error Code to assist with troubleshooting
 				addLogEntry();
-				addLogEntry("ERROR: An internal database error occurred: " ~ e.msg ~ " (SQLite Error Code: " ~ to!string(e.errorCode) ~ ")");
+				addLogEntry("ERROR: An internal database error occurred: " ~ exception.msg ~ " (SQLite Error Code: " ~ to!string(exception.errorCode) ~ ")");
 				addLogEntry();
 				
 				// Give the user some additional information and pointers on this error
 				// The below list is based on user issue / discussion reports since 2018
-				switch (e.errorCode) {
+				switch (exception.errorCode) {
 					case 7: // SQLITE_NOMEM
 						addLogEntry("The operation could not be completed due to insufficient memory. Please close unnecessary applications to free up memory and try again.", ["info", "notify"]);
 						break;
@@ -256,36 +257,41 @@ final class ItemDatabase {
 		auto threadsafeValue = db.getThreadsafeValue();
 		addLogEntry("Threadsafe database value: " ~ to!string(threadsafeValue), ["debug"]);
 		
-		// Set the enforcement of foreign key constraints.
-		// https://www.sqlite.org/pragma.html#pragma_foreign_keys
-		// PRAGMA foreign_keys = boolean;
-		db.exec("PRAGMA foreign_keys = TRUE;");
-		// Set the recursive trigger capability
-		// https://www.sqlite.org/pragma.html#pragma_recursive_triggers
-		// PRAGMA recursive_triggers = boolean;
-		db.exec("PRAGMA recursive_triggers = TRUE;");
-		// Set the journal mode for databases associated with the current connection
-		// https://www.sqlite.org/pragma.html#pragma_journal_mode
-		db.exec("PRAGMA journal_mode = WAL;");
-		// Automatic indexing is enabled by default as of version 3.7.17
-		// https://www.sqlite.org/pragma.html#pragma_automatic_index 
-		// PRAGMA automatic_index = boolean;
-		db.exec("PRAGMA automatic_index = FALSE;");
-		// Tell SQLite to store temporary tables in memory. This will speed up many read operations that rely on temporary tables, indices, and views.
-		// https://www.sqlite.org/pragma.html#pragma_temp_store
-		db.exec("PRAGMA temp_store = MEMORY;");
-		// Tell SQlite to cleanup database table size
-		// https://www.sqlite.org/pragma.html#pragma_auto_vacuum
-		// PRAGMA schema.auto_vacuum = 0 | NONE | 1 | FULL | 2 | INCREMENTAL;
-		db.exec("PRAGMA auto_vacuum = FULL;");
-		// This pragma sets or queries the database connection locking-mode. The locking-mode is either NORMAL or EXCLUSIVE.
-		// https://www.sqlite.org/pragma.html#pragma_locking_mode
-		// PRAGMA schema.locking_mode = NORMAL | EXCLUSIVE
-		db.exec("PRAGMA locking_mode = EXCLUSIVE;");
-		// The synchronous setting determines how carefully SQLite writes data to disk, balancing between performance and data safety.
-		// https://sqlite.org/pragma.html#pragma_synchronous
-		// PRAGMA synchronous = 0 | OFF | 1 | NORMAL | 2 | FULL | 3 | EXTRA;
-		db.exec("PRAGMA synchronous=NORMAL;");
+		try {
+			// Set the enforcement of foreign key constraints.
+			// https://www.sqlite.org/pragma.html#pragma_foreign_keys
+			// PRAGMA foreign_keys = boolean;
+			db.exec("PRAGMA foreign_keys = TRUE;");
+			// Set the recursive trigger capability
+			// https://www.sqlite.org/pragma.html#pragma_recursive_triggers
+			// PRAGMA recursive_triggers = boolean;
+			db.exec("PRAGMA recursive_triggers = TRUE;");
+			// Set the journal mode for databases associated with the current connection
+			// https://www.sqlite.org/pragma.html#pragma_journal_mode
+			db.exec("PRAGMA journal_mode = WAL;");
+			// Automatic indexing is enabled by default as of version 3.7.17
+			// https://www.sqlite.org/pragma.html#pragma_automatic_index 
+			// PRAGMA automatic_index = boolean;
+			db.exec("PRAGMA automatic_index = FALSE;");
+			// Tell SQLite to store temporary tables in memory. This will speed up many read operations that rely on temporary tables, indices, and views.
+			// https://www.sqlite.org/pragma.html#pragma_temp_store
+			db.exec("PRAGMA temp_store = MEMORY;");
+			// Tell SQlite to cleanup database table size
+			// https://www.sqlite.org/pragma.html#pragma_auto_vacuum
+			// PRAGMA schema.auto_vacuum = 0 | NONE | 1 | FULL | 2 | INCREMENTAL;
+			db.exec("PRAGMA auto_vacuum = FULL;");
+			// This pragma sets or queries the database connection locking-mode. The locking-mode is either NORMAL or EXCLUSIVE.
+			// https://www.sqlite.org/pragma.html#pragma_locking_mode
+			// PRAGMA schema.locking_mode = NORMAL | EXCLUSIVE
+			db.exec("PRAGMA locking_mode = EXCLUSIVE;");
+			// The synchronous setting determines how carefully SQLite writes data to disk, balancing between performance and data safety.
+			// https://sqlite.org/pragma.html#pragma_synchronous
+			// PRAGMA synchronous = 0 | OFF | 1 | NORMAL | 2 | FULL | 3 | EXTRA;
+			db.exec("PRAGMA synchronous=NORMAL;");
+		} catch (SqliteException exception) {
+			detailSQLErrorMessage(exception);
+		} 
+		
 		
 		insertItemStmt = "
 			INSERT OR REPLACE INTO item (driveId, id, name, remoteName, type, eTag, cTag, mtime, parentId, quickXorHash, sha256Hash, remoteDriveId, remoteParentId, remoteId, remoteType, syncStatus, size)
@@ -361,10 +367,32 @@ final class ItemDatabase {
 		db.setVersion(itemDatabaseVersion);
 	}
 	
-	void detailSQLErrorMessage(string errorMessage) {
+	void detailSQLErrorMessage(SqliteException exception) {
 		addLogEntry();
-		addLogEntry("A database statement execution error occurred: " ~ errorMessage);
+		addLogEntry("A database statement execution error occurred: " ~ exception.msg);
 		addLogEntry();
+		
+		switch (exception.errorCode) {
+			case 7:   // SQLITE_FULL
+			case 10:  // SQLITE_SCHEMA
+			case 11:  // SQLITE_CORRUPT
+			case 17:  // SQLITE_IOERR
+			case 21:  // SQLITE_NOMEM
+			case 22:  // SQLITE_MISUSE
+			case 26:  // SQLITE_NOTADB
+			case 27:  // SQLITE_CANTOPEN
+				addLogEntry("Fatal SQLite error encountered. Error code: " ~ to!string(exception.errorCode), ["info", "notify"]);
+				addLogEntry();
+				// Must exit here
+				forceExit();
+				// This line is needed, even though the application technically never gets here ..
+				// -	Error: switch case fallthrough - use 'goto default;' if intended
+				goto default;
+			default:
+				addLogEntry("Please restart the application with --resync to potentially fix any local database issues.");
+				// Handle non-fatal errors or continue execution
+				break;
+		}
 	}
 	
 	void insert(const ref Item item) {
@@ -373,8 +401,8 @@ final class ItemDatabase {
 		try {
 			bindItem(item, p);
 			p.exec();
-		} catch (SqliteException e) {
-			detailSQLErrorMessage(e.msg);
+		} catch (SqliteException exception) {
+			detailSQLErrorMessage(exception);
 		}
 	}
 
@@ -384,8 +412,8 @@ final class ItemDatabase {
 		try {
 			bindItem(item, p);
 			p.exec();
-		} catch (SqliteException e) {
-			detailSQLErrorMessage(e.msg);
+		} catch (SqliteException exception) {
+			detailSQLErrorMessage(exception);
 		}
 	}
 
@@ -400,29 +428,29 @@ final class ItemDatabase {
 	void upsert(const ref Item item) {
 		Statement selectStmt = db.prepare("SELECT COUNT(*) FROM item WHERE driveId = ? AND id = ?");
 		Statement executionStmt = Statement.init;  // Initialise executionStmt to avoid uninitialised variable usage
+		
 		scope(exit) {
 			selectStmt.finalise();
 			executionStmt.finalise();
 		}
 		
-		selectStmt.bind(1, item.driveId);
-		selectStmt.bind(2, item.id);
-		
-		auto result = selectStmt.exec();
-		size_t count = result.front[0].to!size_t;
-		
-		if (count == 0) {
-			executionStmt = db.prepare(insertItemStmt);
-		} else {
-			executionStmt = db.prepare(updateItemStmt);
-		}
-		
 		try {
+			selectStmt.bind(1, item.driveId);
+			selectStmt.bind(2, item.id);
+			auto result = selectStmt.exec();
+			size_t count = result.front[0].to!size_t;
+			
+			if (count == 0) {
+				executionStmt = db.prepare(insertItemStmt);
+			} else {
+				executionStmt = db.prepare(updateItemStmt);
+			}
+		
 			bindItem(item, executionStmt);
 			executionStmt.exec();
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			// Handle errors appropriately
-			detailSQLErrorMessage(e.msg);
+			detailSQLErrorMessage(exception);
 		}
 	}
 
@@ -442,9 +470,9 @@ final class ItemDatabase {
 				res.step();
 			}
 			return items;
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			// Handle errors appropriately
-			detailSQLErrorMessage(e.msg);
+			detailSQLErrorMessage(exception);
 			items = [];
 			return items; // Return an empty array on error
 		}
@@ -462,9 +490,9 @@ final class ItemDatabase {
 				item = buildItem(r);
 				return true;
 			}
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			// Handle the error appropriately
-			detailSQLErrorMessage(e.msg);
+			detailSQLErrorMessage(exception);
 		}
 
 		return false;
@@ -481,9 +509,9 @@ final class ItemDatabase {
 				item = buildItem(r);
 				return true;
 			}
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			// Handle the error appropriately
-			detailSQLErrorMessage(e.msg);
+			detailSQLErrorMessage(exception);
 		}
 
 		return false;
@@ -498,9 +526,9 @@ final class ItemDatabase {
 			p.bind(2, id);
 			auto r = p.exec();
 			return !r.empty;
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			// Handle the error appropriately
-			detailSQLErrorMessage(e.msg);
+			detailSQLErrorMessage(exception);
 			return false;
 		}
 	}
@@ -538,9 +566,9 @@ final class ItemDatabase {
 			}
 			item = currItem;
 			return true;
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			// Handle the error appropriately
-			detailSQLErrorMessage(e.msg);
+			detailSQLErrorMessage(exception);
 			return false;
 		}
 	}
@@ -571,9 +599,9 @@ final class ItemDatabase {
 
 			item = currItem;
 			return true;
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			// Handle the error appropriately
-			detailSQLErrorMessage(e.msg);
+			detailSQLErrorMessage(exception);
 			return false;
 		}
 	}
@@ -585,9 +613,9 @@ final class ItemDatabase {
 			p.bind(1, driveId);
 			p.bind(2, id);
 			p.exec();
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			// Handle the error appropriately
-			detailSQLErrorMessage(e.msg);
+			detailSQLErrorMessage(exception);
 		}
 	}
 
@@ -759,9 +787,9 @@ final class ItemDatabase {
 					}
 				}
 			}
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			// Handle the error appropriately
-			detailSQLErrorMessage(e.msg);
+			detailSQLErrorMessage(exception);
 		}
 		
 		return path;
@@ -778,9 +806,9 @@ final class ItemDatabase {
 				items ~= buildItem(res);
 				res.step();
 			}
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			// Handle the error appropriately
-			detailSQLErrorMessage(e.msg);
+			detailSQLErrorMessage(exception);
 		}
 		return items;
 	}
@@ -801,9 +829,9 @@ final class ItemDatabase {
 			auto res = stmt.exec();
 			if (res.empty) return null;
 			return res.front[0].dup;
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			// Handle the error appropriately
-			detailSQLErrorMessage(e.msg);
+			detailSQLErrorMessage(exception);
 			return null;
 		}
 	}
@@ -820,9 +848,9 @@ final class ItemDatabase {
 			stmt.bind(2, id);
 			stmt.bind(3, deltaLink);
 			stmt.exec();
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			// Handle the error appropriately
-			detailSQLErrorMessage(e.msg);
+			detailSQLErrorMessage(exception);
 		}
 	}
 	
@@ -843,9 +871,9 @@ final class ItemDatabase {
 			stmt.bind(1, driveId);
 			stmt.bind(2, id);
 			stmt.exec();
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			// Handle the error appropriately
-			detailSQLErrorMessage(e.msg);
+			detailSQLErrorMessage(exception);
 		}
 	}
 	
@@ -864,9 +892,9 @@ final class ItemDatabase {
 				items ~= buildItem(res);
 				res.step();
 			}
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			// Handle the error appropriately
-			detailSQLErrorMessage(e.msg);
+			detailSQLErrorMessage(exception);
 		}
 		return items;
 	}
@@ -886,9 +914,9 @@ final class ItemDatabase {
 				items ~= buildItem(res);
 				res.step();
 			}
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			// Handle the error appropriately
-			detailSQLErrorMessage(e.msg);
+			detailSQLErrorMessage(exception);
 		}
 		return items;
 	}
@@ -925,9 +953,9 @@ final class ItemDatabase {
 			scope(exit) stmt.finalise();  // Ensure the statement is finalised when we exit
 			stmt.exec();
 			addLogEntry("Database vacuum is complete");
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			addLogEntry();
-			addLogEntry("ERROR: Unable to perform a database vacuum: " ~ e.msg);
+			addLogEntry("ERROR: Unable to perform a database vacuum: " ~ exception.msg);
 			addLogEntry();
 		}
 	}
@@ -960,9 +988,9 @@ final class ItemDatabase {
 			db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
 			addLogEntry("Database checkpoint is complete", ["debug"]);
 			
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			addLogEntry();
-			addLogEntry("ERROR: Unable to perform a database checkpoint: " ~ e.msg);
+			addLogEntry("ERROR: Unable to perform a database checkpoint: " ~ exception.msg);
 			addLogEntry();
 		}
 	}
@@ -980,9 +1008,9 @@ final class ItemDatabase {
 				driveIdArray ~= res.front[0].dup;
 				res.step();
 			}
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			// Handle the error appropriately
-			detailSQLErrorMessage(e.msg);
+			detailSQLErrorMessage(exception);
 		}
 		return driveIdArray;
 	}
@@ -998,9 +1026,9 @@ final class ItemDatabase {
 			if (!res.empty) {
 				rowCount = res.front[0].to!int;
 			}
-		} catch (SqliteException e) {
+		} catch (SqliteException exception) {
 			// Handle the error appropriately
-			detailSQLErrorMessage(e.msg);
+			detailSQLErrorMessage(exception);
 		}
 		
 		return rowCount;
