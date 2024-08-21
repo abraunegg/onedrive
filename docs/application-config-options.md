@@ -190,7 +190,7 @@ _**Config Example:**_ `cleanup_local_files = "false"` or `cleanup_local_files = 
 _**CLI Option Use:**_ `--cleanup-local-files`
 
 > [!IMPORTANT]
-> This configuration option can only be used with `--download_only`. It cannot be used with any other application option.
+> This configuration option can only be used with `--download-only`. It cannot be used with any other application option.
 
 ### connect_timeout
 _**Description:**_ This configuration setting manages the TCP connection timeout duration in seconds for HTTPS connections to Microsoft OneDrive when using the curl library (CURLOPT_CONNECTTIMEOUT).
