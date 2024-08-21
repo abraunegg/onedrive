@@ -190,7 +190,7 @@ _**Config Example:**_ `cleanup_local_files = "false"` or `cleanup_local_files = 
 _**CLI Option Use:**_ `--cleanup-local-files`
 
 > [!IMPORTANT]
-> This configuration option can only be used with 'download_only'. It cannot be used with any other application option.
+> This configuration option can only be used with `--download_only`. It cannot be used with any other application option.
 
 ### connect_timeout
 _**Description:**_ This configuration setting manages the TCP connection timeout duration in seconds for HTTPS connections to Microsoft OneDrive when using the curl library (CURLOPT_CONNECTTIMEOUT).
@@ -293,6 +293,9 @@ _**Default Value:**_ False
 _**Config Example:**_ `download_only = "false"` or `download_only = "true"`
 
 _**CLI Option Use:**_ `--download-only`
+
+> [!IMPORTANT]
+> When using this option, the default mode of operation is to not clean up local files that have been deleted online. This ensures that the local data is an *archive* of what was stored online. To cleanup local files use `--cleanup-local-files`.
 
 ### drive_id
 _**Description:**_ This setting controls the specific drive identifier the client will use when syncing with Microsoft OneDrive.
