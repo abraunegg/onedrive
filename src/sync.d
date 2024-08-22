@@ -1885,6 +1885,8 @@ class SyncEngine {
 				} else {
 					// Not cleaning up local files
 					addLogEntry("Skipping local deletion activity as --download-only has been used", ["verbose"]);
+					// List files and directories we are not deleting locally
+					listDeletedItems();
 				}
 			} else {
 				// Not using --download-only process normally
@@ -2886,6 +2888,27 @@ class SyncEngine {
 		if (!dryRun) {
 			// Cleanup array memory
 			idsToDelete = [];
+		}
+	}
+	
+	// List items that were deleted online, but, due to --download-only being used, will not be deleted locally
+	void listDeletedItems() {
+		// For each id in the idsToDelete array
+		foreach_reverse (i; idsToDelete) {
+			Item item;
+			string path;
+			if (!itemDB.selectById(i[0], i[1], item)) continue; // check if the item is in the db
+			// Compute this item path
+			path = computeItemPath(i[0], i[1]);
+			
+			// Log the action if the path exists .. it may of already been removed and this is a legacy array item
+			if (exists(path)) {
+				if (item.type == ItemType.file) {
+					addLogEntry("Skipping local deletion for file " ~ path, ["verbose"]);
+				} else {
+					addLogEntry("Skipping local deletion for directory " ~ path, ["verbose"]);
+				}
+			}
 		}
 	}
 	
