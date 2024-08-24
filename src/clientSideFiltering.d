@@ -356,6 +356,7 @@ class ClientSideFiltering {
 				}
 			}
 		}
+		
 		// Interim results
 		addLogEntry("[F]exclude           = " ~ to!string(exclude), ["debug"]);
 		addLogEntry("[F]exludeDirectMatch = " ~ to!string(exludeDirectMatch), ["debug"]);

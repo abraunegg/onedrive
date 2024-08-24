@@ -127,6 +127,8 @@ class SyncEngine {
 	string[] pathsToCreateOnline;
 	// Array of items from the database that have been deleted locally, that needs to be deleted online
 	DatabaseItemsToDeleteOnline[] databaseItemsToDeleteOnline;
+	// Array of parentId's that have been skipped via 'sync_list'
+	string[] syncListSkippedParentIds;
 		
 	// Flag that there were upload or download failures listed
 	bool syncFailures = false;
@@ -668,13 +670,13 @@ class SyncEngine {
 						// Whilst these files are synced locally, the entire folder structure will need to be excluded from syncing back to OneDrive
 						// But file changes , *if any* , will need to be synced back to the original shared file location
 						//  .
-						//	├── Files Shared With Me											-> Directory should not be created online | Not Synced
-						//	│   └── Display Name (email address) (of Account who shared file)	-> Directory should not be created online | Not Synced
-						//	│   │   └── shared file.ext 										-> File synced with original shared file location on remote drive
-						//	│   │   └── shared file.ext 										-> File synced with original shared file location on remote drive
-						//	│   │   └── ......			 										-> File synced with original shared file location on remote drive
-						//	│   └── Display Name (email address) ...
-						//	│		└── shared file.ext ....									-> File synced with original shared file location on remote drive
+						//	├── Files Shared With Me													-> Directory should not be created online | Not Synced
+						//	│          └── Display Name (email address) (of Account who shared file)	-> Directory should not be created online | Not Synced
+						//	│          │   └── shared file.ext 											-> File synced with original shared file location on remote drive
+						//	│          │   └── shared file.ext 											-> File synced with original shared file location on remote drive
+						//	│          │   └── ......			 										-> File synced with original shared file location on remote drive
+						//	│          └── Display Name (email address) ...
+						//	│		└── shared file.ext ....											-> File synced with original shared file location on remote drive
 						
 						// Does the Local Folder to store the OneDrive Business Shared Files exist?
 						if (!exists(appConfig.configuredBusinessSharedFilesDirectoryName)) {
@@ -1733,7 +1735,7 @@ class SyncEngine {
 						} else {
 							// path is unwanted
 							unwanted = true;
-							addLogEntry("Skipping item - excluded by sync_list config: " ~ newItemPath, ["verbose"]);
+							addLogEntry("Skipping path - excluded by sync_list config: " ~ newItemPath, ["verbose"]);
 							// flagging to skip this item now, but does this exist in the DB thus needs to be removed / deleted?
 							if (existingDBEntry) {
 								// flag to delete
@@ -3850,9 +3852,40 @@ class SyncEngine {
 						// This is a file in the logical root
 						clientSideRuleExcludesPath = false;
 					} else {
-						// path is unwanted
+						// Path is unwanted, flag to exclude
 						clientSideRuleExcludesPath = true;
-						addLogEntry("Skipping item - excluded by sync_list config: " ~ newItemPath, ["verbose"]);
+						
+						// Has this itemId already been flagged as being skipped?
+						if (!syncListSkippedParentIds.canFind(thisItemId)) {
+							if (isItemFolder(onedriveJSONItem)) {
+								// Detail we are skipping this JSON data from online
+								addLogEntry("Skipping path - excluded by sync_list config: " ~ newItemPath, ["verbose"]);
+								// Add this folder id to the elements we have already detailed we are skipping, so we do no output this again
+								syncListSkippedParentIds ~= thisItemId;
+							}
+						}
+						
+						// If this is a 'add shortcut to onedrive' link, we need to actually scan this path, so add this we need to pass this JSON
+						if (isItemRemote(onedriveJSONItem)) {
+							addLogEntry("Skipping shared folder shortcut - excluded by sync_list config: " ~ newItemPath, ["verbose"]);
+						}
+					}
+				} else {
+					// Is this a file or directory?
+					if (isItemFile(onedriveJSONItem)) {
+						// File included due to 'sync_list' match
+						addLogEntry("Including file - included by sync_list config: " ~ newItemPath, ["verbose"]);
+						
+						// Is the parent item in the database?
+						if (!parentInDatabase) {
+							// Parental database structure needs to be created
+							addLogEntry("Parental Path structure needs to be created to support included file: " ~ dirName(newItemPath), ["verbose"]);
+							// Recursivly, stepping backward from 'thisItemParentId', query online, save entry to DB
+							createLocalPathStructure(onedriveJSONItem);
+						}
+					} else {
+						// Directory included due to 'sync_list' match
+						addLogEntry("Including directory - included by sync_list config: " ~ newItemPath, ["verbose"]);
 					}
 				}
 			}
@@ -3870,9 +3903,47 @@ class SyncEngine {
 			}
 		}
 		
-		
 		// return if path is excluded
 		return clientSideRuleExcludesPath;
+	}
+	
+	// When using 'sync_list' if a file is to be included, ensure that the path that the file resides in, is available locally and in the database
+	void createLocalPathStructure(JSONValue onedriveJSONItem) {
+	
+		// Function variables
+		bool parentInDatabase;
+		JSONValue onlinePathData;
+		OneDriveApi onlinePathOneDriveApiInstance;
+		onlinePathOneDriveApiInstance = new OneDriveApi(appConfig);
+		onlinePathOneDriveApiInstance.initialise();
+		
+		string thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+		string thisItemParentId = onedriveJSONItem["parentReference"]["id"].str;
+		
+		// Calculate if the Parent Item is in the database so that it can be re-used
+		parentInDatabase = itemDB.idInLocalDatabase(thisItemDriveId, thisItemParentId);
+		
+		if (!parentInDatabase) {
+			// get data from online for this driveId and itemId
+			onlinePathData = onlinePathOneDriveApiInstance.getPathDetailsById(thisItemDriveId, thisItemParentId);
+			string grandparentItemDriveId = onlinePathData["parentReference"]["driveId"].str;
+			string grandparentItemParentId = onlinePathData["parentReference"]["id"].str;
+			
+			// Is this item's data in the database?
+			if (!itemDB.idInLocalDatabase(grandparentItemDriveId, grandparentItemParentId)) {
+				// grandparent needs to be added
+				createLocalPathStructure(onlinePathData);
+			}
+			
+			// Save JSON to database
+			saveItem(onlinePathData);
+		}
+		
+		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+		onlinePathOneDriveApiInstance.releaseCurlEngine();
+		onlinePathOneDriveApiInstance = null;
+		// Perform Garbage Collection
+		GC.collect();
 	}
 	
 	// Process the list of local changes to upload to OneDrive
@@ -5021,7 +5092,7 @@ class SyncEngine {
 				// The directory was not found on the drive id we queried
 				addLogEntry("The requested directory to create was not found on OneDrive - creating remote directory: " ~ thisNewPathToCreate, ["verbose"]);
 				
-				// Build up the create directory request
+				// Build up the online create directory request
 				JSONValue createDirectoryOnlineAPIResponse;
 				JSONValue newDriveItem = [
 						"name": JSONValue(baseName(thisNewPathToCreate)),
