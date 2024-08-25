@@ -1,5 +1,5 @@
 name: "Bug Report"
-description: Create a Bug Report to help us fix your issue
+description: Before proceeding, please ensure your issue is a genuine software bug. This form is exclusively for reporting actual software bugs that need fixing. Do not use this form for questions, installation problems, dependency issues, or other inquiries. Such matters should be addressed in GitHub Discussions.
 title: "Bug: "
 labels: ["Bug"]
 body:
