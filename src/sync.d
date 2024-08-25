@@ -3576,11 +3576,11 @@ class SyncEngine {
 						} else {
 							if (exists(appConfig.syncListFilePath)){
 								// skipped most likely due to inclusion in sync_list
-								addLogEntry("Skipping item - excluded by sync_list config: " ~ localFilePath, ["verbose"]);
+								addLogEntry("Skipping path - excluded by sync_list config: " ~ localFilePath, ["verbose"]);
 								clientSideRuleExcludesPath = true;
 							} else {
 								// skipped for some other reason
-								addLogEntry("Skipping item - path excluded by user config: " ~ localFilePath, ["verbose"]);
+								addLogEntry("Skipping path - excluded by user config: " ~ localFilePath, ["verbose"]);
 								clientSideRuleExcludesPath = true;
 							}
 						}
