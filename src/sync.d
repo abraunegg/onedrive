@@ -196,7 +196,11 @@ class SyncEngine {
 	bool cleanupDataPass = false;
 	// Create the specific task pool to process items in parallel
 	TaskPool processPool;
-		
+	
+	// Shared Folder Flags for 'sync_list' processing
+	bool trimToSharedFolder = false;
+	string currentSharedFolderName = "";
+			
 	// Configure this class instance
 	this(ApplicationConfig appConfig, ItemDatabase itemDB, ClientSideFiltering selectiveSync) {
 	
@@ -601,7 +605,7 @@ class SyncEngine {
 						// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
 						if (selectiveSync.isDirNameExcluded(remoteItem.name)) {
 							// This directory name is excluded
-							addLogEntry("Skipping item - excluded by skip_dir config: " ~ remoteItem.name, ["verbose"]);
+							addLogEntry("Skipping path - excluded by skip_dir config: " ~ remoteItem.name, ["verbose"]);
 							continue;
 						}
 					}
@@ -639,7 +643,7 @@ class SyncEngine {
 								// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
 								if (selectiveSync.isDirNameExcluded(remoteItem.name)) {
 									// This directory name is excluded
-									addLogEntry("Skipping item - excluded by skip_dir config: " ~ remoteItem.name, ["verbose"]);
+									addLogEntry("Skipping path - excluded by skip_dir config: " ~ remoteItem.name, ["verbose"]);
 									continue;
 								}
 							}
@@ -815,6 +819,13 @@ class SyncEngine {
 		jsonItemsToProcess = [];
 		processedCount = 0;
 		
+		// Reset generateSimulatedDeltaResponse
+		generateSimulatedDeltaResponse = false;
+		
+		// Reset Shared Folder Flags for 'sync_list' processing
+		trimToSharedFolder = false;
+		currentSharedFolderName = "";
+		
 		// Was a driveId provided as an input
 		if (strip(driveIdToQuery).empty) {
 			// No provided driveId to query, use the account default
@@ -845,6 +856,19 @@ class SyncEngine {
 		if ((singleDirectoryScope) || (nationalCloudDeployment) || (cleanupLocalFiles)) {
 			// Generate a simulated /delta response so that we correctly capture the current online state, less any 'online' delete and replace activity
 			generateSimulatedDeltaResponse = true;
+		}
+		
+		// Shared Folders, by nature of where that path has been shared with us, we cannot use /delta against that path, as this queries the entire 'other persons' drive:
+		//    Syncing this OneDrive Business Shared Folder: Sub Folder 2
+		//    Fetching /delta response from the OneDrive API for Drive ID: b!fZgJhK-pU0eTQpylvmoYCkE4YgH_KRNDlxjRx9OWNqmV9Q_E_uWdRJKIB5L_ruPN
+		//    Processing API Response Bundle: 1 - Quantity of 'changes|items' in this bundle to process: 18
+		//    Skipping path - excluded by sync_list config: Sub Folder Share/Sub Folder 1/Sub Folder 2
+		//
+		// When using 'sync_list' potentially nothing is going to match, as, we are getting the 'whole' path from their 'root' , not just the folder shared with us
+		if (!sharedFolderName.empty) {
+			// When using 'sync_list' we need to do this
+			trimToSharedFolder = true;
+			currentSharedFolderName = sharedFolderName;
 		}
 		
 		// Reset latestDeltaLink & deltaLinkCache
@@ -1057,13 +1081,13 @@ class SyncEngine {
 			deltaChanges = null;
 			// Perform Garbage Collection
 			GC.collect();
-			
 		} else {
 			// Why are are generating a /delta response
 			addLogEntry("Why are we generating a /delta response:", ["debug"]);
 			addLogEntry(" singleDirectoryScope:    " ~ to!string(singleDirectoryScope), ["debug"]);
 			addLogEntry(" nationalCloudDeployment: " ~ to!string(nationalCloudDeployment), ["debug"]);
 			addLogEntry(" cleanupLocalFiles:       " ~ to!string(cleanupLocalFiles), ["debug"]);
+			addLogEntry(" sharedFolderName:        " ~ sharedFolderName, ["debug"]);
 			
 			// What 'path' are we going to start generating the response for
 			string pathToQuery;
@@ -1090,6 +1114,7 @@ class SyncEngine {
 			// This then allows the application to look for any remaining 'N' values, and delete these as no longer needed locally
 			deltaChanges = generateDeltaResponse(pathToQuery);
 			
+			// How many changes were returned?
 			ulong nrChanges = count(deltaChanges["value"].array);
 			int changeCount = 0;
 			addLogEntry("API Response Bundle: " ~ to!string(responseBundleCount) ~ " - Quantity of 'changes|items' in this bundle to process: " ~ to!string(nrChanges), ["debug"]);
@@ -1722,7 +1747,7 @@ class SyncEngine {
 					}
 					
 					// What path are we checking?
-					addLogEntry("sync_list item to check: " ~ newItemPath, ["debug"]);
+					addLogEntry("path to check against 'sync_list' entries: " ~ newItemPath, ["debug"]);
 					
 					// Unfortunately there is no avoiding this call to check if the path is excluded|included via sync_list
 					if (selectiveSync.isPathExcludedViaSyncList(newItemPath)) {
@@ -3835,13 +3860,26 @@ class SyncEngine {
 					addLogEntry("See: https://github.com/OneDrive/onedrive-api-docs/issues/1765 for further details", ["verbose"]);
 				}
 				
-				// Update newItemPath
+				// If this is a Shared Folder, we need to 'trim' the resulting path to that of the 'folder' that is actually shared with us so that this can be appropriatly checked against 'sync_list' entries
+				if (trimToSharedFolder) {
+					// Find the index of 'currentSharedFolderName' in 'newItemPath'
+					int pos = cast(int) newItemPath.indexOf(currentSharedFolderName);
+					
+					// If currentSharedFolderName is found within newItemPath
+					if (pos != -1) {
+						// Get the substring from the position of currentSharedFolderName
+						string result = newItemPath[pos .. $];
+						newItemPath = result;
+					}
+				}
+				
+				// Update newItemPath, remove leading '/' if present
 				if(newItemPath[0] == '/') {
 					newItemPath = newItemPath[1..$];
 				}
 				
 				// What path are we checking against sync_list?
-				addLogEntry("sync_list item to check: " ~ newItemPath, ["debug"]);
+				addLogEntry("path to check against 'sync_list' entries: " ~ newItemPath, ["debug"]);
 				
 				// Unfortunately there is no avoiding this call to check if the path is excluded|included via sync_list
 				if (selectiveSync.isPathExcludedViaSyncList(newItemPath)) {
@@ -3885,7 +3923,7 @@ class SyncEngine {
 						}
 					} else {
 						// Directory included due to 'sync_list' match
-						addLogEntry("Including directory - included by sync_list config: " ~ newItemPath, ["verbose"]);
+						addLogEntry("Including path - included by sync_list config: " ~ newItemPath, ["verbose"]);
 					}
 				}
 			}
@@ -3917,19 +3955,37 @@ class SyncEngine {
 		onlinePathOneDriveApiInstance = new OneDriveApi(appConfig);
 		onlinePathOneDriveApiInstance.initialise();
 		
+		// Configure these variables based on the JSON input
 		string thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
 		string thisItemParentId = onedriveJSONItem["parentReference"]["id"].str;
 		
 		// Calculate if the Parent Item is in the database so that it can be re-used
 		parentInDatabase = itemDB.idInLocalDatabase(thisItemDriveId, thisItemParentId);
 		
+		// Is the parent in the database?
 		if (!parentInDatabase) {
-			// get data from online for this driveId and itemId
-			onlinePathData = onlinePathOneDriveApiInstance.getPathDetailsById(thisItemDriveId, thisItemParentId);
+			// Get data from online for this driveId and itemId
+			try {
+				onlinePathData = onlinePathOneDriveApiInstance.getPathDetailsById(thisItemDriveId, thisItemParentId);
+			} catch (OneDriveException exception) {
+				// Display what the error is
+				// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+			} 
+			
+			
+			// Does this JSON match the root name of a shared folder we may be trying to match?
+			if (trimToSharedFolder) {
+				if (currentSharedFolderName == onlinePathData["name"].str) {
+					createDatabaseRootTieRecordForOnlineSharedFolder(onlinePathData);
+				}
+			} 
+			
+			// Configure the grandparent items
 			string grandparentItemDriveId = onlinePathData["parentReference"]["driveId"].str;
 			string grandparentItemParentId = onlinePathData["parentReference"]["id"].str;
 			
-			// Is this item's data in the database?
+			// Is this item's grandparent data in the database?
 			if (!itemDB.idInLocalDatabase(grandparentItemDriveId, grandparentItemParentId)) {
 				// grandparent needs to be added
 				createLocalPathStructure(onlinePathData);
@@ -6467,11 +6523,11 @@ class SyncEngine {
 	// then once the target of the --single-directory request is hit, all of the children of that path can be queried, giving a much more focused
 	// JSON response which can then be processed, negating the need to continuously traverse the tree and 'exclude' items
 	JSONValue generateDeltaResponse(string pathToQuery = null) {
-			
 		// JSON value which will be responded with
 		JSONValue selfGeneratedDeltaResponse;
 		
 		// Function variables
+		bool remotePathObject = false;
 		Item searchItem;
 		JSONValue rootData;
 		JSONValue driveData;
@@ -6487,6 +6543,8 @@ class SyncEngine {
 			pathToQuery = ".";
 		}
 		
+		addLogEntry("pathToQuery: " ~ pathToQuery);
+		
 		// Create new OneDrive API Instance
 		generateDeltaResponseOneDriveApiInstance = new OneDriveApi(appConfig);
 		generateDeltaResponseOneDriveApiInstance.initialise();
@@ -6495,17 +6553,19 @@ class SyncEngine {
 		if (!singleDirectoryScope) {
 			// In a --resync scenario, there is no DB data to query, so we have to query the OneDrive API here to get relevant details
 			try {
-				// Query the OneDrive API
+				// Query the OneDrive API, using the path, which will query 'our' OneDrive Account
 				pathData = generateDeltaResponseOneDriveApiInstance.getPathDetails(pathToQuery);
+				
 				// Is the path on OneDrive local or remote to our account drive id?
-				if (isItemRemote(pathData)) {
-					// The path we are seeking is remote to our account drive id
-					searchItem.driveId = pathData["remoteItem"]["parentReference"]["driveId"].str;
-					searchItem.id = pathData["remoteItem"]["id"].str;
-				} else {
+				if (!isItemRemote(pathData)) {
 					// The path we are seeking is local to our account drive id
 					searchItem.driveId = pathData["parentReference"]["driveId"].str;
 					searchItem.id = pathData["id"].str;
+				} else {
+					// The path we are seeking is remote to our account drive id
+					searchItem.driveId = pathData["remoteItem"]["parentReference"]["driveId"].str;
+					searchItem.id = pathData["remoteItem"]["id"].str;
+					remotePathObject = true;
 				}
 			} catch (OneDriveException e) {
 				// Display error message
@@ -6583,7 +6643,6 @@ class SyncEngine {
 					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 					// Display what the error is
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-					
 				}
 				// Add driveData JSON data to array
 				addLogEntry("Adding OneDrive root details for processing", ["verbose"]);
@@ -6595,7 +6654,7 @@ class SyncEngine {
 			childrenData ~= driveData;
 		} else {
 			// driveData is an invalid JSON object
-			writeln("CODING TO DO: The query of OneDrive API to getPathDetailsById generated an invalid JSON response - thus we cant build our own /delta simulated response ... how to handle?");
+			addLogEntry("CODING TO DO: The query of OneDrive API to getPathDetailsById generated an invalid JSON response - thus we cant build our own /delta simulated response ... how to handle?");
 			// Must exit here
 			generateDeltaResponseOneDriveApiInstance.releaseCurlEngine();
 			// Free object and memory
@@ -6630,11 +6689,16 @@ class SyncEngine {
 				// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 				// Display what the error is
 				displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-				
 			}
 			
-			// process top level children
-			addLogEntry("Adding " ~ to!string(count(topLevelChildren["value"].array)) ~ " OneDrive items for processing from the OneDrive 'root' folder", ["verbose"]);
+			// Process top level children
+			if (!remotePathObject) {
+				// Main account root folder
+				addLogEntry("Adding " ~ to!string(count(topLevelChildren["value"].array)) ~ " OneDrive items for processing from the OneDrive 'root' folder", ["verbose"]);
+			} else {
+				// Shared Folder
+				addLogEntry("Adding " ~ to!string(count(topLevelChildren["value"].array)) ~ " OneDrive items for processing from the OneDrive Shared folder", ["verbose"]);
+			}
 			
 			foreach (child; topLevelChildren["value"].array) {
 				// Check for any Client Side Filtering here ... we should skip querying the OneDrive API for 'folders' that we are going to just process and skip anyway.
