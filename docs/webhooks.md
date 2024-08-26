@@ -1,4 +1,4 @@
-# How to configure receiving Real-time Changes from Microsoft OneDrive Service
+# How to configure receiving real-time changes from Microsoft OneDrive
 
 When operating in 'Monitor Mode,' receiving real-time updates to online data can significantly enhance synchronisation efficiency. This is achieved by enabling 'webhooks,' which allows the client to subscribe to remote updates.
 
@@ -13,7 +13,7 @@ With this setup, any remote changes are promptly synchronised to your local file
 > * No-IP
 > * DynDNS
 > * DuckDNS
-> * Afraid.ord
+> * Afraid.org
 > * Cloudflare
 > * Google Domains
 > * Dynu
@@ -21,7 +21,7 @@ With this setup, any remote changes are promptly synchronised to your local file
 >
 > This FQDN will allow you to create a valid HTTPS certificate for your system, which can be used by Microsoft Graph for webhook functionality.
 >
-> Please note that it is beyond the scope of this document to provide guidance on setting up these configurations.
+> Please note that it is beyond the scope of this document to provide guidance on setting up this requirement.
 
 Depending on your environment, a number of steps are required to configure this application functionality. At a very high level these configuration steps are:
 
@@ -31,27 +31,54 @@ Depending on your environment, a number of steps are required to configure this 
 4. Configure your Firewall or Router to forward traffic to your system
 
 > [!NOTE]
-> The configuration below was validated on Fedora 39.
+> The configuration steps below were validated on [Fedora 40 Workstation](https://fedoraproject.org/)
 >
 > The installation of required components (nginx, certbot) for your platform is beyond the scope of this document and it is assumed you know how to install these components. If you are unsure, please seek support from your Linux distribution support channels.
 
+### Step 1: Application configuration
 
-
-### 1. Application configuration
-
-#### Enable feature
+#### Enable the 'webhook' application feature
 *  In your 'config' file, set `webhook_enabled = "true"` to activate the webhook feature.
 
 #### Configure the public notification URL
-*  In your 'config' file, set `webhook_public_url = "http://<your.fully.qualified.domain.name>/webhooks/onedrive"` as the public URL that will receive subscription updates from the Microsoft Graph API platform.
+*  In your 'config' file, set `webhook_public_url = "https://<your.fully.qualified.domain.name>/webhooks/onedrive"` as the public URL that will receive subscription updates from the Microsoft Graph API platform.
 
 > [!NOTE]
 > This URL should utilise your FQDN and be resolvable from the Internet. This URL will also be used within your 'nginx' configuration.
 
-### 2. Install and configure 'nginx'
+### Step 2: Install and configure 'nginx'
+
+> [!NOTE]
+> Nginx is a web server that can also be used as a reverse proxy, load balancer, mail proxy and HTTP cache.
+
+#### Install 'nginx'
+*  Install 'nginx' and any other requirements to install 'nginx' on your platform. It is beyond the scope of this document to advise on how to install this.
+
+#### Configure 'nginx'
+*  Create a basic 'nginx' configuration file to support proxying traffic from Nginx to the local 'onedrive' process, which will, by default, have an HTTP listener running on TCP port 8888
+```
+server {
+	listen 443;
+	server_name <your.fully.qualified.domain.name>;
+	location /webhooks/onedrive {
+		proxy_http_version 1.1;
+		proxy_pass http://127.0.0.1:8888;
+	}
+}
+```
+> [!TIP]
+> Save this file in the nginx configuration directory similar to the following path: `/etc/nginx/conf.d/webhooks_onedrive.conf`. This will help keep all your configurations organised.
+
+*  Test your 'nginx' configuration using `sudo nginx -t` to validate that there are no errors. If any are identified, please correct them.
+
+
+
+### Step 3: Configure 'certbot' to create a SSL Certificate and deploy to 'nginx'
+
+
 *   **Setup Nginx as a Reverse Proxy:** Configure Nginx to listen on port 443 for HTTPS traffic. It should proxy incoming webhook notifications to the internal webhook listener running on the client
 
-### 3. Firewall/Router Configuration
+### Step 4: Firewall/Router Configuration
 *   **Port Forwarding:** Ensure that your firewall or router is configured to forward incoming HTTPS traffic on port 443 to the internal IP address of your Nginx server. This setup allows external webhook notifications from the Microsoft Graph API to reach your Nginx server and subsequently be proxied to the local webhook listener.
 
 When these steps are followed, your environment configuration will be similar to the following diagram:

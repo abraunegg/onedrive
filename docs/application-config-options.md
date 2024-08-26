@@ -821,24 +821,11 @@ _**Default Value:**_ False
 _**Config Example:**_ The following is the minimum working example that needs to be added to your 'config' file to enable 'webhooks' successfully:
 ```text
 webhook_enabled = "true"
-webhook_public_url = "http://<your_host_ip>:8888/"
+webhook_public_url = "https://<your.fully.qualified.domain.name>/webhooks/onedrive"
 ```
 
 > [!NOTE]
-> Setting `webhook_enabled = "true"` enables the webhook feature in 'monitor' mode. The onedrive process will listen for incoming updates at a configurable endpoint, which defaults to `0.0.0.0:8888`. The `webhook_public_url` must be set to an public-facing url for Microsoft to send updates to your webhook. 
-> 
-> If your host is directly exposed to the Internet, the `webhook_public_url` can be set to `http://<your_host_ip>:8888/` to match the default endpoint. In this case, it is also advisable to configure a reverse proxy like `nginx` to proxy the traffic to the client. For example, below is a nginx config snippet to proxy traffic into the webhook:
-> ```text
-> server {
-> 	listen 80;
-> 	location /webhooks/onedrive {
-> 		proxy_http_version 1.1;
-> 		proxy_pass http://127.0.0.1:8888;
-> 	}
-> }
-> ```
-> 
-> With nginx running, you can configure 'webhook_public_url' to `https://<public_facing_url_to_reach_your_webhook>/webhooks/onedrive`
+> Setting `webhook_enabled = "true"` enables the webhook feature in 'monitor' mode. The onedrive process will listen for incoming updates at a configurable endpoint, which defaults to `0.0.0.0:8888`.
 
 > [!IMPORTANT]
 > A valid HTTPS certificate is required for your public-facing URL if using nginx. Self signed certificates will be rejected. Consider using https://letsencrypt.org/ to utilise free SSL certificates for your public-facing URL.
@@ -846,10 +833,11 @@ webhook_public_url = "http://<your_host_ip>:8888/"
 > [!TIP]
 > If you receive this application error: `Subscription validation request failed. Response must exactly match validationToken query parameter.` the most likely cause for this error will be your nginx configuration.
 > 
-> To resolve this configuration issue, potentially investigate the following configuration for nginx:
+> To resolve this configuration issue, potentially investigate adding the following 'proxy' configuration options to your nginx configuration file:
 > ```text
 > server {
-> 	listen 80;
+> 	listen 443;
+>	server_name <your.fully.qualified.domain.name>;
 > 	location /webhooks/onedrive {
 > 		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 > 		proxy_set_header X-Original-Request-URI $request_uri;
@@ -904,8 +892,9 @@ _**Value Type:**_ String
 _**Default Value:**_ *empty*
 
 _**Config Example:**_ 
-*  If your host is directly connected to the Internet: `webhook_public_url = "http://<your_host_ip>:8888/"`
-*  If you are using nginx to reverse proxy traffic from the Internet: `webhook_public_url = "https://<public_facing_url_to_reach_your_webhook>/webhooks/onedrive"`
+```text
+webhook_public_url = "https://<your.fully.qualified.domain.name>/webhooks/onedrive"
+```
 
 ### webhook_renewal_interval
 _**Description:**_ This configuration option controls the frequency at which an existing Microsoft OneDrive webhook subscription is renewed. The value is expressed in the number of seconds before renewal.
