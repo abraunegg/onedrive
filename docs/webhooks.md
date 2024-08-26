@@ -46,15 +46,40 @@ Depending on your environment, a number of steps are required to configure this 
 > [!NOTE]
 > This URL should utilise your FQDN and be resolvable from the Internet. This URL will also be used within your 'nginx' configuration.
 
+#### Testing
+At this point, if you attempt to test 'webhooks', when they are attempted to be initialised, the following error *should* be generated:
+```
+ERROR: Microsoft OneDrive API returned an error with the following message:
+  Error Message:    HTTP request returned status code 400 (Bad Request)
+  Error Reason:     Subscription validation request timed out.
+  Error Code:       ValidationError
+  Error Timestamp:  YYYY-MM-DDThh:mm:ss
+  API Request ID:   eb196382-51d7-4411-984a-45a3fda90463
+Will retry creating or renewing subscription in 1 minute
+```
+This error is 100% normal at this point.
+
 ### Step 2: Install and configure 'nginx'
 
 > [!NOTE]
 > Nginx is a web server that can also be used as a reverse proxy, load balancer, mail proxy and HTTP cache.
 
-#### Install 'nginx'
-*  Install 'nginx' and any other requirements to install 'nginx' on your platform. It is beyond the scope of this document to advise on how to install this.
+#### Install and enable 'nginx'
+*  Install 'nginx' and any other requirements to install 'nginx' on your platform. It is beyond the scope of this document to advise on how to install this. Enable and start the 'nginx' service.
 
-#### Configure 'nginx'
+> [!TIP]
+> You may need to enable firewall rules to allow inbound http and https connections:
+> ```
+> firewall-cmd --permanent --zone=public --add-service=http
+> firewall-cmd --permanent --zone=public --add-service=https
+> ```
+
+#### Verify your 'nginx' installation
+* From your local machine, attempt to access the local server now running, by using a web browser and pointing at http://127.0.0.1/
+
+![nginx_verify_install](./images/nginx_verify_install.png)
+
+#### Configure 'nginx' to receive the subscription update
 *  Create a basic 'nginx' configuration file to support proxying traffic from Nginx to the local 'onedrive' process, which will, by default, have an HTTP listener running on TCP port 8888
 ```
 server {
@@ -67,10 +92,11 @@ server {
 }
 ```
 > [!TIP]
-> Save this file in the nginx configuration directory similar to the following path: `/etc/nginx/conf.d/webhooks_onedrive.conf`. This will help keep all your configurations organised.
+> Save this file in the nginx configuration directory similar to the following path: `/etc/nginx/conf.d/onedrive_webhook.conf`. This will help keep all your configurations organised.
 
 *  Test your 'nginx' configuration using `sudo nginx -t` to validate that there are no errors. If any are identified, please correct them.
 
+*  Once tested, reload your 'nginx' configuration.
 
 
 ### Step 3: Configure 'certbot' to create a SSL Certificate and deploy to 'nginx'
