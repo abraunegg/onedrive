@@ -170,10 +170,11 @@ Item makeDatabaseItem(JSONValue driveItem) {
 		}
 	}
 	
-	// We have 3 different operational modes where 'item.syncStatus' is used to flag if an item is synced or not:
+	// We have 4 different operational modes where 'item.syncStatus' is used to flag if an item is synced or not:
 	// - National Cloud Deployments do not support /delta as a query
 	// - When using --single-directory
 	// - When using --download-only --cleanup-local-files
+	// - Are we scanning a Shared Folder
 	//
 	// Thus we need to track in the database that this item is in sync
 	// As we are making an item, set the syncStatus to Y
@@ -854,8 +855,12 @@ final class ItemDatabase {
 		}
 	}
 	
-	// National Cloud Deployments (US and DE) do not support /delta as a query
-	// We need to track in the database that this item is in sync
+	// We have 4 different operational modes where 'item.syncStatus' is used to flag if an item is synced or not:
+	// - National Cloud Deployments do not support /delta as a query
+	// - When using --single-directory
+	// - When using --download-only --cleanup-local-files
+	// - Are we scanning a Shared Folder
+	//
 	// As we query /children to get all children from OneDrive, update anything in the database 
 	// to be flagged as not-in-sync, thus, we can use that flag to determine what was previously
 	// in-sync, but now deleted on OneDrive
@@ -877,7 +882,12 @@ final class ItemDatabase {
 		}
 	}
 	
-	// National Cloud Deployments (US and DE) do not support /delta as a query
+	// We have 4 different operational modes where 'item.syncStatus' is used to flag if an item is synced or not:
+	// - National Cloud Deployments do not support /delta as a query
+	// - When using --single-directory
+	// - When using --download-only --cleanup-local-files
+	// - Are we scanning a Shared Folder
+	//
 	// Select items that have a out-of-sync flag set
 	Item[] selectOutOfSyncItems(const(char)[] driveId) {
 		assert(driveId);

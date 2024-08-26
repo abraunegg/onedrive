@@ -198,7 +198,7 @@ class SyncEngine {
 	TaskPool processPool;
 	
 	// Shared Folder Flags for 'sync_list' processing
-	bool trimToSharedFolder = false;
+	bool sharedFolderDeltaGeneration = false;
 	string currentSharedFolderName = "";
 			
 	// Configure this class instance
@@ -823,7 +823,7 @@ class SyncEngine {
 		generateSimulatedDeltaResponse = false;
 		
 		// Reset Shared Folder Flags for 'sync_list' processing
-		trimToSharedFolder = false;
+		sharedFolderDeltaGeneration = false;
 		currentSharedFolderName = "";
 		
 		// Was a driveId provided as an input
@@ -867,8 +867,11 @@ class SyncEngine {
 		// When using 'sync_list' potentially nothing is going to match, as, we are getting the 'whole' path from their 'root' , not just the folder shared with us
 		if (!sharedFolderName.empty) {
 			// When using 'sync_list' we need to do this
-			trimToSharedFolder = true;
+			sharedFolderDeltaGeneration = true;
 			currentSharedFolderName = sharedFolderName;
+			
+			generateSimulatedDeltaResponse = true;
+			
 		}
 		
 		// Reset latestDeltaLink & deltaLinkCache
@@ -1667,7 +1670,7 @@ class SyncEngine {
 						addLogEntry("skip_dir exclude result (directory based): " ~ to!string(unwanted), ["debug"]);
 						if (unwanted) {
 							// This path should be skipped
-							addLogEntry("Skipping item - excluded by skip_dir config: " ~ matchDisplay, ["verbose"]);
+							addLogEntry("Skipping path - excluded by skip_dir config: " ~ matchDisplay, ["verbose"]);
 						}
 					}
 					// Is the item a file?
@@ -1690,7 +1693,7 @@ class SyncEngine {
 						addLogEntry("skip_dir exclude result (file based): " ~ to!string(unwanted), ["debug"]);
 						if (unwanted) {
 							// this files path should be skipped
-							addLogEntry("Skipping item - file path is excluded by skip_dir config: " ~ newItemPath, ["verbose"]);
+							addLogEntry("Skipping file - file path is excluded by skip_dir config: " ~ newItemPath, ["verbose"]);
 						}
 					}
 				}
@@ -1726,7 +1729,7 @@ class SyncEngine {
 						addLogEntry("skip_file item to check: " ~ exclusionTestPath, ["debug"]);
 						unwanted = selectiveSync.isFileNameExcluded(exclusionTestPath);
 						addLogEntry("Result: " ~ to!string(unwanted), ["debug"]);
-						if (unwanted) addLogEntry("Skipping item - excluded by skip_file config: " ~ thisItemName, ["verbose"]);
+						if (unwanted) addLogEntry("Skipping file - excluded by skip_dir config: " ~ thisItemName, ["verbose"]);
 					} else {
 						// parent id is not in the database
 						unwanted = true;
@@ -1800,7 +1803,7 @@ class SyncEngine {
 				if (isItemFile(onedriveJSONItem)) {
 					if (fileSizeLimit != 0) {
 						if (onedriveJSONItem["size"].integer >= fileSizeLimit) {
-							addLogEntry("Skipping item - excluded by skip_size config: " ~ thisItemName ~ " (" ~ to!string(onedriveJSONItem["size"].integer/2^^20) ~ " MB)", ["verbose"]);
+							addLogEntry("Skipping file - excluded by skip_size config: " ~ thisItemName ~ " (" ~ to!string(onedriveJSONItem["size"].integer/2^^20) ~ " MB)", ["verbose"]);
 							unwanted = true;
 						}
 					}
@@ -2845,9 +2848,9 @@ class SyncEngine {
 			// Log the action if the path exists .. it may of already been removed and this is a legacy array item
 			if (exists(path)) {
 				if (item.type == ItemType.file) {
-					addLogEntry("Trying to delete file " ~ path);
+					addLogEntry("Trying to delete local file: " ~ path);
 				} else {
-					addLogEntry("Trying to delete directory " ~ path);
+					addLogEntry("Trying to delete local directory: " ~ path);
 				}
 			}
 			
@@ -2885,9 +2888,9 @@ class SyncEngine {
 			if (needsRemoval) {
 				// Log the action
 				if (item.type == ItemType.file) {
-					addLogEntry("Deleting file " ~ path);
+					addLogEntry("Deleting local file: " ~ path);
 				} else {
-					addLogEntry("Deleting directory " ~ path);
+					addLogEntry("Deleting local directory: " ~ path);
 				}
 				
 				// Perform the action
@@ -3063,11 +3066,11 @@ class SyncEngine {
 			//   https://docs.microsoft.com/en-us/graph/deployments#supported-features
 			//
 			// - Are we performing a --single-directory sync, which will exclude many items online, focusing in on a specific online directory
-			// 
 			// - Are we performing a --download-only --cleanup-local-files action?
+			// - Are we scanning a Shared Folder
 			//
 			// If we did, we self generated a /delta response, thus need to now process elements that are still flagged as out-of-sync
-			if ((singleDirectoryScope) || (nationalCloudDeployment) || (cleanupLocalFiles)) {
+			if ((singleDirectoryScope) || (nationalCloudDeployment) || (cleanupLocalFiles) || sharedFolderDeltaGeneration) {
 				// Any entry in the DB than is flagged as out-of-sync needs to be cleaned up locally first before we scan the entire DB
 				// Normally, this is done at the end of processing all /delta queries, however when using --single-directory or a National Cloud Deployments is configured
 				// We cant use /delta to query the OneDrive API as National Cloud Deployments dont support /delta
@@ -3570,7 +3573,7 @@ class SyncEngine {
 						// The path that needs to be checked needs to include the '/'
 						// This due to if the user has specified in skip_dir an exclusive path: '/path' - that is what must be matched
 						if (selectiveSync.isDirNameExcluded(localFilePath.strip('.'))) {
-							addLogEntry("Skipping item - excluded by skip_dir config: " ~ localFilePath, ["verbose"]);
+							addLogEntry("Skipping path - excluded by skip_dir config: " ~ localFilePath, ["verbose"]);
 							clientSideRuleExcludesPath = true;
 						}
 					}
@@ -3583,7 +3586,7 @@ class SyncEngine {
 					// The path that needs to be checked needs to include the '/'
 					// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
 					if (selectiveSync.isFileNameExcluded(localFilePath.strip('.'))) {
-						addLogEntry("Skipping item - excluded by skip_file config: " ~ localFilePath, ["verbose"]);
+						addLogEntry("Skipping file - excluded by skip_dir config: " ~ localFilePath, ["verbose"]);
 						clientSideRuleExcludesPath = true;
 					}
 				}
@@ -3601,7 +3604,17 @@ class SyncEngine {
 						} else {
 							if (exists(appConfig.syncListFilePath)){
 								// skipped most likely due to inclusion in sync_list
-								addLogEntry("Skipping path - excluded by sync_list config: " ~ localFilePath, ["verbose"]);
+								
+								// is this path a file or directory?
+								if (isFile(localFilePath)) {
+									// file	
+									addLogEntry("Skipping file - excluded by sync_list config: " ~ localFilePath, ["verbose"]);
+								} else {
+									// directory
+									addLogEntry("Skipping path - excluded by sync_list config: " ~ localFilePath, ["verbose"]);
+								}
+								
+								// flag as excluded
 								clientSideRuleExcludesPath = true;
 							} else {
 								// skipped for some other reason
@@ -3621,7 +3634,7 @@ class SyncEngine {
 					// Get the file size
 					ulong thisFileSize = getSize(localFilePath);
 					if (thisFileSize >= fileSizeLimit) {
-						addLogEntry("Skipping item - excluded by skip_size config: " ~ localFilePath ~ " (" ~ to!string(thisFileSize/2^^20) ~ " MB)", ["verbose"]);
+						addLogEntry("Skipping file - excluded by skip_size config: " ~ localFilePath ~ " (" ~ to!string(thisFileSize/2^^20) ~ " MB)", ["verbose"]);
 					}
 				}
 			}
@@ -3729,7 +3742,7 @@ class SyncEngine {
 					addLogEntry("skip_dir exclude result (directory based): " ~ to!string(clientSideRuleExcludesPath), ["debug"]);
 					if (clientSideRuleExcludesPath) {
 						// This path should be skipped
-						addLogEntry("Skipping item - excluded by skip_dir config: " ~ matchDisplay, ["verbose"]);
+						addLogEntry("Skipping path - excluded by skip_dir config: " ~ matchDisplay, ["verbose"]);
 					}
 				}
 			}
@@ -3787,7 +3800,7 @@ class SyncEngine {
 				
 				if (clientSideRuleExcludesPath) {
 					// This path should be skipped
-					addLogEntry("Skipping item - excluded by skip_file config: " ~ exclusionTestPath, ["verbose"]);
+					addLogEntry("Skipping file - excluded by skip_dir config: " ~ exclusionTestPath, ["verbose"]);
 				}
 			}
 		}
@@ -3861,7 +3874,7 @@ class SyncEngine {
 				}
 				
 				// If this is a Shared Folder, we need to 'trim' the resulting path to that of the 'folder' that is actually shared with us so that this can be appropriatly checked against 'sync_list' entries
-				if (trimToSharedFolder) {
+				if (sharedFolderDeltaGeneration) {
 					// Find the index of 'currentSharedFolderName' in 'newItemPath'
 					int pos = cast(int) newItemPath.indexOf(currentSharedFolderName);
 					
@@ -3934,7 +3947,7 @@ class SyncEngine {
 			if (isItemFile(onedriveJSONItem)) {
 				if (fileSizeLimit != 0) {
 					if (onedriveJSONItem["size"].integer >= fileSizeLimit) {
-						addLogEntry("Skipping item - excluded by skip_size config: " ~ thisItemName ~ " (" ~ to!string(onedriveJSONItem["size"].integer/2^^20) ~ " MB)", ["verbose"]);
+						addLogEntry("Skipping file - excluded by skip_size config: " ~ thisItemName ~ " (" ~ to!string(onedriveJSONItem["size"].integer/2^^20) ~ " MB)", ["verbose"]);
 						clientSideRuleExcludesPath = true;
 					}
 				}
@@ -3973,17 +3986,26 @@ class SyncEngine {
 				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
 			} 
 			
-			
 			// Does this JSON match the root name of a shared folder we may be trying to match?
-			if (trimToSharedFolder) {
+			if (sharedFolderDeltaGeneration) {
 				if (currentSharedFolderName == onlinePathData["name"].str) {
 					createDatabaseRootTieRecordForOnlineSharedFolder(onlinePathData);
 				}
 			} 
 			
 			// Configure the grandparent items
-			string grandparentItemDriveId = onlinePathData["parentReference"]["driveId"].str;
-			string grandparentItemParentId = onlinePathData["parentReference"]["id"].str;
+			string grandparentItemDriveId;
+			string grandparentItemParentId;
+			grandparentItemDriveId = onlinePathData["parentReference"]["driveId"].str;
+			
+			// OneDrive Personal JSON responses are in-consistent with not having 'id' available
+			if (hasParentReferenceId(onlinePathData)) {
+				// Use the parent reference id
+				grandparentItemParentId = onlinePathData["parentReference"]["id"].str;
+			} else {
+				// Testing evidence shows that for Personal accounts, use the 'id' itself
+				grandparentItemParentId = onlinePathData["id"].str;
+			}
 			
 			// Is this item's grandparent data in the database?
 			if (!itemDB.idInLocalDatabase(grandparentItemDriveId, grandparentItemParentId)) {
@@ -4486,7 +4508,7 @@ class SyncEngine {
 			}
 		} else {
 			// When valid quota details are not fetched
-			addLogEntry("Failed to fetch or interpret quota details from the API response.", ["verbose"]);
+			addLogEntry("Failed to fetch or query quota details for OneDrive Drive ID: " ~ driveId, ["verbose"]);
 			quotaRestricted = true; // Considering restricted due to failure to interpret
 		}
 
@@ -4689,7 +4711,7 @@ class SyncEngine {
 				
 		// A short lived item that has already disappeared will cause an error - is the path still valid?
 		if (!exists(path)) {
-			addLogEntry("Skipping item - path has disappeared: " ~ path);
+			addLogEntry("Skipping path - path has disappeared: " ~ path);
 			return;
 		}
 		
@@ -6543,8 +6565,6 @@ class SyncEngine {
 			pathToQuery = ".";
 		}
 		
-		addLogEntry("pathToQuery: " ~ pathToQuery);
-		
 		// Create new OneDrive API Instance
 		generateDeltaResponseOneDriveApiInstance = new OneDriveApi(appConfig);
 		generateDeltaResponseOneDriveApiInstance.initialise();
@@ -6632,21 +6652,24 @@ class SyncEngine {
 		
 			// Process this initial JSON response
 			if (!isItemRoot(driveData)) {
-				// Get root details for the provided driveId
-				try {
-					rootData = generateDeltaResponseOneDriveApiInstance.getDriveIdRoot(searchItem.driveId);
-				} catch (OneDriveException exception) {
-					addLogEntry("rootData = onedrive.getDriveIdRoot(searchItem.driveId) generated a OneDriveException", ["debug"]);
-					
-					string thisFunctionName = getFunctionName!({});
-					// Default operation if not 408,429,503,504 errors
-					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
-					// Display what the error is
-					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+				// Are we generating a /delta response for a Shared Folder, if not, then we need to add the drive root details first
+				if (!sharedFolderDeltaGeneration) {
+					// Get root details for the provided driveId
+					try {
+						rootData = generateDeltaResponseOneDriveApiInstance.getDriveIdRoot(searchItem.driveId);
+					} catch (OneDriveException exception) {
+						addLogEntry("rootData = onedrive.getDriveIdRoot(searchItem.driveId) generated a OneDriveException", ["debug"]);
+						
+						string thisFunctionName = getFunctionName!({});
+						// Default operation if not 408,429,503,504 errors
+						// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
+						// Display what the error is
+						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+					}
+					// Add driveData JSON data to array
+					addLogEntry("Adding OneDrive root details for processing", ["verbose"]);
+					childrenData ~= rootData;
 				}
-				// Add driveData JSON data to array
-				addLogEntry("Adding OneDrive root details for processing", ["verbose"]);
-				childrenData ~= rootData;
 			}
 			
 			// Add driveData JSON data to array
@@ -6694,10 +6717,10 @@ class SyncEngine {
 			// Process top level children
 			if (!remotePathObject) {
 				// Main account root folder
-				addLogEntry("Adding " ~ to!string(count(topLevelChildren["value"].array)) ~ " OneDrive items for processing from the OneDrive 'root' folder", ["verbose"]);
+				addLogEntry("Adding " ~ to!string(count(topLevelChildren["value"].array)) ~ " OneDrive items for processing from the OneDrive 'root' Folder", ["verbose"]);
 			} else {
 				// Shared Folder
-				addLogEntry("Adding " ~ to!string(count(topLevelChildren["value"].array)) ~ " OneDrive items for processing from the OneDrive Shared folder", ["verbose"]);
+				addLogEntry("Adding " ~ to!string(count(topLevelChildren["value"].array)) ~ " OneDrive items for processing from the OneDrive Shared Folder", ["verbose"]);
 			}
 			
 			foreach (child; topLevelChildren["value"].array) {
@@ -8599,7 +8622,9 @@ class SyncEngine {
 	void createDatabaseRootTieRecordForOnlineSharedFolder(JSONValue onedriveJSONItem) {
 		// Creating|Updating a DB Tie
 		addLogEntry("Creating|Updating a 'root' DB Tie Record for this Shared Folder: " ~ onedriveJSONItem["name"].str, ["debug"]);
+		addLogEntry("Creating|Updating a 'root' DB Tie Record for this Shared Folder: " ~ onedriveJSONItem["name"].str);
 		addLogEntry("Raw JSON for 'root' DB Tie Record: " ~ to!string(onedriveJSONItem), ["debug"]);
+		addLogEntry("Raw JSON for 'root' DB Tie Record: " ~ to!string(onedriveJSONItem));
 		
 		// New DB Tie Item to detail the 'root' of the Shared Folder
 		Item tieDBItem;
@@ -8612,7 +8637,15 @@ class SyncEngine {
 		} else {
 			if (onedriveJSONItem["name"].str != "root") {
 				tieDBItem.driveId = onedriveJSONItem["parentReference"]["driveId"].str;
-				tieDBItem.id = onedriveJSONItem["parentReference"]["id"].str;
+				
+				// OneDrive Personal JSON responses are in-consistent with not having 'id' available
+				if (hasParentReferenceId(onedriveJSONItem)) {
+					// Use the parent reference id
+					tieDBItem.id = onedriveJSONItem["parentReference"]["id"].str;
+				} else {
+					// Testing evidence shows that for Personal accounts, use the 'id' itself
+					tieDBItem.id = onedriveJSONItem["id"].str;
+				}
 			} else {
 				tieDBItem.driveId = onedriveJSONItem["parentReference"]["driveId"].str;
 				tieDBItem.id = onedriveJSONItem["id"].str;
