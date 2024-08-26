@@ -1,13 +1,12 @@
 name: "Bug Report"
-description: "Before proceeding, please ensure your issue is a genuine software bug. This form is exclusively for reporting actual software bugs that need fixing."
-note: "For all other matters like installation problems, package dependency issues, application configuration advice or other inquiries please use GitHub Discussions."
+description: Before proceeding, please ensure your issue is a genuine software bug. This form is exclusively for reporting actual software bugs that need fixing. For other items, use GitHub Discussions instead.
 title: "Bug: "
 labels: ["Bug"]
 body:
 - type: markdown
   attributes:
     value: |
-      **Note:** Before submitting a bug report, please ensure you are running the latest 'onedrive' client as built from 'master' and compile by using the latest available DMD or LDC compiler. Refer to the the [INSTALL](https://github.com/abraunegg/onedrive/blob/master/docs/INSTALL.md) document on how to build the client for your system.
+      **Note:** Before submitting a bug report, please ensure you are running the latest 'onedrive' client as built from 'master' and compile by using the latest available DMD or LDC compiler. Refer to the the [install](https://github.com/abraunegg/onedrive/blob/master/docs/install.md) document on how to build the client for your system.
       
 - type: textarea
   id: bugDescription
