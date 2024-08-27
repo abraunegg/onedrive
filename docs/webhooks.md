@@ -70,8 +70,8 @@ This error is 100% normal at this point.
 > [!TIP]
 > You may need to enable firewall rules to allow inbound http and https connections on your system:
 > ```
-> firewall-cmd --permanent --zone=public --add-service=http
-> firewall-cmd --permanent --zone=public --add-service=https
+> firewall-cmd --permanent --add-service=http
+> firewall-cmd --permanent --add-service=https
 > ```
 
 #### Verify your 'nginx' installation
@@ -83,18 +83,9 @@ This error is 100% normal at this point.
 *  Create a basic 'nginx' configuration file to support proxying traffic from Nginx to the local 'onedrive' process, which will, by default, have an HTTP listener running on TCP port 8888
 ```
 server {
-	listen 443;
+	listen 80;
 	server_name <your.fully.qualified.domain.name>;
 	location /webhooks/onedrive {
-		# Allow only Microsoft 365 Common and Office Online addresses
-		# Taken from "Azure IP Ranges and Service Tags – Public Cloud" page. Microsoft updates this JSON file weekly
-		# https://www.microsoft.com/en-us/download/details.aspx?id=56519
-		allow 20.20.32.0/19;
-		allow 20.190.128.0/18;
-		allow 20.231.128.0/19;
-		allow 40.126.0.0/18;
-		deny all;
-
 		# Proxy Options
 		proxy_http_version 1.1;
 		proxy_pass http://127.0.0.1:8888;
@@ -105,9 +96,6 @@ The configuration above will:
 * Create an endpoint listener at `https://<your.fully.qualified.domain.name>/webhooks/onedrive`
 * Secure this endpoint to only allow Microsoft 365 address space to communicate with this enpoint
 
-> [!IMPORTANT]
-> These ranges are part of the Microsoft 365 Common and Office Online services, which also cover Microsoft Graph API. You should regularly update the allowlist as Microsoft updates these ranges frequently.
-> It is recommended to automate updates to your 'nginx' configuration accordingly and is beyond the scope of this document.
 
 > [!TIP]
 > Save this file in the nginx configuration directory similar to the following path: `/etc/nginx/conf.d/onedrive_webhook.conf`. This will help keep all your configurations organised.
@@ -122,17 +110,124 @@ The configuration above will:
 
 * A valid configuration will be similar to the above illustration.
 
+### Step 5: Configure 'certbot' to create a SSL Certificate and deploy to your 'nginx' webhook configuration
+*  Install the 'certbot' tool along with the associated python module 'python-certbot-nginx' for your platform
+*  Run the 'certbot' tool on your platform to generate a valid HTTPS certificate for your `<your.fully.qualified.domain.name>` by running `certbot --nginx`. This should *detect* your active `server_name` from your 'nginx' configuration and install the certificate in the correct manner.
 
-### Step 4: Configure 'certbot' to create a SSL Certificate and deploy to your 'nginx' webhook configuration
+*  The resulting 'nginx' configuration will look something like this:
+```
+server {
+	server_name <your.fully.qualified.domain.name>;
+	location /webhooks/onedrive {
+		# Proxy Options
+		proxy_http_version 1.1;
+		proxy_pass http://127.0.0.1:8888;
+	}
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/<your.fully.qualified.domain.name>/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/<your.fully.qualified.domain.name>/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+
+}
+server {
+    if ($host = <your.fully.qualified.domain.name>) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
 
 
-*   **Setup Nginx as a Reverse Proxy:** Configure Nginx to listen on port 443 for HTTPS traffic. It should proxy incoming webhook notifications to the internal webhook listener running on the client
+	listen 80;
+	server_name <your.fully.qualified.domain.name>;
+    return 404; # managed by Certbot
+}
+```
 
-### Step 4: Firewall/Router Configuration
-*   **Port Forwarding:** Ensure that your firewall or router is configured to forward incoming HTTPS traffic on port 443 to the internal IP address of your Nginx server. This setup allows external webhook notifications from the Microsoft Graph API to reach your Nginx server and subsequently be proxied to the local webhook listener.
+*  Test your 'nginx' configuration using `sudo nginx -t` to validate that there are no errors. If any are identified, please correct them.
+*  Once tested, reload your 'nginx' configuration to activate the webhook reverse proxy configuration.
+
+
+### Step 6: Secure your 'nginx' configuration
+*  Enhance your 'nginx' configuration to only allow the Microsoft 365 platform which includes the Microsoft Graph API to communicate with your configured webhooks endpoint by adding the following text:
+```
+# Allow only Microsoft 365 Common and Office Online addresses
+# Taken from "Azure IP Ranges and Service Tags – Public Cloud" page. Microsoft updates this JSON file weekly
+# https://www.microsoft.com/en-us/download/details.aspx?id=56519
+allow 20.20.32.0/19;
+allow 20.190.128.0/18;
+allow 20.231.128.0/19;
+allow 40.126.0.0/18;
+deny all;
+```
+
+#### Example:
+```
+server {
+	server_name <your.fully.qualified.domain.name>;
+	location /webhooks/onedrive {
+		# Allow only Microsoft 365 Common and Office Online addresses
+		# Taken from "Azure IP Ranges and Service Tags – Public Cloud" page. Microsoft updates this JSON file weekly
+		# https://www.microsoft.com/en-us/download/details.aspx?id=56519
+		allow 20.20.32.0/19;
+		allow 20.190.128.0/18;
+		allow 20.231.128.0/19;
+		allow 40.126.0.0/18;
+		deny all;
+		
+		# Proxy Options
+		proxy_http_version 1.1;
+		proxy_pass http://127.0.0.1:8888;
+	}
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/<your.fully.qualified.domain.name>/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/<your.fully.qualified.domain.name>/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+
+}
+server {
+    if ($host = <your.fully.qualified.domain.name>) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+
+	listen 80;
+	server_name <your.fully.qualified.domain.name>;
+    return 404; # managed by Certbot
+}
+```
+
+> [!IMPORTANT]
+> These ranges are part of the Microsoft 365 Common and Office Online services, which also cover Microsoft Graph API. You should regularly update the allowlist as Microsoft updates these ranges frequently.
+> It is recommended to automate updates to your 'nginx' configuration accordingly and is beyond the scope of this document.
+
+
+### Step 7: Test your 'onedrive' application using this configuration
+
+Detail steps here
+
+
+
+### Troubleshooting
+In some circumstances, `SELinux` can provent 'nginx' from communicating with local system processes. When this occurs, the application will generate an error similar to the following:
+```
+GET THE CORRECT ERROR MESSAGE AND PUT IT HERE
+```
+
+To correct this issue, use the `setsebool` tool to allow HTTPD processes (which includes 'nginx') to make network connections:
+```
+sudo setsebool -P httpd_can_network_connect 1
+```
+After setting the boolean, restart 'nginx' to apply the changes.
+
+
+### Resulting configuration
 
 When these steps are followed, your environment configuration will be similar to the following diagram:
 
 ![webhooks](./puml/webhooks.png)
+
+### Additional Configuration Assistance
 
 Refer to [application-config-options.md](application-config-options.md) for further guidance on 'webhook' configuration options.
