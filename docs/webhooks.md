@@ -1,6 +1,6 @@
-# How to configure receiving real-time changes from Microsoft OneDrive
+# How to configure receiving real-time changes from Microsoft OneDrive using webhooks
 
-When operating in 'Monitor Mode,' receiving real-time updates to online data can significantly enhance synchronisation efficiency. This is achieved by enabling 'webhooks,' which allows the client to subscribe to remote updates.
+When operating in 'Monitor Mode,' receiving real-time updates to online data can significantly enhance synchronisation efficiency. This is achieved by enabling 'webhooks,' which allows the client to subscribe to remote updates and receive real-time notifications when certain events occur on Microsoft OneDrive.
 
 With this setup, any remote changes are promptly synchronised to your local file system, eliminating the need to wait for the next scheduled synchronisation cycle.
 
@@ -86,20 +86,37 @@ server {
 	listen 443;
 	server_name <your.fully.qualified.domain.name>;
 	location /webhooks/onedrive {
+		# Allow only Microsoft 365 Common and Office Online addresses
+		# Taken from "Azure IP Ranges and Service Tags – Public Cloud" page. Microsoft updates this JSON file weekly
+		# https://www.microsoft.com/en-us/download/details.aspx?id=56519
+		allow 20.20.32.0/19;
+		allow 20.190.128.0/18;
+		allow 20.231.128.0/19;
+		allow 40.126.0.0/18;
+		deny all;
+
+		# Proxy Options
 		proxy_http_version 1.1;
 		proxy_pass http://127.0.0.1:8888;
 	}
 }
 ```
+The configuration above will:
+* Create an endpoint listener at `https://<your.fully.qualified.domain.name>/webhooks/onedrive
+* Secure this endpoint to only allow Microsoft 365 address space to communicate with this enpoint
+
+> [!IMPORTANT]
+> These ranges are part of the Microsoft 365 Common and Office Online services, which also cover Microsoft Graph API. You should regularly update the allowlist as Microsoft updates these ranges frequently.
+> It is recommended to automate updates to your 'nginx' configuration accordingly and is beyond the scope of this document.
+
 > [!TIP]
 > Save this file in the nginx configuration directory similar to the following path: `/etc/nginx/conf.d/onedrive_webhook.conf`. This will help keep all your configurations organised.
 
 *  Test your 'nginx' configuration using `sudo nginx -t` to validate that there are no errors. If any are identified, please correct them.
+*  Once tested, reload your 'nginx' configuration to activate the webhook reverse proxy configuration.
 
-*  Once tested, reload your 'nginx' configuration.
 
-
-### Step 3: Configure 'certbot' to create a SSL Certificate and deploy to 'nginx'
+### Step 3: Configure 'certbot' to create a SSL Certificate and deploy to your 'nginx' webhook configuration
 
 
 *   **Setup Nginx as a Reverse Proxy:** Configure Nginx to listen on port 443 for HTTPS traffic. It should proxy incoming webhook notifications to the internal webhook listener running on the client
@@ -111,4 +128,4 @@ When these steps are followed, your environment configuration will be similar to
 
 ![webhooks](./puml/webhooks.png)
 
-Refer to [application-config-options.md](application-config-options.md) for further guidance on 'webhook' configuration.
+Refer to [application-config-options.md](application-config-options.md) for further guidance on 'webhook' configuration options.
