@@ -68,7 +68,7 @@ This error is 100% normal at this point.
 *  Install 'nginx' and any other requirements to install 'nginx' on your platform. It is beyond the scope of this document to advise on how to install this. Enable and start the 'nginx' service.
 
 > [!TIP]
-> You may need to enable firewall rules to allow inbound http and https connections:
+> You may need to enable firewall rules to allow inbound http and https connections on your system:
 > ```
 > firewall-cmd --permanent --zone=public --add-service=http
 > firewall-cmd --permanent --zone=public --add-service=https
@@ -102,7 +102,7 @@ server {
 }
 ```
 The configuration above will:
-* Create an endpoint listener at `https://<your.fully.qualified.domain.name>/webhooks/onedrive
+* Create an endpoint listener at `https://<your.fully.qualified.domain.name>/webhooks/onedrive`
 * Secure this endpoint to only allow Microsoft 365 address space to communicate with this enpoint
 
 > [!IMPORTANT]
@@ -115,8 +115,15 @@ The configuration above will:
 *  Test your 'nginx' configuration using `sudo nginx -t` to validate that there are no errors. If any are identified, please correct them.
 *  Once tested, reload your 'nginx' configuration to activate the webhook reverse proxy configuration.
 
+### Step 4: Initial Firewall/Router Configuration
+*  Configure your firewall or router to forward all incomming HTTP and HTTPS traffic to the internal address of your system where 'nginx' is running. This is required for to allow the Let's Encrypt `certbot` tool to create a valid HTTPS certificate for your system.
 
-### Step 3: Configure 'certbot' to create a SSL Certificate and deploy to your 'nginx' webhook configuration
+![initial_firewall_config](./images/initial_firewall_config.png)
+
+* A valid configuration will be similar to the above illustration.
+
+
+### Step 4: Configure 'certbot' to create a SSL Certificate and deploy to your 'nginx' webhook configuration
 
 
 *   **Setup Nginx as a Reverse Proxy:** Configure Nginx to listen on port 443 for HTTPS traffic. It should proxy incoming webhook notifications to the internal webhook listener running on the client
