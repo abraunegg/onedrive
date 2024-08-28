@@ -44,7 +44,7 @@ Depending on your environment, a number of steps are required to configure this 
 *  In your 'config' file, set `webhook_public_url = "https://<your.fully.qualified.domain.name>/webhooks/onedrive"` as the public URL that will receive subscription updates from the Microsoft Graph API platform.
 
 > [!NOTE]
-> This URL should utilise your FQDN and be resolvable from the Internet. This URL will also be used within your 'nginx' configuration.
+> This URL will utilise your FQDN and must be resolvable from the Internet. This FQDN will also be used within your 'nginx' configuration.
 
 #### Testing
 At this point, if you attempt to test 'webhooks', when they are attempted to be initialised, the following error *should* be generated:
@@ -70,8 +70,9 @@ This error is 100% normal at this point.
 > [!TIP]
 > You may need to enable firewall rules to allow inbound http and https connections on your system:
 > ```
-> firewall-cmd --permanent --add-service=http
-> firewall-cmd --permanent --add-service=https
+> sudo firewall-cmd --permanent --add-service=http
+> sudo firewall-cmd --permanent --add-service=https
+> sudo firewall-cmd --reload
 > ```
 
 #### Verify your 'nginx' installation
@@ -148,86 +149,59 @@ server {
 
 
 ### Step 6: Secure your 'nginx' configuration
-*  Enhance your 'nginx' configuration to only allow the Microsoft 365 platform which includes the Microsoft Graph API to communicate with your configured webhooks endpoint by adding the following text:
-```
-# Allow only Microsoft 365 Common and Office Online addresses
-# Taken from "Azure IP Ranges and Service Tags – Public Cloud" page. Microsoft updates this JSON file weekly
-# https://www.microsoft.com/en-us/download/details.aspx?id=56519
-allow 20.20.32.0/19;
-allow 20.190.128.0/18;
-allow 20.231.128.0/19;
-allow 40.126.0.0/18;
-deny all;
-```
-
-#### Example:
-```
-server {
-	server_name <your.fully.qualified.domain.name>;
-	location /webhooks/onedrive {
-		# Allow only Microsoft 365 Common and Office Online addresses
-		# Taken from "Azure IP Ranges and Service Tags – Public Cloud" page. Microsoft updates this JSON file weekly
-		# https://www.microsoft.com/en-us/download/details.aspx?id=56519
-		allow 20.20.32.0/19;
-		allow 20.190.128.0/18;
-		allow 20.231.128.0/19;
-		allow 40.126.0.0/18;
-		deny all;
-		
-		# Proxy Options
-		proxy_http_version 1.1;
-		proxy_pass http://127.0.0.1:8888;
-	}
-
-    listen 443 ssl; # managed by Certbot
-    ssl_certificate /etc/letsencrypt/live/<your.fully.qualified.domain.name>/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/<your.fully.qualified.domain.name>/privkey.pem; # managed by Certbot
-    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
-
-}
-server {
-    if ($host = <your.fully.qualified.domain.name>) {
-        return 301 https://$host$request_uri;
-    } # managed by Certbot
-
-
-	listen 80;
-	server_name <your.fully.qualified.domain.name>;
-    return 404; # managed by Certbot
-}
-```
+*  Enhance your 'nginx' configuration to only allow the Microsoft 365 platform which includes the Microsoft Graph API to communicate with your configured webhooks endpoint. Review https://www.microsoft.com/en-us/download/details.aspx?id=56519 to assist you. Please note, it is beyond the scope of this document to tell you how to secure your system.
 
 > [!IMPORTANT]
-> These ranges are part of the Microsoft 365 Common and Office Online services, which also cover Microsoft Graph API. You should regularly update the allowlist as Microsoft updates these ranges frequently.
-> It is recommended to automate updates to your 'nginx' configuration accordingly and is beyond the scope of this document.
-
+> The IP address ranges that are part of the Microsoft 365 Common and Office Online services, which also cover Microsoft Graph API can be sourced from the above Microsoft URL. You should regularly update your configuration as Microsoft updates these ranges frequently.
+> It is recommended to automate these updates accordingly and is also beyond the scope of this document on how to do this.
 
 ### Step 7: Test your 'onedrive' application using this configuration
 
-Detail steps here
+*  Run the 'onedrive' application using `--monitor --verbose` and the client should now create a new subscription and register itself:
+```
+.....
+Performing initial synchronisation to ensure consistent local state ...
+Started webhook server
+Initializing subscription for updates ...
+Webhook: handled validation request
+Created new subscription a09ba1cf-3420-4d78-9117-b41373de33ff with expiration: 2024-08-28T08:42:00.637Z
+Attempting to contact Microsoft OneDrive Login Service
+Successfully reached Microsoft OneDrive Login Service
+Starting a sync with Microsoft OneDrive
+.....
+```
 
+*  Review the 'nginx' logs to validate that applicable communication is occuring:
+```
+70.37.95.11 - - [28/Aug/2024:18:26:07 +1000] "POST /webhooks/onedrive?validationToken=Validation%3a+Testing+client+application+reachability+for+subscription+Request-Id%3a+25460109-0e8b-4521-8090-dd691b407ed8 HTTP/1.1" 200 128 "-" "-" "-"
+137.135.11.116 - - [28/Aug/2024:18:32:02 +1000] "POST /webhooks/onedrive?validationToken=Validation%3a+Testing+client+application+reachability+for+subscription+Request-Id%3a+65e43e3c-cbab-4e74-87ec-0e8fafdef6d3 HTTP/1.1" 200 128 "-" "-" "-"
 
+```
 
-### Troubleshooting
+## Troubleshooting
 In some circumstances, `SELinux` can provent 'nginx' from communicating with local system processes. When this occurs, the application will generate an error similar to the following:
 ```
-GET THE CORRECT ERROR MESSAGE AND PUT IT HERE
+ERROR: Microsoft OneDrive API returned an error with the following message:
+  Error Message:    HTTP request returned status code 400 (Bad Request)
+  Error Reason:     Subscription validation request failed. Notification endpoint must respond with 200 OK to validation request.
+  Error Code:       ValidationError
+  Error Timestamp:  2024-08-28T08:22:34
+  API Request ID:   36684746-1458-4150-aeab-9871355a106c
+  Calling Function: logSubscriptionError()
 ```
 
 To correct this issue, use the `setsebool` tool to allow HTTPD processes (which includes 'nginx') to make network connections:
 ```
 sudo setsebool -P httpd_can_network_connect 1
 ```
-After setting the boolean, restart 'nginx' to apply the changes.
+After setting the boolean, restart 'nginx' to apply the SELinux configuration change.
 
-
-### Resulting configuration
+## Resulting configuration
 
 When these steps are followed, your environment configuration will be similar to the following diagram:
 
 ![webhooks](./puml/webhooks.png)
 
-### Additional Configuration Assistance
+## Additional Configuration Assistance
 
 Refer to [application-config-options.md](application-config-options.md) for further guidance on 'webhook' configuration options.

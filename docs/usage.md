@@ -754,7 +754,7 @@ sync_file_permissions = "600"
 > Please note that special permission bits such as setuid, setgid, and the sticky bit are not supported. Valid permission values range from `000` to `777` only.
 
 ### How are uploads and downloads managed?
-The system manages downloads and uploads using a multi-threaded approach. Specifically, the application utilises 16 threads for these processes. This thread count is preset and cannot be modified by users. This design ensures efficient handling of data transfers but does not allow for customisation of thread allocation.
+The system manages downloads and uploads using a multi-threaded approach. Specifically, the application utilises by default 8 threads (a maximum of 16 can be configured) for these processes. This thread count is preset and cannot be modified by users. This design ensures efficient handling of data transfers.
 
 ### How to only sync a specific directory?
 There are two methods to achieve this:
