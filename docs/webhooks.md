@@ -147,6 +147,8 @@ server {
 *  Test your 'nginx' configuration using `sudo nginx -t` to validate that there are no errors. If any are identified, please correct them.
 *  Once tested, reload your 'nginx' configuration to activate the webhook reverse proxy configuration.
 
+> [!IMPORTANT]
+> It is strongly advised that post doing this step, you implement a method to automatically keep your SSL certificate in a healthy state, as if the SSL certificate expires, webhook functionality will stop working. It is also beyond the scope of this document on how to do this.
 
 ### Step 6: Secure your 'nginx' configuration
 *  Enhance your 'nginx' configuration to only allow the Microsoft 365 platform which includes the Microsoft Graph API to communicate with your configured webhooks endpoint. Review https://www.microsoft.com/en-us/download/details.aspx?id=56519 to assist you. Please note, it is beyond the scope of this document to tell you how to secure your system.

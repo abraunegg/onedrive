@@ -609,6 +609,9 @@ void displayOneDriveErrorMessage(string message, string callingFunction) {
 	// Extra Debug if we are using --verbose --verbose
 	addLogEntry("Raw Error Data: " ~ message, ["debug"]);
 	addLogEntry("JSON Message: " ~ to!string(errorMessage), ["debug"]);
+	
+	// Close out logging with an empty line, so that in console output, and logging output this becomes clear
+	addLogEntry();
 }
 
 // Common code for handling when a client is unauthorised

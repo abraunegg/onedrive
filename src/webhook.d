@@ -56,7 +56,7 @@ class OneDriveWebhook {
 		server.listeningPort = this.port;
 
 		spawn(&serveImpl, cast(shared) this);
-		addLogEntry("Started webhook server");
+		addLogEntry("Started OneDrive API Webhook server");
 
 		// Subscriptions
 		oneDriveApiInstance = new OneDriveApi(this.appConfig);
@@ -70,7 +70,7 @@ class OneDriveWebhook {
         server.stop();
         this.started = false;
 
-		addLogEntry("Stopped webhook server");
+		addLogEntry("Stopped OneDrive API Webhook server");
 		object.destroy(server);
 
         // Delete subscription if there exists any
@@ -99,7 +99,7 @@ class OneDriveWebhook {
 			// For validation requests, respond with the validation token passed in the query string
 			// https://docs.microsoft.com/en-us/onedrive/developer/rest-api/concepts/webhook-receiver-validation-request
 			cgi.write(cgi.get["validationToken"]);
-			addLogEntry("Webhook: handled validation request");
+			addLogEntry("OneDrive API Webhook: handled validation request");
 		} else {
 			// Notifications don't include any information about the changes that triggered them.
 			// Put a refresh signal in the queue and let the main monitor loop process it.
@@ -107,7 +107,7 @@ class OneDriveWebhook {
 			_this.count.atomicOp!"+="(1);
 			send(cast()_this.parentTid, to!ulong(_this.count));
 			cgi.write("OK");
-			addLogEntry("Webhook: sent refresh signal #" ~ to!string(_this.count));
+			addLogEntry("OneDrive API Webhook: sent refresh signal #" ~ to!string(_this.count));
 		}
 	}
 
@@ -163,7 +163,7 @@ class OneDriveWebhook {
 	}
 
 	private void createSubscription() {
-		addLogEntry("Initializing subscription for updates ...");
+		addLogEntry("Initialising webhook subscription for updates ...");
 
 		auto expirationDateTime = Clock.currTime(UTC()) + subscriptionExpirationInterval;
 		try {
@@ -208,7 +208,7 @@ class OneDriveWebhook {
 
 				// Save the subscription id and renew it immediately since we don't know the expiration timestamp
 				subscriptionId = m[0];
-				addLogEntry("Found existing subscription " ~ subscriptionId);
+				addLogEntry("Found existing webhook subscription " ~ subscriptionId);
 				renewSubscription();
 			} else {
 				throw e;
@@ -217,7 +217,7 @@ class OneDriveWebhook {
 	}
 	
 	private void renewSubscription() {
-		addLogEntry("Renewing subscription for updates ...");
+		addLogEntry("Renewing webhook subscription for updates ...");
 
 		auto expirationDateTime = Clock.currTime(UTC()) + subscriptionExpirationInterval;
 		try {
@@ -225,7 +225,7 @@ class OneDriveWebhook {
 
 			// Update subscription expiration from the response
 			subscriptionExpiration = SysTime.fromISOExtString(response["expirationDateTime"].str);
-			addLogEntry("Created new subscription " ~ subscriptionId ~ " with expiration: " ~ to!string(subscriptionExpiration.toISOExtString()));
+			addLogEntry("Renewed webhook subscription " ~ subscriptionId ~ " with expiration: " ~ to!string(subscriptionExpiration.toISOExtString()));
 		} catch (OneDriveException e) {
 			if (e.httpStatusCode == 404) {
 				addLogEntry("The subscription is not found on the server. Recreating subscription ...");
@@ -247,96 +247,9 @@ class OneDriveWebhook {
 	}
 	
 	private void logSubscriptionError(OneDriveException e) {
-		if (e.httpStatusCode == 400) {
-			// Log known 400 error where Microsoft cannot get a 200 OK from the webhook endpoint
-			//
-			// Sample 400 error:
-			// {
-			// 	"error": {
-			// 			"code": "InvalidRequest",
-			// 			"innerError": {
-			// 					"client-request-id": "<uuid>",
-			// 					"date": "<timestamp>",
-			// 					"request-id": "<uuid>"
-			// 			},
-			// 			"message": "Subscription validation request failed. Notification endpoint must respond with 200 OK to validation request."
-			// 	}
-			// }
-
-			try {
-				if (e.error["error"]["code"].str == "InvalidRequest") {
-					import std.regex;
-					auto msgReg = ctRegex!(r"Subscription validation request failed", "i");
-					auto m = matchFirst(e.error["error"]["message"].str, msgReg);
-					if (m) {
-						addLogEntry("ERROR: Cannot create or renew subscription: Microsoft did not get 200 OK from the webhook endpoint.");
-						return;
-					}
-				}
-			} catch (JSONException) {
-				// fallthrough
-			}
-		} else if (e.httpStatusCode == 401) {
-			// Log known 401 error where authentication failed
-			//
-			// Sample 401 error:
-			// {
-			// 	"error": {
-			// 			"code": "ExtensionError",
-			// 			"innerError": {
-			// 					"client-request-id": "<uuid>",
-			// 					"date": "<timestamp>",
-			// 					"request-id": "<uuid>"
-			// 			},
-			// 			"message": "Operation: Create; Exception: [Status Code: Unauthorized; Reason: Authentication failed]"
-			// 	}
-			// }
-
-			try {
-				if (e.error["error"]["code"].str == "ExtensionError") {
-					import std.regex;
-					auto msgReg = ctRegex!(r"Authentication failed", "i");
-					auto m = matchFirst(e.error["error"]["message"].str, msgReg);
-					if (m) {
-						addLogEntry("ERROR: Cannot create or renew subscription: Authentication failed.");
-						return;
-					}
-				}
-			} catch (JSONException) {
-				// fallthrough
-			}
-		} else if (e.httpStatusCode == 403) {
-			// Log known 403 error where the number of subscriptions on item has exceeded limit
-			//
-			// Sample 403 error:
-			// {
-			// 	"error": {
-			// 			"code": "ExtensionError",
-			// 			"innerError": {
-			// 					"client-request-id": "<uuid>",
-			// 					"date": "<timestamp>",
-			// 					"request-id": "<uuid>"
-			// 			},
-			// 			"message": "Operation: Create; Exception: [Status Code: Forbidden; Reason: Number of subscriptions on item has exceeded limit]"
-			// 	}
-			// }
-			try {
-				if (e.error["error"]["code"].str == "ExtensionError") {
-					import std.regex;
-					auto msgReg = ctRegex!(r"Number of subscriptions on item has exceeded limit", "i");
-					auto m = matchFirst(e.error["error"]["message"].str, msgReg);
-					if (m) {
-						addLogEntry("ERROR: Cannot create or renew subscription: Number of subscriptions has exceeded limit.");
-						return;
-					}
-				}
-			} catch (JSONException) {
-				// fallthrough
-			}
-		}
-
-		// Log detailed message for unknown errors
-		addLogEntry("ERROR: Cannot create or renew subscription.");
+		// Log a message to the GUI only
+		addLogEntry("ERROR: An issue has occured with webhook subscriptions: " ~ e.error["error"]["message"].str, ["notify"]);
+		// Use the standard OneDrive API logging method
 		displayOneDriveErrorMessage(e.msg, getFunctionName!({}));
 	}
 }

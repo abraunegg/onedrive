@@ -872,7 +872,7 @@ int main(string[] cliArgs) {
 			if (!appConfig.getValueBool("download_only")) {
 				// Not using --download-only
 				try {
-					addLogEntry("Initialising filesystem inotify monitoring ...");
+					addLogEntry("Initialising filesystem inotify monitoring ...", ["info", "notify"]);
 					filesystemMonitor.initialise();
 					addLogEntry("Performing initial synchronisation to ensure consistent local state ...");
 				} catch (MonitorException e) {	
@@ -1069,9 +1069,9 @@ int main(string[] cliArgs) {
 					currentTime = MonoTime.currTime();
 					auto sleepTime = nextCheckTime - currentTime;
 					addLogEntry("Sleep for " ~ to!string(sleepTime), ["debug"]);
-				
-					if(filesystemMonitor.initialised || webhookEnabled) {
 					
+					if(filesystemMonitor.initialised || webhookEnabled) {
+
 						if(filesystemMonitor.initialised) {
 							// If local monitor is on and is waiting (previous event was not from webhook)
 							// start the worker and wait for event
