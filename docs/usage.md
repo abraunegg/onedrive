@@ -356,7 +356,9 @@ This will download all the content from Microsoft OneDrive to your `~/OneDrive` 
 
 > [!IMPORTANT]
 > There is an application functionality change between v2.4.x and v.2.5x when using this option.
+>
 > In prior v2.4.x releases, online deletes were automatically processed, thus automatically deleting local files that were deleted online, however there was zero way to perform a `--download-only` operation to archive the online state.
+>
 > In v2.5.x and above, when using `--download-only` the default is that all files will remain locally as an archive of your online data rather than being deleted locally if deleted online.
 
 > [!TIP]
