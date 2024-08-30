@@ -743,7 +743,7 @@ class OneDriveApi {
 			"expirationDateTime": expirationDateTime.toISOExtString()
 		];
 		curlEngine.http.addRequestHeader("Content-Type", "application/json");
-		return post(url, request.toString());
+		return patch(url, request.toString());
 	}
 	
 	void deleteSubscription(string subscriptionId) {
