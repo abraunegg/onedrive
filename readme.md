@@ -55,7 +55,7 @@ If you are encountering any issue running the application please follow these st
 
 ## Reporting an Issue or Bug
 > [!IMPORTANT]
-> Please ensure that issues reported as bugs are indeed software bugs. Problems like installation failures or dependency issues do not qualify as bugs. For help with these matters, please start a Discussion instead of filing a bug report.
+> Please ensure that issues reported as bugs are indeed software bugs. For installation problems, distribution package/version issues, or package dependency concerns, please start a [Discussion](https://github.com/abraunegg/onedrive/discussions) instead of filing a bug report.
 
 If you encounter any bugs you can report them here on Github. Before filing an issue be sure to:
 
