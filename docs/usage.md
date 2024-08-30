@@ -72,28 +72,7 @@ To avoid potential system instability or the client being terminated by your Out
 ### Upgrading from the 'skilion' Client
 The 'skilion' version has a significant number of issues in how it manages the local sync state. When upgrading from the 'skilion' client to this client, it's recommended to stop any service or OneDrive process that may be running. Once all OneDrive services are stopped, make sure to remove any old client binaries from your system.
 
-Furthermore, if you're using a 'config' file within your configuration directory (`~/.config/onedrive/`), please ensure that you update the `skip_file = ` option as shown below:
-
-**Invalid 'skilion' configuration:**
-```text
-skip_file = ".*|~*"
-```
-**Minimum valid configuration:**
-```text
-skip_file = "~*"
-```
-**Default valid configuration:**
-```text
-skip_file = "~*|.~*|*.tmp|*.swp|*.partial"
-```
-
-Avoid using a 'skip_file' entry of `.*` as it may prevent the correct detection of local changes to process. The configuration values for 'skip_file' will be checked for validity, and if there is an issue, the following error message will be displayed:
-```text
-ERROR: Invalid skip_file entry '.*' detected
-```
-
 ### Guidelines for Local File and Folder Naming in the Synchronisation Directory
-
 To ensure seamless synchronisation with Microsoft OneDrive, it's critical to adhere strictly to the prescribed naming conventions for your files and folders within the sync directory. The guidelines detailed below are designed to preempt potential sync failures by aligning with Microsoft Windows Naming Conventions, coupled with specific OneDrive restrictions.
 
 > [!WARNING]
@@ -116,7 +95,7 @@ To ensure seamless synchronisation with Microsoft OneDrive, it's critical to adh
 Should a file or folder infringe upon these naming conventions or restrictions, synchronisation will skip the item, indicating an invalid name according to Microsoft Naming Convention. The only remedy is to rename the offending item. This constraint is by design and remains firm.
 
 > [!TIP]
-> UTF-16 provides a capability to use alternative characters to work around the restrictions and limitations imposed by Microsoft OneDrive. An example of some replacement characters are below:
+> The UTF-16 character set provides a capability to use alternative characters to work around the restrictions and limitations imposed by Microsoft OneDrive. An example of some replacement characters are below:
 > | Standard Invalid Character | Potential UTF-16 Replacement Character |
 > |--------------------|------------------------------|
 > | .                  | ․ (One Dot Leader, `\u2024`)  |
@@ -208,6 +187,9 @@ Config option 'webhook_enabled'              = false
 There are two modes of operation when using the client:
 1. Standalone sync mode that performs a single sync action against Microsoft OneDrive.
 2. Ongoing sync mode that continuously syncs your data with Microsoft OneDrive.
+
+> [!ITIP]
+> To understand further the client operational modes and how the client operates, please review the [client architecture](client-architecture.md) documentation.
 
 > [!IMPORTANT]
 > The default setting for the OneDrive Client on Linux will sync all data from your Microsoft OneDrive account to your local device. To avoid this and select specific items for synchronisation, you should explore setting up 'Client Side Filtering' rules. This will help you manage and specify what exactly gets synced with your Microsoft OneDrive account.
@@ -370,13 +352,18 @@ In some cases, it may be desirable to 'download only' from Microsoft OneDrive. T
 ```text
 onedrive --sync --download-only
 ```
-This will download all the content from Microsoft OneDrive to your `~/OneDrive` location. Any files that are deleted online remain locally and will not be removed.
+This will download all the content from Microsoft OneDrive to your `~/OneDrive` location. Any files that are deleted online will remain locally and will not be removed.
 
-However, in some circumstances, it may be desirable to clean up local files that have been removed online. To do this, use the following command:
+> [!IMPORTANT]
+> There is an application functionality change between v2.4.x and v.2.5x when using this option.
+> In prior v2.4.x releases, online deletes were automatically processed, thus automatically deleting local files that were deleted online, however there was zero way to perform a `--download-only` operation to archive the online state.
+> In v2.5.x and above, when using `--download-only` the default is that all files will remain locally as an archive of your online data rather than being deleted locally if deleted online.
 
-```text
-onedrive --sync --download-only --cleanup-local-files
-```
+> [!TIP]
+> If you have the requirement to clean up local files that have been removed online, use the following command:
+> ```text
+> onedrive --sync --download-only --cleanup-local-files
+> ```
 
 ### Performing a 'one-way' upload synchronisation with Microsoft OneDrive
 In certain scenarios, you might need to perform an 'upload only' operation to Microsoft OneDrive. This means that you'll be uploading data to OneDrive, but not synchronising any changes or additions made elsewhere. Use this command to initiate an upload-only synchronisation:
@@ -814,8 +801,8 @@ Folders shared with you can be synchronised by adding them to your OneDrive onli
 Folders shared with you can be synchronised by adding them to your OneDrive online. To do that, open your OneDrive account online, go to the Shared files list, right-click on the folder you want to synchronise, and then click on "Add to my OneDrive".
 
 Files shared with you can be synchronised using two methods:
-1. Add a link to the file
-2. Sync the actual file locally
+1. Add a shortcut link to the file to your OneDrive folder online
+2. Sync the actual file locally using the configuration option to sync OneDrive Business Shared Files.
 
 Refer to [business-shared-items.md](business-shared-items.md) for further details.
 
@@ -834,7 +821,7 @@ onedrive --create-share-link <path/to/file>
 > [!IMPORTANT]
 > By default, this access permissions for the file link will be read-only.
 
-To make it a read-write link, execute the following command:
+To make the shareable link a read-write link, execute the following command:
 ```text
 onedrive --create-share-link <path/to/file> --with-editing-perms
 ```

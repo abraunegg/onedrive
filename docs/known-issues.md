@@ -48,10 +48,13 @@ This error typically suggests one of the following issues:
 * An unstable internet connection between the user and the OneDrive service.
 * An issue with HTTPS transparent inspection services that monitor the traffic en route to the OneDrive service.
 
-**Recommended Resolution:**
+**Recommended Resolution Steps:**
 
 Recommended steps to address this issue include:
 * Updating your operating system to the latest version.
+* Configure the application to only use HTTP/1.1
+* Configure the application to use IPv4 only.
+* Upgrade your 'curl' application to the latest available from the curl developers.
 * Seeking assistance from your OS vendor.
 * Contacting your Internet Service Provider (ISP) or your IT Help Desk.
 * Reporting the issue to the OpenSSL and/or Curl teams for improved handling of such connection failures.
