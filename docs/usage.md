@@ -188,7 +188,7 @@ There are two modes of operation when using the client:
 1. Standalone sync mode that performs a single sync action against Microsoft OneDrive.
 2. Ongoing sync mode that continuously syncs your data with Microsoft OneDrive.
 
-> [!ITIP]
+> [!TIP]
 > To understand further the client operational modes and how the client operates, please review the [client architecture](client-architecture.md) documentation.
 
 > [!IMPORTANT]
