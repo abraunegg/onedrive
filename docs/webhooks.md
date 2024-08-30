@@ -95,8 +95,7 @@ server {
 ```
 The configuration above will:
 * Create an endpoint listener at `https://<your.fully.qualified.domain.name>/webhooks/onedrive`
-* Secure this endpoint to only allow Microsoft 365 address space to communicate with this enpoint
-
+* Proxy the received traffic at this listener to the local listener TCP port
 
 > [!TIP]
 > Save this file in the nginx configuration directory similar to the following path: `/etc/nginx/conf.d/onedrive_webhook.conf`. This will help keep all your configurations organised.
@@ -151,7 +150,7 @@ server {
 > It is strongly advised that post doing this step, you implement a method to automatically keep your SSL certificate in a healthy state, as if the SSL certificate expires, webhook functionality will stop working. It is also beyond the scope of this document on how to do this.
 
 ### Step 6: Secure your 'nginx' configuration
-*  Enhance your 'nginx' configuration to only allow the Microsoft 365 platform which includes the Microsoft Graph API to communicate with your configured webhooks endpoint. Review https://www.microsoft.com/en-us/download/details.aspx?id=56519 to assist you. Please note, it is beyond the scope of this document to tell you how to secure your system.
+*  Enhance your 'nginx' configuration to only allow the Microsoft 365 platform which includes the Microsoft Graph API to communicate with your configured webhooks endpoint. Review https://www.microsoft.com/en-us/download/details.aspx?id=56519 to assist you. Please note, it is beyond the scope of this document to tell you how to secure your system against unauthorised access of your endpoint listener.
 
 > [!IMPORTANT]
 > The IP address ranges that are part of the Microsoft 365 Common and Office Online services, which also cover Microsoft Graph API can be sourced from the above Microsoft URL. You should regularly update your configuration as Microsoft updates these ranges frequently.
