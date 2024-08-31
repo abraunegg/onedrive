@@ -149,14 +149,144 @@ server {
 > [!IMPORTANT]
 > It is strongly advised that post doing this step, you implement a method to automatically keep your SSL certificate in a healthy state, as if the SSL certificate expires, webhook functionality will stop working. It is also beyond the scope of this document on how to do this.
 
-### Step 6: Secure your 'nginx' configuration
-*  Enhance your 'nginx' configuration to only allow the Microsoft 365 platform which includes the Microsoft Graph API to communicate with your configured webhooks endpoint. Review https://www.microsoft.com/en-us/download/details.aspx?id=56519 to assist you. Please note, it is beyond the scope of this document to tell you how to secure your system against unauthorised access of your endpoint listener.
+### Step 6: Update 'nginx' to only use TLS 1.2 and TLS 1.3
+To ensure that you are configuring your 'nginx' configuration to use secure communication, it is advisable for you to add the following to your `onedrive_webhook.conf` within the `server {}` configuration section:
+```
+    # Ensure only TLS 1.2 and TLS 1.3 are used
+    ssl_protocols TLSv1.2 TLSv1.3;
+```
+The resulting 'nginx' configuration will look something like this:
+```
+server {
+	server_name <your.fully.qualified.domain.name>;
+	location /webhooks/onedrive {
+		# Proxy Options
+		proxy_http_version 1.1;
+		proxy_pass http://127.0.0.1:8888;
+	}
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/<your.fully.qualified.domain.name>/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/<your.fully.qualified.domain.name>/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+	
+	# Ensure only TLS 1.2 and TLS 1.3 are used
+    ssl_protocols TLSv1.2 TLSv1.3;
+}
+server {
+    if ($host = <your.fully.qualified.domain.name>) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+
+	listen 80;
+	server_name <your.fully.qualified.domain.name>;
+    return 404; # managed by Certbot
+}
+```
+*  Test your 'nginx' configuration using `sudo nginx -t` to validate that there are no errors. If any are identified, please correct them.
+*  Once tested, reload your 'nginx' configuration to activate the webhook reverse proxy configuration.
+
+To validate that the TLS configuration is working, perform the following tests from a different system that is able to resolve your FQDN externally:
+```
+curl -I -v --tlsv1.2 --tls-max 1.2 https://<your.fully.qualified.domain.name>
+curl -I -v --tlsv1.3 --tls-max 1.3 https://<your.fully.qualified.domain.name>
+```
+This should return valid TLS information similar to the following:
+```
+* Rebuilt URL to: https://your.fully.qualified.domain.name/
+*   Trying 123.123.123.123...
+* TCP_NODELAY set
+* Connected to your.fully.qualified.domain.name (123.123.123.123) port 443 (#0)
+* ALPN, offering h2
+* ALPN, offering http/1.1
+* successfully set certificate verify locations:
+*   CAfile: /etc/pki/tls/certs/ca-bundle.crt
+  CApath: none
+* TLSv1.2 (OUT), TLS handshake, Client hello (1):
+* TLSv1.2 (IN), TLS handshake, Server hello (2):
+* TLSv1.2 (IN), TLS handshake, Certificate (11):
+* TLSv1.2 (IN), TLS handshake, Server key exchange (12):
+* TLSv1.2 (IN), TLS handshake, Server finished (14):
+* TLSv1.2 (OUT), TLS handshake, Client key exchange (16):
+* TLSv1.2 (OUT), TLS change cipher, Change cipher spec (1):
+* TLSv1.2 (OUT), TLS handshake, Finished (20):
+* TLSv1.2 (IN), TLS handshake, Finished (20):
+* SSL connection using TLSv1.2 / ECDHE-ECDSA-AES256-GCM-SHA384
+* ALPN, server accepted to use http/1.1
+* Server certificate:
+*  subject: CN=your.fully.qualified.domain.name
+*  start date: Aug 28 07:18:04 2024 GMT
+*  expire date: Nov 26 07:18:03 2024 GMT
+*  subjectAltName: host "your.fully.qualified.domain.name" matched cert's "your.fully.qualified.domain.name"
+*  issuer: C=US; O=Let's Encrypt; CN=E6
+*  SSL certificate verify ok.
+> HEAD / HTTP/1.1
+> Host: your.fully.qualified.domain.name
+> User-Agent: curl/7.61.1
+> Accept: */*
+> 
+< HTTP/1.1 200 OK
+HTTP/1.1 200 OK
+< Server: nginx/1.26.2
+Server: nginx/1.26.2
+< Date: Sat, 31 Aug 2024 22:36:01 GMT
+Date: Sat, 31 Aug 2024 22:36:01 GMT
+< Content-Type: text/html
+Content-Type: text/html
+< Content-Length: 8474
+Content-Length: 8474
+< Last-Modified: Mon, 20 Feb 2023 17:42:39 GMT
+Last-Modified: Mon, 20 Feb 2023 17:42:39 GMT
+< Connection: keep-alive
+Connection: keep-alive
+< ETag: "63f3b10f-211a"
+ETag: "63f3b10f-211a"
+< Accept-Ranges: bytes
+Accept-Ranges: bytes
+```
+
+Lastly, to validate that TLS 1.1 and below is being blocked, perform the following tests from a different system that is able to resolve your FQDN externally:
+```
+curl -I -v --tlsv1.1 --tls-max 1.1 https://<your.fully.qualified.domain.name>
+```
+
+The response should be similar to the following:
+```
+* Rebuilt URL to: https://your.fully.qualified.domain.name/
+*   Trying 123.123.123.123...
+* TCP_NODELAY set
+* Connected to your.fully.qualified.domain.name (123.123.123.123) port 443 (#0)
+* ALPN, offering h2
+* ALPN, offering http/1.1
+* successfully set certificate verify locations:
+*   CAfile: /etc/pki/tls/certs/ca-bundle.crt
+  CApath: none
+* TLSv1.3 (OUT), TLS alert, internal error (592):
+* error:141E70BF:SSL routines:tls_construct_client_hello:no protocols available
+curl: (35) error:141E70BF:SSL routines:tls_construct_client_hello:no protocols available
+```
+
+> [!IMPORTANT]
+> TLS 1.2 and TLS 1.3 support is provided by OpenSSL.
+>
+> To correctly support only using these TLS versions, you must be using 'nginx' version 1.15.0 or later combined with OpenSSL 1.1.1 or later.
+> 
+> If your distribution does not provide these, then please raise this with your distribution or upgrade your distribution to one that does.
+
+> [!NOTE]
+> If you use a version of 'nginx' that supports TLS 1.3 but are using an older version of OpenSSL (e.g., OpenSSL 1.0.x), TLS 1.3 will not be supported even if your 'nginx' configuration requests it.
+
+
+### Step 7: Secure your 'nginx' configuration to only allow Microsoft 365 to connect
+Enhance your 'nginx' configuration to only allow the Microsoft 365 platform which includes the Microsoft Graph API to communicate with your configured webhooks endpoint. Review https://www.microsoft.com/en-us/download/details.aspx?id=56519 to assist you. Please note, it is beyond the scope of this document to tell you how to secure your system against unauthorised access of your endpoint listener.
 
 > [!IMPORTANT]
 > The IP address ranges that are part of the Microsoft 365 Common and Office Online services, which also cover Microsoft Graph API can be sourced from the above Microsoft URL. You should regularly update your configuration as Microsoft updates these ranges frequently.
 > It is recommended to automate these updates accordingly and is also beyond the scope of this document on how to do this.
 
-### Step 7: Test your 'onedrive' application using this configuration
+### Step 8: Test your 'onedrive' application using this configuration
 
 *  Run the 'onedrive' application using `--monitor --verbose` and the client should now create a new subscription and register itself:
 ```
