@@ -171,7 +171,7 @@ server {
     include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 	
-	# Ensure only TLS 1.2 and TLS 1.3 are used
+    # Ensure only TLS 1.2 and TLS 1.3 are used
     ssl_protocols TLSv1.2 TLSv1.3;
 }
 server {
