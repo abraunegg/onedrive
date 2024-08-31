@@ -1016,7 +1016,7 @@ webhook_public_url = "<public-facing url to reach your webhook>"
 
 Setting `webhook_enabled` to `true` enables the webhook in 'monitor' mode. The onedrive process will listen for incoming updates at a configurable endpoint, which defaults to `0.0.0.0:8888`. The `webhook_public_url` must be set to an public-facing url for Microsoft to send updates to your webhook. If your host is directly exposed to the Internet, the `webhook_public_url` can be set to `http://<your_host_ip>:8888/` to match the default endpoint. However, the recommended approach is to configure a reverse proxy like nginx.
 
-**Note:** A valid HTTPS certificate is required for your public-facing URL if using nginx.
+**Note:** A valid HTTPS certificate is required for your public-facing URL if using nginx. (The reverse proxy also has to support TLS 1.2!)
 
 For example, below is a nginx config snippet to proxy traffic into the webhook:
 
