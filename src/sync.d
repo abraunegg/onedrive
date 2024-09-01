@@ -2423,7 +2423,7 @@ class SyncEngine {
 			if ((localActualFreeSpace < freeSpaceReservation) || (jsonFileSize > localActualFreeSpace)) {
 				// localActualFreeSpace is less than freeSpaceReservation .. insufficient free space
 				// jsonFileSize is greater than localActualFreeSpace .. insufficient free space
-				addLogEntry("Downloading file: " ~ newItemPath ~ " ... failed!");
+				addLogEntry("Downloading file: " ~ newItemPath ~ " ... failed!", ["info", "notify"]);
 				addLogEntry("Insufficient local disk space to download file");
 				downloadFailed = true;
 			} else {
@@ -2624,7 +2624,7 @@ class SyncEngine {
 				}
 			} else {
 				// Output download failed
-				addLogEntry("Downloading file: " ~ newItemPath ~ " ... failed!");
+				addLogEntry("Downloading file: " ~ newItemPath ~ " ... failed!", ["info", "notify"]);
 				// Add the path to a list of items that failed to download
 				if (!canFind(fileDownloadFailures, newItemPath)) {
 					fileDownloadFailures ~= newItemPath; // Add newItemPath if it's not already present
@@ -5763,7 +5763,7 @@ class SyncEngine {
 					// Default operation if not 408,429,503,504 errors
 					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 					// Display what the error is
-					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
+					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 					
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
@@ -5774,7 +5774,7 @@ class SyncEngine {
 					
 				} catch (FileException e) {
 					// display the error message
-					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
+					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 					
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
@@ -5807,12 +5807,12 @@ class SyncEngine {
 					// Default operation if not 408,429,503,504 errors
 					// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 					// Display what the error is
-					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
+					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
 					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 										
 				} catch (FileException e) {
 					// display the error message
-					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
+					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				}
 				
@@ -5847,7 +5847,7 @@ class SyncEngine {
 								uploadFailed = false;
 								addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done");
 							} else {
-								addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
+								addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
 								uploadFailed = true;
 							}
 						} catch (OneDriveException exception) {
@@ -5856,18 +5856,18 @@ class SyncEngine {
 							// Default operation if not 408,429,503,504 errors
 							// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 							// Display what the error is
-							addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
+							addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
 							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 							
 						}
 					} else {
 						// No Upload URL or nextExpectedRanges or localPath .. not a valid JSON we can use
 						addLogEntry("Session data is missing required elements to perform a session upload.", ["verbose"]);
-						addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
+						addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
 					}
 				} else {
 					// Create session Upload URL failed
-					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
+					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
 				}
 				
 				// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
