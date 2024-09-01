@@ -732,7 +732,6 @@ class OneDriveApi {
 			"expirationDateTime": expirationDateTime.toISOExtString(),
  			"clientState": randomUUID().toString()
 		];
-		curlEngine.http.addRequestHeader("Content-Type", "application/json");
 		return post(url, request.toString());
 	}
 	
@@ -742,7 +741,6 @@ class OneDriveApi {
 		const JSONValue request = [
 			"expirationDateTime": expirationDateTime.toISOExtString()
 		];
-		curlEngine.http.addRequestHeader("Content-Type", "application/json");
 		return patch(url, request.toString());
 	}
 	
