@@ -110,8 +110,8 @@ The configuration above will:
 
 * A valid configuration will be similar to the above illustration.
 
-### Step 5: Configure 'certbot' to create a SSL Certificate and deploy to your 'nginx' webhook configuration
-*  Install the 'certbot' tool along with the associated python module 'python-certbot-nginx' for your platform
+### Step 5: Use Let's Encrypt 'certbot' to create a SSL Certificate and deploy to your 'nginx' webhook configuration
+*  Install the Let's Encrypt 'certbot' tool along with the associated python module 'python-certbot-nginx' for your platform
 *  Run the 'certbot' tool on your platform to generate a valid HTTPS certificate for your `<your.fully.qualified.domain.name>` by running `certbot --nginx`. This should *detect* your active `server_name` from your 'nginx' configuration and install the certificate in the correct manner.
 
 *  The resulting 'nginx' configuration will look something like this:
@@ -277,6 +277,9 @@ curl: (35) error:141E70BF:SSL routines:tls_construct_client_hello:no protocols a
 
 > [!NOTE]
 > If you use a version of 'nginx' that supports TLS 1.3 but are using an older version of OpenSSL (e.g., OpenSSL 1.0.x), TLS 1.3 will not be supported even if your 'nginx' configuration requests it.
+
+> [!NOTE]
+> If using 'LetsEncrypt', TLS 1.2 and TLS 1.3 support will be automatically configured in the `/etc/letsencrypt/options-ssl-nginx.conf` include file when the SSL Certificate is added to your 'nginx' configuration.
 
 
 ### Step 7: Secure your 'nginx' configuration to only allow Microsoft 365 to connect
