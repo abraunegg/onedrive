@@ -4186,7 +4186,7 @@ class SyncEngine {
 			}
 		} else {
 			// Upload was successful
-			addLogEntry("Uploading modified file: " ~ localFilePath ~ " ... done.", ["info", "notify"]);
+			addLogEntry("Uploading modified file: " ~ localFilePath ~ " ... done", ["info", "notify"]);
 			
 			// What do we save to the DB? Is this a OneDrive Business Shared File?
 			if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file)) {
@@ -5748,7 +5748,7 @@ class SyncEngine {
 					// Attempt to upload the zero byte file using simpleUpload for all account types
 					uploadResponse = uploadFileOneDriveApiInstance.simpleUpload(fileToUpload, parentItem.driveId, parentItem.id, baseName(fileToUpload));
 					uploadFailed = false;
-					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done.");
+					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done");
 					
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
@@ -5845,7 +5845,7 @@ class SyncEngine {
 							
 							if (uploadResponse.type() == JSONType.object) {
 								uploadFailed = false;
-								addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done.");
+								addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done");
 							} else {
 								addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed.");
 								uploadFailed = true;
@@ -5880,7 +5880,7 @@ class SyncEngine {
 			// We are in a --dry-run scenario
 			uploadResponse = createFakeResponse(fileToUpload);
 			uploadFailed = false;
-			addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done.", ["info", "notify"]);
+			addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", ["info", "notify"]);
 		}
 		
 		// Upload has finished
