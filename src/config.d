@@ -342,6 +342,9 @@ class ApplicationConfig {
 		longValues["webhook_renewal_interval"] = 300;
 		longValues["webhook_retry_interval"] = 60;
 		
+		// GUI File Transfer and Deletion Notifications
+		boolValues["notify_file_actions"] = false;
+		
 		// EXPAND USERS HOME DIRECTORY
 		// Determine the users home directory.
 		// Need to avoid using ~ here as expandTilde() below does not interpret correctly when running under init.d or systemd scripts
@@ -1413,6 +1416,7 @@ class ApplicationConfig {
 		version(Notifications) {
 			addLogEntry("Environment var 'XDG_RUNTIME_DIR'            = " ~ to!string(xdg_exists));
 			addLogEntry("Environment var 'DBUS_SESSION_BUS_ADDRESS'   = " ~ to!string(dbus_exists));
+			addLogEntry("Config option 'notify_file_actions'          = " ~ to!string(getValueBool("notify_file_actions")));
 		} else {
 			addLogEntry("Compile time option --enable-notifications   = false");
 		}

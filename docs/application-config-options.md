@@ -33,6 +33,7 @@ Before reading this document, please ensure you are running application version 
   - [monitor_interval](#monitor_interval)
   - [monitor_log_frequency](#monitor_log_frequency)
   - [no_remote_delete](#no_remote_delete)
+  - [notify_file_actions](#notify_file_actions)
   - [operation_timeout](#operation_timeout)
   - [rate_limit](#rate_limit)
   - [read_only_auth_scope](#read_only_auth_scope)
@@ -467,6 +468,18 @@ _**CLI Option Use:**_ `--no-remote-delete`
 
 > [!IMPORTANT]
 > This configuration option can *only* be used in conjunction with `--upload-only`
+
+### notify_file_actions
+_**Description:**_ This configuration option controls whether the client will log via GUI notifications successful actions that the client performs.
+
+_**Value Type:**_ Boolean
+
+_**Default Value:**_ False
+
+_**Config Example:**_ `notify_file_actions = "true"`
+
+> [!NOTE]
+> GUI Notification Support must be compiled in first, otherwise this option will have zero effect and will not be used.
 
 ### operation_timeout
 _**Description:**_ This configuration option controls the maximum amount of time (seconds) a file operation is allowed to take. This includes DNS resolution, connecting, data transfer, etc. We recommend users not to tamper with this option unless strictly necessary. This option controls the CURLOPT_TIMEOUT setting of libcurl.

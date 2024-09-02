@@ -649,7 +649,6 @@ To enable GUI notifications, you must compile the application with GUI Notificat
 Without these conditions met, GUI notifications will not function even if the support is compiled in.
 
 Once these conditions have been met, the following application events will trigger a GUI notification within the display manager session by default:
-
 *   Aborting a sync if .nosync file is found
 *   Skipping a particular item due to an invalid name
 *   Skipping a particular item due to an invalid symbolic link
@@ -663,6 +662,17 @@ Once these conditions have been met, the following application events will trigg
 *   When a new client version is available
 *   Files that fail to upload
 *   Files that fail to download
+
+Additionally, GUI notifications can also be sent for the following activities:
+*   Successful file download
+*   Successful file upload
+*   Successful deletion locally (files and folders)
+*   Successful deletion online (files and folders)
+
+To enable these specific notifications, add the following to your 'config' file:
+```
+notify_file_actions = "true"
+```
 
 ### Handling a Microsoft OneDrive Account Password Change
 If you change your Microsoft OneDrive Account Password, the client will no longer be authorised to sync, and will generate the following error upon next application run:

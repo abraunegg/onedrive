@@ -2606,7 +2606,7 @@ class SyncEngine {
 			// File should have been downloaded
 			if (!downloadFailed) {
 				// Download did not fail
-				addLogEntry("Downloading file: " ~ newItemPath ~ " ... done");
+				addLogEntry("Downloading file: " ~ newItemPath ~ " ... done", fileTransferNotifications());
 				// Save this item into the database
 				saveItem(onedriveJSONItem);
 				
@@ -2888,9 +2888,9 @@ class SyncEngine {
 			if (needsRemoval) {
 				// Log the action
 				if (item.type == ItemType.file) {
-					addLogEntry("Deleting local file: " ~ path);
+					addLogEntry("Deleting local file: " ~ path, fileTransferNotifications());
 				} else {
-					addLogEntry("Deleting local directory: " ~ path);
+					addLogEntry("Deleting local directory: " ~ path, fileTransferNotifications());
 				}
 				
 				// Perform the action
@@ -4186,7 +4186,7 @@ class SyncEngine {
 			}
 		} else {
 			// Upload was successful
-			addLogEntry("Uploading modified file: " ~ localFilePath ~ " ... done", ["info", "notify"]);
+			addLogEntry("Uploading modified file: " ~ localFilePath ~ " ... done", fileTransferNotifications());
 			
 			// What do we save to the DB? Is this a OneDrive Business Shared File?
 			if ((dbItem.type == ItemType.remote) && (dbItem.remoteType == ItemType.file)) {
@@ -5748,7 +5748,7 @@ class SyncEngine {
 					// Attempt to upload the zero byte file using simpleUpload for all account types
 					uploadResponse = uploadFileOneDriveApiInstance.simpleUpload(fileToUpload, parentItem.driveId, parentItem.id, baseName(fileToUpload));
 					uploadFailed = false;
-					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done");
+					addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
 					
 					// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 					uploadFileOneDriveApiInstance.releaseCurlEngine();
@@ -5845,7 +5845,7 @@ class SyncEngine {
 							
 							if (uploadResponse.type() == JSONType.object) {
 								uploadFailed = false;
-								addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done");
+								addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
 							} else {
 								addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... failed!", ["info", "notify"]);
 								uploadFailed = true;
@@ -5880,7 +5880,7 @@ class SyncEngine {
 			// We are in a --dry-run scenario
 			uploadResponse = createFakeResponse(fileToUpload);
 			uploadFailed = false;
-			addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", ["info", "notify"]);
+			addLogEntry("Uploading new file: " ~ fileToUpload ~ " ... done", fileTransferNotifications());
 		}
 		
 		// Upload has finished
@@ -6158,7 +6158,7 @@ class SyncEngine {
 			// Is this a --download-only operation?
 			if (!appConfig.getValueBool("download_only")) {
 				// Process the delete - delete the object online
-				addLogEntry("Deleting item from Microsoft OneDrive: " ~ path);
+				addLogEntry("Deleting item from Microsoft OneDrive: " ~ path, fileTransferNotifications());
 				bool flagAsBigDelete = false;
 				
 				Item[] children;
@@ -9184,5 +9184,36 @@ class SyncEngine {
 				forceExit();
 			}
 		}
+	}
+	
+	// Return an array of the notification parameters when this is called. This implements FR #2760
+	string[] fileTransferNotifications() {
+	
+		// Based on the configuration option, send the file transfer actions to the GUI notifications if configured
+		// GUI notifications are already sent for files that meet this criteria:
+		// - Skipping a particular item due to an invalid name
+		// - Skipping a particular item due to an invalid symbolic link
+		// - Skipping a particular item due to an invalid UTF sequence
+		// - Skipping a particular item due to an invalid character encoding sequence
+		// - Files that fail to upload
+		// - Files that fail to download
+		//
+		// This is about notifying on:
+		// - Successful file download
+		// - Successful file upload
+		// - Successful deletion locally
+		// - Successful deletion online
+		
+		string[] loggingOptions;
+		
+		if (appConfig.getValueBool("notify_file_actions")) {
+			// Add the 'notify' to enable GUI notifications
+			loggingOptions = ["info", "notify"];
+		} else {
+			// Logging to console and/or logfile only
+			loggingOptions = ["info"];
+		}
+	
+		return loggingOptions;
 	}
 }
