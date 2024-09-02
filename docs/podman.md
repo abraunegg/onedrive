@@ -3,19 +3,19 @@ This client can be run as a Podman container, with 3 available container base op
 
 | Container Base | Docker Tag  | Description                                                    | i686 | x86_64 | ARMHF | AARCH64 |
 |----------------|-------------|----------------------------------------------------------------|:------:|:------:|:-----:|:-------:|
-| Alpine Linux   | edge-alpine | Podman container based on Alpine 3.18 using 'master'           |❌|✔|❌|✔|
-| Alpine Linux   | alpine      | Podman container based on Alpine 3.18 using latest release     |❌|✔|❌|✔|
+| Alpine Linux   | edge-alpine | Podman container based on Alpine 3.20 using 'master'           |❌|✔|❌|✔|
+| Alpine Linux   | alpine      | Podman container based on Alpine 3.20 using latest release     |❌|✔|❌|✔|
 | Debian         | debian      | Podman container based on Debian Stable using latest release   |✔|✔|✔|✔|
 | Debian         | edge        | Podman container based on Debian Stable using 'master'         |✔|✔|✔|✔|
 | Debian         | edge-debian | Podman container based on Debian Stable using 'master'         |✔|✔|✔|✔|
 | Debian         | latest      | Podman container based on Debian Stable using latest release   |✔|✔|✔|✔|
-| Fedora         | edge-fedora | Podman container based on Fedora 38 using 'master'             |❌|✔|❌|✔|
-| Fedora         | fedora      | Podman container based on Fedora 38 using latest release       |❌|✔|❌|✔|
+| Fedora         | edge-fedora | Podman container based on Fedora 40 using 'master'             |❌|✔|❌|✔|
+| Fedora         | fedora      | Podman container based on Fedora 40 using latest release       |❌|✔|❌|✔|
 
 These containers offer a simple monitoring-mode service for the OneDrive Client for Linux.
 
 The instructions below have been validated on:
-*   Fedora 38
+*   Fedora 40
 
 The instructions below will utilise the 'edge' tag, however this can be substituted for any of the other docker tags such as 'latest' from the table above if desired.
 
@@ -63,7 +63,7 @@ If you are still experiencing permission issues despite disabling SELinux, pleas
 ### 3. Test 'podman' on your platform
 Test that 'podman' is operational for your 'non-root' user, as per below:
 ```bash
-[alex@fedora38-podman ~]$ podman pull fedora
+[alex@fedora40-podman ~]$ podman pull fedora
 Resolved "fedora" as an alias (/etc/containers/registries.conf.d/000-shortnames.conf)
 Trying to pull registry.fedoraproject.org/fedora:latest...
 Getting image source signatures
@@ -71,9 +71,9 @@ Copying blob b30887322388 done   |
 Copying config a1cd3cbf8a done   | 
 Writing manifest to image destination
 a1cd3cbf8adaa422629f2fcdc629fd9297138910a467b11c66e5ddb2c2753dff
-[alex@fedora38-podman ~]$ podman run fedora /bin/echo "Welcome to the Podman World"
+[alex@fedora40-podman ~]$ podman run fedora /bin/echo "Welcome to the Podman World"
 Welcome to the Podman World
-[alex@fedora38-podman ~]$ 
+[alex@fedora40-podman ~]$ 
 ```
 
 ### 4. Configure the required podman volumes

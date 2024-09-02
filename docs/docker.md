@@ -3,19 +3,19 @@ This client can be run as a Docker container, with 3 available container base op
 
 | Container Base | Docker Tag  | Description                                                    | i686 | x86_64 | ARMHF | AARCH64 |
 |----------------|-------------|----------------------------------------------------------------|:------:|:------:|:-----:|:-------:|
-| Alpine Linux   | edge-alpine | Docker container based on Alpine 3.18 using 'master'           |❌|✔|❌|✔|
-| Alpine Linux   | alpine      | Docker container based on Alpine 3.18 using latest release     |❌|✔|❌|✔|
+| Alpine Linux   | edge-alpine | Docker container based on Alpine 3.20 using 'master'           |❌|✔|❌|✔|
+| Alpine Linux   | alpine      | Docker container based on Alpine 3.20 using latest release     |❌|✔|❌|✔|
 | Debian         | debian      | Docker container based on Debian Stable using latest release   |✔|✔|✔|✔|
 | Debian         | edge        | Docker container based on Debian Stable using 'master'         |✔|✔|✔|✔|
 | Debian         | edge-debian | Docker container based on Debian Stable using 'master'         |✔|✔|✔|✔|
 | Debian         | latest      | Docker container based on Debian Stable using latest release   |✔|✔|✔|✔|
-| Fedora         | edge-fedora | Docker container based on Fedora 38 using 'master'             |❌|✔|❌|✔|
-| Fedora         | fedora      | Docker container based on Fedora 38 using latest release       |❌|✔|❌|✔|
+| Fedora         | edge-fedora | Docker container based on Fedora 40 using 'master'             |❌|✔|❌|✔|
+| Fedora         | fedora      | Docker container based on Fedora 40 using latest release       |❌|✔|❌|✔|
 
 These containers offer a simple monitoring-mode service for the OneDrive Client for Linux.
 
 The instructions below have been validated on:
-*   Fedora 38
+*   Fedora 40
 
 The instructions below will utilise the 'edge' tag, however this can be substituted for any of the other docker tags such as 'latest' from the table above if desired.
 
@@ -76,7 +76,7 @@ sudo systemctl enable --now docker
 
 Test that 'docker' is operational for your 'non-root' user, as per below:
 ```bash
-[alex@fedora-38-docker-host ~]$ docker run hello-world
+[alex@fedora-40-docker-host ~]$ docker run hello-world
 Unable to find image 'hello-world:latest' locally
 latest: Pulling from library/hello-world
 719385e32844: Pull complete 
@@ -104,7 +104,7 @@ Share images, automate workflows, and more with a free Docker ID:
 For more examples and ideas, visit:
  https://docs.docker.com/get-started/
 
-[alex@fedora-38-docker-host ~]$ 
+[alex@fedora-40-docker-host ~]$ 
 ```
 
 ### 5. Configure the required docker volumes
