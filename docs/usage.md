@@ -270,11 +270,15 @@ onedrive -s -v
 ### Using 'Client Side Filtering' rules to determine what should be synced with Microsoft OneDrive
 Client Side Filtering in the context of the OneDrive Client for Linux refers to user-configured rules that determine what files and directories the client should upload or download from Microsoft OneDrive. These rules are crucial for optimising synchronisation, especially when dealing with large numbers of files or specific file types. The OneDrive Client for Linux offers several configuration options to facilitate this:
 
+* **check_nosync:** This option allows you you create a `.nosync` file in local directories, to skip that directory from being included in sync operations.
+
 * **skip_dir:** This option allows the user to specify directories that should not be synchronised with OneDrive. It's particularly useful for omitting large or irrelevant directories from the sync process.
 
 * **skip_dotfiles:** Dotfiles, usually configuration files or scripts, can be excluded from the sync. This is useful for users who prefer to keep these files local.
 
 * **skip_file:** Specific files can be excluded from synchronisation using this option. It provides flexibility in selecting which files are essential for cloud storage.
+
+* **skip_size:** Skip files greater than this specific size (in MB)
 
 * **skip_symlinks:** Symlinks often point to files outside the OneDrive directory or to locations that are not relevant for cloud storage. This option prevents them from being included in the sync.
 
@@ -283,7 +287,17 @@ Additionally, the OneDrive Client for Linux allows the implementation of Client 
 These configurable options and the 'sync_list' file provide users with the flexibility to tailor the synchronisation process to their specific needs, conserving bandwidth and storage space while ensuring that important files are always backed up and accessible.
 
 > [!IMPORTANT]
-> After changing any Client Side Filtering rule, you must perform a full re-synchronisation.
+> Client Side Filtering rules are generally processed in the following order:
+> 1. 'check_nosync'
+> 2. 'skip_dotfiles'
+> 3. 'skip_symlinks'
+> 4. 'skip_dir'
+> 5. 'skip_file'
+> 6. 'sync_list'
+> 7. 'skip_size'
+
+> [!IMPORTANT]
+> After changing any Client Side Filtering rule, you must perform a full re-synchronisation by using `--resync`.
 
 ### Testing your configuration
 You can test your configuration by utilising the `--dry-run` CLI option. No files will be downloaded, uploaded, or removed; however, the application will display what 'would' have occurred. For example:
