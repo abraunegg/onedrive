@@ -271,15 +271,10 @@ onedrive -s -v
 Client Side Filtering in the context of the OneDrive Client for Linux refers to user-configured rules that determine what files and directories the client should upload or download from Microsoft OneDrive. These rules are crucial for optimising synchronisation, especially when dealing with large numbers of files or specific file types. The OneDrive Client for Linux offers several configuration options to facilitate this:
 
 * **check_nosync:** This option allows you you create a `.nosync` file in local directories, to skip that directory from being included in sync operations.
-
 * **skip_dir:** This option allows the user to specify directories that should not be synchronised with OneDrive. It's particularly useful for omitting large or irrelevant directories from the sync process.
-
 * **skip_dotfiles:** Dotfiles, usually configuration files or scripts, can be excluded from the sync. This is useful for users who prefer to keep these files local.
-
 * **skip_file:** Specific files can be excluded from synchronisation using this option. It provides flexibility in selecting which files are essential for cloud storage.
-
 * **skip_size:** Skip files greater than this specific size (in MB)
-
 * **skip_symlinks:** Symlinks often point to files outside the OneDrive directory or to locations that are not relevant for cloud storage. This option prevents them from being included in the sync.
 
 Additionally, the OneDrive Client for Linux allows the implementation of Client Side Filtering rules through a 'sync_list' file. This file explicitly states which directories or files should be included in the synchronisation. By default, any item not listed in the 'sync_list' file is excluded. This method offers a more granular approach to synchronisation, ensuring that only the necessary data is transferred to and from Microsoft OneDrive.
@@ -295,6 +290,8 @@ These configurable options and the 'sync_list' file provide users with the flexi
 > 5. 'skip_file'
 > 6. 'sync_list'
 > 7. 'skip_size'
+>
+> For further details please review the [client architecture](client-architecture.md) documentation.
 
 > [!IMPORTANT]
 > After changing any Client Side Filtering rule, you must perform a full re-synchronisation by using `--resync`.
