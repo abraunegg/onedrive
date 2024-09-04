@@ -98,7 +98,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 *   Fix error that the application is unable to perform a database vacuum: out of memory when exiting
 
 ### Removed
-*   Remove sha1 from being used by the client as this is being depreciated by Microsoft in July 2023
+*   Remove sha1 from being used by the client as this is being deprecated by Microsoft in July 2023
 *   Complete the removal of crc32 elements
 
 ### Added
@@ -367,7 +367,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 *   Added support in --get-O365-drive-id to provide the 'drive_id' for multiple 'document libraries' within a single Shared Library Site
 
 ### Removed
-*   Removed the depreciated config option 'force_http_11' which was flagged as depreciated by PR #549 in v2.3.6 (June 2019)
+*   Removed the deprecated config option 'force_http_11' which was flagged as deprecated by PR #549 in v2.3.6 (June 2019)
 
 ### Updated
 *   Updated error output of --get-O365-drive-id to provide more details why an error occurred if a SharePoint site lacks the details we need to perform the match
@@ -747,7 +747,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 *   Added --force-http-2 to use HTTP/2 if desired
 
 ### Changed
-*   Depreciated --force-http-1.1 (enabled by default) due to OneDrive inconsistent behavior with HTTP/2 protocol
+*   Deprecated --force-http-1.1 (enabled by default) due to OneDrive inconsistent behavior with HTTP/2 protocol
 
 ## 2.3.5 - 2019-06-19
 ### Fixed

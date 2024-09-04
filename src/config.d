@@ -742,11 +742,11 @@ class ApplicationConfig {
 			switch (key) {
 				case "min_notify_changes":
 				case "force_http_2":
-					addLogEntry("The option '" ~ key ~ "' has been depreciated and will be ignored. Please read the updated documentation and update your client configuration to remove this option.");
+					addLogEntry("The option '" ~ key ~ "' has been deprecated and will be ignored. Please read the updated documentation and update your client configuration to remove this option.");
 					continue;
 				case "sync_business_shared_folders":
 					addLogEntry();
-					addLogEntry("The option 'sync_business_shared_folders' has been depreciated and the process for synchronising Microsoft OneDrive Business Shared Folders has changed.");
+					addLogEntry("The option 'sync_business_shared_folders' has been deprecated and the process for synchronising Microsoft OneDrive Business Shared Folders has changed.");
 					addLogEntry("Please review the revised documentation on how to correctly configure this application feature.");
 					addLogEntry("You must update your client configuration and make changes to your local filesystem and online data to use this capability.");
 					return false;
@@ -1022,7 +1022,7 @@ class ApplicationConfig {
 					"Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library",
 					&stringValues["sharepoint_library_name"],
 				"get-O365-drive-id",
-					"Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library (DEPRECIATED)",
+					"Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library (DEPRECATED)",
 					&stringValues["sharepoint_library_name"],
 				"list-shared-items",
 					"List OneDrive Business Shared Items",
@@ -1109,7 +1109,7 @@ class ApplicationConfig {
 					"Perform a synchronisation with Microsoft OneDrive",
 					&boolValues["synchronize"],
 				"synchronize",
-					"Perform a synchronisation with Microsoft OneDrive (DEPRECIATED)",
+					"Perform a synchronisation with Microsoft OneDrive (DEPRECATED)",
 					&boolValues["synchronize"],
 				"sync-root-files",
 					"Sync all files in sync_dir root when using sync_list.",
@@ -1290,31 +1290,31 @@ class ApplicationConfig {
 		}
 	}
 	
-	// Check the arguments passed in for any that will be depreciated
-	void checkDepreciatedOptions(string[] cliArgs) {
+	// Check the arguments passed in for any that will be deprecated
+	void checkDeprecatedOptions(string[] cliArgs) {
 	
-		bool depreciatedCommandsFound = false;
+		bool deprecatedCommandsFound = false;
 	
 		foreach (cliArg; cliArgs) {
-			// Check each CLI arg for items that have been depreciated
+			// Check each CLI arg for items that have been deprecated
 			
-			// --synchronize depreciated in v2.5.0, will be removed in future version
+			// --synchronize deprecated in v2.5.0, will be removed in future version
 			if (cliArg == "--synchronize") {
 				addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
-				addLogEntry("DEPRECIATION WARNING: --synchronize has been depreciated in favour of --sync or -s");
-				depreciatedCommandsFound = true;
+				addLogEntry("DEPRECIATION WARNING: --synchronize has been deprecated in favour of --sync or -s");
+				deprecatedCommandsFound = true;
 			}
 			
-			// --get-O365-drive-id depreciated in v2.5.0, will be removed in future version
+			// --get-O365-drive-id deprecated in v2.5.0, will be removed in future version
 			if (cliArg == "--get-O365-drive-id") {
 				addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
-				addLogEntry("DEPRECIATION WARNING: --get-O365-drive-id has been depreciated in favour of --get-sharepoint-drive-id");
-				depreciatedCommandsFound = true;
+				addLogEntry("DEPRECIATION WARNING: --get-O365-drive-id has been deprecated in favour of --get-sharepoint-drive-id");
+				deprecatedCommandsFound = true;
 			}
 		}
 	
-		if (depreciatedCommandsFound) {
-			addLogEntry("DEPRECIATION WARNING: Depreciated commands will be removed in a future release.");
+		if (deprecatedCommandsFound) {
+			addLogEntry("DEPRECIATION WARNING: Deprecated commands will be removed in a future release.");
 			addLogEntry(); // used instead of an empty 'writeln();' to ensure the line break is correct in the buffered console output ordering
 		}
 	}

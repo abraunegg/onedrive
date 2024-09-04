@@ -233,8 +233,8 @@ int main(string[] cliArgs) {
 		addLogEntry("Disabling GUI notifications as per user configuration");
 	}
 	
-	// Perform a depreciated options check now that the config file (if present) and CLI options have all been parsed to advise the user that their option usage might change
-	appConfig.checkDepreciatedOptions(cliArgs);
+	// Perform a deprecated options check now that the config file (if present) and CLI options have all been parsed to advise the user that their option usage might change
+	appConfig.checkDeprecatedOptions(cliArgs);
 	
 	// Configure Client Side Filtering (selective sync) by parsing and getting a usable regex for skip_file, skip_dir and sync_list config components
 	selectiveSync = new ClientSideFiltering(appConfig);

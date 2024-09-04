@@ -88,7 +88,7 @@ Before reading this document, please ensure you are running application version 
   - [CLI Option: --sync-shared-files](#cli-option---sync-shared-files)
   - [CLI Option: --verbose | -v+](#cli-option---verbose--v)
   - [CLI Option: --with-editing-perms](#cli-option---with-editing-perms)
-- [Depreciated Configuration File and CLI Options](#depreciated-configuration-file-and-cli-options)
+- [Deprecated Configuration File and CLI Options](#deprecated-configuration-file-and-cli-options)
   - [force_http_2](#force_http_2)
   - [min_notify_changes](#min_notify_changes)
   - [CLI Option: --synchronize](#cli-option---synchronize)
@@ -1177,30 +1177,30 @@ _**Usage Example:**_ `onedrive --create-share-link 'relative/path/to/your/file.t
 > [!IMPORTANT]
 > Placement of `--with-editing-perms` is critical. It *must* be placed after the file path as per the example above.
 
-## Depreciated Configuration File and CLI Options
+## Deprecated Configuration File and CLI Options
 The following configuration options are no longer supported:
 
 ### force_http_2
 _**Description:**_ Force the use of HTTP/2 for all operations where applicable
 
-_**Depreciated Config Example:**_ `force_http_2 = "true"`
+_**Deprecated Config Example:**_ `force_http_2 = "true"`
 
-_**Depreciated CLI Option:**_ `--force-http-2`
+_**Deprecated CLI Option:**_ `--force-http-2`
 
 _**Reason for depreciation:**_ HTTP/2 will be used by default where possible, when the OneDrive API platform does not downgrade the connection to HTTP/1.1, thus this configuration option is no longer required.
 
 ### min_notify_changes
 _**Description:**_ Minimum number of pending incoming changes necessary to trigger a GUI desktop notification.
 
-_**Depreciated Config Example:**_ `min_notify_changes = "50"`
+_**Deprecated Config Example:**_ `min_notify_changes = "50"`
 
-_**Depreciated CLI Option:**_ `--min-notify-changes '50'`
+_**Deprecated CLI Option:**_ `--min-notify-changes '50'`
 
 _**Reason for depreciation:**_ Application has been totally re-written. When this item was introduced, it was done so to reduce spamming of all events to the GUI desktop.
 
 ### CLI Option: --synchronize
 _**Description:**_ Perform a synchronisation with Microsoft OneDrive
 
-_**Depreciated CLI Option:**_ `--synchronize`
+_**Deprecated CLI Option:**_ `--synchronize`
 
-_**Reason for depreciation:**_ `--synchronize` has been depreciated in favour of `--sync` or `-s`
+_**Reason for depreciation:**_ `--synchronize` has been deprecated in favour of `--sync` or `-s`
