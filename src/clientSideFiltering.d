@@ -19,7 +19,7 @@ import log;
 class ClientSideFiltering {
 	// Class variables
 	ApplicationConfig appConfig;
-	string[] paths;
+	string[] syncListRules;
 	Regex!char fileMask;
 	Regex!char directoryMask;
 	bool skipDirStrictMatch = false;
@@ -83,7 +83,7 @@ class ClientSideFiltering {
 	
 	// Shutdown components
 	void shutdown() {
-		paths = null;
+		syncListRules = null;
 		fileMask = regex("");
 		directoryMask = regex("");
 	}
@@ -96,8 +96,9 @@ class ClientSideFiltering {
 		foreach (line; range) {
 			// Skip comments in file
 			if (line.length == 0 || line[0] == ';' || line[0] == '#') continue;
-			paths ~= buildNormalizedPath(line);
+			syncListRules ~= buildNormalizedPath(line);
 		}
+		// Close reading the 'sync_list' file
 		file.close();
 	}
 	
@@ -133,7 +134,7 @@ class ClientSideFiltering {
 	// Match against sync_list only
 	bool isPathExcludedViaSyncList(string path) {
 		// Debug output that we are performing a 'sync_list' inclusion / exclusion test
-		return isPathExcluded(path, paths);
+		return isPathExcluded(path);
 	}
 	
 	// config file skip_dir parameter
@@ -195,99 +196,140 @@ class ClientSideFiltering {
 		return false;
 	}
 	
-	// test if the given path is not included in the allowed paths
-	// if there are no allowed paths always return false
-	private bool isPathExcluded(string path, string[] allowedPaths) {
+	// test if the given path is not included in the allowed syncListRules
+	// if there are no allowed syncListRules always return false
+	private bool isPathExcluded(string path) {
 		// function variables
+		
 		bool exclude = false;
+		
 		bool exludeDirectMatch = false; // will get updated to true, if there is a pattern match to sync_list entry
 		bool excludeMatched = false; // will get updated to true, if there is a pattern match to sync_list entry
 		bool finalResult = true; // will get updated to false, if pattern match to sync_list entry
+		
+		bool anywhereRuleMatched = false; // will get updated if the 'anywhere' rule matches
+		bool excludeAnywhereMatched = false; // will get updated if the 'anywhere' rule matches
+		
+		bool explicitlyIncluded = false;  // IS THIS BEING USED?
+		
+		
+		bool wildcardRuleMatched = false; // will get updated if the 'wildcard' rule matches
+		bool excludeWildcardMatched = false; // will get updated if the 'wildcard' rule matches
+		
+		
+		
 		int offset;
 		string wildcard = "*";
-		
+		string globbing = "**";
+				
 		// always allow the root
 		if (path == ".") return false;
-		// if there are no allowed paths always return false
-		if (allowedPaths.empty) return false;
-		path = buildNormalizedPath(path);
-		addLogEntry("Evaluation against 'sync_list' for this path: " ~ path, ["debug"]);
-		addLogEntry("[S]exclude           = " ~  to!string(exclude), ["debug"]);
-		addLogEntry("[S]exludeDirectMatch = " ~ to!string(exludeDirectMatch), ["debug"]);
-		addLogEntry("[S]excludeMatched    = " ~ to!string(excludeMatched), ["debug"]);
+		// if there are no allowed syncListRules always return false
+		if (syncListRules.empty) return false;
 		
-		// unless path is an exact match, entire sync_list entries need to be processed to ensure
-		// negative matches are also correctly detected
-		foreach (allowedPath; allowedPaths) {
-			// is this an inclusion path or finer grained exclusion?
-			switch (allowedPath[0]) {
+		// To ensure we are checking the 'right' path, build the path
+		path = buildPath("/", buildNormalizedPath(path));
+		
+		// Evaluation start point
+		addLogEntry("Evaluation against 'sync_list' rules for this input path: " ~ path, ["debug"]);
+		addLogEntry("[S]exclude                = " ~ to!string(exclude), ["debug"]);
+		addLogEntry("[S]exludeDirectMatch      = " ~ to!string(exludeDirectMatch), ["debug"]);
+		addLogEntry("[S]excludeAnywhereMatched = " ~ to!string(excludeAnywhereMatched), ["debug"]);
+		addLogEntry("[S]excludeWildcardMatched = " ~ to!string(excludeWildcardMatched), ["debug"]);
+		addLogEntry("[S]excludeMatched         = " ~ to!string(excludeMatched), ["debug"]);
+		
+		// Unless path is an exact match, entire sync_list entries need to be processed to ensure negative matches are also correctly detected
+		foreach (syncListRuleEntry; syncListRules) {
+
+			// There are several matches we need to think of here
+			// Exclusions:
+			//		!foldername/*  					 			= As there is no preceding '/' (after the !) .. this is a rule that should exclude 'foldername' and all its children ANYWHERE
+			//		!*.extention   					 			= As there is no preceding '/' (after the !) .. this is a rule that should exclude any item that has the specified extention ANYWHERE
+			//		!/path/to/foldername/*  		 			= As there IS a preceding '/' (after the !) .. this is a rule that should exclude this specific path and all its children
+			//		!/path/to/foldername/*.extention 			= As there IS a preceding '/' (after the !) .. this is a rule that should exclude any item that has the specified extention in this path ONLY
+			//		!/path/to/foldername/*/specific_target/*	= As there IS a preceding '/' (after the !) .. this excludes 'specific_target' in any subfolder of '/path/to/foldername/'
+			//
+			// Inclusions:
+			//		foldername/*  					 			= As there is no preceding '/' .. this is a rule that should INCLUDE 'foldername' and all its children ANYWHERE
+			//		*.extention   					 			= As there is no preceding '/' .. this is a rule that should INCLUDE any item that has the specified extention ANYWHERE
+			//		/path/to/foldername/*  		 				= As there IS a preceding '/' .. this is a rule that should INCLUDE this specific path and all its children
+			//		/path/to/foldername/*.extention 			= As there IS a preceding '/' .. this is a rule that should INCLUDE any item that has the specified extention in this path ONLY
+			//		/path/to/foldername/*/specific_target/*		= As there IS a preceding '/' .. this INCLUDES 'specific_target' in any subfolder of '/path/to/foldername/'
+
+			// Is this rule an 'exclude' or 'include' rule?
+			bool thisIsAnExcludeRule = false;
+			
+			// Switch based on first character of rule to determine rule type
+			switch (syncListRuleEntry[0]) {
 				case '-':
 					// sync_list path starts with '-', this user wants to exclude this path
-					exclude = true;
-					// If the sync_list entry starts with '-/' offset needs to be 2, else 1
-					if (startsWith(allowedPath, "-/")){
-						// Offset needs to be 2
-						offset = 2;
-					} else {
-						// Offset needs to be 1
-						offset = 1;
-					}
+					exclude = true; // default exclude
+					thisIsAnExcludeRule = true; // exclude rule
+					offset = 1; // To negate the '-' in the rule entry
 					break;
 				case '!':
 					// sync_list path starts with '!', this user wants to exclude this path
-					exclude = true;
-					// If the sync_list entry starts with '!/' offset needs to be 2, else 1
-					if (startsWith(allowedPath, "!/")){
-						// Offset needs to be 2
-						offset = 2;
-					} else {
-						// Offset needs to be 1
-						offset = 1;
-					}
+					exclude = true; // default exclude
+					thisIsAnExcludeRule = true; // exclude rule
+					offset = 1; // To negate the '!' in the rule entry
 					break;
 				case '/':
 					// sync_list path starts with '/', this user wants to include this path
 					// but a '/' at the start causes matching issues, so use the offset for comparison
-					exclude = false;
-					offset = 1;
-					break;	
-					
+					exclude = false; // DO NOT EXCLUDE
+					thisIsAnExcludeRule = false; // INCLUDE rule
+					offset = 0;
+					break;
 				default:
 					// no negative pattern, default is to not exclude
-					exclude = false;
+					exclude = false; // DO NOT EXCLUDE
+					thisIsAnExcludeRule = false; // INCLUDE rule
 					offset = 0;
 			}
 			
-			// What are we comparing against?
-			addLogEntry("Evaluation against 'sync_list' entry: " ~ allowedPath, ["debug"]);
+			// Update syncListRuleEntry to remove the offset
+			syncListRuleEntry = syncListRuleEntry[offset..$];
 			
-			// Generate the common prefix from the path vs the allowed path
-			auto comm = commonPrefix(path, allowedPath[offset..$]);
+			// What 'sync_list' rule are we comparing against?
+			if (thisIsAnExcludeRule) {
+				addLogEntry("Evaluation against EXCLUSION 'sync_list' rule: !" ~ syncListRuleEntry, ["debug"]);
+			} else {
+				addLogEntry("Evaluation against INCLUSION 'sync_list' rule: " ~ syncListRuleEntry, ["debug"]);
+			}
 			
-			// Is path is an exact match of the allowed path?
+			// Generate the common path prefix from the input path vs the 'sync_list' rule
+			auto comm = commonPrefix(path, syncListRuleEntry);
+			
+			// Is path is an exact match of the 'sync_list' rule?
 			if (comm.length == path.length) {
 				// we have a potential exact match
+				
 				// strip any potential '/*' from the allowed path, to avoid a potential lesser common match
-				string strippedAllowedPath = strip(allowedPath[offset..$], "/*");
+				string strippedAllowedPath = strip(syncListRuleEntry, "/*");
 				
 				if (path == strippedAllowedPath) {
 					// we have an exact path match
 					addLogEntry("Exact path match with 'sync_list' entry", ["debug"]);
+					addLogEntry("Exact path match with 'sync_list' entry");
 					
 					if (!exclude) {
-						addLogEntry("Evaluation against 'sync_list' result: direct match", ["debug"]);
+						addLogEntry("Evaluation against 'sync_list' rule result: direct match", ["debug"]);
+						addLogEntry("Evaluation against 'sync_list' rule result: direct match");
+						// set direct match flag
+						//exludeDirectMatch = true;
+						// final result
 						finalResult = false;
-						// direct match, break and go sync
+						// direct match, break and search rules no more
 						break;
 					} else {
-						addLogEntry("Evaluation against 'sync_list' result: direct match - path to be excluded", ["debug"]);
+						addLogEntry("Evaluation against 'sync_list' rule result: direct match - path to be excluded", ["debug"]);
 						
 						// do not set excludeMatched = true here, otherwise parental path also gets excluded
 						// flag exludeDirectMatch so that a 'wildcard match' will not override this exclude
 						exludeDirectMatch = true;
 						// final result
 						finalResult = true;
-					}	
+					}
 				} else {
 					// no exact path match, but something common does match
 					addLogEntry("Something 'common' matches the 'sync_list' input path", ["debug"]);
@@ -299,12 +341,12 @@ class ClientSideFiltering {
 						if (path == pathToEvaluate) {
 							// The input path matches what we want to evaluate against as a direct match
 							if (!exclude) {
-								addLogEntry("Evaluation against 'sync_list' result: direct match for parental path item", ["debug"]);
+								addLogEntry("Evaluation against 'sync_list' rule result: direct match for parental path item", ["debug"]);
 								finalResult = false;
-								// direct match, break and go sync
+								// direct match, break and search rules no more
 								break;
 							} else {
-								addLogEntry("Evaluation against 'sync_list' result: direct match for parental path item but to be excluded", ["debug"]);
+								addLogEntry("Evaluation against 'sync_list' rule result: direct match for parental path item but to be excluded", ["debug"]);
 								finalResult = true;
 								// do not set excludeMatched = true here, otherwise parental path also gets excluded
 							}					
@@ -314,56 +356,158 @@ class ClientSideFiltering {
 				}
 			}
 			
-			// Is path is a subitem/sub-folder of the allowed path?
-			if (comm.length == allowedPath[offset..$].length) {
+			// Is path is a subitem/sub-folder of the 'sync_list' rule?
+			if (comm.length == syncListRuleEntry.length) {
 				// The given path is potentially a subitem of an allowed path
-				// We want to capture sub-folders / files of allowed paths here, but not explicitly match other items
+				
+				// We want to capture sub-folders / files of allowed syncListRules here, but not explicitly match other items
 				// if there is no wildcard
-				auto subItemPathCheck = allowedPath[offset..$] ~ "/";
+				auto subItemPathCheck = syncListRuleEntry ~ "/";
 				if (canFind(path, subItemPathCheck)) {
 					// The 'path' includes the allowed path, and is 'most likely' a sub-path item
 					if (!exclude) {
-						addLogEntry("Evaluation against 'sync_list' result: parental path match", ["debug"]);
+						addLogEntry("Evaluation against 'sync_list' rule result: parental path match", ["debug"]);
 						finalResult = false;
-						// parental path matches, break and go sync
+						// parental path matches, break and search rules no more
 						break;
 					} else {
-						addLogEntry("Evaluation against 'sync_list' result: parental path match but must be excluded", ["debug"]);
+						addLogEntry("Evaluation against 'sync_list' rule result: parental path match but must be excluded", ["debug"]);
 						finalResult = true;
 						excludeMatched = true;
 					}
 				}
 			}
 			
-			// Does the allowed path contain a wildcard? (*)
-			if (canFind(allowedPath[offset..$], wildcard)) {
-				// allowed path contains a wildcard
-				// manually replace '*' for '.*' to be compatible with regex
-				string regexCompatiblePath = replace(allowedPath[offset..$], "*", ".*");
-				auto allowedMask = regex(regexCompatiblePath);
-				if (matchAll(path, allowedMask)) {
-					// regex wildcard evaluation matches
-					// if we have a prior pattern match for an exclude, excludeMatched = true
-					if (!exclude && !excludeMatched && !exludeDirectMatch) {
-						// nothing triggered an exclusion before evaluation against wildcard match attempt
-						addLogEntry("Evaluation against 'sync_list' result: wildcard pattern match", ["debug"]);
-						finalResult = false;
-					} else {
-						addLogEntry("Evaluation against 'sync_list' result: wildcard pattern matched but must be excluded", ["debug"]);
+			// Is the 'sync_list' rule an 'anywhere' rule?
+			//	EXCLUSION
+			//		!foldername/*
+			//		!*.extention 
+			//  INCLUSION
+			//		foldername/*
+			//		*.extention 
+			if (to!string(syncListRuleEntry[0]) != "/") {
+				// reset anywhereRuleMatched
+				anywhereRuleMatched = false; 
+			
+				// what sort of rule
+				if (thisIsAnExcludeRule) {
+					addLogEntry("anywhere 'sync_list' exclusion rule: !" ~ syncListRuleEntry, ["debug"]);
+				} else {
+					addLogEntry("anywhere 'sync_list' inclusion rule: " ~ syncListRuleEntry, ["debug"]);
+				}
+				
+				// this is an 'anywhere' rule
+				string anywhereRuleStripped;
+				// If this 'sync_list' rule end in '/*' - if yes, remove it to allow for easier comparison
+				if (syncListRuleEntry.endsWith("/*")) {
+					// strip '/*' from the end of the rule
+					anywhereRuleStripped = syncListRuleEntry.stripRight("/*");
+				} else {
+					// keep rule 'as-is'
+					anywhereRuleStripped = syncListRuleEntry;
+				}
+				
+				if (canFind(path, anywhereRuleStripped)) {
+					// we matched the path to the rule
+					addLogEntry("anywhere rule 'canFind' MATCH", ["debug"]);
+					anywhereRuleMatched = true;
+				} else {
+					// no 'canFind' match, try via regex
+					addLogEntry("No anywhere rule 'canFind' MATCH .. trying a regex match", ["debug"]);
+					
+					// create regex from 'syncListRuleEntry'
+					auto allowedMask = regex(createRegexCompatiblePath(syncListRuleEntry));
+					
+					// perform regex match attempt
+					if (matchAll(path, allowedMask)) {
+						// we regex matched the path to the rule
+						addLogEntry("anywhere rule 'matchAll via regex' MATCH", ["debug"]);
+						anywhereRuleMatched = true;
+					}
+				}
+				
+				// is this rule matched?
+				if (anywhereRuleMatched) {
+					// Is this an exclude rule?
+					if (thisIsAnExcludeRule) {
+						addLogEntry("Evaluation against 'sync_list' rule result: anywhere rule matched and must be excluded", ["debug"]);
 						finalResult = true;
-						excludeMatched = true;
+						excludeAnywhereMatched = true;
+						// anywhere match, break and search rules no more
+						break;
+					} else {
+						addLogEntry("Evaluation against 'sync_list' rule result: anywhere rule matched and must be included", ["debug"]);
+						finalResult = false;
+						excludeAnywhereMatched = false;
+						// anywhere match, break and search rules no more
+						break;
+					}
+				}
+			}
+			
+			// Does the 'sync_list' rule contain a wildcard (*) or globbing (**) reference
+			if (canFind(syncListRuleEntry, wildcard)) {
+			
+				// reset the applicable flag
+				wildcardRuleMatched = false;
+			
+				// sync_list rule contains some sort of wildcard sequence
+				if (thisIsAnExcludeRule) {
+					addLogEntry("wildcard (* or **) exclusion rule: !" ~ syncListRuleEntry, ["debug"]);
+				} else {
+					addLogEntry("wildcard (* or **) inclusion rule: " ~ syncListRuleEntry, ["debug"]);
+				}
+				
+				// Is this a globbing rule (**) or just a single wildcard (*) entries
+				if (canFind(syncListRuleEntry, globbing)) {
+					// globbing (**) rule processing
+					if (matchPathAgainstRule(path, syncListRuleEntry)) {
+						// set the applicable flag
+						wildcardRuleMatched = true;
+						addLogEntry("Evaluation against 'sync_list' rule result: wildcard globbing pattern match", ["debug"]);
+					}
+				} else {
+					// wildcard (*) rule processing
+					// create regex from 'syncListRuleEntry'
+					auto allowedMask = regex(createRegexCompatiblePath(syncListRuleEntry));
+					if (matchAll(path, allowedMask)) {
+						// set the applicable flag
+						wildcardRuleMatched = true;
+						addLogEntry("Evaluation against 'sync_list' rule result: wildcard pattern match", ["debug"]);
+					}
+				}
+				
+				// Was the rule matched?
+				if (wildcardRuleMatched) {
+					// Is this an exclude rule?
+					if (thisIsAnExcludeRule) {
+						// Yes exclude rule
+						addLogEntry("Evaluation against 'sync_list' rule result: wildcard|globbing rule matched and must be excluded", ["debug"]);
+						finalResult = true;
+						excludeWildcardMatched = true;
+						// anywhere match, break and search rules no more
+						break;
+					} else {
+					
+						// include rule
+						addLogEntry("Evaluation against 'sync_list' rule result: wildcard|globbing pattern matched and must be included", ["debug"]);
+						finalResult = false;
+						excludeWildcardMatched = false;
+					
 					}
 				}
 			}
 		}
 		
-		// Interim results
-		addLogEntry("[F]exclude           = " ~ to!string(exclude), ["debug"]);
-		addLogEntry("[F]exludeDirectMatch = " ~ to!string(exludeDirectMatch), ["debug"]);
-		addLogEntry("[F]excludeMatched    = " ~ to!string(excludeMatched), ["debug"]);
+		// Interim results after checking each 'sync_list' rule against the input path
+		addLogEntry("[F]exclude                = " ~ to!string(exclude), ["debug"]);
+		addLogEntry("[F]exludeDirectMatch      = " ~ to!string(exludeDirectMatch), ["debug"]);
+		addLogEntry("[F]excludeAnywhereMatched = " ~ to!string(excludeAnywhereMatched), ["debug"]);
+		addLogEntry("[F]excludeWildcardMatched = " ~ to!string(excludeWildcardMatched), ["debug"]);
+		addLogEntry("[F]excludeMatched         = " ~ to!string(excludeMatched), ["debug"]);
 		
 		// If exclude or excludeMatched is true, then finalResult has to be true
-		if ((exclude) || (excludeMatched) || (exludeDirectMatch)) {
+		if ((exclude) || (exludeDirectMatch) || (excludeAnywhereMatched) || (excludeWildcardMatched) || (excludeMatched)) {
 			finalResult = true;
 		}
 		
@@ -374,5 +518,64 @@ class ClientSideFiltering {
 			addLogEntry("Evaluation against 'sync_list' final result: included for sync", ["debug"]);
 		}
 		return finalResult;
+	}
+	
+	// Create a wildcard regex compatible string based on the sync list rule
+	string createRegexCompatiblePath(string regexCompatiblePath) {
+		regexCompatiblePath = regexCompatiblePath.replace(".", "\\."); // Escape the dot (.) if present
+		regexCompatiblePath = regexCompatiblePath.replace("*", ".*");  // Replace * with '.*' to be compatible with function and to match any characters
+		return regexCompatiblePath;
+	}
+	
+	// Create a regex compatible string to match a relevant segment
+	bool matchSegment(string ruleSegment, string pathSegment) {
+		ruleSegment = ruleSegment.replace("*", ".*");  // Replace * with '.*' to be compatible with function and to match any characters
+		auto pattern = regex("^" ~ ruleSegment ~ "$");
+		// Check if there's a match
+		return !match(pathSegment, pattern).empty;
+	}
+	
+	// Function to handle path matching when using globbing (**)
+	bool matchPathAgainstRule(string path, string rule) {
+		// Split both the path and rule into segments
+		auto pathSegments = pathSplitter(path).filter!(s => !s.empty).array;
+		auto ruleSegments = pathSplitter(rule).filter!(s => !s.empty).array;
+
+		bool lastSegmentMatchesRule = false;
+		size_t i = 0, j = 0;
+
+		while (i < pathSegments.length && j < ruleSegments.length) {
+			if (ruleSegments[j] == "**") {
+				if (j == ruleSegments.length - 1) {
+					return true; // '**' at the end matches everything
+				}
+
+				// Find next matching part after '**'
+				while (i < pathSegments.length && !matchSegment(ruleSegments[j + 1], pathSegments[i])) {
+					i++;
+				}
+				j++; // Move past the '**' in the rule
+			} else {
+				if (!matchSegment(ruleSegments[j], pathSegments[i])) {
+					return false;
+				} else {
+					// increment to next set of values
+					i++;
+					j++;
+				}
+			}
+		}
+		
+		// Ensure that we handle the last segments gracefully
+		if (i >= pathSegments.length && j < ruleSegments.length) {
+			if (j == ruleSegments.length - 1 && ruleSegments[j] == "*") {
+				return true;
+			}
+			if (ruleSegments[j - 1] == pathSegments[i - 1]) {
+				lastSegmentMatchesRule = true;
+			}
+		}
+
+		return j == ruleSegments.length || (j == ruleSegments.length - 1 && ruleSegments[j] == "**") || lastSegmentMatchesRule;
 	}
 }
