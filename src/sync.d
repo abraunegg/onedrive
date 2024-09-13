@@ -4553,14 +4553,16 @@ class SyncEngine {
 		}
 		
 		// Log the action that we are performing, however only if this is a directory
-		if (isDir(path)) {
-			if (!appConfig.suppressLoggingOutput) {
-				if (!cleanupLocalFiles) {
-					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload", appConfig.verbosityCount);
-				} else {
-					addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for data to cleanup", appConfig.verbosityCount);
-					// Set the cleanup flag
-					cleanupDataPass = true;
+		if (exists(path)) {
+			if (isDir(path)) {
+				if (!appConfig.suppressLoggingOutput) {
+					if (!cleanupLocalFiles) {
+						addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for new data to upload", appConfig.verbosityCount);
+					} else {
+						addProcessingLogHeaderEntry("Scanning the local file system '" ~ logPath ~ "' for data to cleanup", appConfig.verbosityCount);
+						// Set the cleanup flag
+						cleanupDataPass = true;
+					}
 				}
 			}
 		}
@@ -4569,10 +4571,12 @@ class SyncEngine {
 		addLogEntry("Starting Filesystem Walk:     " ~ to!string(startTime), ["debug"]);
 		
 		// Add a processing '.' if this is a directory we are scanning
-		if (isDir(path)) {
-			if (!appConfig.suppressLoggingOutput) {
-				if (appConfig.verbosityCount == 0) {
-					addProcessingDotEntry();
+		if (exists(path)) {
+			if (isDir(path)) {
+				if (!appConfig.suppressLoggingOutput) {
+					if (appConfig.verbosityCount == 0) {
+						addProcessingDotEntry();
+					}
 				}
 			}
 		}
@@ -4583,11 +4587,13 @@ class SyncEngine {
 		cleanupDataPass = false;
 		
 		// Close processing '.' if this is a directory we are scanning
-		if (isDir(path)) {
-			if (appConfig.verbosityCount == 0) {
-				if (!appConfig.suppressLoggingOutput) {
-					// Close out the '....' being printed to the console
-					completeProcessingDots();
+		if (exists(path)) {
+			if (isDir(path)) {
+				if (appConfig.verbosityCount == 0) {
+					if (!appConfig.suppressLoggingOutput) {
+						// Close out the '....' being printed to the console
+						completeProcessingDots();
+					}
 				}
 			}
 		}
@@ -4666,10 +4672,12 @@ class SyncEngine {
 	void scanPathForNewData(string path) {
 	
 		// Add a processing '.'
-		if (isDir(path)) {
-			if (!appConfig.suppressLoggingOutput) {
-				if (appConfig.verbosityCount == 0) {
-					addProcessingDotEntry();
+		if (exists(path)) {
+			if (isDir(path)) {
+				if (!appConfig.suppressLoggingOutput) {
+					if (appConfig.verbosityCount == 0) {
+						addProcessingDotEntry();
+					}
 				}
 			}
 		}
