@@ -39,21 +39,21 @@ class JsonResponseException: Exception {
 	@safe pure this(string inputMessage) {
 		string msg = format(inputMessage);
 		super(msg);
-	}	
+	}
 }
 
 class PosixException: Exception {
 	@safe pure this(string localTargetName, string remoteTargetName) {
 		string msg = format("POSIX 'case-insensitive match' between '%s' (local) and '%s' (online) which violates the Microsoft OneDrive API namespace convention", localTargetName, remoteTargetName);
 		super(msg);
-	}	
+	}
 }
 
 class AccountDetailsException: Exception {
 	@safe pure this() {
 		string msg = format("Unable to query OneDrive API to obtain required account details");
 		super(msg);
-	}	
+	}
 }
 
 class SyncException: Exception {
@@ -777,7 +777,7 @@ class SyncEngine {
 			onlinePathData = queryOneDriveForSpecificPathAndCreateIfMissing(normalisedSingleDirectoryPath, true);
 		} catch (PosixException e) {
 			displayPosixErrorMessage(e.msg);
-			addLogEntry("ERROR: Requested directory to search for and potentially create has a 'case-insensitive match' to an existing directory on OneDrive online.");
+			addLogEntry("ERROR: Requested directory to search for and potentially create has a 'case-insensitive match' to an existing directory on Microsoft OneDrive online.");
 		}
 		
 		// Was a valid JSON response provided?
@@ -5346,7 +5346,7 @@ class SyncEngine {
 				// Normally this would throw an error, however we cant use throw new PosixException()
 				string msg = format("POSIX 'case-insensitive match' between '%s' (local) and '%s' (online) which violates the Microsoft OneDrive API namespace convention", baseName(thisNewPathToCreate), onlinePathData["name"].str);
 				displayPosixErrorMessage(msg);
-				addLogEntry("ERROR: Requested directory to create has a 'case-insensitive match' to an existing directory on OneDrive online.");
+				addLogEntry("ERROR: Requested directory to create has a 'case-insensitive match' to an existing directory on Microsoft OneDrive online.");
 				addLogEntry("ERROR: To resolve, rename this local directory: " ~ buildNormalizedPath(absolutePath(thisNewPathToCreate)));
 				addLogEntry("Skipping creating this directory online due to 'case-insensitive match': " ~ thisNewPathToCreate);
 				// Add this path to posixViolationPaths
@@ -5374,17 +5374,22 @@ class SyncEngine {
 	}
 	
 	// Test that the online name actually matches the requested local name
-	void performPosixTest(string localNameToCheck, string onlineName) {
-			
+	bool performPosixTest(string localNameToCheck, string onlineName) {
+		
 		// https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
 		// Do not assume case sensitivity. For example, consider the names OSCAR, Oscar, and oscar to be the same, 
 		// even though some file systems (such as a POSIX-compliant file system) may consider them as different. 
 		// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior.
+		
+		bool posixIssue = false;
+		
 		if (localNameToCheck != onlineName) {
 			// POSIX Error
 			// Local item name has a 'case-insensitive match' to an existing item on OneDrive
-			throw new PosixException(localNameToCheck, onlineName);
+			posixIssue = true;
 		}
+		
+		return posixIssue;
 	}
 	
 	// Upload new file items as identified
@@ -5591,7 +5596,10 @@ class SyncEngine {
 								
 								// Portable Operating System Interface (POSIX) testing of JSON response from OneDrive API
 								if (hasName(fileDetailsFromOneDrive)) {
-									performPosixTest(baseName(fileToUpload), fileDetailsFromOneDrive["name"].str);
+									// Perform the POSIX evaluation test against the names
+									if (performPosixTest(baseName(fileToUpload), fileDetailsFromOneDrive["name"].str)) {
+										throw new PosixException(baseName(fileToUpload), fileDetailsFromOneDrive["name"].str);
+									}
 								} else {
 									throw new JsonResponseException("Unable to perform POSIX test as the OneDrive API request generated an invalid JSON response");
 								}
@@ -5669,22 +5677,13 @@ class SyncEngine {
 									displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 								}
 							} catch (PosixException e) {
-								// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
-								checkFileOneDriveApiInstance.releaseCurlEngine();
-								checkFileOneDriveApiInstance = null;
-								// Perform Garbage Collection
-								GC.collect();
-								
 								// Display POSIX error message
 								displayPosixErrorMessage(e.msg);
+								addLogEntry("ERROR: Requested file to upload has a 'case-insensitive match' to an existing item on Microsoft OneDrive online.");
+								addLogEntry("ERROR: To resolve, rename this local file: " ~ fileToUpload);
+								addLogEntry("Skipping uploading this new file due to 'case-insensitive match': " ~ fileToUpload);
 								uploadFailed = true;
 							} catch (JsonResponseException e) {
-								// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
-								checkFileOneDriveApiInstance.releaseCurlEngine();
-								checkFileOneDriveApiInstance = null;
-								// Perform Garbage Collection
-								GC.collect();
-								
 								// Display JSON error message
 								addLogEntry(e.msg, ["debug"]);
 								uploadFailed = true;
@@ -7020,7 +7019,10 @@ class SyncEngine {
 						
 						// Portable Operating System Interface (POSIX) testing of JSON response from OneDrive API
 						if (hasName(getPathDetailsAPIResponse)) {
-							performPosixTest(thisFolderName, getPathDetailsAPIResponse["name"].str);
+							// Perform the POSIX evaluation test against the names
+							if (performPosixTest(thisFolderName, getPathDetailsAPIResponse["name"].str)) {
+								throw new PosixException(thisFolderName, getPathDetailsAPIResponse["name"].str);
+							}
 						} else {
 							throw new JsonResponseException("Unable to perform POSIX test as the OneDrive API request generated an invalid JSON response");
 						}
@@ -7056,15 +7058,19 @@ class SyncEngine {
 						if (exception.httpStatusCode == 404) {
 							directoryFoundOnline = false;
 						} else {
-						
 							string thisFunctionName = getFunctionName!({});
 							// Default operation if not 408,429,503,504 errors
 							// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 							// Display what the error is
 							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 						}
+					} catch (PosixException e) {
+						// Display POSIX error message
+						displayPosixErrorMessage(e.msg);
+						addLogEntry("ERROR: Requested directory to search for and potentially create has a 'case-insensitive match' to an existing directory on Microsoft OneDrive online.");
+						addLogEntry("ERROR: To resolve, rename this local directory: " ~ currentPathTree);
 					} catch (JsonResponseException e) {
-							addLogEntry(e.msg, ["debug"]);
+						addLogEntry(e.msg, ["debug"]);
 					}
 				} else {
 					// parentDetails.driveId is not the account drive id - thus will be a remote shared item
@@ -7097,11 +7103,19 @@ class SyncEngine {
 								} else {
 									string childAsLower = toLower(child["name"].str);
 									string thisFolderNameAsLower = toLower(thisFolderName);
-									if (childAsLower == thisFolderNameAsLower) {	
-										// This is a POSIX 'case in-sensitive match' ..... 
-										// Local item name has a 'case-insensitive match' to an existing item on OneDrive
-										posixIssue = true;
-										throw new PosixException(thisFolderName, child["name"].str);
+									
+									try {
+										if (childAsLower == thisFolderNameAsLower) {	
+											// This is a POSIX 'case in-sensitive match' ..... 
+											// Local item name has a 'case-insensitive match' to an existing item on OneDrive
+											posixIssue = true;
+											throw new PosixException(thisFolderName, child["name"].str);
+										}
+									} catch (PosixException e) {
+										// Display POSIX error message
+										displayPosixErrorMessage(e.msg);
+										addLogEntry("ERROR: Requested directory to search for and potentially create has a 'case-insensitive match' to an existing directory on Microsoft OneDrive online.");
+										addLogEntry("ERROR: To resolve, rename this local directory: " ~ currentPathTree);
 									}
 								}
 							}
