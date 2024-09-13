@@ -478,8 +478,6 @@ class ClientSideFiltering {
 						addLogEntry("Evaluation against 'sync_list' rule result: wildcard|globbing rule matched and must be excluded", ["debug"]);
 						finalResult = true;
 						excludeWildcardMatched = true;
-						// anywhere match, break and search rules no more
-						break;
 					} else {
 						// include rule
 						addLogEntry("Evaluation against 'sync_list' rule result: wildcard|globbing pattern matched and must be included", ["debug"]);
