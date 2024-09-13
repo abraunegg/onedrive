@@ -430,7 +430,8 @@ Here is an example of `sync_list`:
 !/Secret_data/*
 #
 # Include everything else in root directory
-/*
+# - Use 'sync_root_files' or --sync-root-files option
+# Do not use /* as this will include everything including items you are expecting to be excluded
 #
 # Include my Backup folder(s) or file(s) anywhere on OneDrive
 Backup
