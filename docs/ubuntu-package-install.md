@@ -454,14 +454,4 @@ Read and understand the [known issues](#known-issues-with-installing-from-the-ab
 
 ## Known Issues with Installing from the above packages
 
-### 1. The client may segfault | core-dump when exiting
-When the client is run in `--monitor` mode manually, or when using the systemd service, the client may segfault on exit.
-
-This issue is caused by the way the 'onedrive' packages are built using the distribution LDC package & the default distribution compiler options which is the root cause for this issue. Refer to: https://bugs.launchpad.net/ubuntu/+source/ldc/+bug/1895969
-
-**Additional references:**
-*  https://github.com/abraunegg/onedrive/issues/1053
-*  https://github.com/abraunegg/onedrive/issues/1609
-
-**Resolution Options:**
-*  Uninstall the 'onedrive' package and build client from source, installing either the DMD or LDC compiler via the Install Script found here: https://dlang.org/download.html. Do not use your distribuion provided 'ldc' package.
+There are currently no known issues when installing 'onedrive' from the OpenSuSE Build Service repository.
