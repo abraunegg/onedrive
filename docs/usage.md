@@ -291,6 +291,8 @@ These configurable options and the 'sync_list' file provide users with the flexi
 > 6. 'sync_list'
 > 7. 'skip_size'
 >
+> ![Client Side Filtering Processing Order](./puml/client_side_filtering_processing_order.png)
+>
 > For further details please review the [client architecture](client-architecture.md) documentation.
 
 > [!IMPORTANT]
