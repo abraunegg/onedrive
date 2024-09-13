@@ -777,7 +777,7 @@ class SyncEngine {
 			onlinePathData = queryOneDriveForSpecificPathAndCreateIfMissing(normalisedSingleDirectoryPath, true);
 		} catch (PosixException e) {
 			displayPosixErrorMessage(e.msg);
-			addLogEntry("ERROR: Requested directory to search for and potentially create has a 'case-insensitive match' to an existing directory on OneDrive online.");
+			addLogEntry("ERROR: Requested directory to search for and potentially create has a 'case-insensitive match' to an existing directory on Microsoft OneDrive online.");
 		}
 		
 		// Was a valid JSON response provided?
@@ -5346,7 +5346,7 @@ class SyncEngine {
 				// Normally this would throw an error, however we cant use throw new PosixException()
 				string msg = format("POSIX 'case-insensitive match' between '%s' (local) and '%s' (online) which violates the Microsoft OneDrive API namespace convention", baseName(thisNewPathToCreate), onlinePathData["name"].str);
 				displayPosixErrorMessage(msg);
-				addLogEntry("ERROR: Requested directory to create has a 'case-insensitive match' to an existing directory on OneDrive online.");
+				addLogEntry("ERROR: Requested directory to create has a 'case-insensitive match' to an existing directory on Microsoft OneDrive online.");
 				addLogEntry("ERROR: To resolve, rename this local directory: " ~ buildNormalizedPath(absolutePath(thisNewPathToCreate)));
 				addLogEntry("Skipping creating this directory online due to 'case-insensitive match': " ~ thisNewPathToCreate);
 				// Add this path to posixViolationPaths
@@ -5374,16 +5374,22 @@ class SyncEngine {
 	}
 	
 	// Test that the online name actually matches the requested local name
-	void performPosixTest(string localNameToCheck, string onlineName) {
+	bool performPosixTest(string localNameToCheck, string onlineName) {
+		
 		// https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
 		// Do not assume case sensitivity. For example, consider the names OSCAR, Oscar, and oscar to be the same, 
 		// even though some file systems (such as a POSIX-compliant file system) may consider them as different. 
 		// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior.
+		
+		bool posixIssue = false;
+		
 		if (localNameToCheck != onlineName) {
 			// POSIX Error
 			// Local item name has a 'case-insensitive match' to an existing item on OneDrive
-			throw new PosixException(localNameToCheck, onlineName);
+			posixIssue = true;
 		}
+		
+		return posixIssue;
 	}
 	
 	// Upload new file items as identified
@@ -5553,16 +5559,23 @@ class SyncEngine {
 						if (spaceAvailableOnline) {
 							// We need to check that this new local file does not exist on OneDrive
 							JSONValue fileDetailsFromOneDrive;
+
+							// https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
+							// Do not assume case sensitivity. For example, consider the names OSCAR, Oscar, and oscar to be the same, 
+							// even though some file systems (such as a POSIX-compliant file systems that Linux use) may consider them as different.
+							// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior, OneDrive does not use this.
+							
 							// In order to upload this file - this query HAS to respond with a '404 - Not Found' so that the upload is triggered
+							
 							// Does this 'file' already exist on OneDrive?
 							try {
+							
 								// Create a new API Instance for this thread and initialise it
 								checkFileOneDriveApiInstance = new OneDriveApi(appConfig);
 								checkFileOneDriveApiInstance.initialise();
 
 								if (parentItem.driveId == appConfig.defaultDriveId) {
 									// getPathDetailsByDriveId is only reliable when the driveId is our driveId
-									// this will throw a 404 if item is not online
 									fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload);
 								} else {
 									// We need to curate a response by listing the children of this parentItem.driveId and parentItem.id , without traversing directories
@@ -5575,69 +5588,29 @@ class SyncEngine {
 									}
 								}
 								
-							} catch (OneDriveException exception) {
-								// The ondrive api threw an exception
 								// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
 								checkFileOneDriveApiInstance.releaseCurlEngine();
 								checkFileOneDriveApiInstance = null;
 								// Perform Garbage Collection
 								GC.collect();
 								
-								// If we get a 404 .. the file is not online .. this is what we want .. file does not exist online
-								if (exception.httpStatusCode == 404) {
-									// The file has been checked, client side filtering checked, does not exist online - we need to upload it
-									addLogEntry("fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload); generated a 404 - file does not exist online - must upload it", ["debug"]);
-									uploadFailed = performNewFileUpload(parentItem, fileToUpload, thisFileSize);
-								} else {
-									// some other error
-									string thisFunctionName = getFunctionName!({});
-									// Default operation if not 408,429,503,504 errors
-									// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
-									// Display what the error is
-									displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-								}
-							}
-							
-							// If we get to this point, the OneDrive API returned a 200 OK with valid JSON data that indicates a 'file' exists at this location already
-							// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
-							checkFileOneDriveApiInstance.releaseCurlEngine();
-							checkFileOneDriveApiInstance = null;
-							// Perform Garbage Collection
-							GC.collect();
-							
-							// and that it matches the POSIX filename of the local item we are trying to upload as a new file
-							addLogEntry("The item we are attempting to upload as a new file already exists on Microsoft OneDrive: " ~ fileToUpload, ["verbose"]);
-							
-							// No 404 or otherwise was triggered, meaning that the file already exists online and passes the POSIX test ...
-							addLogEntry("fileDetailsFromOneDrive after exist online check: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);
-							
-							// Is this a POSIX issue? Check the JSON response from the API
-							
-							// https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
-							// Do not assume case sensitivity. For example, consider the names OSCAR, Oscar, and oscar to be the same, 
-							// even though some file systems (such as a POSIX-compliant file systems that Linux use) may consider them as different.
-							// Note that NTFS supports POSIX semantics for case sensitivity but this is not the default behavior, OneDrive does not use this.
-							
-							try {
+								// Portable Operating System Interface (POSIX) testing of JSON response from OneDrive API
 								if (hasName(fileDetailsFromOneDrive)) {
-									try {
-										performPosixTest(baseName(fileToUpload), fileDetailsFromOneDrive["name"].str);
-									} catch (PosixException e) {
-										// Display POSIX error message
-										displayPosixErrorMessage(e.msg);
-										uploadFailed = true;
+									// Perform the POSIX evaluation test against the names
+									if (performPosixTest(baseName(fileToUpload), fileDetailsFromOneDrive["name"].str)) {
+										throw new PosixException(baseName(fileToUpload), fileDetailsFromOneDrive["name"].str);
 									}
 								} else {
 									throw new JsonResponseException("Unable to perform POSIX test as the OneDrive API request generated an invalid JSON response");
 								}
-							} catch (JsonResponseException e) {
-								// Display JSON error message
-								addLogEntry(e.msg, ["debug"]);
-								uploadFailed = true;
-							}
-							
-							// POSIX Test passed so 'uploadFailed' should still be false
-							if (!uploadFailed) {
+								
+								// If we get to this point, the OneDrive API returned a 200 OK with valid JSON data that indicates a 'file' exists at this location already
+								// and that it matches the POSIX filename of the local item we are trying to upload as a new file
+								addLogEntry("The file we are attempting to upload as a new file already exists on Microsoft OneDrive: " ~ fileToUpload, ["verbose"]);
+								
+								// No 404 or otherwise was triggered, meaning that the file already exists online and passes the POSIX test ...
+								addLogEntry("fileDetailsFromOneDrive after exist online check: " ~ to!string(fileDetailsFromOneDrive), ["debug"]);
+								
 								// Does the data from online match our local file that we are attempting to upload as a new file?
 								if (!disableUploadValidation && performUploadIntegrityValidationChecks(fileDetailsFromOneDrive, fileToUpload, thisFileSize)) {
 									// Save online item details to the database
@@ -5683,6 +5656,37 @@ class SyncEngine {
 										itemDB.deleteById(changedItemParentDriveId, changedItemId);
 									}
 								}
+							} catch (OneDriveException exception) {
+								// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
+								checkFileOneDriveApiInstance.releaseCurlEngine();
+								checkFileOneDriveApiInstance = null;
+								// Perform Garbage Collection
+								GC.collect();
+								
+								// If we get a 404 .. the file is not online .. this is what we want .. file does not exist online
+								if (exception.httpStatusCode == 404) {
+									// The file has been checked, client side filtering checked, does not exist online - we need to upload it
+									addLogEntry("fileDetailsFromOneDrive = checkFileOneDriveApiInstance.getPathDetailsByDriveId(parentItem.driveId, fileToUpload); generated a 404 - file does not exist online - must upload it", ["debug"]);
+									uploadFailed = performNewFileUpload(parentItem, fileToUpload, thisFileSize);
+								} else {
+									// some other error
+									string thisFunctionName = getFunctionName!({});
+									// Default operation if not 408,429,503,504 errors
+									// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
+									// Display what the error is
+									displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+								}
+							} catch (PosixException e) {
+								// Display POSIX error message
+								displayPosixErrorMessage(e.msg);
+								addLogEntry("ERROR: Requested file to upload has a 'case-insensitive match' to an existing item on Microsoft OneDrive online.");
+								addLogEntry("ERROR: To resolve, rename this local file: " ~ fileToUpload);
+								addLogEntry("Skipping uploading this new file due to 'case-insensitive match': " ~ fileToUpload);
+								uploadFailed = true;
+							} catch (JsonResponseException e) {
+								// Display JSON error message
+								addLogEntry(e.msg, ["debug"]);
+								uploadFailed = true;
 							}
 						} else {
 							// skip file upload - insufficient space to upload
@@ -7015,7 +7019,10 @@ class SyncEngine {
 						
 						// Portable Operating System Interface (POSIX) testing of JSON response from OneDrive API
 						if (hasName(getPathDetailsAPIResponse)) {
-							performPosixTest(thisFolderName, getPathDetailsAPIResponse["name"].str);
+							// Perform the POSIX evaluation test against the names
+							if (performPosixTest(thisFolderName, getPathDetailsAPIResponse["name"].str)) {
+								throw new PosixException(thisFolderName, getPathDetailsAPIResponse["name"].str);
+							}
 						} else {
 							throw new JsonResponseException("Unable to perform POSIX test as the OneDrive API request generated an invalid JSON response");
 						}
@@ -7051,13 +7058,17 @@ class SyncEngine {
 						if (exception.httpStatusCode == 404) {
 							directoryFoundOnline = false;
 						} else {
-						
 							string thisFunctionName = getFunctionName!({});
 							// Default operation if not 408,429,503,504 errors
 							// - 408,429,503,504 errors are handled as a retry within oneDriveApiInstance
 							// Display what the error is
 							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 						}
+					} catch (PosixException e) {
+								// Display POSIX error message
+								displayPosixErrorMessage(e.msg);
+								addLogEntry("ERROR: Requested directory to search for and potentially create has a 'case-insensitive match' to an existing directory on Microsoft OneDrive online.");
+								addLogEntry("ERROR: To resolve, rename this local directory: " ~ currentPathTree);
 					} catch (JsonResponseException e) {
 							addLogEntry(e.msg, ["debug"]);
 					}
