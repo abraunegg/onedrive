@@ -8622,9 +8622,7 @@ class SyncEngine {
 	void createDatabaseRootTieRecordForOnlineSharedFolder(JSONValue onedriveJSONItem) {
 		// Creating|Updating a DB Tie
 		addLogEntry("Creating|Updating a 'root' DB Tie Record for this Shared Folder: " ~ onedriveJSONItem["name"].str, ["debug"]);
-		addLogEntry("Creating|Updating a 'root' DB Tie Record for this Shared Folder: " ~ onedriveJSONItem["name"].str);
 		addLogEntry("Raw JSON for 'root' DB Tie Record: " ~ to!string(onedriveJSONItem), ["debug"]);
-		addLogEntry("Raw JSON for 'root' DB Tie Record: " ~ to!string(onedriveJSONItem));
 		
 		// New DB Tie Item to detail the 'root' of the Shared Folder
 		Item tieDBItem;
