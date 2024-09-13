@@ -7065,12 +7065,12 @@ class SyncEngine {
 							displayOneDriveErrorMessage(exception.msg, thisFunctionName);
 						}
 					} catch (PosixException e) {
-								// Display POSIX error message
-								displayPosixErrorMessage(e.msg);
-								addLogEntry("ERROR: Requested directory to search for and potentially create has a 'case-insensitive match' to an existing directory on Microsoft OneDrive online.");
-								addLogEntry("ERROR: To resolve, rename this local directory: " ~ currentPathTree);
+						// Display POSIX error message
+						displayPosixErrorMessage(e.msg);
+						addLogEntry("ERROR: Requested directory to search for and potentially create has a 'case-insensitive match' to an existing directory on Microsoft OneDrive online.");
+						addLogEntry("ERROR: To resolve, rename this local directory: " ~ currentPathTree);
 					} catch (JsonResponseException e) {
-							addLogEntry(e.msg, ["debug"]);
+						addLogEntry(e.msg, ["debug"]);
 					}
 				} else {
 					// parentDetails.driveId is not the account drive id - thus will be a remote shared item
@@ -7103,11 +7103,19 @@ class SyncEngine {
 								} else {
 									string childAsLower = toLower(child["name"].str);
 									string thisFolderNameAsLower = toLower(thisFolderName);
-									if (childAsLower == thisFolderNameAsLower) {	
-										// This is a POSIX 'case in-sensitive match' ..... 
-										// Local item name has a 'case-insensitive match' to an existing item on OneDrive
-										posixIssue = true;
-										throw new PosixException(thisFolderName, child["name"].str);
+									
+									try {
+										if (childAsLower == thisFolderNameAsLower) {	
+											// This is a POSIX 'case in-sensitive match' ..... 
+											// Local item name has a 'case-insensitive match' to an existing item on OneDrive
+											posixIssue = true;
+											throw new PosixException(thisFolderName, child["name"].str);
+										}
+									} catch (PosixException e) {
+										// Display POSIX error message
+										displayPosixErrorMessage(e.msg);
+										addLogEntry("ERROR: Requested directory to search for and potentially create has a 'case-insensitive match' to an existing directory on Microsoft OneDrive online.");
+										addLogEntry("ERROR: To resolve, rename this local directory: " ~ currentPathTree);
 									}
 								}
 							}
