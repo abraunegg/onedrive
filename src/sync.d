@@ -3933,6 +3933,12 @@ class SyncEngine {
 							addLogEntry("Parental Path structure needs to be created to support included file: " ~ dirName(newItemPath), ["verbose"]);
 							// Recursivly, stepping backward from 'thisItemParentId', query online, save entry to DB
 							createLocalPathStructure(onedriveJSONItem);
+							
+							// If this is --dry-run
+							if (dryRun) {
+								// we dont create the directory, but we need to track that we 'faked it'
+								idsFaked ~= [onedriveJSONItem["parentReference"]["driveId"].str, onedriveJSONItem["parentReference"]["id"].str];
+							}
 						}
 					} else {
 						// Directory included due to 'sync_list' match
@@ -4011,6 +4017,12 @@ class SyncEngine {
 			if (!itemDB.idInLocalDatabase(grandparentItemDriveId, grandparentItemParentId)) {
 				// grandparent needs to be added
 				createLocalPathStructure(onlinePathData);
+			}
+			
+			// If this is --dry-run
+			if (dryRun) {
+				// we dont create the directory, but we need to track that we 'faked it'
+				idsFaked ~= [onlinePathData["parentReference"]["driveId"].str, onlinePathData["parentReference"]["id"].str];
 			}
 			
 			// Save JSON to database
