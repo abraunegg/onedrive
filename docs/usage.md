@@ -491,7 +491,7 @@ The following are supported for pattern matching and exclusion rules:
 > When enabling the use of 'sync_list,' utilise the `--display-config` option to validate that your configuration will be used by the application, and test your configuration by adding `--dry-run` to ensure the client will operate as per your requirement.
 
 > [!TIP] 
-> In some circumstances, it may be required to sync all the individual files within the 'sync_dir', but due to frequent name change / addition / deletion of these files, it is not desirable to constantly change the 'sync_list' file to include / exclude these files and force a resync. To assist with this, enable the following in your configuration file:
+> In some circumstances, it may be required to sync all the individual files within the 'sync_dir' root, but due to frequent name change / addition / deletion of these files, it is not desirable to constantly change the 'sync_list' file to include / exclude these files and force a resync. To assist with this, enable the following in your configuration file:
 > ```text
 > sync_root_files = "true"
 > ```

@@ -96,7 +96,16 @@ class ClientSideFiltering {
 		foreach (line; range) {
 			// Skip comments in file
 			if (line.length == 0 || line[0] == ';' || line[0] == '#') continue;
-			syncListRules ~= buildNormalizedPath(line);
+			
+			// Is the rule a legacy 'include all root files lazy rule?' 
+			if (strip(line) == "/*") {
+				// yes ...
+				addLogEntry();
+				addLogEntry("ERROR: Invalid sync_list rule '/*' detected. Please use 'sync_root_files = \"true\"' or --sync-root-files option to sync files in the root path.", ["info", "notify"]);
+				addLogEntry();
+			} else {
+				syncListRules ~= buildNormalizedPath(line);
+			}
 		}
 		// Close reading the 'sync_list' file
 		file.close();
