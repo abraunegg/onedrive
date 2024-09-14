@@ -14,7 +14,7 @@
 Name:       onedrive
 Version:    2.5.0
 Release:    1%{?dist}
-Summary:    Microsoft OneDrive Client
+Summary:    OneDrive Client for Linux
 Group:      System Environment/Network
 License:    GPLv3
 URL:        https://github.com/abraunegg/onedrive
@@ -41,7 +41,7 @@ Requires(postun):  initscripts
 %define debug_package %{nil}
 
 %description
-Microsoft OneDrive Client for Linux
+OneDrive Client for Linux
 
 %prep
 
