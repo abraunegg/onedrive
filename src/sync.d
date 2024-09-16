@@ -69,7 +69,7 @@ struct DriveDetailsCache {
 	string driveId;
 	bool quotaRestricted;
 	bool quotaAvailable;
-	ulong quotaRemaining;
+	long quotaRemaining; 
 }
 
 struct DeltaLinkDetails {
@@ -457,7 +457,7 @@ class SyncEngine {
 				if ("remaining" in defaultOneDriveDriveDetails["quota"]) {
 					if (appConfig.accountType == "personal") {
 						// zero space available
-						addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online.");
+						addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional capacity.");
 					} else {
 						// zero space available is being reported, maybe being restricted?
 						addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
@@ -4453,7 +4453,7 @@ class SyncEngine {
 		JSONValue currentDriveQuota;
 		bool quotaRestricted = false; // Assume quota is not restricted unless "remaining" is missing
 		bool quotaAvailable = false;
-		ulong quotaRemainingOnline = 0;
+		long quotaRemainingOnline = 0;
 		string[3][] result;
 		OneDriveApi getCurrentDriveQuotaApiInstance;
 
@@ -4500,11 +4500,20 @@ class SyncEngine {
 			// If 'business' accounts, if driveId == defaultDriveId, then we will have data
 			// If 'business' accounts, if driveId != defaultDriveId, then we will have data, but it will be a 0 value
 			addLogEntry("Quota Details: " ~ to!string(currentDriveQuota), ["debug"]);
+			JSONValue quota = currentDriveQuota["quota"];
 			
-			auto quota = currentDriveQuota["quota"];
 			if ("remaining" in quota) {
-				quotaRemainingOnline = quota["remaining"].integer;
+				// Issue #2806
+				// If this is a negative value, quota["remaining"].integer will convert to a huge positive number. Convert a different way.
+				string tempQuotaRemainingOnlineString = to!string(quota["remaining"]);
+				long tempQuotaRemainingOnlineValue = to!long(tempQuotaRemainingOnlineString);
+			
+				// Update quotaRemainingOnline to use the converted value
+				quotaRemainingOnline = tempQuotaRemainingOnlineValue;
+			
+				// Set the applicable 'quotaAvailable' value
 				quotaAvailable = quotaRemainingOnline > 0;
+				
 				// If "remaining" is present but its value is <= 0, it's not restricted but exhausted
 				if (quotaRemainingOnline <= 0) {
 					if (appConfig.accountType == "personal") {
@@ -8510,19 +8519,12 @@ class SyncEngine {
 	
 		bool quotaRestricted;
 		bool quotaAvailable;
-		ulong quotaRemaining;
+		long quotaRemaining;
 		
 		// Get the data from online
 		auto onlineDriveData = getRemainingFreeSpaceOnline(driveId);
 		quotaRestricted = to!bool(onlineDriveData[0][0]);
 		quotaAvailable = to!bool(onlineDriveData[0][1]);
-		
-		
-		auto quotaRemainingValue = onlineDriveData[0][2];
-		
-		addLogEntry("quotaRemainingValue: " ~ to!string(quotaRemainingValue));
-		
-		
 		quotaRemaining = to!long(onlineDriveData[0][2]);
 		onlineDriveDetails[driveId] = DriveDetailsCache(driveId, quotaRestricted, quotaAvailable, quotaRemaining);
 		
