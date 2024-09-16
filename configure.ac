@@ -9,7 +9,7 @@ dnl - commit the changed files (configure.ac, configure)
 dnl - tag the release
 
 AC_PREREQ([2.69])
-AC_INIT([onedrive],[v2.4.25], [https://github.com/abraunegg/onedrive], [onedrive])
+AC_INIT([onedrive],[v2.5.0], [https://github.com/abraunegg/onedrive], [onedrive])
 AC_CONFIG_SRCDIR([src/main.d])
 
 
@@ -101,7 +101,7 @@ case $(basename $DC) in
 		VERSION=`$DC --version`
 		# remove  everything up to first (
 		VERSION=${VERSION#* (}
-		# remove everthing after ):
+		# remove everything after ):
 		VERSION=${VERSION%%):*}
 		# now version should be something like L.M.N
 		MINVERSION=1.18.0
@@ -162,7 +162,7 @@ dnl value via pkg-config and put it into $def_systemdsystemunitdir
 AS_IF([test "x$with_systemdsystemunitdir" = "xyes" -o "x$with_systemdsystemunitdir" = "xauto"],
       [ dnl true part, so try to determine with pkg-config
         def_systemdsystemunitdir=$($PKG_CONFIG --variable=systemdsystemunitdir systemd)
-        dnl if we cannot find it via pkg-config, *and* the user explicitely passed it in with,
+        dnl if we cannot find it via pkg-config, *and* the user explicitly passed it in with,
         dnl we warn, and in all cases we unset (set to no) the respective variable
         AS_IF([test "x$def_systemdsystemunitdir" = "x"],
               [  dnl we couldn't find the default value via pkg-config

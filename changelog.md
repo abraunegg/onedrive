@@ -1,8 +1,84 @@
 # Changelog
-The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
-and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## 2.5.0 - 2024-09-16
+
+### Special Thankyou
+A special thankyou to all those who helped with testing and providing feedback during the development of this major release. A big thankyou to:
+*   @JC-comp
+*   @Lyncredible
+*   @rrodrigueznt
+*   @bpozdena
+*   @hskrieg
+*   @robertschulze 
+*   @aothmane-control
+*   @mozram
+*   @LunCh-CECNL
+*   @pkolmann
+*   @tdcockers
+*   @undefiened
+*   @cyb3rko
+
+### Notable Changes
+*   This version introduces significant changes regarding how the integrity and validation of your data is determined and is not backwards compatible with v2.4.x.
+*   OneDrive Business Shared Folder Sync has been 100% re-written in v2.5.0. If you are using this feature, please read the new documentation carefully.
+*   The application function --download-only no longer automatically deletes local files. Please read the new documentation regarding this feature.
+
+### Changes
+*   Renamed various documentation files to align with document content
+*   Implement buffered logging so that all logging from all upload & download activities are handled correctly
+*   Replace polling monitor loop with blocking wait
+*   Update how the application utilises curl to fix socket reuse
+*   Various performance enhancements
+*   Implement refactored OneDrive API logic
+*   Enforcement of operational conflicts
+*   Enforcement of application configuration defaults and minimums
+*   Utilise threadsafe sqlite DB access methods
+*   Various bugs and other issues identified during development and testing
+*   Various code cleanup and optimisations
+
+### Fixed
+*   Fix Bug: Upload only not working with Business shared folders
+*   Fix Bug: Business shared folders with same basename get merged
+*   Fix Bug: --dry-run prevents authorization
+*   Fix Bug: Log timestamps lacking trailing zeros, leading to poor log file output alignment
+*   Fix Bug: Subscription ID already exists when using webhooks
+*   Fix Bug: Not all files being downloaded when API data includes HTML ASCII Control Sequences
+*   Fix Bug: --display-sync-status does not work when OneNote sections (.one files) are in your OneDrive
+*   Fix Bug: vim backups when editing files cause edited file to be deleted rather than the edited file being uploaded
+*   Fix Bug: skip_dir does not always work as intended for all directory entries
+*   Fix Bug: Online date being changed in download-only mode
+*   Fix Bug: Resolve that download_only = "true" and cleanup_local_files = "true" also deletes files present online
+*   Fix Bug: Resolve that upload session are not canceled with resync option
+*   Fix Bug: Local files should be safely backed up when the item is not in sync locally to prevent data loss when they are deleted online
+*   Fix Bug: Files with newer timestamp are not chosen as version to be kept
+*   Fix Bug: Synced file is removed when updated on the remote while being processed by onedrive
+*   Fix Bug: Cannot select/filter within Personal Shared Folders
+*   Fix Bug: HTML encoding requires to add filter entries twice
+*   Fix Bug: Uploading files using fragments stuck at 0%
+*   Fix Bug: Implement safeguard when sync_dir is missing and is re-created data is not deleted online
+*   Fix Bug: Fix that --get-sharepoint-drive-id does not handle a SharePoint site with more than 200 entries
+*   Fix Bug: Fix that 'sync_list' does not include files that should be included, when specified just as *.ext_type
+*   Fix Bug: Fix 'sync_list' processing so that '.folder_name' is excluded but 'folder_name' is included
+
+### Added
+*   Implement Feature Request: Multi-threaded uploading/downloading of files
+*   Implement Feature Request: Renaming/Relocation of OneDrive Business shared folders
+*   Implement Feature Request: Support the syncing of individual business shared files
+*   Implement Feature Request: Implement application output to detail upload|download failures at the end of a sync process
+*   Implement Feature Request: Log when manual Authorization is required when using --auth-files
+*   Implement Feature Request: Add cmdline parameter to display (human readable) quota status
+*   Implement Feature Request: Add capability to disable 'fullscan_frequency'
+*   Implement Feature Request: Ability to set --disable-download-validation from Docker environment variable
+*   Implement Feature Request: Ability to set --sync-shared-files from Docker environment variable
+*   Implement Feature Request: file sync (upload/download/delete) notifications
+
+### Updated
+*   Overhauled all documentation
 
 ## 2.4.25 - 2023-06-21
+
 ### Fixed
 *   Fixed that the application was reporting as v2.2.24 when in fact it was v2.4.24 (release tagging issue)
 *   Fixed that the running version obsolete flag (due to above issue) was causing a false flag as being obsolete
@@ -24,7 +100,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Fix error that the application is unable to perform a database vacuum: out of memory when exiting
 
 ### Removed
-*   Remove sha1 from being used by the client as this is being depreciated by Microsoft in July 2023
+*   Remove sha1 from being used by the client as this is being deprecated by Microsoft in July 2023
 *   Complete the removal of crc32 elements
 
 ### Added
@@ -293,7 +369,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Added support in --get-O365-drive-id to provide the 'drive_id' for multiple 'document libraries' within a single Shared Library Site
 
 ### Removed
-*   Removed the depreciated config option 'force_http_11' which was flagged as depreciated by PR #549 in v2.3.6 (June 2019)
+*   Removed the deprecated config option 'force_http_11' which was flagged as deprecated by PR #549 in v2.3.6 (June 2019)
 
 ### Updated
 *   Updated error output of --get-O365-drive-id to provide more details why an error occurred if a SharePoint site lacks the details we need to perform the match
@@ -673,7 +749,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 *   Added --force-http-2 to use HTTP/2 if desired
 
 ### Changed
-*   Depreciated --force-http-1.1 (enabled by default) due to OneDrive inconsistent behavior with HTTP/2 protocol
+*   Deprecated --force-http-1.1 (enabled by default) due to OneDrive inconsistent behavior with HTTP/2 protocol
 
 ## 2.3.5 - 2019-06-19
 ### Fixed

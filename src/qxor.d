@@ -1,10 +1,13 @@
+// What is this module called?
+module qxor;
+
+// What does this module require to function?
 import std.algorithm;
 import std.digest;
 
-// implementation of the QuickXorHash algorithm in D
+// Implementation of the QuickXorHash algorithm in D
 // https://github.com/OneDrive/onedrive-api-docs/blob/live/docs/code-snippets/quickxorhash.md
-struct QuickXor
-{
+struct QuickXor {
 	private enum int widthInBits = 160;
 	private enum size_t lengthInBytes = (widthInBits - 1) / 8 + 1;
 	private enum size_t lengthInQWords = (widthInBits - 1) / 64 + 1;
@@ -15,8 +18,7 @@ struct QuickXor
 	private ulong _lengthSoFar;
 	private int _shiftSoFar;
 
-	nothrow @safe void put(scope const(ubyte)[] array...)
-	{
+	nothrow @safe void put(scope const(ubyte)[] array...) {
 		int vectorArrayIndex = _shiftSoFar / 64;
 		int vectorOffset = _shiftSoFar % 64;
 		immutable size_t iterations = min(array.length, widthInBits);
@@ -52,18 +54,15 @@ struct QuickXor
 
 		_shiftSoFar = cast(int) (_shiftSoFar + shift * (array.length % widthInBits)) % widthInBits;
 		_lengthSoFar += array.length;
-
 	}
 
-	nothrow @safe void start()
-	{
+	nothrow @safe void start() {
 		_data = _data.init;
 		_shiftSoFar = 0;
 		_lengthSoFar = 0;
 	}
 
-	nothrow @trusted ubyte[lengthInBytes] finish()
-	{
+	nothrow @trusted ubyte[lengthInBytes] finish() {
 		ubyte[lengthInBytes] tmp;
 		tmp[0 .. lengthInBytes] = (cast(ubyte*) _data)[0 .. lengthInBytes];
 		for (size_t i = 0; i < 8; i++) {
@@ -72,17 +71,3 @@ struct QuickXor
 		return tmp;
 	}
 }
-
-unittest
-{
-	assert(isDigest!QuickXor);
-}
-
-unittest
-{
-	QuickXor qxor;
-	qxor.put(cast(ubyte[]) "The quick brown fox jumps over the lazy dog");
-	assert(qxor.finish().toHexString() == "6CC4A56F2B26C492FA4BBE57C1F31C4193A972BE");
-}
-
-alias QuickXorDigest = WrapperDigest!(QuickXor);

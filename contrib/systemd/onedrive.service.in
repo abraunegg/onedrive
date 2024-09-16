@@ -1,5 +1,5 @@
 [Unit]
-Description=OneDrive Free Client
+Description=OneDrive Client for Linux
 Documentation=https://github.com/abraunegg/onedrive
 After=network-online.target
 Wants=network-online.target
@@ -21,7 +21,10 @@ RestrictRealtime=true
 ExecStart=@prefix@/bin/onedrive --monitor
 Restart=on-failure
 RestartSec=3
-RestartPreventExitStatus=3
+# Do not restart the service if a --resync is required which is done via a 126 exit code
+RestartPreventExitStatus=126
+# Time to wait for the service to stop gracefully before forcefully terminating it
+TimeoutStopSec=90
 
 [Install]
 WantedBy=default.target

@@ -3,19 +3,19 @@ This client can be run as a Docker container, with 3 available container base op
 
 | Container Base | Docker Tag  | Description                                                    | i686 | x86_64 | ARMHF | AARCH64 |
 |----------------|-------------|----------------------------------------------------------------|:------:|:------:|:-----:|:-------:|
-| Alpine Linux   | edge-alpine | Docker container based on Alpine 3.18 using 'master'           |❌|✔|❌|✔|
-| Alpine Linux   | alpine      | Docker container based on Alpine 3.18 using latest release     |❌|✔|❌|✔|
+| Alpine Linux   | edge-alpine | Docker container based on Alpine 3.20 using 'master'           |❌|✔|❌|✔|
+| Alpine Linux   | alpine      | Docker container based on Alpine 3.20 using latest release     |❌|✔|❌|✔|
 | Debian         | debian      | Docker container based on Debian Stable using latest release   |✔|✔|✔|✔|
 | Debian         | edge        | Docker container based on Debian Stable using 'master'         |✔|✔|✔|✔|
 | Debian         | edge-debian | Docker container based on Debian Stable using 'master'         |✔|✔|✔|✔|
 | Debian         | latest      | Docker container based on Debian Stable using latest release   |✔|✔|✔|✔|
-| Fedora         | edge-fedora | Docker container based on Fedora 38 using 'master'             |❌|✔|❌|✔|
-| Fedora         | fedora      | Docker container based on Fedora 38 using latest release       |❌|✔|❌|✔|
+| Fedora         | edge-fedora | Docker container based on Fedora 40 using 'master'             |❌|✔|❌|✔|
+| Fedora         | fedora      | Docker container based on Fedora 40 using latest release       |❌|✔|❌|✔|
 
 These containers offer a simple monitoring-mode service for the OneDrive Client for Linux.
 
 The instructions below have been validated on:
-*   Fedora 38
+*   Fedora 40
 
 The instructions below will utilise the 'edge' tag, however this can be substituted for any of the other docker tags such as 'latest' from the table above if desired.
 
@@ -23,7 +23,8 @@ The 'edge' Docker Container will align closer to all documentation and features,
 
 Additionally there are specific version release tags for each release. Refer to https://hub.docker.com/r/driveone/onedrive/tags for any other Docker tags you may be interested in.
 
-**Note:** The below instructions for docker has been tested and validated when logging into the system as an unprivileged user (non 'root' user).
+> [!NOTE]
+> The below instructions for docker has been tested and validated when logging into the system as an unprivileged user (non 'root' user).
 
 ## High Level Configuration Steps
 1. Install 'docker' as per your distribution platform's instructions if not already installed.
@@ -37,7 +38,11 @@ Additionally there are specific version release tags for each release. Refer to 
 ## Configuration Steps
 
 ### 1. Install 'docker' on your platform
-Install 'docker' as per your distribution platform's instructions if not already installed.
+Install Docker for your system using the official instructions found at https://docs.docker.com/engine/install/.
+
+> [!CAUTION]
+> If you are using Ubuntu or any distribution based on Ubuntu, do not install Docker from your distribution's repositories, as they may contain obsolete versions. Instead, you must install Docker using the packages provided directly by Docker.
+
 
 ### 2. Configure 'docker' to allow non-privileged users to run Docker commands
 Read https://docs.docker.com/engine/install/linux-postinstall/ to configure the 'docker' user group with your user account to allow your non 'root' user to run 'docker' commands.
@@ -71,7 +76,7 @@ sudo systemctl enable --now docker
 
 Test that 'docker' is operational for your 'non-root' user, as per below:
 ```bash
-[alex@fedora-38-docker-host ~]$ docker run hello-world
+[alex@fedora-40-docker-host ~]$ docker run hello-world
 Unable to find image 'hello-world:latest' locally
 latest: Pulling from library/hello-world
 719385e32844: Pull complete 
@@ -99,7 +104,7 @@ Share images, automate workflows, and more with a free Docker ID:
 For more examples and ideas, visit:
  https://docs.docker.com/get-started/
 
-[alex@fedora-38-docker-host ~]$ 
+[alex@fedora-40-docker-host ~]$ 
 ```
 
 ### 5. Configure the required docker volumes
@@ -131,17 +136,19 @@ This will create a docker volume labeled `onedrive_data` and will map to a path 
 *   The owner of this specified folder must have permissions for its parent directory
 *   Docker will attempt to change the permissions of the volume to the user the container is configured to run as
 
-**NOTE:** Issues occur when this target folder is a mounted folder of an external system (NAS, SMB mount, USB Drive etc) as the 'mount' itself is owed by 'root'. If this is your use case, you *must* ensure your normal user can mount your desired target without having the target mounted by 'root'. If you do not fix this, your Docker container will fail to start with the following error message:
-```bash
-ROOT level privileges prohibited!
-```
+> [!IMPORTANT]
+> Issues occur when this target folder is a mounted folder of an external system (NAS, SMB mount, USB Drive etc) as the 'mount' itself is owed by 'root'. If this is your use case, you *must* ensure your normal user can mount your desired target without having the target mounted by 'root'. If you do not fix this, your Docker container will fail to start with the following error message:
+> ```bash
+> ROOT level privileges prohibited!
+> ```
 
 ### 6. First run of Docker container under docker and performing authorisation
 The 'onedrive' client within the container first needs to be authorised with your Microsoft account. This is achieved by initially running docker in interactive mode.
 
 Run the docker image with the commands below and make sure to change the value of `ONEDRIVE_DATA_DIR` to the actual onedrive data directory on your filesystem that you wish to use (e.g. `export ONEDRIVE_DATA_DIR="/home/abraunegg/OneDrive"`).
 
-**Important:** The 'target' folder of `ONEDRIVE_DATA_DIR` must exist before running the docker container. The script below will create 'ONEDRIVE_DATA_DIR' so that it exists locally for the docker volume mapping to occur.
+> [!IMPORTANT]
+> The 'target' folder of `ONEDRIVE_DATA_DIR` must exist before running the docker container. The script below will create 'ONEDRIVE_DATA_DIR' so that it exists locally for the docker volume mapping to occur.
 
 It is also a requirement that the container be run using a non-root uid and gid, you must insert a non-root UID and GID (e.g.` export ONEDRIVE_UID=1000` and export `ONEDRIVE_GID=1000`). The script below will use `id` to evaluate your system environment to use the correct values.
 ```bash
@@ -228,7 +235,7 @@ docker volume inspect onedrive_conf
 
 Or you can map your own config folder to the config volume. Make sure to copy all files from the docker volume into your mapped folder first.
 
-The detailed document for the config can be found here: [Configuration](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#configuration)
+The detailed document for the config can be found here: [Configuration](https://github.com/abraunegg/onedrive/blob/master/docs/usage.md#configuration)
 
 ### Syncing multiple accounts
 There are many ways to do this, the easiest is probably to do the following:
@@ -246,7 +253,7 @@ If you are experienced with docker and onedrive, you can use the following scrip
 ```bash
 # Update ONEDRIVE_DATA_DIR with correct OneDrive directory path
 ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
-# Create directory if non-existant
+# Create directory if non-existent
 mkdir -p ${ONEDRIVE_DATA_DIR} 
 
 firstRun='-d'
@@ -270,10 +277,15 @@ docker run $firstRun --restart unless-stopped --name onedrive -v onedrive_conf:/
 | <B>ONEDRIVE_NOREMOTEDELETE</B> | Controls "--no-remote-delete" switch on onedrive sync. Default is 0 | 1 |
 | <B>ONEDRIVE_LOGOUT</B> | Controls "--logout" switch. Default is 0 | 1 |
 | <B>ONEDRIVE_REAUTH</B> | Controls "--reauth" switch. Default is 0 | 1 |
-| <B>ONEDRIVE_AUTHFILES</B> | Controls "--auth-files" option. Default is "" | "authUrl:responseUrl" |
-| <B>ONEDRIVE_AUTHRESPONSE</B> | Controls "--auth-response" option. Default is "" | See [here](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#authorize-the-application-with-your-onedrive-account) |
+| <B>ONEDRIVE_AUTHFILES</B> | Controls "--auth-files" option. Default is "" | Please read [CLI Option: --auth-files](./application-config-options.md#cli-option---auth-files) |
+| <B>ONEDRIVE_AUTHRESPONSE</B> | Controls "--auth-response" option. Default is "" | Please read [CLI Option: --auth-response](./application-config-options.md#cli-option---auth-response) |
 | <B>ONEDRIVE_DISPLAY_CONFIG</B> | Controls "--display-running-config" switch on onedrive sync. Default is 0 | 1 |
 | <B>ONEDRIVE_SINGLE_DIRECTORY</B> | Controls "--single-directory" option. Default = "" | "mydir" |
+| <B>ONEDRIVE_DRYRUN</B> | Controls "--dry-run" option. Default is 0 | 1 |
+| <B>ONEDRIVE_DISABLE_DOWNLOAD_VALIDATION</B> | Controls "--disable-download-validation" option. Default is 0 | 1 |
+| <B>ONEDRIVE_DISABLE_UPLOAD_VALIDATION</B> | Controls "--disable-upload-validation" option. Default is 0 | 1 |
+| <B>ONEDRIVE_SYNC_SHARED_FILES</B> | Controls "--sync-shared-files" option. Default is 0 | 1 |
+| <B>ONEDRIVE_RUNAS_ROOT</B> | Controls if the Docker container should be run as the 'root' user instead of 'onedrive' user. Default is 0 | 1 |
 
 ### Environment Variables Usage Examples
 **Verbose Output:**
@@ -334,7 +346,8 @@ If you are running a Raspberry Pi, you will need to edit your system configurati
 
 *   Modify the file `/etc/dphys-swapfile` and edit the `CONF_SWAPSIZE`, for example: `CONF_SWAPSIZE=2048`. 
 
-A reboot of your Raspberry Pi is required to make this change effective.
+> [!IMPORTANT]
+> A reboot of your Raspberry Pi is required to make this change effective.
 
 ### Building and running a custom Docker image
 You can also build your own image instead of pulling the one from [hub.docker.com](https://hub.docker.com/r/driveone/onedrive):

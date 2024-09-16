@@ -3,19 +3,19 @@ This client can be run as a Podman container, with 3 available container base op
 
 | Container Base | Docker Tag  | Description                                                    | i686 | x86_64 | ARMHF | AARCH64 |
 |----------------|-------------|----------------------------------------------------------------|:------:|:------:|:-----:|:-------:|
-| Alpine Linux   | edge-alpine | Podman container based on Alpine 3.18 using 'master'           |❌|✔|❌|✔|
-| Alpine Linux   | alpine      | Podman container based on Alpine 3.18 using latest release     |❌|✔|❌|✔|
+| Alpine Linux   | edge-alpine | Podman container based on Alpine 3.20 using 'master'           |❌|✔|❌|✔|
+| Alpine Linux   | alpine      | Podman container based on Alpine 3.20 using latest release     |❌|✔|❌|✔|
 | Debian         | debian      | Podman container based on Debian Stable using latest release   |✔|✔|✔|✔|
 | Debian         | edge        | Podman container based on Debian Stable using 'master'         |✔|✔|✔|✔|
 | Debian         | edge-debian | Podman container based on Debian Stable using 'master'         |✔|✔|✔|✔|
 | Debian         | latest      | Podman container based on Debian Stable using latest release   |✔|✔|✔|✔|
-| Fedora         | edge-fedora | Podman container based on Fedora 38 using 'master'             |❌|✔|❌|✔|
-| Fedora         | fedora      | Podman container based on Fedora 38 using latest release       |❌|✔|❌|✔|
+| Fedora         | edge-fedora | Podman container based on Fedora 40 using 'master'             |❌|✔|❌|✔|
+| Fedora         | fedora      | Podman container based on Fedora 40 using latest release       |❌|✔|❌|✔|
 
 These containers offer a simple monitoring-mode service for the OneDrive Client for Linux.
 
 The instructions below have been validated on:
-*   Fedora 38
+*   Fedora 40
 
 The instructions below will utilise the 'edge' tag, however this can be substituted for any of the other docker tags such as 'latest' from the table above if desired.
 
@@ -23,7 +23,8 @@ The 'edge' Docker Container will align closer to all documentation and features,
 
 Additionally there are specific version release tags for each release. Refer to https://hub.docker.com/r/driveone/onedrive/tags for any other Docker tags you may be interested in.
 
-**Note:** The below instructions for podman has been tested and validated when logging into the system as an unprivileged user (non 'root' user).
+> [!NOTE]
+> The below instructions for podman has been tested and validated when logging into the system as an unprivileged user (non 'root' user).
 
 ## High Level Configuration Steps
 1. Install 'podman' as per your distribution platform's instructions if not already installed.
@@ -62,7 +63,7 @@ If you are still experiencing permission issues despite disabling SELinux, pleas
 ### 3. Test 'podman' on your platform
 Test that 'podman' is operational for your 'non-root' user, as per below:
 ```bash
-[alex@fedora38-podman ~]$ podman pull fedora
+[alex@fedora40-podman ~]$ podman pull fedora
 Resolved "fedora" as an alias (/etc/containers/registries.conf.d/000-shortnames.conf)
 Trying to pull registry.fedoraproject.org/fedora:latest...
 Getting image source signatures
@@ -70,9 +71,9 @@ Copying blob b30887322388 done   |
 Copying config a1cd3cbf8a done   | 
 Writing manifest to image destination
 a1cd3cbf8adaa422629f2fcdc629fd9297138910a467b11c66e5ddb2c2753dff
-[alex@fedora38-podman ~]$ podman run fedora /bin/echo "Welcome to the Podman World"
+[alex@fedora40-podman ~]$ podman run fedora /bin/echo "Welcome to the Podman World"
 Welcome to the Podman World
-[alex@fedora38-podman ~]$ 
+[alex@fedora40-podman ~]$ 
 ```
 
 ### 4. Configure the required podman volumes
@@ -103,17 +104,19 @@ This will create a podman volume labeled `onedrive_data` and will map to a path 
 *   The owner of this specified folder must not be root
 *   Podman will attempt to change the permissions of the volume to the user the container is configured to run as
 
-**NOTE:** Issues occur when this target folder is a mounted folder of an external system (NAS, SMB mount, USB Drive etc) as the 'mount' itself is owed by 'root'. If this is your use case, you *must* ensure your normal user can mount your desired target without having the target mounted by 'root'. If you do not fix this, your Podman container will fail to start with the following error message:
-```bash
-ROOT level privileges prohibited!
-```
+> [!IMPORTANT]
+> Issues occur when this target folder is a mounted folder of an external system (NAS, SMB mount, USB Drive etc) as the 'mount' itself is owed by 'root'. If this is your use case, you *must* ensure your normal user can mount your desired target without having the target mounted by 'root'. If you do not fix this, your Podman container will fail to start with the following error message:
+> ```bash
+> ROOT level privileges prohibited!
+> ```
 
 ### 5. First run of Docker container under podman and performing authorisation
 The 'onedrive' client within the container first needs to be authorised with your Microsoft account. This is achieved by initially running podman in interactive mode.
 
 Run the podman image with the commands below and make sure to change the value of `ONEDRIVE_DATA_DIR` to the actual onedrive data directory on your filesystem that you wish to use (e.g. `export ONEDRIVE_DATA_DIR="/home/abraunegg/OneDrive"`).
 
-**Important:** The 'target' folder of `ONEDRIVE_DATA_DIR` must exist before running the podman container. The script below will create 'ONEDRIVE_DATA_DIR' so that it exists locally for the podman volume mapping to occur.
+> [!IMPORTANT]
+> The 'target' folder of `ONEDRIVE_DATA_DIR` must exist before running the podman container. The script below will create 'ONEDRIVE_DATA_DIR' so that it exists locally for the podman volume mapping to occur.
 
 It is also a requirement that the container be run using a non-root uid and gid, you must insert a non-root UID and GID (e.g.` export ONEDRIVE_UID=1000` and export `ONEDRIVE_GID=1000`). The script below will use `id` to evaluate your system environment to use the correct values.
 ```bash
@@ -127,7 +130,8 @@ podman run -it --name onedrive --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
     driveone/onedrive:edge
 ```
 
-**Important:** In some scenarios, 'podman' sets the configuration and data directories to a different UID & GID as specified. To resolve this situation, you must run 'podman' with the `--userns=keep-id` flag to ensure 'podman' uses the UID and GID as specified. The updated script example when using `--userns=keep-id` is below:
+> [!IMPORTANT]
+> In some scenarios, 'podman' sets the configuration and data directories to a different UID & GID as specified. To resolve this situation, you must run 'podman' with the `--userns=keep-id` flag to ensure 'podman' uses the UID and GID as specified. The updated script example when using `--userns=keep-id` is below:
 
 ```bash
 export ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
@@ -142,7 +146,8 @@ podman run -it --name onedrive --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
 ```
 
 
-**Important:** If you plan to use the 'podman' built in auto-updating of container images described in 'Systemd Service & Auto Updating' below, you must pass an additional argument to set a label during the first run. The updated script example to support auto-updating of container images is below:
+> [!IMPORTANT]
+> If you plan to use the 'podman' built in auto-updating of container images described in 'Systemd Service & Auto Updating' below, you must pass an additional argument to set a label during the first run. The updated script example to support auto-updating of container images is below:
 
 ```bash
 export ONEDRIVE_DATA_DIR="${HOME}/OneDrive"
@@ -194,7 +199,6 @@ podman start onedrive
 ```bash
 podman rm -f onedrive
 ```
-
 
 ## Advanced Usage
 
@@ -255,7 +259,7 @@ podman volume inspect onedrive_conf
 ```
 Or you can map your own config folder to the config volume. Make sure to copy all files from the volume into your mapped folder first.
 
-The detailed document for the config can be found here: [Configuration](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#configuration)
+The detailed document for the config can be found here: [Configuration](https://github.com/abraunegg/onedrive/blob/master/docs/usage.md#configuration)
 
 ### Syncing multiple accounts
 There are many ways to do this, the easiest is probably to do the following:
@@ -290,10 +294,15 @@ podman run -it --name onedrive_work --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" \
 | <B>ONEDRIVE_NOREMOTEDELETE</B> | Controls "--no-remote-delete" switch on onedrive sync. Default is 0 | 1 |
 | <B>ONEDRIVE_LOGOUT</B> | Controls "--logout" switch. Default is 0 | 1 |
 | <B>ONEDRIVE_REAUTH</B> | Controls "--reauth" switch. Default is 0 | 1 |
-| <B>ONEDRIVE_AUTHFILES</B> | Controls "--auth-files" option. Default is "" | "authUrl:responseUrl" |
-| <B>ONEDRIVE_AUTHRESPONSE</B> | Controls "--auth-response" option. Default is "" | See [here](https://github.com/abraunegg/onedrive/blob/master/docs/USAGE.md#authorize-the-application-with-your-onedrive-account) |
+| <B>ONEDRIVE_AUTHFILES</B> | Controls "--auth-files" option. Default is "" | Please read [CLI Option: --auth-files](./application-config-options.md#cli-option---auth-files) |
+| <B>ONEDRIVE_AUTHRESPONSE</B> | Controls "--auth-response" option. Default is "" | Please read [CLI Option: --auth-response](./application-config-options.md#cli-option---auth-response) |
 | <B>ONEDRIVE_DISPLAY_CONFIG</B> | Controls "--display-running-config" switch on onedrive sync. Default is 0 | 1 |
 | <B>ONEDRIVE_SINGLE_DIRECTORY</B> | Controls "--single-directory" option. Default = "" | "mydir" |
+| <B>ONEDRIVE_DRYRUN</B> | Controls "--dry-run" option. Default is 0 | 1 |
+| <B>ONEDRIVE_DISABLE_DOWNLOAD_VALIDATION</B> | Controls "--disable-download-validation" option. Default is 0 | 1 |
+| <B>ONEDRIVE_DISABLE_UPLOAD_VALIDATION</B> | Controls "--disable-upload-validation" option. Default is 0 | 1 |
+| <B>ONEDRIVE_SYNC_SHARED_FILES</B> | Controls "--sync-shared-files" option. Default is 0 | 1 |
+| <B>ONEDRIVE_RUNAS_ROOT</B> | Controls if the Docker container should be run as the 'root' user instead of 'onedrive' user. Default is 0 | 1 |
 
 ### Environment Variables Usage Examples
 **Verbose Output:**

@@ -63,6 +63,18 @@ When these delegated API permissions are combined, these provide the effective a
 
 These 'default' permissions will allow the OneDrive Client for Linux to read, write and delete data associated with your OneDrive Account.
 
+## How are the Authentication Scopes used?
+
+When using the OneDrive Client for Linux, the above authentication scopes will be presented to the Microsoft Authentication Service (login.microsoftonline.com), where the service will validate the request and provide an applicable token to access Microsoft OneDrive with. This can be illustrated as the following:
+
+![Linux Authentication to Microsoft OneDrive](./puml/onedrive_linux_authentication.png)
+
+This is similar to the Microsoft Windows OneDrive Client:
+
+![Windows Authentication to Microsoft OneDrive](./puml/onedrive_windows_authentication.png)
+
+In a business setting, IT staff who need to authorise the use of the OneDrive Client for Linux in their environment can be assured of its safety. The primary concern for IT staff should be securing the device running the OneDrive Client for Linux. Unlike in a corporate environment where Windows devices are secured through Active Directory and Group Policy Objects (GPOs) to protect corporate data on the device, it is beyond the responsibility of this client to manage security on Linux devices.
+
 ## Configuring read-only access to your OneDrive data
 In some situations, it may be desirable to configure the OneDrive Client for Linux totally in read-only operation.
 
@@ -72,7 +84,8 @@ read_only_auth_scope = "true"
 ```
 This will change the user authentication scope request to use read-only access.
 
-**Note:** When changing this value, you *must* re-authenticate the client using the `--reauth` option to utilise the change in authentication scopes.
+> [!IMPORTANT]
+> When changing this value, you *must* re-authenticate the client using the `--reauth` option to utilise the change in authentication scopes.
 
 When using read-only authentication scopes, the uploading of any data or local change to OneDrive will fail with the following error:
 ```
@@ -88,7 +101,8 @@ As such, it is also advisable for you to add the following to your configuration
 download_only = "true"
 ```
 
-**Important:** Additionally when using 'read_only_auth_scope' you also will need to remove your existing application access consent otherwise old authentication consent will be valid and will be used. This will mean the application will technically have the consent to upload data. See below on how to remove your prior application consent.
+> [!IMPORTANT]
+> Additionally when using 'read_only_auth_scope' you also will need to remove your existing application access consent otherwise old authentication consent will be valid and will be used. This will mean the application will technically have the consent to upload data. See below on how to remove your prior application consent.
  
 ## Reviewing your existing application access consent
 

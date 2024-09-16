@@ -12,9 +12,9 @@
 %endif
 
 Name:       onedrive
-Version:    2.4.25
+Version:    2.5.0
 Release:    1%{?dist}
-Summary:    Microsoft OneDrive Client
+Summary:    OneDrive Client for Linux
 Group:      System Environment/Network
 License:    GPLv3
 URL:        https://github.com/abraunegg/onedrive
@@ -41,7 +41,7 @@ Requires(postun):  initscripts
 %define debug_package %{nil}
 
 %description
-Microsoft OneDrive Client for Linux
+OneDrive Client for Linux
 
 %prep
 
@@ -50,7 +50,7 @@ Microsoft OneDrive Client for Linux
 
 %build
 # cd %{_builddir}/%{name}-%{version}
-%configure 
+%configure --enable-debug --enable-notifications
 make 
 
 %install
@@ -59,7 +59,7 @@ make
 %clean
 
 %files
-%doc README.md LICENSE CHANGELOG.md
+%doc readme.md LICENSE changelog.md
 %config %{_sysconfdir}/logrotate.d/onedrive
 %{_mandir}/man1/%{name}.1.gz
 %{_docdir}/%{name}

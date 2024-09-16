@@ -1,0 +1,34 @@
+@startuml
+|Decision Tree|
+:Start Client Side Filtering Evaluation;
+if (check_nosync?) then (true)
+  :Skip item (no sync);
+else (false)
+  if (skip_dotfiles?) then (true)
+    :Skip file (dotfile);
+  else (false)
+    if (skip_symlinks?) then (true)
+      :Skip item (symlink);
+    else (false)
+      if (skip_dir?) then (true)
+        :Skip directory;
+      else (false)
+        if (skip_file?) then (true)
+          :Skip file;
+        else (false)
+          if (in sync_list?) then (false)
+            :Skip item (not in sync list);
+          else (true)
+            if (skip_size?) then (true)
+              :Skip file (size too large);
+            else (false)
+              :File or Directory flagged\nto be synced;
+            endif
+          endif
+        endif
+      endif
+    endif
+  endif
+endif
+:End Client Side Filtering Evaluation;
+@enduml
