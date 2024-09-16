@@ -8516,6 +8516,13 @@ class SyncEngine {
 		auto onlineDriveData = getRemainingFreeSpaceOnline(driveId);
 		quotaRestricted = to!bool(onlineDriveData[0][0]);
 		quotaAvailable = to!bool(onlineDriveData[0][1]);
+		
+		
+		auto quotaRemainingValue = onlineDriveData[0][2];
+		
+		addLogEntry("quotaRemainingValue: " ~ to!string(quotaRemainingValue));
+		
+		
 		quotaRemaining = to!long(onlineDriveData[0][2]);
 		onlineDriveDetails[driveId] = DriveDetailsCache(driveId, quotaRestricted, quotaAvailable, quotaRemaining);
 		
