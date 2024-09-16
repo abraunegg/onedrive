@@ -18,6 +18,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 *   @pkolmann
 *   @tdcockers
 *   @undefiened
+*   @cyb3rko
 
 ### Notable Changes
 *   This version introduces significant changes regarding how the integrity and validation of your data is determined and is not backwards compatible with v2.4.x.
@@ -59,6 +60,7 @@ A special thankyou to all those who helped with testing and providing feedback d
 *   Fix Bug: Implement safeguard when sync_dir is missing and is re-created data is not deleted online
 *   Fix Bug: Fix that --get-sharepoint-drive-id does not handle a SharePoint site with more than 200 entries
 *   Fix Bug: Fix that 'sync_list' does not include files that should be included, when specified just as *.ext_type
+*   Fix Bug: Fix 'sync_list' processing so that '.folder_name' is excluded but 'folder_name' is included
 
 ### Added
 *   Implement Feature Request: Multi-threaded uploading/downloading of files
