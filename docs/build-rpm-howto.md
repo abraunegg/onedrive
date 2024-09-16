@@ -19,7 +19,7 @@ mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 ## Build RPM from spec file
 Build the RPM from the provided spec file:
 ```text
-wget https://github.com/abraunegg/onedrive/archive/refs/tags/v2.5.0-rc3.tar.gz -O ~/rpmbuild/SOURCES/v2.5.0.tar.gz
+wget https://github.com/abraunegg/onedrive/archive/refs/tags/v2.5.0.tar.gz -O ~/rpmbuild/SOURCES/v2.5.0.tar.gz
 #wget https://raw.githubusercontent.com/abraunegg/onedrive/master/contrib/spec/onedrive.spec.in -O ~/rpmbuild/SPECS/onedrive.spec
 
 wget https://raw.githubusercontent.com/abraunegg/onedrive/onedrive-v2.5.0-release-candidate-3/contrib/spec/onedrive.spec.in -O ~/rpmbuild/SPECS/onedrive.spec
@@ -112,7 +112,7 @@ configure: WARNING: unrecognized options: --disable-dependency-tracking
 if [ -f .git/HEAD ] ; then \
         git describe --tags > version ; \
 else \
-        echo v2.5.0-rc3 > version ; \
+        echo v2.5.0 > version ; \
 fi
 dmd -w -J. -g -debug -gs -version=NoPragma -version=NoGdk -version=Notifications -L-lcurl -L-lsqlite3 -L-lnotify -L-lgdk_pixbuf-2.0 -L-lgio-2.0 -L-lgobject-2.0 -L-lglib-2.0 -L-ldl src/main.d src/config.d src/log.d src/util.d src/qxor.d src/curlEngine.d src/onedrive.d src/webhook.d src/sync.d src/itemdb.d src/sqlite.d src/clientSideFiltering.d src/monitor.d src/arsd/cgi.d src/notifications/notify.d src/notifications/dnotify.d -ofonedrive
 + RPM_EC=0
@@ -218,10 +218,10 @@ Installed:
 
 Complete!
 [alex@centos9stream ~]$ onedrive --version
-onedrive v2.5.0-rc3
+onedrive v2.5.0
 [alex@centos9stream ~]$ onedrive --display-config
 WARNING: D-Bus message bus daemon is not available; GUI notifications are disabled
-Application version                          = onedrive v2.5.0-rc3
+Application version                          = onedrive v2.5.0
 Compiled with                                = DMD 2088
 User Application Config path                 = /home/alex/.config/onedrive
 System Application Config path               = /etc/onedrive
@@ -264,7 +264,7 @@ Config option 'space_reservation'            = 52428800
 Config option 'application_id'               = d50ca740-c83f-4d1b-b616-12c519384f0c
 Config option 'azure_ad_endpoint'            = 
 Config option 'azure_tenant_id'              = 
-Config option 'user_agent'                   = ISV|abraunegg|OneDrive Client for Linux/v2.5.0-rc3
+Config option 'user_agent'                   = ISV|abraunegg|OneDrive Client for Linux/v2.5.0
 Config option 'force_http_11'                = false
 Config option 'debug_https'                  = false
 Config option 'rate_limit'                   = 0
