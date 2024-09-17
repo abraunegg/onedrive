@@ -18,7 +18,7 @@ ENV PKG_CONFIG=/usr/bin/pkgconf
 COPY . /usr/src/onedrive
 WORKDIR /usr/src/onedrive
 
-RUN ./configure \
+RUN ./configure --enable-debug\
  && make clean \
  && make \
  && make install
