@@ -3856,7 +3856,17 @@ class SyncEngine {
 						if (containsURLEncodedItems(selfBuiltPath)) {
 							// decode it
 							addLogEntry("selfBuiltPath for sync_list check needs decoding: " ~ selfBuiltPath, ["debug"]);
-							newItemPath = decodeComponent(selfBuiltPath);
+							
+							try {
+								// try and decode selfBuiltPath
+								newItemPath = decodeComponent(selfBuiltPath);
+							} catch (URIException exception) {
+								// why?
+								addLogEntry("ERROR: Unable to URL Decode path: " ~ exception.msg);
+								addLogEntry("ERROR: To resolve, rename this item online: " ~ selfBuiltPath);
+								// have to use as-is due to decode error
+								newItemPath = selfBuiltPath;
+							}
 						} else {
 							// use as-is
 							newItemPath = selfBuiltPath;
