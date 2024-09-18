@@ -69,7 +69,7 @@ struct DriveDetailsCache {
 	string driveId;
 	bool quotaRestricted;
 	bool quotaAvailable;
-	long quotaRemaining; 
+	long quotaRemaining;
 }
 
 struct DeltaLinkDetails {
@@ -443,7 +443,10 @@ class SyncEngine {
 				// - quotaAvailable;
 				// - quotaRemaining;
 				addOrUpdateOneDriveOnlineDetails(appConfig.defaultDriveId);
-			} 
+			}
+			
+			// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero value
+			// When addOrUpdateOneDriveOnlineDetails() is called, messaging is provided if these are zero, negative or missing (thus quota is being restricted)
 			
 			// Fetch the details from cachedOnlineDriveData
 			cachedOnlineDriveData = getDriveDetails(appConfig.defaultDriveId);
@@ -451,35 +454,12 @@ class SyncEngine {
 			// - cachedOnlineDriveData.quotaAvailable;
 			// - cachedOnlineDriveData.quotaRemaining;
 			
-			// In some cases OneDrive Business configurations 'restrict' quota details thus is empty / blank / negative value / zero
-			if (cachedOnlineDriveData.quotaRemaining <= 0) {
-				// free space is <= 0  .. why ?
-				if ("remaining" in defaultOneDriveDriveDetails["quota"]) {
-					if (appConfig.accountType == "personal") {
-						// zero space available
-						addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional capacity.");
-					} else {
-						// zero space available is being reported, maybe being restricted?
-						addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
-					}
-				} else {
-					// json response was missing a 'remaining' value
-					if (appConfig.accountType == "personal") {
-						addLogEntry("ERROR: OneDrive quota information is missing. Potentially your OneDrive account currently has zero space available. Please free up some space online.");
-					} else {
-						// quota details not available
-						addLogEntry("ERROR: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
-					}
-				}
-			}
-			
-			// What did we set based on the data from the JSON
+			// What did we set based on the data from the JSON and cached drive data
 			addLogEntry("appConfig.accountType                 = " ~ appConfig.accountType, ["debug"]);
 			addLogEntry("appConfig.defaultDriveId              = " ~ appConfig.defaultDriveId, ["debug"]);
 			addLogEntry("cachedOnlineDriveData.quotaRemaining  = " ~ to!string(cachedOnlineDriveData.quotaRemaining), ["debug"]);
 			addLogEntry("cachedOnlineDriveData.quotaAvailable  = " ~ to!string(cachedOnlineDriveData.quotaAvailable), ["debug"]);
 			addLogEntry("cachedOnlineDriveData.quotaRestricted = " ~ to!string(cachedOnlineDriveData.quotaRestricted), ["debug"]);
-			
 		} else {
 			// Handle the invalid JSON response
 			throw new AccountDetailsException();
@@ -2794,9 +2774,9 @@ class SyncEngine {
 		} else {
 			// zero or non-zero value or restricted
 			if (!cachedOnlineDriveData.quotaRestricted){
-				addLogEntry("Remaining Free Space:       0 KB", ["verbose"]);
+				addLogEntry("Remaining Free Space: 0 KB", ["verbose"]);
 			} else {
-				addLogEntry("Remaining Free Space:       Not Available", ["verbose"]);
+				addLogEntry("Remaining Free Space: Not Available", ["verbose"]);
 			}
 		}
 	}
@@ -4504,7 +4484,7 @@ class SyncEngine {
 			
 			if ("remaining" in quota) {
 				// Issue #2806
-				// If this is a negative value, quota["remaining"].integer will convert to a huge positive number. Convert a different way.
+				// If this is a negative value, quota["remaining"].integer can potentially convert to a huge positive number. Convert a different way.
 				string tempQuotaRemainingOnlineString = to!string(quota["remaining"]);
 				long tempQuotaRemainingOnlineValue = to!long(tempQuotaRemainingOnlineString);
 			
@@ -4525,7 +4505,14 @@ class SyncEngine {
 			} else {
 				// "remaining" not present, indicating restricted quota information
 				quotaRestricted = true;
-				addLogEntry("Quota information is restricted or not available for this drive.", ["verbose"]);
+				
+				// what sort of account type is this?
+				if (appConfig.accountType == "personal") {
+					addLogEntry("ERROR: OneDrive quota information is missing. Your OneDrive account potentially has zero space available. Please free up some space online.");
+				} else {
+					// quota details not available
+					addLogEntry("WARNING: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+				}
 			}
 		} else {
 			// When valid quota details are not fetched
@@ -8625,7 +8612,7 @@ class SyncEngine {
 	void updateDriveDetailsCache(string driveId, bool quotaRestricted, bool quotaAvailable, ulong localFileSize) {
 	
 		// As each thread is running differently, what is the current 'quotaRemaining' for 'driveId' ?
-		ulong quotaRemaining;
+		long quotaRemaining;
 		DriveDetailsCache cachedOnlineDriveData;
 		cachedOnlineDriveData = getDriveDetails(driveId);
 		quotaRemaining = cachedOnlineDriveData.quotaRemaining;
@@ -8637,7 +8624,7 @@ class SyncEngine {
 		if (quotaRemaining <= 0) {
 			if (appConfig.accountType == "personal"){
 				// zero space available
-				addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional space.");
+				addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional capacity.");
 				quotaRemaining = 0;
 				quotaAvailable = false;
 			} else {
@@ -8656,7 +8643,7 @@ class SyncEngine {
 	void freshenCachedDriveQuotaDetails() {
 		foreach (driveId; onlineDriveDetails.keys) {
 			// Update this driveid quota details
-			addLogEntry("Freshen Quota Details: " ~ driveId, ["debug"]);
+			addLogEntry("Freshen Quota Details for this driveId: " ~ driveId, ["debug"]);
 			addOrUpdateOneDriveOnlineDetails(driveId);
 		}
 	}
