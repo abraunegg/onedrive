@@ -63,6 +63,7 @@ Item makeDatabaseItem(JSONValue driveItem) {
 		item.mtime = SysTime(0);
 	} else {
 		// Item is not in a deleted state
+		string lastModifiedTimestamp;
 		// Resolve 'Key not found: fileSystemInfo' when then item is a remote item
 		// https://github.com/abraunegg/onedrive/issues/11
 		if (isItemRemote(driveItem)) {
@@ -72,17 +73,47 @@ Item makeDatabaseItem(JSONValue driveItem) {
 			// See: https://github.com/abraunegg/onedrive/issues/1533
 			if ("fileSystemInfo" in driveItem["remoteItem"]) {
 				// 'fileSystemInfo' is in 'remoteItem' which will be the majority of cases
-				item.mtime = SysTime.fromISOExtString(driveItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
+				lastModifiedTimestamp = strip(driveItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
+				// is lastModifiedTimestamp valid?
+				if (isValidUTCDateTime(lastModifiedTimestamp)) {
+					// string is a valid timestamp
+					item.mtime = SysTime.fromISOExtString(lastModifiedTimestamp);
+				} else {
+					// invalid timestamp from JSON file
+					addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
+					// Set mtime to SysTime(0) to ensure we have a value
+					item.mtime = SysTime(0);
+				}
+			
 			} else {
 				// is a remote item, but 'fileSystemInfo' is missing from 'remoteItem'
-				if ("fileSystemInfo" in driveItem) {
-					item.mtime = SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+				lastModifiedTimestamp = strip(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+				// is lastModifiedTimestamp valid?
+				if (isValidUTCDateTime(lastModifiedTimestamp)) {
+					// string is a valid timestamp
+					item.mtime = SysTime.fromISOExtString(lastModifiedTimestamp);
+				} else {
+					// invalid timestamp from JSON file
+					addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
+					// Set mtime to SysTime(0) to ensure we have a value
+					item.mtime = SysTime(0);
 				}
 			}
 		} else {
 			// Does fileSystemInfo exist at all ?
 			if ("fileSystemInfo" in driveItem) {
-				item.mtime = SysTime.fromISOExtString(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+				// fileSystemInfo exists
+				lastModifiedTimestamp = strip(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+				// is lastModifiedTimestamp valid?
+				if (isValidUTCDateTime(lastModifiedTimestamp)) {
+					// string is a valid timestamp
+					item.mtime = SysTime.fromISOExtString(lastModifiedTimestamp);
+				} else {
+					// invalid timestamp from JSON file
+					addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
+					// Set mtime to SysTime(0) to ensure we have a value
+					item.mtime = SysTime(0);
+				}
 			}
 		}
 	}

@@ -512,6 +512,25 @@ bool isValidUTF16(string path) {
     return true;
 }
 
+// Validate that the provided string is a valid date time stamp in UTC format
+bool isValidUTCDateTime(string dateTimeString) {
+    // Regular expression for validating the datetime format
+    auto pattern = regex(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$");
+
+    // First, check if the string matches the pattern
+    if (!match(dateTimeString, pattern)) {
+        return false;
+    }
+
+    // Attempt to parse the string into a DateTime object
+    try {
+        auto dt = SysTime.fromISOExtString(dateTimeString);
+        return true;
+    } catch (TimeException) {
+        return false;
+    }
+}
+
 // Does the path contain any HTML URL encoded items (e.g., '%20' for space)
 bool containsURLEncodedItems(string path) {
     // Check for null or empty string
@@ -1292,6 +1311,7 @@ extern(C) nothrow @nogc @system void exitScopeSignalHandler(int signo) {
 	}
 }
 
+// Return the compiler details
 string compilerDetails() {
 	version(DigitalMars) enum compiler = "DMD";
 	else version(LDC)    enum compiler = "LDC";

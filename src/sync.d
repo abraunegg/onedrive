@@ -2488,12 +2488,33 @@ class SyncEngine {
 								try {
 									// get the mtime from the JSON data
 									SysTime itemModifiedTime;
+									string lastModifiedTimestamp;
 									if (isItemRemote(onedriveJSONItem)) {
 										// remote file item
-										itemModifiedTime = SysTime.fromISOExtString(onedriveJSONItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
+										lastModifiedTimestamp = strip(onedriveJSONItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
+										// is lastModifiedTimestamp valid?
+										if (isValidUTCDateTime(lastModifiedTimestamp)) {
+											// string is a valid timestamp
+											itemModifiedTime = SysTime.fromISOExtString(lastModifiedTimestamp);
+										} else {
+											// invalid timestamp from JSON file
+											addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
+											// Set mtime to SysTime(0)
+											itemModifiedTime = SysTime(0);
+										}
 									} else {
 										// not a remote item
-										itemModifiedTime = SysTime.fromISOExtString(onedriveJSONItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+										lastModifiedTimestamp = strip(onedriveJSONItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+										// is lastModifiedTimestamp valid?
+										if (isValidUTCDateTime(lastModifiedTimestamp)) {
+											// string is a valid timestamp
+											itemModifiedTime = SysTime.fromISOExtString(lastModifiedTimestamp);
+										} else {
+											// invalid timestamp from JSON file
+											addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
+											// Set mtime to SysTime(0)
+											itemModifiedTime = SysTime(0);
+										}
 									}
 									
 									// set the correct time on the downloaded file
@@ -4499,7 +4520,7 @@ class SyncEngine {
 					if (appConfig.accountType == "personal") {
 						addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional capacity.");
 					} else { // Assuming 'business' or 'sharedLibrary'
-						addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+						addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator." , ["verbose"]);
 					}
 				}
 			} else {
@@ -4508,10 +4529,10 @@ class SyncEngine {
 				
 				// what sort of account type is this?
 				if (appConfig.accountType == "personal") {
-					addLogEntry("ERROR: OneDrive quota information is missing. Your OneDrive account potentially has zero space available. Please free up some space online.");
+					addLogEntry("ERROR: OneDrive quota information is missing. Your OneDrive account potentially has zero space available. Please free up some space online.", ["verbose"]);
 				} else {
 					// quota details not available
-					addLogEntry("WARNING: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+					addLogEntry("WARNING: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);
 				}
 			}
 		} else {
@@ -8343,7 +8364,22 @@ class SyncEngine {
 		
 		// Check the session data for expirationDateTime
 		if ("expirationDateTime" in sessionFileData) {
-			auto expiration = SysTime.fromISOExtString(sessionFileData["expirationDateTime"].str);
+			addLogEntry("expirationDateTime: " ~ sessionFileData["expirationDateTime"].str);
+			SysTime expiration;
+			string expirationTimestamp;
+			expirationTimestamp = strip(sessionFileData["expirationDateTime"].str);
+			
+			// is expirationTimestamp valid?
+			if (isValidUTCDateTime(expirationTimestamp)) {
+				// string is a valid timestamp
+				expiration = SysTime.fromISOExtString(expirationTimestamp);
+			} else {
+				// invalid timestamp from JSON file
+				addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ expirationTimestamp);
+				return false;
+			}
+			
+			// valid timestamp
 			if (expiration < Clock.currTime()) {
 				addLogEntry("The upload session has expired for: " ~ sessionFilePath, ["verbose"]);
 				return false;
@@ -8656,6 +8692,7 @@ class SyncEngine {
 		
 		// New DB Tie Item to detail the 'root' of the Shared Folder
 		Item tieDBItem;
+		string lastModifiedTimestamp;
 		tieDBItem.name = "root";
 		
 		// Get the right parentReference details
@@ -8680,8 +8717,23 @@ class SyncEngine {
 			}
 		}
 		
+		// set the item type
 		tieDBItem.type = ItemType.dir;
-		tieDBItem.mtime = SysTime.fromISOExtString(onedriveJSONItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+		
+		// get the lastModifiedDateTime
+		lastModifiedTimestamp = strip(onedriveJSONItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+		// is lastModifiedTimestamp valid?
+		if (isValidUTCDateTime(lastModifiedTimestamp)) {
+			// string is a valid timestamp
+			tieDBItem.mtime = SysTime.fromISOExtString(lastModifiedTimestamp);
+		} else {
+			// invalid timestamp from JSON file
+			addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
+			// Set mtime to SysTime(0)
+			tieDBItem.mtime = SysTime(0);
+		}
+		
+		// ensure there is no parentId
 		tieDBItem.parentId = null;
 		
 		// Add this DB Tie parent record to the local database
