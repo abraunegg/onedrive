@@ -12,7 +12,7 @@ RUN apt-get clean \
 COPY . /usr/src/onedrive
 WORKDIR /usr/src/onedrive
 
-RUN ./configure \
+RUN ./configure --enable-debug\
  && make clean \
  && make \
  && make install

@@ -16,7 +16,7 @@ COPY . /usr/src/onedrive
 WORKDIR /usr/src/onedrive
 
 RUN autoreconf -fiv \
- && ./configure \
+ && ./configure --enable-debug\
  && make clean \
  && make \
  && make install
