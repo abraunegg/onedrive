@@ -84,7 +84,6 @@ Item makeDatabaseItem(JSONValue driveItem) {
 					// Set mtime to SysTime(0) to ensure we have a value
 					item.mtime = SysTime(0);
 				}
-			
 			} else {
 				// is a remote item, but 'fileSystemInfo' is missing from 'remoteItem'
 				lastModifiedTimestamp = strip(driveItem["fileSystemInfo"]["lastModifiedDateTime"].str);
@@ -114,6 +113,11 @@ Item makeDatabaseItem(JSONValue driveItem) {
 					// Set mtime to SysTime(0) to ensure we have a value
 					item.mtime = SysTime(0);
 				}
+			} else {
+				// no timestamp from JSON file
+				addLogEntry("WARNING: No timestamp provided by the Microsoft OneDrive API - using current system time for item!");
+				// Set mtime to SysTime(0)
+				item.mtime = SysTime(0);
 			}
 		}
 	}
@@ -694,6 +698,8 @@ final class ItemDatabase {
 	private Item buildItem(Statement.Result result) {
 		assert(!result.empty, "The result must not be empty");
 		assert(result.front.length == 18, "The result must have 18 columns");
+		assert(isValidUTCDateTime(result.front[7].dup), "The DB record mtime entry is not a valid ISO timestamp entry");
+		
 		Item item = {
 		
 			// column 0: driveId
@@ -722,7 +728,7 @@ final class ItemDatabase {
 			// Column 4 is type - not set here
 			eTag: result.front[5].dup,
 			cTag: result.front[6].dup,
-			mtime: SysTime.fromISOExtString(result.front[7]),
+			mtime: SysTime.fromISOExtString(result.front[7].dup),
 			parentId: result.front[8].dup,
 			quickXorHash: result.front[9].dup,
 			sha256Hash: result.front[10].dup,
