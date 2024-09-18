@@ -710,8 +710,12 @@ int main(string[] cliArgs) {
 		
 		// Are we doing a single directory operation (--single-directory) ?
 		if (!appConfig.getValueString("single_directory").empty) {
+			// Ensure that the value stored for appConfig.getValueString("single_directory") does not contain any extra quotation marks
+			string originalSingleDirectoryValue = appConfig.getValueString("single_directory");
+			// Strip quotation marks from provided path to ensure no issues within a Docker environment when using passed in values
+			string updatedSingleDirectoryValue = strip(originalSingleDirectoryValue, "\"");
 			// Set singleDirectoryPath
-			singleDirectoryPath = appConfig.getValueString("single_directory");
+			singleDirectoryPath = updatedSingleDirectoryValue;
 			
 			// Ensure that this is a normalised relative path to runtimeSyncDirectory
 			string normalisedRelativePath = replace(buildNormalizedPath(absolutePath(singleDirectoryPath)), buildNormalizedPath(absolutePath(runtimeSyncDirectory)), "." );

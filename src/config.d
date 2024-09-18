@@ -795,7 +795,9 @@ class ApplicationConfig {
 						setValueString("skip_dir", configFileSkipDir);
 					}
 				} else if (key == "single_directory") {
-					string configFileSingleDirectory = strip(value, "\"");
+					// --single-directory Strip quotation marks from path 
+					// This is an issue when using ONEDRIVE_SINGLE_DIRECTORY with Docker
+					string configFileSingleDirectory = strip(to!string(c.front.dup), "\"");
 					setValueString("single_directory", configFileSingleDirectory);
 				} else if (key == "azure_ad_endpoint") {
 					switch (value) {
