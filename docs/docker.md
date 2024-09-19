@@ -304,9 +304,13 @@ docker container run -e ONEDRIVE_RESYNC=1 -v onedrive_conf:/onedrive/conf -v "${
 ```bash
 docker container run -e ONEDRIVE_RESYNC=1 -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:edge
 ```
-**Perform a --logout and re-authenticate:**
+**Perform a --logout:**
 ```bash
 docker container run -it -e ONEDRIVE_LOGOUT=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:edge
+```
+**Perform a --logout and re-authenticate:**
+```bash
+docker container run -it -e ONEDRIVE_REAUTH=1 -v onedrive_conf:/onedrive/conf -v "${ONEDRIVE_DATA_DIR}:/onedrive/data" driveone/onedrive:edge
 ```
 
 ## Building a custom Docker image

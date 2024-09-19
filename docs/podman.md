@@ -321,9 +321,13 @@ podman run -e ONEDRIVE_RESYNC=1 -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRI
 ```bash
 podman run -e ONEDRIVE_RESYNC=1 -e ONEDRIVE_VERBOSE=1 -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" driveone/onedrive:edge
 ```
-**Perform a --logout and re-authenticate:**
+**Perform a --logout:**
 ```bash
 podman run -it -e ONEDRIVE_LOGOUT=1 -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" driveone/onedrive:edge
+```
+**Perform a --logout and re-authenticate:**
+```bash
+podman run -it -e ONEDRIVE_REAUTH=1 -v onedrive_conf:/onedrive/conf:U,Z -v "${ONEDRIVE_DATA_DIR}:/onedrive/data:U,Z" --user "${ONEDRIVE_UID}:${ONEDRIVE_GID}" driveone/onedrive:edge
 ```
 
 ## Building a custom Podman image
