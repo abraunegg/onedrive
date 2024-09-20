@@ -4428,25 +4428,32 @@ class SyncEngine {
 					}
 					
 				} catch (FileException e) {
-					writeln("DEBUG TO REMOVE: Modified file upload FileException Handling (Create the Upload Session)");
+					addLogEntry("DEBUG TO REMOVE: Modified file upload FileException Handling (Create the Upload Session)");
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				}
 				
-				// Perform the upload using the session that has been created
-				try {
-					uploadResponse = performSessionFileUpload(uploadFileOneDriveApiInstance, thisFileSizeLocal, uploadSessionData, threadUploadSessionFilePath);
-				} catch (OneDriveException exception) {
-					// Function name
-					string thisFunctionName = getFunctionName!({});
-					
-					// Handle all other HTTP status codes
-					// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
-					// Display what the error is
-					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-					
-				} catch (FileException e) {
-					writeln("DEBUG TO REMOVE: Modified file upload FileException Handling (Perform the Upload using the session)");
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				// Do we have a valid session URL that we can use ?
+				if (uploadSessionData.type() == JSONType.object) {
+					// This is a valid JSON object
+					// Perform the upload using the session that has been created
+					try {
+						uploadResponse = performSessionFileUpload(uploadFileOneDriveApiInstance, thisFileSizeLocal, uploadSessionData, threadUploadSessionFilePath);
+					} catch (OneDriveException exception) {
+						// Function name
+						string thisFunctionName = getFunctionName!({});
+						
+						// Handle all other HTTP status codes
+						// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+						// Display what the error is
+						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+						
+					} catch (FileException e) {
+						addLogEntry("DEBUG TO REMOVE: Modified file upload FileException Handling (Perform the Upload using the session)");
+						displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					}
+				} else {
+					// Create session Upload URL failed
+					addLogEntry("Unable to upload modified file as the creation of the upload session URL failed", ["debug"]);
 				}
 			}
 		} else {
