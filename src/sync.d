@@ -2669,18 +2669,28 @@ class SyncEngine {
 					addLogEntry("Local item has the same hash value as the item online - correcting the applicable file timestamp", ["verbose"]);
 					// Correction logic based on the configuration and the comparison of timestamps
 					if (localModifiedTime > itemModifiedTime) {
-						// Local file is newer .. are we in a --download-only situation?
+						// Local file is newer timestamp wise, but has the same hash .. are we in a --download-only situation?
 						if (!appConfig.getValueBool("download_only") && !dryRun) {
-							// The source of the out-of-date timestamp was OneDrive and this needs to be corrected to avoid always generating a hash test if timestamp is different
-							addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);
-							// Attempt to update the online date time stamp
-							// We need to use the correct driveId and itemId, especially if we are updating a OneDrive Business Shared File timestamp
-							if (item.type == ItemType.file) {
-								// Not a remote file
-								uploadLastModifiedTime(item, item.driveId, item.id, localModifiedTime, item.eTag);
+							// Not --download-only .. but are we in a --resync scenario?
+							if (appConfig.getValueBool("resync")) {
+								// --resync was used
+								// The source of the out-of-date timestamp was the local item and needs to be corrected ... but why is it newer - indexing application potentially changing the timestamp ?
+								addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --resync", ["verbose"]);
+								// Fix the local file timestamp
+								addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);
+								setTimes(path, item.mtime, item.mtime);
 							} else {
-								// Remote file, remote values need to be used
-								uploadLastModifiedTime(item, item.remoteDriveId, item.remoteId, localModifiedTime, item.eTag);
+								// The source of the out-of-date timestamp was OneDrive and this needs to be corrected to avoid always generating a hash test if timestamp is different
+								addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);
+								// Attempt to update the online date time stamp
+								// We need to use the correct driveId and itemId, especially if we are updating a OneDrive Business Shared File timestamp
+								if (item.type == ItemType.file) {
+									// Not a remote file
+									uploadLastModifiedTime(item, item.driveId, item.id, localModifiedTime, item.eTag);
+								} else {
+									// Remote file, remote values need to be used
+									uploadLastModifiedTime(item, item.remoteDriveId, item.remoteId, localModifiedTime, item.eTag);
+								}
 							}
 						} else if (!dryRun) {
 							// --download-only is being used ... local file needs to be corrected ... but why is it newer - indexing application potentially changing the timestamp ?

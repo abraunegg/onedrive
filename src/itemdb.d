@@ -223,7 +223,7 @@ Item makeDatabaseItem(JSONValue driveItem) {
 
 final class ItemDatabase {
 	// increment this for every change in the db schema
-	immutable int itemDatabaseVersion = 13;
+	immutable int itemDatabaseVersion = 14;
 
 	Database db;
 	string insertItemStmt;
@@ -323,7 +323,7 @@ final class ItemDatabase {
 			// The synchronous setting determines how carefully SQLite writes data to disk, balancing between performance and data safety.
 			// https://sqlite.org/pragma.html#pragma_synchronous
 			// PRAGMA synchronous = 0 | OFF | 1 | NORMAL | 2 | FULL | 3 | EXTRA;
-			db.exec("PRAGMA synchronous=NORMAL;");
+			db.exec("PRAGMA synchronous=FULL;");
 		} catch (SqliteException exception) {
 			detailSQLErrorMessage(exception);
 		} 

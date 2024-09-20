@@ -475,6 +475,19 @@ bool containsASCIIControlCodes(string path) {
     return !matchResult.empty;
 }
 
+// Is the string a valid UTF-8 string?
+bool isValidUTF8(string input) {
+	try {
+		auto it = input.byUTF!(char);
+		foreach (_; it) {
+			// Just iterate to check for valid UTF-8
+		}
+	return true;
+	} catch (UTFException) {
+		return false;
+	}
+}
+
 // Is the path a valid UTF-16 encoded path?
 bool isValidUTF16(string path) {
     // Check for null or empty string
@@ -514,21 +527,26 @@ bool isValidUTF16(string path) {
 
 // Validate that the provided string is a valid date time stamp in UTC format
 bool isValidUTCDateTime(string dateTimeString) {
-    // Regular expression for validating the datetime format
-    auto pattern = regex(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$");
+    // Validate for UTF-8 first
+	if (!isValidUTF8(dateTimeString)) {
+		return false;
+	}
+	
+	// Regular expression for validating the datetime format
+	auto pattern = regex(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$");
 
-    // First, check if the string matches the pattern
-    if (!match(dateTimeString, pattern)) {
-        return false;
-    }
+	// First, check if the string matches the pattern
+	if (!match(dateTimeString, pattern)) {
+		return false;
+	}
 
-    // Attempt to parse the string into a DateTime object
-    try {
-        auto dt = SysTime.fromISOExtString(dateTimeString);
-        return true;
-    } catch (TimeException) {
-        return false;
-    }
+	// Attempt to parse the string into a DateTime object
+	try {
+		auto dt = SysTime.fromISOExtString(dateTimeString);
+		return true;
+	} catch (TimeException) {
+		return false;
+	}
 }
 
 // Does the path contain any HTML URL encoded items (e.g., '%20' for space)
