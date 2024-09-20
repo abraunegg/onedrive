@@ -291,7 +291,7 @@ final class ItemDatabase {
 		
 		// What is the threadsafe value
 		auto threadsafeValue = db.getThreadsafeValue();
-		addLogEntry("Threadsafe database value: " ~ to!string(threadsafeValue), ["debug"]);
+		addLogEntry("SQLite Threadsafe database value: " ~ to!string(threadsafeValue), ["debug"]);
 		
 		try {
 			// Set the enforcement of foreign key constraints.
@@ -698,7 +698,7 @@ final class ItemDatabase {
 	private Item buildItem(Statement.Result result) {
 		assert(!result.empty, "The result must not be empty");
 		assert(result.front.length == 18, "The result must have 18 columns");
-		assert(isValidUTCDateTime(result.front[7].dup), "The DB record mtime entry is not a valid ISO timestamp entry");
+		assert(isValidUTCDateTime(result.front[7].dup), "The DB record mtime entry is not a valid ISO timestamp entry. Please attempt a --resync to fix the local database.");
 		
 		Item item = {
 		
