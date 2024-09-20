@@ -81,8 +81,8 @@ Item makeDatabaseItem(JSONValue driveItem) {
 				} else {
 					// invalid timestamp from JSON file
 					addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
-					// Set mtime to SysTime(0) to ensure we have a value
-					item.mtime = SysTime(0);
+					// Set mtime to Clock.currTime(UTC()) to ensure we have a valid UTC value
+					item.mtime = Clock.currTime(UTC());
 				}
 			} else {
 				// is a remote item, but 'fileSystemInfo' is missing from 'remoteItem'
@@ -94,8 +94,8 @@ Item makeDatabaseItem(JSONValue driveItem) {
 				} else {
 					// invalid timestamp from JSON file
 					addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
-					// Set mtime to SysTime(0) to ensure we have a value
-					item.mtime = SysTime(0);
+					// Set mtime to Clock.currTime(UTC()) to ensure we have a valid UTC value
+					item.mtime = Clock.currTime(UTC());
 				}
 			}
 		} else {
@@ -110,14 +110,14 @@ Item makeDatabaseItem(JSONValue driveItem) {
 				} else {
 					// invalid timestamp from JSON file
 					addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
-					// Set mtime to SysTime(0) to ensure we have a value
-					item.mtime = SysTime(0);
+					// Set mtime to Clock.currTime(UTC()) to ensure we have a valid UTC value
+					item.mtime = Clock.currTime(UTC());
 				}
 			} else {
 				// no timestamp from JSON file
 				addLogEntry("WARNING: No timestamp provided by the Microsoft OneDrive API - using current system time for item!");
-				// Set mtime to SysTime(0)
-				item.mtime = SysTime(0);
+				// Set mtime to Clock.currTime(UTC()) to ensure we have a valid UTC value
+				item.mtime = Clock.currTime(UTC());
 			}
 		}
 	}
