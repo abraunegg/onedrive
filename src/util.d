@@ -532,13 +532,13 @@ bool isValidUTCDateTime(string dateTimeString) {
 	
 	// Validate for UTF-8 first
 	if (!isValidUTF8(dateTimeString)) {
-		addLogEntry("BAD TIMESTAMP (UTF-8 FAIL): " ~ dateTimeString):
+		addLogEntry("BAD TIMESTAMP (UTF-8 FAIL): " ~ dateTimeString);
 		return false;
 	}
 	
 	// First, check if the string matches the pattern
 	if (!match(dateTimeString, pattern)) {
-		addLogEntry("BAD TIMESTAMP (REGEX FAIL): " ~ dateTimeString):
+		addLogEntry("BAD TIMESTAMP (REGEX FAIL): " ~ dateTimeString);
 		return false;
 	}
 
@@ -547,7 +547,7 @@ bool isValidUTCDateTime(string dateTimeString) {
 		auto dt = SysTime.fromISOExtString(dateTimeString);
 		return true;
 	} catch (TimeException) {
-		addLogEntry("BAD TIMESTAMP (CONVERSION FAIL): " ~ dateTimeString):
+		addLogEntry("BAD TIMESTAMP (CONVERSION FAIL): " ~ dateTimeString);
 		return false;
 	}
 }
