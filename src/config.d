@@ -371,11 +371,6 @@ class ApplicationConfig {
 		// outcome of setting defaultHomePath
 		addLogEntry("runtime_environment: Calculated defaultHomePath: " ~ defaultHomePath, ["debug"]);
 		
-		// If logging was compiled in, we need to ensure that these variables are actually available before we enable GUI Notifications
-		flagEnvironmentVariablesAvailable(validateGUINotificationEnvironmentVariables());
-		// Attempt to enable GUI Notifications
-		validateDBUSServerAvailability();
-		
 		// DEVELOPER OPTIONS
 		// display_memory = true | false
 		//  - It may be desirable to display the memory usage of the application to assist with diagnosing memory issues with the application
