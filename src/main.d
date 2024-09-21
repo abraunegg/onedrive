@@ -190,6 +190,14 @@ int main(string[] cliArgs) {
 	// Update the current runtime application configuration (default or 'config' fileread-in options) from any passed in command line arguments
 	appConfig.updateFromArgs(cliArgs);
 	
+	// If --disable-notifications has not been used, check if everything exists to enable notifications
+	if (!appConfig.getValueBool("disable_notifications")) {
+		// If notifications was compiled in, we need to ensure that these variables are actually available before we enable GUI Notifications
+		flagEnvironmentVariablesAvailable(appConfig.validateGUINotificationEnvironmentVariables());
+		// Attempt to enable GUI Notifications
+		validateDBUSServerAvailability();
+	}
+	
 	// In a debug scenario, to assist with understanding the run-time configuration, ensure this flag is set
 	if (debugLogging) {
 		appConfig.setValueBool("display_running_config", true);
