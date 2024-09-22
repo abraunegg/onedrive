@@ -5767,7 +5767,6 @@ class SyncEngine {
 		if (!uploadFailed) {
 			// Update the 'cachedOnlineDriveData' record for this 'dbItem.driveId' so that this is tracked as accurately as possible for other threads
 			updateDriveDetailsCache(parentItem.driveId, cachedOnlineDriveData.quotaRestricted, cachedOnlineDriveData.quotaAvailable, thisFileSize);
-			
 		} else {
 			// Need to add this to fileUploadFailures to capture at the end
 			fileUploadFailures ~= fileToUpload;
@@ -5961,6 +5960,7 @@ class SyncEngine {
 			if (uploadResponse.type() == JSONType.object) {
 				// check if the path still exists locally before we try to set the file times online - as short lived files, whilst we uploaded it - it may not exist locally already
 				if (exists(fileToUpload)) {
+					// Are we in a --dry-run scenario
 					if (!dryRun) {
 						// Check the integrity of the uploaded file, if the local file still exists
 						performUploadIntegrityValidationChecks(uploadResponse, fileToUpload, thisFileSize);
@@ -5973,6 +5973,19 @@ class SyncEngine {
 						string newFileETag = uploadResponse["eTag"].str;
 						// Attempt to update the online date time stamp based on our local data
 						uploadLastModifiedTime(parentItem, parentItem.driveId, newFileId, mtime, newFileETag);
+					}
+					
+					// Are we in an --upload-only & --remove-source-files scenario?
+					// Use actual config values as we are doing an upload session recovery
+					if (localDeleteAfterUpload) {
+						// Log that we are deleting a local item
+						addLogEntry("Removing local file as --upload-only & --remove-source-files configured");
+						// Are we in a --dry-run scenario?
+						if (!dryRun) {
+							// No --dry-run ... process local file delete
+							addLogEntry("Removing local file: " ~ fileToUpload, ["debug"]);
+							safeRemove(fileToUpload);
+						}
 					}
 				} else {
 					// will be removed in different event!
