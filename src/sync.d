@@ -1730,7 +1730,7 @@ class SyncEngine {
 					}
 					
 					// What path are we checking?
-					addLogEntry("path to check against 'sync_list' entries: " ~ newItemPath, ["debug"]);
+					addLogEntry("Path to check against 'sync_list' entries: " ~ newItemPath, ["debug"]);
 					
 					// Unfortunately there is no avoiding this call to check if the path is excluded|included via sync_list
 					if (selectiveSync.isPathExcludedViaSyncList(newItemPath)) {
@@ -3882,7 +3882,7 @@ class SyncEngine {
 				}
 				
 				// What path are we checking against sync_list?
-				addLogEntry("path to check against 'sync_list' entries: " ~ newItemPath, ["debug"]);
+				addLogEntry("Path to check against 'sync_list' entries: " ~ newItemPath, ["debug"]);
 				
 				// Unfortunately there is no avoiding this call to check if the path is excluded|included via sync_list
 				if (selectiveSync.isPathExcludedViaSyncList(newItemPath)) {
@@ -3963,6 +3963,9 @@ class SyncEngine {
 		OneDriveApi onlinePathOneDriveApiInstance;
 		onlinePathOneDriveApiInstance = new OneDriveApi(appConfig);
 		onlinePathOneDriveApiInstance.initialise();
+		
+		// Log what we recieved to analyse
+		addLogEntry("createLocalPathStructure input onedriveJSONItem: " ~ to!string(onedriveJSONItem), ["debug"]);
 		
 		// Configure these variables based on the JSON input
 		string thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
