@@ -937,6 +937,10 @@ bool hasParentReference(const ref JSONValue item) {
 	return ("parentReference" in item) != null;
 }
 
+bool hasParentReferenceDriveId(JSONValue item) {
+	return ("driveId" in item["parentReference"]) != null;
+}
+
 bool hasParentReferenceId(JSONValue item) {
 	return ("id" in item["parentReference"]) != null;
 }

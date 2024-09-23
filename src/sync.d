@@ -3963,13 +3963,23 @@ class SyncEngine {
 		OneDriveApi onlinePathOneDriveApiInstance;
 		onlinePathOneDriveApiInstance = new OneDriveApi(appConfig);
 		onlinePathOneDriveApiInstance.initialise();
+		string thisItemDriveId;
+		string thisItemParentId;
 		
 		// Log what we recieved to analyse
 		addLogEntry("createLocalPathStructure input onedriveJSONItem: " ~ to!string(onedriveJSONItem), ["debug"]);
 		
 		// Configure these variables based on the JSON input
-		string thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
-		string thisItemParentId = onedriveJSONItem["parentReference"]["id"].str;
+		thisItemDriveId = onedriveJSONItem["parentReference"]["driveId"].str;
+		
+		// OneDrive Personal JSON responses are in-consistent with not having 'id' available
+		if (hasParentReferenceId(onedriveJSONItem)) {
+			// Use the parent reference id
+			thisItemParentId = onedriveJSONItem["parentReference"]["id"].str;
+		} else {
+			// Testing evidence shows that for Personal accounts, use the 'id' itself if parent reference is unavailable
+			thisItemParentId = onedriveJSONItem["id"].str;
+		}
 		
 		// Calculate if the Parent Item is in the database so that it can be re-used
 		parentInDatabase = itemDB.idInLocalDatabase(thisItemDriveId, thisItemParentId);
@@ -6685,10 +6695,10 @@ class SyncEngine {
 			// Dynamic output for a non-verbose run so that the user knows something is happening
 			if (appConfig.verbosityCount == 0) {
 				if (!appConfig.suppressLoggingOutput) {
-					addProcessingLogHeaderEntry("Fetching items from the OneDrive API for Drive ID: " ~ searchItem.driveId, appConfig.verbosityCount);
+					addProcessingLogHeaderEntry("Generating a /delta response from the OneDrive API from this Item ID: " ~ searchItem.id, appConfig.verbosityCount);
 				}
 			} else {
-				addLogEntry("Generating a /delta response from the OneDrive API for Drive ID: " ~ searchItem.driveId, ["verbose"]);
+				addLogEntry("Generating a /delta response from the OneDrive API from this Item ID: " ~ searchItem.id, ["verbose"]);
 			}
 		
 			// Process this initial JSON response
@@ -6798,6 +6808,7 @@ class SyncEngine {
 					}
 				}
 			}
+			
 			// If a collection exceeds the default page size (200 items), the @odata.nextLink property is returned in the response 
 			// to indicate more items are available and provide the request URL for the next page of items.
 			if ("@odata.nextLink" in topLevelChildren) {
@@ -6905,6 +6916,7 @@ class SyncEngine {
 						}
 					}
 				}
+				
 				// If a collection exceeds the default page size (200 items), the @odata.nextLink property is returned in the response 
 				// to indicate more items are available and provide the request URL for the next page of items.
 				if ("@odata.nextLink" in thisLevelChildren) {
