@@ -3976,60 +3976,60 @@ class SyncEngine {
 		if (hasParentReferenceId(onedriveJSONItem)) {
 			// Use the parent reference id
 			thisItemParentId = onedriveJSONItem["parentReference"]["id"].str;
-		} else {
-			// Testing evidence shows that for Personal accounts, use the 'id' itself if parent reference is unavailable
-			thisItemParentId = onedriveJSONItem["id"].str;
 		}
 		
-		// Calculate if the Parent Item is in the database so that it can be re-used
-		parentInDatabase = itemDB.idInLocalDatabase(thisItemDriveId, thisItemParentId);
-		
-		// Is the parent in the database?
-		if (!parentInDatabase) {
-			// Get data from online for this driveId and itemId
-			try {
-				onlinePathData = onlinePathOneDriveApiInstance.getPathDetailsById(thisItemDriveId, thisItemParentId);
-			} catch (OneDriveException exception) {
-				// Display what the error is
-				// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
-				displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
-			} 
+		// To continue, thisItemDriveId and thisItemParentId must not be empty
+		if ((thisItemDriveId != "") && (thisItemParentId != "")) {
+			// Calculate if the Parent Item is in the database so that it can be re-used
+			parentInDatabase = itemDB.idInLocalDatabase(thisItemDriveId, thisItemParentId);
 			
-			// Does this JSON match the root name of a shared folder we may be trying to match?
-			if (sharedFolderDeltaGeneration) {
-				if (currentSharedFolderName == onlinePathData["name"].str) {
-					createDatabaseRootTieRecordForOnlineSharedFolder(onlinePathData);
+			// Is the parent in the database?
+			if (!parentInDatabase) {
+				// Get data from online for this driveId and itemId
+				try {
+					onlinePathData = onlinePathOneDriveApiInstance.getPathDetailsById(thisItemDriveId, thisItemParentId);
+				} catch (OneDriveException exception) {
+					// Display what the error is
+					// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+					displayOneDriveErrorMessage(exception.msg, getFunctionName!({}));
+				} 
+				
+				// Does this JSON match the root name of a shared folder we may be trying to match?
+				if (sharedFolderDeltaGeneration) {
+					if (currentSharedFolderName == onlinePathData["name"].str) {
+						createDatabaseRootTieRecordForOnlineSharedFolder(onlinePathData);
+					}
+				} 
+				
+				// Configure the grandparent items
+				string grandparentItemDriveId;
+				string grandparentItemParentId;
+				grandparentItemDriveId = onlinePathData["parentReference"]["driveId"].str;
+				
+				// OneDrive Personal JSON responses are in-consistent with not having 'id' available
+				if (hasParentReferenceId(onlinePathData)) {
+					// Use the parent reference id
+					grandparentItemParentId = onlinePathData["parentReference"]["id"].str;
+				} else {
+					// Testing evidence shows that for Personal accounts, use the 'id' itself
+					grandparentItemParentId = onlinePathData["id"].str;
 				}
-			} 
-			
-			// Configure the grandparent items
-			string grandparentItemDriveId;
-			string grandparentItemParentId;
-			grandparentItemDriveId = onlinePathData["parentReference"]["driveId"].str;
-			
-			// OneDrive Personal JSON responses are in-consistent with not having 'id' available
-			if (hasParentReferenceId(onlinePathData)) {
-				// Use the parent reference id
-				grandparentItemParentId = onlinePathData["parentReference"]["id"].str;
-			} else {
-				// Testing evidence shows that for Personal accounts, use the 'id' itself
-				grandparentItemParentId = onlinePathData["id"].str;
-			}
-			
-			// Is this item's grandparent data in the database?
-			if (!itemDB.idInLocalDatabase(grandparentItemDriveId, grandparentItemParentId)) {
-				// grandparent needs to be added
-				createLocalPathStructure(onlinePathData);
-			}
-			
-			// If this is --dry-run
-			if (dryRun) {
-				// we dont create the directory, but we need to track that we 'faked it'
-				idsFaked ~= [onlinePathData["parentReference"]["driveId"].str, onlinePathData["parentReference"]["id"].str];
-			}
-			
-			// Save JSON to database
-			saveItem(onlinePathData);
+				
+				// Is this item's grandparent data in the database?
+				if (!itemDB.idInLocalDatabase(grandparentItemDriveId, grandparentItemParentId)) {
+					// grandparent needs to be added
+					createLocalPathStructure(onlinePathData);
+				}
+				
+				// If this is --dry-run
+				if (dryRun) {
+					// we dont create the directory, but we need to track that we 'faked it'
+					idsFaked ~= [onlinePathData["parentReference"]["driveId"].str, onlinePathData["parentReference"]["id"].str];
+				}
+				
+				// Save JSON to database
+				saveItem(onlinePathData);
+			}	
 		}
 		
 		// OneDrive API Instance Cleanup - Shutdown API, free curl object and memory
