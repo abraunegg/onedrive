@@ -2,6 +2,30 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.5.1 - 2024-09-27
+
+### Special Thankyou
+A special thankyou to @phlibi for assistance with diagnosing and troubleshooting the database timestamp issue
+
+### Added
+*   Implement Feature Request: Don't print the d-bus WARNING if disable_notifications is set on cmd line or in config
+
+### Changed
+*   Add --enable-debug to Docker files when building client application to allow for better diagnostics when issues occur
+*   Update Debian Dockerfile to use 'curl' from backports so a more modern curl version is used
+
+### Fixed
+*   Fix Regression: Fix regression of extra quotation marks when using ONEDRIVE_SINGLE_DIRECTORY with Docker
+*   Fix Regression: Fix regression that real-time synchronization is not occurring when using --monitor and sync_list
+*   Fix Regression: Fix regression that --remove-source-files doesn’t work
+*   Fix Bug: Application crash when run synchronize due to negative free space online
+*   Fix Bug: Application crash when performing a URL dedocde
+*   Fix Bug: Application crash when using sync_list and Personal Shared Folders the root folder fails to present the item id
+*   Fix Bug: Application crash when attempting to read timestamp from database as invalid data was written
+
+### Updated
+*   Updated documentation (various)
+
 ## 2.5.0 - 2024-09-16
 
 ### Special Thankyou
