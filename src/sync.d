@@ -2488,12 +2488,33 @@ class SyncEngine {
 								try {
 									// get the mtime from the JSON data
 									SysTime itemModifiedTime;
+									string lastModifiedTimestamp;
 									if (isItemRemote(onedriveJSONItem)) {
 										// remote file item
-										itemModifiedTime = SysTime.fromISOExtString(onedriveJSONItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
+										lastModifiedTimestamp = strip(onedriveJSONItem["remoteItem"]["fileSystemInfo"]["lastModifiedDateTime"].str);
+										// is lastModifiedTimestamp valid?
+										if (isValidUTCDateTime(lastModifiedTimestamp)) {
+											// string is a valid timestamp
+											itemModifiedTime = SysTime.fromISOExtString(lastModifiedTimestamp);
+										} else {
+											// invalid timestamp from JSON file
+											addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
+											// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
+											itemModifiedTime = Clock.currTime(UTC());
+										}
 									} else {
 										// not a remote item
-										itemModifiedTime = SysTime.fromISOExtString(onedriveJSONItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+										lastModifiedTimestamp = strip(onedriveJSONItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+										// is lastModifiedTimestamp valid?
+										if (isValidUTCDateTime(lastModifiedTimestamp)) {
+											// string is a valid timestamp
+											itemModifiedTime = SysTime.fromISOExtString(lastModifiedTimestamp);
+										} else {
+											// invalid timestamp from JSON file
+											addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
+											// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
+											itemModifiedTime = Clock.currTime(UTC());
+										}
 									}
 									
 									// set the correct time on the downloaded file
@@ -2648,18 +2669,28 @@ class SyncEngine {
 					addLogEntry("Local item has the same hash value as the item online - correcting the applicable file timestamp", ["verbose"]);
 					// Correction logic based on the configuration and the comparison of timestamps
 					if (localModifiedTime > itemModifiedTime) {
-						// Local file is newer .. are we in a --download-only situation?
+						// Local file is newer timestamp wise, but has the same hash .. are we in a --download-only situation?
 						if (!appConfig.getValueBool("download_only") && !dryRun) {
-							// The source of the out-of-date timestamp was OneDrive and this needs to be corrected to avoid always generating a hash test if timestamp is different
-							addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);
-							// Attempt to update the online date time stamp
-							// We need to use the correct driveId and itemId, especially if we are updating a OneDrive Business Shared File timestamp
-							if (item.type == ItemType.file) {
-								// Not a remote file
-								uploadLastModifiedTime(item, item.driveId, item.id, localModifiedTime, item.eTag);
+							// Not --download-only .. but are we in a --resync scenario?
+							if (appConfig.getValueBool("resync")) {
+								// --resync was used
+								// The source of the out-of-date timestamp was the local item and needs to be corrected ... but why is it newer - indexing application potentially changing the timestamp ?
+								addLogEntry("The source of the incorrect timestamp was the local file - correcting timestamp locally due to --resync", ["verbose"]);
+								// Fix the local file timestamp
+								addLogEntry("Calling setTimes() for this file: " ~ path, ["debug"]);
+								setTimes(path, item.mtime, item.mtime);
 							} else {
-								// Remote file, remote values need to be used
-								uploadLastModifiedTime(item, item.remoteDriveId, item.remoteId, localModifiedTime, item.eTag);
+								// The source of the out-of-date timestamp was OneDrive and this needs to be corrected to avoid always generating a hash test if timestamp is different
+								addLogEntry("The source of the incorrect timestamp was OneDrive online - correcting timestamp online", ["verbose"]);
+								// Attempt to update the online date time stamp
+								// We need to use the correct driveId and itemId, especially if we are updating a OneDrive Business Shared File timestamp
+								if (item.type == ItemType.file) {
+									// Not a remote file
+									uploadLastModifiedTime(item, item.driveId, item.id, localModifiedTime, item.eTag);
+								} else {
+									// Remote file, remote values need to be used
+									uploadLastModifiedTime(item, item.remoteDriveId, item.remoteId, localModifiedTime, item.eTag);
+								}
 							}
 						} else if (!dryRun) {
 							// --download-only is being used ... local file needs to be corrected ... but why is it newer - indexing application potentially changing the timestamp ?
@@ -4410,25 +4441,32 @@ class SyncEngine {
 					}
 					
 				} catch (FileException e) {
-					writeln("DEBUG TO REMOVE: Modified file upload FileException Handling (Create the Upload Session)");
+					addLogEntry("DEBUG TO REMOVE: Modified file upload FileException Handling (Create the Upload Session)");
 					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
 				}
 				
-				// Perform the upload using the session that has been created
-				try {
-					uploadResponse = performSessionFileUpload(uploadFileOneDriveApiInstance, thisFileSizeLocal, uploadSessionData, threadUploadSessionFilePath);
-				} catch (OneDriveException exception) {
-					// Function name
-					string thisFunctionName = getFunctionName!({});
-					
-					// Handle all other HTTP status codes
-					// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
-					// Display what the error is
-					displayOneDriveErrorMessage(exception.msg, thisFunctionName);
-					
-				} catch (FileException e) {
-					writeln("DEBUG TO REMOVE: Modified file upload FileException Handling (Perform the Upload using the session)");
-					displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+				// Do we have a valid session URL that we can use ?
+				if (uploadSessionData.type() == JSONType.object) {
+					// This is a valid JSON object
+					// Perform the upload using the session that has been created
+					try {
+						uploadResponse = performSessionFileUpload(uploadFileOneDriveApiInstance, thisFileSizeLocal, uploadSessionData, threadUploadSessionFilePath);
+					} catch (OneDriveException exception) {
+						// Function name
+						string thisFunctionName = getFunctionName!({});
+						
+						// Handle all other HTTP status codes
+						// - 408,429,503,504 errors are handled as a retry within uploadFileOneDriveApiInstance
+						// Display what the error is
+						displayOneDriveErrorMessage(exception.msg, thisFunctionName);
+						
+					} catch (FileException e) {
+						addLogEntry("DEBUG TO REMOVE: Modified file upload FileException Handling (Perform the Upload using the session)");
+						displayFileSystemErrorMessage(e.msg, getFunctionName!({}));
+					}
+				} else {
+					// Create session Upload URL failed
+					addLogEntry("Unable to upload modified file as the creation of the upload session URL failed", ["debug"]);
 				}
 			}
 		} else {
@@ -4522,7 +4560,7 @@ class SyncEngine {
 					if (appConfig.accountType == "personal") {
 						addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional capacity.");
 					} else { // Assuming 'business' or 'sharedLibrary'
-						addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+						addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator." , ["verbose"]);
 					}
 				}
 			} else {
@@ -4531,10 +4569,10 @@ class SyncEngine {
 				
 				// what sort of account type is this?
 				if (appConfig.accountType == "personal") {
-					addLogEntry("ERROR: OneDrive quota information is missing. Your OneDrive account potentially has zero space available. Please free up some space online.");
+					addLogEntry("ERROR: OneDrive quota information is missing. Your OneDrive account potentially has zero space available. Please free up some space online.", ["verbose"]);
 				} else {
 					// quota details not available
-					addLogEntry("WARNING: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.");
+					addLogEntry("WARNING: OneDrive quota information is being restricted. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);
 				}
 			}
 		} else {
@@ -8381,7 +8419,22 @@ class SyncEngine {
 		
 		// Check the session data for expirationDateTime
 		if ("expirationDateTime" in sessionFileData) {
-			auto expiration = SysTime.fromISOExtString(sessionFileData["expirationDateTime"].str);
+			addLogEntry("expirationDateTime: " ~ sessionFileData["expirationDateTime"].str);
+			SysTime expiration;
+			string expirationTimestamp;
+			expirationTimestamp = strip(sessionFileData["expirationDateTime"].str);
+			
+			// is expirationTimestamp valid?
+			if (isValidUTCDateTime(expirationTimestamp)) {
+				// string is a valid timestamp
+				expiration = SysTime.fromISOExtString(expirationTimestamp);
+			} else {
+				// invalid timestamp from JSON file
+				addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ expirationTimestamp);
+				return false;
+			}
+			
+			// valid timestamp
 			if (expiration < Clock.currTime()) {
 				addLogEntry("The upload session has expired for: " ~ sessionFilePath, ["verbose"]);
 				return false;
@@ -8694,6 +8747,7 @@ class SyncEngine {
 		
 		// New DB Tie Item to detail the 'root' of the Shared Folder
 		Item tieDBItem;
+		string lastModifiedTimestamp;
 		tieDBItem.name = "root";
 		
 		// Get the right parentReference details
@@ -8718,8 +8772,23 @@ class SyncEngine {
 			}
 		}
 		
+		// set the item type
 		tieDBItem.type = ItemType.dir;
-		tieDBItem.mtime = SysTime.fromISOExtString(onedriveJSONItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+		
+		// get the lastModifiedDateTime
+		lastModifiedTimestamp = strip(onedriveJSONItem["fileSystemInfo"]["lastModifiedDateTime"].str);
+		// is lastModifiedTimestamp valid?
+		if (isValidUTCDateTime(lastModifiedTimestamp)) {
+			// string is a valid timestamp
+			tieDBItem.mtime = SysTime.fromISOExtString(lastModifiedTimestamp);
+		} else {
+			// invalid timestamp from JSON file
+			addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
+			// Set mtime to SysTime(0)
+			tieDBItem.mtime = SysTime(0);
+		}
+		
+		// ensure there is no parentId
 		tieDBItem.parentId = null;
 		
 		// Add this DB Tie parent record to the local database

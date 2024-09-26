@@ -475,6 +475,19 @@ bool containsASCIIControlCodes(string path) {
     return !matchResult.empty;
 }
 
+// Is the string a valid UTF-8 string?
+bool isValidUTF8(string input) {
+	try {
+		auto it = input.byUTF!(char);
+		foreach (_; it) {
+			// Just iterate to check for valid UTF-8
+		}
+	return true;
+	} catch (UTFException) {
+		return false;
+	}
+}
+
 // Is the path a valid UTF-16 encoded path?
 bool isValidUTF16(string path) {
     // Check for null or empty string
@@ -510,6 +523,33 @@ bool isValidUTF16(string path) {
     }
 
     return true;
+}
+
+// Validate that the provided string is a valid date time stamp in UTC format
+bool isValidUTCDateTime(string dateTimeString) {
+    // Regular expression for validating the string against UTC datetime format
+	auto pattern = regex(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$");
+	
+	// Validate for UTF-8 first
+	if (!isValidUTF8(dateTimeString)) {
+		addLogEntry("BAD TIMESTAMP (UTF-8 FAIL): " ~ dateTimeString);
+		return false;
+	}
+	
+	// First, check if the string matches the pattern
+	if (!match(dateTimeString, pattern)) {
+		addLogEntry("BAD TIMESTAMP (REGEX FAIL): " ~ dateTimeString);
+		return false;
+	}
+
+	// Attempt to parse the string into a DateTime object
+	try {
+		auto dt = SysTime.fromISOExtString(dateTimeString);
+		return true;
+	} catch (TimeException) {
+		addLogEntry("BAD TIMESTAMP (CONVERSION FAIL): " ~ dateTimeString);
+		return false;
+	}
 }
 
 // Does the path contain any HTML URL encoded items (e.g., '%20' for space)
@@ -1296,6 +1336,7 @@ extern(C) nothrow @nogc @system void exitScopeSignalHandler(int signo) {
 	}
 }
 
+// Return the compiler details
 string compilerDetails() {
 	version(DigitalMars) enum compiler = "DMD";
 	else version(LDC)    enum compiler = "LDC";

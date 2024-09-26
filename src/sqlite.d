@@ -97,7 +97,13 @@ struct Database {
 	// Open the database file
 	void open(const(char)[] filename) {
 		// https://www.sqlite.org/c3ref/open.html
-		int rc = sqlite3_open(toStringz(filename), &pDb);
+		// Safest multithreaded way to open the database
+		int rc = sqlite3_open_v2(
+			toStringz(filename), /* Database filename (UTF-8) */
+			&pDb,                /* OUT: SQLite db handle */
+			SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX,  /* Flags */
+			null                 /* Optional: Name of the VFS module to use */
+		);
 		
 		if (rc != SQLITE_OK) {
 			string errorMsg;
