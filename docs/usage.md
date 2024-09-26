@@ -65,7 +65,7 @@ Before reading this document, please ensure you are running application version 
 ### Memory Usage
 Starting with version 2.5.x, the application has been completely rewritten. It is crucial to understand the memory requirements to ensure the application runs smoothly on your system.
 
-Testing indicates that during a `--resync` operation or a full online scan, the client may use approximately 1GB of memory for every 100,000 objects stored online. This occurs because the client queries the OneDrive API for all objects before processing them locally. Once processing is complete, the memory is released back to the system.
+During a `--resync` or full online scan, the OneDrive Client may use approximately 1GB of memory for every 100,000 objects stored online. This is because the client retrieves data for all objects via the OneDrive API before processing them locally. Once this process completes, the memory is freed. To avoid performance issues, ensure your system has sufficient available memory. If the system starts using swap space due to insufficient free memory, this can significantly slow down the application and impact overall performance.
 
 To avoid potential system instability or the client being terminated by your Out-Of-Memory (OOM) process monitors, please ensure your system has sufficient memory allocated or configure adequate swap space.
 
