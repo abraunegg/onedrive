@@ -45,13 +45,23 @@ Refer to [Frequently Asked Questions](https://github.com/abraunegg/onedrive/wiki
 ## Have a question
 If you have a question or need something clarified, please raise a new discussion post [here](https://github.com/abraunegg/onedrive/discussions)
 
+## Supported Application Version
+Support is only provided for the current application release version or newer 'master' branch versions.
+
+The current release version is: [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases)
+
+Check the version of the application you are using `onedrive --version` and ensure that you are running either the current release or compile the application yourself from master to get the latest version.
+
+To check your version, run: `onedrive --version`. Ensure you are using the current release or compile the latest version from the master branch if needed.
+
+If you are using an older version, you must upgrade to the current release or newer to receive support.
+
 ## Basic Troubleshooting Steps
 If you are encountering any issue running the application please follow these steps first:
 1.  Check the version of the application you are using `onedrive --version` and ensure that you are running either the latest [release](https://github.com/abraunegg/onedrive/releases) or built from master.
 2.  Configure the application to only use IPv4 network connectivity, and then retest. 
 3.  Configure the application to only use HTTP/1.1. operations with IPv4 network connectivity, and then retest.
 4.  If the above points do not resolve your issue, upgrade your 'curl' version to the latest available by the curl developers. Refer to https://curl.se/docs/releases.html for details.
-
 
 ## Reporting an Issue or Bug
 > [!IMPORTANT]
