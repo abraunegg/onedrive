@@ -2499,8 +2499,8 @@ class SyncEngine {
 										} else {
 											// invalid timestamp from JSON file
 											addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
-											// Set mtime to SysTime(0)
-											itemModifiedTime = SysTime(0);
+											// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
+											itemModifiedTime = Clock.currTime(UTC());
 										}
 									} else {
 										// not a remote item
@@ -2512,8 +2512,8 @@ class SyncEngine {
 										} else {
 											// invalid timestamp from JSON file
 											addLogEntry("WARNING: Invalid timestamp provided by the Microsoft OneDrive API: " ~ lastModifiedTimestamp);
-											// Set mtime to SysTime(0)
-											itemModifiedTime = SysTime(0);
+											// Set mtime to Clock.currTime(UTC()) given that the time in the JSON should be a UTC timestamp
+											itemModifiedTime = Clock.currTime(UTC());
 										}
 									}
 									
