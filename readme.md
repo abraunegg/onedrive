@@ -50,8 +50,6 @@ Support is only provided for the current application release version or newer 'm
 
 The current release version is: [![Version](https://img.shields.io/github/v/release/abraunegg/onedrive)](https://github.com/abraunegg/onedrive/releases)
 
-Check the version of the application you are using `onedrive --version` and ensure that you are running either the current release or compile the application yourself from master to get the latest version.
-
 To check your version, run: `onedrive --version`. Ensure you are using the current release or compile the latest version from the master branch if needed.
 
 If you are using an older version, you must upgrade to the current release or newer to receive support.
