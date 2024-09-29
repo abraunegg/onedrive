@@ -12,7 +12,7 @@
 %endif
 
 Name:       onedrive
-Version:    2.5.1
+Version:    2.5.2
 Release:    1%{?dist}
 Summary:    OneDrive Client for Linux
 Group:      System Environment/Network
