@@ -124,7 +124,7 @@ Item makeDatabaseItem(JSONValue driveItem) {
 			}
 		}
 	}
-		
+	
 	// Set this item object type
 	bool typeSet = false;
 	if (isItemFile(driveItem)) {
