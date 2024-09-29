@@ -8714,10 +8714,12 @@ class SyncEngine {
 		// Do the flags get updated?
 		if (quotaRemaining <= 0) {
 			if (appConfig.accountType == "personal"){
-				// zero space available
-				addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional capacity.");
-				quotaRemaining = 0;
-				quotaAvailable = false;
+				if (driveId == appConfig.defaultDriveId) {
+					// zero space available on our drive
+					addLogEntry("ERROR: OneDrive account currently has zero space available. Please free up some space online or purchase additional capacity.");
+					quotaRemaining = 0;
+					quotaAvailable = false;
+				}
 			} else {
 				// zero space available is being reported, maybe being restricted?
 				addLogEntry("WARNING: OneDrive quota information is being restricted or providing a zero value. Please fix by speaking to your OneDrive / Office 365 Administrator.", ["verbose"]);
