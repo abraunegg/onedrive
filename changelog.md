@@ -2,6 +2,18 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.5.2 - 2024-09-29
+
+### Added
+*   Added 15 second sleep to systemd services to allow d-bus daemon to start and be available if present
+
+### Fixed
+*   Fix Bug: Application crash unable to correctly process a timestamp that has fractional seconds
+*   Fix Bug: Fixed application logging output of Personal Shared Folder incorrectly advising there is no free space
+
+### Updated
+*   Updated documentation
+
 ## 2.5.1 - 2024-09-27
 
 ### Special Thankyou
