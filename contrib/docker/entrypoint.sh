@@ -72,6 +72,13 @@ if [ "${ONEDRIVE_DOWNLOADONLY:=0}" == "1" ]; then
 	ARGS=(--download-only ${ARGS[@]})
 fi
 
+# Tell client to clean up local files when in download-only mode based on environment variable
+if [ "${ONEDRIVE_CLEANUPLOCAL:=0}" == "1" ]; then
+	echo "# We are cleaning up local files that are not present online"
+	echo "# Adding --cleanup-local-files"
+	ARGS=(--cleanup-local-files ${ARGS[@]})
+fi
+
 # Tell client to sync in upload-only mode based on environment variable
 if [ "${ONEDRIVE_UPLOADONLY:=0}" == "1" ]; then
 	echo "# We are synchronizing in upload-only mode"
