@@ -259,7 +259,7 @@ Once these values are changed, you will need to restart your client so that the 
 
 To make these changes permanent on your system, refer to your OS reference documentation.
 
-## Using the OneDrive Client for Linux to syncronise your data
+## Using the OneDrive Client for Linux to synchronise your data
 
 ### Increasing application logging level
 When running a sync (`--sync`) or using monitor mode (`--monitor`), it may be desirable to see additional information regarding the progress and operation of the client. For example, for a `--sync` command, this would be:
