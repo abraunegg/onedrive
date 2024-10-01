@@ -62,6 +62,8 @@ Before reading this document, please ensure you are running application version 
   - [How to start a user systemd service at boot without user login?](#how-to-start-a-user-systemd-service-at-boot-without-user-login)
   - [How to access Microsoft OneDrive service through a proxy](#how-to-access-microsoft-onedrive-service-through-a-proxy)
   - [How to set up SELinux for a sync folder outside of the home folder](#how-to-set-up-selinux-for-a-sync-folder-outside-of-the-home-folder)
+- [Advanced Configuration of the OneDrive Client for Linux](#advanced-configuration-of-the-onedrive-client-for-linux)
+- [Overview of OneDrive Client Commands](#overview-of-onedrive-client-commands)
 
 ## Important Notes
 
@@ -1124,3 +1126,164 @@ To remove this change from SELinux and restore the default behaviour:
 sudo semanage fcontext -d /path/to/onedriveSyncFolder
 sudo restorecon -R -v /path/to/onedriveSyncFolder
 ```
+
+## Advanced Configuration of the OneDrive Client for Linux
+
+Refer to [advanced-usage.md](advanced-usage.md) for further details on the following topics:
+
+* Configuring the client to use multiple OneDrive accounts / configurations
+* Configuring the client to use multiple OneDrive accounts / configurations using Docker
+* Configuring the client for use in dual-boot (Windows / Linux) situations
+* Configuring the client for use when 'sync_dir' is a mounted directory
+* Upload data from the local ~/OneDrive folder to a specific location on OneDrive
+
+## Overview of OneDrive Client Commands
+Below is a comprehensive list of available commands for the OneDrive client, as shown by the output of `onedrive --help`. These commands provide a range of options for synchronising, monitoring, and managing files between your local system and Microsoft's OneDrive cloud service.
+
+The following commands are available:
+```text
+onedrive - A client for the Microsoft OneDrive Cloud Service
+
+  Usage:
+    onedrive [options] --sync
+      Do a one time synchronization
+    onedrive [options] --monitor
+      Monitor filesystem and sync regularly
+    onedrive [options] --display-config
+      Display the currently used configuration
+    onedrive [options] --display-sync-status
+      Query OneDrive service and report on pending changes
+    onedrive -h | --help
+      Show this help screen
+    onedrive --version
+      Show version
+
+  Options:
+
+  --auth-files ARG
+      Perform authentication not via interactive dialog but via files read/writes to these files.
+  --auth-response ARG
+      Perform authentication not via interactive dialog but via providing the response url directly.
+  --check-for-nomount
+      Check for the presence of .nosync in the syncdir root. If found, do not perform sync.
+  --check-for-nosync
+      Check for the presence of .nosync in each directory. If found, skip directory from sync.
+  --classify-as-big-delete ARG
+      Number of children in a path that is locally removed which will be classified as a 'big data delete'
+  --cleanup-local-files
+      Cleanup additional local files when using --download-only. This will remove local data.
+  --confdir ARG
+      Set the directory used to store the configuration files
+  --create-directory ARG
+      Create a directory on OneDrive - no sync will be performed.
+  --create-share-link ARG
+      Create a shareable link for an existing file on OneDrive
+  --debug-https
+      Debug OneDrive HTTPS communication.
+  --destination-directory ARG
+      Destination directory for renamed or move on OneDrive - no sync will be performed.
+  --disable-download-validation
+      Disable download validation when downloading from OneDrive
+  --disable-notifications
+      Do not use desktop notifications in monitor mode.
+  --disable-upload-validation
+      Disable upload validation when uploading to OneDrive
+  --display-config
+      Display what options the client will use as currently configured - no sync will be performed.
+  --display-quota
+      Display the quota status of the client - no sync will be performed.
+  --display-running-config
+      Display what options the client has been configured to use on application startup.
+  --display-sync-status
+      Display the sync status of the client - no sync will be performed.
+  --download-only
+      Replicate the OneDrive online state locally, by only downloading changes from OneDrive. Do not upload local changes to OneDrive.
+  --dry-run
+      Perform a trial sync with no changes made
+  --enable-logging
+      Enable client activity to a separate log file
+  --force
+      Force the deletion of data when a 'big delete' is detected
+  --force-http-11
+      Force the use of HTTP 1.1 for all operations
+  --force-sync
+      Force a synchronization of a specific folder, only when using --sync --single-directory and ignore all non-default skip_dir and skip_file rules
+  --get-O365-drive-id ARG
+      Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library (DEPRECATED)
+  --get-file-link ARG
+      Display the file link of a synced file
+  --get-sharepoint-drive-id ARG
+      Query and return the Office 365 Drive ID for a given Office 365 SharePoint Shared Library
+  --help -h
+      This help information.
+  --list-shared-items
+      List OneDrive Business Shared Items
+  --local-first
+      Synchronize from the local directory source first, before downloading changes from OneDrive.
+  --log-dir ARG
+      Directory where logging output is saved to, needs to end with a slash.
+  --logout
+      Logout the current user
+  --modified-by ARG
+      Display the last modified by details of a given path
+  --monitor -m
+      Keep monitoring for local and remote changes
+  --monitor-fullscan-frequency ARG
+      Number of sync runs before performing a full local scan of the synced directory
+  --monitor-interval ARG
+      Number of seconds by which each sync operation is undertaken when idle under monitor mode.
+  --monitor-log-frequency ARG
+      Frequency of logging in monitor mode
+  --no-remote-delete
+      Do not delete local file 'deletes' from OneDrive when using --upload-only
+  --print-access-token
+      Print the access token, useful for debugging
+  --reauth
+      Reauthenticate the client with OneDrive
+  --remove-directory ARG
+      Remove a directory on OneDrive - no sync will be performed.
+  --remove-source-files
+      Remove source file after successful transfer to OneDrive when using --upload-only
+  --resync
+      Forget the last saved state, perform a full sync
+  --resync-auth
+      Approve the use of performing a --resync action
+  --single-directory ARG
+      Specify a single local directory within the OneDrive root to sync.
+  --skip-dir ARG
+      Skip any directories that match this pattern from syncing
+  --skip-dir-strict-match
+      When matching skip_dir directories, only match explicit matches
+  --skip-dot-files
+      Skip dot files and folders from syncing
+  --skip-file ARG
+      Skip any files that match this pattern from syncing
+  --skip-size ARG
+      Skip new files larger than this size (in MB)
+  --skip-symlinks
+      Skip syncing of symlinks
+  --source-directory ARG
+      Source directory to rename or move on OneDrive - no sync will be performed.
+  --space-reservation ARG
+      The amount of disk space to reserve (in MB) to avoid 100% disk space utilisation
+  --sync -s
+      Perform a synchronisation with Microsoft OneDrive
+  --sync-root-files
+      Sync all files in sync_dir root when using sync_list.
+  --sync-shared-files
+      Sync OneDrive Business Shared Files to the local filesystem
+  --syncdir ARG
+      Specify the local directory used for synchronisation to OneDrive
+  --synchronize
+      Perform a synchronisation with Microsoft OneDrive (DEPRECATED)
+  --upload-only
+      Replicate the locally configured sync_dir state to OneDrive, by only uploading local changes to OneDrive. Do not download changes from OneDrive.
+  --verbose -v+
+      Print more details, useful for debugging (repeat for extra debugging)
+  --version
+      Print the version and exit
+  --with-editing-perms
+      Create a read-write shareable link for an existing file on OneDrive when used with --create-share-link <file>
+```
+
+Refer to [application-config-options.md](application-config-options.md) for in-depth details on all application options.
