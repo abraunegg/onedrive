@@ -59,6 +59,7 @@ Before reading this document, please ensure you are running application version 
     - [OneDrive service running as a non-root user via systemd (with notifications enabled) (Arch, Ubuntu, Debian, OpenSuSE, Fedora)](#onedrive-service-running-as-a-non-root-user-via-systemd-with-notifications-enabled-arch-ubuntu-debian-opensuse-fedora)
     - [OneDrive service running as a non-root user via runit (antiX, Devuan, Artix, Void)](#onedrive-service-running-as-a-non-root-user-via-runit-antix-devuan-artix-void)
   - [How to start a user systemd service at boot without user login?](#how-to-start-a-user-systemd-service-at-boot-without-user-login)
+  - [How to access Microsoft OneDrive service through a proxy](#how-to-access-microsoft-onedrive-service-through-a-proxy)
 
 ## Important Notes
 
@@ -1068,3 +1069,41 @@ To address this issue, you need to reconfigure your 'user' account so that the s
 ```text
 loginctl enable-linger <your_user_name>
 ```
+
+### How to access Microsoft OneDrive service through a proxy
+If you have a requirement to run the client through a proxy, there are a couple of ways to achieve this:
+
+#### Option 1: Use '.bashrc' to specify the proxy server details
+Set proxy configuration in `~/.bashrc` to allow the 'onedrive' application to use a specific proxy server:
+```
+# Set the HTTP proxy
+export http_proxy="http://your.proxy.server:port"
+
+# Set the HTTPS proxy
+export https_proxy="http://your.proxy.server:port"
+```
+
+Once you've edited your `~/.bashrc` file, run the following command to apply the changes:
+```
+source ~/.bashrc
+```
+
+#### Option 2: Update the 'systemd' service file to include the proxy server details
+If running as a systemd service, edit the applicable systemd service file to include the proxy configuration information:
+```text
+[Unit]
+Description=OneDrive Client for Linux
+Documentation=https://github.com/abraunegg/onedrive
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+........
+Environment="HTTP_PROXY=http://your.proxy.server:port"
+Environment="HTTPS_PROXY=http://your.proxy.server:port"
+ExecStart=/usr/local/bin/onedrive --monitor
+........
+
+```
+> [!NOTE]
+> After modifying the service files, you will need to run `sudo systemctl daemon-reload` to ensure the service file changes are picked up. A restart of the OneDrive service will also be required to pick up the change to send the traffic via the proxy server
