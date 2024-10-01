@@ -15,7 +15,7 @@ Before reading this document, please ensure you are running application version 
   - [Understanding OneDrive Client for Linux Operational Modes](#understanding-onedrive-client-for-linux-operational-modes)
     - [Standalone Synchronisation Operational Mode (Standalone Mode)](#standalone-synchronisation-operational-mode-standalone-mode)
     - [Ongoing Synchronisation Operational Mode (Monitor Mode)](#ongoing-synchronisation-operational-mode-monitor-mode)
-- [Using the client](#using-the-client)
+- [Using the OneDrive Client for Linux](#using-the-onedrive-client-for-linux)
   - [Increasing application logging level](#increasing-application-logging-level)
   - [Using 'Client Side Filtering' rules to determine what should be synced with Microsoft OneDrive](#using-client-side-filtering-rules-to-determine-what-should-be-synced-with-microsoft-onedrive)
   - [Testing your configuration](#testing-your-configuration)
@@ -259,7 +259,7 @@ Once these values are changed, you will need to restart your client so that the 
 
 To make these changes permanent on your system, refer to your OS reference documentation.
 
-## Using the client
+## Using the OneDrive Client for Linux
 
 ### Increasing application logging level
 When running a sync (`--sync`) or using monitor mode (`--monitor`), it may be desirable to see additional information regarding the progress and operation of the client. For example, for a `--sync` command, this would be:
