@@ -15,6 +15,7 @@ Before reading this document, please ensure you are running application version 
   - [Understanding OneDrive Client for Linux Operational Modes](#understanding-onedrive-client-for-linux-operational-modes)
     - [Standalone Synchronisation Operational Mode (Standalone Mode)](#standalone-synchronisation-operational-mode-standalone-mode)
     - [Ongoing Synchronisation Operational Mode (Monitor Mode)](#ongoing-synchronisation-operational-mode-monitor-mode)
+- [Using the client](#using-the-client)
   - [Increasing application logging level](#increasing-application-logging-level)
   - [Using 'Client Side Filtering' rules to determine what should be synced with Microsoft OneDrive](#using-client-side-filtering-rules-to-determine-what-should-be-synced-with-microsoft-onedrive)
   - [Testing your configuration](#testing-your-configuration)
@@ -60,6 +61,7 @@ Before reading this document, please ensure you are running application version 
     - [OneDrive service running as a non-root user via runit (antiX, Devuan, Artix, Void)](#onedrive-service-running-as-a-non-root-user-via-runit-antix-devuan-artix-void)
   - [How to start a user systemd service at boot without user login?](#how-to-start-a-user-systemd-service-at-boot-without-user-login)
   - [How to access Microsoft OneDrive service through a proxy](#how-to-access-microsoft-onedrive-service-through-a-proxy)
+  - [How to set up SELinux for a sync folder outside of the home folder](#how-to-set-up-selinux-for-a-sync-folder-outside-of-the-home-folder)
 
 ## Important Notes
 
@@ -254,6 +256,8 @@ sudo sysctl fs.inotify.max_user_watches=<new_value>
 Once these values are changed, you will need to restart your client so that the new values are detected and used.
 
 To make these changes permanent on your system, refer to your OS reference documentation.
+
+## Using the client
 
 ### Increasing application logging level
 When running a sync (`--sync`) or using monitor mode (`--monitor`), it may be desirable to see additional information regarding the progress and operation of the client. For example, for a `--sync` command, this would be:
@@ -1075,7 +1079,7 @@ If you have a requirement to run the client through a proxy, there are a couple 
 
 #### Option 1: Use '.bashrc' to specify the proxy server details
 Set proxy configuration in `~/.bashrc` to allow the 'onedrive' application to use a specific proxy server:
-```
+```text
 # Set the HTTP proxy
 export http_proxy="http://your.proxy.server:port"
 
@@ -1107,3 +1111,16 @@ ExecStart=/usr/local/bin/onedrive --monitor
 ```
 > [!NOTE]
 > After modifying the service files, you will need to run `sudo systemctl daemon-reload` to ensure the service file changes are picked up. A restart of the OneDrive service will also be required to pick up the change to send the traffic via the proxy server
+
+### How to set up SELinux for a sync folder outside of the home folder
+
+If SELinux is enforced and the sync folder is outside of the home folder, as long as there is no policy for cloud file service providers, label the file system folder to `user_home_t`.
+```text
+sudo semanage fcontext -a -t user_home_t /path/to/onedriveSyncFolder
+sudo restorecon -R -v /path/to/onedriveSyncFolder
+```
+To remove this change from SELinux and restore the default behaviour:
+```text
+sudo semanage fcontext -d /path/to/onedriveSyncFolder
+sudo restorecon -R -v /path/to/onedriveSyncFolder
+```
