@@ -63,7 +63,7 @@ Before reading this document, please ensure you are running application version 
   - [How to access Microsoft OneDrive service through a proxy](#how-to-access-microsoft-onedrive-service-through-a-proxy)
   - [How to set up SELinux for a sync folder outside of the home folder](#how-to-set-up-selinux-for-a-sync-folder-outside-of-the-home-folder)
 - [Advanced Configuration of the OneDrive Client for Linux](#advanced-configuration-of-the-onedrive-client-for-linux)
-- [Overview of OneDrive Client Commands](#overview-of-onedrive-client-commands)
+- [Overview of all OneDrive Client for Linux CLI Options](#overview-of-all-onedrive-client-for-linux-cli-options)
 
 ## Important Notes
 
@@ -1137,10 +1137,10 @@ Refer to [advanced-usage.md](advanced-usage.md) for further details on the follo
 * Configuring the client for use when 'sync_dir' is a mounted directory
 * Upload data from the local ~/OneDrive folder to a specific location on OneDrive
 
-## Overview of OneDrive Client Commands
-Below is a comprehensive list of available commands for the OneDrive client, as shown by the output of `onedrive --help`. These commands provide a range of options for synchronising, monitoring, and managing files between your local system and Microsoft's OneDrive cloud service.
+## Overview of all OneDrive Client for Linux CLI Options
+Below is a comprehensive list of all available configuration options for the OneDrive Client for Linux, as shown by the output of `onedrive --help`. These commands provide a range of options for synchronising, monitoring, and managing files between your local system and Microsoft's OneDrive cloud service.
 
-The following commands are available:
+The following configuration options are available:
 ```text
 onedrive - A client for the Microsoft OneDrive Cloud Service
 
