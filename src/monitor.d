@@ -74,7 +74,7 @@ class MonitorBackgroundWorker {
 		}
 		
 		// Add path to inotify watch - required regardless if a '.folder' or 'folder'
-		addLogEntry("inotify_add_watch successfully added for: " ~ pathname, ["debug"]);
+		if (debugLogging) {addLogEntry("inotify_add_watch successfully added for: " ~ pathname, ["debug"]);}
 		
 		// Do we log that we are monitoring this directory?
 		if (isDir(pathname)) {
@@ -351,7 +351,7 @@ final class Monitor {
 			if (isDir(dirname)) {
 				if (selectiveSync.isDirNameExcluded(dirname.strip('.'))) {
 					// dont add a watch for this item
-					addLogEntry("Skipping monitoring due to skip_dir match: " ~ dirname, ["debug"]);
+					if (debugLogging) {addLogEntry("Skipping monitoring due to skip_dir match: " ~ dirname, ["debug"]);}
 					return;
 				}
 			}
@@ -361,14 +361,14 @@ final class Monitor {
 				// This due to if the user has specified in skip_file an exclusive path: '/path/file' - that is what must be matched
 				if (selectiveSync.isFileNameExcluded(dirname.strip('.'))) {
 					// dont add a watch for this item
-					addLogEntry("Skipping monitoring due to skip_file match: " ~ dirname, ["debug"]);
+					if (debugLogging) {addLogEntry("Skipping monitoring due to skip_file match: " ~ dirname, ["debug"]);}
 					return;
 				}
 			}
 			// is the path excluded by sync_list?
 			if (selectiveSync.isPathExcludedViaSyncList(buildNormalizedPath(dirname))) {
 				// dont add a watch for this item
-				addLogEntry("Skipping monitoring due to sync_list match: " ~ dirname, ["debug"]);
+				if (debugLogging) {addLogEntry("Skipping monitoring due to sync_list match: " ~ dirname, ["debug"]);}
 				return;
 			}
 		}
@@ -401,7 +401,7 @@ final class Monitor {
 		
 		// passed all potential exclusions
 		// add inotify watch for this path / directory / file
-		addLogEntry("Calling worker.addInotifyWatch() for this dirname: " ~ dirname, ["debug"]);
+		if (debugLogging) {addLogEntry("Calling worker.addInotifyWatch() for this dirname: " ~ dirname, ["debug"]);}
 		int wd = worker.addInotifyWatch(dirname);
 		if (wd > 0) {
 			wdToDirName[wd] = buildNormalizedPath(dirname) ~ "/";
@@ -414,7 +414,7 @@ final class Monitor {
 				auto pathList = dirEntries(dirname, SpanMode.shallow, false);
 				foreach(DirEntry entry; pathList) {
 					if (entry.isDir) {
-						addLogEntry("Calling addRecursive() for this directory: " ~ entry.name, ["debug"]);
+						if (debugLogging) {addLogEntry("Calling addRecursive() for this directory: " ~ entry.name, ["debug"]);}
 						addRecursive(entry.name);
 					}
 				}
@@ -476,7 +476,7 @@ final class Monitor {
 	private string getPath(const(inotify_event)* event) {
 		string path = wdToDirName[event.wd];
 		if (event.len > 0) path ~= fromStringz(event.name.ptr);
-		addLogEntry("inotify path event for: " ~ path, ["debug"]);
+		if (debugLogging) {addLogEntry("inotify path event for: " ~ path, ["debug"]);}
 		return path;
 	}
 
@@ -509,36 +509,40 @@ final class Monitor {
 					string evalPath;
 					
 					// inotify event debug
-					addLogEntry("inotify event wd: " ~ to!string(event.wd), ["debug"]);
-					addLogEntry("inotify event mask: " ~ to!string(event.mask), ["debug"]);
-					addLogEntry("inotify event cookie: " ~ to!string(event.cookie), ["debug"]);
-					addLogEntry("inotify event len: " ~ to!string(event.len), ["debug"]);
-					addLogEntry("inotify event name: " ~ to!string(event.name), ["debug"]);
+					if (debugLogging) {
+						addLogEntry("inotify event wd: " ~ to!string(event.wd), ["debug"]);
+						addLogEntry("inotify event mask: " ~ to!string(event.mask), ["debug"]);
+						addLogEntry("inotify event cookie: " ~ to!string(event.cookie), ["debug"]);
+						addLogEntry("inotify event len: " ~ to!string(event.len), ["debug"]);
+						addLogEntry("inotify event name: " ~ to!string(event.name), ["debug"]);
+					}
 					
 					// inotify event handling
-					if (event.mask & IN_ACCESS) addLogEntry("inotify event flag: IN_ACCESS", ["debug"]);
-					if (event.mask & IN_MODIFY) addLogEntry("inotify event flag: IN_MODIFY", ["debug"]);
-					if (event.mask & IN_ATTRIB) addLogEntry("inotify event flag: IN_ATTRIB", ["debug"]);
-					if (event.mask & IN_CLOSE_WRITE) addLogEntry("inotify event flag: IN_CLOSE_WRITE", ["debug"]);
-					if (event.mask & IN_CLOSE_NOWRITE) addLogEntry("inotify event flag: IN_CLOSE_NOWRITE", ["debug"]);
-					if (event.mask & IN_MOVED_FROM) addLogEntry("inotify event flag: IN_MOVED_FROM", ["debug"]);
-					if (event.mask & IN_MOVED_TO) addLogEntry("inotify event flag: IN_MOVED_TO", ["debug"]);
-					if (event.mask & IN_CREATE) addLogEntry("inotify event flag: IN_CREATE", ["debug"]);
-					if (event.mask & IN_DELETE) addLogEntry("inotify event flag: IN_DELETE", ["debug"]);
-					if (event.mask & IN_DELETE_SELF) addLogEntry("inotify event flag: IN_DELETE_SELF", ["debug"]);
-					if (event.mask & IN_MOVE_SELF) addLogEntry("inotify event flag: IN_MOVE_SELF", ["debug"]);
-					if (event.mask & IN_UNMOUNT) addLogEntry("inotify event flag: IN_UNMOUNT", ["debug"]);
-					if (event.mask & IN_Q_OVERFLOW) addLogEntry("inotify event flag: IN_Q_OVERFLOW", ["debug"]);
-					if (event.mask & IN_IGNORED) addLogEntry("inotify event flag: IN_IGNORED", ["debug"]);
-					if (event.mask & IN_CLOSE) addLogEntry("inotify event flag: IN_CLOSE", ["debug"]);
-					if (event.mask & IN_MOVE) addLogEntry("inotify event flag: IN_MOVE", ["debug"]);
-					if (event.mask & IN_ONLYDIR) addLogEntry("inotify event flag: IN_ONLYDIR", ["debug"]);
-					if (event.mask & IN_DONT_FOLLOW) addLogEntry("inotify event flag: IN_DONT_FOLLOW", ["debug"]);
-					if (event.mask & IN_EXCL_UNLINK) addLogEntry("inotify event flag: IN_EXCL_UNLINK", ["debug"]);
-					if (event.mask & IN_MASK_ADD) addLogEntry("inotify event flag: IN_MASK_ADD", ["debug"]);
-					if (event.mask & IN_ISDIR) addLogEntry("inotify event flag: IN_ISDIR", ["debug"]);
-					if (event.mask & IN_ONESHOT) addLogEntry("inotify event flag: IN_ONESHOT", ["debug"]);
-					if (event.mask & IN_ALL_EVENTS) addLogEntry("inotify event flag: IN_ALL_EVENTS", ["debug"]);
+					if (debugLogging) {
+						if (event.mask & IN_ACCESS) addLogEntry("inotify event flag: IN_ACCESS", ["debug"]);
+						if (event.mask & IN_MODIFY) addLogEntry("inotify event flag: IN_MODIFY", ["debug"]);
+						if (event.mask & IN_ATTRIB) addLogEntry("inotify event flag: IN_ATTRIB", ["debug"]);
+						if (event.mask & IN_CLOSE_WRITE) addLogEntry("inotify event flag: IN_CLOSE_WRITE", ["debug"]);
+						if (event.mask & IN_CLOSE_NOWRITE) addLogEntry("inotify event flag: IN_CLOSE_NOWRITE", ["debug"]);
+						if (event.mask & IN_MOVED_FROM) addLogEntry("inotify event flag: IN_MOVED_FROM", ["debug"]);
+						if (event.mask & IN_MOVED_TO) addLogEntry("inotify event flag: IN_MOVED_TO", ["debug"]);
+						if (event.mask & IN_CREATE) addLogEntry("inotify event flag: IN_CREATE", ["debug"]);
+						if (event.mask & IN_DELETE) addLogEntry("inotify event flag: IN_DELETE", ["debug"]);
+						if (event.mask & IN_DELETE_SELF) addLogEntry("inotify event flag: IN_DELETE_SELF", ["debug"]);
+						if (event.mask & IN_MOVE_SELF) addLogEntry("inotify event flag: IN_MOVE_SELF", ["debug"]);
+						if (event.mask & IN_UNMOUNT) addLogEntry("inotify event flag: IN_UNMOUNT", ["debug"]);
+						if (event.mask & IN_Q_OVERFLOW) addLogEntry("inotify event flag: IN_Q_OVERFLOW", ["debug"]);
+						if (event.mask & IN_IGNORED) addLogEntry("inotify event flag: IN_IGNORED", ["debug"]);
+						if (event.mask & IN_CLOSE) addLogEntry("inotify event flag: IN_CLOSE", ["debug"]);
+						if (event.mask & IN_MOVE) addLogEntry("inotify event flag: IN_MOVE", ["debug"]);
+						if (event.mask & IN_ONLYDIR) addLogEntry("inotify event flag: IN_ONLYDIR", ["debug"]);
+						if (event.mask & IN_DONT_FOLLOW) addLogEntry("inotify event flag: IN_DONT_FOLLOW", ["debug"]);
+						if (event.mask & IN_EXCL_UNLINK) addLogEntry("inotify event flag: IN_EXCL_UNLINK", ["debug"]);
+						if (event.mask & IN_MASK_ADD) addLogEntry("inotify event flag: IN_MASK_ADD", ["debug"]);
+						if (event.mask & IN_ISDIR) addLogEntry("inotify event flag: IN_ISDIR", ["debug"]);
+						if (event.mask & IN_ONESHOT) addLogEntry("inotify event flag: IN_ONESHOT", ["debug"]);
+						if (event.mask & IN_ALL_EVENTS) addLogEntry("inotify event flag: IN_ALL_EVENTS", ["debug"]);
+					}
 					
 					// skip events that need to be ignored
 					if (event.mask & IN_IGNORED) {
@@ -584,11 +588,11 @@ final class Monitor {
 					
 					// handle the inotify events
 					if (event.mask & IN_MOVED_FROM) {
-						addLogEntry("event IN_MOVED_FROM: " ~ path, ["debug"]);
+						if (debugLogging) {addLogEntry("event IN_MOVED_FROM: " ~ path, ["debug"]);}
 						cookieToPath[event.cookie] = path;
 						movedNotDeleted[path] = true; // Mark as moved, not deleted
 					} else if (event.mask & IN_MOVED_TO) {
-						addLogEntry("event IN_MOVED_TO: " ~ path, ["debug"]);
+						if (debugLogging) {addLogEntry("event IN_MOVED_TO: " ~ path, ["debug"]);}
 						if (event.mask & IN_ISDIR) addRecursive(path);
 						auto from = event.cookie in cookieToPath;
 						if (from) {
@@ -604,7 +608,7 @@ final class Monitor {
 							}
 						}
 					} else if (event.mask & IN_CREATE) {
-						addLogEntry("event IN_CREATE: " ~ path, ["debug"]);
+						if (debugLogging) {addLogEntry("event IN_CREATE: " ~ path, ["debug"]);}
 						if (event.mask & IN_ISDIR) {
 							addRecursive(path);
 							if (useCallbacks) actionHolder.append(ActionType.createDir, path);
@@ -613,14 +617,14 @@ final class Monitor {
 						if (path in movedNotDeleted) {
 							movedNotDeleted.remove(path); // Ignore delete for moved files
 						} else {
-							addLogEntry("event IN_DELETE: " ~ path, ["debug"]);
+							if (debugLogging) {addLogEntry("event IN_DELETE: " ~ path, ["debug"]);}
 							if (useCallbacks) actionHolder.append(ActionType.deleted, path);
 						}
 					} else if ((event.mask & IN_CLOSE_WRITE) && !(event.mask & IN_ISDIR)) {
-						addLogEntry("event IN_CLOSE_WRITE and not IN_ISDIR: " ~ path, ["debug"]);
+						if (debugLogging) {addLogEntry("event IN_CLOSE_WRITE and not IN_ISDIR: " ~ path, ["debug"]);}
 						if (useCallbacks) actionHolder.append(ActionType.changed, path);
 					} else {
-						addLogEntry("event unhandled: " ~ path, ["debug"]);
+						addLogEntry("inotify event unhandled: " ~ path);
 						assert(0);
 					}
 
@@ -639,13 +643,13 @@ final class Monitor {
 
 			// Assume that the items moved outside the watched directory have been deleted
 			foreach (cookie, path; cookieToPath) {
-				addLogEntry("Deleting cookie|watch (post loop): " ~ path, ["debug"]);
+				if (debugLogging) {addLogEntry("Deleting cookie|watch (post loop): " ~ path, ["debug"]);}
 				if (useCallbacks) onDelete(path);
 				remove(path);
 				cookieToPath.remove(cookie);
 			}
 			// Debug Log that all inotify events are flushed
-			addLogEntry("inotify events flushed", ["debug"]);
+			if (debugLogging) {addLogEntry("inotify events flushed", ["debug"]);}
 		}
 	}
   

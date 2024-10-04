@@ -129,21 +129,21 @@ Item makeDatabaseItem(JSONValue driveItem) {
 	bool typeSet = false;
 	if (isItemFile(driveItem)) {
 		// 'file' object exists in the JSON
-		addLogEntry("Flagging object as a file", ["debug"]);
+		if (debugLogging) {addLogEntry("Flagging object as a file", ["debug"]);}
 		typeSet = true;
 		item.type = ItemType.file;
 	}
 	
 	if (isItemFolder(driveItem)) {
 		// 'folder' object exists in the JSON
-		addLogEntry("Flagging object as a directory", ["debug"]);
+		if (debugLogging) {addLogEntry("Flagging object as a directory", ["debug"]);}
 		typeSet = true;
 		item.type = ItemType.dir;
 	}
 	
 	if (isItemRemote(driveItem)) {
 		// 'remote' object exists in the JSON
-		addLogEntry("Flagging object as a remote", ["debug"]);
+		if (debugLogging) {addLogEntry("Flagging object as a remote", ["debug"]);}
 		typeSet = true;
 		item.type = ItemType.remote;
 	}
@@ -165,7 +165,7 @@ Item makeDatabaseItem(JSONValue driveItem) {
 			if ("quickXorHash" in driveItem["file"]["hashes"]) {
 				item.quickXorHash = driveItem["file"]["hashes"]["quickXorHash"].str;
 			} else {
-				addLogEntry("quickXorHash is missing from " ~ driveItem["id"].str, ["debug"]);
+				if (debugLogging) {addLogEntry("quickXorHash is missing from " ~ driveItem["id"].str, ["debug"]);}
 			}
 			
 			// If quickXorHash is empty ..
@@ -174,7 +174,7 @@ Item makeDatabaseItem(JSONValue driveItem) {
 				if ("sha256Hash" in driveItem["file"]["hashes"]) {
 					item.sha256Hash = driveItem["file"]["hashes"]["sha256Hash"].str;
 				} else {
-					addLogEntry("sha256Hash is missing from " ~ driveItem["id"].str, ["debug"]);
+					if (debugLogging) {addLogEntry("sha256Hash is missing from " ~ driveItem["id"].str, ["debug"]);}
 				}
 			}
 		} else {
@@ -295,7 +295,7 @@ final class ItemDatabase {
 		
 		// What is the threadsafe value
 		auto threadsafeValue = db.getThreadsafeValue();
-		addLogEntry("SQLite Threadsafe database value: " ~ to!string(threadsafeValue), ["debug"]);
+		if (debugLogging) {addLogEntry("SQLite Threadsafe database value: " ~ to!string(threadsafeValue), ["debug"]);}
 		
 		try {
 			// Set the enforcement of foreign key constraints.
@@ -610,12 +610,12 @@ final class ItemDatabase {
 					
 					// If the item is of type remote, substitute it with the child
 					if (currItem.type == ItemType.remote) {
-						addLogEntry("Record is a Remote Object: " ~ to!string(currItem), ["debug"]);
+						if (debugLogging) {addLogEntry("Record is a Remote Object: " ~ to!string(currItem), ["debug"]);}
 						Item child;
 						if (selectById(currItem.remoteDriveId, currItem.remoteId, child)) {
 							assert(child.type != ItemType.remote, "The type of the child cannot be remote");
 							currItem = child;
-							addLogEntry("Selecting Record that is NOT Remote Object: " ~ to!string(currItem), ["debug"]);
+							if (debugLogging) {addLogEntry("Selecting Record that is NOT Remote Object: " ~ to!string(currItem), ["debug"]);}
 						}
 					}
 				}
@@ -651,7 +651,7 @@ final class ItemDatabase {
 				}
 
 				if (currItem.type == ItemType.remote) {
-					addLogEntry("Record selected is a Remote Object: " ~ to!string(currItem), ["debug"]);
+					if (debugLogging) {addLogEntry("Record selected is a Remote Object: " ~ to!string(currItem), ["debug"]);}
 				}
 
 				item = currItem;
@@ -842,10 +842,10 @@ final class ItemDatabase {
 								id = r2.front[1].dup;
 							}
 						} else {
-							// broken tree
-							addLogEntry("The following generated a broken tree query:", ["debug"]);
-							addLogEntry("Drive ID: " ~ to!string(driveId), ["debug"]);
-							addLogEntry("Item ID: " ~ to!string(id), ["debug"]);
+							// broken database tree
+							addLogEntry("The following generated a broken database tree query:");
+							addLogEntry("Drive ID: " ~ to!string(driveId));
+							addLogEntry("Item ID: " ~ to!string(id));
 							assert(0);
 						}
 					}
@@ -882,8 +882,10 @@ final class ItemDatabase {
 	string getDeltaLink(const(char)[] driveId, const(char)[] id) {
 		synchronized(lock) {
 			// Log what we received
-			addLogEntry("DeltaLink Query (driveId): " ~ to!string(driveId), ["debug"]);
-			addLogEntry("DeltaLink Query (id):      " ~ to!string(id), ["debug"]);
+			if (debugLogging) {
+				addLogEntry("DeltaLink Query (driveId): " ~ to!string(driveId), ["debug"]);
+				addLogEntry("DeltaLink Query (id):      " ~ to!string(id), ["debug"]);
+			}
 			// assert if these are null
 			assert(driveId && id);
 			
@@ -1051,7 +1053,7 @@ final class ItemDatabase {
 	void performCheckpoint() {
 		synchronized(lock) {
 			// Log what we are attempting to do
-			addLogEntry("Attempting to perform a database checkpoint to merge temporary data", ["debug"]);
+			if (debugLogging) {addLogEntry("Attempting to perform a database checkpoint to merge temporary data", ["debug"]);}
 			
 			try {
 				// Check the current DB Status - we have to be in a clean state here
@@ -1074,7 +1076,7 @@ final class ItemDatabase {
 				
 				// Ensure there are no pending operations by performing a checkpoint
 				db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
-				addLogEntry("Database checkpoint is complete", ["debug"]);
+				if (debugLogging) {addLogEntry("Database checkpoint is complete", ["debug"]);}
 				
 			} catch (SqliteException exception) {
 				addLogEntry();

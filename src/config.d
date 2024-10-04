@@ -101,9 +101,7 @@ class ApplicationConfig {
 	// Application items that depend on application run-time environment, thus cannot be immutable
 	// Public variables
 	
-	// Logging output 
-	bool verboseLogging = false;
-	bool debugLogging = false;
+	// Logging verbosity count
 	long verbosityCount = 0;
 	
 	// Was the application just authorised - paste of response uri
@@ -351,25 +349,25 @@ class ApplicationConfig {
 		// Check for HOME environment variable
 		if (environment.get("HOME") != ""){
 			// Use HOME environment variable
-			addLogEntry("runtime_environment: HOME environment variable detected, expansion of '~' should be possible", ["debug"]);
+			if (debugLogging) {addLogEntry("runtime_environment: HOME environment variable detected, expansion of '~' should be possible", ["debug"]);}
 			defaultHomePath = environment.get("HOME");
 			shellEnvironmentSet = true;
 		} else {
 			if ((environment.get("SHELL") == "") && (environment.get("USER") == "")){
 				// No shell is set or username - observed case when running as systemd service under CentOS 7.x
-				addLogEntry("runtime_environment: No HOME, SHELL or USER environment variable configuration detected. Expansion of '~' not possible", ["debug"]);
+				if (debugLogging) {addLogEntry("runtime_environment: No HOME, SHELL or USER environment variable configuration detected. Expansion of '~' not possible", ["debug"]);}
 				defaultHomePath = "/root";
 				shellEnvironmentSet = false;
 			} else {
 				// A shell & valid user is set, but no HOME is set, use ~ which can be expanded
-				addLogEntry("runtime_environment: SHELL and USER environment variable detected, expansion of '~' should be possible", ["debug"]);
+				if (debugLogging) {addLogEntry("runtime_environment: SHELL and USER environment variable detected, expansion of '~' should be possible", ["debug"]);}
 				defaultHomePath = "~";
 				shellEnvironmentSet = true;
 			}
 		}
 		
 		// outcome of setting defaultHomePath
-		addLogEntry("runtime_environment: Calculated defaultHomePath: " ~ defaultHomePath, ["debug"]);
+		if (debugLogging) {addLogEntry("runtime_environment: Calculated defaultHomePath: " ~ defaultHomePath, ["debug"]);}
 		
 		// DEVELOPER OPTIONS
 		// display_memory = true | false
@@ -402,12 +400,12 @@ class ApplicationConfig {
 			// A CLI 'confdir' was passed in
 			// Clean up any stray " .. these should not be there for correct process handling of the configuration option
 			confdirOption = strip(confdirOption,"\"");
-			addLogEntry("configDirName: CLI override to set configDirName to: " ~ confdirOption, ["debug"]);
+			if (debugLogging) {addLogEntry("configDirName: CLI override to set configDirName to: " ~ confdirOption, ["debug"]);}
 			
 			// For the passed in --confdir option ..
 			if (canFind(confdirOption,"~")) {
 				// A ~ was found
-				addLogEntry("configDirName: A '~' was found in configDirName, using the calculated 'defaultHomePath' to replace '~'", ["debug"]);
+				if (debugLogging) {addLogEntry("configDirName: A '~' was found in configDirName, using the calculated 'defaultHomePath' to replace '~'", ["debug"]);}
 				configDirName = defaultHomePath ~ strip(confdirOption,"~","~");
 			} else {
 				configDirName = confdirOption;
@@ -415,18 +413,20 @@ class ApplicationConfig {
 		} else {
 			// Determine the base directory relative to which user specific configuration files should be stored
 			if (environment.get("XDG_CONFIG_HOME") != ""){
-				addLogEntry("configDirBase: XDG_CONFIG_HOME environment variable set", ["debug"]);
+				if (debugLogging) {addLogEntry("configDirBase: XDG_CONFIG_HOME environment variable set", ["debug"]);}
 				configDirBase = environment.get("XDG_CONFIG_HOME");
 			} else {
 				// XDG_CONFIG_HOME does not exist on systems where X11 is not present - ie - headless systems / servers
-				addLogEntry("configDirBase: WARNING - no XDG_CONFIG_HOME environment variable set", ["debug"]);
+				if (debugLogging) {addLogEntry("configDirBase: WARNING - no XDG_CONFIG_HOME environment variable set", ["debug"]);}
 				configDirBase = buildNormalizedPath(buildPath(defaultHomePath, ".config"));
 			}
 			
 			// Output configDirBase calculation
-			addLogEntry("configDirBase: " ~ configDirBase, ["debug"]);
-			// Set the calculated application configuration directory
-			addLogEntry("configDirName: Configuring application to use calculated config path", ["debug"]);
+			if (debugLogging) {
+				addLogEntry("configDirBase: " ~ configDirBase, ["debug"]);
+				// Set the calculated application configuration directory
+				addLogEntry("configDirName: Configuring application to use calculated config path", ["debug"]);
+			}
 			// configDirBase contains the correct path so we do not need to check for presence of '~'
 			configDirName = buildNormalizedPath(buildPath(configDirBase, "onedrive"));
 		}
@@ -484,17 +484,19 @@ class ApplicationConfig {
 		syncListHashFile = buildNormalizedPath(buildPath(configDirName, ".sync_list.hash"));
 						
 		// Debug Output for application set variables based on configDirName
-		addLogEntry("refreshTokenFilePath =   " ~ refreshTokenFilePath, ["debug"]);
-		addLogEntry("deltaLinkFilePath =      " ~ deltaLinkFilePath, ["debug"]);
-		addLogEntry("databaseFilePath =       " ~ databaseFilePath, ["debug"]);
-		addLogEntry("databaseFilePathDryRun = " ~ databaseFilePathDryRun, ["debug"]);
-		addLogEntry("uploadSessionFilePath =  " ~ uploadSessionFilePath, ["debug"]);
-		addLogEntry("userConfigFilePath =     " ~ userConfigFilePath, ["debug"]);
-		addLogEntry("syncListFilePath =       " ~ syncListFilePath, ["debug"]);
-		addLogEntry("systemConfigFilePath =   " ~ systemConfigFilePath, ["debug"]);
-		addLogEntry("configBackupFile =       " ~ configBackupFile, ["debug"]);
-		addLogEntry("configHashFile =         " ~ configHashFile, ["debug"]);
-		addLogEntry("syncListHashFile =       " ~ syncListHashFile, ["debug"]);
+		if (debugLogging) {
+			addLogEntry("refreshTokenFilePath =   " ~ refreshTokenFilePath, ["debug"]);
+			addLogEntry("deltaLinkFilePath =      " ~ deltaLinkFilePath, ["debug"]);
+			addLogEntry("databaseFilePath =       " ~ databaseFilePath, ["debug"]);
+			addLogEntry("databaseFilePathDryRun = " ~ databaseFilePathDryRun, ["debug"]);
+			addLogEntry("uploadSessionFilePath =  " ~ uploadSessionFilePath, ["debug"]);
+			addLogEntry("userConfigFilePath =     " ~ userConfigFilePath, ["debug"]);
+			addLogEntry("syncListFilePath =       " ~ syncListFilePath, ["debug"]);
+			addLogEntry("systemConfigFilePath =   " ~ systemConfigFilePath, ["debug"]);
+			addLogEntry("configBackupFile =       " ~ configBackupFile, ["debug"]);
+			addLogEntry("configHashFile =         " ~ configHashFile, ["debug"]);
+			addLogEntry("syncListHashFile =       " ~ syncListHashFile, ["debug"]);
+		}
 		
 		// Configure the Hash and Backup File Permission Value
 		string valueToConvert = to!string(defaultFilePermissionMode);
@@ -576,7 +578,7 @@ class ApplicationConfig {
 		if (!getValueBool("dry_run")) {
 			// Is there a backup of the config file if the config file exists?
 			if (exists(applicableConfigFilePath)) {
-				addLogEntry("Creating a backup of the applicable config file", ["debug"]);
+				if (debugLogging) {addLogEntry("Creating a backup of the applicable config file", ["debug"]);}
 				// create backup copy of current config file
 				try {
 					std.file.copy(applicableConfigFilePath, configBackupFile);
@@ -818,7 +820,7 @@ class ApplicationConfig {
 					string tempApplicationId = strip(value);
 					if (tempApplicationId.empty) {
 						addLogEntry("Invalid value for key in config file - using default value: " ~ key);
-						addLogEntry("application_id in config file cannot be empty - using default application_id", ["debug"]);
+						if (debugLogging) {addLogEntry("application_id in config file cannot be empty - using default application_id", ["debug"]);}
 						setValueString("application_id", defaultApplicationId);
 					}
 				} else if (key == "drive_id") {
@@ -826,7 +828,7 @@ class ApplicationConfig {
 					if (tempDriveId.empty) {
 						addLogEntry();
 						addLogEntry("Invalid value for key in config file: " ~ key);
-						addLogEntry("drive_id in config file cannot be empty - this is a fatal error and must be corrected by removing this entry from your config file.", ["debug"]);
+						if (debugLogging) {addLogEntry("drive_id in config file cannot be empty - this is a fatal error and must be corrected by removing this entry from your config file.", ["debug"]);}
 						addLogEntry();
 						forceExit();
 					} else {
@@ -836,7 +838,7 @@ class ApplicationConfig {
 					string tempLogDir = strip(value);
 					if (tempLogDir.empty) {
 						addLogEntry("Invalid value for key in config file - using default value: " ~ key);
-						addLogEntry("log_dir in config file cannot be empty - using default log_dir", ["debug"]);
+						if (debugLogging) {addLogEntry("log_dir in config file cannot be empty - using default log_dir", ["debug"]);}
 						setValueString("log_dir", defaultLogFileDir);
 					}
 				}
@@ -1228,14 +1230,14 @@ class ApplicationConfig {
 					// Does the 'currently configured' tempAuthUrl include a ~
 					if (canFind(tempAuthUrl, "~")) {	
 						// A ~ was found in auth_files(authURL)
-						addLogEntry("auth_files: A '~' was found in 'auth_files(authURL)', using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set", ["debug"]);
+						if (debugLogging) {addLogEntry("auth_files: A '~' was found in 'auth_files(authURL)', using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set", ["debug"]);}
 						tempAuthUrl = buildNormalizedPath(buildPath(defaultHomePath, strip(tempAuthUrl, "~")));
 					}
 					
 					// Does the 'currently configured' tempAuthUrl include a ~
 					if (canFind(tempResponseUrl, "~")) {
 						// A ~ was found in auth_files(authURL)
-						addLogEntry("auth_files: A '~' was found in 'auth_files(tempResponseUrl)', using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set", ["debug"]);
+						if (debugLogging) {addLogEntry("auth_files: A '~' was found in 'auth_files(tempResponseUrl)', using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set", ["debug"]);}
 						tempResponseUrl = buildNormalizedPath(buildPath(defaultHomePath, strip(tempResponseUrl, "~")));
 					}
 				} else {
@@ -1243,21 +1245,21 @@ class ApplicationConfig {
 					// Does the 'currently configured' tempAuthUrl include a ~
 					if (canFind(tempAuthUrl, "~")) {
 						// A ~ was found in auth_files(authURL)
-						addLogEntry("auth_files: A '~' was found in the configured 'auth_files(authURL)', automatically expanding as SHELL and USER environment variable is set", ["debug"]);
+						if (debugLogging) {addLogEntry("auth_files: A '~' was found in the configured 'auth_files(authURL)', automatically expanding as SHELL and USER environment variable is set", ["debug"]);}
 						tempAuthUrl = expandTilde(tempAuthUrl);
 					}
 					
 					// Does the 'currently configured' tempAuthUrl include a ~
 					if (canFind(tempResponseUrl, "~")) {
 						// A ~ was found in auth_files(authURL)
-						addLogEntry("auth_files: A '~' was found in the configured 'auth_files(tempResponseUrl)', automatically expanding as SHELL and USER environment variable is set", ["debug"]);
+						if (debugLogging) {addLogEntry("auth_files: A '~' was found in the configured 'auth_files(tempResponseUrl)', automatically expanding as SHELL and USER environment variable is set", ["debug"]);}
 						tempResponseUrl = expandTilde(tempResponseUrl);
 					}
 				}
 				
 				// Build new string
 				newAuthFilesString = tempAuthUrl ~ ":" ~ tempResponseUrl;
-				addLogEntry("auth_files - updated value: " ~ newAuthFilesString, ["debug"]);
+				if (debugLogging) {addLogEntry("auth_files - updated value: " ~ newAuthFilesString, ["debug"]);}
 				setValueString("auth_files", newAuthFilesString);
 			}
 			
@@ -1499,7 +1501,7 @@ class ApplicationConfig {
 			}
 			
 			// What did the user enter?
-			addLogEntry("--resync warning User Response Entered: " ~ to!string(response), ["debug"]);
+			if (debugLogging) {addLogEntry("--resync warning User Response Entered: " ~ to!string(response), ["debug"]);}
 			
 			// Evaluate user response
 			if ((to!string(response) == "y") || (to!string(response) == "Y")) {
@@ -1545,7 +1547,7 @@ class ApplicationConfig {
 		}
 		
 		// What did the user enter?
-		addLogEntry("--force-sync warning User Response Entered: " ~ to!string(response), ["debug"]);
+		if (debugLogging) {addLogEntry("--force-sync warning User Response Entered: " ~ to!string(response), ["debug"]);}
 		
 		// Evaluate user response
 		if ((to!string(response) == "y") || (to!string(response) == "Y")) {
@@ -1585,7 +1587,7 @@ class ApplicationConfig {
 
 		// Helper lambda for logging and setting the difference flag
 		auto logAndSetDifference = (string message, size_t index) {
-			addLogEntry(message, ["debug"]);
+			if (debugLogging) {addLogEntry(message, ["debug"]);}
 			configOptionsDifferent[index] = true;
 		};
 
@@ -1596,7 +1598,7 @@ class ApplicationConfig {
 		// Check for updates in the config file
 		if (currentConfigHash != previousConfigHash) {
 			addLogEntry("Application configuration file has been updated, checking if --resync needed");
-			addLogEntry("Using this configBackupFile: " ~ configBackupFile, ["debug"]);
+			if (debugLogging) {addLogEntry("Using this configBackupFile: " ~ configBackupFile, ["debug"]);}
 
 			if (exists(configBackupFile)) {
 				string[string] backupConfigStringValues;
@@ -1648,7 +1650,7 @@ class ApplicationConfig {
 						if (!c.empty) {
 							c.popFront(); // skip the whole match
 							string key = c.front.dup;
-							addLogEntry("Backup Config Key: " ~ key, ["debug"]);
+							if (debugLogging) {addLogEntry("Backup Config Key: " ~ key, ["debug"]);}
 
 							auto p = key in backupConfigStringValues;
 							if (p) {
@@ -1772,7 +1774,7 @@ class ApplicationConfig {
 	void cleanupHashFilesDueToResync() {
 		if (!getValueBool("dry_run")) {
 			// cleanup hash files
-			addLogEntry("Cleaning up configuration hash files", ["debug"]);
+			if (debugLogging) {addLogEntry("Cleaning up configuration hash files", ["debug"]);}
 			safeRemove(configHashFile);
 			safeRemove(syncListHashFile);
 		} else {
@@ -1789,7 +1791,7 @@ class ApplicationConfig {
 			// Update applicable 'config' files
 			if (exists(applicableConfigFilePath)) {
 				// Update the hash of the applicable config file
-				addLogEntry("Updating applicable config file hash", ["debug"]);
+				if (debugLogging) {addLogEntry("Updating applicable config file hash", ["debug"]);}
 				try {
 					std.file.write(configHashFile, computeQuickXorHash(applicableConfigFilePath));
 					// Hash file should only be readable by the user who created it - 0600 permissions needed
@@ -1802,7 +1804,7 @@ class ApplicationConfig {
 			// Update 'sync_list' files
 			if (exists(syncListFilePath)) {
 				// update sync_list hash
-				addLogEntry("Updating sync_list hash", ["debug"]);
+				if (debugLogging) {addLogEntry("Updating sync_list hash", ["debug"]);}
 				try {
 					std.file.write(syncListHashFile, computeQuickXorHash(syncListFilePath));
 					// Hash file should only be readable by the user who created it - 0600 permissions needed
@@ -1914,9 +1916,9 @@ class ApplicationConfig {
 			operationalConflictDetected = true;
 		} else {
 			// Debug log output what permissions are being set to
-			addLogEntry("Configuring default new folder permissions as: " ~ to!string(getValueLong("sync_dir_permissions")), ["debug"]);
+			if (debugLogging) {addLogEntry("Configuring default new folder permissions as: " ~ to!string(getValueLong("sync_dir_permissions")), ["debug"]);}
 			configureRequiredDirectoryPermisions();
-			addLogEntry("Configuring default new file permissions as: " ~ to!string(getValueLong("sync_file_permissions")), ["debug"]);
+			if (debugLogging) {addLogEntry("Configuring default new file permissions as: " ~ to!string(getValueLong("sync_file_permissions")), ["debug"]);}
 			configureRequiredFilePermisions();
 		}
 		
@@ -2178,16 +2180,20 @@ class ApplicationConfig {
 	// Reset skip_file and skip_dir to application defaults when --force-sync is used
 	void resetSkipToDefaults() {
 		// skip_file
-		addLogEntry("original skip_file: " ~ getValueString("skip_file"), ["debug"]);
-		addLogEntry("resetting skip_file to application defaults", ["debug"]);
+		if (debugLogging) {
+			addLogEntry("original skip_file: " ~ getValueString("skip_file"), ["debug"]);
+			addLogEntry("resetting skip_file to application defaults", ["debug"]);
+		}
 		setValueString("skip_file", defaultSkipFile);
-		addLogEntry("reset skip_file: " ~ getValueString("skip_file"), ["debug"]);
+		if (debugLogging) {addLogEntry("reset skip_file: " ~ getValueString("skip_file"), ["debug"]);}
 		
 		// skip_dir
-		addLogEntry("original skip_dir: " ~ getValueString("skip_dir"), ["debug"]);
-		addLogEntry("resetting skip_dir to application defaults", ["debug"]);
+		if (debugLogging) {
+			addLogEntry("original skip_dir: " ~ getValueString("skip_dir"), ["debug"]);
+			addLogEntry("resetting skip_dir to application defaults", ["debug"]);
+		}
 		setValueString("skip_dir", defaultSkipDir);
-		addLogEntry("reset skip_dir: " ~ getValueString("skip_dir"), ["debug"]);
+		if (debugLogging) {addLogEntry("reset skip_dir: " ~ getValueString("skip_dir"), ["debug"]);}
 	}
 	
 	// Initialise the correct 'sync_dir' expanding any '~' if present
@@ -2195,43 +2201,43 @@ class ApplicationConfig {
 	
 		string runtimeSyncDirectory;
 		
-		addLogEntry("sync_dir: Setting runtimeSyncDirectory from config value 'sync_dir'", ["debug"]);
+		if (debugLogging) {addLogEntry("sync_dir: Setting runtimeSyncDirectory from config value 'sync_dir'", ["debug"]);}
 		
 		if (!shellEnvironmentSet){
-			addLogEntry("sync_dir: No SHELL or USER environment variable configuration detected", ["debug"]);
+			if (debugLogging) {addLogEntry("sync_dir: No SHELL or USER environment variable configuration detected", ["debug"]);}
 			
 			// No shell or user set, so expandTilde() will fail - usually headless system running under init.d / systemd or potentially Docker
 			// Does the 'currently configured' sync_dir include a ~
 			if (canFind(getValueString("sync_dir"), "~")) {
 				// A ~ was found in sync_dir
-				addLogEntry("sync_dir: A '~' was found in 'sync_dir', using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set", ["debug"]);
+				if (debugLogging) {addLogEntry("sync_dir: A '~' was found in 'sync_dir', using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set", ["debug"]);}
 				runtimeSyncDirectory = buildNormalizedPath(buildPath(defaultHomePath, strip(getValueString("sync_dir"), "~")));
 			} else {
 				// No ~ found in sync_dir, use as is
-				addLogEntry("sync_dir: Using configured 'sync_dir' path as-is as no SHELL or USER environment variable configuration detected", ["debug"]);
+				if (debugLogging) {addLogEntry("sync_dir: Using configured 'sync_dir' path as-is as no SHELL or USER environment variable configuration detected", ["debug"]);}
 				runtimeSyncDirectory = getValueString("sync_dir");
 			}
 		} else {
 			// A shell and user environment variable is set, expand any ~ as this will be expanded correctly if present
 			if (canFind(getValueString("sync_dir"), "~")) {
-				addLogEntry("sync_dir: A '~' was found in the configured 'sync_dir', automatically expanding as SHELL and USER environment variable is set", ["debug"]);
+				if (debugLogging) {addLogEntry("sync_dir: A '~' was found in the configured 'sync_dir', automatically expanding as SHELL and USER environment variable is set", ["debug"]);}
 				runtimeSyncDirectory = expandTilde(getValueString("sync_dir"));
 			} else {
 				// No ~ found in sync_dir, does the path begin with a '/' ?
-				addLogEntry("sync_dir: Using configured 'sync_dir' path as-is as however SHELL or USER environment variable configuration detected - should be placed in USER home directory", ["debug"]);
+				if (debugLogging) {addLogEntry("sync_dir: Using configured 'sync_dir' path as-is as however SHELL or USER environment variable configuration detected - should be placed in USER home directory", ["debug"]);}
 				if (!startsWith(getValueString("sync_dir"), "/")) {
-					addLogEntry("Configured 'sync_dir' does not start with a '/' or '~/' - adjusting configured 'sync_dir' to use User Home Directory as base for 'sync_dir' path", ["debug"]);
+					if (debugLogging) {addLogEntry("Configured 'sync_dir' does not start with a '/' or '~/' - adjusting configured 'sync_dir' to use User Home Directory as base for 'sync_dir' path", ["debug"]);}
 					string updatedPathWithHome = "~/" ~ getValueString("sync_dir");
 					runtimeSyncDirectory = expandTilde(updatedPathWithHome);
 				} else {
-					addLogEntry("use 'sync_dir' as is - no touch", ["debug"]);
+					if (debugLogging) {addLogEntry("use 'sync_dir' as is - no touch", ["debug"]);}
 					runtimeSyncDirectory = getValueString("sync_dir");
 				}
 			}
 		}
 		
 		// What will runtimeSyncDirectory be actually set to?
-		addLogEntry("sync_dir: runtimeSyncDirectory set to: " ~ runtimeSyncDirectory, ["debug"]);
+		if (debugLogging) {addLogEntry("sync_dir: runtimeSyncDirectory set to: " ~ runtimeSyncDirectory, ["debug"]);}
 		
 		// Configure configuredBusinessSharedFilesDirectoryName
 		configuredBusinessSharedFilesDirectoryName = buildNormalizedPath(buildPath(runtimeSyncDirectory, defaultBusinessSharedFilesDirectoryName));
@@ -2244,7 +2250,7 @@ class ApplicationConfig {
 		
 		string configuredLogDirPath;
 		
-		addLogEntry("log_dir: Setting runtime application log from config value 'log_dir'", ["debug"]);
+		if (debugLogging) {addLogEntry("log_dir: Setting runtime application log from config value 'log_dir'", ["debug"]);}
 				
 		if (getValueString("log_dir") != defaultLogFileDir) {
 			// User modified 'log_dir' to be used with 'enable_logging'
@@ -2253,11 +2259,11 @@ class ApplicationConfig {
 				// ~ needs to be expanded correctly
 				if (!shellEnvironmentSet) {
 					// No shell or user environment variable set, so expandTilde() will fail - usually headless system running under init.d / systemd or potentially Docker
-					addLogEntry("log_dir: A '~' was found in log_dir, using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set", ["debug"]);
+					if (debugLogging) {addLogEntry("log_dir: A '~' was found in log_dir, using the calculated 'homePath' to replace '~' as no SHELL or USER environment variable set", ["debug"]);}
 					configuredLogDirPath = buildNormalizedPath(buildPath(defaultHomePath, strip(getValueString("log_dir"), "~")));
 				} else {
 					// A shell and user environment variable is set, expand any ~ as this will be expanded correctly if present
-					addLogEntry("log_dir: A '~' was found in the configured 'log_dir', automatically expanding as SHELL and USER environment variable is set", ["debug"]);
+					if (debugLogging) {addLogEntry("log_dir: A '~' was found in the configured 'log_dir', automatically expanding as SHELL and USER environment variable is set", ["debug"]);}
 					configuredLogDirPath = expandTilde(getValueString("log_dir"));
 				}		
 			} else {
@@ -2289,13 +2295,6 @@ class ApplicationConfig {
 		
 		// Return the initialised application log path
 		return configuredLogDirPath;
-	}
-	
-	void setConfigLoggingLevels(bool verboseLoggingInput, bool debugLoggingInput, long verbosityCountInput) {
-		// set the appConfig logging values
-		verboseLogging = verboseLoggingInput;
-		debugLogging = debugLoggingInput;
-		verbosityCount = verbosityCountInput;
 	}
 	
 	// What IP protocol is going to be used to access Microsoft OneDrive
@@ -2418,15 +2417,15 @@ class ApplicationConfig {
 			
 			// Output the result
 			if (xdg_exists) {
-				addLogEntry("runtime_environment: XDG_RUNTIME_DIR exists with value: " ~ xdg_value , ["debug"]);
+				if (debugLogging) {addLogEntry("runtime_environment: XDG_RUNTIME_DIR exists with value: " ~ xdg_value , ["debug"]);}
 			} else {
-				addLogEntry("runtime_environment: XDG_RUNTIME_DIR missing from runtime user environment", ["debug"]);
+				if (debugLogging) {addLogEntry("runtime_environment: XDG_RUNTIME_DIR missing from runtime user environment", ["debug"]);}
 			}
 			
 			if (dbus_exists) {
-				addLogEntry("runtime_environment: DBUS_SESSION_BUS_ADDRESS exists with value: " ~ dbus_value, ["debug"]);
+				if (debugLogging) {addLogEntry("runtime_environment: DBUS_SESSION_BUS_ADDRESS exists with value: " ~ dbus_value, ["debug"]);}
 			} else {
-				addLogEntry("runtime_environment: DBUS_SESSION_BUS_ADDRESS missing from runtime user environment", ["debug"]);
+				if (debugLogging) {addLogEntry("runtime_environment: DBUS_SESSION_BUS_ADDRESS missing from runtime user environment", ["debug"]);}
 			}
 
 			// Determine result
